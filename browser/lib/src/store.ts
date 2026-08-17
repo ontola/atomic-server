@@ -32,11 +32,13 @@ import {
 import { stringToSlug } from './stringToSlug.js';
 import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
+import { withDeadline } from './withDeadline.js';
 import { BLOB, endpoints, INTERNAL_ID } from './urls.js';
 import { initOntologies } from './ontologies/index.js';
 import { decodeB64, encodeB64, encodeB64Url } from './base64.js';
 import {
   encodeGenesisCert,
+  personalDriveCert,
   subjectForSignature,
   type GenesisCert,
 } from './genesis.js';
@@ -78,6 +80,12 @@ type DriveCallback = (drive: string) => void;
 
 /** Called when the server reports vector index activity for a drive (via websocket). */
 export type IndexingStatusCallback = (indexing: boolean) => void;
+
+/** How long a migration fetch may take before the answer stops being useful.
+ *  These are servers the device may never reach; sign-in must not wait on
+ *  them. */
+const LEGACY_FETCH_DEADLINE_MS = 5_000;
+
 type Fetch = typeof fetch;
 type CreateResourceOptions = {
   /** Optional subject of the new resource, if not given the store will generate a random subject */
@@ -92,6 +100,9 @@ type CreateResourceOptions = {
   propVals?: Record<string, JSONValue>;
   /** Set to true if the resource should have a DID as subject. Defaults to `true` for `did:ad` agents, otherwise `false`. */
   did?: boolean;
+  /** When set, the resource is minted from this cert (deterministic DID)
+   *  instead of a random-nonce certificate. */
+  genesisCert?: GenesisCert;
 };
 
 export interface StoreOpts {
@@ -270,10 +281,10 @@ export interface CreateDriveOpts {
    *  separate save for callers (e.g. dev-drive) that want the agent to be
    *  renderable as a named resource right away. */
   agentName?: string;
-  /** A personal drive becomes the agent's home: it is linked as the agent's
-   *  `personalDrive` and hosts the saved-drives switcher list (seeded with
-   *  itself). A non-personal (additional) drive is instead pushed onto the
-   *  agent's EXISTING personal drive's list. Defaults to true. */
+  /** A personal drive is the agent's derived home DID (same subject on every
+   *  device). It is linked as `personalDrive` for older clients and hosts the
+   *  saved-drives switcher list. A non-personal drive is pushed onto that
+   *  list. Defaults to true. */
   personal?: boolean;
 }
 
@@ -351,6 +362,7 @@ const CLIENT_DB_ATTACH_GRACE = 5000;
 const SERVER_MANAGED_SKELETON_PROPS: ReadonlySet<string> = new Set([
   commits.properties.lastCommit,
   commits.properties.createdAt,
+  'https://atomicdata.dev/properties/createdBy',
   'https://atomicdata.dev/properties/drive',
   core.properties.parent,
 ]);
@@ -432,6 +444,15 @@ export class Store {
    *  so subsequent calls (e.g. a forced refresh after a known change)
    *  can re-fetch. Keyed by normalized subject. */
   private _inFlightFetches: Map<string, Promise<Resource>> = new Map();
+
+  /** Subjects with a gap-recovery fetch in flight. A delta that cannot apply
+   *  triggers one full-state fetch; this stops a burst of unappliable deltas
+   *  for the same subject from firing one fetch each. */
+  private _gapRecoveries: Set<string> = new Set();
+
+  /** Agent subjects already re-checked against the server this session — see
+   *  the agent branch in {@link fetchResourceWithLocalFallback}. */
+  private _revalidatedAgents: Set<string> = new Set();
 
   /** Current Agent, used for signing commits. Is required for posting things. */
   private agent?: Agent;
@@ -1685,6 +1706,19 @@ export class Store {
     return this.aliases.get(normalized) ?? normalized;
   }
 
+  /**
+   * True when `subject` is a placeholder (`_new:…`) that has since been aliased
+   * to a real subject — i.e. the draft it stood for has been persisted.
+   *
+   * Lets a view tell apart the two reasons a collection can grow: one of its
+   * own drafts materialising, versus a resource arriving from elsewhere (a
+   * peer, or another tab). Those need opposite handling, and without a way to
+   * distinguish them a view has to guess.
+   */
+  public isAliased(subject: string): boolean {
+    return this.aliases.has(this.normalizeSubject(subject));
+  }
+
   /** Resolve a (possibly aliased) subject to its cached Resource. */
   private getResolved(subject: string): Resource | undefined {
     return this.resources.get(this.resolveSubject(subject));
@@ -1790,6 +1824,39 @@ export class Store {
   }
 
   /**
+   * Repair a document that has fallen behind: fetch full state and replace the
+   * local doc with it.
+   *
+   * The live channel is deltas, and it has no way to say "you are missing
+   * something". A receiver that misses one update queues every later one as
+   * pending, which looks exactly like a document that quietly stopped syncing.
+   * `SYNC_VV` already handles this at connect time; this is the mid-session
+   * equivalent, triggered by the one signal available — an import that could
+   * not fully apply.
+   *
+   * Failures are swallowed on purpose. This runs off the back of an incoming
+   * update, the caller keeps its existing (stale but usable) state either way,
+   * and a network error here should not surface as an error on a document the
+   * user can still read.
+   */
+  private recoverFromIncompleteImport(subject: string, source?: string): void {
+    if (this._gapRecoveries.has(subject)) return;
+
+    this._gapRecoveries.add(subject);
+    console.warn(
+      `[Store] incomplete Loro import for ${subject.slice(0, 60)} ` +
+        `(source: ${source ?? 'unknown'}) — missing base state, fetching a full ` +
+        `snapshot to catch up.`,
+    );
+
+    this.fetchResourceFromServer(subject, { forceOverride: true })
+      .catch(() => undefined)
+      .finally(() => {
+        this._gapRecoveries.delete(subject);
+      });
+  }
+
+  /**
    * Single ingress for resource state from any source: subject
    * normalisation, commit-id dedup, Loro hydration, atomic OPFS
    * persist, one `notify` — in that order.
@@ -1873,21 +1940,44 @@ export class Store {
     // no error anywhere. Surface it instead. Skip the failure if the
     // resource already had usable content from a prior good import
     // (a late/partial live push shouldn't blow away a good state).
-    if (!complete && !isCommitDetail && !resource.get(core.properties.isA)) {
-      console.warn(
-        `[Store] applyIncoming: incomplete Loro import for ${subject.slice(0, 60)} ` +
-          `(source: ${change.source}) — server sent a delta this client can't apply ` +
-          `(missing base state). Surfacing as error.`,
-      );
-      if (change.commitId) resource.setLastCommitValue(change.commitId);
-      this.failResource(
-        subject,
-        new Error(
-          'Sync error: received an incomplete update for this resource ' +
-            '(missing base state). Try reloading; if it persists, the ' +
-            "local cache may be out of sync with the server's history.",
-        ),
-      );
+    if (!complete && !isCommitDetail) {
+      if (!resource.get(core.properties.isA)) {
+        console.warn(
+          `[Store] applyIncoming: incomplete Loro import for ${subject.slice(0, 60)} ` +
+            `(source: ${change.source}) — server sent a delta this client can't apply ` +
+            `(missing base state). Surfacing as error.`,
+        );
+        if (change.commitId) resource.setLastCommitValue(change.commitId);
+        this.failResource(
+          subject,
+          new Error(
+            'Sync error: received an incomplete update for this resource ' +
+              '(missing base state). Try reloading; if it persists, the ' +
+              "local cache may be out of sync with the server's history.",
+          ),
+        );
+
+        return 'invalid';
+      }
+
+      // The resource already has usable content, so failing it would throw
+      // away good state for the sake of an update we couldn't apply. The old
+      // code took the other extreme and fell through to `return 'applied'`,
+      // which is how a collaborator's text went missing in silence: one
+      // delta arrives whose base ops we never saw, Loro parks it as pending,
+      // and every later delta parks behind it. No error, no indicator — the
+      // document simply stops being live until someone reloads.
+      //
+      // Ask for full state instead. `forceOverride` replaces rather than
+      // merges, which is what closes the gap; `applyIncoming`'s own guards
+      // still refuse to clobber unsaved local edits or a pending outbox.
+      //
+      // Deliberately NOT stamping `lastCommit` here. We did not apply that
+      // commit, and claiming it would make the echo-dedup at the top of this
+      // method drop the very fetch being issued to repair the gap.
+      this.recoverFromIncompleteImport(subject, change.source);
+      resource.loading = false;
+      this.addResource(resource, { skipCommitCompare: true });
 
       return 'invalid';
     }
@@ -2073,6 +2163,7 @@ export class Store {
     propVals,
     noParent,
     did,
+    genesisCert,
   }: CreateResourceOptions = {}): Promise<Resource<C>> {
     const shouldUseDid =
       did ?? this.getAgent()?.subject?.startsWith('did:ad:agent:') ?? false;
@@ -2103,7 +2194,11 @@ export class Store {
     let newSubject: string;
     let genesisCertB64: string | undefined;
 
-    if (subject) {
+    if (genesisCert) {
+      const minted = await this.mintFromCert(genesisCert);
+      newSubject = subject ?? minted.did;
+      genesisCertB64 = minted.certB64;
+    } else if (subject) {
       newSubject = subject;
     } else if (shouldUseDid) {
       const minted = await this.mintCertDid(
@@ -2149,7 +2244,7 @@ export class Store {
     // only `save()` does (it moves the stash into the outbox). So a
     // created-but-never-saved resource (e.g. an unfilled `TableNewRow`) is never
     // POSTed. This is the only remaining `signChanges` call site.
-    if (shouldUseDid && !subject) {
+    if ((shouldUseDid && !subject) || genesisCert) {
       const genesisCommit = await resource.signChanges(this.getAgent()!);
       resource.stashGenesis(genesisCommit);
     }
@@ -2195,24 +2290,69 @@ export class Store {
       propVals[SUBDOMAIN_PROP] = subdomain;
     }
 
+    if (personal) {
+      const existingDid = await agent.personalDriveSubject();
+      const existing = this._resources.get(existingDid);
+
+      if (existing && !existing.new && !existing.error) {
+        const oldPointer = await this.linkPersonalDrive(
+          existing,
+          agent.subject,
+          agentName,
+        );
+        await this.maybeMigrateOldPersonalDrive(existing, [
+          oldPointer,
+          agent.initialDrive,
+        ]);
+
+        return existing;
+      }
+    }
+
+    const genesisCert = personal
+      ? personalDriveCert(decodeB64(await agent.getPublicKey()))
+      : undefined;
+
+    // Pin the personal drive to the derived subject. `newResource` would
+    // otherwise mint one by signing the certificate through the agent's
+    // provider — the same non-deterministic signature this method just looked
+    // the drive up by, so the drive would be created under a subject no
+    // subsequent lookup could ever find.
+    const personalSubject = personal
+      ? await agent.personalDriveSubject()
+      : undefined;
+
     const drive = await this.newResource({
       isA: server.classes.drive,
       noParent: true,
       propVals,
+      genesisCert,
+      subject: personalSubject,
     });
 
     await drive.save();
 
     if (personal) {
-      await this.linkPersonalDrive(drive, agent.subject, agentName);
+      const oldPointer = await this.linkPersonalDrive(
+        drive,
+        agent.subject,
+        agentName,
+      );
+      await this.maybeMigrateOldPersonalDrive(drive, [
+        oldPointer,
+        agent.initialDrive,
+      ]);
     } else {
       await this.addToSavedDrives(drive, agent.subject);
     }
 
     // Every drive gets a default Ontology: the home for classes and
     // properties created inside the drive (e.g. table Row classes), so they
-    // don't pile up directly under the drive itself.
-    await this.createDefaultOntology(drive);
+    // don't pile up directly under the drive itself. Skip if a previous
+    // device already created one — two random ontology DIDs would fork.
+    if (!drive.get(server.properties.defaultOntology)) {
+      await this.createDefaultOntology(drive);
+    }
 
     return drive;
   }
@@ -2222,11 +2362,20 @@ export class Store {
    * switcher list with itself and links it on the Agent resource (optionally
    * naming the agent in the same commit).
    */
+  /**
+   * Seeds the switcher list on `drive` and, when a complete Agent resource is
+   * available, writes `personalDrive` for older clients.
+   *
+   * Returns a previous `personalDrive` pointer when it named a different
+   * subject, so migration can union that drive's lists. The pointer is
+   * captured before this write — otherwise migration would only ever see
+   * the derived DID it just stored.
+   */
   private async linkPersonalDrive(
     drive: Resource,
     agentSubject: string,
     agentName?: string,
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     // The user's saved-drives switcher list lives on the personal DRIVE itself
     // (the per-user home index), not on the Agent. Seed it with this drive so
     // it shows up in the switcher. This must be a second commit: the drive's
@@ -2235,27 +2384,50 @@ export class Store {
     drive.push(server.properties.drives, [drive.subject], true);
     await drive.save();
 
-    // Link the drive to the Agent resource. We MUST force a fresh fetch
-    // from the server here. The agent may already be in the store (from a
-    // stale clientDb cache or a previous partial load) with `loading=false`,
-    // in which case `getResource()` short-circuits and returns the cached
-    // stub. Then `set/push/save` would commit a Loro snapshot that only
-    // carries the locally-set properties (personalDrive, drives) — the
-    // server-side state (isA, publicKey, read, etc.) was never merged into
-    // the local Loro doc, so it isn't part of the outgoing snapshot, and
-    // isn't written to clientDb. On reload the SPA reads the partial cache
-    // and the agent's edit form errors with "<class> is not a Class"
-    // because `isA` is missing. Forcing a fetch seeds the local resource
-    // with the full server state before we layer the new properties on top.
-    //
-    // Use HTTP (not WS): the WS may still be authenticated as a previous
-    // agent (e.g. onboarding switches from a dev-drive agent to a freshly-
-    // created one — the WS auth is fire-and-forget and races the GET).
-    // HTTP signs each request with the current agent and never has stale
-    // session state.
-    const agentResource = await this.fetchResourceFromServer(agentSubject, {
-      noWebSocket: true,
-    });
+    // Capture any local pointer before the server fetch. A failed GET
+    // applies an error stub into the same map slot and would otherwise
+    // erase the only copy of the old home subject.
+    const prior = this._resources.get(agentSubject);
+    const localPointer = prior?.isReady()
+      ? (prior.get(core.properties.personalDrive) as string | undefined)
+      : undefined;
+
+    // Prefer a fresh server copy when we can get one. A stale/partial
+    // local Agent (clientDb cache, previous incomplete load) would let
+    // `set/save` commit a Loro snapshot that only carries the properties
+    // we write here — `isA` / `publicKey` / `read` never make it into
+    // the outgoing snapshot, and the edit form later errors with
+    // "<class> is not a Class". HTTP (not WS): onboarding can still be
+    // authenticated as a previous agent on the socket.
+    let agentResource: Resource | undefined;
+
+    try {
+      agentResource = await this.fetchResourceFromServer(agentSubject, {
+        noWebSocket: true,
+      });
+
+      if (agentResource.error) {
+        throw agentResource.error;
+      }
+    } catch {
+      // Offline / local-only. An error stub is not usable — writing on
+      // it would mint a partial Agent Loro doc. The derived DID is
+      // identity; the pointer is only a cache for older clients.
+      agentResource = prior?.isReady() ? prior : undefined;
+    }
+
+    const oldPointer = agentResource?.isReady()
+      ? ((agentResource.get(core.properties.personalDrive) as
+          | string
+          | undefined) ?? localPointer)
+      : localPointer;
+
+    if (!agentResource || !agentResource.isReady()) {
+      return oldPointer && oldPointer !== drive.subject
+        ? oldPointer
+        : undefined;
+    }
+
     await agentResource.set(
       core.properties.personalDrive,
       drive.subject,
@@ -2277,30 +2449,126 @@ export class Store {
     }
 
     await agentResource.save();
+
+    return oldPointer && oldPointer !== drive.subject ? oldPointer : undefined;
   }
 
   /**
    * Adds a non-personal (additional) drive to the saved-drives switcher list
-   * on the agent's personal drive. Best-effort: the agent may not have
-   * provisioned a personal drive yet.
+   * on the agent's derived personal drive. Materializes that drive if needed.
    */
   private async addToSavedDrives(
     drive: Resource,
-    agentSubject: string,
+    _agentSubject: string,
+  ): Promise<void> {
+    // An agent whose personal drive cannot be derived (see
+    // `Agent.personalDriveSubject`) must still be able to make ordinary
+    // drives; it just has nowhere to list them.
+    let personalDriveResource: Resource;
+
+    try {
+      personalDriveResource = await this.ensurePersonalDrive();
+    } catch (e) {
+      console.warn('Could not record the new drive on the personal drive:', e);
+
+      return;
+    }
+
+    const already = personalDriveResource.getSubjects(server.properties.drives);
+
+    if (!already.includes(drive.subject)) {
+      personalDriveResource.push(server.properties.drives, [drive.subject]);
+      await personalDriveResource.save();
+    }
+  }
+
+  /**
+   * Union any previous home's lists onto the derived drive and keep the old
+   * drive as an ordinary workspace. Best-effort: does not block sign-in or
+   * first write.
+   *
+   * Takes several candidates because the old home is recorded in two places
+   * that go missing independently:
+   *
+   * - `personalDrive` on the Agent **resource** — absent whenever the server
+   *   holding the account never wrote one, which is the common case for a
+   *   self-hosted account whose drives were made ad hoc.
+   * - `initialDrive` from the agent **secret** — the only record left on a
+   *   device that has never seen the old drive, since it travels with the key
+   *   rather than with any server's data.
+   *
+   * An account predating the derivation can have either, both, or (for a
+   * genuinely new agent) neither.
+   */
+  private async maybeMigrateOldPersonalDrive(
+    derived: Resource,
+    candidates: (string | undefined)[],
+  ): Promise<void> {
+    const seen = new Set<string>([derived.subject]);
+
+    for (const candidate of candidates) {
+      if (!candidate || seen.has(candidate)) {
+        continue;
+      }
+
+      seen.add(candidate);
+
+      // Per candidate: one unreachable old home must not strand the other.
+      await this.migrateOneOldPersonalDrive(derived, candidate);
+    }
+  }
+
+  /** Union one old home's lists onto `derived`. See the caller for why. */
+  private async migrateOneOldPersonalDrive(
+    derived: Resource,
+    oldPointer: string,
   ): Promise<void> {
     try {
-      const agentResource = await this.getResource(agentSubject);
-      const personalDrive = agentResource.get(core.properties.personalDrive) as
-        | string
-        | undefined;
+      let old = this._resources.get(oldPointer);
 
-      if (personalDrive) {
-        const personalDriveResource = await this.getResource(personalDrive);
-        personalDriveResource.push(server.properties.drives, [drive.subject]);
-        await personalDriveResource.save();
+      if (!old || !old.isReady()) {
+        try {
+          old = await withDeadline(
+            this.fetchResourceFromServer(oldPointer, { noWebSocket: true }),
+            LEGACY_FETCH_DEADLINE_MS,
+            undefined,
+          );
+        } catch {
+          return;
+        }
       }
-    } catch (_e) {
-      // Ignore (e.g. no personal drive yet, or an unwritable agent resource).
+
+      if (!old || old.error) {
+        return;
+      }
+
+      const listProps = [
+        server.properties.drives,
+        core.properties.sharedWithMe,
+        'https://atomicdata.dev/properties/favorites',
+      ];
+
+      for (const prop of listProps) {
+        const incoming = old.getSubjects(prop);
+        const have = new Set(derived.getSubjects(prop));
+        const missing = incoming.filter(s => s && !have.has(s));
+
+        if (missing.length > 0) {
+          derived.push(prop, missing, true);
+        }
+      }
+
+      const drives = new Set(derived.getSubjects(server.properties.drives));
+
+      if (!drives.has(oldPointer)) {
+        derived.push(server.properties.drives, [oldPointer], true);
+      }
+
+      if (derived.hasUnsavedChanges()) {
+        await derived.save();
+      }
+    } catch {
+      // Migration is nice, not load-bearing.
     }
   }
 
@@ -2556,6 +2824,56 @@ export class Store {
     };
   }
 
+  private async mintFromCert(
+    cert: GenesisCert,
+  ): Promise<{ did: string; certB64: string }> {
+    const agent = this.getAgent();
+
+    if (!agent) {
+      throw new Error(
+        'Cannot create a DID resource without an agent. Set an agent on the store first.',
+      );
+    }
+
+    const certBytes = encodeGenesisCert(cert);
+
+    return {
+      did: subjectForSignature(await agent.signBytes(certBytes)),
+      certB64: encodeB64Url(certBytes),
+    };
+  }
+
+  /** The agent's derived personal-drive DID. Same key → same subject. */
+  public async personalDriveSubject(): Promise<string> {
+    const agent = this.getAgent();
+
+    if (!agent) {
+      throw new Error('Cannot derive a personal drive without an agent');
+    }
+
+    return agent.personalDriveSubject();
+  }
+
+  /**
+   * Materialize the derived personal drive if needed and return it.
+   * Repeat genesis for the same subject merges on the server.
+   */
+  public async ensurePersonalDrive(
+    name = 'My drive',
+    opts: Omit<CreateDriveOpts, 'personal'> = {},
+  ): Promise<Resource> {
+    // `createDrive` returns the cached drive untouched when it already has
+    // one, which is what keeps this from renaming a home the user has titled.
+    // Deliberately no lookup for a drive that is not in memory: a bounded
+    // `getResource` cannot be cancelled, so the abandoned fetch outlives the
+    // deadline and fails the drive this call then creates. Materializing is
+    // therefore a sign-in action, not something boot repeats.
+    return this.createDrive(name, {
+      ...opts,
+      personal: true,
+    });
+  }
+
   /**
    * Try the local WASM DB (OPFS) for a persisted copy of `subject` and hydrate
    * the store from it.
@@ -2809,6 +3127,21 @@ export class Store {
         // narrow case it covered (a destroy commit that landed while
         // we were disconnected AND not covered by SUB on reconnect)
         // is rare and recovers on the next live update.
+        //
+        // Agents are the exception, because that premise fails for them: they
+        // belong to no drive, so no SUB covers them and nothing ever refreshes
+        // the local copy. A cached agent can therefore be wrong forever — which
+        // is what kept other people's names from appearing after the server
+        // started allowing the read: every client already held a cached stub
+        // and stopped asking. Re-check each agent once per session; after that
+        // it is trusted like anything else.
+        if (
+          subject.startsWith('did:ad:agent:') &&
+          !this._revalidatedAgents.has(subject)
+        ) {
+          this._revalidatedAgents.add(subject);
+          await this.fetchResourceFromServer(subject, opts);
+        }
       } else {
         // Online, no local data — server is our only source.
         await this.fetchResourceFromServer(subject, opts);
@@ -3805,6 +4138,10 @@ export class Store {
    * *this* server is tried first. The original is kept as a fallback for the
    * case the secret really does describe another, still-live server.
    */
+  /** Agents whose legacy migration has already been started — see
+   *  `adoptLegacyAgentIdentity`. */
+  private legacyAdoptionRuns = new Set<string>();
+
   private async fetchLegacyAgentResource(
     legacySubject: string,
   ): Promise<Resource | undefined> {
@@ -3820,9 +4157,22 @@ export class Store {
 
     for (const candidate of candidates) {
       try {
-        const resource = await this.getResource(candidate);
+        // Bounded: these are servers this device may never reach, and an
+        // unbounded await here is felt as a frozen sign-in rather than a slow
+        // one. A late answer is no use once we have stopped waiting.
+        const resource = await withDeadline(
+          this.getResource(candidate),
+          LEGACY_FETCH_DEADLINE_MS,
+          undefined,
+        );
 
-        if (!resource.error) return resource;
+        if (resource && !resource.error) return resource;
+
+        console.warn(
+          `[atomic] Previous account not readable at '${candidate}'${
+            resource ? '' : ' (timed out)'
+          }.`,
+        );
       } catch {
         // Try the next candidate.
       }
@@ -3831,19 +4181,50 @@ export class Store {
     return undefined;
   }
 
+  /**
+   * Everything an agent needs on the way in: a home drive that exists, and —
+   * for a pre-DID account — the name and drives the old server holds.
+   *
+   * `setAgent` fires this and forgets it, and an app sets an agent more than
+   * once while booting (a node's own agent, then the signed-in one, then a
+   * rehydrate). Keyed on the agent, not a bare boolean: signing out and into a
+   * different account must still run. The key is added before the first await
+   * so concurrent callers collapse onto one run rather than racing.
+   */
   private async adoptLegacyAgentIdentity(agent: Agent): Promise<void> {
     const legacySubject = agent.legacySubject;
 
+    // Checked before the guard is claimed: an agent that gains a legacy
+    // subject after the first `setAgent` must still be able to migrate.
     if (!legacySubject || !agent.subject) return;
+
+    if (this.legacyAdoptionRuns.has(agent.subject)) return;
+
+    this.legacyAdoptionRuns.add(agent.subject);
 
     try {
       const legacy = await this.fetchLegacyAgentResource(legacySubject);
 
-      if (!legacy) return;
+      if (!legacy) {
+        // Loud on purpose. This used to return in silence, so a migration that
+        // never ran was indistinguishable from one that found nothing to do —
+        // and the once-per-agent guard means it will not be retried.
+        console.warn(
+          `[atomic] Migration skipped: could not read the previous account at '${legacySubject}'.`,
+        );
+
+        return;
+      }
 
       const current = await this.getResource(agent.subject);
 
-      if (current.error) return;
+      if (current.error) {
+        console.warn(
+          `[atomic] Migration skipped: this agent's own resource did not load (${current.error.message}).`,
+        );
+
+        return;
+      }
 
       // Identity only. `drives` is deliberately NOT carried onto the Agent:
       // the two models keep that list in different places, and putting it back
@@ -3877,9 +4258,12 @@ export class Store {
       }
 
       await this.adoptLegacyDriveList(agent, legacy, current);
-    } catch {
+    } catch (e) {
       // Best effort. A failure here leaves the user signed in with an empty
-      // profile — bad, but not as bad as failing the sign-in itself.
+      // profile — bad, but not as bad as failing the sign-in itself. Say so:
+      // an empty profile with no explanation reads as "migration is broken"
+      // when it is usually one unreachable server.
+      console.warn('[atomic] Migrating the previous account failed:', e);
     }
   }
 
@@ -3931,7 +4315,23 @@ export class Store {
    * origin; drop everything else. A drive that genuinely lives elsewhere is not
    * lost — it is still on the legacy Agent, and "Open by URL" reaches it.
    */
-  private isAdoptableDriveSubject(subject: string): boolean {
+  /**
+   * `legacyOrigin` is the origin of the legacy Agent resource this list came
+   * from. Drives sitting there are adoptable even though they are not on the
+   * current server: that origin is the account being migrated away from, and
+   * the user just authenticated against it, so it is not an arbitrary
+   * third party. Without this a pre-DID account migrating to a desktop node
+   * or a self-hosted server loses its entire drive list, since none of the
+   * subjects can match the new home's origin.
+   *
+   * Everything else still has to be same-origin. That keeps the case this
+   * filter exists for: a stale list naming `http://localhost:9883` must never
+   * make a hosted app issue requests at the user's own machine.
+   */
+  private isAdoptableDriveSubject(
+    subject: string,
+    legacyOrigin?: string,
+  ): boolean {
     if (subject.startsWith('did:')) return true;
 
     // The migration's mangled spelling. It survives serialization as a path
@@ -3940,7 +4340,11 @@ export class Store {
     if (/\/[^/]+:\//.test(subject.replace(/^https?:\/\//, ''))) return false;
 
     try {
-      return new URL(subject).origin === new URL(this.serverUrl).origin;
+      const { origin } = new URL(subject);
+
+      if (origin === new URL(this.serverUrl).origin) return true;
+
+      return legacyOrigin !== undefined && origin === legacyOrigin;
     } catch {
       // Unparseable, and not a DID: nothing can be done with it.
       return false;
@@ -3955,27 +4359,25 @@ export class Store {
     // An earlier build parked the list on the Agent. Treat that as a source
     // too, so an account migrated by that version is repaired rather than
     // stranded.
+    // Where the legacy list came from — see `isAdoptableDriveSubject`.
+    let legacyOrigin: string | undefined;
+
+    try {
+      legacyOrigin = new URL(legacy.subject).origin;
+    } catch {
+      legacyOrigin = undefined;
+    }
+
     const inherited = [
       ...legacy.getSubjects(server.properties.drives),
       ...didAgent.getSubjects(server.properties.drives),
-    ].filter(subject => this.isAdoptableDriveSubject(subject));
+    ].filter(subject => this.isAdoptableDriveSubject(subject, legacyOrigin));
 
     if (inherited.length === 0) return;
 
-    const existingSubject =
-      (didAgent.get(core.properties.personalDrive) as string | undefined) ??
-      agent.initialDrive;
-
-    // `createDrive(personal: true)` seeds the switcher list with itself and
-    // links `personalDrive` on the Agent, so afterwards this is an ordinary
-    // union into an existing list. It is only reached when the account has no
-    // private drive at all, so it cannot displace one the user already has.
-    const personalDrive = existingSubject
-      ? await this.getResource(existingSubject)
-      : await this.createDrive('My drive', {
-          personal: true,
-          agentName: legacy.get(core.properties.name) as string | undefined,
-        });
+    const personalDrive = await this.ensurePersonalDrive('My drive', {
+      agentName: legacy.get(core.properties.name) as string | undefined,
+    });
 
     if (personalDrive.error) return;
 

@@ -76,12 +76,21 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
     );
   };
 
-  const goToRedirect = (destination?: string) => {
+  const goToRedirect = (destination?: string, activated?: boolean) => {
     const url = destination ?? redirectURL;
     if (!url) return;
     queueMicrotask(() => {
       navigate(constructOpenURL(url));
       void store.fetchResourceFromServer(url).finally(() => {
+        // The invite's own drive is already the active one — leave it alone.
+        // Falling through here is what used to send an invitee straight back
+        // to their private drive: they'd land on the shared resource with a
+        // sidebar showing their own drive, and no live subscription to the
+        // one they were invited to.
+        if (activated) {
+          return;
+        }
+
         const signedIn = store.getAgent();
 
         if (!signedIn?.subject) {
@@ -107,15 +116,19 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
    *  2. the personal drive (the lists).
    * Order matters: the Agent's `personalDrive` must be saved before the drive's
    * lists, so the sidebar can resolve agent → personalDrive → lists.
+   *
+   * Returns both drives the caller has to choose between: the invitee's own
+   * `personalDrive`, and `hostDrive` — the drive the invited resource lives on,
+   * which is the one they should land in.
    */
   const persistAgentAfterInvite = async (
     subject: string,
     destination: string | undefined,
     name?: string,
-  ): Promise<string | undefined> => {
+  ): Promise<{ personalDrive?: string; hostDrive?: string }> => {
     store.getResourceLoading(subject);
     let personalDriveSubject: string | undefined;
-    let createdDrive = false;
+    let hostDriveSubject: string | undefined;
 
     try {
       // --- 1. Agent identity: name, isA, personalDrive pointer ---
@@ -133,75 +146,55 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
         ]);
       }
 
-      const existingPersonal = agentResource.get(
-        core.properties.personalDrive,
-      ) as string | undefined;
-
-      if (existingPersonal) {
-        personalDriveSubject = existingPersonal;
-      } else {
-        const driveLabel = name?.trim() ? `${name.trim()}'s Drive` : 'Personal';
-        const pd = await store.newResource({
-          isA: server.classes.drive,
-          noParent: true,
-          propVals: {
-            [core.properties.name]: driveLabel,
-            [core.properties.description]:
-              'Your private space on this server. Only you can read and write here.',
-            [core.properties.write]: [subject],
-            [core.properties.read]: [subject],
-          },
-        });
-
-        await pd.save();
-        await agentResource.set(core.properties.personalDrive, pd.subject);
-        personalDriveSubject = pd.subject;
-        createdDrive = true;
-      }
-
       await agentResource.save();
 
-      // --- 2. Home-index lists, stored on the PRIVATE DRIVE ---
-      if (personalDriveSubject) {
-        const driveResource = store.getResourceLoading(personalDriveSubject);
+      // The home is DERIVED from the agent's key, so it is the one drive this
+      // flow must not invent. Minting a fresh one here and pointing the Agent
+      // at it wrote the lists below to a drive nothing reads: the sidebar
+      // resolves the home from the key (`usePersonalDrive`), not from the
+      // pointer, so "Shared with me" stayed empty after accepting an invite.
+      //
+      // `ensurePersonalDrive` also seeds the switcher list and writes the
+      // pointer for older clients, which is why neither happens here anymore.
+      // Saved first, so it links against a complete Agent rather than a
+      // half-written one.
+      // No literal for the unnamed case: `ensurePersonalDrive` already
+      // defaults it, inside the library, where the i18n extractor cannot turn
+      // a plain string into an injected hook in this non-component function.
+      const driveResource = name?.trim()
+        ? await store.ensurePersonalDrive(`${name.trim()}'s Drive`)
+        : await store.ensurePersonalDrive();
+      personalDriveSubject = driveResource.subject;
 
-        // The personal drive itself belongs in the switcher.
-        if (createdDrive) {
-          driveResource.push(
-            server.properties.drives,
-            [personalDriveSubject],
-            true,
+      // --- 2. Home-index lists, stored on the PRIVATE DRIVE ---
+      if (destination) {
+        // sharedWithMe is what the sidebar's "Shared with me" panel reads.
+        // Set it first so a failure in the drive-bookmark code below doesn't
+        // bubble to the outer catch and skip the drive `save()`.
+        driveResource.push(core.properties.sharedWithMe, [destination], true);
+
+        // Drive bookmark (so the destination's drive shows in the switcher)
+        // is best-effort — walking the ancestry can fail transiently right
+        // after invite acceptance while the server propagates the rights
+        // grant. Log so we notice if it stops working entirely.
+        try {
+          await store.fetchResourceFromServer(destination);
+          const target = store.getResourceLoading(destination);
+          const hostDrive = await getResourcesDrive(target, store);
+
+          if (hostDrive && hostDrive !== personalDriveSubject) {
+            hostDriveSubject = hostDrive;
+            driveResource.push(server.properties.drives, [hostDrive], true);
+          }
+        } catch (e) {
+          console.warn(
+            '[invite] could not bookmark host drive (sharedWithMe still set):',
+            e,
           );
         }
-
-        if (destination) {
-          // sharedWithMe is what the sidebar's "Shared with me" panel reads.
-          // Set it first so a failure in the drive-bookmark code below doesn't
-          // bubble to the outer catch and skip the drive `save()`.
-          driveResource.push(core.properties.sharedWithMe, [destination], true);
-
-          // Drive bookmark (so the destination's drive shows in the switcher)
-          // is best-effort — walking the ancestry can fail transiently right
-          // after invite acceptance while the server propagates the rights
-          // grant. Log so we notice if it stops working entirely.
-          try {
-            await store.fetchResourceFromServer(destination);
-            const target = store.getResourceLoading(destination);
-            const hostDrive = await getResourcesDrive(target, store);
-
-            if (hostDrive && hostDrive !== personalDriveSubject) {
-              driveResource.push(server.properties.drives, [hostDrive], true);
-            }
-          } catch (e) {
-            console.warn(
-              '[invite] could not bookmark host drive (sharedWithMe still set):',
-              e,
-            );
-          }
-        }
-
-        await driveResource.save();
       }
+
+      await driveResource.save();
     } catch (e) {
       store.notifyError(
         e instanceof Error
@@ -210,7 +203,30 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
       );
     }
 
-    return personalDriveSubject;
+    return { personalDrive: personalDriveSubject, hostDrive: hostDriveSubject };
+  };
+
+  /**
+   * Make the invite's drive the active one, so the sidebar shows what the
+   * invitee was actually invited to. Falls back to their own drive when the
+   * destination's drive can't be resolved (a bare resource, or the ancestry
+   * walk failed) — which is also the new-agent case, where `drive` would
+   * otherwise still be `baseURL`. Reports whether it set anything, so
+   * `goToRedirect` knows not to overwrite it.
+   */
+  const activateDrive = (drives: {
+    personalDrive?: string;
+    hostDrive?: string;
+  }): boolean => {
+    const target = drives.hostDrive ?? drives.personalDrive;
+
+    if (!target) {
+      return false;
+    }
+
+    setDrive(target);
+
+    return true;
   };
 
   const [dialogProps, show, hide] = useDialog({
@@ -224,20 +240,13 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
         return;
       }
 
-      const personalDrive = await persistAgentAfterInvite(
+      const drives = await persistAgentAfterInvite(
         agentSubject,
         redirectURL,
         agentName,
       );
 
-      // Point the sidebar at the new personal drive. Without this, the
-      // default `drive` in AppSettings is still `baseURL` (or whatever was
-      // active pre-invite) and the sidebar shows that instead.
-      if (personalDrive) {
-        setDrive(personalDrive);
-      }
-
-      goToRedirect();
+      goToRedirect(undefined, activateDrive(drives));
     },
   });
 
@@ -263,6 +272,11 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
       const subject = `did:ad:agent:${keypair.publicKey}`;
       const newAgent = new Agent(provider, subject);
 
+      // Same reason as in `handleAccept`: a WebCrypto key cannot reproduce
+      // this later, and this agent goes into the store before that runs.
+      newAgent.personalDrive = await Agent.personalDriveSubjectFromSecret(
+        Agent.buildSecret(keypair.privateKey, subject),
+      );
       store.setAgent(newAgent);
 
       // Create the initial Agent resource using the Store instance,
@@ -317,9 +331,25 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
         : new JSCryptoProvider(keys.real.privateKey);
       const newAgent = new Agent(provider, newAgentSubject, destination);
 
-      if (keys.crypto) {
-        saveAgentToIDB(keys.crypto, newAgentSubject);
-      }
+      // The home drive is the signature this key makes over its genesis cert,
+      // and a WebCrypto key signs differently every time — so it can only be
+      // computed here, while the raw key is still in hand, and must then be
+      // carried. Skipping it left the agent permanently unable to name its own
+      // home: the sidebar's home-index panels resolve the drive from the key,
+      // found nothing, and rendered as though nothing had ever been shared.
+      newAgent.personalDrive =
+        await Agent.personalDriveSubjectFromSecret(secret);
+
+      // Stored as the secret, not as the keypair. The keypair overload has
+      // nothing to derive the above from and writes it as undefined, which is
+      // what threw it away a line after it was computed. This path still
+      // prefers the non-extractable keypair, and it also covers the JS-crypto
+      // fallback, which previously persisted no agent at all.
+      // `adoptOnDevice: false` keeps this to storage. Signing in is the moment
+      // a device takes on an identity; opening an invite link is not — this
+      // runs on a desktop that may already hold its owner's agent, and the
+      // embedded node should not start signing as whoever accepted an invite.
+      await saveAgentToIDB(secret, { adoptOnDevice: false });
 
       setAgentSecret(secret);
       setAgent(newAgent);
@@ -329,17 +359,13 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
       setRedirectURL(destination);
 
       void (async () => {
-        const personalDrive = await persistAgentAfterInvite(
+        const drives = await persistAgentAfterInvite(
           agentSubject!,
           destination,
           undefined,
         );
 
-        if (personalDrive) {
-          setDrive(personalDrive);
-        }
-
-        goToRedirect(destination);
+        goToRedirect(destination, activateDrive(drives));
       })();
 
       return;

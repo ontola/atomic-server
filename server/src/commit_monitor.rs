@@ -567,6 +567,42 @@ impl Handler<ExternalChange> for CommitMonitor {
     /// subscribers of its drive — the same two audiences, and the same
     /// drive-boundary check, that `Handler<CommitMessage>` serves.
     fn handle(&mut self, msg: ExternalChange, _ctx: &mut Context<Self>) {
+        // Keep search in step with the store. A change that no commit produced
+        // — a peer sync writing straight through `add_resource_opts` — never
+        // reaches `Handler<CommitMessage>`, which is where indexing lives. So
+        // resources arriving over Iroh were stored and listed (the query index
+        // IS updated) but invisible to search: 49 resources synced, zero
+        // INDEXING events. Someone who reaches for search first concludes their
+        // data never arrived.
+        if !msg.destroyed {
+            let search_state = self.search_state.clone();
+            let store = self.store.clone();
+            let subject_for_index = msg.subject.clone();
+            tokio::spawn(async move {
+                let subject = atomic_lib::Subject::from_raw(
+                    &subject_for_index,
+                    store.get_base_domain().as_deref(),
+                );
+
+                match store.get_resource(&subject).await {
+                    Ok(resource) => {
+                        let _ = search_state.remove_resource(&subject_for_index);
+
+                        if let Err(e) = search_state.add_resource(&resource, &store).await {
+                            tracing::warn!(
+                                "CommitMonitor: could not index peer-synced {}: {e}",
+                                &subject_for_index[..subject_for_index.len().min(40)]
+                            );
+                        }
+                    }
+                    Err(e) => tracing::debug!(
+                        "CommitMonitor: peer-synced {} not indexable: {e}",
+                        &subject_for_index[..subject_for_index.len().min(40)]
+                    ),
+                }
+            });
+        }
+
         let base_domain = self.store.get_base_domain();
         let subject = atomic_lib::Subject::from_raw(&msg.subject, base_domain.as_deref());
         let resolved = subject.resolve(
@@ -581,10 +617,18 @@ impl Handler<ExternalChange> for CommitMonitor {
             let Some(snapshot) = msg.loro_snapshot.as_ref() else {
                 return;
             };
+            // SNAPSHOT, because that is what this payload is: `external_change`
+            // reads it straight out of `Tree::LoroSnapshots`, unlike the commit
+            // path above which carries a commit's delta and correctly omits the
+            // flag. Sending full state labelled as a delta made the client merge
+            // it into a document it does not have, seeding the partial doc its
+            // own GET handler warns about — "can keep only the seed's props and
+            // render the resource class-less". Visible as a peer's new table row
+            // appearing with every cell empty until a reload.
             let flags = if msg.commit_id.is_some() {
-                ws_v2::flags::HAS_COMMIT_ID | ws_v2::flags::PUSH
+                ws_v2::flags::SNAPSHOT | ws_v2::flags::HAS_COMMIT_ID | ws_v2::flags::PUSH
             } else {
-                ws_v2::flags::PUSH
+                ws_v2::flags::SNAPSHOT | ws_v2::flags::PUSH
             };
             Arc::from(
                 ws_v2::encode_update(flags, 0, &resolved, msg.commit_id.as_deref(), snapshot)

@@ -1,6 +1,8 @@
 import { describe, it } from 'vitest';
 import { Agent } from './agent.js';
+import { decodeB64 } from './base64.js';
 import { JSCryptoProvider, legacySubjectFromSecret } from './CryptoProvider.js';
+import { personalDriveSubject } from './genesis.js';
 
 describe('Agent', () => {
   const validPrivateKey = 'CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=';
@@ -41,6 +43,19 @@ describe('Agent', () => {
     expect(generatedPublickey).to.equal(
       '7LsjMW5gOfDdJzK_atgjQ1t20J_rw8MjVg6xwqm-h8U',
     );
+  });
+
+  it('derives a stable personal-drive DID from the key', async ({ expect }) => {
+    const agent = new Agent(
+      new JSCryptoProvider(validPrivateKey),
+      validSubject,
+    );
+    const first = await agent.personalDriveSubject();
+    const second = await agent.personalDriveSubject();
+    expect(first).toBe(second);
+    expect(first).toBe(await personalDriveSubject(decodeB64(validPrivateKey)));
+    expect(first.startsWith('did:ad:')).toBe(true);
+    expect(first.startsWith('did:ad:agent:')).toBe(false);
   });
 });
 

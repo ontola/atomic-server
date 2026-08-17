@@ -45,7 +45,10 @@ pub async fn handle_forget_peer(
     }
 
     let node = params.node.clone();
-    crate::iroh_transport::remove_live_peer(&node);
+    // Unconditional: the user asked to drop this device, so whichever
+    // connection currently holds the link should go. `remove_live_peer` is for
+    // a connection retiring itself and refuses if a newer one has replaced it.
+    crate::iroh_transport::remove_live_peer_any(&node);
     crate::iroh_transport::remove_known_peer(store, &node);
 
     Ok(HttpResponse::Ok().json(serde_json::json!({ "ok": true })))

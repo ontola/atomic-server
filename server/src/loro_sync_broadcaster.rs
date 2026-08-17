@@ -166,14 +166,35 @@ impl Handler<LoroSyncUpdate> for LoroSyncBroadcaster {
             return;
         };
 
+        // No sender address means a peer relayed this in. There is no local
+        // connection to attribute it to and none to exclude from the fan-out;
+        // the sending node ran its own write check before relaying, and this
+        // one ran another when the frame arrived.
         let Some(addr) = &msg.addr else {
-            tracing::warn!("no addr in LoroSync update for {}", msg.subject);
+            for subscriber in subscribers {
+                subscriber.addr.do_send(msg.clone());
+            }
+
             return;
         };
 
         if !subscribers.iter().any(|s| s.addr == *addr && s.can_write) {
             tracing::warn!("not allowed to send LoroSync update to {}", msg.subject);
             return;
+        }
+
+        // Out to peers as well as to local subscribers, so an edit in progress
+        // reaches the other device rather than waiting for a save. Only local
+        // updates get here (the branch above returns early for relayed ones),
+        // so there is no echo to guard against.
+        if let Ok(agent) = self.store.get_default_agent() {
+            atomic_lib::sync::peer::broadcast_ephemeral(
+                atomic_lib::sync::protocol::ephemeral_kind::DOC,
+                msg.subject.as_str(),
+                &agent.subject.to_string(),
+                msg.update.as_bytes(),
+                None,
+            );
         }
 
         // Broadcast to all subscribers except the sender
@@ -191,6 +212,22 @@ impl Handler<LoroEphemeralUpdate> for LoroSyncBroadcaster {
     type Result = ();
 
     fn handle(&mut self, msg: LoroEphemeralUpdate, _ctx: &mut Context<Self>) {
+        // Relay to peers before the local fan-out below, and only for presence
+        // that originated here (`addr` is the websocket it came from; a frame
+        // we relayed IN from a peer has none, and must not be sent back out or
+        // two nodes trade cursors forever).
+        if msg.addr.is_some() {
+            if let Ok(agent) = self.store.get_default_agent() {
+                atomic_lib::sync::peer::broadcast_ephemeral(
+                    atomic_lib::sync::protocol::ephemeral_kind::LORO,
+                    msg.subject.as_str(),
+                    &agent.subject.to_string(),
+                    msg.update.as_bytes(),
+                    None,
+                );
+            }
+        }
+
         let Some(subscribers) = self.subscriptions.get(&msg.subject) else {
             return;
         };
@@ -320,12 +357,53 @@ impl Handler<PresenceUpdate> for LoroSyncBroadcaster {
         };
         *cached = Some(msg.update.clone());
 
+        // Relay to peers. Only local presence reaches here (the handler above
+        // requires a sender address), so there is no echo to guard against.
+        if let Ok(agent) = self.store.get_default_agent() {
+            atomic_lib::sync::peer::broadcast_ephemeral(
+                atomic_lib::sync::protocol::ephemeral_kind::PRESENCE,
+                msg.subject.as_str(),
+                &agent.subject.to_string(),
+                msg.update.as_bytes(),
+                None,
+            );
+        }
+
         for subscriber in subscribers.keys() {
             if subscriber == sender {
                 continue;
             }
 
             subscriber.do_send(msg.clone());
+        }
+    }
+}
+
+impl Handler<crate::actor_messages::RemotePresenceUpdate> for LoroSyncBroadcaster {
+    type Result = ();
+
+    /// Fan a peer's presence out to everyone watching that drive here.
+    ///
+    /// No sender to exclude and no subscriber check: the frame came from
+    /// another node, which applied its own read gate before relaying it, and
+    /// there is no local connection it could be attributed to.
+    fn handle(
+        &mut self,
+        msg: crate::actor_messages::RemotePresenceUpdate,
+        _ctx: &mut Context<Self>,
+    ) {
+        let Some(subscribers) = self.presence.get(&msg.subject) else {
+            return;
+        };
+
+        let local = PresenceUpdate {
+            subject: msg.subject.clone(),
+            update: msg.update,
+            addr: None,
+        };
+
+        for subscriber in subscribers.keys() {
+            subscriber.do_send(local.clone());
         }
     }
 }

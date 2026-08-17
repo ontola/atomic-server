@@ -364,6 +364,36 @@ describe('isTerminalCommitError (F5: code-first, planning/unified-sync.md)', () 
   });
 });
 
+describe('a commit naming a class the server lacks', () => {
+  // Verbatim from the field: every row of a shared table was refused with this,
+  // the rows rendered as though saved, and the outbox retried each one forever
+  // because nothing classified the failure.
+  const MESSAGE =
+    'Failed getting class did:ad:ViKExaq3nm6tVE5UCaCzEQhe7lwOrd. Resource not found. ' +
+    'DID Resource did:ad:ViKExaq3nm6tVE5UCaCzEQhe7lwOrd not found locally';
+
+  it('blocks, so the entry stops retrying and stays visible', ({ expect }) => {
+    expect(isUnrecoverableCommitError(MESSAGE, ErrorCode.MISSING_CLASS)).toBe(
+      true,
+    );
+  });
+
+  it('is NOT terminal — the row is good and must not be discarded', ({
+    expect,
+  }) => {
+    // The class can still arrive, and the same commit would then apply.
+    // Dropping the entry would throw away a write the user believes they made.
+    expect(isTerminalCommitError(MESSAGE, ErrorCode.MISSING_CLASS)).toBe(false);
+  });
+
+  it('blocks on the message alone, for a server too old to send the code', ({
+    expect,
+  }) => {
+    expect(isUnrecoverableCommitError(MESSAGE, undefined)).toBe(true);
+    expect(isUnrecoverableCommitError(MESSAGE, ErrorCode.UNKNOWN)).toBe(true);
+  });
+});
+
 describe('isUnrecoverableCommitError (F5: code-first, planning/unified-sync.md)', () => {
   it('trusts a recognized code even with unrelated message text', ({
     expect,

@@ -159,6 +159,18 @@ export function isUnrecoverableCommitErrorMessage(message: string): boolean {
     return true;
   }
 
+  // Server emits: "Failed getting class <subject>. Resource not found..."
+  // (`storelike.rs`). The commit names a class this server does not hold, so
+  // validation cannot run and every retry fails identically.
+  //
+  // Blocking, not terminal. The row itself is fine — this fires when a table's
+  // class never reached the server the row is being written to — so the entry
+  // has to stay. Found in the field as two people adding table rows that
+  // rendered locally, were refused one at a time, and were reported nowhere.
+  if (message.includes('Failed getting class')) {
+    return true;
+  }
+
   return false;
 }
 
@@ -179,6 +191,7 @@ const KNOWN_ERROR_CODES: ReadonlySet<number> = new Set([
   ErrorCode.GENESIS_COLLISION,
   ErrorCode.MISSING_REQUIRED_PROPERTY,
   ErrorCode.UNAUTHORIZED_WRITE,
+  ErrorCode.MISSING_CLASS,
 ]);
 
 /**
@@ -207,7 +220,9 @@ export function isUnrecoverableCommitError(
   code?: number,
 ): boolean {
   if (code !== undefined && KNOWN_ERROR_CODES.has(code)) {
-    return code === ErrorCode.UNAUTHORIZED_WRITE;
+    return (
+      code === ErrorCode.UNAUTHORIZED_WRITE || code === ErrorCode.MISSING_CLASS
+    );
   }
 
   return isUnrecoverableCommitErrorMessage(message);

@@ -232,6 +232,96 @@ async fn e2e_bidirectional_bulk_sync() {
 }
 
 /// After bulk sync, an edit on A reaches B via the live stream.
+/// An idle link stays up.
+///
+/// The read loop now treats silence as a dead connection, which is what makes a
+/// half-open link recoverable — one side's stream can die while the other keeps
+/// broadcasting into it, and until this it took ~15 minutes for the second side
+/// to notice, during which every local change was silently dropped and
+/// `auto_connect` would not redial (it skips peers it believes are connected).
+///
+/// The hazard in that fix is tearing down healthy connections that simply have
+/// nothing to say, so this waits past the keepalive interval with no traffic at
+/// all and asserts the peer is still there and still syncing.
+#[tokio::test]
+async fn e2e_an_idle_link_survives_on_keepalives() {
+    let pair = setup_pair("e2e_idle_link").await;
+
+    sync_b_from_a(&pair).await;
+    wait_for_live_peers(1, std::time::Duration::from_secs(3)).await;
+
+    // Quiet for longer than a keepalive interval — but inside the liveness
+    // timeout, so only the keepalives are holding it open.
+    tokio::time::sleep(crate::sync::protocol::KEEPALIVE_INTERVAL * 2).await;
+
+    assert!(
+        crate::sync::peer::live_peer_count() >= 1,
+        "an idle connection must be held open by keepalives, not torn down"
+    );
+
+    // And it still works, rather than merely appearing registered.
+    let canvas = pair
+        .db_a
+        .create_resource(
+            CANVAS_CLASS,
+            &pair.drive,
+            "After idling",
+            Some(vec![(
+                STROKE_DATA,
+                crate::Value::Json(serde_json::Value::Array(vec![
+                    serde_json::json!({"color": 2, "path": [[1.0, 1.0]]}),
+                ])),
+            )]),
+        )
+        .await
+        .unwrap();
+
+    sync_b_from_a(&pair).await;
+    assert_eq!(stroke_count(&pair.db_b, &canvas).await, 1);
+}
+
+/// Presence crosses a peer link — and never reaches the store.
+///
+/// Both halves matter. Before this, `EPHEMERAL` (0x40) was a reserved tag with
+/// no sender and no handler, so two machines syncing the same drive could not
+/// see each other's cursors at all. And presence must stay out of the store:
+/// every other frame on this link ends in a write, and cursor positions merged
+/// into the CRDT would be persisted and synced forever.
+#[tokio::test]
+async fn e2e_presence_crosses_the_link_without_being_stored() {
+    let pair = setup_pair("e2e_presence").await;
+
+    sync_b_from_a(&pair).await;
+    wait_for_live_peers(1, std::time::Duration::from_secs(3)).await;
+
+    let before = pair.db_b.all_resources(true).count();
+    let mut presence = pair.db_b.subscribe_ephemeral();
+
+    let payload = b"cursor-position-blob".to_vec();
+    crate::sync::peer::broadcast_ephemeral(
+        crate::sync::protocol::ephemeral_kind::PRESENCE,
+        &pair.drive,
+        "did:ad:agent:someone",
+        &payload,
+        None,
+    );
+
+    let received = tokio::time::timeout(std::time::Duration::from_secs(5), presence.recv())
+        .await
+        .expect("presence must arrive before the timeout")
+        .expect("the presence channel must stay open");
+
+    assert_eq!(received.drive, pair.drive);
+    assert_eq!(received.agent, "did:ad:agent:someone");
+    assert_eq!(received.payload, payload);
+
+    let after = pair.db_b.all_resources(true).count();
+    assert_eq!(
+        before, after,
+        "presence must not create resources — it is not data"
+    );
+}
+
 #[tokio::test]
 async fn e2e_stroke_append_after_sync() {
     let pair = setup_pair("e2e_stroke").await;
@@ -407,13 +497,22 @@ async fn e2e_engine_pull_after_iroh_bulk_sync() {
     let subjects = crate::sync::engine::collect_drive_subjects(&pair.db_b, &drive_subject).await;
     let vvs = crate::sync::engine::build_drive_vvs(&pair.db_b, &subjects);
     let hash = crate::sync::engine::compute_drive_hash(&vvs);
+    // Pull as the drive's own agent, not `Public`. Since the personal drive is
+    // derived and provisioned private, nothing on it is world-readable, and the
+    // push side of `handle_sync_vv` filters by `check_read` — so a `Public`
+    // pull now returns SYNC_DIFF with no SYNC_PUSH behind it and imports
+    // nothing. `Public` passed here only while test drives happened to be
+    // readable by anyone, which is not the shape this fallback runs in: the
+    // device doing the pull is the owner's other device, holding the owner's
+    // agent.
+    let owner = crate::agents::ForAgent::from(pair.db_a.get_default_agent().unwrap());
     let frames = crate::sync::engine::handle_sync_vv(
         &pair.drive,
         &hash,
         &[],
         &std::collections::HashMap::new(),
         &pair.db_a,
-        &ForAgent::Public,
+        &owner,
     )
     .await;
 

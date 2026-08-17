@@ -259,3 +259,27 @@ must compute the same differing set on either end of the wire. Both carry the
 same test names. A fix to one is a fix to the other; the golden-vector tests
 (`item_fingerprint_matches_golden_vector`) pin the hashing, but the *traversal*
 is only kept in step by mirroring the tests, so do that deliberately.
+
+`lib/src/genesis.rs` ↔ `browser/lib/src/genesis.ts` also share a personal-drive
+derivation (`personal_drive_subject` / `personalDriveSubject`). The cross-lang
+vector (`personal_drive_cross_lang_vector`) pins the nonce, signature, and DID.
+
+## Personal drive identity
+
+| Flow | Where |
+|---|---|
+| Same agent key → same personal-drive DID | `lib/src/genesis.rs`, `browser/lib/src/genesis.test.ts` |
+| Cross-language personal-drive vector | `genesis.rs` + `genesis.test.ts` |
+| Repeat genesis for that DID merges Loro state | `lib/src/commit.rs::repeat_personal_drive_genesis_merges` |
+| Repeat genesis without a cert is still rejected | `lib/src/commit.rs::repeat_genesis_without_cert_is_still_rejected` |
+| `createDrive({ personal: true })` uses the derived DID | `browser/lib/src/store.personal-drive.test.ts` |
+| Two stores with the same key mint the same subject | `store.personal-drive.test.ts` |
+| Extra drives are listed on the derived personal drive | `store.personal-drive.test.ts` |
+| Lists from a previous random-DID home are unioned onto the derived drive | `store.personal-drive.test.ts` |
+| `Agent.personalDriveSubject` matches the genesis helper | `agent.test.ts` |
+| `Db::setup` / `ensure_personal_drive` use the derived DID and are idempotent | `lib/src/db.rs::personal_drive_tests` |
+| Extra `Db::create_drive` is listed on the personal drive | `lib/src/db.rs::personal_drive_tests` |
+
+Not covered: Flutter `create_drive` still mints a random DID (the Rust
+`ensure_personal_drive` helper exists for `setup()`). E2E sign-in on a second
+machine with the old machine offline.

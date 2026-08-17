@@ -43,6 +43,60 @@ pub mod tag {
     /// authorization (the authenticated agent + Iroh NodeId are).
     pub const HELLO: u8 = 0x37;
     pub const EPHEMERAL: u8 = 0x40;
+    /// Liveness probe. Payload-free, never answered — its only job is to give
+    /// the peer's read loop something to receive, so silence can be treated as
+    /// a dead link rather than an idle one.
+    pub const KEEPALIVE: u8 = 0x41;
+}
+
+/// How often an otherwise-idle live connection sends a `KEEPALIVE`.
+pub const KEEPALIVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// How long a live connection may hear nothing at all before it is considered
+/// dead. Comfortably more than [`KEEPALIVE_INTERVAL`], so a couple of dropped
+/// probes do not tear down a working link.
+///
+/// This exists because a half-open connection is invisible: one side's stream
+/// dies and the other keeps queueing writes into it, believing it is live —
+/// which also stops the reconnect loop, since that skips peers it thinks are
+/// connected. Observed gap between the two sides noticing: 15 minutes, during
+/// which every local change was silently dropped.
+pub const LIVENESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(35);
+
+/// Which live-collaboration channel a frame belongs to.
+///
+/// They are not interchangeable: each fans out to a different subscriber set on
+/// the far side, so the frame has to say which. [`DOC`] additionally differs in
+/// what it is *allowed* to do — see its own note.
+pub mod ephemeral_kind {
+    /// `LORO_EPHEMERAL_UPDATE` — ephemeral state for one subject.
+    pub const LORO: u8 = 0;
+    /// `PRESENCE_UPDATE` — drive-scoped presence.
+    pub const PRESENCE: u8 = 1;
+    /// `LORO_SYNC_UPDATE` — the ops of an edit in progress, before anyone has
+    /// saved.
+    ///
+    /// The odd one out, and the reason this frame is no longer only about
+    /// presence: this is content, not a cursor. Committed state crosses the
+    /// link as an `UPDATE` frame when the store is written, which happens on
+    /// save — so without this, a peer sees nothing of an edit until it is
+    /// finished, while cursors cross the instant they move. The result was
+    /// carets pointing into text the receiving document had never heard of,
+    /// which Loro rejects, so remote cursors never appeared at all.
+    ///
+    /// Because it is content it gets a stricter gate and a looser size limit
+    /// than the other two: see [`max_payload_for_kind`] and the read loop in
+    /// `peer.rs`, which admits it on *write* rights rather than read.
+    pub const DOC: u8 = 2;
+}
+
+/// A single `KEEPALIVE` frame, length-prefixed and ready to send.
+pub fn encode_keepalive_wire_msg() -> Vec<u8> {
+    let frame = vec![tag::KEEPALIVE];
+    let mut msg = Vec::with_capacity(4 + frame.len());
+    msg.extend_from_slice(&(frame.len() as u32).to_be_bytes());
+    msg.extend_from_slice(&frame);
+    msg
 }
 
 /// Structured error codes carried on `ERROR` frames (and the HTTP `/commit`
@@ -72,6 +126,15 @@ pub mod error_code {
     /// Retrying floods the server; only a rights change or a fresh edit
     /// helps. Blocking — stop retrying, keep the entry visible.
     pub const UNAUTHORIZED_WRITE: u16 = 3;
+    /// The commit names a class this server does not hold, so validation
+    /// cannot run. Seen in the field as a table whose rows were refused one at
+    /// a time because the table's row class had never reached the server: every
+    /// row looked saved locally and none of them were.
+    ///
+    /// Blocking, NOT terminal. The write itself is well-formed — the class may
+    /// still arrive, at which point the same commit would apply — so dropping
+    /// it would discard a good edit. Keep it, stop retrying, and say so.
+    pub const MISSING_CLASS: u16 = 4;
 }
 
 /// Classify a commit-application error message into a structured code for
@@ -91,6 +154,13 @@ pub fn classify_commit_error(message: &str) -> u16 {
 
     if message.contains("/properties/write right has been found") {
         return error_code::UNAUTHORIZED_WRITE;
+    }
+
+    // `storelike.rs` wraps the lookup failure as
+    // "Failed getting class <subject>. <inner>", so the prefix is the stable
+    // part regardless of why the class could not be read.
+    if message.contains("Failed getting class") {
+        return error_code::MISSING_CLASS;
     }
 
     error_code::UNKNOWN
@@ -403,6 +473,119 @@ pub fn encode_hello(name: &str) -> Vec<u8> {
     buf.extend_from_slice(&(len as u16).to_be_bytes());
     buf.extend_from_slice(&name_bytes[..len]);
     buf
+}
+
+/// Largest ephemeral payload accepted from a peer. Presence is cursor
+/// positions and selections, not documents — anything larger is a bug or an
+/// attempt to push real data down a channel that skips every rights check a
+/// write would face.
+pub const EPHEMERAL_MAX_PAYLOAD: usize = 64 * 1024;
+
+/// Largest [`ephemeral_kind::DOC`] payload accepted from a peer.
+///
+/// Roomier than [`EPHEMERAL_MAX_PAYLOAD`] because this kind carries content: a
+/// keystroke is tens of bytes, but pasting a section of a document is a single
+/// op and can be far larger. Still bounded — a whole document arrives as a
+/// snapshot through the sync handshake, not through here.
+pub const LIVE_DOC_MAX_PAYLOAD: usize = 1024 * 1024;
+
+/// The payload ceiling for one [`ephemeral_kind`].
+pub fn max_payload_for_kind(kind: u8) -> usize {
+    if kind == ephemeral_kind::DOC {
+        LIVE_DOC_MAX_PAYLOAD
+    } else {
+        EPHEMERAL_MAX_PAYLOAD
+    }
+}
+
+/// Encode an EPHEMERAL frame: `drive`, the agent it originated from, and an
+/// opaque payload (a Loro `EphemeralStore` update).
+///
+/// The agent travels with the frame because a peer link is node-to-node while
+/// presence is per-agent: one node may relay several agents' cursors, and the
+/// receiver needs to know whose it is — to attribute it, and to decide whether
+/// it may be shown at all.
+pub fn encode_ephemeral(kind: u8, drive: &str, agent: &str, payload: &[u8]) -> Vec<u8> {
+    let drive_bytes = drive.as_bytes();
+    let agent_bytes = agent.as_bytes();
+    let drive_len = drive_bytes.len().min(u16::MAX as usize);
+    let agent_len = agent_bytes.len().min(u16::MAX as usize);
+
+    let mut buf = Vec::with_capacity(2 + 2 + drive_len + 2 + agent_len + payload.len());
+    buf.push(tag::EPHEMERAL);
+    buf.push(kind);
+    buf.extend_from_slice(&(drive_len as u16).to_be_bytes());
+    buf.extend_from_slice(&drive_bytes[..drive_len]);
+    buf.extend_from_slice(&(agent_len as u16).to_be_bytes());
+    buf.extend_from_slice(&agent_bytes[..agent_len]);
+    buf.extend_from_slice(payload);
+    buf
+}
+
+/// A decoded EPHEMERAL frame. Never persisted — see the read loop in `peer.rs`.
+#[derive(Debug, Clone)]
+pub struct DecodedEphemeral {
+    /// See [`ephemeral_kind`].
+    pub kind: u8,
+    pub drive: String,
+    pub agent: String,
+    pub payload: Vec<u8>,
+}
+
+/// Decode the payload of an EPHEMERAL frame (slice *after* the tag byte).
+///
+/// Returns `None` on truncation, invalid UTF-8, or a payload beyond
+/// [`max_payload_for_kind`]. Fail closed rather than attempt recovery — for
+/// presence because it is the least important thing on the link, and for
+/// [`ephemeral_kind::DOC`] because a half-read op is worse than a missing one:
+/// the sender's next save pushes a full snapshot, so a dropped frame costs a
+/// moment of divergence, not the edit.
+pub fn decode_ephemeral(data: &[u8]) -> Option<DecodedEphemeral> {
+    if data.len() < 3 {
+        return None;
+    }
+
+    let kind = data[0];
+    let drive_len = u16::from_be_bytes([data[1], data[2]]) as usize;
+    let mut cursor = 3;
+
+    if data.len() < cursor + drive_len {
+        return None;
+    }
+
+    let drive = std::str::from_utf8(&data[cursor..cursor + drive_len])
+        .ok()?
+        .to_string();
+    cursor += drive_len;
+
+    if data.len() < cursor + 2 {
+        return None;
+    }
+
+    let agent_len = u16::from_be_bytes([data[cursor], data[cursor + 1]]) as usize;
+    cursor += 2;
+
+    if data.len() < cursor + agent_len {
+        return None;
+    }
+
+    let agent = std::str::from_utf8(&data[cursor..cursor + agent_len])
+        .ok()?
+        .to_string();
+    cursor += agent_len;
+
+    let payload = data[cursor..].to_vec();
+
+    if payload.len() > max_payload_for_kind(kind) {
+        return None;
+    }
+
+    Some(DecodedEphemeral {
+        kind,
+        drive,
+        agent,
+        payload,
+    })
 }
 
 /// Decode the payload of a HELLO frame (slice *after* the tag byte).
@@ -960,10 +1143,116 @@ mod tests {
         );
     }
 
+    /// The message a table row gets when its class never reached this server.
+    /// Verbatim from the field, where every row of a shared table was refused
+    /// with it and nothing surfaced that to either person.
+    #[test]
+    fn a_missing_class_is_classified_rather_than_left_unknown() {
+        assert_eq!(
+            classify_commit_error(
+                "Failed getting class did:ad:ViKExaq3nm6tVE5UCaCzEQhe7lwOrd. \
+                 Resource not found. DID Resource did:ad:ViKExaq3nm6tVE5UCaCzEQhe7lwOrd \
+                 not found locally"
+            ),
+            error_code::MISSING_CLASS
+        );
+    }
+
     #[test]
     fn encode_sub_frame() {
         let encoded = encode_sub("did:ad:drive:abc");
         assert_eq!(encoded[0], tag::SUB);
         assert_eq!(&encoded[1..], b"did:ad:drive:abc");
+    }
+}
+
+#[cfg(test)]
+mod ephemeral_frame_tests {
+    use super::*;
+
+    #[test]
+    fn an_ephemeral_frame_round_trips() {
+        let payload = vec![0xAA, 0xBB, 0x00, 0xFF];
+        let frame = encode_ephemeral(
+            ephemeral_kind::PRESENCE,
+            "did:ad:drive123",
+            "did:ad:agent:abc",
+            &payload,
+        );
+
+        assert_eq!(frame[0], tag::EPHEMERAL);
+
+        let decoded = decode_ephemeral(&frame[1..]).expect("must decode");
+        assert_eq!(decoded.kind, ephemeral_kind::PRESENCE);
+        assert_eq!(decoded.drive, "did:ad:drive123");
+        assert_eq!(decoded.agent, "did:ad:agent:abc");
+        assert_eq!(decoded.payload, payload);
+    }
+
+    /// Presence skips every check a write faces, so an oversized payload is
+    /// either a bug or an attempt to move real data down it. Drop, don't parse.
+    #[test]
+    fn an_oversized_payload_is_refused() {
+        let payload = vec![0u8; EPHEMERAL_MAX_PAYLOAD + 1];
+        let frame = encode_ephemeral(
+            ephemeral_kind::PRESENCE,
+            "did:ad:drive123",
+            "did:ad:agent:abc",
+            &payload,
+        );
+
+        assert!(decode_ephemeral(&frame[1..]).is_none());
+    }
+
+    /// Fail closed on anything malformed: presence is the least important
+    /// thing on the link, so a truncated frame is dropped rather than guessed.
+    #[test]
+    fn a_truncated_frame_is_refused() {
+        let frame = encode_ephemeral(
+            ephemeral_kind::LORO,
+            "did:ad:drive123",
+            "did:ad:agent:abc",
+            &[1, 2, 3],
+        );
+
+        for cut in 1..frame.len().min(24) {
+            let _ = decode_ephemeral(&frame[1..cut]);
+        }
+
+        assert!(decode_ephemeral(&[]).is_none());
+        assert!(decode_ephemeral(&[0xFF]).is_none());
+    }
+
+    /// An edit in progress is content, not a cursor: a paste is one op and can
+    /// be far bigger than any selection. Holding it to the presence ceiling
+    /// would drop exactly the edits most worth relaying.
+    #[test]
+    fn an_edit_may_carry_more_than_a_cursor() {
+        let payload = vec![7u8; EPHEMERAL_MAX_PAYLOAD + 1];
+        let frame = encode_ephemeral(
+            ephemeral_kind::DOC,
+            "did:ad:doc123",
+            "did:ad:agent:abc",
+            &payload,
+        );
+
+        let decoded = decode_ephemeral(&frame[1..]).expect("must decode");
+        assert_eq!(decoded.kind, ephemeral_kind::DOC);
+        assert_eq!(decoded.payload, payload);
+    }
+
+    /// Roomier is not unbounded — a whole document arrives as a snapshot
+    /// through the sync handshake, never through this channel.
+    #[test]
+    fn an_edit_past_its_own_ceiling_is_refused() {
+        let payload = vec![7u8; LIVE_DOC_MAX_PAYLOAD + 1];
+        let frame = encode_ephemeral(
+            ephemeral_kind::DOC,
+            "did:ad:doc123",
+            "did:ad:agent:abc",
+            &payload,
+        );
+
+        assert!(decode_ephemeral(&frame[1..]).is_none());
     }
 }

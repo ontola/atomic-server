@@ -112,7 +112,28 @@ const store = new Store({
 const initialDrive = driveStorage.get();
 
 if (initialDrive) {
-  store.setDrive(initialDrive);
+  // `setDrive` reads an http(s) subject as a SERVER ORIGIN and repoints the
+  // app at it. That is intended when the user opens an external drive, but
+  // restoring the last session is not that choice — and a stored URL from a
+  // previous switch would re-apply it on every launch, stranding the app on a
+  // server it cannot authenticate against with no obvious way back.
+  const restoresForeignServer =
+    /^https?:\/\//.test(initialDrive) &&
+    (() => {
+      try {
+        return new URL(initialDrive).origin !== new URL(serverUrl).origin;
+      } catch {
+        return true;
+      }
+    })();
+
+  if (restoresForeignServer) {
+    console.warn(
+      `[atomic] Ignoring stored drive '${initialDrive}': opening it would move this app to another server. Pick it from the drive switcher to switch deliberately.`,
+    );
+  } else {
+    store.setDrive(initialDrive);
+  }
 }
 
 // A deep link into a resource (share/show `?subject=` entry URL) starts the

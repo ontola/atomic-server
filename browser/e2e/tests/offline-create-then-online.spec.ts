@@ -67,6 +67,11 @@ test.describe('offline create → online sync → disable localDB', () => {
       const store = window.store;
       const drive = await store.createDrive('Offline-Created Drive', {
         description: 'Created while offline — must survive disabling localDB.',
+        // An ADDITIONAL drive. `personal` defaults to true, and a personal
+        // drive is now the agent's derived home — one subject per key — so
+        // without this the call returns the dev drive this test already has
+        // instead of creating anything.
+        personal: false,
       });
 
       return drive.subject as string;

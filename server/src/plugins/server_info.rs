@@ -61,7 +61,24 @@ fn peer_resources(store: &Db) -> Vec<atomic_lib::values::SubResource> {
     let live = crate::iroh_transport::live_peer_ids();
     let known = crate::iroh_transport::get_known_peers(store);
 
-    let mut seen: Vec<(String, Option<String>, bool)> = Vec::new();
+    // (node id, name, live, last synced). `last_synced` is already tracked on
+    // the stored peer; reporting it is what lets a device card say when it last
+    // exchanged anything instead of only whether a socket is open. "Connected"
+    // alone cannot distinguish a healthy link from one that has moved nothing.
+    let mut seen: Vec<(
+        String,
+        Option<String>,
+        bool,
+        Option<i64>,
+        Option<u32>,
+        Option<u32>,
+    )> = Vec::new();
+
+    let stored_for = |id: &str| -> Option<&atomic_lib::sync::peer::KnownPeer> {
+        known
+            .iter()
+            .find(|p| crate::iroh_transport::normalize_node_id(&p.node_id) == id)
+    };
 
     for id in &live {
         let name = crate::iroh_transport::live_peer_name(id).or_else(|| {
@@ -71,37 +88,72 @@ fn peer_resources(store: &Db) -> Vec<atomic_lib::values::SubResource> {
                 .map(|p| p.name.clone())
                 .filter(|n| !n.is_empty())
         });
-        seen.push((id.clone(), name, true));
+        let stored = stored_for(id);
+        seen.push((
+            id.clone(),
+            name,
+            true,
+            stored.and_then(|p| p.last_synced),
+            stored.and_then(|p| p.last_sent),
+            stored.and_then(|p| p.last_received),
+        ));
     }
 
     for peer in &known {
         let id = crate::iroh_transport::normalize_node_id(&peer.node_id);
 
-        if seen.iter().any(|(known_id, _, _)| known_id == &id) {
+        if seen.iter().any(|(known_id, ..)| known_id == &id) {
             continue;
         }
 
         let name = Some(peer.name.clone()).filter(|n| !n.is_empty());
-        seen.push((id, name, false));
+        seen.push((
+            id,
+            name,
+            false,
+            peer.last_synced,
+            peer.last_sent,
+            peer.last_received,
+        ));
     }
 
     seen.into_iter()
-        .map(|(node_id, name, is_live)| {
-            let mut propvals = atomic_lib::resources::PropVals::new();
-            propvals.insert(urls::IS_A.into(), vec![urls::PEER.to_string()].into());
-            propvals.insert(
-                urls::PEER_NODE_ID.into(),
-                Value::String(format!("did:ad:node:{node_id}")),
-            );
+        .map(
+            |(node_id, name, is_live, last_synced, last_sent, last_received)| {
+                let mut propvals = atomic_lib::resources::PropVals::new();
+                propvals.insert(urls::IS_A.into(), vec![urls::PEER.to_string()].into());
+                propvals.insert(
+                    urls::PEER_NODE_ID.into(),
+                    Value::String(format!("did:ad:node:{node_id}")),
+                );
 
-            if let Some(name) = name {
-                propvals.insert(urls::PEER_DEVICE_NAME.into(), Value::String(name));
-            }
+                if let Some(name) = name {
+                    propvals.insert(urls::PEER_DEVICE_NAME.into(), Value::String(name));
+                }
 
-            propvals.insert(urls::PEER_LIVE.into(), Value::Boolean(is_live));
+                propvals.insert(urls::PEER_LIVE.into(), Value::Boolean(is_live));
 
-            atomic_lib::values::SubResource::Nested(propvals)
-        })
+                if let Some(last_synced) = last_synced {
+                    propvals.insert(urls::PEER_LAST_SEEN.into(), Value::Timestamp(last_synced));
+                }
+
+                // What the last sync moved, each way. A timestamp plus
+                // "Connected" still cannot distinguish a link carrying data
+                // from one being refused every subject; these can.
+                if let Some(sent) = last_sent {
+                    propvals.insert(urls::PEER_LAST_SENT.into(), Value::Integer(sent as i64));
+                }
+
+                if let Some(received) = last_received {
+                    propvals.insert(
+                        urls::PEER_LAST_RECEIVED.into(),
+                        Value::Integer(received as i64),
+                    );
+                }
+
+                atomic_lib::values::SubResource::Nested(propvals)
+            },
+        )
         .collect()
 }
 

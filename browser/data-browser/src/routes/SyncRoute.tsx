@@ -1092,9 +1092,17 @@ function SyncPage() {
             ? data.peerName.trim()
             : undefined;
         const didFallback = `${NODE_DID_PREFIX}${rawNodeId.slice(0, 8)}...`;
-        const msg = peerName
-          ? `Synced ${data.count} resource${data.count !== 1 ? 's' : ''} with ${peerName}`
-          : `Synced ${data.count} resource${data.count !== 1 ? 's' : ''}`;
+        // Say what moved in each direction. A pass that sends 49 and receives 1
+        // is not "1 resource synced", and reporting it that way hides whether
+        // the link works at all.
+        const received: number =
+          typeof data.count === 'number' ? data.count : 0;
+        const sent: number = typeof data.pushed === 'number' ? data.pushed : 0;
+        const withWhom = peerName ? ` with ${peerName}` : '';
+        const msg =
+          received === 0 && sent === 0
+            ? `Already up to date${withWhom}`
+            : `Synced${withWhom} — sent ${sent}, received ${received}`;
         setPeerSyncResult(msg);
 
         const existing = knownPeers.findIndex(
@@ -1477,39 +1485,66 @@ function SyncPage() {
               />
             ))}
 
-          {/* Paired devices (Iroh peers) */}
-          {pairedPeers.map(peer => (
-            <ConnCard key={peer.nodeId}>
-              <CardIcon>
-                <FaMobileScreenButton />
-              </CardIcon>
-              <ConnBody>
-                <ConnTopRow>
-                  <ConnTitle title={peer.nodeId}>{peer.label}</ConnTitle>
-                  <ConnTopRight>
-                    <StatusPill $status='unknown'>Paired</StatusPill>
-                    <NodeAction
-                      onClick={() => syncWithPeer(peer.nodeId)}
-                      disabled={peerSyncing}
-                    >
-                      {peerSyncing ? 'Syncing…' : 'Sync now'}
-                    </NodeAction>
-                  </ConnTopRight>
-                </ConnTopRow>
-                <ConnSub>
-                  Paired device
-                  {peer.lastSync
-                    ? ` · synced ${formatTimeAgo(new Date(peer.lastSync)) ?? 'just now'}`
-                    : ''}
-                </ConnSub>
-                <ConnActions>
-                  <NodeActionSubtle onClick={() => removePeer(peer.nodeId)}>
-                    Remove
-                  </NodeActionSubtle>
-                </ConnActions>
-              </ConnBody>
-            </ConnCard>
-          ))}
+          {/* Paired devices (Iroh peers).
+
+              Status comes from THIS device's own server rather than the local
+              `atomic-peers` record: that record only updates when the user
+              presses "Sync now", so it reported "synced 5 hours ago" about a
+              link that was live and exchanging data. The server knows whether
+              the peer is connected right now and when it last synced. */}
+          {pairedPeers.map(peer => {
+            const reported = serverPeers.find(
+              p => nodeDidToRaw(p.nodeId) === nodeDidToRaw(peer.nodeId),
+            );
+            const lastSynced = reported?.lastSeen ?? peer.lastSync;
+
+            return (
+              <ConnCard key={peer.nodeId}>
+                <CardIcon>
+                  <FaMobileScreenButton />
+                </CardIcon>
+                <ConnBody>
+                  <ConnTopRow>
+                    <ConnTitle title={peer.nodeId}>{peer.label}</ConnTitle>
+                    <ConnTopRight>
+                      <StatusPill
+                        $status={reported?.live ? 'synced' : 'unknown'}
+                      >
+                        {reported?.live ? 'Connected' : 'Paired'}
+                      </StatusPill>
+                      <NodeAction
+                        onClick={() => syncWithPeer(peer.nodeId)}
+                        disabled={peerSyncing}
+                      >
+                        {peerSyncing ? 'Syncing…' : 'Sync now'}
+                      </NodeAction>
+                    </ConnTopRight>
+                  </ConnTopRow>
+                  <ConnSub>
+                    Paired device
+                    {lastSynced
+                      ? ` · synced ${formatTimeAgo(new Date(lastSynced)) ?? 'just now'}`
+                      : ' · not synced yet'}
+                    {/* Only what this side actually counted — the accepting node
+                      answers frames through the engine and does not tally what
+                      it served, and a fabricated 0 would be the same lie this
+                      is meant to remove. */}
+                    {reported?.lastSent !== undefined
+                      ? ` · sent ${reported.lastSent}`
+                      : ''}
+                    {reported?.lastReceived !== undefined
+                      ? ` · received ${reported.lastReceived}`
+                      : ''}
+                  </ConnSub>
+                  <ConnActions>
+                    <NodeActionSubtle onClick={() => removePeer(peer.nodeId)}>
+                      Remove
+                    </NodeActionSubtle>
+                  </ConnActions>
+                </ConnBody>
+              </ConnCard>
+            );
+          })}
 
           {/* Devices paired with the server this browser reads from — a phone
               that scanned the code. The server reports them; this tab only
@@ -1535,7 +1570,42 @@ function SyncPage() {
                   </ConnTopRow>
                   <ConnSub>
                     Paired with {serverLabel(status.serverUrl ?? '')}
+                    {/* "Connected" only says a socket is open. Say when data
+                        last actually moved, so a link that is up but carrying
+                        nothing is distinguishable from a healthy one. */}
+                    {peer.lastSeen
+                      ? ` · synced ${
+                          formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
+                        }`
+                      : ' · not synced yet'}
+                    {/* What that sync actually moved. A timestamp alone cannot
+                        tell a working link from one being refused every
+                        subject. Deliberately the last pass, not a lifetime
+                        total — see `KnownPeer::last_sent`. */}
+                    {peer.lastSeen &&
+                    (peer.lastSent !== undefined ||
+                      peer.lastReceived !== undefined)
+                      ? ` · sent ${peer.lastSent ?? 0}, received ${
+                          peer.lastReceived ?? 0
+                        }`
+                      : ''}
                   </ConnSub>
+                  <NodeIdRow>
+                    <NodeIdLabel>Node ID</NodeIdLabel>
+                    <NodeIdValue
+                      title={`Copy ${peer.nodeId}`}
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(peer.nodeId);
+                          toast.success('Node ID copied');
+                        } catch (e) {
+                          store.notifyError(e as Error);
+                        }
+                      }}
+                    >
+                      {peer.nodeId}
+                    </NodeIdValue>
+                  </NodeIdRow>
                   <ConnActions>
                     <NodeActionSubtle
                       onClick={() => disconnectServerPeer(peer.nodeId)}

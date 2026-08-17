@@ -324,8 +324,18 @@ use std::sync::Mutex;
 
 /// Active outgoing send streams keyed by peer NodeID.
 /// Used to push UPDATE frames to connected peers.
-static LIVE_PEERS: Mutex<Option<HashMap<String, tokio::sync::mpsc::Sender<Vec<u8>>>>> =
+/// Value is `(connection generation, sender)`. The generation exists because a
+/// reconnect installs a new entry under the SAME node id, and the old
+/// connection's loops then tear down moments later. Keyed only by node id, that
+/// teardown removed the entry the *new* connection had just installed — live
+/// sync went silent while both ends still displayed "Connected", and nothing
+/// recovered it until the next reconnect. Removal now only applies if the entry
+/// still belongs to the connection asking to remove it.
+static LIVE_PEERS: Mutex<Option<HashMap<String, (u64, tokio::sync::mpsc::Sender<Vec<u8>>)>>> =
     Mutex::new(None);
+
+/// Monotonic id per live connection; see [`LIVE_PEERS`].
+static LIVE_PEER_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// Keep QUIC connections alive so live streams don't drop.
 static LIVE_CONNECTIONS: Mutex<Option<Vec<iroh::endpoint::Connection>>> = Mutex::new(None);
@@ -378,21 +388,44 @@ pub fn live_peer_ids() -> Vec<String> {
 }
 
 /// Drop a live peer entry (dead write loop, closed channel, or reconnect).
-pub fn remove_live_peer(peer_id: &str) {
-    remove_live_peer_inner(peer_id, true);
+///
+/// `generation` is the connection doing the removing: a stale connection must
+/// not evict the entry a newer one installed under the same node id.
+pub fn remove_live_peer(peer_id: &str, generation: u64) {
+    remove_live_peer_inner(peer_id, Some(generation), true);
 }
 
-/// Drop without notifying the UI (intentional reconnect / replace).
-fn remove_live_peer_quiet(peer_id: &str) {
-    remove_live_peer_inner(peer_id, false);
+/// Evict whatever connection is current, whoever installed it. For a deliberate
+/// reconnect, where the caller means "drop the existing link" rather than "my
+/// own connection ended".
+fn remove_live_peer_any_quiet(peer_id: &str) {
+    remove_live_peer_inner(peer_id, None, false);
 }
 
-fn remove_live_peer_inner(peer_id: &str, notify: bool) {
+/// Evict the current connection and tell the UI. For an explicit user action —
+/// "Disconnect" / forget this peer — where the intent is to drop the link
+/// whichever connection happens to hold it.
+pub fn remove_live_peer_any(peer_id: &str) {
+    remove_live_peer_inner(peer_id, None, true);
+}
+
+fn remove_live_peer_inner(peer_id: &str, generation: Option<u64>, notify: bool) {
     let key = normalize_node_id(peer_id);
     let mut removed = false;
     if let Ok(mut guard) = LIVE_PEERS.lock() {
         if let Some(map) = guard.as_mut() {
-            removed = map.remove(&key).is_some();
+            let is_current = match generation {
+                Some(generation) => map.get(&key).is_some_and(|(gen, _)| *gen == generation),
+                None => true,
+            };
+            if is_current {
+                removed = map.remove(&key).is_some();
+            } else if map.contains_key(&key) {
+                tracing::debug!(
+                    "[live] stale connection for {} tried to deregister a newer one — ignored",
+                    &key[..key.len().min(12)]
+                );
+            }
         }
     }
     if removed {
@@ -454,30 +487,18 @@ fn own_agent_update_frame(store: &Db) -> Option<Vec<u8>> {
     Some(encode_live_update_wire_msg(&key, &snapshot))
 }
 
-/// Whether `subject` is this device's own agent — the only agent resource a
-/// peer is allowed to reconcile with us (a same-agent link authenticated as
-/// exactly this agent), and the one whose live UPDATE must be applied without
-/// echoing back out (see the read loop).
-fn is_our_agent_subject(store: &Db, subject: &str) -> bool {
-    if !subject.starts_with("did:ad:agent:") {
-        return false;
-    }
-    let Ok(agent) = store.get_default_agent() else {
-        return false;
-    };
-    let ours = crate::Subject::from_raw(
-        &agent.subject.to_string(),
-        store.get_base_domain().as_deref(),
-    )
-    .pure_id();
-    crate::Subject::from_raw(subject, store.get_base_domain().as_deref()).pure_id() == ours
-}
-
-fn send_live_update_wire_msg(msg: Vec<u8>) {
+/// Fan an UPDATE out to live peers, except `skip_peer` — the peer an imported
+/// update came from. Sending it back is what made two idle nodes trade the same
+/// snapshot indefinitely.
+fn send_live_update_wire_msg_except(msg: Vec<u8>, skip_peer: Option<&str>) {
     let mut dead_peers = Vec::new();
     let peers = LIVE_PEERS.lock().unwrap();
     if let Some(map) = peers.as_ref() {
-        for (peer_id, tx) in map {
+        for (peer_id, (generation, tx)) in map {
+            if skip_peer.is_some_and(|skip| normalize_node_id(skip) == *peer_id) {
+                continue;
+            }
+
             match tx.try_send(msg.clone()) {
                 Ok(_) => {}
                 Err(tokio::sync::mpsc::error::TrySendError::Full(m)) => {
@@ -493,15 +514,51 @@ fn send_live_update_wire_msg(msg: Vec<u8>) {
                     });
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                    dead_peers.push(peer_id.clone());
+                    dead_peers.push((peer_id.clone(), *generation));
                 }
             }
         }
     }
     drop(peers);
-    for peer_id in dead_peers {
-        remove_live_peer(&peer_id);
+    for (peer_id, generation) in dead_peers {
+        remove_live_peer(&peer_id, generation);
     }
+}
+
+fn send_live_update_wire_msg(msg: Vec<u8>) {
+    send_live_update_wire_msg_except(msg, None);
+}
+
+/// Push live-collaboration state — presence, cursors, or the ops of an edit in
+/// progress — to connected live peers. `kind` says which; see
+/// `protocol::ephemeral_kind`.
+///
+/// `skip_peer` is the peer it arrived from, if this is a relay rather than a
+/// local update — the same echo suppression `UPDATE` frames use, which matters
+/// more here: these arrive at keystroke frequency, so a loop would saturate the
+/// link far faster than resource changes ever could.
+///
+/// Nothing is stored and nothing is retried. If the channel is full the frame
+/// is dropped, on the grounds that a stale cursor is better than a delayed
+/// document — and that a dropped op costs a moment of divergence, which the
+/// sender's next save repairs with a full snapshot.
+pub fn broadcast_ephemeral(
+    kind: u8,
+    drive: &str,
+    agent: &str,
+    payload: &[u8],
+    skip_peer: Option<&str>,
+) {
+    if payload.is_empty() || payload.len() > super::protocol::max_payload_for_kind(kind) {
+        return;
+    }
+
+    let frame = super::protocol::encode_ephemeral(kind, drive, agent, payload);
+    let len = frame.len() as u32;
+    let mut msg = Vec::with_capacity(4 + frame.len());
+    msg.extend_from_slice(&len.to_be_bytes());
+    msg.extend_from_slice(&frame);
+    send_live_update_wire_msg_except(msg, skip_peer);
 }
 
 /// Push an UPDATE frame to all connected live peers immediately (e.g. after a stroke save).
@@ -555,6 +612,13 @@ fn start_live_sync(store: Db) {
                 _ => continue,
             };
 
+            // Never send an update back to the peer it arrived from.
+            let from_peer: Option<String> = match &event {
+                crate::DbEvent::Changed { source_id, .. }
+                | crate::DbEvent::Destroyed { source_id, .. } => source_id.clone(),
+                _ => None,
+            };
+
             let loro_bytes: Option<Vec<u8>> = match &event {
                 crate::DbEvent::Changed {
                     delta: Some(delta), ..
@@ -574,7 +638,7 @@ fn start_live_sync(store: Db) {
                     let mut msg = Vec::with_capacity(4 + frame.len());
                     msg.extend_from_slice(&len.to_be_bytes());
                     msg.extend_from_slice(&frame);
-                    send_live_update_wire_msg(msg);
+                    send_live_update_wire_msg_except(msg, from_peer.as_deref());
                     continue;
                 }
                 _ => None,
@@ -582,7 +646,7 @@ fn start_live_sync(store: Db) {
 
             if let Some(bytes) = loro_bytes {
                 let msg = encode_live_update_wire_msg(&subject_key, &bytes);
-                send_live_update_wire_msg(msg);
+                send_live_update_wire_msg_except(msg, from_peer.as_deref());
             }
         }
     });
@@ -727,6 +791,7 @@ fn register_live_peer(
     let tx_for_read = tx.clone();
 
     // Add to peer map — replace if already connected (incoming may supersede outgoing)
+    let generation = LIVE_PEER_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
     let is_new_peer = {
         let mut map = LIVE_PEERS.lock().unwrap();
         if let Some(m) = map.as_mut() {
@@ -737,7 +802,7 @@ fn register_live_peer(
                     &key[..key.len().min(12)]
                 );
             }
-            m.insert(key.clone(), tx);
+            m.insert(key.clone(), (generation, tx));
             !replacing
         } else {
             false
@@ -772,7 +837,20 @@ fn register_live_peer(
             "[live] write loop started for {}",
             &write_peer_id[..write_peer_id.len().min(12)]
         );
-        while let Some(msg) = rx.recv().await {
+        loop {
+            // Send a KEEPALIVE whenever there is nothing else to say, so the
+            // peer can tell an idle link from a dead one. Without traffic the
+            // far side has no way to distinguish "quiet" from "gone", and a
+            // half-open connection survives until some lower layer eventually
+            // notices — 15 minutes, in the case this was written for.
+            let msg =
+                match tokio::time::timeout(super::protocol::KEEPALIVE_INTERVAL, rx.recv()).await {
+                    Ok(Some(msg)) => msg,
+                    // Channel closed: the peer was deregistered.
+                    Ok(None) => break,
+                    Err(_) => super::protocol::encode_keepalive_wire_msg(),
+                };
+
             match send.write_all(&msg).await {
                 Ok(_) => {
                     tracing::trace!(
@@ -794,7 +872,7 @@ fn register_live_peer(
             "[live] write loop ended for {}",
             &write_peer_id[..write_peer_id.len().min(12)]
         );
-        remove_live_peer(&write_peer_id);
+        remove_live_peer(&write_peer_id, generation);
     });
 
     // Read loop: receives UPDATE frames from the peer, imports them
@@ -812,9 +890,27 @@ fn register_live_peer(
         let mut agent = agent;
         let mut drive_cache: std::collections::HashMap<String, bool> =
             std::collections::HashMap::new();
+        // Whether this peer has ever sent a KEEPALIVE. Older builds do not, and
+        // silence from them means nothing — tearing the link down on a timeout
+        // would turn every working idle connection to an older peer into a
+        // 35-second reconnect loop. Observed for real against a peer that had
+        // not been upgraded yet: 10 teardowns in as many minutes, each followed
+        // by a full reconnect. So the timeout only becomes a liveness signal
+        // once the peer has shown it speaks it.
+        let mut peer_sends_keepalives = false;
         loop {
-            let len = match recv.read_u32().await {
-                Ok(n) => {
+            // Silence is treated as death, not idleness. A half-open link is
+            // otherwise invisible: this side keeps believing it is connected,
+            // so `auto_connect` will not redial it (it skips peers already in
+            // `live_peer_ids`) and every local change is broadcast into a
+            // socket nobody reads — with no error anywhere. The peer sends a
+            // KEEPALIVE every `KEEPALIVE_INTERVAL`, so hearing nothing for
+            // `LIVENESS_TIMEOUT` means the connection is gone.
+            let read =
+                tokio::time::timeout(super::protocol::LIVENESS_TIMEOUT, recv.read_u32()).await;
+
+            let len = match read {
+                Ok(Ok(n)) => {
                     tracing::trace!(
                         "[live] received frame {} bytes from {}",
                         n,
@@ -822,12 +918,30 @@ fn register_live_peer(
                     );
                     n as usize
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     tracing::info!(
                         "[live] read error from {}: {e}",
                         &read_peer_id[..read_peer_id.len().min(12)]
                     );
                     break;
+                }
+                Err(_) if peer_sends_keepalives => {
+                    tracing::info!(
+                        "[live] no traffic from {} for {:?} — treating the link as dead",
+                        &read_peer_id[..read_peer_id.len().min(12)],
+                        super::protocol::LIVENESS_TIMEOUT
+                    );
+                    break;
+                }
+                Err(_) => {
+                    // Never heard a keepalive from this peer, so its silence
+                    // carries no information. Keep waiting rather than
+                    // manufacture a disconnect.
+                    tracing::debug!(
+                        "[live] {} is quiet and sends no keepalives — not assuming it is dead",
+                        &read_peer_id[..read_peer_id.len().min(12)]
+                    );
+                    continue;
                 }
             };
             // Same "no proven identity → tight budget" rule as the accept-side
@@ -851,6 +965,85 @@ fn register_live_peer(
             }
 
             if buf.is_empty() {
+                continue;
+            }
+
+            // Keepalive: nothing to do. Receiving it already did the job —
+            // it reset the liveness timeout above.
+            if buf[0] == super::protocol::tag::KEEPALIVE {
+                peer_sends_keepalives = true;
+                continue;
+            }
+
+            // Live collaboration: presence, cursors, and the ops of an edit in
+            // progress. Handled before every other frame type and returned from
+            // immediately, because the one thing none of it may do is reach the
+            // store: the paths below all end in a write, and cursor positions
+            // merged into the CRDT would persist and sync forever. Uncommitted
+            // ops become durable only if a local user saves the document they
+            // land in, which produces a signed commit under that user's own
+            // identity.
+            //
+            // Two different gates, because the kinds ask for different things.
+            // Presence and cursors disclose who is looking at what, so a peer
+            // that cannot read must not receive them — but they author nothing,
+            // so read is enough. Uncommitted ops are somebody else's characters
+            // appearing in a document, so those need write: a peer with read
+            // access has no business putting text in front of an editor as
+            // though it belonged there.
+            if buf[0] == super::protocol::tag::EPHEMERAL {
+                if let Some(decoded) = super::protocol::decode_ephemeral(&buf[1..]) {
+                    let scope_subj = crate::Subject::from_raw(
+                        &decoded.drive,
+                        store.get_base_domain().as_deref(),
+                    );
+
+                    let admitted = if decoded.kind == super::protocol::ephemeral_kind::DOC {
+                        // `None` means the resource isn't stored here: nothing
+                        // to check rights against, and no local editor that
+                        // could have it open either.
+                        match super::ws_apply::resolve_destroy_drive(&store, &decoded.drive).await {
+                            Some(drive_subject) => {
+                                admitted_for_drive(
+                                    &store,
+                                    &agent,
+                                    &drive_subject,
+                                    initiated_by_us,
+                                    &mut drive_cache,
+                                )
+                                .await
+                            }
+                            None => false,
+                        }
+                    } else {
+                        match store.get_resource(&scope_subj).await {
+                            Ok(scope_resource) => {
+                                crate::hierarchy::check_read(&store, &scope_resource, &agent)
+                                    .await
+                                    .is_ok()
+                            }
+                            // A drive we do not hold has nothing to disclose.
+                            Err(_) => false,
+                        }
+                    };
+
+                    if admitted {
+                        store.publish_ephemeral(crate::db::EphemeralEvent {
+                            kind: decoded.kind,
+                            drive: decoded.drive,
+                            agent: decoded.agent,
+                            payload: decoded.payload,
+                            from_peer: read_peer_id.clone(),
+                        });
+                    } else {
+                        tracing::debug!(
+                            "[live] dropped a kind-{} frame {} is not admitted for",
+                            decoded.kind,
+                            &read_peer_id[..read_peer_id.len().min(12)]
+                        );
+                    }
+                }
+
                 continue;
             }
 
@@ -916,28 +1109,48 @@ fn register_live_peer(
                             )
                             .await
                             {
-                                // Our own agent resource is account state that
-                                // both same-agent devices push on connect. Apply
-                                // it with the importing flag held so the live
-                                // push loop doesn't re-broadcast it back — an
-                                // unconditional re-send of an identical snapshot
-                                // would ping-pong between the two. Same
-                                // suppression bulk SYNC_PUSH imports use; the
-                                // WS announcer ignores the flag, so the local
-                                // browser still sees the merged name / drives.
-                                let own_agent = is_our_agent_subject(&store, &decoded.subject);
-                                if own_agent {
-                                    super::ws_apply::set_importing(true);
-                                }
+                                // Hold the importing flag across EVERY live
+                                // import so the push loop doesn't re-broadcast
+                                // what we just received — an unconditional
+                                // re-send of an identical snapshot ping-pongs
+                                // between the two nodes.
+                                //
+                                // This used to apply only when the subject was
+                                // this node's own agent, which suppressed the
+                                // echo on exactly one side: the device whose
+                                // agent it is stays quiet, the peer for whom it
+                                // is a stranger's agent re-sends it, and a drive
+                                // — nobody's own agent — echoes on both. Two
+                                // idle nodes then traded ~8.6KB frames
+                                // indefinitely (measured: 355 frames in 58s,
+                                // ~50KB/s, for one agent resource and one
+                                // drive).
+                                //
+                                // The WS announcer ignores this flag, so the
+                                // local browser still sees the merged state.
+                                //
+                                // A global mute is the blunt version of this:
+                                // `DbEvent` already carries `source_id`, so the
+                                // push loop could instead skip only the peer the
+                                // update came from, and never mute a concurrent
+                                // local edit. That needs `persist_update` to
+                                // take a source and the push loop to read it.
+                                // Attribute this write to the peer it came
+                                // from. `add_resource_opts` reads it while the
+                                // write is still on the stack and stamps it on
+                                // the `DbEvent`, so the push loop can skip that
+                                // one peer rather than muting every broadcast
+                                // for the duration of an import.
+                                super::ws_apply::set_import_source(Some(read_peer_id.clone()));
+                                super::ws_apply::set_importing(true);
                                 let _ = super::ws_apply::persist_update(
                                     &store,
                                     &decoded.subject,
                                     resolved,
                                 )
                                 .await;
-                                if own_agent {
-                                    super::ws_apply::set_importing(false);
-                                }
+                                super::ws_apply::set_importing(false);
+                                super::ws_apply::set_import_source(None);
                                 tracing::trace!(
                                     "[live] imported update for {} from {}",
                                     &decoded.subject[..decoded.subject.len().min(20)],
@@ -990,7 +1203,7 @@ fn register_live_peer(
             }
         }
 
-        remove_live_peer(&read_peer_id);
+        remove_live_peer(&read_peer_id, generation);
     });
 }
 
@@ -1210,7 +1423,7 @@ pub async fn sync_drive_with_peer_using_outcome(
     }
 
     if force && live_peer_ids().contains(&remote_key) {
-        remove_live_peer_quiet(&remote_key);
+        remove_live_peer_any_quiet(&remote_key);
     }
 
     let my_node_id = endpoint.node_id();
@@ -1445,6 +1658,7 @@ pub async fn sync_drive_with_peer_using_outcome(
                                 store,
                                 &remote_agent,
                                 &diff.pull,
+                                Some(&remote_key),
                             )
                             .await;
                             if !entries.is_empty() {
@@ -1501,6 +1715,7 @@ pub async fn sync_drive_with_peer_using_outcome(
                         store,
                         &remote_agent,
                         &pull_subjects,
+                        Some(&remote_key),
                     )
                     .await;
                     if !entries.is_empty() {
@@ -1602,7 +1817,12 @@ pub async fn sync_drive_with_peer_using_outcome(
     // The exchange completed and this is a real peer we hold a drive with —
     // stamp it so the UI can show when we last synced, and remember where it
     // lives now (relay + direct addrs) so the next dial skips discovery.
-    mark_peer_synced(store, &remote_key);
+    mark_peer_synced(
+        store,
+        &remote_key,
+        Some(total_pushed as u32),
+        Some(total_imported as u32),
+    );
     if let Some(info) = endpoint.remote_info(node_id) {
         let addr: iroh::NodeAddr = info.into();
         remember_peer_addr(
@@ -1674,6 +1894,15 @@ const KNOWN_PEERS_KEY: &[u8] = b"_iroh_known_peers_v2";
 pub struct KnownPeer {
     pub node_id: String,
     pub name: String,
+    /// What the LAST completed sync with this peer moved, in resources. A
+    /// per-sync figure rather than a lifetime total on purpose: a running
+    /// counter has to survive re-pairs, store resets and partial syncs, and
+    /// quietly becomes fiction the first time one of those is missed. These
+    /// two are checkable against the number the sync itself reported.
+    #[serde(default)]
+    pub last_sent: Option<u32>,
+    #[serde(default)]
+    pub last_received: Option<u32>,
     /// Unix millis of the last successful sync with this peer, if ever. Absent
     /// for peers stored before this was tracked (serde default), so the UI shows
     /// "not yet" rather than a bogus epoch time.
@@ -1691,6 +1920,22 @@ pub struct KnownPeer {
 }
 
 /// Get all known peers from the DB.
+/// Whether this node's user deliberately paired with `node_id`.
+///
+/// Only the initiator side records a peer (`add_known_peer` is called after we
+/// dial and the remote says HELLO); the accept side deliberately does not, on
+/// the grounds that the local user never chose an unsolicited inbound
+/// connection. So this answers "did the owner of this node choose to sync with
+/// that one", which is the authority a replica needs — rather than an ACL entry
+/// the owner has to write by hand for every device and every drive.
+pub fn is_paired_peer(store: &Db, node_id: &str) -> bool {
+    let key = normalize_node_id(node_id);
+
+    get_known_peers(store)
+        .iter()
+        .any(|p| normalize_node_id(&p.node_id) == key)
+}
+
 pub fn get_known_peers(store: &Db) -> Vec<KnownPeer> {
     if let Ok(Some(bytes)) = store
         .kv
@@ -1716,6 +1961,8 @@ pub fn add_known_peer(store: &Db, node_id: &str, name: &str) {
     } else {
         peers.push(KnownPeer {
             node_id: key,
+            last_sent: None,
+            last_received: None,
             name: name.to_string(),
             last_synced: None,
             relay_url: None,
@@ -1755,6 +2002,8 @@ pub fn remember_peer_addr(
     } else {
         peers.push(KnownPeer {
             node_id: key.clone(),
+            last_sent: None,
+            last_received: None,
             name: String::new(),
             last_synced: None,
             relay_url: None,
@@ -1809,7 +2058,29 @@ fn dial_target(store: &Db, node_id: NodeId) -> iroh::NodeAddr {
 /// Stamp a peer's `last_synced` to now, upserting it if unknown. Called when a
 /// sync exchange with the peer completes, so the UI can say "synced 2m ago"
 /// without a separate bookkeeping path.
-pub fn mark_peer_synced(store: &Db, node_id: &str) {
+/// Record a completed sync with `node_id`.
+///
+/// `sent` / `received` are optional because the two sides know different
+/// things: the dialling side tallies both directions itself, while the
+/// accepting side answers frames through the engine and only counts what came
+/// in. Reporting an unknown figure as 0 would be the same class of lie this
+/// status work exists to remove, so absent stays absent.
+/// Record a sync against a peer we ALREADY know, and do nothing otherwise.
+///
+/// For the accepting side. `mark_peer_synced` inserts a `KnownPeer` when it
+/// finds none, which is right when we did the dialling — choosing to dial is
+/// the consent. On the accept side the peer chose us, so inserting would hand
+/// any stranger who completes a handshake a permanent entry in known-peers, and
+/// with it an auto-reconnect slot that no pairing ever granted.
+pub fn mark_known_peer_synced(store: &Db, node_id: &str, sent: Option<u32>, received: Option<u32>) {
+    if !is_paired_peer(store, node_id) {
+        return;
+    }
+
+    mark_peer_synced(store, node_id, sent, received);
+}
+
+pub fn mark_peer_synced(store: &Db, node_id: &str, sent: Option<u32>, received: Option<u32>) {
     let key = normalize_node_id(node_id);
     let mut peers = get_known_peers(store);
     let now = crate::utils::now();
@@ -1818,10 +2089,14 @@ pub fn mark_peer_synced(store: &Db, node_id: &str) {
         .find(|p| normalize_node_id(&p.node_id) == key)
     {
         existing.last_synced = Some(now);
+        existing.last_sent = sent;
+        existing.last_received = received;
     } else {
         peers.push(KnownPeer {
             node_id: key,
             name: String::new(),
+            last_sent: sent,
+            last_received: received,
             last_synced: Some(now),
             relay_url: None,
             direct_addrs: Vec::new(),
@@ -2059,6 +2334,17 @@ async fn handle_stream(
                 "[accept] sync complete, transitioning to live mode with {}",
                 &remote_key[..remote_key.len().min(12)]
             );
+            // Record it here too. This used to run only on the dialling side,
+            // so an always-on node — which is always the one being dialled —
+            // reported "not synced yet" about a peer it had been exchanging
+            // data with for hours. The counts are from this node's point of
+            // view: what it served, and what it took in.
+            //
+            // `mark_known_peer_synced`, not `mark_peer_synced`: this side did
+            // not choose the connection, so recording a sync must never be what
+            // introduces the peer. Updating a peer we already paired with is
+            // reporting; inserting one we have not is granting access.
+            mark_known_peer_synced(&store, &remote_key, None, Some(total_imported as u32));
             // Accept side: the peer dialed us. No owned-drive relaxation — it
             // must hold real write rights to touch anything here.
             register_live_peer(remote_key, send, recv, store, agent, false);
@@ -2354,6 +2640,7 @@ mod initiator_trust_tests {
             &db,
             &ForAgent::Public,
             &[child.clone()],
+            None,
         )
         .await;
         assert!(
@@ -2367,6 +2654,7 @@ mod initiator_trust_tests {
             &db,
             &ForAgent::AgentSubject(alice.subject.clone()),
             &[child.clone()],
+            None,
         )
         .await;
         assert_eq!(
@@ -2391,11 +2679,63 @@ mod initiator_trust_tests {
             &db,
             &ForAgent::AgentSubject(mallory.subject.clone()),
             &[child],
+            None,
         )
         .await;
         assert!(
             served.is_empty(),
             "a peer that authenticated as an unrelated agent must not receive unreadable snapshots"
+        );
+    }
+
+    /// A node the owner deliberately paired with may replicate what the owner
+    /// can read, even though its own agent holds no rights on the drive.
+    ///
+    /// Without this, two of the same person's machines sync nothing: the
+    /// serving node refuses every subject because the peer's node agent is a
+    /// stranger to the drive, and the only remedy is hand-writing an ACL entry
+    /// naming that agent — per device, per drive, with no prompt and no error.
+    /// Pairing is already an authenticated choice by the owner; this treats it
+    /// as one.
+    #[tokio::test]
+    async fn a_paired_replica_receives_what_the_owner_can_read() {
+        let db = Db::init_temp("paired_replica_serves").await.unwrap();
+        let alice = crate::agents::Agent::new(Some("Alice")).unwrap();
+        db.set_default_agent(alice.clone());
+        let (_drive, child) = private_drive_with_child(&db, &alice).await;
+
+        // The replica's own identity: a node agent, granted nothing.
+        let replica_node = "aaaabbbbccccddddeeeeffff0000111122223333444455556666777788889999";
+        let replica_agent = db.create_agent(Some("Replica")).await.unwrap();
+        let as_replica = ForAgent::AgentSubject(replica_agent.subject.clone());
+
+        // Not paired yet — rights only, so nothing is served.
+        let unpaired = crate::sync::engine::collect_readable_snapshots(
+            &db,
+            &as_replica,
+            &[child.clone()],
+            Some(replica_node),
+        )
+        .await;
+        assert!(
+            unpaired.is_empty(),
+            "a node the owner never dialled must not be served"
+        );
+
+        // The owner pairs with it.
+        add_known_peer(&db, replica_node, "Replica");
+
+        let paired = crate::sync::engine::collect_readable_snapshots(
+            &db,
+            &as_replica,
+            &[child],
+            Some(replica_node),
+        )
+        .await;
+        assert_eq!(
+            paired.len(),
+            1,
+            "a paired replica must receive what the owner can read"
         );
     }
 
@@ -2457,5 +2797,105 @@ mod initiator_trust_tests {
             crate::sync::tombstones::is_tombstoned(&db, &child),
             "the owner's remove[] entry must record a tombstone"
         );
+    }
+}
+
+#[cfg(test)]
+mod live_peer_registry_tests {
+    use super::*;
+
+    fn register(key: &str) -> u64 {
+        let generation =
+            LIVE_PEER_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        let (tx, _rx) = tokio::sync::mpsc::channel(4);
+        let mut guard = LIVE_PEERS.lock().unwrap();
+        if guard.is_none() {
+            *guard = Some(HashMap::new());
+        }
+        guard
+            .as_mut()
+            .unwrap()
+            .insert(normalize_node_id(key), (generation, tx));
+
+        generation
+    }
+
+    fn is_registered(key: &str) -> bool {
+        LIVE_PEERS
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|m| m.contains_key(&normalize_node_id(key)))
+    }
+
+    /// A reconnect installs a new connection under the same node id, and the
+    /// old one's loops tear down a moment later. That teardown must not evict
+    /// the live connection that replaced it — otherwise sync goes silent while
+    /// both ends still show "Connected", and nothing recovers it until the next
+    /// reconnect.
+    #[test]
+    fn a_stale_connection_does_not_deregister_its_replacement() {
+        let peer = "test-peer-stale-vs-replacement";
+        let old = register(peer);
+        let new = register(peer);
+        assert_ne!(old, new);
+
+        remove_live_peer(peer, old);
+        assert!(
+            is_registered(peer),
+            "the replacement connection must survive the old one's teardown"
+        );
+
+        remove_live_peer(peer, new);
+        assert!(
+            !is_registered(peer),
+            "the current connection must still be able to deregister itself"
+        );
+    }
+
+    #[test]
+    fn a_deliberate_reconnect_evicts_whoever_is_current() {
+        let peer = "test-peer-forced-reconnect";
+        register(peer);
+        remove_live_peer_any_quiet(peer);
+        assert!(!is_registered(peer));
+    }
+}
+
+#[cfg(all(test, feature = "db-redb"))]
+mod peer_sync_volume_tests {
+    use super::*;
+
+    /// The card needs to say what a sync moved, not just that one happened —
+    /// a timestamp cannot distinguish a link carrying data from one being
+    /// refused every subject.
+    #[tokio::test]
+    async fn a_completed_sync_records_what_it_moved() {
+        let db = Db::init_temp("peer_sync_volume").await.unwrap();
+        let node = "1111222233334444555566667777888899990000aaaabbbbccccddddeeeeffff";
+
+        mark_peer_synced(&db, node, Some(49), Some(1));
+
+        let peer = get_known_peers(&db)
+            .into_iter()
+            .find(|p| normalize_node_id(&p.node_id) == normalize_node_id(node))
+            .expect("the sync must record the peer");
+
+        assert_eq!(peer.last_sent, Some(49));
+        assert_eq!(peer.last_received, Some(1));
+        assert!(peer.last_synced.is_some());
+
+        // A later, quieter sync replaces the figures rather than accumulating:
+        // these describe the last pass, so they must be checkable against what
+        // that pass reported.
+        mark_peer_synced(&db, node, Some(0), Some(2));
+
+        let peer = get_known_peers(&db)
+            .into_iter()
+            .find(|p| normalize_node_id(&p.node_id) == normalize_node_id(node))
+            .unwrap();
+
+        assert_eq!(peer.last_sent, Some(0));
+        assert_eq!(peer.last_received, Some(2));
     }
 }

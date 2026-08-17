@@ -8,6 +8,7 @@
     "core:webview:allow-create-webview-window",
     "core:window:allow-close",
     "core:window:allow-set-focus",
+    "mcp-bridge:default",
     {
       "identifier": "opener:allow-open-url",
       "allow": [

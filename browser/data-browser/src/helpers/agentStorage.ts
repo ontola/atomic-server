@@ -1,4 +1,9 @@
-import { Agent, SubtleCryptoProvider, JSCryptoProvider } from '@tomic/react';
+import {
+  Agent,
+  SubtleCryptoProvider,
+  JSCryptoProvider,
+  legacySubjectFromSecret,
+} from '@tomic/react';
 import { del, get, set } from 'idb-keyval';
 import { adoptAgentOnDevice } from './adoptAgent';
 import { clearSessionDbKeys, ensureDbKeyOnSignIn } from './localDbKey';
@@ -8,6 +13,24 @@ const AGENT_IDB_KEY = 'atomic.agent';
 interface StoredAgent {
   keyPair: CryptoKeyPair;
   subject: string;
+  /**
+   * Carried across restarts because they only exist on the secret, and the
+   * secret is read exactly once — at sign-in. Without them a restored Agent
+   * looks brand-new to the pre-DID migration, which reads both and returns at
+   * its first line, so a returning user's drives are never adopted. The
+   * migration then appears to do nothing forever, having run only in the
+   * session where the secret was pasted.
+   */
+  legacySubject?: string;
+  initialDrive?: string;
+  /**
+   * The derived personal-drive DID. Stored because it cannot be recomputed
+   * from the non-extractable keypair beside it: deriving it means signing, and
+   * WebCrypto signatures are not reproducible (see
+   * `Agent.personalDriveSubject`). Written at sign-in, while the secret is
+   * still readable.
+   */
+  personalDrive?: string;
 }
 
 /**
@@ -17,6 +40,11 @@ interface StoredAgent {
 interface StoredAgentFallback {
   privateKey: string;
   subject: string;
+  /** See {@link StoredAgent}. */
+  legacySubject?: string;
+  initialDrive?: string;
+  /** See {@link StoredAgent}. */
+  personalDrive?: string;
 }
 
 const AGENT_FALLBACK_KEY = 'atomic.agent.fallback';
@@ -44,7 +72,13 @@ export async function getAgentFromIDB(): Promise<Agent | undefined> {
         // readable copy below — a corrupt keypair must not lock the user out.
         await provider.sign('atomic-key-check');
 
-        const agent = new Agent(provider, storedAgent.subject);
+        const agent = new Agent(
+          provider,
+          storedAgent.subject,
+          storedAgent.initialDrive,
+        );
+        agent.legacySubject = storedAgent.legacySubject;
+        agent.personalDrive = storedAgent.personalDrive;
 
         // Heal installs written while the readable key was saved
         // unconditionally: a plaintext copy beside a non-extractable key hands
@@ -68,10 +102,15 @@ export async function getAgentFromIDB(): Promise<Agent | undefined> {
 
   if (fallback) {
     try {
-      return new Agent(
+      const agent = new Agent(
         new JSCryptoProvider(fallback.privateKey),
         fallback.subject,
+        fallback.initialDrive,
       );
+      agent.legacySubject = fallback.legacySubject;
+      agent.personalDrive = fallback.personalDrive;
+
+      return agent;
     } catch (e) {
       console.error('Failed to load agent from fallback:', e);
     }
@@ -135,9 +174,20 @@ export async function saveAgentToIDB(
     throw new Error('Subject is required');
   }
 
+  // Preserve the secret-only fields: this overload re-stores a keypair and
+  // has no secret to re-derive them from, and dropping them would silently
+  // disable the migration for a returning user.
+  const previous = (await get(AGENT_IDB_KEY)) as StoredAgent | undefined;
+
   await set(AGENT_IDB_KEY, {
     keyPair: keyPairOrSecret,
     subject,
+    legacySubject:
+      previous?.subject === subject ? previous.legacySubject : undefined,
+    initialDrive:
+      previous?.subject === subject ? previous.initialDrive : undefined,
+    personalDrive:
+      previous?.subject === subject ? previous.personalDrive : undefined,
   } satisfies StoredAgent);
 }
 
@@ -149,6 +199,9 @@ async function storeSecret(secret: string): Promise<void> {
   // the only moment it passes through JS once the keypair is stored
   // non-extractably.
   const decoded = JSON.parse(atob(secret));
+  // Derived here, once, from the raw key — the stored keypair cannot
+  // reproduce it. See `StoredAgent.personalDrive`.
+  const personalDrive = await Agent.personalDriveSubjectFromSecret(secret);
 
   {
     // Prefer the non-extractable keypair. Once stored this way the private key
@@ -161,6 +214,9 @@ async function storeSecret(secret: string): Promise<void> {
         await set(AGENT_IDB_KEY, {
           keyPair,
           subject: resolvedSubject,
+          legacySubject: legacySubjectFromSecret(secret),
+          initialDrive: decoded.initialDrive,
+          personalDrive,
         } satisfies StoredAgent);
         await del(AGENT_FALLBACK_KEY);
 
@@ -179,6 +235,9 @@ async function storeSecret(secret: string): Promise<void> {
     await set(AGENT_FALLBACK_KEY, {
       privateKey: decoded.privateKey,
       subject: newSubject,
+      legacySubject: legacySubjectFromSecret(secret),
+      initialDrive: decoded.initialDrive,
+      personalDrive,
     } satisfies StoredAgentFallback);
     // Drop a keypair from a previous account, so it can't be loaded instead.
     await del(AGENT_IDB_KEY);

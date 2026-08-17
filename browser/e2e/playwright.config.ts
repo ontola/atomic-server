@@ -22,6 +22,18 @@ const config: PlaywrightTestConfig = {
     storageState: {
       cookies: [],
       origins: [
+        // `FRONTEND_URL` / `SERVER_URL` are overridable, but this list was not,
+        // so running the suite on any other port silently lost
+        // `viewTransitionsDisabled` — the flake-reducer below — for the origin
+        // actually under test. Derive those two first; the fixed entries stay
+        // for the default and dagger setups.
+        ...[process.env.FRONTEND_URL, process.env.SERVER_URL]
+          .filter((url): url is string => !!url)
+          .map(url => new URL(url).origin)
+          .map(origin => ({
+            origin,
+            localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],
+          })),
         {
           origin: 'http://localhost:6747',
           localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],

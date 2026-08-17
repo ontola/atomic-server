@@ -58,5 +58,12 @@ export async function testStore(): Promise<TestStore> {
     new Error('test-store: property validation skipped'),
   );
 
+  // Keep unit tests off the network. A failed GET still returns an error
+  // resource (see `Client.fetchResourceHTTP`); callers must not then wait
+  // on `getResource` for that stub to become ready.
+  store.injectFetch(async () => {
+    throw new Error('test-store: network disabled');
+  });
+
   return { store, agentDID, posted, postCommitSpy };
 }

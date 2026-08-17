@@ -12,14 +12,46 @@
  *
  * See `planning/genesis-self-verifying.md`.
  */
-import { sha512 } from '@noble/hashes/sha2.js';
-import { hashes, sign, verify } from '@noble/ed25519';
+import { sha256, sha512 } from '@noble/hashes/sha2.js';
+import { getPublicKey, hashes, sign, verify } from '@noble/ed25519';
 import { decodeB64, encodeB64Url } from './base64.js';
 
 // Match `CryptoProvider.ts`: the synchronous noble API needs sha512 installed.
 hashes.sha512 = sha512;
 
 export const GENESIS_VERSION_V1 = 0x01;
+
+/** Purpose string for the per-agent personal drive singleton. Version the
+ *  suffix to derive a different subject without colliding. */
+export const PERSONAL_DRIVE_PURPOSE = 'atomic-personal-drive-v1';
+
+/** First 16 bytes of SHA-256(`purpose`) — must match
+ *  `lib/src/genesis.rs::domain_separator_nonce`. */
+export function domainSeparatorNonce(purpose: string): Uint8Array {
+  return sha256(new TextEncoder().encode(purpose)).slice(0, 16);
+}
+
+/** Genesis certificate for the agent's personal drive: `createdAt = 0`,
+ *  empty parent/drive, nonce = SHA-256(`atomic-personal-drive-v1`)[..16]. */
+export function personalDriveCert(signerPubkey: Uint8Array): GenesisCert {
+  return {
+    signerPubkey,
+    createdAt: 0,
+    nonce: domainSeparatorNonce(PERSONAL_DRIVE_PURPOSE),
+    parent: '',
+    drive: '',
+  };
+}
+
+/** `did:ad:<sig>` of {@link personalDriveCert} signed by `privateKey`. */
+export async function personalDriveSubject(
+  privateKey: Uint8Array,
+): Promise<string> {
+  const cert = personalDriveCert(await getPublicKey(privateKey));
+
+  return subjectForSignature(await signGenesisCert(cert, privateKey));
+}
+
 /** `flags` bit 0: a 32-byte `stateHash` is present after the nonce. */
 const FLAG_HAS_STATE_HASH = 0b0000_0001;
 

@@ -126,6 +126,11 @@ async fn iroh_sync_handler(
     {
         Ok(outcome) => actix_web::HttpResponse::Ok().json(serde_json::json!({
             "count": outcome.count,
+            // Both directions. Reporting only `count` (what we pulled) made a
+            // pass that pushed 49 resources and pulled 1 read as
+            // "Synced 1 resource" — the user cannot tell a working sync from a
+            // stalled one if the number only describes half of it.
+            "pushed": outcome.pushed,
             // `peerName` is the remote's self-reported `HELLO` label.
             // Older peers that don't speak HELLO yet send `null`; the UI
             // falls back to a truncated Node DID in that case.

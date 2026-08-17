@@ -70,6 +70,35 @@ use self::{
 // A function called by the Store when a Commit is accepted
 type HandleCommit = Box<dyn Fn(&CommitResponse) + Send + Sync>;
 
+/// Live-collaboration state received from a peer over the sync link:
+/// presence, cursors, or the ops of an edit someone has not saved yet.
+///
+/// Separate from [`DbEvent`] because none of it is written here: it exists only
+/// to be handed to whatever is currently rendering (websocket clients), then
+/// forgotten. Uncommitted ops become durable only if a local user saves the
+/// document they land in, which produces a signed commit under that user's own
+/// identity. The originating agent travels with it because a peer link is
+/// node-to-node while this state is per-agent — one node may relay several
+/// people's cursors and edits.
+#[derive(Debug, Clone)]
+pub struct EphemeralEvent {
+    /// Which channel this belongs to — per-document Loro ephemeral,
+    /// drive-scoped presence, or an edit in progress. They fan out to different
+    /// subscribers, so the distinction has to survive the trip. See
+    /// `protocol::ephemeral_kind`.
+    pub kind: u8,
+    /// What the state is scoped to: the drive for presence, the resource for
+    /// the other two.
+    pub drive: String,
+    /// The agent this came from.
+    pub agent: String,
+    /// Opaque Loro update — `EphemeralStore` bytes for presence and cursors,
+    /// document ops for an edit in progress.
+    pub payload: Vec<u8>,
+    /// The peer that relayed it, so it is not sent straight back.
+    pub from_peer: String,
+}
+
 /// Event emitted when a resource is created, updated, or deleted.
 #[derive(Debug, Clone)]
 pub enum DbEvent {
@@ -248,6 +277,14 @@ pub struct Db {
     on_commit: Option<Arc<HandleCommit>>,
     /// Broadcast channel for all resource mutations.
     db_events: tokio::sync::broadcast::Sender<DbEvent>,
+    /// Presence arriving from a peer. Deliberately NOT `db_events`: presence is
+    /// ephemeral and must never reach the store, and every consumer of
+    /// `DbEvent` writes or indexes. Cursor positions merged into the CRDT would
+    /// be persisted and synced forever.
+    ///
+    /// Small buffer on purpose — presence is worth dropping under load, unlike
+    /// a resource change. A lagging subscriber loses cursors, not data.
+    ephemeral_events: tokio::sync::broadcast::Sender<EphemeralEvent>,
     /// In-memory authoritative map of watched query filters, keyed by drive
     /// prefix (e.g. `"https://example.com"` for HTTP drives, the DID for
     /// DID-form drives) and routed by property within each drive (see
@@ -370,6 +407,7 @@ impl Db {
 
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
+            ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             base_domain,
@@ -404,6 +442,7 @@ impl Db {
 
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
+            ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             base_domain,
@@ -436,6 +475,7 @@ impl Db {
 
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
+            ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             base_domain,
@@ -529,6 +569,7 @@ impl Db {
 
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
+            ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             base_domain,
@@ -678,6 +719,7 @@ impl Db {
 
             on_commit: None,
             db_events: tokio::sync::broadcast::channel(64).0,
+            ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             base_domain,
@@ -815,10 +857,90 @@ impl Db {
         self.apply_commit(commit, &opts).await?;
         self.set_active_drive(&did)?;
 
-        // Add the new drive to the agent's `drives` array and persist.
+        // Record the new drive on the personal drive's `drives` list when
+        // that home already exists. Otherwise keep writing to the Agent so
+        // `create_drive` in tests / first-run does not mint a second drive.
+        let listed = if let Ok(personal) = self.personal_drive_subject() {
+            self.get_resource(&personal.as_str().into())
+                .await
+                .ok()
+                .map(|_| personal)
+        } else {
+            None
+        };
+        if let Some(personal) = listed {
+            if personal != did {
+                self.push_drive_to_list(&personal, &did).await?;
+            }
+        } else {
+            let agent = self.get_default_agent()?;
+            self.push_drive_to_list(&agent.subject.to_string(), &did)
+                .await?;
+        }
+
+        Ok(did)
+    }
+
+    /// The agent's derived personal-drive DID. Same key → same subject.
+    pub fn personal_drive_subject(&self) -> AtomicResult<String> {
         let agent = self.get_default_agent()?;
-        let mut agent_resource = self.get_resource(&agent.subject).await?;
-        let mut drives: Vec<crate::values::SubResource> = agent_resource
+        let private_key = agent
+            .private_key
+            .as_ref()
+            .ok_or("Cannot derive a personal drive without a private key")?;
+        crate::genesis::GenesisCert::personal_drive_subject(private_key)
+    }
+
+    /// Materialize the derived personal drive if it is not already stored.
+    /// Repeat genesis for the same subject merges.
+    pub async fn ensure_personal_drive(&self) -> AtomicResult<String> {
+        let agent = self.get_default_agent()?;
+        let did = self.personal_drive_subject()?;
+        if self.get_resource(&did.as_str().into()).await.is_ok() {
+            return Ok(did);
+        }
+
+        let signer_pubkey: [u8; 32] = crate::agents::decode_base64(&agent.public_key)?
+            .try_into()
+            .map_err(|_| "Agent public key must be 32 bytes")?;
+        let cert = crate::genesis::GenesisCert::for_personal_drive(signer_pubkey);
+
+        let mut builder = crate::commit::CommitBuilder::new("placeholder".into());
+        builder.set(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![urls::DRIVE.into()]),
+        );
+        builder.set(urls::NAME.into(), Value::String("My drive".into()));
+        builder.set(
+            urls::WRITE.into(),
+            Value::ResourceArray(vec![agent.subject.to_string().into()]),
+        );
+        builder.set(
+            urls::READ.into(),
+            Value::ResourceArray(vec![agent.subject.to_string().into()]),
+        );
+        builder.set(
+            urls::DESCRIPTION.into(),
+            Value::String("Your personal drive.".into()),
+        );
+
+        let commit =
+            crate::commit::Commit::create_did_with_cert(builder, &agent, self, Some(cert)).await?;
+        let opts = crate::commit::CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: false,
+            validate_rights: false,
+            update_index: true,
+            ..crate::commit::CommitOpts::no_validations_no_index()
+        };
+        self.apply_commit(commit, &opts).await?;
+        Ok(did)
+    }
+
+    async fn push_drive_to_list(&self, list_subject: &str, drive_did: &str) -> AtomicResult<()> {
+        let mut resource = self.get_resource(&list_subject.into()).await?;
+        let mut drives: Vec<crate::values::SubResource> = resource
             .get(urls::DRIVES)
             .ok()
             .and_then(|v| match v {
@@ -826,14 +948,12 @@ impl Db {
                 _ => None,
             })
             .unwrap_or_default();
-        if !drives.iter().any(|d| d.to_string() == did) {
-            drives.push(did.clone().into());
-            agent_resource.set_unsafe(urls::DRIVES.into(), Value::ResourceArray(drives))?;
-            self.add_resource_opts(&agent_resource, false, true, true)
-                .await?;
+        if !drives.iter().any(|d| d.to_string() == drive_did) {
+            drives.push(drive_did.to_string().into());
+            resource.set_unsafe(urls::DRIVES.into(), Value::ResourceArray(drives))?;
+            self.add_resource_opts(&resource, false, true, true).await?;
         }
-
-        Ok(did)
+        Ok(())
     }
 
     /// Create a new resource with a `did:ad:` subject via genesis commit.
@@ -1100,9 +1220,21 @@ impl Db {
     pub async fn setup(&self, agent_name: &str) -> AtomicResult<(crate::agents::Agent, String)> {
         let mut agent = self.create_agent(Some(agent_name)).await?;
         self.set_default_agent(agent.clone());
-        let drive = self
-            .create_drive(&format!("{}'s Drive", agent_name))
-            .await?;
+        let drive = self.ensure_personal_drive().await?;
+        // `create_drive` — which this used to call — set the active drive as
+        // part of creating one. `ensure_personal_drive` deliberately does not:
+        // materializing a home is not the same act as switching to it. Setup IS
+        // that act, so it records it here; without this every later call fails
+        // with "No drive set. Call setup() first."
+        self.set_active_drive(&drive)?;
+
+        if let Ok(mut personal) = self.get_resource(&drive.as_str().into()).await {
+            personal.set_unsafe(
+                urls::NAME.into(),
+                Value::String(format!("{}'s Drive", agent_name)),
+            )?;
+            self.add_resource_opts(&personal, false, true, true).await?;
+        }
 
         // Set initial_drive so the secret contains the drive DID.
         // This lets other devices find this drive via DHT when restoring from secret.
@@ -1660,6 +1792,17 @@ impl Db {
     /// Subscribe to all DB events (changes, deletions).
     pub fn subscribe_events(&self) -> tokio::sync::broadcast::Receiver<DbEvent> {
         self.db_events.subscribe()
+    }
+
+    /// Presence arriving from peers. See [`EphemeralEvent`].
+    pub fn subscribe_ephemeral(&self) -> tokio::sync::broadcast::Receiver<EphemeralEvent> {
+        self.ephemeral_events.subscribe()
+    }
+
+    /// Publish presence received from a peer. Send failure means nobody is
+    /// listening (no websocket clients on this node) — expected, not an error.
+    pub fn publish_ephemeral(&self, event: EphemeralEvent) {
+        let _ = self.ephemeral_events.send(event);
     }
 
     /// Finds resource by Subject, return PropVals HashMap
@@ -2782,7 +2925,10 @@ impl Storelike for Db {
         let _ = self.db_events.send(DbEvent::Changed {
             subject: resource.get_subject().without_params(),
             delta: None,
-            source_id: None,
+            // Attributed here, while the importing write is still on the stack:
+            // the live push loop uses it to avoid sending an update straight
+            // back to the peer it came from.
+            source_id: crate::sync::ws_apply::current_import_source(),
             is_new: false,
             from_commit: false,
         });
@@ -3568,6 +3714,42 @@ mod pending_blob_request_ttl_tests {
         assert_eq!(
             db.take_pending_blob_request(&hash),
             Some("https://example.com/drive".to_string())
+        );
+    }
+}
+
+#[cfg(test)]
+mod personal_drive_tests {
+    use super::*;
+    use crate::Storelike;
+
+    #[tokio::test]
+    async fn setup_uses_the_derived_personal_drive_did() {
+        let store = Db::init_temp("personal_drive_setup").await.unwrap();
+        let (_agent, drive) = store.setup("Alice").await.unwrap();
+        let expected = store.personal_drive_subject().unwrap();
+        assert_eq!(drive, expected);
+        assert_eq!(store.ensure_personal_drive().await.unwrap(), expected);
+    }
+
+    #[tokio::test]
+    async fn extra_drive_is_listed_on_the_personal_drive() {
+        let store = Db::init_temp("personal_drive_list").await.unwrap();
+        let (_agent, personal) = store.setup("Alice").await.unwrap();
+        let extra = store.create_drive("Project").await.unwrap();
+        assert_ne!(extra, personal);
+
+        let listed = store
+            .get_resource(&personal.as_str().into())
+            .await
+            .unwrap()
+            .get(urls::DRIVES)
+            .unwrap()
+            .to_subjects(None)
+            .unwrap();
+        assert!(
+            listed.iter().any(|s| s == &extra),
+            "personal drive should list {extra}, got {listed:?}"
         );
     }
 }

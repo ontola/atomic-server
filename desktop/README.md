@@ -19,6 +19,30 @@ If you only want to work on the _server side_ of things, you can remove `devUrl`
 
 `cargo tauri build` likewise runs `beforeBuildCommand` to produce `browser/data-browser/dist-tauri` before bundling.
 
+### Driving the app from an agent (MCP bridge)
+
+Debug builds register `tauri-plugin-mcp-bridge` on `127.0.0.1:9223`, which lets
+an MCP client open documents, type, and read the DOM — enough to test things
+like collaborative editing end to end without a person at the keyboard.
+
+The bridge also needs `withGlobalTauri`, which is static config rather than
+something `debug_assertions` can gate. Rather than ship it, it lives in a
+separate file you opt into:
+
+```sh
+cargo tauri dev --config tauri.dev.conf.json
+```
+
+Without that flag the plugin still starts, but the webview has no
+`window.__TAURI__` for it to talk through. Keep `withGlobalTauri` out of
+`tauri.conf.json`: this app runs with `csp: null` and renders data from drives
+the user may not control, so exposing the Tauri API to page content in shipped
+builds widens a surface that is already wide.
+
+The channel is unauthenticated — anything that can reach the port can execute
+JS in the webview — which is why it binds to loopback rather than the plugin's
+default `0.0.0.0`.
+
 ### Environment overrides are baked in at build time
 
 `beforeBuildCommand` is a normal vite production build, so it reads `.env` and

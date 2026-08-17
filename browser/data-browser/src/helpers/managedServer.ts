@@ -9,6 +9,11 @@ export type ServerPeer = {
   deviceName: string | null;
   /** Whether it holds a connection to the server right now. */
   live: boolean;
+  /** Unix millis of the last successful sync, if it has ever synced. */
+  lastSeen?: number;
+  /** Resources moved by that last sync, each way. Not lifetime totals. */
+  lastSent?: number;
+  lastReceived?: number;
 };
 
 /**
@@ -90,6 +95,18 @@ export async function fetchManagedInfo(
                   nodeId,
                   deviceName: readString(p?.[peerProps.deviceName]),
                   live: p?.[peerProps.live] === true,
+                  lastSeen:
+                    typeof p?.[peerProps.lastSeen] === 'number'
+                      ? (p[peerProps.lastSeen] as number)
+                      : undefined,
+                  lastSent:
+                    typeof p?.[peerProps.lastSent] === 'number'
+                      ? (p[peerProps.lastSent] as number)
+                      : undefined,
+                  lastReceived:
+                    typeof p?.[peerProps.lastReceived] === 'number'
+                      ? (p[peerProps.lastReceived] as number)
+                      : undefined,
                 }
               : null;
           })

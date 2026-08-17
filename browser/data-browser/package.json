@@ -134,10 +134,10 @@
   },
   "scripts": {
     "build": "if [ \"$SKIP_WASM_BUILD\" = \"1\" ]; then echo 'SKIP_WASM_BUILD=1, skipping wasm-pack'; else pnpm build:wasm; fi && vite build",
-    "build:tauri": "pnpm build:wasm && TAURI=1 vite build",
+    "build:tauri": "pnpm --filter \"@tomic/lib\" --filter \"@tomic/react\" run build && pnpm build:wasm && TAURI=1 vite build",
     "build:wasm": "cd ../../wasm && export CARGO_TARGET_DIR=../target/wasm-pack && cargo bin wasm-pack --version && env -u CARGO_ENCODED_RUSTFLAGS -u RUSTFLAGS cargo bin wasm-pack build --target web --out-dir pkg && cp pkg/atomic_wasm.js pkg/atomic_wasm_bg.wasm ../browser/data-browser/public/wasm/",
     "dev": "vite",
-    "dev:tauri": "TAURI=1 vite",
+    "dev:tauri": "pnpm --filter \"@tomic/lib\" --filter \"@tomic/react\" run build && TAURI=1 vite",
     "format-check": "oxfmt -c ../.oxfmtrc.json --check ./src",
     "format": "oxfmt -c ../.oxfmtrc.json ./src",
     "lint": "oxlint -c ../.oxlintrc.json . && pnpm format-check",

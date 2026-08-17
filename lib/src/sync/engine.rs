@@ -1127,6 +1127,19 @@ pub async fn import_sync_push(
     (count, blob_requests)
 }
 
+/// Whether the owner deliberately dialled this node. Peer-to-peer sync only
+/// exists with the `iroh` feature — the WASM build of this crate has no peer
+/// module — so without it nothing is ever treated as paired.
+#[cfg(feature = "iroh")]
+fn peer_is_paired(store: &Db, node_id: &str) -> bool {
+    crate::sync::peer::is_paired_peer(store, node_id)
+}
+
+#[cfg(not(feature = "iroh"))]
+fn peer_is_paired(_store: &Db, _node_id: &str) -> bool {
+    false
+}
+
 /// Serve a remote-supplied `pull` list from local Loro snapshots — gated per
 /// subject on `check_read` for the identity the remote proved.
 /// This is the initiator-side mirror of the acceptor's `handle_sync_vv`,
@@ -1136,20 +1149,59 @@ pub async fn import_sync_push(
 /// drive and receive it regardless of read rights. Dialing a peer never
 /// established that peer's rights. Fail closed: a subject that doesn't
 /// materialize into a resource can't be rights-checked, so it isn't served.
+///
+/// `paired_peer` is the node id of a peer this node's user deliberately dialled
+/// (see `peer::is_paired_peer`). Such a peer may replicate anything WE can
+/// read, even though its own agent holds no rights: pairing is an authenticated
+/// choice by the owner, and it is the authority a replica should run on. The
+/// alternative — the owner hand-writing an ACL entry naming each device's agent
+/// on each drive — is what made two of the same person's nodes sync nothing at
+/// all while the UI reported "In sync".
+///
+/// Note this deliberately does NOT widen what gets served: a paired replica is
+/// served exactly the subjects this node can read, never more.
 pub async fn collect_readable_snapshots(
     store: &Db,
     agent: &crate::agents::ForAgent,
     subjects: &[String],
+    paired_peer: Option<&str>,
 ) -> Vec<(String, Vec<u8>)> {
+    // Resolved once: a paired peer's entitlement is "whatever we ourselves may
+    // read", so it is our own identity that answers, not the peer's.
+    let own_agent = if paired_peer.is_some_and(|node| peer_is_paired(store, node)) {
+        store
+            .get_default_agent()
+            .ok()
+            .map(crate::agents::ForAgent::from)
+    } else {
+        None
+    };
+
     let mut entries = Vec::new();
     for subject in subjects {
         let subj = crate::Subject::from_raw(subject, store.get_base_domain().as_deref());
         match store.get_resource(&subj).await {
             Ok(resource) => {
-                if crate::hierarchy::check_read(store, &resource, agent)
+                let mut readable = crate::hierarchy::check_read(store, &resource, agent)
                     .await
-                    .is_err()
-                {
+                    .is_ok();
+
+                if !readable {
+                    if let Some(own) = own_agent.as_ref() {
+                        readable = crate::hierarchy::check_read(store, &resource, own)
+                            .await
+                            .is_ok();
+
+                        if readable {
+                            tracing::debug!(
+                                "[sync] serving {} to a paired replica",
+                                &subject[..subject.len().min(30)]
+                            );
+                        }
+                    }
+                }
+
+                if !readable {
                     tracing::warn!(
                         "[sync] refusing to serve {} to peer: no read access for {:?}",
                         &subject[..subject.len().min(30)],
