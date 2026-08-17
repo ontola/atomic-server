@@ -1727,3 +1727,43 @@ refused with `No write right has been found for did:ad:agent:…`. `InvitePage`
 already treats the drive-bookmark as best-effort for exactly this reason, but
 against a remote replica the window fires every time rather than rarely, so
 anything in that path that is *not* best-effort will fail there.
+
+### quick-add — the keystroke that lands mid-save
+
+CI's snapshot said it precisely: the field still held "Bread" and no row had
+been added. `create()` clears the field before it awaits anything, so had it
+run at all the field would be empty — it took the early return, and with text
+present the only remaining cause was `busy`. The bar is used at speed and the
+window is wider than it looks: a row becomes visible when `onRowCreated` fires
+in `.then()`, while `busy` clears later in `.finally()`.
+
+Removing that gate is safe on its own terms — submitting the same item twice
+is already impossible, because the field is cleared before anything is awaited
+and `ready` is false until something new is typed.
+
+**The test that proved it, and the one that didn't.** The first attempt delayed
+the HTTP `/commit` route and passed against the bug: commits travel over the
+**websocket** while connected, so it held nothing open. `routeWebSocket` is
+what creates a real in-flight window. Only running the new test with the fix
+reverted exposed this — it had already gone green and looked like proof.
+
+Final: 3/3 red without the fix, 5/5 green with it, all four quick-add specs
+passing.
+
+### Reading CI honestly
+
+Two ways a run lied today, both worth checking before debugging anything:
+
+- **Overlapping runs.** Mancave is one 24-core box running 4 shards x 2 workers.
+  Pushing inside a run's ~30 min doubles shard times (8m -> 18m) and fails a
+  scattered set of timing-sensitive specs together — dashboards, calendar,
+  filePicker, table-templates. Seen at load average 20.88. `ssh mancave uptime`
+  before believing a list.
+- **Cache replay.** A docs-only commit does not touch the e2e cache key, so the
+  run replays the previous result — identical failures *and* identical shard
+  times to the tenth of a minute, which re-executed tests cannot produce. To
+  force a real e2e run, change something under `browser/`.
+
+All eight failures from that degraded run were A/B'd locally against this
+branch's changes and none of them are ours — including the four dashboard
+specs, which do use `QuickAddBar` through `CreateBlock`.
