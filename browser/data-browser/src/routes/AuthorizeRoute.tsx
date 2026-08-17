@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   approveAccessRequest,
   authorizeRedirectUrl,
+  authorizeReturnLabel,
   createAccessRequest,
   denyAccessRequest,
   expandAccessRequestTargets,
@@ -66,6 +67,9 @@ function AuthorizePage() {
   const [busy, setBusy] = useState(false);
   const [secret, setSecret] = useState<string>();
   const [grantedAgent, setGrantedAgent] = useState<string>();
+  const returnLabel = parsed.ok
+    ? authorizeReturnLabel(parsed.spec.redirectUri)
+    : undefined;
 
   const expanded = parsed.ok
     ? expandAccessRequestTargets(parsed.spec.targets, workspaces)
@@ -147,6 +151,7 @@ function AuthorizePage() {
 
       const spec = parsed.ok ? parsed.spec : undefined;
       const redirect = authorizeRedirectUrl(spec?.redirectUri, {
+        granted: true,
         agent: result.subject,
         state: spec?.state,
       });
@@ -173,7 +178,12 @@ function AuthorizePage() {
 
     try {
       await denyAccessRequest(store, requestSubject);
-      window.location.assign(paths.agentSettings);
+      const spec = parsed.ok ? parsed.spec : undefined;
+      const redirect = authorizeRedirectUrl(spec?.redirectUri, {
+        granted: false,
+        state: spec?.state,
+      });
+      window.location.assign(redirect ?? paths.agentSettings);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setBusy(false);
@@ -230,6 +240,24 @@ function AuthorizePage() {
                 inside it — not the rest of the workspace. You can uncheck
                 anything you do not want to grant.
               </Hint>
+              {parsed.ok && parsed.spec.publicKey && returnLabel && (
+                <Hint data-testid='authorize-return'>
+                  After you allow, you'll return to {returnLabel}. The app
+                  already has a key — nothing to copy.
+                </Hint>
+              )}
+              {parsed.ok && parsed.spec.publicKey && !returnLabel && (
+                <Hint>
+                  The app already has a key. After you allow, you're done —
+                  nothing to copy.
+                </Hint>
+              )}
+              {parsed.ok && !parsed.spec.publicKey && (
+                <Hint>
+                  This app did not send a key, so you'll copy a secret after
+                  Allow. A redirect never carries the secret.
+                </Hint>
+              )}
               <Column gap='0.4rem'>
                 {selected.length === 0 && expanded.length === 0 ? (
                   <p>No workspaces to grant yet.</p>

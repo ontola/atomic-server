@@ -54,21 +54,21 @@ This is not the same as the `/app/token` bearer page, which signs in **as you** 
 
 ### Requesting rights (for app developers)
 
-Settings is how a person mints a key. An app should instead **ask**, the way OAuth's `/authorize` does:
+Settings is how a person mints a key. An app should instead **ask**, the way OAuth's `/authorize` does. To skip copy/paste, the app mints a keypair, sends the public DID, and a `redirect_uri`:
 
 ```
-https://your-app.example/app/authorize?name=Raycast&write=0&targets=*
+https://your-node.example/app/authorize?name=Raycast&write=0&targets=*&agent=did:ad:agent:…&redirect_uri=https://app.example/cb&state=…
 ```
+
+After Allow, the browser returns to `redirect_uri?granted=true&agent=did:ad:agent:…&state=…`. The app already has the private key, so that DID is enough — the secret is never in the URL. Deny returns `granted=false&error=access_denied`. `redirect_uri` must be `https:`, `http://localhost`, or a native scheme (`raycast://…`).
 
 | Query | Meaning |
 | --- | --- |
 | `name` | Shown on the consent screen (required) |
 | `write` | `1` / `true` for read and write; omit for read only |
 | `targets` | Comma-separated resource subjects. `*` (default) means every workspace the user can currently write to |
-| `agent` or `public_key` | DID or public key the app already minted. Preferred: Atomic grants that identity and never copies a secret |
-| `redirect_uri` | Optional. After Allow, redirect with `granted=true&agent=…&state=`. Never includes the secret. `https:`, `http://localhost`, or a native scheme only |
+| `agent` or `public_key` | DID or public key the app already minted. Required to skip copy/paste |
+| `redirect_uri` | Where to send the user after Allow / Deny. Never includes the secret |
 | `state` | Correlation id. Also makes the pending request idempotent |
 
-The pending request is stored in a private folder on the user's personal drive (`localId: app-key-requests`). Approving creates or binds an app key; denying deletes the row.
-
-If the app cannot mint a keypair first, omit `agent`. Allow then shows a secret once — the PAT fallback, not the OAuth happy path.
+If the app cannot mint a keypair first, omit `agent`. Allow then shows a secret once — even if `redirect_uri` is set. That is the PAT fallback, not the happy path.

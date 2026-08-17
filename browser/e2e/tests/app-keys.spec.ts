@@ -140,4 +140,34 @@ test.describe('app keys', () => {
     await expect(page.getByText('Raycast', { exact: true })).toBeVisible();
     await expect(page).toHaveURL(/\/app\/agent/);
   });
+
+  test('allow with a public key returns to redirect_uri, nothing to copy', async ({
+    page,
+  }) => {
+    const appAgent = 'did:ad:agent:e2ePublicKeyForRedirect';
+    const redirect = `${FRONTEND_URL}/app/about`;
+    const authorize = new URL(`${FRONTEND_URL}/app/authorize`);
+    authorize.searchParams.set('name', 'Redirect app');
+    authorize.searchParams.set('write', '0');
+    authorize.searchParams.set('agent', appAgent);
+    authorize.searchParams.set('redirect_uri', redirect);
+    authorize.searchParams.set('state', 's1');
+
+    await page.goto(authorize.toString());
+    await expect(page.getByTestId('authorize-return')).toContainText(
+      'nothing to copy',
+      { timeout: 30_000 },
+    );
+
+    const allow = page.getByTestId('authorize-allow');
+    await expect(allow).toBeEnabled({ timeout: 30_000 });
+    await allow.click();
+
+    await page.waitForURL(/\/app\/about/);
+    const landed = new URL(page.url());
+    expect(landed.searchParams.get('granted')).toBe('true');
+    expect(landed.searchParams.get('agent')).toBe(appAgent);
+    expect(landed.searchParams.get('state')).toBe('s1');
+    expect(landed.search).not.toMatch(/secret|privateKey/i);
+  });
 });

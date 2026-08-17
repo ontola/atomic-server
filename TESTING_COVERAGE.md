@@ -133,6 +133,7 @@ Mint a new agent, grant it resource-level rights, keep the signed-in session as 
 | User Settings create → secret shown once → list row → still signed in → revoke | `browser/e2e/tests/app-keys.spec.ts` |
 | Grant on a folder, not the whole workspace | `browser/e2e/tests/app-keys.spec.ts` |
 | `/app/authorize` Allow mints a key and shows the secret | `browser/e2e/tests/app-keys.spec.ts` |
+| `/app/authorize` with public key + redirect_uri returns without a secret | `browser/e2e/tests/app-keys.spec.ts` |
 
 ### Not covered
 

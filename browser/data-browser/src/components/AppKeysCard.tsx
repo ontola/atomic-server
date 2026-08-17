@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import {
   approveAccessRequest,
+  authorizeRedirectUrl,
   core,
   dataBrowser,
   denyAccessRequest,
@@ -245,6 +246,18 @@ function PendingRequestRow({
         parent: keysFolder,
       });
       toast.success(`Granted ${spec.name}`);
+      const redirect = authorizeRedirectUrl(spec.redirectUri, {
+        granted: true,
+        agent: result.subject,
+        state: spec.state,
+      });
+
+      if (redirect && !result.secret) {
+        window.location.assign(redirect);
+
+        return;
+      }
+
       onApproved(result);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
@@ -258,6 +271,17 @@ function PendingRequestRow({
 
     try {
       await denyAccessRequest(store, subject);
+      const redirect = authorizeRedirectUrl(spec.redirectUri, {
+        granted: false,
+        state: spec.state,
+      });
+
+      if (redirect) {
+        window.location.assign(redirect);
+
+        return;
+      }
+
       toast.success('Request denied');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));

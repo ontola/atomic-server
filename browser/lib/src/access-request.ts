@@ -320,11 +320,18 @@ export async function denyAccessRequest(
 
 /**
  * Front-channel return after consent. Never includes the secret — same reason
- * OAuth deprecated the implicit flow.
+ * OAuth deprecated the implicit flow. Copy/paste is skipped when the app
+ * sent a public key *and* a safe `redirect_uri`: it already holds the
+ * private key, so `agent=` on the return URL is enough.
  */
 export function authorizeRedirectUrl(
   redirectUri: string | undefined,
-  params: { agent: string; state?: string },
+  params: {
+    granted: boolean;
+    agent?: string;
+    state?: string;
+    error?: string;
+  },
 ): string | undefined {
   if (!redirectUri || !isSafeRedirectUri(redirectUri)) {
     return undefined;
@@ -332,14 +339,43 @@ export function authorizeRedirectUrl(
 
   try {
     const url = new URL(redirectUri);
-    url.searchParams.set('granted', 'true');
-    url.searchParams.set('agent', params.agent);
+    url.searchParams.set('granted', params.granted ? 'true' : 'false');
+
+    if (params.granted && params.agent) {
+      url.searchParams.set('agent', params.agent);
+    }
+
+    if (!params.granted) {
+      url.searchParams.set('error', params.error ?? 'access_denied');
+    }
 
     if (params.state) {
       url.searchParams.set('state', params.state);
     }
 
     return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+/** Host or scheme shown on the consent screen (“you’ll return to …”). */
+export function authorizeReturnLabel(
+  redirectUri: string | undefined,
+): string | undefined {
+  if (!redirectUri || !isSafeRedirectUri(redirectUri)) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(redirectUri);
+
+    if (url.protocol === 'https:' || url.protocol === 'http:') {
+      return url.host;
+    }
+
+    const scheme = url.protocol.replace(/:$/, '');
+    return url.host ? `${scheme}://${url.host}` : `${scheme}:`;
   } catch {
     return undefined;
   }
@@ -374,5 +410,6 @@ function fingerprintRequest(spec: AccessRequestSpec): string {
     spec.write ? 'w' : 'r',
     [...spec.targets].sort().join(','),
     spec.publicKey ?? '',
+    spec.redirectUri ?? '',
   ].join('|');
 }

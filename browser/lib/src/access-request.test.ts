@@ -4,6 +4,7 @@ import {
   APP_KEY_SCOPE_ALL_WORKSPACES,
   approveAccessRequest,
   authorizeRedirectUrl,
+  authorizeReturnLabel,
   createAccessRequest,
   denyAccessRequest,
   expandAccessRequestTargets,
@@ -113,6 +114,7 @@ describe('authorizeRedirectUrl', () => {
 
   it('returns agent and state, never a secret', () => {
     const url = authorizeRedirectUrl('https://app.example/cb', {
+      granted: true,
       agent: 'did:ad:agent:x',
       state: 's1',
     });
@@ -121,6 +123,30 @@ describe('authorizeRedirectUrl', () => {
     expect(url).toContain('agent=did%3Aad%3Aagent%3Ax');
     expect(url).toContain('state=s1');
     expect(url).not.toMatch(/secret|private/i);
+  });
+
+  it('returns error=access_denied on deny, still without a secret', () => {
+    const url = authorizeRedirectUrl('https://app.example/cb', {
+      granted: false,
+      state: 's1',
+    });
+
+    expect(url).toContain('granted=false');
+    expect(url).toContain('error=access_denied');
+    expect(url).toContain('state=s1');
+    expect(url).not.toContain('agent=');
+    expect(url).not.toMatch(/secret|private/i);
+  });
+});
+
+describe('authorizeReturnLabel', () => {
+  it('shows the host for http(s) and the scheme for native apps', () => {
+    expect(authorizeReturnLabel('https://app.example/cb')).toBe('app.example');
+    expect(authorizeReturnLabel('http://localhost:6747/cb')).toBe(
+      'localhost:6747',
+    );
+    expect(authorizeReturnLabel('raycast://oauth')).toBe('raycast://oauth');
+    expect(authorizeReturnLabel('javascript:alert(1)')).toBeUndefined();
   });
 });
 
