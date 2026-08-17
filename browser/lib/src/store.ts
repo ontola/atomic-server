@@ -450,6 +450,10 @@ export class Store {
    *  for the same subject from firing one fetch each. */
   private _gapRecoveries: Set<string> = new Set();
 
+  /** Agent subjects already re-checked against the server this session — see
+   *  the agent branch in {@link fetchResourceWithLocalFallback}. */
+  private _revalidatedAgents: Set<string> = new Set();
+
   /** Current Agent, used for signing commits. Is required for posting things. */
   private agent?: Agent;
   /** Mapped from origin to websocket */
@@ -3123,6 +3127,21 @@ export class Store {
         // narrow case it covered (a destroy commit that landed while
         // we were disconnected AND not covered by SUB on reconnect)
         // is rare and recovers on the next live update.
+        //
+        // Agents are the exception, because that premise fails for them: they
+        // belong to no drive, so no SUB covers them and nothing ever refreshes
+        // the local copy. A cached agent can therefore be wrong forever — which
+        // is what kept other people's names from appearing after the server
+        // started allowing the read: every client already held a cached stub
+        // and stopped asking. Re-check each agent once per session; after that
+        // it is trusted like anything else.
+        if (
+          subject.startsWith('did:ad:agent:') &&
+          !this._revalidatedAgents.has(subject)
+        ) {
+          this._revalidatedAgents.add(subject);
+          await this.fetchResourceFromServer(subject, opts);
+        }
       } else {
         // Online, no local data — server is our only source.
         await this.fetchResourceFromServer(subject, opts);

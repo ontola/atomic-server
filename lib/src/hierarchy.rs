@@ -251,6 +251,21 @@ fn check_rights_impl<'a, S: Storelike>(
             }
         }
 
+        // Anyone may READ an Agent. An agent resource is an identity — a name,
+        // a public key, a pointer to a home drive — and every place that shows
+        // who did something has to resolve one: chat avatars, member lists,
+        // "who created this". Agents belong to no drive, so no drive grant can
+        // reach them, and nobody but the owner is ever listed in their `read`.
+        // The result was that only presence, which carries the name inside its
+        // own payload, could show a name at all; everything else read a 401 and
+        // rendered a stub. Writing is untouched — still owner-only.
+        if matches!(right, Right::Read)
+            && crate::agents::migrate_legacy_agent_subject(resource.get_subject().as_str())
+                .starts_with("did:ad:agent:")
+        {
+            return Ok("Agents are publicly readable.".into());
+        }
+
         // Handle Commits.
         if let Ok(commit_subject) = resource.get(urls::SUBJECT) {
             return match right {
@@ -435,6 +450,51 @@ mod test {
         check_rights(&store, &resource, &signed_in, Right::Write)
             .await
             .expect("the legacy grant names this very key — its owner must keep write access");
+    }
+
+    /// Anyone can read an agent; only its owner can write it.
+    ///
+    /// Field bug (2026-08-17): two people on a shared drive saw each other's
+    /// names only in presence, which carries the name in its own payload.
+    /// Everywhere else — chat avatars, member lists, "Show profile" — resolves
+    /// the agent resource, and that read was refused: an agent grants `read` to
+    /// nobody but itself and belongs to no drive, so no grant could reach it.
+    #[tokio::test]
+    async fn agents_are_readable_by_anyone_but_writable_only_by_their_owner() {
+        use crate::agents::ForAgent;
+        use crate::hierarchy::{check_rights, Right};
+
+        let store = crate::db::Db::init_temp("agents_are_public").await.unwrap();
+        crate::test_utils::setup_test_env(&store).await.unwrap();
+
+        let owner_key = "+/UHiCrMCWr7O5waaKRPJ5Pq90T8ncocNkH0kYihCFM=";
+        let owner = format!("did:ad:agent:{owner_key}");
+
+        let mut agent_resource = crate::Resource::new(owner.as_str().into());
+        agent_resource
+            .set(
+                crate::urls::NAME.into(),
+                Value::String("Their Display Name".into()),
+                &store,
+            )
+            .await
+            .unwrap();
+        agent_resource.save_locally(&store).await.unwrap();
+
+        let someone_else = ForAgent::AgentSubject(
+            "did:ad:agent:9Bx1xRXvB1jVHYqYcSCbnR3T9pMGHYnvXQFmJ4wMPBw=".into(),
+        );
+
+        check_rights(&store, &agent_resource, &someone_else, Right::Read)
+            .await
+            .expect("an agent's identity is public — otherwise nobody can show anyone's name");
+
+        assert!(
+            check_rights(&store, &agent_resource, &someone_else, Right::Write)
+                .await
+                .is_err(),
+            "reading an agent must not imply editing it",
+        );
     }
 
     // TODO: Add tests for:
