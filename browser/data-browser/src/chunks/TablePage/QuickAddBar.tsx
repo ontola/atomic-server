@@ -35,14 +35,25 @@ export function QuickAddBar({
 }: Props): JSX.Element {
   const store = useStore();
   const [typed, setTyped] = useState('');
-  const [busy, setBusy] = useState(false);
+  /**
+   * How many saves are in flight, not whether one is — this bar is used at
+   * speed, and a second item is often named before the first has landed.
+   */
+  const [pending, setPending] = useState(0);
+  const busy = pending > 0;
 
   // A spec with a field is asking for a value; creating a blank row instead
   // would be a worse guess than doing nothing.
   const ready = !spec.field || typed.trim() !== '';
 
   const create = () => {
-    if (!ready || busy) {
+    // Deliberately not gated on a save being in flight. It used to be, and that
+    // silently dropped the keystroke: type, press enter, and nothing happens —
+    // no row, no error, the text still sitting in the field. Double-submitting
+    // one item is already impossible without it, because the field is cleared
+    // below before anything is awaited, which makes `ready` false until
+    // something new is typed.
+    if (!ready) {
       return;
     }
 
@@ -50,7 +61,7 @@ export function QuickAddBar({
     // Cleared up front, not after the save: anything typed while the save is in
     // flight would otherwise be wiped when the reset landed.
     setTyped('');
-    setBusy(true);
+    setPending(n => n + 1);
 
     void createQuickAddRow(store, {
       table: tableSubject,
@@ -66,7 +77,7 @@ export function QuickAddBar({
         console.error('Failed to quick-add a row', error);
         toast.error(`Could not add the ${tableClass.title.toLowerCase()}`);
       })
-      .finally(() => setBusy(false));
+      .finally(() => setPending(n => n - 1));
   };
 
   return (
