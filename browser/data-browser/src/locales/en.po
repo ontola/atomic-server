@@ -7143,3 +7143,11 @@ msgstr "{0}. Your backup is sealed in this browser and nowhere else, so it unloc
 #: src/components/AccountRecoveryCard.tsx
 msgid "You can get back in with:{0} {1}"
 msgstr "You can get back in with:{0} {1}"
+
+#: src/routes/SyncRoute.tsx
+msgid "An always-on device has an address. One you carry has a code instead, shown below."
+msgstr "An always-on device has an address. One you carry has a code instead, shown below."
+
+#: src/routes/SyncRoute.tsx
+msgid "An always-on device has an address. Type it here."
+msgstr "An always-on device has an address. Type it here."

@@ -7109,3 +7109,11 @@ msgstr ""
 #: src/components/AccountRecoveryCard.tsx
 msgid "You can get back in with:{0} {1}"
 msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "An always-on device has an address. One you carry has a code instead, shown below."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "An always-on device has an address. Type it here."
+msgstr ""

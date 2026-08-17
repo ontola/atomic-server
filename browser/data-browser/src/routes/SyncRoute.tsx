@@ -1670,9 +1670,14 @@ function SyncPage() {
                   setShowAddServer(false);
                 }}
               >
+                {/* Only promise the code when there is one to scan. It is
+                    rendered from the connected node's id, so a node that never
+                    reported one (offline, or an older server) leaves the whole
+                    pairing section out and this line pointing at nothing. */}
                 <AddServerExplainer>
-                  An always-on device has an address. One you carry has a code —
-                  scan it below instead.
+                  {pairNodeId
+                    ? 'An always-on device has an address. One you carry has a code instead, shown below.'
+                    : 'An always-on device has an address. Type it here.'}
                 </AddServerExplainer>
                 <ServerInputRow>
                   <ServerInput
