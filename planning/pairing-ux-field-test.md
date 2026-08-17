@@ -754,6 +754,102 @@ server put them. Verified in the running app: the tree ends
 M9-M12 for different findings while this branch was open, and the note now
 carries both sets.)
 
+## Two-person session, 2026-08-17 — reported, not yet fixed
+
+Joep invited a colleague who also holds a legacy secret. Four distinct problems,
+recorded here so each can be reproduced and fixed on its own rather than as one
+vague "sharing is broken".
+
+### M17 — Accepting an invite shows the drive but does not switch to it (open)
+
+The invite link opened the shared drive's contents, while the sidebar kept
+showing the accepting user's own private drive.
+
+**Already reproduced, by accident, during the M15 work.** After accepting the
+same invite in a fresh browser, `localStorage['drive']` held
+`"https://atomic.ontola.io"` — the server root — rather than the target's
+`did:ad:W2Q3m…`. Two visible consequences: the sidebar rendered `/` instead of
+the drive name, and `/search?parents=https://atomic.ontola.io` returned 500,
+because the server root is not a resource. Setting the key by hand and reloading
+fixed everything.
+
+That also means the invite path leaves the client subscribed drive-wide to the
+WRONG drive, which is its own class of bug: `subscribeToDrive()` sends
+`encodeSub(store.getDrive())`, so nothing on the shared drive fans out live to
+that session. It is very likely why the fourth item below was invisible even
+before the deploy gap.
+
+**Reproduce:** accept an invite as a second agent, then read
+`localStorage['drive']`. It should be the invite's target.
+
+**First place to look:** whatever the invite accept flow calls after minting the
+agent — it navigates to the drive without going through the same drive-setting
+path the switcher uses. Related to M6, which is the same class: what "current
+drive" means is decided in more than one place.
+
+### M18 — Agent names do not propagate, except through presence (open)
+
+Both users' names migrated correctly from their legacy agents, and presence
+shows them correctly. Everywhere else — chatroom avatars, for example — the
+other person's name does not appear or does not update live.
+
+Presence is the odd one out because it carries the name IN the payload: the
+agent announces itself, so the receiver never has to resolve anything. Every
+other surface resolves the agent subject to a resource and reads `name` off it,
+which needs that resource to be fetchable and to update live.
+
+An agent resource lives on no drive. So it is outside the drive-wide
+subscription that everything else relies on, which fits the symptom exactly:
+correct after a fetch, never updated after that, and missing entirely where the
+fetch is not attempted.
+
+**Worth deciding before coding**, and Joep's instinct is the right shape: agent
+identity needs a home. Options to weigh — a per-drive "profile" resource (the
+name as it appears on THIS drive, ACL'd with the drive), a server-level profile
+collection, or making agent resources first-class subscribable objects. The
+first keeps the existing rights model; the last is the smallest code change and
+the largest privacy question, since it makes every agent readable to anyone who
+can name it.
+
+**Reproduce:** two agents in one chatroom, rename one, watch the other's UI.
+
+### M19 — "Show profile" opens the wrong resource (open)
+
+The avatar menu's "Show profile" opens the *following* resource instead of the
+agent's profile.
+
+`PresenceAvatarMenu.tsx:48` does `navigate(constructOpenURL(agentSubject))`,
+which looks right — so the likely fault is what `agentSubject` holds at that
+point, not the navigation. The same string is also used by
+`FollowStatus.tsx`, so check which component actually rendered the clicked menu
+before assuming.
+
+**Reproduce:** open the sidebar avatar menu for another live session, click Show
+profile, compare the opened subject against that agent's subject.
+
+### M20 — A colleague's browser does not show rows this session created (open)
+
+Almost certainly the deploy gap rather than a new bug, and worth checking before
+anything else is investigated.
+
+The colleague loads the app from the Home Assistant add-on, whose binary — and
+therefore whose embedded bundle — was built at 18:35. Every client-side fix from
+this session landed at 20:21-20:22:
+
+| fix | lands |
+| --- | --- |
+| rows that arrive from a peer are drawn (M15) | 20:22 |
+| a live update that cannot apply is recovered (M14b) | 20:22 |
+| a connect that never opened no longer pins auth (M16) | 20:22 |
+| keyless children stop sorting to the top (M13) | 20:22 |
+
+M15 is exactly this symptom, measured and fixed on this branch. So the first
+step is to redeploy HA from a build that contains it and retest — not to open a
+new investigation.
+
+If it still reproduces after that deploy, the next suspect is M17: a session
+subscribed to the wrong drive receives no live fan-out for the shared one.
+
 ### P1 — Proposal: show discovered-but-unpaired nodes on the Sync page
 
 The Sync page shows two lists, and neither is discovery:
