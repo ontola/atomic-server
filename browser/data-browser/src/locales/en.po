@@ -7248,3 +7248,28 @@ msgstr "Granted {0}"
 #: src/components/AppKeysCard.tsx
 msgid "Request denied"
 msgstr "Request denied"
+
+#~ msgid "After you allow, you’ll return to"
+#~ msgstr "After you allow, you’ll return to"
+
+#: src/routes/AuthorizeRoute.tsx
+msgid ". The app already has a key — nothing to copy."
+msgstr ". The app already has a key — nothing to copy."
+
+#~ msgid "The app already has a key. After you allow, you’re done — nothing to copy."
+#~ msgstr "The app already has a key. After you allow, you’re done — nothing to copy."
+
+#~ msgid "This app did not send a key, so you’ll copy a secret after Allow. A redirect never carries the secret."
+#~ msgstr "This app did not send a key, so you’ll copy a secret after Allow. A redirect never carries the secret."
+
+#: src/routes/AuthorizeRoute.tsx
+msgid "After you allow, you'll return to"
+msgstr "After you allow, you'll return to"
+
+#: src/routes/AuthorizeRoute.tsx
+msgid "The app already has a key. After you allow, you're done — nothing to copy."
+msgstr "The app already has a key. After you allow, you're done — nothing to copy."
+
+#: src/routes/AuthorizeRoute.tsx
+msgid "This app did not send a key, so you'll copy a secret after Allow. A redirect never carries the secret."
+msgstr "This app did not send a key, so you'll copy a secret after Allow. A redirect never carries the secret."
