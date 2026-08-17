@@ -126,6 +126,15 @@ pub mod error_code {
     /// Retrying floods the server; only a rights change or a fresh edit
     /// helps. Blocking — stop retrying, keep the entry visible.
     pub const UNAUTHORIZED_WRITE: u16 = 3;
+    /// The commit names a class this server does not hold, so validation
+    /// cannot run. Seen in the field as a table whose rows were refused one at
+    /// a time because the table's row class had never reached the server: every
+    /// row looked saved locally and none of them were.
+    ///
+    /// Blocking, NOT terminal. The write itself is well-formed — the class may
+    /// still arrive, at which point the same commit would apply — so dropping
+    /// it would discard a good edit. Keep it, stop retrying, and say so.
+    pub const MISSING_CLASS: u16 = 4;
 }
 
 /// Classify a commit-application error message into a structured code for
@@ -145,6 +154,13 @@ pub fn classify_commit_error(message: &str) -> u16 {
 
     if message.contains("/properties/write right has been found") {
         return error_code::UNAUTHORIZED_WRITE;
+    }
+
+    // `storelike.rs` wraps the lookup failure as
+    // "Failed getting class <subject>. <inner>", so the prefix is the stable
+    // part regardless of why the class could not be read.
+    if message.contains("Failed getting class") {
+        return error_code::MISSING_CLASS;
     }
 
     error_code::UNKNOWN
@@ -1124,6 +1140,21 @@ mod tests {
         assert_eq!(
             classify_commit_error("some other error"),
             error_code::UNKNOWN
+        );
+    }
+
+    /// The message a table row gets when its class never reached this server.
+    /// Verbatim from the field, where every row of a shared table was refused
+    /// with it and nothing surfaced that to either person.
+    #[test]
+    fn a_missing_class_is_classified_rather_than_left_unknown() {
+        assert_eq!(
+            classify_commit_error(
+                "Failed getting class did:ad:ViKExaq3nm6tVE5UCaCzEQhe7lwOrd. \
+                 Resource not found. DID Resource did:ad:ViKExaq3nm6tVE5UCaCzEQhe7lwOrd \
+                 not found locally"
+            ),
+            error_code::MISSING_CLASS
         );
     }
 

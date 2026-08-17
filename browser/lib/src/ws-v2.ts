@@ -68,6 +68,10 @@ export const ErrorCode = {
   GENESIS_COLLISION: 1,
   MISSING_REQUIRED_PROPERTY: 2,
   UNAUTHORIZED_WRITE: 3,
+  /** The commit names a class the server does not hold, so it cannot validate.
+   *  Blocking rather than terminal: the write is well-formed and would apply
+   *  once the class arrives, so it must not be discarded. */
+  MISSING_CLASS: 4,
 } as const;
 
 // ---- Low-level read/write helpers ----
