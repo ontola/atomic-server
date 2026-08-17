@@ -1358,3 +1358,53 @@ hammers — but it parks as a blocked entry, which is why an invitee who has
 written nothing still sees "Changes pending" forever. Not yet fixed; the cold
 repro to finish it is a second drive + invite with `Resource.prototype`
 instrumented before accepting.
+
+### M22, root cause and fix
+
+The heal pass in `Resource.getLoroDoc()` writes every JSON-AD propval the
+incoming snapshot lacks into the CRDT. `createdBy` is always one of those: the
+server derives it from the genesis certificate and ships it as a propval, but
+never stores it in the document. So every hydration wrote it — a LOCAL
+operation — which marked the subject dirty and signed a commit for a value the
+client never authored.
+
+`lastCommit` and `createdAt` were already exempt for exactly this reason.
+`createdBy` now joins them in one named set, `DERIVED_BY_SERVER`. They stay in
+the read cache, so `get()` and JSON-AD round-trips are unchanged.
+
+Verified by repeating the identical action four times with two agents on one
+server: the first three accepts (before the fix) each queued a commit for the
+shared drive and collected 401s; the fourth (after) left the outbox empty.
+
+Worth noting what this was costing on resources you CAN write: a redundant
+commit on every hydration, which is part of the write amplification we have
+been chasing separately.
+
+### M18, the shape of a fix
+
+Decision taken: a **public Profile resource per agent**. The agent resource
+keeps the private things — keys, the `personalDrive` pointer — and a separate,
+publicly readable resource carries the display name (avatar later). One grant
+fixes chat avatars, member lists and "Show profile" together, and publishes
+nothing but the name the user chose to show.
+
+The open question is **discovery**: given an agent DID, how does another client
+find that agent's profile without reading the agent?
+
+- *Deterministic DID* does not work. A resource's DID is the owner's signature
+  over its genesis certificate, so only the owner can compute it.
+- *Well-known HTTP subject* (`<server>/agents/<publicKey>/profile`) is
+  constructible by anyone from the DID suffix and needs no index or endpoint.
+  It reintroduces an HTTP subject in a codebase deliberately moving to DIDs.
+- *Server-side index* — the server records `profileOf` on apply and answers
+  `GET /profile?agent=<did>`. Cleanest fit with DID subjects; costs an
+  endpoint, an index and a migration for existing agents.
+
+Recommendation: the server-side index. It is the only one that stays honest
+about subjects, and the endpoint is small.
+
+Whichever we pick, the client should stop fabricating an agent stub that is
+indistinguishable from a real profile. Today an unreadable agent renders with
+`isA: agent`, the `publicKey` recovered from the DID suffix and a `createdAt`
+of *now* — which is why this read as "names don't update" rather than "you are
+not allowed to read this".
