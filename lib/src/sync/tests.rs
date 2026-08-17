@@ -66,7 +66,10 @@ mod peer_sync_tests {
             &peers_b,
             &resources_b,
             &db_a,
-            &ForAgent::Public,
+            // Both devices belong to the same person and the drive is private,
+            // so the pull has to identify itself as its owner. Asking as
+            // `Public` gets a correct, empty answer.
+            &ForAgent::AgentSubject(agent_a.subject.clone()),
         )
         .await;
 
@@ -159,7 +162,7 @@ mod peer_sync_tests {
         let db_b = Db::init_temp("undo_sync_b").await.unwrap();
         db_b.load_agent_from_secret(&secret).await.unwrap();
 
-        async fn pull_from_a(db_a: &Db, db_b: &Db, drive_a: &str) -> usize {
+        async fn pull_from_a(db_a: &Db, db_b: &Db, drive_a: &str, owner: &crate::Subject) -> usize {
             let drive_subject =
                 crate::Subject::from_raw(drive_a, db_b.get_base_domain().as_deref());
             let subjects = crate::sync::engine::collect_drive_subjects(db_b, &drive_subject).await;
@@ -171,7 +174,8 @@ mod peer_sync_tests {
                 &[],
                 &std::collections::HashMap::new(),
                 db_a,
-                &ForAgent::Public,
+                // Same person, private drive — see the sibling test.
+                &ForAgent::AgentSubject(owner.clone()),
             )
             .await;
             let mut imported = 0;
@@ -217,13 +221,13 @@ mod peer_sync_tests {
             )
             .unwrap();
         resource_a.save_locally(&db_a).await.unwrap();
-        assert!(pull_from_a(&db_a, &db_b, &drive_a).await > 0);
+        assert!(pull_from_a(&db_a, &db_b, &drive_a, &agent_a.subject).await > 0);
         assert_eq!(stroke_count_on(&db_b, &canvas).await, 2);
 
         // A: undo last stroke, persist, replicate to B again
         assert!(resource_a.undo().unwrap());
         resource_a.save_locally(&db_a).await.unwrap();
-        pull_from_a(&db_a, &db_b, &drive_a).await;
+        pull_from_a(&db_a, &db_b, &drive_a, &agent_a.subject).await;
         assert_eq!(
             stroke_count_on(&db_b, &canvas).await,
             1,
