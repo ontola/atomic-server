@@ -114,4 +114,30 @@ test.describe('app keys', () => {
     await expect(page.getByText(`Read · ${folderName}`)).toBeVisible();
     await expect(page.getByText(/Read · Dev drive/)).toHaveCount(0);
   });
+
+  test('an app can request rights at /app/authorize', async ({ page }) => {
+    await page.goto(`${FRONTEND_URL}/app/authorize?name=Raycast&write=0`);
+    await expect(
+      page.getByRole('heading', { name: 'Authorize an app' }),
+    ).toBeVisible();
+    await expect(page.getByText('Raycast wants')).toBeVisible();
+
+    const allow = page.getByTestId('authorize-allow');
+    await expect(allow).toBeEnabled({ timeout: 30_000 });
+    await allow.click();
+
+    await expect(
+      page.getByText('You will not see it again', { exact: false }),
+    ).toBeVisible({ timeout: 30_000 });
+    const secret = await page
+      .locator('[data-code-content]')
+      .getAttribute('data-code-content');
+    expect(secret).toBeTruthy();
+    expect(secret!.length).toBeGreaterThan(40);
+
+    await page.getByTestId('app-key-secret-done').click();
+    await expect(page.getByRole('heading', { name: 'App keys' })).toBeVisible();
+    await expect(page.getByText('Raycast', { exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/app\/agent/);
+  });
 });

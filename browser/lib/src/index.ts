@@ -41,6 +41,7 @@ export * from './ontologies/i18n.js';
 export * from './canvas-strokes.js';
 export * from './agent.js';
 export * from './issue-access-agent.js';
+export * from './access-request.js';
 // Needed outside this package by the Cloud Vault client, which must convert an
 // agent's base64 key into the raw seed before wrapping a drive key. Doing that
 // conversion anywhere else risks the wrong representation being wrapped, which

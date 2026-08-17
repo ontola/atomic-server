@@ -115,7 +115,7 @@ Both matter because `iroh_transport` holds the router and node identity in
 
 ## App keys (issued agents)
 
-Mint a new agent, grant it drive-level rights, keep the signed-in session as you. Plan: [`planning/issued-agents.md`](./planning/issued-agents.md).
+Mint a new agent, grant it resource-level rights, keep the signed-in session as you. Apps can request those rights at `/app/authorize`. Plan: [`planning/issued-agents.md`](./planning/issued-agents.md).
 
 ### Glue — covered
 
@@ -124,6 +124,7 @@ Mint a new agent, grant it drive-level rights, keep the signed-in session as you
 | Mint does not call `setAgent`; secret round-trips; read-only vs write ACL | `browser/lib/src/issue-access-agent.test.ts` |
 | Grant an existing key more resources; revoke removes ACL and marks the name | `browser/lib/src/issue-access-agent.test.ts` |
 | Folder-level grant does not put the key on the workspace; revoke finds it from the recorded targets | `browser/lib/src/issue-access-agent.test.ts` |
+| Authorize query parses OAuth-style params; all-workspaces expands at consent; public-key bind returns no secret; deny deletes the pending row | `browser/lib/src/access-request.test.ts` |
 
 ### Flow — covered
 
@@ -131,6 +132,7 @@ Mint a new agent, grant it drive-level rights, keep the signed-in session as you
 |---|---|
 | User Settings create → secret shown once → list row → still signed in → revoke | `browser/e2e/tests/app-keys.spec.ts` |
 | Grant on a folder, not the whole workspace | `browser/e2e/tests/app-keys.spec.ts` |
+| `/app/authorize` Allow mints a key and shows the secret | `browser/e2e/tests/app-keys.spec.ts` |
 
 ### Not covered
 

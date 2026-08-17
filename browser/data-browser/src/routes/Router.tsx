@@ -13,6 +13,7 @@ import { ServerSettingsRoute } from './SettingsServer';
 import { pathNames } from './paths';
 import { ShareRoute } from './Share/ShareRoute';
 import { TokenRoute } from './TokenRoute';
+import { AuthorizeRoute } from './AuthorizeRoute';
 import { devRoutesEnabled } from '../config';
 import { rootRoute, topRoute, appRoute } from './RootRoutes';
 import { unavailableLazyRoute } from './UnavailableLazyRoute';
@@ -82,6 +83,7 @@ const routeTree = rootRoute.addChildren({
     ShareRoute,
     AboutRoute,
     TokenRoute,
+    AuthorizeRoute,
     HistoryRoute,
     NewRoute,
     NewDriveRoute,

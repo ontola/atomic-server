@@ -1,10 +1,14 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import {
+  approveAccessRequest,
   core,
   dataBrowser,
+  denyAccessRequest,
+  expandAccessRequestTargets,
   grantAccessAgent,
   isRevokedAccessAgentName,
   issueAccessAgent,
+  readAccessRequest,
   revokeAccessAgent,
   useChildren,
   useResource,
@@ -30,6 +34,7 @@ import {
 } from './ConfirmationDialog';
 import { SearchBox } from './forms/SearchBox';
 import { getOrCreateAppKeysFolder } from '../helpers/appKeysFolder';
+import { getOrCreateAppKeyRequestsFolder } from '../helpers/appKeyRequestsFolder';
 import { usePersonalDrive } from '../hooks/usePersonalDrive';
 import { useSavedDrives } from '../hooks/useSavedDrives';
 
@@ -46,6 +51,7 @@ export function AppKeysCard() {
   const { personalDrive } = usePersonalDrive();
   const [savedDrives] = useSavedDrives();
   const [folderSubject, setFolderSubject] = useState<string>();
+  const [requestsFolder, setRequestsFolder] = useState<string>();
   const [folderError, setFolderError] = useState<string>();
 
   const workspaces = useMemo(() => {
@@ -66,10 +72,14 @@ export function AppKeysCard() {
 
     let cancelled = false;
 
-    void getOrCreateAppKeysFolder(store, personalDrive)
-      .then(subject => {
+    void Promise.all([
+      getOrCreateAppKeysFolder(store, personalDrive),
+      getOrCreateAppKeyRequestsFolder(store, personalDrive),
+    ])
+      .then(([keys, requests]) => {
         if (!cancelled) {
-          setFolderSubject(subject);
+          setFolderSubject(keys);
+          setRequestsFolder(requests);
           setFolderError(undefined);
         }
       })
@@ -85,6 +95,7 @@ export function AppKeysCard() {
   }, [store, personalDrive]);
 
   const { subjects: folderChildren } = useChildren(folderSubject);
+  const { subjects: pendingRequests } = useChildren(requestsFolder);
   const [minted, setMinted] = useState<string[]>([]);
   const children = useMemo(
     () => [...new Set([...folderChildren, ...minted])],
@@ -124,6 +135,34 @@ export function AppKeysCard() {
             </Button>
           </Row>
           {folderError && <ErrorLook>{folderError}</ErrorLook>}
+          {pendingRequests.length > 0 && (
+            <Column gap='0.4rem'>
+              <PendingHeading>Pending requests</PendingHeading>
+              <CardInsideFull>
+                {pendingRequests.map((subject, index) => (
+                  <PendingRequestRow
+                    key={subject}
+                    subject={subject}
+                    workspaces={workspaces}
+                    keysFolder={folderSubject}
+                    noBorder={index === 0}
+                    onApproved={issued => {
+                      setMinted(list =>
+                        list.includes(issued.subject)
+                          ? list
+                          : [...list, issued.subject],
+                      );
+
+                      if (issued.secret) {
+                        setSecret(issued.secret);
+                        showCreate();
+                      }
+                    }}
+                  />
+                ))}
+              </CardInsideFull>
+            </Column>
+          )}
           <CardInsideFull>
             {children.length === 0 ? (
               <CardRow noBorder>
@@ -175,6 +214,92 @@ export function AppKeysCard() {
           ))}
       </Dialog>
     </>
+  );
+}
+
+function PendingRequestRow({
+  subject,
+  workspaces,
+  keysFolder,
+  noBorder,
+  onApproved,
+}: {
+  subject: string;
+  workspaces: string[];
+  keysFolder?: string;
+  noBorder?: boolean;
+  onApproved: (issued: { subject: string; secret?: string }) => void;
+}) {
+  const store = useStore();
+  const resource = useResource(subject);
+  const spec = readAccessRequest(resource);
+  const targets = expandAccessRequestTargets(spec.targets, workspaces);
+  const [busy, setBusy] = useState(false);
+
+  async function handleAllow() {
+    setBusy(true);
+
+    try {
+      const result = await approveAccessRequest(store, subject, {
+        targets,
+        parent: keysFolder,
+      });
+      toast.success(`Granted ${spec.name}`);
+      onApproved(result);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeny() {
+    setBusy(true);
+
+    try {
+      await denyAccessRequest(store, subject);
+      toast.success('Request denied');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!spec.name) {
+    return null;
+  }
+
+  return (
+    <CardRow noBorder={noBorder}>
+      <Row justify='space-between' align='center' wrapItems gap='0.75rem'>
+        <Column gap='0.15rem'>
+          <KeyName>{spec.name}</KeyName>
+          <KeyMeta>
+            {spec.write ? 'Read and write' : 'Read'}
+            {' · '}
+            <GrantPlaces subjects={targets} />
+          </KeyMeta>
+        </Column>
+        <Row gap='0.5rem'>
+          <Button
+            subtle
+            onClick={() => void handleDeny()}
+            disabled={busy}
+            data-testid='deny-app-key-request'
+          >
+            Deny
+          </Button>
+          <Button
+            onClick={() => void handleAllow()}
+            disabled={busy || targets.length === 0}
+            data-testid='allow-app-key-request'
+          >
+            {busy ? 'Granting…' : 'Allow'}
+          </Button>
+        </Row>
+      </Row>
+    </CardRow>
   );
 }
 
@@ -684,6 +809,12 @@ function TargetName({ subject }: { subject: string }) {
 
   return <>{title || 'Untitled'}</>;
 }
+
+const PendingHeading = styled.h3`
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+`;
 
 const Explanation = styled.p`
   margin: 0;

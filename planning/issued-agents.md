@@ -265,6 +265,46 @@ can still *sign*. They just fail authorization.
 - **Zones / authorization-sync**: issued agents are ordinary principals.
   No special case in `check_rights`.
 
+## Requesting rights (OAuth-shaped)
+
+Minting a key in Settings is the GitHub PAT flow: the user goes to Atomic
+and copies a secret into the app. Developers should also be able to
+**request** rights, the way OAuth does — the app initiates, the user
+consents on a trusted screen, the credential is issued only after Allow.
+
+OAuth itself is the wrong primitive (bearer tokens, a scope language, a
+token endpoint). The *shape* is right:
+
+| OAuth | Atomic |
+| --- | --- |
+| `GET /authorize?client_id&scope&redirect_uri&state` | `GET /app/authorize?name&write&targets&redirect_uri&state` |
+| Scope strings (`repo`, `read:user`) | Resource subjects + read/write. `targets=*` means all current workspaces, expanded at consent time. RFC 9396 RAR, not RFC 6749 scopes. |
+| Authorization server stores a pending grant | Well-known folder on the personal drive, `localId: app-key-requests` |
+| Consent screen | `/app/authorize` and a Pending list on App keys |
+| Authorization code in the front channel, token on the back channel | App sends its **public key** (`agent` / `public_key`). We grant that DID. Nothing secret returns in the URL. Same reason OAuth deprecated implicit. |
+| Implicit / PAT fallback | If the app sent no key, this session mints one and shows the secret once — never in `redirect_uri`. |
+| Device flow | The authorize URL *is* the user code. Raycast opens a browser; pending rows also appear in Settings. |
+| Registered `redirect_uri` | Optional. Only `https:`, `http://localhost`, or a native scheme. `javascript:` / `data:` / random `http:` are rejected. Query becomes `granted=true&agent=did:ad:agent:…&state=`. |
+
+The developer-facing document is the authorize URL (or, later, a JSON-AD
+manifest the URL points at). They do **not** write into the user's drive —
+they cannot, they have no rights yet. Opening `/app/authorize` while signed
+in creates the pending row. That is the AS writing its own pending-authorization
+table.
+
+Reuse invite properties for the row (`invite/write`, `invite/publicKey`,
+`invite/agent`, `destination`). Targets stay on `resources` so a request can
+name several folders. No new ontology.
+
+Approve deletes the pending row. The issued Agent under `app-keys` is the
+grant, like OAuth keeping the token grant and dropping the `/authorize`
+request.
+
+Do not invent a parallel scope language. `https://atomicdata.dev/app-keys/all-workspaces`
+is a scope URI the client may send; the AS expands it to real subjects at
+Allow. Down-scoping (unchecking a workspace) is allowed, as OAuth ASes may
+grant a subset.
+
 ## Phasing
 
 ### Phase 1 — mint, list, revoke, reuse
@@ -277,6 +317,9 @@ can still *sign*. They just fail authorization.
       secret once, list, revoke, add access to an existing key.
 - [x] Unit tests on the helper. Docs: agents page + this plan.
 - [x] Relabel `/app/token` so it is not mistaken for a scoped key.
+- [x] Apps can request rights: `/app/authorize` (OAuth-shaped), pending
+      folder `localId: app-key-requests`, Allow binds a public key or
+      mints a secret.
 
 ### Phase 2 — activity and rotation
 
@@ -314,8 +357,8 @@ can still *sign*. They just fail authorization.
 | Layer | What |
 | --- | --- |
 | **protocol** | Already covered: rights on drives (`lib/tests/drive_rights.rs`), agent DID auth |
-| **glue** | `issueAccessAgent` / `revokeAccessAgent` / `grantAccessAgent` against `testStore` — mint does not call `setAgent`, secret round-trips, ACL push/remove |
-| **flow** | Settings create → secret shown → list row → revoke. E2E only if the helper tests are not enough to catch a session-switch bug |
+| **glue** | `issueAccessAgent` / `bindAccessAgent` / `revokeAccessAgent` / `grantAccessAgent` / `createAccessRequest` / `approveAccessRequest` against `testStore` — mint does not call `setAgent`, secret round-trips, ACL push/remove, authorize query parsing, public-key bind returns no secret |
+| **flow** | Settings create → secret shown → list row → revoke. `/app/authorize` Allow. E2E only if the helper tests are not enough to catch a session-switch bug |
 
 A test that creates an issued agent and then asserts `store.getAgent()` is
 still the original DID is load-bearing. Switching the session is the

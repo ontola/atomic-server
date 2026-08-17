@@ -133,6 +133,8 @@ msgstr "<0/> Create New Agent"
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
+#: src/components/AppKeysCard.tsx
+#: src/components/AppKeysCard.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
@@ -169,6 +171,7 @@ msgstr "Agent name"
 #: src/chunks/AI/MCPConfigTab.tsx
 #: src/chunks/AI/SkillsConfigTab.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
+#: src/components/AppKeysCard.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDashboardDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewDriveDialog.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
@@ -873,6 +876,7 @@ msgstr "Click to enlarge"
 
 #: src/components/SideBar/AppMenu.tsx
 #: src/routes/SettingsAgent.tsx
+#: src/routes/TokenRoute.tsx
 msgid "User Settings"
 msgstr "User Settings"
 
@@ -1268,6 +1272,7 @@ msgstr "Canvas"
 msgid "Save failed: {0}"
 msgstr "Save failed: {0}"
 
+#: src/components/AppKeysCard.tsx
 #: src/views/Canvas/CanvasPage.tsx
 msgid "Saving…"
 msgstr "Saving…"
@@ -1868,6 +1873,8 @@ msgstr "Permissions set here:"
 msgid "Inherited permissions:"
 msgstr "Inherited permissions:"
 
+#: src/components/AppKeysCard.tsx
+#: src/components/AppKeysCard.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/OntologyPage/OntologyPage.tsx
@@ -1931,6 +1938,7 @@ msgstr "Please wait while we link your OpenRouter account..."
 msgid "Set a title"
 msgstr "Set a title"
 
+#: src/components/AppKeysCard.tsx
 #: src/components/EditableTitle.tsx
 #: src/components/NavBar.tsx
 msgid "Untitled"
@@ -2234,6 +2242,7 @@ msgstr "Edit value"
 
 #: src/components/SignInButton.tsx
 #: src/helpers/managed/cloudSync.ts
+#: src/routes/AuthorizeRoute.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Sign in"
@@ -2616,10 +2625,14 @@ msgstr "Allow all reads done by this plugin"
 msgid "Allow all writes done by this plugin"
 msgstr "Allow all writes done by this plugin"
 
+#: src/components/AppKeysCard.tsx
+#: src/routes/AuthorizeRoute.tsx
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Deny"
 msgstr "Deny"
 
+#: src/components/AppKeysCard.tsx
+#: src/routes/AuthorizeRoute.tsx
 #: src/views/PluginView/useRequestPermissionDialog.tsx
 msgid "Allow"
 msgstr "Allow"
@@ -5509,6 +5522,7 @@ msgstr "Local storage is off, so this server is the only data source. Enable loc
 msgid "Could not create the drive."
 msgstr "Could not create the drive."
 
+#: src/components/AppKeysCard.tsx
 #: src/routes/NewDriveRoute.tsx
 msgid "Creating…"
 msgstr "Creating…"
@@ -7037,3 +7051,200 @@ msgstr "This workspace already lives on {0}. Moving it here is a migration, not 
 #: src/components/Vault/VaultPanel.tsx
 msgid "Checking this workspace’s backup…"
 msgstr "Checking this workspace’s backup…"
+
+#: src/routes/SettingsAgent.tsx
+msgid "Secrets for apps and plugins. Each key is its own identity — not your account secret."
+msgstr "Secrets for apps and plugins. Each key is its own identity — not your account secret."
+
+#: src/helpers/appKeysFolder.ts
+#: src/routes/SettingsAgent.tsx
+msgid "App keys"
+msgstr "App keys"
+
+#: src/routes/TokenRoute.tsx
+msgid "It is a short-lived session for a personal CLI — not a scoped key for an app. For Raycast, a plugin, or anything that should not hold your account secret, create an app key in"
+msgstr "It is a short-lived session for a personal CLI — not a scoped key for an app. For Raycast, a plugin, or anything that should not hold your account secret, create an app key in"
+
+#: src/routes/TokenRoute.tsx
+msgid "This signs in as you, with all of your rights."
+msgstr "This signs in as you, with all of your rights."
+
+#: src/components/AppKeysCard.tsx
+msgid "App keys live on your private workspace. Create one first, then you can mint keys for apps and plugins."
+msgstr "App keys live on your private workspace. Create one first, then you can mint keys for apps and plugins."
+
+#: src/components/AppKeysCard.tsx
+msgid "Each key is its own identity. Grant a workspace, or a single folder or page — rights inherit to everything inside."
+msgstr "Each key is its own identity. Grant a workspace, or a single folder or page — rights inherit to everything inside."
+
+#: src/components/AppKeysCard.tsx
+msgid "<0/> Create key"
+msgstr "<0/> Create key"
+
+#. 0: report.failed.length; 1: known.length; 2: report.failed .map(f => f.reason) .join('\; ')
+#: src/components/AppKeysCard.tsx
+msgid "Still has access to {0} of {1} places — could not revoke: {2}"
+msgstr "Still has access to {0} of {1} places — could not revoke: {2}"
+
+#. 0: known.length; 1: known.length === 1 ? '' \\: 's'
+#: src/components/AppKeysCard.tsx
+msgid "Key revoked — checked {0} place{1}"
+msgstr "Key revoked — checked {0} place{1}"
+
+#: src/components/AppKeysCard.tsx
+msgid "Untitled key"
+msgstr "Untitled key"
+
+#: src/components/AppKeysCard.tsx
+msgid "Revoked — this secret can no longer read what you granted."
+msgstr "Revoked — this secret can no longer read what you granted."
+
+#: src/components/AppKeysCard.tsx
+#: src/components/AppKeysCard.tsx
+#: src/components/AppKeysCard.tsx
+msgid "Read and write"
+msgstr "Read and write"
+
+#: src/components/AppKeysCard.tsx
+msgid "No access"
+msgstr "No access"
+
+#: src/components/AppKeysCard.tsx
+#: src/components/AppKeysCard.tsx
+#: src/components/AppKeysCard.tsx
+msgid "Add access"
+msgstr "Add access"
+
+#: src/components/AppKeysCard.tsx
+#: src/components/AppKeysCard.tsx
+msgid "Revoke"
+msgstr "Revoke"
+
+#: src/components/AppKeysCard.tsx
+msgid "Revoke this key?"
+msgstr "Revoke this key?"
+
+#: src/components/AppKeysCard.tsx
+msgid "Apps using this secret will lose access. You cannot show the secret again — create a new key if you still need one."
+msgstr "Apps using this secret will lose access. You cannot show the secret again — create a new key if you still need one."
+
+#: src/components/AppKeysCard.tsx
+msgid "Create an app key"
+msgstr "Create an app key"
+
+#: src/components/AppKeysCard.tsx
+msgid "Raycast"
+msgstr "Raycast"
+
+#: src/components/AppKeysCard.tsx
+msgid "Read only"
+msgstr "Read only"
+
+#: src/components/AppKeysCard.tsx
+msgid "Access"
+msgstr "Access"
+
+#: src/components/AppKeysCard.tsx
+msgid "Access to"
+msgstr "Access to"
+
+#: src/components/AppKeysCard.tsx
+msgid "A folder or page grant covers that resource and everything inside it — not the rest of the workspace."
+msgstr "A folder or page grant covers that resource and everything inside it — not the rest of the workspace."
+
+#: src/components/AppKeysCard.tsx
+msgid "Create key"
+msgstr "Create key"
+
+#: src/components/AppKeysCard.tsx
+msgid "Access updated"
+msgstr "Access updated"
+
+#: src/components/AppKeysCard.tsx
+msgid "Same key, more places. The secret does not change — the app already holding it gets the new access."
+msgstr "Same key, more places. The secret does not change — the app already holding it gets the new access."
+
+#: src/components/AppKeysCard.tsx
+msgid "Copy this secret now"
+msgstr "Copy this secret now"
+
+#: src/components/AppKeysCard.tsx
+msgid "<0>You will not see this again.</0> Paste it into the app. If you lose it, revoke the key and create a new one."
+msgstr "<0>You will not see this again.</0> Paste it into the app. If you lose it, revoke the key and create a new one."
+
+#: src/components/AppKeysCard.tsx
+#: src/routes/AuthorizeRoute.tsx
+msgid "I have copied it"
+msgstr "I have copied it"
+
+#: src/components/AppKeysCard.tsx
+msgid "nothing"
+msgstr "nothing"
+
+#. 0: subjects.length
+#: src/components/AppKeysCard.tsx
+msgid "{0} places"
+msgstr "{0} places"
+
+#: src/helpers/appKeysFolder.ts
+msgid "Secrets for apps and plugins. Each child is its own identity — not your account. The secret is shown once at creation and is not stored here."
+msgstr "Secrets for apps and plugins. Each child is its own identity — not your account. The secret is shown once at creation and is not stored here."
+
+#: src/routes/AuthorizeRoute.tsx
+msgid "Authorize an app"
+msgstr "Authorize an app"
+
+#: src/components/AppKeysCard.tsx
+#: src/routes/AuthorizeRoute.tsx
+msgid "Granting…"
+msgstr "Granting…"
+
+#: src/routes/AuthorizeRoute.tsx
+msgid "Sign in first, then return to this page."
+msgstr "Sign in first, then return to this page."
+
+#: src/routes/AuthorizeRoute.tsx
+msgid "<0>Copy this secret now. You will not see it again.</0> The app did not send a public key, so this session minted the keypair. Paste the secret into the app."
+msgstr "<0>Copy this secret now. You will not see it again.</0> The app did not send a public key, so this session minted the keypair. Paste the secret into the app."
+
+#: src/routes/AuthorizeRoute.tsx
+msgid "Access granted. The app already holds the key — nothing to copy."
+msgstr "Access granted. The app already holds the key — nothing to copy."
+
+#: src/routes/AuthorizeRoute.tsx
+msgid "Back to App keys"
+msgstr "Back to App keys"
+
+#. 0: ' '; 1: parsed.spec.write ? 'read and write' \\: 'read'; 2: parsed.spec.description ? ` ${parsed.spec.description}` \\: ''
+#: src/routes/AuthorizeRoute.tsx
+msgid "<0/> wants{0} {1} access. {2}"
+msgstr "<0/> wants{0} {1} access. {2}"
+
+#: src/routes/AuthorizeRoute.tsx
+msgid "A folder or page grant covers that resource and everything inside it — not the rest of the workspace. You can uncheck anything you do not want to grant."
+msgstr "A folder or page grant covers that resource and everything inside it — not the rest of the workspace. You can uncheck anything you do not want to grant."
+
+#: src/routes/AuthorizeRoute.tsx
+msgid "No workspaces to grant yet."
+msgstr "No workspaces to grant yet."
+
+#: src/helpers/appKeyRequestsFolder.ts
+msgid "App key requests"
+msgstr "App key requests"
+
+#: src/helpers/appKeyRequestsFolder.ts
+msgid "Pending rights requests from apps. Approve one to mint or bind an app key. The secret is never stored here."
+msgstr "Pending rights requests from apps. Approve one to mint or bind an app key. The secret is never stored here."
+
+#: src/components/AppKeysCard.tsx
+msgid "Pending requests"
+msgstr "Pending requests"
+
+#. 0: spec.name
+#: src/components/AppKeysCard.tsx
+msgid "Granted {0}"
+msgstr "Granted {0}"
+
+#: src/components/AppKeysCard.tsx
+msgid "Request denied"
+msgstr "Request denied"

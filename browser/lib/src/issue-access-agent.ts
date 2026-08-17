@@ -67,14 +67,108 @@ export async function issueAccessAgent(
   const keys = await Agent.generateKeyPair();
   const subject = `did:ad:agent:${keys.publicKey}`;
 
-  const resource = await store.newResource({
+  await publishIssuedAgentProfile(store, {
     subject,
+    publicKey: keys.publicKey,
+    name,
+    parent: opts.parent,
+    description: opts.description,
+  });
+  await grantAccessAgent(store, subject, opts.targets, opts.write);
+
+  return {
+    subject,
+    secret: Agent.buildSecret(keys.privateKey, subject),
+  };
+}
+
+/**
+ * Grant an agent the app already holds. OAuth's preferred shape: the client
+ * minted the keypair, sent only the public key / DID, and never needs a
+ * secret copied out of this session.
+ */
+export async function bindAccessAgent(
+  store: Store,
+  opts: IssueAccessAgentOpts & { publicKey: string },
+): Promise<{ subject: string }> {
+  const current = store.getAgent();
+
+  if (!current?.subject) {
+    throw new Error('Cannot grant an app key while signed out');
+  }
+
+  const name = opts.name.trim();
+
+  if (!name) {
+    throw new Error('App keys need a name');
+  }
+
+  if (opts.targets.length === 0) {
+    throw new Error('Choose at least one resource');
+  }
+
+  const { subject, publicKey } = agentSubjectFromPublicKey(opts.publicKey);
+
+  await publishIssuedAgentProfile(store, {
+    subject,
+    publicKey,
+    name,
+    parent: opts.parent,
+    description: opts.description,
+  });
+  await grantAccessAgent(store, subject, opts.targets, opts.write);
+
+  return { subject };
+}
+
+export function agentSubjectFromPublicKey(value: string): {
+  subject: string;
+  publicKey: string;
+} {
+  const trimmed = value.trim();
+
+  if (trimmed.startsWith('did:ad:agent:')) {
+    return {
+      subject: trimmed,
+      publicKey: trimmed.slice('did:ad:agent:'.length),
+    };
+  }
+
+  return {
+    subject: `did:ad:agent:${trimmed}`,
+    publicKey: trimmed,
+  };
+}
+
+async function publishIssuedAgentProfile(
+  store: Store,
+  opts: {
+    subject: string;
+    publicKey: string;
+    name: string;
+    parent?: string;
+    description?: string;
+  },
+): Promise<void> {
+  const cached = store.resources.get(opts.subject);
+  const alreadyPublished =
+    cached &&
+    !cached.error &&
+    !cached.new &&
+    Boolean(cached.get(core.properties.publicKey));
+
+  if (alreadyPublished) {
+    return;
+  }
+
+  const resource = await store.newResource({
+    subject: opts.subject,
     parent: opts.parent,
     noParent: !opts.parent,
     isA: core.classes.agent,
     propVals: {
-      [core.properties.publicKey]: keys.publicKey,
-      [core.properties.name]: name,
+      [core.properties.publicKey]: opts.publicKey,
+      [core.properties.name]: opts.name,
       [core.properties.read]: [instances.publicAgent],
       ...(opts.description
         ? { [core.properties.description]: opts.description }
@@ -88,13 +182,6 @@ export async function issueAccessAgent(
   // resource is treated as a table-row placeholder and never listed.
   resource.new = false;
   await store.notifyResourceManuallyCreated(resource);
-
-  await grantAccessAgent(store, subject, opts.targets, opts.write);
-
-  return {
-    subject,
-    secret: Agent.buildSecret(keys.privateKey, subject),
-  };
 }
 
 /**
