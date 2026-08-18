@@ -9,6 +9,7 @@ import {
   DIALOG_CLOSE_BUTTON,
   SEARCHBOX_PROPERTY_PLACEHOLDER,
   waitForSearchIndex,
+  waitForClassInstanceSearchable,
 } from './test-utils';
 
 test.describe('Ontology', async () => {
@@ -261,6 +262,23 @@ test.describe('Ontology', async () => {
     // happily come back holding "Create …" plus the other instance, and the
     // `.nth(1)` below then selects the wrong arrow.
     await waitForSearchIndex(page, 'green arrow with black border');
+    // ...and the picker does not use that search. It filters by
+    // `isA: arrow-kind`, and a filtered search skips the local index and waits
+    // on Tantivy, so the unfiltered call above can be green while the results
+    // list still holds only its "Create" row. On a loaded runner that is a 30s
+    // timeout in `pickOption`; wait for the query the picker actually issues.
+    await waitForClassInstanceSearchable(
+      page,
+      'arrow-kind',
+      'red arrow with circle',
+      'Red arrow with circle',
+    );
+    await waitForClassInstanceSearchable(
+      page,
+      'arrow-kind',
+      'green arrow with black border',
+      'Green arrow with black border',
+    );
 
     await page
       .getByRole('button', { name: 'add an item to the allows-only list' })
