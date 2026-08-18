@@ -361,6 +361,7 @@ export default function CollaborativeEditor({
     }
 
     const root = editor.view.dom;
+
     const hideCursorNames = () => {
       root.querySelectorAll('.ProseMirror-loro-cursor').forEach(el => {
         el.setAttribute('aria-hidden', 'true');
