@@ -4,7 +4,6 @@ import { type AIModelIdentifier, type AtomicUIMessage } from './types';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { useGetModel } from './useModel';
 import { simplifyConversation } from './simplifyConversation';
-import { AIProvider } from '@components/AI/aiContstants';
 
 const titleSystemPrompt = `You are a specialized AI system that generates titles for AI conversations.
 You will be given the first part of a conversation between the user and an AI assistant.
@@ -44,14 +43,13 @@ ${conversation}
 `;
 
 export const useGenerativeData = () => {
-  const { defaultChatModel, genFeaturesModel, isProviderAvailable } =
-    useAISettings();
+  const { defaultChatModel, genFeaturesModel, isAIAvailable } = useAISettings();
 
   const getModel = useGetModel();
   const modelIdentifier = selectGenerativeFeaturesModel(
     genFeaturesModel,
     defaultChatModel,
-    isProviderAvailable,
+    isAIAvailable,
   );
 
   const generateTitleFromConversation = async (
@@ -149,15 +147,11 @@ export function cleanGeneratedTextLine(text: string): string | undefined {
 export function selectGenerativeFeaturesModel(
   genFeaturesModel: AIModelIdentifier,
   defaultChatModel: AIModelIdentifier,
-  isProviderAvailable: (provider: AIProvider) => boolean,
+  isAIAvailable: boolean,
 ): AIModelIdentifier | undefined {
-  if (isProviderAvailable(genFeaturesModel.provider)) {
-    return genFeaturesModel;
+  if (!isAIAvailable) {
+    return undefined;
   }
 
-  if (isProviderAvailable(defaultChatModel.provider)) {
-    return defaultChatModel;
-  }
-
-  return undefined;
+  return genFeaturesModel.id ? genFeaturesModel : defaultChatModel;
 }

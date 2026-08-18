@@ -12,7 +12,6 @@ import { Button } from '@components/Button';
 import { FaXmark, FaPaperclip, FaFile } from 'react-icons/fa6';
 import { ChatMessagesContainer } from '@components/ChatMessagesContainer';
 import { useStore, type Resource } from '@tomic/react';
-import { AIProvider } from '@components/AI/aiContstants';
 import {
   AIAgent,
   type AIAtomicResourceMessageContext,
@@ -27,23 +26,10 @@ import { AISettingsDialog } from './AISettingsDialog';
 import { MessageContextItem } from './MessageContextItem';
 
 import { ComboBox } from '@components/ComboBox';
-import { effectFetch } from '@helpers/effectFetch';
-
-type OllamaModel = {
-  name: string;
-  model: string;
-  size: number;
-  details: {
-    format: string;
-    parent_model: string;
-    family: string;
-    parameter_size: string;
-    quantization_level: string;
-  };
-};
 import { useProcessMessages } from './useProcessMessages';
 import { AISetupPanel } from './AISetupPanel';
-import { useOpenRouterModels } from './useOpenRouterModels';
+import { useAIModels } from './useAIModels';
+import { matchPreset, normalizeModelIdValue } from './aiEndpoint';
 import {
   getAutoCompactTokenThreshold,
   useModelContextLength,
@@ -130,12 +116,17 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 }) => {
   const store = useStore();
   const {
-    openRouterApiKey,
+    aiBaseUrl,
+    aiApiKey,
     showTokenUsage,
     showFollowUpPrompts,
-    ollamaUrl,
-    isProviderAvailable,
+    isAIAvailable,
+    defaultChatModel,
+    setDefaultChatModel,
   } = useAISettings();
+  const { models: endpointModels } = useAIModels();
+  const endpointLabel =
+    matchPreset(aiBaseUrl)?.label ?? aiBaseUrl ?? 'the model endpoint';
 
   // useChat does not update it's options so we need to use a ref to make it use the latest value.
   const showFollowUpPromptsRef = useRef(showFollowUpPrompts);
@@ -151,101 +142,32 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     setLastUsedSidebarAgent,
   } = useAIAgentConfig();
   const getToolsForAgent = useTools();
-  const {
-    checkORModelSupportsImageInput,
-    checkORModelSupport,
-    getOutputModalities,
-    models: openRouterModels,
-  } = useOpenRouterModels();
 
-  const [ollamaModels, setOllamaModels] = useState<OllamaModel[]>([]);
-
-  useEffect(() => {
-    if (!ollamaUrl) {
-      setOllamaModels([]);
-
-      return;
-    }
-
-    return effectFetch(`${ollamaUrl}/api/tags`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })(
-      data => {
-        setOllamaModels(data.models || []);
-      },
-      e => {
-        console.error('Failed to fetch Ollama models:', e);
-        setOllamaModels([]);
-      },
-    );
-  }, [ollamaUrl]);
-
-  const currencyFormatter = useRef(
-    new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-    }),
-  ).current;
-
-  // Most recently selected model values (`provider:id`), most-recent-first.
+  // Most recently selected model ids, most-recent-first.
   const [recentModelValues, setRecentModelValues] = useLocalStorage<string[]>(
     'atomic.ai.recentModels',
     [],
   );
 
   const combinedModelOptions = useMemo(() => {
-    const openRouterOptions = openRouterModels.map(model => {
-      const promptPrice =
-        model.pricing?.prompt !== undefined
-          ? `${currencyFormatter.format(model.pricing.prompt * 1000000)}/M input`
-          : '';
-      const completionPrice =
-        model.pricing?.completion !== undefined
-          ? `${currencyFormatter.format(model.pricing.completion * 1000000)}/M output`
-          : '';
-      const pricingStr = [promptPrice, completionPrice]
-        .filter(Boolean)
-        .join(' • ');
-
-      return {
-        label: model.name,
-        // Include the provider so searching "openrouter" surfaces all of them.
-        searchLabel: `${model.name.toLowerCase()} openrouter`,
-        // Show the provider in the subtitle alongside the cost.
-        description: ['OpenRouter', pricingStr].filter(Boolean).join(' • '),
-        value: `openrouter:${model.id}`,
-      };
-    });
-
-    const ollamaOptions = ollamaModels.map(model => {
-      const details = [
-        'Ollama (local)',
-        model.details?.parameter_size
-          ? `Size: ${model.details.parameter_size}`
+    const all = endpointModels.map(model => ({
+      label: model.name ?? model.id,
+      searchLabel: (model.name ?? model.id).toLowerCase(),
+      description: [
+        endpointLabel,
+        model.context_length
+          ? `Context: ${model.context_length.toLocaleString()}`
           : '',
-        model.details?.format ? `Format: ${model.details.format}` : '',
       ]
         .filter(Boolean)
-        .join(' • ');
+        .join(' • '),
+      value: model.id,
+    }));
 
-      return {
-        label: model.name,
-        // Include the provider so searching "ollama" surfaces all of them.
-        searchLabel: `${model.name.toLowerCase()} ollama`,
-        description: details,
-        value: `ollama:${model.model}`,
-      };
-    });
-
-    const all = [...openRouterOptions, ...ollamaOptions];
-
+    const normalizedRecent = recentModelValues.map(normalizeModelIdValue);
     // Surface recently used models at the top. With an empty query the ComboBox
     // shows the options in this order; once the user types, QuickScore re-ranks.
-    const recentRank = new Map(recentModelValues.map((value, i) => [value, i]));
+    const recentRank = new Map(normalizedRecent.map((value, i) => [value, i]));
     const recent = all
       .filter(option => recentRank.has(option.value))
       .sort(
@@ -255,7 +177,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     const rest = all.filter(option => !recentRank.has(option.value));
 
     return [...recent, ...rest];
-  }, [openRouterModels, ollamaModels, currencyFormatter, recentModelValues]);
+  }, [endpointModels, endpointLabel, recentModelValues]);
 
   const modelSelectContainerRef = useRef<HTMLDivElement>(null);
 
@@ -265,12 +187,13 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
   const [userInput, setUserInput] = useState('');
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
-  const { defaultChatModel, setDefaultChatModel } = useAISettings();
   const [selectedAgent, setSelectedAgent] = useState<AIAgent>(
     getInitialAgent(!chatSubject, chatSubject),
   );
   const [activeModel, setActiveModel] = useState<AIModelIdentifier>(() => {
-    return selectedAgent.model ?? defaultChatModel;
+    const raw = selectedAgent.model ?? defaultChatModel;
+
+    return { id: raw.id };
   });
   const modelContextLength = useModelContextLength(activeModel);
   const vectorIndexing = useVectorIndexStatus();
@@ -283,11 +206,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   });
 
   const { reportAIEdit } = useAIChanges();
-  // Whether the active model's provider can actually be reached. We NEVER use
-  // this to block typing (a user must always be able to compose a message, even
-  // while a provider is unreachable or still being set up) — only to disable the
-  // SEND and to surface a clear reason.
-  const canUseInput = isProviderAvailable(activeModel.provider);
+  // We NEVER use this to block typing — only to disable SEND and surface a reason.
+  const canUseInput = isAIAvailable;
 
   // Re-opens the provider setup overlay (`AISetupPanel` renders while
   // `atomic.ai.setupComplete` is false).
@@ -305,21 +225,9 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     undefined,
   );
 
-  /** Names the thing that didn't answer, since "no answer" alone helps nobody. */
-  const providerLabel =
-    activeModel.provider === AIProvider.Ollama
-      ? `Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}`
-      : activeModel.provider === AIProvider.OpenRouter
-        ? 'OpenRouter'
-        : 'the model provider';
-
   const providerNotice = canUseInput
     ? null
-    : activeModel.provider === AIProvider.Ollama
-      ? `Can't reach Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}. Make sure it's running, or switch to a cloud model — you can keep typing in the meantime.`
-      : activeModel.provider === AIProvider.OpenRouter
-        ? 'No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime.'
-        : 'No AI model provider is available. Set one up to send — you can keep typing in the meantime.';
+    : 'No model endpoint is configured. Add a base URL (and API key if needed) — you can keep typing in the meantime.';
 
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
     AIMessageContext[]
@@ -339,8 +247,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   });
 
   const transport = useClientOnlyTransport({
-    openRouterAPIKey: openRouterApiKey,
-    ollamaURL: ollamaUrl,
+    endpoint: {
+      baseUrl: aiBaseUrl ?? '',
+      apiKey: aiApiKey,
+    },
     selectedAgent,
     model: activeModel,
     additionalSystemPrompt: selectedAgent.skillsEnabled
@@ -352,8 +262,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
       ...(selectedAgent.skillsEnabled ? skillTools : {}),
       ...getToolsForAgent(selectedAgent),
     },
-    resolveOutputModalities: getOutputModalities,
-    resolveParameterSupport: checkORModelSupport,
     addContextToMessages,
   });
 
@@ -495,14 +403,9 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     setUserSelectedContextItems(newContextItems);
   };
 
-  const checkModelSupportsImageInput = (model: AIModelIdentifier) => {
-    if (model.provider === AIProvider.OpenRouter) {
-      return checkORModelSupportsImageInput(model.id);
-    }
-
-    // We can't know if an ollama is multimodal so we'll just assume it is and have the model handle the failure case.
-    return true;
-  };
+  // Most gateways don't advertise modalities on /models; let the model reject
+  // unsupported image parts rather than hiding the attach button.
+  const checkModelSupportsImageInput = (_model: AIModelIdentifier) => true;
 
   // Combine both context item lists when needed
   const allContextItems = [
@@ -738,7 +641,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
             {requestError && (
               <ProviderNotice role='alert'>
                 <span>
-                  {`No answer from ${providerLabel}: ${requestError}`}
+                  {`No answer from ${endpointLabel}: ${requestError}`}
                 </span>
                 <Button
                   onClick={() => {
@@ -856,17 +759,11 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     <ModelSelectWrapper ref={modelSelectContainerRef}>
                       <ComboBox
                         subtle
-                        selectedItem={`${activeModel.provider}:${activeModel.id}`}
+                        selectedItem={activeModel.id}
                         options={combinedModelOptions}
                         onSelect={value => {
                           if (!value) return;
-                          const [providerStr, ...idParts] = value.split(':');
-                          const id = idParts.join(':');
-                          const provider =
-                            providerStr === 'openrouter'
-                              ? AIProvider.OpenRouter
-                              : AIProvider.Ollama;
-                          const newModel = { id, provider };
+                          const newModel = { id: normalizeModelIdValue(value) };
                           setActiveModel(newModel);
 
                           // Persist the choice to whichever source the chat reads
@@ -889,10 +786,12 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
                           // Remember this model so it surfaces at the top next time.
                           setRecentModelValues(prev =>
-                            [value, ...prev.filter(v => v !== value)].slice(
-                              0,
-                              5,
-                            ),
+                            [
+                              newModel.id,
+                              ...prev
+                                .map(normalizeModelIdValue)
+                                .filter(v => v !== newModel.id),
+                            ].slice(0, 5),
                           );
                           // Move focus to the chat input so the user can type right away.
                           setInputFocusSignal(n => n + 1);

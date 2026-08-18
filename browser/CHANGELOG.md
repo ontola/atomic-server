@@ -4,6 +4,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- **One AI endpoint.** Chat and generative features use a single OpenAI-compatible base URL + API key. Presets cover OpenRouter, Ollama, OrcaRouter, Groq and OpenAI; anything else that speaks `/v1/chat/completions` works the same way. The old OpenRouter / Ollama provider split (and their separate SDKs) is gone.
+
 ## [v0.41.0-beta.2] - 2026-08-01
 
 ### Atomic Browser

@@ -2,14 +2,13 @@ import * as React from 'react';
 import { Column, Row } from '@components/Row';
 import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
-import styled, { useTheme } from 'styled-components';
+import styled from 'styled-components';
 import { Suspense, useEffect, useState } from 'react';
 import { OpenRouterLoginButton } from './OpenRouterLoginButton';
 import { effectFetch } from '@helpers/effectFetch';
 import { CheckboxDescriptor } from '@components/forms/CheckboxDescriptor';
 import { transition } from '@helpers/transition';
 import { useAISettings } from './AISettingsContext';
-import { useIsOllamaUrlValid } from './useIsOllamaUrlValid';
 import { Details } from '@components/Details';
 import {
   SettingsContent,
@@ -20,7 +19,13 @@ import {
   queryMatches,
 } from '@components/Settings';
 import { WarningBlock } from '@components/WarningBlock';
-import { FaCheck, FaTriangleExclamation } from 'react-icons/fa6';
+import {
+  AI_ENDPOINT_PRESETS,
+  matchPreset,
+  OPENROUTER_BASE_URL,
+} from '@chunks/AI/aiEndpoint';
+import { useAIModels } from '@chunks/AI/useAIModels';
+import { ProviderStatus } from './ProviderStatus';
 
 const ModelSelect = React.lazy(
   () => import('@chunks/AI/ModelSelect/ModelSelect'),
@@ -41,57 +46,56 @@ interface CreditUsage {
 
 const CREDITS_ENDPOINT = 'https://openrouter.ai/api/v1/credits';
 
-// Keywords for the AI section's own content (enable toggle, token usage)
 const AI_OWN_KEYWORDS = 'ai token usage';
-// Keywords from child sections — makes this section visible, but children still filter
 const AI_CHILD_KEYWORDS =
-  'openrouter ollama mcp server generative model chat provider api key local';
+  'openrouter ollama openai orcarouter groq litellm endpoint model chat provider api key local gateway';
 
 const AISettings: React.FC = () => {
-  const theme = useTheme();
   const { query: searchQuery } = useSettingsSearch();
   const {
     enableAI,
     setEnableAI,
-    openRouterApiKey,
-    setOpenRouterApiKey,
+    aiBaseUrl,
+    setAiBaseUrl,
+    aiApiKey,
+    setAiApiKey,
     showTokenUsage,
     setShowTokenUsage,
-    ollamaUrl,
-    setOllamaUrl,
     showFollowUpPrompts,
     setShowFollowUpPrompts,
-    isProviderAvailable,
+    isAIAvailable,
     shouldGenerateTitles,
     setShouldGenerateTitles,
     genFeaturesModel,
     setGenFeaturesModel,
   } = useAISettings();
+  const { configured, reachable, checking } = useAIModels();
 
   const [creditUsage, setCreditUsage] = useState<CreditUsage | undefined>();
+  const preset = matchPreset(aiBaseUrl);
+  const isOpenRouter = aiBaseUrl
+    ? matchPreset(aiBaseUrl)?.id === 'openrouter' ||
+      aiBaseUrl.replace(/\/+$/, '') === OPENROUTER_BASE_URL
+    : false;
 
-  const handleSetOpenRouterKey = (key: string | undefined) => {
+  const handleSetApiKey = (key: string | undefined) => {
     if (!key) {
       setCreditUsage(undefined);
     }
 
-    setOpenRouterApiKey(key);
+    setAiApiKey(key);
   };
 
-  const genFeaturesUnavailable = !isProviderAvailable(
-    genFeaturesModel.provider,
-  );
-
-  const { valid: isOllamaUrlValid } = useIsOllamaUrlValid(ollamaUrl);
-
   useEffect(() => {
-    if (!openRouterApiKey) {
+    if (!isOpenRouter || !aiApiKey) {
+      setCreditUsage(undefined);
+
       return;
     }
 
     return effectFetch(CREDITS_ENDPOINT, {
       headers: {
-        Authorization: `Bearer ${openRouterApiKey}`,
+        Authorization: `Bearer ${aiApiKey}`,
       },
     })(data => {
       setCreditUsage({
@@ -99,7 +103,7 @@ const AISettings: React.FC = () => {
         used: data.data.total_usage,
       });
     });
-  }, [openRouterApiKey]);
+  }, [isOpenRouter, aiApiKey]);
 
   const { parentMatched } = useSettingsSearch();
   const isSearching = searchQuery.length > 0;
@@ -111,8 +115,6 @@ const AISettings: React.FC = () => {
     !ownMatch &&
     queryMatches(searchQuery, `ai ${AI_CHILD_KEYWORDS}`);
 
-  // Only propagate parentMatched when this section's own content matched,
-  // not when a child keyword matched (let children filter themselves).
   const childContext = React.useMemo(
     () => ({
       query: searchQuery,
@@ -151,109 +153,83 @@ const AISettings: React.FC = () => {
 
                 <SubGroup>
                   <SubSection>
-                    <SubSectionTitle>OpenRouter</SubSectionTitle>
-                    <Column gap='0.5rem'>
-                      <ConditionalSettings
-                        fullWidth
-                        gap='0.5rem'
-                        enabled={true}
-                      >
-                        <label htmlFor='openrouter-api-key'>
-                          OpenRouter API Key
-                        </label>
-                        <Row center>
-                          {!openRouterApiKey && (
-                            <>
-                              <OpenRouterLoginButton />
-                              or
-                            </>
-                          )}
-                          <InputWrapper>
-                            <InputStyled
-                              id='openrouter-api-key'
-                              type='password'
-                              value={openRouterApiKey || ''}
-                              onChange={e =>
-                                handleSetOpenRouterKey(
-                                  e.target.value || undefined,
-                                )
-                              }
-                              placeholder='Enter your OpenRouter API key'
-                            />
-                          </InputWrapper>
-                        </Row>
-                        {creditUsage && (
-                          <Subtle>
-                            Credits used: {intl.format(creditUsage.used)} /{' '}
-                            {intl.format(creditUsage.total)}
-                          </Subtle>
-                        )}
-                        {!openRouterApiKey && (
-                          <Subtle>
-                            OpenRouter provides a unified API that gives you
-                            access to hundreds of AI models from all major
-                            vendors, while automatically handling fallbacks and
-                            selecting the most cost-effective options.
-                          </Subtle>
-                        )}
-                      </ConditionalSettings>
-                    </Column>
-                  </SubSection>
-
-                  <SubSection>
-                    <SubSectionTitle>Ollama</SubSectionTitle>
+                    <SubSectionTitle>Model endpoint</SubSectionTitle>
                     <Column gap='0.5rem'>
                       <Subtle>
-                        Host your own AI models locally using{' '}
-                        <a
-                          href='https://ollama.com/'
-                          target='_blank'
-                          rel='noreferrer'
-                        >
-                          Ollama
-                        </a>
+                        Any OpenAI-compatible API: OpenRouter, Ollama, Groq,
+                        OrcaRouter, LiteLLM, LM Studio, etc. Pick a preset or
+                        paste a base URL (usually ending in <code>/v1</code>).
                       </Subtle>
-                      <ConditionalSettings
-                        fullWidth
-                        gap='0.5rem'
-                        enabled={true}
-                      >
-                        <Row center gap='1ch'>
-                          {isOllamaUrlValid ? (
-                            <FaCheck
-                              title='Server found'
-                              color={theme.colors.main}
-                            />
-                          ) : (
-                            <FaTriangleExclamation
-                              title='Server not responding'
-                              color={theme.colors.warning}
-                            />
-                          )}
-                          <label htmlFor='ollama-url'>Ollama API Url</label>
-                        </Row>
+                      <ProviderStatus
+                        connected={reachable}
+                        configured={configured}
+                        checking={checking}
+                      />
+                      <PresetRow>
+                        {AI_ENDPOINT_PRESETS.map(p => (
+                          <PresetButton
+                            key={p.id}
+                            type='button'
+                            $active={preset?.id === p.id}
+                            onClick={() => setAiBaseUrl(p.baseUrl)}
+                          >
+                            {p.label}
+                          </PresetButton>
+                        ))}
+                      </PresetRow>
+                      <label htmlFor='ai-endpoint-base-url'>Base URL</label>
+                      <InputWrapper>
+                        <InputStyled
+                          id='ai-endpoint-base-url'
+                          type='url'
+                          value={aiBaseUrl || ''}
+                          onChange={e =>
+                            setAiBaseUrl(e.target.value || undefined)
+                          }
+                          placeholder='https://openrouter.ai/api/v1'
+                        />
+                      </InputWrapper>
+                      <label htmlFor='ai-endpoint-api-key'>API Key</label>
+                      <Row center>
+                        {isOpenRouter && !aiApiKey && (
+                          <>
+                            <OpenRouterLoginButton />
+                            or
+                          </>
+                        )}
                         <InputWrapper>
                           <InputStyled
-                            id='ollama-url'
-                            value={ollamaUrl || ''}
+                            id='ai-endpoint-api-key'
+                            type='password'
+                            value={aiApiKey || ''}
                             onChange={e =>
-                              setOllamaUrl(e.target.value || undefined)
+                              handleSetApiKey(e.target.value || undefined)
                             }
-                            type='url'
-                            placeholder='http://localhost:11434'
+                            placeholder={
+                              preset?.apiKeyPlaceholder ??
+                              (preset && !preset.requiresApiKey
+                                ? 'Optional'
+                                : 'sk-...')
+                            }
                           />
                         </InputWrapper>
-                      </ConditionalSettings>
+                      </Row>
+                      {creditUsage && (
+                        <Subtle>
+                          Credits used: {intl.format(creditUsage.used)} /{' '}
+                          {intl.format(creditUsage.total)}
+                        </Subtle>
+                      )}
                     </Column>
                   </SubSection>
 
                   <SubSection>
                     <SubSectionTitle>Generative features</SubSectionTitle>
-                    {genFeaturesUnavailable && (
+                    {!isAIAvailable && (
                       <WarningBlock>
                         <WarningBlock.Title>
-                          The generative features model uses a provider that is
-                          not available.
+                          Configure a model endpoint above to use generative
+                          features.
                         </WarningBlock.Title>
                       </WarningBlock>
                     )}
@@ -345,6 +321,29 @@ const Subtle = styled.p`
   font-size: 0.8rem;
   margin: 0;
   color: ${p => p.theme.colors.textLight};
+`;
+
+const PresetRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+`;
+
+const PresetButton = styled.button<{ $active: boolean }>`
+  appearance: none;
+  border: 1px solid
+    ${p => (p.$active ? p.theme.colors.main : p.theme.colors.bg2)};
+  background: ${p => (p.$active ? p.theme.colors.main : p.theme.colors.bg)};
+  color: ${p => (p.$active ? p.theme.colors.bg : p.theme.colors.text)};
+  border-radius: ${p => p.theme.radius};
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  ${transition('background-color', 'border-color', 'color')}
+
+  &:hover {
+    border-color: ${p => p.theme.colors.main};
+  }
 `;
 
 export default AISettings;

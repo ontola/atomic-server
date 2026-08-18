@@ -6,35 +6,27 @@ import {
   type ToolSet,
   type UIMessageChunk,
 } from 'ai';
-import { AIProvider } from '@components/AI/aiContstants';
 import {
   type AIAgent,
   type AIModelIdentifier,
   type AtomicUIMessage,
 } from './types';
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { useRef } from 'react';
 import { useStore } from '@tomic/react';
-import { createOllama } from 'ollama-ai-provider-v2';
-import { addFieldsIf } from '@helpers/addIf';
 import { stringifyTree, useGetDriveStructure } from './useGetDriveStructure';
 import { useSettings } from '@helpers/AppSettings';
 import { shortenSubject } from '@helpers/subjectRefs';
 import { getClassesOnDrive } from './atomicSchemaHelpers';
-
-export type Modalities = 'text' | 'image';
+import { createEndpointModel, type AIEndpoint } from './aiEndpoint';
 
 export interface ClientOnlyTransportOptions {
-  openRouterAPIKey?: string;
-  ollamaURL?: string;
+  endpoint: AIEndpoint;
   selectedAgent: AIAgent;
   model: AIModelIdentifier;
   tools: ToolSet;
   addContextToMessages: (
     messages: AtomicUIMessage[],
   ) => Promise<AtomicUIMessage[]>;
-  resolveOutputModalities: (modelId: string) => Modalities[];
-  resolveParameterSupport: (modelId: string, parameter: string) => boolean;
   /** Appended after template substitution (e.g. skills instructions). */
   additionalSystemPrompt?: string;
 }
@@ -73,12 +65,12 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
 
     const result = streamText({
       messages: await convertToModelMessages(transformedMessages),
-      model: this.getModel(this.options.model),
+      model: createEndpointModel(this.options.model.id, this.options.endpoint),
       system: await this._prepareSystemPrompt(agent.systemPrompt),
       tools: this.options.tools,
       abortSignal,
       stopWhen: stepCountIs(1000),
-      ...this.getParameters(agent, this.options.model),
+      temperature: agent.temperature,
     });
 
     const originalStream = result.toUIMessageStream({
@@ -101,67 +93,6 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
 
   public async reconnectToStream(): Promise<ReadableStream<UIMessageChunk> | null> {
     return null;
-  }
-
-  private getModel(model: AIModelIdentifier) {
-    if (
-      model.provider === AIProvider.OpenRouter &&
-      this.options.openRouterAPIKey
-    ) {
-      const modalities = this.options.resolveOutputModalities(model.id);
-
-      const openRouter = createOpenRouter({
-        apiKey: this.options.openRouterAPIKey,
-        compatibility: 'strict',
-        extraBody: {
-          modalities,
-          plugins: [{ id: 'context-compression' }],
-        },
-      });
-
-      return openRouter(model.id);
-    }
-
-    if (model.provider === AIProvider.Ollama && this.options.ollamaURL) {
-      const ollama = createOllama({
-        baseURL: `${this.options.ollamaURL}/api`,
-      });
-
-      return ollama(model.id);
-    }
-
-    throw new Error('Invalid model provider');
-  }
-
-  private getParameters(agent: AIAgent, model: AIModelIdentifier) {
-    if (model.provider === AIProvider.Ollama) {
-      // We can't check if Ollama supports specific parameters, so we just return all of them.
-      return {
-        temperature: agent.temperature,
-      };
-    }
-
-    if (model.provider === AIProvider.OpenRouter) {
-      return {
-        ...addFieldsIf(
-          this.options.resolveParameterSupport(model.id, 'temperature'),
-          {
-            temperature: agent.temperature,
-          },
-        ),
-        ...addFieldsIf(
-          this.options.resolveParameterSupport(model.id, 'reasoning'),
-          {
-            reasoning: {
-              effort: 'low',
-              summary: 'auto',
-            },
-          },
-        ),
-      };
-    }
-
-    throw new Error('Invalid model provider');
   }
 }
 
