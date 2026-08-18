@@ -4954,7 +4954,6 @@ msgid "Embedded (this device)"
 msgstr "Embedded (this device)"
 
 #: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Node ID"
 msgstr "Node ID"
 
@@ -5091,7 +5090,9 @@ msgid "Bring your workspace over"
 msgstr "Bring your workspace over"
 
 #. 0: device
+#. 0: serverLabel(status.serverUrl ?? '')
 #: src/components/pairing/PairingFlowProvider.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Paired with {0}"
 msgstr "Paired with {0}"
 
@@ -5299,19 +5300,14 @@ msgstr "Mount your Atomic drives as a folder on this computer. Your files, folde
 msgid "Switching to {0}…"
 msgstr "Switching to {0}…"
 
-#: src/routes/SyncRoute.tsx
-msgid "Copy Node ID"
-msgstr "Copy Node ID"
+#~ msgid "Copy Node ID"
+#~ msgstr "Copy Node ID"
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Node ID copied"
 msgstr "Node ID copied"
 
-#. 0: rawToNodeDid(serverNodeId)
-#. 0: peer.nodeId
-#: src/routes/SyncRoute.tsx
+#. 0: nodeId
 #: src/routes/SyncRoute.tsx
 msgid "Copy {0}"
 msgstr "Copy {0}"
@@ -6991,6 +6987,10 @@ msgstr "{0} of {1}"
 #~ msgstr "ProbeEpsilonE {0}"
 
 #. 0: syncedAgo
+#. 0: formatTimeAgo(new Date(lastSynced)) ?? 'just now'
+#. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Synced {0}"
 msgstr "Synced {0}"
@@ -7047,3 +7047,17 @@ msgstr "Synced{0} — sent {1}, received {2}"
 #: src/routes/SyncRoute.tsx
 msgid "Paired"
 msgstr "Paired"
+
+#: src/routes/SyncRoute.tsx
+msgid "Paired device"
+msgstr "Paired device"
+
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Not synced yet"
+msgstr "Not synced yet"
+
+#. 0: action.label; 1: detail
+#: src/components/ResourceContextMenu/index.tsx
+msgid "{0} failed: {1}"
+msgstr "{0} failed: {1}"
