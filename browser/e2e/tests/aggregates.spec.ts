@@ -10,35 +10,42 @@ import {
 const row = (page: Page, text: string) =>
   page.getByRole('row').filter({ hasText: text });
 
-/** Types a value into one grid cell, addressed by its row and column index. */
+/**
+ * Puts `value` in one grid cell, addressed by its row and column index.
+ *
+ * Uses the editor `<input>`'s `fill`, not keystrokes: under CI load
+ * Control+A misses, typing appends, and the Hours cell became `"34"` —
+ * after which `toContainText('6')` on the footer false-passed on a sum of 36.
+ */
 async function setCell(
   page: Page,
   rowIndex: number,
   columnIndex: number,
   value: string,
-  opts: { replace?: boolean } = {},
 ) {
   const cell = page.locator(
     `[aria-rowindex="${rowIndex}"] > [aria-colindex="${columnIndex}"]`,
   );
-  // `click` scrolls into view AND re-resolves the locator if the grid remounts
-  // the cell under us; `scrollIntoViewIfNeeded` fails outright on that.
-  await cell.click();
-  await expect(cell).toBeFocused();
-  await page.keyboard.press('Enter');
 
-  if (opts.replace) {
-    // Typing appends to what the cell already holds. Select-all then
-    // Backspace, not just select-all: under load Control+A can miss, and
-    // `toContainText('6')` on the footer then false-passed on a sum of 36.
-    await page.keyboard.press('ControlOrMeta+a');
-    await page.keyboard.press('Backspace');
-  }
+  await expect(async () => {
+    // `click` scrolls into view AND re-resolves the locator if the grid remounts
+    // the cell under us; `scrollIntoViewIfNeeded` fails outright on that.
+    await cell.click();
+    const input = cell.locator('input');
 
-  await page.keyboard.type(value);
-  // Tab commits the edit (Escape would revert it) — same as the table tests.
-  await page.keyboard.press('Tab');
-  await page.waitForTimeout(300);
+    if ((await input.count()) === 0) {
+      await expect(cell).toBeFocused({ timeout: 2_000 });
+      await page.keyboard.press('Enter');
+    }
+
+    await expect(input).toBeVisible({ timeout: 2_000 });
+    await input.fill(value);
+    // Tab commits the edit (Escape would revert it) and leaves the next cell,
+    // which Tab may have opened in edit mode.
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Escape');
+    await expect(cell).toHaveText(value, { timeout: 3_000 });
+  }).toPass({ timeout: 30_000 });
 }
 
 // Totals assertions use 30s budgets, not the 10s default: an aggregate value
@@ -118,10 +125,7 @@ test.describe('table totals', () => {
     await expect(footer).toContainText('5', { timeout: 30_000 });
 
     // It follows an edit, without a reload: 2 + 4 = 6.
-    await setCell(page, 3, hours, '4', { replace: true });
-    await expect(
-      page.locator(`[aria-rowindex="3"] > [aria-colindex="${hours}"]`),
-    ).toHaveText('4');
+    await setCell(page, 3, hours, '4');
     await expect(footer.locator(`[aria-colindex="${hours}"]`)).toContainText(
       '6',
       { timeout: 30_000 },
