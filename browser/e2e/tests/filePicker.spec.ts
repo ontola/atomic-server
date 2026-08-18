@@ -12,7 +12,7 @@ import {
   openNewResourcePage,
   signIn,
   testFilePath,
-  waitForSearchIndex,
+  waitForOntologyClass,
 } from './test-utils';
 
 const ONTOLOGY_NAME = 'filepicker-test';
@@ -104,12 +104,11 @@ test.describe('File Picker', () => {
 
     await createModel(page);
 
-    // The new resource page relies on the search API to show ontology class
-    // buttons; wait until the just-created `robot` class is searchable.
-    // Pass the query: without one this helper is a 1.5s blind sleep, which is
-    // enough on a warm store and not enough on a fresh one, where indexing
-    // competes with the drive seeding this test just did.
-    await waitForSearchIndex(page, 'robot');
+    // `/app/new` lists classes by searching for ONTOLOGIES and rendering each
+    // one's `classes` — so wait for that, not for `robot` to be findable by
+    // name. The two are not the same signal, and the difference is what made
+    // this test fail under suite load while passing on its own.
+    await waitForOntologyClass(page, 'robot');
 
     {
       // Test selecting an existing file.
