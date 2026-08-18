@@ -341,7 +341,21 @@ export const resourceActions: ActionDefinition[] = [
           ctx.navigate(parent ? constructOpenURL(parent) : '/');
         }
       } catch (error) {
-        toast.error((error as Error).message);
+        // A failed delete is the one that most needs saying so: `destroy()`
+        // throws before it removes the resource locally, so the row stays in
+        // the tree and the only thing distinguishing "deleted" from "refused"
+        // is this message. It used to read `(error as Error).message`, which is
+        // `undefined` for anything thrown that isn't an Error — an empty toast,
+        // i.e. a delete that silently did nothing.
+        const detail =
+          error instanceof Error && error.message
+            ? error.message
+            : typeof error === 'string' && error
+              ? error
+              : 'unknown error';
+
+        console.error('[delete] destroy failed for', ctx.subject, error);
+        toast.error(`Could not delete: ${detail}`);
       }
     },
   },

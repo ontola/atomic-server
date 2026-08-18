@@ -13,7 +13,8 @@ import { ResourceCodeUsageDialog } from '../../views/CodeUsage/ResourceCodeUsage
 import { addIf } from '../../helpers/addIf';
 import { resourceActions } from '../../actions/resourceActions';
 import { useActionContext } from '../../actions/useActionContext';
-import type { ActionDefinition } from '../../actions/types';
+import toast from 'react-hot-toast';
+import type { ActionContext, ActionDefinition } from '../../actions/types';
 import { useCustomContextItemsContext } from './CustomContextItemsContext';
 import { CoverPickerDialog, EmojiPickerDialog } from '../ResourceDecorations';
 
@@ -27,6 +28,43 @@ export { ResourceContextMenuHost } from './ResourceContextMenuHost';
 export { useResourceContextMenu } from './ResourceContextMenuContext';
 
 export { DIVIDER, type DropdownItem } from '../Dropdown';
+
+/**
+ * Run a menu action, and never let its failure disappear.
+ *
+ * `run` is async and both call sites invoke it without awaiting, so a rejection
+ * used to become an unhandled promise — the menu closed, nothing happened, and
+ * the only trace was in a console nobody had open. That is what a failed delete
+ * looked like: the row stayed, and no error was ever shown.
+ *
+ * Actions that report their own failures still do; this is the net under them.
+ */
+function runAction(action: ActionDefinition, ctx: ActionContext): void {
+  try {
+    const result = action.run(ctx) as unknown;
+
+    if (result instanceof Promise) {
+      void result.catch((e: unknown) => reportActionError(action, e));
+    }
+  } catch (e) {
+    // A synchronous throw, before the promise even exists.
+    reportActionError(action, e);
+  }
+}
+
+function reportActionError(action: ActionDefinition, e: unknown): void {
+  const detail =
+    e instanceof Error && e.message
+      ? e.message
+      : typeof e === 'string' && e
+        ? e
+        : 'unknown error';
+
+  // Logged as well as shown: the toast is necessarily short, and a server's
+  // parse error is the kind of thing worth having in full.
+  console.error(`[action] "${action.label}" failed:`, e);
+  toast.error(`${action.label} failed: ${detail}`);
+}
 
 /** Ids of the actions in the registry (`actions/resourceActions.tsx`). */
 export const ContextMenuOptions = {
@@ -190,7 +228,7 @@ export function ResourceContextMenu({
         if (action.danger && action.confirmation && !shiftHeld) {
           setConfirmingAction(action);
         } else {
-          action.run(ctx);
+          runAction(action, ctx);
         }
       },
     });
@@ -241,7 +279,9 @@ export function ResourceContextMenu({
         }}
         theme={ConfirmationDialogTheme.Alert}
         confirmLabel={confirmation?.confirmLabel(ctx)}
-        onConfirm={() => confirmingAction?.run(ctx)}
+        onConfirm={() => {
+          if (confirmingAction) runAction(confirmingAction, ctx);
+        }}
       >
         {confirmation?.body(ctx)}
       </ConfirmationDialog>
