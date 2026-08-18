@@ -106,7 +106,10 @@ test.describe('File Picker', () => {
 
     // The new resource page relies on the search API to show ontology class
     // buttons; wait until the just-created `robot` class is searchable.
-    await waitForSearchIndex(page);
+    // Pass the query: without one this helper is a 1.5s blind sleep, which is
+    // enough on a warm store and not enough on a fresh one, where indexing
+    // competes with the drive seeding this test just did.
+    await waitForSearchIndex(page, 'robot');
 
     {
       // Test selecting an existing file.
