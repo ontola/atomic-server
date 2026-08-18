@@ -113,6 +113,37 @@ stale_source() {
        -type f -newer "$BINARY" -print -quit 2>/dev/null
 }
 
+# The binary being fresh is not the same as the EMBEDDED BUNDLE being fresh:
+# `build.rs` skips the JS build when it thinks `dist` is current, so a rebuilt
+# binary can still carry an old frontend. Check the bundle on its own terms.
+BUNDLE="$REPO_ROOT/browser/data-browser/dist/index.html"
+
+stale_bundle() {
+  [[ -f "$BUNDLE" ]] || return 1
+
+  find "$REPO_ROOT/browser/data-browser/src" \
+       "$REPO_ROOT/browser/lib/src" \
+       -type f -newer "$BUNDLE" -print -quit 2>/dev/null
+}
+
+if [[ "$STALE_OK" != true ]] && [[ -n "$(stale_bundle)" ]]; then
+  echo "The embedded frontend bundle is older than the sources it is built from." >&2
+  echo "  bundle: $BUNDLE" >&2
+  echo "  newer:  $(stale_bundle)" >&2
+  echo >&2
+  echo "The invite and dev-drive pages are served from that bundle, not from" >&2
+  echo "vite, so they would run stale code while every other page runs current" >&2
+  echo "code. Rebuild it:" >&2
+  echo "  cargo build -p atomic-server" >&2
+  echo >&2
+  echo "If that leaves the bundle untouched, something non-bundle in dist/ is" >&2
+  echo "newer than your sources and build.rs is skipping the JS build; build" >&2
+  echo "the frontend directly with 'pnpm --filter @tomic/data-browser build'." >&2
+  echo >&2
+  echo "Pass --stale-ok to start anyway." >&2
+  exit 1
+fi
+
 if [[ "$STALE_OK" != true ]] && [[ -n "$(stale_source)" ]]; then
   echo "The server binary is older than the sources it is built from." >&2
   echo "  binary: $BINARY" >&2

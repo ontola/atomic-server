@@ -7,6 +7,10 @@
     "moduleResolution": "bundler",
     "lib": ["ES6", "ES7", "ESNext", "DOM"],
     "outDir": "./dist",
+    // Not in `dist`: `server/build.rs` decides whether to rebuild the embedded
+    // bundle by comparing the newest file in `dist` against the JS sources, so a
+    // typecheck artifact sitting there makes a stale bundle look current.
+    "tsBuildInfoFile": "./node_modules/.cache/tsconfig.build.tsbuildinfo",
     "strictNullChecks": true,
     "paths": {
       "@components/*": ["./src/components/*"],
