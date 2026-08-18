@@ -223,19 +223,10 @@ test.describe('documents', async () => {
     // span, so presence in the DOM — not a bounding box — is the correct signal
     // that the ephemeral cursor synced and was positioned.
     const remoteCursor = page.locator('.ProseMirror-loro-cursor');
-    // A single typed character sometimes never emits LORO_EPHEMERAL_UPDATE
-    // under suite load. Nudge the caret until page1 has the decoration.
-    await expect(async () => {
-      if ((await remoteCursor.count()) === 0) {
-        await page2.keyboard.press('ArrowLeft');
-        await page2.keyboard.press('ArrowRight');
-      }
-
-      await expect(
-        remoteCursor.first(),
-        'page1 did not render the collaborator’s ephemeral cursor',
-      ).toBeAttached({ timeout: 3_000 });
-    }).toPass({ timeout: 30_000 });
+    await expect(
+      remoteCursor.first(),
+      'page1 did not render the collaborator’s ephemeral cursor',
+    ).toBeAttached({ timeout: 15_000 });
 
     // Exactly one remote peer → exactly one caret (ephemeral, not duplicated or
     // persisted into the doc), and it carries the peer's color via inline style.

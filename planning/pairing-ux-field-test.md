@@ -1789,8 +1789,16 @@ real totals bug, not "this PR's problem later". An empty local-DB page
 dropped `aggregates`, and `useTableAggregates` asked once — if that read
 hit the index before the puts landed, ResourceUpdated never fired again
 because the rows were already in the JS store. Fixed by keeping empty-set
-statistics on the collection, draining the worker and retrying an empty
-read, and flushing ClientDb before the dashboard navigation the tests use.
+statistics on the collection, and by having the dashboard specs await
+`waitForRowsMaterialized` — which drains the ClientDb worker, so a query
+issued after it cannot answer from an index that is missing rows the grid
+already shows.
+
+An earlier revision also had `useTableAggregates` retry an empty read eight
+times, flushing on each attempt. That was dropped: it is product code polling
+to hide an index lag the readiness signal already covers, and it made a
+legitimately empty table — a freshly created one — flush eight times on every
+mount, against the OPFS write-amplification work.
 
 Document specs were failing on the same Loro cursor widget that splits
 "New paragraph" into `Ne Dev User w paragraph`. Assertions now read the
