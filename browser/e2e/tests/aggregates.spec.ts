@@ -122,9 +122,10 @@ test.describe('table totals', () => {
     await expect(
       page.locator(`[aria-rowindex="3"] > [aria-colindex="${hours}"]`),
     ).toHaveText('4');
-    await expect(
-      footer.locator(`[aria-colindex="${hours}"]`),
-    ).toContainText('6', { timeout: 30_000 });
+    await expect(footer.locator(`[aria-colindex="${hours}"]`)).toContainText(
+      '6',
+      { timeout: 30_000 },
+    );
 
     // The menu must come back on the same cell, again and again: a cell whose
     // menu opens once and then goes dead is the failure this covers.
@@ -157,12 +158,14 @@ test.describe('table totals', () => {
     );
 
     // 2 and 4 → sum 6, average 3, each in its own row under Hours.
-    await expect(
-      footer.locator(`[aria-colindex="${hours}"]`),
-    ).toContainText('6', { timeout: 30_000 });
-    await expect(
-      secondRow.locator(`[aria-colindex="${hours}"]`),
-    ).toContainText('3', { timeout: 30_000 });
+    await expect(footer.locator(`[aria-colindex="${hours}"]`)).toContainText(
+      '6',
+      { timeout: 30_000 },
+    );
+    await expect(secondRow.locator(`[aria-colindex="${hours}"]`)).toContainText(
+      '3',
+      { timeout: 30_000 },
+    );
 
     // Break the totals down per day, from the row-count cell's menu. (Its menu
     // was used a moment ago, so let that one finish closing first.)
