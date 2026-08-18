@@ -313,6 +313,37 @@ truth while keeping the old methods as shims. Then move signing to
 write directly to the outbox instead of `_pendingCommits`. Then
 delete the parallel state stores and the Resource-owned drain path.
 
+#### Provenance: only a user edit may enqueue
+
+Under sign-at-drain the outbox holds a dirty bit, so "is this a write we
+should push?" is decided when a Loro op fires rather than when a commit is
+signed. That makes the *provenance* of every op load-bearing, and for a long
+time it was approximated by `store.isOwnedSubject(subject)` — a check that
+answers "same domain", not "may we write this". Every `did:ad:` subject
+passed it, including resources on other people's drives.
+
+The failure was not theoretical: merely OPENING a resource you can read but
+not write enqueued a commit for it. `getLoroDoc`'s heal pass writes propvals
+that arrived in the JSON-AD payload but are missing from the accompanying
+Loro snapshot, and `applyHydratedValues` writes a fetch response through a
+doc that already exists. Both are *hydration* — replaying state the server
+already has — but both produced local ops indistinguishable from typing. The
+resulting commits were rejected `Unauthorized` forever, retried through the
+whole backoff ladder, and then parked as blocked entries the user never
+asked for.
+
+The rule, enforced at the Loro boundary rather than by a subject-shape
+guess:
+
+> A local Loro change enqueues a write **only** if it is `by: 'local'` and
+> carries no `atomic:system` origin. Peer ops arrive as `by: 'import'`;
+> history scrubs as `by: 'checkout'`; every runtime housekeeping write —
+> hydration, heal, datatype tags, post-ack bookkeeping — is committed under
+> `SYSTEM_COMMIT_ORIGIN`.
+
+This also removes a slice of write amplification: healed propvals are no
+longer re-exported to the server that sent them.
+
 #### S4a: Resource save decomposition
 
 `browser/lib/src/resource.ts` is currently the knot: it holds the
@@ -504,12 +535,20 @@ mostly stay.
    write paths; the P2 correctness risk is closed. Only the `OpfsPersistor`
    *class* facade + making `putResource`/`putLoroSnapshot` private remains, and
    that's optional cleanup. (S2)
-2. **`LocalOutbox`** — wraps existing `_pendingCommits` +
-   `dirtyForSync`. Existing tests keep passing. (S4)
-3. **Resource save decomposition** — make `Resource.save()` sign
-   directly into `LocalOutbox`, move ack/blob/child follow-up work
-   into the store drain path, then delete `Resource._pendingCommits`
-   and `Resource.pushCommits`. (S4a)
+2. **`LocalOutbox`** — ✅ *landed.* `local-outbox.ts` is the single durable
+   queue; `Store.dirtyForSync`, `atomic.dirtyForSync` and
+   `atomic.offline.<subject>` are gone. It diverged from the S4 sketch below
+   in one deliberate way: it queues **dirty subjects and signs at drain**
+   rather than storing signed commits (see the file header for why). That
+   divergence moved the "should this ever be pushed?" decision to the moment
+   a Loro op fires, which is what made **provenance** the load-bearing part —
+   see the provenance rule under S4. (S4)
+3. **Resource save decomposition** — ✅ *mostly landed.* `_pendingCommits`,
+   `pushCommits`, `_drainPendingCommits`, `setPendingCommits`,
+   `_lastLocalSignature` and `hydrateCommitLogFromOffline` no longer exist;
+   `hasPendingCommits` is now a thin delegate to `outbox.hasPending`. Still
+   open: shrinking `CommitBuilder` to a test helper (43 references), and the
+   `previousCommit` retry branch. (S4a)
 4. **`applyIncoming` chokepoint** — move WS handlers over one
    Tag at a time, then HTTP fetch, then local-commit paths.
    Each Tag move is independently testable. (S1)

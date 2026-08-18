@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { createRoute } from '@tanstack/react-router';
+import { useEffect, useState, type MouseEvent } from 'react';
+import { createRoute, Link } from '@tanstack/react-router';
 import toast from 'react-hot-toast';
 import {
   StoreEvents,
@@ -40,7 +40,10 @@ import {
   type ManagedAccount,
 } from '../helpers/managed/session';
 import { getRememberedManagedPortalUrl } from '../helpers/managed/api';
-import { getRecoverySecret } from '../helpers/managed/recovery';
+import {
+  getRecoverySecret,
+  readCachedBackups,
+} from '../helpers/managed/recovery';
 import { useDriveVault } from '../helpers/managed/useDriveVault';
 import { ContainerNarrow } from '../components/Containers';
 import { Main } from '../components/Main';
@@ -86,7 +89,7 @@ import {
   getManagedPortalUrl,
 } from '../helpers/managed/cloudSync';
 import { appRoute } from './RootRoutes';
-import { pathNames } from './paths';
+import { pathNames, paths } from './paths';
 import { useSettings } from '../helpers/AppSettings';
 import { serverURLStorage } from '../helpers/serverURLStorage';
 
@@ -208,6 +211,30 @@ type ServerCardProps = {
   onSwitch: (server: string) => void;
   onRemove: (server: string) => void;
 };
+
+/**
+ * Props for an anchor that leaves the app for the browser.
+ *
+ * `openExternal` rather than a bare `target='_blank'`: in the desktop app Tauri
+ * intercepts a new-window request natively, before a click handler could cancel
+ * it, and hands it to `shell.open`, which is denied there and fails on Android
+ * regardless. The href stays real either way, so this is still a link to
+ * assistive tech and to "copy link address".
+ *
+ * Shared because there are now several of these on one page, and the version
+ * that forgot the handler was silently a dead link in the app.
+ */
+function externalLinkProps(url: string) {
+  return {
+    href: url,
+    target: isRunningInTauri() ? undefined : '_blank',
+    rel: 'noreferrer',
+    onClick: (e: MouseEvent) => {
+      e.preventDefault();
+      void openExternal(url);
+    },
+  };
+}
 
 /**
  * One server, as a card.
@@ -403,9 +430,7 @@ function ServerCard({
               // visitors get the marketing page at `/`, so the
               // link landed on a sales pitch rather than the
               // account it promises to manage.
-              href={`${managedInfo.portalUrl}/dashboard`}
-              target='_blank'
-              rel='noopener noreferrer'
+              {...externalLinkProps(`${managedInfo.portalUrl}/dashboard`)}
             >
               {'Manage account & plan →'}
             </ManagedLink>
@@ -520,15 +545,23 @@ function SyncPage() {
   );
 
   /**
-   * Whether the account holds an encrypted recovery backup.
+   * Where this account's encrypted backup actually is.
+   *
+   * Three answers, not two, because a backup on this device is not the thing
+   * this row promises. `stored` means the control plane holds the sealed
+   * envelope, which is what lets an email get you back in on hardware you do
+   * not own yet. `device-only` means the sealed copy is in this browser and
+   * nowhere else: a passkey still unlocks it here, and a lost laptop still
+   * loses the account. Settings reads that local copy too, so a two-state
+   * answer here had the two pages contradicting each other in plain sight.
    *
    * `null` until asked, and on failure — "we could not check" is not "you have
    * none", and telling someone their recovery is missing when the control
    * plane was merely unreachable is the one wrong answer this row can give.
    */
-  const [hasRecoveryBackup, setHasRecoveryBackup] = useState<boolean | null>(
-    null,
-  );
+  const [recoveryBackup, setRecoveryBackup] = useState<
+    'stored' | 'device-only' | 'none' | null
+  >(null);
 
   useEffect(() => {
     if (!managedAccount) return;
@@ -537,18 +570,36 @@ function SyncPage() {
 
     void (async () => {
       try {
-        const secret = await getRecoverySecret();
+        const stored = await getRecoverySecret();
 
-        if (!cancelled) setHasRecoveryBackup(secret !== null);
+        if (cancelled) return;
+
+        if (stored) {
+          setRecoveryBackup('stored');
+
+          return;
+        }
+
+        // Nothing on the server. Before calling that "no backup", ask whether
+        // this browser is holding one, because that is the copy the settings
+        // page reports and the difference between the two is exactly what the
+        // reader needs told.
+        const agentSubject = store.getAgent()?.subject;
+        const cached = readCachedBackups();
+        const mine = agentSubject
+          ? cached.some(entry => entry.agent_subject === agentSubject)
+          : cached.length > 0;
+
+        setRecoveryBackup(mine ? 'device-only' : 'none');
       } catch {
-        if (!cancelled) setHasRecoveryBackup(null);
+        if (!cancelled) setRecoveryBackup(null);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [managedAccount]);
+  }, [managedAccount, store]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1190,42 +1241,97 @@ function SyncPage() {
                     : 'Cloud services for this workspace'}
                 </AccountEmail>
               </AccountBody>
-              {managedAccount && (
-                <ManagedLink
-                  // The dashboard, not the portal root: a signed-in visitor
-                  // gets the marketing page at `/`, so the link would land on
-                  // a sales pitch rather than the account it promises to
-                  // manage.
-                  href={`${accountPortalUrl}/dashboard`}
-                  target='_blank'
-                  rel='noopener noreferrer'
-                >
-                  {'Manage account →'}
-                </ManagedLink>
-              )}
+              {/* The way out to the portal, in both states. It used to appear
+                  only once you were signed in, which left the card naming a
+                  provider with no route to it: everything you can do about
+                  these services other than switch them on lives over there,
+                  including having an account in the first place.
+
+                  Signed in, that is the dashboard rather than the portal root,
+                  because a signed-in visitor gets the marketing page at `/` and
+                  would land on a sales pitch instead of the account the link
+                  promises to manage. Signed out, `/signin` is the bare
+                  magic-link form, which both creates an account and returns to
+                  an existing one. */}
+              <ManagedLink
+                data-testid='provider-portal-link'
+                {...externalLinkProps(
+                  managedAccount
+                    ? `${accountPortalUrl}/dashboard`
+                    : `${accountPortalUrl}/signin`,
+                )}
+              >
+                {managedAccount ? 'Manage account →' : 'Sign in →'}
+              </ManagedLink>
             </ProviderHeader>
 
             {/* Email recovery. Blue when it is actually set up, which is the
                 rule for every row here: colour answers "is this on", not "does
-                this exist". Left neutral while unknown too — a failed check
-                must not be drawn as a missing backup. */}
-            {managedAccount && (
-              <ProviderService data-testid='recovery-row'>
-                <CardIcon $tone={hasRecoveryBackup ? 'provider' : 'neutral'}>
-                  <FaKey />
-                </CardIcon>
-                <ConnBody>
-                  <ConnTitle>Email recovery</ConnTitle>
-                  <ConnSub>
-                    {hasRecoveryBackup === null
+                this exist". Left neutral while unknown too, since a failed
+                check must not be drawn as a missing backup.
+
+                Rendered signed out as well, like the two rows below it. Hiding
+                it made the one service that protects against losing every
+                device the only one you could not find out about until after you
+                had an account, and it left the card looking like it had two
+                offers when it has three. */}
+            <ProviderService data-testid='recovery-row'>
+              <CardIcon
+                $tone={
+                  managedAccount && recoveryBackup === 'stored'
+                    ? 'provider'
+                    : 'neutral'
+                }
+              >
+                <FaKey />
+              </CardIcon>
+              <ConnBody>
+                <ConnTitle>Email recovery</ConnTitle>
+                <ConnSub>
+                  {!managedAccount
+                    ? `Not set up. With an account on ${PRODUCT_NAME} we hold your key sealed, so an email gets you back in on a new device. Without one, losing every device loses this workspace.`
+                    : recoveryBackup === null
                       ? `Signed in as ${managedAccount.email}.`
-                      : hasRecoveryBackup
-                        ? `${managedAccount.email} — we hold your key sealed, so this email gets you back in on a new device.`
-                        : `${managedAccount.email} — no recovery backup stored. Lose every device and this workspace is gone.`}
-                  </ConnSub>
-                </ConnBody>
-              </ProviderService>
-            )}
+                      : recoveryBackup === 'stored'
+                        ? `${managedAccount.email}. We hold your key sealed, so this email gets you back in on a new device.`
+                        : recoveryBackup === 'device-only'
+                          ? `${managedAccount.email}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
+                          : `${managedAccount.email}. No recovery backup stored, so losing every device loses this workspace.`}
+                </ConnSub>
+                {/* Signed out, the account itself is the missing piece, and it
+                    is made in the portal: on a device that cannot hold our
+                    cookie the sign-in is approved from a browser anyway.
+
+                    Signed in with nothing stored, the flow is in settings,
+                    where the rest of account recovery already lives. It asks
+                    for the agent secret, which this page has no business
+                    collecting in a status row, and it cannot avoid asking: the
+                    key is non-extractable in the browser, so the copy the user
+                    saved at setup is the only one that can still be sealed.
+
+                    Nothing to press once it is on. Rotating a code or reading
+                    the secret back are settings' business, and this row's job
+                    is answering whether you are covered. */}
+                {!managedAccount ? (
+                  <ConnActions>
+                    <LearnMore
+                      {...externalLinkProps(`${accountPortalUrl}/signin`)}
+                    >
+                      Set up email recovery
+                    </LearnMore>
+                  </ConnActions>
+                ) : recoveryBackup === 'none' ||
+                  recoveryBackup === 'device-only' ? (
+                  <ConnActions>
+                    <LearnMoreLink to={paths.agentSettings}>
+                      {recoveryBackup === 'device-only'
+                        ? 'Store it with ' + PRODUCT_NAME
+                        : 'Set up email recovery'}
+                    </LearnMoreLink>
+                  </ConnActions>
+                ) : null}
+              </ConnBody>
+            </ProviderService>
 
             {/* Unconditional, like the other two: a service that disappears
                 when it is off cannot be found, and the question this card
@@ -1262,9 +1368,12 @@ function SyncPage() {
               </ProviderService>
             ) : (
               <ProviderService data-testid='cloud-server-row'>
-                {/* Glyph blue, card neutral: an offer should be findable as
-                    one of ours without being mistaken for a live service. */}
-                <CardIcon $tone='provider'>
+                {/* Neutral, like every other service that is off. This was
+                    blue on the reasoning that an offer should still look like
+                    one of ours, but the reader scans this column to find out
+                    what they have, and the header above already says whose
+                    services these are. */}
+                <CardIcon>
                   <FaCloud />
                 </CardIcon>
                 <ConnBody>
@@ -1294,21 +1403,9 @@ function SyncPage() {
                         where this device is talking to a node that has never
                         heard of a portal. */}
                     <LearnMore
-                      href={tierOfferUrl(accountPortalUrl, 'server')}
-                      // No `_blank` in the app: Tauri intercepts a new-window
-                      // request natively, before the click handler can cancel
-                      // it, and hands it to `shell.open` — which is denied and
-                      // then fails on Android regardless. The href stays real
-                      // either way, so this is still a link to assistive tech
-                      // and to "copy link address".
-                      target={isNode ? undefined : '_blank'}
-                      rel='noreferrer'
-                      onClick={e => {
-                        e.preventDefault();
-                        void openExternal(
-                          tierOfferUrl(accountPortalUrl, 'server'),
-                        );
-                      }}
+                      {...externalLinkProps(
+                        tierOfferUrl(accountPortalUrl, 'server'),
+                      )}
                     >
                       See plans
                     </LearnMore>
@@ -1360,7 +1457,9 @@ function SyncPage() {
             server — the same reconcile a regular drive uses, no special path. */}
         {localOnlyDrive && !driveMissing && !showCloudBackup && (
           <LocalDriveNotice>
-            <CardIcon $tone='provider'>
+            {/* Nothing is synced yet, which is the whole point of the notice,
+                so the glyph stays neutral. The button carries the invitation. */}
+            <CardIcon>
               <FaCloudArrowUp />
             </CardIcon>
             <ConnBody>
@@ -1641,9 +1740,14 @@ function SyncPage() {
                   setShowAddServer(false);
                 }}
               >
+                {/* Only promise the code when there is one to scan. It is
+                    rendered from the connected node's id, so a node that never
+                    reported one (offline, or an older server) leaves the whole
+                    pairing section out and this line pointing at nothing. */}
                 <AddServerExplainer>
-                  An always-on device has an address. One you carry has a code —
-                  scan it below instead.
+                  {pairNodeId
+                    ? 'An always-on device has an address. One you carry has a code instead, shown below.'
+                    : 'An always-on device has an address. Type it here.'}
                 </AddServerExplainer>
                 <ServerInputRow>
                   <ServerInput
@@ -2358,7 +2462,7 @@ const ConnActions = styled.div`
 `;
 
 /** A link, styled as one. The primary action next to it is the button. */
-const LearnMore = styled.a`
+const learnMoreLook = css`
   color: ${p => p.theme.colors.main};
   font-size: ${CARD_SUB_FONT};
   text-decoration: underline;
@@ -2367,6 +2471,15 @@ const LearnMore = styled.a`
   &:focus-visible {
     color: ${p => p.theme.colors.mainDark};
   }
+`;
+
+const LearnMore = styled.a`
+  ${learnMoreLook}
+`;
+
+/** The same, for somewhere inside the app: a real route, not an `openExternal`. */
+const LearnMoreLink = styled(Link)`
+  ${learnMoreLook}
 `;
 
 const StatusPill = styled.span<{ $status: NodeStatus }>`
