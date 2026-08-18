@@ -1,4 +1,7 @@
 import { describe, it } from 'vitest';
+import { Collection } from './collection.js';
+import type { ClientDbQueryResult, ClientDbWorker } from './client-db.js';
+import { core } from './index.js';
 import { Store } from './store.js';
 
 /**
@@ -57,5 +60,40 @@ describe('empty local-DB results are only trusted for synced drives', () => {
     store.finishDriveSync(DRIVE_A, 12, Date.now());
 
     expect(store.hasCompletedDriveSyncFor(undefined)).toBe(false);
+  });
+});
+
+describe('an empty matching set still carries its statistics', () => {
+  it('exposes count=0 rather than leaving aggregates unset', async ({
+    expect,
+  }) => {
+    const drive = 'did:ad:resource:drive-a';
+    const store = new Store({ serverUrl: 'https://example.com' });
+    store.setDrive(drive);
+    store.finishDriveSync(drive, 1, Date.now());
+    store.setClientDb({
+      isReady: true,
+      waitForReady: async () => true,
+      query: async (): Promise<ClientDbQueryResult> => ({
+        subjects: [],
+        resources: [],
+        count: 0,
+        aggregates: [{ id: 'block', function: 'count', value: 0, count: 0 }],
+      }),
+    } as unknown as ClientDbWorker);
+
+    const collection = new Collection(store, 'https://example.com', {
+      page_size: '1',
+      include_nested: false,
+      property: core.properties.parent,
+      value: 'did:ad:resource:table',
+      drive,
+      aggregation: { aggregates: [{ id: 'block', function: 'count' }] },
+    });
+    await collection.waitForReady();
+
+    expect(collection.aggregates).toEqual([
+      { id: 'block', function: 'count', value: 0, count: 0 },
+    ]);
   });
 });

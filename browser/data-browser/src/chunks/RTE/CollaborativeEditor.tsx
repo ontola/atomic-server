@@ -351,6 +351,29 @@ export default function CollaborativeEditor({
     return registerCollaborativeDocumentEditor(resource.subject, editor);
   }, [editor, editorReady, resource.subject]);
 
+  // Cursor name labels live in the document as real text nodes, so a
+  // screen reader (and Playwright's text locator) would read
+  // "Ne Dev User w paragraph". Hide the decoration from the a11y tree;
+  // the caret itself stays in the DOM for presence tests.
+  useEffect(() => {
+    if (!editor || !editorReady) {
+      return;
+    }
+
+    const root = editor.view.dom;
+    const hideCursorNames = () => {
+      root.querySelectorAll('.ProseMirror-loro-cursor').forEach(el => {
+        el.setAttribute('aria-hidden', 'true');
+      });
+    };
+
+    hideCursorNames();
+    const observer = new MutationObserver(hideCursorNames);
+    observer.observe(root, { childList: true, subtree: true });
+
+    return () => observer.disconnect();
+  }, [editor, editorReady]);
+
   useEffect(() => {
     if (!agentResource) return;
 

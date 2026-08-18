@@ -960,6 +960,12 @@ export class Collection {
           this.setEmptyPage(page);
         }
 
+        // An empty matching set still has statistics (count = 0, sum = null).
+        // Dropping them left dashboard/table totals as an em-dash: the UI
+        // treated "no outcomes" as "not yet computed" and nothing re-asked,
+        // because the resources were already in the JS store.
+        this._aggregates = result.aggregates ?? [];
+
         return 'ok';
       }
 
@@ -989,6 +995,7 @@ export class Collection {
 
     if (result.subjects.length === 0) {
       this.setEmptyPage(page);
+      this._aggregates = result.aggregates ?? [];
 
       return 'ok';
     }

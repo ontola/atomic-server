@@ -66,8 +66,28 @@ export function useTableAggregates(opts: {
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const read = async () => {
+    // An empty first read is usually the index still catching up: the
+    // resources are already in the JS store (so ResourceUpdated will not
+    // fire again) but the worker has not applied their puts yet. CI then
+    // froze on the em-dash placeholder until reload. Drain the worker and
+    // re-ask a few times; a truly empty table settles on count=0.
+    const EMPTY_RETRY_MS = 400;
+    const EMPTY_RETRY_LIMIT = 8;
+
+    const read = async (attempt = 0, drain = true) => {
+      // Drain only when the index may lag the JS store (cold load, or a
+      // retry after an empty read). Event-driven refreshes already queued
+      // the put before notify, so an extra fsync on every save is wasted.
+      if (drain) {
+        try {
+          await store.getClientDb()?.flush?.();
+        } catch {
+          // Still read — a flush failure must not skip the query.
+        }
+      }
+
       const builder = new CollectionBuilder(store, server);
       builder.setProperty(property);
       builder.setValue(value);
@@ -86,8 +106,22 @@ export function useTableAggregates(opts: {
 
       const collection = await builder.buildAndFetch();
 
-      if (!cancelled) {
-        setOutcomes(collection.aggregates);
+      if (cancelled) {
+        return;
+      }
+
+      const next = collection.aggregates;
+      setOutcomes(next);
+
+      const uncomputed =
+        next.length === 0 || next.every(o => (o.count ?? 0) === 0);
+
+      if (uncomputed && attempt < EMPTY_RETRY_LIMIT) {
+        retryTimer = setTimeout(() => {
+          void read(attempt + 1, true).catch(e =>
+            console.warn('[Aggregates] read failed:', String(e).slice(0, 200)),
+          );
+        }, EMPTY_RETRY_MS);
       }
     };
 
@@ -103,10 +137,11 @@ export function useTableAggregates(opts: {
 
     const runRead = () => {
       pendingSince = undefined;
+      clearTimeout(retryTimer);
       // A failed read leaves the totals frozen at whatever they showed
       // before — nothing retries until the next trigger — so say so rather
       // than swallowing it.
-      void read().catch(e =>
+      void read(0, false).catch(e =>
         console.warn('[Aggregates] read failed:', String(e).slice(0, 200)),
       );
     };
@@ -177,6 +212,7 @@ export function useTableAggregates(opts: {
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      clearTimeout(retryTimer);
       offSaved();
       offRemoved();
       offUpdated();
