@@ -28,8 +28,11 @@ async function setCell(
   await page.keyboard.press('Enter');
 
   if (opts.replace) {
-    // Typing appends to what the cell already holds.
+    // Typing appends to what the cell already holds. Select-all then
+    // Backspace, not just select-all: under load Control+A can miss, and
+    // `toContainText('6')` on the footer then false-passed on a sum of 36.
     await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.press('Backspace');
   }
 
   await page.keyboard.type(value);
@@ -116,7 +119,12 @@ test.describe('table totals', () => {
 
     // It follows an edit, without a reload: 2 + 4 = 6.
     await setCell(page, 3, hours, '4', { replace: true });
-    await expect(footer).toContainText('6', { timeout: 30_000 });
+    await expect(
+      page.locator(`[aria-rowindex="3"] > [aria-colindex="${hours}"]`),
+    ).toHaveText('4');
+    await expect(
+      footer.locator(`[aria-colindex="${hours}"]`),
+    ).toContainText('6', { timeout: 30_000 });
 
     // The menu must come back on the same cell, again and again: a cell whose
     // menu opens once and then goes dead is the failure this covers.
@@ -149,8 +157,12 @@ test.describe('table totals', () => {
     );
 
     // 2 and 4 → sum 6, average 3, each in its own row under Hours.
-    await expect(footer).toContainText('6', { timeout: 30_000 });
-    await expect(secondRow).toContainText('3', { timeout: 30_000 });
+    await expect(
+      footer.locator(`[aria-colindex="${hours}"]`),
+    ).toContainText('6', { timeout: 30_000 });
+    await expect(
+      secondRow.locator(`[aria-colindex="${hours}"]`),
+    ).toContainText('3', { timeout: 30_000 });
 
     // Break the totals down per day, from the row-count cell's menu. (Its menu
     // was used a moment ago, so let that one finish closing first.)

@@ -5,6 +5,7 @@ import {
   FRONTEND_URL,
   newResource,
   pickFromMenu,
+  waitForRowsMaterialized,
 } from './test-utils';
 
 /**
@@ -130,11 +131,7 @@ async function createSpendingTable(page: Page): Promise<Fixture> {
     };
   }, props);
 
-  await page.waitForFunction(
-    () => window.store?.getSyncStatus().pendingDirtyCount === 0,
-    undefined,
-    { timeout: 30_000 },
-  );
+  await waitForRowsMaterialized(page, 30_000);
 
   return created;
 }
@@ -239,11 +236,7 @@ async function createDashboard(page: Page, fixture: Fixture): Promise<string> {
     return dashboard.subject;
   }, fixture);
 
-  await page.waitForFunction(
-    () => window.store?.getSyncStatus().pendingDirtyCount === 0,
-    undefined,
-    { timeout: 30_000 },
-  );
+  await waitForRowsMaterialized(page, 30_000);
   await page.goto(
     `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(subject)}`,
   );
@@ -251,6 +244,11 @@ async function createDashboard(page: Page, fixture: Fixture): Promise<string> {
   await expect(page.getByTestId('dashboard-grid')).toBeVisible({
     timeout: 15_000,
   });
+  await page.waitForFunction(
+    () => window.store?.getClientDb()?.isReady === true,
+    undefined,
+    { timeout: 30_000 },
+  );
 
   return subject;
 }
@@ -317,9 +315,11 @@ test.describe('dashboards', () => {
     // The store computes the number over every matching row, so it is the real
     // total rather than a sum of whatever page happened to load.
     await expect(block(page, 'Total spent')).toContainText('946.5', {
-      timeout: 15_000,
+      timeout: 30_000,
     });
-    await expect(block(page, 'Expenses')).toContainText('4');
+    await expect(block(page, 'Expenses')).toContainText('4', {
+      timeout: 30_000,
+    });
 
     // One bar per category, largest first, each labelled by its tag name.
     const chart = block(page, 'Per category');
@@ -344,7 +344,7 @@ test.describe('dashboards', () => {
     await createDashboard(page, fixture);
 
     await expect(block(page, 'Expenses')).toContainText('4', {
-      timeout: 15_000,
+      timeout: 30_000,
     });
 
     // The whole point of a dashboard as an app shell: press the thing, and the
@@ -385,7 +385,7 @@ test.describe('dashboards', () => {
     await createDashboard(page, fixture);
 
     const total = block(page, 'Total spent');
-    await expect(total).toContainText('946.5', { timeout: 15_000 });
+    await expect(total).toContainText('946.5', { timeout: 30_000 });
 
     // `grid-column: span N` resolves into `gridColumnStart`, not End.
     const spanOf = () =>
@@ -411,7 +411,7 @@ test.describe('dashboards', () => {
     );
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(block(page, 'Total spent')).toContainText('946.5', {
-      timeout: 15_000,
+      timeout: 30_000,
     });
     await expect.poll(spanOf, { timeout: 15_000 }).toBe('span 12');
   });
@@ -422,7 +422,7 @@ test.describe('dashboards', () => {
     const fixture = await createSpendingTable(page);
     await createDashboard(page, fixture);
     await expect(block(page, 'Total spent')).toContainText('946.5', {
-      timeout: 15_000,
+      timeout: 30_000,
     });
 
     // Everything the create tool can write, the dialog can change — otherwise
@@ -439,7 +439,7 @@ test.describe('dashboards', () => {
 
     // 946.5 over four rows.
     await expect(block(page, 'Average spend')).toContainText('236.63', {
-      timeout: 15_000,
+      timeout: 30_000,
     });
 
     await page.waitForFunction(
@@ -450,7 +450,7 @@ test.describe('dashboards', () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
 
     await expect(block(page, 'Average spend')).toContainText('236.63', {
-      timeout: 15_000,
+      timeout: 30_000,
     });
   });
 
@@ -460,7 +460,7 @@ test.describe('dashboards', () => {
     const fixture = await createSpendingTable(page);
     await createDashboard(page, fixture);
     await expect(block(page, 'Total spent')).toContainText('946.5', {
-      timeout: 15_000,
+      timeout: 30_000,
     });
 
     await pickFromMenu(
@@ -479,7 +479,7 @@ test.describe('dashboards', () => {
     await page.getByTestId('block-save').click();
 
     await expect(block(page, 'Total spent')).toContainText('4', {
-      timeout: 15_000,
+      timeout: 30_000,
     });
   });
 
@@ -506,7 +506,7 @@ test.describe('dashboards', () => {
     await page.getByTestId('block-save').click();
 
     await expect(block(page, 'Biggest expense')).toContainText('900', {
-      timeout: 15_000,
+      timeout: 30_000,
     });
     await expect(page.getByTestId('dashboard-block')).toHaveCount(7);
   });

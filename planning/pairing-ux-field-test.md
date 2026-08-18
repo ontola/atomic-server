@@ -1784,21 +1784,19 @@ guaranteed, and that guarantee should not be dropped by accident.
 
 ### What is left, and what it is not
 
-On a quiet runner the branch fails two specs, both the same shape:
+The dashboard em-dash (`Total spent—Sum amount`, `Expenses—Count`) was a
+real totals bug, not "this PR's problem later". An empty local-DB page
+dropped `aggregates`, and `useTableAggregates` asked once — if that read
+hit the index before the puts landed, ResourceUpdated never fired again
+because the rows were already in the JS store. Fixed by keeping empty-set
+statistics on the collection, draining the worker and retrying an empty
+read, and flushing ClientDb before the dashboard navigation the tests use.
 
-    dashboard:311   "Total spent—Sum amount"   expected 946.5
-    dashboard:340   "Expenses—Count"           expected 4
+Document specs were failing on the same Loro cursor widget that splits
+"New paragraph" into `Ne Dev User w paragraph`. Assertions now read the
+editor with those decorations stripped; the widget is `aria-hidden` so it
+does not land in the a11y tree either.
 
-That em-dash is the placeholder shown while a measure has not computed, so
-neither is about adding a row — `340` fails on its Count block before the
-row-add matters. It is the totals path missing a 15s budget, the same family
-as `aggregates.spec.ts:50`, and the same fragility already on record: acked
-rows re-draining on every reload plus OPFS write amplification. The relayed
-path shows it too — one resource created on the Home Assistant box produced
-**seven** index writes.
-
-This PR did not cause it and should not be asked to fix it; it is the
-write-amplification work, which is its own piece.
 
 **One thing this PR did cause, found late.** Persisting the invite agent as a
 secret rather than a keypair also adopts that agent on the device by default —
