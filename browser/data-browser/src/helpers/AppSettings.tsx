@@ -21,7 +21,7 @@ import { serverURLStorage } from './serverURLStorage';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { errorHandler } from '../handlers/errorHandler';
 import { isDev } from '../config';
-import { getLocalServerOrigin } from './tauri';
+import { getLocalServerOrigin, isRunningInTauri } from './tauri';
 import { fetchManagedInfo, isAtomicServer } from './managedServer';
 
 interface ProviderProps {
@@ -117,7 +117,10 @@ export const AppSettingsContextProvider = (
       if (newServer.startsWith('http://') || newServer.startsWith('https://')) {
         const url = new URL(newServer);
         setBaseURL(url.origin);
-        serverURLStorage.set(url.origin);
+        // Explicit: someone typed this, picked it from the list, or followed a
+        // `?server=` link. This is the only kind of choice allowed to outrank
+        // a device's own embedded node on the next launch.
+        serverURLStorage.set(url.origin, true);
       }
     },
     [setBaseURL],
@@ -129,8 +132,18 @@ export const AppSettingsContextProvider = (
 
       if (newDrive.startsWith('http://') || newDrive.startsWith('https://')) {
         const url = new URL(newDrive);
+        // Opening a drive that lives elsewhere does mean reading from its
+        // server for now.
         setBaseURL(url.origin);
-        serverURLStorage.set(url.origin);
+
+        // But it is not a decision about where this app belongs. On a device
+        // with its own node, persisting it is how a single visit to one
+        // `https://…/drive/…` entry in the switcher left the app booting
+        // against that server forever, ignoring the node running beside it.
+        // Session-only here; `setServer` is the deliberate route.
+        if (!isRunningInTauri()) {
+          serverURLStorage.set(url.origin);
+        }
       }
     },
     [innerSetDrive, setBaseURL],
