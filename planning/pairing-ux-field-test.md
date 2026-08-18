@@ -1784,21 +1784,27 @@ guaranteed, and that guarantee should not be dropped by accident.
 
 ### What is left, and what it is not
 
-On a quiet runner the branch fails two specs, both the same shape:
+The dashboard em-dash (`Total spent—Sum amount`, `Expenses—Count`) was a
+real totals bug, not "this PR's problem later". An empty local-DB page
+dropped `aggregates`, and `useTableAggregates` asked once — if that read
+hit the index before the puts landed, ResourceUpdated never fired again
+because the rows were already in the JS store. Fixed by keeping empty-set
+statistics on the collection, and by having the dashboard specs await
+`waitForRowsMaterialized` — which drains the ClientDb worker, so a query
+issued after it cannot answer from an index that is missing rows the grid
+already shows.
 
-    dashboard:311   "Total spent—Sum amount"   expected 946.5
-    dashboard:340   "Expenses—Count"           expected 4
+An earlier revision also had `useTableAggregates` retry an empty read eight
+times, flushing on each attempt. That was dropped: it is product code polling
+to hide an index lag the readiness signal already covers, and it made a
+legitimately empty table — a freshly created one — flush eight times on every
+mount, against the OPFS write-amplification work.
 
-That em-dash is the placeholder shown while a measure has not computed, so
-neither is about adding a row — `340` fails on its Count block before the
-row-add matters. It is the totals path missing a 15s budget, the same family
-as `aggregates.spec.ts:50`, and the same fragility already on record: acked
-rows re-draining on every reload plus OPFS write amplification. The relayed
-path shows it too — one resource created on the Home Assistant box produced
-**seven** index writes.
+Document specs were failing on the same Loro cursor widget that splits
+"New paragraph" into `Ne Dev User w paragraph`. Assertions now read the
+editor with those decorations stripped; the widget is `aria-hidden` so it
+does not land in the a11y tree either.
 
-This PR did not cause it and should not be asked to fix it; it is the
-write-amplification work, which is its own piece.
 
 **One thing this PR did cause, found late.** Persisting the invite agent as a
 secret rather than a keypair also adopts that agent on the device by default —

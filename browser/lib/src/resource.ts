@@ -491,6 +491,19 @@ export class Resource<C extends OptionalClass = any> {
             this.loroSetProperty(key, value);
           }
         }
+
+        // The heal writes above are HYDRATION, not user edits — they copy
+        // propvals the server already sent alongside this very snapshot.
+        // Flush them now, tagged with the system origin, for two reasons:
+        // the dirty-marking subscriber below ignores that origin (so merely
+        // OPENING someone else's resource can't enqueue a write we have no
+        // rights to make), and committing before the save cursor is read
+        // keeps them out of the next delta export. Guarded on pending ops
+        // because `setRecordTimestamp(true)` makes even an empty commit
+        // write a commit-point op and advance `oplogVersion`.
+        if (this._loroDoc.getPendingTxnLength() > 0) {
+          this._loroDoc.commit({ origin: SYSTEM_COMMIT_ORIGIN });
+        }
       }
 
       this.rebuildCacheFromLoro();
@@ -535,10 +548,11 @@ export class Resource<C extends OptionalClass = any> {
         this.eventManager.emit(ResourceEvents.LoadingChange, this.loading);
       }
 
-      // Sign-at-drain: any local Loro op marks the subject dirty in
-      // the outbox. Server imports of remote ops go through
-      // `doc.import()` which doesn't fire `subscribeLocalUpdates` —
-      // only user-driven `set()` calls do.
+      // Sign-at-drain: a local Loro op marks the subject dirty in the
+      // outbox. Provenance decides what counts as "local": a peer's ops
+      // arrive as `by: 'import'` and the runtime's own housekeeping
+      // writes carry `SYSTEM_COMMIT_ORIGIN`, so only user-driven `set()`
+      // calls get through.
       //
       // Skip subjects we don't own:
       // - `did:ad:commit:*` are commit-detail resources materialized
@@ -547,7 +561,14 @@ export class Resource<C extends OptionalClass = any> {
       // - External HTTP subjects (atomicdata.dev/* etc.) belong to
       //   another domain. POSTing them returns "Subject of commit
       //   should be sent to other domain."
-      this._loroDoc.subscribeLocalUpdates(() => {
+      this._loroDoc.subscribe(batch => {
+        // Only genuine local edits enqueue. `import` (a peer's ops) and
+        // `checkout` (history scrub) are not writes of ours, and anything
+        // tagged with the system origin is runtime housekeeping —
+        // hydration, heal, datatype tags, post-ack bookkeeping — which
+        // replays state the server already has.
+        if (batch.by !== 'local') return;
+        if (batch.origin?.startsWith(SYSTEM_COMMIT_ORIGIN)) return;
         if (!this._store) return;
         if (this.subject.startsWith('did:ad:commit:')) return;
         // A resource still under construction (created, not yet `save()`d):
@@ -1154,7 +1175,7 @@ export class Resource<C extends OptionalClass = any> {
     // `setRecordTimestamp(true)` writes a timestamp on every commit
     // boundary), advancing oplogVersion past the cursor and producing
     // a non-empty delta with no real content. Skipping the
-    // doc.commit() also avoids re-firing `subscribeLocalUpdates`
+    // doc.commit() also avoids re-firing the local-change subscriber
     // which would re-mark the subject dirty in the outbox.
     if (!isFirstCommit && this._loroVersionAtLastSave) {
       const currentVV = this._loroDoc.oplogVersion();
@@ -2095,8 +2116,29 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Applies a batch of non-validating values during hydration or derived updates. */
   public applyHydratedValues(values: Iterable<[string, AtomicValue]>): void {
+    // Close out any UNCOMMITTED user edit under its own origin first.
+    // `set()` leaves its ops in an open Loro transaction, so a server
+    // response landing between a keystroke and the next commit boundary
+    // would otherwise be flushed by the system-origin commit below —
+    // folding the user's edit into a change the outbox is told to ignore,
+    // which loses it silently.
+    if (this._loroDoc && this._loroDoc.getPendingTxnLength() > 0) {
+      this._loroDoc.commit({ timestamp: Date.now() });
+    }
+
     for (const [key, value] of values) {
       this.applyRawValue(key, value);
+    }
+
+    // These values came FROM a server response. When a Loro doc already
+    // exists they were written through it as local ops; commit them under
+    // the system origin so the dirty-marking subscriber skips them.
+    // Otherwise re-fetching a resource we can read but not write (anything
+    // on someone else's drive) queues an "updated (loro)" commit that the
+    // server rejects as unauthorized, forever.
+    // Re-read `_loroDoc`: a `loroUpdate: undefined` value above resets it.
+    if (this._loroDoc && this._loroDoc.getPendingTxnLength() > 0) {
+      this._loroDoc.commit({ origin: SYSTEM_COMMIT_ORIGIN });
     }
   }
 

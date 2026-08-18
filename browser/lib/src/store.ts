@@ -1120,10 +1120,10 @@ export class Store {
           // whatever the server already has. Skip client-only placeholder
           // subjects (`_new:`/`_local:`) — they never exist on the server, so
           // there's nothing to align with, and merging back a "not found"
-          // response would reset `Resource.new`, re-arming
-          // `subscribeLocalUpdates`'s dirty-tracking for the next edit and
-          // looping this exact drop (see the `_new:` guard in
-          // `resource.ts`'s `subscribeLocalUpdates`).
+          // response would reset `Resource.new`, re-arming the local-change
+          // subscriber's dirty-tracking for the next edit and looping this
+          // exact drop (see the `_new:` guard in `resource.ts`'s Loro
+          // subscription).
           if (
             !entry.subject.startsWith('_new:') &&
             !entry.subject.startsWith('_local:')

@@ -755,6 +755,157 @@ export async function waitForSearchIndex(
     .toBeGreaterThanOrEqual(expected);
 }
 
+/**
+ * Wait until `/app/new` will actually offer `shortname` as a class button.
+ *
+ * A plain text search for the class is the wrong signal, even though it is the
+ * obvious one: `OntologySections` searches for ONTOLOGIES
+ * (`filters: {isA: ontology}`, empty query, scoped to the drive) and renders
+ * each one's `classes`. So the Class resource can be indexed and findable while
+ * the page still shows nothing, because the ontology carrying it has not come
+ * back from that filtered query yet. Filtered searches skip the local index and
+ * go to Tantivy, so this polls the same server path the page depends on.
+ *
+ * (`allowEmptyQuery` is a `useServerSearch` gate on whether to call the store
+ * at all for an empty query — calling `store.search('')` here is the same
+ * thing, so it has no counterpart in `SearchOpts`.)
+ */
+export async function waitForOntologyClass(
+  page: Page,
+  shortname: string,
+): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          async args => {
+            try {
+              const ontologies = await window.store.search('', {
+                filters: { [args.isA]: args.ontologyClass },
+                parents: window.store.getDrive(),
+                limit: 100,
+              });
+
+              for (const subject of ontologies) {
+                const ontology = await window.store.getResource(subject);
+                const classes = (ontology.get(args.classesProp) ??
+                  []) as string[];
+
+                for (const classSubject of classes) {
+                  const klass = await window.store.getResource(classSubject);
+
+                  if (klass.get(args.shortnameProp) === args.shortname) {
+                    return true;
+                  }
+                }
+              }
+
+              return false;
+            } catch {
+              return false;
+            }
+          },
+          {
+            shortname,
+            isA: 'https://atomicdata.dev/properties/isA',
+            ontologyClass: 'https://atomicdata.dev/class/ontology',
+            classesProp: 'https://atomicdata.dev/properties/classes',
+            shortnameProp: 'https://atomicdata.dev/properties/shortname',
+          },
+        ),
+      { timeout: 30_000, intervals: [500] },
+    )
+    .toBe(true);
+}
+
+/**
+ * Wait until a SearchBox filtered to `classShortname` will actually return
+ * `title` for `query`.
+ *
+ * `waitForSearchIndex` is not this signal. It polls an UNFILTERED
+ * `store.search`, which merges in local-index hits; the SearchBox passes
+ * `filters: {isA: <class>}` (SearchBoxWindow's ServerSearchUnit), and a
+ * filtered search skips the local index entirely and waits on Tantivy. So the
+ * unfiltered call goes green while the picker still shows only its "Create"
+ * row — which is what times out, on a loaded runner, inside `pickOption`.
+ *
+ * The class subject is resolved by shortname rather than threaded through the
+ * test, because these specs build their ontology through the UI and never hold
+ * the subject.
+ */
+export async function waitForClassInstanceSearchable(
+  page: Page,
+  classShortname: string,
+  query: string,
+  title: string,
+): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          async args => {
+            try {
+              const drive = window.store.getDrive();
+              const ontologies = await window.store.search('', {
+                filters: { [args.isA]: args.ontologyClass },
+                parents: drive,
+                limit: 100,
+              });
+
+              let classSubject: string | undefined;
+
+              for (const subject of ontologies) {
+                const ontology = await window.store.getResource(subject);
+                const classes = (ontology.get(args.classesProp) ??
+                  []) as string[];
+
+                for (const candidate of classes) {
+                  const klass = await window.store.getResource(candidate);
+
+                  if (klass.get(args.shortnameProp) === args.classShortname) {
+                    classSubject = candidate;
+                    break;
+                  }
+                }
+
+                if (classSubject) break;
+              }
+
+              if (!classSubject) return false;
+
+              const hits = await window.store.search(args.query, {
+                filters: { [args.isA]: classSubject },
+                parents: drive,
+                limit: 30,
+              });
+
+              for (const hit of hits) {
+                const resource = await window.store.getResource(hit);
+
+                if (resource.get(args.nameProp) === args.title) return true;
+              }
+
+              return false;
+            } catch {
+              return false;
+            }
+          },
+          {
+            classShortname,
+            query,
+            title,
+            isA: 'https://atomicdata.dev/properties/isA',
+            ontologyClass: 'https://atomicdata.dev/class/ontology',
+            classesProp: 'https://atomicdata.dev/properties/classes',
+            shortnameProp: 'https://atomicdata.dev/properties/shortname',
+            nameProp: 'https://atomicdata.dev/properties/name',
+          },
+        ),
+      { timeout: 30_000, intervals: [500] },
+    )
+    .toBe(true);
+}
+
 export async function openAgentPage(page: Page) {
   await page.goto(`${FRONTEND_URL}/app/agent`);
 }

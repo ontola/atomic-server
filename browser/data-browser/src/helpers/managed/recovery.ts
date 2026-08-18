@@ -1029,6 +1029,49 @@ export async function addRecoveryCodeWrapper(agentSubject?: string): Promise<{
 }
 
 /**
+ * Upload a sealed backup this device is holding on its own.
+ *
+ * The envelope is already built, so this needs no secret, no passkey and no
+ * new code: it is the same ciphertext, put where an email can reach it. That
+ * gap is real rather than theoretical — a browser keeps its cached copy when
+ * the control plane loses the row (a reset dev database, an account moved
+ * between deployments), and until this the only way back was
+ * `addRecoveryCodeWrapper`, which re-uploads as a side effect of demanding a
+ * passkey tap and handing back a code nobody asked for.
+ */
+export async function storeCachedRecoverySecret(
+  recovery: RecoverySecret,
+): Promise<RecoverySecret> {
+  const base = {
+    agent_subject: recovery.agent_subject,
+    drive_subject: recovery.drive_subject ?? null,
+    encrypted_secret: recovery.encrypted_secret,
+    encryption_algorithm: recovery.encryption_algorithm,
+    nonce: recovery.nonce,
+    format_version: recovery.format_version,
+  };
+
+  // A v1 row carries its KDF at the top level and must send no wrappers; v2
+  // is the other way round. Re-deriving either shape would be inventing
+  // crypto, so send back exactly what was stored.
+  return saveRecoverySecret(
+    recovery.format_version === RECOVERY_FORMAT_VERSION
+      ? {
+          ...base,
+          kdf_algorithm: recovery.kdf_algorithm,
+          kdf_params: recovery.kdf_params,
+          salt: recovery.salt,
+        }
+      : {
+          ...base,
+          wrappers: recovery.wrappers.map(
+            ({ created_at: _created, ...rest }) => rest,
+          ),
+        },
+  );
+}
+
+/**
  * Lazy migration for a v1 row: re-encrypt under envelope v2 and replace the
  * stored blob, after a successful v1 decrypt (sign-in or restore) — never
  * forced. Prefers a passkey, so the common case needs no new screen and
@@ -1084,9 +1127,25 @@ export async function saveRecoverySecret(input: RecoverySecretInput) {
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error(
+        `Sign in to ${PRODUCT_NAME} before enabling encrypted recovery.`,
+      );
+    }
+
+    // Relay what the control plane objected to. It validates the envelope
+    // (subject shape, format version, wrapper fields) and says which rule was
+    // broken; swallowing that left the one flow where a user can *do*
+    // something about it — an identity the server will not accept — showing a
+    // sentence that says only "no".
+    const reason = await response
+      .json()
+      .then((body: { error?: string }) => body?.error)
+      .catch(() => undefined);
+
     throw new Error(
-      response.status === 401
-        ? `Sign in to ${PRODUCT_NAME} before enabling encrypted recovery.`
+      reason
+        ? `Could not save encrypted recovery backup: ${reason}.`
         : 'Could not save encrypted recovery backup.',
     );
   }

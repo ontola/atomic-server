@@ -10,6 +10,7 @@ import {
   searchAndOpen,
   getCurrentSubject,
   openSubject,
+  waitForSearchIndex,
 } from './test-utils';
 
 const SEARCH_RESULTS = 'https://atomicdata.dev/properties/search/results';
@@ -201,6 +202,11 @@ test.describe('search', async () => {
       avocadoCakeSubject,
       avocadoSaladSubject,
     ]);
+    // The server having both docs is not the signal this assertion needs: the
+    // overlay renders what `store.search` returns, which answers from the
+    // CLIENT index. Poll that same call until both are in it — otherwise the
+    // un-scoped assertion races a local index the reload above had to rebuild.
+    await waitForSearchIndex(page, 'Avocado', 2);
 
     await typeInSearch(page, 'Avocado');
     await expect(

@@ -9,6 +9,7 @@ import {
   DIALOG_CLOSE_BUTTON,
   SEARCHBOX_PROPERTY_PLACEHOLDER,
   waitForSearchIndex,
+  waitForClassInstanceSearchable,
 } from './test-utils';
 
 test.describe('Ontology', async () => {
@@ -26,8 +27,9 @@ test.describe('Ontology', async () => {
       // Wait for the dropdown option to actually render before navigating to
       // it, instead of sleeping for the open animation. `visible` doesn't
       // require in-viewport, so it holds for the keyboard path too (where the
-      // option may be scrolled out of view).
-      await query.waitFor({ state: 'visible' });
+      // option may be scrolled out of view). Search results can lag
+      // `waitForSearchIndex` when the picker hits the server index.
+      await query.waitFor({ state: 'visible', timeout: 30_000 });
 
       // Sometimes when the page moves after the dropdown opens, part of the dropdown falls outside the viewport.
       // In this case we have to use the keyboard because scrolling doesn't seem to work.
@@ -260,6 +262,23 @@ test.describe('Ontology', async () => {
     // happily come back holding "Create …" plus the other instance, and the
     // `.nth(1)` below then selects the wrong arrow.
     await waitForSearchIndex(page, 'green arrow with black border');
+    // ...and the picker does not use that search. It filters by
+    // `isA: arrow-kind`, and a filtered search skips the local index and waits
+    // on Tantivy, so the unfiltered call above can be green while the results
+    // list still holds only its "Create" row. On a loaded runner that is a 30s
+    // timeout in `pickOption`; wait for the query the picker actually issues.
+    await waitForClassInstanceSearchable(
+      page,
+      'arrow-kind',
+      'red arrow with circle',
+      'Red arrow with circle',
+    );
+    await waitForClassInstanceSearchable(
+      page,
+      'arrow-kind',
+      'green arrow with black border',
+      'Green arrow with black border',
+    );
 
     await page
       .getByRole('button', { name: 'add an item to the allows-only list' })
@@ -271,7 +290,9 @@ test.describe('Ontology', async () => {
       .getByPlaceholder('Search for a arrow-kind ')
       .fill('red arrow with circle');
     await pickOption(
-      page.getByRole('dialog').getByText('Red arrow with circle').nth(1),
+      page
+        .getByTestId('searchbox-results')
+        .getByText('Red arrow with circle', { exact: true }),
     );
 
     await page
@@ -281,11 +302,14 @@ test.describe('Ontology', async () => {
     await page
       .getByPlaceholder('Search for a arrow-kind ')
       .fill('green arrow with black border');
+    // Exact match in the results list — not `.nth(1)` on the whole dialog.
+    // The Create option's label contains the same words, so a substring
+    // match is only the Create row until the instance hit arrives, and
+    // `.nth(1)` then times out.
     await pickOption(
       page
-        .getByRole('dialog')
-        .getByText('Green arrow with black border')
-        .nth(1),
+        .getByTestId('searchbox-results')
+        .getByText('Green arrow with black border', { exact: true }),
     );
 
     // Each instance is rendered at least three times (sidebar tree, allows-only

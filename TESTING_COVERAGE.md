@@ -252,6 +252,13 @@ Recorded because each one cost real debugging time.
   **Treat a flake as an unread bug report until proven otherwise** — and when
   an algorithm is ported, check the port for the same defect.
 
+- **An empty local-DB collection page used to drop its aggregates.** Count=0
+  is a real statistic (and sum=null is too). Leaving `collection.aggregates`
+  unset made dashboard/table totals render an em-dash forever, because the
+  follow-up `ResourceUpdated` never came — the rows were already in the JS
+  store. Guard: `collection-empty-trust.test.ts`, plus the dashboard e2e
+  that waits for `946.5` / `4` rather than the placeholder.
+
 ### Algorithms mirrored in two languages
 
 `lib/src/sync/rbsr.rs` ↔ `browser/lib/src/rbsr.ts` are line-for-line ports and

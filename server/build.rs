@@ -437,6 +437,16 @@ fn is_js_build_output(path: &Path) -> bool {
 }
 
 /// Finds the modification time of the newest file in the dist directory
+/// Newest mtime among the files in `dist` that the JS build actually produces.
+///
+/// Anything else that lands in there is not evidence the bundle is current, and
+/// treating it as such is silent: `tsconfig.build.json` sets `outDir: ./dist`,
+/// so a plain `pnpm typecheck` drops `tsconfig.build.tsbuildinfo` in beside the
+/// bundle. That one file then reads as "dist is newer than every source",
+/// `should_build` says there is nothing to do, and the server embeds a bundle
+/// from before the sources changed — while a `cargo build` that looks entirely
+/// successful scrolls past. Observed exactly that: sources at 14:42, tsbuildinfo
+/// at 14:43, actual bundle still 13:47.
 fn find_newest_file_time(dist_dir: &PathBuf) -> Option<Duration> {
     let mut newest_time: Option<Duration> = None;
 
@@ -445,6 +455,17 @@ fn find_newest_file_time(dist_dir: &PathBuf) -> Option<Duration> {
         .collect::<Result<Vec<_>, _>>()
     {
         for entry in entries {
+            let is_build_metadata = entry
+                .path()
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e == "tsbuildinfo")
+                .unwrap_or(false);
+
+            if is_build_metadata {
+                continue;
+            }
+
             if entry.path().is_file() {
                 if let Ok(meta) = entry.metadata() {
                     if let Ok(modified) = meta.modified() {
