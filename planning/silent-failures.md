@@ -88,15 +88,30 @@ errored.
 that, a rejected write should surface where the person who caused it is looking.
 *Fixed 2026-08-18 (ecaa4a63).*
 
-**Two servers hold different data and both report healthy sync.** *(open)*
-Desktop and HA are peered, mutually authenticated, live loops running — and the
-desktop computes `SYNC_DIFF: server pushes 0, server pulls 1`, i.e. "I have
-nothing to send you", while holding 27 children of a table the peer renders as
-15 rows.
-*Should have:* convergence failure is the loudest thing a sync system can have
-to say, and it says nothing. There is no signal anywhere that two replicas
-disagree — no divergence counter, no mismatch warning, nothing surfaced in the
-UI. This is the most important entry in this file.
+**A client renders a stale row set and never reconciles with its server.** *(open)*
+The Houseplants table showed 22+ rows on desktop and 15 in the browser against
+Home Assistant. It looked exactly like a sync failure, and the peer log
+supported that reading: `SYNC_DIFF: server pushes 0, server pulls 1` — "I have
+nothing to send you".
+
+It was not a sync failure. Running the same collection query against both
+servers returns **24 members from each**: identical resource sets, identical
+query index. The servers were converged the whole time and `pushes 0` was
+correct. One client was simply displaying a stale local index, and nothing —
+not the client, not the server, not the sync page — indicated that what was on
+screen disagreed with what the server held.
+*Should have:* a client that answers a collection from its local index while
+the server holds a different count is the single most misleading state in the
+system, because it is indistinguishable from a sync bug and sends you into the
+sync code. It needs to be visible: reconcile against the server and say so, or
+surface the disagreement.
+
+*Diagnostic note, and a lesson in its own right:* three separate signals pointed
+at the servers disagreeing — different row counts, a `pushes 0` diff, and rows
+with `lastCommit` the peer "did not have". All three were consistent with the
+wrong conclusion. What settled it was querying both servers directly and getting
+24 = 24. Measure the thing itself before believing a story that explains the
+symptoms.
 
 **`fetchResourceHTTP(url, {agent})` silently ignores the option.**
 Returns `Unauthorized` rather than either signing the request or rejecting an
