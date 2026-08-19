@@ -6291,31 +6291,23 @@ msgstr "Nothing here yet. Add a number, a chart, a button or a table."
 msgid "Pick a column for the {0} to measure"
 msgstr "Pick a column for the {0} to measure"
 
-#: src/routes/AboutRoute.tsx
-msgid "The one workspace for everything, owned by you."
-msgstr "The one workspace for everything, owned by you."
+#~ msgid "The one workspace for everything, owned by you."
+#~ msgstr "The one workspace for everything, owned by you."
 
-#: src/routes/AboutRoute.tsx
-msgid "Documents, tables, files, chat and custom apps in one place. AtomicServer starts on your device, and can run with no server at all. It adds backup, sharing and always-on availability when you want them. Everything you make is Atomic Data: typed, linked and portable, so it stays readable by other apps and by you."
-msgstr "Documents, tables, files, chat and custom apps in one place. AtomicServer starts on your device, and can run with no server at all. It adds backup, sharing and always-on availability when you want them. Everything you make is Atomic Data: typed, linked and portable, so it stays readable by other apps and by you."
+#~ msgid "Documents, tables, files, chat and custom apps in one place. AtomicServer starts on your device, and can run with no server at all. It adds backup, sharing and always-on availability when you want them. Everything you make is Atomic Data: typed, linked and portable, so it stays readable by other apps and by you."
+#~ msgstr "Documents, tables, files, chat and custom apps in one place. AtomicServer starts on your device, and can run with no server at all. It adds backup, sharing and always-on availability when you want them. Everything you make is Atomic Data: typed, linked and portable, so it stays readable by other apps and by you."
 
-#. 0: token
-#: src/helpers/managed/api.ts
-msgid "Bearer {0}"
-msgstr "Bearer {0}"
+#~ msgid "Bearer {0}"
+#~ msgstr "Bearer {0}"
 
-#: src/routes/SyncRoute.tsx
-msgid "Set up Cloud Server"
-msgstr "Set up Cloud Server"
+#~ msgid "Set up Cloud Server"
+#~ msgstr "Set up Cloud Server"
 
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Cloud Server"
-msgstr "Cloud Server"
+#~ msgid "Cloud Server"
+#~ msgstr "Cloud Server"
 
-#: src/helpers/managed/cloudSync.ts
-msgid "Timed out connecting to the Cloud Server node."
-msgstr "Timed out connecting to the Cloud Server node."
+#~ msgid "Timed out connecting to the Cloud Server node."
+#~ msgstr "Timed out connecting to the Cloud Server node."
 
 #. 0: PRODUCT_NAME
 #: src/components/Vault/VaultPanel.tsx
@@ -6411,25 +6403,20 @@ msgstr "Chrome"
 msgid "Safari"
 msgstr "Safari"
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Use my own secret"
-msgstr "Use my own secret"
+#~ msgid "Use my own secret"
+#~ msgstr "Use my own secret"
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Restore this workspace"
-msgstr "Restore this workspace"
+#~ msgid "Restore this workspace"
+#~ msgstr "Restore this workspace"
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "You’re signed in, and this workspace has an encrypted backup. We stored it sealed, so only this device can open it."
-msgstr "You’re signed in, and this workspace has an encrypted backup. We stored it sealed, so only this device can open it."
+#~ msgid "You’re signed in, and this workspace has an encrypted backup. We stored it sealed, so only this device can open it."
+#~ msgstr "You’re signed in, and this workspace has an encrypted backup. We stored it sealed, so only this device can open it."
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Restore my workspace"
-msgstr "Restore my workspace"
+#~ msgid "Restore my workspace"
+#~ msgstr "Restore my workspace"
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "…or bring it from another device instead"
-msgstr "…or bring it from another device instead"
+#~ msgid "…or bring it from another device instead"
+#~ msgstr "…or bring it from another device instead"
 
 #. 0: PRODUCT_NAME
 #: src/components/Vault/VaultPanel.tsx
@@ -6441,24 +6428,17 @@ msgstr "Nothing has been backed up to {0} yet."
 msgid "{0} encrypted object{1} · {2} stored in {3}."
 msgstr "{0} encrypted object{1} · {2} stored in {3}."
 
-#. 0: PRODUCT_NAME
-#: src/helpers/managed/enrollment.ts
-msgid "Your {0} session expired. Sign in and retry."
-msgstr "Your {0} session expired. Sign in and retry."
+#~ msgid "Your {0} session expired. Sign in and retry."
+#~ msgstr "Your {0} session expired. Sign in and retry."
 
-#. 0: PRODUCT_NAME
-#: src/helpers/managed/enrollment.ts
-msgid "{0} could not place this drive right now. This is usually "
-msgstr "{0} could not place this drive right now. This is usually "
+#~ msgid "{0} could not place this drive right now. This is usually "
+#~ msgstr "{0} could not place this drive right now. This is usually "
 
-#. 0: PRODUCT_NAME; 1: response.status
-#: src/helpers/managed/enrollment.ts
-msgid "Could not enable {0} hosting (HTTP {1})."
-msgstr "Could not enable {0} hosting (HTTP {1})."
+#~ msgid "Could not enable {0} hosting (HTTP {1})."
+#~ msgstr "Could not enable {0} hosting (HTTP {1})."
 
-#: src/routes/SyncRoute.tsx
-msgid "Manage account →"
-msgstr "Manage account →"
+#~ msgid "Manage account →"
+#~ msgstr "Manage account →"
 
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultPanel.tsx
@@ -6474,108 +6454,76 @@ msgstr "Turn on Cloud Vault"
 msgid "Cloud Vault is on"
 msgstr "Cloud Vault is on"
 
-#. 0: PRODUCT_NAME
-#: src/routes/SyncRoute.tsx
-msgid "A hosted workspace on {0}: shareable links, search across everything, API access, and no waiting on another device to be awake. Unlike Cloud Vault, our servers process what you put here."
-msgstr "A hosted workspace on {0}: shareable links, search across everything, API access, and no waiting on another device to be awake. Unlike Cloud Vault, our servers process what you put here."
+#~ msgid "A hosted workspace on {0}: shareable links, search across everything, API access, and no waiting on another device to be awake. Unlike Cloud Vault, our servers process what you put here."
+#~ msgstr "A hosted workspace on {0}: shareable links, search across everything, API access, and no waiting on another device to be awake. Unlike Cloud Vault, our servers process what you put here."
 
 #. 0: missing.join(', ')
 #: src/helpers/managed/useVaultBackup.ts
 msgid "Cloud Vault is not available here: {0}."
 msgstr "Cloud Vault is not available here: {0}."
 
-#: src/routes/SyncRoute.tsx
-msgid "Disconnect"
-msgstr "Disconnect"
+#~ msgid "Disconnect"
+#~ msgstr "Disconnect"
 
-#: src/routes/SyncRoute.tsx
-msgid "Reconnect"
-msgstr "Reconnect"
+#~ msgid "Reconnect"
+#~ msgstr "Reconnect"
 
-#: src/routes/SyncRoute.tsx
-msgid "Not connected"
-msgstr "Not connected"
+#~ msgid "Not connected"
+#~ msgstr "Not connected"
 
-#: src/routes/SyncRoute.tsx
-msgid "Switch"
-msgstr "Switch"
+#~ msgid "Switch"
+#~ msgstr "Switch"
 
-#: src/routes/SyncRoute.tsx
-msgid "Your cloud services"
-msgstr "Your cloud services"
+#~ msgid "Your cloud services"
+#~ msgstr "Your cloud services"
 
-#: src/routes/SyncRoute.tsx
-msgid "Cloud services for this workspace"
-msgstr "Cloud services for this workspace"
+#~ msgid "Cloud services for this workspace"
+#~ msgstr "Cloud services for this workspace"
 
-#. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
-msgid "Signed in as {0}."
-msgstr "Signed in as {0}."
+#~ msgid "Signed in as {0}."
+#~ msgstr "Signed in as {0}."
 
-#. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
-msgid "{0} — we hold your key sealed, so this email gets you back in on a new device."
-msgstr "{0} — we hold your key sealed, so this email gets you back in on a new device."
+#~ msgid "{0} — we hold your key sealed, so this email gets you back in on a new device."
+#~ msgstr "{0} — we hold your key sealed, so this email gets you back in on a new device."
 
-#. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
-msgid "{0} — no recovery backup stored. Lose every device and this workspace is gone."
-msgstr "{0} — no recovery backup stored. Lose every device and this workspace is gone."
+#~ msgid "{0} — no recovery backup stored. Lose every device and this workspace is gone."
+#~ msgstr "{0} — no recovery backup stored. Lose every device and this workspace is gone."
 
-#: src/routes/SyncRoute.tsx
-msgid "Email recovery"
-msgstr "Email recovery"
+#~ msgid "Email recovery"
+#~ msgstr "Email recovery"
 
-#. 0: nodeUsage.resourceCount.toLocaleString()
-#: src/routes/SyncRoute.tsx
-msgid "{0} resources"
-msgstr "{0} resources"
+#~ msgid "{0} resources"
+#~ msgstr "{0} resources"
 
-#. 0: formatBytes(usedBytes); 1: formatBytes(quotaBytes)
-#: src/routes/SyncRoute.tsx
-msgid "{0} of {1}"
-msgstr "{0} of {1}"
+#~ msgid "{0} of {1}"
+#~ msgstr "{0} of {1}"
 
-#. 0: syncedAgo
-#: src/routes/SyncRoute.tsx
-msgid "Synced {0}"
-msgstr "Synced {0}"
+#~ msgid "Synced {0}"
+#~ msgstr "Synced {0}"
 
-#: src/routes/SyncRoute.tsx
-msgid "Synced just now"
-msgstr "Synced just now"
+#~ msgid "Synced just now"
+#~ msgstr "Synced just now"
 
-#: src/routes/SyncRoute.tsx
-msgid "Open a workspace to see whether it can be hosted."
-msgstr "Open a workspace to see whether it can be hosted."
+#~ msgid "Open a workspace to see whether it can be hosted."
+#~ msgstr "Open a workspace to see whether it can be hosted."
 
-#: src/routes/SyncRoute.tsx
-msgid "This device doesn’t have this workspace yet. Pair the device that does, and you can host it from here."
-msgstr "This device doesn’t have this workspace yet. Pair the device that does, and you can host it from here."
+#~ msgid "This device doesn’t have this workspace yet. Pair the device that does, and you can host it from here."
+#~ msgstr "This device doesn’t have this workspace yet. Pair the device that does, and you can host it from here."
 
-#. 0: serverHostname ?? 'another server'
-#: src/routes/SyncRoute.tsx
-msgid "Already set up for this workspace. This app is reading from {0} instead."
-msgstr "Already set up for this workspace. This app is reading from {0} instead."
+#~ msgid "Already set up for this workspace. This app is reading from {0} instead."
+#~ msgstr "Already set up for this workspace. This app is reading from {0} instead."
 
-#: src/routes/SyncRoute.tsx
-msgid "This server"
-msgstr "This server"
+#~ msgid "This server"
+#~ msgstr "This server"
 
-#. 0: serverHostname ?? 'This server'
-#: src/routes/SyncRoute.tsx
-msgid "{0} doesn’t offer hosting, so it can’t be switched on from here."
-msgstr "{0} doesn’t offer hosting, so it can’t be switched on from here."
+#~ msgid "{0} doesn’t offer hosting, so it can’t be switched on from here."
+#~ msgstr "{0} doesn’t offer hosting, so it can’t be switched on from here."
 
-#: src/routes/SyncRoute.tsx
-msgid "Checking whether this workspace is hosted…"
-msgstr "Checking whether this workspace is hosted…"
+#~ msgid "Checking whether this workspace is hosted…"
+#~ msgstr "Checking whether this workspace is hosted…"
 
-#. 0: serverHostname ?? 'another server'
-#: src/routes/SyncRoute.tsx
-msgid "This workspace already lives on {0}. Moving it here is a migration, not a backup."
-msgstr "This workspace already lives on {0}. Moving it here is a migration, not a backup."
+#~ msgid "This workspace already lives on {0}. Moving it here is a migration, not a backup."
+#~ msgstr "This workspace already lives on {0}. Moving it here is a migration, not a backup."
 
 #: src/components/Vault/VaultPanel.tsx
 msgid "Checking this workspace’s backup…"
