@@ -47,6 +47,19 @@ e2e specs failed in a way that looked like a bug in the personal-drive work.
 *Should have:* refused to run the suite against a binary older than its sources.
 *Fixed 2026-08-18 (87e12c9a) — `test-server` now refuses and names the file.*
 
+**The embedded bundle was only refreshed when the build *itself* built it.**
+`build.rs` gated the `dist` → `assets_tmp` copy on `needs_build`, which answers
+"are the JS sources newer than dist" — should `pnpm build` run — not "is the
+copy I embed current". Those diverge precisely when you build the frontend by
+hand, which is what a deploy does. dist is then fresh, `needs_build` is false,
+the copy is skipped, and the binary ships an older `assets_tmp`. The more
+carefully you prepared, the more certainly you shipped a stale bundle.
+Surfaced only by comparing the chunk hashes in the served `index.html` against
+the local `dist`; the binary's md5 matched what was built, and the build said
+nothing.
+*Should have:* compared the two directories, which is the actual question.
+*Fixed 2026-08-19 (5a39f546).*
+
 ## Test harness
 
 **An oversized `.e2e-store` invents 4–8 different failures per run.**
