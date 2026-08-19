@@ -131,6 +131,32 @@ Returns `Unauthorized` rather than either signing the request or rejecting an
 unknown option. Reads as a permissions problem, is actually a typo-shaped API
 gap.
 
+**A query index silently disagreed with the data it indexes.** *(open)*
+The Houseplants table rendered 5 rows on the desktop node and 22 on Home
+Assistant. Every resource was present on both, and every probe said they were
+converged — because the probes were reconstructions of the table's query rather
+than the query itself.
+
+The table asks for children of the table, filtered by classtype, sorted by the
+view's sort property, scoped to the drive. That combination routes through
+`query_complex`, whose index is keyed by drive. On the desktop node it returns
+**5**; drop the drive scope OR the sort and the same server returns **22**. Home
+Assistant returns 22 for all three shapes. So one index held 5 of 22 rows while
+the resources, the unscoped index, and every other query shape were complete.
+
+*Should have:* an index that cannot answer for rows it is supposed to cover is
+the definition of a silent failure — the rows are simply absent, with no error,
+no warning, and nothing to distinguish it from "there are only 5 rows". It needs
+a consistency check between an index and the resources it claims to index.
+
+*Diagnostic lesson, which cost most of the day:* every measurement I took was a
+query I composed — `parent=<table>` — and it returned 24/24 from both servers,
+over and over, while the UI showed 5 and 22. The reconstruction differed from
+the real query in exactly the parameters that break. Capture what the
+application actually sends (patch the fetch, read the server's access log)
+before comparing anything. "Both servers agree" is worthless if the question is
+not the one the product asks.
+
 ## Environment and deployment
 
 **A Home Assistant add-on pinned to an image tag nobody publishes.**
