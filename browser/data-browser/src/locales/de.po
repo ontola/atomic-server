@@ -7060,3 +7060,183 @@ msgstr ""
 #: src/routes/SettingsAgent.tsx
 msgid "Open a drive by URL or DID"
 msgstr ""
+
+msgid "New notification"
+msgstr ""
+
+msgid "Atomic"
+msgstr ""
+
+msgid "Open notification"
+msgstr ""
+
+msgid "Could not find anyone who can grant access."
+msgstr ""
+
+msgid "No personal drive to store the request on."
+msgstr ""
+
+msgid "Access request sent"
+msgstr ""
+
+msgid "Request access"
+msgstr ""
+
+msgid "I need"
+msgstr ""
+
+msgid "Why do you need access?"
+msgstr ""
+
+msgid "Message (optional)"
+msgstr ""
+
+msgid "No writers found to notify for this resource."
+msgstr ""
+
+msgid "The people who can already write this resource will get a notification. They can grant you read or write from their inbox."
+msgstr ""
+
+msgid "Send request"
+msgstr ""
+
+msgid "<0/> Request access"
+msgstr ""
+
+msgid "No drive to save the message on."
+msgstr ""
+
+msgid "Message sent"
+msgstr ""
+
+msgid "Send message"
+msgstr ""
+
+msgid "Choose a person…"
+msgstr ""
+
+msgid "To"
+msgstr ""
+
+msgid "Write a message…"
+msgstr ""
+
+msgid "Message"
+msgstr ""
+
+msgid "No one else has access to this drive yet. Share it or create an invite first, then you can message them."
+msgstr ""
+
+msgid "<0/> Send"
+msgstr ""
+
+msgid "<0/> Send message"
+msgstr ""
+
+msgid "Loading watches…"
+msgstr ""
+
+msgid "No watches yet. Open a table or collection and tap Watch."
+msgstr ""
+
+msgid "Mute"
+msgstr ""
+
+msgid "Unmute"
+msgstr ""
+
+msgid "Watch {0}"
+msgstr ""
+
+msgid "Watching"
+msgstr ""
+
+msgid "Watch"
+msgstr ""
+
+msgid "Stop notifying me when this changes"
+msgstr ""
+
+msgid "Notify me when rows change"
+msgstr ""
+
+msgid "Notifications"
+msgstr ""
+
+msgid "Your notification inbox. Items sync across your devices, including read state."
+msgstr ""
+
+msgid ""
+"Private drive created via `/app/dev-drive` for local development and E2E. Notification inbox and watches live here. You can remove these with Prune test data on `/app/prunetests`. \n"
+"\n"
+"{0}"
+msgstr ""
+
+msgid ""
+"Workspace created via `/app/dev-drive` for local development and E2E. Not the agent's private drive. You can remove these with Prune test data on `/app/prunetests`. \n"
+"\n"
+"{0}"
+msgstr ""
+
+msgid "Sign in to see your notifications."
+msgstr ""
+
+msgid "Mark all read"
+msgstr ""
+
+msgid "No notifications yet."
+msgstr ""
+
+msgid "You'll be notified when someone mentions you, sends you a message, requests access, or when a table or collection you watch updates."
+msgstr ""
+
+msgid "Access granted"
+msgstr ""
+
+msgid "Grant access"
+msgstr ""
+
+msgid "Dismiss"
+msgstr ""
+
+msgid "Grant"
+msgstr ""
+
+msgid "Your watches"
+msgstr ""
+
+msgid "Mentions, messages, and access requests appear under{0} <0>Notifications</0> in the sidebar (below User Settings). Read status syncs across your devices."
+msgstr ""
+
+msgid "Use <0>Watch</0> on a table or collection (a saved query) to get alerted when rows change. Send a message to someone on the same drive from the Notifications page. Request access from Share when you can see a resource but cannot edit it. When this tab or window is in the background, alerts can also show as {0}{1} notifications. On Android and iOS the hub sends a real APNs / FCM lock-screen notification when the app is closed (generic copy; tap opens the resource after sync)."
+msgstr ""
+
+msgid "OS notifications allowed"
+msgstr ""
+
+msgid "OS notifications blocked — enable them in system settings"
+msgstr ""
+
+msgid "OS notifications are not available in this browser"
+msgstr ""
+
+msgid "OS notifications not enabled yet"
+msgstr ""
+
+msgid "Enable OS notifications"
+msgstr ""
+
+msgid "Status:"
+msgstr ""
+
+msgid "This request has been granted."
+msgstr ""
+
+msgid "Access request"
+msgstr ""
+
+msgid "Requested <0/> access to{0} {1}"
+msgstr ""
+
+msgid "Mentions and watched tables"
+msgstr ""
