@@ -1,0 +1,37 @@
+{
+  "_comment": [
+    "Shared search-query contract: Tantivy key escaping and the /search URL",
+    "shape. browser/lib/src/search.ts and lib/src/client/search.rs must both",
+    "reproduce every `escaped` / `expected` value. The server File-picker",
+    "repro (server/tests/it/file_search_repro.rs) looks up the isA key here",
+    "instead of re-implementing the escape. Keys beginning with an underscore",
+    "are documentation."
+  ],
+  "escape": [
+    { "input": "https://test", "escaped": "https\\://test" },
+    { "input": "https://test.com", "escaped": "https\\://test\\.com" },
+    {
+      "input": "+^`:{}\"[]()!\\* .",
+      "escaped": "\\+\\^\\`\\:\\{\\}\\\"\\[\\]\\(\\)\\!\\\\\\*\\ \\."
+    },
+    {
+      "input": "https://atomicdata.dev/properties/isA",
+      "escaped": "https\\://atomicdata\\.dev/properties/isA"
+    },
+    {
+      "input": "https://atomicdata.dev/classes/File",
+      "escaped": "https\\://atomicdata\\.dev/classes/File"
+    },
+    { "input": "name", "escaped": "name" },
+    { "input": "", "escaped": "" }
+  ],
+  "searchSubject": {
+    "serverUrl": "https://test.com",
+    "query": "test",
+    "include": true,
+    "limit": 30,
+    "parents": "https://test.com/parent",
+    "filters": { "age": "10" },
+    "expected": "https://test.com/search?q=test&include=true&limit=30&filters=age%3A%2210%22&parents=https%3A%2F%2Ftest.com%2Fparent"
+  }
+}

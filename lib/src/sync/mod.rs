@@ -8,6 +8,8 @@
 // (always compiled) can reference `sync::policy` in a no-features build.
 #[cfg(feature = "db")]
 pub mod engine;
+#[cfg(feature = "db")]
+pub mod ingest;
 #[cfg(all(test, feature = "iroh", feature = "db-redb"))]
 mod iroh_e2e;
 #[cfg(feature = "iroh")]

@@ -1906,20 +1906,8 @@ mod peer_sync_tests {
 
         let commit_json = r#"{"https://atomicdata.dev/properties/set": {"https://atomicdata.dev/properties/name": "x"}}"#;
 
-        let hub_opts = CommitIngestOpts {
-            source_id: None,
-            validate_loro_causality: true,
-            enforce_subject_ownership: true,
-            suppress_live_echo: false,
-            response_origin: None,
-        };
-        let peer_opts = CommitIngestOpts {
-            source_id: None,
-            validate_loro_causality: false,
-            enforce_subject_ownership: false,
-            suppress_live_echo: true,
-            response_origin: None,
-        };
+        let hub_opts = CommitIngestOpts::hub(None, None);
+        let peer_opts = CommitIngestOpts::peer();
 
         for opts in [&hub_opts, &peer_opts] {
             let err = ingest_commit_json(&db, commit_json, opts)
@@ -1960,13 +1948,7 @@ mod peer_sync_tests {
 
         const OWNERSHIP_ERR: &str = "Subject of commit should be sent to other domain - this store can not own this resource.";
 
-        let hub_opts = CommitIngestOpts {
-            source_id: None,
-            validate_loro_causality: true,
-            enforce_subject_ownership: true,
-            suppress_live_echo: false,
-            response_origin: None,
-        };
+        let hub_opts = CommitIngestOpts::hub(None, None);
         let hub_err = ingest_commit_json(&db, &commit_json, &hub_opts)
             .await
             .expect_err("hub policy must reject a commit for a subject on a foreign domain");
@@ -1976,13 +1958,7 @@ mod peer_sync_tests {
             "hub policy must fail with the exact ownership message"
         );
 
-        let peer_opts = CommitIngestOpts {
-            source_id: None,
-            validate_loro_causality: false,
-            enforce_subject_ownership: false,
-            suppress_live_echo: true,
-            response_origin: None,
-        };
+        let peer_opts = CommitIngestOpts::peer();
         // With the gate off, the outcome must differ from the hub case above:
         // either the commit fully applies, or it fails for some other reason
         // — but never with the ownership message, since the gate is off.

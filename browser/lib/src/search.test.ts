@@ -1,32 +1,49 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, it } from 'vitest';
 import { escapeTantivyKey, buildSearchSubject, SearchOpts } from './search.js';
 
-const testTuples = [
-  ['https://test', 'https\\://test'],
-  ['https://test.com', 'https\\://test\\.com'],
-];
+/**
+ * Shared with `lib/src/client/search.rs` and the File-picker repro.
+ * Renaming an expected value here without the Rust suite is how the two
+ * escape helpers drift and File-picker filters stop matching.
+ */
+const fixture = JSON.parse(
+  readFileSync(
+    fileURLToPath(
+      new URL('../../../testdata/search-query.json', import.meta.url),
+    ),
+    'utf-8',
+  ),
+) as {
+  escape: { input: string; escaped: string }[];
+  searchSubject: {
+    serverUrl: string;
+    query: string;
+    include: boolean;
+    limit: number;
+    parents: string;
+    filters: Record<string, string>;
+    expected: string;
+  };
+};
 
 describe('search.ts', () => {
-  it('Handles resources without an ID', ({ expect }) => {
-    for (const [input, output] of testTuples) {
-      expect(escapeTantivyKey(input)).toBe(output);
+  it('escapes Tantivy keys the same way as Rust', ({ expect }) => {
+    for (const { input, escaped } of fixture.escape) {
+      expect(escapeTantivyKey(input)).toBe(escaped);
     }
   });
 
   it('Builds a good search URL', ({ expect }) => {
-    const serverURL = 'https://test.com';
-    const query = 'test';
+    const { serverUrl, query, include, limit, parents, filters, expected } =
+      fixture.searchSubject;
     const searchOpts: SearchOpts = {
-      include: true,
-      limit: 30,
-      parents: 'https://test.com/parent',
-      filters: {
-        age: '10',
-      },
+      include,
+      limit,
+      parents,
+      filters,
     };
-    const built = buildSearchSubject(serverURL, query, searchOpts);
-    expect(built).toBe(
-      'https://test.com/search?q=test&include=true&limit=30&filters=age%3A%2210%22&parents=https%3A%2F%2Ftest.com%2Fparent',
-    );
+    expect(buildSearchSubject(serverUrl, query, searchOpts)).toBe(expected);
   });
 });
