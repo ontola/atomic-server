@@ -267,6 +267,16 @@ export class Collection {
 
   private _totalMembers = 0;
 
+  /** True once this collection has checked its local-index count against the
+   *  server. Once per instance: collections are rebuilt on mount, so a stale
+   *  index still gets caught, and it cannot loop with the repair refresh. */
+  private _countChecked = false;
+
+  /** Forces the next `fetchPage` past the local DB. Set only by the repair
+   *  path — without it, refreshing after a mismatch re-reads the same stale
+   *  index and reports the same wrong count forever. */
+  private _bypassLocalDb = false;
+
   /** Statistics from the last loaded page. The store computes them over every
    *  matching resource, so any page carries the same numbers. */
   private _aggregates: AggregateOutcome[] = [];
@@ -798,7 +808,16 @@ export class Collection {
     // user's WS log as 30+ duplicate frames after refresh. Reversed
     // here. The cold-load case pays at most one extra OPFS wait
     // before the server fetch fires.
-    if (hasClientDb && (await this.fetchPageFromLocalDb(page)) === 'ok') {
+    if (
+      !this._bypassLocalDb &&
+      hasClientDb &&
+      (await this.fetchPageFromLocalDb(page)) === 'ok'
+    ) {
+      // Served locally. The local index answers instantly and is usually
+      // right, but nothing has established that it holds every member — see
+      // `verifyCountAgainstServer`.
+      void this.verifyCountAgainstServer();
+
       return;
     }
 
@@ -1067,6 +1086,86 @@ export class Collection {
     this._aggregates = result.aggregates ?? [];
 
     return 'ok';
+  }
+
+  /**
+   * Compare the count the local index just produced against the server's, and
+   * repair if they disagree.
+   *
+   * The local DB is treated as the source of truth for `parent=` queries, and
+   * an EMPTY local result is already handled with care — it is only trusted
+   * once this drive's sync has completed, because an empty index is
+   * indistinguishable from an unpopulated one. A PARTIAL index got no such
+   * treatment: any non-empty answer was returned as authoritative, so an index
+   * holding 15 of 24 rows rendered 15 rows, and kept rendering 15. `refresh()`
+   * re-entered the same local path and reproduced it, and OPFS persists, so it
+   * survived reloads. Nothing anywhere compared the two counts, which made it
+   * indistinguishable from a sync failure — the symptom sends you into the
+   * sync code, where everything is working correctly.
+   *
+   * Deliberately a count, not a page: the fast local render stays, and this
+   * costs one small query rather than the duplicate `/query` per mount that
+   * the OPFS-first ordering was introduced to remove.
+   */
+  private async verifyCountAgainstServer(): Promise<void> {
+    if (this._countChecked) return;
+    if (!this.store.serverConnected) return;
+    if (!this.params.property || !this.params.value) return;
+
+    // Local-only subjects have no server-side members by definition; asking
+    // would only ever return empty and would then "repair" a correct page
+    // into an empty one.
+    if (
+      typeof this.params.value === 'string' &&
+      this.store.isLocalOnlySubject(this.params.value)
+    ) {
+      return;
+    }
+
+    // Set before the request, not after: a second page arriving while this is
+    // in flight must not queue a second identical check.
+    this._countChecked = true;
+
+    const localTotal = this._totalMembers;
+
+    try {
+      const url = new URL(this.buildSubject(0));
+      // One member is enough to carry `totalMembers`.
+      url.searchParams.set('page_size', '1');
+      const probe =
+        await this.store.fetchResourceFromServer<Collections.Collection>(
+          url.toString(),
+        );
+
+      if (!probe || probe.error) return;
+
+      await enableLoro();
+      probe.getLoroDoc();
+      const serverTotal = probe.get(collections.properties.totalMembers);
+
+      if (!isNumber(serverTotal) || serverTotal === localTotal) return;
+
+      // Loud on purpose. This is the state that reads as a sync bug, so say
+      // plainly that it is not one and that the client is repairing itself.
+      console.warn(
+        `[Collection] local index disagreed with the server for ` +
+          `${this.params.property}=${this.params.value}: local ${localTotal}, ` +
+          `server ${serverTotal}. The local index is incomplete for this ` +
+          `query; refetching from the server.`,
+      );
+
+      this._bypassLocalDb = true;
+
+      try {
+        await this.refresh();
+      } finally {
+        this._bypassLocalDb = false;
+      }
+    } catch {
+      // A failed probe must never cost the caller the page it already has.
+      // Leave `_countChecked` set: retrying on every page of a collection
+      // whose server is unreachable is the wrong trade.
+    }
   }
 
   private async fetchPageFromServer(page: number): Promise<void> {
