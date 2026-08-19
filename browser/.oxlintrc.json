@@ -61,7 +61,7 @@
     "react/use-memo": "error",
     "react/void-use-memo": "error",
     "react/unsupported-syntax": "error",
-    // 58 / 39 / 29 hits today: prop-sync effects, latest-ref during render,
+    // 61 / 42 / 32 hits today: prop-sync effects, latest-ref during render,
     // and `const Comp = getButtonComp()` during render. Warn until cleaned up.
     "react/set-state-in-effect": "warn",
     "react/refs": "warn",
