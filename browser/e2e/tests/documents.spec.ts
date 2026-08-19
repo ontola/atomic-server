@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import {
   getDevDriveSecret,
   newResource,
@@ -11,6 +11,20 @@ import {
   setTitle,
   waitForSearchIndex,
 } from './test-utils';
+
+/**
+ * Document text with Loro cursor widgets stripped. Those decorations insert
+ * the peer's name into the DOM (`Ne Dev User w paragraph`) and split strings
+ * Playwright's `text=` locator needs intact.
+ */
+async function editorPlainText(page: Page): Promise<string> {
+  return page.getByLabel('Rich Text Editor').evaluate(el => {
+    const clone = el.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll('.ProseMirror-loro-cursor').forEach(n => n.remove());
+
+    return (clone.innerText ?? clone.textContent ?? '').replace(/\s+/g, ' ');
+  });
+}
 
 test.describe('documents', async () => {
   test.beforeEach(before);
@@ -91,15 +105,19 @@ test.describe('documents', async () => {
     const syncText = 'New paragraph';
     await page2.keyboard.type(syncText);
 
-    await expect(
-      page2.locator(`text=${syncText}`),
-      'New paragraph not found after typing. Something is wrong with rendering the text / handling the keyboard.',
-    ).toBeVisible();
+    await expect(async () => {
+      expect(
+        await editorPlainText(page2),
+        'New paragraph not found after typing. Something is wrong with rendering the text / handling the keyboard.',
+      ).toContain(syncText);
+    }).toPass({ timeout: 10_000 });
 
-    await expect(
-      page.locator(`text=${syncText}`),
-      'New paragraph not found in first window. Sync might not be working.',
-    ).toBeVisible();
+    await expect(async () => {
+      expect(
+        await editorPlainText(page),
+        'New paragraph not found in first window. Sync might not be working.',
+      ).toContain(syncText);
+    }).toPass({ timeout: 15_000 });
 
     // Delete the typed text. `Alt+Backspace` only deletes-word on macOS;
     // headless chromium on Linux (dagger CI) treats it as a no-op, so the
@@ -114,14 +132,18 @@ test.describe('documents', async () => {
     // Loro CRDT sync between two browser contexts goes through the server's
     // WS hub, so propagation can take several seconds under suite-wide load.
     // Verify the local deletion first, then poll for the cross-tab sync.
-    await expect(
-      page2.locator(`text=${syncText}`),
-      'Paragraph not deleted in second window',
-    ).not.toBeVisible({ timeout: 15000 });
-    await expect(
-      page.locator(`text=${syncText}`),
-      'Paragraph not deleted in first window.',
-    ).not.toBeVisible({ timeout: 15000 });
+    await expect(async () => {
+      expect(
+        await editorPlainText(page2),
+        'Paragraph not deleted in second window',
+      ).not.toContain(syncText);
+    }).toPass({ timeout: 15_000 });
+    await expect(async () => {
+      expect(
+        await editorPlainText(page),
+        'Paragraph not deleted in first window.',
+      ).not.toContain(syncText);
+    }).toPass({ timeout: 15_000 });
 
     // Wait for AtomicServer to index the folder so the @-mention can find it.
     await waitForSearchIndex(page2);
@@ -186,10 +208,15 @@ test.describe('documents', async () => {
     ).not.toBeVisible({ timeout: 15000 });
     await expect(page2.getByText(sharedText)).toBeVisible({ timeout: 15000 });
 
-    // page2 places its caret inside the shared text. The selection change makes
-    // loro-prosemirror set the local ephemeral cursor, which is broadcast.
+    // page2 places its caret inside the shared text. Type a character so
+    // loro-prosemirror both updates the local ephemeral cursor AND
+    // broadcasts it — a click + ArrowLeft alone sometimes never emitted a
+    // LORO_EPHEMERAL_UPDATE under suite load.
+    const editor2 = page2.getByLabel('Rich Text Editor');
+    await expect(editor2).toBeVisible({ timeout: 30_000 });
     await page2.getByText(sharedText).click();
-    await page2.keyboard.press('ArrowLeft');
+    await page2.keyboard.press('End');
+    await page2.keyboard.type('!');
 
     // page1 must render page2's remote caret. Use `toBeAttached` (not
     // `toBeVisible`): a collapsed remote caret is a thin/zero-width decoration
@@ -199,7 +226,7 @@ test.describe('documents', async () => {
     await expect(
       remoteCursor.first(),
       'page1 did not render the collaborator’s ephemeral cursor',
-    ).toBeAttached({ timeout: 15000 });
+    ).toBeAttached({ timeout: 15_000 });
 
     // Exactly one remote peer → exactly one caret (ephemeral, not duplicated or
     // persisted into the doc), and it carries the peer's color via inline style.

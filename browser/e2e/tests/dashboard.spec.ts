@@ -5,6 +5,7 @@ import {
   FRONTEND_URL,
   newResource,
   pickFromMenu,
+  waitForRowsMaterialized,
 } from './test-utils';
 
 /**
@@ -130,11 +131,7 @@ async function createSpendingTable(page: Page): Promise<Fixture> {
     };
   }, props);
 
-  await page.waitForFunction(
-    () => window.store?.getSyncStatus().pendingDirtyCount === 0,
-    undefined,
-    { timeout: 30_000 },
-  );
+  await waitForRowsMaterialized(page, 30_000);
 
   return created;
 }
@@ -239,11 +236,7 @@ async function createDashboard(page: Page, fixture: Fixture): Promise<string> {
     return dashboard.subject;
   }, fixture);
 
-  await page.waitForFunction(
-    () => window.store?.getSyncStatus().pendingDirtyCount === 0,
-    undefined,
-    { timeout: 30_000 },
-  );
+  await waitForRowsMaterialized(page, 30_000);
   await page.goto(
     `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(subject)}`,
   );
@@ -251,6 +244,11 @@ async function createDashboard(page: Page, fixture: Fixture): Promise<string> {
   await expect(page.getByTestId('dashboard-grid')).toBeVisible({
     timeout: 15_000,
   });
+  await page.waitForFunction(
+    () => window.store?.getClientDb()?.isReady === true,
+    undefined,
+    { timeout: 30_000 },
+  );
 
   return subject;
 }
@@ -319,7 +317,9 @@ test.describe('dashboards', () => {
     await expect(block(page, 'Total spent')).toContainText('946.5', {
       timeout: 15_000,
     });
-    await expect(block(page, 'Expenses')).toContainText('4');
+    await expect(block(page, 'Expenses')).toContainText('4', {
+      timeout: 15_000,
+    });
 
     // One bar per category, largest first, each labelled by its tag name.
     const chart = block(page, 'Per category');

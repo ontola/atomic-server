@@ -115,7 +115,10 @@ export function VaultPanel({
         data-vault-state='off'
         $embedded={embedded}
       >
-        <CardIcon $tone='provider'>
+        {/* Neutral: an offer is not a service. Blue on this page means "on",
+            so a vault that is off must not wear it, or the row's own answer
+            contradicts its glyph. */}
+        <CardIcon>
           <FaLock />
         </CardIcon>
         <Body>
