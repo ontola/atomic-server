@@ -57,7 +57,7 @@ templates, and offline variants stay in the full suite. Policy:
 | Browser e2e full | `cd browser && pnpm run test-e2e` | `endToEnd` on `develop` and `v*` tags |
 | Flutter Dart | `cd flutter && flutter test` | `flutterTest` |
 | Flutter Rust bridge | `cargo test --manifest-path flutter/rust/Cargo.toml` | `flutterTest` |
-| Python SDK | `cd python && maturin develop && pytest` | **not in CI** |
+| Python SDK | `cd python && uv run pytest` | `Python SDK` (ubuntu + windows) |
 | Kotlin / UniFFI SDK | `cd ffi && cargo test && cd kotlin && ./gradlew test` | **not in CI** |
 
 CI runs `cargo nextest run --workspace --exclude atomic-server-tauri
@@ -70,7 +70,10 @@ Two things worth knowing about the runners:
   `--workspace` never compiles it. It is covered only by the explicit
   `--manifest-path` step in `flutterTest`.
 - **`python/` is excluded from the workspace** for the same reason (PyO3).
-  Tests are `pytest` after `maturin develop`; they are not in Dagger CI yet.
+  Tests are `uv run pytest` in `python/`. GitHub Actions workflow
+  `Python SDK` runs them on ubuntu-latest and windows-latest (MSVC is on
+  the Windows runner; a host without Visual Studio Build Tools cannot
+  link the extension). Not in Dagger.
 - **`ffi/` is excluded from the workspace** (UniFFI + Iroh). Rust tests are
   `cargo test` in `ffi/`; JVM tests are `./gradlew test` in `ffi/kotlin`.
   Not in Dagger CI yet.
@@ -211,7 +214,7 @@ One 13-line smoke test, never run in CI — the pipeline has no emulator.
 
 ### 7b. Python SDK (`python/`)
 
-Glue: `pytest` after `maturin build` covers in-memory CRUD, file-backed reopen, and a two-process Iroh sync (`tests/test_iroh.py`). Not in Dagger CI. No WS session or blobs.
+Glue: `uv run pytest` covers in-memory CRUD, file-backed reopen, and a two-process Iroh sync (`tests/test_iroh.py`). GitHub Actions `Python SDK` runs that on Linux and Windows. Not in Dagger. No WS session or blobs.
 
 ### 7c. Kotlin / UniFFI SDK (`ffi/`)
 

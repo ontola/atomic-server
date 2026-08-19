@@ -247,7 +247,7 @@ cd browser/lib && pnpm test                      # JS unit tests
 cd browser && pnpm run -r build                  # Full workspace build
 cd browser && pnpm run test-e2e:light            # Playwright @smoke (feature-branch CI)
 cd browser && pnpm run test-e2e                  # Full Playwright suite (develop / tags)
-cd python && maturin develop && pytest            # Python SDK (excluded from workspace)
+cd python && uv run pytest                           # Python SDK (excluded from workspace)
 cd ffi && cargo test && cd kotlin && ./gradlew test  # Kotlin / UniFFI SDK (excluded from workspace)
 ```
 
