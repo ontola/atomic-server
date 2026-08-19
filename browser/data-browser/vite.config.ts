@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import babel from '@rolldown/plugin-babel';
 import { VitePWA } from 'vite-plugin-pwa';
+import { oxcReactCompiler } from './oxcReactCompilerPlugin';
 import webfontDownload from 'vite-plugin-webfont-dl';
 import prismjs from 'vite-plugin-prismjs';
 import wasm from 'vite-plugin-wasm';
@@ -142,60 +142,13 @@ export default defineConfig({
     },
     !isVitest && webfontDownload(),
     !isVitest && wuchale(),
-    // OXC handles the bulk JSX/TS transform via @vitejs/plugin-react v6.
-    // The two passes we still need babel for ride on @rolldown/plugin-babel,
-    // which MUST run before `react()` ("the compiler must run before other
-    // transforms" — React Compiler docs):
-    //
-    //  - babel-plugin-react-compiler: auto-memoising compiler. A native Rust
-    //    port now exists (React's official port, vendored by oxc), but as of
-    //    2026-06 it's not production-ready for us, so we stay on Babel:
-    //      * released `oxc-transform@0.137` `reactCompiler` option is a no-op
-    //        (zero memoisation in testing);
-    //      * community `oxc-plugin-react-compiler@0.2` (now archived) DOES run
-    //        the Rust compiler, but emits duplicate `_temp` helpers that break
-    //        files with multiple memoised components (e.g. our AI chunks).
-    //    Revisit once oxc-transform ships a working pass.
-    //    React's official Vite recipe is this same two-pass setup.
-    //  - babel-plugin-styled-components: emits `displayName` so DOM classes
-    //    read `Foo-sc-XXX` instead of opaque `sc-XXX` hashes. plugin-react
-    //    v6 dropped its own `babel` option, so this is now the only hook.
-    babel({
-      include: /\.[jt]sx?$/,
-      exclude: /node_modules/,
-      plugins: [
-        [
-          'babel-plugin-react-compiler',
-          {
-            logger: {
-              logEvent(filename, event) {
-                if (event.kind === 'CompileError') {
-                  console.error(`\nCompilation failed: ${filename}`);
-                  console.error(`Reason: ${event.detail.reason}`);
-
-                  if (event.detail.description) {
-                    console.error(`Details: ${event.detail.description}`);
-                  }
-
-                  if (event.detail.loc) {
-                    const { line, column } = event.detail.loc.start;
-                    console.error(`Location: Line ${line}, Column ${column}`);
-                  }
-
-                  if (event.detail.suggestions) {
-                    console.error('Suggestions:', event.detail.suggestions);
-                  }
-                }
-              },
-            },
-          },
-        ],
-        [
-          'babel-plugin-styled-components',
-          { displayName: true, fileName: false },
-        ],
-      ],
-    }),
+    // Native React Compiler (oxc-transform-react). Must run before JSX
+    // transforms; this plugin does compiler + TS + JSX + Fast Refresh in one
+    // pass. Replace with `react({ compiler: true })` once plugin-react 6.1.0
+    // is released (vitejs/vite-plugin-react#1419). The compiler transform is
+    // skipped under Vitest — unit tests call `transformSync` directly — but
+    // the oxc styled-components options still apply so displayName works.
+    ...oxcReactCompiler({ compile: !isVitest }),
     react(),
     !isVitest &&
       !isTauri &&
@@ -493,10 +446,10 @@ export default defineConfig({
     allowedHosts: ['.tunn.dev', 't-1sk9qbdw.tunn.dev'],
     // Pre-transform the lazy AI chunk's source graph in the background at
     // boot, so the first time the sidebar opens its modules are already
-    // through the (slow) React Compiler babel pass instead of being
-    // transformed on-demand while the user waits behind "Loading AI".
-    // Complements the `optimizeDeps.include` AI entries above (those cover
-    // the npm deps; this covers our own source modules).
+    // through the React Compiler pass instead of being transformed on-demand
+    // while the user waits behind "Loading AI". Complements the
+    // `optimizeDeps.include` AI entries above (those cover the npm deps;
+    // this covers our own source modules).
     warmup: {
       clientFiles: [
         './src/chunks/AI/AISidebar.tsx',

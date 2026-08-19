@@ -340,54 +340,46 @@ export function DropdownMenu({
     { enabled: !!isMainMenu },
     [isActive],
   );
+
   // Arrow navigation + Enter/Escape are handled on the menu element itself
   // (not via the global `useHotkeys` above): the menu renders in a portal, and
   // react-hotkeys-hook's document listener does NOT fire for keys dispatched
   // while focus is inside that portal — so after the first keypress moved focus
   // into the menu, arrows stopped working. Handling `onKeyDown` on the menu (to
   // which keydowns from the focused item bubble) is reliable.
-  const handleMenuKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setUseKeys(true);
+  const handleMenuKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setUseKeys(true);
 
-        if (hasSelectable) {
-          setSelectedIndex(getNewIndex(effectiveSelectedIndex, 1));
-        }
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setUseKeys(true);
-
-        if (hasSelectable) {
-          setSelectedIndex(getNewIndex(effectiveSelectedIndex, -1));
-        }
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        const item = normalizedItems[effectiveSelectedIndex];
-
-        if (isItem(item) && !item.disabled) {
-          item.onClick();
-
-          if (item.keepOpen) {
-            return;
-          }
-        }
-
-        handleClose();
-      } else if (e.key === 'Escape' || e.key === 'Tab') {
-        e.preventDefault();
-        handleClose();
+      if (hasSelectable) {
+        setSelectedIndex(getNewIndex(effectiveSelectedIndex, 1));
       }
-    },
-    [
-      getNewIndex,
-      normalizedItems,
-      effectiveSelectedIndex,
-      hasSelectable,
-      handleClose,
-    ],
-  );
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setUseKeys(true);
+
+      if (hasSelectable) {
+        setSelectedIndex(getNewIndex(effectiveSelectedIndex, -1));
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const item = normalizedItems[effectiveSelectedIndex];
+
+      if (isItem(item) && !item.disabled) {
+        item.onClick();
+
+        if (item.keepOpen) {
+          return;
+        }
+      }
+
+      handleClose();
+    } else if (e.key === 'Escape' || e.key === 'Tab') {
+      e.preventDefault();
+      handleClose();
+    }
+  };
 
   // Focus the menu on open so keyboard navigation works even when it opened at
   // the cursor with no highlighted item (context menus). Only when focus isn't

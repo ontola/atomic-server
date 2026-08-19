@@ -29,44 +29,46 @@ type Props = {
 /** Renders a value in a fitting way, depending on its DataType */
 function ValueComp({ value, datatype }: Props): JSX.Element {
   try {
-    switch (datatype) {
-      case Datatype.ATOMIC_URL: {
-        const resource = valToResource(value);
-
-        if (typeof resource === 'string') {
-          return <ResourceInline subject={resource} />;
-        }
-
-        return <Nestedresource resource={resource} />;
-      }
-
-      case (Datatype.DATE, Datatype.TIMESTAMP):
-        return <DateTime date={valToDate(value)} />;
-      case Datatype.MARKDOWN:
-        return <Markdown text={valToString(value)} />;
-      case Datatype.RESOURCEARRAY:
-        return <ResourceArray subjects={valToArray(value)} />;
-      case Datatype.JSON:
-        return <JSONRenderer value={value as JSONValue} />;
-      case Datatype.LORODOC:
-        return <LoroDocValue value={value as Uint8Array} />;
-
-      case Datatype.LOCALIZEDTEXT:
-        return <LocalizedTextValue value={value as LocalizedText} />;
-
-      case Datatype.URI:
-        return (
-          <AtomicLink href={value as string}>{value as string}</AtomicLink>
-        );
-      default:
-        return <div>{valToString(value)}</div>;
-    }
+    return renderValue(value, datatype);
   } catch (e) {
     return (
       <ErrMessage>
         {e.message} original value: {value?.toString()}
       </ErrMessage>
     );
+  }
+}
+
+function renderValue(value: AtomicValue, datatype: Datatype): JSX.Element {
+  switch (datatype) {
+    case Datatype.ATOMIC_URL: {
+      const resource = valToResource(value);
+
+      if (typeof resource === 'string') {
+        return <ResourceInline subject={resource} />;
+      }
+
+      return <Nestedresource resource={resource} />;
+    }
+
+    case (Datatype.DATE, Datatype.TIMESTAMP):
+      return <DateTime date={valToDate(value)} />;
+    case Datatype.MARKDOWN:
+      return <Markdown text={valToString(value)} />;
+    case Datatype.RESOURCEARRAY:
+      return <ResourceArray subjects={valToArray(value)} />;
+    case Datatype.JSON:
+      return <JSONRenderer value={value as JSONValue} />;
+    case Datatype.LORODOC:
+      return <LoroDocValue value={value as Uint8Array} />;
+
+    case Datatype.LOCALIZEDTEXT:
+      return <LocalizedTextValue value={value as LocalizedText} />;
+
+    case Datatype.URI:
+      return <AtomicLink href={value as string}>{value as string}</AtomicLink>;
+    default:
+      return <div>{valToString(value)}</div>;
   }
 }
 
