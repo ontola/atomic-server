@@ -44,15 +44,19 @@ function runAction(action: ActionDefinition, ctx: ActionContext): void {
     const result = action.run(ctx) as unknown;
 
     if (result instanceof Promise) {
-      void result.catch((e: unknown) => reportActionError(action, e));
+      void result.catch((e: unknown) => reportActionError(action, ctx, e));
     }
   } catch (e) {
     // A synchronous throw, before the promise even exists.
-    reportActionError(action, e);
+    reportActionError(action, ctx, e);
   }
 }
 
-function reportActionError(action: ActionDefinition, e: unknown): void {
+function reportActionError(
+  action: ActionDefinition,
+  ctx: ActionContext,
+  e: unknown,
+): void {
   const detail =
     e instanceof Error && e.message
       ? e.message
@@ -60,10 +64,23 @@ function reportActionError(action: ActionDefinition, e: unknown): void {
         ? e
         : 'unknown error';
 
+  // `label` is `(ctx) => string`, not a string. Interpolating it directly put
+  // the function's source in the toast — so the net added to surface a failed
+  // action named it as `(ctx) => ...` instead of "Delete". Resolving it can
+  // itself throw (it reads the resource), and a label that fails must not
+  // swallow the error it was meant to report.
+  let label = 'Action';
+
+  try {
+    label = action.label(ctx);
+  } catch {
+    // keep the fallback
+  }
+
   // Logged as well as shown: the toast is necessarily short, and a server's
   // parse error is the kind of thing worth having in full.
-  console.error(`[action] "${action.label}" failed:`, e);
-  toast.error(`${action.label} failed: ${detail}`);
+  console.error(`[action] "${label}" failed:`, e);
+  toast.error(`${label} failed: ${detail}`);
 }
 
 /** Ids of the actions in the registry (`actions/resourceActions.tsx`). */

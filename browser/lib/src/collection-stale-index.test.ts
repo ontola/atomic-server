@@ -190,7 +190,7 @@ describe('Collection: local sort matches the server', () => {
     });
     await collection.waitForReady();
 
-    const ordered: string[] = [];
+    const ordered: Array<string | undefined> = [];
 
     for (let i = 0; i < collection.totalMembers; i++) {
       ordered.push(await collection.getMemberWithIndex(i));
@@ -202,5 +202,28 @@ describe('Collection: local sort matches the server', () => {
       'did:ad:rowD', // 1
       'did:ad:rowA', // 5
     ]);
+  });
+});
+
+describe('Collection: local surplus is not "stale"', () => {
+  it('does not replace a locally-larger page with the server’s smaller one', async ({
+    expect,
+  }) => {
+    // The local index knows about a row the server has not acknowledged yet —
+    // an optimistic add, or a pending write. Repairing here would delete it.
+    const local = ['did:ad:row1', 'did:ad:row2', 'did:ad:pending'];
+    const server = ['did:ad:row1', 'did:ad:row2'];
+    const { store, urls } = storeWithServer(server);
+    store.setClientDb(stubClientDb(local));
+
+    const collection = new Collection(store, 'https://example.com', params());
+    await collection.waitForReady();
+    await new Promise(r => setTimeout(r, 30));
+
+    expect(collection.totalMembers).toBe(local.length);
+    const fullFetches = urls.filter(
+      u => new URL(u).searchParams.get('page_size') !== '1',
+    );
+    expect(fullFetches).toEqual([]);
   });
 });

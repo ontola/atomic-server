@@ -1169,7 +1169,13 @@ export class Collection {
       probe.getLoroDoc();
       const serverTotal = probe.get(collections.properties.totalMembers);
 
-      if (!isNumber(serverTotal) || serverTotal === localTotal) return;
+      // Only a SHORTFALL is repairable here. A local surplus is the normal
+      // local-first case — an optimistic add already folded into
+      // `_totalMembers`, or a write the server has not acknowledged yet — and
+      // replacing the page with the server's smaller one would delete rows
+      // from the table that genuinely exist. The failure this check exists for
+      // is the index holding fewer members than the server, not more.
+      if (!isNumber(serverTotal) || serverTotal <= localTotal) return;
 
       // Loud on purpose. This is the state that reads as a sync bug, so say
       // plainly that it is not one and that the client is repairing itself.

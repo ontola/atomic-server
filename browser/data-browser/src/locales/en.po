@@ -6375,6 +6375,7 @@ msgid "Button says"
 msgstr "Button says"
 
 #: src/chunks/TablePage/NewColumnButton.tsx
+#: src/components/ResourceContextMenu/index.tsx
 msgid "Action"
 msgstr "Action"
 
@@ -6917,7 +6918,7 @@ msgstr "Paired device"
 msgid "Not synced yet"
 msgstr "Not synced yet"
 
-#. 0: action.label; 1: detail
+#. 0: label; 1: detail
 #: src/components/ResourceContextMenu/index.tsx
 msgid "{0} failed: {1}"
 msgstr "{0} failed: {1}"
