@@ -72,8 +72,34 @@ fn main() -> std::io::Result<()> {
             "Copying assets took: {:.3}s",
             start_copy.elapsed().as_secs_f32()
         );
+    } else if dirs.js_dist_tmp.exists() && !dist_is_newer_than_tmp(&dirs) {
+        p!(
+            "{} is current with {}, skipping copy",
+            dirs.js_dist_tmp.display(),
+            dirs.js_dist_source.display()
+        );
     } else if dirs.js_dist_tmp.exists() {
-        p!("Found {}, skipping copy", dirs.js_dist_tmp.display());
+        // `needs_build` is false and the embedded copy still has to be
+        // refreshed: `should_build` answers "are the JS SOURCES newer than
+        // `dist`", i.e. "should I run `pnpm build`". Building the frontend by
+        // hand — which is what a deploy does, and what the e2e docs tell you to
+        // do — makes that false while leaving `dist` newer than the copy we
+        // embed. Gating the copy on it meant the binary shipped whatever
+        // `assets_tmp` held from some earlier build, silently: the more
+        // carefully you prepared the bundle, the more certainly you embedded a
+        // stale one.
+        p!(
+            "{} is newer than {}, refreshing the embedded copy",
+            dirs.js_dist_source.display(),
+            dirs.js_dist_tmp.display()
+        );
+        let start_copy = Instant::now();
+        let _ = fs::remove_dir_all(&dirs.js_dist_tmp);
+        dircpy::copy_dir(&dirs.js_dist_source, &dirs.js_dist_tmp)?;
+        p!(
+            "Copying assets took: {:.3}s",
+            start_copy.elapsed().as_secs_f32()
+        );
     } else {
         p!(
             "Could not find {} , copying from {}",
@@ -447,6 +473,25 @@ fn is_js_build_output(path: &Path) -> bool {
 /// from before the sources changed — while a `cargo build` that looks entirely
 /// successful scrolls past. Observed exactly that: sources at 14:42, tsbuildinfo
 /// at 14:43, actual bundle still 13:47.
+/// True when the built bundle is newer than the copy we embed.
+///
+/// Compares newest-file times both ways rather than trusting `should_build`,
+/// which is about whether `pnpm build` needs to run, not about whether the
+/// embedded copy is current. The two diverge exactly when someone builds the
+/// frontend themselves.
+fn dist_is_newer_than_tmp(dirs: &Dirs) -> bool {
+    match (
+        find_newest_file_time(&dirs.js_dist_source),
+        find_newest_file_time(&dirs.js_dist_tmp),
+    ) {
+        (Some(dist), Some(tmp)) => dist > tmp,
+        // No embedded copy yet, or an unreadable one: copy and be sure.
+        (Some(_), None) => true,
+        // Nothing built to copy from — leave whatever is embedded alone.
+        (None, _) => false,
+    }
+}
+
 fn find_newest_file_time(dist_dir: &PathBuf) -> Option<Duration> {
     let mut newest_time: Option<Duration> = None;
 
