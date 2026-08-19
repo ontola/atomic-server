@@ -133,10 +133,6 @@ const NavBarStyled = styled.div<{ top: boolean }>`
   container-name: nav-bar;
   container-type: inline-size;
 
-  &:has(:focus) {
-    box-shadow: 0px 0px 0px 2px ${props => props.theme.colors.main};
-  }
-
   @media print {
     display: none;
   }
