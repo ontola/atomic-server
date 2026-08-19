@@ -1921,3 +1921,448 @@ async fn find_resource_scoped_to_its_drive() {
         "a localId lookup constrained to one drive must resolve the resource"
     );
 }
+
+/// A watched query's index is built once, when it is both empty and unwatched
+/// (`query_complex`). After that nothing reconciles it against reality — so any
+/// member the incremental path fails to add is missing for good, and the guard
+/// that would have caught it (`total_count == 0`) never fires again because 5
+/// is not 0.
+///
+/// This is the shape behind a table showing 5 of 22 rows on one node and 22 on
+/// another: same resources, same query, an index that had stopped keeping up.
+#[tokio::test]
+#[timeout(120000)]
+async fn sorted_query_index_keeps_up_with_later_children() {
+    let store = Db::init_temp("query_index_drift").await.unwrap();
+
+    let parent_subject = "https://localhost/drift-parent";
+    let mut parent = crate::Resource::new(parent_subject.into());
+    parent
+        .set_unsafe(urls::NAME.into(), Value::String("Parent".into()))
+        .unwrap();
+    store
+        .add_resource_opts(&parent, false, true, true)
+        .await
+        .unwrap();
+
+    let add_child = |name: String, sorted: bool| {
+        let subj = format!("https://localhost/drift/{name}");
+        let mut r = crate::Resource::new(subj);
+        r.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_subject.into()))
+            .unwrap();
+        // Half the rows carry no value for the sort property, exactly like a
+        // table row whose sorted column was never filled in.
+        if sorted {
+            r.set_unsafe(urls::NAME.into(), Value::String(name.clone()))
+                .unwrap();
+        }
+        r
+    };
+
+    for i in 0..5 {
+        let r = add_child(format!("early{i}"), true);
+        store
+            .add_resource_opts(&r, false, true, true)
+            .await
+            .unwrap();
+    }
+
+    let mut query = crate::storelike::Query::new_prop_val(urls::PARENT, parent_subject);
+    query.sort_by = Some(urls::NAME.to_string());
+    query.drive = Some("https://localhost".into());
+    query.limit = Some(100);
+
+    // Builds and watches the index.
+    let first = store.query(&query).await.unwrap();
+    assert_eq!(first.count, 5, "expected the 5 existing children");
+
+    // Now the rows that arrive after the filter is already watched.
+    for i in 0..17 {
+        let r = add_child(format!("later{i}"), i % 2 == 0);
+        store
+            .add_resource_opts(&r, false, true, true)
+            .await
+            .unwrap();
+    }
+
+    let second = store.query(&query).await.unwrap();
+    assert_eq!(
+        second.count, 22,
+        "children added after the query was watched must still be listed; \
+         got {} of 22. Subjects: {:?}",
+        second.count, second.subjects
+    );
+}
+
+/// Same drift check, with DID subjects — the shape real drives actually use.
+/// DID atoms take a different branch in the indexer (they cannot be
+/// prefix-matched to a drive, so they consult every drive's property buckets),
+/// and the drive-scoped query they are read back through is keyed by drive.
+#[tokio::test]
+#[timeout(120000)]
+async fn sorted_query_index_keeps_up_with_later_did_children() {
+    let store = Db::init_temp("query_index_drift_did").await.unwrap();
+
+    let drive =
+        "did:ad:driveDRIFTaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let parent_subject =
+        "did:ad:parentDRIFTaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    let mut parent = crate::Resource::new(parent_subject.into());
+    parent
+        .set_unsafe(urls::NAME.into(), Value::String("Parent".into()))
+        .unwrap();
+    parent
+        .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    store
+        .add_resource_opts(&parent, false, true, true)
+        .await
+        .unwrap();
+
+    let mk = |i: usize, sorted: bool| {
+        let subj = format!("did:ad:row{:0>70}==", format!("{i}"));
+        let mut r = crate::Resource::new(subj);
+        r.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent_subject.into()))
+            .unwrap();
+        if sorted {
+            r.set_unsafe(urls::NAME.into(), Value::String(format!("row{i}")))
+                .unwrap();
+        }
+        r
+    };
+
+    for i in 0..5 {
+        let r = mk(i, true);
+        store
+            .add_resource_opts(&r, false, true, true)
+            .await
+            .unwrap();
+    }
+
+    let mut query = crate::storelike::Query::new_prop_val(urls::PARENT, parent_subject);
+    query.sort_by = Some(urls::NAME.to_string());
+    query.drive = Some(drive.into());
+    query.limit = Some(100);
+
+    let first = store.query(&query).await.unwrap();
+    assert_eq!(first.count, 5, "expected the 5 existing children");
+
+    for i in 5..22 {
+        let r = mk(i, i % 2 == 0);
+        store
+            .add_resource_opts(&r, false, true, true)
+            .await
+            .unwrap();
+    }
+
+    let second = store.query(&query).await.unwrap();
+    assert_eq!(
+        second.count, 22,
+        "DID children added after the query was watched must still be listed; \
+         got {} of 22",
+        second.count
+    );
+}
+
+/// The real-world shape: TWO constraints (parent AND isA) plus a sort, on DID
+/// subjects, drive-scoped. This is what a table view issues — children of the
+/// table, narrowed to the table's classtype so the table's own View resources
+/// stay out of the row list.
+#[tokio::test]
+#[timeout(120000)]
+async fn sorted_query_index_keeps_up_with_two_constraints() {
+    use crate::storelike::Query;
+
+    let store = Db::init_temp("query_index_drift_two").await.unwrap();
+
+    let drive =
+        "did:ad:driveTWOaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let table =
+        "did:ad:tableTWOaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let row_class =
+        "did:ad:classTWOaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    let mut t = crate::Resource::new(table.into());
+    t.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    store
+        .add_resource_opts(&t, false, true, true)
+        .await
+        .unwrap();
+
+    let mk = |i: usize, sorted: bool| {
+        let subj = format!("did:ad:two{:0>70}==", format!("{i}"));
+        let mut r = crate::Resource::new(subj);
+        r.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(table.into()))
+            .unwrap();
+        r.set_unsafe(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![crate::values::SubResource::Subject(row_class.into())]),
+        )
+        .unwrap();
+        if sorted {
+            r.set_unsafe(urls::NAME.into(), Value::String(format!("row{i}")))
+                .unwrap();
+        }
+        r
+    };
+
+    for i in 0..5 {
+        let r = mk(i, true);
+        store
+            .add_resource_opts(&r, false, true, true)
+            .await
+            .unwrap();
+    }
+
+    let mut query = Query::new_prop_val(urls::PARENT, table);
+    query.filters = vec![crate::storelike::PropVal {
+        property: Some(urls::IS_A.to_string()),
+        value: Some(Value::AtomicUrl(row_class.into())),
+        ..Default::default()
+    }];
+    query.sort_by = Some(urls::NAME.to_string());
+    query.drive = Some(drive.into());
+    query.limit = Some(100);
+
+    let first = store.query(&query).await.unwrap();
+    assert_eq!(
+        first.count, 5,
+        "expected the 5 existing rows, got {}",
+        first.count
+    );
+
+    for i in 5..22 {
+        let r = mk(i, i % 2 == 0);
+        store
+            .add_resource_opts(&r, false, true, true)
+            .await
+            .unwrap();
+    }
+
+    let second = store.query(&query).await.unwrap();
+    assert_eq!(
+        second.count, 22,
+        "rows added after the two-constraint query was watched must still be \
+         listed; got {} of 22",
+        second.count
+    );
+}
+
+/// Which encodings of `isA` does a two-constraint query actually find?
+///
+/// Rows created by a local commit carry `isA` as a `ResourceArray`. Rows
+/// rebuilt from a Loro doc (`apply_state_doc`, which every sync import goes
+/// through) recover their `Value` variant by inference — that is what the
+/// sibling `datatypes` map exists to pin down. If an encoding that reads back
+/// as the same subject fails the constraint, the row is silently absent from
+/// the index, and therefore from the table, while being present in the store
+/// and in every unfiltered query.
+#[tokio::test]
+#[timeout(120000)]
+#[ignore = "reproduces an OPEN bug: query_sorted_indexed returns 2 of 3 members \
+            that are written, parseable, local and matching — the read stops \
+            after the second. Run with `--ignored` while working on it."]
+async fn is_a_encodings_all_match_the_class_constraint() {
+    use crate::storelike::Query;
+
+    let store = Db::init_temp("query_index_isa_encodings").await.unwrap();
+
+    let drive =
+        "did:ad:driveENCaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let table =
+        "did:ad:tableENCaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let cls =
+        "did:ad:classENCaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    let mut t = crate::Resource::new(table.into());
+    t.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    store
+        .add_resource_opts(&t, false, true, true)
+        .await
+        .unwrap();
+
+    let encodings: Vec<(&str, Value)> = vec![
+        (
+            "ResourceArray",
+            Value::ResourceArray(vec![crate::values::SubResource::Subject(cls.into())]),
+        ),
+        ("String", Value::String(cls.into())),
+        ("AtomicUrl", Value::AtomicUrl(cls.into())),
+        (
+            "String-holding-json-array",
+            Value::String(format!("[\"{cls}\"]")),
+        ),
+    ];
+
+    for (i, (label, val)) in encodings.iter().enumerate() {
+        let subj = format!("did:ad:enc{:0>70}==", format!("{i}"));
+        let mut r = crate::Resource::new(subj);
+        r.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(table.into()))
+            .unwrap();
+        r.set_unsafe(urls::IS_A.into(), val.clone()).unwrap();
+        r.set_unsafe(urls::NAME.into(), Value::String((*label).into()))
+            .unwrap();
+        store
+            .add_resource_opts(&r, false, true, true)
+            .await
+            .unwrap();
+    }
+
+    let mut query = Query::new_prop_val(urls::PARENT, table);
+    query.filters = vec![crate::storelike::PropVal {
+        property: Some(urls::IS_A.to_string()),
+        value: Some(Value::AtomicUrl(cls.into())),
+        ..Default::default()
+    }];
+    query.sort_by = Some(urls::NAME.to_string());
+    query.drive = Some(drive.into());
+    query.limit = Some(100);
+
+    let res = store.query(&query).await.unwrap();
+    assert_eq!(
+        res.count,
+        encodings.len(),
+        "every isA encoding that names the same class must satisfy the class \
+         constraint; got {} of {}. Found: {:?}",
+        res.count,
+        encodings.len(),
+        res.subjects
+    );
+}
+
+/// Narrows the previous failure: is the row rejected by the MATCHER
+/// (`resource_matches_filter`, which decides membership) or never offered as a
+/// CANDIDATE (`plan_candidate_iterator`, which decides what gets considered)?
+/// The fix differs — one is a comparison bug, the other an index-atom bug.
+#[tokio::test]
+#[timeout(120000)]
+async fn is_a_string_encoding_matcher_vs_candidates() {
+    let cls = "did:ad:classPROBEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    let mut r = crate::Resource::new(
+        "did:ad:probe0000000000000000000000000000000000000000000000000000000000000000==".into(),
+    );
+    r.set_unsafe(urls::IS_A.into(), Value::String(cls.into()))
+        .unwrap();
+
+    let filter = crate::db::query_index::QueryFilter {
+        filters: vec![crate::storelike::PropVal {
+            property: Some(urls::IS_A.to_string()),
+            value: Some(Value::AtomicUrl(cls.into())),
+            ..Default::default()
+        }],
+        sort_by: None,
+        drive:
+            "did:ad:drivePROBEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=="
+                .into(),
+    };
+
+    assert!(
+        crate::db::query_index::resource_matches_filter(&r, &filter),
+        "a String-encoded isA naming the class should satisfy the constraint \
+         (contains_value compares by string) — if this fails, the matcher is at fault"
+    );
+
+    // If the matcher accepts it, the row must also be OFFERED as a candidate,
+    // i.e. its isA must produce an index atom the planner can find it by.
+    let atoms: Vec<_> = crate::Atom::new(
+        r.get_subject().clone(),
+        urls::IS_A.into(),
+        Value::String(cls.into()),
+    )
+    .to_indexable_atoms();
+    assert!(
+        atoms.iter().any(|a| a.ref_value == cls),
+        "a String-encoded isA must yield an index atom keyed by the class \
+         subject, else the planner can never surface the row. Got: {:?}",
+        atoms
+            .iter()
+            .map(|a| a.ref_value.clone())
+            .collect::<Vec<_>>()
+    );
+}
+
+/// A query whose index holds *some* members is trusted, forever.
+///
+/// `query_complex` reconciles an index against reality exactly once, and only
+/// when it comes back EMPTY (`total_count == 0 && !is_watched`). A partial
+/// index is non-zero, so the rebuild never fires and the query keeps returning
+/// a number that is wrong but entirely plausible. An unwatched filter's index
+/// is by definition unmaintained — nothing has been keeping it current — so
+/// however many entries it happens to hold, it is not evidence of anything.
+#[tokio::test]
+#[timeout(120000)]
+async fn partial_index_for_an_unwatched_filter_is_rebuilt() {
+    use crate::storelike::Query;
+
+    let store = Db::init_temp("query_partial_rebuild").await.unwrap();
+    let drive =
+        "did:ad:drivePARTaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let table =
+        "did:ad:tablePARTaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    let mut t = crate::Resource::new(table.into());
+    t.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    store
+        .add_resource_opts(&t, false, true, true)
+        .await
+        .unwrap();
+
+    let mut subjects = vec![];
+    for i in 0..6 {
+        let subj = format!("did:ad:part{:0>69}==", format!("{i}"));
+        let mut r = crate::Resource::new(subj.clone());
+        r.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(table.into()))
+            .unwrap();
+        r.set_unsafe(urls::NAME.into(), Value::String(format!("row{i}")))
+            .unwrap();
+        store
+            .add_resource_opts(&r, false, true, true)
+            .await
+            .unwrap();
+        subjects.push(subj);
+    }
+
+    let mut query = Query::new_prop_val(urls::PARENT, table);
+    query.sort_by = Some(urls::NAME.to_string());
+    query.drive = Some(drive.into());
+    query.limit = Some(100);
+    query.for_agent = crate::agents::ForAgent::Sudo;
+
+    let q_filter = crate::db::query_index::QueryFilter::try_from_query(&query).unwrap();
+
+    // Seed a PARTIAL index for this filter without watching it: two of the six
+    // members, as a build that stopped short would leave behind.
+    let mut transaction = crate::db::trees::Transaction::new();
+    for subj in subjects.iter().take(2) {
+        let resource = store
+            .get_resource_shallow(&crate::Subject::from(subj.clone()))
+            .unwrap();
+        let sort_key = crate::db::query_index::sort_key_for(&resource, urls::NAME);
+        crate::db::query_index::update_indexed_member(
+            &q_filter,
+            subj,
+            &sort_key,
+            false,
+            &mut transaction,
+        )
+        .unwrap();
+    }
+    store.apply_transaction(&mut transaction).unwrap();
+    assert!(
+        !q_filter.is_watched(&store),
+        "precondition: the filter must be unwatched, so its index is unmaintained"
+    );
+
+    let res = store.query(&query).await.unwrap();
+    assert_eq!(
+        res.count, 6,
+        "an unwatched filter's index is unmaintained; a partial one must be \
+         rebuilt rather than believed. Got {} of 6",
+        res.count
+    );
+}

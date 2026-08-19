@@ -2528,13 +2528,39 @@ impl Db {
         let (mut subjects, mut resources, mut total_count) =
             query_sorted_indexed(self, q, &q_filter).await?;
 
-        if total_count == 0 && !q_filter.is_watched(self) {
+        // Rebuild whenever the filter is not watched, whatever the index
+        // currently holds.
+        //
+        // This used to also require `total_count == 0`. But "not watched" means
+        // nothing has been maintaining this index — so however many entries it
+        // happens to hold, they are not evidence that it is complete. A partial
+        // one (a build that stopped short, entries left by a filter that was
+        // once watched) is non-zero, so the rebuild never fired and the query
+        // kept returning a number that was wrong and entirely plausible. Empty
+        // was treated as suspicious and partial as authoritative, which is
+        // backwards: partial is the state that looks fine.
+        if !q_filter.is_watched(self) {
             info!(filter = ?q_filter, "Building query index");
             crate::metrics::query_indexed();
             let atoms = self.plan_candidate_iterator(q, &q_filter);
             q_filter.watch(self)?;
 
             let mut transaction = Transaction::new();
+
+            // Drop whatever was there first, so the rebuild is authoritative
+            // rather than merged into a set of unknown provenance — otherwise
+            // a stale member for a resource that no longer matches survives a
+            // rebuild that was supposed to correct exactly that.
+            let id = query_index::query_id(&q_filter)?;
+            for kv in self.kv.scan_prefix(Tree::QueryMembers, &id) {
+                let (key, _) = kv?;
+                transaction.push(Operation {
+                    tree: Tree::QueryMembers,
+                    method: Method::Delete,
+                    key,
+                    val: None,
+                });
+            }
             // Every candidate is verified against ALL of the filter's
             // constraints on its materialized row (no Loro decode), so the
             // member index only holds true AND-matches — including for
