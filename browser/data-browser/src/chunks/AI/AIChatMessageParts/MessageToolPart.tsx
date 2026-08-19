@@ -226,24 +226,29 @@ const ResourceTitleInner = ({ subject }: { subject: string }) => {
 
 const CreateResourceTitle = ({ jsonAD }: { jsonAD: string }) => {
   let name = 'resource';
+  let count: number | undefined;
 
   try {
     const data = JSON.parse(jsonAD);
 
     if (Array.isArray(data)) {
-      return (
-        <span>
-          Creating <Name>{data.length} resources</Name>
-        </span>
-      );
+      count = data.length;
+    } else {
+      name =
+        data[core.properties.name] ??
+        data[core.properties.shortname] ??
+        'resource';
     }
-
-    name =
-      data[core.properties.name] ??
-      data[core.properties.shortname] ??
-      'resource';
   } catch {
     // Invalid JSON-AD, let the AI handle it.
+  }
+
+  if (count !== undefined) {
+    return (
+      <span>
+        Creating <Name>{count} resources</Name>
+      </span>
+    );
   }
 
   return (

@@ -135,7 +135,10 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   // momentum-scroll tails carried over from the previous view. See
   // `helpers/wheelSession.ts`. Reset on resource change (= canvas-to-canvas
   // navigation) so each canvas starts gated.
-  const canvasMountedAtRef = useRef(performance.now());
+  // Infinity until the mount effect below stamps a real time, so any wheel
+  // session that started before this canvas was visible is gated. `performance.now()`
+  // during render trips `react/purity`.
+  const canvasMountedAtRef = useRef(Number.POSITIVE_INFINITY);
 
   // Custom cursor preview: a circle the size of the next stroke at the
   // current zoom (`penWidth × scale`). Null while not hovering, or while
