@@ -151,7 +151,18 @@ test.describe('file upload + offline survival', () => {
 
     // Now the server should return the bytes.
     const result = await page.evaluate(async (s: string) => {
-      const r = window.store?.resources.get(s)!;
+      const store = window.store;
+
+      if (!store) {
+        throw new Error('store missing');
+      }
+
+      const r = store.resources.get(s);
+
+      if (!r) {
+        throw new Error(`resource missing: ${s}`);
+      }
+
       const downloadUrl = r.get(
         'https://atomicdata.dev/properties/downloadURL',
       );

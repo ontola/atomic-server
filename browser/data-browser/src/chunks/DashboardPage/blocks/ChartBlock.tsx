@@ -44,7 +44,7 @@ export function ChartBlock({ block, config }: BlockProps): JSX.Element {
             granularity: chart.granularity ?? 'exact',
           })
         : undefined,
-    [spec, query, chart?.field, chart?.granularity],
+    [spec, query, chart],
   );
 
   const outcome = useBlockAggregate(query, aggregation);
