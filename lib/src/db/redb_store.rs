@@ -98,7 +98,9 @@ impl BatchBuffer {
 #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
 pub fn compact_file(path: &std::path::Path) -> AtomicResult<(u64, u64, bool)> {
     let size_before = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
-    let mut db = redb::Database::create(path)
+    let mut db = redb::Database::builder()
+        .set_cache_size(DEFAULT_FILE_CACHE_BYTES)
+        .create(path)
         .map_err(|e| format!("Failed to open redb at {}: {e}", path.display()))?;
     let did_compact = db
         .compact()
@@ -108,52 +110,48 @@ pub fn compact_file(path: &std::path::Path) -> AtomicResult<(u64, u64, bool)> {
     Ok((size_before, size_after, did_compact))
 }
 
+/// Default redb page cache for on-disk stores. redb's own default is 1 GiB,
+/// which dominates `Database::create` cost and RAM for the small DBs that
+/// tests / `Db::init_temp` open by the dozen. 64 MiB is enough for a typical
+/// server working set without the open-time tax.
+pub const DEFAULT_FILE_CACHE_BYTES: usize = 64 * 1024 * 1024;
+
+/// Smaller cache for throwaway / template-cloned test DBs (~4 MiB after
+/// bootstrap). Keeps `init_temp` from reserving a gigabyte per test.
+pub const TEMP_FILE_CACHE_BYTES: usize = 16 * 1024 * 1024;
+
+/// In-memory stores don't need a large cache either.
+const MEMORY_CACHE_BYTES: usize = 16 * 1024 * 1024;
+
 impl RedbStore {
-    /// Create a RedbStore backed by a file on disk.
+    /// Create a RedbStore backed by a file on disk (64 MiB page cache).
     #[cfg(not(target_arch = "wasm32"))]
     pub fn new_file(path: &std::path::Path) -> AtomicResult<Self> {
-        // `Database::create` with defaults uses a 1 GiB cache and the
-        // slow full-scan repair path on any unclean shutdown. On a
-        // multi-GB store that's 40+ seconds added to every boot
-        // (see redb issue #1055). The Builder lets us drop the cache
-        // to fit-for-purpose; per-transaction `set_quick_repair(true)`
-        // below persists the allocator state on every commit so the
-        // next open is "almost instant" (redb transactions.rs:1246-1258
-        // describes the mechanism).
-        let t = std::time::Instant::now();
-        let db = Database::create(path)
-            .map_err(|e| format!("Failed to create redb at {}: {e}", path.display()))?;
-        tracing::info!("RedbStore::new_file: Database::create in {:?}", t.elapsed());
+        Self::new_file_with_cache(path, DEFAULT_FILE_CACHE_BYTES)
+    }
 
-        // Create all tables upfront
+    /// Create a RedbStore backed by a file on disk with an explicit page cache.
+    ///
+    /// redb defaults to a 1 GiB cache; we always go through [`Builder`] so
+    /// callers (especially `Db::init_temp`) can opt into something fit for
+    /// purpose. Per-transaction `set_quick_repair(true)` persists allocator
+    /// state so the next open skips the full-scan repair path (see redb
+    /// issue #1055 / transactions.rs:1246-1258).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn new_file_with_cache(path: &std::path::Path, cache_bytes: usize) -> AtomicResult<Self> {
         let t = std::time::Instant::now();
-        {
-            let mut tx = db
-                .begin_write()
-                .map_err(|e| format!("Failed to begin write tx: {e}"))?;
-            // 2-phase commit persists redb's allocator state alongside
-            // each transaction. Without it, an unclean shutdown (SIGKILL,
-            // crash, power loss) forces a full file scan + repair on next
-            // open — measured at 44s on a 3.6 GiB store, all of it spent
-            // in `Database::create` before the actor system even starts.
-            // With 2PC the next open loads the allocator state and skips
-            // the repair entirely. Trade-off: each write pays one extra
-            // fsync; on a server doing a handful of commits/sec that's
-            // imperceptible, and the boot-time win is dramatic.
-            tx.set_quick_repair(true);
-            let _ = tx.open_table(TABLE_RESOURCES);
-            let _ = tx.open_table(TABLE_PROP_VAL_SUB);
-            let _ = tx.open_table(TABLE_VAL_PROP_SUB);
-            let _ = tx.open_table(TABLE_QUERY_MEMBERS);
-            let _ = tx.open_table(TABLE_WATCHED_QUERIES);
-            let _ = tx.open_table(TABLE_PLUGIN_META);
-            let _ = tx.open_table(TABLE_DRIVE_MAPPING);
-            let _ = tx.open_table(TABLE_DID_MAPPING);
-            let _ = tx.open_table(TABLE_LORO_SNAPSHOTS);
-            let _ = tx.open_table(TABLE_BLOBS);
-            tx.commit()
-                .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
-        }
+        let db = Database::builder()
+            .set_cache_size(cache_bytes)
+            .create(path)
+            .map_err(|e| format!("Failed to create redb at {}: {e}", path.display()))?;
+        tracing::info!(
+            cache_bytes,
+            "RedbStore::new_file: Database::create in {:?}",
+            t.elapsed()
+        );
+
+        let t = std::time::Instant::now();
+        Self::create_tables(&db)?;
         tracing::info!("RedbStore::new_file: table-create tx in {:?}", t.elapsed());
 
         Ok(RedbStore {
@@ -166,34 +164,39 @@ impl RedbStore {
     pub fn new_memory() -> AtomicResult<Self> {
         let backend = InMemoryBackend::new();
         let db = Database::builder()
+            .set_cache_size(MEMORY_CACHE_BYTES)
             .create_with_backend(backend)
             .map_err(|e| format!("Failed to create redb: {e}"))?;
 
-        // Create all tables upfront so reads don't fail on missing tables
-        {
-            let mut tx = db
-                .begin_write()
-                .map_err(|e| format!("Failed to begin write tx: {e}"))?;
-            tx.set_quick_repair(true);
-            // Opening a table in a write transaction creates it if it doesn't exist
-            let _ = tx.open_table(TABLE_RESOURCES);
-            let _ = tx.open_table(TABLE_PROP_VAL_SUB);
-            let _ = tx.open_table(TABLE_VAL_PROP_SUB);
-            let _ = tx.open_table(TABLE_QUERY_MEMBERS);
-            let _ = tx.open_table(TABLE_WATCHED_QUERIES);
-            let _ = tx.open_table(TABLE_PLUGIN_META);
-            let _ = tx.open_table(TABLE_DRIVE_MAPPING);
-            let _ = tx.open_table(TABLE_DID_MAPPING);
-            let _ = tx.open_table(TABLE_LORO_SNAPSHOTS);
-            let _ = tx.open_table(TABLE_BLOBS);
-            tx.commit()
-                .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
-        }
+        Self::create_tables(&db)?;
 
         Ok(RedbStore {
             db: Arc::new(db),
             batch_buffer: std::sync::Mutex::new(None),
         })
+    }
+
+    fn create_tables(db: &Database) -> AtomicResult<()> {
+        let mut tx = db
+            .begin_write()
+            .map_err(|e| format!("Failed to begin write tx: {e}"))?;
+        // 2-phase commit persists redb's allocator state alongside each
+        // transaction. Without it, an unclean shutdown forces a full file
+        // scan + repair on next open — measured at 44s on a 3.6 GiB store.
+        tx.set_quick_repair(true);
+        let _ = tx.open_table(TABLE_RESOURCES);
+        let _ = tx.open_table(TABLE_PROP_VAL_SUB);
+        let _ = tx.open_table(TABLE_VAL_PROP_SUB);
+        let _ = tx.open_table(TABLE_QUERY_MEMBERS);
+        let _ = tx.open_table(TABLE_WATCHED_QUERIES);
+        let _ = tx.open_table(TABLE_PLUGIN_META);
+        let _ = tx.open_table(TABLE_DRIVE_MAPPING);
+        let _ = tx.open_table(TABLE_DID_MAPPING);
+        let _ = tx.open_table(TABLE_LORO_SNAPSHOTS);
+        let _ = tx.open_table(TABLE_BLOBS);
+        tx.commit()
+            .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
+        Ok(())
     }
 
     /// Create a RedbStore backed by OPFS for persistent storage in WASM Workers.

@@ -38,10 +38,10 @@ pub type PropVals = HashMap<String, Value>;
 
 impl Clone for Resource {
     fn clone(&self) -> Self {
-        let loro = self.loro.as_ref().map(|doc| {
-            let snapshot = doc.export_snapshot();
-            crate::loro::AtomicLoroDoc::from_snapshot(&snapshot).expect("Failed to clone Loro doc")
-        });
+        // Fork in-memory instead of export_snapshot → from_snapshot. The
+        // serialize/deserialize round-trip dominated commit apply (which clones
+        // the pre-edit resource) and any other Resource::clone hot path.
+        let loro = self.loro.as_ref().map(|doc| doc.fork());
         Resource {
             propvals: self.propvals.clone(),
             subject: self.subject.clone(),
@@ -53,8 +53,7 @@ impl Clone for Resource {
 
 impl Resource {
     fn clone_loro_state(doc: &crate::loro::AtomicLoroDoc) -> crate::loro::AtomicLoroDoc {
-        let snapshot = doc.export_snapshot();
-        crate::loro::AtomicLoroDoc::from_snapshot(&snapshot).expect("Failed to clone Loro doc")
+        doc.fork()
     }
 
     fn adopt_resource_state(&mut self, new: &Resource) -> AtomicResult<()> {
@@ -232,7 +231,8 @@ impl Resource {
 
     pub fn build_state_doc(&self) -> AtomicResult<crate::loro::AtomicLoroDoc> {
         if let Some(doc) = &self.loro {
-            return crate::loro::AtomicLoroDoc::from_snapshot(&doc.export_snapshot());
+            // Independent working copy without a serialize round-trip.
+            return Ok(doc.fork());
         }
 
         // A Commit resource carries a `loroUpdate` property whose bytes are
@@ -443,6 +443,12 @@ impl Resource {
         self.loro
             .as_ref()
             .expect("versioned state not loaded — call ensure_materialized() first")
+    }
+
+    /// Borrow the live Loro doc if it has been materialized. Used by commit
+    /// signing to fork without an export→reimport round-trip.
+    pub(crate) fn loro_doc(&self) -> Option<&crate::loro::AtomicLoroDoc> {
+        self.loro.as_ref()
     }
 
     /// Rebuild propvals + commit from the current Loro doc state.
