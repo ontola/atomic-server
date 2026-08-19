@@ -4,6 +4,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: clicking a button in the navbar no longer draws a blue outline around the whole bar. The bar used `:has(:focus)`, which matched mouse clicks; keyboard focus still shows on the button itself.
+
 ## [v0.41.0-beta.2] - 2026-08-01
 
 ### Atomic Browser
