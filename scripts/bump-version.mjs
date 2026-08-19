@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Bumps the release version across every Rust crate and @tomic/* JS package
- * in lockstep, per CONTRIBUTING.md's "Releases, Versioning and Tagging".
+ * Bumps the release version across every Rust crate, @tomic/* JS package, and
+ * the Flutter `atomic_lib` pubspec in lockstep, per CONTRIBUTING.md's
+ * "Releases, Versioning and Tagging".
  *
  * Usage:
  *   node scripts/bump-version.mjs <old-version> <new-version>
@@ -20,6 +21,8 @@
  *   it skips dependency resolution and so leaves the workspace members' own
  *   versions stale in Cargo.lock. Verified — it silently no-ops.
  * - CHANGELOG.md files — update those by hand.
+ * - `dart/atomic_lib/example/pubspec.yaml` — example app version is independent
+ *   (same idea as create-template scaffolds).
  * - Historical version mentions in prose docs (e.g. docs/src/svelte.md,
  *   CONTRIBUTING.md's own examples) — those describe a specific past
  *   release, not a live pin, and bumping them would misstate history.
@@ -70,6 +73,9 @@ const TEMPLATE_PACKAGE_FILES = [
 // Plain "version" field, JSON, not an npm package.
 const VERSION_ONLY_JSON_FILES = ['desktop/tauri.conf.json'];
 
+// Flutter / Dart pub packages published from this repo.
+const DART_PUBSPEC_FILES = ['dart/atomic_lib/pubspec.yaml'];
+
 let changedFiles = 0;
 
 /**
@@ -81,6 +87,7 @@ const DECLARED_VERSION_SITES = [
   ...RUST_FILES.map(f => ({ file: f, re: /^version = "([^"]+)"/m })),
   ...JS_PACKAGE_FILES.map(f => ({ file: f, re: /"version":\s*"([^"]+)"/ })),
   ...VERSION_ONLY_JSON_FILES.map(f => ({ file: f, re: /"version":\s*"([^"]+)"/ })),
+  ...DART_PUBSPEC_FILES.map(f => ({ file: f, re: /^version:\s*(\S+)/m })),
 ];
 
 function runCheck(expected) {
@@ -170,6 +177,16 @@ for (const relPath of VERSION_ONLY_JSON_FILES) {
   );
 }
 
+console.log(`\nDart / Flutter pubspecs: ${oldVersion} -> ${newVersion}`);
+for (const relPath of DART_PUBSPEC_FILES) {
+  replaceInFile(relPath, (content) =>
+    content.replace(
+      new RegExp(`^version:\\s*${escapeRegExp(oldVersion)}\\s*$`, 'm'),
+      `version: ${newVersion}`,
+    ),
+  );
+}
+
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -178,4 +195,4 @@ console.log(`\n${changedFiles} file(s) updated.`);
 console.log('\nNext steps:');
 console.log('  cargo metadata --format-version 1 --no-deps');
 console.log('  cd browser && pnpm install --lockfile-only');
-console.log('  Update CHANGELOG.md and browser/CHANGELOG.md by hand.');
+console.log('  Update CHANGELOG.md, browser/CHANGELOG.md, and dart/atomic_lib/CHANGELOG.md by hand.');

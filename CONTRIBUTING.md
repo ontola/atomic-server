@@ -215,9 +215,9 @@ So please first send an e-mail to <joep@ontola.io> describing the issue, and the
 1. Commit changes
 1. Make sure all tests run properly
 1. Pick one version for the release, including pre-release suffixes when needed (for example `0.41.0-beta.0`).
-1. Bump every version site in lockstep — 15 of them across the Rust crates, the
-   `@tomic/*` packages, the starter templates' dependency constraints and
-   `desktop/tauri.conf.json`:
+1. Bump every version site in lockstep — Rust crates, `@tomic/*` packages, the
+   starter templates' dependency constraints, `desktop/tauri.conf.json`, and
+   `dart/atomic_lib/pubspec.yaml`:
 
    ```sh
    node scripts/bump-version.mjs <old-version> <new-version>
@@ -236,12 +236,15 @@ So please first send an e-mail to <joep@ontola.io> describing the issue, and the
    ```sh
    node scripts/bump-version.mjs --check <new-version>
    ```
-1. Update the `CHANGELOG.md` files (browser and root). Only ever add a section
-   for a version you are actually about to tag — a section for a release that
-   never shipped is worse than no section, see the `[v0.40.2]` entry for how
-   confusing that gets.
+1. Update the `CHANGELOG.md` files (browser, root, and `dart/atomic_lib` when
+   the Flutter SDK changed). Only ever add a section for a version you are
+   actually about to tag — a section for a release that never shipped is worse
+   than no section, see the `[v0.40.2]` entry for how confusing that gets.
 1. Publish to cargo: `cargo publish`. First `lib`, then `cli` and `server`.
 1. Publish to `npm` (see `browser/CONTRIBUTING.md`)
+1. Publish to pub.dev when the Flutter SDK should ship:
+   `cd dart/atomic_lib && dart pub publish` (precompiled binaries must already
+   be on the matching `precompiled_*` GitHub Release).
 
 The following should be triggered automatically:
 
@@ -251,7 +254,7 @@ The following should be triggered automatically:
 Note:
 
 - We use [semver](https://semver.org/), and are still quite far from 1.0.0.
-- The version for `atomic-lib` is the most important, and dictates the versions of `cli` and `server`. When `lib` changes minor version, `cli` and `server` should follow.
+- The version for `atomic-lib` is the most important, and dictates the versions of `cli`, `server`, `@tomic/*`, and the Flutter `atomic_lib` package. When `lib` changes minor version, those should follow.
 
 ### CI/CD pipeline
 

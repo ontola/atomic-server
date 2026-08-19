@@ -1,4 +1,4 @@
-import 'package:atomiccanvas_flutter/screens/pair_screen.dart';
+import 'package:atomic_lib/atomic_lib.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

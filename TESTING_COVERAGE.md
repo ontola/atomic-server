@@ -37,7 +37,7 @@ A flow is only genuinely safe when all three are covered.
 | Browser unit (vitest) | `cd browser && pnpm run -r test` | `jsTest` |
 | Browser e2e (playwright) | `cd browser/e2e && pnpm run test-e2e` | `endToEnd` |
 | Flutter Dart | `cd flutter && flutter test` | `flutterTest` |
-| Flutter Rust bridge | `cargo test --manifest-path flutter/rust/Cargo.toml` | `flutterTest` |
+| Flutter Rust bridge | `cargo test --manifest-path dart/atomic_lib/rust/Cargo.toml` | `flutterTest` |
 
 CI runs `cargo nextest run --workspace --exclude atomic-server-tauri
 --no-default-features --features light`. Feature unification pulls in
@@ -45,7 +45,7 @@ CI runs `cargo nextest run --workspace --exclude atomic-server-tauri
 
 Two things worth knowing about the runners:
 
-- **`flutter/rust` is excluded from the workspace** (root `Cargo.toml`), so
+- **`dart/atomic_lib/rust` is excluded from the workspace** (root `Cargo.toml`), so
   `--workspace` never compiles it. It is covered only by the explicit
   `--manifest-path` step in `flutterTest`.
 - **`.config/nextest.toml` sets `retries = 2`.** A flaky test passes CI
@@ -90,11 +90,11 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Browser records a peer and calls `/iroh-sync` | `data-browser/src/helpers/pairing.test.ts` | stubbed fetch |
 | Known-peer store: labels, dedupe, corrupt data, quota | `data-browser/src/helpers/knownPeers.test.ts` | |
 | `forgetServerPeer` signs the exact `?node=` URL, and fails soft | `data-browser/src/helpers/managedServer.test.ts` | mocked `signRequest` |
-| Canvas editing session merges a peer's stroke | `flutter/rust/src/api/simple/tests.rs` | |
-| Whole-list rewrite (erase/undo) keeps a peer's stroke | `flutter/rust/src/api/simple/tests.rs` | |
-| Bridge `start_peer` → `add_known_peer` → `peer_sync` pushes a drawing to a real remote process | `flutter/rust/src/api/simple/peer_tests.rs` | receiving side writes the receipt |
-| Bridge known-peer bookkeeping (add / rename / dedupe / forget) | `flutter/rust/src/api/simple/peer_tests.rs` | |
-| Bridge `peer_sync` to an unreachable node errors rather than hanging | `flutter/rust/src/api/simple/peer_tests.rs` | |
+| Canvas editing session merges a peer's stroke | `dart/atomic_lib/rust/src/api/simple/tests.rs` | |
+| Whole-list rewrite (erase/undo) keeps a peer's stroke | `dart/atomic_lib/rust/src/api/simple/tests.rs` | |
+| Bridge `start_peer` → `add_known_peer` → `peer_sync` pushes a drawing to a real remote process | `dart/atomic_lib/rust/src/api/simple/peer_tests.rs` | receiving side writes the receipt |
+| Bridge known-peer bookkeeping (add / rename / dedupe / forget) | `dart/atomic_lib/rust/src/api/simple/peer_tests.rs` | |
+| Bridge `peer_sync` to an unreachable node errors rather than hanging | `dart/atomic_lib/rust/src/api/simple/peer_tests.rs` | |
 | **`POST /iroh-sync` request shape, both sides** | `testdata/pairing-request.json` + `pairing.test.ts` + `iroh_pairing.rs` | shared fixture binds them |
 | Dart pairing-code parser, peer-sync result formatting | `flutter/test/atomic/` | pure parsers |
 

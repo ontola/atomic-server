@@ -1,23 +1,16 @@
 import 'dart:async';
+import 'package:atomic_lib/atomic_lib.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
-import 'src/rust/frb_generated.dart';
 import 'canvas/infinite_canvas.dart';
 import 'gallery/canvas_store.dart';
 import 'gallery/gallery_screen.dart';
 import 'models/canvas_entry.dart';
-import 'screens/login_screen.dart';
-import 'screens/pair_screen.dart';
 import 'theme.dart';
-import 'atomic/atomic_client.dart';
-import 'atomic/session.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await RustLib.init();
-  final dir = await getApplicationDocumentsDirectory();
-  await AtomicClient.openDb(dir.path);
+  await Atomic.init();
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   runApp(const AtomicCanvasApp());
 }
@@ -287,7 +280,12 @@ class _AtomicCanvasAppState extends State<AtomicCanvasApp>
         extensions: const [AppColors.dark],
       ),
       home: !_loggedIn
-          ? LoginScreen(onLoggedIn: _onLoggedIn)
+          ? LoginScreen(
+              appName: 'Atomic Canvas',
+              appIcon: Icons.brush,
+              continueLabel: 'Continue to Canvas',
+              onLoggedIn: _onLoggedIn,
+            )
           : !_store.isLoaded
               ? Scaffold(
                   backgroundColor:

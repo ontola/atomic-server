@@ -19,7 +19,9 @@ a like *count* is fine; centralizing the *like* is not.
 
 ### 1. Generic Flutter/Dart SDK (extract from Atomic Canvas)
 
-`flutter/rust/src/api/simple.rs` is canvas-shaped: `push_stroke`,
+**Started:** package lives at `dart/atomic_lib/` (see `atomic-flutter-sdk.md`). Remaining: generic query/fetch/blob bridge APIs.
+
+`dart/atomic_lib/rust/src/api/simple.rs` is canvas-shaped: `push_stroke`,
 `list_canvases`, hardcoded internal queries. Missing for any generic app:
 
 - **Query from Dart**: property/value + filters, `sort_by`, pagination —
@@ -31,8 +33,8 @@ a like *count* is fine; centralizing the *like* is not.
   stringly-typed app code.
 - **Search** passthrough (hub `/search`).
 
-Deliverable: an `atomic_flutter` package (bridge + Dart layer from
-`flutter/lib/atomic/`) with Canvas as its first consumer. Aligns with
+Deliverable: an `atomic_lib` package (bridge + Dart layer from
+`dart/atomic_lib/`) with Canvas as its first consumer. Aligns with
 [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) and
 [`SDK-API-design.md`](./SDK-API-design.md).
 

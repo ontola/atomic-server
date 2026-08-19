@@ -1,0 +1,111 @@
+# Precompile signed Rust binaries for package:atomic_lib (Cargokit path A).
+# Uploads to GitHub Releases tagged precompiled_<crate_hash>.
+#
+# Secret: CARGOKIT_PRIVATE_KEY — hex ed25519 key from
+#   cd dart/atomic_lib/cargokit/build_tool && dart run build_tool gen-key
+# Public key lives in dart/atomic_lib/rust/cargokit.yaml.
+
+name: atomic_lib
+
+on:
+  push:
+    branches: [develop, master, main]
+    # Same release tags as the rest of the monorepo; atomic_lib-v* kept for
+    # Flutter-only republishes if needed.
+    tags: ['v*', 'atomic_lib-v*']
+    paths:
+      - 'dart/atomic_lib/**'
+      - 'lib/**'
+      - '.github/workflows/atomic_lib_precompile.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  dart_test:
+    name: Dart analyze & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.8'
+      - name: Pub get
+        working-directory: dart/atomic_lib
+        run: flutter pub get
+      - name: Analyze
+        working-directory: dart/atomic_lib
+        run: flutter analyze lib test
+      - name: Test
+        working-directory: dart/atomic_lib
+        run: flutter test
+
+  rust_bridge_test:
+    name: Rust bridge tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test FFI crate
+        run: cargo test --manifest-path dart/atomic_lib/rust/Cargo.toml --lib
+
+  precompile:
+    name: Precompile (${{ matrix.os }})
+    needs: [dart_test, rust_bridge_test]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.8'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install GTK (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev
+
+      - name: Pub get (build_tool)
+        working-directory: dart/atomic_lib/cargokit/build_tool
+        run: flutter pub get
+
+      - name: Check signing key
+        shell: bash
+        env:
+          PRIVATE_KEY: ${{ secrets.CARGOKIT_PRIVATE_KEY }}
+        run: |
+          if [ -z "$PRIVATE_KEY" ]; then
+            echo "::error::Set repository secret CARGOKIT_PRIVATE_KEY (see planning/atomic-flutter-sdk.md)"
+            exit 1
+          fi
+
+      - name: Precompile (macOS / Windows hosts)
+        if: runner.os == 'macOS' || runner.os == 'Windows'
+        working-directory: dart/atomic_lib/cargokit/build_tool
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRIVATE_KEY: ${{ secrets.CARGOKIT_PRIVATE_KEY }}
+        run: dart run build_tool precompile-binaries -v --manifest-dir=../../rust --repository=ontola/atomic-server
+
+      - name: Precompile (Linux + Android)
+        if: runner.os == 'Linux'
+        working-directory: dart/atomic_lib/cargokit/build_tool
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRIVATE_KEY: ${{ secrets.CARGOKIT_PRIVATE_KEY }}
+        run: >
+          dart run build_tool precompile-binaries -v
+          --manifest-dir=../../rust
+          --repository=ontola/atomic-server
+          --android-sdk-location=$ANDROID_HOME
+          --android-ndk-version=27.0.12077973
+          --android-min-sdk-version=23

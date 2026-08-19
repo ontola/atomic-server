@@ -1,0 +1,9 @@
+# Cargokit precompiled binaries — see
+# https://github.com/irondash/cargokit/blob/main/docs/precompiled_binaries.md
+#
+# CI uploads signed artifacts to GitHub releases tagged precompiled_<crate_hash>.
+# The matching private key lives in the repo secret CARGOKIT_PRIVATE_KEY.
+
+precompiled_binaries:
+  url_prefix: https://github.com/ontola/atomic-server/releases/download/precompiled_
+  public_key: 2abf41764d2c7f6ea92d028da52b926a103f6a43512bb17befa496d23d335232
