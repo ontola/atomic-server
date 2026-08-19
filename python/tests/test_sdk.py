@@ -183,7 +183,8 @@ def test_get_fetches_http_schema_resource():
     if resource is None:
         pytest.skip("https://atomicdata.dev not reachable")
     assert resource.subject.startswith("https://")
-    assert store.has(subject)
+    # Cached under the resource's own subject (may differ from the request URL).
+    assert store.has(resource.subject)
 
 
 def test_save_remote_posts_over_http(store):

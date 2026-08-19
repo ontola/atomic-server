@@ -383,7 +383,7 @@ mod tests {
         assert!(!store.has(subject.clone()));
         if let Ok(Some(resource)) = store.get(subject.clone()) {
             assert!(resource.subject().starts_with("https://"));
-            assert!(store.has(subject));
+            assert!(store.has(resource.subject()));
         }
     }
 }

@@ -231,7 +231,7 @@ class StoreTest {
             "https://atomicdata.dev not reachable",
         )
         assertTrue(resource!!.subject().startsWith("https://"))
-        assertTrue(store.has(subject))
+        assertTrue(store.has(resource.subject()))
         resource.close()
         store.close()
     }
