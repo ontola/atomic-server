@@ -9,8 +9,8 @@ Libraries and clients (all MIT licenced) that work great with [atomic-server](at
 - Svelte library: [@tomic/svelte](svelte.md)
 - Client CLI (rust): [atomic-cli](rust-cli.md) for fetching & editing data
 - Rust library: [atomic-lib](rust-lib.md) powers `atomic-server` and `atomic-cli`, and can be used in other Rust projects ([docs.rs](https://docs.rs/atomic_lib/latest/atomic_lib/))
-- Python SDK: [atomic-data](python.md) wraps `atomic_lib` via PyO3 (local redb store, no server required)
-- Kotlin SDK: [dev.atomicdata](kotlin.md) wraps `atomic_lib` via UniFFI (local redb store, Iroh P2P)
+- Python SDK: [atomic-data](python.md) wraps `atomic_lib` via PyO3 (local redb store, Iroh P2P, HTTP schema/search/`save_remote`)
+- Kotlin SDK: [dev.atomicdata](kotlin.md) wraps `atomic_lib` via UniFFI (local redb store, Iroh P2P, HTTP schema/search/`saveRemote`)
 - [Raycast Extension](https://www.raycast.com/atomicdata-dev/atomic-data-browser): full-text search
 
 ## Want to add to this list? Some ideas for tooling

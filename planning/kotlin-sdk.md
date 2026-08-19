@@ -10,7 +10,8 @@ Android AAR / `cargo-ndk` and the Binder host are **not** built.
 ## Decision
 
 Use **UniFFI**, not PyO3-style hand bindings, not `flutter_rust_bridge`, not
-an HTTP client.
+an HTTP-only client. HTTP GET / search / `saveRemote()` are part of the same
+`atomic_lib` store (schema fetch for unknown Class / Property URLs).
 
 Kotlin is the first language where UniFFI is the obvious tool:
 
@@ -34,11 +35,11 @@ non-Python / non-Flutter binding should call:
 ```text
 atomic-ffi
 
-  open / in_memory
+  open / in_memory (optional server origin)
   setup / load_agent / create_agent
   create_drive / list_drives
-  create / get / query / delete / flush
-  Resource: get/set/save/destroy_resource / to_json
+  create / get / search / query / delete / flush
+  Resource: get/set/save/save_remote/destroy_resource / to_json
   start_peer / sync_with / announce / wait_for
 ```
 

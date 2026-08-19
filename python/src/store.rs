@@ -102,19 +102,42 @@ impl Store {
     /// Creates the directory if needed. Data lives in `path/atomic.redb`.
     /// Call [`Store.flush`] (or use the store as a context manager) so recent
     /// writes survive a crash — redb commits are not fsynced on every write.
+    ///
+    /// `server` is the AtomicServer origin (`https://atomicdata.dev`) used for
+    /// HTTP search and `save_remote()`. Schema `get()` of an `https://`
+    /// subject still fetches even when this is unset.
     #[staticmethod]
-    fn open(path: &str) -> PyResult<Self> {
+    #[pyo3(signature = (path, server=None))]
+    fn open(path: &str, server: Option<&str>) -> PyResult<Self> {
         let base = std::path::Path::new(path);
         let uploads = base.join("uploads");
-        let db = block_on(Db::init_redb_file(base, None, &uploads)).map_err(py_err)?;
+        let db = block_on(Db::init_redb_file(
+            base,
+            server.map(|s| s.to_string()),
+            &uploads,
+        ))
+        .map_err(py_err)?;
         Ok(Store { db })
     }
 
     /// In-memory store. Lost when the process exits. Useful in tests.
     #[staticmethod]
-    fn in_memory() -> PyResult<Self> {
-        let db = block_on(Db::init_redb(None)).map_err(py_err)?;
+    #[pyo3(signature = (server=None))]
+    fn in_memory(server: Option<&str>) -> PyResult<Self> {
+        let db = block_on(Db::init_redb(server.map(|s| s.to_string()))).map_err(py_err)?;
         Ok(Store { db })
+    }
+
+    /// AtomicServer origin for HTTP search and `save_remote()`, or `None`.
+    #[getter]
+    fn server(&self) -> Option<String> {
+        self.db.get_base_domain()
+    }
+
+    /// Set the AtomicServer origin (`https://example.com`).
+    #[setter]
+    fn set_server(&mut self, url: &str) {
+        self.db = self.db.clone_with_url(url.to_string());
     }
 
     /// Create an agent and a personal drive. Pure local — no network.
@@ -224,7 +247,13 @@ impl Store {
             .ok_or_else(|| py_err(format!("created {subject} but could not read it back")))
     }
 
-    /// Fetch a resource by subject URL / DID. `None` if it is not stored.
+    /// Fetch a resource by subject URL / DID.
+    ///
+    /// Local first. If the subject is an `http(s)://` URL that is not in
+    /// this store, this GETs JSON-AD over HTTP, caches it, and returns it.
+    /// That is how unknown Class / Property schema items are loaded.
+    /// `None` if it is not stored and the fetch fails or does not apply
+    /// (local DIDs with no HTTP URL).
     fn get(&self, subject: &str) -> PyResult<Option<Resource>> {
         let subject = self.subject(subject);
         match block_on(self.db.get_resource(&subject)) {
@@ -289,6 +318,27 @@ impl Store {
         let result = block_on(self.db.query(&q)).map_err(py_err)?;
         Ok(result
             .resources
+            .into_iter()
+            .map(|r| self.wrap_resource(r))
+            .collect())
+    }
+
+    /// Full-text search on the configured AtomicServer `/search` endpoint.
+    ///
+    /// Requires `server` (constructor or `store.server = ...`).
+    #[pyo3(signature = (query, limit=None))]
+    fn search(&self, query: &str, limit: Option<u32>) -> PyResult<Vec<Resource>> {
+        if self.db.get_base_domain().is_none() {
+            return Err(PyValueError::new_err(
+                "search() needs a server URL (Store.open(..., server=...) or store.server = ...)",
+            ));
+        }
+        let opts = atomic_lib::client::search::SearchOpts {
+            limit,
+            ..Default::default()
+        };
+        let resources = block_on(self.db.search(query, opts)).map_err(py_err)?;
+        Ok(resources
             .into_iter()
             .map(|r| self.wrap_resource(r))
             .collect())

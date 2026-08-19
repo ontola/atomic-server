@@ -187,4 +187,52 @@ class StoreTest {
         assertEquals("edited after reopen", got.get("description"))
         store.close()
     }
+
+    @Test
+    fun bundledSchemaIsLocal() {
+        val store = Store.inMemory()
+        assertTrue(store.has(Urls.NAME))
+        val prop = store.get(Urls.NAME)
+        assertNotNull(prop)
+        assertTrue(prop.get("shortname") != null || prop.get("name") != null)
+        prop.close()
+        store.close()
+    }
+
+    @Test
+    fun searchRequiresServer() {
+        val store = Store.inMemory()
+        val err = assertFailsWith<AtomicSdkException> { store.search("folder", null) }
+        assertContains(err.message ?: "", "server")
+        store.close()
+    }
+
+    @Test
+    fun serverGetterSetter() {
+        val store = Store.inMemory()
+        assertNull(store.server())
+        store.setServer("https://atomicdata.dev")
+        assertEquals("https://atomicdata.dev", store.server())
+        store.close()
+
+        val withServer = Store.inMemory("https://example.com")
+        assertEquals("https://example.com", withServer.server())
+        withServer.close()
+    }
+
+    @Test
+    fun getFetchesHttpSchemaResource() {
+        val store = Store.inMemory()
+        val subject = "https://atomicdata.dev"
+        assertFalse(store.has(subject))
+        val resource = store.get(subject)
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+            resource != null,
+            "https://atomicdata.dev not reachable",
+        )
+        assertTrue(resource!!.subject().startsWith("https://"))
+        assertTrue(store.has(subject))
+        resource.close()
+        store.close()
+    }
 }

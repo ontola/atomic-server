@@ -39,10 +39,12 @@ pub(crate) fn block_on<F: std::future::Future>(fut: F) -> F::Output {
     runtime().block_on(fut)
 }
 
-/// Local-first Atomic Data SDK.
+/// Atomic Data SDK.
 ///
 /// Opens a redb-backed store (or an in-memory one), creates an agent + drive,
-/// and reads / writes resources as signed Loro commits. No server required.
+/// and reads / writes resources as signed Loro commits. Local by default.
+/// HTTP GET of `https://` subjects loads schema and other external resources;
+/// `server=` enables search and `save_remote()`.
 #[pymodule]
 fn atomic_data(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Store>()?;

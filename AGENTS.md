@@ -75,8 +75,8 @@ Atomic Server is a graph database with real-time sync, built on **Loro CRDT** fo
 - **`@tomic/react`** (`browser/react/`) — React hooks.
 - **`data-browser`** (`browser/data-browser/`) — The web app (React + TipTap + Loro), feels similar to notion. See the related AGENTS.md
 - **`flutter/`** — Cross-platform canvas app (Android/iOS/Web). Uses `flutter_rust_bridge` to call `atomic_lib`. See `flutter/README.md` and `flutter/AGENTS.md`.
-- **`python/`** — Python SDK (`atomic_data`). PyO3 bindings over `atomic_lib` (local redb). Excluded from the Cargo workspace; build with `maturin`. See `python/README.md` and `planning/python-sdk.md`.
-- **`ffi/`** — UniFFI crate (`atomic-ffi`) and Kotlin SDK (`dev.atomicdata`). Same local redb + Iroh surface as Python. Excluded from the Cargo workspace. See `ffi/README.md` and `planning/kotlin-sdk.md`.
+- **`python/`** — Python SDK (`atomic_data`). PyO3 bindings over `atomic_lib` (local redb, Iroh, HTTP schema/search/`save_remote`). Excluded from the Cargo workspace; build with `maturin`. See `python/README.md` and `planning/python-sdk.md`.
+- **`ffi/`** — UniFFI crate (`atomic-ffi`) and Kotlin SDK (`dev.atomicdata`). Same local redb + Iroh + HTTP surface as Python. Excluded from the Cargo workspace. See `ffi/README.md` and `planning/kotlin-sdk.md`.
 
 ### Data model
 

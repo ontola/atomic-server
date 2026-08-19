@@ -2,10 +2,12 @@
 
 Local-first [Atomic Data](https://atomicdata.dev) SDK for Python.
 
-This is **not** a thin HTTP client. It wraps [`atomic_lib`](../lib) — the same
+This is **not** an HTTP-only client. It wraps [`atomic_lib`](../lib) — the same
 Rust crate that powers AtomicServer, the browser WASM store, and the Flutter
 app — through [PyO3](https://pyo3.rs). Reads and writes go to a local [redb]
-database. Edits are signed Loro CRDT commits. A server is optional.
+database. Edits are signed Loro CRDT commits. A server is optional for local
+CRUD and Iroh sync; HTTP is still there for schema fetch, search, and
+`save_remote()`.
 
 [redb]: https://github.com/cberner/redb
 
@@ -24,8 +26,13 @@ Reimplementing commits, Ed25519, and Loro in Python would drift. UniFFI is a
 better fit when one IDL must generate Swift + Kotlin + Python; here the Python
 API can be idiomatic on its own, the way the Flutter bridge is.
 
-Reads and writes are local. Sync is Iroh: `start_peer()`, hand the node URI
-to another device, `sync_with()`. After that, `.save()` pushes live.
+Reads and writes are local by default. Sync is Iroh: `start_peer()`, hand the
+node URI to another device, `sync_with()`. After that, `.save()` pushes live.
+
+HTTP is part of the same store: `get("https://…")` GETs JSON-AD (that is how
+unknown Class / Property schema items are loaded). Pass `server=` for
+AtomicServer `/search` and `Resource.save_remote()` (POST `/commit`). The
+core ontology is bundled, so Folder / PlainText / `name` work offline.
 
 ## Install (from this repo)
 
@@ -96,6 +103,15 @@ page = store.get(subject)
 
 `Store.in_memory()` is the same API without a directory — useful in tests.
 
+Talk to a running AtomicServer:
+
+```python
+store = Store.open("./my-atomic-data", server="https://atomicdata.dev")
+page = store.get("https://atomicdata.dev")          # HTTP GET + cache
+hits = store.search("folder", limit=10)             # GET /search
+note.save_remote()                                  # POST /commit
+```
+
 A `Resource` keeps a handle to the store. Drop every `Store` and `Resource`
 before opening the same directory again — redb takes an exclusive file lock.
 
@@ -104,13 +120,15 @@ before opening the same directory again — redb takes an exclusive file lock.
 
 ## API
 
-- **Store** — `open(path)`, `in_memory()`, `setup(name)`, `load_agent(secret)`,
-  `create(class_url, name, ...)`, `get(subject)`, `query(...)`, `delete(subject)`,
-  `flush()`, context manager
+- **Store** — `open(path, server=None)`, `in_memory(server=None)`, `setup(name)`,
+  `load_agent(secret)`, `create(class_url, name, ...)`, `get(subject)` (HTTP
+  GET for unknown `https://` subjects), `search(query)`, `query(...)`,
+  `delete(subject)`, `flush()`, context manager
 - **Iroh** — `start_peer()`, `peer_id`, `announce()`, `sync_with(node_id)`,
   `add_peer()`, `peers()`, `live_peers()`, `wait_for(subject)`
-- **Resource** — dict-like access, `.save()` (live-pushes if peers are up),
-  `.destroy()`, `.to_dict()`, `.to_json()`
+- **Resource** — dict-like access, `.save()` (local + live-push if peers are
+  up), `.save_remote()` (POST `/commit`), `.destroy()`, `.to_dict()`,
+  `.to_json()`
 - **atomic_data.urls** — well-known class and property URLs
 
 Property keys accept full URLs or shortnames (`name`, `description`, `parent`,

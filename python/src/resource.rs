@@ -110,6 +110,14 @@ impl Resource {
         Ok(())
     }
 
+    /// Sign the pending edits and POST the commit to an AtomicServer `/commit`.
+    ///
+    /// For `did:ad:` resources the store needs a `server` origin. HTTP(S)
+    /// subjects post to that subject's own host.
+    fn save_remote(&mut self) -> PyResult<String> {
+        block_on(self.inner.save_remote(&self.db)).map_err(py_err)
+    }
+
     /// Sign a destroy commit and remove the resource from the store.
     pub fn destroy(&mut self) -> PyResult<()> {
         block_on(self.inner.destroy(&self.db)).map_err(py_err)?;

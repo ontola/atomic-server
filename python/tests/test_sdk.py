@@ -149,3 +149,45 @@ def test_independent_in_memory_stores():
     note = a.create(urls.PLAIN_TEXT, name="only-in-a")
     assert b.get(note.subject) is None
     assert a.get(setup_a.drive_subject) is not None
+
+
+def test_bundled_schema_is_local():
+    store = Store.in_memory()
+    assert store.has(urls.NAME)
+    prop = store.get(urls.NAME)
+    assert prop is not None
+    assert prop.get("shortname") or prop.get("name")
+
+
+def test_search_requires_server():
+    store = Store.in_memory()
+    with pytest.raises(ValueError, match="server"):
+        store.search("folder")
+
+
+def test_server_getter_setter():
+    store = Store.in_memory()
+    assert store.server is None
+    store.server = "https://atomicdata.dev"
+    assert store.server == "https://atomicdata.dev"
+    with_server = Store.in_memory(server="https://example.com")
+    assert with_server.server == "https://example.com"
+
+
+def test_get_fetches_http_schema_resource():
+    """Unknown https:// subjects are loaded with HTTP GET (schema fetch)."""
+    store = Store.in_memory()
+    subject = "https://atomicdata.dev"
+    assert not store.has(subject)
+    resource = store.get(subject)
+    if resource is None:
+        pytest.skip("https://atomicdata.dev not reachable")
+    assert resource.subject.startswith("https://")
+    assert store.has(subject)
+
+
+def test_save_remote_posts_over_http(store):
+    store.server = "http://127.0.0.1:1"
+    note = store.create(urls.FOLDER, name="remote")
+    with pytest.raises(RuntimeError):
+        note.save_remote()

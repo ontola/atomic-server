@@ -7,7 +7,8 @@ wraps [`atomic_lib`](rust-lib.md) through
 [UniFFI](https://mozilla.github.io/uniffi-rs/) — the same Rust store the
 browser (WASM), Flutter app, and [Python SDK](python.md) use. Reads and
 writes go to a local [redb](https://github.com/cberner/redb) file. Edits are
-signed Loro commits. A server is optional.
+signed Loro commits. A server is optional for local CRUD and Iroh; HTTP GET /
+search / `saveRemote()` are still available.
 
 Source: [`ffi/`](https://github.com/atomicdata-dev/atomic-server/tree/develop/ffi)
 (crate `atomic-ffi`, Kotlin package `dev.atomicdata`).
@@ -69,6 +70,23 @@ store.loadAgent(secret)
 
 `Resource.destroyResource()` deletes the resource. It is not named
 `destroy()` because UniFFI already uses that for FFI handle teardown.
+
+## HTTP (schema, search, remote save)
+
+The core ontology is bundled, so validation works offline. Unknown Class /
+Property URLs are loaded with `store.get("https://…")` (HTTP GET + cache).
+
+```kotlin
+val store = Store.open("./my-atomic-data", "https://atomicdata.dev")
+// or later: store.setServer("https://atomicdata.dev")
+
+val schema = store.get("https://atomicdata.dev/classes/Bookmark")
+val hits = store.search("notes", 10u)
+note.saveRemote()   // POST /commit; did:ad: needs store.server()
+```
+
+`has(subject)` is local-only. `search()` errors if no server is set. `save()`
+stays local; `saveRemote()` is the HTTP POST.
 
 ## P2P sync (Iroh)
 

@@ -214,11 +214,18 @@ One 13-line smoke test, never run in CI — the pipeline has no emulator.
 
 ### 7b. Python SDK (`python/`)
 
-Glue: `uv run pytest` covers in-memory CRUD, file-backed reopen, and a two-process Iroh sync (`tests/test_iroh.py`). GitHub Actions `Python SDK` runs that on Linux and Windows. Not in Dagger. No WS session or blobs.
+Glue: `uv run pytest` covers in-memory CRUD, file-backed reopen, HTTP schema
+`get()` / `search()`-requires-server / `save_remote()` error path, and a
+two-process Iroh sync (`tests/test_iroh.py`). GitHub Actions `Python SDK`
+runs that on Linux and Windows. Not in Dagger. No WS session or blobs.
 
 ### 7c. Kotlin / UniFFI SDK (`ffi/`)
 
-Glue: `cargo test` in `ffi/` covers the same local CRUD + Iroh-guard cases as Python, in-process. `ffi/kotlin` JUnit covers the generated bindings plus a two-process Iroh sync (`IrohTest.twoProcessIrohSync`). Not in Dagger CI. No Android AAR, WS session, or blobs. `startPeer` is process-global — only one JVM test may start Iroh.
+Glue: `cargo test` in `ffi/` covers the same local CRUD + Iroh-guard + HTTP
+schema/`search` cases as Python, in-process. `ffi/kotlin` JUnit covers the
+generated bindings plus a two-process Iroh sync (`IrohTest.twoProcessIrohSync`).
+Not in Dagger CI. No Android AAR, WS session, or blobs. `startPeer` is
+process-global — only one JVM test may start Iroh.
 
 ### 8. Known residual races
 
