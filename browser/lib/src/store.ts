@@ -2984,8 +2984,11 @@ export class Store {
             // (missing base ops, buffered by Loro as pending → nothing
             // materialises). The WS path (`applyIncoming`) already acts on this
             // signal; the OPFS path used to drop it on the floor.
+            // OPFS snapshots are authoritative full state — replace, don't
+            // merge into the JSON-AD-seeded doc. Merging minted a second
+            // LoroList per array and flashed table/sidebar order on open.
             ({ complete: importComplete } =
-              resource.importLoroUpdate(snapshot));
+              resource.importLoroUpdate(snapshot, true));
           }
         }
 

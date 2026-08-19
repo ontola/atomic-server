@@ -938,9 +938,13 @@ export class Resource<C extends OptionalClass = any> {
       // list seeded here with plain objects would later confuse the
       // append/replace paths (they expect container elements) and, for a
       // canvas, breaks the first `pushListItem` stroke.
-      const { LoroList: LoroListClass } = LoroLoader.Loro;
-      const list: LoroList = map.setContainer(prop, new LoroListClass());
-      this.writeJsonToLoroList(list, value);
+      //
+      // Drain in-place rather than `setContainer(new LoroList())`. Replacing
+      // the container resets its identity, so a later snapshot import of the
+      // original list (OPFS cold-load, WS GET) merges two concurrent lists
+      // and the array order flashes — table columns (`requires`/`recommends`)
+      // and sidebar `isA` were the visible cases.
+      this.writeLoroListInPlace(map, prop, value);
     } else {
       // Objects: serialize to JSON string.
       map.set(prop, JSON.stringify(value));
@@ -2385,33 +2389,7 @@ export class Resource<C extends OptionalClass = any> {
       return;
     }
 
-    const { LoroList, LoroMap } = LoroLoader.Loro;
-    const existing = map.get(propUrl);
-
-    let list: LoroList;
-
-    if (existing && typeof existing === 'object' && 'delete' in existing) {
-      list = existing as LoroList;
-
-      // Drain in-place rather than `setContainer(new LoroList())`. Replacing
-      // the container resets its identity, so cross-device merges of writes
-      // that target the *old* list would silently drop. Deleting + pushing
-      // keeps the same container ID.
-      if (list.length > 0) {
-        list.delete(0, list.length);
-      }
-    } else {
-      list = map.setContainer(propUrl, new LoroList());
-    }
-
-    for (const item of items) {
-      if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
-        const itemMap = list.pushContainer(new LoroMap());
-        this.writeJsonToLoroMap(itemMap, item as JSONObject);
-      } else {
-        list.push(item);
-      }
-    }
+    this.writeLoroListInPlace(map, propUrl, items);
 
     // Single commit at end → single UndoManager checkpoint for the whole
     // replacement.
@@ -2477,6 +2455,38 @@ export class Resource<C extends OptionalClass = any> {
         this.writeJsonToLoroMap(nested, value as JSONObject);
       }
     }
+  }
+
+  /**
+   * Write `value` into the property's LoroList, keeping the existing
+   * container when one is already there. Minting a new list on every
+   * `set()` made OPFS/WS snapshot imports concurrent with the seed and
+   * shuffled array order on open.
+   */
+  private writeLoroListInPlace(
+    map: {
+      get: (key: string) => unknown;
+      setContainer: (key: string, container: LoroList) => LoroList;
+    },
+    prop: string,
+    value: JSONValue[],
+  ): void {
+    const { LoroList: LoroListClass } = LoroLoader.Loro;
+    const existing = map.get(prop);
+
+    let list: LoroList;
+
+    if (existing && typeof existing === 'object' && 'delete' in existing) {
+      list = existing as LoroList;
+
+      if (list.length > 0) {
+        list.delete(0, list.length);
+      }
+    } else {
+      list = map.setContainer(prop, new LoroListClass());
+    }
+
+    this.writeJsonToLoroList(list, value);
   }
 
   private writeJsonToLoroList(list: LoroList, arr: JSONValue[]): void {
@@ -3402,6 +3412,11 @@ export class Resource<C extends OptionalClass = any> {
     // Drop any seeded/partial state so the incoming snapshot is authoritative.
     if (replace) {
       this.resetLoroState();
+      // Point `getLoroDoc()` at these bytes so it imports the snapshot
+      // instead of seeding a *new* LoroList per array from `#cache`.
+      // Seeding-then-merging was the OPFS cold-load flash: two concurrent
+      // lists for `requires`/`recommends` concatenated or LWW-swapped.
+      this._loroSnapshotBytes = loroUpdate;
     }
 
     // Ensure the LoroDoc exists, then import the update into it.

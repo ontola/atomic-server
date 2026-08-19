@@ -280,6 +280,49 @@ describe('resource.ts', () => {
   });
 
   /**
+   * Opening a filled table (and the sidebar tree) flashed as if row/column
+   * order changed. OPFS cold-load hydrates JSON-AD first — which seeds a
+   * *new* LoroList per array property — then merges the stored snapshot,
+   * whose lists have different container IDs. Concurrent LoroLists concatenate
+   * or LWW-swap, so `requires`/`recommends` (table columns) and `isA` shuffle
+   * for a frame. Merging an authoritative snapshot must keep the original
+   * array order, not interleave the seed.
+   */
+  it('importing a snapshot over a cache-seeded doc keeps resource-array order', async ({
+    expect,
+  }) => {
+    const recommends = 'https://atomicdata.dev/properties/recommends';
+    const order = [
+      'https://example.com/col/name',
+      'https://example.com/col/date',
+      'https://example.com/col/number',
+      'https://example.com/col/checkbox',
+      'https://example.com/col/select',
+    ];
+
+    const original = new Resource('https://example.com/table-class');
+    await original.set(recommends, order, false);
+    const snapshot = original.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    // OPFS JSON-AD is stored without the binary snapshot (`includeBinary:
+    // false`), so hydration seeds Loro from the flattened array.
+    const jsonAd = original.toObject({ includeBinary: false })!;
+    const loaded = new Resource('https://example.com/table-class');
+    loaded.applyHydratedValues(
+      Object.entries(jsonAd).filter(([key]) => key !== '@id') as [
+        string,
+        JSONValue,
+      ][],
+    );
+    loaded.getLoroDoc();
+    expect(loaded.get(recommends)).toEqual(order);
+
+    loaded.importLoroUpdate(snapshot);
+
+    expect(loaded.get(recommends)).toEqual(order);
+  });
+
+  /**
    * Regression: drawing onto a canvas whose strokes were seeded in bulk via
    * `set()` (template/demo content) threw "pushContainer is not a function"
    * and the new stroke was dropped. `set()` must store an array of objects as
