@@ -251,11 +251,25 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
    * otherwise still be `baseURL`. Reports whether it set anything, so
    * `goToRedirect` knows not to overwrite it.
    */
-  const activateDrive = (drives: {
+  const activateDrive = async (drives: {
     privateDrive?: string;
     hostDrive?: string;
-  }): boolean => {
-    const target = drives.hostDrive ?? drives.privateDrive;
+  }): Promise<boolean> => {
+    let target = drives.hostDrive ?? drives.privateDrive;
+
+    if (drives.hostDrive) {
+      try {
+        const host = await store.getResource(drives.hostDrive);
+
+        if (host.error && drives.privateDrive) {
+          target = drives.privateDrive;
+        }
+      } catch {
+        if (drives.privateDrive) {
+          target = drives.privateDrive;
+        }
+      }
+    }
 
     if (!target) {
       return false;
@@ -311,7 +325,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
       }
 
       setAgentSecret(undefined);
-      goToRedirect(undefined, activateDrive(drives));
+      goToRedirect(undefined, await activateDrive(drives));
     },
   });
 
@@ -447,7 +461,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
           pinPersonalDriveOnAgent(drives.privateDrive);
         }
 
-        goToRedirect(destination, activateDrive(drives));
+        goToRedirect(destination, await activateDrive(drives));
       })();
 
       return;
