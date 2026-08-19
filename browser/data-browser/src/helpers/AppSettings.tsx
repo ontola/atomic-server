@@ -141,9 +141,9 @@ export const AppSettingsContextProvider = (
         // `https://…/drive/…` entry in the switcher left the app booting
         // against that server forever, ignoring the node running beside it.
         // Session-only here; `setServer` is the deliberate route.
-        // Even on Tauri we must call this to clear the explicit flag, so
-        // switching back to a local drive can restore the embedded node.
-        serverURLStorage.set(url.origin);
+        if (!isRunningInTauri()) {
+          serverURLStorage.set(url.origin);
+        }
 
         return;
       }
@@ -159,10 +159,20 @@ export const AppSettingsContextProvider = (
       // intermittent: `embeddedNodeWins` re-applies the device's own node at
       // boot, and nothing re-applied it here.
       //
-      // Same rule as boot, deliberately: only a server the person actually
-      // chose outranks the node running beside them.
-      if (isRunningInTauri() && !serverURLStorage.wasExplicitlyChosen()) {
-        setBaseURL(getLocalServerOrigin());
+      // Same rule as boot: a server the person actually chose outranks the
+      // node running beside them — but it does NOT mean "stay wherever the
+      // last drive put you". Gating the whole restore on `wasExplicitlyChosen`
+      // left anyone who had ever picked a server stranded on the origin of the
+      // https drive they just came from, which is the bug this branch is
+      // supposed to fix, merely harder to reach.
+      //
+      // So come home either way; only the destination differs.
+      if (isRunningInTauri()) {
+        const chosen = serverURLStorage.wasExplicitlyChosen()
+          ? serverURLStorage.get()
+          : undefined;
+
+        setBaseURL(chosen ?? getLocalServerOrigin());
       }
     },
     [innerSetDrive, setBaseURL],

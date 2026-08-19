@@ -60,6 +60,15 @@ nothing.
 *Should have:* compared the two directories, which is the actual question.
 *Fixed 2026-08-19 (5a39f546).*
 
+**`pnpm build` printed "Build Finished!" after the declaration step failed.**
+`tsup` runs `tsc --emitDeclarationOnly --declaration` and its failure did not
+stop the build reporting success — so a local "lib built" check passed while CI
+failed on the same command. The diagnostic (`error TS2345` in a test file) was
+only visible by running `tsc` directly.
+*Should have:* a build that emits nothing usable is a failed build; it should
+exit non-zero and print the diagnostics where the person running it will see
+them.
+
 ## Test harness
 
 **An oversized `.e2e-store` invents 4–8 different failures per run.**

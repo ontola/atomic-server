@@ -52,7 +52,11 @@ function runAction(action: ActionDefinition, ctx: ActionContext): void {
   }
 }
 
-function reportActionError(action: ActionDefinition, ctx: ActionContext, e: unknown): void {
+function reportActionError(
+  action: ActionDefinition,
+  ctx: ActionContext,
+  e: unknown,
+): void {
   const detail =
     e instanceof Error && e.message
       ? e.message
@@ -60,7 +64,18 @@ function reportActionError(action: ActionDefinition, ctx: ActionContext, e: unkn
         ? e
         : 'unknown error';
 
-  const label = action.label(ctx);
+  // `label` is `(ctx) => string`, not a string. Interpolating it directly put
+  // the function's source in the toast — so the net added to surface a failed
+  // action named it as `(ctx) => ...` instead of "Delete". Resolving it can
+  // itself throw (it reads the resource), and a label that fails must not
+  // swallow the error it was meant to report.
+  let label = 'Action';
+
+  try {
+    label = action.label(ctx);
+  } catch {
+    // keep the fallback
+  }
 
   // Logged as well as shown: the toast is necessarily short, and a server's
   // parse error is the kind of thing worth having in full.

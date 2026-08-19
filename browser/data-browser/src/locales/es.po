@@ -6341,6 +6341,7 @@ msgid "Button says"
 msgstr ""
 
 #: src/chunks/TablePage/NewColumnButton.tsx
+#: src/components/ResourceContextMenu/index.tsx
 msgid "Action"
 msgstr ""
 
@@ -6883,7 +6884,7 @@ msgstr ""
 msgid "Not synced yet"
 msgstr ""
 
-#. 0: action.label; 1: detail
+#. 0: label; 1: detail
 #: src/components/ResourceContextMenu/index.tsx
 msgid "{0} failed: {1}"
 msgstr ""

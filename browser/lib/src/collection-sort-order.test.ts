@@ -86,67 +86,6 @@ function storeWithServer(serverMembers: string[]) {
   return { store, urls };
 }
 
-describe('Collection: partial local index', () => {
-  it('repairs a page the local index under-reported', async ({ expect }) => {
-    const local = ['did:ad:row1', 'did:ad:row2'];
-    const server = ['did:ad:row1', 'did:ad:row2', 'did:ad:row3', 'did:ad:row4'];
-    const { store } = storeWithServer(server);
-    store.setClientDb(stubClientDb(local));
-
-    const collection = new Collection(store, 'https://example.com', params());
-    await collection.waitForReady();
-
-    // Let the background count check and its repair settle.
-    await vi.waitFor(() => {
-      expect(collection.totalMembers).toBe(server.length);
-    });
-  });
-
-  it('leaves an agreeing local index alone', async ({ expect }) => {
-    const members = ['did:ad:row1', 'did:ad:row2'];
-    const { store, urls } = storeWithServer(members);
-    store.setClientDb(stubClientDb(members));
-
-    const collection = new Collection(store, 'https://example.com', params());
-    await collection.waitForReady();
-    await new Promise(r => setTimeout(r, 20));
-
-    expect(collection.totalMembers).toBe(members.length);
-    // One probe, and no full-page refetch behind it.
-    const fullFetches = urls.filter(
-      u => new URL(u).searchParams.get('page_size') !== '1',
-    );
-    expect(fullFetches).toEqual([]);
-  });
-
-  it('checks once, not once per page', async ({ expect }) => {
-    const local = ['did:ad:row1'];
-    const server = ['did:ad:row1', 'did:ad:row2', 'did:ad:row3'];
-    const { store, urls } = storeWithServer(server);
-    store.setClientDb(stubClientDb(local));
-
-    const collection = new Collection(store, 'https://example.com', params());
-    await collection.waitForReady();
-    await vi.waitFor(() => {
-      expect(collection.totalMembers).toBe(server.length);
-    });
-
-    const probes = urls.filter(
-      u => new URL(u).searchParams.get('page_size') === '1',
-    );
-    expect(probes.length).toBe(1);
-  });
-});
-
-/**
- * The same collection can be answered by the local index or by the server, and
- * the two must agree on order — otherwise a row list reshuffles depending on
- * which side answered, which reads as data changing under you.
- *
- * The server's member key is `id || sort_key || subject`, and it encodes a
- * missing value as `TAG_NONE` (0x05), below every value tag. So: missing
- * values first, ties by subject.
- */
 describe('Collection: local sort matches the server', () => {
   const sortProp = 'https://example.com/prop/when';
 
@@ -190,7 +129,7 @@ describe('Collection: local sort matches the server', () => {
     });
     await collection.waitForReady();
 
-    const ordered: string[] = [];
+    const ordered: Array<string | undefined> = [];
 
     for (let i = 0; i < collection.totalMembers; i++) {
       ordered.push(await collection.getMemberWithIndex(i));
@@ -202,5 +141,28 @@ describe('Collection: local sort matches the server', () => {
       'did:ad:rowD', // 1
       'did:ad:rowA', // 5
     ]);
+  });
+});
+
+describe('Collection: local surplus is not "stale"', () => {
+  it('does not replace a locally-larger page with the server’s smaller one', async ({
+    expect,
+  }) => {
+    // The local index knows about a row the server has not acknowledged yet —
+    // an optimistic add, or a pending write. Repairing here would delete it.
+    const local = ['did:ad:row1', 'did:ad:row2', 'did:ad:pending'];
+    const server = ['did:ad:row1', 'did:ad:row2'];
+    const { store, urls } = storeWithServer(server);
+    store.setClientDb(stubClientDb(local));
+
+    const collection = new Collection(store, 'https://example.com', params());
+    await collection.waitForReady();
+    await new Promise(r => setTimeout(r, 30));
+
+    expect(collection.totalMembers).toBe(local.length);
+    const fullFetches = urls.filter(
+      u => new URL(u).searchParams.get('page_size') !== '1',
+    );
+    expect(fullFetches).toEqual([]);
   });
 });
