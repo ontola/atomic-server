@@ -279,6 +279,19 @@ Recorded because each one cost real debugging time.
   store. Guard: `collection-empty-trust.test.ts`, plus the dashboard e2e
   that waits for `946.5` / `4` rather than the placeholder.
 
+- **Opening a filled table (and the sidebar) flashed as if order changed.**
+  Two independent paints: (1) WASM `parent=` queries are unsorted;
+  hydrating each member notifies `ResourceUpdated`, and `useCollection`
+  optimistic-added them in arrival order before client-side sort wrote
+  the page. Guard: `collection-page-assemble.test.ts`. (2) The sidebar
+  fetched children while `isA` was still empty, so every table row
+  appeared in the tree until the class arrived and hid them. The
+  ResourceSideBar now treats unknown class as hide-children. OPFS
+  cold-load could also shuffle array props (`requires`/`recommends`) by
+  seeding a new LoroList from JSON-AD then merging the snapshot;
+  `importLoroUpdate(snapshot, true)` replaces instead. Guard:
+  `resource.test.ts` ("importing a snapshot over a cache-seeded doc").
+
 ### Algorithms mirrored in two languages
 
 `lib/src/sync/rbsr.rs` ↔ `browser/lib/src/rbsr.ts` are line-for-line ports and
