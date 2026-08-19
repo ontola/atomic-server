@@ -98,6 +98,15 @@ impl Resource {
         Ok(())
     }
 
+    /// Sign the pending edits and POST the commit to an AtomicServer `/commit`.
+    ///
+    /// For `did:ad:` resources the store needs a `server` origin. HTTP(S)
+    /// subjects post to that subject's own host.
+    pub fn save_remote(&self) -> Result<String, AtomicSdkError> {
+        let mut inner = self.inner.lock().unwrap();
+        block_on(inner.save_remote(&self.db)).map_err(err)
+    }
+
     /// Delete this resource from the store.
     ///
     /// Named `destroy_resource` so UniFFI Kotlin does not collide with

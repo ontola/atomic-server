@@ -4,9 +4,11 @@ Local-first [Atomic Data](https://atomicdata.dev) for the JVM. This crate
 exposes `atomic_lib` through [UniFFI](https://mozilla.github.io/uniffi-rs/).
 Kotlin is the first generated language; Swift can use the same surface later.
 
-This is **not** an HTTP client. Reads and writes go to a local [redb]
+This is **not** an HTTP-only client. Reads and writes go to a local [redb]
 database. Edits are signed Loro CRDT commits. Sync is Iroh:
-`startPeer()`, hand the node URI to another device, `syncWith()`.
+`startPeer()`, hand the node URI to another device, `syncWith()`. HTTP GET of
+`https://` subjects loads schema and other external resources; pass `server`
+for `/search` and `saveRemote()` (POST `/commit`).
 
 [redb]: https://github.com/cberner/redb
 
@@ -76,6 +78,15 @@ val node = store.startPeer()   // did:ad:node:…
 
 `Resource.destroyResource()` deletes the resource. It is not named
 `destroy()` because UniFFI already uses that for FFI handle teardown.
+
+Talk to a running AtomicServer:
+
+```kotlin
+val store = Store.open("./my-atomic-data", "https://atomicdata.dev")
+val page = store.get("https://atomicdata.dev")   // HTTP GET + cache
+val hits = store.search("folder", 10u)           // GET /search
+note.saveRemote()                                // POST /commit
+```
 
 Two Iroh nodes cannot share one process — `startPeer` is process-global,
 same as Flutter and Python.

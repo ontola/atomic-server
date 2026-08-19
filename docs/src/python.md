@@ -6,7 +6,8 @@ Local-first [Atomic Data](atomic-data-overview.md) for Python. The package
 wraps [`atomic_lib`](rust-lib.md) through
 [PyO3](https://pyo3.rs) — the same Rust store the browser (WASM) and Flutter
 app use. Reads and writes go to a local [redb](https://github.com/cberner/redb)
-file. Edits are signed Loro commits. A server is optional.
+file. Edits are signed Loro commits. A server is optional for local CRUD and
+Iroh; HTTP GET / search / `save_remote()` are still available.
 
 Source: [`python/`](https://github.com/atomicdata-dev/atomic-server/tree/develop/python).
 
@@ -67,6 +68,24 @@ store.load_agent(secret)
 ```
 
 `Store.in_memory()` is the same API without a directory.
+
+## HTTP (schema, search, remote save)
+
+The core ontology (Folder, PlainText, `name`, …) is bundled, so validation
+works offline. Unknown Class / Property URLs are loaded the same way
+`atomic_lib` always has: `store.get("https://…")` GETs JSON-AD and caches it.
+
+```python
+store = Store.open("./my-atomic-data", server="https://atomicdata.dev")
+# or later: store.server = "https://atomicdata.dev"
+
+schema = store.get("https://atomicdata.dev/classes/Bookmark")
+hits = store.search("notes", limit=10)
+note.save_remote()   # POST /commit; did:ad: needs store.server
+```
+
+`has(subject)` is local-only (no network). `search()` errors if no server is
+set. `save()` stays local; `save_remote()` is the HTTP POST.
 
 ## P2P sync (Iroh)
 

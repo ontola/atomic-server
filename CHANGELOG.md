@@ -363,8 +363,8 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   `ingest_commit_json` serializes; `sync::ws_apply::apply_commit_json` now
   returns the `CommitResponse` instead of `()`. See
   `planning/runtime-boundary-decision.md`.
-- **Python SDK** (`python/`, import `atomic_data`): bindings over `atomic_lib` via PyO3. Local redb plus Iroh P2P (`start_peer`, `sync_with`, live push on save). No server required.
-- **Kotlin SDK** (`ffi/`, package `dev.atomicdata`): UniFFI bindings over `atomic_lib`. Same local redb + Iroh surface as Python (`startPeer`, `syncWith`, live push on save). JVM tests included; Android AAR is later.
+- **Python SDK** (`python/`, import `atomic_data`): bindings over `atomic_lib` via PyO3. Local redb plus Iroh P2P (`start_peer`, `sync_with`, live push on save). HTTP GET of `https://` subjects (schema / external resources); optional `server=` for `/search` and `save_remote()`.
+- **Kotlin SDK** (`ffi/`, package `dev.atomicdata`): UniFFI bindings over `atomic_lib`. Same local redb + Iroh + HTTP surface as Python (`startPeer`, `syncWith`, `search`, `saveRemote`). JVM tests included; Android AAR is later.
 
 ## [v0.41.0-beta.2] - 2026-08-01
 

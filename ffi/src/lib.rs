@@ -1,7 +1,9 @@
 //! UniFFI surface over `atomic_lib`.
 //!
-//! Same product API as the Python SDK: local redb + Iroh P2P. Kotlin (and
-//! later Swift) generate from this crate. PyO3 stays in `python/`.
+//! Same product API as the Python SDK: local redb + Iroh P2P, plus HTTP GET
+//! of `https://` subjects (schema / external resources), optional `server`
+//! for `/search` and `saveRemote()`. Kotlin (and later Swift) generate from
+//! this crate. PyO3 stays in `python/`.
 
 uniffi::setup_scaffolding!();
 
@@ -121,7 +123,7 @@ mod tests {
 
     #[test]
     fn setup_creates_agent_and_drive() {
-        let store = Store::in_memory().unwrap();
+        let store = Store::in_memory(None).unwrap();
         assert!(store.agent().unwrap().is_none());
         assert!(store.active_drive().is_none());
 
@@ -139,7 +141,7 @@ mod tests {
 
     #[test]
     fn create_read_update() {
-        let store = Store::in_memory().unwrap();
+        let store = Store::in_memory(None).unwrap();
         store.setup("Test agent".into()).unwrap();
         let mut props = HashMap::new();
         props.insert("description".into(), "first draft".into());
@@ -163,7 +165,7 @@ mod tests {
 
     #[test]
     fn query_by_parent_and_class() {
-        let store = Store::in_memory().unwrap();
+        let store = Store::in_memory(None).unwrap();
         store.setup("Test agent".into()).unwrap();
         let drive = store.active_drive().unwrap();
         let folder = store
@@ -210,7 +212,7 @@ mod tests {
 
     #[test]
     fn destroy_folder() {
-        let store = Store::in_memory().unwrap();
+        let store = Store::in_memory(None).unwrap();
         store.setup("Agent".into()).unwrap();
         let folder = store
             .create(url_folder(), "Tmp".into(), None, None)
@@ -223,7 +225,7 @@ mod tests {
 
     #[test]
     fn delete_removes_resource() {
-        let store = Store::in_memory().unwrap();
+        let store = Store::in_memory(None).unwrap();
         store.setup("Agent".into()).unwrap();
         let folder = store
             .create(url_folder(), "ephemeral".into(), None, None)
@@ -236,14 +238,14 @@ mod tests {
 
     #[test]
     fn missing_get_returns_none() {
-        let store = Store::in_memory().unwrap();
+        let store = Store::in_memory(None).unwrap();
         store.setup("Agent".into()).unwrap();
         assert!(store.get("did:ad:does-not-exist".into()).unwrap().is_none());
     }
 
     #[test]
     fn create_requires_parent_or_drive() {
-        let store = Store::in_memory().unwrap();
+        let store = Store::in_memory(None).unwrap();
         store.create_agent("No drive".into()).unwrap();
         let err = store
             .create(url_folder(), "orphan".into(), None, None)
@@ -253,8 +255,8 @@ mod tests {
 
     #[test]
     fn independent_in_memory_stores() {
-        let a = Store::in_memory().unwrap();
-        let b = Store::in_memory().unwrap();
+        let a = Store::in_memory(None).unwrap();
+        let b = Store::in_memory(None).unwrap();
         let setup_a = a.setup("A".into()).unwrap();
         b.setup("B".into()).unwrap();
         let note = a
@@ -266,7 +268,7 @@ mod tests {
 
     #[test]
     fn to_json_includes_subject() {
-        let store = Store::in_memory().unwrap();
+        let store = Store::in_memory(None).unwrap();
         store.setup("Agent".into()).unwrap();
         let note = store
             .create(url_folder(), "serial".into(), None, None)
@@ -278,7 +280,7 @@ mod tests {
 
     #[test]
     fn known_peers_persist_locally() {
-        let store = Store::in_memory().unwrap();
+        let store = Store::in_memory(None).unwrap();
         store.setup("Ada".into()).unwrap();
         store.add_peer(format!("did:ad:node:{}", "cd".repeat(32)), "Phone".into());
         let peers = store.peers();
@@ -289,7 +291,7 @@ mod tests {
 
     #[test]
     fn sync_with_requires_start_peer() {
-        let store = Store::in_memory().unwrap();
+        let store = Store::in_memory(None).unwrap();
         store.setup("Ada".into()).unwrap();
         let err = store
             .sync_with(format!("did:ad:node:{}", "ab".repeat(32)), None)
@@ -299,7 +301,7 @@ mod tests {
 
     #[test]
     fn wait_for_times_out() {
-        let store = Store::in_memory().unwrap();
+        let store = Store::in_memory(None).unwrap();
         store.setup("Ada".into()).unwrap();
         let err = store
             .wait_for("did:ad:does-not-change".into(), 0.2)
@@ -312,7 +314,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().to_string_lossy().to_string();
         let (subject, secret, drive) = {
-            let store = Store::open(path.clone()).unwrap();
+            let store = Store::open(path.clone(), None).unwrap();
             let setup = store.setup("Ada".into()).unwrap();
             let mut props = HashMap::new();
             props.insert("description".into(), "on disk".into());
@@ -327,7 +329,7 @@ mod tests {
         };
 
         {
-            let store = Store::open(path.clone()).unwrap();
+            let store = Store::open(path.clone(), None).unwrap();
             let loaded = store.get(subject.clone()).unwrap().unwrap();
             assert_eq!(loaded.get("name".into()), Some("Persisted".into()));
             assert_eq!(loaded.get("description".into()), Some("on disk".into()));
@@ -341,11 +343,47 @@ mod tests {
             store.flush().unwrap();
         }
 
-        let store = Store::open(path).unwrap();
+        let store = Store::open(path, None).unwrap();
         let got = store.get(subject).unwrap().unwrap();
         assert_eq!(
             got.get("description".into()),
             Some("edited after reopen".into())
         );
+    }
+
+    #[test]
+    fn bundled_schema_is_local() {
+        let store = Store::in_memory(None).unwrap();
+        assert!(store.has(url_name()));
+        let prop = store.get(url_name()).unwrap().unwrap();
+        assert!(prop.get("shortname".into()).is_some() || prop.get("name".into()).is_some());
+    }
+
+    #[test]
+    fn search_requires_server() {
+        let store = Store::in_memory(None).unwrap();
+        let err = store.search("folder".into(), None).unwrap_err();
+        assert!(err.to_string().contains("server"));
+    }
+
+    #[test]
+    fn server_getter_setter() {
+        let store = Store::in_memory(None).unwrap();
+        assert!(store.server().is_none());
+        store.set_server("https://atomicdata.dev".into());
+        assert_eq!(store.server().as_deref(), Some("https://atomicdata.dev"));
+        let with = Store::in_memory(Some("https://example.com".into())).unwrap();
+        assert_eq!(with.server().as_deref(), Some("https://example.com"));
+    }
+
+    #[test]
+    fn get_fetches_http_resource() {
+        let store = Store::in_memory(None).unwrap();
+        let subject = "https://atomicdata.dev".to_string();
+        assert!(!store.has(subject.clone()));
+        if let Ok(Some(resource)) = store.get(subject.clone()) {
+            assert!(resource.subject().starts_with("https://"));
+            assert!(store.has(subject));
+        }
     }
 }
