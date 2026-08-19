@@ -142,6 +142,16 @@ export function Cell({
 
       setMouseDown(true);
 
+      // Stop the browser starting its own text selection for this drag.
+      // `user-select: none` on the cell is not enough: it governs what can be
+      // selected, not whether a drag begins, so dragging across cells still
+      // paints a native selection over the grid (and, in the desktop webview,
+      // leaves it behind after mouseup). Not called when entering Edit mode
+      // below, where selecting text is the point.
+      if (cursorMode !== CursorMode.Edit) {
+        e.preventDefault();
+      }
+
       // When Shift is pressed, enter multi-select mode
       if (e.shiftKey) {
         e.stopPropagation();

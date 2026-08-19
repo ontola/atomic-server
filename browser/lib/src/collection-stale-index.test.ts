@@ -137,3 +137,70 @@ describe('Collection: partial local index', () => {
     expect(probes.length).toBe(1);
   });
 });
+
+/**
+ * The same collection can be answered by the local index or by the server, and
+ * the two must agree on order — otherwise a row list reshuffles depending on
+ * which side answered, which reads as data changing under you.
+ *
+ * The server's member key is `id || sort_key || subject`, and it encodes a
+ * missing value as `TAG_NONE` (0x05), below every value tag. So: missing
+ * values first, ties by subject.
+ */
+describe('Collection: local sort matches the server', () => {
+  const sortProp = 'https://example.com/prop/when';
+
+  function localDbWith(rows: Array<[string, unknown]>): ClientDbWorker {
+    return {
+      isReady: true,
+      waitForReady: async () => true,
+      query: async (): Promise<ClientDbQueryResult> => ({
+        // Deliberately NOT in the expected order — the sort must impose it.
+        subjects: rows.map(([s]) => s),
+        resources: [],
+        count: rows.length,
+      }),
+    } as unknown as ClientDbWorker;
+  }
+
+  it('puts rows with no sort value first, then ties by subject', async ({
+    expect,
+  }) => {
+    const rows: Array<[string, unknown]> = [
+      ['did:ad:rowC', null],
+      ['did:ad:rowA', 5],
+      ['did:ad:rowB', null],
+      ['did:ad:rowD', 1],
+    ];
+    const store = new Store({ serverUrl: 'https://example.com' });
+    store.setServerConnected(false);
+    store.setDrive(DRIVE);
+    store.setClientDb(localDbWith(rows));
+
+    for (const [subject, when] of rows) {
+      const r = new Resource(subject);
+      r.applyHydratedValues(when === null ? [] : [[sortProp, when as never]]);
+      r.loading = false;
+      store.addResource(r);
+    }
+
+    const collection = new Collection(store, 'https://example.com', {
+      ...params(),
+      sort_by: sortProp,
+    });
+    await collection.waitForReady();
+
+    const ordered: string[] = [];
+
+    for (let i = 0; i < collection.totalMembers; i++) {
+      ordered.push(await collection.getMemberWithIndex(i));
+    }
+
+    expect(ordered).toEqual([
+      'did:ad:rowB', // no value — first, tie broken by subject
+      'did:ad:rowC',
+      'did:ad:rowD', // 1
+      'did:ad:rowA', // 5
+    ]);
+  });
+});
