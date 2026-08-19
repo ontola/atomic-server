@@ -4779,10 +4779,6 @@ msgstr "Mis en cache localement · fonctionne hors ligne"
 msgid "Server-only · no local cache"
 msgstr "Serveur uniquement · pas de cache local"
 
-#: src/routes/SyncRoute.tsx
-msgid "Cloud Sync"
-msgstr "Synchronisation cloud"
-
 #. 0: usagePct
 #: src/routes/SyncRoute.tsx
 msgid "{0}% of storage used"
@@ -4986,22 +4982,6 @@ msgstr "Sauvegarde de cet espace de travail vers {0} en cours…"
 #: src/routes/SyncRoute.tsx
 msgid "Setting up…"
 msgstr "Configuration en cours…"
-
-#. 0: PRODUCT_NAME
-#. 0: PRODUCT_NAME
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Back up to {0}"
-msgstr "Sauvegarder vers {0}"
-
-#. 0: PRODUCT_NAME; 1: ' '
-#: src/routes/SyncRoute.tsx
-msgid "This workspace lives only on this device. Turn on {0}{1} to back it up and reach it from your other devices and the web."
-msgstr "Cet espace de travail vit uniquement sur cet appareil. Activez {0}{1} pour le sauvegarder et y accéder depuis vos autres appareils et le web."
-
-#: src/helpers/managed/cloudSync.ts
-msgid "Timed out connecting to the Cloud Sync node."
-msgstr "Délai d'attente dépassé lors de la connexion au nœud de synchronisation cloud."
 
 #: src/routes/SyncRoute.tsx
 msgid "Sign-in wasn’t completed — nothing was backed up."
@@ -5713,15 +5693,6 @@ msgstr "Passer ?"
 msgid "<0>Then it's all on you.</0> We'll show you your secret next — it's the only copy that will ever exist, nobody can reset it for you, and losing it means losing your account and everything in it. Fine if you'll genuinely keep it safe."
 msgstr "<0>Alors tout repose sur vous.</0> Nous allons vous montrer votre secret ensuite — c'est la seule copie qui existera jamais, personne ne peut le réinitialiser pour vous, et le perdre signifie perdre votre compte et tout ce qu'il contient. C'est acceptable si vous le conservez vraiment en sécurité."
 
-#: src/components/AccountRecoveryCard.tsx
-msgid "Nothing protects this account but the secret you saved during setup. That copy is the only one — we can't show it here, and we can't reset it. Keep it safe."
-msgstr "Rien ne protège ce compte à part le secret que vous avez enregistré lors de la configuration. Cette copie est la seule — nous ne pouvons pas l'afficher ici, et nous ne pouvons pas la réinitialiser. Gardez-la en sécurité."
-
-#. 0: ' '; 1: [hasPasskey && 'your passkey', hasCode && 'your recovery code'] .filter(Boolean) .join(' or ') || 'your recovery password'
-#: src/components/AccountRecoveryCard.tsx
-msgid "You can get back in with:{0} {1} ."
-msgstr "Vous pouvez revenir avec :{0} {1} ."
-
 #. 0: PRODUCT_NAME; 1: ' '
 #: src/components/AccountRecoveryCard.tsx
 msgid "This <0>is</0> your account — anyone holding it is you, on any device, forever. It can't be changed or revoked, and it's the only thing that still works if {0}{1} disappears. Store it like a passport, not a password."
@@ -6323,244 +6294,6 @@ msgstr "Rien ici pour l'instant. Ajoutez un nombre, un graphique, un bouton ou u
 msgid "Pick a column for the {0} to measure"
 msgstr "Choisissez une colonne pour que {0} mesure"
 
-#~ msgid "The one workspace for everything, owned by you."
-#~ msgstr "L'espace de travail unique pour tout, qui vous appartient."
-
-#~ msgid "Documents, tables, files, chat and custom apps in one place. AtomicServer starts on your device, and can run with no server at all. It adds backup, sharing and always-on availability when you want them. Everything you make is Atomic Data: typed, linked and portable, so it stays readable by other apps and by you."
-#~ msgstr "Documents, tableaux, fichiers, chat et applications personnalisées en un seul endroit. AtomicServer démarre sur votre appareil et peut fonctionner sans aucun serveur. Il ajoute la sauvegarde, le partage et la disponibilité permanente lorsque vous le souhaitez. Tout ce que vous créez sont des Données Atomiques : typées, liées et portables, pour rester lisibles par d'autres applications et par vous."
-
-#~ msgid "Bearer {0}"
-#~ msgstr "Porteur {0}"
-
-#~ msgid "Set up Cloud Server"
-#~ msgstr "Configurer le serveur cloud"
-
-#~ msgid "Cloud Server"
-#~ msgstr "Serveur cloud"
-
-#~ msgid "Timed out connecting to the Cloud Server node."
-#~ msgstr "Délai dépassé lors de la connexion au nœud du serveur cloud."
-
-#. 0: PRODUCT_NAME
-#: src/components/Vault/VaultPanel.tsx
-msgid "Keep an encrypted copy of this workspace in {0}. It is sealed on this device, so we store it without being able to read it."
-msgstr "Conservez une copie chiffrée de cet espace de travail dans {0}. Elle est scellée sur cet appareil, nous la stockons donc sans pouvoir la lire."
-
-#: src/components/Vault/VaultPanel.tsx
-msgid "Working…"
-msgstr "Travail en cours…"
-
-#: src/components/Vault/VaultPanel.tsx
-msgid "Back up now"
-msgstr "Sauvegarder maintenant"
-
-#: src/components/Vault/VaultPanel.tsx
-msgid "Backups are paused. You can still restore what is already stored."
-msgstr "Les sauvegardes sont en pause. Vous pouvez toujours restaurer ce qui est déjà stocké."
-
-#: src/components/Vault/VaultPanel.tsx
-msgid "<0/> Restore"
-msgstr "<0/> Restaurer"
-
-#. 0: minutes
-#: src/components/Vault/VaultPanel.tsx
-msgid "{0} min ago"
-msgstr "il y a {0} min"
-
-#. 0: hours
-#: src/components/Vault/VaultPanel.tsx
-msgid "{0}h ago"
-msgstr "il y a {0} h"
-
-#: src/components/Vault/LinkProviderPanel.tsx
-msgid "That code expired. Start again when you are ready."
-msgstr "Ce code a expiré. Recommencez lorsque vous êtes prêt."
-
-#. 0: providerName(portalUrl)
-#: src/components/Vault/LinkProviderPanel.tsx
-msgid "Connect your {0} account"
-msgstr "Connectez votre compte {0}"
-
-#. 0: ' '; 0.0: hostOf(portalUrl); 1: ' '
-#: src/components/Vault/LinkProviderPanel.tsx
-msgid "Open{0} <0>{0}/link</0>{1} on a device where you are signed in, and enter this code."
-msgstr "Ouvrez{0} <0>{0}/link</0>{1} sur un appareil où vous êtes connecté, puis saisissez ce code."
-
-#: src/components/Vault/LinkProviderPanel.tsx
-msgid "Waiting for you to approve it…"
-msgstr "En attente de votre approbation…"
-
-#. 0: providerName(portalUrl)
-#: src/components/Vault/LinkProviderPanel.tsx
-msgid "This app cannot sign in on its own, so approve it from somewhere you already are. Then it can keep an encrypted copy of your workspaces — sealed here, so {0} stores it without being able to read it."
-msgstr "Cette application ne peut pas se connecter seule, approuvez-la donc depuis un endroit où vous êtes déjà connecté. Elle pourra alors conserver une copie chiffrée de vos espaces de travail — scellée ici, de sorte que {0} la stocke sans pouvoir la lire."
-
-#: src/components/Vault/LinkProviderPanel.tsx
-msgid "Getting a code…"
-msgstr "Obtention d’un code…"
-
-#: src/components/Vault/LinkProviderPanel.tsx
-msgid "Connect this device"
-msgstr "Connecter cet appareil"
-
-#: src/helpers/managed/deviceLink.ts
-msgid "Android"
-msgstr "Android"
-
-#: src/helpers/managed/deviceLink.ts
-msgid "Mac"
-msgstr "Mac"
-
-#: src/helpers/managed/deviceLink.ts
-msgid "Windows"
-msgstr "Windows"
-
-#: src/helpers/managed/deviceLink.ts
-msgid "Linux"
-msgstr "Linux"
-
-#: src/helpers/managed/deviceLink.ts
-msgid "Firefox"
-msgstr "Firefox"
-
-#: src/helpers/managed/deviceLink.ts
-msgid "Edge"
-msgstr "Edge"
-
-#: src/helpers/managed/deviceLink.ts
-msgid "Chrome"
-msgstr "Chrome"
-
-#: src/helpers/managed/deviceLink.ts
-msgid "Safari"
-msgstr "Safari"
-
-#~ msgid "Use my own secret"
-#~ msgstr "Utiliser mon propre secret"
-
-#~ msgid "Restore this workspace"
-#~ msgstr "Restaurer cet espace de travail"
-
-#~ msgid "You’re signed in, and this workspace has an encrypted backup. We stored it sealed, so only this device can open it."
-#~ msgstr "Vous êtes connecté, et cet espace de travail dispose d’une sauvegarde chiffrée. Nous l’avons stockée scellée, de sorte que seul cet appareil peut l’ouvrir."
-
-#~ msgid "Restore my workspace"
-#~ msgstr "Restaurer mon espace de travail"
-
-#~ msgid "…or bring it from another device instead"
-#~ msgstr "…ou l’apporter depuis un autre appareil"
-
-#. 0: PRODUCT_NAME
-#: src/components/Vault/VaultPanel.tsx
-msgid "Nothing has been backed up to {0} yet."
-msgstr "Rien n’a encore été sauvegardé sur {0}."
-
-#. 0: details.confirmed_objects; 1: details.confirmed_objects === 1 ? '' \\: 's'; 2: formatBytes(enrollment.used_bytes); 3: PRODUCT_NAME
-#: src/components/Vault/VaultPanel.tsx
-msgid "{0} encrypted object{1} · {2} stored in {3}."
-msgstr "{0} objet{1} chiffré · {2} stocké dans {3}."
-
-#~ msgid "Your {0} session expired. Sign in and retry."
-#~ msgstr "Votre session {0} a expiré. Connectez-vous et réessayez."
-
-#~ msgid "{0} could not place this drive right now. This is usually "
-#~ msgstr "{0} n'a pas pu placer ce disque pour le moment. Cela est généralement dû à "
-
-#~ msgid "Could not enable {0} hosting (HTTP {1})."
-#~ msgstr "Impossible d'activer l'hébergement {0} (HTTP {1})."
-
-#~ msgid "Manage account →"
-#~ msgstr "Gérer le compte →"
-
-#: src/components/Vault/VaultPanel.tsx
-#: src/components/Vault/VaultPanel.tsx
-#: src/components/Vault/VaultPanel.tsx
-msgid "Cloud Vault"
-msgstr "Cloud Vault"
-
-#: src/components/Vault/VaultPanel.tsx
-msgid "Turn on Cloud Vault"
-msgstr "Activer Cloud Vault"
-
-#: src/components/Vault/VaultPanel.tsx
-msgid "Cloud Vault is on"
-msgstr "Cloud Vault est activé"
-
-#~ msgid "A hosted workspace on {0}: shareable links, search across everything, API access, and no waiting on another device to be awake. Unlike Cloud Vault, our servers process what you put here."
-#~ msgstr "Un espace de travail hébergé sur {0} : liens partageables, recherche dans tout, accès API, et sans avoir à attendre qu’un autre appareil soit allumé. Contrairement à Cloud Vault, nos serveurs traitent ce que vous placez ici."
-
-#. 0: missing.join(', ')
-#: src/helpers/managed/useVaultBackup.ts
-msgid "Cloud Vault is not available here: {0}."
-msgstr "Cloud Vault n'est pas disponible ici : {0}."
-
-#~ msgid "Disconnect"
-#~ msgstr "Déconnecter"
-
-#~ msgid "Reconnect"
-#~ msgstr "Reconnecter"
-
-#~ msgid "Not connected"
-#~ msgstr "Non connecté"
-
-#~ msgid "Switch"
-#~ msgstr "Basculer"
-
-#~ msgid "Your cloud services"
-#~ msgstr "Vos services cloud"
-
-#~ msgid "Cloud services for this workspace"
-#~ msgstr "Services cloud pour cet espace de travail"
-
-#~ msgid "Signed in as {0}."
-#~ msgstr "Connecté en tant que {0}."
-
-#~ msgid "{0} — we hold your key sealed, so this email gets you back in on a new device."
-#~ msgstr "{0} — nous conservons votre clé scellée, donc cet e-mail vous permet de revenir sur un nouvel appareil."
-
-#~ msgid "{0} — no recovery backup stored. Lose every device and this workspace is gone."
-#~ msgstr "{0} — aucune sauvegarde de récupération n’est stockée. Si vous perdez tous vos appareils, cet espace de travail disparaîtra."
-
-#~ msgid "Email recovery"
-#~ msgstr "Récupération par e-mail"
-
-#~ msgid "{0} resources"
-#~ msgstr "{0} ressources"
-
-#~ msgid "{0} of {1}"
-#~ msgstr "{0} sur {1}"
-
-#~ msgid "Synced {0}"
-#~ msgstr "Synchronisé {0}"
-
-#~ msgid "Synced just now"
-#~ msgstr "Synchronisé à l’instant"
-
-#~ msgid "Open a workspace to see whether it can be hosted."
-#~ msgstr "Ouvrez un espace de travail pour voir s’il peut être hébergé."
-
-#~ msgid "This device doesn’t have this workspace yet. Pair the device that does, and you can host it from here."
-#~ msgstr "Cet appareil ne dispose pas encore de cet espace de travail. Appairez l’appareil qui le possède et vous pourrez l’héberger depuis ici."
-
-#~ msgid "Already set up for this workspace. This app is reading from {0} instead."
-#~ msgstr "Déjà configuré pour cet espace de travail. Cette application lit depuis {0} à la place."
-
-#~ msgid "This server"
-#~ msgstr "Ce serveur"
-
-#~ msgid "{0} doesn’t offer hosting, so it can’t be switched on from here."
-#~ msgstr "{0} ne propose pas d’hébergement, donc il ne peut pas être activé depuis ici."
-
-#~ msgid "Checking whether this workspace is hosted…"
-#~ msgstr "Vérification de l’hébergement de cet espace de travail…"
-
-#~ msgid "This workspace already lives on {0}. Moving it here is a migration, not a backup."
-#~ msgstr "Cet espace de travail se trouve déjà sur {0}. Le déplacer ici est une migration, pas une sauvegarde."
-
-#: src/components/Vault/VaultPanel.tsx
-msgid "Checking this workspace’s backup…"
-msgstr "Vérification de la sauvegarde de cet espace de travail…"
-
 #: src/routes/AboutRoute.tsx
 msgid "The one workspace for everything, owned by you."
 msgstr ""
@@ -6711,16 +6444,6 @@ msgstr ""
 msgid "{0} encrypted object{1} · {2} stored in {3}."
 msgstr ""
 
-#: src/helpers/managed/deviceLink.test.ts
-#: src/helpers/managed/deviceLink.test.ts
-msgid "Joep’s Pixel"
-msgstr ""
-
-#: src/helpers/managed/vault.test.ts
-#: src/helpers/managed/vault.test.ts
-msgid "Cloud Vault quota exceeded"
-msgstr ""
-
 #. 0: PRODUCT_NAME
 #: src/helpers/managed/enrollment.ts
 msgid "Your {0} session expired. Sign in and retry."
@@ -6734,18 +6457,6 @@ msgstr ""
 #. 0: PRODUCT_NAME; 1: response.status
 #: src/helpers/managed/enrollment.ts
 msgid "Could not enable {0} hosting (HTTP {1})."
-msgstr ""
-
-#: src/helpers/managed/enrollment.test.ts
-msgid "Cloud Server requires a subscription"
-msgstr ""
-
-#: src/helpers/managed/enrollment.test.ts
-msgid "No session"
-msgstr ""
-
-#: src/helpers/managed/enrollment.test.ts
-msgid "Internal Server Error"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
@@ -7008,6 +6719,8 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "An always-on device has an address. Type it here."
+msgstr ""
+
 #: src/chunks/FormBuilder/DeleteFormDialog.tsx
 msgid "Are you sure you want to delete this form?"
 msgstr "Êtes-vous sûr de vouloir supprimer ce formulaire ?"
