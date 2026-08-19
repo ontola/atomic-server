@@ -141,9 +141,9 @@ export const AppSettingsContextProvider = (
         // `https://…/drive/…` entry in the switcher left the app booting
         // against that server forever, ignoring the node running beside it.
         // Session-only here; `setServer` is the deliberate route.
-        if (!isRunningInTauri()) {
-          serverURLStorage.set(url.origin);
-        }
+        // Even on Tauri we must call this to clear the explicit flag, so
+        // switching back to a local drive can restore the embedded node.
+        serverURLStorage.set(url.origin);
 
         return;
       }

@@ -1171,6 +1171,11 @@ export class Collection {
 
       if (!isNumber(serverTotal) || serverTotal === localTotal) return;
 
+      // Only repair when the server has MORE members than we do locally.
+      // A local surplus (pending writes, optimistic adds already in
+      // `_totalMembers`) is not a sign of an incomplete index.
+      if (serverTotal < localTotal) return;
+
       // Loud on purpose. This is the state that reads as a sync bug, so say
       // plainly that it is not one and that the client is repairing itself.
       console.warn(
