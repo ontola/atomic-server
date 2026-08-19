@@ -53,9 +53,11 @@ async function fetchChildren(store: Store, parent: string): Promise<string[]> {
 
 /** Resources that present their own children in dedicated UI; recursing into
  *  them (table rows, chat messages) would flood the tree. Same set the
- *  sidebar hides children for. */
+ *  sidebar hides children for — including "class not loaded yet", so a
+ *  table's rows don't flash in the tree before `isA` arrives. */
 function hideChildrenOf(classes: string[]): boolean {
   return (
+    classes.length === 0 ||
     classes.includes(dataBrowser.classes.table) ||
     classes.includes(dataBrowser.classes.chatroom) ||
     classes.includes(dataBrowser.classes.meeting) ||

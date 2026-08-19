@@ -53,12 +53,12 @@ export function useTableData(
 
   // Constrain rows to instances of the table's classtype. This keeps non-row
   // children — notably the table's own View resources — out of the row list.
-  // Only applied once the classtype is known, to avoid a query against
-  // `unknownSubject` on first render.
-  const classFilter: PropVal[] =
-    classSubject && classSubject !== unknownSubject
-      ? [{ property: core.properties.isA, value: classSubject }]
-      : [];
+  // Don't query at all until the classtype is known: a `parent=` query
+  // without `isA` briefly lists views as rows, then filters them out.
+  const classReady = !!classSubject && classSubject !== unknownSubject;
+  const classFilter: PropVal[] = classReady
+    ? [{ property: core.properties.isA, value: classSubject }]
+    : [];
 
   // The view's statistics ride along with the query, so the store computes them
   // over every matching row (filters included, paging excluded) instead of the
@@ -72,7 +72,9 @@ export function useTableData(
 
   const queryFilter = {
     property: core.properties.parent,
-    value: resource.subject,
+    // `Collection.fetchPage` no-ops when value is undefined. Hold the
+    // query until classtype is known so views don't flash as rows.
+    value: classReady ? resource.subject : undefined,
     filters: [...classFilter, ...userFilters],
     expression_filters: expressionFilters,
     sort_by: sorting.prop,
