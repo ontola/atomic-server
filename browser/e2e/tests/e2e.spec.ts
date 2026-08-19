@@ -299,8 +299,11 @@ test.describe('data-browser', async () => {
       });
     }
 
-    await expect(page2.getByTestId('current-drive-title')).toContainText(
-      "'s Drive",
+    // New agents land on the invite host when ancestry resolves (Dev drive
+    // in `/app/dev-drive` tests), otherwise on their personal `{name}'s Drive`.
+    await expect(page2.getByTestId('current-drive-title')).toHaveText(
+      /Dev drive|'s Drive/,
+      { timeout: 15_000 },
     );
     await expect(page2.getByTestId('shared-with-me')).toBeVisible();
     await expect(

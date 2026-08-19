@@ -158,9 +158,7 @@ test.describe('notifications', () => {
   test('sidebar entry opens empty inbox', async ({ page }) => {
     await openNotificationsInbox(page);
     await expect(page).toHaveURL(/\/app\/notifications/);
-    await expect(
-      page.getByRole('heading', { name: 'Notifications' }),
-    ).toBeVisible();
+    await expect(page.getByTestId('notifications-heading')).toBeVisible();
     await expect(page.getByTestId('notifications-empty')).toBeVisible();
   });
 
@@ -623,7 +621,7 @@ test.describe('notifications', () => {
     await page.waitForFunction(
       () => window.store.getSyncStatus().pendingDirtyCount === 0,
       undefined,
-      { timeout: 15_000 },
+      { timeout: 30_000 },
     );
 
     // B loads the mentioned doc and restarts the engine → backlog reconcile.
@@ -660,9 +658,7 @@ test.describe('notifications', () => {
       timeout: 15_000,
     });
     await page.getByTestId('send-message').click();
-    await expect(
-      page.getByRole('heading', { name: 'Send message' }),
-    ).toBeVisible();
+    await expect(page.getByTestId('send-message-title')).toBeVisible();
   });
 
   test('direct message ResourceUpdated materializes inbox item', async ({

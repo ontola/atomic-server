@@ -107,7 +107,7 @@ function NotificationsPage(): React.JSX.Element {
     return (
       <Main>
         <ContainerNarrow>
-          <h1>Notifications</h1>
+          <h1 data-testid='notifications-heading'>Notifications</h1>
           <p>Sign in to see your notifications.</p>
         </ContainerNarrow>
       </Main>
@@ -118,7 +118,7 @@ function NotificationsPage(): React.JSX.Element {
     <Main>
       <ContainerNarrow>
         <Row justify='space-between' center>
-          <h1>Notifications</h1>
+          <h1 data-testid='notifications-heading'>Notifications</h1>
           <Row gap='0.5rem' center>
             <SendMessageButton />
             {unread > 0 && (

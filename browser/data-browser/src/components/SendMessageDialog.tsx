@@ -116,7 +116,7 @@ export function SendMessageButton(): React.JSX.Element | null {
         {isOpen && (
           <>
             <Dialog.Title>
-              <h2>Send message</h2>
+              <h2 data-testid='send-message-title'>Send message</h2>
             </Dialog.Title>
             <Dialog.Content>
               <Column gap='1rem'>
