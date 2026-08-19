@@ -219,8 +219,8 @@ which layer, and — more usefully — which are not. Read it before deciding wh
 a new test belongs, and update it when you add one or discover a gap.
 
 ```
-cargo test -p atomic_lib --no-default-features  # 76 tests
-cargo test -p atomic-server --lib               # 23 tests
+cargo test -p atomic_lib --features db-redb --lib # unit tests (needs the `db` feature)
+cargo test -p atomic-server --lib
 cargo test -p atomic-server --test sync          # integration test: real server, 2 agents, WS sync
 cargo test -p atomic_lib --features "iroh,discovery,db-redb" --lib -- sync::tests  # Iroh sync tests (incl. live sync)
 cargo test -p atomic_lib --features "iroh,db-redb" --lib -- sync::iroh_e2e -- --test-threads=1  # Iroh e2e: bulk + live + folderId
@@ -228,10 +228,19 @@ cargo test -p atomic_lib --features db-redb,iroh --test identity_durability  # i
 cargo test -p atomic_lib --features db-redb,iroh --test cross_process_sync   # two OS processes reconcile over Iroh
 cargo test -p atomic-server --test it iroh_pairing  # two servers pair via POST /iroh-sync
 cargo test --manifest-path flutter/rust/Cargo.toml  # Flutter bridge (workspace-excluded, needs --manifest-path)
-cd browser/lib && pnpm test                      # 29 JS tests
+cd browser/lib && pnpm test                      # JS unit tests
 cd browser && pnpm run -r build                  # Full workspace build
 cd browser && pnpm run test-e2e                  # Full e2e test
 ```
+
+`atomic_lib`'s unit tests need the `db` feature — `hierarchy.rs`'s test module
+calls `Db::init_temp` and `test_utils::setup_test_env`, both gated behind it. So
+`cargo test -p atomic_lib --no-default-features` does **not** compile; don't
+reach for it. CI never trips on this because it tests the whole workspace at
+once (`.dagger` `rustTest`), where `atomic-server`'s unconditional `atomic_lib`
+dependency (`features = ["db-redb", ...]` in `server/Cargo.toml`) turns `db` on
+via feature unification. `--lib` is load-bearing too: the `list_sled_trees`
+example needs `sled`, which only `db-sled` provides.
 
 ## Cursor Cloud specific instructions
 
