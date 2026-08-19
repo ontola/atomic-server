@@ -34,6 +34,12 @@ Repository = "https://github.com/atomicdata-dev/atomic-server"
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv]
+default-groups = ["dev"]
+
 [tool.maturin]
 features = ["pyo3/extension-module"]
 module-name = "atomic_data"

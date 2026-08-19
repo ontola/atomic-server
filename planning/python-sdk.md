@@ -59,10 +59,10 @@ makes two devices converge today.
 - Blobs
 - History / time-travel
 - Code-first schema (see `json-schema-code-first.md`)
-- PyPI publish / Dagger CI job
+- PyPI publish / Dagger CI job (GitHub Actions `Python SDK` covers pytest on Linux and Windows)
 
 ## Tests
 
 ```bash
-cd python && maturin develop && pytest
+cd python && uv run pytest
 ```

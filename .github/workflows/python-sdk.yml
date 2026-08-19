@@ -1,0 +1,46 @@
+# Python SDK tests (not part of Dagger).
+#
+# The extension is a PyO3 cdylib. On Windows that needs MSVC's linker;
+# ubuntu-latest and windows-latest both have one. A machine without
+# Visual Studio Build Tools cannot `uv run pytest` from source.
+
+name: Python SDK
+
+on:
+  pull_request:
+    paths:
+      - "python/**"
+      - "lib/**"
+      - ".github/workflows/python-sdk.yml"
+  push:
+    paths:
+      - "python/**"
+      - "lib/**"
+      - ".github/workflows/python-sdk.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: pytest (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: python
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: python
+      - uses: astral-sh/setup-uv@v10.0.1
+      - name: uv run pytest
+        run: uv run pytest -q

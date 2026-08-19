@@ -12,7 +12,20 @@ Source: [`python/`](https://github.com/atomicdata-dev/atomic-server/tree/develop
 
 ## Install
 
-From a checkout of this repo (needs a Rust toolchain and Python 3.9+):
+From a checkout of this repo (needs a Rust toolchain and Python 3.9+).
+There is no PyPI wheel yet, so the first install compiles `atomic_lib`.
+
+On Windows, also install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+with the **Desktop development with C++** workload. `uv` / maturin link
+with MSVC's `link.exe`; GNU/MinGW is not supported.
+
+```bash
+cd python
+uv sync
+uv run pytest -q
+```
+
+Or without uv:
 
 ```bash
 pip install maturin

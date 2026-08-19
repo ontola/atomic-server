@@ -29,12 +29,29 @@ to another device, `sync_with()`. After that, `.save()` pushes live.
 
 ## Install (from this repo)
 
-Needs a Rust toolchain and Python 3.9+.
+Needs a Rust toolchain and Python 3.9+. There is no PyPI wheel yet, so
+the first install compiles `atomic_lib`.
+
+On **Windows** that compile needs [Visual Studio Build Tools] with the
+**Desktop development with C++** workload (`link.exe`). GNU/MinGW is not
+a supported target. `uv run pytest` will fail at link time without those
+tools — that is the host, not the package.
+
+[Visual Studio Build Tools]: https://visualstudio.microsoft.com/visual-cpp-build-tools/
 
 ```bash
-pip install maturin
+cd python
+uv sync
+uv run pytest -q
+```
+
+Or without uv:
+
+```bash
+pip install maturin pytest
 cd python
 maturin develop
+pytest
 ```
 
 Then `import atomic_data`.
@@ -103,7 +120,6 @@ Property keys accept full URLs or shortnames (`name`, `description`, `parent`,
 
 ```bash
 cd python
-maturin develop
-pip install pytest
-pytest
+uv sync
+uv run pytest -q
 ```
