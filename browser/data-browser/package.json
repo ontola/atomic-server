@@ -101,13 +101,11 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@rolldown/plugin-babel": "^0.2.3",
     "@tanstack/router-devtools": "^1.167.0",
     "@types/prismjs": "^1.26.6",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
-    "babel-plugin-styled-components": "^2.3.0",
     "csstype": "^3.2.3",
     "gh-pages": "^6.3.0",
     "lint-staged": "^17.0.5",

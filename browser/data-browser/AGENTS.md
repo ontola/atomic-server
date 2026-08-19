@@ -13,6 +13,7 @@ We are using the React Compiler so manual memoization is often not needed. Make 
 The compiler currently has some trouble compiling components that contain try/catch blocks with complex logic like if statements or async code.
 Additionally the use of `finally` is not yet supported inside components.
 Those show up as Vite warnings from `oxc-transform-react` and as Oxlint `react/*` compiler rules; the component still runs, just without auto-memoization.
+styled-components `displayName` is added by Oxc's built-in plugin on Vite's oxc pass — there is no Babel in this package.
 
 ## Localization
 

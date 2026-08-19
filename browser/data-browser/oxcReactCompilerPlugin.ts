@@ -11,17 +11,35 @@ const includeRE = /\.[cm]?[jt]sx?(?:$|\?)/;
 const excludeRE = /\/node_modules\//;
 
 /**
+ * Matches the old `babel-plugin-styled-components` options: `displayName` so
+ * DOM classes read `Foo-sc-XXX`, `fileName: false` so they aren't prefixed
+ * with the source path. Vite's oxc pass (Rolldown) applies this; the React
+ * Compiler package does not expose the plugin.
+ *
+ * @see https://oxc.rs/docs/guide/usage/transformer/plugins.html#styled-components
+ */
+export const styledComponentsOxcOptions = {
+  displayName: true,
+  fileName: false,
+} as const;
+
+/**
  * Native React Compiler via `oxc-transform-react`, mirroring the unreleased
  * `@vitejs/plugin-react` `compiler: true` integration
  * (vitejs/vite-plugin-react#1419, shipping in 6.1.0).
  *
  * oxc-transform-react owns compiler + TS + JSX + Fast Refresh in one pass.
  * Rolldown's built-in JSX refresh must stay off or it double-instruments.
+ * styled-components displayName/SSR ids run in Vite's oxc pass (the compiler
+ * package has no `plugins` option).
  *
- * Once plugin-react 6.1.0 is on npm this file can be deleted in favour of
- * `react({ compiler: true })`. Babel stays for styled-components displayName.
+ * Once plugin-react 6.1.0 is on npm the compiler plugin can be deleted in
+ * favour of `react({ compiler: true })`; keep the oxc styled-components
+ * options either way.
  */
-export function oxcReactCompiler(): Plugin[] {
+export function oxcReactCompiler({
+  compile = true,
+}: { compile?: boolean } = {}): Plugin[] {
   let sourcemap = true;
   let jsxDevelopment = false;
   let fastRefresh = false;
@@ -88,9 +106,10 @@ export function oxcReactCompiler(): Plugin[] {
 
   // plugin-react 6.0.x always turns Rolldown JSX refresh on in serve mode.
   // A post-enforce config hook wins that merge so only oxc-transform-react
-  // emits `$RefreshReg$` / `$RefreshSig$`.
-  const disableOxcRefresh: Plugin = {
-    name: 'atomic:oxc-react-compiler-disable-oxc-refresh',
+  // emits `$RefreshReg$` / `$RefreshSig$`. styled-components lives here too
+  // because `vite:oxc` already re-transforms `.tsx` after the compiler pass.
+  const oxcViteOptions: Plugin = {
+    name: 'atomic:oxc-vite-options',
     enforce: 'post',
     config() {
       return {
@@ -98,10 +117,13 @@ export function oxcReactCompiler(): Plugin[] {
           jsx: {
             refresh: false,
           },
+          plugins: {
+            styledComponents: styledComponentsOxcOptions,
+          },
         },
       };
     },
   };
 
-  return [compilerPlugin, disableOxcRefresh];
+  return [...(compile ? [compilerPlugin] : []), oxcViteOptions];
 }
