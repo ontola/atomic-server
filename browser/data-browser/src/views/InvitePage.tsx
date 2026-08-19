@@ -230,25 +230,26 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
   };
 
   const pinPersonalDriveOnAgent = (personalDrive: string) => {
-    if (agentSecret) {
-      try {
-        const parsed = JSON.parse(atob(agentSecret)) as {
-          privateKey: string;
-          subject: string;
-        };
-        const nextAgent = Agent.fromSecret(
-          Agent.buildSecret(parsed.privateKey, parsed.subject, personalDrive),
-          'js',
-        );
-        store.setAgent(nextAgent);
-        setAgent(nextAgent);
-      } catch {
-        if (agent) {
-          agent.initialDrive = personalDrive;
-        }
-      }
-    } else if (agent) {
-      agent.initialDrive = personalDrive;
+    if (!agentSecret) {
+      // Existing session: persistAgentAfterInvite already wrote
+      // `privateDrive` on the Agent resource; the engine remounts from that.
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(atob(agentSecret)) as {
+        privateKey: string;
+        subject: string;
+      };
+      const nextAgent = Agent.fromSecret(
+        Agent.buildSecret(parsed.privateKey, parsed.subject, personalDrive),
+        'js',
+      );
+      nextAgent.privateDrive = agent?.privateDrive ?? personalDrive;
+      store.setAgent(nextAgent);
+      setAgent(nextAgent);
+    } catch {
+      // Secret parse failed — inbox still follows the Agent resource pointer.
     }
   };
 
