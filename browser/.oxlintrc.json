@@ -47,7 +47,26 @@
         "ignore": ["about"]
       }
     ],
-    // Disabling this because of react compiler
+    // React Compiler recommended rules (oxlint 1.79). `correctness: error`
+    // already turns most of these on; they are listed so the three high-volume
+    // ones can stay warn until those call sites are cleaned up. See
+    // https://oxc.rs/blog/2026-08-18-react-compiler-support.html
+    "react/error-boundaries": "error",
+    "react/globals": "error",
+    "react/immutability": "error",
+    "react/incompatible-library": "error",
+    "react/preserve-manual-memoization": "error",
+    "react/purity": "error",
+    "react/set-state-in-render": "error",
+    "react/use-memo": "error",
+    "react/void-use-memo": "error",
+    "react/unsupported-syntax": "error",
+    // 58 / 39 / 29 hits today: prop-sync effects, latest-ref during render,
+    // and `const Comp = getButtonComp()` during render. Warn until cleaned up.
+    "react/set-state-in-effect": "warn",
+    "react/refs": "warn",
+    "react/static-components": "warn",
+    // The compiler's own memoization makes exhaustive-deps less load-bearing.
     "react-hooks/exhaustive-deps": "warn",
     "no-useless-escape": "off",
     "no-useless-rename": "off",

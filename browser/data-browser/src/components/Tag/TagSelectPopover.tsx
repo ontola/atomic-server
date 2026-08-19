@@ -144,7 +144,7 @@ export const TagSelectPopover: React.FC<TagSelectPopoverProps> = ({
                   blockAutoscroll={!usingKeyboard}
                   key={tag}
                 >
-                  {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
+                  {/* eslint-disable-next-line jsx-a11y/label-has-associated-control, jsx-a11y/no-noninteractive-element-interactions */}
                   <label
                     data-selected={isSelected}
                     tabIndex={-1}
