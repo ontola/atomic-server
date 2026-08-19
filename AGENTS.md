@@ -290,9 +290,10 @@ Only re-run this when the `wasm/` or `lib/` Rust changes; it is not part of `pnp
 ### Running the frontend
 
 `cd browser && pnpm start` runs `@tomic/lib` + `@tomic/react` (tsup watch) and the Vite dev
-server (`:6747`) together. During `vite dev` you'll see `Compilation failed: <file>` lines
-from `babel-plugin-react-compiler` — these are non-fatal (the compiler skips auto-memoizing
-files with try/catch); the app still serves and HMRs normally.
+server (`:6747`) together. During `vite dev` you may see React Compiler warnings from
+`oxc-transform-react` (try/catch, `finally`, ref-during-render, and similar
+Rules of React violations). Those are non-fatal: the compiler skips
+auto-memoizing that component and the app still serves and HMRs normally.
 
 ### Services summary
 

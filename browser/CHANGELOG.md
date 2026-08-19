@@ -4,6 +4,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Dev: React Compiler now runs through native `oxc-transform-react` instead of `babel-plugin-react-compiler`. JSX/TS and Fast Refresh share that pass; Babel stays only for styled-components `displayName`. Vite dev no longer pays the Babel compiler tax per module (files that used to take ~100ms now land around ~10ms). `babel-plugin-react-compiler` is gone.
+
 - Fix: clicking a button in the navbar no longer draws a blue outline around the whole bar. The bar used `:has(:focus)`, which matched mouse clicks; keyboard focus still shows on the button itself.
 
 ## [v0.41.0-beta.2] - 2026-08-01
