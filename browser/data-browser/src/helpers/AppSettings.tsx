@@ -144,6 +144,25 @@ export const AppSettingsContextProvider = (
         if (!isRunningInTauri()) {
           serverURLStorage.set(url.origin);
         }
+
+        return;
+      }
+
+      // A `did:` drive names no server, so this branch did nothing at all —
+      // and that is how switching away and back stranded the app. Opening an
+      // `https://…` drive repoints the store at that origin; coming back to a
+      // drive that lives on THIS device left it pointed at the previous one.
+      // Every collection then answers from a server that does not hold this
+      // drive — or, if it is unreachable, answers nothing — and the sidebar
+      // renders empty with no indication that the app is asking the wrong
+      // machine. Restarting fixed it, which is what made it look
+      // intermittent: `embeddedNodeWins` re-applies the device's own node at
+      // boot, and nothing re-applied it here.
+      //
+      // Same rule as boot, deliberately: only a server the person actually
+      // chose outranks the node running beside them.
+      if (isRunningInTauri() && !serverURLStorage.wasExplicitlyChosen()) {
+        setBaseURL(getLocalServerOrigin());
       }
     },
     [innerSetDrive, setBaseURL],
