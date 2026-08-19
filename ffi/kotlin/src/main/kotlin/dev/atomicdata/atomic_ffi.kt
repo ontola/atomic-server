@@ -802,6 +802,14 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 
 
 
+
+
+
+
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -842,6 +850,8 @@ fun uniffi_atomic_ffi_checksum_method_resource_keys(
 fun uniffi_atomic_ffi_checksum_method_resource_name(
 ): Short
 fun uniffi_atomic_ffi_checksum_method_resource_save(
+): Short
+fun uniffi_atomic_ffi_checksum_method_resource_save_remote(
 ): Short
 fun uniffi_atomic_ffi_checksum_method_resource_set(
 ): Short
@@ -887,9 +897,15 @@ fun uniffi_atomic_ffi_checksum_method_store_peers(
 ): Short
 fun uniffi_atomic_ffi_checksum_method_store_query(
 ): Short
+fun uniffi_atomic_ffi_checksum_method_store_search(
+): Short
+fun uniffi_atomic_ffi_checksum_method_store_server(
+): Short
 fun uniffi_atomic_ffi_checksum_method_store_set_active_drive(
 ): Short
 fun uniffi_atomic_ffi_checksum_method_store_set_device_name(
+): Short
+fun uniffi_atomic_ffi_checksum_method_store_set_server(
 ): Short
 fun uniffi_atomic_ffi_checksum_method_store_setup(
 ): Short
@@ -968,6 +984,8 @@ fun uniffi_atomic_ffi_fn_method_resource_name(`ptr`: Pointer,uniffi_out_err: Uni
 ): RustBuffer.ByValue
 fun uniffi_atomic_ffi_fn_method_resource_save(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
+fun uniffi_atomic_ffi_fn_method_resource_save_remote(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_atomic_ffi_fn_method_resource_set(`ptr`: Pointer,`property`: RustBuffer.ByValue,`value`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_atomic_ffi_fn_method_resource_set_name(`ptr`: Pointer,`name`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -980,9 +998,9 @@ fun uniffi_atomic_ffi_fn_clone_store(`ptr`: Pointer,uniffi_out_err: UniffiRustCa
 ): Pointer
 fun uniffi_atomic_ffi_fn_free_store(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
-fun uniffi_atomic_ffi_fn_constructor_store_in_memory(uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_atomic_ffi_fn_constructor_store_in_memory(`server`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Pointer
-fun uniffi_atomic_ffi_fn_constructor_store_open(`path`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_atomic_ffi_fn_constructor_store_open(`path`: RustBuffer.ByValue,`server`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Pointer
 fun uniffi_atomic_ffi_fn_method_store_active_drive(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -1020,9 +1038,15 @@ fun uniffi_atomic_ffi_fn_method_store_peers(`ptr`: Pointer,uniffi_out_err: Uniff
 ): RustBuffer.ByValue
 fun uniffi_atomic_ffi_fn_method_store_query(`ptr`: Pointer,`parent`: RustBuffer.ByValue,`classUrl`: RustBuffer.ByValue,`property`: RustBuffer.ByValue,`value`: RustBuffer.ByValue,`limit`: RustBuffer.ByValue,`offset`: Int,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_atomic_ffi_fn_method_store_search(`ptr`: Pointer,`query`: RustBuffer.ByValue,`limit`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_atomic_ffi_fn_method_store_server(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_atomic_ffi_fn_method_store_set_active_drive(`ptr`: Pointer,`subject`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_atomic_ffi_fn_method_store_set_device_name(`ptr`: Pointer,`name`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_atomic_ffi_fn_method_store_set_server(`ptr`: Pointer,`url`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_atomic_ffi_fn_method_store_setup(`ptr`: Pointer,`name`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -1211,6 +1235,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_atomic_ffi_checksum_method_resource_save() != 30956.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_atomic_ffi_checksum_method_resource_save_remote() != 19479.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_atomic_ffi_checksum_method_resource_set() != 5476.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1256,10 +1283,10 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_atomic_ffi_checksum_method_store_flush() != 4851.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_atomic_ffi_checksum_method_store_get() != 21403.toShort()) {
+    if (lib.uniffi_atomic_ffi_checksum_method_store_get() != 18007.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_atomic_ffi_checksum_method_store_has() != 17296.toShort()) {
+    if (lib.uniffi_atomic_ffi_checksum_method_store_has() != 10953.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_atomic_ffi_checksum_method_store_live_peers() != 46534.toShort()) {
@@ -1277,10 +1304,19 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_atomic_ffi_checksum_method_store_query() != 41621.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_atomic_ffi_checksum_method_store_search() != 65224.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_atomic_ffi_checksum_method_store_server() != 24965.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_atomic_ffi_checksum_method_store_set_active_drive() != 2781.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_atomic_ffi_checksum_method_store_set_device_name() != 18642.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_atomic_ffi_checksum_method_store_set_server() != 56732.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_atomic_ffi_checksum_method_store_setup() != 26554.toShort()) {
@@ -1295,10 +1331,10 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_atomic_ffi_checksum_method_store_wait_for() != 64329.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_atomic_ffi_checksum_constructor_store_in_memory() != 41056.toShort()) {
+    if (lib.uniffi_atomic_ffi_checksum_constructor_store_in_memory() != 43359.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_atomic_ffi_checksum_constructor_store_open() != 32226.toShort()) {
+    if (lib.uniffi_atomic_ffi_checksum_constructor_store_open() != 48180.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
 }
@@ -1689,6 +1725,14 @@ public interface ResourceInterface {
     
     fun `save`()
     
+    /**
+     * Sign the pending edits and POST the commit to an AtomicServer `/commit`.
+     *
+     * For `did:ad:` resources the store needs a `server` origin. HTTP(S)
+     * subjects post to that subject's own host.
+     */
+    fun `saveRemote`(): kotlin.String
+    
     fun `set`(`property`: kotlin.String, `value`: kotlin.String)
     
     fun `setName`(`name`: kotlin.String)
@@ -1858,6 +1902,25 @@ open class Resource: Disposable, AutoCloseable, ResourceInterface
 }
     }
     
+    
+
+    
+    /**
+     * Sign the pending edits and POST the commit to an AtomicServer `/commit`.
+     *
+     * For `did:ad:` resources the store needs a `server` origin. HTTP(S)
+     * subjects post to that subject's own host.
+     */
+    @Throws(AtomicSdkException::class)override fun `saveRemote`(): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCallWithError(AtomicSdkException) { _status ->
+    UniffiLib.INSTANCE.uniffi_atomic_ffi_fn_method_resource_save_remote(
+        it, _status)
+}
+    }
+    )
+    }
     
 
     
@@ -2068,8 +2131,18 @@ public interface StoreInterface {
     
     fun `flush`()
     
+    /**
+     * Fetch a resource by subject URL / DID.
+     *
+     * Local first. If the subject is an `http(s)://` URL that is not in
+     * this store, this GETs JSON-AD over HTTP, caches it, and returns it.
+     * That is how unknown Class / Property schema items are loaded.
+     */
     fun `get`(`subject`: kotlin.String): Resource?
     
+    /**
+     * True when the subject is already in this store (no network fetch).
+     */
     fun `has`(`subject`: kotlin.String): kotlin.Boolean
     
     fun `livePeers`(): List<kotlin.String>
@@ -2082,9 +2155,26 @@ public interface StoreInterface {
     
     fun `query`(`parent`: kotlin.String?, `classUrl`: kotlin.String?, `property`: kotlin.String?, `value`: kotlin.String?, `limit`: kotlin.UInt?, `offset`: kotlin.UInt): List<Resource>
     
+    /**
+     * Full-text search on the configured AtomicServer `/search` endpoint.
+     *
+     * Requires `server` (constructor or `setServer`).
+     */
+    fun `search`(`query`: kotlin.String, `limit`: kotlin.UInt?): List<Resource>
+    
+    /**
+     * AtomicServer origin for HTTP search and `saveRemote()`, or `null`.
+     */
+    fun `server`(): kotlin.String?
+    
     fun `setActiveDrive`(`subject`: kotlin.String)
     
     fun `setDeviceName`(`name`: kotlin.String)
+    
+    /**
+     * Set the AtomicServer origin (`https://example.com`).
+     */
+    fun `setServer`(`url`: kotlin.String)
     
     fun `setup`(`name`: kotlin.String): SetupInfo
     
@@ -2316,6 +2406,13 @@ open class Store: Disposable, AutoCloseable, StoreInterface
     
 
     
+    /**
+     * Fetch a resource by subject URL / DID.
+     *
+     * Local first. If the subject is an `http(s)://` URL that is not in
+     * this store, this GETs JSON-AD over HTTP, caches it, and returns it.
+     * That is how unknown Class / Property schema items are loaded.
+     */
     @Throws(AtomicSdkException::class)override fun `get`(`subject`: kotlin.String): Resource? {
             return FfiConverterOptionalTypeResource.lift(
     callWithPointer {
@@ -2328,7 +2425,10 @@ open class Store: Disposable, AutoCloseable, StoreInterface
     }
     
 
-    override fun `has`(`subject`: kotlin.String): kotlin.Boolean {
+    
+    /**
+     * True when the subject is already in this store (no network fetch).
+     */override fun `has`(`subject`: kotlin.String): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     callWithPointer {
     uniffiRustCall() { _status ->
@@ -2403,6 +2503,39 @@ open class Store: Disposable, AutoCloseable, StoreInterface
     
 
     
+    /**
+     * Full-text search on the configured AtomicServer `/search` endpoint.
+     *
+     * Requires `server` (constructor or `setServer`).
+     */
+    @Throws(AtomicSdkException::class)override fun `search`(`query`: kotlin.String, `limit`: kotlin.UInt?): List<Resource> {
+            return FfiConverterSequenceTypeResource.lift(
+    callWithPointer {
+    uniffiRustCallWithError(AtomicSdkException) { _status ->
+    UniffiLib.INSTANCE.uniffi_atomic_ffi_fn_method_store_search(
+        it, FfiConverterString.lower(`query`),FfiConverterOptionalUInt.lower(`limit`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * AtomicServer origin for HTTP search and `saveRemote()`, or `null`.
+     */override fun `server`(): kotlin.String? {
+            return FfiConverterOptionalString.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_atomic_ffi_fn_method_store_server(
+        it, _status)
+}
+    }
+    )
+    }
+    
+
+    
     @Throws(AtomicSdkException::class)override fun `setActiveDrive`(`subject`: kotlin.String)
         = 
     callWithPointer {
@@ -2420,6 +2553,20 @@ open class Store: Disposable, AutoCloseable, StoreInterface
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_atomic_ffi_fn_method_store_set_device_name(
         it, FfiConverterString.lower(`name`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Set the AtomicServer origin (`https://example.com`).
+     */override fun `setServer`(`url`: kotlin.String)
+        = 
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_atomic_ffi_fn_method_store_set_server(
+        it, FfiConverterString.lower(`url`),_status)
 }
     }
     
@@ -2482,22 +2629,27 @@ open class Store: Disposable, AutoCloseable, StoreInterface
     
     companion object {
         
-    @Throws(AtomicSdkException::class) fun `inMemory`(): Store {
+    @Throws(AtomicSdkException::class) fun `inMemory`(`server`: kotlin.String? = null): Store {
             return FfiConverterTypeStore.lift(
     uniffiRustCallWithError(AtomicSdkException) { _status ->
     UniffiLib.INSTANCE.uniffi_atomic_ffi_fn_constructor_store_in_memory(
-        _status)
+        FfiConverterOptionalString.lower(`server`),_status)
 }
     )
     }
     
 
         
-    @Throws(AtomicSdkException::class) fun `open`(`path`: kotlin.String): Store {
+    /**
+     * Open a persistent store. `server` is the AtomicServer origin used for
+     * HTTP search and `save_remote()`. Schema `get()` of an `https://`
+     * subject still fetches even when this is unset.
+     */
+    @Throws(AtomicSdkException::class) fun `open`(`path`: kotlin.String, `server`: kotlin.String? = null): Store {
             return FfiConverterTypeStore.lift(
     uniffiRustCallWithError(AtomicSdkException) { _status ->
     UniffiLib.INSTANCE.uniffi_atomic_ffi_fn_constructor_store_open(
-        FfiConverterString.lower(`path`),_status)
+        FfiConverterString.lower(`path`),FfiConverterOptionalString.lower(`server`),_status)
 }
     )
     }
