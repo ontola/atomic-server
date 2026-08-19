@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import babel from '@rolldown/plugin-babel';
 import { VitePWA } from 'vite-plugin-pwa';
 import { oxcReactCompiler } from './oxcReactCompilerPlugin';
 import webfontDownload from 'vite-plugin-webfont-dl';
@@ -146,22 +145,10 @@ export default defineConfig({
     // Native React Compiler (oxc-transform-react). Must run before JSX
     // transforms; this plugin does compiler + TS + JSX + Fast Refresh in one
     // pass. Replace with `react({ compiler: true })` once plugin-react 6.1.0
-    // is released (vitejs/vite-plugin-react#1419). Skipped under Vitest —
-    // unit tests call `transformSync` directly and don't need the Vite pass.
-    ...(isVitest ? [] : oxcReactCompiler()),
-    // babel-plugin-styled-components: emits `displayName` so DOM classes
-    // read `Foo-sc-XXX` instead of opaque `sc-XXX` hashes. plugin-react v6
-    // dropped its own `babel` option, so this is now the only Babel hook.
-    babel({
-      include: /\.[jt]sx?$/,
-      exclude: /node_modules/,
-      plugins: [
-        [
-          'babel-plugin-styled-components',
-          { displayName: true, fileName: false },
-        ],
-      ],
-    }),
+    // is released (vitejs/vite-plugin-react#1419). The compiler transform is
+    // skipped under Vitest — unit tests call `transformSync` directly — but
+    // the oxc styled-components options still apply so displayName works.
+    ...oxcReactCompiler({ compile: !isVitest }),
     react(),
     !isVitest &&
       !isTauri &&
