@@ -107,18 +107,24 @@ test.describe('tables', async () => {
       // cell to land here in edit mode. Click the target cell directly,
       // mirroring the initial cell setup — the trailing empty row is always
       // present once the previous row has gained content.
-      const rowFirstCell = page.locator(
-        `[aria-rowindex="${rowIndex}"] > [aria-colindex="2"]`,
-      );
-      await rowFirstCell.scrollIntoViewIfNeeded();
-      await rowFirstCell.click();
-      await expect(rowFirstCell).toBeFocused();
-      await page.keyboard.press('Enter');
-      await expect(
-        page.locator(
-          `[aria-rowindex="${rowIndex}"] > [aria-colindex="2"] > input`,
-        ),
-      ).toBeFocused();
+      //
+      // The grid remounts rows while they materialize; a locator that was
+      // attached a moment ago can detach mid-scroll. Retry until focus
+      // lands in this cell's editor.
+      await expect(async () => {
+        const rowFirstCell = page.locator(
+          `[aria-rowindex="${rowIndex}"] > [aria-colindex="2"]`,
+        );
+        await rowFirstCell.scrollIntoViewIfNeeded();
+        await rowFirstCell.click();
+        await expect(rowFirstCell).toBeFocused({ timeout: 2_000 });
+        await page.keyboard.press('Enter');
+        await expect(
+          page.locator(
+            `[aria-rowindex="${rowIndex}"] > [aria-colindex="2"] > input`,
+          ),
+        ).toBeFocused({ timeout: 2_000 });
+      }).toPass({ timeout: 15_000 });
       const nameInput = page.locator(
         `[aria-rowindex="${rowIndex}"] > [aria-colindex="2"] > input`,
       );
