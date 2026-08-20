@@ -13,10 +13,15 @@
 > **2026-08-15 — field test.**
 > [`pairing-ux-field-test.md`](./pairing-ux-field-test.md) walks this UX on a
 > real self-hosted server plus the desktop app. Transport and pairing work;
-> **drive transfer does not**. A blank node signs in, finds no `personalDrive`
-> on the peer's agent copy, provisions one locally, and reports "Your
-> workspace is here" — onto a drive it just invented. The two nodes end up
-> with disjoint drive sets. Nothing in the flow asks the peer what it holds.
+> **drive transfer does not** (C0). A blank node signs in, finds no
+> `personalDrive` on the peer's agent copy, provisions one locally, and
+> reports "Your workspace is here" — onto a drive it just invented. The two
+> nodes end up with disjoint drive sets. Nothing in the flow asks the peer
+> what it holds.
+>
+> **2026-08-20 — M6 closed.** Opening an adopted `https://…` drive no longer
+> moves the home server. A bare origin is still a server switch; an HTTP
+> drive with a path is fetched cross-origin. See the field-test M6 write-up.
 >
 > Context: the Android Tauri app boots and syncs as of 2026-07-08 (embedded
 > server + webview, Iroh transport ready). What's missing is any humane way

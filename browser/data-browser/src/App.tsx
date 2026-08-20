@@ -1,4 +1,4 @@
-import { StoreContext, Store, enableLoro } from '@tomic/react';
+import { StoreContext, Store, enableLoro, Client } from '@tomic/react';
 
 import { isDev } from './config';
 import { registerHandlers } from './handlers';
@@ -112,24 +112,14 @@ const store = new Store({
 const initialDrive = driveStorage.get();
 
 if (initialDrive) {
-  // `setDrive` reads an http(s) subject as a SERVER ORIGIN and repoints the
-  // app at it. That is intended when the user opens an external drive, but
-  // restoring the last session is not that choice — and a stored URL from a
-  // previous switch would re-apply it on every launch, stranding the app on a
-  // server it cannot authenticate against with no obvious way back.
-  const restoresForeignServer =
-    /^https?:\/\//.test(initialDrive) &&
-    (() => {
-      try {
-        return new URL(initialDrive).origin !== new URL(serverUrl).origin;
-      } catch {
-        return true;
-      }
-    })();
-
-  if (restoresForeignServer) {
+  // A stored *bare origin* used to be the pre-DID stand-in for a
+  // drive and would still move `serverUrl`. Skip that restore — the
+  // home server comes from `serverURLStorage`, not from `drive`.
+  // An HTTP URL with a path is a real legacy drive and is safe to
+  // restore: `setDrive` will not follow a foreign origin.
+  if (Client.isBareHttpOrigin(initialDrive)) {
     console.warn(
-      `[atomic] Ignoring stored drive '${initialDrive}': opening it would move this app to another server. Pick it from the drive switcher to switch deliberately.`,
+      `[atomic] Ignoring stored drive '${initialDrive}': it is a server origin, not a workspace.`,
     );
   } else {
     store.setDrive(initialDrive);

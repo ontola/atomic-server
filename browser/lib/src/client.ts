@@ -134,6 +134,51 @@ export class Client {
   }
 
   /**
+   * True when `subject` is an HTTP(S) URL with no path, query, or hash —
+   * i.e. a server origin, not a drive. `https://example.com` and
+   * `https://example.com/` match; `https://example.com/drives/foo` does not.
+   *
+   * `Store.setDrive` treats a bare origin as `setServerUrl`. An HTTP
+   * subject with a path is a real (legacy) drive and must not move the
+   * home server.
+   */
+  public static isBareHttpOrigin(subject: string): boolean {
+    if (!subject.startsWith('http://') && !subject.startsWith('https://')) {
+      return false;
+    }
+
+    try {
+      const url = new URL(subject);
+
+      return (
+        (url.pathname === '/' || url.pathname === '') &&
+        !url.search &&
+        !url.hash
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * True when `subject` is an HTTP(S) URL that names a resource (has a
+   * path, query, or hash), not a server origin.
+   */
+  public static isHttpDriveSubject(subject: string): boolean {
+    if (!subject.startsWith('http://') && !subject.startsWith('https://')) {
+      return false;
+    }
+
+    try {
+      new URL(subject);
+
+      return !Client.isBareHttpOrigin(subject);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Removes query params from the URL if it can build a URL. Will return the
    * normal URL if things go wrong.
    */
