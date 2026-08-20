@@ -1,7 +1,9 @@
 # Canvas undo/redo: consolidation plan
 
 > **Status:** Phase A landed (browser scrub gesture, `replaceListItems`,
-> `strokeData` datatype = `jsonArray`, legacy string parser dropped).
+> `strokeData` datatype = `json` — `jsonArray` was retired; see
+> [`migrate-jsonarray-to-json.md`](./migrate-jsonarray-to-json.md), legacy
+> string parser dropped).
 > **Phase C landed** (browser discarded-branches: hold the undo button →
 > version overlay + thumbnail panel; drag over a thumbnail and release to
 > restore; branches persist in `localStorage` alongside the undo/redo

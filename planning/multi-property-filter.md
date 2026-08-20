@@ -1,9 +1,10 @@
 # Multi-property filtering (AND)
 
-> Status: **In progress** (started 2026-06-13). Goal: queries/collections can
-> filter on **multiple `(property, value)` constraints combined with AND**,
-> index-backed (sorted + paginated), full-stack (Rust core → server `/query` →
-> `@tomic/lib` → WASM client-db → React `useCollection`).
+> Status: **Shipped** (full-stack, 2026-06). Queries/collections filter on
+> **multiple `(property, value)` constraints combined with AND**, index-backed
+> (sorted + paginated), full-stack (Rust core → server `/query` → `@tomic/lib`
+> → WASM client-db → React `useCollection`). UI lives in
+> [`table-view-filters.md`](./table-view-filters.md).
 >
 > **Phase 1 (Rust core) — DONE & tested.** `QueryFilter` now holds
 > `filters: Vec<PropVal>` (AND); `Query` keeps `property`/`value` and gains

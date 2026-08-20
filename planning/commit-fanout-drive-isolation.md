@@ -1,8 +1,8 @@
 # Drive-scoped commit fan-out: tenant isolation + the chatroom regression
 
-> **Status:** Shipped & verified (uncommitted on `did-rebased2`) — drive-scoped
-> fan-out + a server-side drive safety net close both the leak and the chatroom
-> regression. Full genesis-cert wiring (Part B) deferred. Builds on
+> **Status:** Shipped. Drive-scoped fan-out + a server-side drive safety net
+> close both the leak and the chatroom regression. Full genesis-cert wiring
+> (Part B) deferred. Builds on
 > [`sync.md`](./sync.md) (the WS `UPDATE`/`DESTROY` fan-out channel) and
 > [`genesis-self-verifying.md`](./genesis-self-verifying.md) (the immutable
 > `drive` field this fan-out routes by). Full genesis-cert wiring is deferred to

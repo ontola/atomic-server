@@ -1,5 +1,7 @@
 # JSON Schema compatible, code-first schemas
 
+**Status:** Proposal. Nothing built.
+
 ## Goal
 
 Make Atomic usable by app developers who want to define their data model in

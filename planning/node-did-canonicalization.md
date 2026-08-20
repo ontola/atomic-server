@@ -1,5 +1,8 @@
 # Node DID canonicalization
 
+**Status:** Shipped. `did:ad:node:<hex>` is the only user-facing and HTTP API
+form for peer node IDs.
+
 ## Decision
 
 - [x] `did:ad:node:<hex>` is the only user-facing and HTTP API form for peer node IDs.

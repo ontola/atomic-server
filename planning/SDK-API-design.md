@@ -1,6 +1,8 @@
 Using the Atomic ecosystem should be a breeze for any software engineer or LLM agent.
 We want people to get control over their data, and have true interoperability between apps.
 
+**Status:** Direction. SDK / agent DX; not a build checklist.
+
 ## Old (HTTP) situation
 
 In the "old" HTTP based Atomic(Server) UX, an app developer had to:

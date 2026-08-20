@@ -1,9 +1,11 @@
 # Pairing UX — field test notes from a real self-hosted setup
 
-> **Status:** Findings (2026-08-15), **substantially revised the same day
-> after rebuilding.** Companion to [`device-pairing.md`](./device-pairing.md),
-> which owns the pairing/onboarding UX; anything adopted from here belongs
-> there.
+> **Status:** Field notes (2026-08-15 through 2026-08-20). C0 (pairing invents
+> a drive) is superseded — both sides derive. M6 (opening an HTTP drive moves
+> the home server) is closed. Open: M4 (pre-0.40 DID auth), M8 (desktop
+> “saved locally” toast), M12 (presence over Iroh), extra-workspace inventory.
+> Companion to [`device-pairing.md`](./device-pairing.md), which owns the
+> pairing/onboarding UX; anything adopted from here belongs there.
 >
 > **Outcome (revised 2026-08-20):** C0 below is a pre-derivation finding.
 > The personal-drive DID is derived from the Agent key

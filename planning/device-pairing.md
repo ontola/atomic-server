@@ -1,7 +1,10 @@
 # Device Pairing — sync onboarding UX between a server and a phone/tablet
 
 > **Status:** Proposal (2026-07-08), revised 2026-07-10. Owns the
-> pairing/onboarding UX and the QR/deep-link envelope. Resolves
+> pairing/onboarding UX and the QR/deep-link envelope. C0 (invented
+> personal-drive DID) is **superseded** by derivation; M6 (HTTP drive
+> hijacks `serverUrl`) is **closed**. Remaining: extra-workspace inventory,
+> M4 (pre-0.40 DID auth). Resolves
 > [`serverless-p2p.md`](./serverless-p2p.md) Open Question 3 (key transport)
 > and narrows OQ1 (LAN discovery) and OQ4 (drive enrollment). Trust rules are
 > inherited from serverless-p2p Principle 1 and are not renegotiated here.
