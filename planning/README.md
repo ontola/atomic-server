@@ -127,6 +127,7 @@ Design intent, kept for direction. None has a line of code behind it.
 | [`nextgraph-interop.md`](./nextgraph-interop.md) | `did:ng:` via a scheme-routed Store backend. PR #1360 (optional NextGraph mirror) is open. |
 | [`personal-information-suite.md`](./personal-information-suite.md) | Contacts, calendar, email. |
 | [`social-apps.md`](./social-apps.md) | Requirements for social-network-shaped apps. Companion to `zones.md`. |
+| [`ecosystem-integrations.md`](./ecosystem-integrations.md) | **Exploration.** Where Atomic should meet other apps. Webhooks (#976/#77) first; Resource Event is the missing primitive. |
 | [`atomic-assistant-browser-extension.md`](./atomic-assistant-browser-extension.md) | Local-first Chromium extension. |
 | [`tours.md`](./tours.md) | Recorded tours; `unified-templates.md` defers them. |
 
