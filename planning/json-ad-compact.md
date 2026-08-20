@@ -1,10 +1,11 @@
 # JSON-AD-Compact: one wire dialect for the LLM assistant
 
-> Status: **In progress** (started 2026-07-08). First consumer: the data-browser
-> AI assistant tools (`useAtomicTools.ts`). Related: [[SDK-API-design]] (agent
-> DX), the `create_table` spec vocabulary in `createTableFromSpec.ts` (the
-> shipped prototype of this idea), and the drive-structure / custom-classes
-> system-prompt inventories that provide the ambient name→subject map.
+> Status: **Phase 1–2 shipped** (resolver, tool I/O, table/context providers).
+> Remaining: rebase `create_table.rows` on `fromCompact`; server
+> `format=compact`. First consumer: the data-browser AI assistant tools
+> (`useAtomicTools.ts`). Related: [[SDK-API-design]] (agent DX), the
+> `create_table` spec vocabulary in `createTableFromSpec.ts`, and the
+> drive-structure / custom-classes system-prompt inventories.
 
 ## Problem
 
@@ -103,15 +104,15 @@ section); tool descriptions just say "compact form".
 
 | Phase | Surface | Status |
 | ----- | ------- | ------ |
-| 1 | Resolver module + unit tests for pure resolution/coercion | **this round** |
-| 1 | Reads emit compact: `get_atomic_resource`, `query` results | **this round** |
-| 1 | Writes accept compact: `create_resource` (incl. batch), `edit_atomic_resource` property-by-shortname + tag-name values | **this round** |
-| 1 | `query` gains `class` param: shortname `where` keys, tag-name values, implied `isA` filter | **this round** |
-| 1 | System-prompt grammar section; slim per-tool JSON-AD explanations | **this round** |
-| 1 | Short subject refs (`#xxxxxxxx`) at the tool boundary + drive-tree/custom-classes seeding + markdown-link and tool-bubble expansion | **this round** |
-| 2 | Context items (`processAtomicResources`) emit compact; per-class context providers (table → row-class schema + tag map + first N rows + count in transient context) | next |
-| 3 | `create_table.rows` / `rowToPropVals` re-based on `fromCompact` | next |
-| 4 | Server-side `format=compact` so MCP server & other clients share it instead of reimplementing resolution | later |
+| 1 | Resolver module + unit tests for pure resolution/coercion | **done** |
+| 1 | Reads emit compact: `get_atomic_resource`, `query` results | **done** |
+| 1 | Writes accept compact: `create_resource` (incl. batch), `edit_atomic_resource` property-by-shortname + tag-name values | **done** |
+| 1 | `query` gains `class` param: shortname `where` keys, tag-name values, implied `isA` filter | **done** |
+| 1 | System-prompt grammar section; slim per-tool JSON-AD explanations | **done** |
+| 1 | Short subject refs (`#xxxxxxxx`) at the tool boundary + drive-tree/custom-classes seeding + markdown-link and tool-bubble expansion | **done** |
+| 2 | Context items (`processAtomicResources`) emit compact; per-class context providers (table → row-class schema + tag map + first N rows + count in transient context) | **done** |
+| 3 | `create_table.rows` / `rowToPropVals` re-based on `fromCompact` | remaining |
+| 4 | Server-side `format=compact` so MCP server & other clients share it instead of reimplementing resolution | remaining |
 
 ## Decisions record
 

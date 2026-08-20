@@ -1,5 +1,7 @@
 # Reticulum transport for Atomic sync
 
+**Status:** Proposal. Nothing built.
+
 ## Goal
 
 Make the Atomic sync protocol work over Reticulum, so Atomic nodes can sync over
