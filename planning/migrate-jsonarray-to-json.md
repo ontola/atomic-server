@@ -1,5 +1,8 @@
 # Migrate Canvas strokeData Datatype from jsonArray to json
 
+**Status:** Shipped. Canvas `strokeData` datatype is `json`. `jsonArray` is
+retired.
+
 Change the datatype of `https://atomicdata.dev/ontology/canvas/strokeData` from the non-existent `jsonArray` datatype to the standard native `json` datatype, and update the Rust backend, browser frontend, and Flutter mobile clients to support it.
 
 ## Decision

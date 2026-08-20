@@ -1,8 +1,10 @@
 # Table view: multi-property filtering UI (+ Views)
 
-> Status: **In progress** (started 2026-06-13). Builds on the completed
-> full-stack multi-property (AND) filtering core
-> ([[multi-property-filter]] / `planning/multi-property-filter.md`).
+> Status: **Default View shipped** (filters, sort, columns, operators).
+> Remaining: multi-view switcher (create / switch / delete); index-accelerated
+> range scans. Builds on the completed full-stack multi-property (AND)
+> filtering core ([[multi-property-filter]] /
+> `planning/multi-property-filter.md`).
 
 ## Goal
 

@@ -1,15 +1,20 @@
 # Pairing UX — field test notes from a real self-hosted setup
 
-> **Status:** Findings (2026-08-15), **substantially revised the same day
-> after rebuilding.** Companion to [`device-pairing.md`](./device-pairing.md),
-> which owns the pairing/onboarding UX; anything adopted from here belongs
-> there.
+> **Status:** Field notes (2026-08-15 through 2026-08-20). C0 (pairing invents
+> a drive) is superseded — both sides derive. M6 (opening an HTTP drive moves
+> the home server) is closed. Open: M4 (pre-0.40 DID auth), M8 (desktop
+> “saved locally” toast), M12 (presence over Iroh), extra-workspace inventory.
+> Companion to [`device-pairing.md`](./device-pairing.md), which owns the
+> pairing/onboarding UX; anything adopted from here belongs there.
 >
-> **Outcome: a blank node still cannot pull a peer's drives.** On current
-> code the pairing dialog reports "Your workspace is here" — but the drive it
-> opens was **provisioned locally on sign-in**, not received. The two nodes
-> end up holding disjoint drive sets, each returning "not found locally" for
-> the other's.
+> **Outcome (revised 2026-08-20):** C0 below is a pre-derivation finding.
+> The personal-drive DID is derived from the Agent key
+> ([`deterministic-personal-drive.md`](./deterministic-personal-drive.md)), so
+> two devices with the same secret name the same home. They cannot invent
+> disjoint personal-drive subjects. Pairing + live sync between desktop and
+> the HA node was verified 2026-08-17. The 2026-08-15 header ("a blank node
+> still cannot pull a peer's drives") described looking up the
+> `personalDrive` pointer and minting when it was absent — that path is gone.
 >
 > **This note has been wrong in both directions in one day.** The first draft
 > called it a bootstrap deadlock; the second declared it fixed after a
@@ -48,9 +53,10 @@ Disjoint. See C0 for why.
 
 ## Confirmed on a current build
 
-### C0 — A blank node invents a drive instead of pulling the peer's
+### C0 — A blank node invents a drive instead of pulling the peer's (superseded)
 
-The agent resource for one DID exists in two divergent copies:
+**Historical (2026-08-15).** The agent resource for one DID existed in two
+divergent copies, and the home was still a `personalDrive` pointer:
 
 | | desktop | server |
 | --- | --- | --- |
@@ -58,24 +64,27 @@ The agent resource for one DID exists in two divergent copies:
 | `name` | joep.io | Joep Meindertsma |
 | `publicKey` | `Qmfp…rcQ` | `Qmfp…rcQ=` |
 
-Sequence: sign in on the desktop → `fetchPersonalDriveSubject`
-(`helpers/personalDrive.ts:34`) asks a server for the agent's
-`personalDrive` → the server's copy has none → `adoptLegacyDriveList`
-provisions a fresh private drive locally → pairing resolves *that* drive and
-reports "Your workspace is here". The server's actual drives are never
-requested, because **nothing asks the peer what it holds**.
+Sequence then: sign in on the desktop → `fetchPersonalDriveSubject` asked a
+server for the agent's `personalDrive` → the server's copy had none →
+`adoptLegacyDriveList` provisioned a fresh private drive locally → pairing
+resolved *that* drive and reported "Your workspace is here". The two nodes
+held disjoint drive sets (`bkvN8DuZ…` vs `kZR5Rbwu…`). Nothing asked the peer
+what it held.
 
-Failing honestly ("your workspace didn't arrive") would be better than
-succeeding onto an invented drive, which is indistinguishable from success
-until you notice the drive is empty.
+**Why this cannot happen for the personal drive anymore.**
+`fetchPersonalDriveSubject` (`helpers/personalDrive.ts`) derives the subject
+from the Agent key (`agent.personalDriveSubject()`). The pointer is not
+identity. `createDrive({ personal: true })` pins that same DID; a repeat
+genesis merges. Two devices with the same secret therefore *name* the same
+home before any network round-trip. M23 then stopped *materializing* that
+subject before `deviceHasDriveData`, so an empty local shell is no longer
+read as "you already have your workspace".
 
-The `publicKey` padding difference between the two copies — same agent, one
-with the trailing `=` and one without — may be incidental or may be why they
-never reconcile. Worth checking on its own.
-
-**Fix direction:** pairing should ask the peer which drives it holds for this
-agent and offer them, rather than resolving against local state. Same
-conclusion the first draft reached; it survives the rebuild.
+What is still true, and is not C0: pairing syncs the named drive (and
+whatever the peer pushes for it). Extra workspaces the agent holds elsewhere
+arrive by being listed on that shared home, or by an explicit pull — there is
+still no "ask the peer which drives you have" inventory. That is a sync-scope
+question, not an identity one.
 
 ### C1 — The pairing input rejects a server address
 
@@ -349,11 +358,11 @@ was load-bearing and unenforced on the client. Deriving identity from a
 signature requires the signer to be deterministic — a requirement worth
 stating wherever it is relied upon.
 
-### M6 — Adopting a drive hands the whole session to the old server (open, top of the list)
+### M6 — Adopting a drive hands the whole session to the old server (fixed, 2026-08-20)
 
-The migration working is what breaks the app.
+The migration working is what used to break the app.
 
-`AppSettings.setDrive` repoints the entire app at a drive's origin:
+`AppSettings.setDrive` used to repoint the entire app at *any* HTTP drive's origin:
 
 ```ts
 if (newDrive.startsWith('http://') || newDrive.startsWith('https://')) {
@@ -362,10 +371,10 @@ if (newDrive.startsWith('http://') || newDrive.startsWith('https://')) {
 }
 ```
 
-Migration restores drives that live on `atomicdata.dev`. Opening one moves the
+Migration restores drives that live on `atomicdata.dev`. Opening one moved the
 session to that pre-0.40 server — which cannot do DID auth and does not speak
-the v2 websocket — so authentication times out after 30s, the socket retries
-forever, and every local `did:ad:` resource 404s because the client is asking
+the v2 websocket — so authentication timed out after 30s, the socket retried
+forever, and every local `did:ad:` resource 404ed because the client was asking
 the wrong machine.
 
 Measured on a run with the app's own server captured: **0 requests from the
@@ -381,15 +390,22 @@ Auth error: Timed out waiting 30000ms for WS tag 2
 The embedded server was healthy throughout — HTTP root in 0.9ms, correct
 default agent, 100ms durable-flush tick running.
 
-This is the parent of most of the evening's symptoms: "Server error" on every
+This was the parent of most of that evening's symptoms: "Server error" on every
 drive, the private drive not resolving, the migration fetch timing out (`curl`
 gets that same resource in 120ms), and the lost edits.
 
-**Not yet fixed** — it is a semantics decision, not a bug with one right
-answer. Either refuse to follow a drive to an origin that fails a capability
-check, or keep the home server fixed and fetch foreign drives cross-origin. The
-second is more defensible: a drive adopted from a server you are migrating
-*away from* should not be able to take the session with it.
+**Decision, not a blanket ban on HTTP origins.** A bare origin
+(`https://host`, no path) is still a server switch — that *is* what "open this
+URL" means when the URL is the machine. An HTTP subject *with a path* is a
+drive. `Store.setDrive` / `AppSettings.setDrive` set it as the current
+workspace and leave `serverUrl` alone. Fetch goes to the subject's own origin;
+live SUB / SYNC_VV / presence stay on the home websocket (`isLiveSyncedDrive`).
+A drive adopted from a server you are migrating *away from* cannot take the
+session with it.
+
+Pinned by `browser/lib/src/store.set-drive.test.ts`. Reading those drives
+still needs M4 (legacy auth against a pre-0.40 origin); this fix only stops
+the session move.
 
 ### M7 — A foreign origin's websocket took the whole app offline (fixed)
 

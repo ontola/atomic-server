@@ -1,5 +1,7 @@
 # LLM-Generated JS Applications and Future WASM Plugins
 
+**Status:** Proposal. Nothing built.
+
 ## Goal
 
 Let Atomic host existing and LLM-generated applications that use Atomic for

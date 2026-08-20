@@ -1,9 +1,10 @@
 # Scalable drive reconciliation & signed state roots
 
-> **Status:** Proposal (2026-07-08). Direction agreed, nothing built beyond the
-> foundation below. Records the decision so RBSR/Merkle work isn't started
-> before the design is settled. Builds on the drive-scoped VV read and the
-> hash-first probe already landed (see [Foundation](#foundation-already-landed)).
+> **Status:** Partial. Algorithm core lives in `lib/src/sync/rbsr.rs` (fingerprint
+> + recursive reconcile, pinned by unit tests). Not on the WS/Iroh wire yet;
+> range fingerprints are still O(range), not an incrementally-maintained tree.
+> Builds on the drive-scoped VV read and the hash-first probe already landed
+> (see [Foundation](#foundation-already-landed)).
 > Ties the reconciliation redesign to the signed-state-certificate direction in
 > [`genesis-self-verifying.md`](./genesis-self-verifying.md),
 > [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md),

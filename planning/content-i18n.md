@@ -1,17 +1,18 @@
 # Content i18n: localized resources, not localized values
 
-> **Status: Active (2026-07-20).** Issue #1069, milestone 11 (Local-first
-> headless CMS). Supersedes the `TranslationBox` concept in
+> **Status:** LocalizedText + template locales shipped (2026-07). Remaining:
+> TranslationsBar UI, `useTranslation` sibling resolution, `/query` `lang`,
+> search language filter. Issue #1069, milestone 11 (Local-first headless CMS).
+> Supersedes the `TranslationBox` concept in
 > `docs/src/schema/translations.md` (2020, pre-Loro, pre-DID). Companion to
 > [`website-templates.md`](./website-templates.md) §Internationalization and
 > [`drafts-and-suggestions.md`](./drafts-and-suggestions.md).
 >
-> **Sequencing amendment (2026-07-20):** the `LocalizedText` datatype is
-> being built *now* (decision in session), ahead of the document-level
-> tooling and without waiting for the primitive-first `Value` reshape —
-> the reshape collapses variants Loro can't distinguish, whereas
-> `LocalizedText` is a tagged structural shape (like `json`) and survives
-> it. Build progress tracked in the checklist at the bottom.
+> **Sequencing amendment (2026-07-20):** `LocalizedText` was built ahead of
+> the document-level tooling and without waiting for the primitive-first
+> `Value` reshape — the reshape collapses variants Loro can't distinguish,
+> whereas `LocalizedText` is a tagged structural shape (like `json`) and
+> survives it. Build progress tracked in the checklist at the bottom.
 
 ## The question
 

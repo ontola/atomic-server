@@ -10,6 +10,7 @@ import {
   waitForSearchIndex,
   waitForClassInstanceSearchable,
   waitForOntologyClass,
+  smoke,
 } from './test-utils';
 
 test.describe('Ontology', async () => {
@@ -20,7 +21,7 @@ test.describe('Ontology', async () => {
   // probably too short under contention. Investigate: replace the
   // `waitForTimeout(100)` in `pickOption` with an explicit visibility
   // wait on the dropdown's option list.
-  test('Create and edit ontology', async ({ page }) => {
+  test('Create and edit ontology', smoke, async ({ page }) => {
     test.slow();
 
     const pickOption = async (query: Locator, keyboardSteps?: number) => {

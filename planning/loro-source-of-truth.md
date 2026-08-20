@@ -1,9 +1,13 @@
 # Loro as the single source of truth
 
-> **Status:** Active plan (2026-05). Defines the storage end-state that
-> [`unified-data-layer.md`](./unified-data-layer.md) and [`unified-sync.md`](./unified-sync.md)
-> assume but do not specify. Concerns `lib/src` (core `Db`) and the Flutter
-> embedding (`flutter/rust`, `flutter/lib`).
+> **Status:** Partial. Sparse `datatypes` map shipped (Rust + TS). Phase 2a–2c
+> shipped: `Tree::Resources` is a derived cache; `loroUpdate` is stripped from
+> the blob for CRDT resources. Remaining: drop the untagged heuristic (explicit
+> `string` tag), Phase 1.6 `Value` reshape, Flutter undo. Defines the storage
+> end-state that [`unified-data-layer.md`](./unified-data-layer.md) and
+> [`unified-sync.md`](./unified-sync.md) assume but do not specify. Concerns
+> `lib/src` (core `Db`) and the Flutter embedding (`flutter/rust`,
+> `flutter/lib`).
 
 ## Goal
 
@@ -11,18 +15,20 @@ For mutable resources, the **Loro CRDT document is the authoritative state**.
 The flat `PropVals` map becomes a **derived read/index projection**, rebuilt
 from the doc on every write and never authored independently.
 
-Today the dependency runs backwards: `PropVals` is the primary write target and
-the Loro doc is seeded *from* it. The same logical state is also persisted
-twice and re-copied up the stack — see [Current state](#current-state).
+The write path is now doc-first for CRDT resources (Phase 2a); `Tree::Resources`
+is a derived cache and `loroUpdate` is stripped from the blob (Phase 2c). What
+remains is the untagged heuristic, the 3-way `build_state_doc` fallback, and
+Flutter's parallel undo trees — see the checklists below. The table in
+[Current state](#current-state) describes the shape this plan started from.
 
-## Current state (honest)
+## Current state (honest, as of 2026-05; #2 later stripped)
 
 A single resource's mergeable state exists in up to five representations:
 
 | # | Representation | Where | Notes |
 | --- | --- | --- | --- |
 | 1 | Loro oplog snapshot | `Tree::LoroSnapshots`, key `pure_id()` | The real merge truth. |
-| 2 | `loroUpdate` propval **inside** the `Tree::Resources` blob | `Tree::Resources` | Redundant; after a commit it can be a *stale incremental delta* (see `db.rs` `get_resource` comment). |
+| 2 | `loroUpdate` propval **inside** the `Tree::Resources` blob | `Tree::Resources` | **Removed in Phase 2c** for CRDT resources. Commits keep it (signed payload). |
 | 3 | Flat queryable `PropVals` | `Tree::Resources` | The index/query projection. |
 | 4 | Live `Resource` (in-memory doc + undo stack) | Flutter `CANVAS_CACHE` static (`flutter/rust/src/api/simple.rs`) | Undo history persisted nowhere. |
 | 5 | Materialized display copies | Dart `CanvasEntry.strokes`, `InfiniteCanvas._strokes`, `_loroStrokeStates` | Two parallel undo trees. |

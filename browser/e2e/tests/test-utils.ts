@@ -5,6 +5,9 @@ import {
   registerPerfPage,
 } from './perf-attach';
 
+/** Playwright tag for the light CI gate (`pnpm test-e2e:light` / `--grep @smoke`). */
+export const smoke = { tag: '@smoke' } as const;
+
 export const PROPERTIES = {
   isA: 'https://atomicdata.dev/properties/isA',
   set: 'https://atomicdata.dev/properties/set',

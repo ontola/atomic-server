@@ -37,6 +37,7 @@ import {
   acceptInvite,
   topBarShareButton,
   SEARCHBOX_PROPERTY_PLACEHOLDER,
+  smoke,
 } from './test-utils';
 
 test.describe('data-browser', async () => {
@@ -54,108 +55,114 @@ test.describe('data-browser', async () => {
     await expect(currentDriveTitle(page)).toContainText('atomicdata.dev');
   });
 
-  test('sign in with secret, edit profile, sign out', async ({ page }) => {
-    await signIn(page);
-    await editProfileAndCommit(page);
+  test(
+    'sign in with secret, edit profile, sign out',
+    smoke,
+    async ({ page }) => {
+      await signIn(page);
+      await editProfileAndCommit(page);
 
-    page.on('dialog', d => {
-      d.accept();
-    });
+      page.on('dialog', d => {
+        d.accept();
+      });
 
-    await openAgentPage(page);
-    await page.click('[data-test="sign-out"]');
-    await expect(
-      page.getByRole('button', { name: 'Create account' }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole('button', { name: 'Sign in', exact: true }),
-    ).toBeVisible();
-    await page.reload();
-    await expect(
-      page.getByRole('button', { name: 'Create account' }),
-    ).toBeVisible();
-  });
+      await openAgentPage(page);
+      await page.click('[data-test="sign-out"]');
+      await expect(
+        page.getByRole('button', { name: 'Create account' }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Sign in', exact: true }),
+      ).toBeVisible();
+      await page.reload();
+      await expect(
+        page.getByRole('button', { name: 'Create account' }),
+      ).toBeVisible();
+    },
+  );
 
   /**
    * We remove public read rights from drive, create an invite, open that
    * invite, and add the public read right again.
    */
-  test('authorization, invite, share menu', async ({
-    page,
-    browser,
-    context,
-  }) => {
-    // `acceptInvite` (test-utils.ts) waits through two sequential server
-    // round trips (new agent genesis commit save, then invite accept POST)
-    // before its dialog opens — see the comment at that call site. Give the
-    // whole test a wider budget to match, same as plugin.spec.ts's install
-    // flow.
-    test.slow();
+  test(
+    'authorization, invite, share menu',
+    smoke,
+    async ({ page, browser, context }) => {
+      // `acceptInvite` (test-utils.ts) waits through two sequential server
+      // round trips (new agent genesis commit save, then invite accept POST)
+      // before its dialog opens — see the comment at that call site. Give the
+      // whole test a wider budget to match, same as plugin.spec.ts's install
+      // flow.
+      test.slow();
 
-    await signIn(page);
-    const { driveURL, driveTitle } = await newDrive(page);
-    await currentDriveTitle(page).click();
-    await contextMenuClick('share', page);
-    expect(publicReadRightLocator(page)).not.toBeChecked();
+      await signIn(page);
+      const { driveURL, driveTitle } = await newDrive(page);
+      await currentDriveTitle(page).click();
+      await contextMenuClick('share', page);
+      expect(publicReadRightLocator(page)).not.toBeChecked();
 
-    // Initialize unauthorized page for reader. An anonymous user landing on a
-    // private drive is redirected to the welcome flow (ErrorPage redirects on
-    // unauthorized when no agent), so check for the sign-in card buttons that
-    // GettingStartedFlow renders instead of a literal "Unauthorized" string.
-    const context2 = await browser.newContext();
-    const page2 = await context2.newPage();
-    await page2.setViewportSize({ width: 1000, height: 400 });
-    // Navigate straight to the private drive. Do NOT use `openSubject` here:
-    // it waits for `main[about=drive]`, but an unauthorized anonymous user is
-    // redirected to /welcome — `main[about]` only renders as a sub-second
-    // flash (ResourcePage wraps ErrorPage in <Main> before the redirect
-    // effect fires). Dev is slow enough to catch that flash; on a production
-    // bundle the redirect wins the race. The correct readiness signal is the
-    // welcome card itself, asserted below.
-    await page2.goto(
-      `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(driveURL)}`,
-    );
-    await expect(
-      page2.getByRole('button', { name: 'Create account' }),
-    ).toBeVisible({ timeout: 15000 });
+      // Initialize unauthorized page for reader. An anonymous user landing on a
+      // private drive is redirected to the welcome flow (ErrorPage redirects on
+      // unauthorized when no agent), so check for the sign-in card buttons that
+      // GettingStartedFlow renders instead of a literal "Unauthorized" string.
+      const context2 = await browser.newContext();
+      const page2 = await context2.newPage();
+      await page2.setViewportSize({ width: 1000, height: 400 });
+      // Navigate straight to the private drive. Do NOT use `openSubject` here:
+      // it waits for `main[about=drive]`, but an unauthorized anonymous user is
+      // redirected to /welcome — `main[about]` only renders as a sub-second
+      // flash (ResourcePage wraps ErrorPage in <Main> before the redirect
+      // effect fires). Dev is slow enough to catch that flash; on a production
+      // bundle the redirect wins the race. The correct readiness signal is the
+      // welcome card itself, asserted below.
+      await page2.goto(
+        `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(driveURL)}`,
+      );
+      await expect(
+        page2.getByRole('button', { name: 'Create account' }),
+      ).toBeVisible({ timeout: 15000 });
 
-    // Create invite
-    await page.click('button:has-text("Create Invite")');
-    context.grantPermissions(['clipboard-read', 'clipboard-write']);
-    await page.click('button:has-text("Create")');
-    await expect(page.locator('text=Invite created and copied ')).toBeVisible();
-    const inviteUrl = await page.evaluate(() =>
-      document
-        ?.querySelector('[data-code-content]')
-        ?.getAttribute('data-code-content'),
-    );
-    expect(inviteUrl).not.toBeFalsy();
+      // Create invite
+      await page.click('button:has-text("Create Invite")');
+      context.grantPermissions(['clipboard-read', 'clipboard-write']);
+      await page.click('button:has-text("Create")');
+      await expect(
+        page.locator('text=Invite created and copied '),
+      ).toBeVisible();
+      const inviteUrl = await page.evaluate(() =>
+        document
+          ?.querySelector('[data-code-content]')
+          ?.getAttribute('data-code-content'),
+      );
+      expect(inviteUrl).not.toBeFalsy();
 
-    // The invite resource needs to be persisted server-side before the
-    // invitee opens its URL — otherwise the server returns 404. Wait for
-    // the dirty queue to drain rather than guessing a fixed 200ms.
-    await page.waitForFunction(
-      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
-      undefined,
-      { timeout: 10000 },
-    );
+      // The invite resource needs to be persisted server-side before the
+      // invitee opens its URL — otherwise the server returns 404. Wait for
+      // the dirty queue to drain rather than guessing a fixed 200ms.
+      await page.waitForFunction(
+        () => window.store?.getSyncStatus().pendingDirtyCount === 0,
+        undefined,
+        { timeout: 10000 },
+      );
 
-    // Open invite
-    const page3 = await openNewSubjectWindow(browser, inviteUrl as string);
-    await acceptInvite(page3);
-    await page3.waitForURL(/\/app\/show/, { timeout: 15000 });
-    await page3.reload();
-    await expect(page3.getByText(driveTitle).first()).toBeVisible();
-    // Accepting must also make the invited drive the ACTIVE one. Showing the
-    // resource while the sidebar still points at the invitee's own drive is
-    // the failure this guards: the sidebar lists the wrong children and the
-    // drive-wide subscription goes to a drive nobody is looking at.
-    await expect(page3.getByTestId('current-drive-title')).toHaveText(
-      driveTitle,
-    );
-  });
+      // Open invite
+      const page3 = await openNewSubjectWindow(browser, inviteUrl as string);
+      await acceptInvite(page3);
+      await page3.waitForURL(/\/app\/show/, { timeout: 15000 });
+      await page3.reload();
+      await expect(page3.getByText(driveTitle).first()).toBeVisible();
+      // Accepting must also make the invited drive the ACTIVE one. Showing the
+      // resource while the sidebar still points at the invitee's own drive is
+      // the failure this guards: the sidebar lists the wrong children and the
+      // drive-wide subscription goes to a drive nobody is looking at.
+      await expect(page3.getByTestId('current-drive-title')).toHaveText(
+        driveTitle,
+      );
+    },
+  );
 
-  test('chatroom', async ({ page, browser, context }) => {
+  test('chatroom', smoke, async ({ page, browser, context }) => {
     // This test also goes through `acceptInvite`'s two-round-trip agent
     // creation flow (see that call site) partway through, on top of its own
     // multi-round-trip chat/reload/invite steps — give it the same wider
@@ -417,7 +424,7 @@ test.describe('data-browser', async () => {
   // Likely a children-collection invalidation race after the `newResource`
   // commit. Investigate: subscribe directly to the folder's `useChildren`
   // collection ready state instead of waiting for the DOM.
-  test('folder', async ({ page }) => {
+  test('folder', smoke, async ({ page }) => {
     await newResource('folder', page);
     const folderTitle = 'TestFolder-uniqueName';
     await setTitle(page, folderTitle);
@@ -530,7 +537,7 @@ test.describe('data-browser', async () => {
     await expect(page.locator('text=Resource Saved')).toBeVisible();
   });
 
-  test('delete resource', async ({ page }) => {
+  test('delete resource', smoke, async ({ page }) => {
     await newResource('folder', page);
     const parentResource = await getCurrentSubject(page);
     // Empty-folder quick-create now renders dedicated "New Folder" / "New
@@ -751,7 +758,7 @@ test.describe('data-browser', async () => {
     ).toBeVisible();
   });
 
-  test('history page', async ({ page }) => {
+  test('history page', smoke, async ({ page }) => {
     await newResource('document', page);
 
     const firstTitleCommit = waitForCommit(page, {

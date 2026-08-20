@@ -26,6 +26,23 @@ and absent in another:
 
 A flow is only genuinely safe when all three are covered.
 
+### Playwright light vs full
+
+Only the browser suite splits. Lint, Rust, vitest, JS integration, and
+Flutter run on every CI job.
+
+| Trigger | Playwright |
+|---|---|
+| Feature-branch push | **light** (`@smoke`), required |
+| `develop` push | **full**, required (staging) |
+| stable `v*` tag | **full**, required (production) |
+| `workflow_dispatch` `e2e_mode=full`, `[full-e2e]` in the commit, or PR label `full-e2e` | **full** |
+
+Tag a new journey `@smoke` (`smoke` from `browser/e2e/tests/test-utils.ts`)
+only if a failure means the first-hour demo is dead. Extra operators,
+templates, and offline variants stay in the full suite. Policy:
+[`planning/e2e-light-heavy.md`](./planning/e2e-light-heavy.md).
+
 ---
 
 ## Where the suites live
@@ -35,7 +52,9 @@ A flow is only genuinely safe when all three are covered.
 | `atomic_lib` unit + integration | `cargo nextest run -p atomic_lib --features db-redb,iroh,ws` | `rustTest` |
 | Server integration | `cargo test -p atomic-server --test it <module>` | `rustTest` |
 | Browser unit (vitest) | `cd browser && pnpm run -r test` | `jsTest` |
-| Browser e2e (playwright) | `cd browser/e2e && pnpm run test-e2e` | `endToEnd` |
+| Browser integration (vitest + real server) | `cd browser/lib && pnpm run test:integration` | `jsTestIntegration` |
+| Browser e2e light (`@smoke`) | `cd browser && pnpm run test-e2e:light` | `endToEnd` on feature branches |
+| Browser e2e full | `cd browser && pnpm run test-e2e` | `endToEnd` on `develop` and `v*` tags |
 | Flutter Dart | `cd flutter && flutter test` | `flutterTest` |
 | Flutter Rust bridge | `cargo test --manifest-path flutter/rust/Cargo.toml` | `flutterTest` |
 
@@ -90,6 +109,7 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Browser records a peer and calls `/iroh-sync` | `data-browser/src/helpers/pairing.test.ts` | stubbed fetch |
 | Known-peer store: labels, dedupe, corrupt data, quota | `data-browser/src/helpers/knownPeers.test.ts` | |
 | `forgetServerPeer` signs the exact `?node=` URL, and fails soft | `data-browser/src/helpers/managedServer.test.ts` | mocked `signRequest` |
+| Opening a foreign HTTP drive does not move `serverUrl` | `browser/lib/src/store.set-drive.test.ts` | bare origin still switches the server; path-bearing HTTP is a drive |
 | Canvas editing session merges a peer's stroke | `flutter/rust/src/api/simple/tests.rs` | |
 | Whole-list rewrite (erase/undo) keeps a peer's stroke | `flutter/rust/src/api/simple/tests.rs` | |
 | Bridge `start_peer` → `add_known_peer` → `peer_sync` pushes a drawing to a real remote process | `flutter/rust/src/api/simple/peer_tests.rs` | receiving side writes the receipt |

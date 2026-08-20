@@ -4,6 +4,7 @@ import {
   FRONTEND_URL,
   nodeReachableServerUrl,
   SERVER_URL,
+  smoke,
 } from './test-utils';
 
 /**
@@ -156,23 +157,25 @@ test.describe('pairing by pasting a code', () => {
     ).toBeVisible();
   });
 
-  test('a successful pairing reports what synced, and with whom', async ({
-    page,
-  }) => {
-    await pretendToBeTheApp(page);
-    const calls = await stubIrohSync(page, {
-      count: 3,
-      peerName: 'Joep’s phone',
-    });
-    await gotoSync(page);
+  test(
+    'a successful pairing reports what synced, and with whom',
+    smoke,
+    async ({ page }) => {
+      await pretendToBeTheApp(page);
+      const calls = await stubIrohSync(page, {
+        count: 3,
+        peerName: 'Joep’s phone',
+      });
+      await gotoSync(page);
 
-    await pasteCode(page, VALID_CODE);
+      await pasteCode(page, VALID_CODE);
 
-    await expect(
-      page.getByText('Synced 3 resources with Joep’s phone'),
-    ).toBeVisible();
-    expect(calls.count).toBe(1);
-  });
+      await expect(
+        page.getByText('Synced 3 resources with Joep’s phone'),
+      ).toBeVisible();
+      expect(calls.count).toBe(1);
+    },
+  );
 
   test('the paired device is remembered for next time', async ({ page }) => {
     await pretendToBeTheApp(page);

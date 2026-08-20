@@ -37,6 +37,7 @@ test.describe('documents', async () => {
   // exceeds the loro broadcast budget under dagger CPU contention.
   // Investigate: bump the assertion to `waitForFunction` polling on the
   // store's loro-doc state instead of DOM text.
+  // Full suite only — do not tag `@smoke`. Folder create is the light cover.
   test('create document, edit, page title, websockets', async ({
     page,
     browser,

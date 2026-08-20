@@ -1,4 +1,16 @@
-on: [push, workflow_dispatch]
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      e2e_mode:
+        description: Playwright suite. auto = light on feature branches, full on develop and v* tags.
+        type: choice
+        options:
+          - auto
+          - light
+          - full
+        default: auto
+
 
 # Main prefers Mancave (self-hosted) so Dagger cache volumes stay warm.
 # GitHub-hosted runs ONLY when Mancave is unavailable — never as a retry
@@ -30,8 +42,12 @@ jobs:
   pick:
     name: Pick runner
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       host: ${{ steps.pick.outputs.host }}
+      e2e-mode: ${{ steps.e2e.outputs.mode }}
     steps:
       - id: pick
         env:
@@ -86,6 +102,39 @@ jobs:
             echo "host=hosted" >> "$GITHUB_OUTPUT"
           fi
 
+      - id: e2e
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          DISPATCH_MODE: ${{ github.event.inputs.e2e_mode }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # Light = @smoke Playwright. Full = every spec.
+          # Default full on develop/tags so staging/production never ship on
+          # a subset. Feature-branch pushes are light unless opted in.
+          mode=light
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "${DISPATCH_MODE:-auto}" = "full" ]; then
+            mode=full
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "${DISPATCH_MODE:-auto}" = "light" ]; then
+            mode=light
+          elif [ "$REF" = "refs/heads/develop" ]; then
+            mode=full
+          elif [[ "$REF" == refs/tags/v* ]]; then
+            mode=full
+          elif printf '%s' "${COMMIT_MSG:-}" | grep -q '\[full-e2e\]'; then
+            mode=full
+          elif prs=$(gh api "repos/$REPO/commits/$SHA/pulls" -H "Accept: application/vnd.github+json" 2>/dev/null); then
+            if printf '%s' "$prs" | jq -e 'any(.[]; any(.labels[]; .name == "full-e2e"))' >/dev/null; then
+              mode=full
+            fi
+          fi
+          echo "e2e-mode=$mode (ref=$REF dispatch=${DISPATCH_MODE:-} event=$EVENT_NAME)"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+
   mancave:
     name: Main (Mancave)
     needs: pick
@@ -101,6 +150,7 @@ jobs:
       runner: ${{ vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]' }}
       artifact-name: build-artifacts-mancave
       host-profile: mancave
+      e2e-mode: ${{ needs.pick.outputs.e2e-mode }}
     secrets:
       NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -120,6 +170,7 @@ jobs:
       runner: '["ubuntu-latest"]'
       artifact-name: build-artifacts-github
       host-profile: hosted
+      e2e-mode: ${{ needs.pick.outputs.e2e-mode }}
     secrets:
       NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

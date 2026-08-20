@@ -11,6 +11,7 @@ import {
   getCurrentSubject,
   openSubject,
   waitForSearchIndex,
+  smoke,
 } from './test-utils';
 
 const SEARCH_RESULTS = 'https://atomicdata.dev/properties/search/results';
@@ -100,7 +101,7 @@ async function waitForFilteredServerSearch(
 test.describe('search', async () => {
   test.beforeEach(before);
 
-  test('text search', async ({ page }) => {
+  test('text search', smoke, async ({ page }) => {
     // Seed content: dev-drive starts empty, so we create the thing we intend
     // to find. Previously the test relied on onboarding content ("Welcome to
     // your drive…") that no longer ships with dev-drive. Avoid colons in the
