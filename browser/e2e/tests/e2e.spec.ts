@@ -37,6 +37,7 @@ import {
   acceptInvite,
   topBarShareButton,
   SEARCHBOX_PROPERTY_PLACEHOLDER,
+  smoke,
 } from './test-utils';
 
 test.describe('data-browser', async () => {
@@ -54,7 +55,9 @@ test.describe('data-browser', async () => {
     await expect(currentDriveTitle(page)).toContainText('atomicdata.dev');
   });
 
-  test('sign in with secret, edit profile, sign out', async ({ page }) => {
+  test('sign in with secret, edit profile, sign out', smoke, async ({
+    page,
+  }) => {
     await signIn(page);
     await editProfileAndCommit(page);
 
@@ -80,7 +83,7 @@ test.describe('data-browser', async () => {
    * We remove public read rights from drive, create an invite, open that
    * invite, and add the public read right again.
    */
-  test('authorization, invite, share menu', async ({
+  test('authorization, invite, share menu', smoke, async ({
     page,
     browser,
     context,
@@ -155,7 +158,7 @@ test.describe('data-browser', async () => {
     );
   });
 
-  test('chatroom', async ({ page, browser, context }) => {
+  test('chatroom', smoke, async ({ page, browser, context }) => {
     // This test also goes through `acceptInvite`'s two-round-trip agent
     // creation flow (see that call site) partway through, on top of its own
     // multi-round-trip chat/reload/invite steps — give it the same wider
@@ -417,7 +420,7 @@ test.describe('data-browser', async () => {
   // Likely a children-collection invalidation race after the `newResource`
   // commit. Investigate: subscribe directly to the folder's `useChildren`
   // collection ready state instead of waiting for the DOM.
-  test('folder', async ({ page }) => {
+  test('folder', smoke, async ({ page }) => {
     await newResource('folder', page);
     const folderTitle = 'TestFolder-uniqueName';
     await setTitle(page, folderTitle);
@@ -530,7 +533,7 @@ test.describe('data-browser', async () => {
     await expect(page.locator('text=Resource Saved')).toBeVisible();
   });
 
-  test('delete resource', async ({ page }) => {
+  test('delete resource', smoke, async ({ page }) => {
     await newResource('folder', page);
     const parentResource = await getCurrentSubject(page);
     // Empty-folder quick-create now renders dedicated "New Folder" / "New
@@ -751,7 +754,7 @@ test.describe('data-browser', async () => {
     ).toBeVisible();
   });
 
-  test('history page', async ({ page }) => {
+  test('history page', smoke, async ({ page }) => {
     await newResource('document', page);
 
     const firstTitleCommit = waitForCommit(page, {

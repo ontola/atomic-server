@@ -148,6 +148,9 @@ const config: PlaywrightTestConfig = {
       : []),
   ],
   fullyParallel: true,
+  // Light vs full: tag `@smoke` (see `smoke` in tests/test-utils.ts).
+  // `pnpm test-e2e:light` / CI feature branches pass `--grep @smoke`.
+  // `pnpm test-e2e` and develop/tag CI run the unfiltered suite.
   // Worker count:
   // - local (no CI): 2
   // - CI without override: 1 (safe for 2-vCPU hosted runners)

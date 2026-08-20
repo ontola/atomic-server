@@ -5,6 +5,7 @@ import {
   getDevDriveSecret,
   signIn,
   FRONTEND_URL,
+  smoke,
 } from './test-utils';
 
 /**
@@ -54,7 +55,9 @@ test('top bar offers no Meet control when no meeting is live', async ({
   await expect(page.getByTestId('menu-item-newDraft')).toHaveCount(0);
 });
 
-test('prepare an agenda, start it, and preserve minutes', async ({ page }) => {
+test('prepare an agenda, start it, and preserve minutes', smoke, async ({
+  page,
+}) => {
   test.setTimeout(90_000);
   await before({ page });
   await page.waitForLoadState('load');

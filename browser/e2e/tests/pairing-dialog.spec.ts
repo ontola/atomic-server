@@ -4,6 +4,7 @@ import {
   FRONTEND_URL,
   nodeReachableServerUrl,
   SERVER_URL,
+  smoke,
 } from './test-utils';
 
 /**
@@ -156,7 +157,7 @@ test.describe('pairing by pasting a code', () => {
     ).toBeVisible();
   });
 
-  test('a successful pairing reports what synced, and with whom', async ({
+  test('a successful pairing reports what synced, and with whom', smoke, async ({
     page,
   }) => {
     await pretendToBeTheApp(page);

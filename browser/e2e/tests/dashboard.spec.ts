@@ -6,6 +6,7 @@ import {
   newResource,
   pickFromMenu,
   waitForRowsMaterialized,
+  smoke,
 } from './test-utils';
 
 /**
@@ -306,7 +307,7 @@ test.describe('dashboards', () => {
     await expect(page.getByRole('menuitem', { name: 'Button' })).toBeVisible();
   });
 
-  test('the four block kinds each show what they were configured to', async ({
+  test('the four block kinds each show what they were configured to', smoke, async ({
     page,
   }) => {
     const fixture = await createSpendingTable(page);

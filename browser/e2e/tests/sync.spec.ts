@@ -10,12 +10,13 @@ import {
   waitForSearchIndex,
   waitForServerConnected,
   waitForSynced,
+  smoke,
 } from './test-utils';
 
 test.describe('sync', () => {
   test.beforeEach(before);
 
-  test('create resource online, edit title, verify it persists across reload', async ({
+  test('create resource online, edit title, verify it persists across reload', smoke, async ({
     page,
   }) => {
     // 1. Create a document in the drive (online)

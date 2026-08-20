@@ -7,12 +7,13 @@ import {
   makeDrivePublic,
   newResource,
   FRONTEND_URL,
+  smoke,
 } from './test-utils';
 
 test.describe('drive deep link', () => {
   test.beforeEach(before);
 
-  test('opening a share link to a NON-DRIVE child resource adopts the PARENT drive as the session drive', async ({
+  test('opening a share link to a NON-DRIVE child resource adopts the PARENT drive as the session drive', smoke, async ({
     page,
     browser,
   }) => {

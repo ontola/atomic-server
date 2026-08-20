@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
-import { before, createTableFromDialog, reloadReconnected } from './test-utils';
+import { before, createTableFromDialog, reloadReconnected, smoke } from './test-utils';
 
 /**
  * Drag `source` onto `target` in a way that satisfies @dnd-kit's MouseSensor,
@@ -156,7 +156,7 @@ test.describe('kanban', () => {
     await expect(column(page, 'No status')).not.toBeVisible();
   });
 
-  test('add a card, drag it between columns, and it persists', async ({
+  test('add a card, drag it between columns, and it persists', smoke, async ({
     page,
   }) => {
     await createIssueTracker(page, 'Bugs');
