@@ -322,6 +322,45 @@ describe('resource.ts', () => {
     expect(loaded.get(recommends)).toEqual(order);
   });
 
+  it('replace-import of an OPFS snapshot does not drop isA or duplicate arrays', async ({
+    expect,
+  }) => {
+    const recommends = 'https://atomicdata.dev/properties/recommends';
+    const name = 'https://atomicdata.dev/properties/name';
+    const isA = core.properties.isA;
+    const tableClass = 'https://atomicdata.dev/classes/Table';
+    const order = [
+      'https://example.com/col/name',
+      'https://example.com/col/date',
+      'https://example.com/col/number',
+    ];
+
+    const original = new Resource('https://example.com/table-replace');
+    await original.set(isA, [tableClass], false);
+    await original.set(name, 'TypedRefresh', false);
+    await original.set(recommends, order, false);
+    const snapshot = original.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    const jsonAd = original.toObject({ includeBinary: false })!;
+    const loaded = new Resource('https://example.com/table-replace');
+    loaded.applyHydratedValues(
+      Object.entries(jsonAd).filter(([key]) => key !== '@id') as [
+        string,
+        JSONValue,
+      ][],
+    );
+    loaded.getLoroDoc();
+    loaded.loading = true;
+
+    const { complete } = loaded.importLoroUpdate(snapshot, true);
+
+    expect(complete).toBe(true);
+    expect(loaded.loading).toBe(false);
+    expect(loaded.get(isA)).toEqual([tableClass]);
+    expect(loaded.get(name)).toBe('TypedRefresh');
+    expect(loaded.get(recommends)).toEqual(order);
+  });
+
   /**
    * Regression: drawing onto a canvas whose strokes were seeded in bulk via
    * `set()` (template/demo content) threw "pushContainer is not a function"

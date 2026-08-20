@@ -3455,6 +3455,17 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     try {
+      // `replace` already pointed `getLoroDoc()` at these bytes, so the
+      // snapshot is in the doc. Importing it a second time merged it with
+      // the JSON-AD heal commit and could drop `isA` (stuck `loading`, no
+      // title after reload) or duplicate array items.
+      if (replace) {
+        this._loroSnapshotBytes = undefined;
+        this.eventManager.emit(ResourceEvents.LocalChange, '', undefined);
+
+        return { complete: true };
+      }
+
       const status = doc.import(loroUpdate);
       this.rebuildCacheFromLoro();
       this.#cacheDirty = false;
