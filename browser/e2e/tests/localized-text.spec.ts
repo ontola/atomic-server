@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import {
   before,
   inDialog,
+  pickFromMenu,
   waitForGridMounted,
   waitForSynced,
 } from './test-utils';
@@ -222,8 +223,10 @@ test.describe('LocalizedText table columns', () => {
     await expect(page.getByRole('gridcell', { name: 'Hello' })).toBeVisible();
 
     // Split into one column per declared language.
-    await chips(page).first().click();
-    await page.getByText('Split by language').click();
+    await pickFromMenu(
+      chips(page).first(),
+      page.getByText('Split by language'),
+    );
     await expect(chips(page)).toHaveCount(2);
     await expect(chips(page).nth(0)).toHaveText('en');
     await expect(chips(page).nth(1)).toHaveText('nl');

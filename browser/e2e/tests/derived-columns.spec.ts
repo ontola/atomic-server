@@ -246,12 +246,14 @@ test.describe('computed columns', () => {
     const narrowed = await widthOf(timer);
     expect(narrowed).toBeLessThan(70);
 
-    // Widths live on the table, so they survive a reload.
+    await waitForSynced(page);
     await page.reload();
     await waitForGridMounted(page);
 
-    expect(await widthOf(duration)).toBe(widened);
-    expect(await widthOf(timer)).toBe(narrowed);
+    await expect
+      .poll(() => widthOf(duration), { timeout: 15_000 })
+      .toBe(widened);
+    await expect.poll(() => widthOf(timer), { timeout: 15_000 }).toBe(narrowed);
   });
 
   test('columns can be reordered, including the ones a view adds', async ({
@@ -306,11 +308,11 @@ test.describe('computed columns', () => {
       reordered.indexOf('name'),
     );
 
-    // The order lives on the View, so it survives a reload.
+    await waitForSynced(page);
     await page.reload();
     await waitForGridMounted(page);
 
-    expect(await headings()).toEqual(reordered);
+    await expect.poll(headings, { timeout: 15_000 }).toEqual(reordered);
   });
   test('a computed column can be filtered on, in a unit that reads', async ({
     page,

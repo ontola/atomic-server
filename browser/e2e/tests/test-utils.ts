@@ -20,6 +20,28 @@ export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:6747';
 
 /**
+ * Rewrite a server-origin URL onto the SPA origin Playwright drives.
+ *
+ * Invite links and `/app/…` URLs are minted on the atomic-server origin.
+ * Locally that origin may serve a stub bundle while Vite is on
+ * `FRONTEND_URL`. Opening the server URL then loads an empty page and
+ * every "Create account and accept" wait times out. CI sets both to the
+ * same origin, so this is a no-op there.
+ */
+export function spaUrl(url: string): string {
+  try {
+    const parsed = new URL(url, FRONTEND_URL);
+    const frontend = new URL(FRONTEND_URL);
+    parsed.protocol = frontend.protocol;
+    parsed.host = frontend.host;
+
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+/**
  * Hostname the Node test process can actually reach.
  *
  * Dagger serves the SPA at `http://atomic.localhost:9883` so Chromium treats
@@ -1391,7 +1413,7 @@ export async function setGridCell(
     }
 
     await expect(input).toBeVisible({ timeout: 2_000 });
-    await input.fill(value);
+    await fillGridInput(input, value);
     await page.keyboard.press('Tab');
     await page.keyboard.press('Escape');
 
@@ -1404,18 +1426,38 @@ export async function setGridCell(
 }
 
 /**
- * Opens the menu behind `trigger` and clicks `item` in it.
- *
- * Two things go wrong with a plain click-then-click. The dropdown mounts
- * `visibility: hidden` and reveals itself a frame after it has been
- * positioned, and a dismissed menu can linger in the DOM — so an unscoped
- * locator can resolve to a hidden item and wait out its whole budget on
- * something that will never appear. And the trigger TOGGLES its menu, so a
- * click landing while a previous menu is still closing closes this one
- * instead of opening it.
- *
- * Hence: scope to a visible instance, and retry the open as well as the pick.
+ * Fill a grid editor. Native `type="date"` inputs reject `fill("15012026")`
+ * (`Malformed value`); they want ISO. The suite types ddMMyyyy because it
+ * runs in `en-GB` — convert that, then `fill` the ISO form.
  */
+async function fillGridInput(input: Locator, value: string) {
+  const type = await input.getAttribute('type');
+
+  if (type === 'date') {
+    const iso = ddmmyyyyToIso(value);
+    await input.fill(iso);
+
+    return;
+  }
+
+  await input.fill(value);
+}
+
+/** `15012026` / `2026-01-15` → `2026-01-15`. Other strings pass through. */
+function ddmmyyyyToIso(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+
+  const digits = value.replace(/\D/g, '');
+
+  if (digits.length === 8) {
+    return `${digits.slice(4)}-${digits.slice(2, 4)}-${digits.slice(0, 2)}`;
+  }
+
+  return value;
+}
+
 /**
  * Waits until every row typed into a grid is a real member of its table.
  *
@@ -1501,6 +1543,19 @@ export async function focusCell(page: Page, cell: Locator) {
   }).toPass({ timeout: 15_000 });
 }
 
+/**
+ * Opens the menu behind `trigger` and clicks `item` in it.
+ *
+ * Two things go wrong with a plain click-then-click. The dropdown mounts
+ * `visibility: hidden` and reveals itself a frame after it has been
+ * positioned, and a dismissed menu can linger in the DOM — so an unscoped
+ * locator can resolve to a hidden item and wait out its whole budget on
+ * something that will never appear. And the trigger TOGGLES its menu, so a
+ * click landing while a previous menu is still closing closes this one
+ * instead of opening it.
+ *
+ * Hence: scope to a visible instance, and retry the open as well as the pick.
+ */
 export async function pickFromMenu(trigger: Locator, item: Locator) {
   const visible = item.filter({ visible: true }).first();
 
@@ -1549,7 +1604,7 @@ export async function openNewSubjectWindow(
   // be visited directly — wrapping them in /app/show?subject=... would treat
   // them as resources to fetch and the server has no such resource.
   if (url.includes('/app/')) {
-    await page.goto(url);
+    await page.goto(spaUrl(url));
   } else {
     await openSubject(page, url);
   }

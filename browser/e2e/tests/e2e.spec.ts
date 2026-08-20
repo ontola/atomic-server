@@ -9,7 +9,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
   FRONTEND_URL,
-  SERVER_URL,
+  spaUrl,
   before,
   changeDrive,
   contextMenuClick,
@@ -241,13 +241,11 @@ test.describe('data-browser', async () => {
       'Message date missing after refresh — createdAt did not survive the round-trip',
     ).toHaveAttribute('datetime', new RegExp(`^${year}-`));
 
-    // Build the chatroom fallback URL on the SERVER's origin (same as the
-    // invite URL the guest opens), not the frontend dev server. The guest
-    // sets up their agent on `localhost:9883` after accepting the invite —
-    // crossing to `localhost:6747` would land on a fresh-origin localStorage
-    // with no agent and bounce the guest to the welcome page.
+    // Build the chatroom fallback URL on the SPA origin the guest already
+    // accepted the invite on. Mixing FRONTEND_URL (Vite) with SERVER_URL
+    // (embedded bundle) drops the guest's localStorage agent.
     const chatSubject = await getCurrentSubject(page);
-    const showFallback = new URL('/app/show', SERVER_URL);
+    const showFallback = new URL('/app/show', FRONTEND_URL);
     showFallback.searchParams.set('subject', chatSubject);
     const chatRoomHref = showFallback.href;
 
@@ -270,13 +268,14 @@ test.describe('data-browser', async () => {
         ?.getAttribute('data-code-content'),
     );
     expect(inviteUrl).toBeTruthy();
+    await waitForSynced(page);
 
     const context2 = await browser.newContext();
     await context2.grantPermissions(['clipboard-read', 'clipboard-write'], {
       origin: new URL(FRONTEND_URL).origin,
     });
     const page2 = await context2.newPage();
-    await page2.goto(inviteUrl as string);
+    await page2.goto(spaUrl(inviteUrl as string));
 
     await acceptInvite(page2);
     await page2.waitForURL(/\/app\//, { timeout: 15_000 });
