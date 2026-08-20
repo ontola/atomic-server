@@ -12,6 +12,7 @@ import {
   FaMagnifyingGlass,
   FaMessage,
   FaPencil,
+  FaPlay,
   FaPlus,
   FaRegStar,
   FaShare,
@@ -33,6 +34,7 @@ import { paths } from '../routes/paths';
 import { shortcuts } from '../components/HotKeyWrapper';
 import { ResourceInline } from '../views/ResourceInline';
 import { ResourceUsage } from '../components/ResourceUsage';
+import { pluginClassNow } from '@chunks/PluginRuns/runScript';
 import type { ActionContext, ActionDefinition } from './types';
 
 const getParent = (ctx: ActionContext): string | undefined =>
@@ -64,6 +66,24 @@ export const resourceActions: ActionDefinition[] = [
     shortcut: shortcuts.data,
     disabled: ctx => ctx.pathname.startsWith(paths.data),
     run: ctx => ctx.navigate(dataURL(ctx.subject)),
+  },
+  {
+    id: 'run-plugin',
+    scope: 'resource',
+    section: 'action',
+    label: () => 'Run',
+    helper: () =>
+      'Run this plugin and review what it proposes before anything is written.',
+    keywords: ['plugin', 'execute', 'automation', 'import'],
+    icon: () => <FaPlay />,
+    available: ctx => {
+      if (ctx.openPluginRun === undefined || !ctx.drive) return false;
+
+      const pluginClass = pluginClassNow(ctx.store, ctx.drive);
+
+      return pluginClass !== undefined && ctx.resource.hasClasses(pluginClass);
+    },
+    run: ctx => ctx.openPluginRun?.(),
   },
   {
     id: 'favorite',

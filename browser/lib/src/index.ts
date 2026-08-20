@@ -147,6 +147,7 @@ export {
 } from './plugin-apply.js';
 export {
   ensureSchema,
+  findSchema,
   type ClassSpec,
   type EnsuredSchema,
   type PropertySpec,
@@ -156,7 +157,7 @@ export {
 export {
   recordRun,
   runStatus,
-  pluginRunSchema,
+  pluginSchema,
   type RecordRunOptions,
   type RunStatus,
 } from './plugin-log.js';
