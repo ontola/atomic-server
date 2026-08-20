@@ -524,8 +524,7 @@ const DidOpenRow = styled.button<{ selected: boolean }>`
   border: 1px solid ${p => p.theme.colors.bg2};
   border-radius: 0.375rem;
   padding: 0.75rem 1rem;
-  background: ${p =>
-    p.selected ? p.theme.colors.bg1 : p.theme.colors.bg};
+  background: ${p => (p.selected ? p.theme.colors.bg1 : p.theme.colors.bg)};
   color: ${p => p.theme.colors.text};
   cursor: pointer;
   font: inherit;

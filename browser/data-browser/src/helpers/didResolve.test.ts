@@ -18,8 +18,7 @@ const { readKnownPeers, upsertKnownPeer } = await import('./knownPeers');
 
 const RESOURCE =
   'did:ad:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
-const AGENT =
-  'did:ad:agent:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
+const AGENT = 'did:ad:agent:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
 const NODE =
   'did:ad:node:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc';
 const NODE_B =
@@ -27,7 +26,10 @@ const NODE_B =
 
 const resolveAgentContract = (() => {
   const path = fileURLToPath(
-    new URL('../../../../testdata/resolve-agent-response.json', import.meta.url),
+    new URL(
+      '../../../../testdata/resolve-agent-response.json',
+      import.meta.url,
+    ),
   );
   const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Record<
     string,
@@ -67,32 +69,34 @@ function stubResolveFetch(opts: {
   resolveAgentOk?: boolean;
   irohSync?: unknown | ((url: string, init?: RequestInit) => unknown);
 }) {
-  const fetchMock = vi.fn().mockImplementation(async (url: unknown, init?: RequestInit) => {
-    const href = String(url);
+  const fetchMock = vi
+    .fn()
+    .mockImplementation(async (url: unknown, init?: RequestInit) => {
+      const href = String(url);
 
-    if (href.includes('/resolve-agent')) {
-      const body = opts.resolveAgent ?? { nodeIds: [] };
+      if (href.includes('/resolve-agent')) {
+        const body = opts.resolveAgent ?? { nodeIds: [] };
 
-      return {
-        ok: opts.resolveAgentOk ?? true,
-        json: async () => body,
-      };
-    }
+        return {
+          ok: opts.resolveAgentOk ?? true,
+          json: async () => body,
+        };
+      }
 
-    if (href.includes('/iroh-sync')) {
-      const body =
-        typeof opts.irohSync === 'function'
-          ? opts.irohSync(href, init)
-          : (opts.irohSync ?? { count: 1 });
+      if (href.includes('/iroh-sync')) {
+        const body =
+          typeof opts.irohSync === 'function'
+            ? opts.irohSync(href, init)
+            : (opts.irohSync ?? { count: 1 });
 
-      return {
-        ok: true,
-        json: async () => body,
-      };
-    }
+        return {
+          ok: true,
+          json: async () => body,
+        };
+      }
 
-    throw new Error(`unexpected fetch: ${href}`);
-  });
+      throw new Error(`unexpected fetch: ${href}`);
+    });
 
   globalThis.fetch = fetchMock as unknown as typeof fetch;
 

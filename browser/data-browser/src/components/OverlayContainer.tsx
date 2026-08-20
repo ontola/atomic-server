@@ -31,10 +31,7 @@ import ResourceCard from '../views/Card/ResourceCard';
 import ResourceRow from '@views/ResourceRow';
 import { DEFAULT_AICHAT_NAME } from './AI/aiContstants';
 import { setPendingFirstMessage } from '@chunks/AI/pendingFirstMessage';
-import {
-  parseDidOpenInput,
-  resolveDidForOpen,
-} from '../helpers/didResolve';
+import { parseDidOpenInput, resolveDidForOpen } from '../helpers/didResolve';
 
 // ─── Module-level overlay state ────────────────────────────────────────────────
 

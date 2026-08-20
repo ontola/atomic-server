@@ -15,10 +15,7 @@ import { isRootWelcomeResourceError } from '../helpers/isRootWelcomeResourceErro
 import { isDriveSignInError } from '../helpers/isDriveSignInError';
 import { RootWelcomeGate } from './RootWelcomeGate';
 import { readKnownPeers } from '../helpers/knownPeers';
-import {
-  parseDidOpenInput,
-  resolveDidForOpen,
-} from '../helpers/didResolve';
+import { parseDidOpenInput, resolveDidForOpen } from '../helpers/didResolve';
 
 import type { JSX } from 'react';
 
@@ -150,8 +147,8 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
         {resource.subject.startsWith('did:ad:') && knownPeers.length === 0 && (
           <p>
             This DID is not on this device. Pair a device on the{' '}
-            <AtomicLink path={paths.sync}>Sync</AtomicLink> page, or open a
-            link that includes an <code>agent</code> or <code>node</code> hint.
+            <AtomicLink path={paths.sync}>Sync</AtomicLink> page, or open a link
+            that includes an <code>agent</code> or <code>node</code> hint.
           </p>
         )}
         {peerStatus && <p>{peerStatus}</p>}

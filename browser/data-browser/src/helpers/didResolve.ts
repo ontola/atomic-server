@@ -327,7 +327,9 @@ export async function resolveAgentNodeIds(agentDid: string): Promise<string[]> {
     }
 
     return (data.nodeIds ?? [])
-      .map(id => (id.startsWith(NODE_DID_PREFIX) ? id : `${NODE_DID_PREFIX}${id}`))
+      .map(id =>
+        id.startsWith(NODE_DID_PREFIX) ? id : `${NODE_DID_PREFIX}${id}`,
+      )
       .filter(id => /^did:ad:node:[0-9a-f]{64}$/i.test(id));
   } catch (e) {
     console.warn('[didResolve] resolve-agent request failed:', e);
