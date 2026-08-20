@@ -27,18 +27,46 @@ branch from the tag and merge back to `develop`. See `CONTRIBUTING.md`.
 ## Formatting (mandatory before every commit)
 
 CI fails fast on format (`cargo fmt --check`, package `oxfmt`). **Never push
-unformatted code.** Before every `git commit` that touches the listed trees:
+unformatted code.** Prefer the git hook; always verify before commit.
 
-1. **Rust** (`lib/`, `server/`, `cli/`, `desktop/`, `browser/data-browser` wasm,
-   `flutter/rust/`, etc.): run `cargo fmt --all` from the repo root, then
-   `cargo fmt --all -- --check` and fix until it passes.
-2. **Browser / TS** (`browser/**`): from `browser/`, run `pnpm format` (or
-   `pnpm --filter <pkg> format` for the packages you edited). Prefer
-   `pnpm lint-fix` when you also want oxlint auto-fixes.
+### Pre-commit hook (preferred)
 
-Do this even for “docs-only” or “tiny” Rust edits — fmt drift on a few lines
-still reds the Mancave pipeline. Do not rely on a later CI failure as the
-reminder.
+The repo ships [`.githooks/pre-commit`](.githooks/pre-commit): it runs
+`cargo fmt --all` when any `*.rs` is staged, and `oxfmt` on staged
+`browser/` TS/JS. Enable once per clone:
+
+```
+git config core.hooksPath .githooks
+```
+
+Cursor Cloud wraps `core.hooksPath` with its own dispatcher and still invokes
+the previous path — keep that previous path as `.githooks` (see Cursor Cloud
+section). **Never pass `--no-verify`** to skip this hook.
+
+### Manual fallback
+
+If the hook is not installed, before every `git commit` that touches the listed
+trees:
+
+1. **Rust** (`lib/`, `server/`, `cli/`, `desktop/`, wasm, `flutter/rust/`, …):
+   `cargo fmt --all` then `cargo fmt --all -- --check`.
+2. **Browser / TS** (`browser/**`): from `browser/`, `pnpm format` (or
+   `pnpm --filter <pkg> format`). Prefer `pnpm lint-fix` when you also want
+   oxlint auto-fixes.
+
+### After every push — monitor CI
+
+Do not treat “pushed” as done. After `git push` to a PR branch:
+
+1. Resolve the PR / latest run: `gh pr checks` or
+   `gh run list --branch "$(git branch --show-current)" -L 1`.
+2. Wait until checks finish: `gh run watch <run-id> --exit-status`, or poll
+   `gh pr checks` every 30–60s (do not busy-loop).
+3. On failure: `gh run view <run-id> --log-failed`, fix the root cause, commit
+   (fmt hook on), push, and watch again.
+4. Only finish when required checks are green (or a failure is proven
+   unrelated and tracked). Format/`cargo fmt --check` failures must be fixed,
+   not ignored.
 
 ## Quick Dev Setup
 
@@ -277,6 +305,25 @@ example needs `sled`, which only `db-sled` provides.
 The startup update script only runs `pnpm install` (in `browser/`). Everything below is
 already handled in the VM snapshot; these notes capture the non-obvious gotchas for
 building/running the stack again after pulling changes.
+
+### Enable the format pre-commit hook
+
+Cursor replaces `core.hooksPath` with its dispatcher but still runs the
+*previous* hooks path first. Point that path at the repo hooks:
+
+```
+git config core.hooksPath .githooks
+```
+
+If Cursor has already wrapped hooks for this workspace, set the saved original
+path instead (same effect for chaining):
+
+```
+# example path; the hash folder name is workspace-specific under ~/.cursor/agent-hooks/
+echo "/workspace/.githooks" > ~/.cursor/agent-hooks/*/'.cursor-original-hooks-path'
+```
+
+Prefer the `git config` form on a fresh clone before the first agent commit.
 
 ### Run the server on port 9885 (not the default 9883)
 

@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Format staged Rust / browser sources before commit.
+# Enable with:  git config core.hooksPath .githooks
+# (Cursor Cloud wraps hooksPath and still invokes this via its dispatcher.)
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+mapfile -t staged < <(git diff --cached --name-only --diff-filter=ACMR)
+
+rust_files=()
+browser_files=()
+
+for f in "${staged[@]}"; do
+  case "$f" in
+    *.rs)
+      rust_files+=("$f")
+      ;;
+    browser/*)
+      case "$f" in
+        *.ts | *.tsx | *.js | *.jsx | *.mjs | *.cjs | *.json | *.css | *.md)
+          browser_files+=("$f")
+          ;;
+      esac
+      ;;
+  esac
+done
+
+if ((${#rust_files[@]} > 0)); then
+  if ! command -v cargo >/dev/null 2>&1; then
+    echo "pre-commit: cargo not found; cannot fmt Rust" >&2
+    exit 1
+  fi
+  cargo fmt --all
+  git add -- "${rust_files[@]}"
+fi
+
+if ((${#browser_files[@]} > 0)); then
+  if [[ ! -x browser/node_modules/.bin/oxfmt ]] && [[ ! -d browser/node_modules/oxfmt ]]; then
+    echo "pre-commit: oxfmt not installed under browser/ (run pnpm install there); skipping JS fmt" >&2
+  else
+    rel=()
+    for f in "${browser_files[@]}"; do
+      rel+=("${f#browser/}")
+    done
+    (
+      cd browser
+      pnpm exec oxfmt -c .oxfmtrc.json --ignore-path .gitignore -- "${rel[@]}"
+    )
+    git add -- "${browser_files[@]}"
+  fi
+fi
