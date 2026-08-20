@@ -1,5 +1,10 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
-import { before, createTableFromDialog, reloadReconnected, smoke } from './test-utils';
+import {
+  before,
+  createTableFromDialog,
+  reloadReconnected,
+  smoke,
+} from './test-utils';
 
 /**
  * Drag `source` onto `target` in a way that satisfies @dnd-kit's MouseSensor,
@@ -156,42 +161,44 @@ test.describe('kanban', () => {
     await expect(column(page, 'No status')).not.toBeVisible();
   });
 
-  test('add a card, drag it between columns, and it persists', smoke, async ({
-    page,
-  }) => {
-    await createIssueTracker(page, 'Bugs');
+  test(
+    'add a card, drag it between columns, and it persists',
+    smoke,
+    async ({ page }) => {
+      await createIssueTracker(page, 'Bugs');
 
-    const todo = column(page, 'todo');
-    const doing = column(page, 'doing');
+      const todo = column(page, 'todo');
+      const doing = column(page, 'doing');
 
-    await addCard(page, todo, 'Login button misaligned');
+      await addCard(page, todo, 'Login button misaligned');
 
-    // Starts in todo, not doing.
-    await expect(cardIn(todo, 'Login button misaligned')).toBeVisible();
-    await expect(cardIn(doing, 'Login button misaligned')).toHaveCount(0);
+      // Starts in todo, not doing.
+      await expect(cardIn(todo, 'Login button misaligned')).toBeVisible();
+      await expect(cardIn(doing, 'Login button misaligned')).toHaveCount(0);
 
-    // Drag from todo onto the doing column's card list.
-    await dndDrag(
-      page,
-      cardIn(todo, 'Login button misaligned'),
-      doing.getByTestId('kanban-column-body'),
-    );
+      // Drag from todo onto the doing column's card list.
+      await dndDrag(
+        page,
+        cardIn(todo, 'Login button misaligned'),
+        doing.getByTestId('kanban-column-body'),
+      );
 
-    // Now in doing, gone from todo.
-    await expect(cardIn(doing, 'Login button misaligned')).toBeVisible();
-    await expect(cardIn(todo, 'Login button misaligned')).toHaveCount(0);
+      // Now in doing, gone from todo.
+      await expect(cardIn(doing, 'Login button misaligned')).toBeVisible();
+      await expect(cardIn(todo, 'Login button misaligned')).toHaveCount(0);
 
-    // Survives a reload (the status change was persisted to the resource).
-    await reloadReconnected(page);
-    await expect(page.getByTestId('kanban-board')).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(
-      column(page, 'doing').getByTestId('kanban-card').filter({
-        hasText: 'Login button misaligned',
-      }),
-    ).toBeVisible();
-  });
+      // Survives a reload (the status change was persisted to the resource).
+      await reloadReconnected(page);
+      await expect(page.getByTestId('kanban-board')).toBeVisible({
+        timeout: 30_000,
+      });
+      await expect(
+        column(page, 'doing').getByTestId('kanban-card').filter({
+          hasText: 'Login button misaligned',
+        }),
+      ).toBeVisible();
+    },
+  );
 
   test('clicking a card opens it in the expanded modal (not full-screen)', async ({
     page,

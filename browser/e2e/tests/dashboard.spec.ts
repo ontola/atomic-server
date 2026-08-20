@@ -307,36 +307,42 @@ test.describe('dashboards', () => {
     await expect(page.getByRole('menuitem', { name: 'Button' })).toBeVisible();
   });
 
-  test('the four block kinds each show what they were configured to', smoke, async ({
-    page,
-  }) => {
-    const fixture = await createSpendingTable(page);
-    await createDashboard(page, fixture);
+  test(
+    'the four block kinds each show what they were configured to',
+    smoke,
+    async ({ page }) => {
+      const fixture = await createSpendingTable(page);
+      await createDashboard(page, fixture);
 
-    // The store computes the number over every matching row, so it is the real
-    // total rather than a sum of whatever page happened to load.
-    await expect(block(page, 'Total spent')).toContainText('946.5', {
-      timeout: 15_000,
-    });
-    await expect(block(page, 'Expenses')).toContainText('4', {
-      timeout: 15_000,
-    });
+      // The store computes the number over every matching row, so it is the real
+      // total rather than a sum of whatever page happened to load.
+      await expect(block(page, 'Total spent')).toContainText('946.5', {
+        timeout: 15_000,
+      });
+      await expect(block(page, 'Expenses')).toContainText('4', {
+        timeout: 15_000,
+      });
 
-    // One bar per category, largest first, each labelled by its tag name.
-    const chart = block(page, 'Per category');
-    await expect(chart).toContainText('900');
-    await expect(chart).toContainText('30');
-    // 4.5 + 12 — the two food rows, bucketed together.
-    await expect(chart).toContainText('16.5');
+      // One bar per category, largest first, each labelled by its tag name.
+      const chart = block(page, 'Per category');
+      await expect(chart).toContainText('900');
+      await expect(chart).toContainText('30');
+      // 4.5 + 12 — the two food rows, bucketed together.
+      await expect(chart).toContainText('16.5');
 
-    // Markdown, not the raw asterisks.
-    await expect(block(page, 'Notes')).toContainText('Watch the tools budget');
+      // Markdown, not the raw asterisks.
+      await expect(block(page, 'Notes')).toContainText(
+        'Watch the tools budget',
+      );
 
-    // The view block is the real grid: its rows are there and editable.
-    const list = block(page, 'All expenses');
-    await expect(list.getByRole('gridcell', { name: 'Laptop' })).toBeVisible();
-    await expect(list.getByRole('grid')).toBeVisible();
-  });
+      // The view block is the real grid: its rows are there and editable.
+      const list = block(page, 'All expenses');
+      await expect(
+        list.getByRole('gridcell', { name: 'Laptop' }),
+      ).toBeVisible();
+      await expect(list.getByRole('grid')).toBeVisible();
+    },
+  );
 
   test('a button block adds a row, and the numbers beside it follow', async ({
     page,
