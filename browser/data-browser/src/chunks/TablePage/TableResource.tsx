@@ -482,6 +482,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       viewGroupGranularity,
       derivedSpecs,
     ),
+    drive: store.getDrive(),
     server: resource.subject.startsWith('http')
       ? new URL(resource.subject).origin
       : undefined,

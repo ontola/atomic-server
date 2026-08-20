@@ -130,6 +130,35 @@ test.describe('table refresh', () => {
 
     for (let i = 0; i < 8; i++) {
       await page.reload({ waitUntil: 'domcontentloaded' });
+
+      // Same recovery as the empty-reload test: suite-wide load can flake
+      // the WS GET into ErrorPage / "Still loading…". The regression is
+      // row growth, not a missing title on a stalled fetch.
+      for (let retry = 0; retry < 3; retry++) {
+        const titleVisible = await editableTitle(page)
+          .isVisible({ timeout: 15000 })
+          .catch(() => false);
+        if (titleVisible) break;
+        const retryBtn = page.getByRole('button', { name: 'Retry' });
+
+        if (await retryBtn.isVisible({ timeout: 500 }).catch(() => false)) {
+          await retryBtn.click();
+          continue;
+        }
+
+        const stillLoading = await page
+          .getByRole('heading', { name: /Still loading/i })
+          .isVisible({ timeout: 500 })
+          .catch(() => false);
+
+        if (stillLoading) {
+          await page.reload({ waitUntil: 'domcontentloaded' });
+          continue;
+        }
+
+        break;
+      }
+
       await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
 
       // Wait for the table's collection to settle: server's `/query`

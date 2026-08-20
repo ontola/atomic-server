@@ -129,8 +129,14 @@ export function useTableAggregates(opts: {
     );
 
     // Any save or delete can change a total — including one made in another
-    // tab, which arrives through the same events.
-    const offSaved = store.on(StoreEvents.ResourceSaved, refresh);
+    // tab, which arrives through the same events. Read immediately on save:
+    // the persist is queued first (see outbox drain), so a query posted now
+    // lands behind that put on the worker. The debounced follow-up still
+    // covers a write storm that would otherwise starve the first read.
+    const offSaved = store.on(StoreEvents.ResourceSaved, () => {
+      runRead();
+      refresh();
+    });
     const offRemoved = store.on(StoreEvents.ResourceRemoved, refresh);
 
     // ...but a member can also change WITHOUT a local save: a live push from
