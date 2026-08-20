@@ -520,8 +520,10 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
    *  load. */
   const ensureUndoStack = useCallback(async () => {
     if (bootstrappedRef.current) return;
+
     if (bootstrappingPromiseRef.current) {
       await bootstrappingPromiseRef.current;
+
       return;
     }
 
@@ -539,8 +541,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           resource.get(canvas.properties.strokeData),
         );
         const steps = bootstrapUndoSteps(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          versions.map((v: any) => v.propvals.get(canvas.properties.strokeData)),
+          versions.map(v => v.propvals.get(canvas.properties.strokeData)),
           current,
         );
 
@@ -551,8 +552,12 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
         // it twice.
         if (undoStackRef.current.length > 0) {
           const filtered = steps.filter(
-            step => !undoStackRef.current.some(existing => strokesEqual(existing, step)),
+            step =>
+              !undoStackRef.current.some(existing =>
+                strokesEqual(existing, step),
+              ),
           );
+
           undoStackRef.current = [...filtered, ...undoStackRef.current].slice(
             -UNDO_STACK_LIMIT,
           );
