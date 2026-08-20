@@ -10,7 +10,6 @@ import {
   before,
   setTitle,
   waitForSearchIndex,
-  smoke,
 } from './test-utils';
 
 /**
@@ -37,148 +36,136 @@ test.describe('documents', async () => {
   // exceeds the loro broadcast budget under dagger CPU contention.
   // Investigate: bump the assertion to `waitForFunction` polling on the
   // store's loro-doc state instead of DOM text.
-  test(
-    'create document, edit, page title, websockets',
-    smoke,
-    async ({ page, browser }) => {
-      page.on('console', msg => {
-        console.log(`[page1-console] [${msg.type()}]`, msg.text());
-      });
-      // The multi-user flow opens a second context, signs in, syncs, edits,
-      // and waits for cross-tab WS propagation — frequently bumps past the
-      // 30s default under suite-wide load.
-      test.slow();
-      const folderTitle = 'SomeFolder';
+  // Full suite only — do not tag `@smoke`. Folder create is the light cover.
+  test('create document, edit, page title, websockets', async ({
+    page,
+    browser,
+  }) => {
+    page.on('console', msg => {
+      console.log(`[page1-console] [${msg.type()}]`, msg.text());
+    });
+    // The multi-user flow opens a second context, signs in, syncs, edits,
+    // and waits for cross-tab WS propagation — frequently bumps past the
+    // 30s default under suite-wide load.
+    test.slow();
+    const folderTitle = 'SomeFolder';
 
-      const secret = await getDevDriveSecret(page);
-      await makeDrivePublic(page);
-      await newResource('folder', page);
-      await setTitle(page, folderTitle);
-      await newResource('document', page);
-      const title = `Document ${timestamp()}`;
-      await editTitle(title, page);
+    const secret = await getDevDriveSecret(page);
+    await makeDrivePublic(page);
+    await newResource('folder', page);
+    await setTitle(page, folderTitle);
+    await newResource('document', page);
+    const title = `Document ${timestamp()}`;
+    await editTitle(title, page);
 
-      const teststring = `My test: ${timestamp()}`;
+    const teststring = `My test: ${timestamp()}`;
 
-      await expect(page.getByText('loading...')).not.toBeVisible();
+    await expect(page.getByText('loading...')).not.toBeVisible();
 
-      const editor = page.getByLabel('Rich Text Editor');
+    const editor = page.getByLabel('Rich Text Editor');
 
-      await editor.fill('/heading');
-      await expect(page.getByText('Heading 1')).toBeVisible();
-      await page.keyboard.press('Enter');
-      await page.keyboard.type(teststring);
+    await editor.fill('/heading');
+    await expect(page.getByText('Heading 1')).toBeVisible();
+    await page.keyboard.press('Enter');
+    await page.keyboard.type(teststring);
 
-      await expect(
-        page.getByRole('heading', { name: teststring }),
-      ).toBeVisible();
+    await expect(page.getByRole('heading', { name: teststring })).toBeVisible();
 
-      // multi-user
-      const currentSubject = await getCurrentSubject(page);
-      const page2 = await openNewSubjectWindow(
-        browser,
-        currentSubject!,
-        secret,
-      );
-      page2.on('console', msg => {
-        console.log(`[page2-console] [${msg.type()}]`, msg.text());
-      });
+    // multi-user
+    const currentSubject = await getCurrentSubject(page);
+    const page2 = await openNewSubjectWindow(browser, currentSubject!, secret);
+    page2.on('console', msg => {
+      console.log(`[page2-console] [${msg.type()}]`, msg.text());
+    });
 
-      // "Set Drive" historically appeared when opening a foreign-drive subject;
-      // proper sign-in already sets the drive, so the button often isn't there.
-      // Click only when present, ignore otherwise.
-      const setDriveButton = page2.getByRole('button', { name: 'Set Drive' });
+    // "Set Drive" historically appeared when opening a foreign-drive subject;
+    // proper sign-in already sets the drive, so the button often isn't there.
+    // Click only when present, ignore otherwise.
+    const setDriveButton = page2.getByRole('button', { name: 'Set Drive' });
 
-      if (
-        await setDriveButton.isVisible({ timeout: 1500 }).catch(() => false)
-      ) {
-        await setDriveButton.click();
-      }
+    if (await setDriveButton.isVisible({ timeout: 1500 }).catch(() => false)) {
+      await setDriveButton.click();
+    }
 
-      // Sidebar may still show loading placeholders for unrelated children;
-      // scope to `main` so we only wait for the document body to land. Bumped
-      // timeout because the second tab needs WS auth + initial sync.
-      await expect(
-        page2.getByRole('main').getByText(/^loading/i),
-      ).not.toBeVisible({ timeout: 15000 });
-      await expect(
-        page2.getByRole('heading', { name: teststring }),
-        'First paragraph title not visible in second tab. Not a websocket issue',
-      ).toBeVisible({ timeout: 15000 });
-      expect(await page2.title()).toEqual(title);
+    // Sidebar may still show loading placeholders for unrelated children;
+    // scope to `main` so we only wait for the document body to land. Bumped
+    // timeout because the second tab needs WS auth + initial sync.
+    await expect(
+      page2.getByRole('main').getByText(/^loading/i),
+    ).not.toBeVisible({ timeout: 15000 });
+    await expect(
+      page2.getByRole('heading', { name: teststring }),
+      'First paragraph title not visible in second tab. Not a websocket issue',
+    ).toBeVisible({ timeout: 15000 });
+    expect(await page2.title()).toEqual(title);
 
-      await page2.getByLabel('Rich Text Editor').focus();
-      await page2.keyboard.press('End');
-      await page2.keyboard.press('Enter');
-      const syncText = 'New paragraph';
-      await page2.keyboard.type(syncText);
+    await page2.getByLabel('Rich Text Editor').focus();
+    await page2.keyboard.press('End');
+    await page2.keyboard.press('Enter');
+    const syncText = 'New paragraph';
+    await page2.keyboard.type(syncText);
 
-      await expect(async () => {
-        expect(
-          await editorPlainText(page2),
-          'New paragraph not found after typing. Something is wrong with rendering the text / handling the keyboard.',
-        ).toContain(syncText);
-      }).toPass({ timeout: 10_000 });
+    await expect(async () => {
+      expect(
+        await editorPlainText(page2),
+        'New paragraph not found after typing. Something is wrong with rendering the text / handling the keyboard.',
+      ).toContain(syncText);
+    }).toPass({ timeout: 10_000 });
 
-      await expect(async () => {
-        expect(
-          await editorPlainText(page),
-          'New paragraph not found in first window. Sync might not be working.',
-        ).toContain(syncText);
-      }).toPass({ timeout: 15_000 });
+    await expect(async () => {
+      expect(
+        await editorPlainText(page),
+        'New paragraph not found in first window. Sync might not be working.',
+      ).toContain(syncText);
+    }).toPass({ timeout: 15_000 });
 
-      // Delete the typed text. `Alt+Backspace` only deletes-word on macOS;
-      // headless chromium on Linux (dagger CI) treats it as a no-op, so the
-      // paragraph stayed and the cross-tab "not visible" assertion timed
-      // out. Re-select-then-Backspace deletes the selection deterministically
-      // on every platform. Select the paragraph node instead of locating it by
-      // text: a remote cursor decoration can split "New paragraph" across text
-      // nodes and make Playwright's text locator miss visibly rendered content.
-      await page2
-        .getByLabel('Rich Text Editor')
-        .locator('p')
-        .last()
-        .selectText();
-      await page2.keyboard.press('Backspace');
+    // Delete the typed text. `Alt+Backspace` only deletes-word on macOS;
+    // headless chromium on Linux (dagger CI) treats it as a no-op, so the
+    // paragraph stayed and the cross-tab "not visible" assertion timed
+    // out. Re-select-then-Backspace deletes the selection deterministically
+    // on every platform. Select the paragraph node instead of locating it by
+    // text: a remote cursor decoration can split "New paragraph" across text
+    // nodes and make Playwright's text locator miss visibly rendered content.
+    await page2.getByLabel('Rich Text Editor').locator('p').last().selectText();
+    await page2.keyboard.press('Backspace');
 
-      // Loro CRDT sync between two browser contexts goes through the server's
-      // WS hub, so propagation can take several seconds under suite-wide load.
-      // Verify the local deletion first, then poll for the cross-tab sync.
-      await expect(async () => {
-        expect(
-          await editorPlainText(page2),
-          'Paragraph not deleted in second window',
-        ).not.toContain(syncText);
-      }).toPass({ timeout: 15_000 });
-      await expect(async () => {
-        expect(
-          await editorPlainText(page),
-          'Paragraph not deleted in first window.',
-        ).not.toContain(syncText);
-      }).toPass({ timeout: 15_000 });
+    // Loro CRDT sync between two browser contexts goes through the server's
+    // WS hub, so propagation can take several seconds under suite-wide load.
+    // Verify the local deletion first, then poll for the cross-tab sync.
+    await expect(async () => {
+      expect(
+        await editorPlainText(page2),
+        'Paragraph not deleted in second window',
+      ).not.toContain(syncText);
+    }).toPass({ timeout: 15_000 });
+    await expect(async () => {
+      expect(
+        await editorPlainText(page),
+        'Paragraph not deleted in first window.',
+      ).not.toContain(syncText);
+    }).toPass({ timeout: 15_000 });
 
-      // Wait for AtomicServer to index the folder so the @-mention can find it.
-      await waitForSearchIndex(page2, folderTitle);
-      // Add a link to a folder via @ mention
-      await page2.keyboard.press('Space');
-      await page2.keyboard.type('@');
-      // The RTE command list mounts asynchronously after `@` is typed.
-      // Wait for it instead of guessing a fixed delay.
-      await expect(page2.getByTestId('rte-command-list')).toBeVisible({
-        timeout: 10000,
-      });
-      await page2.keyboard.type(folderTitle, { delay: 50 });
-      await expect(
-        page2.getByTestId('rte-command-list').getByText(folderTitle),
-      ).toBeVisible();
-      await page2.keyboard.press('Enter');
+    // Wait for AtomicServer to index the folder so the @-mention can find it.
+    await waitForSearchIndex(page2, folderTitle);
+    // Add a link to a folder via @ mention
+    await page2.keyboard.press('Space');
+    await page2.keyboard.type('@');
+    // The RTE command list mounts asynchronously after `@` is typed.
+    // Wait for it instead of guessing a fixed delay.
+    await expect(page2.getByTestId('rte-command-list')).toBeVisible({
+      timeout: 10000,
+    });
+    await page2.keyboard.type(folderTitle, { delay: 50 });
+    await expect(
+      page2.getByTestId('rte-command-list').getByText(folderTitle),
+    ).toBeVisible();
+    await page2.keyboard.press('Enter');
 
-      // Cross-tab CRDT sync of the @-mention link can take a few seconds.
-      await expect(
-        page.getByLabel('Rich Text Editor').locator('a:has-text("SomeFolder")'),
-      ).toBeVisible({ timeout: 15000 });
-    },
-  );
+    // Cross-tab CRDT sync of the @-mention link can take a few seconds.
+    await expect(
+      page.getByLabel('Rich Text Editor').locator('a:has-text("SomeFolder")'),
+    ).toBeVisible({ timeout: 15000 });
+  });
 
   // Ephemeral Loro cursor (presence): a collaborator's caret position is
   // broadcast over the WS hub as a `LORO_EPHEMERAL_UPDATE` frame (not
