@@ -1,6 +1,6 @@
 import { EditableTitle } from '@components/EditableTitle';
 import { ResourceCoverImage } from '@components/ResourceDecorations';
-import { dataBrowser, useLoroDoc, useLoroReady } from '@tomic/react';
+import { dataBrowser, useLoroDoc, useLoroReady, useStore } from '@tomic/react';
 import type { ResourcePageProps } from '@views/ResourcePage';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import styled from 'styled-components';
@@ -9,6 +9,11 @@ import {
   DIVIDER,
 } from '@components/ResourceContextMenu';
 import { FaFilePdf } from 'react-icons/fa6';
+import {
+  isYjsMigrationCandidate,
+  loroDocHasVisibleContent,
+  upgradeDocument,
+} from './upgradeDocument';
 
 const CollaborativeEditor = lazy(
   () => import('@chunks/RTE/CollaborativeEditor'),
@@ -28,6 +33,7 @@ const customMenuItems = [
 export const DocumentV2FullPage: React.FC<ResourcePageProps> = ({
   resource,
 }) => {
+  const store = useStore();
   const doc = useLoroDoc(resource);
   const loroReady = useLoroReady();
 
@@ -40,6 +46,11 @@ export const DocumentV2FullPage: React.FC<ResourcePageProps> = ({
   // loaded sits on "Loading..." forever with no signal. Give the WASM
   // import a bounded grace window, then surface a real error.
   const [graceExpired, setGraceExpired] = useState(false);
+  const leftoverYjs = isYjsMigrationCandidate(
+    resource.get(dataBrowser.properties.documentContent),
+    doc ? !loroDocHasVisibleContent(doc) : true,
+  );
+  const [yjsMigrated, setYjsMigrated] = useState(!leftoverYjs);
 
   useEffect(() => {
     if (doc || loroReady) {
@@ -52,6 +63,31 @@ export const DocumentV2FullPage: React.FC<ResourcePageProps> = ({
 
     return () => clearTimeout(id);
   }, [doc, loroReady]);
+
+  useEffect(() => {
+    if (!leftoverYjs || !doc) {
+      return;
+    }
+
+    let cancelled = false;
+
+    upgradeDocument(resource, store)
+      .catch(error => {
+        console.error(
+          '[upgradeDocument] Yjs leftover migration failed:',
+          error,
+        );
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setYjsMigrated(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [doc, leftoverYjs, resource, store]);
 
   if (!doc) {
     // Loro is ready (or gave up) but we still have no doc → the editor
@@ -73,6 +109,10 @@ export const DocumentV2FullPage: React.FC<ResourcePageProps> = ({
       );
     }
 
+    return <div>Loading...</div>;
+  }
+
+  if (!yjsMigrated) {
     return <div>Loading...</div>;
   }
 
