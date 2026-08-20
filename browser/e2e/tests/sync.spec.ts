@@ -5,86 +5,12 @@ import {
   currentDriveTitle,
   FRONTEND_URL,
   getDevDriveSecret,
+  waitForClientDbFlush,
+  waitForClientDbReady,
+  waitForSearchIndex,
+  waitForServerConnected,
+  waitForSynced,
 } from './test-utils';
-
-/** Wait for the WASM ClientDb to be initialized and seeded. */
-async function waitForClientDb(page: import('@playwright/test').Page) {
-  await page.waitForFunction(
-    () => window.store?.getClientDb()?.isReady === true,
-    undefined,
-    { timeout: 30000 },
-  );
-}
-
-/** Wait for the store to be connected to the server. */
-async function waitForConnected(page: import('@playwright/test').Page) {
-  await page.waitForFunction(
-    () => window.store?.getSyncStatus().serverConnected === true,
-    undefined,
-    { timeout: 30000 },
-  );
-}
-
-/** Wait for all dirty resources to be synced (pendingDirtyCount === 0). */
-async function waitForSynced(page: import('@playwright/test').Page) {
-  try {
-    await page.waitForFunction(
-      () => {
-        const status = window.store?.getSyncStatus();
-
-        return status.serverConnected && status.pendingDirtyCount === 0;
-      },
-      undefined,
-      { timeout: 30000 },
-    );
-  } catch (e) {
-    // Surface WHY sync didn't settle. A stuck `pendingDirtyCount` means
-    // an outbox entry's post keeps throwing — `lastAttemptError` carries
-    // the server's rejection reason, which is otherwise invisible.
-    const diag = await page
-      .evaluate(() => {
-        const store = window.store;
-        const status = store.getSyncStatus();
-        // The outbox is Loro-delta based now (a pre-signed genesis + a save
-        // cursor), not a list of commits — surface those fields instead.
-        const entries = store.outbox.pending().map(entry => ({
-          subject: entry.subject,
-          enqueuedAt: entry.enqueuedAt,
-          hasSignedGenesis: !!entry.signedGenesis,
-          baseVersion: entry.baseVersion,
-          lastAttemptError: entry.lastAttemptError,
-        }));
-
-        return { status, entries };
-      })
-      .catch(() => undefined);
-    throw new Error(
-      `waitForSynced timed out. Outbox diagnostics: ${JSON.stringify(diag)}`,
-    );
-  }
-}
-
-/** Wait for the server's search index to process a commit (polls search endpoint). */
-async function waitForSearchable(
-  page: import('@playwright/test').Page,
-  query: string,
-) {
-  await page.waitForFunction(
-    async (q: string) => {
-      if (!window.store) return false;
-
-      try {
-        const results = await window.store.search(q);
-
-        return results.length > 0;
-      } catch {
-        return false;
-      }
-    },
-    query,
-    { timeout: 30000, polling: 1000 },
-  );
-}
 
 test.describe('sync', () => {
   test.beforeEach(before);
@@ -223,10 +149,10 @@ test.describe('sync', () => {
 
     // 4. Reload the page
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await waitForClientDb(page);
+    await waitForClientDbReady(page);
 
     // Wait for the resource itself to report the offline edit before
-    // asserting on the DOM. `waitForClientDb` only confirms the worker/
+    // asserting on the DOM. `waitForClientDbReady` only confirms the worker/
     // OPFS bootstrap finished, not that THIS resource's local-first fetch
     // has resolved — under a contended runner that can outlast a bare
     // `toBeVisible` poll.
@@ -398,31 +324,20 @@ test.describe('sync', () => {
     // tick. The reload below would roll the edit back, and the server would
     // never hear about it — which is exactly this test's failure mode, right
     // down to the fresh context reading the pre-offline title.
-    await page.evaluate(async () => {
-      const db = window.store.getClientDb();
-
-      // Not optional-chained: `?.flush()` on an absent ClientDb is a silent
-      // no-op, and this test would then fail exactly as it does without the
-      // flush at all — blaming durability for a database that was never there.
-      if (!db) throw new Error('ClientDb missing when asking for a flush');
-
-      await db.flush();
-    });
+    await waitForClientDbFlush(page, { required: true });
 
     // 4. Go back online — navigate to force fresh WS connection
     await context.setOffline(false);
-    // Small delay to let the network stack come back up
-    await page.waitForTimeout(500);
     // Reload establishes a fresh store + WS
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await waitForConnected(page);
+    await waitForServerConnected(page);
 
     // The dirty sync should push the offline edit to the server.
     // Wait for all pending resources to sync.
     await waitForSynced(page);
 
     // Wait for the search index to pick up the change
-    await waitForSearchable(page, 'Synced From Offline');
+    await waitForSearchIndex(page, 'Synced From Offline');
 
     // Ask the server for its own copy over HTTP, bypassing every local cache.
     // The two waits above both have blind spots — `waitForSynced` proves the
@@ -466,7 +381,7 @@ test.describe('sync', () => {
     // signal that the sign-in took, so wait for that instead.
 
     // Wait for the second page to connect
-    await waitForConnected(page2);
+    await waitForServerConnected(page2);
 
     // Navigate to the resource — the legacy `adress-bar` input is gone;
     // route directly via the SPA's /app/show entry.

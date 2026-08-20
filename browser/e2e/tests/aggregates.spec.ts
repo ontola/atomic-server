@@ -4,6 +4,8 @@ import {
   createTableFromDialog,
   inDialog,
   pickTotal,
+  setGridCell,
+  waitForGridMounted,
 } from './test-utils';
 
 /** The grid row containing `text`. */
@@ -23,29 +25,7 @@ async function setCell(
   columnIndex: number,
   value: string,
 ) {
-  const cell = page.locator(
-    `[aria-rowindex="${rowIndex}"] > [aria-colindex="${columnIndex}"]`,
-  );
-
-  await expect(async () => {
-    // `click` scrolls into view AND re-resolves the locator if the grid remounts
-    // the cell under us; `scrollIntoViewIfNeeded` fails outright on that.
-    await cell.click();
-    const input = cell.locator('input');
-
-    if ((await input.count()) === 0) {
-      await expect(cell).toBeFocused({ timeout: 2_000 });
-      await page.keyboard.press('Enter');
-    }
-
-    await expect(input).toBeVisible({ timeout: 2_000 });
-    await input.fill(value);
-    // Tab commits the edit (Escape would revert it) and leaves the next cell,
-    // which Tab may have opened in edit mode.
-    await page.keyboard.press('Tab');
-    await page.keyboard.press('Escape');
-    await expect(cell).toHaveText(value, { timeout: 3_000 });
-  }).toPass({ timeout: 30_000 });
+  await setGridCell(page, rowIndex, columnIndex, value);
 }
 
 // Totals assertions use 30s budgets, not the 10s default: an aggregate value
@@ -74,8 +54,7 @@ test.describe('table totals', () => {
     });
 
     await expect(page.getByTestId('timer-new-input')).toBeVisible();
-    await expect(page.getByRole('grid')).toBeVisible();
-    await page.waitForTimeout(500);
+    await waitForGridMounted(page);
 
     for (const name of ['Alpha', 'Beta']) {
       await page.getByTestId('timer-new-input').fill(name);

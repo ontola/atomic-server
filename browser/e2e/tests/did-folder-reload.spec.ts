@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { before, FRONTEND_URL } from './test-utils';
+import {
+  before,
+  FRONTEND_URL,
+  waitForClientDbFlush,
+  waitForSynced,
+} from './test-utils';
 
 /**
  * Repro for: open a DID folder's own page, refresh → it renders BROKEN (raw
@@ -49,7 +54,8 @@ test('DID folder page survives a reload', async ({ page }) => {
   // Give the OPFS flush tick time, then turn OFF Local DB (the Sync-page
   // toggle the user used) so the reload must hydrate the folder purely from
   // the server — exercising the DID server-fetch path.
-  await page.waitForTimeout(2000);
+  await waitForSynced(page);
+  await waitForClientDbFlush(page);
   await page.evaluate(() =>
     localStorage.setItem('atomic-disable-client-db', '1'),
   );

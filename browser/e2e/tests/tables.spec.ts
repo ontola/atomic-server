@@ -3,10 +3,15 @@ import {
   newResource,
   before,
   createTableFromDialog,
+  enterGridEdit,
+  focusCell,
   inDialog,
   reloadGrid,
+  tabToNextGridCell,
+  typeInActiveGridCell,
+  waitForGridMounted,
+  waitForSynced,
   waitForTableBuild,
-  REBUILD_INDEX_TIME,
 } from './test-utils';
 
 /**
@@ -63,8 +68,7 @@ test.describe('tables', async () => {
     };
 
     const tab = async () => {
-      await page.keyboard.press('Tab');
-      await page.waitForTimeout(150);
+      await tabToNextGridCell(page);
     };
 
     const createTag = async (emote: string, name: string) => {
@@ -115,12 +119,12 @@ test.describe('tables', async () => {
           `[aria-rowindex="${rowIndex}"] > [aria-colindex="2"] > input`,
         ),
       ).toBeFocused();
-      await page
-        .locator(`[aria-rowindex="${rowIndex}"] > [aria-colindex="2"] > input`)
-        .fill(name);
-      await page.waitForTimeout(300);
+      const nameInput = page.locator(
+        `[aria-rowindex="${rowIndex}"] > [aria-colindex="2"] > input`,
+      );
+      await nameInput.fill(name);
+      await expect(nameInput).toHaveValue(name);
       await tab();
-      await page.waitForTimeout(300);
       await expect(
         page.getByRole('rowheader', { name: `${currentRowNumber + 1}` }),
       ).toBeAttached();
@@ -231,11 +235,7 @@ test.describe('tables', async () => {
     // 'networkidle' is unreliable on SPAs with persistent WebSocket
     // connections (commit subscriptions, the open WS, etc.). The dirty
     // queue is the actual saved-to-server signal.
-    await page.waitForFunction(
-      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
-      undefined,
-      { timeout: 10000 },
-    );
+    await waitForSynced(page);
     await page.reload();
     await expect(
       page.getByRole('button', { name: selectColumnName }),
@@ -264,22 +264,12 @@ test.describe('tables', async () => {
         select: 'wtf',
       },
     ];
-    // Wait for the grid to be ready before fillRow starts clicking. The cell
-    // click races with TableEditor's React state initialization (handlers
-    // bound after first render); fillRow clicks without `force` so playwright
-    // auto-waits for actionability, but give the first render a moment to
-    // settle so the very first mousedown lands on bound handlers (which set
-    // `activeCell` + `CursorMode.Visual`, the precondition for Enter → Edit).
-    // fillRow owns all positioning — clicking an already-active cell enters
-    // edit mode instead of just focusing it, so we must not pre-click here.
-    // 30s, not the 10s default: the first data row renders after the new
-    // columns' commits clear the ClientDb worker queue, which under a loaded
-    // runner sits behind seconds of index-rebuilding writes (same measured
-    // budget as the rest of the totals/tables family).
-    await expect(
-      page.locator('[aria-rowindex="2"] > [aria-colindex="2"]'),
-    ).toBeVisible({ timeout: 30000 });
-    await page.waitForTimeout(1000);
+    // Wait for the collection's placeholder row before fillRow starts
+    // clicking. fillRow owns all positioning — clicking an already-active
+    // cell enters edit mode instead of just focusing it, so we must not
+    // pre-click here. 30s, not the 10s default: the first data row renders
+    // after the new columns' commits clear the ClientDb worker queue.
+    await waitForGridMounted(page);
 
     for (const [index, row] of rows.entries()) {
       await fillRow(index + 1, row);
@@ -331,10 +321,7 @@ test.describe('tables', async () => {
     await createBlankTable(page, 'Fast Entry Test');
 
     const firstCell = page.getByRole('gridcell').first();
-
-    // Click first cell to focus the table
-    await firstCell.click({ force: true });
-    await page.waitForTimeout(300);
+    await focusCell(page, firstCell);
 
     // Enough rows to overflow the viewport and exercise react-window
     // virtualization + auto-scroll as new rows are added past the fold.
@@ -342,14 +329,9 @@ test.describe('tables', async () => {
 
     // Type each value and immediately press Enter to move to the next row
     for (const value of values) {
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(100);
-      await page.keyboard.type(value, { delay: 30 });
-      await page.waitForTimeout(100);
+      await enterGridEdit(page);
+      await typeInActiveGridCell(page, value);
     }
-
-    // Wait for last typed value to register before exiting edit mode
-    await page.waitForTimeout(500);
 
     // Every Enter must have created a row. This is the regression guard for
     // the bug where, once rows overflowed the viewport, a list remount snapped
@@ -418,7 +400,6 @@ test.describe('tables', async () => {
     // of that work back (the CI-only "row40 missing after refresh").
     await reloadGrid(page);
     await expect(page.getByTestId('editable-title').first()).toBeVisible();
-    await page.waitForTimeout(REBUILD_INDEX_TIME);
 
     // 30s, not the default: the post-reload re-drain queues forty rows of
     // writes ahead of the member query in the ClientDb worker, and on a
@@ -450,23 +431,16 @@ test.describe('tables', async () => {
     await createBlankTable(page, 'Sort Test');
 
     const firstCell = page.getByRole('gridcell').first();
-    await firstCell.click({ force: true });
-    await page.waitForTimeout(300);
+    await focusCell(page, firstCell);
 
     // Enter rows whose names are NOT in alphabetical order.
     for (const name of ['gamma', 'alpha', 'beta']) {
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(100);
-      await page.keyboard.type(name, { delay: 20 });
-      await page.waitForTimeout(100);
+      await enterGridEdit(page);
+      await typeInActiveGridCell(page, name);
     }
 
     await page.keyboard.press('Escape');
-    await page.waitForFunction(
-      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
-      undefined,
-      { timeout: 10000 },
-    );
+    await waitForSynced(page);
 
     // Default sort is by creation time → insertion order: gamma is row 1.
     await expect(
@@ -481,7 +455,6 @@ test.describe('tables', async () => {
       .getByRole('button', { name: 'name', exact: true })
       .first()
       .click();
-    await page.waitForTimeout(500);
 
     // After sort, the freshly-entered virtual rows must reorder: "alpha" first.
     await expect(
@@ -497,23 +470,16 @@ test.describe('tables', async () => {
     await createBlankTable(page, 'Insert Below Test');
 
     const firstCell = page.getByRole('gridcell').first();
-    await firstCell.click({ force: true });
-    await page.waitForTimeout(300);
+    await focusCell(page, firstCell);
 
     // Two rows via normal fast entry.
     for (const value of ['rowA', 'rowB']) {
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(100);
-      await page.keyboard.type(value, { delay: 30 });
-      await page.waitForTimeout(100);
+      await enterGridEdit(page);
+      await typeInActiveGridCell(page, value);
     }
 
     await page.keyboard.press('Escape');
-    await page.waitForFunction(
-      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
-      undefined,
-      { timeout: 10000 },
-    );
+    await waitForSynced(page);
 
     // Reload so the rows are collection members (positional insert targets
     // persisted rows; this-session virtual rows always append at the bottom).
@@ -524,8 +490,7 @@ test.describe('tables', async () => {
     });
 
     // Select rowA's name cell, then insert a row below it.
-    await page.getByText('rowA', { exact: true }).click({ force: true });
-    await page.waitForTimeout(300);
+    await focusCell(page, page.getByText('rowA', { exact: true }));
     await page.keyboard.press('Shift+Enter');
 
     // The inserted row is persisted with a fractional sortOrder between rowA
@@ -536,15 +501,10 @@ test.describe('tables', async () => {
     ).toContainText('rowB', { timeout: 15000 });
 
     // The cursor moved to the inserted row; typing fills its name cell.
-    await page.keyboard.type('rowINSERTED', { delay: 30 });
-    await page.waitForTimeout(300);
+    await enterGridEdit(page);
+    await typeInActiveGridCell(page, 'rowINSERTED');
     await page.keyboard.press('Escape');
-
-    await page.waitForFunction(
-      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
-      undefined,
-      { timeout: 10000 },
-    );
+    await waitForSynced(page);
 
     const expectOrder = async () => {
       await expect(page.locator('[aria-rowindex="2"]')).toContainText('rowA', {
@@ -575,24 +535,18 @@ test.describe('tables', async () => {
     await createBlankTable(page, 'Insert Session Test');
 
     const firstCell = page.getByRole('gridcell').first();
-    await firstCell.click({ force: true });
-    await page.waitForTimeout(300);
+    await focusCell(page, firstCell);
 
     for (const value of ['rowA', 'rowB']) {
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(100);
-      await page.keyboard.type(value, { delay: 30 });
-      await page.waitForTimeout(100);
+      await enterGridEdit(page);
+      await typeInActiveGridCell(page, value);
     }
 
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(200);
 
     // Without reloading (rows are still session drafts), insert below rowA.
-    await page.getByText('rowA', { exact: true }).click({ force: true });
-    await page.waitForTimeout(300);
+    await focusCell(page, page.getByText('rowA', { exact: true }));
     await page.keyboard.press('Shift+Enter');
-    await page.waitForTimeout(300);
 
     // The spliced virtual row renders immediately at aria-rowindex 3,
     // pushing rowB down; the cursor is on it.
@@ -603,17 +557,10 @@ test.describe('tables', async () => {
     // Enter edit mode explicitly (focuses the cell input) before typing —
     // typing into a just-mounted cell via the type-to-edit relay can race
     // its event-listener registration at automation speed.
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(100);
-    await page.keyboard.type('rowMID', { delay: 30 });
-    await page.waitForTimeout(300);
+    await enterGridEdit(page);
+    await typeInActiveGridCell(page, 'rowMID');
     await page.keyboard.press('Escape');
-
-    await page.waitForFunction(
-      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
-      undefined,
-      { timeout: 10000 },
-    );
+    await waitForSynced(page);
 
     const expectOrder = async () => {
       await expect(page.locator('[aria-rowindex="2"]')).toContainText('rowA', {

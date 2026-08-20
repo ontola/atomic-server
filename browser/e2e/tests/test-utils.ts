@@ -187,11 +187,9 @@ export const sidebarDriveButtonId = 'sidebar-drive-open';
 export const defaultDevServer = 'http://localhost:9883';
 export const currentDialogOkButton = 'dialog[open] >> footer >> text=Ok';
 // Fallback wait for the search index to catch up, for callers that can't
-// supply a probe to `waitForSearchIndex`. The e2e server runs with a short
-// `ATOMIC_SEARCH_INDEX_INTERVAL_MS` (see `commit_monitor.rs`), so the flush
-// happens in well under a second — this is a safe upper bound, not the 5s
-// production cadence. Prefer the probe form of `waitForSearchIndex`, which
-// polls real readiness and is independent of the server's flush interval.
+// supply a probe to `waitForSearchIndex`. Prefer the probe form, which
+// polls real readiness. Kept as a named budget for comments that still
+// refer to the server's flush interval (`commit_monitor.rs`).
 export const REBUILD_INDEX_TIME = 1500;
 
 /**
@@ -689,48 +687,36 @@ export async function waitForCommitOnCurrentResource(
   );
 
   await Promise.race([httpMatch, wsMatch]);
-  // Give the store a beat to apply the response before callers assert
-  // — matches the prior `waitForTimeout(200)` after HTTP detection.
-  await page.waitForTimeout(200);
+  // The commit is on the wire; wait until this resource is no longer saving
+  // so callers that read the store or UI are not racing the apply.
+  await page.waitForFunction(
+    subject => {
+      const r = window.store?.resources.get(subject);
+
+      return !!r && !r.loading && !r.isSaving;
+    },
+    currentSubject,
+    { timeout: 15_000 },
+  );
 }
 
 /**
- * Wait for the search index to catch up with recently-created resources.
- *
- * The e2e server runs with a short `ATOMIC_SEARCH_INDEX_INTERVAL_MS` (see
- * `commit_monitor.rs`), so the Tantivy flush + reader reload completes in well
- * under a second — {@link REBUILD_INDEX_TIME} is a safe upper bound, not the 5s
- * production cadence.
- *
- * Where a test searches for one specific resource in a single page/context,
- * prefer an explicit `store.search(query, { parents: drive })` poll for the
- * subject (see `search.spec.ts` "text search") — that's true readiness. A
- * generic probe here is deliberately avoided: it's unreliable across a second
- * browser context (drive scoping) and the overlay's streaming re-render races a
- * click that fires too soon.
- */
-/**
  * Waits until the server's search index can answer for `query`.
  *
- * Without a query this is the old fallback: a fixed sleep, hoping Tantivy
- * committed inside it. That is a guess, and on a loaded server it is wrong —
- * the search then returns fewer hits than the test expects and fails on
- * whatever it was about to select.
+ * Polls `store.search` until it returns at least `expected` hits. A fixed
+ * sleep (the old `REBUILD_INDEX_TIME` fallback) is not a signal: on a loaded
+ * server Tantivy may still be behind, and the search then returns fewer hits
+ * than the test is about to select.
  *
- * With a query it polls the real thing. `expected` is how many hits to wait
- * for, which matters when a test is about to index into the results.
+ * `expected` matters when a test indexes into the results. For a filtered
+ * picker (`filters: {isA: <class>}`), use {@link waitForClassInstanceSearchable}
+ * instead — those searches skip the local index.
  */
 export async function waitForSearchIndex(
   page: Page,
-  query?: string,
+  query: string,
   expected = 1,
 ): Promise<void> {
-  if (query === undefined) {
-    await page.waitForTimeout(REBUILD_INDEX_TIME);
-
-    return;
-  }
-
   await expect
     .poll(
       () =>
@@ -1155,11 +1141,266 @@ export async function createTableFromDialog(
  */
 export async function reloadReconnected(page: Page) {
   await page.reload({ waitUntil: 'domcontentloaded' });
+  await waitForServerConnected(page);
+}
+
+/**
+ * Wait until the WebSocket is up.
+ */
+export async function waitForServerConnected(page: Page, timeoutMs = 30_000) {
   await page.waitForFunction(
-    () => window.store.getSyncStatus().serverConnected === true,
+    () => window.store?.getSyncStatus().serverConnected === true,
     undefined,
-    { timeout: 30_000 },
+    { timeout: timeoutMs },
   );
+}
+
+/**
+ * Wait until the WASM ClientDb has finished init + seed.
+ */
+export async function waitForClientDbReady(page: Page, timeoutMs = 30_000) {
+  await page.waitForFunction(
+    () => window.store?.getClientDb()?.isReady === true,
+    undefined,
+    { timeout: timeoutMs },
+  );
+}
+
+/**
+ * Persist OPFS writes that commit with `Durability::None`.
+ *
+ * Reloading, going offline, or turning ClientDb off before this tick rolls
+ * those writes back. `flush()` is the durable signal; a sleep is not.
+ * No-op (and not an error) when ClientDb is disabled — there is nothing to
+ * flush.
+ */
+export async function waitForClientDbFlush(
+  page: Page,
+  opts: { required?: boolean } = {},
+) {
+  await page.evaluate(async required => {
+    const db = window.store?.getClientDb();
+
+    if (!db) {
+      if (required) {
+        throw new Error('ClientDb missing when asking for a flush');
+      }
+
+      return;
+    }
+
+    await db.flush();
+  }, opts.required === true);
+}
+
+/**
+ * Wait until nothing local is still waiting to reach the server.
+ *
+ * Covers the outbox, in-flight `save()`s, and UI debounce timers
+ * (`startScheduledSave`). `0` means a reload will not drop an edit.
+ */
+export async function waitForSynced(page: Page, timeoutMs = 30_000) {
+  try {
+    await page.waitForFunction(
+      () => {
+        const status = window.store?.getSyncStatus();
+
+        return !!status && status.pendingDirtyCount === 0;
+      },
+      undefined,
+      { timeout: timeoutMs },
+    );
+  } catch (cause) {
+    const diag = await page
+      .evaluate(() => {
+        const store = window.store;
+        const status = store?.getSyncStatus();
+        const entries =
+          store?.outbox
+            ?.pending?.()
+            .map(
+              (entry: {
+                subject: string;
+                enqueuedAt: number;
+                signedGenesis?: unknown;
+                lastAttemptError?: unknown;
+              }) => ({
+                subject: entry.subject,
+                enqueuedAt: entry.enqueuedAt,
+                hasSignedGenesis: !!entry.signedGenesis,
+                lastAttemptError: entry.lastAttemptError,
+              }),
+            ) ?? [];
+
+        return { status, entries };
+      })
+      .catch(() => undefined);
+    throw new Error(
+      `waitForSynced timed out. Outbox diagnostics: ${JSON.stringify(diag)}`,
+      { cause },
+    );
+  }
+}
+
+/**
+ * Wait until the current drive has finished its post-load handshake.
+ *
+ * Collection queries that fire during bootstrap have either already gone
+ * out or will go out as part of rendering the settled UI — so this is the
+ * point at which "no more /query traffic" assertions become meaningful.
+ * When ClientDb is disabled, readiness is just the WS + a finished drive
+ * sync (`clientDbAttached` is false).
+ */
+export async function waitForDriveSettled(page: Page, timeoutMs = 30_000) {
+  await page.waitForFunction(
+    () => {
+      const s = window.store?.getSyncStatus();
+
+      if (!s) {
+        return false;
+      }
+
+      const dbOk = s.clientDbAttached ? s.clientDbReady : true;
+
+      return (
+        s.serverConnected &&
+        !s.syncInProgress &&
+        s.pendingDirtyCount === 0 &&
+        dbOk &&
+        !!s.lastDriveSync
+      );
+    },
+    undefined,
+    { timeout: timeoutMs },
+  );
+}
+
+/**
+ * Wait until the table grid has mounted a data row.
+ *
+ * The grid element can paint before the collection's first page lands, and
+ * a timer / quick-add that creates a row in that window persists it without
+ * rendering it. The trailing placeholder (`aria-rowindex="2"`) is the
+ * collection's "I have rows to show" signal — including the empty table.
+ */
+export async function waitForGridMounted(page: Page, timeoutMs = 30_000) {
+  await expect(page.getByRole('grid')).toBeVisible({ timeout: timeoutMs });
+  await expect(page.locator('[aria-rowindex="2"]')).toBeVisible({
+    timeout: timeoutMs,
+  });
+}
+
+/**
+ * Wait until the grid will accept keyboard input.
+ *
+ * TableEditor binds cell handlers after the first render. A click in that
+ * window leaves focus on the title, and keystrokes never create a row.
+ * {@link focusCell} is the observable precondition.
+ */
+export async function waitForGridInteractive(page: Page) {
+  await waitForGridMounted(page);
+  await focusCell(
+    page,
+    page.locator('[aria-rowindex="2"] > [aria-colindex="2"]'),
+  );
+}
+
+/**
+ * Press Enter in the grid and wait until a cell editor is focused.
+ *
+ * In Visual mode this enters edit; in Edit mode it moves to the next row
+ * and stays in edit. Either way the signal is the same: an `<input>`
+ * inside the grid has focus.
+ */
+export async function enterGridEdit(page: Page) {
+  await page.keyboard.press('Enter');
+  await expect(page.locator('[role="grid"] input').first()).toBeFocused({
+    timeout: 15_000,
+  });
+}
+
+/**
+ * Type into the focused grid cell editor and wait until the value stuck.
+ *
+ * Keystrokes that land before the editor mounts are dropped, and Enter
+ * on the next row then commits an empty cell. The input's value is the
+ * signal that React has the text.
+ */
+export async function typeInActiveGridCell(page: Page, value: string) {
+  const input = page.locator('[role="grid"] input').first();
+  await expect(input).toBeFocused({ timeout: 15_000 });
+  await input.fill(value);
+  await expect(input).toHaveValue(value);
+}
+
+/**
+ * Tab out of the current grid cell and wait until focus moved.
+ *
+ * The next cell's editor mounts asynchronously; typing before that
+ * writes into the previous cell or into the title.
+ */
+export async function tabToNextGridCell(page: Page) {
+  const from = await page.evaluate(
+    () =>
+      document.activeElement
+        ?.closest('[aria-colindex]')
+        ?.getAttribute('aria-colindex') ?? null,
+  );
+
+  await page.keyboard.press('Tab');
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            document.activeElement
+              ?.closest('[aria-colindex]')
+              ?.getAttribute('aria-colindex') ?? null,
+        ),
+      { timeout: 15_000 },
+    )
+    .not.toBe(from);
+}
+
+/**
+ * Put `value` in one grid cell, addressed by row and column index.
+ *
+ * Clicks until the grid takes focus, opens the editor if needed, fills,
+ * Tabs to commit (Escape would revert), and waits until the cell shows
+ * `match` (defaults to `value`). Retries the whole sequence when the
+ * grid remounts the cell under the pointer.
+ */
+export async function setGridCell(
+  page: Page,
+  rowIndex: number,
+  columnIndex: number,
+  value: string,
+  opts: { match?: string | RegExp } = {},
+) {
+  const cell = page.locator(
+    `[aria-rowindex="${rowIndex}"] > [aria-colindex="${columnIndex}"]`,
+  );
+
+  await expect(async () => {
+    await cell.click();
+    const input = cell.locator('input');
+
+    if ((await input.count()) === 0) {
+      await expect(cell).toBeFocused({ timeout: 2_000 });
+      await page.keyboard.press('Enter');
+    }
+
+    await expect(input).toBeVisible({ timeout: 2_000 });
+    await input.fill(value);
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Escape');
+
+    if (opts.match instanceof RegExp) {
+      await expect(cell).toContainText(opts.match, { timeout: 3_000 });
+    } else {
+      await expect(cell).toHaveText(opts.match ?? value, { timeout: 3_000 });
+    }
+  }).toPass({ timeout: 30_000 });
 }
 
 /**
@@ -1215,7 +1456,7 @@ export async function waitForRowsMaterialized(page: Page, timeoutMs = 15_000) {
   // worker handles its messages in order, so awaiting a flush means everything
   // queued ahead of it has landed. Without this a filter drops a matching row,
   // and a total reads an em-dash because the value it sums is not there yet.
-  await page.evaluate(() => window.store?.getClientDb()?.flush?.());
+  await waitForClientDbFlush(page);
 }
 
 /**
@@ -1232,9 +1473,7 @@ export async function reloadGrid(page: Page) {
   // answers post-reload queries with the pre-edit copy.
   await waitForRowsMaterialized(page);
   await page.reload();
-  await expect(page.getByRole('grid')).toBeVisible();
-  // The grid binds its cell handlers after the first render.
-  await page.waitForTimeout(500);
+  await waitForGridMounted(page);
 }
 
 /**
