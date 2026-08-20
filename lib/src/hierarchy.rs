@@ -171,14 +171,15 @@ pub fn check_rights_cached<'a, S: Storelike>(
     })
 }
 
-/// Does the Agent have the right to _append_ to its parent?
-/// This checks the `append` rights on the **parent's zone**, and if that fails,
-/// checks the `write` right on the resource itself (e.g. creator write).
-/// Throws if not allowed.
-/// Returns string with explanation if allowed.
+/// Does the Agent have the right to create this resource under its parent?
+///
+/// Per `planning/zones.md`: require **append** (or write, which implies
+/// append) on `zone(parent)`. Do **not** fall back to write on the child —
+/// with implicit creator write, that would let any genesis signer create
+/// under any parent.
 ///
 /// Parentless resources (drives / born zones) may always be created — that is
-/// the explicit born-zone rule from `planning/zones.md`.
+/// the explicit born-zone rule.
 #[tracing::instrument(skip_all)]
 pub async fn check_append(
     store: &impl Storelike,
@@ -186,13 +187,7 @@ pub async fn check_append(
     for_agent: &ForAgent,
 ) -> AtomicResult<String> {
     match resource.get_parent(store).await {
-        Ok(parent) => {
-            if let Ok(msg) = check_rights(store, &parent, for_agent, Right::Append).await {
-                Ok(msg)
-            } else {
-                check_rights(store, resource, for_agent, Right::Write).await
-            }
-        }
+        Ok(parent) => check_rights(store, &parent, for_agent, Right::Append).await,
         Err(e) => {
             if resource
                 .get_classes(store)
