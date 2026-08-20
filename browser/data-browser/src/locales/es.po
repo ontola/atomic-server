@@ -126,6 +126,7 @@ msgstr "<0/> Crear Nuevo Agente"
 #: src/chunks/AI/MCPConfigTab.tsx
 #: src/chunks/AI/SkillsConfigTab.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/chunks/Plugins/UpdatePluginButton.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
@@ -4907,6 +4908,7 @@ msgid "Embedded (this device)"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Node ID"
 msgstr ""
 
@@ -5043,9 +5045,7 @@ msgid "Bring your workspace over"
 msgstr ""
 
 #. 0: device
-#. 0: serverLabel(status.serverUrl ?? '')
 #: src/components/pairing/PairingFlowProvider.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Paired with {0}"
 msgstr ""
 
@@ -5255,10 +5255,18 @@ msgid "Switching to {0}…"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
+msgid "Copy Node ID"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Node ID copied"
 msgstr ""
 
-#. 0: nodeId
+#. 0: rawToNodeDid(serverNodeId)
+#. 0: peer.nodeId
+#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Copy {0}"
 msgstr ""
@@ -6321,7 +6329,6 @@ msgid "Button says"
 msgstr ""
 
 #: src/chunks/TablePage/NewColumnButton.tsx
-#: src/components/ResourceContextMenu/index.tsx
 msgid "Action"
 msgstr ""
 
@@ -6793,10 +6800,6 @@ msgid "{0} of {1}"
 msgstr ""
 
 #. 0: syncedAgo
-#. 0: formatTimeAgo(new Date(lastSynced)) ?? 'just now'
-#. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Synced {0}"
 msgstr ""
@@ -6852,20 +6855,6 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Paired"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Paired device"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Not synced yet"
-msgstr ""
-
-#. 0: label; 1: detail
-#: src/components/ResourceContextMenu/index.tsx
-msgid "{0} failed: {1}"
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
@@ -6983,9 +6972,109 @@ msgstr ""
 msgid "An always-on device has an address. Type it here."
 msgstr ""
 
-#. 0: detail
+#~ msgid "Never synced"
+#~ msgstr ""
+
+#~ msgid "{0} copied"
+#~ msgstr ""
+
+#~ msgid "Address"
+#~ msgstr ""
+
+#~ msgid "Paired with this device"
+#~ msgstr ""
+
+#~ msgid "Paired device"
+#~ msgstr ""
+
+#~ msgid "Sent {0}"
+#~ msgstr ""
+
+#~ msgid "Received {0}"
+#~ msgstr ""
+
+#~ msgid "Sign in on this device to rename it."
+#~ msgstr ""
+
+#~ msgid "This device is now “{0}”"
+#~ msgstr ""
+
+#~ msgid "Device name"
+#~ msgstr ""
+
+#~ msgid "Not signed in on this device."
+#~ msgstr ""
+
+#~ msgid "The node refused it ({0})."
+#~ msgstr ""
+
+#~ msgid "(saving…)"
+#~ msgstr ""
+
+#~ msgid "(this device)"
+#~ msgstr ""
+
+#~ msgid "Rename this device"
+#~ msgstr ""
+
+#~ msgid "ResizeObserver loop"
+#~ msgstr ""
+
 #: src/actions/resourceActions.tsx
-msgid "Could not delete: {0}"
+msgid "Run"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Run this plugin and review what it proposes before anything is written."
+msgstr ""
+
+#. 0: e.message
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "Could not run this plugin: {0}"
+msgstr ""
+
+#. 0: result.message
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "Could not apply: {0}"
+msgstr ""
+
+#. 0: report.applied; 1: report.failed
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "Applied {0}, {1} failed"
+msgstr ""
+
+#. 0: report.applied
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "Applied {0} changes"
+msgstr ""
+
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "Applying…"
+msgstr ""
+
+#. 0: plan?.changes.length ?? 0
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "Apply {0} changes"
+msgstr ""
+
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "This plugin ran too long and was stopped. Nothing was planned."
+msgstr ""
+
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "Nothing can be written until these are fixed."
+msgstr ""
+
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "This run proposes no changes."
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "New plugin"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Create a plugin here. It proposes changes that you review before anything is written."
 msgstr ""
 
 #: src/views/getting-started/GettingStartedFlow.tsx
