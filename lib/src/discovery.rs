@@ -295,9 +295,7 @@ fn agent_private_key_to_pkarr(private_key: &str) -> AtomicResult<pkarr::Keypair>
         )
         .into());
     }
-    let seed: [u8; 32] = bytes
-        .try_into()
-        .expect("length checked to be 32");
+    let seed: [u8; 32] = bytes.try_into().expect("length checked to be 32");
     Ok(pkarr::Keypair::from_secret_key(&seed))
 }
 

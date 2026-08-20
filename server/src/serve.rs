@@ -152,10 +152,7 @@ async fn announce_drives_pkarr(
     if let Ok(agent) = appstate.store.get_default_agent() {
         if let Some(private_key) = agent.private_key.as_deref() {
             match atomic_lib::discovery::publish_agent_node_id(private_key, node_id, None).await {
-                Ok(()) => tracing::info!(
-                    "Pkarr: announced NodeID under agent {}",
-                    agent.subject
-                ),
+                Ok(()) => tracing::info!("Pkarr: announced NodeID under agent {}", agent.subject),
                 Err(e) => tracing::warn!(
                     "Pkarr: agent-keyed announce failed for {}: {e}",
                     agent.subject

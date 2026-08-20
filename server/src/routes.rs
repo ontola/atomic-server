@@ -148,14 +148,11 @@ async fn resolve_agent_handler(
     req: HttpRequest,
     _appstate: web::Data<crate::appstate::AppState>,
 ) -> actix_web::HttpResponse {
-    let agent = match req
-        .uri()
-        .query()
-        .and_then(|q| {
-            url::form_urlencoded::parse(q.as_bytes())
-                .find(|(k, _)| k == "agent")
-                .map(|(_, v)| v.into_owned())
-        }) {
+    let agent = match req.uri().query().and_then(|q| {
+        url::form_urlencoded::parse(q.as_bytes())
+            .find(|(k, _)| k == "agent")
+            .map(|(_, v)| v.into_owned())
+    }) {
         Some(a) if a.starts_with("did:ad:agent:") => a,
         Some(_) => {
             return actix_web::HttpResponse::BadRequest()
@@ -186,8 +183,9 @@ async fn resolve_agent_handler(
                 "publicZone": record.public_zone,
             }))
         }
-        Err(e) => actix_web::HttpResponse::NotFound()
-            .json(serde_json::json!({"error": e.to_string()})),
+        Err(e) => {
+            actix_web::HttpResponse::NotFound().json(serde_json::json!({"error": e.to_string()}))
+        }
     }
 }
 

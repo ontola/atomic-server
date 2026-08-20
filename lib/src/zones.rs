@@ -9,9 +9,7 @@
 //! it by walking parents; a persisted index can wrap the same helpers later
 //! (OQ2 in the plan).
 
-use crate::{
-    errors::AtomicResult, hierarchy::Right, urls, Resource, Storelike, Subject,
-};
+use crate::{errors::AtomicResult, hierarchy::Right, urls, Resource, Storelike, Subject};
 
 /// Properties whose presence on a resource makes it a zone root.
 pub const ZONE_RIGHT_PROPS: &[&str] = &[urls::READ, urls::WRITE, urls::APPEND];
@@ -32,10 +30,7 @@ pub fn is_zone_root(resource: &Resource) -> bool {
 /// is already a zone root. Fails when the parent chain is broken before a zone
 /// can be derived — callers that authorize commits should reject, not quarantine
 /// (see `planning/zones.md`).
-pub async fn resolve_zone(
-    store: &impl Storelike,
-    resource: &Resource,
-) -> AtomicResult<Resource> {
+pub async fn resolve_zone(store: &impl Storelike, resource: &Resource) -> AtomicResult<Resource> {
     let mut current = resource.clone();
     let mut guard = 0u32;
     loop {
@@ -113,10 +108,7 @@ pub fn agent_in_zone_acl(
 /// Implicit creator write (and implied read/append): the genesis signer of
 /// `resource` always has write authority on that resource. See
 /// `planning/authorization-sync.md` and `planning/zones.md`.
-pub fn agent_is_resource_creator(
-    resource: &Resource,
-    normalized_agent: &Subject,
-) -> bool {
+pub fn agent_is_resource_creator(resource: &Resource, normalized_agent: &Subject) -> bool {
     match resource.genesis_signer() {
         Some(signer) => {
             let migrated = crate::agents::migrate_legacy_agent_subject(&signer);
@@ -176,10 +168,7 @@ pub async fn collect_zone_subjects(
     Ok(out)
 }
 
-async fn find_children(
-    store: &impl Storelike,
-    parent: &Subject,
-) -> AtomicResult<Vec<Subject>> {
+async fn find_children(store: &impl Storelike, parent: &Subject) -> AtomicResult<Vec<Subject>> {
     let query = crate::storelike::Query::new_prop_val(urls::PARENT, parent.as_str());
     let result = store.query(&query).await?;
     Ok(result.subjects)
@@ -265,11 +254,7 @@ mod tests {
         // a zone whose ACL replaces the outer public-read zone.
         let mut inner = Resource::new("did:ad:placeholder".into());
         inner
-            .set(
-                urls::PARENT.into(),
-                Value::AtomicUrl(outer.clone()),
-                &store,
-            )
+            .set(urls::PARENT.into(), Value::AtomicUrl(outer.clone()), &store)
             .await
             .unwrap();
         inner
