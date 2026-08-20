@@ -3,6 +3,7 @@ import {
   before,
   FRONTEND_URL,
   waitForClientDbFlush,
+  waitForServerConnected,
   waitForSynced,
 } from './test-utils';
 
@@ -61,38 +62,36 @@ test('DID folder page survives a reload', async ({ page }) => {
   );
   await page.reload();
 
-  // Wait for the WS to reconnect after reload, then poll the store's view of
-  // the folder for up to 12s to see whether it recovers or stays broken.
-  const diag = await page.evaluate(async f => {
+  // Wait for the WS to reconnect after reload, then wait until the store
+  // actually holds the folder's name — not a 500ms poll hoping it landed.
+  await waitForServerConnected(page);
+  await page.waitForFunction(
+    f => {
+      const s = window.store;
+      s?.getResource(f).catch(() => undefined);
+      const r = s?.resources.get(f);
+
+      return (
+        r?.get?.('https://atomicdata.dev/properties/name') === 'ReloadFolder'
+      );
+    },
+    folder,
+    { timeout: 12_000 },
+  );
+  const diag = await page.evaluate(f => {
     const s = window.store;
+    const r = s.resources.get(f);
 
-    const snap = async () => {
-      const r = s.resources.get(f);
-
-      return {
-        present: !!r,
-        entries: r?.getEntries ? r.getEntries().length : -1,
-        isA: (r?.get?.('https://atomicdata.dev/properties/isA') ??
-          null) as unknown,
-        name: r?.get?.('https://atomicdata.dev/properties/name') ?? null,
-        loading: r?.loading ?? null,
-        error: r?.error?.message ?? null,
-        serverConnected: s.getSyncStatus?.()?.serverConnected ?? null,
-      };
+    return {
+      present: !!r,
+      entries: r?.getEntries ? r.getEntries().length : -1,
+      isA: (r?.get?.('https://atomicdata.dev/properties/isA') ??
+        null) as unknown,
+      name: r?.get?.('https://atomicdata.dev/properties/name') ?? null,
+      loading: r?.loading ?? null,
+      error: r?.error?.message ?? null,
+      serverConnected: s.getSyncStatus?.()?.serverConnected ?? null,
     };
-
-    // Kick a fetch (don't throw if it fails) and poll.
-    s.getResource(f).catch(() => undefined);
-    let last = await snap();
-
-    for (let i = 0; i < 24; i++) {
-      last = await snap();
-      if (last.name === 'ReloadFolder') break;
-      await new Promise(res => setTimeout(res, 500));
-      s.getResource(f).catch(() => undefined);
-    }
-
-    return last;
   }, folder);
   console.log(
     '[did-folder-reload] post-reload store state:',

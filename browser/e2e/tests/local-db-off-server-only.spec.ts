@@ -46,7 +46,8 @@ test('drive contents load with Local DB disabled (server-only)', async ({
     return d;
   });
 
-  // Let the commit land server-side + the 1s OPFS flush tick run.
+  // Persist the create, then disable Local DB so the reload hydrates from
+  // the server only.
   await waitForSynced(page);
   await waitForClientDbFlush(page);
 
