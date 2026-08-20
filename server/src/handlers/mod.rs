@@ -14,6 +14,7 @@ pub mod forget_peer;
 pub mod get_resource;
 #[cfg(feature = "image")]
 pub mod image;
+pub mod plugin_secret;
 pub mod plugin_ui;
 pub mod post_resource;
 pub mod search;
