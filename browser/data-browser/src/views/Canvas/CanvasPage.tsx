@@ -160,6 +160,9 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   /** Whether the Loro-history bootstrap has already run for this canvas on
    *  this device. Persisted so it runs at most once — see the mount effect. */
   const bootstrappedRef = useRef(false);
+  /** In-flight guard: true while a bootstrap operation is running. Prevents
+   *  concurrent calls from duplicating history. */
+  const bootstrappingRef = useRef(false);
 
   // Discarded branch leaves — versions abandoned by editing after an undo,
   // recoverable from the overlay while holding the undo button. Kept in a
@@ -516,10 +519,22 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
    *  load. */
   const ensureUndoStack = useCallback(async () => {
     if (bootstrappedRef.current) return;
+    if (bootstrappingRef.current) return;
+
+    bootstrappingRef.current = true;
+    const targetResource = resource;
 
     try {
       await enableLoro();
     } catch {
+      bootstrappingRef.current = false;
+
+      return;
+    }
+
+    if (resource !== targetResource) {
+      bootstrappingRef.current = false;
+
       return;
     }
 
@@ -535,9 +550,14 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
     // If the user started drawing before this completed, prepend the Loro
     // history (which is older) to the existing undo stack instead of
-    // discarding their edits.
+    // discarding their edits. Filter out duplicates: if pushUndoSnapshot
+    // already captured a state that's also in the Loro history, don't add
+    // it twice.
     if (undoStackRef.current.length > 0) {
-      undoStackRef.current = [...steps, ...undoStackRef.current].slice(
+      const filtered = steps.filter(
+        step => !undoStackRef.current.some(existing => strokesEqual(existing, step)),
+      );
+      undoStackRef.current = [...filtered, ...undoStackRef.current].slice(
         -UNDO_STACK_LIMIT,
       );
     } else {
@@ -547,6 +567,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     // Record the attempt even when it found nothing, so a canvas with no
     // recoverable history doesn't pay for the walk again on the next open.
     bootstrappedRef.current = true;
+    bootstrappingRef.current = false;
     setCanUndo(undoStackRef.current.length > 0);
     persistHistory();
   }, [resource, persistHistory]);
@@ -659,10 +680,10 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   );
 
   const onUndoPointerDown = useCallback(
-    (e: React.PointerEvent) => {
+    async (e: React.PointerEvent) => {
       if (!canUndo && !canRedo && branchesRef.current.length === 0) return;
 
-      void ensureUndoStack();
+      await ensureUndoStack();
 
       e.preventDefault();
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
