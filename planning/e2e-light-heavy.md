@@ -1,6 +1,6 @@
 # Light vs heavy E2E, and where unit tests should grow
 
-**Status: landing.** Tags, `test-e2e:light`, Dagger `--e2e-mode`, and
+**Status: landing.** Tags, `test-e2e:light`, Dagger `--playwright-mode`, and
 `main.yml` gating are in. Remaining: grow `jsTestIntegration`, stop adding
 heavy-only variants as Playwright, then drop redundant heavy specs.
 
@@ -304,10 +304,11 @@ that can fail.
 
 ## CI / Dagger shape (when building)
 
-Today `ci()` takes `--e2e-mode light|full` and passes it to `endToEnd`.
+Today `ci()` takes `--playwright-mode light|full` and passes it to `endToEnd`.
 The workflow decides the mode; Dagger does not guess the branch.
 
-- `endToEnd(mode: 'light' | 'full')`, same flag on `ci()`.
+- `endToEnd` / `ci` take `--playwright-mode light|full` (not `--e2e-mode`:
+  Dagger camelCases that to `e2EMode` and the call fails).
 - `main.yml` passes `full` when `github.ref == develop` or the ref is a
   stable `v*` tag, or when dispatch / a `full-e2e` label (or boolean
   input) asks. Everything else passes `light`.

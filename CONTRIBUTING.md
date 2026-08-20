@@ -348,11 +348,12 @@ Two consequences worth knowing:
   unconditional `--prod`, which meant pushing any feature branch republished
   the public documentation, and later `master`-only, which left live docs on a
   branch that was not production.
-- Playwright is `--e2e-mode light` on feature-branch pushes (`@smoke` only)
+- Playwright is `--playwright-mode light` on feature-branch pushes (`@smoke` only)
   and `full` on `develop` and `v*` tags. `dagger call ci` defaults to `full`
   so omitting the flag cannot shrink a release gate. Opt in from a branch
   with a `full-e2e` PR label, `[full-e2e]` in the commit message, or
-  `workflow_dispatch` `e2e_mode=full`.
+  `workflow_dispatch` `e2e_mode=full`. (Do not name the Dagger flag
+  `--e2e-mode`: the CLI camelCases it to `e2EMode` and the call fails.)
 
 Every deploy then has to prove itself: the job polls `/server` on the target
 until it answers `200` (with enough patience for a store migration). A deploy

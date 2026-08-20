@@ -349,8 +349,12 @@ export class AtomicServer {
      * Playwright suite. `light` = `@smoke` first-hour journeys (feature
      * branches). `full` = every spec (`develop`, `v*` tags, opt-in).
      * Default `full` so omitting the flag cannot shrink a release gate.
+     *
+     * Named `playwrightMode` rather than `e2eMode`: Dagger's kebab-case
+     * parser maps `--e2e-mode` to `e2EMode` (capital after a digit) and
+     * then cannot find the argument.
      */
-    @argument() e2eMode: string = 'full',
+    @argument() playwrightMode: string = 'full',
   ): Promise<string> {
     this.hostProfile = resolveHostProfile(hostProfile);
     this.hostKnobs = HOST_PROFILES[this.hostProfile];
@@ -365,7 +369,7 @@ export class AtomicServer {
     await Promise.all([
       this.docsPublish(netlifyAuthToken, publishDocs),
       this.typedocPublish(netlifyAuthToken, publishDocs),
-      this.endToEnd(netlifyAuthToken, e2eMode),
+      this.endToEnd(netlifyAuthToken, playwrightMode),
       this.jsTest(),
       this.jsTestIntegration(),
       this.flutterTest(),
@@ -1528,7 +1532,7 @@ export class AtomicServer {
     // `pnpm install` — see git history for ERR_PNPM_WORKSPACE_PKG_NOT_FOUND.
     return playwrightContainer
       .withEnvVariable('CI', 'true')
-      // Playwright-run knobs — see `e2eRunKnobs` / `--e2e-mode`. Isolated
+      // Playwright-run knobs — see `e2eRunKnobs` / `--playwright-mode`. Isolated
       // from `hostKnobs` so a light suite does not change nextest width.
       .withEnvVariable(
         'PLAYWRIGHT_WORKERS',
@@ -1624,15 +1628,15 @@ export class AtomicServer {
     /**
      * `light` = `@smoke` only. `full` (default) = every spec, matching
      * today's unfiltered suite. Workflow decides; this func does not
-     * guess the git ref.
+     * guess the git ref. See `ci()` for why this is not named `e2eMode`.
      */
-    @argument() e2eMode: string = 'full',
+    @argument() playwrightMode: string = 'full',
   ): Promise<string> {
     // Shards × own atomic-server. Count comes from `--host-profile`
-    // (Mancave hot / hosted conservative) plus `--e2e-mode` (light uses
+    // (Mancave hot / hosted conservative) plus `--playwright-mode` (light uses
     // fewer shards). Dagger dedupes the shared debug `rustBuild(e2e)` /
     // base-container graph.
-    this.e2eRun = e2eRunKnobs(this.hostProfile, resolveE2eMode(e2eMode));
+    this.e2eRun = e2eRunKnobs(this.hostProfile, resolveE2eMode(playwrightMode));
     const shardCount = this.e2eRun.shardCount;
     const base = this.e2eBaseContainer();
     const shardIndexes = Array.from({ length: shardCount }, (_, i) => i + 1);
