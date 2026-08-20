@@ -5,11 +5,14 @@
 > which owns the pairing/onboarding UX; anything adopted from here belongs
 > there.
 >
-> **Outcome: a blank node still cannot pull a peer's drives.** On current
-> code the pairing dialog reports "Your workspace is here" — but the drive it
-> opens was **provisioned locally on sign-in**, not received. The two nodes
-> end up holding disjoint drive sets, each returning "not found locally" for
-> the other's.
+> **Outcome (revised 2026-08-20):** C0 below is a pre-derivation finding.
+> The personal-drive DID is derived from the Agent key
+> ([`deterministic-personal-drive.md`](./deterministic-personal-drive.md)), so
+> two devices with the same secret name the same home. They cannot invent
+> disjoint personal-drive subjects. Pairing + live sync between desktop and
+> the HA node was verified 2026-08-17. The 2026-08-15 header ("a blank node
+> still cannot pull a peer's drives") described looking up the
+> `personalDrive` pointer and minting when it was absent — that path is gone.
 >
 > **This note has been wrong in both directions in one day.** The first draft
 > called it a bootstrap deadlock; the second declared it fixed after a
@@ -48,9 +51,10 @@ Disjoint. See C0 for why.
 
 ## Confirmed on a current build
 
-### C0 — A blank node invents a drive instead of pulling the peer's
+### C0 — A blank node invents a drive instead of pulling the peer's (superseded)
 
-The agent resource for one DID exists in two divergent copies:
+**Historical (2026-08-15).** The agent resource for one DID existed in two
+divergent copies, and the home was still a `personalDrive` pointer:
 
 | | desktop | server |
 | --- | --- | --- |
@@ -58,24 +62,27 @@ The agent resource for one DID exists in two divergent copies:
 | `name` | joep.io | Joep Meindertsma |
 | `publicKey` | `Qmfp…rcQ` | `Qmfp…rcQ=` |
 
-Sequence: sign in on the desktop → `fetchPersonalDriveSubject`
-(`helpers/personalDrive.ts:34`) asks a server for the agent's
-`personalDrive` → the server's copy has none → `adoptLegacyDriveList`
-provisions a fresh private drive locally → pairing resolves *that* drive and
-reports "Your workspace is here". The server's actual drives are never
-requested, because **nothing asks the peer what it holds**.
+Sequence then: sign in on the desktop → `fetchPersonalDriveSubject` asked a
+server for the agent's `personalDrive` → the server's copy had none →
+`adoptLegacyDriveList` provisioned a fresh private drive locally → pairing
+resolved *that* drive and reported "Your workspace is here". The two nodes
+held disjoint drive sets (`bkvN8DuZ…` vs `kZR5Rbwu…`). Nothing asked the peer
+what it held.
 
-Failing honestly ("your workspace didn't arrive") would be better than
-succeeding onto an invented drive, which is indistinguishable from success
-until you notice the drive is empty.
+**Why this cannot happen for the personal drive anymore.**
+`fetchPersonalDriveSubject` (`helpers/personalDrive.ts`) derives the subject
+from the Agent key (`agent.personalDriveSubject()`). The pointer is not
+identity. `createDrive({ personal: true })` pins that same DID; a repeat
+genesis merges. Two devices with the same secret therefore *name* the same
+home before any network round-trip. M23 then stopped *materializing* that
+subject before `deviceHasDriveData`, so an empty local shell is no longer
+read as "you already have your workspace".
 
-The `publicKey` padding difference between the two copies — same agent, one
-with the trailing `=` and one without — may be incidental or may be why they
-never reconcile. Worth checking on its own.
-
-**Fix direction:** pairing should ask the peer which drives it holds for this
-agent and offer them, rather than resolving against local state. Same
-conclusion the first draft reached; it survives the rebuild.
+What is still true, and is not C0: pairing syncs the named drive (and
+whatever the peer pushes for it). Extra workspaces the agent holds elsewhere
+arrive by being listed on that shared home, or by an explicit pull — there is
+still no "ask the peer which drives you have" inventory. That is a sync-scope
+question, not an identity one.
 
 ### C1 — The pairing input rejects a server address
 

@@ -12,12 +12,13 @@
 >
 > **2026-08-15 — field test.**
 > [`pairing-ux-field-test.md`](./pairing-ux-field-test.md) walks this UX on a
-> real self-hosted server plus the desktop app. Transport and pairing work;
-> **drive transfer does not** (C0). A blank node signs in, finds no
-> `personalDrive` on the peer's agent copy, provisions one locally, and
-> reports "Your workspace is here" — onto a drive it just invented. The two
-> nodes end up with disjoint drive sets. Nothing in the flow asks the peer
-> what it holds.
+> real self-hosted server plus the desktop app. C0 (a blank node minting a
+> *different* personal-drive DID because it looked up the `personalDrive`
+> pointer) is **superseded**: the home subject is derived from the Agent key,
+> so every device names the same drive. Pairing + live sync between desktop
+> and the HA node was verified 2026-08-17. What remains is not identity —
+> extra workspaces still have to arrive via that shared home's `drives` list
+> (or an explicit pull), and M4 still blocks reading pre-0.40 HTTP drives.
 >
 > **2026-08-20 — M6 closed.** Opening an adopted `https://…` drive no longer
 > moves the home server. A bare origin is still a server switch; an HTTP
