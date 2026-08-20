@@ -24,6 +24,51 @@ introduce a `main` branch, treat `master` as production, or add a job that
 fast-forwards `main` when a tag is pushed — the tag is the release. Hotfixes
 branch from the tag and merge back to `develop`. See `CONTRIBUTING.md`.
 
+## Formatting (mandatory before every commit)
+
+CI fails fast on format (`cargo fmt --check`, package `oxfmt`). **Never push
+unformatted code.** Prefer the git hook; always verify before commit.
+
+### Pre-commit hook (preferred)
+
+The repo ships [`.githooks/pre-commit`](.githooks/pre-commit): it runs
+`cargo fmt --all` when any `*.rs` is staged, `oxfmt` on staged `browser/`
+sources, and `oxlint --fix` on staged browser JS/TS (catches stylistic
+rules oxfmt does not). Enable once per clone:
+
+```
+git config core.hooksPath .githooks
+```
+
+Cursor Cloud wraps `core.hooksPath` with its own dispatcher and still invokes
+the previous path — keep that previous path as `.githooks` (see Cursor Cloud
+section). **Never pass `--no-verify`** to skip this hook.
+
+### Manual fallback
+
+If the hook is not installed, before every `git commit` that touches the listed
+trees:
+
+1. **Rust** (`lib/`, `server/`, `cli/`, `desktop/`, wasm, `flutter/rust/`, …):
+   `cargo fmt --all` then `cargo fmt --all -- --check`.
+2. **Browser / TS** (`browser/**`): from `browser/`, `pnpm format` (or
+   `pnpm --filter <pkg> format`). Prefer `pnpm lint-fix` when you also want
+   oxlint auto-fixes.
+
+### After every push — monitor CI
+
+Do not treat “pushed” as done. After `git push` to a PR branch:
+
+1. Resolve the PR / latest run: `gh pr checks` or
+   `gh run list --branch "$(git branch --show-current)" -L 1`.
+2. Wait until checks finish: `gh run watch <run-id> --exit-status`, or poll
+   `gh pr checks` every 30–60s (do not busy-loop).
+3. On failure: `gh run view <run-id> --log-failed`, fix the root cause, commit
+   (fmt hook on), push, and watch again.
+4. Only finish when required checks are green (or a failure is proven
+   unrelated and tracked). Format/`cargo fmt --check` failures must be fixed,
+   not ignored.
+
 ## Quick Dev Setup
 
 Use the Charlotte MCP server and navigate to `http://localhost:6747/app/dev-drive` to instantly create a fresh agent.
@@ -261,6 +306,18 @@ example needs `sled`, which only `db-sled` provides.
 The startup update script only runs `pnpm install` (in `browser/`). Everything below is
 already handled in the VM snapshot; these notes capture the non-obvious gotchas for
 building/running the stack again after pulling changes.
+
+### Enable the format pre-commit hook
+
+```
+git config core.hooksPath .githooks
+```
+
+Cursor Cloud may wrap `core.hooksPath` with its own dispatcher; it still runs
+the previous path first. If commits skip formatting, ensure
+`~/.cursor/agent-hooks/<workspace>/.cursor-original-hooks-path` contains this
+repo’s absolute `.githooks` path (or re-run the `git config` above before
+Cursor wraps hooks on a fresh VM).
 
 ### Run the server on port 9885 (not the default 9883)
 

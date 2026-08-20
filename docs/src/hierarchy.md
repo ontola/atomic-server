@@ -25,15 +25,15 @@ Although you are free to use Atomic Data with your own custom authorization syst
 ## Authorization
 
 - Any Resource might have [`read`](https://atomicdata.dev/properties/read) and [`write`](https://atomicdata.dev/properties/write) Atoms. These both contain a list of Agents. These Agents will be granted the rights to edit (using Commits) or read / use the Resources.
-- Rights are _additive_, which means that the rights add up. If a Resource itself has no `write` Atom containing your Agent, but it's `parent` _does_ have one, you will still get the `write` right.
-- Rights cannot be removed by children or parents - they can only be added.
+- **Zones:** a resource that carries a rights array (or a parentless top-level resource such as a Drive) is a *zone root*. Every resource belongs to exactly one zone — its nearest zone-root ancestor. Rights are evaluated only on that zone; a nested zone's ACL **replaces** the outer one, it does not add to it. Setting rights on a mid-tree resource promotes it to its own zone (for example a public folder inside a private drive).
+- The genesis signer of a resource has **implicit write** (and therefore read) on that resource; explicit `write` lists hold delegates only.
 - `Commits` can not be edited. They can be `read` if the Agent has rights to read the [`subject`](https://atomicdata.dev/properties/subject) of the `Commit`.
 
 ## Top-level resources
 
 Some resources are special, as they do not require a `parent`:
 
-- [`Drive`](https://atomicdata.dev/classes/Drive)s are top-level items in the hierarchy: they do not have a `parent`.
+- [`Drive`](https://atomicdata.dev/classes/Drive)s are top-level items in the hierarchy: they do not have a `parent`. They are born as zone roots and typically seed an initial ACL.
 - [`Agent`](https://atomicdata.dev/classes/Agent)s are top-level items because they are not `owned` by anything. They can always `read` and `write` themselves.
 - [`Commit`](https://atomicdata.dev/classes/Commit)s are immutable, so they should never be edited by anyone. That's why they don't have a place in the hierarchy. Their `read` rights are determined by their subject.
 
@@ -45,7 +45,6 @@ Authentication is about proving _who you are_, which is often the first step for
 
 The specification is growing (and please contribute in the [docs repo](https://github.com/atomicdata-dev/atomic-data-docs/issues)), but the current specification lacks some features:
 
-- Rights can only be added, but not removed in the hierarchy. This means that you cannot have a secret folder inside a public folder.
-- No model for representing groups of Agents, or other runtime checks for authorization. ([issue](https://github.com/atomicdata-dev/atomic-data-docs/issues/73))
+- No model yet for representing groups of Agents as a single ACL entry ([issue](https://github.com/atomicdata-dev/atomic-data-docs/issues/73); tracked as zones OQ3).
 - No way to limit delete access or invite rights separately from write rights ([issue](https://github.com/atomicdata-dev/atomic-data-docs/issues/82))
 - No way to request a set of rights for a Resource

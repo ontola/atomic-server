@@ -142,6 +142,53 @@ async fn iroh_sync_handler(
     }
 }
 
+/// GET /resolve-agent?agent=did:ad:agent:…
+/// Looks up the agent's pkarr record (NodeIDs + optional public zone).
+async fn resolve_agent_handler(
+    req: HttpRequest,
+    _appstate: web::Data<crate::appstate::AppState>,
+) -> actix_web::HttpResponse {
+    let agent = match req.uri().query().and_then(|q| {
+        url::form_urlencoded::parse(q.as_bytes())
+            .find(|(k, _)| k == "agent")
+            .map(|(_, v)| v.into_owned())
+    }) {
+        Some(a) if a.starts_with("did:ad:agent:") => a,
+        Some(_) => {
+            return actix_web::HttpResponse::BadRequest()
+                .json(serde_json::json!({"error": "Expected agent=did:ad:agent:…"}));
+        }
+        None => {
+            return actix_web::HttpResponse::BadRequest()
+                .json(serde_json::json!({"error": "Missing agent query parameter"}));
+        }
+    };
+
+    match atomic_lib::discovery::resolve_agent_record(&agent).await {
+        Ok(record) => {
+            let node_ids: Vec<String> = record
+                .node_ids
+                .into_iter()
+                .map(|id| {
+                    if id.starts_with("did:ad:node:") {
+                        id
+                    } else {
+                        format!("did:ad:node:{id}")
+                    }
+                })
+                .collect();
+            actix_web::HttpResponse::Ok().json(serde_json::json!({
+                "agent": agent,
+                "nodeIds": node_ids,
+                "publicZone": record.public_zone,
+            }))
+        }
+        Err(e) => {
+            actix_web::HttpResponse::NotFound().json(serde_json::json!({"error": e.to_string()}))
+        }
+    }
+}
+
 #[cfg(test)]
 mod node_id_tests {
     use super::node_id_from_did;
@@ -213,6 +260,7 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
             .to(handlers::forget_peer::handle_forget_peer),
     )
     .service(web::resource("/iroh-sync").to(iroh_sync_handler))
+    .service(web::resource("/resolve-agent").to(resolve_agent_handler))
     .service(web::resource("/export").to(handlers::export::handle_export))
     .service(web::resource("/plugin-ui").to(handlers::plugin_ui::handle_plugin_ui))
     .service(web::resource("/plugin-list").to(handlers::plugin_ui::handle_plugin_list))

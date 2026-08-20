@@ -47,6 +47,15 @@
                 
             </intent-filter>
             <!-- DEEP LINK PLUGIN. AUTO-GENERATED. DO NOT REMOVE. -->
+            <!-- Manual: also accept did:ad:… resource/open links on Android.
+                 Desktop/iOS keep atomic:// only (bare `did` would claim every
+                 DID method on those platforms). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="did" />
+            </intent-filter>
         </activity>
 
         <provider

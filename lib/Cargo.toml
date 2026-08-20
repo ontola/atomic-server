@@ -151,3 +151,8 @@ required-features = ["db-redb"]
 name = "lifecycle_bench"
 harness = false
 required-features = ["db-redb"]
+
+[[bench]]
+name = "rights_bench"
+harness = false
+required-features = ["db-redb"]

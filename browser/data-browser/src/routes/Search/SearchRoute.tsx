@@ -19,6 +19,7 @@ import { base64StringToFilter } from './searchUtils';
 import { InlineFormattedResourceList } from '../../components/InlineFormattedResourceList';
 import { ErrorBoundary } from '../../views/ErrorPage';
 import { useOnValueChange } from '@helpers/useOnValueChange';
+import { parseDidOpenInput } from '../../helpers/didResolve';
 
 type SearchRouteQueryParams = {
   query?: string;
@@ -71,6 +72,16 @@ export function Search(): JSX.Element {
     'enter',
     e => {
       e.preventDefault();
+      const didTarget = query ? parseDidOpenInput(query) : null;
+
+      if (didTarget) {
+        //@ts-expect-error blur does exist though
+        document?.activeElement?.blur();
+        navigate(constructOpenURL(didTarget.subject));
+
+        return;
+      }
+
       // Get the current subject from the latest results and selectedIndex
       const selectedSubject = results[selectedIndex];
 
@@ -83,7 +94,7 @@ export function Search(): JSX.Element {
     },
     { enableOnFormTags: ['INPUT'], enableOnContentEditable: true },
     // Explicitly include results and selectedIndex in the dependency array
-    [results, selectedIndex, navigate],
+    [results, selectedIndex, navigate, query],
   );
 
   useHotkeys(

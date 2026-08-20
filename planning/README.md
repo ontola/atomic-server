@@ -32,7 +32,8 @@ Remaining work, not "this file exists."
 | [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) | Target: `atomic_lib` as the complete HTTP-optional local node runtime. |
 | [`genesis-self-verifying.md`](./genesis-self-verifying.md) | **Partial.** Server and browser mint and verify inline genesis certs. Remaining: DataRoute verify UI, `genesis` propval immutability. |
 | [`drive-reconciliation.md`](./drive-reconciliation.md) | **Partial.** Algorithm core in `lib/src/sync/rbsr.rs`. Not on the WS/Iroh wire yet; fingerprint tree still O(range). |
-| [`zones.md`](./zones.md) | **Proposal.** Nothing built. Structural fix for the permission-check half of [`index-performance.md`](./index-performance.md). |
+| [`zones.md`](./zones.md) | **In progress.** Zone derivation, zone-based `check_rights`, implicit creator write, agent-keyed pkarr landed. Remaining: persisted index, sync BFS cutover, browser Share UI, drop authored drive stamp. |
+| [`atomic-uris.md`](./atomic-uris.md) | **Proposal.** Drop `did:ad:` framing (not a real DID Core impl); canonical opaque `atomic:` URIs (no `//`); dual-read alias; one Copy-link shape. |
 | [`partial-sync.md`](./partial-sync.md) | **Proposal.** Replicate part of a drive per device. |
 | [`drafts-and-suggestions.md`](./drafts-and-suggestions.md) | **Mechanism shipped** (`Fork` class, `diffFork`/`mergeFork`, document body CRDT merge). Review/diff UI, suggest-for-non-writers, Canvas fork still open. |
 | [`device-pairing.md`](./device-pairing.md) | **Proposal.** One-scan pairing; QR is routing only (no secret). C0 and M6 closed. Remaining: extra-workspace inventory, M4. |
@@ -46,7 +47,7 @@ Remaining work, not "this file exists."
 | [`structural-problems-index.md`](./structural-problems-index.md) | Ranked structural issues. Highest remaining: React Compiler / Resource proxy (#1). |
 | [`react-compiler-resource-proxy.md`](./react-compiler-resource-proxy.md) | **Planned.** Stale UI from Compiler memoizing Resource proxy reads. |
 | [`canvas-undo-consolidation.md`](./canvas-undo-consolidation.md) | Phase A + C landed (browser). Phase B (Flutter action-stack removal) open. |
-| [`index-performance.md`](./index-performance.md) | First tranche shipped. Structural permission-check fix is `zones.md`, not built. |
+| [`index-performance.md`](./index-performance.md) | First tranche shipped. Structural permission-check fix is `zones.md` (lib path in progress). |
 | [`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md) | **Proposal.** Full-snapshot writes, no auto-compaction, O(file) open fsync. |
 | [`virtual-drive.md`](./virtual-drive.md) | Mountable filesystem (NFS / FUSE / native cloud-sync APIs). |
 | [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md) | **Proposal.** Commits stay signed write certificates; retention is node policy. |

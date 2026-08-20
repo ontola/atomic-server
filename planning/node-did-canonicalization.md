@@ -3,6 +3,10 @@
 **Status:** Shipped. `did:ad:node:<hex>` is the only user-facing and HTTP API
 form for peer node IDs.
 
+> **Follow-up:** [`atomic-uris.md`](./atomic-uris.md) proposes renaming the
+> public prefix to `atomic:node:<hex>` (same hex body; dual-read `did:ad:node:`).
+> Until that ships, this document remains the canonical rule.
+
 ## Decision
 
 - [x] `did:ad:node:<hex>` is the only user-facing and HTTP API form for peer node IDs.

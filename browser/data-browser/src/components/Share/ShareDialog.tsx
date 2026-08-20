@@ -9,6 +9,7 @@ import {
   core,
   ResourceEvents,
   useCanWrite,
+  useCurrentAgent,
   useResource,
   useStore,
 } from '@tomic/react';
@@ -32,6 +33,12 @@ import { AgentRights } from '../../routes/Share/AgentRights';
 import { useInheritedRights } from '../../routes/Share/useInheritedRights';
 import { PermissionRow } from '../../routes/Share/PermissionRow';
 import styled from 'styled-components';
+import { useOwnNodeDid } from '../../hooks/useOwnNodeDid';
+import { buildShareLink } from '../../helpers/didResolve';
+import { fetchManagedInfo } from '../../helpers/managedServer';
+import { isValidNodeDid } from '../../helpers/serverOntology';
+import { isRunningInTauri } from '../../helpers/tauri';
+import { useSettings } from '../../helpers/AppSettings';
 
 export interface ShareDialogProps {
   subject: string;
@@ -232,19 +239,55 @@ const InheritedToggle = styled.button`
 
 function CopyLinkButton({ subject }: { subject: string }): JSX.Element {
   const store = useStore();
+  const [agent] = useCurrentAgent();
+  const ownNodeDid = useOwnNodeDid();
+  const { baseURL } = useSettings();
+  const [serverNodeDid, setServerNodeDid] = useState<string | undefined>();
 
-  const handleCopy = () => {
-    let link: string;
+  useEffect(() => {
+    let cancelled = false;
+    const origin = store.getServerUrl() || baseURL;
 
-    if (subject.startsWith('did:')) {
-      const server = store.getServerUrl().replace(/\/$/, '');
-      link = `${server}/${subject}`;
-    } else {
-      link = subject;
+    if (!origin) {
+      return;
     }
 
+    fetchManagedInfo(origin)
+      .then(info => {
+        if (!cancelled && info.nodeId && isValidNodeDid(info.nodeId)) {
+          setServerNodeDid(info.nodeId);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [store, baseURL]);
+
+  const handleCopy = () => {
+    const node = ownNodeDid ?? serverNodeDid;
+    const appOrigin =
+      typeof window !== 'undefined'
+        ? window.location.origin
+        : store.getServerUrl();
+
+    // Prefer OS deep link inside the desktop shell; HTTPS elsewhere so a
+    // normal browser can open the show URL and resolve via agent/node hints.
+    const format = isRunningInTauri() ? 'atomic' : 'https';
+    const link = buildShareLink(subject, {
+      appOrigin,
+      agent: agent?.subject,
+      node,
+      format,
+    });
+
     navigator.clipboard.writeText(link);
-    toast.success('Link copied to clipboard');
+    toast.success(
+      node || agent?.subject
+        ? 'Link copied (includes resolve hints)'
+        : 'Link copied',
+    );
   };
 
   return (

@@ -3,58 +3,57 @@ import { clearDeepLinkSink, setDeepLinkSink } from '../helpers/deepLinkQueue';
 import { constructOpenURL } from '../helpers/navigation';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { usePairingFlow } from './pairing/PairingFlowProvider';
+import { parseDidOpenInput, resolveDidForOpen } from '../helpers/didResolve';
+import { useSettings } from '../helpers/AppSettings';
+import { useStore } from '@tomic/react';
 
 /** The `atomic://open` host: an "open this resource" deep link. */
 const OPEN_LINK_PREFIX = 'atomic://open';
 
 /**
- * Extract the `subject` of an `atomic://open?subject=…` link, or null if it
- * isn't one / is malformed. Kept at module scope so its try/catch stays out of
- * component render, which the React Compiler can't yet handle.
- */
-function parseOpenLinkSubject(uri: string): string | null {
-  if (!uri.startsWith(OPEN_LINK_PREFIX)) {
-    return null;
-  }
-
-  try {
-    return new URL(uri).searchParams.get('subject');
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Consumes deep links forwarded by the Tauri shell (queued by
  * helpers/deepLinkQueue.ts) and routes them:
  *
- * - `atomic://open?subject=…` opens a resource in the app. The virtual drive
- *   surfaces non-file resources as `.inetloc` link files pointing here, so
- *   double-clicking one in Finder navigates the desktop app to that resource.
- * - `atomic://pair` (and a bare node DID from the Sync page's paste field) go
- *   to the pairing flow, which shows its progress and reports what happened.
+ * - `atomic://open?subject=…&agent=…&node=…` opens a resource (resolving via
+ *   pkarr / known peers when needed).
+ * - Bare `did:ad:…` resource DIDs (with optional query hints) also open —
+ *   Android may deliver these when the `did` scheme is registered.
+ * - `atomic://pair` and bare `did:ad:node:` go to the pairing flow.
  *
- * A pairing code is routing only, so this can act on one without asking. It
- * grants nothing — the dialed peer still has to pass same-agent AUTH — and a
- * code that tries to carry an identity is refused when it's decoded. That
- * refusal is what makes acting-without-asking safe here: `atomic://` links can
- * be fired by any app or web page, not just by the camera, so a link must never
- * be able to sign this device in as someone else. An `open` link only navigates
- * to a resource the user can already reach, so it is likewise safe to act on.
+ * We deliberately do **not** register the bare `did` scheme on iOS/desktop
+ * (that would claim every DID method). `atomic://` is the OS-registered
+ * scheme; `did:ad:` is accepted when the OS or another app hands it to us.
  */
 export function PairingLinkHandler(): JSX.Element {
   const startPairing = usePairingFlow();
   const navigate = useNavigateWithTransition();
+  const { drive } = useSettings();
+  const store = useStore();
 
   const handleLink = useEffectEvent((uri: string) => {
-    // `atomic://open` links navigate to a resource rather than pairing. Consume
-    // them here even when malformed, so a bad open link never falls through to
-    // the pairing flow.
-    if (uri.startsWith(OPEN_LINK_PREFIX)) {
-      const subject = parseOpenLinkSubject(uri);
+    // Open links — atomic://open or a resource DID with optional hints.
+    if (uri.startsWith(OPEN_LINK_PREFIX) || looksLikeResourceDid(uri)) {
+      const target = parseDidOpenInput(uri);
 
-      if (subject) {
-        navigate(constructOpenURL(subject));
+      if (target) {
+        void (async () => {
+          await resolveDidForOpen(target.subject, {
+            drive,
+            agent: target.agent,
+            node: target.node,
+            tryPeers: !target.node && !target.agent,
+            isAvailable: async subject => {
+              try {
+                const resource = await store.getResource(subject);
+
+                return !resource.error;
+              } catch {
+                return false;
+              }
+            },
+          });
+          navigate(constructOpenURL(target.subject));
+        })();
       }
 
       return;
@@ -78,4 +77,17 @@ export function PairingLinkHandler(): JSX.Element {
   }, []);
 
   return <></>;
+}
+
+function looksLikeResourceDid(uri: string): boolean {
+  if (!uri.startsWith('did:ad:')) {
+    return false;
+  }
+
+  // Node DIDs without query params are pairing codes.
+  if (uri.startsWith('did:ad:node:') && !uri.includes('?')) {
+    return false;
+  }
+
+  return parseDidOpenInput(uri) !== null;
 }

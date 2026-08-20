@@ -147,16 +147,34 @@ class _AtomicCanvasAppState extends State<AtomicCanvasApp>
   }
 
   void _handleDeepLink(String uri) {
+    // Pairing codes (node DID / atomic://pair).
     final peer = PairScreen.parsePeerInfo(uri);
-    if (peer == null) return;
-    final nodeId = peer.nodeId;
-    // Show pair dialog once the app is ready
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctx = _navKey.currentContext;
-      if (ctx != null) {
-        PairScreen.show(ctx, nodeId: nodeId);
-      }
-    });
+    if (peer != null) {
+      final nodeId = peer.nodeId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = _navKey.currentContext;
+        if (ctx != null) {
+          PairScreen.show(ctx, nodeId: nodeId);
+        }
+      });
+      return;
+    }
+
+    // Resource / open links — surface so the user can paste into Sync or open
+    // once a full DID-open path exists on canvas. For now, snack the subject.
+    if (uri.startsWith('atomic://open') ||
+        (uri.startsWith('did:ad:') && !uri.startsWith('did:ad:node:'))) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = _navKey.currentContext;
+        if (ctx == null || !ctx.mounted) return;
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(
+            content: Text('Open DID: $uri'),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      });
+    }
   }
 
   void _onLoggedIn() {

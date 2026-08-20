@@ -310,6 +310,7 @@ msgstr "Conecta un modelo para usar Atomic Assistant"
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/components/AI/AISettings.tsx
+#: src/views/ErrorPage.tsx
 msgid "or"
 msgstr "o"
 
@@ -1330,10 +1331,8 @@ msgstr "<0>Ctrl</0>+<1/> deshacer · <2>Ctrl</2>+ <3>Mayús</3>+<4/> rehacer"
 msgid "Resource is loading..."
 msgstr "El recurso está cargando..."
 
-#: src/components/OverlayContainer.tsx
-#: src/routes/Search/SearchOverlay.tsx
-msgid "Search for resources..."
-msgstr "Buscar recursos..."
+#~ msgid "Search for resources..."
+#~ msgstr "Buscar recursos..."
 
 #: src/components/OverlayContainer.tsx
 #: src/components/OverlayContainer.tsx
@@ -1458,6 +1457,7 @@ msgstr "Documento"
 
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/routes/SyncRoute.tsx
+#: src/views/ErrorPage.tsx
 msgid "Sync"
 msgstr "Sincronizar"
 
@@ -1531,6 +1531,7 @@ msgstr "Descripción Textual <0/>"
 #: src/components/AvatarCropper.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/components/forms/ResourceForm.tsx
+#: src/routes/Share/ShareRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
@@ -1842,9 +1843,8 @@ msgstr "Configuración de compartir guardada"
 msgid "Permissions for"
 msgstr "Permisos para"
 
-#: src/routes/Share/ShareRoute.tsx
-msgid "<0/> Create Invite"
-msgstr "<0/> Crear invitación"
+#~ msgid "<0/> Create Invite"
+#~ msgstr "<0/> Crear invitación"
 
 #: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
@@ -3124,11 +3124,11 @@ msgstr "{0} Permisos heredados"
 msgid "<0><0/> Back</0> Create Invite"
 msgstr "<0><0/> Atrás</0> Crear invitación"
 
-#: src/components/Share/ShareDialog.tsx
-msgid "Link copied to clipboard"
-msgstr "Enlace copiado al portapapeles"
+#~ msgid "Link copied to clipboard"
+#~ msgstr "Enlace copiado al portapapeles"
 
 #: src/components/Share/ShareDialog.tsx
+#: src/routes/Share/ShareRoute.tsx
 msgid "<0/> Copy link"
 msgstr "<0/> Copiar enlace"
 
@@ -4443,6 +4443,7 @@ msgid "as a classtype."
 msgstr ""
 
 #: src/components/Share/ShareDialog.tsx
+#: src/routes/Share/ShareRoute.tsx
 msgid "Create Invite"
 msgstr "Crear invitación"
 
@@ -6990,4 +6991,84 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "An always-on device has an address. Type it here."
+
+#. 0: result.via
+#: src/views/ErrorPage.tsx
+msgid "Found via {0}. Reloading…"
+msgstr ""
+
+#: src/views/ErrorPage.tsx
+msgid "Trying known devices…"
+msgstr ""
+
+#. 0: knownPeers.length; 1: knownPeers.length === 1 ? '' \\: 's'
+#: src/views/ErrorPage.tsx
+msgid "Try {0} known device{1}"
+msgstr ""
+
+#: src/views/ErrorPage.tsx
+msgid "Dial every paired device and pull this resource’s zone/drive"
+msgstr ""
+
+#: src/views/ErrorPage.tsx
+msgid "This DID is not on this device. Pair a device on the"
+msgstr ""
+
+#: src/views/ErrorPage.tsx
+msgid "page, or open a link that includes an"
+msgstr ""
+
+#: src/views/ErrorPage.tsx
+msgid "hint."
+msgstr ""
+
+#: src/helpers/didResolve.ts
+msgid "Resource not found locally, and you have no known devices to try."
+msgstr ""
+
+#: src/helpers/didResolve.ts
+msgid "Resource not found locally. Try fetching from your known devices?"
+msgstr ""
+
+#: src/helpers/didResolve.ts
+msgid "Could not resolve this DID. Pair a device on the Sync page, or add an agent/node hint to the link."
+msgstr ""
+
+#: src/helpers/didResolve.ts
+msgid "Could not resolve this DID from local data or known devices."
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+#: src/routes/Share/ShareRoute.tsx
+msgid "Link copied (includes resolve hints)"
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+#: src/routes/Share/ShareRoute.tsx
+msgid "Link copied"
+msgstr ""
+
+#: src/components/InviteForm.tsx
+msgid "Invite copied (includes resolve hints)"
+msgstr ""
+
+#: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
+msgid "Resolving DID…"
+msgstr ""
+
+#: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
+msgid "Search or paste a did:ad:…"
+msgstr ""
+
+#: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
+msgid "No node hint — will try known devices if needed"
+msgstr ""
+
+#: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
+msgid "Open DID"
+
 msgstr ""

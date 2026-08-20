@@ -1,5 +1,12 @@
 import { useEffect, useState, type JSX } from 'react';
-import { core, ResourceEvents, useCanWrite, useResource } from '@tomic/react';
+import {
+  core,
+  ResourceEvents,
+  useCanWrite,
+  useCurrentAgent,
+  useResource,
+  useStore,
+} from '@tomic/react';
 import { ContainerNarrow } from '../../components/Containers';
 import { Card, CardInsideFull } from '../../components/Card';
 import { Button } from '../../components/Button';
@@ -8,9 +15,9 @@ import toast from 'react-hot-toast';
 import { Title } from '../../components/Title';
 import { constructOpenURL } from '../../helpers/navigation';
 import { ErrorLook } from '../../components/ErrorLook';
-import { Column } from '../../components/Row';
+import { Column, Row } from '../../components/Row';
 import { Main } from '../../components/Main';
-import { FaShare } from 'react-icons/fa6';
+import { FaLink, FaShare } from 'react-icons/fa6';
 import { useRights } from './useRights';
 import { AgentRights } from './AgentRights';
 import { useInheritedRights } from './useInheritedRights';
@@ -20,6 +27,11 @@ import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition
 import { appRoute } from '../RootRoutes';
 import { pathNames } from '../paths';
 import { createRoute } from '@tanstack/react-router';
+import { useOwnNodeDid } from '../../hooks/useOwnNodeDid';
+import { buildShareLink } from '../../helpers/didResolve';
+import { isRunningInTauri } from '../../helpers/tauri';
+import { fetchManagedInfo } from '../../helpers/managedServer';
+import { isValidNodeDid } from '../../helpers/serverOntology';
 
 export interface ShareRouteSearchParams {
   subject: string;
@@ -83,14 +95,15 @@ function SharePage(): JSX.Element {
       <ContainerNarrow>
         <Column>
           <Title resource={resource} prefix='Permissions for' link />
-          {canWrite && !showInviteForm && (
-            <span>
+          <Row>
+            <CopyShareLinkButton subject={subject} />
+            {canWrite && !showInviteForm && (
               <Button onClick={() => setShowInviteForm(true)}>
                 <FaShare />
                 Create Invite
               </Button>
-            </span>
-          )}
+            )}
+          </Row>
           {showInviteForm && <InviteForm target={resource} />}
           <Card>
             <Column>
@@ -163,6 +176,57 @@ function RightsHeader({ children }: React.PropsWithChildren): JSX.Element {
         <span>Write</span>
       </PermissionRow.ControlsColumn>
     </PermissionRow>
+  );
+}
+
+function CopyShareLinkButton({ subject }: { subject: string }): JSX.Element {
+  const store = useStore();
+  const [agent] = useCurrentAgent();
+  const ownNodeDid = useOwnNodeDid();
+  const [serverNodeDid, setServerNodeDid] = useState<string | undefined>();
+
+  useEffect(() => {
+    let cancelled = false;
+    const origin = store.getServerUrl();
+
+    if (!origin) {
+      return;
+    }
+
+    fetchManagedInfo(origin)
+      .then(info => {
+        if (!cancelled && info.nodeId && isValidNodeDid(info.nodeId)) {
+          setServerNodeDid(info.nodeId);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [store]);
+
+  return (
+    <Button
+      subtle
+      onClick={() => {
+        const link = buildShareLink(subject, {
+          appOrigin: window.location.origin,
+          agent: agent?.subject,
+          node: ownNodeDid ?? serverNodeDid,
+          format: isRunningInTauri() ? 'atomic' : 'https',
+        });
+        navigator.clipboard.writeText(link);
+        toast.success(
+          ownNodeDid || serverNodeDid || agent?.subject
+            ? 'Link copied (includes resolve hints)'
+            : 'Link copied',
+        );
+      }}
+    >
+      <FaLink />
+      Copy link
+    </Button>
   );
 }
 

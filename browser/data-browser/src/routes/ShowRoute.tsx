@@ -6,6 +6,7 @@ import { About } from './AboutRoute';
 import { createRoute } from '@tanstack/react-router';
 import { appRoute } from './RootRoutes';
 import { pathNames } from './paths';
+import { DidResolveOnShow } from '../helpers/DidResolveOnShow';
 
 export type ShowRouteSearch = {
   subject: string;
@@ -14,6 +15,10 @@ export type ShowRouteSearch = {
    * browser history. Absent = the table's default view.
    */
   view?: string;
+  /** Optional pkarr agent hint for DID resolution (share links). */
+  agent?: string;
+  /** Optional node DID hint for direct dial (share links). */
+  node?: string;
 };
 
 export const ShowRoute = createRoute({
@@ -23,20 +28,33 @@ export const ShowRoute = createRoute({
   validateSearch: (search): ShowRouteSearch => ({
     subject: (search.subject as string) ?? '',
     view: (search.view as string) || undefined,
+    agent: (search.agent as string) || undefined,
+    node: (search.node as string) || undefined,
   }),
 });
 
 /** Renders either the Welcome page, an Individual resource, or search results. */
 export const ShowComponent: React.FunctionComponent = () => {
   // Value shown in navbar, after Submitting
-  const subject = ShowRoute.useSearch({ select: state => state.subject });
+  const { subject, agent, node } = ShowRoute.useSearch({
+    select: state => ({
+      subject: state.subject,
+      agent: state.agent,
+      node: state.node,
+    }),
+  });
 
   if (subject === undefined || subject === '') {
     return <About />;
   }
 
   if (Client.isValidSubject(subject)) {
-    return <ResourcePage key={subject} subject={subject} />;
+    return (
+      <>
+        <DidResolveOnShow subject={subject} agent={agent} node={node} />
+        <ResourcePage key={subject} subject={subject} />
+      </>
+    );
   } else {
     return <Search />;
   }

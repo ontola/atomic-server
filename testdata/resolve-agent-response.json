@@ -1,0 +1,15 @@
+{
+  "_comment": [
+    "The canonical GET /resolve-agent success body: what the server returns after",
+    "looking up an agent on pkarr, and what the browser helper must read.",
+    "browser/data-browser/src/helpers/didResolve.test.ts asserts the client",
+    "consumes these field names; renaming a key here must fail that suite.",
+    "Keys beginning with an underscore are documentation and are stripped before",
+    "the body is used."
+  ],
+  "agent": "did:ad:agent:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+  "nodeIds": [
+    "did:ad:node:2222222222222222222222222222222222222222222222222222222222222222"
+  ],
+  "publicZone": null
+}

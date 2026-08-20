@@ -63,7 +63,11 @@ struct PairLinks {
 fn queue_pair_links(state: &PairLinks, urls: impl IntoIterator<Item = String>) {
   let mut pending = state.pending.lock().unwrap();
   for url in urls {
-    if url.starts_with("atomic://") && !pending.contains(&url) {
+    // `atomic://` is the registered OS scheme. Also accept bare `did:ad:` when
+    // another app (or Android's broader `did` filter) hands us one — the
+    // frontend decides open vs pair.
+    let accept = url.starts_with("atomic://") || url.starts_with("did:ad:");
+    if accept && !pending.contains(&url) {
       println!("[pairing] queued deep link");
       pending.push(url);
     }

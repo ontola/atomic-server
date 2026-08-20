@@ -1,6 +1,10 @@
 # Zones: ACL-bearing roots as the one boundary
 
-**Status: Proposal (2026-07-17).** Direction agreed in design discussion; nothing built.
+**Status: In progress (2026-08-05).** Core lib path landed: zone derivation,
+zone-based `check_rights`, implicit creator write (no per-genesis `write`
+insert), and agent-keyed pkarr discovery alongside legacy drive-keyed
+announces. Remaining: persisted zone index, sync `collect_zone_subjects` wire
+cutover, browser `canWrite` / Share UI, drop authored `drive` stamp.
 Successor-in-spirit to the drive-stamp mechanics in
 [`commit-fanout-drive-isolation.md`](./commit-fanout-drive-isolation.md) and the
 authority-replay ideas in [`authorization-sync.md`](./authorization-sync.md).
@@ -110,8 +114,11 @@ Boundary and announce are decoupled. pkarr/mainline records are for finding
   records total.
 - Zones resolve *through the connection*: dial a node, SYNC the zone DID,
   admission decides.
-- Share links carry their own routing: zone DID + agent DID / node hint.
+- Share links carry their own routing: zone URI + agent / node hint.
   The link is the discovery record; nothing per-share touches the DHT.
+  Canonical spelling is moving to opaque `atomic:` URIs (see
+  [`atomic-uris.md`](./atomic-uris.md)); `did:ad:` remains a read alias during
+  migration.
 - Per-zone announces remain only for owner-independent discovery (community
   zones with many hosts) as an explicit action, never a default.
 
@@ -132,12 +139,25 @@ Boundary and announce are decoupled. pkarr/mainline records are for finding
 
 ## Migration
 
-1. Verify `drive` stamp == derived zone for the whole store (mismatches are
-   latent bugs worth finding regardless).
-2. Introduce the zone index; switch `check_rights` + browser `canWrite` to it.
-3. Drop the stamp from authored state; keep frame-level context + hints.
-4. Existing mid-tree grants need no data migration — they already *are* zone
+1. [x] Zone derivation helpers (`lib/src/zones.rs`: `is_zone_root`,
+   `resolve_zone`, `collect_zone_subjects`, stamp-vs-zone compare). Nested ACLs
+   intentionally disagree with the drive stamp — that is the model.
+2. [x] Switch `check_rights` to zone lookup + remove genesis `write` insert
+   (implicit creator write via `genesis_signer`). Browser `canWrite` still walks
+   parents — replace next.
+3. [ ] Drop the stamp from authored state; keep frame-level context + hints.
+4. [ ] Existing mid-tree grants need no data migration — they already *are* zone
    roots under the new semantics.
+5. [x] Agent-keyed pkarr publish/resolve (`discovery::publish_agent_node_id`);
+   server announces agent record at boot; legacy drive-keyed path retained.
+6. [x] End-to-end DID open: search parses DIDs, `atomic://open` + bare
+   `did:ad:` deep links, `/resolve-agent` endpoint, known-peers fallback on
+   ErrorPage when the link has no node hint.
+7. [x] Share menu / invite links embed `agent` + `node` resolve hints
+   (`buildShareLink`); Show route consumes them via `DidResolveOnShow`.
+8. [ ] Sync engine: `collect_drive_subjects` → `collect_zone_subjects` (BFS stops
+   at nested zones).
+9. [ ] Share panel promote/demote UX (zones model).
 
 ## Acceptance test
 

@@ -310,6 +310,7 @@ msgstr "Connect a model to use Atomic Assistant"
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/components/AI/AISettings.tsx
+#: src/views/ErrorPage.tsx
 msgid "or"
 msgstr "or"
 
@@ -1330,10 +1331,8 @@ msgstr "<0>Ctrl</0>+<1/> undo · <2>Ctrl</2>+ <3>Shift</3>+<4/> redo"
 msgid "Resource is loading..."
 msgstr "Resource is loading..."
 
-#: src/components/OverlayContainer.tsx
-#: src/routes/Search/SearchOverlay.tsx
-msgid "Search for resources..."
-msgstr "Search for resources..."
+#~ msgid "Search for resources..."
+#~ msgstr "Search for resources..."
 
 #: src/components/OverlayContainer.tsx
 #: src/components/OverlayContainer.tsx
@@ -1458,6 +1457,7 @@ msgstr "Document"
 
 #: src/components/SideBar/SyncMenuItem.tsx
 #: src/routes/SyncRoute.tsx
+#: src/views/ErrorPage.tsx
 msgid "Sync"
 msgstr "Sync"
 
@@ -1531,6 +1531,7 @@ msgstr "Textual Description <0/>"
 #: src/components/AvatarCropper.tsx
 #: src/components/Share/ShareDialog.tsx
 #: src/components/forms/ResourceForm.tsx
+#: src/routes/Share/ShareRoute.tsx
 #: src/views/Article/ArticleDescription.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
@@ -1842,9 +1843,8 @@ msgstr "Share settings saved"
 msgid "Permissions for"
 msgstr "Permissions for"
 
-#: src/routes/Share/ShareRoute.tsx
-msgid "<0/> Create Invite"
-msgstr "<0/> Create Invite"
+#~ msgid "<0/> Create Invite"
+#~ msgstr "<0/> Create Invite"
 
 #: src/components/Share/ShareDialog.tsx
 #: src/routes/Share/ShareRoute.tsx
@@ -3124,11 +3124,11 @@ msgstr "{0} Inherited permissions"
 msgid "<0><0/> Back</0> Create Invite"
 msgstr "<0><0/> Back</0> Create Invite"
 
-#: src/components/Share/ShareDialog.tsx
-msgid "Link copied to clipboard"
-msgstr "Link copied to clipboard"
+#~ msgid "Link copied to clipboard"
+#~ msgstr "Link copied to clipboard"
 
 #: src/components/Share/ShareDialog.tsx
+#: src/routes/Share/ShareRoute.tsx
 msgid "<0/> Copy link"
 msgstr "<0/> Copy link"
 
@@ -4454,6 +4454,7 @@ msgid "as a classtype."
 msgstr "as a classtype."
 
 #: src/components/Share/ShareDialog.tsx
+#: src/routes/Share/ShareRoute.tsx
 msgid "Create Invite"
 msgstr "Create Invite"
 
@@ -7025,3 +7026,84 @@ msgstr "An always-on device has an address. One you carry has a code instead, sh
 #: src/routes/SyncRoute.tsx
 msgid "An always-on device has an address. Type it here."
 msgstr "An always-on device has an address. Type it here."
+
+#. 0: result.via
+#: src/views/ErrorPage.tsx
+msgid "Found via {0}. Reloading…"
+msgstr "Found via {0}. Reloading…"
+
+#: src/views/ErrorPage.tsx
+msgid "Trying known devices…"
+msgstr "Trying known devices…"
+
+#. 0: knownPeers.length; 1: knownPeers.length === 1 ? '' \\: 's'
+#: src/views/ErrorPage.tsx
+msgid "Try {0} known device{1}"
+msgstr "Try {0} known device{1}"
+
+#: src/views/ErrorPage.tsx
+msgid "Dial every paired device and pull this resource’s zone/drive"
+msgstr "Dial every paired device and pull this resource’s zone/drive"
+
+#: src/views/ErrorPage.tsx
+msgid "This DID is not on this device. Pair a device on the"
+msgstr "This DID is not on this device. Pair a device on the"
+
+#: src/views/ErrorPage.tsx
+msgid "page, or open a link that includes an"
+msgstr "page, or open a link that includes an"
+
+#: src/views/ErrorPage.tsx
+msgid "hint."
+msgstr "hint."
+
+#: src/helpers/didResolve.ts
+msgid "Resource not found locally, and you have no known devices to try."
+msgstr "Resource not found locally, and you have no known devices to try."
+
+#: src/helpers/didResolve.ts
+msgid "Resource not found locally. Try fetching from your known devices?"
+msgstr "Resource not found locally. Try fetching from your known devices?"
+
+#: src/helpers/didResolve.ts
+msgid "Could not resolve this DID. Pair a device on the Sync page, or add an agent/node hint to the link."
+msgstr "Could not resolve this DID. Pair a device on the Sync page, or add an agent/node hint to the link."
+
+#: src/helpers/didResolve.ts
+msgid "Could not resolve this DID from local data or known devices."
+msgstr "Could not resolve this DID from local data or known devices."
+
+#: src/components/Share/ShareDialog.tsx
+#: src/routes/Share/ShareRoute.tsx
+msgid "Link copied (includes resolve hints)"
+msgstr "Link copied (includes resolve hints)"
+
+#: src/components/Share/ShareDialog.tsx
+#: src/routes/Share/ShareRoute.tsx
+msgid "Link copied"
+msgstr "Link copied"
+
+#: src/components/InviteForm.tsx
+msgid "Invite copied (includes resolve hints)"
+msgstr "Invite copied (includes resolve hints)"
+
+#: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
+msgid "Resolving DID…"
+msgstr "Resolving DID…"
+
+#: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
+msgid "Search or paste a did:ad:…"
+msgstr "Search or paste a did:ad:…"
+
+#: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
+msgid "No node hint — will try known devices if needed"
+msgstr "No node hint — will try known devices if needed"
+
+#: src/components/OverlayContainer.tsx
+#: src/routes/Search/SearchOverlay.tsx
+msgid "Open DID"
+msgstr "Open DID"
+
