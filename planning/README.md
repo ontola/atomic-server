@@ -65,7 +65,7 @@ Remaining work, not "this file exists."
 | [`atomic-assistant-browser-extension.md`](./atomic-assistant-browser-extension.md) | **Proposal.** Local-first Chromium extension. |
 | [`tours.md`](./tours.md) | Design, not built. |
 | [`rust-dependency-upgrade-audit.md`](./rust-dependency-upgrade-audit.md) | Audit notes for a Rust dependency upgrade pass. |
-| [`e2e-light-heavy.md`](./e2e-light-heavy.md) | **Proposal.** Playwright light on feature branches; full on `develop` / tags / opt-in. Non-E2E jobs always. Grow vitest + `jsTestIntegration` before shrinking heavy. |
+| [`e2e-light-heavy.md`](./e2e-light-heavy.md) | **Landing.** Playwright light on feature branches; full on `develop` / tags / opt-in. Steps 1–3 shipped. Remaining: grow vitest + `jsTestIntegration` before shrinking heavy. |
 
 ## Slices and companions
 

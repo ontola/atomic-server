@@ -1,6 +1,8 @@
 # Light vs heavy E2E, and where unit tests should grow
 
-**Status: proposal, not built.** Analysis 2026-08-20.
+**Status: landing.** Tags, `test-e2e:light`, Dagger `--e2e-mode`, and
+`main.yml` gating are in. Remaining: grow `jsTestIntegration`, stop adding
+heavy-only variants as Playwright, then drop redundant heavy specs.
 
 Yes: split Playwright into a **light** suite that gates feature-branch CI,
 and a **heavy** suite that gates `develop` / tags / releases. Lint, Rust,
@@ -302,8 +304,8 @@ that can fail.
 
 ## CI / Dagger shape (when building)
 
-Today `ci()` always calls `this.endToEnd(...)`, which shards the full
-suite. The workflow decides the mode; Dagger does not guess the branch.
+Today `ci()` takes `--e2e-mode light|full` and passes it to `endToEnd`.
+The workflow decides the mode; Dagger does not guess the branch.
 
 - `endToEnd(mode: 'light' | 'full')`, same flag on `ci()`.
 - `main.yml` passes `full` when `github.ref == develop` or the ref is a
@@ -339,13 +341,11 @@ Optional later, not required for the split to pay off:
 
 ---
 
-## Build order (not started)
+## Build order
 
-1. Tag the draft smoke list; add `test-e2e:light`. Measure locally:
-   count, wall time, failures vs full.
-2. Wire Dagger + `main.yml` so PRs run light, `develop`/tags run full.
-   Confirm staging still waits on the full job.
-3. Document the policy in `TESTING_COVERAGE.md`, `browser/e2e/README.md`,
+1. [x] Tag the draft smoke list; add `test-e2e:light`.
+2. [x] Wire Dagger + `main.yml` so feature branches run light, `develop`/tags run full.
+3. [x] Document the policy in `TESTING_COVERAGE.md`, `browser/e2e/README.md`,
    `AGENTS.md` (cheapest layer first).
 4. For each heavy spec that duplicates a unit file, leave the E2E in heavy
    and stop adding variants there. New variants go to vitest.
@@ -353,5 +353,5 @@ Optional later, not required for the split to pay off:
    exist only as Playwright.
 6. Only then drop individual heavy tests that have become redundant.
 
-Step 1–3 is the split. Step 4–6 is how the heavy suite stops growing
+Step 1–3 is the split (landed). Step 4–6 is how the heavy suite stops growing
 faster than the product.

@@ -63,11 +63,20 @@ pnpm playwright test some.spec.ts --project=chromium --workers=1
 
 Comparing failure _sets_ against a known baseline beats expecting all-green.
 
+## Light vs full
+
+Feature-branch CI runs **light**: `--grep @smoke`, about twenty first-hour
+journeys. `develop` and `v*` tags run the **full** suite. Tag a test with
+`smoke` from `./tests/test-utils.ts` only if a failure means the demo is
+dead. See [`planning/e2e-light-heavy.md`](../../planning/e2e-light-heavy.md).
+
 ```sh
 # install deps
 pnpm i
 # install chromium
 pnpm playwright-install
+# light suite (matches feature-branch CI)
+pnpm test-e2e:light
 # run all tests, creates a `playwright-report` folder with HTML files + images
 pnpm test-e2e
 # run all tests and updates snapshots
