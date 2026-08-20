@@ -9,13 +9,23 @@ import {
 const NAME_PROP = 'https://atomicdata.dev/properties/name';
 
 /**
- * Wait until a resource named `title` actually holds a tag named `tagName`.
+ * Wait until a resource named `title` lists `column`'s tag subject on some
+ * array property (the group-by / Status field).
  *
- * Kanban drag keeps a visual preview until `save()` finishes, so the card can
- * already sit in the target column while the resource still has the old
- * status. Reloading in that window is what made the persist test flake.
+ * Kanban drag keeps a visual preview until `set()` writes that tag. Reloading
+ * off the preview is what made the persist test fail: OPFS still had Todo.
+ * Compare against the column's `data-kanban-column-id` (the tag subject) —
+ * looking up the tag resource's name is racy; it may not be in the store.
  */
-async function waitForCardTag(page: Page, title: string, tagName: string) {
+async function waitForCardStatus(page: Page, title: string, col: Locator) {
+  const tagSubject = await col
+    .getByTestId('kanban-column-body')
+    .getAttribute('data-kanban-column-id');
+
+  if (!tagSubject) {
+    throw new Error('kanban column body has no data-kanban-column-id');
+  }
+
   await page.waitForFunction(
     ({ cardTitle, expectedTag, nameProp }) => {
       const store = window.store;
@@ -24,38 +34,23 @@ async function waitForCardTag(page: Page, title: string, tagName: string) {
         return false;
       }
 
-      const expected = expectedTag.toLowerCase();
-
       for (const resource of store.resources.values()) {
         if (resource.get?.(nameProp) !== cardTitle) {
           continue;
         }
 
         for (const [, value] of resource.getEntries?.() ?? []) {
-          if (!Array.isArray(value)) {
-            continue;
-          }
+          const subjects = Array.isArray(value) ? value : [];
 
-          for (const subject of value) {
-            if (typeof subject !== 'string') {
-              continue;
-            }
-
-            const tagNameValue = store.resources.get(subject)?.get?.(nameProp);
-
-            if (
-              typeof tagNameValue === 'string' &&
-              tagNameValue.toLowerCase() === expected
-            ) {
-              return true;
-            }
+          if (subjects.includes(expectedTag)) {
+            return true;
           }
         }
       }
 
       return false;
     },
-    { cardTitle: title, expectedTag: tagName, nameProp: NAME_PROP },
+    { cardTitle: title, expectedTag: tagSubject, nameProp: NAME_PROP },
     { timeout: 30_000 },
   );
 }
@@ -243,7 +238,7 @@ test.describe('kanban', () => {
 
       // The column move is a preview until `set()` writes the tag. Don't reload
       // until the resource actually holds Doing — otherwise OPFS still has Todo.
-      await waitForCardTag(page, 'Login button misaligned', 'Doing');
+      await waitForCardStatus(page, 'Login button misaligned', doing);
 
       // Survives a reload (the status change was persisted to the resource).
       await reloadReconnected(page);
