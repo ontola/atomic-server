@@ -4,6 +4,8 @@ import {
   createTableFromDialog,
   newResource,
   reloadGrid,
+  setGridCell,
+  waitForGridInteractive,
   waitForRowsMaterialized,
 } from './test-utils';
 
@@ -25,10 +27,7 @@ const row = (page: Page, text: string) =>
 /** Creates a table from a template card and waits for its grid. */
 async function createFromTemplate(page: Page, template: RegExp, name: string) {
   await createTableFromDialog(page, { template, name });
-  await expect(page.getByRole('grid')).toBeVisible();
-  // The grid binds its cell handlers after the first render; clicking before
-  // that lands on nothing.
-  await page.waitForTimeout(1000);
+  await waitForGridInteractive(page);
 }
 
 /** The column headings, left to right, as the view renders them. */
@@ -45,41 +44,11 @@ async function setCell(
   rowIndex: number,
   columnIndex: number,
   value: string,
-  opts: { replace?: boolean } = {},
+  _opts: { replace?: boolean } = {},
 ) {
-  const cell = page.locator(
-    `[aria-rowindex="${rowIndex}"] > [aria-colindex="${columnIndex}"]`,
-  );
-  await cell.click();
-
-  // Clicking a cell that is already the active one enters edit mode directly,
-  // which is where Tab out of the previous cell leaves us — so only ask for edit
-  // mode when the click merely focused the cell.
-  if ((await cell.locator('input').count()) === 0) {
-    await expect(cell).toBeFocused();
-    await page.keyboard.press('Enter');
-  }
-
-  if (opts.replace) {
-    await page.keyboard.press('ControlOrMeta+a');
-  }
-
-  await page.keyboard.type(value);
-  // Tab commits the edit (Escape would revert it) and moves into the next cell,
-  // in edit mode — Escape leaves it, so the next click lands on a cell that can
-  // take focus again.
-  await page.keyboard.press('Tab');
-  await page.waitForTimeout(200);
-  await page.keyboard.press('Escape');
-  await page.waitForTimeout(200);
-
-  // Check the value actually arrived. Keystrokes can land on a grid that is
-  // not listening yet and nothing above would notice — the cell stays empty
-  // and the failure surfaces much later as a total with nothing to add or a
-  // filter that matches nothing, pointing at the wrong feature entirely.
-  // Matched loosely because a column may reformat what it was given ("4.50"
+  // Matched loosely when the column reformats what it was given ("4.50"
   // renders as "4.5"); what is being ruled out is the cell being empty.
-  await expect(cell).toContainText(/\S/);
+  await setGridCell(page, rowIndex, columnIndex, value, { match: /\S/ });
 }
 
 /**

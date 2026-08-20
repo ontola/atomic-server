@@ -4,6 +4,7 @@ import {
   createTableFromDialog,
   inDialog,
   pickTotal,
+  waitForGridMounted,
 } from './test-utils';
 
 /** Creates an Issue Tracker table (Board + All issues views, no timestamps). */
@@ -214,7 +215,7 @@ test.describe('timer view', () => {
     ).toBeAttached();
     // Wait for the grid itself, so the collection is loaded before adding.
     await expect(page.getByRole('grid')).toBeVisible();
-    await page.waitForTimeout(500);
+    await waitForGridMounted(page);
 
     // Starting an entry works immediately on a freshly-created table — no
     // reload needed (regression: the new row was persisted but not rendered).
@@ -234,7 +235,7 @@ test.describe('timer view', () => {
   }) => {
     await createTimeTracker(page, 'Config not code');
     await expect(page.getByRole('grid')).toBeVisible();
-    await page.waitForTimeout(500);
+    await waitForGridMounted(page);
 
     await page.getByTestId('timer-new-input').fill('Configured work');
     await page.getByTestId('timer-start-new').click();
@@ -277,7 +278,7 @@ test.describe('timer view', () => {
 
     await createTimeTracker(page, 'Totalled hours');
     await expect(page.getByRole('grid')).toBeVisible();
-    await page.waitForTimeout(500);
+    await waitForGridMounted(page);
 
     // Two logged entries, both stopped, so their durations are settled.
     for (const name of ['Invoicing', 'Standup']) {

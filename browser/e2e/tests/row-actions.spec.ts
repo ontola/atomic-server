@@ -4,6 +4,8 @@ import {
   createTableFromDialog,
   inDialog,
   reloadGrid,
+  setGridCell,
+  waitForGridInteractive,
 } from './test-utils';
 
 /**
@@ -34,8 +36,7 @@ async function createFromTemplate(
   }
 
   await expect(page.getByRole('grid')).toBeVisible();
-  // The grid binds its cell handlers after the first render.
-  await page.waitForTimeout(1000);
+  await waitForGridInteractive(page);
 }
 
 /** Types a value into one grid cell, addressed by its row and column index. */
@@ -45,21 +46,7 @@ async function setCell(
   columnIndex: number,
   value: string,
 ) {
-  const cell = page.locator(
-    `[aria-rowindex="${rowIndex}"] > [aria-colindex="${columnIndex}"]`,
-  );
-  await cell.click();
-
-  if ((await cell.locator('input').count()) === 0) {
-    await expect(cell).toBeFocused();
-    await page.keyboard.press('Enter');
-  }
-
-  await page.keyboard.type(value);
-  await page.keyboard.press('Tab');
-  await page.waitForTimeout(200);
-  await page.keyboard.press('Escape');
-  await page.waitForTimeout(200);
+  await setGridCell(page, rowIndex, columnIndex, value);
 }
 
 /** The column headings, left to right. */

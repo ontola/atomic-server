@@ -29,6 +29,7 @@ import {
   signIn,
   timestamp,
   waitForCommit,
+  waitForSynced,
   openAgentPage,
   fillSearchBox,
   selectHistoryVersionShowing,
@@ -286,7 +287,6 @@ test.describe('data-browser', async () => {
       });
     } catch {
       // Redirect may land outside the chatroom; open the same /app/show?subject=… URL as the owner.
-      await page2.waitForTimeout(500);
       await page2.goto(chatRoomHref);
       await expect(page2.locator(`text=${teststring}`)).toBeVisible({
         timeout: 15_000,
@@ -370,14 +370,30 @@ test.describe('data-browser', async () => {
       await editableTitle(page).type(letter, { delay: Math.random() * 300 });
     }
 
-    // After typing, we need the LAST debounce to fire (~100ms) then its
-    // commit to ack. `pendingDirtyCount === 0` polls too eagerly here —
-    // the last keystroke's debounce timer hasn't started yet at loop exit,
-    // so the count is briefly 0 (last save done, next not yet enqueued)
-    // and `waitForFunction` returns before the final value is committed.
-    // `waitForTimeout(1500)` gives the debounce + round-trip enough budget
-    // before we Escape (which would otherwise cancel the pending save).
-    await page.waitForTimeout(1500);
+    // The last keystroke's debounce may not have been scheduled yet at loop
+    // exit, so `pendingDirtyCount === 0` can be briefly true before the
+    // final character is applied. Wait until the store holds the full
+    // string — that's `useValue` applying the change — then drain the save
+    // before Escape (which would otherwise race a still-armed debounce).
+    await page.waitForFunction(
+      expected => {
+        const main = document.querySelector('main[about]');
+        const subject = main?.getAttribute('about');
+
+        if (!subject) {
+          return false;
+        }
+
+        const resource = window.store?.resources.get(subject);
+
+        return (
+          resource?.get?.('https://atomicdata.dev/properties/name') === expected
+        );
+      },
+      alphabet,
+      { timeout: 15_000 },
+    );
+    await waitForSynced(page);
     await page.keyboard.press('Escape');
 
     await expect(
@@ -426,11 +442,7 @@ test.describe('data-browser', async () => {
     await editTitle(docTitle, page);
 
     // Wait for the doc's save to flush before navigating away.
-    await page.waitForFunction(
-      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
-      undefined,
-      { timeout: 10000 },
-    );
+    await waitForSynced(page);
 
     // Back to the folder — assert the child appears in the main page.
     await page.goto(folderUrl);

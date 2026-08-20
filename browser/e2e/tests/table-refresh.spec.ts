@@ -1,6 +1,13 @@
 // oxlint-disable no-await-in-loop
 import { test, expect } from '@playwright/test';
-import { before, editableTitle, FRONTEND_URL, newResource } from './test-utils';
+import {
+  before,
+  editableTitle,
+  FRONTEND_URL,
+  newResource,
+  setGridCell,
+  waitForSynced,
+} from './test-utils';
 
 /**
  * Regression: refreshing a Table's page must not grow the child-row count.
@@ -151,22 +158,11 @@ test.describe('table refresh', () => {
     // no separate sleep needed.
     const nameCell = page.locator('[aria-rowindex="2"] [aria-colindex="2"]');
     await expect(nameCell).toBeVisible({ timeout: 10000 });
-    await nameCell.click();
-    await page.waitForTimeout(300);
-    await nameCell.click();
-    await page.waitForTimeout(300);
-    const cellInput = page.locator('[role="grid"] input').first();
-    await expect(cellInput).toBeVisible({ timeout: 5000 });
-    await cellInput.fill('row-1');
-    await page.keyboard.press('Tab');
+    await setGridCell(page, 2, 2, 'row-1');
     // Wait for the cell save to drain into the server. The dirty queue is
     // 0 once the commit has been ack'd — that's the actual saved-and-
     // visible-on-reload signal we want the row count to reflect.
-    await page.waitForFunction(
-      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
-      undefined,
-      { timeout: 10000 },
-    );
+    await waitForSynced(page);
 
     const rows = page.locator('[aria-rowindex]');
     const afterTypeCount = await rows.count();
