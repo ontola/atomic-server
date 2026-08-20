@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Client } from '@tomic/react';
+import { Client, useDrive } from '@tomic/react';
 import { DIVIDER, DropdownMenu, isItem, DropdownItem } from '../Dropdown';
 import { AutoOpenTrigger } from '../Dropdown/AutoOpenTrigger';
 import { DropdownTriggerComponent } from '../Dropdown/DropdownTrigger';
@@ -15,6 +15,7 @@ import { resourceActions } from '../../actions/resourceActions';
 import { useActionContext } from '../../actions/useActionContext';
 import toast from 'react-hot-toast';
 import { RunPluginDialog } from '@chunks/PluginRuns/RunPluginDialog';
+import { usePluginClass } from '@chunks/PluginRuns/runScript';
 import type { ActionContext, ActionDefinition } from '../../actions/types';
 import { useCustomContextItemsContext } from './CustomContextItemsContext';
 import { CoverPickerDialog, EmojiPickerDialog } from '../ResourceDecorations';
@@ -162,6 +163,8 @@ export function ResourceContextMenu({
   const [coverPickerOpen, setCoverPickerOpen] = useState<boolean>();
   const [pluginRunOpen, setPluginRunOpen] = useState<boolean>();
   const openPluginRun = useCallback(() => setPluginRunOpen(true), []);
+  const [currentDrive] = useDrive();
+  const pluginClass = usePluginClass(currentDrive);
   const openEmojiPicker = useCallback(() => setEmojiPickerOpen(true), []);
   const openCoverPicker = useCallback(() => setCoverPickerOpen(true), []);
   const ctx = useActionContext(subject, {
@@ -171,6 +174,7 @@ export function ResourceContextMenu({
     openEmojiPicker,
     openCoverPicker,
     openPluginRun,
+    pluginClass,
   });
   const { items: customItems } = useCustomContextItemsContext();
   // Try to not have a useResource hook in here, as that will lead to many costly fetches when the user enters a new subject
