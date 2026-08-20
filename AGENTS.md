@@ -39,7 +39,12 @@ In E2E tests, most specs use `test.beforeEach(before)` from `test-utils.ts`, whi
 ## Debugging process
 
 1. Identify the bug, where it's coming from.
-2. Reproduce the bug in a test at the right abstraction level. E2E tests are the most expensive, so try to find a different level if possible.
+2. Reproduce the bug in a test at the cheapest layer that can fail: Rust /
+   vitest first, then `browser/lib` `*.integration.test.ts` (real server, no
+   UI), then one Playwright test. E2E is the most expensive. Tag `@smoke`
+   (`smoke` in `browser/e2e/tests/test-utils.ts`) only if a failure means the
+   first-hour demo is dead; extra operators and offline variants stay in the
+   full suite. See `planning/e2e-light-heavy.md`.
 3. After reproduction in a failing test, fix the bug until the test and all other tests are green again
 
 ## DevTools Console Helpers
@@ -238,7 +243,8 @@ cargo test -p atomic-server --test it iroh_pairing  # two servers pair via POST 
 cargo test --manifest-path flutter/rust/Cargo.toml  # Flutter bridge (workspace-excluded, needs --manifest-path)
 cd browser/lib && pnpm test                      # JS unit tests
 cd browser && pnpm run -r build                  # Full workspace build
-cd browser && pnpm run test-e2e                  # Full e2e test
+cd browser && pnpm run test-e2e:light            # Playwright @smoke (feature-branch CI)
+cd browser && pnpm run test-e2e                  # Full Playwright suite (develop / tags)
 ```
 
 `atomic_lib`'s unit tests need the `db` feature — `hierarchy.rs`'s test module

@@ -63,6 +63,10 @@ const ATOMIC_DOMAIN = 'atomic';
 // invocation — pin `CARGO_BUILD_JOBS` on every cargo container too.
 type HostProfile = 'mancave' | 'hosted';
 
+/** Playwright gate. `light` is `--grep @smoke`; `full` is the unfiltered suite.
+ *  Default is `full` so a forgotten flag cannot silently shrink develop/tag CI. */
+type E2eMode = 'light' | 'full';
+
 type HostKnobs = {
   e2eShardCount: number;
   e2ePlaywrightWorkers: string;
@@ -73,6 +77,40 @@ type HostKnobs = {
   /** Caps rustc parallelism inside each container via CARGO_BUILD_JOBS. */
   cargoBuildJobs: string;
 };
+
+type E2eRunKnobs = {
+  shardCount: number;
+  workers: string;
+  retries: string;
+  /** Empty string = unfiltered. Otherwise passed as `--grep`. */
+  grep: string;
+};
+
+function resolveE2eMode(value: string): E2eMode {
+  return value === 'light' ? 'light' : 'full';
+}
+
+function e2eRunKnobs(profile: HostProfile, mode: E2eMode): E2eRunKnobs {
+  const host = HOST_PROFILES[profile];
+  if (mode === 'light') {
+    return {
+      // ~18 @smoke tests: two Mancave shards is plenty; hosted keeps one
+      // atomic-server. Do not mutate HostKnobs — rustTest reads those in
+      // parallel with endToEnd.
+      shardCount: profile === 'mancave' ? 2 : 1,
+      workers: host.e2ePlaywrightWorkers,
+      retries: '1',
+      grep: '@smoke',
+    };
+  }
+
+  return {
+    shardCount: host.e2eShardCount,
+    workers: host.e2ePlaywrightWorkers,
+    retries: host.e2ePlaywrightRetries,
+    grep: '',
+  };
+}
 
 /**
  * Trim a Playwright `error-context.md` to the part worth reading in a CI log.
@@ -147,6 +185,10 @@ export class AtomicServer {
   /** Active host knobs for this `ci()` invocation. Standalone func calls
    *  (rustTest/endToEnd alone) keep the conservative hosted defaults. */
   private hostKnobs: HostKnobs = HOST_PROFILES.hosted;
+  private hostProfile: HostProfile = 'hosted';
+  /** Playwright-only knobs for the in-flight `endToEnd` run. Isolated from
+   *  `hostKnobs` so a light E2E job cannot change nextest width mid-`ci()`. */
+  private e2eRun: E2eRunKnobs = e2eRunKnobs('hosted', 'full');
 
   constructor(
     @argument({
@@ -303,8 +345,15 @@ export class AtomicServer {
      * Passed from `.github/workflows/main.yml` per job.
      */
     @argument() hostProfile: string = 'hosted',
+    /**
+     * Playwright suite. `light` = `@smoke` first-hour journeys (feature
+     * branches). `full` = every spec (`develop`, `v*` tags, opt-in).
+     * Default `full` so omitting the flag cannot shrink a release gate.
+     */
+    @argument() e2eMode: string = 'full',
   ): Promise<string> {
-    this.hostKnobs = HOST_PROFILES[resolveHostProfile(hostProfile)];
+    this.hostProfile = resolveHostProfile(hostProfile);
+    this.hostKnobs = HOST_PROFILES[this.hostProfile];
 
     // Fail fast on cheap static checks. A store.ts oxfmt miss used to burn
     // ~20+ minutes of rust/e2e compile before jsLint surfaced it.
@@ -316,7 +365,7 @@ export class AtomicServer {
     await Promise.all([
       this.docsPublish(netlifyAuthToken, publishDocs),
       this.typedocPublish(netlifyAuthToken, publishDocs),
-      this.endToEnd(netlifyAuthToken),
+      this.endToEnd(netlifyAuthToken, e2eMode),
       this.jsTest(),
       this.jsTestIntegration(),
       this.flutterTest(),
@@ -1479,14 +1528,15 @@ export class AtomicServer {
     // `pnpm install` — see git history for ERR_PNPM_WORKSPACE_PKG_NOT_FOUND.
     return playwrightContainer
       .withEnvVariable('CI', 'true')
-      // Host-profile knobs — see HOST_PROFILES / `--host-profile`.
+      // Playwright-run knobs — see `e2eRunKnobs` / `--e2e-mode`. Isolated
+      // from `hostKnobs` so a light suite does not change nextest width.
       .withEnvVariable(
         'PLAYWRIGHT_WORKERS',
-        this.hostKnobs.e2ePlaywrightWorkers,
+        this.e2eRun.workers,
       )
       .withEnvVariable(
         'PLAYWRIGHT_RETRIES',
-        this.hostKnobs.e2ePlaywrightRetries,
+        this.e2eRun.retries,
       )
       .withFile('/app/package.json', browserContainer.file('/app/package.json'))
       .withFile(
@@ -1546,6 +1596,11 @@ export class AtomicServer {
 
   /** One Playwright shard against its own atomic-server service. */
   private e2eShardContainer(base: Container, shardIndex: number): Container {
+    const grepFlag = this.e2eRun.grep
+      ? ` --grep ${JSON.stringify(this.e2eRun.grep)}`
+      : '';
+    const shardCount = this.e2eRun.shardCount;
+
     return base
       .withServiceBinding('atomic', this.atomicService(true))
       .withExec([
@@ -1557,17 +1612,28 @@ export class AtomicServer {
         '/bin/bash',
         '-c',
         'set -o pipefail; ' +
-          `pnpm exec playwright test --config=./playwright.config.ts --shard=${shardIndex}/${this.hostKnobs.e2eShardCount} 2>&1 | tee /test-output.log; ` +
+          `echo "e2e mode grep=${JSON.stringify(this.e2eRun.grep || '(full)')} shard=${shardIndex}/${shardCount} workers=$PLAYWRIGHT_WORKERS retries=$PLAYWRIGHT_RETRIES"; ` +
+          `pnpm exec playwright test --config=./playwright.config.ts${grepFlag} --shard=${shardIndex}/${shardCount} 2>&1 | tee /test-output.log; ` +
           'echo ${PIPESTATUS[0]} > /test-exit-code; exit 0',
       ]);
   }
 
   @func()
-  async endToEnd(@argument() netlifyAuthToken: Secret): Promise<string> {
+  async endToEnd(
+    @argument() netlifyAuthToken: Secret,
+    /**
+     * `light` = `@smoke` only. `full` (default) = every spec, matching
+     * today's unfiltered suite. Workflow decides; this func does not
+     * guess the git ref.
+     */
+    @argument() e2eMode: string = 'full',
+  ): Promise<string> {
     // Shards × own atomic-server. Count comes from `--host-profile`
-    // (Mancave hot / hosted conservative). Dagger dedupes the shared
-    // debug `rustBuild(e2e)` / base-container graph.
-    const shardCount = this.hostKnobs.e2eShardCount;
+    // (Mancave hot / hosted conservative) plus `--e2e-mode` (light uses
+    // fewer shards). Dagger dedupes the shared debug `rustBuild(e2e)` /
+    // base-container graph.
+    this.e2eRun = e2eRunKnobs(this.hostProfile, resolveE2eMode(e2eMode));
+    const shardCount = this.e2eRun.shardCount;
     const base = this.e2eBaseContainer();
     const shardIndexes = Array.from({ length: shardCount }, (_, i) => i + 1);
     const shardContainers = shardIndexes.map(i =>
