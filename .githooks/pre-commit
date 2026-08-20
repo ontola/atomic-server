@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Format staged Rust / browser sources before commit.
+# Format + lint-fix staged Rust / browser sources before commit.
 # Enable with:  git config core.hooksPath .githooks
 # (Cursor Cloud wraps hooksPath and still invokes this via its dispatcher.)
 set -euo pipefail
@@ -10,7 +10,8 @@ cd "$ROOT"
 mapfile -t staged < <(git diff --cached --name-only --diff-filter=ACMR)
 
 rust_files=()
-browser_files=()
+browser_fmt_files=()
+browser_lint_files=()
 
 for f in "${staged[@]}"; do
   case "$f" in
@@ -20,7 +21,12 @@ for f in "${staged[@]}"; do
     browser/*)
       case "$f" in
         *.ts | *.tsx | *.js | *.jsx | *.mjs | *.cjs | *.json | *.css | *.md)
-          browser_files+=("$f")
+          browser_fmt_files+=("$f")
+          ;;
+      esac
+      case "$f" in
+        *.ts | *.tsx | *.js | *.jsx | *.mjs | *.cjs)
+          browser_lint_files+=("$f")
           ;;
       esac
       ;;
@@ -36,18 +42,58 @@ if ((${#rust_files[@]} > 0)); then
   git add -- "${rust_files[@]}"
 fi
 
-if ((${#browser_files[@]} > 0)); then
+if ((${#browser_fmt_files[@]} > 0)); then
   if [[ ! -x browser/node_modules/.bin/oxfmt ]] && [[ ! -d browser/node_modules/oxfmt ]]; then
     echo "pre-commit: oxfmt not installed under browser/ (run pnpm install there); skipping JS fmt" >&2
   else
     rel=()
-    for f in "${browser_files[@]}"; do
+    for f in "${browser_fmt_files[@]}"; do
       rel+=("${f#browser/}")
     done
     (
       cd browser
       pnpm exec oxfmt -c .oxfmtrc.json --ignore-path .gitignore -- "${rel[@]}"
     )
-    git add -- "${browser_files[@]}"
+    git add -- "${browser_fmt_files[@]}"
+  fi
+fi
+
+# oxfmt does not enforce stylistic rules like padding-line-between-statements.
+# Run oxlint --fix on staged JS/TS so CI package lint does not fail later.
+if ((${#browser_lint_files[@]} > 0)); then
+  if [[ ! -x browser/node_modules/.bin/oxlint ]] && [[ ! -d browser/node_modules/oxlint ]]; then
+    echo "pre-commit: oxlint not installed under browser/ (run pnpm install there); skipping JS lint-fix" >&2
+  else
+    # Group by package dir under browser/ so package-relative configs apply.
+    declare -A by_pkg=()
+    for f in "${browser_lint_files[@]}"; do
+      rel="${f#browser/}"
+      pkg="${rel%%/*}"
+      by_pkg["$pkg"]+="${rel#"$pkg"/}"$'\n'
+    done
+    for pkg in "${!by_pkg[@]}"; do
+      mapfile -t files < <(printf '%s' "${by_pkg[$pkg]}" | sed '/^$/d')
+      if ((${#files[@]} == 0)); then
+        continue
+      fi
+      if [[ ! -f "browser/$pkg/package.json" ]]; then
+        # Top-level browser files — lint from browser root with workspace config.
+        (
+          cd browser
+          pnpm exec oxlint -c .oxlintrc.json --fix -- "${files[@]}"
+        )
+      else
+        (
+          cd "browser/$pkg"
+          # Prefer package script path; fall back to workspace oxlint + parent config.
+          if [[ -f ../.oxlintrc.json ]]; then
+            pnpm exec oxlint -c ../.oxlintrc.json --fix -- "${files[@]}"
+          else
+            pnpm exec oxlint --fix -- "${files[@]}"
+          fi
+        )
+      fi
+    done
+    git add -- "${browser_lint_files[@]}"
   fi
 fi

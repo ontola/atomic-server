@@ -107,6 +107,7 @@ test.describe('share link resolve hints', () => {
     expect(clipboard).toMatch(/agent=/);
     // Node comes from the server's `/server` resource when Iroh is up.
     // Assert presence only — the exact NodeID is an environment detail.
+
     if (clipboard.includes('node=')) {
       expect(clipboard).toMatch(/node=did(%3A|:)ad(%3A|:)node(%3A|:)/i);
     }
@@ -135,8 +136,7 @@ test.describe('show URL with resolve hints', () => {
   });
 
   test('an agent hint looks up /resolve-agent then dials', async ({ page }) => {
-    const agent =
-      'did:ad:agent:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
+    const agent = 'did:ad:agent:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
     const agentCalls = await stubResolveAgent(page, { nodeIds: [NODE] });
     const syncCalls = await stubIrohSync(page);
 

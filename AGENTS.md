@@ -32,8 +32,9 @@ unformatted code.** Prefer the git hook; always verify before commit.
 ### Pre-commit hook (preferred)
 
 The repo ships [`.githooks/pre-commit`](.githooks/pre-commit): it runs
-`cargo fmt --all` when any `*.rs` is staged, and `oxfmt` on staged
-`browser/` TS/JS. Enable once per clone:
+`cargo fmt --all` when any `*.rs` is staged, `oxfmt` on staged `browser/`
+sources, and `oxlint --fix` on staged browser JS/TS (catches stylistic
+rules oxfmt does not). Enable once per clone:
 
 ```
 git config core.hooksPath .githooks
@@ -308,22 +309,15 @@ building/running the stack again after pulling changes.
 
 ### Enable the format pre-commit hook
 
-Cursor replaces `core.hooksPath` with its dispatcher but still runs the
-*previous* hooks path first. Point that path at the repo hooks:
-
 ```
 git config core.hooksPath .githooks
 ```
 
-If Cursor has already wrapped hooks for this workspace, set the saved original
-path instead (same effect for chaining):
-
-```
-# example path; the hash folder name is workspace-specific under ~/.cursor/agent-hooks/
-echo "/workspace/.githooks" > ~/.cursor/agent-hooks/*/'.cursor-original-hooks-path'
-```
-
-Prefer the `git config` form on a fresh clone before the first agent commit.
+Cursor Cloud may wrap `core.hooksPath` with its own dispatcher; it still runs
+the previous path first. If commits skip formatting, ensure
+`~/.cursor/agent-hooks/<workspace>/.cursor-original-hooks-path` contains this
+repo’s absolute `.githooks` path (or re-run the `git config` above before
+Cursor wraps hooks on a fresh VM).
 
 ### Run the server on port 9885 (not the default 9883)
 
