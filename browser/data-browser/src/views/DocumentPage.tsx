@@ -1,26 +1,44 @@
-import { useState, type JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 import { useArray, useCanWrite, dataBrowser, useStore } from '@tomic/react';
 import { styled } from 'styled-components';
-import { FaCircleInfo } from 'react-icons/fa6';
 
 import { ElementShow } from './Element';
-import { Button } from '../components/Button';
 import { ResourcePageProps } from './ResourcePage';
 import { Column, Row } from '../components/Row';
+import { Spinner } from '../components/Spinner';
 import { upgradeDocument } from './Document/upgradeDocument';
-import toast from 'react-hot-toast';
 import {
   PAGE_TITLE_TRANSITION_TAG,
   transitionName,
 } from '../helpers/transitionName';
 import { ViewTransitionProps } from '../helpers/ViewTransitionProps';
 
-/** A full page, editable document, consisting of Elements */
+/** Full-page view for a V1 document. Writable ones migrate to V2 silently. */
 export function DocumentPage({ resource }: ResourcePageProps): JSX.Element {
   const store = useStore();
   const canWrite = useCanWrite(resource);
   const [elements] = useArray(resource, dataBrowser.properties.elements);
-  const [upgrading, setUpgrading] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!canWrite || failed) {
+      return;
+    }
+
+    let cancelled = false;
+
+    upgradeDocument(resource, store).catch(error => {
+      console.error('[upgradeDocument] V1 migration failed:', error);
+
+      if (!cancelled) {
+        setFailed(true);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canWrite, failed, resource, store]);
 
   return (
     <FullPageWrapper>
@@ -31,33 +49,17 @@ export function DocumentPage({ resource }: ResourcePageProps): JSX.Element {
               {resource.title}
             </DocumentTitle>
           </Row>
-          {canWrite && (
-            <UpgradeMessage>
-              <Row align='baseline'>
-                <FaCircleInfo />
-                This document needs to be updated to the new format in order to
-                be edited.
-              </Row>
-              <Button
-                disabled={upgrading}
-                onClick={() => {
-                  setUpgrading(true);
-                  upgradeDocument(resource, store).catch(e => {
-                    console.error(e);
-                    toast.error('Could not update document');
-                    setUpgrading(false);
-                  });
-                }}
-              >
-                Update Document
-              </Button>
-            </UpgradeMessage>
+          {canWrite && !failed ? (
+            <LoadingRow>
+              <Spinner size='2rem' />
+            </LoadingRow>
+          ) : (
+            <div>
+              {elements.map(subject => (
+                <ElementShow subject={subject} key={subject} />
+              ))}
+            </div>
           )}
-          <div>
-            {elements.map(subject => (
-              <ElementShow subject={subject} key={subject} />
-            ))}
-          </div>
         </Column>
       </DocumentContainer>
     </FullPageWrapper>
@@ -91,12 +93,10 @@ const FullPageWrapper = styled.div`
   box-sizing: border-box;
 `;
 
-const UpgradeMessage = styled(Column)`
-  background-color: ${p => p.theme.colors.mainSelectedBg};
-  border: 1px solid ${p => p.theme.colors.mainSelectedFg};
-  color: ${p => p.theme.colors.mainSelectedFg};
-  padding: ${p => p.theme.size()};
-  border-radius: ${p => p.theme.radius};
+const LoadingRow = styled.div`
+  display: flex;
+  justify-content: center;
+  padding: ${p => p.theme.size(4)};
 `;
 
 export default DocumentPage;

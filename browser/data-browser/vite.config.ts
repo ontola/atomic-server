@@ -347,6 +347,10 @@ export default defineConfig({
       // instance (see the exclude note below re: the DecorationGroup crash).
       // `loro-crdt` stays external, so the WASM is unaffected.
       'loro-prosemirror',
+      // Lazy-loaded only when a leftover Yjs-era DocumentV2 is opened. Listed
+      // so the first `import('yjs')` does not trigger a mid-session re-optimize
+      // that 504s the dynamic import.
+      'yjs',
     ],
     // `loro-crdt` ships a WASM module that `vite-plugin-wasm` (see the
     // `wasm()` plugin above) handles. esbuild's dep-optimizer CANNOT —

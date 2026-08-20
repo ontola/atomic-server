@@ -98,6 +98,7 @@
     "workbox-build": "^7.4.1",
     "workbox-window": "^7.4.1",
     "wuchale": "^0.25.6",
+    "yjs": "^13.6.30",
     "zod": "^4.4.3"
   },
   "devDependencies": {
