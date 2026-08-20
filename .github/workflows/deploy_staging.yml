@@ -1,9 +1,9 @@
 name: Deployment Staging
 
-# Staging follows `develop` under the same rule as production follows `master`:
-# deploy the commit whose pipeline passed, not merely the latest commit. See
-# deploy_production.yml for why `workflow_run` rather than `push`, and why the
-# head_sha has to be passed explicitly.
+# Staging follows `develop`. Production follows a stable `v*` tag, not a
+# branch. Same rule otherwise: deploy the commit whose pipeline passed, not
+# merely the latest commit. See deploy_production.yml for why `workflow_run`
+# rather than `push`, and why the head_sha has to be passed explicitly.
 on:
   workflow_dispatch:
     inputs:
