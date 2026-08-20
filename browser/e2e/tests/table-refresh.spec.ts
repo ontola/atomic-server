@@ -6,6 +6,7 @@ import {
   FRONTEND_URL,
   newResource,
   setGridCell,
+  waitForClientDbReady,
   waitForSynced,
 } from './test-utils';
 
@@ -95,56 +96,13 @@ test.describe('table refresh', () => {
   }) => {
     test.slow();
 
-    // Confirm the WASM ClientDb actually initialized in this browser — the
-    // user's bug is WASM-side, so a silent fallback would mask the issue.
+    // Confirm the WASM ClientDb actually initialized — a silent fallback
+    // would mask the bug this test exists to catch. `isReady` is the
+    // signal; a 200ms poll is not.
     await page.goto(`${FRONTEND_URL}/`, {
       waitUntil: 'domcontentloaded',
     });
-    const clientDbState = await page.evaluate(
-      () =>
-        new Promise<string>(resolve => {
-          const start = Date.now();
-
-          const tick = () => {
-            // `window.store` is published when the app bundle runs, and the
-            // navigation above only waits for `domcontentloaded` — so on a
-            // slower machine this polls before there is a store at all. It
-            // used to read straight through and throw a TypeError out of the
-            // promise, failing the test with "Cannot read properties of
-            // undefined" instead of waiting the extra tick it needed.
-            const db = window.store?.getClientDb?.();
-
-            if (db?.isReady) {
-              resolve('ready');
-
-              return;
-            }
-
-            if (db?.initError) {
-              resolve('error:' + db.initError.message);
-
-              return;
-            }
-
-            if (Date.now() - start > 20000) {
-              resolve(
-                `timeout: store=${!!window.store} db=${!!db} isReady=${db?.isReady}`,
-              );
-
-              return;
-            }
-
-            setTimeout(tick, 200);
-          };
-
-          tick();
-        }),
-    );
-    console.log(`ClientDb state: ${clientDbState}`);
-    expect(
-      clientDbState,
-      'WASM ClientDb must be ready for this test to be meaningful',
-    ).toBe('ready');
+    await waitForClientDbReady(page, 20_000);
 
     await newResource('table', page);
     const nameInput = page.getByPlaceholder('New Table');

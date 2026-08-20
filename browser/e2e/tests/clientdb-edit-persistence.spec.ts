@@ -28,13 +28,20 @@ test('edit persists to local ClientDb across the drain', async ({ page }) => {
     await r.set(NAME, 'PersistProbe-A');
     await r.save();
     const realSubject = r.subject;
-    await new Promise(res => setTimeout(res, 1500));
+    const db = s.getClientDb();
+
+    if (!db) {
+      throw new Error('ClientDb missing — cannot probe OPFS persistence');
+    }
+
+    // Writes commit with Durability::None; flush() is the durable signal.
+    await db.flush();
     const afterCreate = await asAny.fetchResourceFromClientDb(realSubject);
 
     const r2 = await s.getResource(realSubject);
     await r2.set(NAME, 'PersistProbe-B-EDITED');
     await r2.save();
-    await new Promise(res => setTimeout(res, 2500));
+    await db.flush();
     const afterEdit = await asAny.fetchResourceFromClientDb(realSubject);
     const srv = await s.fetchResourceFromServer(realSubject);
 
