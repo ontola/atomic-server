@@ -963,12 +963,17 @@ export class AtomicServer {
         '/lib/src/genesis_test_vectors.json',
         this.source.file('lib/src/genesis_test_vectors.json'),
       )
-      // data-browser/src/helpers/pairing.test.ts reads a repo-root testdata
-      // fixture the same way (`../../../../testdata/pairing-request.json`
-      // from /app/data-browser/src/helpers) — mount just this one file.
+      // data-browser helpers read repo-root testdata fixtures via
+      // `../../../../testdata/…` from /app/data-browser/src/helpers — that
+      // resolves to /testdata/… when only browser/ is mounted at /app.
+      // Mount each shared contract file explicitly (do not mount over OS /).
       .withFile(
         '/testdata/pairing-request.json',
         this.source.file('testdata/pairing-request.json'),
+      )
+      .withFile(
+        '/testdata/resolve-agent-response.json',
+        this.source.file('testdata/resolve-agent-response.json'),
       );
 
     // Build all packages since they may depend on each other's built artifacts
