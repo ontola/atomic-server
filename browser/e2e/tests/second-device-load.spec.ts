@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { before, getDevDriveSecret, signIn, FRONTEND_URL } from './test-utils';
+import { before, getDevDriveSecret, signIn, FRONTEND_URL, smoke } from './test-utils';
 
 /**
  * A second device (or a fresh/cleared OPFS) must load an existing drive's
@@ -9,7 +9,7 @@ import { before, getDevDriveSecret, signIn, FRONTEND_URL } from './test-utils';
  * fallback). Guards the cold-load path that the OPFS durability fix and the
  * collection server-fallback depend on.
  */
-test('a fresh-OPFS second device loads an existing drive’s contents', async ({
+test('a fresh-OPFS second device loads an existing drive’s contents', smoke, async ({
   browser,
 }) => {
   const ctx1 = await browser.newContext();

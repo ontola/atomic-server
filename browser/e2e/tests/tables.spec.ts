@@ -12,6 +12,7 @@ import {
   waitForGridMounted,
   waitForSynced,
   waitForTableBuild,
+  smoke,
 } from './test-utils';
 
 /**
@@ -59,7 +60,7 @@ test.describe('tables', async () => {
   // races, leaving the cell-input not focused. Investigate: replace the
   // double-click pattern with a single-click + explicit Edit-mode
   // assertion, or use the keyboard-driven flow exclusively.
-  test('create and fill', async ({ page }) => {
+  test('create and fill', smoke, async ({ page }) => {
     test.slow();
 
     const newColumn = async (type: string) => {

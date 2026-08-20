@@ -13,6 +13,7 @@ import {
   signIn,
   testFilePath,
   waitForOntologyClass,
+  smoke,
 } from './test-utils';
 
 const ONTOLOGY_NAME = 'filepicker-test';
@@ -93,7 +94,9 @@ const createModel = async (page: Page) => {
 test.describe('File Picker', () => {
   test.beforeEach(before);
 
-  test('select file and upload using the filepicker', async ({ page }) => {
+  test('select file and upload using the filepicker', smoke, async ({
+    page,
+  }) => {
     const SEARCH_BAR_PLACEHOLDER = 'Search or enter a URL...';
 
     await signIn(page);

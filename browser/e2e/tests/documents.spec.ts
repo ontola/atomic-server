@@ -10,6 +10,7 @@ import {
   before,
   setTitle,
   waitForSearchIndex,
+  smoke,
 } from './test-utils';
 
 /**
@@ -36,7 +37,7 @@ test.describe('documents', async () => {
   // exceeds the loro broadcast budget under dagger CPU contention.
   // Investigate: bump the assertion to `waitForFunction` polling on the
   // store's loro-doc state instead of DOM text.
-  test('create document, edit, page title, websockets', async ({
+  test('create document, edit, page title, websockets', smoke, async ({
     page,
     browser,
   }) => {
