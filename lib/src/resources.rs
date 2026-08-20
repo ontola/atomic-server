@@ -495,6 +495,31 @@ impl Resource {
         self.ensure_materialized()
     }
 
+    /// DocumentV2 / TipTap body as markdown. Empty when the resource has no
+    /// rich-text body. Loads materialized Loro state if needed.
+    pub fn document_markdown(&mut self) -> String {
+        let _ = self.ensure_materialized();
+        self.loro
+            .as_ref()
+            .map(|doc| doc.extract_document_markdown())
+            .unwrap_or_default()
+    }
+
+    /// Normalized ProseMirror JSON for a DocumentV2 body, if present.
+    pub fn document_json(&mut self) -> Option<serde_json::Value> {
+        let _ = self.ensure_materialized();
+        self.loro.as_ref().and_then(|doc| doc.prosemirror_json())
+    }
+
+    /// Replace the DocumentV2 body from ProseMirror JSON and mark the resource dirty.
+    pub fn set_document_json(&mut self, json: &serde_json::Value) -> AtomicResult<()> {
+        self.ensure_materialized()?;
+        self.loro().set_prosemirror_doc(json)?;
+        self.sync_propvals_from_loro();
+        self.sync_loro_changes_to_commit_builder()?;
+        Ok(())
+    }
+
     /// Edit history for this resource (newest first).
     pub fn get_history(&self) -> Vec<crate::history::VersionMetadata> {
         match &self.loro {

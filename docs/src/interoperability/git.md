@@ -1,14 +1,76 @@
 {{#title Atomic Data and Git}}
 # Atomic Data and Git
 
-## How to manage Atomic Data using GIT
+Git is a snapshot DAG over a folder of files. Atomic Data is a graph of
+resources, each with a Loro CRDT document and signed commits. They overlap
+enough that **exporting a drive as a git repository** is useful — as a readable
+backup, and as an interchange format other tools already speak — but they are
+not the same model, and git should not replace Atomic sync.
 
-Although Git started as in invention to manage changes to the
+A longer design note lives in [`planning/drive-as-git.md`](../../planning/drive-as-git.md).
+A prototype exporter lives in `atomic_lib::git_export`.
 
-## Similarities / differences between Git and Atomic Data + Commits
+## Similarities
 
-Similarities:
+- Both identify versions with hashes and can store history in a DAG.
+- Both work offline-first and copy between machines without a vendor.
+- Both can sign commits (git optional; Atomic always).
+- Most user-facing Atomic data *can* be projected as files in folders, which is
+  what git is good at.
 
-- Atomic Commits and Git Commits both use hashes to identify previous state
-- Both allow for decentralized storage
-- Both work with
+## Differences
+
+| | Git | Atomic |
+| --- | --- | --- |
+| Identity | Path in a tree | `did:ad:{genesis}` |
+| Merge | 3-way, line-oriented, conflicts | Loro CRDT, automatic |
+| Unit of change | Whole-tree snapshot | Per-resource signed commit + Loro update |
+| Schema / ACLs | None | Classes, datatypes, read/write/append |
+| History | Linearized snapshots | Per-document oplog |
+
+Git does not validate structured data. Atomic commits do. GitHub-style
+collaboration (PRs, blame) is a reason to *project into* git, not to store
+Atomic state *as* git.
+
+## Exporting a drive as a git repo
+
+`atomic_lib::git_export::export_drive` writes an `atomic-git-export` v2 tree:
+
+- Folders stay folders; File blobs stay files; DocumentV2 bodies become
+  lossless markdown+HTML; other resources become pretty JSON-AD.
+- Identity is `localId` (existing property, else the export path). Sidecars
+  have no `@id`; in-drive links are rewritten to `localId`s.
+- `.atomic/index.json` maps each `localId` to its path and kind.
+- `.atomic/resources/` holds portable JSON-AD (no Loro binary, no commit
+  bookkeeping).
+- Optionally `git init` and one snapshot commit.
+
+Re-import (`import_as_new_drive`) mints **new** DIDs the first time. A second
+import into the same drive is idempotent (same `localId`s → same DIDs).
+Export → import → export is a no-op aside from `exportedAt`. This is
+interchange of content + graph shape, not a restore of original DIDs or
+CRDT history. Encrypted vault backup is the identity-preserving path.
+
+Try the sample:
+
+```sh
+cargo run -p atomic_lib --features db-redb --example export_drive_git -- /tmp/atomic-drive-git
+```
+
+## When to use which backup
+
+- **Encrypted vault** — complete, blind restore of CRDT history, blobs, and
+  DIDs.
+- **Git export** — readable copy you can push to a private remote, grep, or
+  open in another editor. Not encrypted. Not a replica.
+- **Virtual drive (NFS)** — live OS mount while Atomic is running.
+
+## Live two-way sync with git
+
+Not recommended as a sync transport. Git merge is not Loro merge; ACLs have no
+git equivalent; a public remote of a private drive is a leak. Two-way
+collaboration belongs to Iroh / WebSocket sync. Git is an export target and a
+publish format.
+
+If you want proposal/review workflows on Atomic data, that is the Fork class
+(see the drafts/suggestions plan), not `git merge`.

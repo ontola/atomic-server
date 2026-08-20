@@ -113,6 +113,20 @@ Both matter because `iroh_transport` holds the router and node identity in
 
 ---
 
+## Drive export (git)
+
+| Flow | Where | Gap |
+|---|---|---|
+| Snapshot export of folder / document / file / bookmark to a git repo | `lib/src/git_export.rs` | no CLI, no desktop UI |
+| Lossless ProseMirror ↔ markdown+HTML | `lib/src/git_md.rs` | TipTap `MarkdownManager` is still TS-only |
+| Re-import via `localId` (new DIDs; embed hrefs rewritten) | `git_export.rs` `reimport_mints_a_new_drive_with_the_same_tree` | original-DID restore not built |
+| Export → import → export is stable | `git_export.rs` `export_import_export_is_stable` | `exportedAt` ignored |
+| Re-import into the same drive keeps DIDs | `git_export.rs` `reimport_into_same_drive_keeps_dids` | |
+| Atomic commit history → git commits | — | not built (Level 1 in `planning/drive-as-git.md`) |
+| Two-way git watch / GitHub PR merge | — | rejected as a sync transport |
+
+---
+
 ## Blind spots
 
 Ordered by how much they would hurt.

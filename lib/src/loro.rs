@@ -727,6 +727,59 @@ impl AtomicLoroDoc {
         String::new()
     }
 
+    /// Document body as markdown for git / filesystem export.
+    ///
+    /// Prefers the loro-prosemirror `doc` tree, serialized with
+    /// [`crate::git_md`] so TipTap nodes (embeds, notes, mentions) survive a
+    /// round-trip. Falls back to a top-level `documentContent` text container.
+    pub fn extract_document_markdown(&self) -> String {
+        if let Some(json) = self.prosemirror_json() {
+            let markdown = crate::git_md::serialize(&json);
+            if !markdown.trim().is_empty() {
+                return markdown;
+            }
+        }
+
+        if let Some(text_container) = self.doc().try_get_text("documentContent") {
+            let trimmed = text_container.to_string().trim().to_string();
+            if !trimmed.is_empty() {
+                return format!("{trimmed}\n");
+            }
+        }
+
+        String::new()
+    }
+
+    /// Normalized ProseMirror JSON from the loro-prosemirror `doc` root.
+    pub fn prosemirror_json(&self) -> Option<serde_json::Value> {
+        let pm_map = self.doc().try_get_map("doc")?;
+        let json = loro_value_to_json(&pm_map.get_deep_value());
+        let normalized = crate::git_md::normalize_pm_json(&json);
+        if normalized.get("type").and_then(|t| t.as_str()) == Some("doc") {
+            Some(normalized)
+        } else {
+            Some(serde_json::json!({ "type": "doc", "content": [normalized] }))
+        }
+    }
+
+    /// Replace the loro-prosemirror `doc` tree from ProseMirror JSON.
+    pub fn set_prosemirror_doc(&self, json: &serde_json::Value) -> AtomicResult<()> {
+        let shape = crate::git_md::pm_to_loro_shape(json);
+        let map = self.doc().get_map("doc");
+        let keys: Vec<String> = {
+            let mut keys = Vec::new();
+            map.for_each(|key, _| keys.push(key.to_string()));
+            keys
+        };
+        for key in keys {
+            map.delete(&key)
+                .map_err(|e| format!("Loro doc map delete error: {e}"))?;
+        }
+        json_value_to_loro_map(&shape, &map)?;
+        self.commit();
+        Ok(())
+    }
+
     /// Get all properties from the root map as a HashMap of LoroValues.
     pub fn get_all_properties(&self) -> std::collections::HashMap<String, loro::LoroValue> {
         let root = self.doc.get_map("properties");
@@ -1214,6 +1267,161 @@ fn extract_text_from_prosemirror_json(node: &serde_json::Value) -> String {
 
 fn collapse_whitespace(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Best-effort markdown from a loro-prosemirror or ProseMirror JSON tree.
+/// Kept for tests that pin the old lossy extractor; git export uses `git_md`.
+#[cfg(test)]
+/// Handles both `{type, content}` (ProseMirror) and `{nodeName, children}`
+/// (loro-prosemirror) shapes.
+fn extract_markdown_from_prosemirror_json(node: &serde_json::Value) -> String {
+    match node {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Array(arr) => arr
+            .iter()
+            .map(extract_markdown_from_prosemirror_json)
+            .collect::<Vec<_>>()
+            .join(""),
+        serde_json::Value::Object(obj) => {
+            if let Some(serde_json::Value::String(text)) = obj.get("text") {
+                return apply_pm_marks(text, obj.get("marks"));
+            }
+
+            let node_type = obj
+                .get("type")
+                .or_else(|| obj.get("nodeName"))
+                .and_then(|t| t.as_str())
+                .unwrap_or("");
+
+            let children = obj
+                .get("content")
+                .or_else(|| obj.get("children"))
+                .map(extract_markdown_from_prosemirror_json)
+                .unwrap_or_default();
+
+            match node_type {
+                "doc" => children,
+                "paragraph" => {
+                    if children.is_empty() {
+                        "\n\n".into()
+                    } else {
+                        format!("{}\n\n", children.trim_end())
+                    }
+                }
+                "heading" => {
+                    let level = obj
+                        .get("attrs")
+                        .and_then(|a| a.get("level"))
+                        .and_then(|l| l.as_u64())
+                        .unwrap_or(1)
+                        .clamp(1, 6) as usize;
+                    format!("{} {}\n\n", "#".repeat(level), children.trim())
+                }
+                "bulletList" | "bullet_list" => children,
+                "orderedList" | "ordered_list" => numbered_markdown_list(&children),
+                "listItem" | "list_item" => {
+                    let body = children.trim();
+                    let mut lines = body.lines();
+                    let first = lines.next().unwrap_or("");
+                    let mut out = format!("- {first}\n");
+                    for line in lines {
+                        if line.is_empty() {
+                            out.push('\n');
+                        } else {
+                            out.push_str("  ");
+                            out.push_str(line);
+                            out.push('\n');
+                        }
+                    }
+                    out
+                }
+                "codeBlock" | "code_block" => {
+                    let lang = obj
+                        .get("attrs")
+                        .and_then(|a| a.get("language").or_else(|| a.get("lang")))
+                        .and_then(|l| l.as_str())
+                        .unwrap_or("");
+                    format!("```{lang}\n{}\n```\n\n", children.trim_end())
+                }
+                "blockquote" => {
+                    let quoted = children
+                        .trim()
+                        .lines()
+                        .map(|line| format!("> {line}"))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    format!("{quoted}\n\n")
+                }
+                "hardBreak" | "hard_break" => "\n".into(),
+                "horizontalRule" | "horizontal_rule" => "---\n\n".into(),
+                "image" => {
+                    let attrs = obj.get("attrs");
+                    let alt = attrs
+                        .and_then(|a| a.get("alt"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    let src = attrs
+                        .and_then(|a| a.get("src"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    format!("![{alt}]({src})")
+                }
+                "" => children,
+                _ => children,
+            }
+        }
+        _ => String::new(),
+    }
+}
+
+#[cfg(test)]
+fn apply_pm_marks(text: &str, marks: Option<&serde_json::Value>) -> String {
+    let Some(serde_json::Value::Array(marks)) = marks else {
+        return text.to_string();
+    };
+    let mut out = text.to_string();
+    for mark in marks {
+        let mark_type = mark
+            .get("type")
+            .or_else(|| mark.get("name"))
+            .and_then(|t| t.as_str())
+            .unwrap_or("");
+        out = match mark_type {
+            "bold" | "strong" => format!("**{out}**"),
+            "italic" | "em" => format!("*{out}*"),
+            "code" => format!("`{out}`"),
+            "strike" | "strikethrough" => format!("~~{out}~~"),
+            "link" => {
+                let href = mark
+                    .get("attrs")
+                    .and_then(|a| a.get("href"))
+                    .and_then(|h| h.as_str())
+                    .unwrap_or("");
+                format!("[{out}]({href})")
+            }
+            _ => out,
+        };
+    }
+    out
+}
+
+/// Ordered lists come out of `listItem` as `- ` bullets; renumber them.
+#[cfg(test)]
+fn numbered_markdown_list(children: &str) -> String {
+    let mut n = 1u32;
+    let mut out = String::new();
+    for line in children.lines() {
+        if let Some(rest) = line.strip_prefix("- ") {
+            out.push_str(&format!("{n}. {rest}\n"));
+            n += 1;
+        } else if line.is_empty() {
+            out.push('\n');
+        } else {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out
 }
 
 /// Convert a LoroValue back to serde_json::Value.
@@ -2957,5 +3165,63 @@ mod test {
         para_children.insert(0, "from doc map").unwrap();
 
         assert_eq!(doc.extract_document_plain_text(), "from doc map");
+    }
+
+    #[test]
+    fn extract_markdown_headings_lists_and_marks() {
+        let json = serde_json::json!({
+            "type": "doc",
+            "content": [
+                {
+                    "type": "heading",
+                    "attrs": { "level": 2 },
+                    "content": [{ "type": "text", "text": "Title" }]
+                },
+                {
+                    "type": "paragraph",
+                    "content": [
+                        { "type": "text", "text": "Hello ", "marks": [{ "type": "bold" }] },
+                        { "type": "text", "text": "world", "marks": [{ "type": "italic" }] }
+                    ]
+                },
+                {
+                    "type": "bulletList",
+                    "content": [
+                        {
+                            "type": "listItem",
+                            "content": [{
+                                "type": "paragraph",
+                                "content": [{ "type": "text", "text": "one" }]
+                            }]
+                        }
+                    ]
+                },
+                {
+                    "type": "codeBlock",
+                    "attrs": { "language": "rs" },
+                    "content": [{ "type": "text", "text": "fn main() {}" }]
+                }
+            ]
+        });
+        let markdown = super::extract_markdown_from_prosemirror_json(&json);
+        assert!(markdown.contains("## Title"), "{markdown}");
+        assert!(
+            markdown.contains("**Hello **") || markdown.contains("**Hello**"),
+            "{markdown}"
+        );
+        assert!(markdown.contains("*world*"), "{markdown}");
+        assert!(markdown.contains("- one"), "{markdown}");
+        assert!(markdown.contains("```rs"), "{markdown}");
+        assert!(markdown.contains("fn main() {}"), "{markdown}");
+    }
+
+    #[test]
+    fn extract_document_markdown_from_document_content() {
+        let doc = AtomicLoroDoc::new();
+        doc.doc()
+            .get_text("documentContent")
+            .insert(0, "# Hello\n\nfrom text")
+            .unwrap();
+        assert_eq!(doc.extract_document_markdown(), "# Hello\n\nfrom text\n");
     }
 }
