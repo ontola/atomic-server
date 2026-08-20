@@ -20,9 +20,8 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Tag, branch or commit to deploy"
-        required: false
-        default: master
+        description: "Stable tag to deploy (e.g. v0.40.3). No default — do not pass a branch."
+        required: true
         type: string
       skip_ci_check:
         description: "Deploy even if no green pipeline is found (emergencies)"

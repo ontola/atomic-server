@@ -4,12 +4,12 @@ import {
   newDrive,
   newResource,
   before,
-  REBUILD_INDEX_TIME,
   inDialog,
   DIALOG_CLOSE_BUTTON,
   SEARCHBOX_PROPERTY_PLACEHOLDER,
   waitForSearchIndex,
   waitForClassInstanceSearchable,
+  waitForOntologyClass,
 } from './test-utils';
 
 test.describe('Ontology', async () => {
@@ -225,9 +225,10 @@ test.describe('Ontology', async () => {
       await closeDialogWith(DIALOG_CLOSE_BUTTON);
     });
 
-    // Create arrow-kind instances
-
-    await page.waitForTimeout(REBUILD_INDEX_TIME);
+    // Create arrow-kind instances. The New Instance dialog lists classes
+    // from the drive's ontologies — wait until Tantivy (and that filtered
+    // search) can see `arrow-kind` rather than sleeping for the index flush.
+    await waitForOntologyClass(page, 'arrow-kind');
 
     const createInstance = async (name: string) => {
       await page.getByRole('button', { name: 'New Instance' }).click();

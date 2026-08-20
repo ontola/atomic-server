@@ -70,17 +70,21 @@ jobs:
           version: "latest"
           cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
           verb: call
-          # `--publish-docs` only from master. This pipeline runs on every push
-          # to every branch, and netlifyDeploy used to pass `--prod`
-          # unconditionally — so any feature branch republished the public docs
-          # and typedoc. Every other branch now gets a preview URL instead.
-          # `--host-profile` selects parallelism (mancave hot / hosted quiet).
-          args: ci --netlify-auth-token env://NETLIFY_TOKEN --host-profile ${{ inputs.host-profile }} ${{ github.ref == 'refs/heads/master' && '--publish-docs' || '' }}
+          # `--publish-docs` only from a stable `v*` tag (no hyphen), matching
+          # production. This pipeline runs on every push, and netlifyDeploy
+          # used to pass `--prod` unconditionally — so any feature branch
+          # republished the public docs and typedoc. `master` used to own live
+          # docs while the app shipped from tags; both now follow the tag.
+          # Every other ref gets a preview URL. `--host-profile` selects
+          # parallelism (mancave hot / hosted quiet).
+          args: ci --netlify-auth-token env://NETLIFY_TOKEN --host-profile ${{ inputs.host-profile }} ${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') && '--publish-docs' || '' }}
       - name: Dagger docker images (build images & publish)
-        # develop and master only. There is no `main` branch here — that clause
-        # could never fire, and left in place it invites someone to conclude
-        # one exists.
-        if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/master'
+        # Floating `:develop` image tracks the integration branch. There is no
+        # `main` branch here — that clause could never fire, and left in place
+        # it invites someone to conclude one exists. `master` is not a docker
+        # trigger either. Versioned images are published from tags via the
+        # release process (`dagger call create-docker-images --tags …`).
+        if: github.ref == 'refs/heads/develop'
         uses: dagger/dagger-for-github@8.0.0
         with:
           version: "latest"

@@ -1,5 +1,9 @@
 import { test, expect } from '@playwright/test';
-import { currentDriveTitle, FRONTEND_URL } from './test-utils';
+import {
+  currentDriveTitle,
+  FRONTEND_URL,
+  waitForServerConnected,
+} from './test-utils';
 import { applyCpuThrottle } from './perf-attach';
 
 /**
@@ -35,35 +39,32 @@ test('a DID drive renders (not bare subject) with Local DB off, server-only', as
     `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive ?? '')}`,
   );
 
-  // Diagnostics: what does the store hold for the drive after the refresh?
-  const diag = await page.evaluate(async d => {
+  // Diagnostics: wait until the store holds the drive's class, then snap.
+  await waitForServerConnected(page);
+  await page.waitForFunction(
+    d => {
+      const s = window.store;
+      s?.getResource(d).catch(() => undefined);
+      const r = s?.resources.get(d);
+
+      return !!r?.get?.('https://atomicdata.dev/properties/isA');
+    },
+    drive ?? '',
+    { timeout: 15_000 },
+  );
+  const diag = await page.evaluate(d => {
     const s = window.store;
+    const r = s.resources.get(d);
 
-    const snap = () => {
-      const r = s.resources.get(d);
-
-      return {
-        present: !!r,
-        loading: r?.loading ?? null,
-        error: r?.error?.message ?? null,
-        isA: (r?.get?.('https://atomicdata.dev/properties/isA') ??
-          null) as unknown,
-        entries: r?.getEntries ? r.getEntries().length : -1,
-        serverConnected: s.getSyncStatus?.()?.serverConnected ?? null,
-      };
+    return {
+      present: !!r,
+      loading: r?.loading ?? null,
+      error: r?.error?.message ?? null,
+      isA: (r?.get?.('https://atomicdata.dev/properties/isA') ??
+        null) as unknown,
+      entries: r?.getEntries ? r.getEntries().length : -1,
+      serverConnected: s.getSyncStatus?.()?.serverConnected ?? null,
     };
-
-    s.getResource(d).catch(() => undefined);
-    let last = snap();
-
-    for (let i = 0; i < 30; i++) {
-      last = snap();
-      if (last.isA) break;
-      await new Promise(res => setTimeout(res, 300));
-      s.getResource(d).catch(() => undefined);
-    }
-
-    return last;
   }, drive ?? '');
   console.log('[did-render] post-refresh drive state:', JSON.stringify(diag));
 
@@ -123,6 +124,9 @@ test('a DID drive renders (not bare subject) with Local DB off, server-only', as
 
     s.getResource(f).catch(() => undefined);
 
+    // Sampling a race window, not waiting for readiness: we need ~2s of
+    // snapshots to catch a settled-but-contentless flash. 25ms is the
+    // sample interval, not a "hope it landed" sleep.
     for (let i = 0; i < 80; i++) {
       const r = s.resources.get(f);
       out.push({

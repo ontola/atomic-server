@@ -99,8 +99,7 @@ test.describe('documents', async () => {
     expect(await page2.title()).toEqual(title);
 
     await page2.getByLabel('Rich Text Editor').focus();
-    await page2.keyboard.press('ArrowDown');
-    await page2.waitForTimeout(50);
+    await page2.keyboard.press('End');
     await page2.keyboard.press('Enter');
     const syncText = 'New paragraph';
     await page2.keyboard.type(syncText);
@@ -146,7 +145,7 @@ test.describe('documents', async () => {
     }).toPass({ timeout: 15_000 });
 
     // Wait for AtomicServer to index the folder so the @-mention can find it.
-    await waitForSearchIndex(page2);
+    await waitForSearchIndex(page2, folderTitle);
     // Add a link to a folder via @ mention
     await page2.keyboard.press('Space');
     await page2.keyboard.type('@');

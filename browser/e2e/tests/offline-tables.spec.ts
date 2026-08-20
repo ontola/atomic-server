@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { FRONTEND_URL, editableTitle } from './test-utils';
+import {
+  FRONTEND_URL,
+  editableTitle,
+  setGridCell,
+  waitForClientDbFlush,
+} from './test-utils';
 
 /**
  * Offline-first table test.
@@ -59,17 +64,8 @@ test.describe('offline tables', () => {
     //    Double-click: first click sets Visual mode, second enters Edit mode.
     const nameCell = page.locator('[aria-rowindex="2"] [aria-colindex="2"]');
     await expect(nameCell).toBeVisible({ timeout: 10000 });
-    await nameCell.click();
-    await page.waitForTimeout(500);
-    await nameCell.click();
-    await page.waitForTimeout(300);
-
-    const cellInput = page.locator('[role="grid"] input').first();
-    await expect(cellInput).toBeVisible({ timeout: 5000 });
-    await cellInput.fill('Test Row 1');
-    // Tab commits the cell value (Escape would discard it).
-    await page.keyboard.press('Tab');
-    await page.waitForTimeout(2000);
+    await setGridCell(page, 2, 2, 'Test Row 1');
+    await waitForClientDbFlush(page);
 
     await expect(
       page.getByRole('gridcell', { name: 'Test Row 1' }),
