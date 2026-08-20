@@ -2987,8 +2987,10 @@ export class Store {
             // OPFS snapshots are authoritative full state — replace, don't
             // merge into the JSON-AD-seeded doc. Merging minted a second
             // LoroList per array and flashed table/sidebar order on open.
-            ({ complete: importComplete } =
-              resource.importLoroUpdate(snapshot, true));
+            ({ complete: importComplete } = resource.importLoroUpdate(
+              snapshot,
+              true,
+            ));
           }
         }
 
