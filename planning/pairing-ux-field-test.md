@@ -349,11 +349,11 @@ was load-bearing and unenforced on the client. Deriving identity from a
 signature requires the signer to be deterministic — a requirement worth
 stating wherever it is relied upon.
 
-### M6 — Adopting a drive hands the whole session to the old server (open, top of the list)
+### M6 — Adopting a drive hands the whole session to the old server (fixed, 2026-08-20)
 
-The migration working is what breaks the app.
+The migration working is what used to break the app.
 
-`AppSettings.setDrive` repoints the entire app at a drive's origin:
+`AppSettings.setDrive` used to repoint the entire app at *any* HTTP drive's origin:
 
 ```ts
 if (newDrive.startsWith('http://') || newDrive.startsWith('https://')) {
@@ -362,10 +362,10 @@ if (newDrive.startsWith('http://') || newDrive.startsWith('https://')) {
 }
 ```
 
-Migration restores drives that live on `atomicdata.dev`. Opening one moves the
+Migration restores drives that live on `atomicdata.dev`. Opening one moved the
 session to that pre-0.40 server — which cannot do DID auth and does not speak
-the v2 websocket — so authentication times out after 30s, the socket retries
-forever, and every local `did:ad:` resource 404s because the client is asking
+the v2 websocket — so authentication timed out after 30s, the socket retried
+forever, and every local `did:ad:` resource 404ed because the client was asking
 the wrong machine.
 
 Measured on a run with the app's own server captured: **0 requests from the
@@ -381,15 +381,22 @@ Auth error: Timed out waiting 30000ms for WS tag 2
 The embedded server was healthy throughout — HTTP root in 0.9ms, correct
 default agent, 100ms durable-flush tick running.
 
-This is the parent of most of the evening's symptoms: "Server error" on every
+This was the parent of most of that evening's symptoms: "Server error" on every
 drive, the private drive not resolving, the migration fetch timing out (`curl`
 gets that same resource in 120ms), and the lost edits.
 
-**Not yet fixed** — it is a semantics decision, not a bug with one right
-answer. Either refuse to follow a drive to an origin that fails a capability
-check, or keep the home server fixed and fetch foreign drives cross-origin. The
-second is more defensible: a drive adopted from a server you are migrating
-*away from* should not be able to take the session with it.
+**Decision, not a blanket ban on HTTP origins.** A bare origin
+(`https://host`, no path) is still a server switch — that *is* what "open this
+URL" means when the URL is the machine. An HTTP subject *with a path* is a
+drive. `Store.setDrive` / `AppSettings.setDrive` set it as the current
+workspace and leave `serverUrl` alone. Fetch goes to the subject's own origin;
+live SUB / SYNC_VV / presence stay on the home websocket (`isLiveSyncedDrive`).
+A drive adopted from a server you are migrating *away from* cannot take the
+session with it.
+
+Pinned by `browser/lib/src/store.set-drive.test.ts`. Reading those drives
+still needs M4 (legacy auth against a pre-0.40 origin); this fix only stops
+the session move.
 
 ### M7 — A foreign origin's websocket took the whole app offline (fixed)
 
