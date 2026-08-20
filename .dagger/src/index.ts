@@ -94,7 +94,7 @@ function e2eRunKnobs(profile: HostProfile, mode: E2eMode): E2eRunKnobs {
   const host = HOST_PROFILES[profile];
   if (mode === 'light') {
     return {
-      // ~18 @smoke tests: two Mancave shards is plenty; hosted keeps one
+      // ~17 @smoke tests: two Mancave shards is plenty; hosted keeps one
       // atomic-server. Do not mutate HostKnobs — rustTest reads those in
       // parallel with endToEnd.
       shardCount: profile === 'mancave' ? 2 : 1,

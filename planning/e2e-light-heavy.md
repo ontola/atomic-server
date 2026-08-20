@@ -195,7 +195,8 @@ list — tag these, do not copy them into a new file:
 | Create identity / sign in / sign out | `e2e.spec.ts`, `onboarding.spec.ts` | 1–2 tests |
 | Invite + share + second context accepts | `e2e.spec.ts` authorization | 1 (this *is* a flow test; protocol coverage is not a substitute) |
 | Chatroom | `e2e.spec.ts` | 1 |
-| Folder + document edit | `e2e.spec.ts` / `documents.spec.ts` | 1 |
+| Folder | `e2e.spec.ts` | 1 |
+| Document CRDT (create + websockets) | `documents.spec.ts` | 0 — already marked FLAKY; folder covers create |
 | Table create + type a row | `tables.spec.ts` `create and fill` | 1 |
 | Search | `search.spec.ts` text search | 1 |
 | Offline edit survives reload + reconnect | `sync.spec.ts` | 1 |
