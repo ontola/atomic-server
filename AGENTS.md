@@ -16,6 +16,14 @@ Use todo lists and checkboxes to track progress.
 Make sure to update the planning as you find new insights and see outdated planning text.
 Remove planning documents that are completed.
 
+## Git
+
+Default branch is `develop`. Open PRs against it. Staging deploys from `develop`
+after green CI; production and live docs deploy from a stable `v*` tag. Do not
+introduce a `main` branch, treat `master` as production, or add a job that
+fast-forwards `main` when a tag is pushed — the tag is the release. Hotfixes
+branch from the tag and merge back to `develop`. See `CONTRIBUTING.md`.
+
 ## Quick Dev Setup
 
 Use the Charlotte MCP server and navigate to `http://localhost:6747/app/dev-drive` to instantly create a fresh agent.

@@ -14,6 +14,7 @@ import {
   Agent,
   useStore,
   StoreEvents,
+  Client,
 } from '@tomic/react';
 import toast from 'react-hot-toast';
 import { SIDEBAR_TOGGLE_WIDTH } from '../components/SideBar';
@@ -130,7 +131,13 @@ export const AppSettingsContextProvider = (
     (newDrive: string) => {
       innerSetDrive(newDrive);
 
-      if (newDrive.startsWith('http://') || newDrive.startsWith('https://')) {
+      // A bare origin is a server switch (`https://host`). An HTTP drive
+      // with a path is a workspace — including one on another origin.
+      // Following that origin would move the whole session (websocket,
+      // DID auth, every later fetch) onto a replica that may not speak
+      // this client's protocol. Fetch it cross-origin; keep the home
+      // server. `Store.setDrive` is the other half of this split.
+      if (Client.isBareHttpOrigin(newDrive)) {
         const url = new URL(newDrive);
         // Opening a drive that lives elsewhere does mean reading from its
         // server for now.

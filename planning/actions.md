@@ -1,5 +1,7 @@
 # Unified Actions
 
+**Status:** Design. Nothing built.
+
 ## Problem
 
 Resource actions (view, edit, delete, share, history, favorite, …) are invocable

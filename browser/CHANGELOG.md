@@ -4,6 +4,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: opening an adopted HTTP drive no longer moves the home server. A bare origin (`https://host`) is still a server switch; an HTTP subject with a path is a workspace and is fetched cross-origin, so a pre-DID drive on `atomicdata.dev` cannot take the session with it (websocket, DID auth, every later fetch).
+
 - Dev: React Compiler now runs through native `oxc-transform-react` instead of `babel-plugin-react-compiler`. JSX/TS and Fast Refresh share that pass. styled-components `displayName` comes from Oxc's built-in plugin on Vite's oxc pass, so Babel is gone (`babel-plugin-react-compiler`, `babel-plugin-styled-components`, `@rolldown/plugin-babel`). Vite dev no longer pays a Babel tax per module (files that used to take ~100ms now land around ~10ms). Oxlint 1.79's compiler-powered Rules of React (`react/immutability`, `react/purity`, `react/error-boundaries`, …) are on; `set-state-in-effect` / `refs` / `static-components` stay warn until those call sites are cleaned up.
 
 - Fix: clicking a button in the navbar no longer draws a blue outline around the whole bar. The bar used `:has(:focus)`, which matched mouse clicks; keyboard focus still shows on the button itself.

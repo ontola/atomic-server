@@ -1,9 +1,11 @@
 # Forks, drafts, publishing, and suggestions
 
-> **Status:** design agreed 2026-07-14; **terminology split 2026-07-15.** Covers
-> milestone 11 (Local-first headless CMS): issue #467 (drafts / publishing /
-> archiving) and the mechanism half of #1000 (edit content from a webpage).
-> Content i18n (#1069) is out of scope for this round.
+> **Status:** Mechanism shipped (`Fork` class, `diffFork`/`mergeFork`, document
+> body CRDT merge, `PendingForks` / `ForkBar`). Remaining: review/diff UI,
+> suggest-for-non-writers, Canvas fork. Design agreed 2026-07-14; terminology
+> split 2026-07-15. Covers milestone 11 (Local-first headless CMS): issue #467
+> (drafts / publishing / archiving) and the mechanism half of #1000 (edit
+> content from a webpage). Content i18n (#1069) is out of scope for this round.
 
 ## Two orthogonal things, neither of them CMS-specific
 

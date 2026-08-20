@@ -1,5 +1,8 @@
 # Refactor UPDATE Frame Decoding to Unified Helper & Fix TS Client Delta Sync
 
+**Status:** Shipped. Unified `decode_update`; the TS client exports compact
+Loro deltas instead of full snapshots.
+
 Clean up the confusing, duplicated, and potentially buggy UPDATE frame decoding logic in `atomic_lib`, document the protocol wire format, and optimize the TypeScript client to export compact CRDT deltas instead of full snapshots on every edit.
 
 ## Proposed Changes

@@ -1,5 +1,7 @@
 # Virtual Drive: Atomic as a Filesystem
 
+**Status:** Proposal. Nothing built.
+
 AtomicServer runs offline-first as a desktop app and syncs across devices.
 A natural extension is to expose its hierarchy as a filesystem that the OS can
 mount — similar to how Google Drive or Dropbox surface remote storage. Files

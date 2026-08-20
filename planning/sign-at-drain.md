@@ -1,10 +1,9 @@
 # Sign at drain (one commit per save boundary)
 
-> **Status:** Shipped uncommitted (2026-05-29). Real sign-at-drain
-> landed in working tree — local Loro ops mark the subject dirty in the
-> outbox; the store-level drain exports the accumulated Loro delta,
-> signs ONE commit per dirty subject, POSTs. 26 keystrokes ≠ 26 signed
-> commits — at most one batched commit per drain pass per subject.
+> **Status:** Shipped (2026-05). Local Loro ops mark the subject dirty in the
+> outbox; the store-level drain exports the accumulated Loro delta, signs ONE
+> commit per dirty subject, POSTs. 26 keystrokes ≠ 26 signed commits — at most
+> one batched commit per drain pass per subject.
 >
 > The earlier "option 2" (keep eager sign, async POST) shipped as steps
 > 1-3 (commits `a909ad32`..`1e9e2f08`); the working-tree changes
@@ -328,7 +327,7 @@ Each step is independently shippable; tests stay green after each.
    `a909ad32`..`1e9e2f08`)_. Eager-sign, async-POST. See option 2 in
    "Why we returned to option 1" — kept for context; step 4 supersedes
    the `_saveInner` contract here.
-4. **Browser: real sign-at-drain.** ✅ _shipped (uncommitted)_. Loro
+4. **Browser: real sign-at-drain.** ✅ _shipped_. Loro
    doc is the source of truth for what to sign. The outbox holds a
    dirty bit + an optional pre-signed genesis envelope. The store-
    level drain (`drainOutboxSubject`) exports the accumulated Loro
@@ -352,7 +351,7 @@ Each step is independently shippable; tests stay green after each.
 
 ## Step 6: collapse the public API surface
 
-> **Status:** Partially shipped (2026-05-29, uncommitted). Done:
+> **Status:** Shipped (2026-05-30). Done:
 > `save()` now awaits durability and returns `SaveResult`
 > (`'persisted' | 'offline' | 'noop'`), `differentAgent` param dropped;
 > `signChanges` / `markNextCommitAsGenesis` / the Loro drain helpers

@@ -1,5 +1,12 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, createTableFromDialog, inDialog } from './test-utils';
+import {
+  before,
+  createTableFromDialog,
+  inDialog,
+  setGridCell,
+  waitForGridMounted,
+  waitForSynced,
+} from './test-utils';
 
 /** The grid row containing `text`. */
 const row = (page: Page, text: string) =>
@@ -44,27 +51,9 @@ async function setCell(
   rowIndex: number,
   columnIndex: number,
   value: string,
-  opts: { replace?: boolean } = {},
+  _opts: { replace?: boolean } = {},
 ) {
-  const cell = page.locator(
-    `[aria-rowindex="${rowIndex}"] > [aria-colindex="${columnIndex}"]`,
-  );
-  await cell.click();
-
-  if ((await cell.locator('input').count()) === 0) {
-    await expect(cell).toBeFocused();
-    await page.keyboard.press('Enter');
-  }
-
-  if (opts.replace) {
-    await page.keyboard.press('ControlOrMeta+a');
-  }
-
-  await page.keyboard.type(value);
-  await page.keyboard.press('Tab');
-  await page.waitForTimeout(200);
-  await page.keyboard.press('Escape');
-  await page.waitForTimeout(200);
+  await setGridCell(page, rowIndex, columnIndex, value, { match: /\S/ });
 }
 
 test.describe('computed columns', () => {
@@ -81,8 +70,7 @@ test.describe('computed columns', () => {
     });
 
     await expect(page.getByTestId('timer-new-input')).toBeVisible();
-    await expect(page.getByRole('grid')).toBeVisible();
-    await page.waitForTimeout(500);
+    await waitForGridMounted(page);
 
     await page.getByTestId('timer-new-input').fill('Write docs');
     await page.getByTestId('timer-start-new').click();
@@ -186,23 +174,16 @@ test.describe('computed columns', () => {
       template: /Inventory/,
       name: 'Live values',
     });
-    await expect(page.getByRole('grid')).toBeVisible();
-    await page.waitForTimeout(1000);
-
+    await waitForGridMounted(page);
     await setCell(page, 2, 2, 'Bolts');
     await setCell(page, 2, 4, '4');
     await setCell(page, 2, 5, '0.25');
 
     // Reload once, so the row under test is a saved row rather than the trailing
     // draft — a draft's cells are a separate story (see the gaps list).
-    await page.waitForFunction(
-      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
-      undefined,
-      { timeout: 15_000 },
-    );
+    await waitForSynced(page);
     await page.reload();
-    await expect(page.getByRole('grid')).toBeVisible();
-    await page.waitForTimeout(1000);
+    await waitForGridMounted(page);
 
     const bolts = row(page, 'Bolts');
     await expect(bolts.getByTestId('derived-value')).toHaveText('1', {
@@ -228,8 +209,7 @@ test.describe('computed columns', () => {
     });
 
     await expect(page.getByTestId('timer-new-input')).toBeVisible();
-    await expect(page.getByRole('grid')).toBeVisible();
-    await page.waitForTimeout(500);
+    await waitForGridMounted(page);
 
     // A timer view leads with its own columns: Duration (2) and the Start/Stop
     // button (3), then the stored ones.
@@ -253,7 +233,7 @@ test.describe('computed columns', () => {
       await page.mouse.down();
       await page.mouse.move(x + by, y, { steps: 10 });
       await page.mouse.up();
-      await page.waitForTimeout(1500);
+      await expect.poll(() => widthOf(column)).not.toBe(Math.round(box.width));
     };
 
     await resizeBy(duration, 90);
@@ -266,13 +246,14 @@ test.describe('computed columns', () => {
     const narrowed = await widthOf(timer);
     expect(narrowed).toBeLessThan(70);
 
-    // Widths live on the table, so they survive a reload.
+    await waitForSynced(page);
     await page.reload();
-    await expect(page.getByRole('grid')).toBeVisible();
-    await page.waitForTimeout(500);
+    await waitForGridMounted(page);
 
-    expect(await widthOf(duration)).toBe(widened);
-    expect(await widthOf(timer)).toBe(narrowed);
+    await expect
+      .poll(() => widthOf(duration), { timeout: 15_000 })
+      .toBe(widened);
+    await expect.poll(() => widthOf(timer), { timeout: 15_000 }).toBe(narrowed);
   });
 
   test('columns can be reordered, including the ones a view adds', async ({
@@ -284,8 +265,7 @@ test.describe('computed columns', () => {
     });
 
     await expect(page.getByTestId('timer-new-input')).toBeVisible();
-    await expect(page.getByRole('grid')).toBeVisible();
-    await page.waitForTimeout(500);
+    await waitForGridMounted(page);
 
     const headings = () =>
       page.evaluate(() =>
@@ -315,19 +295,24 @@ test.describe('computed columns', () => {
       steps: 15,
     });
     await page.mouse.up();
-    await page.waitForTimeout(1200);
+    await expect
+      .poll(async () => {
+        const h = await headings();
+
+        return h.indexOf('Duration') > h.indexOf('name');
+      })
+      .toBe(true);
 
     const reordered = await headings();
     expect(reordered.indexOf('Duration')).toBeGreaterThan(
       reordered.indexOf('name'),
     );
 
-    // The order lives on the View, so it survives a reload.
+    await waitForSynced(page);
     await page.reload();
-    await expect(page.getByRole('grid')).toBeVisible();
-    await page.waitForTimeout(500);
+    await waitForGridMounted(page);
 
-    expect(await headings()).toEqual(reordered);
+    await expect.poll(headings, { timeout: 15_000 }).toEqual(reordered);
   });
   test('a computed column can be filtered on, in a unit that reads', async ({
     page,
@@ -342,8 +327,7 @@ test.describe('computed columns', () => {
     });
 
     await expect(page.getByTestId('timer-new-input')).toBeVisible();
-    await expect(page.getByRole('grid')).toBeVisible();
-    await page.waitForTimeout(500);
+    await waitForGridMounted(page);
 
     // Log the short one and stop it...
     await page.getByTestId('timer-new-input').fill('Short task');
@@ -395,11 +379,7 @@ test.describe('computed columns', () => {
       undefined,
       { timeout: 30_000 },
     );
-    await page.waitForFunction(
-      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
-      undefined,
-      { timeout: 30_000 },
-    );
+    await waitForSynced(page, 30_000);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('grid')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId('filter-chip')).toContainText('1 hours');

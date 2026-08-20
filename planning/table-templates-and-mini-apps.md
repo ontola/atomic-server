@@ -2,12 +2,12 @@
 
 ## Status
 
-In progress (2026-07-31). Prompted by the Timer view: building it as a bespoke
-renderer meant re-implementing the table badly, which raised the question of
-what should happen as templates multiply. Steps 3 (derived columns), 4
-(aggregation with breakdowns), 5 (assistant tools) and 6 (the catalogue) have
-shipped. What's left is the list of gaps below — chiefly making derived columns
-first-class in filters and aggregates.
+Steps 3–6 shipped (2026-07-31). Prompted by the Timer view: building it as a
+bespoke renderer meant re-implementing the table badly, which raised the
+question of what should happen as templates multiply. Steps 3 (derived
+columns), 4 (aggregation with breakdowns), 5 (assistant tools) and 6 (the
+catalogue) have shipped. What's left is the list of gaps below — chiefly
+making derived columns first-class in filters and aggregates.
 
 ## The Problem
 

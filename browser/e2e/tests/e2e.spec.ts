@@ -9,7 +9,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
   FRONTEND_URL,
-  SERVER_URL,
+  spaUrl,
   before,
   changeDrive,
   contextMenuClick,
@@ -29,6 +29,7 @@ import {
   signIn,
   timestamp,
   waitForCommit,
+  waitForSynced,
   openAgentPage,
   fillSearchBox,
   selectHistoryVersionShowing,
@@ -240,13 +241,11 @@ test.describe('data-browser', async () => {
       'Message date missing after refresh — createdAt did not survive the round-trip',
     ).toHaveAttribute('datetime', new RegExp(`^${year}-`));
 
-    // Build the chatroom fallback URL on the SERVER's origin (same as the
-    // invite URL the guest opens), not the frontend dev server. The guest
-    // sets up their agent on `localhost:9883` after accepting the invite —
-    // crossing to `localhost:6747` would land on a fresh-origin localStorage
-    // with no agent and bounce the guest to the welcome page.
+    // Build the chatroom fallback URL on the SPA origin the guest already
+    // accepted the invite on. Mixing FRONTEND_URL (Vite) with SERVER_URL
+    // (embedded bundle) drops the guest's localStorage agent.
     const chatSubject = await getCurrentSubject(page);
-    const showFallback = new URL('/app/show', SERVER_URL);
+    const showFallback = new URL('/app/show', FRONTEND_URL);
     showFallback.searchParams.set('subject', chatSubject);
     const chatRoomHref = showFallback.href;
 
@@ -269,13 +268,14 @@ test.describe('data-browser', async () => {
         ?.getAttribute('data-code-content'),
     );
     expect(inviteUrl).toBeTruthy();
+    await waitForSynced(page);
 
     const context2 = await browser.newContext();
     await context2.grantPermissions(['clipboard-read', 'clipboard-write'], {
       origin: new URL(FRONTEND_URL).origin,
     });
     const page2 = await context2.newPage();
-    await page2.goto(inviteUrl as string);
+    await page2.goto(spaUrl(inviteUrl as string));
 
     await acceptInvite(page2);
     await page2.waitForURL(/\/app\//, { timeout: 15_000 });
@@ -286,7 +286,6 @@ test.describe('data-browser', async () => {
       });
     } catch {
       // Redirect may land outside the chatroom; open the same /app/show?subject=… URL as the owner.
-      await page2.waitForTimeout(500);
       await page2.goto(chatRoomHref);
       await expect(page2.locator(`text=${teststring}`)).toBeVisible({
         timeout: 15_000,
@@ -370,14 +369,30 @@ test.describe('data-browser', async () => {
       await editableTitle(page).type(letter, { delay: Math.random() * 300 });
     }
 
-    // After typing, we need the LAST debounce to fire (~100ms) then its
-    // commit to ack. `pendingDirtyCount === 0` polls too eagerly here —
-    // the last keystroke's debounce timer hasn't started yet at loop exit,
-    // so the count is briefly 0 (last save done, next not yet enqueued)
-    // and `waitForFunction` returns before the final value is committed.
-    // `waitForTimeout(1500)` gives the debounce + round-trip enough budget
-    // before we Escape (which would otherwise cancel the pending save).
-    await page.waitForTimeout(1500);
+    // The last keystroke's debounce may not have been scheduled yet at loop
+    // exit, so `pendingDirtyCount === 0` can be briefly true before the
+    // final character is applied. Wait until the store holds the full
+    // string — that's `useValue` applying the change — then drain the save
+    // before Escape (which would otherwise race a still-armed debounce).
+    await page.waitForFunction(
+      expected => {
+        const main = document.querySelector('main[about]');
+        const subject = main?.getAttribute('about');
+
+        if (!subject) {
+          return false;
+        }
+
+        const resource = window.store?.resources.get(subject);
+
+        return (
+          resource?.get?.('https://atomicdata.dev/properties/name') === expected
+        );
+      },
+      alphabet,
+      { timeout: 15_000 },
+    );
+    await waitForSynced(page);
     await page.keyboard.press('Escape');
 
     await expect(
@@ -426,11 +441,7 @@ test.describe('data-browser', async () => {
     await editTitle(docTitle, page);
 
     // Wait for the doc's save to flush before navigating away.
-    await page.waitForFunction(
-      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
-      undefined,
-      { timeout: 10000 },
-    );
+    await waitForSynced(page);
 
     // Back to the folder — assert the child appears in the main page.
     await page.goto(folderUrl);

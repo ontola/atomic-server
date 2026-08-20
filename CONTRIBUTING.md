@@ -23,6 +23,7 @@ Check out the [Roadmap](https://docs.atomicdata.dev/roadmap.html) if you want to
 - [Git policy](#git-policy)
   - [Open a PR](#open-a-pr)
   - [Branching](#branching)
+  - [Hotfixes](#hotfixes)
 - [Testing](#testing)
 - [Performance monitoring / benchmarks](#performance-monitoring--benchmarks)
   - [Tracing](#tracing)
@@ -106,6 +107,16 @@ Check the Dagger index.ts file to see how cross compilation is done in the CI.
 
 ## Git policy
 
+One long-lived branch: `develop`. Staging follows it. Production is a stable
+`v*` tag, not a branch.
+
+Do not add a `main` that is updated when you tag `develop`. The tag already
+*is* the release — a second pointer for the same commit drifts (failed update
+job, a direct push, a PR against the GitHub default), and production that
+deploys from both `main` and tags can disagree. `master` is not part of this
+flow either; it used to own live docs, which now publish from the same stable
+tags as production.
+
 ### Open a PR
 
 - Make sure your branch is up to date with `develop`.
@@ -115,6 +126,23 @@ Check the Dagger index.ts file to see how cross compilation is done in the CI.
 ### Branching
 
 Create new branches off `develop`. When an issue is ready for PR, open PR against `develop`.
+
+### Hotfixes
+
+When production needs a fix that must not wait for everything already on
+`develop`, branch from the tag, tag the fix, merge back:
+
+```sh
+git checkout -b hotfix/describe-it v0.40.3
+# fix, open a PR, merge
+git tag v0.40.4
+git push origin v0.40.4
+git checkout develop
+git merge hotfix/describe-it
+```
+
+The new tag is what production deploys. `develop` must get the fix too, or the
+next release reintroduces the bug.
 
 ## Testing
 
@@ -266,20 +294,22 @@ Nothing deploys until its pipeline is green.
 | Trigger | Deploys to | Docs |
 | --- | --- | --- |
 | push to `develop` | staging.atomicdata.dev | Netlify preview URL |
-| push to `master` | — | the live docs + typedoc sites |
-| a `v*` **tag** | atomicdata.dev | — |
+| a stable `v*` **tag** | atomicdata.dev | the live docs + typedoc sites |
 
 Staging follows a branch; **production runs a tagged release**. A branch pointer
 answers "what was merged most recently", which is not the question you are
 asking when production is misbehaving — "which release is this" is, and a tag
 answers it. It also means the deployed thing has a name that appears in the
-changelog, and that redeploying it later gets you the same bytes.
+changelog, and that redeploying it later gets you the same bytes. Live docs
+follow the same rule, so docs.atomicdata.dev describes the tagged software
+rather than whatever last landed on a docs-only branch.
 
-Pre-release tags (`v0.41.0-beta.2` and friends) do **not** deploy. They exist to
-be published and tested. Put one on production deliberately via the
-`workflow_dispatch` if you want it there.
+Pre-release tags (`v0.41.0-beta.2` and friends) do **not** deploy the app or
+publish live docs. They exist to be published and tested. Put one on production
+deliberately via the `workflow_dispatch` if you want it there.
 
-There is no `main` branch, and nothing refers to one.
+There is no `main` branch, and nothing should refer to one. Do not introduce
+one as a fast-forward of the latest tag — see [Git policy](#git-policy).
 
 `release-plz` used to live here, triggered on pushes to `main` — a branch this
 repo does not have — so it never ran once, while holding a
@@ -309,10 +339,12 @@ Two consequences worth knowing:
   Staging therefore passes `github.event.workflow_run.head_sha` into
   `deployment.yml`'s required `ref` input; production passes the resolved tag
   SHA. Leaving it out deploys something other than what CI tested, silently.
-- Docs publishing is opt-in per branch. `dagger call ci` takes `--publish-docs`,
-  and `main.yml` passes it only from `master`. Without it Netlify gets a preview
-  deploy. This used to be unconditional `--prod`, which meant pushing any
-  feature branch republished the public documentation.
+- Docs publishing is opt-in per ref. `dagger call ci` takes `--publish-docs`,
+  and `main-ci.yml` passes it only for a stable `v*` tag (no hyphen in the tag
+  name). Without it Netlify gets a preview deploy. This used to be
+  unconditional `--prod`, which meant pushing any feature branch republished
+  the public documentation, and later `master`-only, which left live docs on a
+  branch that was not production.
 
 Every deploy then has to prove itself: the job polls `/server` on the target
 until it answers `200` (with enough patience for a store migration). A deploy
@@ -328,9 +360,10 @@ export taken during the deploy, and expect to think.
 
 To deploy a specific commit — a rollback, or a fix that cannot wait for a full
 pipeline — use the `workflow_dispatch` on either deploy workflow and give it a
-ref. To require human approval for production, add reviewers to the `production`
-environment in the repository settings; the environment is already declared, so
-no workflow change is needed.
+ref. Production dispatch has no default on purpose: type the tag (or SHA) you
+mean; the old default was `master`. To require human approval for production,
+add reviewers to the `production` environment in the repository settings; the
+environment is already declared, so no workflow change is needed.
 
 ### Publishing manually - doing the CI's work
 
@@ -361,9 +394,12 @@ For a single local ARM64 image, use `dagger call create-docker-image --target aa
 
 #### Deploying to atomicdata.dev
 
-1. Run the [`deploy` Github action](https://github.com/atomicdata-dev/atomic-server/actions/workflows/deployment.yml)
+Push a stable `v*` tag. That is what production follows. To deploy a tag (or
+commit) by hand, run the
+[`deploy_production` GitHub Action](https://github.com/atomicdata-dev/atomic-server/actions/workflows/deploy_production.yml)
+and pass that ref.
 
-or do it manually:
+Or do it manually:
 
 1. `cd server`
 1. `cargo build --release --target x86_64-unknown-linux-musl --bin atomic-server` (if it fails, use cross, see above)

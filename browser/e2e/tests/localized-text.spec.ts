@@ -1,5 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before, inDialog, REBUILD_INDEX_TIME } from './test-utils';
+import {
+  before,
+  inDialog,
+  pickFromMenu,
+  waitForGridMounted,
+  waitForSynced,
+} from './test-utils';
 
 const LOCALIZED_TEXT_DATATYPE =
   'https://atomicdata.dev/datatypes/localizedText';
@@ -12,12 +18,7 @@ const chips = (page: Page) => page.locator('button[title="Content language"]');
 const cell = (page: Page, rowIndex: number, colIndex: number) =>
   page.locator(`[aria-rowindex="${rowIndex}"] > [aria-colindex="${colIndex}"]`);
 
-const waitForSaved = (page: Page) =>
-  page.waitForFunction(
-    () => window.store?.getSyncStatus().pendingDirtyCount === 0,
-    undefined,
-    { timeout: 10000 },
-  );
+const waitForSaved = (page: Page) => waitForSynced(page);
 
 /** Creates a table with the default name column plus a LocalizedText column. */
 async function createLocalizedTable(
@@ -52,7 +53,7 @@ async function createLocalizedTable(
   // click races React state initialization otherwise (same settle as
   // tables.spec).
   await expect(cell(page, 2, 2)).toBeVisible();
-  await page.waitForTimeout(1000);
+  await waitForGridMounted(page);
 }
 
 /**
@@ -193,11 +194,10 @@ test.describe('LocalizedText table columns', () => {
     // toggling split re-renders rows from the collection query, which only
     // sees the row after the server has rebuilt its index.
     await page.reload();
-    await page.waitForTimeout(REBUILD_INDEX_TIME);
+    await waitForGridMounted(page);
     await expect(page.getByRole('gridcell', { name: 'r1' })).toBeVisible({
       timeout: 15000,
     });
-    await page.waitForTimeout(1000);
 
     await declareLanguages(page, ['en', 'nl']);
 
@@ -223,8 +223,10 @@ test.describe('LocalizedText table columns', () => {
     await expect(page.getByRole('gridcell', { name: 'Hello' })).toBeVisible();
 
     // Split into one column per declared language.
-    await chips(page).first().click();
-    await page.getByText('Split by language').click();
+    await pickFromMenu(
+      chips(page).first(),
+      page.getByText('Split by language'),
+    );
     await expect(chips(page)).toHaveCount(2);
     await expect(chips(page).nth(0)).toHaveText('en');
     await expect(chips(page).nth(1)).toHaveText('nl');

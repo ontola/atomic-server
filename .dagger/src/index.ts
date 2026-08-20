@@ -291,10 +291,10 @@ export class AtomicServer {
   async ci(
     @argument() netlifyAuthToken: Secret,
     /**
-     * Publish docs to the live sites instead of preview URLs. Pass `--publish-docs`
-     * only from a branch that should own the public docs (master). Left off,
-     * every branch build gets a Netlify preview and the published docs are
-     * whatever master last put there.
+     * Publish docs to the live sites instead of preview URLs. Pass
+     * `--publish-docs` only from a stable `v*` tag (the same ref production
+     * deploys). Left off, every build gets a Netlify preview and the published
+     * docs stay whatever the last stable tag put there.
      */
     @argument() publishDocs = false,
     /**

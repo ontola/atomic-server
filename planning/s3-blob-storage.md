@@ -1,5 +1,7 @@
 # S3-compatible Blob Storage
 
+**Status:** Proposal. Nothing built.
+
 ## Problem
 
 `Tree::Blobs` (the content-addressed store for file bytes, keyed by BLAKE3 hash) currently lives inside the same redb instance as resources, indexes, and Loro snapshots. That works for a single-server install with modest file volume, but it conflates two very different storage workloads:

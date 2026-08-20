@@ -1127,7 +1127,7 @@ export class WSClient {
 
     // Local-only drives are unknown to the server — a SUB would only
     // produce an error frame (and leak the drive subject).
-    if (drive && !this.store.isLocalOnlyDrive(drive)) {
+    if (drive && this.store.isLiveSyncedDrive(drive)) {
       this.sendBinary(encodeSub(drive));
     }
   }
@@ -1181,7 +1181,7 @@ export class WSClient {
       // `server/tests/ws_get_unauthorized_latency.rs`).
       // Local-only drives never reconcile with a server: a SYNC_VV would
       // upload the whole local drive's version state for nothing.
-      if (drive && !this.store.isLocalOnlyDrive(drive)) {
+      if (drive && this.store.isLiveSyncedDrive(drive)) {
         await this.startVVSync(drive);
       }
     };

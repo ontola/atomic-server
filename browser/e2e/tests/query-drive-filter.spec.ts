@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { before, editableTitle } from './test-utils';
+import {
+  before,
+  editableTitle,
+  waitForClientDbFlush,
+  waitForDriveSettled,
+  waitForSynced,
+} from './test-utils';
 
 /**
  * Regression test: after creating a fresh dev-drive and refreshing the
@@ -62,13 +68,7 @@ test.describe('query GETs after refresh', () => {
     // useChildren hooks build their CollectionBuilders.
     await page.reload({ waitUntil: 'domcontentloaded' });
 
-    await page.waitForFunction(
-      () => window.store?.getSyncStatus().serverConnected === true,
-      undefined,
-      { timeout: 30000 },
-    );
-    // Idle window: let any deferred queries land.
-    await page.waitForTimeout(2000);
+    await waitForDriveSettled(page);
 
     expect(
       badRequests,
@@ -111,17 +111,8 @@ test.describe('query GETs after refresh', () => {
     // OPFS persist of the new document. If we reload before OPFS has
     // the data, the post-reload server queries are legitimate (cold
     // load), not the bug we're testing.
-    await page.waitForFunction(
-      () =>
-        window.store?.getSyncStatus().pendingDirtyCount === 0 &&
-        window.store?.getClientDb()?.isReady === true,
-      undefined,
-      { timeout: 30000 },
-    );
-
-    // Belt-and-braces: give the OPFS put queue a moment to drain so
-    // the post-reload bootstrap fingerprint matches.
-    await page.waitForTimeout(500);
+    await waitForSynced(page);
+    await waitForClientDbFlush(page);
 
     // Wire WS listeners BEFORE reload so we don't miss any framesent.
     // WS v2 framing is BINARY — see `ws-v2.ts:Tag`. GET = 0x10, encoded
@@ -161,21 +152,16 @@ test.describe('query GETs after refresh', () => {
     // Wait for steady state: WS connected, ClientDb ready, and the
     // OPFS bootstrap-fingerprint check has completed (logged as
     // "skipping seed" when the fingerprint matches).
-    await page.waitForFunction(
-      () =>
-        window.store?.getSyncStatus().serverConnected === true &&
-        window.store?.getClientDb()?.isReady === true,
-      undefined,
-      { timeout: 30000 },
-    );
+    await waitForDriveSettled(page);
 
     // Drop frames from the bootstrap window. `Collection.fetchPage` falls
     // through to `/query` while ClientDb isn't ready (or before this drive
     // has completed a local sync) — those are cold-load fetches, not the
-    // redundant post-ready storm this regression guards. Clear, then watch
-    // only the settle window where the local WASM DB must win.
+    // redundant post-ready storm this regression guards. Clear once the
+    // drive has settled, then watch only the window where the local WASM
+    // DB must win — the sidebar showing the seeded document is that UI.
     wsGetFrames.length = 0;
-    await page.waitForTimeout(2000);
+    await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
 
     // No `/query?` frames should fire at all — those are exclusively
     // collection queries that the local WASM DB can serve.

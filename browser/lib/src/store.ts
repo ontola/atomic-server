@@ -600,10 +600,10 @@ export class Store {
     // actor free for the GET that almost always follows on share-
     // link / welcome-page cold opens.
     //
-    // A stored value that happens to be an HTTP URL (legacy data from
-    // pre-DID drives) is also ignored here for drive purposes —
-    // `setServerUrl` above already absorbed the origin, and an
-    // accidental URL-as-drive is exactly what we're avoiding.
+    // A stored *bare origin* (`https://host`) is not a drive — that used
+    // to be the pre-DID stand-in for "no workspace selected". A stored
+    // HTTP URL *with a path* is a real legacy drive subject and is
+    // restored; `setDrive` will not treat it as a server switch.
     let storedDrive: string | undefined = undefined;
 
     if (typeof window !== 'undefined') {
@@ -620,8 +620,11 @@ export class Store {
 
     if (
       storedDrive &&
-      !storedDrive.startsWith('http://') &&
-      !storedDrive.startsWith('https://')
+      (Client.isHttpDriveSubject(storedDrive) ||
+        !(
+          storedDrive.startsWith('http://') ||
+          storedDrive.startsWith('https://')
+        ))
     ) {
       this.drive = storedDrive;
     } else {
@@ -802,6 +805,34 @@ export class Store {
 
   public isLocalOnlyDrive(drive: string): boolean {
     return this.localOnlyDrives.has(drive);
+  }
+
+  /**
+   * True when `subject` is an HTTP(S) URL whose origin is not this
+   * store's home server. Opening that resource must not move the
+   * session: fetch it from its own origin, keep `serverUrl` here.
+   */
+  public isForeignOriginSubject(subject: string): boolean {
+    if (!subject.startsWith('http://') && !subject.startsWith('https://')) {
+      return false;
+    }
+
+    try {
+      return new URL(subject).origin !== new URL(this.serverUrl).origin;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Live SUB / SYNC_VV / presence go to the home server. Skip drives it
+   * cannot serve: local-only workspaces, and HTTP drives that live on
+   * another origin (fetched cross-origin, never subscribed here).
+   */
+  public isLiveSyncedDrive(drive: string): boolean {
+    if (!drive || this.isLocalOnlyDrive(drive)) return false;
+
+    return !this.isForeignOriginSubject(drive);
   }
 
   /**
@@ -4447,24 +4478,22 @@ export class Store {
 
   /** Sets the current Drive.
    *
-   *  Accepts either a drive subject (a DID — the only form that actually
-   *  identifies a drive in the index) or an HTTP URL. An HTTP URL is
-   *  treated as a *server origin*, not a drive: it updates `serverUrl`
-   *  but leaves `this.drive` untouched (i.e. `getDrive()` keeps
-   *  returning whatever real drive — possibly `undefined` — was set
-   *  before). This split is what prevents the SYNC_VV / encodeSub
-   *  paths from running against a bare host URL, which the server's
-   *  `collect_drive_subjects` cannot enumerate cheaply.
+   *  A DID (or other non-HTTP subject) is a drive. An HTTP URL with a
+   *  path is also a drive — including one whose origin is not this
+   *  store's home server. Those are fetched cross-origin; `serverUrl`
+   *  stays put. Only a *bare* HTTP origin (`https://host`, no path) is
+   *  treated as `setServerUrl`, and does not become `this.drive`. That
+   *  split is what prevents SYNC_VV / encodeSub from running against a
+   *  host URL, which `collect_drive_subjects` cannot enumerate cheaply.
    *
    *  Both forms still persist to localStorage and fire `DriveChanged`
    *  so AppSettings-style UI mirrors stay in sync.
    */
   public setDrive(drive: string): void {
-    const isUrl = drive.startsWith('http://') || drive.startsWith('https://');
-
-    if (isUrl) {
-      const url = new URL(drive);
-      this.setServerUrl(url.origin);
+    if (!drive) {
+      this.drive = undefined;
+    } else if (Client.isBareHttpOrigin(drive)) {
+      this.setServerUrl(new URL(drive).origin);
     } else {
       this.drive = drive;
     }
@@ -4806,12 +4835,12 @@ export class Store {
       drive,
       callback,
       () => {
-        if (this._serverConnected && !this.isLocalOnlyDrive(drive)) {
+        if (this._serverConnected && this.isLiveSyncedDrive(drive)) {
           this.presenceWebSocket(drive)?.subscribePresence(drive);
         }
       },
       () => {
-        if (this._serverConnected && !this.isLocalOnlyDrive(drive)) {
+        if (this._serverConnected && this.isLiveSyncedDrive(drive)) {
           this.presenceWebSocket(drive)?.unsubscribePresence(drive);
         }
       },
@@ -4822,9 +4851,9 @@ export class Store {
    *  drive's presence subscribers. */
   public broadcastPresenceUpdate(drive: string, update: Uint8Array): void {
     if (!this._serverConnected) return;
-    // Local-only drives have no peers behind a relay; their presence
-    // (including injected demo sessions) stays in this tab.
-    if (this.isLocalOnlyDrive(drive)) return;
+    // Local-only drives and foreign-origin HTTP drives have no live
+    // peers on the home websocket.
+    if (!this.isLiveSyncedDrive(drive)) return;
     this.presenceWebSocket(drive)?.sendPresenceUpdate(
       JSON.stringify({ subject: drive, update: encodeB64(update) }),
     );

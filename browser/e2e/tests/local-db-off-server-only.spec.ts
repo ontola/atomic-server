@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { before, newDrive, FRONTEND_URL } from './test-utils';
+import {
+  before,
+  newDrive,
+  FRONTEND_URL,
+  waitForClientDbFlush,
+  waitForSynced,
+} from './test-utils';
 
 /**
  * The Sync page "Local DB" toggle writes `atomic-disable-client-db=1` to
@@ -40,8 +46,10 @@ test('drive contents load with Local DB disabled (server-only)', async ({
     return d;
   });
 
-  // Let the commit land server-side + the 1s OPFS flush tick run.
-  await page.waitForTimeout(2000);
+  // Persist the create, then disable Local DB so the reload hydrates from
+  // the server only.
+  await waitForSynced(page);
+  await waitForClientDbFlush(page);
 
   // Toggle "Local DB" off (what the Sync page does) and reload. From here the
   // store never initialises ClientDb — the drive page is served purely from
@@ -94,7 +102,8 @@ test('UI-created drive contents load with Local DB disabled', async ({
     await f.save();
   }, driveURL);
 
-  await page.waitForTimeout(2000);
+  await waitForSynced(page);
+  await waitForClientDbFlush(page);
 
   await page.evaluate(() =>
     localStorage.setItem('atomic-disable-client-db', '1'),

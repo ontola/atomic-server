@@ -4,6 +4,7 @@ import {
   createTableFromDialog,
   inDialog,
   reloadGrid,
+  waitForGridMounted,
 } from './test-utils';
 
 /**
@@ -30,7 +31,7 @@ async function createFromTemplate(
   }
 
   await expect(page.getByRole('grid')).toBeVisible();
-  await page.waitForTimeout(1000);
+  await waitForGridMounted(page);
 }
 
 /**

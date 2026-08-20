@@ -1,7 +1,9 @@
 # Canvas undo/redo: consolidation plan
 
 > **Status:** Phase A landed (browser scrub gesture, `replaceListItems`,
-> `strokeData` datatype = `jsonArray`, legacy string parser dropped).
+> `strokeData` datatype = `json` — `jsonArray` was retired; see
+> [`migrate-jsonarray-to-json.md`](./migrate-jsonarray-to-json.md), legacy
+> string parser dropped).
 > **Phase C landed** (browser discarded-branches: hold the undo button →
 > version overlay + thumbnail panel; drag over a thumbnail and release to
 > restore; branches persist in `localStorage` alongside the undo/redo
@@ -24,7 +26,7 @@
 | Concern | Browser | Flutter |
 | --- | --- | --- |
 | `strokeData` Loro storage | `LoroList<LoroMap>` ✓ | `LoroList<LoroMap>` ✓ |
-| Ontology declared datatype | `jsonArray` ✓ | `jsonArray` ✓ |
+| Ontology declared datatype | `json` ✓ | `json` ✓ |
 | Tap-undo / tap-redo | `resource.undo()` / `resource.redo()` via Loro `UndoManager` ✓ | Same — `AtomicClient.undoCanvas()` → Rust `resource.undo()` ✓ |
 | Undo-button drag-to-scrub gesture | Released — pointer-capture handler on the button, `getLoroHistory()` for preview, `replaceListItems()` on release ✓ | Released — same gesture, `_loroStrokeStates`/`_loroVersionIds` precomputed via `warmResourceHistory`/`getResourceAtVersion` ✓ |
 | Discarded-branch (scrub-back-then-draw → returnable forward fork) | ❌ Missing | ✓ Implemented (in-memory, ephemeral) |
@@ -118,7 +120,7 @@ A horizontal strip of thumbnails along the bottom edge (toggle-able to keep it o
 Flutter's branches today are lost on app close (the planning doc flags it: *"Decide whether `CANVAS_CACHE` undo history should persist"*). Options:
 
 - *Ephemeral.* Match Flutter. Cheapest. Branches vanish on reload.
-- *Stored on the canvas resource.* Add a `discardedBranches` propval (jsonArray of branch records). Persists; survives reload; consumes a property slot and bandwidth on every commit.
+- *Stored on the canvas resource.* Add a `discardedBranches` propval (json of branch records). Persists; survives reload; consumes a property slot and bandwidth on every commit.
 - *Stored in `ClientDb` only.* Browser-local, survives reload, doesn't sync. Splits the UX (you see your branches but not your collaborators'). Probably the right trade-off — branches are inherently a per-author concept.
 
 Lean toward **ClientDb-only** (browser) + a similar **`canvas_branches` table in the Iroh/sled store** (Flutter), with no cross-device sync. That cleanly matches the *"undo is local"* semantics already chosen for the underlying `UndoManager`.

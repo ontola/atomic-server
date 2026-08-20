@@ -1,5 +1,7 @@
 # NextGraph interop — `did:ng:` resources via a pluggable Store backend
 
+> **Status:** Proposal. Nothing built.
+
 > Scope note: this is about making Atomic and **NextGraph** (`did:ng:`,
 > RDF + CRDT graph store, [nextgraph.org]) interoperate at the browser data
 > layer. It builds on the `Store`/`Resource` contract described in
