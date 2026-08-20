@@ -155,6 +155,16 @@ export const AppSettingsContextProvider = (
         return;
       }
 
+      // An HTTP drive with a path is a workspace, not a server: it is fetched
+      // cross-origin and the home server stays where it is. That means it must
+      // not reach the come-home branch below either. Before the origin/drive
+      // split above, every `http(s)://` subject left through the early return;
+      // now only a bare origin does, so without this a `https://host/drive/abc`
+      // would fall through and repoint the session that was meant to stay.
+      if (newDrive.startsWith('http://') || newDrive.startsWith('https://')) {
+        return;
+      }
+
       // A `did:` drive names no server, so this branch did nothing at all —
       // and that is how switching away and back stranded the app. Opening an
       // `https://…` drive repoints the store at that origin; coming back to a
