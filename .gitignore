@@ -47,3 +47,5 @@ scratchpad
 node_modules/
 # Generated integration certification evidence
 /artifacts/integration-certification/
+CLAUDE.local.md
+AGENTS.local.md
