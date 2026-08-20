@@ -28,7 +28,8 @@ cargo install mdbook-linkcheck
 mdbook serve
 ```
 
-Publishing is done with Github actions - simply push the master branch.
+Live docs publish from a stable `v*` tag (the same ref as production). Pushes
+to `develop` and other branches get a Netlify preview URL. See `CONTRIBUTING.md`.
 
 ## Contributing
 
