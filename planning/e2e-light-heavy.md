@@ -2,9 +2,11 @@
 
 **Status: proposal, not built.** Analysis 2026-08-20.
 
-Yes: split Playwright into a **light** suite that gates everyday CI, and a
-**heavy** suite that gates `develop` / tags / releases. Also yes: that only
-works if the cases we drop from the PR gate already have a cheaper test at
+Yes: split Playwright into a **light** suite that gates feature-branch CI,
+and a **heavy** suite that gates `develop` / tags / releases. Lint, Rust,
+vitest, JS integration, and Flutter stay on **every** run — “partial” means
+fewer browsers, not a thinner backend net. The split only works if the
+cases we drop from the feature-branch gate already have a cheaper test at
 the right layer. Do not shrink E2E first and hope unit tests appear later.
 
 Companion: [`TESTING_COVERAGE.md`](../TESTING_COVERAGE.md) — protocol vs glue
@@ -111,40 +113,73 @@ integration tests.
 
 ## Proposed model
 
-Three layers, two E2E gates.
+Three layers. **Only Playwright splits.** Lint, Rust, vitest, JS integration,
+and Flutter stay on every run.
 
 ```
-unit (vitest / cargo)     always, PR + develop + tag
-integration (jsTestIntegration, server `it`, lib sync)
-                          always
-e2e light  (@smoke)       every PR, and local `pnpm test-e2e:light`
-e2e heavy  (full suite)   develop, v* tags, workflow_dispatch, nightly-optional
+always (any branch / tag / dispatch)
+  jsLint, rustFmt, rustClippy, rustTest, jsTest, jsTestIntegration, flutterTest
+
+e2e light  (@smoke)     feature-branch pushes (today's `on: push` to anything but develop)
+e2e heavy  (full suite) develop, v* tags, and opt-in
 ```
 
 Mechanism: Playwright **tags**, not two folders. A test can be `@smoke` and
 still run in heavy (heavy = unfiltered). Light is `--grep @smoke`. Optional
 later: `@perf` excluded from both default jobs and run on a schedule.
 
-### When each gate runs
+### CI policy: when full?
 
-| Trigger | Light | Heavy |
+**Partial by default. Full when we are about to ship, or when someone asks.**
+
+Today every origin push runs the full Playwright suite (`main.yml` is
+`on: [push, workflow_dispatch]`; there is no `pull_request` trigger). That
+is why Mancave queues: agent branches and feature branches compete with
+`develop` for the same box. The split only pays off if feature-branch
+pushes stop launching 8 browsers.
+
+| Trigger | Unit / integration / lint | Playwright |
 |---|---|---|
-| PR / feature-branch push | required | no |
-| `develop` push (staging) | included in heavy | required |
-| `v*` tag (production) | included in heavy | required |
-| Local default `pnpm test-e2e` | — | full (today's behavior) |
-| Local inner loop | `test-e2e:light` | on demand |
+| Push to a feature branch | always, required | **light**, required |
+| Push to `develop` | always, required | **full**, required (staging deploys from this green) |
+| Push of a stable `v*` tag | always, required | **full**, required (production deploys from this green) |
+| `workflow_dispatch` | always | **full** unless the input says light |
+| PR label / dispatch input `full-e2e` on a feature branch | always | **full** (opt-in, still required for that run) |
+| Local `pnpm test-e2e` | — | full (today) |
+| Local `pnpm test-e2e:light` | — | light |
 
-PRs stay mergeable without waiting for website-template applies and kanban
-operator matrices. `develop` still refuses to stage a build that broke an
-offline table reload.
+Never skip the non-Playwright jobs on a “partial” run. Those are the cheap
+net, already parallel with E2E, and they are where protocol bugs belong.
+“Partial CI” means **fewer browsers**, not “skip Rust.”
 
-Retries: light can run `retries=1` (or 0 locally). Heavy keeps `retries=2`
-on Mancave until the host is less contended. A smaller light job also *is*
-the contention fix: fewer browsers next to cargo.
+Do **not**:
 
-Shards: light likely needs **1–2 shards**, not 4. That frees CPU for
-clippy/nextest on the same box.
+- Run light on `develop`. Staging (`deploy_staging.yml`) follows a green
+  Main on `develop`. A subset gate would ship untested offline / table /
+  two-browser paths.
+- Run full E2E as a non-blocking extra job on every feature branch. That
+  keeps Mancave contended and undoes the split.
+- Infer the suite from changed paths (`tables.spec.ts` if `TablePage`
+  changed). Brittle, and agents will get it wrong. Opt-in full on the
+  branch if you touched a heavy-only flow and want the answer before merge.
+- Skip E2E entirely on docs-only commits as a first step. Dagger cache
+  already makes those ~2–12 min. A GHA path filter is an optional later
+  save, not the policy.
+
+**Merge tax.** A light-green feature branch can still turn `develop` red.
+That is the point of the `develop` gate: staging waits, the author (or
+whoever lands) pays the full suite once, not on every push. Use the
+`full-e2e` opt-in when the change is in a heavy-only area (offline tables,
+canvas, vault, website templates) so you find that before merge.
+
+Retries: light `retries=1` (0 locally). Heavy keeps `retries=2` on Mancave
+until the host is less contended. A smaller default job *is* the contention
+fix.
+
+Shards: light **1–2 shards**, not 4. Full keeps current 4 / 2.
+
+Nightly full-on-`develop` is optional later (retries=0, flake hunting). It
+is not required if every `develop` push already runs full.
 
 ---
 
@@ -268,28 +303,25 @@ that can fail.
 ## CI / Dagger shape (when building)
 
 Today `ci()` always calls `this.endToEnd(...)`, which shards the full
-suite. Change:
+suite. The workflow decides the mode; Dagger does not guess the branch.
 
-- `endToEnd(mode: 'light' | 'full')`.
-- `ci()` takes the same flag (or infers from git ref inside the workflow,
-  not inside Dagger — the workflow already knows branch vs tag).
+- `endToEnd(mode: 'light' | 'full')`, same flag on `ci()`.
+- `main.yml` passes `full` when `github.ref == develop` or the ref is a
+  stable `v*` tag, or when dispatch / a `full-e2e` label (or boolean
+  input) asks. Everything else passes `light`.
 - Light: `--grep @smoke`, 1–2 shards, `PLAYWRIGHT_RETRIES=1`,
   `PLAYWRIGHT_WORKERS=2` on Mancave.
 - Full: current command, current shards/retries.
 - `pnpm` scripts: `test-e2e:light` / keep `test-e2e` = full.
 - Do not grep-exclude by filename forever; tags survive file splits.
 
-`develop` and tags keep today's contract: staging/production only move
-when the heavy suite is green. Feature branches get the light gate plus
-the always-on unit/integration jobs (those are cheap and already
-parallel).
-
 Optional later, not required for the split to pay off:
 
-- Nightly heavy on `develop` even if a push already ran it (catches flake
-  that slipped a retry).
+- Nightly full on `develop` with `retries=0` (flake hunting).
 - `@perf` job, one shard, `workers=1`, no retries, fail on budget miss.
 - Firefox/WebKit projects stay heavy-only (locks + sign-out round-trip).
+- Docs-only path filter that skips Playwright entirely (Dagger cache
+  already makes these cheap).
 
 ---
 
