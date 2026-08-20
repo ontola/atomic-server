@@ -55,54 +55,60 @@ test('top bar offers no Meet control when no meeting is live', async ({
   await expect(page.getByTestId('menu-item-newDraft')).toHaveCount(0);
 });
 
-test('prepare an agenda, start it, and preserve minutes', smoke, async ({
-  page,
-}) => {
-  test.setTimeout(90_000);
-  await before({ page });
-  await page.waitForLoadState('load');
+test(
+  'prepare an agenda, start it, and preserve minutes',
+  smoke,
+  async ({ page }) => {
+    test.setTimeout(90_000);
+    await before({ page });
+    await page.waitForLoadState('load');
 
-  await page.getByRole('button', { name: 'New Meeting' }).first().click();
-  await expect(page.getByText('agenda', { exact: true }).first()).toBeVisible({
-    timeout: 30_000,
-  });
+    await page.getByRole('button', { name: 'New Meeting' }).first().click();
+    await expect(page.getByText('agenda', { exact: true }).first()).toBeVisible(
+      {
+        timeout: 30_000,
+      },
+    );
 
-  const meeting = await getCurrentSubject(page);
-  expect(meeting).toBeTruthy();
-  const agendaText = 'Approve launch plan';
-  await page.getByLabel('Rich Text Editor').fill(agendaText);
-  await expect(page.getByText(agendaText)).toBeVisible();
+    const meeting = await getCurrentSubject(page);
+    expect(meeting).toBeTruthy();
+    const agendaText = 'Approve launch plan';
+    await page.getByLabel('Rich Text Editor').fill(agendaText);
+    await expect(page.getByText(agendaText)).toBeVisible();
 
-  expect(
-    await page.evaluate(subject => {
-      const store = window.store;
-      const drive = store.getDrive();
+    expect(
+      await page.evaluate(subject => {
+        const store = window.store;
+        const drive = store.getDrive();
 
-      if (!drive) return false;
+        if (!drive) return false;
 
-      const resource = store.getResourceLoading(drive);
-      const live = (resource.get(
-        'https://atomicdata.dev/properties/currentMeetings',
-      ) ?? []) as string[];
+        const resource = store.getResourceLoading(drive);
+        const live = (resource.get(
+          'https://atomicdata.dev/properties/currentMeetings',
+        ) ?? []) as string[];
 
-      return live.includes(subject!);
-    }, meeting),
-  ).toBe(false);
+        return live.includes(subject!);
+      }, meeting),
+    ).toBe(false);
 
-  await page.getByRole('button', { name: 'Start meeting' }).click();
-  await expect(page.getByText('notes', { exact: true }).first()).toBeVisible();
-  await expect(page.getByTestId('follow-session-panel')).toHaveAttribute(
-    'data-open',
-    '',
-  );
-  await expect(page.getByText(agendaText)).toBeVisible();
+    await page.getByRole('button', { name: 'Start meeting' }).click();
+    await expect(
+      page.getByText('notes', { exact: true }).first(),
+    ).toBeVisible();
+    await expect(page.getByTestId('follow-session-panel')).toHaveAttribute(
+      'data-open',
+      '',
+    );
+    await expect(page.getByText(agendaText)).toBeVisible();
 
-  await page.getByRole('button', { name: 'End meeting' }).click();
-  await expect(
-    page.getByText('minutes', { exact: true }).first(),
-  ).toBeVisible();
-  await expect(page.getByText(agendaText)).toBeVisible();
-});
+    await page.getByRole('button', { name: 'End meeting' }).click();
+    await expect(
+      page.getByText('minutes', { exact: true }).first(),
+    ).toBeVisible();
+    await expect(page.getByText(agendaText)).toBeVisible();
+  },
+);
 
 test('start a meeting, join it, follow along, and end it', async ({
   browser,
