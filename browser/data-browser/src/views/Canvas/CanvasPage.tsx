@@ -511,13 +511,15 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
    *  hovering it, pressing it, or Ctrl+Z — rather than on open. Runs at most
    *  once per canvas per device; cheap to call on every interaction after.
    *
-   *  Synchronous: the undo control is only enabled once the mount effect has
-   *  awaited the Loro WASM, so by the time anything can call this the oplog
-   *  is readable. */
-  const ensureUndoStack = useCallback(() => {
+   *  Async: awaits Loro WASM readiness before reading the oplog, so it's
+   *  safe to call from the keyboard shortcut (Ctrl+Z) even on a cold page
+   *  load. */
+  const ensureUndoStack = useCallback(async () => {
     if (bootstrappedRef.current) return;
 
-    if (undoStackRef.current.length > 0 || redoStackRef.current.length > 0) {
+    try {
+      await enableLoro();
+    } catch {
       return;
     }
 
@@ -526,22 +528,31 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       resource.get(canvas.properties.strokeData),
     );
     const steps = bootstrapUndoSteps(
-      versions.map(v => v.propvals.get(canvas.properties.strokeData)),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      versions.map((v: any) => v.propvals.get(canvas.properties.strokeData)),
       current,
     );
+
+    // If the user started drawing before this completed, prepend the Loro
+    // history (which is older) to the existing undo stack instead of
+    // discarding their edits.
+    if (undoStackRef.current.length > 0) {
+      undoStackRef.current = [...steps, ...undoStackRef.current].slice(
+        -UNDO_STACK_LIMIT,
+      );
+    } else {
+      undoStackRef.current = steps;
+    }
 
     // Record the attempt even when it found nothing, so a canvas with no
     // recoverable history doesn't pay for the walk again on the next open.
     bootstrappedRef.current = true;
-    undoStackRef.current = steps;
-    // Opening only counted version buckets. If every one of them holds the
-    // drawing as it looks right now, there is nothing to undo after all.
-    setCanUndo(steps.length > 0);
+    setCanUndo(undoStackRef.current.length > 0);
     persistHistory();
   }, [resource, persistHistory]);
 
   const handleUndo = useCallback(async () => {
-    ensureUndoStack();
+    await ensureUndoStack();
 
     if (undoStackRef.current.length === 0) return;
 
@@ -651,7 +662,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     (e: React.PointerEvent) => {
       if (!canUndo && !canRedo && branchesRef.current.length === 0) return;
 
-      ensureUndoStack();
+      void ensureUndoStack();
 
       e.preventDefault();
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -1589,7 +1600,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
             // Build the undo stack on hover, so the press that follows acts
             // on a stack that is already there. The press paths call this
             // too — touch and Ctrl+Z never hover.
-            onPointerEnter={ensureUndoStack}
+            onPointerEnter={() => void ensureUndoStack()}
             disabled={!canUndo && !canRedo && branches.length === 0}
             aria-pressed={previewStrokes !== null}
           >
