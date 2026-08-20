@@ -6,6 +6,60 @@ import {
   smoke,
 } from './test-utils';
 
+const NAME_PROP = 'https://atomicdata.dev/properties/name';
+
+/**
+ * Wait until a resource named `title` actually holds a tag named `tagName`.
+ *
+ * Kanban drag keeps a visual preview until `save()` finishes, so the card can
+ * already sit in the target column while the resource still has the old
+ * status. Reloading in that window is what made the persist test flake.
+ */
+async function waitForCardTag(page: Page, title: string, tagName: string) {
+  await page.waitForFunction(
+    ({ cardTitle, expectedTag, nameProp }) => {
+      const store = window.store;
+
+      if (!store) {
+        return false;
+      }
+
+      const expected = expectedTag.toLowerCase();
+
+      for (const resource of store.resources.values()) {
+        if (resource.get?.(nameProp) !== cardTitle) {
+          continue;
+        }
+
+        for (const [, value] of resource.getEntries?.() ?? []) {
+          if (!Array.isArray(value)) {
+            continue;
+          }
+
+          for (const subject of value) {
+            if (typeof subject !== 'string') {
+              continue;
+            }
+
+            const tagNameValue = store.resources.get(subject)?.get?.(nameProp);
+
+            if (
+              typeof tagNameValue === 'string' &&
+              tagNameValue.toLowerCase() === expected
+            ) {
+              return true;
+            }
+          }
+        }
+      }
+
+      return false;
+    },
+    { cardTitle: title, expectedTag: tagName, nameProp: NAME_PROP },
+    { timeout: 30_000 },
+  );
+}
+
 /**
  * Drag `source` onto `target` in a way that satisfies @dnd-kit's MouseSensor,
  * which only starts a drag after the pointer moves past a 10px activation
@@ -187,6 +241,10 @@ test.describe('kanban', () => {
       await expect(cardIn(doing, 'Login button misaligned')).toBeVisible();
       await expect(cardIn(todo, 'Login button misaligned')).toHaveCount(0);
 
+      // The column move is a preview until `set()` writes the tag. Don't reload
+      // until the resource actually holds Doing — otherwise OPFS still has Todo.
+      await waitForCardTag(page, 'Login button misaligned', 'Doing');
+
       // Survives a reload (the status change was persisted to the resource).
       await reloadReconnected(page);
       await expect(page.getByTestId('kanban-board')).toBeVisible({
@@ -196,7 +254,7 @@ test.describe('kanban', () => {
         column(page, 'doing').getByTestId('kanban-card').filter({
           hasText: 'Login button misaligned',
         }),
-      ).toBeVisible();
+      ).toBeVisible({ timeout: 15_000 });
     },
   );
 
@@ -240,7 +298,9 @@ test.describe('kanban', () => {
     await expect(page.getByTestId('kanban-board')).toBeVisible({
       timeout: 30_000,
     });
-    await expect(cardIn(column(page, 'todo'), 'New title')).toBeVisible();
+    await expect(cardIn(column(page, 'todo'), 'New title')).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
   test('right-clicking a card opens the resource context menu', async ({
