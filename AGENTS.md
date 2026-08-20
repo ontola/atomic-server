@@ -24,6 +24,22 @@ introduce a `main` branch, treat `master` as production, or add a job that
 fast-forwards `main` when a tag is pushed — the tag is the release. Hotfixes
 branch from the tag and merge back to `develop`. See `CONTRIBUTING.md`.
 
+## Formatting (mandatory before every commit)
+
+CI fails fast on format (`cargo fmt --check`, package `oxfmt`). **Never push
+unformatted code.** Before every `git commit` that touches the listed trees:
+
+1. **Rust** (`lib/`, `server/`, `cli/`, `desktop/`, `browser/data-browser` wasm,
+   `flutter/rust/`, etc.): run `cargo fmt --all` from the repo root, then
+   `cargo fmt --all -- --check` and fix until it passes.
+2. **Browser / TS** (`browser/**`): from `browser/`, run `pnpm format` (or
+   `pnpm --filter <pkg> format` for the packages you edited). Prefer
+   `pnpm lint-fix` when you also want oxlint auto-fixes.
+
+Do this even for “docs-only” or “tiny” Rust edits — fmt drift on a few lines
+still reds the Mancave pipeline. Do not rely on a later CI failure as the
+reminder.
+
 ## Quick Dev Setup
 
 Use the Charlotte MCP server and navigate to `http://localhost:6747/app/dev-drive` to instantly create a fresh agent.
