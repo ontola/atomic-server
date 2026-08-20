@@ -39,3 +39,6 @@ scratchpad
 
 .bin/
 .fastembed_cache
+
+CLAUDE.local.md
+AGENTS.local.md
