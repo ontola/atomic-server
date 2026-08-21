@@ -3297,12 +3297,18 @@ export class Resource<C extends OptionalClass = any> {
     // past it — that's why the subject is dirty), so this is exactly the
     // baseline the reconnect drain must export from. `setBaseVersion` keeps
     // only the first offline baseline, so a run of offline edits all rebase
-    // on the same synced version. (Skipped when nothing synced yet — the
-    // drain then sends a first-commit snapshot.)
-    const baseVersion = this.getEncodedSaveCursor();
+    // on the same synced version.
+    //
+    // Skip when the only commit is an unposted genesis. `signChanges` already
+    // advanced the local cursor to that snapshot; treating it as a rewind
+    // baseline makes the post-genesis empty export look like "OPFS not ready"
+    // and the drain retries forever (`offline-create-then-online`).
+    if (!signedGenesis) {
+      const baseVersion = this.getEncodedSaveCursor();
 
-    if (baseVersion) {
-      this.store.outbox.setBaseVersion(this.subject, baseVersion);
+      if (baseVersion) {
+        this.store.outbox.setBaseVersion(this.subject, baseVersion);
+      }
     }
 
     await this.persistToClientDb();

@@ -1287,6 +1287,8 @@ export class Store {
     // `setGenesisCommit` and this drain pass (they're past the
     // genesis's captured version but would be marked "saved" by an
     // overzealous `markLoroSaved()`). Step 2 below picks those up.
+    const postedGenesis = !!entry.signedGenesis;
+
     if (entry.signedGenesis) {
       const genesis = entry.signedGenesis;
       const created = await this.postCommit(genesis, endpoint);
@@ -1445,6 +1447,18 @@ export class Store {
     let exported = resource.exportLoroDeltaForDrain(isFirstCommit, commitToken);
 
     if (!exported) {
+      if (entry.baseVersion && postedGenesis) {
+        // Genesis already captured the doc. An empty follow-up is "caught
+        // up", not "OPFS not ready" — leaving dirty here is what stranded
+        // `offline-create-then-online` (pendingDirtyCount stuck at 1,
+        // hasSignedGenesis false, drain spinning).
+        this.outbox.clearBaseVersion(subject);
+        this.outbox.clearDirty(subject);
+        this.emitSyncStatus();
+
+        return;
+      }
+
       if (entry.baseVersion) {
         console.warn(
           `[Outbox] empty Loro export for ${subject} with offline baseVersion; leaving dirty for retry`,

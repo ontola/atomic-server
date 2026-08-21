@@ -324,6 +324,7 @@ Not covered: leftover Yjs-era DocumentV2 bodies end-to-end (needs a stored `{ ty
 | `createDrive({ personal: true })` uses the derived DID | `browser/lib/src/store.personal-drive.test.ts` |
 | Two stores with the same key mint the same subject | `store.personal-drive.test.ts` |
 | Extra drives are listed on the derived personal drive | `store.personal-drive.test.ts` |
+| Extra drive created offline drains on reconnect (genesis must not set a rewind baseline) | `browser/lib/src/offline-create-drain.test.ts` |
 | Lists from a previous random-DID home are unioned onto the derived drive | `store.personal-drive.test.ts` |
 | `Agent.personalDriveSubject` matches the genesis helper | `agent.test.ts` |
 | `Db::setup` / `ensure_personal_drive` use the derived DID and are idempotent | `lib/src/db.rs::personal_drive_tests` |
