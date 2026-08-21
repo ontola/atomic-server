@@ -157,6 +157,12 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   // this device still has its full pre-existing history available.
   const undoStackRef = useRef<CanvasStroke[][]>([]);
   const redoStackRef = useRef<CanvasStroke[][]>([]);
+  /** Whether the Loro-history bootstrap has already run for this canvas on
+   *  this device. Persisted so it runs at most once — see the mount effect. */
+  const bootstrappedRef = useRef(false);
+  /** In-flight guard: holds a promise while a bootstrap operation is running.
+   *  Waiters join the in-flight work instead of bailing. */
+  const bootstrappingPromiseRef = useRef<Promise<void> | null>(null);
 
   // Discarded branch leaves — versions abandoned by editing after an undo,
   // recoverable from the overlay while holding the undo button. Kept in a
@@ -299,6 +305,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       undo: undoStackRef.current,
       redo: redoStackRef.current,
       branches: branchesRef.current,
+      bootstrapped: bootstrappedRef.current,
     });
   }, [resource.subject]);
 
@@ -316,17 +323,29 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     undoStackRef.current = stored.undo;
     redoStackRef.current = stored.redo;
     branchesRef.current = stored.branches;
+    bootstrappedRef.current = stored.bootstrapped;
+    bootstrappingPromiseRef.current = null;
     setBranches(stored.branches);
     setCanUndo(stored.undo.length > 0);
     setCanRedo(stored.redo.length > 0);
 
     let cancelled = false;
 
-    if (stored.undo.length === 0 && stored.redo.length === 0) {
-      // First open on this device: bootstrap undo steps from the Loro
-      // history. `getLoroHistory()` returns [] until the Loro WASM has
-      // loaded, so await it — reading synchronously here left the undo
-      // button permanently disabled on a cold page load.
+    if (
+      !stored.bootstrapped &&
+      stored.undo.length === 0 &&
+      stored.redo.length === 0
+    ) {
+      // First open on this device: this canvas may still have undoable
+      // history in its Loro oplog. Reconstructing it means materializing
+      // every version, which is far too expensive to spend on opening a
+      // canvas nobody may ever undo — so only ask the cheap question here
+      // ("is there anything older than now?") and leave the reconstruction
+      // to `ensureUndoStack`, on the first undo or scrub.
+      //
+      // Still async: `hasPriorLoroVersions()` reads the oplog, which is
+      // empty until the Loro WASM has loaded. Reading it synchronously left
+      // the undo button permanently disabled on a cold page load.
       (async () => {
         try {
           await enableLoro();
@@ -336,7 +355,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
         if (cancelled) return;
 
-        // Don't clobber steps the user created while the WASM loaded.
+        // Don't override the state of steps made while the WASM loaded.
         if (
           undoStackRef.current.length > 0 ||
           redoStackRef.current.length > 0
@@ -344,19 +363,9 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
           return;
         }
 
-        const versions = resource.getLoroHistory();
-        const current = parseCanvasStrokes(
-          resource.get(canvas.properties.strokeData),
-        );
-        const steps = bootstrapUndoSteps(
-          versions.map(v => v.propvals.get(canvas.properties.strokeData)),
-          current,
-        );
-
-        if (cancelled || steps.length === 0) return;
-
-        undoStackRef.current = steps;
-        setCanUndo(true);
+        if (resource.hasPriorLoroVersions()) {
+          setCanUndo(true);
+        }
       })();
     }
 
@@ -500,7 +509,79 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     [resource],
   );
 
+  /** Reconstruct undo steps from this canvas's Loro history, for a canvas
+   *  whose history was made on another device. Materializing every version
+   *  is expensive, so it happens on first contact with the undo control —
+   *  hovering it, pressing it, or Ctrl+Z — rather than on open. Runs at most
+   *  once per canvas per device; cheap to call on every interaction after.
+   *
+   *  Async: awaits Loro WASM readiness before reading the oplog, so it's
+   *  safe to call from the keyboard shortcut (Ctrl+Z) even on a cold page
+   *  load. */
+  const ensureUndoStack = useCallback(async () => {
+    if (bootstrappedRef.current) return;
+
+    if (bootstrappingPromiseRef.current) {
+      await bootstrappingPromiseRef.current;
+
+      return;
+    }
+
+    const targetSubject = resource.subject;
+    const promise = (async () => {
+      try {
+        await enableLoro();
+
+        if (resource.subject !== targetSubject) {
+          return;
+        }
+
+        const versions = resource.getLoroHistory();
+        const current = parseCanvasStrokes(
+          resource.get(canvas.properties.strokeData),
+        );
+        const steps = bootstrapUndoSteps(
+          versions.map(v => v.propvals.get(canvas.properties.strokeData)),
+          current,
+        );
+
+        // If the user started drawing before this completed, prepend the Loro
+        // history (which is older) to the existing undo stack instead of
+        // discarding their edits. Filter out duplicates: if pushUndoSnapshot
+        // already captured a state that's also in the Loro history, don't add
+        // it twice.
+        if (undoStackRef.current.length > 0) {
+          const filtered = steps.filter(
+            step =>
+              !undoStackRef.current.some(existing =>
+                strokesEqual(existing, step),
+              ),
+          );
+
+          undoStackRef.current = [...filtered, ...undoStackRef.current].slice(
+            -UNDO_STACK_LIMIT,
+          );
+        } else {
+          undoStackRef.current = steps;
+        }
+
+        // Record the attempt even when it found nothing, so a canvas with no
+        // recoverable history doesn't pay for the walk again on the next open.
+        bootstrappedRef.current = true;
+        setCanUndo(undoStackRef.current.length > 0);
+        persistHistory();
+      } finally {
+        bootstrappingPromiseRef.current = null;
+      }
+    })();
+
+    bootstrappingPromiseRef.current = promise;
+    await promise;
+  }, [resource, persistHistory]);
+
   const handleUndo = useCallback(async () => {
+    await ensureUndoStack();
+
     if (undoStackRef.current.length === 0) return;
 
     const target = undoStackRef.current.pop()!;
@@ -515,7 +596,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
     setCanRedo(true);
 
     await applyHistoricalStrokes(target);
-  }, [applyHistoricalStrokes, persistHistory]);
+  }, [applyHistoricalStrokes, persistHistory, ensureUndoStack]);
 
   const handleRedo = useCallback(async () => {
     if (redoStackRef.current.length === 0) return;
@@ -606,11 +687,13 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   );
 
   const onUndoPointerDown = useCallback(
-    (e: React.PointerEvent) => {
+    async (e: React.PointerEvent) => {
       if (!canUndo && !canRedo && branchesRef.current.length === 0) return;
 
       e.preventDefault();
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+
+      await ensureUndoStack();
 
       const timeline = timelineOf(
         { undo: undoStackRef.current, redo: redoStackRef.current },
@@ -637,7 +720,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       setScrubTotal(timeline.length);
       setOverlayMode('held');
     },
-    [canUndo, canRedo],
+    [canUndo, canRedo, ensureUndoStack],
   );
 
   const onUndoPointerMove = useCallback((e: React.PointerEvent) => {
@@ -1542,6 +1625,10 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
             onPointerMove={onUndoPointerMove}
             onPointerUp={onUndoPointerUp}
             onPointerCancel={onUndoPointerCancel}
+            // Build the undo stack on hover, so the press that follows acts
+            // on a stack that is already there. The press paths call this
+            // too — touch and Ctrl+Z never hover.
+            onPointerEnter={() => void ensureUndoStack()}
             disabled={!canUndo && !canRedo && branches.length === 0}
             aria-pressed={previewStrokes !== null}
           >

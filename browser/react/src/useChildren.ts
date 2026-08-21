@@ -70,13 +70,8 @@ export function useChildren(parentSubject: string | undefined): {
           try {
             const resource = await store.getResource(subject);
             const explicit = resource.get(dataBrowser.properties.sortOrder);
-            const createdAt = resource.get(commits.properties.createdAt);
             const key =
-              typeof explicit === 'number'
-                ? explicit
-                : typeof createdAt === 'number'
-                  ? createdAt
-                  : undefined;
+              typeof explicit === 'number' ? explicit : resource.getCreatedAt();
 
             return { subject, key, index };
           } catch {

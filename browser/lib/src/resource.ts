@@ -938,9 +938,13 @@ export class Resource<C extends OptionalClass = any> {
       // list seeded here with plain objects would later confuse the
       // append/replace paths (they expect container elements) and, for a
       // canvas, breaks the first `pushListItem` stroke.
-      const { LoroList: LoroListClass } = LoroLoader.Loro;
-      const list: LoroList = map.setContainer(prop, new LoroListClass());
-      this.writeJsonToLoroList(list, value);
+      //
+      // Drain in-place rather than `setContainer(new LoroList())`. Replacing
+      // the container resets its identity, so a later snapshot import of the
+      // original list (OPFS cold-load, WS GET) merges two concurrent lists
+      // and the array order flashes — table columns (`requires`/`recommends`)
+      // and sidebar `isA` were the visible cases.
+      this.writeLoroListInPlace(map, prop, value);
     } else {
       // Objects: serialize to JSON string.
       map.set(prop, JSON.stringify(value));
@@ -1863,6 +1867,39 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /**
+   * Whether the OpLog holds any state older than the current one — i.e.
+   * whether `getLoroHistory()` would return more than just "now".
+   *
+   * Counts version buckets the same way `getLoroHistory` groups them, but
+   * without materializing any of them: no `checkout()`, no `toJSON()`. Use
+   * this for "is there anything to undo?" and leave the (far more expensive)
+   * materialization until something actually reads a historical state.
+   */
+  public hasPriorLoroVersions(): boolean {
+    const doc = this.getLoroDoc();
+
+    if (!doc) {
+      return false;
+    }
+
+    const buckets = new Set<string>();
+
+    for (const changes of doc.getAllChanges().values()) {
+      for (const change of changes) {
+        buckets.add(change.message ?? '');
+
+        // The newest bucket is the current state, so two distinct buckets is
+        // already enough — no reason to walk the rest of the oplog.
+        if (buckets.size > 1) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
    * Get the history of this resource from its Loro OpLog.
    * Returns an array of Versions, each with materialized property values
    * at that point in time. Uses Loro's `checkout()` for instant time-travel
@@ -1888,10 +1925,17 @@ export class Resource<C extends OptionalClass = any> {
     // Loro merges sequential same-peer ops into a single Change whose
     // `length` is the operation count. Iterating only over Changes therefore
     // collapses every edit between commits into one version. To recover one
-    // version per *commit* we walk every op counter inside each Change and
-    // group by the change message (see the bucketing below). The state
+    // version per *commit* we enumerate every op counter inside each Change
+    // and group by the change message (see the bucketing below). The state
     // captured for each bucket is the **last** op counter that carried its
     // message — the snapshot that was actually saved under that commit.
+    //
+    // Enumerating steps is cheap; *materializing* one is not (a checkout plus
+    // a whole-document toJSON). Since only the last step of each bucket is
+    // ever read, we resolve the winners first and materialize only those.
+    // Materializing every step instead made this O(total ops) — a canvas
+    // stores one op per stroke point, so opening a small drawing spent
+    // seconds doing 6000+ checkouts to produce 10 versions.
     type Step = {
       peer: string;
       counter: number;
@@ -1932,7 +1976,6 @@ export class Resource<C extends OptionalClass = any> {
 
     const lastCommitProp = 'https://atomicdata.dev/properties/lastCommit';
     type GroupedVersion = {
-      bucketKey: string;
       contentKey: string;
       step: Step;
       propvals: Map<string, JSONValue>;
@@ -1945,7 +1988,28 @@ export class Resource<C extends OptionalClass = any> {
      *  state arrived at from different peers (e.g. the same snapshot
      *  reimported during sync). Including containers is what lets body-only
      *  edits register as distinct versions instead of collapsing into the
-     *  previous propvals-identical bucket. */
+     *  previous propvals-identical bucket.
+     *
+     *  Nested object keys are sorted, because `doc.toJSON()` emits map keys in
+     *  an order that depends on how the doc reached that version: jumping
+     *  straight to a version can yield `{color, path, width}` where arriving
+     *  by replaying every op yields `{width, path, color}`. Same state, and a
+     *  plain `JSON.stringify` would call them different — which made dedup
+     *  depend on the checkout path taken to get there. */
+    const canonicalize = (_key: string, value: JSONValue): JSONValue => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return value;
+      }
+
+      const record = value as Record<string, JSONValue>;
+
+      return Object.fromEntries(
+        Object.keys(record)
+          .sort()
+          .map(k => [k, record[k]]),
+      );
+    };
+
     const contentSignature = (
       pv: Map<string, JSONValue>,
       ct: Map<string, JSONValue>,
@@ -1957,10 +2021,44 @@ export class Resource<C extends OptionalClass = any> {
         a.localeCompare(b),
       );
 
-      return JSON.stringify([propEntries, containerEntries]);
+      return JSON.stringify([propEntries, containerEntries], canonicalize);
     };
 
+    // Bucket by the Loro Change message. Two token families exist:
+    // `e-<token>` written by the logical-edit mutation methods
+    // (pushListItem / replaceListItems / removeListItem / undo / redo —
+    // see `commitLoroEdit`), and `c-<ulid>` written by the drain for
+    // ops that were still pending at export time (property `set()`s).
+    // All ops of one edit/commit share a message and form one version.
+    // Ops with no message (the genesis/base change, and body edits made
+    // outside the runtime, e.g. loro-prosemirror) bucket under '' as the
+    // base version — intentionally collapsed so document typing doesn't
+    // spam a version per keystroke batch. The latest step per bucket
+    // wins — the final saved state under that commit.
+    //
+    // (Earlier this bucketed by the `lastCommit` propval, but under
+    // sign-at-drain `lastCommit` is server-assigned and never written into
+    // the Loro doc, so every op collapsed into the '' bucket and history
+    // showed only the latest state.)
+    //
+    // `steps` is in causal order, so the last write per key is the winner.
+    // Bucket order follows first appearance, which is what orders the
+    // resulting versions.
+    const bucketOrder: string[] = [];
+    const winners = new Map<string, Step>();
+
     for (const step of steps) {
+      const bucketKey = step.message ?? '';
+
+      if (!winners.has(bucketKey)) {
+        bucketOrder.push(bucketKey);
+      }
+
+      winners.set(bucketKey, step);
+    }
+
+    for (const bucketKey of bucketOrder) {
+      const step = winners.get(bucketKey)!;
       const frontiers = [
         { peer: step.peer as `${number}`, counter: step.counter },
       ];
@@ -2001,41 +2099,12 @@ export class Resource<C extends OptionalClass = any> {
         }
       }
 
-      // Bucket by the Loro Change message. Two token families exist:
-      // `e-<token>` written by the logical-edit mutation methods
-      // (pushListItem / replaceListItems / removeListItem / undo / redo —
-      // see `commitLoroEdit`), and `c-<ulid>` written by the drain for
-      // ops that were still pending at export time (property `set()`s).
-      // All ops of one edit/commit share a message and form one version.
-      // Ops with no message (the genesis/base change, and body edits made
-      // outside the runtime, e.g. loro-prosemirror) bucket under '' as the
-      // base version — intentionally collapsed so document typing doesn't
-      // spam a version per keystroke batch. The latest entry per bucket
-      // wins — the final saved state under that commit.
-      //
-      // (Earlier this bucketed by the `lastCommit` propval, but under
-      // sign-at-drain `lastCommit` is server-assigned and never written into
-      // the Loro doc, so every op collapsed into the '' bucket and history
-      // showed only the latest state.)
-      const bucketKey = step.message ?? '';
-      const cKey = contentSignature(propvals, containers);
-
-      const existing = grouped.find(g => g.bucketKey === bucketKey);
-
-      if (existing) {
-        existing.step = step;
-        existing.propvals = propvals;
-        existing.containers = containers;
-        existing.contentKey = cKey;
-      } else {
-        grouped.push({
-          bucketKey,
-          contentKey: cKey,
-          step,
-          propvals,
-          containers,
-        });
-      }
+      grouped.push({
+        contentKey: contentSignature(propvals, containers),
+        step,
+        propvals,
+        containers,
+      });
     }
 
     // Drop earlier buckets whose content signature matches a later one — they
@@ -2385,33 +2454,7 @@ export class Resource<C extends OptionalClass = any> {
       return;
     }
 
-    const { LoroList, LoroMap } = LoroLoader.Loro;
-    const existing = map.get(propUrl);
-
-    let list: LoroList;
-
-    if (existing && typeof existing === 'object' && 'delete' in existing) {
-      list = existing as LoroList;
-
-      // Drain in-place rather than `setContainer(new LoroList())`. Replacing
-      // the container resets its identity, so cross-device merges of writes
-      // that target the *old* list would silently drop. Deleting + pushing
-      // keeps the same container ID.
-      if (list.length > 0) {
-        list.delete(0, list.length);
-      }
-    } else {
-      list = map.setContainer(propUrl, new LoroList());
-    }
-
-    for (const item of items) {
-      if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
-        const itemMap = list.pushContainer(new LoroMap());
-        this.writeJsonToLoroMap(itemMap, item as JSONObject);
-      } else {
-        list.push(item);
-      }
-    }
+    this.writeLoroListInPlace(map, propUrl, items);
 
     // Single commit at end → single UndoManager checkpoint for the whole
     // replacement.
@@ -2477,6 +2520,38 @@ export class Resource<C extends OptionalClass = any> {
         this.writeJsonToLoroMap(nested, value as JSONObject);
       }
     }
+  }
+
+  /**
+   * Write `value` into the property's LoroList, keeping the existing
+   * container when one is already there. Minting a new list on every
+   * `set()` made OPFS/WS snapshot imports concurrent with the seed and
+   * shuffled array order on open.
+   */
+  private writeLoroListInPlace(
+    map: {
+      get: (key: string) => unknown;
+      setContainer: (key: string, container: LoroList) => LoroList;
+    },
+    prop: string,
+    value: JSONValue[],
+  ): void {
+    const { LoroList: LoroListClass } = LoroLoader.Loro;
+    const existing = map.get(prop);
+
+    let list: LoroList;
+
+    if (existing && typeof existing === 'object' && 'delete' in existing) {
+      list = existing as LoroList;
+
+      if (list.length > 0) {
+        list.delete(0, list.length);
+      }
+    } else {
+      list = map.setContainer(prop, new LoroListClass());
+    }
+
+    this.writeJsonToLoroList(list, value);
   }
 
   private writeJsonToLoroList(list: LoroList, arr: JSONValue[]): void {
@@ -3402,6 +3477,11 @@ export class Resource<C extends OptionalClass = any> {
     // Drop any seeded/partial state so the incoming snapshot is authoritative.
     if (replace) {
       this.resetLoroState();
+      // Point `getLoroDoc()` at these bytes so it imports the snapshot
+      // instead of seeding a *new* LoroList per array from `#cache`.
+      // Seeding-then-merging was the OPFS cold-load flash: two concurrent
+      // lists for `requires`/`recommends` concatenated or LWW-swapped.
+      this._loroSnapshotBytes = loroUpdate;
     }
 
     // Ensure the LoroDoc exists, then import the update into it.
@@ -3440,6 +3520,17 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     try {
+      // `replace` already pointed `getLoroDoc()` at these bytes, so the
+      // snapshot is in the doc. Importing it a second time merged it with
+      // the JSON-AD heal commit and could drop `isA` (stuck `loading`, no
+      // title after reload) or duplicate array items.
+      if (replace) {
+        this._loroSnapshotBytes = undefined;
+        this.eventManager.emit(ResourceEvents.LocalChange, '', undefined);
+
+        return { complete: true };
+      }
+
       const status = doc.import(loroUpdate);
       this.rebuildCacheFromLoro();
       this.#cacheDirty = false;

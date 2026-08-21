@@ -1,5 +1,59 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
-import { before, createTableFromDialog, reloadReconnected } from './test-utils';
+import {
+  before,
+  createTableFromDialog,
+  reloadReconnected,
+  smoke,
+} from './test-utils';
+
+const NAME_PROP = 'https://atomicdata.dev/properties/name';
+
+/**
+ * Wait until a resource named `title` lists `column`'s tag subject on some
+ * array property (the group-by / Status field).
+ *
+ * Kanban drag keeps a visual preview until `set()` writes that tag. Reloading
+ * off the preview is what made the persist test fail: OPFS still had Todo.
+ * Compare against the column's `data-kanban-column-id` (the tag subject) —
+ * looking up the tag resource's name is racy; it may not be in the store.
+ */
+async function waitForCardStatus(page: Page, title: string, col: Locator) {
+  const tagSubject = await col
+    .getByTestId('kanban-column-body')
+    .getAttribute('data-kanban-column-id');
+
+  if (!tagSubject) {
+    throw new Error('kanban column body has no data-kanban-column-id');
+  }
+
+  await page.waitForFunction(
+    ({ cardTitle, expectedTag, nameProp }) => {
+      const store = window.store;
+
+      if (!store) {
+        return false;
+      }
+
+      for (const resource of store.resources.values()) {
+        if (resource.get?.(nameProp) !== cardTitle) {
+          continue;
+        }
+
+        for (const [, value] of resource.getEntries?.() ?? []) {
+          const subjects = Array.isArray(value) ? value : [];
+
+          if (subjects.includes(expectedTag)) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    },
+    { cardTitle: title, expectedTag: tagSubject, nameProp: NAME_PROP },
+    { timeout: 30_000 },
+  );
+}
 
 /**
  * Drag `source` onto `target` in a way that satisfies @dnd-kit's MouseSensor,
@@ -156,42 +210,48 @@ test.describe('kanban', () => {
     await expect(column(page, 'No status')).not.toBeVisible();
   });
 
-  test('add a card, drag it between columns, and it persists', async ({
-    page,
-  }) => {
-    await createIssueTracker(page, 'Bugs');
+  test(
+    'add a card, drag it between columns, and it persists',
+    smoke,
+    async ({ page }) => {
+      await createIssueTracker(page, 'Bugs');
 
-    const todo = column(page, 'todo');
-    const doing = column(page, 'doing');
+      const todo = column(page, 'todo');
+      const doing = column(page, 'doing');
 
-    await addCard(page, todo, 'Login button misaligned');
+      await addCard(page, todo, 'Login button misaligned');
 
-    // Starts in todo, not doing.
-    await expect(cardIn(todo, 'Login button misaligned')).toBeVisible();
-    await expect(cardIn(doing, 'Login button misaligned')).toHaveCount(0);
+      // Starts in todo, not doing.
+      await expect(cardIn(todo, 'Login button misaligned')).toBeVisible();
+      await expect(cardIn(doing, 'Login button misaligned')).toHaveCount(0);
 
-    // Drag from todo onto the doing column's card list.
-    await dndDrag(
-      page,
-      cardIn(todo, 'Login button misaligned'),
-      doing.getByTestId('kanban-column-body'),
-    );
+      // Drag from todo onto the doing column's card list.
+      await dndDrag(
+        page,
+        cardIn(todo, 'Login button misaligned'),
+        doing.getByTestId('kanban-column-body'),
+      );
 
-    // Now in doing, gone from todo.
-    await expect(cardIn(doing, 'Login button misaligned')).toBeVisible();
-    await expect(cardIn(todo, 'Login button misaligned')).toHaveCount(0);
+      // Now in doing, gone from todo.
+      await expect(cardIn(doing, 'Login button misaligned')).toBeVisible();
+      await expect(cardIn(todo, 'Login button misaligned')).toHaveCount(0);
 
-    // Survives a reload (the status change was persisted to the resource).
-    await reloadReconnected(page);
-    await expect(page.getByTestId('kanban-board')).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(
-      column(page, 'doing').getByTestId('kanban-card').filter({
-        hasText: 'Login button misaligned',
-      }),
-    ).toBeVisible();
-  });
+      // The column move is a preview until `set()` writes the tag. Don't reload
+      // until the resource actually holds Doing — otherwise OPFS still has Todo.
+      await waitForCardStatus(page, 'Login button misaligned', doing);
+
+      // Survives a reload (the status change was persisted to the resource).
+      await reloadReconnected(page);
+      await expect(page.getByTestId('kanban-board')).toBeVisible({
+        timeout: 30_000,
+      });
+      await expect(
+        column(page, 'doing').getByTestId('kanban-card').filter({
+          hasText: 'Login button misaligned',
+        }),
+      ).toBeVisible({ timeout: 15_000 });
+    },
+  );
 
   test('clicking a card opens it in the expanded modal (not full-screen)', async ({
     page,
@@ -233,7 +293,9 @@ test.describe('kanban', () => {
     await expect(page.getByTestId('kanban-board')).toBeVisible({
       timeout: 30_000,
     });
-    await expect(cardIn(column(page, 'todo'), 'New title')).toBeVisible();
+    await expect(cardIn(column(page, 'todo'), 'New title')).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
   test('right-clicking a card opens the resource context menu', async ({

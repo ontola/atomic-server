@@ -18,7 +18,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { before, FRONTEND_URL } from './test-utils';
+import { before, FRONTEND_URL, waitForSynced } from './test-utils';
 
 test.describe('offline create → online sync → disable localDB', () => {
   test.beforeEach(before);
@@ -89,18 +89,17 @@ test.describe('offline create → online sync → disable localDB', () => {
     expect(pendingBeforeReconnect).toBeGreaterThan(0);
 
     // 4. Reconnect and wait for the dirty sync to drain.
+    // Four genesis commits after a WS handshake routinely exceeds 15s under
+    // dagger load; `waitForSynced` is 30s and dumps the outbox on timeout.
     await page.evaluate(() => {
       window.store.reconnect();
     });
     await page.waitForFunction(
-      () => {
-        const s = window.store?.getSyncStatus();
-
-        return s.serverConnected === true && s.pendingDirtyCount === 0;
-      },
+      () => window.store?.getSyncStatus().serverConnected === true,
       undefined,
-      { timeout: 15000 },
+      { timeout: 15_000 },
     );
+    await waitForSynced(page);
     console.log('[setup] dirty queue drained');
 
     // 5. Verify the server actually has the offline-created drive.

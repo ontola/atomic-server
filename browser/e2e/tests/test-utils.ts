@@ -5,6 +5,9 @@ import {
   registerPerfPage,
 } from './perf-attach';
 
+/** Playwright tag for the light CI gate (`pnpm test-e2e:light` / `--grep @smoke`). */
+export const smoke = { tag: '@smoke' } as const;
+
 export const PROPERTIES = {
   isA: 'https://atomicdata.dev/properties/isA',
   set: 'https://atomicdata.dev/properties/set',
@@ -1160,8 +1163,15 @@ export async function createTableFromDialog(
  *
  * Callers still need a budget of their own on the view marker: being
  * reconnected is when the fetch can start, not when it has finished.
+ *
+ * Before reloading, wait until the outbox is empty and OPFS has flushed.
+ * Kanban/calendar persist tests previously reloaded off a UI preview while
+ * `save()` was still in flight, so the post-reload assertion saw the old
+ * grouping. `waitForSynced` is a no-op when nothing is dirty.
  */
 export async function reloadReconnected(page: Page) {
+  await waitForSynced(page);
+  await waitForClientDbFlush(page);
   await page.reload({ waitUntil: 'domcontentloaded' });
   await waitForServerConnected(page);
 }

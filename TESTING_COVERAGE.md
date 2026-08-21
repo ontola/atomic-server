@@ -26,6 +26,23 @@ and absent in another:
 
 A flow is only genuinely safe when all three are covered.
 
+### Playwright light vs full
+
+Only the browser suite splits. Lint, Rust, vitest, JS integration, and
+Flutter run on every CI job.
+
+| Trigger | Playwright |
+|---|---|
+| Feature-branch push | **light** (`@smoke`), required |
+| `develop` push | **full**, required (staging) |
+| stable `v*` tag | **full**, required (production) |
+| `workflow_dispatch` `e2e_mode=full`, `[full-e2e]` in the commit, or PR label `full-e2e` | **full** |
+
+Tag a new journey `@smoke` (`smoke` from `browser/e2e/tests/test-utils.ts`)
+only if a failure means the first-hour demo is dead. Extra operators,
+templates, and offline variants stay in the full suite. Policy:
+[`planning/e2e-light-heavy.md`](./planning/e2e-light-heavy.md).
+
 ---
 
 ## Where the suites live
@@ -35,7 +52,9 @@ A flow is only genuinely safe when all three are covered.
 | `atomic_lib` unit + integration | `cargo nextest run -p atomic_lib --features db-redb,iroh,ws` | `rustTest` |
 | Server integration | `cargo test -p atomic-server --test it <module>` | `rustTest` |
 | Browser unit (vitest) | `cd browser && pnpm run -r test` | `jsTest` |
-| Browser e2e (playwright) | `cd browser/e2e && pnpm run test-e2e` | `endToEnd` |
+| Browser integration (vitest + real server) | `cd browser/lib && pnpm run test:integration` | `jsTestIntegration` |
+| Browser e2e light (`@smoke`) | `cd browser && pnpm run test-e2e:light` | `endToEnd` on feature branches |
+| Browser e2e full | `cd browser && pnpm run test-e2e` | `endToEnd` on `develop` and `v*` tags |
 | Flutter Dart | `cd flutter && flutter test` | `flutterTest` |
 | Flutter Rust bridge | `cargo test --manifest-path flutter/rust/Cargo.toml` | `flutterTest` |
 
@@ -260,6 +279,19 @@ Recorded because each one cost real debugging time.
   store. Guard: `collection-empty-trust.test.ts`, plus the dashboard e2e
   that waits for `946.5` / `4` rather than the placeholder.
 
+- **Opening a filled table (and the sidebar) flashed as if order changed.**
+  Two independent paints: (1) WASM `parent=` queries are unsorted;
+  hydrating each member notifies `ResourceUpdated`, and `useCollection`
+  optimistic-added them in arrival order before client-side sort wrote
+  the page. Guard: `collection-page-assemble.test.ts`. (2) The sidebar
+  fetched children while `isA` was still empty, so every table row
+  appeared in the tree until the class arrived and hid them. The
+  ResourceSideBar now treats unknown class as hide-children. OPFS
+  cold-load could also shuffle array props (`requires`/`recommends`) by
+  seeding a new LoroList from JSON-AD then merging the snapshot;
+  `importLoroUpdate(snapshot, true)` replaces instead. Guard:
+  `resource.test.ts` ("importing a snapshot over a cache-seeded doc").
+
 ### Algorithms mirrored in two languages
 
 `lib/src/sync/rbsr.rs` ↔ `browser/lib/src/rbsr.ts` are line-for-line ports and
@@ -271,6 +303,15 @@ is only kept in step by mirroring the tests, so do that deliberately.
 `lib/src/genesis.rs` ↔ `browser/lib/src/genesis.ts` also share a personal-drive
 derivation (`personal_drive_subject` / `personalDriveSubject`). The cross-lang
 vector (`personal_drive_cross_lang_vector`) pins the nonce, signature, and DID.
+
+## Documents
+
+| Flow | Layer | Where |
+|---|---|---|
+| V1 element list + paragraph markdown (+ resource embed) → TipTap JSON; leftover Yjs `XmlFragment` walker; `{ type: 'ydoc' }` detection without loading `yjs` | glue | `browser/data-browser/src/views/Document/documentMigrationUtils.test.ts` |
+| Opening a writable v1 document migrates it silently into the Loro editor (no "Update Document" button) | flow | `browser/e2e/tests/documents.spec.ts` |
+
+Not covered: leftover Yjs-era DocumentV2 bodies end-to-end (needs a stored `{ type: 'ydoc' }` fixture); read-only v1 documents stay on the element list and have no e2e.
 
 ## Personal drive identity
 

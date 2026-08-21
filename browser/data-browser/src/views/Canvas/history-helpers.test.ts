@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { CanvasStroke } from '@tomic/lib';
 import {
   archiveBranch,
   BRANCH_LIMIT,
   bootstrapUndoSteps,
+  loadCanvasHistory,
+  saveCanvasHistory,
   scrubIndexFor,
   SCRUB_PIXELS_PER_HISTORY,
   stacksAt,
@@ -152,5 +154,66 @@ describe('strokesEqual', () => {
     expect(strokesEqual(snap(1), snap(1))).toBe(true);
     expect(strokesEqual(snap(1), snap(2))).toBe(false);
     expect(strokesEqual([], [])).toBe(true);
+  });
+});
+
+// These tests run in node, which has no localStorage. An in-memory stand-in
+// keeps them dependency-free; the helpers only ever use these four.
+const storage = new Map<string, string>();
+globalThis.localStorage = {
+  getItem: (k: string) => storage.get(k) ?? null,
+  setItem: (k: string, v: string) => void storage.set(k, v),
+  removeItem: (k: string) => void storage.delete(k),
+  clear: () => storage.clear(),
+} as unknown as Storage;
+
+describe('canvas history persistence', () => {
+  const subject = 'https://example.com/canvas-persist';
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  /**
+   * Reconstructing undo steps from the Loro history is expensive, and it
+   * legitimately returns nothing for a canvas with no prior state. Without a
+   * recorded attempt, "no steps" is indistinguishable from "never ran", so
+   * every open paid for the walk again.
+   */
+  it('remembers that the bootstrap ran even when it found no steps', () => {
+    saveCanvasHistory(subject, {
+      undo: [],
+      redo: [],
+      branches: [],
+      bootstrapped: true,
+    });
+
+    const stored = loadCanvasHistory(subject);
+
+    expect(stored.bootstrapped).toBe(true);
+    expect(stored.undo).toEqual([]);
+  });
+
+  it('treats a canvas never seen on this device as un-bootstrapped', () => {
+    expect(loadCanvasHistory('https://example.com/canvas-unseen')).toEqual({
+      undo: [],
+      redo: [],
+      branches: [],
+      bootstrapped: false,
+    });
+  });
+
+  it('treats history saved before the flag existed as un-bootstrapped', () => {
+    // Entries written by an older build carry undo state but no flag; they
+    // must not be read as "already bootstrapped".
+    localStorage.setItem(
+      `canvas-undo:${subject}`,
+      JSON.stringify({ undo: [snap(1)], redo: [], branches: [] }),
+    );
+
+    const stored = loadCanvasHistory(subject);
+
+    expect(stored.bootstrapped).toBe(false);
+    expect(stored.undo).toEqual([snap(1)]);
   });
 });

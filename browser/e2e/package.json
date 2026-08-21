@@ -22,6 +22,7 @@
     "test-server": "./scripts/e2e-server.sh",
     "test-server-fresh": "./scripts/e2e-server.sh --fresh",
     "test-e2e": "playwright test --config=./playwright.config.ts",
+    "test-e2e:light": "playwright test --config=./playwright.config.ts --grep @smoke",
     "test-debug": "PWDEBUG=1 playwright test",
     "test-update": "playwright test --update-snapshots",
     "test-new": "playwright codegen http://localhost:6747",

@@ -6,6 +6,7 @@ import {
   getCurrentSubject,
   makeDrivePublic,
   openNewSubjectWindow,
+  openSubject,
   timestamp,
   before,
   setTitle,
@@ -36,6 +37,7 @@ test.describe('documents', async () => {
   // exceeds the loro broadcast budget under dagger CPU contention.
   // Investigate: bump the assertion to `waitForFunction` polling on the
   // store's loro-doc state instead of DOM text.
+  // Full suite only — do not tag `@smoke`. Folder create is the light cover.
   test('create document, edit, page title, websockets', async ({
     page,
     browser,
@@ -231,5 +233,93 @@ test.describe('documents', async () => {
     // persisted into the doc), and it carries the peer's color via inline style.
     await expect(remoteCursor).toHaveCount(1);
     await expect(remoteCursor).toHaveAttribute('style', /border-color/);
+  });
+
+  test('opens a v1 document and migrates it silently into the editor', async ({
+    page,
+  }) => {
+    test.slow();
+
+    await page.waitForFunction(
+      () =>
+        window.store?.getClientDb()?.isReady === true &&
+        window.store?.getSyncStatus().serverConnected === true,
+      undefined,
+      { timeout: 30_000 },
+    );
+
+    const unique = `Migrated paragraph ${timestamp()}`;
+    const subject = await page.evaluate(async text => {
+      const store = window.store;
+      const drive = store.getDrive();
+
+      if (!drive) {
+        throw new Error('no drive');
+      }
+
+      const doc = await store.newResource({
+        parent: drive,
+        isA: 'https://atomicdata.dev/classes/Document',
+        propVals: {
+          'https://atomicdata.dev/properties/name': 'V1 Legacy Document',
+        },
+      });
+      await doc.save();
+
+      const paragraph = await store.newResource({
+        parent: doc.subject,
+        isA: 'https://atomicdata.dev/classes/elements/Paragraph',
+        propVals: {
+          'https://atomicdata.dev/properties/description': text,
+        },
+      });
+      await paragraph.save();
+
+      await doc.set('https://atomicdata.dev/properties/documents/elements', [
+        paragraph.subject,
+      ]);
+      await doc.save();
+
+      return doc.subject;
+    }, unique);
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () => window.store?.getSyncStatus().pendingDirtyCount === 0,
+          ),
+        { timeout: 30_000 },
+      )
+      .toBe(true);
+
+    await openSubject(page, subject);
+
+    await expect(
+      page.getByRole('button', { name: 'Update Document' }),
+    ).toHaveCount(0);
+
+    await expect(page.getByLabel('Rich Text Editor')).toBeVisible({
+      timeout: 30_000,
+    });
+
+    await expect(async () => {
+      expect(await editorPlainText(page)).toContain(unique);
+    }).toPass({ timeout: 20_000 });
+
+    await expect
+      .poll(
+        () =>
+          page.evaluate(s => {
+            const resource = window.store.resources.get(s);
+            const isA = resource?.get(
+              'https://atomicdata.dev/properties/isA',
+            ) as string[] | undefined;
+
+            return Array.isArray(isA) ? isA[0] : undefined;
+          }, subject),
+        { timeout: 15_000 },
+      )
+      .toBe('https://atomicdata.dev/classes/DocumentV2');
   });
 });

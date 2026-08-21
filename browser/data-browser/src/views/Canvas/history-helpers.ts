@@ -44,6 +44,13 @@ export type DiscardedBranch = {
 
 export type CanvasHistoryState = HistoryStacks & {
   branches: DiscardedBranch[];
+  /**
+   * Whether undo steps have already been reconstructed from the Loro
+   * history for this canvas on this device. That reconstruction is
+   * expensive, and it legitimately yields zero steps for a canvas with no
+   * prior state — without this flag those canvases re-run it on every open.
+   */
+  bootstrapped: boolean;
 };
 
 const historyStorageKey = (subject: string) => `canvas-undo:${subject}`;
@@ -52,7 +59,7 @@ export function loadCanvasHistory(subject: string): CanvasHistoryState {
   try {
     const raw = localStorage.getItem(historyStorageKey(subject));
 
-    if (!raw) return { undo: [], redo: [], branches: [] };
+    if (!raw) return { undo: [], redo: [], branches: [], bootstrapped: false };
 
     const parsed = JSON.parse(raw) as Partial<CanvasHistoryState>;
 
@@ -64,9 +71,10 @@ export function loadCanvasHistory(subject: string): CanvasHistoryState {
             b => b && typeof b.id === 'string' && Array.isArray(b.strokes),
           )
         : [],
+      bootstrapped: parsed.bootstrapped === true,
     };
   } catch {
-    return { undo: [], redo: [], branches: [] };
+    return { undo: [], redo: [], branches: [], bootstrapped: false };
   }
 }
 

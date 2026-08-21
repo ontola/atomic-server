@@ -1,8 +1,10 @@
 import { isNumber } from './datatypes.js';
 import { enableLoro } from './loro-loader.js';
 import { Collections, collections } from './ontologies/collections.js';
-import { Resource } from './resource.js';
+import { Resource, normalizeLoroChangeTimestampMs } from './resource.js';
 import { Store, StoreEvents } from './store.js';
+import { commits } from './ontologies/commits.js';
+import { dataBrowser } from './ontologies/dataBrowser.js';
 
 /**
  * Strips `did:ad:commit:` subjects from a member list. Commit resources don't
@@ -272,6 +274,15 @@ export class Collection {
   private _aggregates: AggregateOutcome[] = [];
 
   private _waitForReady: Promise<void>;
+  /**
+   * True while `fetchPage` is hydrating members into the store. Query
+   * hydration fires `ResourceUpdated` for every row; `useCollection`
+   * would otherwise optimistic-add them in arrival (unsorted) order
+   * before `setPage` lands the sorted list — the table/sidebar flash
+   * on open. Skip those adds; the in-flight fetch is about to write
+   * the ordered page.
+   */
+  private _assemblingPage = false;
 
   public constructor(
     store: Store,
@@ -588,6 +599,14 @@ export class Collection {
       // rows. Once the resource is signed (and eventually pushed), it
       // fires another `ResourceUpdated` with `new=false` and lands here.
       if (resource.new) return 'unchanged';
+
+      // Hydrating a local-DB page notifies `ResourceUpdated` for every
+      // member before `setPage` writes the sorted list. Optimistic-adding
+      // those in arrival order is the table/sidebar flash on open. The
+      // in-flight fetch is about to land the ordered page; skip the add.
+      // Keep this *off* during `queryLocalDb()` itself so a resource the
+      // user creates while the query is in flight still appears.
+      if (this._assemblingPage) return 'unchanged';
 
       // No page loaded yet — either the constructor's initial
       // `fetchPage(0)` hasn't completed, or `refresh()`'s active loop
@@ -942,6 +961,30 @@ export class Collection {
       return 'no-db';
     }
 
+    // Hydrate + sort + setPage must not optimistic-add via ResourceUpdated.
+    // Set the flag only around this slice — not the `queryLocalDb` wait
+    // above — so a locally created member during the query still lands.
+    this._assemblingPage = true;
+
+    try {
+      return this.finishLocalDbPage(page, result, drive);
+    } finally {
+      this._assemblingPage = false;
+    }
+  }
+
+  /** Hydrate query payloads, sort, and write the page. Caller holds
+   *  `_assemblingPage`. */
+  private finishLocalDbPage(
+    page: number,
+    result: {
+      subjects: string[];
+      resources?: string[];
+      count: number;
+      aggregates?: AggregateOutcome[];
+    },
+    drive: string | undefined,
+  ): 'ok' | 'no-db' {
     if (result.count === 0) {
       // Empty local result is normally authoritative — but it's ambiguous
       // until THIS drive has been synced (the index may be mid-populate, or
@@ -1011,17 +1054,21 @@ export class Collection {
       // resources interleave with untouched ones. Client resources usually
       // lack a materialized `createdAt` propval, so read the genesis Loro
       // change directly.
-      const isSortOrder =
-        sortBy === 'https://atomicdata.dev/properties/sortOrder';
+      const isSortOrder = sortBy === dataBrowser.properties.sortOrder;
+      const isCreatedAt = sortBy === commits.properties.createdAt;
 
       for (const s of result.subjects) {
         const resource = this.store.resources.get(s);
         let key = resource?.get(sortBy);
 
-        if (key === undefined && isSortOrder && resource) {
-          key =
-            resource.get('https://atomicdata.dev/properties/createdAt') ??
-            resource.getCreatedAt();
+        if (typeof key === 'number' && (isSortOrder || isCreatedAt)) {
+          key = isCreatedAt ? normalizeLoroChangeTimestampMs(key) : key;
+        } else if (
+          key === undefined &&
+          resource &&
+          (isSortOrder || isCreatedAt)
+        ) {
+          key = resource.getCreatedAt();
         }
 
         sortKeys.set(s, key);

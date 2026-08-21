@@ -1500,17 +1500,6 @@ export class Store {
 
     if (caughtUp) {
       resource.markSynced();
-    }
-
-    this.notifyResourceSaved(resource);
-    await this.maybePushBlobForResource(resource).catch(() => undefined);
-
-    // Only clear the outbox dirty bit if we caught up. If the user
-    // typed more characters mid-round-trip, the Loro subscriber already
-    // called `markDirty` (synchronously) and our `clearDirty` would
-    // erase that entry — so leave it dirty and nudge another drain.
-
-    if (caughtUp) {
       this.outbox.clearDirty(subject);
 
       // Persist the now-synced state to the local ClientDb (OPFS). The
@@ -1521,10 +1510,17 @@ export class Store {
       // edit reaches the server but the local cache keeps the pre-edit
       // snapshot, and a reload reads the stale state (the WS commit echo is
       // deduped by commitId, so it won't re-persist it either).
+      //
+      // Queue the put BEFORE `ResourceSaved` so listeners that re-query
+      // (table totals) post onto the same worker after this write, not
+      // against the pre-edit index.
       this.addResource(resource, { skipCommitCompare: true });
     } else {
       this.outbox.markDirty(subject);
     }
+
+    this.notifyResourceSaved(resource);
+    await this.maybePushBlobForResource(resource).catch(() => undefined);
 
     this.emitSyncStatus();
   };
@@ -2979,13 +2975,18 @@ export class Store {
         if (hasLocalData && hasSnapshot) {
           const resource = this.resources.get(subject);
 
-          if (resource) {
+          if (resource && !resource.hasUnsavedChanges()) {
             // Capture `complete`: the snapshot may be an unapplyable delta
             // (missing base ops, buffered by Loro as pending → nothing
             // materialises). The WS path (`applyIncoming`) already acts on this
             // signal; the OPFS path used to drop it on the floor.
-            ({ complete: importComplete } =
-              resource.importLoroUpdate(snapshot));
+            // OPFS snapshots are authoritative full state — replace, don't
+            // merge into the JSON-AD-seeded doc. Merging minted a second
+            // LoroList per array and flashed table/sidebar order on open.
+            ({ complete: importComplete } = resource.importLoroUpdate(
+              snapshot,
+              true,
+            ));
           }
         }
 

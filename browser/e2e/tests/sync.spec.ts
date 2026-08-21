@@ -10,49 +10,54 @@ import {
   waitForSearchIndex,
   waitForServerConnected,
   waitForSynced,
+  smoke,
 } from './test-utils';
 
 test.describe('sync', () => {
   test.beforeEach(before);
 
-  test('create resource online, edit title, verify it persists across reload', async ({
-    page,
-  }) => {
-    // 1. Create a document in the drive (online)
-    await page
-      .getByTestId('sidebar')
-      .getByRole('button', { name: 'New Document' })
-      .click();
+  test(
+    'create resource online, edit title, verify it persists across reload',
+    smoke,
+    async ({ page }) => {
+      // 1. Create a document in the drive (online)
+      await page
+        .getByTestId('sidebar')
+        .getByRole('button', { name: 'New Document' })
+        .click();
 
-    await expect(editableTitle(page)).toBeVisible({ timeout: 10000 });
+      await expect(editableTitle(page)).toBeVisible({ timeout: 10000 });
 
-    // Set title
-    await editableTitle(page).click();
-    await expect(editableTitle(page)).toHaveRole('textbox');
-    await editableTitle(page).fill('Sync Test Doc');
-    await page.keyboard.press('Escape');
+      // Set title
+      await editableTitle(page).click();
+      await expect(editableTitle(page)).toHaveRole('textbox');
+      await editableTitle(page).fill('Sync Test Doc');
+      await page.keyboard.press('Escape');
 
-    // Wait for the title to be committed to the server
-    await expect(
-      page.getByTestId('sidebar').getByText('Sync Test Doc'),
-    ).toBeVisible({ timeout: 10000 });
+      // Wait for the title to be committed to the server
+      await expect(
+        page.getByTestId('sidebar').getByText('Sync Test Doc'),
+      ).toBeVisible({ timeout: 10000 });
 
-    // Wait for server to process the commit and rebuild index
-    await page.waitForFunction(
-      () => window.store?.getSyncStatus().pendingDirtyCount === 0,
-      undefined,
-      { timeout: 10000 },
-    );
+      // Wait for server to process the commit and rebuild index
+      await page.waitForFunction(
+        () => window.store?.getSyncStatus().pendingDirtyCount === 0,
+        undefined,
+        { timeout: 10000 },
+      );
 
-    // 2. Reload and verify persistence
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(currentDriveTitle(page)).toBeVisible({ timeout: 15000 });
+      // 2. Reload and verify persistence
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await expect(currentDriveTitle(page)).toBeVisible({ timeout: 15000 });
 
-    // The document should be accessible (not unauthorized)
-    await expect(page.getByTestId('sidebar').locator('a').first()).toBeVisible({
-      timeout: 15000,
-    });
-  });
+      // The document should be accessible (not unauthorized)
+      await expect(
+        page.getByTestId('sidebar').locator('a').first(),
+      ).toBeVisible({
+        timeout: 15000,
+      });
+    },
+  );
 
   test('edits made offline persist across reload', async ({ page }) => {
     test.slow();

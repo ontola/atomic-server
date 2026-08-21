@@ -280,6 +280,88 @@ describe('resource.ts', () => {
   });
 
   /**
+   * Opening a filled table (and the sidebar tree) flashed as if row/column
+   * order changed. OPFS cold-load hydrates JSON-AD first — which seeds a
+   * *new* LoroList per array property — then merges the stored snapshot,
+   * whose lists have different container IDs. Concurrent LoroLists concatenate
+   * or LWW-swap, so `requires`/`recommends` (table columns) and `isA` shuffle
+   * for a frame. Merging an authoritative snapshot must keep the original
+   * array order, not interleave the seed.
+   */
+  it('importing a snapshot over a cache-seeded doc keeps resource-array order', async ({
+    expect,
+  }) => {
+    const recommends = 'https://atomicdata.dev/properties/recommends';
+    const order = [
+      'https://example.com/col/name',
+      'https://example.com/col/date',
+      'https://example.com/col/number',
+      'https://example.com/col/checkbox',
+      'https://example.com/col/select',
+    ];
+
+    const original = new Resource('https://example.com/table-class');
+    await original.set(recommends, order, false);
+    const snapshot = original.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    // OPFS JSON-AD is stored without the binary snapshot (`includeBinary:
+    // false`), so hydration seeds Loro from the flattened array.
+    const jsonAd = original.toObject({ includeBinary: false })!;
+    const loaded = new Resource('https://example.com/table-class');
+    loaded.applyHydratedValues(
+      Object.entries(jsonAd).filter(([key]) => key !== '@id') as [
+        string,
+        JSONValue,
+      ][],
+    );
+    loaded.getLoroDoc();
+    expect(loaded.get(recommends)).toEqual(order);
+
+    loaded.importLoroUpdate(snapshot);
+
+    expect(loaded.get(recommends)).toEqual(order);
+  });
+
+  it('replace-import of an OPFS snapshot does not drop isA or duplicate arrays', async ({
+    expect,
+  }) => {
+    const recommends = 'https://atomicdata.dev/properties/recommends';
+    const name = 'https://atomicdata.dev/properties/name';
+    const isA = core.properties.isA;
+    const tableClass = 'https://atomicdata.dev/classes/Table';
+    const order = [
+      'https://example.com/col/name',
+      'https://example.com/col/date',
+      'https://example.com/col/number',
+    ];
+
+    const original = new Resource('https://example.com/table-replace');
+    await original.set(isA, [tableClass], false);
+    await original.set(name, 'TypedRefresh', false);
+    await original.set(recommends, order, false);
+    const snapshot = original.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    const jsonAd = original.toObject({ includeBinary: false })!;
+    const loaded = new Resource('https://example.com/table-replace');
+    loaded.applyHydratedValues(
+      Object.entries(jsonAd).filter(([key]) => key !== '@id') as [
+        string,
+        JSONValue,
+      ][],
+    );
+    loaded.getLoroDoc();
+    loaded.loading = true;
+
+    const { complete } = loaded.importLoroUpdate(snapshot, true);
+
+    expect(complete).toBe(true);
+    expect(loaded.loading).toBe(false);
+    expect(loaded.get(isA)).toEqual([tableClass]);
+    expect(loaded.get(name)).toBe('TypedRefresh');
+    expect(loaded.get(recommends)).toEqual(order);
+  });
+
+  /**
    * Regression: drawing onto a canvas whose strokes were seeded in bulk via
    * `set()` (template/demo content) threw "pushContainer is not a function"
    * and the new stroke was dropped. `set()` must store an array of objects as
@@ -612,6 +694,173 @@ describe('getLoroHistory', () => {
     expect(history[history.length - 1].propvals.get(strokeData)).toEqual(
       r.get(strokeData),
     );
+  });
+
+  /**
+   * The undo control needs to know whether anything older than "now" exists,
+   * and that question was answered by materializing the entire history —
+   * seconds of work on canvas open for a boolean nobody may ever act on.
+   * The probe reads only change metadata.
+   */
+  describe('hasPriorLoroVersions', () => {
+    it('is false for a resource whose only state is its current one', async ({
+      expect,
+    }) => {
+      const r = new Resource('https://example.com/prior-none');
+      await r.set(name, 'Canvas', false);
+      r.getLoroDoc()!.commit();
+
+      expect(r.hasPriorLoroVersions()).toBe(false);
+    });
+
+    it('is true once an edit leaves an older state behind', async ({
+      expect,
+    }) => {
+      const r = new Resource('https://example.com/prior-some');
+      await r.set(name, 'Canvas', false);
+      r.getLoroDoc()!.commit();
+      r.pushListItem(strokeData, { color: 1, width: 2, path: [[0, 0]] });
+
+      expect(r.hasPriorLoroVersions()).toBe(true);
+    });
+
+    it('agrees with getLoroHistory without materializing anything', async ({
+      expect,
+    }) => {
+      const r = new Resource('https://example.com/prior-agrees');
+      await r.set(name, 'Canvas', false);
+      r.getLoroDoc()!.commit();
+      r.pushListItem(strokeData, { color: 1, width: 2, path: [[0, 0]] });
+      r.pushListItem(strokeData, { color: 2, width: 2, path: [[1, 1]] });
+
+      const doc = r.getLoroDoc()!;
+      const fork = doc.fork.bind(doc);
+      let forked = 0;
+      vi.spyOn(doc, 'fork').mockImplementation(() => {
+        forked++;
+
+        return fork();
+      });
+
+      expect(r.hasPriorLoroVersions()).toBe(r.getLoroHistory().length > 1);
+      // getLoroHistory forks to time-travel; the probe must not.
+      expect(forked).toBe(1);
+    });
+
+    it('is false before the Loro WASM has produced a doc', ({ expect }) => {
+      const r = new Resource('https://example.com/prior-no-doc');
+      vi.spyOn(r, 'getLoroDoc').mockReturnValue(undefined);
+
+      expect(r.hasPriorLoroVersions()).toBe(false);
+    });
+  });
+
+  /**
+   * Regression: history materialized *every* op counter — a checkout plus a
+   * whole-document `toJSON()` each — then kept only the last one per bucket.
+   * A canvas stores one op per stroke point, so opening a drawing with a few
+   * thousand points spent seconds rebuilding states nothing ever read. Only
+   * the last step of a bucket is observable, so only those get materialized.
+   */
+  it('materializes one state per version, not one per op', async ({
+    expect,
+  }) => {
+    const r = new Resource('https://example.com/history-op-count');
+    await r.set(name, 'Canvas', false);
+    r.getLoroDoc()!.commit();
+
+    // One edit carrying many ops — a single stroke with a long path is one
+    // logical version but hundreds of Loro ops.
+    const longPath = Array.from(
+      { length: 400 },
+      (_, i) => [i, i] as [number, number],
+    );
+    r.pushListItem(strokeData, { color: 1, width: 2, path: longPath });
+    r.pushListItem(strokeData, { color: 2, width: 2, path: longPath });
+
+    let opCount = 0;
+
+    for (const changes of r.getLoroDoc()!.getAllChanges().values()) {
+      for (const change of changes) {
+        opCount += change.length;
+      }
+    }
+
+    const doc = r.getLoroDoc()!;
+    const fork = doc.fork.bind(doc);
+    let checkouts = 0;
+    vi.spyOn(doc, 'fork').mockImplementation(() => {
+      const forked = fork();
+      const checkout = forked.checkout.bind(forked);
+      vi.spyOn(forked, 'checkout').mockImplementation(frontiers => {
+        checkouts++;
+
+        return checkout(frontiers);
+      });
+
+      return forked;
+    });
+
+    const history = r.getLoroHistory();
+
+    expect(opCount).toBeGreaterThan(500);
+    expect(history.map(strokeCountOf)).toEqual([0, 1, 2]);
+    // One checkout per message bucket, independent of how many ops each
+    // bucket spans. The bucket count is what may grow, never the op count.
+    expect(checkouts).toBeLessThanOrEqual(history.length + 2);
+  });
+
+  /**
+   * Regression: versions were deduped on `JSON.stringify` of raw `toJSON()`
+   * output, whose map-key order depends on the path taken to reach the
+   * version — jumping straight to one yields `{color, path, width}` where
+   * replaying every op yields `{width, path, color}`. Identical states then
+   * compared unequal, so whether a duplicate version collapsed depended on
+   * how history happened to walk the doc. Key order is emitted by Loro, so
+   * reproduce it here by shuffling the keys `toJSON()` hands back.
+   */
+  it('dedupes identical states regardless of map key order', async ({
+    expect,
+  }) => {
+    const r = new Resource('https://example.com/history-key-order');
+    await r.set(name, 'Canvas', false);
+    r.getLoroDoc()!.commit();
+    r.pushListItem(strokeData, { color: 1, width: 2, path: [[0, 0]] });
+    r.replaceListItems(strokeData, [{ color: 1, width: 2, path: [[0, 0]] }]);
+
+    const doc = r.getLoroDoc()!;
+    const fork = doc.fork.bind(doc);
+    let call = 0;
+    vi.spyOn(doc, 'fork').mockImplementation(() => {
+      const forked = fork();
+      const toJSON = forked.toJSON.bind(forked);
+      vi.spyOn(forked, 'toJSON').mockImplementation(() => {
+        // Alternate key order per materialization without touching values.
+        const reorder = (value: unknown): unknown => {
+          if (!value || typeof value !== 'object') return value;
+
+          if (Array.isArray(value)) return value.map(reorder);
+
+          const keys = Object.keys(value as Record<string, unknown>);
+          const ordered = call % 2 === 0 ? keys : [...keys].reverse();
+
+          return Object.fromEntries(
+            ordered.map(k => [k, reorder((value as never)[k])]),
+          );
+        };
+
+        call++;
+
+        return reorder(toJSON()) as ReturnType<typeof toJSON>;
+      });
+
+      return forked;
+    });
+
+    // The push and the replace leave the canvas in the same observable
+    // state, so history must collapse them into one version — regardless of
+    // the key order each materialization happened to come back in.
+    expect(r.getLoroHistory().map(strokeCountOf)).toEqual([0, 1]);
   });
 
   /**

@@ -69,8 +69,14 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
     // in the AI panel, ontologies show classes/properties in their
     // dedicated panel. Listing those children again in the sidebar would
     // be noisy and confuses drop targeting.
+    //
+    // `allowIncomplete` means `classes` is `[]` until `isA` hydrates. Treat
+    // that as hidden too: otherwise `useChildren` fetches every table row
+    // into the tree, then hides them when the class arrives — the sidebar
+    // flash on open.
     const classes = resource.getClasses();
     const hideChildren =
+      classes.length === 0 ||
       classes.includes(dataBrowser.classes.table) ||
       classes.includes(dataBrowser.classes.chatroom) ||
       classes.includes(dataBrowser.classes.meeting) ||
