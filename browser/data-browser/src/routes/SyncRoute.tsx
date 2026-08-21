@@ -1,4 +1,10 @@
-import { useEffect, useState, type MouseEvent } from 'react';
+import {
+  useEffect,
+  useState,
+  type JSX,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 import { createRoute, Link } from '@tanstack/react-router';
 import toast from 'react-hot-toast';
 import {
@@ -318,132 +324,206 @@ function ServerCard({
   }
 
   return (
-    <ConnCard $active={isActive} $provider={isCloud}>
-      <CardIcon $tone={isCloud ? 'provider' : 'neutral'}>
-        {isCloud ? <FaCloud /> : <FaServer />}
-      </CardIcon>
+    <SyncCard
+      active={isActive}
+      provider={isCloud}
+      icon={isCloud ? <FaCloud /> : <FaServer />}
+      iconTone={isCloud ? 'provider' : 'neutral'}
+      title={isCloud ? 'Cloud Server' : serverLabel(server)}
+      status={
+        isActive
+          ? { tone: serverStatus, label: statusLabel(serverStatus) }
+          : { tone: 'unknown', label: 'Not connected' }
+      }
+      controls={
+        isActive ? (
+          status.serverConnected ? (
+            // Without a working local store (embedded node or ready OPFS
+            // cache), the server is the only data source — disconnecting
+            // would leave the app with no data at all.
+            <NodeAction
+              onClick={() => store.disconnect()}
+              disabled={!hasWorkingLocalStore}
+              title={
+                hasWorkingLocalStore
+                  ? undefined
+                  : 'Local storage is off, so this server is the only data source. Enable local storage below to work disconnected.'
+              }
+            >
+              Disconnect
+            </NodeAction>
+          ) : (
+            <NodeAction
+              onClick={() => store.reconnect().catch(e => store.notifyError(e))}
+            >
+              Reconnect
+            </NodeAction>
+          )
+        ) : (
+          <NodeAction onClick={() => onSwitch(server)}>Switch</NodeAction>
+        )
+      }
+      subtitle={
+        isActive
+          ? isCloud
+            ? serverHostname
+            : 'Always-on · in use'
+          : 'Always-on device'
+      }
+      facts={isActive ? facts : undefined}
+      // A node id identifies this server's node, so it belongs on the server —
+      // not buried in Developer.
+      nodeId={isActive && serverNodeId ? rawToNodeDid(serverNodeId) : undefined}
+      footer={
+        isCloud && managedInfo.portalUrl ? (
+          <ManagedLink
+            // The dashboard, not the portal root: signed-in visitors get the
+            // marketing page at `/`, so the link landed on a sales pitch
+            // rather than the account it promises to manage.
+            //
+            // `externalLinkProps` rather than a raw target/rel: in the desktop
+            // app the plain form opens nothing at all.
+            {...externalLinkProps(`${managedInfo.portalUrl}/dashboard`)}
+          >
+            {'Manage account & plan →'}
+          </ManagedLink>
+        ) : !isActive ? (
+          // Removing the server you're using would strand the app.
+          <NodeActionSubtle onClick={() => onRemove(server)}>
+            Remove
+          </NodeActionSubtle>
+        ) : undefined
+      }
+    >
+      {/* Status details belong to the server actually in use. */}
+      {isActive && !status.serverConnected && status.serverConnectionError && (
+        <ConnError role='alert'>
+          <FaCircleExclamation aria-hidden />
+          <span>{status.serverConnectionError}</span>
+        </ConnError>
+      )}
+
+      {isActive && usagePct !== null && (
+        <UsageBar
+          aria-label={`${usagePct}% of storage used`}
+          title={`${usagePct}% used`}
+        >
+          <UsageFill style={{ width: `${usagePct}%` }} />
+        </UsageBar>
+      )}
+    </SyncCard>
+  );
+}
+
+/**
+ * One device or server in the sync list.
+ *
+ * There were four of these assembled by hand — the server in use, two kinds of
+ * peer, and this device — sharing the styled pieces but not a shape. They drifted:
+ * the same "Disconnect" verb sat top-right on one card and bottom-left on
+ * another, telemetry lived in the subtitle on peers and in a facts line on the
+ * server, and the node-id copy was written three times, once without the error
+ * handling the other two had.
+ *
+ * So the differences between the cards are data now, and the arrangement is
+ * decided once. Two slots, by what the control DOES rather than where it looks
+ * best per card:
+ *   - `controls` change the connection (Disconnect, Sync now, Switch) and sit
+ *     beside the status they act on;
+ *   - `footer` leaves or leads away from it (Remove, Manage account).
+ */
+interface SyncCardProps {
+  icon: ReactNode;
+  iconTone?: 'provider' | 'neutral';
+  title: ReactNode;
+  /** Tooltip for the title, where the title is a short name for a long id. */
+  titleHint?: string;
+  status?: { tone: NodeStatus; label: ReactNode };
+  controls?: ReactNode;
+  subtitle?: ReactNode;
+  /** What is true of this connection, joined by dots. Empty entries drop out,
+   *  so callers can build the list conditionally without filtering. */
+  facts?: (string | false | undefined | null)[];
+  /** Anything between the facts and the node id: errors, a usage bar. */
+  children?: ReactNode;
+  /** Rendered as a click-to-copy row. Pass the full `did:ad:node:…`. */
+  nodeId?: string;
+  footer?: ReactNode;
+  active?: boolean;
+  provider?: boolean;
+  /** The standalone spacing "This device" uses; the list cards sit tighter. */
+  spacious?: boolean;
+}
+
+function SyncCard({
+  icon,
+  iconTone,
+  title,
+  titleHint,
+  status,
+  controls,
+  subtitle,
+  facts,
+  children,
+  nodeId,
+  footer,
+  active,
+  provider,
+  spacious,
+}: SyncCardProps): JSX.Element {
+  const store = useStore();
+  const shown = (facts ?? []).filter((f): f is string => !!f);
+
+  return (
+    <ConnCard $active={active} $provider={provider} $spacious={spacious}>
+      <CardIcon $tone={iconTone}>{icon}</CardIcon>
       <ConnBody>
         <ConnTopRow>
-          <ConnTitle>
-            {isCloud ? 'Cloud Server' : serverLabel(server)}
-          </ConnTitle>
-          <ConnTopRight>
-            {isActive ? (
-              <>
-                <StatusPill $status={serverStatus}>
-                  <StatusIcon status={serverStatus} />
-                  {statusLabel(serverStatus)}
+          <ConnTitle title={titleHint}>{title}</ConnTitle>
+          {(status || controls) && (
+            <ConnTopRight>
+              {status && (
+                <StatusPill $status={status.tone}>
+                  {/* Drawn from the tone rather than passed in: the server card
+                      had an icon and the peer cards did not, for no reason
+                      anyone chose. */}
+                  <StatusIcon status={status.tone} />
+                  {status.label}
                 </StatusPill>
-                {status.serverConnected ? (
-                  // Without a working local store (embedded node or
-                  // ready OPFS cache), the server is the only data
-                  // source — disconnecting would leave the app with
-                  // no data at all.
-                  <NodeAction
-                    onClick={() => store.disconnect()}
-                    disabled={!hasWorkingLocalStore}
-                    title={
-                      hasWorkingLocalStore
-                        ? undefined
-                        : 'Local storage is off, so this server is the only data source. Enable local storage below to work disconnected.'
-                    }
-                  >
-                    Disconnect
-                  </NodeAction>
-                ) : (
-                  <NodeAction
-                    onClick={() =>
-                      store.reconnect().catch(e => store.notifyError(e))
-                    }
-                  >
-                    Reconnect
-                  </NodeAction>
-                )}
-              </>
-            ) : (
-              <>
-                <StatusPill $status='unknown'>Not connected</StatusPill>
-                <NodeAction onClick={() => onSwitch(server)}>Switch</NodeAction>
-              </>
-            )}
-          </ConnTopRight>
+              )}
+              {controls}
+            </ConnTopRight>
+          )}
         </ConnTopRow>
 
-        <ConnSub>
-          {isActive
-            ? isCloud
-              ? serverHostname
-              : 'Always-on · in use'
-            : 'Always-on device'}
-        </ConnSub>
+        {subtitle && <ConnSub>{subtitle}</ConnSub>}
 
-        {/* Status details belong to the server actually in use. */}
-        {isActive &&
-          !status.serverConnected &&
-          status.serverConnectionError && (
-            <ConnError role='alert'>
-              <FaCircleExclamation aria-hidden />
-              <span>{status.serverConnectionError}</span>
-            </ConnError>
-          )}
+        {children}
 
-        {isActive && usagePct !== null && (
-          <UsageBar
-            aria-label={`${usagePct}% of storage used`}
-            title={`${usagePct}% used`}
-          >
-            <UsageFill style={{ width: `${usagePct}%` }} />
-          </UsageBar>
-        )}
+        {shown.length > 0 && <ConnMeta>{shown.join(' · ')}</ConnMeta>}
 
-        {isActive && facts.length > 0 && (
-          <ConnMeta>{facts.join(' · ')}</ConnMeta>
-        )}
-
-        {/* A node id identifies this server's node, so it belongs on
-                    the server — not buried in Developer. */}
-        {isActive && serverNodeId && (
+        {nodeId && (
           <NodeIdRow>
             <NodeIdLabel>Node ID</NodeIdLabel>
             <NodeIdValue
-              title={`Copy ${rawToNodeDid(serverNodeId)}`}
+              title={`Copy ${nodeId}`}
               onClick={async () => {
                 try {
-                  await navigator.clipboard.writeText(
-                    rawToNodeDid(serverNodeId),
-                  );
+                  await navigator.clipboard.writeText(nodeId);
                   toast.success('Node ID copied');
                 } catch (e) {
+                  // Written three ways before this, one of them swallowing the
+                  // rejection: a denied clipboard looked like a dead button.
                   store.notifyError(e as Error);
                 }
               }}
             >
-              {rawToNodeDid(serverNodeId)}
+              {nodeId}
             </NodeIdValue>
           </NodeIdRow>
         )}
 
-        {isCloud && managedInfo.portalUrl && (
-          <ConnActions>
-            <ManagedLink
-              // The dashboard, not the portal root: signed-in
-              // visitors get the marketing page at `/`, so the
-              // link landed on a sales pitch rather than the
-              // account it promises to manage.
-              {...externalLinkProps(`${managedInfo.portalUrl}/dashboard`)}
-            >
-              {'Manage account & plan →'}
-            </ManagedLink>
-          </ConnActions>
-        )}
-        {/* Removing the server you're using would strand the app. */}
-        {!isActive && (
-          <ConnActions>
-            <NodeActionSubtle onClick={() => onRemove(server)}>
-              Remove
-            </NodeActionSubtle>
-          </ConnActions>
-        )}
+        {footer && <ConnActions>{footer}</ConnActions>}
       </ConnBody>
     </ConnCard>
   );
@@ -1493,37 +1573,21 @@ function SyncPage() {
               pays for them. What is left here is an inventory of places this
               workspace physically lives. */}
           {/* This device — always the source of truth for local-first data. */}
-          <DeviceCard>
-            <CardIcon>
-              <FaLaptop />
-            </CardIcon>
-            <ConnBody>
-              <ConnTitle>This device</ConnTitle>
-              <ConnSub>
-                {isNode
-                  ? status.lastDriveSync
-                    ? `${status.lastDriveSync.count.toLocaleString()} resources · stored locally`
-                    : 'Embedded server · stored locally'
-                  : clientDbOn
-                    ? 'Cached locally · works offline'
-                    : 'Server-only · no local cache'}
-              </ConnSub>
-              {isNode && localNodeId && (
-                <NodeIdRow>
-                  <NodeIdLabel>Node ID</NodeIdLabel>
-                  <NodeIdValue
-                    title='Copy Node ID'
-                    onClick={() => {
-                      navigator.clipboard.writeText(localNodeId);
-                      toast.success('Node ID copied');
-                    }}
-                  >
-                    {localNodeId}
-                  </NodeIdValue>
-                </NodeIdRow>
-              )}
-            </ConnBody>
-          </DeviceCard>
+          <SyncCard
+            spacious
+            icon={<FaLaptop />}
+            title='This device'
+            subtitle={
+              isNode
+                ? status.lastDriveSync
+                  ? `${status.lastDriveSync.count.toLocaleString()} resources · stored locally`
+                  : 'Embedded server · stored locally'
+                : clientDbOn
+                  ? 'Cached locally · works offline'
+                  : 'Server-only · no local cache'
+            }
+            nodeId={isNode && localNodeId ? localNodeId : undefined}
+          />
 
           {/* A client that cannot hold the provider's cookie — a self-hosted
               origin, or the desktop and Android apps on tauri://localhost — has
@@ -1598,50 +1662,43 @@ function SyncPage() {
             const lastSynced = reported?.lastSeen ?? peer.lastSync;
 
             return (
-              <ConnCard key={peer.nodeId}>
-                <CardIcon>
-                  <FaMobileScreenButton />
-                </CardIcon>
-                <ConnBody>
-                  <ConnTopRow>
-                    <ConnTitle title={peer.nodeId}>{peer.label}</ConnTitle>
-                    <ConnTopRight>
-                      <StatusPill
-                        $status={reported?.live ? 'synced' : 'unknown'}
-                      >
-                        {reported?.live ? 'Connected' : 'Paired'}
-                      </StatusPill>
-                      <NodeAction
-                        onClick={() => syncWithPeer(peer.nodeId)}
-                        disabled={peerSyncing}
-                      >
-                        {peerSyncing ? 'Syncing…' : 'Sync now'}
-                      </NodeAction>
-                    </ConnTopRight>
-                  </ConnTopRow>
-                  <ConnSub>
-                    Paired device
-                    {lastSynced
-                      ? ` · synced ${formatTimeAgo(new Date(lastSynced)) ?? 'just now'}`
-                      : ' · not synced yet'}
-                    {/* Only what this side actually counted — the accepting node
-                      answers frames through the engine and does not tally what
-                      it served, and a fabricated 0 would be the same lie this
-                      is meant to remove. */}
-                    {reported?.lastSent !== undefined
-                      ? ` · sent ${reported.lastSent}`
-                      : ''}
-                    {reported?.lastReceived !== undefined
-                      ? ` · received ${reported.lastReceived}`
-                      : ''}
-                  </ConnSub>
-                  <ConnActions>
-                    <NodeActionSubtle onClick={() => removePeer(peer.nodeId)}>
-                      Remove
-                    </NodeActionSubtle>
-                  </ConnActions>
-                </ConnBody>
-              </ConnCard>
+              <SyncCard
+                key={peer.nodeId}
+                icon={<FaMobileScreenButton />}
+                title={peer.label}
+                titleHint={peer.nodeId}
+                status={{
+                  tone: reported?.live ? 'synced' : 'unknown',
+                  label: reported?.live ? 'Connected' : 'Paired',
+                }}
+                controls={
+                  <NodeAction
+                    onClick={() => syncWithPeer(peer.nodeId)}
+                    disabled={peerSyncing}
+                  >
+                    {peerSyncing ? 'Syncing…' : 'Sync now'}
+                  </NodeAction>
+                }
+                subtitle='Paired device'
+                facts={[
+                  lastSynced
+                    ? `Synced ${formatTimeAgo(new Date(lastSynced)) ?? 'just now'}`
+                    : 'Not synced yet',
+                  // Only what this side actually counted — the accepting node
+                  // answers frames through the engine and does not tally what
+                  // it served, and a fabricated 0 would be the same lie this
+                  // is meant to remove.
+                  reported?.lastSent !== undefined &&
+                    `sent ${reported.lastSent}`,
+                  reported?.lastReceived !== undefined &&
+                    `received ${reported.lastReceived}`,
+                ]}
+                footer={
+                  <NodeActionSubtle onClick={() => removePeer(peer.nodeId)}>
+                    Remove
+                  </NodeActionSubtle>
+                }
+              />
             );
           })}
 
@@ -1654,66 +1711,37 @@ function SyncPage() {
               peer.deviceName ?? (raw ? `${raw.slice(0, 12)}…` : peer.nodeId);
 
             return (
-              <ConnCard key={peer.nodeId}>
-                <CardIcon>
-                  <FaMobileScreenButton />
-                </CardIcon>
-                <ConnBody>
-                  <ConnTopRow>
-                    <ConnTitle title={peer.nodeId}>{name}</ConnTitle>
-                    <ConnTopRight>
-                      <StatusPill $status={peer.live ? 'synced' : 'unknown'}>
-                        {peer.live ? 'Connected' : 'Offline'}
-                      </StatusPill>
-                    </ConnTopRight>
-                  </ConnTopRow>
-                  <ConnSub>
-                    Paired with {serverLabel(status.serverUrl ?? '')}
-                    {/* "Connected" only says a socket is open. Say when data
-                        last actually moved, so a link that is up but carrying
-                        nothing is distinguishable from a healthy one. */}
-                    {peer.lastSeen
-                      ? ` · synced ${
-                          formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
-                        }`
-                      : ' · not synced yet'}
-                    {/* What that sync actually moved. A timestamp alone cannot
-                        tell a working link from one being refused every
-                        subject. Deliberately the last pass, not a lifetime
-                        total — see `KnownPeer::last_sent`. */}
-                    {peer.lastSeen &&
+              <SyncCard
+                key={peer.nodeId}
+                icon={<FaMobileScreenButton />}
+                title={name}
+                titleHint={peer.nodeId}
+                status={{
+                  tone: peer.live ? 'synced' : 'unknown',
+                  label: peer.live ? 'Connected' : 'Offline',
+                }}
+                controls={
+                  <NodeAction onClick={() => disconnectServerPeer(peer.nodeId)}>
+                    Disconnect
+                  </NodeAction>
+                }
+                subtitle={`Paired with ${serverLabel(status.serverUrl ?? '')}`}
+                facts={[
+                  // "Connected" only says a socket is open. Say when data last
+                  // actually moved, so a link that is up but carrying nothing
+                  // is distinguishable from a healthy one.
+                  peer.lastSeen
+                    ? `Synced ${formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'}`
+                    : 'Not synced yet',
+                  // What that sync moved. Deliberately the last pass, not a
+                  // lifetime total — see `KnownPeer::last_sent`.
+                  !!peer.lastSeen &&
                     (peer.lastSent !== undefined ||
-                      peer.lastReceived !== undefined)
-                      ? ` · sent ${peer.lastSent ?? 0}, received ${
-                          peer.lastReceived ?? 0
-                        }`
-                      : ''}
-                  </ConnSub>
-                  <NodeIdRow>
-                    <NodeIdLabel>Node ID</NodeIdLabel>
-                    <NodeIdValue
-                      title={`Copy ${peer.nodeId}`}
-                      onClick={async () => {
-                        try {
-                          await navigator.clipboard.writeText(peer.nodeId);
-                          toast.success('Node ID copied');
-                        } catch (e) {
-                          store.notifyError(e as Error);
-                        }
-                      }}
-                    >
-                      {peer.nodeId}
-                    </NodeIdValue>
-                  </NodeIdRow>
-                  <ConnActions>
-                    <NodeActionSubtle
-                      onClick={() => disconnectServerPeer(peer.nodeId)}
-                    >
-                      Disconnect
-                    </NodeActionSubtle>
-                  </ConnActions>
-                </ConnBody>
-              </ConnCard>
+                      peer.lastReceived !== undefined) &&
+                    `sent ${peer.lastSent ?? 0}, received ${peer.lastReceived ?? 0}`,
+                ]}
+                nodeId={peer.nodeId}
+              />
             );
           })}
 
@@ -2265,11 +2293,6 @@ const cardBase = cardSurface;
 
 /** The "This device" card. Same surface as the rest of the list — it is one
  *  of the devices, not a different kind of object. */
-const DeviceCard = styled.div`
-  ${cardBase}
-  margin-bottom: 1.5rem;
-`;
-
 const NodeIdRow = styled.div`
   display: flex;
   align-items: baseline;
@@ -2314,9 +2337,13 @@ const NodeIdValue = styled.button`
  * said it was. Being in use is still worth showing, so it keeps a neutral
  * emphasis, and the "In sync" badge next to the title carries the state.
  */
-const ConnCard = styled.div<{ $active?: boolean; $provider?: boolean }>`
+const ConnCard = styled.div<{
+  $active?: boolean;
+  $provider?: boolean;
+  $spacious?: boolean;
+}>`
   ${cardBase}
-  margin-bottom: 0.6rem;
+  margin-bottom: ${p => (p.$spacious ? '1.5rem' : '0.6rem')};
   border-color: ${p =>
     p.$provider
       ? p.theme.colors.main

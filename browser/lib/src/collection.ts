@@ -1074,20 +1074,44 @@ export class Collection {
         sortKeys.set(s, key);
       }
 
-      const missing = (value: unknown) => value === null || value === undefined;
-
+      // Ordered to match the server, because the same collection can be
+      // answered by either and the two must not disagree. A row list that
+      // reshuffles depending on which side answered reads as data changing
+      // under you.
+      //
+      //   - Missing values FIRST. The server encodes them as `TAG_NONE`
+      //     (0x05), below every value tag, so they lead an ascending sort.
+      //     This used to return 1 and push them last.
+      //   - Ties broken by subject. The server's member key is
+      //     `id || sort_key || subject`, so equal sort keys come back in
+      //     subject order. Returning 0 here left them in whatever order the
+      //     local index happened to yield — stable, but stable at a
+      //     different order than the server's, which is exactly the case
+      //     where every row shares a value (an unfilled column).
       result.subjects.sort((a, b) => {
         const valA = sortKeys.get(a);
         const valB = sortKeys.get(b);
+        const aMissing = valA === null || valA === undefined;
+        const bMissing = valB === null || valB === undefined;
 
-        if (missing(valA) && missing(valB)) return 0;
-        if (missing(valA)) return 1;
-        if (missing(valB)) return -1;
+        let cmp: number;
 
-        const cmp =
-          typeof valA === 'number' && typeof valB === 'number'
-            ? valA - valB
-            : String(valA).localeCompare(String(valB));
+        if (aMissing && bMissing) {
+          cmp = 0;
+        } else if (aMissing) {
+          cmp = -1;
+        } else if (bMissing) {
+          cmp = 1;
+        } else {
+          cmp =
+            typeof valA === 'number' && typeof valB === 'number'
+              ? valA - valB
+              : String(valA).localeCompare(String(valB));
+        }
+
+        if (cmp === 0) {
+          cmp = a.localeCompare(b);
+        }
 
         return sortDesc ? -cmp : cmp;
       });

@@ -58,7 +58,8 @@ const searchServerUrl = (() => {
 })();
 
 if (searchServerUrl) {
-  serverURLStorage.set(searchServerUrl);
+  // Following a `?server=` link is choosing that server.
+  serverURLStorage.set(searchServerUrl, true);
 }
 
 const storedServerUrl = searchServerUrl ?? serverURLStorage.get();
@@ -68,7 +69,27 @@ const storedIsValid =
   !!storedServerUrl &&
   (storedServerUrl.startsWith('http://') ||
     storedServerUrl.startsWith('https://'));
-const serverUrl = storedIsValid ? storedServerUrl! : defaultServerUrl;
+/**
+ * A device running its own node uses it, unless the user said otherwise.
+ *
+ * A stored server used to win outright. But it was written by two very
+ * different things: choosing a server, and merely opening a drive whose subject
+ * happens to be an http(s) URL. A switcher with a couple of dozen
+ * `https://atomicdata.dev/drive/…` entries meant one visit to any of them
+ * pinned the public server — and the desktop app then booted against it every
+ * launch, ignoring the node running in the same process, showing "Could not
+ * reach the server" for drives sitting on disk.
+ *
+ * So on Tauri the bar is an explicit choice (see `wasExplicitlyChosen`).
+ * Anything else loses to the embedded node, including a value stored before
+ * this distinction existed — those get one reset, back to the node that was
+ * always the right answer.
+ */
+const embeddedNodeWins =
+  isRunningInTauri() && !serverURLStorage.wasExplicitlyChosen();
+
+const serverUrl =
+  storedIsValid && !embeddedNodeWins ? storedServerUrl! : defaultServerUrl;
 
 // Fire-and-forget — first paint doesn't wait. Catch so a failed import
 // (offline + no cached module) doesn't show up as an unhandledrejection

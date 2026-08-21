@@ -4948,7 +4948,6 @@ msgid "Embedded (this device)"
 msgstr "Embedded (this device)"
 
 #: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Node ID"
 msgstr "Node ID"
 
@@ -5085,7 +5084,9 @@ msgid "Bring your workspace over"
 msgstr "Bring your workspace over"
 
 #. 0: device
+#. 0: serverLabel(status.serverUrl ?? '')
 #: src/components/pairing/PairingFlowProvider.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Paired with {0}"
 msgstr "Paired with {0}"
 
@@ -5295,18 +5296,10 @@ msgid "Switching to {0}…"
 msgstr "Switching to {0}…"
 
 #: src/routes/SyncRoute.tsx
-msgid "Copy Node ID"
-msgstr "Copy Node ID"
-
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Node ID copied"
 msgstr "Node ID copied"
 
-#. 0: rawToNodeDid(serverNodeId)
-#. 0: peer.nodeId
-#: src/routes/SyncRoute.tsx
+#. 0: nodeId
 #: src/routes/SyncRoute.tsx
 msgid "Copy {0}"
 msgstr "Copy {0}"
@@ -6382,6 +6375,7 @@ msgid "Button says"
 msgstr "Button says"
 
 #: src/chunks/TablePage/NewColumnButton.tsx
+#: src/components/ResourceContextMenu/index.tsx
 msgid "Action"
 msgstr "Action"
 
@@ -6854,6 +6848,10 @@ msgid "{0} of {1}"
 msgstr "{0} of {1}"
 
 #. 0: syncedAgo
+#. 0: formatTimeAgo(new Date(lastSynced)) ?? 'just now'
+#. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Synced {0}"
 msgstr "Synced {0}"
@@ -6910,6 +6908,20 @@ msgstr "Synced{0} — sent {1}, received {2}"
 #: src/routes/SyncRoute.tsx
 msgid "Paired"
 msgstr "Paired"
+
+#: src/routes/SyncRoute.tsx
+msgid "Paired device"
+msgstr "Paired device"
+
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Not synced yet"
+msgstr "Not synced yet"
+
+#. 0: label; 1: detail
+#: src/components/ResourceContextMenu/index.tsx
+msgid "{0} failed: {1}"
+msgstr "{0} failed: {1}"
 
 #: src/routes/SyncRoute.tsx
 msgid "Sign in →"
@@ -7025,3 +7037,8 @@ msgstr "An always-on device has an address. One you carry has a code instead, sh
 #: src/routes/SyncRoute.tsx
 msgid "An always-on device has an address. Type it here."
 msgstr "An always-on device has an address. Type it here."
+
+#. 0: detail
+#: src/actions/resourceActions.tsx
+msgid "Could not delete: {0}"
+msgstr "Could not delete: {0}"

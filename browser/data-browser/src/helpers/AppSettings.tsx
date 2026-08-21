@@ -22,7 +22,7 @@ import { serverURLStorage } from './serverURLStorage';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { errorHandler } from '../handlers/errorHandler';
 import { isDev } from '../config';
-import { getLocalServerOrigin } from './tauri';
+import { getLocalServerOrigin, isRunningInTauri } from './tauri';
 import { fetchManagedInfo, isAtomicServer } from './managedServer';
 
 interface ProviderProps {
@@ -118,7 +118,10 @@ export const AppSettingsContextProvider = (
       if (newServer.startsWith('http://') || newServer.startsWith('https://')) {
         const url = new URL(newServer);
         setBaseURL(url.origin);
-        serverURLStorage.set(url.origin);
+        // Explicit: someone typed this, picked it from the list, or followed a
+        // `?server=` link. This is the only kind of choice allowed to outrank
+        // a device's own embedded node on the next launch.
+        serverURLStorage.set(url.origin, true);
       }
     },
     [setBaseURL],
@@ -136,8 +139,57 @@ export const AppSettingsContextProvider = (
       // server. `Store.setDrive` is the other half of this split.
       if (Client.isBareHttpOrigin(newDrive)) {
         const url = new URL(newDrive);
+        // Opening a drive that lives elsewhere does mean reading from its
+        // server for now.
         setBaseURL(url.origin);
-        serverURLStorage.set(url.origin);
+
+        // But it is not a decision about where this app belongs. On a device
+        // with its own node, persisting it is how a single visit to one
+        // `https://…/drive/…` entry in the switcher left the app booting
+        // against that server forever, ignoring the node running beside it.
+        // Session-only here; `setServer` is the deliberate route.
+        if (!isRunningInTauri()) {
+          serverURLStorage.set(url.origin);
+        }
+
+        return;
+      }
+
+      // An HTTP drive with a path is a workspace, not a server: it is fetched
+      // cross-origin and the home server stays where it is. That means it must
+      // not reach the come-home branch below either. Before the origin/drive
+      // split above, every `http(s)://` subject left through the early return;
+      // now only a bare origin does, so without this a `https://host/drive/abc`
+      // would fall through and repoint the session that was meant to stay.
+      if (newDrive.startsWith('http://') || newDrive.startsWith('https://')) {
+        return;
+      }
+
+      // A `did:` drive names no server, so this branch did nothing at all —
+      // and that is how switching away and back stranded the app. Opening an
+      // `https://…` drive repoints the store at that origin; coming back to a
+      // drive that lives on THIS device left it pointed at the previous one.
+      // Every collection then answers from a server that does not hold this
+      // drive — or, if it is unreachable, answers nothing — and the sidebar
+      // renders empty with no indication that the app is asking the wrong
+      // machine. Restarting fixed it, which is what made it look
+      // intermittent: `embeddedNodeWins` re-applies the device's own node at
+      // boot, and nothing re-applied it here.
+      //
+      // Same rule as boot: a server the person actually chose outranks the
+      // node running beside them — but it does NOT mean "stay wherever the
+      // last drive put you". Gating the whole restore on `wasExplicitlyChosen`
+      // left anyone who had ever picked a server stranded on the origin of the
+      // https drive they just came from, which is the bug this branch is
+      // supposed to fix, merely harder to reach.
+      //
+      // So come home either way; only the destination differs.
+      if (isRunningInTauri()) {
+        const chosen = serverURLStorage.wasExplicitlyChosen()
+          ? serverURLStorage.get()
+          : undefined;
+
+        setBaseURL(chosen ?? getLocalServerOrigin());
       }
     },
     [innerSetDrive, setBaseURL],

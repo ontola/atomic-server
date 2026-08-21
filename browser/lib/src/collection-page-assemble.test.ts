@@ -222,7 +222,10 @@ describe('collection page assemble does not flash unsorted members', () => {
             '@id': BOB,
             [core.properties.parent]: TABLE,
             [core.properties.isA]: [dataBrowser.classes.folder],
-            [core.properties.name]: 'zebra',
+            // Sorts before the string "undefined", so a stringify-the-missing
+            // bug would put Bob first. Missing-first (server TAG_NONE) puts
+            // Alice first.
+            [core.properties.name]: 'aardvark',
           }),
         ],
         count: 2,
@@ -246,7 +249,6 @@ describe('collection page assemble does not flash unsorted members', () => {
 
     await collection.refresh();
 
-    // `String(undefined).localeCompare("zebra")` used to put Alice first.
-    expect(await collection.getMembersOnPage(0)).toEqual([BOB, ALICE]);
+    expect(await collection.getMembersOnPage(0)).toEqual([ALICE, BOB]);
   });
 });

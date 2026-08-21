@@ -2,6 +2,19 @@ import { isDev } from '../config';
 
 const ServerURLStorageKEY = 'serverUrl';
 const KnownServersKEY = 'knownServers';
+/**
+ * Set only when the user picked a server themselves — the connect dialog, the
+ * Sync page, a `?server=` link.
+ *
+ * Opening a drive whose subject is an http(s) URL also repoints the app at
+ * that origin, and that used to be persisted identically. A drive switcher
+ * holding a couple of dozen `https://atomicdata.dev/drive/…` entries therefore
+ * wrote the public server into storage on the first visit to any of them, and
+ * every later launch booted there — including the desktop app, which has its
+ * own node and should have been using it. The two cases look the same in
+ * storage unless we record which one it was.
+ */
+const ServerURLExplicitKEY = 'serverUrlExplicit';
 
 // Atomic-Server URLs must be fetchable over HTTP/HTTPS.
 // Anything else — notably `tauri://localhost` left over from earlier buggy builds —
@@ -11,10 +24,37 @@ const isValidServerUrl = (url: unknown): url is string =>
   (url.startsWith('http://') || url.startsWith('https://'));
 
 export const serverURLStorage = {
-  set(url: string) {
+  /**
+   * @param explicit the user chose this server, as opposed to it being
+   *   inferred from a drive they opened. Only an explicit choice outranks an
+   *   embedded node — see `wasExplicitlyChosen`.
+   */
+  set(url: string, explicit = false) {
     if (!isValidServerUrl(url)) return;
     localStorage.setItem(ServerURLStorageKEY, JSON.stringify(url));
+
+    if (explicit) {
+      localStorage.setItem(ServerURLExplicitKEY, JSON.stringify(url));
+    } else {
+      // A drive-derived repoint supersedes whatever was chosen before, so the
+      // stale marker must not keep vouching for a server we are leaving.
+      localStorage.removeItem(ServerURLExplicitKEY);
+    }
+
     this.addKnownServer(url);
+  },
+
+  /** Whether the stored server is one the user actually picked. */
+  wasExplicitlyChosen(): boolean {
+    try {
+      const marked = JSON.parse(
+        localStorage.getItem(ServerURLExplicitKEY) as string,
+      );
+
+      return isValidServerUrl(marked) && marked === this.get();
+    } catch {
+      return false;
+    }
   },
   get(): string | undefined {
     try {
