@@ -113,6 +113,30 @@ function e2eRunKnobs(profile: HostProfile, mode: E2eMode): E2eRunKnobs {
 }
 
 /**
+ * `bash -c` payload for one Playwright shard.
+ *
+ * The log label must be safe inside a double-quoted `echo`. The previous
+ * `JSON.stringify(grep || '(full)')` wrote `grep="(full)"`, which closed
+ * the quote so bash treated `(full)` as a subshell and the shard never
+ * started. Light CI hid it because `@smoke` is not a metacharacter.
+ */
+function e2eShardRunScript(
+  grep: string,
+  shardIndex: number,
+  shardCount: number,
+): string {
+  const grepFlag = grep ? ` --grep ${JSON.stringify(grep)}` : '';
+  const grepLabel = grep || 'full';
+
+  return (
+    'set -o pipefail; ' +
+    `echo "e2e mode grep=${grepLabel} shard=${shardIndex}/${shardCount} workers=$PLAYWRIGHT_WORKERS retries=$PLAYWRIGHT_RETRIES"; ` +
+    `pnpm exec playwright test --config=./playwright.config.ts${grepFlag} --shard=${shardIndex}/${shardCount} 2>&1 | tee /test-output.log; ` +
+    'echo ${PIPESTATUS[0]} > /test-exit-code; exit 0'
+  );
+}
+
+/**
  * Trim a Playwright `error-context.md` to the part worth reading in a CI log.
  *
  * The file leads with ~2.5k characters of breadcrumbs, sidebar and app menu —
@@ -1600,9 +1624,6 @@ export class AtomicServer {
 
   /** One Playwright shard against its own atomic-server service. */
   private e2eShardContainer(base: Container, shardIndex: number): Container {
-    const grepFlag = this.e2eRun.grep
-      ? ` --grep ${JSON.stringify(this.e2eRun.grep)}`
-      : '';
     const shardCount = this.e2eRun.shardCount;
 
     return base
@@ -1615,10 +1636,7 @@ export class AtomicServer {
       .withExec([
         '/bin/bash',
         '-c',
-        'set -o pipefail; ' +
-          `echo "e2e mode grep=${JSON.stringify(this.e2eRun.grep || '(full)')} shard=${shardIndex}/${shardCount} workers=$PLAYWRIGHT_WORKERS retries=$PLAYWRIGHT_RETRIES"; ` +
-          `pnpm exec playwright test --config=./playwright.config.ts${grepFlag} --shard=${shardIndex}/${shardCount} 2>&1 | tee /test-output.log; ` +
-          'echo ${PIPESTATUS[0]} > /test-exit-code; exit 0',
+        e2eShardRunScript(this.e2eRun.grep, shardIndex, shardCount),
       ]);
   }
 
