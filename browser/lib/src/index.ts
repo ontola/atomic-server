@@ -164,6 +164,7 @@ export {
 export {
   parseManifest,
   secretsMentionedIn,
+  originsMentionedIn,
   type DeclaredSecret,
   type PluginManifest,
 } from './plugin-manifest.js';
