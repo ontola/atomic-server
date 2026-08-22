@@ -726,6 +726,7 @@ msgstr "Unable to connect to Ollama server. Check if the server is running and y
 #: src/components/Searchbar/TagSuggestionOverlay.tsx
 #: src/views/Card/ResourceCard.tsx
 #: src/views/Document/DocumentV2FullPage.tsx
+#: src/views/Document/DocumentV2FullPage.tsx
 #: src/views/File/FilePreview.tsx
 #: src/views/File/FilePreviewThumbnail.tsx
 #: src/views/ResourcePage.tsx
@@ -1052,14 +1053,6 @@ msgstr "Agent Secret"
 #: src/views/InvitePage.tsx
 msgid "Copy secret to continue"
 msgstr "Copy secret to continue"
-
-#: src/views/DocumentPage.tsx
-msgid "Update Document"
-msgstr "Update Document"
-
-#: src/views/DocumentPage.tsx
-msgid "Could not update document"
-msgstr "Could not update document"
 
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
@@ -4277,10 +4270,6 @@ msgstr "Atomic Data Browser"
 msgid "This removes drives created for automated tests or local dev: names containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
 msgstr "This removes drives created for automated tests or local dev: names containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
 
-#: src/views/DocumentPage.tsx
-msgid "<0/> This document needs to be updated to the new format in order to be edited."
-msgstr "<0/> This document needs to be updated to the new format in order to be edited."
-
 #: src/views/ResourcePage.tsx
 msgid "The resource at <0/> hasn't loaded after 15 seconds. It may not exist, or the server may be unreachable."
 msgstr "The resource at <0/> hasn't loaded after 15 seconds. It may not exist, or the server may be unreachable."
@@ -4673,7 +4662,7 @@ msgstr "Title is used to construct the subject, keep in mind that the subject ca
 msgid "Creating table <0/>"
 msgstr "Creating table <0/>"
 
-#. 0.0: data.length
+#. 0.0: count
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Creating <0>{0} resources</0>"
 msgstr "Creating <0>{0} resources</0>"
@@ -4949,7 +4938,6 @@ msgid "Embedded (this device)"
 msgstr "Embedded (this device)"
 
 #: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Node ID"
 msgstr "Node ID"
 
@@ -5086,7 +5074,9 @@ msgid "Bring your workspace over"
 msgstr "Bring your workspace over"
 
 #. 0: device
+#. 0: serverLabel(status.serverUrl ?? '')
 #: src/components/pairing/PairingFlowProvider.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Paired with {0}"
 msgstr "Paired with {0}"
 
@@ -5297,18 +5287,10 @@ msgid "Switching to {0}…"
 msgstr "Switching to {0}…"
 
 #: src/routes/SyncRoute.tsx
-msgid "Copy Node ID"
-msgstr "Copy Node ID"
-
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 msgid "Node ID copied"
 msgstr "Node ID copied"
 
-#. 0: rawToNodeDid(serverNodeId)
-#. 0: peer.nodeId
-#: src/routes/SyncRoute.tsx
+#. 0: nodeId
 #: src/routes/SyncRoute.tsx
 msgid "Copy {0}"
 msgstr "Copy {0}"
@@ -6384,6 +6366,7 @@ msgid "Button says"
 msgstr "Button says"
 
 #: src/chunks/TablePage/NewColumnButton.tsx
+#: src/components/ResourceContextMenu/index.tsx
 msgid "Action"
 msgstr "Action"
 
@@ -6856,6 +6839,10 @@ msgid "{0} of {1}"
 msgstr "{0} of {1}"
 
 #. 0: syncedAgo
+#. 0: formatTimeAgo(new Date(lastSynced)) ?? 'just now'
+#. 0: formatTimeAgo(new Date(peer.lastSeen)) ?? 'just now'
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Synced {0}"
 msgstr "Synced {0}"
@@ -7280,3 +7267,26 @@ msgstr "Available once you have run this plugin and applied its changes at least
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 msgid "Apply background runs without asking me"
 msgstr "Apply background runs without asking me"
+
+#: src/oxc-styled-components.test.ts
+msgid "Button.tsx"
+msgstr "Button.tsx"
+
+#. 0: detail
+#: src/actions/resourceActions.tsx
+msgid "Could not delete: {0}"
+msgstr "Could not delete: {0}"
+
+#: src/routes/SyncRoute.tsx
+msgid "Paired device"
+msgstr "Paired device"
+
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Not synced yet"
+msgstr "Not synced yet"
+
+#. 0: label; 1: detail
+#: src/components/ResourceContextMenu/index.tsx
+msgid "{0} failed: {1}"
+msgstr "{0} failed: {1}"
