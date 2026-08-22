@@ -783,6 +783,7 @@ msgstr "Chats de IA"
 msgid "Ontologies"
 msgstr "Ontologías"
 
+#: src/chunks/AppPage/AppFrame.tsx
 #: src/components/SideBar/index.tsx
 msgid "App"
 msgstr "App"
@@ -7255,4 +7256,12 @@ msgstr ""
 #. 0: label; 1: detail
 #: src/components/ResourceContextMenu/index.tsx
 msgid "{0} failed: {1}"
+msgstr ""
+
+#: src/chunks/AppPage/index.tsx
+msgid "This app has no entry point, so there is nothing to open."
+msgstr ""
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Sign in to open this app."
 msgstr ""

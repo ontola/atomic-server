@@ -783,6 +783,7 @@ msgstr "AI Chats"
 msgid "Ontologies"
 msgstr "Ontologies"
 
+#: src/chunks/AppPage/AppFrame.tsx
 #: src/components/SideBar/index.tsx
 msgid "App"
 msgstr "App"
@@ -7290,3 +7291,11 @@ msgstr "Not synced yet"
 #: src/components/ResourceContextMenu/index.tsx
 msgid "{0} failed: {1}"
 msgstr "{0} failed: {1}"
+
+#: src/chunks/AppPage/index.tsx
+msgid "This app has no entry point, so there is nothing to open."
+msgstr "This app has no entry point, so there is nothing to open."
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Sign in to open this app."
+msgstr "Sign in to open this app."
