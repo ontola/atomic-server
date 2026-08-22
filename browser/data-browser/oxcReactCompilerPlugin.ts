@@ -43,6 +43,7 @@ export function oxcReactCompiler({
   let sourcemap = true;
   let jsxDevelopment = false;
   let fastRefresh = false;
+  let appSourceDir = '';
 
   const compilerPlugin: Plugin = {
     name: 'atomic:oxc-react-compiler',
@@ -61,6 +62,7 @@ export function oxcReactCompiler({
         !config.isProduction &&
         config.command === 'serve' &&
         config.server.hmr !== false;
+      appSourceDir = `${config.root}/src/`;
     },
     transform: {
       filter: {
@@ -74,11 +76,28 @@ export function oxcReactCompiler({
         const shouldCompile = isClient && looksLikeReactCode.test(code);
         const filename = id.split('?')[0]!;
 
+        // Only this app's own source gets Fast Refresh instrumentation.
+        //
+        // `includeRE` matches every `.ts` in the workspace, and the refresh
+        // transform registers anything capitalized — which in `@tomic/lib`
+        // means classes like `Store` and `Resource`, not components. Those
+        // modules also load inside the ClientDb worker, where the
+        // `$RefreshReg$` definition never runs: plugin-react's footer that
+        // declares it is guarded by `!inWebWorker`, while the call this pass
+        // emits is not. The worker then dies on
+        // `ReferenceError: $RefreshReg$ is not defined`, the app reports it as
+        // an error toast on every page, and that toast has a "Copy" button
+        // that collides with e2e selectors elsewhere on the page.
+        //
+        // Nothing is lost: the workspace packages hold no components, and
+        // editing them needs a rebuild before vite sees the change anyway.
+        const isAppSource = filename.startsWith(appSourceDir);
+
         const result = await transform(filename, code, {
           jsx: {
             runtime: 'automatic',
             development: jsxDevelopment,
-            refresh: isClient && fastRefresh,
+            refresh: isClient && fastRefresh && isAppSource,
           },
           reactCompiler: shouldCompile ? { target: '19' } : false,
           sourcemap,
