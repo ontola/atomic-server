@@ -162,6 +162,11 @@ export {
   type RunStatus,
 } from './plugin-log.js';
 export {
+  createApp,
+  type CreateAppOptions,
+  type CreatedApp,
+} from './plugin-app.js';
+export {
   parseManifest,
   secretsMentionedIn,
   originsMentionedIn,
