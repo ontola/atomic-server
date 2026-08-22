@@ -40,6 +40,9 @@ pub struct AppState {
     /// `crate::rate_limit`. Sized from `--write-rate-limit` and
     /// `--anonymous-write-rate-limit`.
     pub write_rate_limiter: Arc<crate::rate_limit::WriteRateLimiter>,
+    /// Short-lived capabilities that let a null-origin plugin iframe read the
+    /// one plugin's source it was opened for. See `plugins::view_token`.
+    pub view_tokens: Arc<crate::plugins::view_token::ViewTokens>,
 }
 
 impl AppState {
@@ -230,6 +233,7 @@ impl AppState {
             index_status_broadcast,
             managed: server_info.managed,
             managed_dashboard_url: server_info.managed_dashboard_url,
+            view_tokens: Arc::new(Default::default()),
         })
     }
 
