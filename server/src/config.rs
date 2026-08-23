@@ -130,6 +130,28 @@ pub struct Opts {
     /// to the OS hostname if unset, then to "Unknown" if that fails.
     #[clap(long, env = "ATOMIC_DEVICE_NAME")]
     pub device_name: Option<String>,
+
+    /// Who may create a **new** Drive on this node.
+    ///
+    /// `open` (the default) lets anyone who can reach the server create an
+    /// account and store their data here. That is right for localhost and for a
+    /// node you deliberately share with others; on a public address it is an
+    /// open registration form for space on your disk.
+    ///
+    /// `owner` allows only the Agent named in `--owner-agent`. Reading what you
+    /// shared, invited collaborators, and your own other devices are unaffected.
+    ///
+    /// Left unset, naming an `--owner-agent` selects `owner`.
+    #[clap(value_enum, long, env = "ATOMIC_HOST_MODE")]
+    pub host_mode: Option<crate::host_mode::HostMode>,
+
+    /// The Agent ID that owns this node, e.g. `did:ad:agent:...`.
+    ///
+    /// The public ID only — never the secret. This node does not sign as you; it
+    /// only recognises you. Copy it from Settings in any Atomic client, or from
+    /// the `subject` field of your saved secret.
+    #[clap(long, env = "ATOMIC_OWNER_AGENT")]
+    pub owner_agent: Option<String>,
     /// Use the GPU (if available) for processing vector search embeddings.
     #[clap(long, env = "ATOMIC_GPU_INDEXING")]
     pub gpu_indexing: bool,
@@ -287,6 +309,9 @@ pub struct Config {
     pub openrouter_embedding_dimensions: Option<u32>,
     /// When true, vector models are not loaded and indexing is a no-op.
     pub skip_vector_index: bool,
+    /// Who may enroll a new Drive here. Resolved once at boot from explicit
+    /// configuration; see [`crate::host_mode`] for why it is never guessed.
+    pub host_mode: crate::host_mode::HostModeConfig,
 }
 
 impl Config {
@@ -311,6 +336,23 @@ impl Config {
     /// Returns the base domain of the server (e.g. "atomicdata.dev").
     pub fn get_base_domain(&self) -> Option<String> {
         self.base_domain.clone()
+    }
+
+    /// Signals that this node was set up to be reached from outside. Used only
+    /// to decide whether an Open node is warned at boot — never to pick the
+    /// mode, which [`crate::host_mode`] explains at length.
+    pub fn reachability(&self) -> crate::host_mode::Reachability {
+        let port = if self.opts.https {
+            self.opts.port_https
+        } else {
+            self.opts.port
+        };
+
+        crate::host_mode::Reachability {
+            https: self.opts.https,
+            public_domain: crate::host_mode::domain_looks_public(&self.opts.domain),
+            web_port: matches!(port, 80 | 443),
+        }
     }
 }
 
@@ -427,6 +469,11 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         );
     }
 
+    // Resolved before anything binds: Owner mode with an unusable owner must
+    // fail here, not after the socket is open. Mirrors the `--https` without
+    // `--email` refusal above.
+    let host_mode = crate::host_mode::resolve(opts.host_mode, opts.owner_agent.as_deref())?;
+
     let base_domain = opts.base_domain.clone();
 
     let gpu_indexing = opts.gpu_indexing;
@@ -456,6 +503,7 @@ pub fn build_config(opts: Opts) -> AtomicServerResult<Config> {
         || store_path_looks_like_test_harness(&store_path);
 
     Ok(Config {
+        host_mode,
         initialize,
         repopulate_defaults,
         gpu_indexing,

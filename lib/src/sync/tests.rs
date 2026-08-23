@@ -369,6 +369,10 @@ mod peer_sync_tests {
             fn drive_within_quota(&self, _drive_subject: &str) -> bool {
                 true
             }
+
+            fn may_enroll_drive(&self, _drive_subject: &str, _agent: &ForAgent) -> bool {
+                false
+            }
         }
 
         let db = Db::init_temp("blob_unadmitted").await.unwrap();

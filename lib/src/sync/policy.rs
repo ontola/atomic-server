@@ -68,6 +68,34 @@ pub trait SyncPolicy: Send + Sync {
     fn admit_drive_write(&self, drive_subject: &str) -> bool {
         self.admit_decision(drive_subject).is_admitted()
     }
+
+    /// Whether `agent` may bring a drive this node has **never hosted** into
+    /// existence here.
+    ///
+    /// This is the one question [`admit_decision`](Self::admit_decision) cannot
+    /// answer, because it is about the *writer*, not the drive: a node that
+    /// refuses every unknown drive can never be set up, and a node that accepts
+    /// every unknown drive is free storage for the internet. Consulted only
+    /// where a drive is genuinely new — the bootstrap paths — and never as a
+    /// substitute for `admit_decision` on an existing one.
+    ///
+    /// Deliberately has no default: "may a stranger create a workspace here"
+    /// has no answer that is safe to inherit by omission.
+    fn may_enroll_drive(&self, drive_subject: &str, agent: &crate::agents::ForAgent) -> bool;
+
+    /// Remember that this node now hosts `drive_subject`, so later writes to it
+    /// are admitted. A no-op for policies with nothing to remember.
+    fn enroll_drive(&self, _drive_subject: &str) {}
+
+    /// What to tell whoever was refused, in their language rather than ours.
+    ///
+    /// The person reading this is usually not an operator: they clicked
+    /// "create account" on someone else's server. "Drive … is not enrolled for
+    /// sync on this node" tells them nothing they can act on, and reads like a
+    /// malfunction rather than a decision.
+    fn not_enrolled_message(&self, drive_subject: &str) -> String {
+        format!("Drive {drive_subject} is not enrolled for sync on this node.")
+    }
 }
 
 /// The default policy: every drive is allowed and there are no quotas. This is
@@ -82,6 +110,12 @@ impl SyncPolicy for OpenPolicy {
     }
 
     fn drive_within_quota(&self, _drive_subject: &str) -> bool {
+        true
+    }
+
+    /// Anyone. This is what "open" means, and what every node did before host
+    /// mode existed — an upgrade must not change who may write.
+    fn may_enroll_drive(&self, _drive_subject: &str, _agent: &crate::agents::ForAgent) -> bool {
         true
     }
 }
@@ -147,6 +181,21 @@ impl AllowlistPolicy {
             .collect();
         if let Ok(mut guard) = self.inner.write() {
             guard.allowed = map;
+        }
+    }
+
+    /// Add one drive to the allowlist, leaving the rest of it alone.
+    ///
+    /// [`set_drive_policies`](Self::set_drive_policies) replaces the whole list,
+    /// which is right for a control plane pushing the current truth and wrong
+    /// for a node enrolling the drive it just accepted — that would drop every
+    /// other drive it hosts.
+    pub fn enroll(&self, drive_subject: impl Into<String>) {
+        if let Ok(mut guard) = self.inner.write() {
+            guard
+                .allowed
+                .entry(drive_subject.into())
+                .or_insert_with(DrivePolicy::default);
         }
     }
 
@@ -234,11 +283,232 @@ impl SyncPolicy for AllowlistPolicy {
     fn admit_decision(&self, drive_subject: &str) -> AdmitDecision {
         self.decide_at(drive_subject, Instant::now())
     }
+
+    /// Nobody, by asking. A managed node's allowlist is the control plane's to
+    /// populate; a drive appears here because it was enrolled out of band, not
+    /// because someone pushed it.
+    fn may_enroll_drive(&self, _drive_subject: &str, _agent: &crate::agents::ForAgent) -> bool {
+        false
+    }
+
+    fn enroll_drive(&self, drive_subject: &str) {
+        self.enroll(drive_subject);
+    }
+}
+
+/// Only one agent may put new drives on this node.
+///
+/// The self-hosted counterpart to [`AllowlistPolicy`]: same allowlist, but
+/// populated locally and synchronously instead of by a control plane. A node
+/// running this hosts the drives it already had plus whatever its owner creates,
+/// and refuses to become storage for anybody else.
+///
+/// What it does **not** touch: reading, ACL on existing resources, or writes by
+/// collaborators to a drive that is already hosted. A guest invited to a drive
+/// keeps working exactly as before — they just cannot genesis a drive of their
+/// own here. Treating "has write on some hosted drive" as "may enroll a new
+/// one" would be the same hole with extra steps.
+pub struct OwnerPolicy {
+    /// The owner's agent DID. Compared verbatim: an agent DID *is* a public
+    /// key, so equality is the whole check.
+    owner_agent: String,
+    hosted: AllowlistPolicy,
+}
+
+impl OwnerPolicy {
+    /// `owner_agent` is the DID (`did:ad:agent:…`), never a secret.
+    ///
+    /// Grace is zero, unlike a managed node's. A managed allowlist lags its
+    /// control plane, so a freshly-enrolled drive needs a window to sync in;
+    /// enrollment here is local and immediate, and that window is precisely how
+    /// long a stranger would have to dump a drive before anyone noticed.
+    pub fn new(owner_agent: impl Into<String>) -> Self {
+        let hosted = AllowlistPolicy::new();
+        hosted.set_grace(Duration::ZERO);
+
+        Self {
+            owner_agent: owner_agent.into(),
+            hosted,
+        }
+    }
+
+    /// Enroll the drives this node already stores.
+    ///
+    /// A node that ran Open and then gained an owner must keep serving what is
+    /// already on its disk — including drives belonging to people the owner
+    /// invited, or created before the switch. Gating those retroactively would
+    /// turn on a security feature by deleting access to existing data.
+    pub fn enroll_existing<I, S>(&self, drive_subjects: I)
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        for subject in drive_subjects {
+            self.hosted.enroll(subject);
+        }
+    }
+
+    pub fn owner_agent(&self) -> &str {
+        &self.owner_agent
+    }
+
+    pub fn hosted_drive_subjects(&self) -> Vec<String> {
+        self.hosted.allowed_drive_subjects()
+    }
+}
+
+impl SyncPolicy for OwnerPolicy {
+    fn drive_is_allowed(&self, drive_subject: &str) -> bool {
+        self.hosted.drive_is_allowed(drive_subject)
+    }
+
+    fn drive_within_quota(&self, drive_subject: &str) -> bool {
+        self.hosted.drive_within_quota(drive_subject)
+    }
+
+    fn admit_decision(&self, drive_subject: &str) -> AdmitDecision {
+        self.hosted.admit_decision(drive_subject)
+    }
+
+    fn may_enroll_drive(&self, _drive_subject: &str, agent: &crate::agents::ForAgent) -> bool {
+        match agent {
+            // The node acting on its own behalf: initialization, migrations,
+            // importing a backup. Refusing this would mean a gated node could
+            // not finish booting.
+            crate::agents::ForAgent::Sudo => true,
+            crate::agents::ForAgent::AgentSubject(subject) => {
+                subject.as_str() == self.owner_agent
+            }
+            // An unauthenticated request is never the owner. Stated rather than
+            // left to fall out of the comparison, because this is the case the
+            // whole policy exists for.
+            crate::agents::ForAgent::Public => false,
+        }
+    }
+
+    fn enroll_drive(&self, drive_subject: &str) {
+        self.hosted.enroll(drive_subject);
+    }
+
+    fn not_enrolled_message(&self, _drive_subject: &str) -> String {
+        "This server does not host new Drives. Its owner runs it for their own \
+         data, so you cannot create a workspace here.\n\n\
+         You can still read anything they published, and open any Drive you were \
+         invited to. To keep your own data, run your own server or use a hosted \
+         one."
+            .to_string()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::agents::ForAgent;
+
+    const OWNER: &str = "did:ad:agent:ownerkey";
+    const STRANGER: &str = "did:ad:agent:strangerkey";
+
+    fn agent(subject: &str) -> ForAgent {
+        ForAgent::AgentSubject(crate::Subject::from_raw(subject, None))
+    }
+
+    #[test]
+    fn an_open_node_takes_a_drive_from_anyone() {
+        assert!(OpenPolicy.may_enroll_drive("did:ad:drive:new", &agent(STRANGER)));
+        assert!(OpenPolicy.may_enroll_drive("did:ad:drive:new", &ForAgent::Public));
+    }
+
+    #[test]
+    fn only_the_owner_may_enroll_a_new_drive() {
+        let policy = OwnerPolicy::new(OWNER);
+
+        assert!(policy.may_enroll_drive("did:ad:drive:new", &agent(OWNER)));
+        assert!(!policy.may_enroll_drive("did:ad:drive:new", &agent(STRANGER)));
+        assert!(!policy.may_enroll_drive("did:ad:drive:new", &ForAgent::Public));
+        // The node itself, so a gated node can still finish booting.
+        assert!(policy.may_enroll_drive("did:ad:drive:new", &ForAgent::Sudo));
+    }
+
+    #[test]
+    fn a_stranger_drive_is_refused_with_no_grace_window() {
+        let policy = OwnerPolicy::new(OWNER);
+
+        // Managed nodes admit an unknown drive briefly while enrollment
+        // propagates. That window is exactly the abuse this mode closes, so the
+        // very first attempt must be refused — not the second.
+        assert_eq!(
+            policy.admit_decision("did:ad:drive:stranger"),
+            AdmitDecision::NotEnrolled
+        );
+        assert_eq!(
+            policy.admit_decision("did:ad:drive:stranger"),
+            AdmitDecision::NotEnrolled
+        );
+    }
+
+    #[test]
+    fn an_enrolled_drive_keeps_writing() {
+        let policy = OwnerPolicy::new(OWNER);
+        policy.enroll_drive("did:ad:drive:mine");
+
+        assert_eq!(
+            policy.admit_decision("did:ad:drive:mine"),
+            AdmitDecision::Admitted
+        );
+    }
+
+    #[test]
+    fn drives_already_on_disk_survive_the_switch() {
+        // Turning the gate on must not revoke access to data that is already
+        // here — including a guest's drive created while the node was open.
+        let policy = OwnerPolicy::new(OWNER);
+        policy.enroll_existing(["did:ad:drive:from-before", "did:ad:drive:a-guests"]);
+
+        for existing in ["did:ad:drive:from-before", "did:ad:drive:a-guests"] {
+            assert_eq!(
+                policy.admit_decision(existing),
+                AdmitDecision::Admitted,
+                "{existing}"
+            );
+        }
+        assert_eq!(
+            policy.admit_decision("did:ad:drive:brand-new"),
+            AdmitDecision::NotEnrolled
+        );
+    }
+
+    #[test]
+    fn enrolling_one_drive_does_not_drop_the_others() {
+        let policy = AllowlistPolicy::new();
+        policy.set_drive_policies([("did:ad:drive:a", None), ("did:ad:drive:b", None)]);
+        policy.enroll("did:ad:drive:c");
+
+        let mut hosted = policy.allowed_drive_subjects();
+        hosted.sort();
+        assert_eq!(
+            hosted,
+            ["did:ad:drive:a", "did:ad:drive:b", "did:ad:drive:c"]
+        );
+    }
+
+    #[test]
+    fn the_refusal_explains_itself_to_a_visitor() {
+        let message = OwnerPolicy::new(OWNER).not_enrolled_message("did:ad:drive:x");
+
+        // No jargon, and no drive subject: the person reading this did not ask
+        // for a drive by name, they clicked a button.
+        assert!(!message.contains("enrolled"), "{message}");
+        assert!(!message.contains("did:ad:drive:x"), "{message}");
+        // It has to say what they *can* still do.
+        assert!(message.contains("invited"), "{message}");
+    }
+
+    #[test]
+    fn a_managed_allowlist_is_never_enrolled_by_asking() {
+        let policy = AllowlistPolicy::new();
+        assert!(!policy.may_enroll_drive("did:ad:drive:new", &agent(OWNER)));
+    }
 
     #[test]
     fn open_policy_allows_everything() {

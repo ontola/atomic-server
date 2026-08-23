@@ -923,10 +923,35 @@ impl Commit {
                     match store.sync_policy().admit_decision(&drive_subject) {
                         crate::sync::policy::AdmitDecision::Admitted => {}
                         crate::sync::policy::AdmitDecision::NotEnrolled => {
-                            return Err(format!(
-                                "Drive {drive_subject} is not enrolled for sync on this node."
-                            )
-                            .into());
+                            // A drive nobody here has seen is either its owner
+                            // setting one up or a stranger helping themselves to
+                            // the disk. Only the policy can tell those apart, so
+                            // ask it — and only for a drive being created, never
+                            // as a way back in for one already refused.
+                            //
+                            // Whose signature this is has been checked by now
+                            // (`validate_signature`, far above). When that check
+                            // was skipped the commit did not come off the wire at
+                            // all — it is initialization, a migration, or an
+                            // import — so the writer is this node itself.
+                            let writer = if opts.validate_signature {
+                                crate::agents::ForAgent::AgentSubject(commit.signer.clone())
+                            } else {
+                                crate::agents::ForAgent::Sudo
+                            };
+
+                            let policy = store.sync_policy();
+
+                            if is_new && policy.may_enroll_drive(&drive_subject, &writer) {
+                                tracing::info!(
+                                    "Enrolling new drive {} for {}",
+                                    drive_subject,
+                                    writer
+                                );
+                                policy.enroll_drive(&drive_subject);
+                            } else {
+                                return Err(policy.not_enrolled_message(&drive_subject).into());
+                            }
                         }
                         crate::sync::policy::AdmitDecision::OverQuota => {
                             return Err(format!(
@@ -2941,5 +2966,121 @@ mod test {
         assert_eq!(commit_builder.subject, "https://localhost/test");
         assert!(commit_builder.loro_update.is_some());
         assert!(!commit_builder.destroy);
+    }
+}
+
+/// Owner mode: only the node's owner may put a *new* drive here.
+///
+/// The managed-node tests above cover an allowlist a control plane populates.
+/// These cover the self-hosted gate, where the answer turns on *who is signing*
+/// rather than on what some other system already enrolled.
+#[cfg(all(test, feature = "db"))]
+mod owner_mode_tests {
+    use super::*;
+    use crate::sync::policy::OwnerPolicy;
+    use crate::Value;
+    use std::sync::Arc;
+
+    fn signed_opts(agent: &crate::agents::Agent) -> CommitOpts {
+        CommitOpts {
+            validate_signature: true,
+            validate_timestamp: false,
+            validate_previous_commit: true,
+            validate_rights: true,
+            validate_for_agent: Some(agent.subject.to_string()),
+            update_index: true,
+            ..CommitOpts::no_validations_no_index()
+        }
+    }
+
+    /// A commit that brings a new drive into being, signed by `agent`.
+    async fn new_drive_commit(db: &crate::Db, agent: &crate::agents::Agent) -> Commit {
+        let mut builder = CommitBuilder::new("placeholder".into());
+        builder.set(
+            crate::urls::IS_A.into(),
+            Value::ResourceArray(vec![crate::urls::DRIVE.to_string().into()]),
+        );
+        builder.set(crate::urls::NAME.into(), Value::String("A Drive".into()));
+        Commit::create_did(builder, agent, db).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_stranger_cannot_create_a_drive_on_someone_elses_node() {
+        let db = crate::Db::init_temp("owner_gate_stranger").await.unwrap();
+        let (owner, _) = db.setup("Owner").await.unwrap();
+        let stranger = db.create_agent(Some("Stranger")).await.unwrap();
+
+        db.set_sync_policy(Arc::new(OwnerPolicy::new(owner.subject.to_string())));
+
+        let commit = new_drive_commit(&db, &stranger).await;
+        let err = db
+            .apply_commit(commit, &signed_opts(&stranger))
+            .await
+            .expect_err("a stranger must not be able to genesis a drive on a gated node")
+            .to_string();
+
+        // The person reading this clicked a button; the message has to be about
+        // them, not about enrollment bookkeeping.
+        assert!(err.contains("does not host new Drives"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn the_owner_can_still_create_drives() {
+        let db = crate::Db::init_temp("owner_gate_owner").await.unwrap();
+        let (owner, _) = db.setup("Owner").await.unwrap();
+
+        db.set_sync_policy(Arc::new(OwnerPolicy::new(owner.subject.to_string())));
+
+        let commit = new_drive_commit(&db, &owner).await;
+        let subject = commit.subject.to_string();
+
+        db.apply_commit(commit, &signed_opts(&owner))
+            .await
+            .expect("the owner must be able to create a drive on their own node");
+
+        // And it was enrolled, so the *next* write to it is admitted without
+        // re-deciding who may enroll.
+        assert!(
+            db.sync_policy().admit_drive_write(&subject),
+            "creating a drive must enroll it"
+        );
+    }
+
+    #[tokio::test]
+    async fn drives_that_predate_the_gate_keep_working() {
+        // The switch from open to owner must never revoke access to data
+        // already on the disk — including a guest's drive from before.
+        let db = crate::Db::init_temp("owner_gate_snapshot").await.unwrap();
+        let (owner, _) = db.setup("Owner").await.unwrap();
+        let guest = db.create_agent(Some("Guest")).await.unwrap();
+
+        let commit = new_drive_commit(&db, &guest).await;
+        let guest_drive = commit.subject.to_string();
+        db.apply_commit(commit, &signed_opts(&guest))
+            .await
+            .expect("open node accepts the guest drive");
+
+        // Now the operator names an owner and restarts.
+        let policy = OwnerPolicy::new(owner.subject.to_string());
+        policy.enroll_existing(db.drive_subjects().await);
+        db.set_sync_policy(Arc::new(policy));
+
+        assert!(
+            db.sync_policy().admit_drive_write(&guest_drive),
+            "a drive created before the gate went up must stay writable"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_open_node_still_takes_a_drive_from_anyone() {
+        // The default path, and the one every existing deployment is on.
+        let db = crate::Db::init_temp("owner_gate_open").await.unwrap();
+        let (_owner, _) = db.setup("Owner").await.unwrap();
+        let stranger = db.create_agent(Some("Stranger")).await.unwrap();
+
+        let commit = new_drive_commit(&db, &stranger).await;
+        db.apply_commit(commit, &signed_opts(&stranger))
+            .await
+            .expect("an open node must behave exactly as it did before host mode existed");
     }
 }

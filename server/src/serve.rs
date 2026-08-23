@@ -439,6 +439,35 @@ where
         message.push('\n');
     }
 
+    // Always say which it is. A node that silently changed who may write to it
+    // would be worse than one that never gated at all.
+    match config.host_mode.mode {
+        crate::host_mode::HostMode::Owner => {
+            message.push_str(&format!(
+                "Only its owner can create new Drives here ({}).\n\n",
+                config
+                    .host_mode
+                    .owner_agent
+                    .as_deref()
+                    .unwrap_or("no owner set")
+            ));
+        }
+        crate::host_mode::HostMode::Open => {
+            let reachability = config.reachability();
+
+            if reachability.looks_exposed() && config.opts.host_mode.is_none() {
+                let warning = crate::host_mode::exposure_warning(reachability);
+                // Both, deliberately: the banner is what someone watching the
+                // terminal sees, and the `warn!` is what survives into
+                // journalctl for someone reading back later.
+                tracing::warn!("{}", warning);
+                message.push_str(&format!("{}\n\n", warning));
+            } else {
+                message.push_str("Anyone who can reach this node can create a Drive on it.\n\n");
+            }
+        }
+    }
+
     if config.opts.https {
         if cfg!(feature = "https") {
             #[cfg(feature = "https")]

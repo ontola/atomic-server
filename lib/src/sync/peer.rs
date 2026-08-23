@@ -686,9 +686,22 @@ async fn admitted_for_drive(
 
     // Admission gate first (allowlist/quota/bootstrap grace) — cheap,
     // in-memory. No-op under the default OpenPolicy (self-hosted / FOSS).
-    if !store.sync_policy().admit_drive_write(drive_subject) {
-        cache.insert(drive_subject.to_string(), false);
-        return false;
+    let policy = store.sync_policy();
+
+    if !policy.admit_drive_write(drive_subject) {
+        // Same bootstrap question as `import_sync_push`: a drive we do not have
+        // may be a live update for one arriving right now. Whether that is
+        // allowed depends on who is pushing it, which only the policy knows.
+        let drive_subj =
+            crate::Subject::from_raw(drive_subject, store.get_base_domain().as_deref());
+        let is_new_here = store.get_resource(&drive_subj).await.is_err();
+
+        if is_new_here && policy.may_enroll_drive(drive_subject, agent) {
+            policy.enroll_drive(drive_subject);
+        } else {
+            cache.insert(drive_subject.to_string(), false);
+            return false;
+        }
     }
 
     // ACL: may this write land? The sending peer's own write access, or —
