@@ -48,10 +48,7 @@ pub async fn single_page(
         ))
         .insert_header((
             "Content-Security-Policy",
-            format!(
-                "script-src 'nonce-{}' 'wasm-unsafe-eval'; worker-src 'self'",
-                csp_nonce
-            ),
+            spa_content_security_policy(&csp_nonce),
         ))
         .body(body);
 
@@ -63,6 +60,24 @@ use atomic_lib::storelike::ResourceResponse;
 use atomic_lib::urls;
 use atomic_lib::Resource;
 use atomic_lib::Storelike;
+
+const DEFAULT_SOCIAL_PREVIEW: &str = "/default_social_preview.jpg";
+
+/// CSP for the data-browser HTML shell.
+///
+/// `script-src` is nonce-locked so an injected inline script does not run.
+/// That is not enough on its own: the production bundle is a relative
+/// `<script src="/assets/…">` carrying the same nonce, and a `<base href>`
+/// earlier in `<head>` retargets that URL to an attacker origin — a nonce
+/// then *authorizes* the foreign script. `base-uri 'self'` closes that.
+/// `object-src 'none'` is cheap hardening. A full `default-src 'none'` is
+/// not applied here: the SPA loads styles, images, fonts, WASM and API
+/// calls from several origins and would need an explicit inventory first.
+fn spa_content_security_policy(nonce: &str) -> String {
+    format!(
+        "script-src 'nonce-{nonce}' 'wasm-unsafe-eval'; worker-src 'self'; base-uri 'self'; object-src 'none'"
+    )
+}
 
 /* HTML tags for social media and link previews. Also includes JSON-AD body of the requested resource, if publicly available. */
 struct MetaTags {
@@ -110,10 +125,14 @@ impl MetaTags {
             "Atomic Server".to_string()
         };
         let image = if let Ok(d) = r.get(urls::DOWNLOAD_URL) {
-            // TODO: check if thefile is actually an image
-            d.to_string()
+            // `download-url` is a user-writable string, not recomputed on
+            // read. Only http(s) and same-origin paths are used as a preview
+            // image; anything else falls back so a crafted value cannot
+            // break out of the `<meta>` attribute even if escaping is later
+            // removed.
+            sanitize_preview_image(&d.to_string())
         } else {
-            "/default_social_preview.jpg".to_string()
+            DEFAULT_SOCIAL_PREVIEW.to_string()
         };
         // TODO: also fetch the parents for extra fast first renders!
         let json = r.to_json_ad(Some(origin)).ok();
@@ -131,7 +150,7 @@ impl Default for MetaTags {
         Self {
             description: "Sign in to view this resource".to_string(),
             title: "Atomic Server".to_string(),
-            image: "/default_social_preview.jpg".to_string(),
+            image: DEFAULT_SOCIAL_PREVIEW.to_string(),
             json: None,
         }
     }
@@ -140,7 +159,11 @@ impl Default for MetaTags {
 impl Display for MetaTags {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let description = escape_html(&self.description);
-        let image = &self.image;
+        // Escape `image` the same way as title/description. The previous
+        // raw interpolation let a `download-url` containing `"` close the
+        // attribute and inject markup (`<base>`, `<meta http-equiv>`) into
+        // every visitor's `<head>`.
+        let image = escape_html(&self.image);
         let title = escape_html(&self.title);
 
         write!(
@@ -174,6 +197,39 @@ fn escape_html(s: &str) -> String {
         .replace('\'', "&#x27;")
         .replace('"', "&quot;")
         .replace('/', "&#x2F;")
+}
+
+/// Values safe to put in `og:image` / `twitter:image` after HTML escaping.
+///
+/// Allows `http(s):` and same-origin relative paths (`/…`). Rejects
+/// protocol-relative URLs (`//evil`), `javascript:` / `data:` / etc., and
+/// anything with whitespace, controls, or HTML-significant characters.
+fn sanitize_preview_image(value: &str) -> String {
+    if is_safe_preview_image_url(value) {
+        value.to_string()
+    } else {
+        DEFAULT_SOCIAL_PREVIEW.to_string()
+    }
+}
+
+fn is_safe_preview_image_url(value: &str) -> bool {
+    if value.is_empty() {
+        return false;
+    }
+    if value
+        .chars()
+        .any(|c| c.is_control() || c.is_whitespace() || matches!(c, '<' | '>' | '"' | '\'' | '`'))
+    {
+        return false;
+    }
+    // Same-origin relative path, not protocol-relative `//host`.
+    if value.starts_with('/') && !value.starts_with("//") {
+        return true;
+    }
+    match url::Url::parse(value) {
+        Ok(parsed) => matches!(parsed.scheme(), "http" | "https"),
+        Err(_) => false,
+    }
 }
 
 /// Declares the configured home Drive to the app, inside the HTML we are
@@ -235,7 +291,10 @@ fn generate_nonce() -> Result<String, ring::error::Unspecified> {
 
 #[cfg(test)]
 mod test {
-    use super::{home_drive_script, MetaTags};
+    use super::{
+        home_drive_script, sanitize_preview_image, spa_content_security_policy, MetaTags,
+        DEFAULT_SOCIAL_PREVIEW,
+    };
 
     const ORIGIN: &str = "https://example.com";
 
@@ -302,14 +361,116 @@ mod test {
     }
 
     #[test]
-    // Malicious test: try escaping html and adding script tag
     fn evil_meta_tags() {
+        // Description, title, and image all land in quoted attributes. A
+        // `"` plus markup used to close `og:image` / `twitter:image` and
+        // inject a `<base>` or `<meta http-equiv=refresh>` into `<head>`.
         let html = MetaTags {
             description: "\"<script>alert('evil')</script>\"".to_string(),
+            title: r#""><script>alert(1)</script>"#.to_string(),
+            image: r#""><base href="https://evil.example/">"#.to_string(),
             ..Default::default()
         }
         .to_string();
-        println!("{}", html);
-        assert!(!html.contains("<script>"));
+        assert!(
+            !html.contains("<script>"),
+            "injected a script tag: {html}"
+        );
+        assert!(!html.contains("<base"), "injected a base tag: {html}");
+        assert!(
+            !html.contains("http-equiv"),
+            "injected a refresh meta: {html}"
+        );
+        assert!(
+            !html.contains(r#"content=""><"#),
+            "broke out of a content attribute: {html}"
+        );
+        assert!(
+            html.contains("&quot;") && html.contains("&lt;base"),
+            "image payload should be HTML-escaped, got: {html}"
+        );
+    }
+
+    #[test]
+    fn image_refresh_payload_is_escaped() {
+        let html = MetaTags {
+            image: r#""><meta http-equiv="refresh" content="0;url=https://evil.example/phish">"#
+                .to_string(),
+            ..Default::default()
+        }
+        .to_string();
+        assert!(!html.contains("http-equiv"), "injected refresh: {html}");
+        assert!(
+            !html.contains("<meta http-equiv"),
+            "injected a raw refresh tag: {html}"
+        );
+    }
+
+    #[test]
+    fn preview_image_url_allowlist() {
+        assert_eq!(
+            sanitize_preview_image("https://cdn.example.com/cover.jpg"),
+            "https://cdn.example.com/cover.jpg"
+        );
+        assert_eq!(
+            sanitize_preview_image("http://cdn.example.com/cover.jpg"),
+            "http://cdn.example.com/cover.jpg"
+        );
+        assert_eq!(
+            sanitize_preview_image("/download/files/abc"),
+            "/download/files/abc"
+        );
+        assert_eq!(
+            sanitize_preview_image(DEFAULT_SOCIAL_PREVIEW),
+            DEFAULT_SOCIAL_PREVIEW
+        );
+
+        // Attribute-breakout and non-http(s) schemes fall back.
+        assert_eq!(
+            sanitize_preview_image(r#""><base href="https://evil.example/">"#),
+            DEFAULT_SOCIAL_PREVIEW
+        );
+        assert_eq!(
+            sanitize_preview_image("//evil.example/x"),
+            DEFAULT_SOCIAL_PREVIEW
+        );
+        assert_eq!(
+            sanitize_preview_image("javascript:alert(1)"),
+            DEFAULT_SOCIAL_PREVIEW
+        );
+        assert_eq!(
+            sanitize_preview_image("data:text/html,<h1>x</h1>"),
+            DEFAULT_SOCIAL_PREVIEW
+        );
+        assert_eq!(
+            sanitize_preview_image("file:///etc/passwd"),
+            DEFAULT_SOCIAL_PREVIEW
+        );
+        assert_eq!(sanitize_preview_image(""), DEFAULT_SOCIAL_PREVIEW);
+        assert_eq!(
+            sanitize_preview_image("https://example.com/a b.jpg"),
+            DEFAULT_SOCIAL_PREVIEW
+        );
+    }
+
+    #[test]
+    fn spa_csp_pins_base_uri() {
+        let csp = spa_content_security_policy("test-nonce");
+        assert!(
+            csp.contains("base-uri 'self'"),
+            "CSP must pin base-uri so an injected <base> cannot retarget the bundle: {csp}"
+        );
+        assert!(
+            csp.contains("object-src 'none'"),
+            "CSP should disable plugins: {csp}"
+        );
+        assert!(
+            csp.contains("script-src 'nonce-test-nonce'"),
+            "CSP must keep the per-request script nonce: {csp}"
+        );
+        assert!(
+            !csp.contains("default-src"),
+            "default-src is deliberately unset until the SPA origins are inventoried: {csp}"
+        );
     }
 }

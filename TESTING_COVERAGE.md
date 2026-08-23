@@ -304,6 +304,16 @@ is only kept in step by mirroring the tests, so do that deliberately.
 derivation (`personal_drive_subject` / `personalDriveSubject`). The cross-lang
 vector (`personal_drive_cross_lang_vector`) pins the nonce, signature, and DID.
 
+## SPA HTML shell
+
+| Flow | Layer | Where |
+|---|---|---|
+| Social-preview title / description / image HTML-escaped (no attribute breakout, no `<base>` / `<script>` / refresh) | glue | `server/src/handlers/single_page_app.rs::evil_meta_tags` |
+| `download-url` used as `og:image` only when http(s) or a same-origin path | glue | `single_page_app.rs::preview_image_url_allowlist` |
+| SPA CSP includes `base-uri 'self'` and `object-src 'none'` | glue | `single_page_app.rs::spa_csp_pins_base_uri` |
+
+Not covered: a live browser navigation of a resource whose `download-url` is attacker-controlled. The sink is the HTML formatter, covered above.
+
 ## Documents
 
 | Flow | Layer | Where |

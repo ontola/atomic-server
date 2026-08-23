@@ -7,6 +7,10 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Security: HTML-escape the social-preview `og:image` / `twitter:image` value
+  (from `download-url`), allowlist http(s) and same-origin paths, and add
+  `base-uri 'self'` plus `object-src 'none'` to the SPA CSP so a
+  publicly-readable resource cannot inject markup into the HTML shell.
 - Git / CI: one integration branch (`develop`) plus stable `v*` tags. Staging
   follows `develop`; production and live docs follow a tagged release. `master`
   is no longer a deploy or docs trigger, and `main` is not introduced as a
