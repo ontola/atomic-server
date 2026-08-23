@@ -191,9 +191,10 @@ impl Display for MetaTags {
 }
 
 fn escape_html(s: &str) -> String {
-    s.replace('<', "&lt;")
+    // `&` first so the entities we insert next are not re-escaped.
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
         .replace('>', "&gt;")
-        .replace('&', "&amp;")
         .replace('\'', "&#x27;")
         .replace('"', "&quot;")
         .replace('/', "&#x2F;")
@@ -399,10 +400,34 @@ mod test {
             ..Default::default()
         }
         .to_string();
-        assert!(!html.contains("http-equiv"), "injected refresh: {html}");
         assert!(
             !html.contains("<meta http-equiv"),
             "injected a raw refresh tag: {html}"
+        );
+        assert!(
+            !html.contains(r#"content=""><"#),
+            "broke out of a content attribute: {html}"
+        );
+        assert!(
+            html.contains("&lt;meta"),
+            "refresh payload should be HTML-escaped, got: {html}"
+        );
+    }
+
+    #[test]
+    fn escape_html_encodes_ampersand_once() {
+        let html = MetaTags {
+            title: "A & B < C".to_string(),
+            ..Default::default()
+        }
+        .to_string();
+        assert!(
+            html.contains("A &amp; B &lt; C"),
+            "ampersand must be escaped once, and < must stay a single entity: {html}"
+        );
+        assert!(
+            !html.contains("&amp;amp;") && !html.contains("&amp;lt;"),
+            "entities were double-escaped: {html}"
         );
     }
 
