@@ -1,6 +1,12 @@
 # FOSS public host mode — expose HTTP, do not host strangers
 
-> **Status:** Proposal (2026-08-15). Companion to
+> **Status:** Phase 1 + 2 built (2026-08-23). Server-side gating, `/server`
+> advertisement, welcome-screen branch, and the operator guide have landed.
+> Phase 3 (rate limits, Iroh stream refusal) is untouched.
+>
+> Three decisions changed during the build; the body below has been corrected
+> where it said otherwise, and [Resolved decisions](#resolved-decisions) records
+> why. Companion to
 > [`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md) (managed
 > allowlist), [`unified-sync.md`](./unified-sync.md) Open Question 5
 > (bootstrap admission), and [`sync-onboarding-ux.md`](./sync-onboarding-ux.md)
@@ -205,9 +211,9 @@ DID they will put in the env.
 ### 2. Going public — env, then expose
 
 1. They already have a secret (localhost, desktop, or phone).
-2. They set `ATOMIC_OWNER_AGENT`, a public `ATOMIC_DOMAIN`, and
-   usually `--https`. Owner mode is the default on a public domain;
-   the env is what makes it *theirs*.
+2. They set `ATOMIC_OWNER_AGENT`. That alone selects Owner mode —
+   a public `ATOMIC_DOMAIN` and `--https` are about links and certs,
+   not about who may write.
 3. Boot. Snapshot every Drive already on disk into the allowlist
    (so a localhost-then-expose move does not lock the owner out of
    data that is already there).
@@ -398,23 +404,79 @@ Tests (flow):
 - `planning/sync-onboarding-ux.md` — welcome branches; language:
   “always-on device,” not “sync hub.”
 
-## Open questions
+## Resolved decisions
 
-1. **Should Owner be the default as soon as `ATOMIC_DOMAIN` is not
-   localhost, or only when `--https` / a non-loopback bind is set?**
-   Leaning: non-localhost domain. A `ATOMIC_DOMAIN=example.com` HTTP
-   node on a VPS is already public to anyone who finds the port.
-2. **May the owner grant `createDrive` to another agent in v1?** No.
-   Invite-to-a-Drive covers collaboration. Host-your-own-Drive is
-   multi-tenant and needs its own invite type.
-3. **Disable Iroh in Owner mode?** No for v1. HTTPS is enough for the
-   browser; phones still pair. Redacting the NodeID from public
-   `/server` is the first cut.
-4. **Name.** `hostMode` / Owner, not “public mode,” not “locked,” not
-   “registration.” The node is not a product with accounts; it has an
-   owner.
-5. **Refuse to start vs. start locked if the env is missing?** Refuse
-   to start. A process that never bound is an operator error they see
-   in `journalctl`. A process that bound and admits nothing looks like
-   a broken site. `ATOMIC_HOST_MODE=open` remains the explicit escape.
-)
+Recorded because each reverses something this document originally proposed.
+
+### 1. `ATOMIC_DOMAIN` decides nothing (reverses OQ1)
+
+OQ1 asked whether Owner should be the default as soon as `ATOMIC_DOMAIN` is not
+localhost, and leaned yes. That is **fail-open in the deployments that matter
+most**.
+
+`ATOMIC_DOMAIN` defaults to `localhost` and exists to build links and to satisfy
+the LetsEncrypt challenge. Behind Docker with nginx/Caddy/Traefik, or behind a
+Cloudflare or Tailscale tunnel, the process never learns its public name: the
+domain still reads `localhost` while the whole internet reaches it. Inferring
+"Open, this is a private box" there hands out a guarantee we cannot keep — and
+the same rule would have hard-failed every `ATOMIC_DOMAIN=example.com` HTTP node
+on upgrade. Backwards on both ends.
+
+So the mode is decided by **explicit configuration only**:
+
+1. `ATOMIC_HOST_MODE` — the operator said so.
+2. `ATOMIC_OWNER_AGENT` is set — naming an owner is not done by accident.
+3. Neither — Open, exactly as before host mode existed.
+
+Domain, `--https`, and port are still read, for exactly one purpose: deciding
+whether an Open node prints a warning. A wrong guess there costs a line of log
+noise instead of a stranger's workspace.
+
+`ATOMIC_DOMAIN` itself is **not** deprecated — it still feeds `get_origin()` /
+`server_url` and the cert. What was deprecated is domain-as-identity: drives,
+agents, and nodes are `did:ad:…`, so the domain no longer names anyone's data.
+That is what makes it a bad security signal and a fine display one.
+
+### 2. Upgrades are grandfathered, not broken
+
+An existing node with no new configuration keeps booting and keeps admitting
+whoever it admitted yesterday. A security change that stops a running server is
+one operators route around.
+
+What an unconfigured node gets instead is a boot warning, but only when there is
+a sign of *intent to publish* — `--https`, a routable `ATOMIC_DOMAIN`, or port
+80/443. Notably **not** the bind address: `--ip` defaults to `::`, so warning on
+a non-loopback bind would fire on every dev run and every test, and a warning
+that always fires is one nobody reads.
+
+The residual gap is honest and documented: a proxied node shows no signal at all,
+so it is never warned. The docs carry that case instead — it is the one the FAQ
+and the installation guide both lead with.
+
+### 3. Enrollment is derived from the store, not persisted
+
+The sketch said to persist `allowed_drives` in redb `PluginMeta`. Simpler and
+impossible to drift: on Owner boot, scan the resource tree for Drives and enroll
+what is there (`Db::drive_subjects`). A drive that exists is a drive this node
+hosts; next boot re-derives the same answer.
+
+That also *is* the snapshot-on-flip behaviour the plan wanted, for free. The scan
+is O(store) once per boot, deliberately not index-backed: a stale or partial
+query index would answer "fewer drives than you have", which here silently locks
+the owner out of their own data.
+
+## Still open
+
+2. **May the owner grant `createDrive` to another agent?** No. Invite-to-a-Drive
+   covers collaboration. Host-your-own-Drive is multi-tenant and needs its own
+   invite type.
+3. **Disable Iroh in Owner mode?** No. HTTPS is enough for the browser, phones
+   still pair, and the node ID is now redacted from unauthenticated `/server`.
+4. **Name.** `hostMode` / Owner. Settled.
+5. **Refuse to start vs. start locked when Owner has no owner?** Refuse. A
+   process that never bound is an operator error visible in `journalctl`; one
+   that bound and admits nothing looks like a broken site.
+6. **Should a proxied node be detectable at runtime?** Open. An `X-Forwarded-*`
+   header or a non-local `Host` on a live request would prove reachability that
+   boot-time config cannot. Would close the one gap above, at the cost of a
+   warning path that fires from request handling.
