@@ -7,7 +7,7 @@ use atomic_lib::urls::{DOWNLOAD_URL, MIMETYPE};
 use atomic_lib::{
     agents::{Agent, ForAgent},
     class_extender::{BoxFuture, ClassExtender, CommitExtenderContext, GetExtenderContext},
-    db::plugin_meta::PluginMetaKey,
+    db::plugin_meta::{validate_plugin_identifier, PluginMetaKey},
     errors::AtomicResult,
     storelike::ResourceResponse,
     urls::{self},
@@ -71,6 +71,9 @@ fn get_namespace_and_name(resource: &Resource) -> AtomicResult<(String, String)>
         )));
     };
 
+    validate_plugin_identifier("name", name)?;
+    validate_plugin_identifier("namespace", namespace)?;
+
     Ok((namespace.to_string(), name.to_string()))
 }
 
@@ -83,18 +86,18 @@ async fn do_uninstall_plugin(
 ) -> AtomicResult<()> {
     tracing::info!("destroying plugin {}", resource.get_subject());
 
-    let Ok(Value::String(name)) = resource.get(urls::NAME) else {
-        return Err(AtomicError::from(format!(
-            "Plugin {} has no name",
-            resource.get_subject()
-        )));
-    };
-
-    let Ok(Value::String(namespace)) = resource.get(urls::NAMESPACE) else {
-        return Err(AtomicError::from(format!(
-            "Plugin {} has no namespace",
-            resource.get_subject()
-        )));
+    let (namespace, name) = match get_namespace_and_name(resource) {
+        Ok(pair) => pair,
+        Err(e) => {
+            // Still allow the resource to be deleted; do not touch the
+            // filesystem with an unsanitized identifier.
+            tracing::warn!(
+                "skipping plugin uninstall for {}: {}",
+                resource.get_subject(),
+                e
+            );
+            return Ok(());
+        }
     };
 
     tracing::info!(
@@ -106,7 +109,7 @@ async fn do_uninstall_plugin(
 
     // Even if the uninstall fails we still want to continue the commit
     // If we don't do this the resource will not be able to be deleted.
-    let _ = uninstall_plugin(name, namespace, parent_subject, store, plugins_dir).await;
+    let _ = uninstall_plugin(&name, &namespace, parent_subject, store, plugins_dir).await;
 
     Ok(())
 }
@@ -319,8 +322,11 @@ fn on_before_commit(
                     ));
                 }
             } else {
-                // For new plugins, check if name/namespace are already used on this drive.
-                if let Ok((namespace, name)) = get_namespace_and_name(resource) {
+                // For new plugins, reject unsanitized identifiers and check
+                // uniqueness on this drive. Name/namespace must be set at
+                // create time — they cannot be updated later.
+                if resource.get(urls::NAME).is_ok() || resource.get(urls::NAMESPACE).is_ok() {
+                    let (namespace, name) = get_namespace_and_name(resource)?;
                     let key = PluginMetaKey::new(&parent_subject, &namespace, &name);
                     if let Some(meta) = store.get_plugin_meta(&key)? {
                         if meta.subject.as_str() != resource.get_subject().as_str() {

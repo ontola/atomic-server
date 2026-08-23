@@ -304,6 +304,17 @@ is only kept in step by mirroring the tests, so do that deliberately.
 derivation (`personal_drive_subject` / `personalDriveSubject`). The cross-lang
 vector (`personal_drive_cross_lang_vector`) pins the nonce, signature, and DID.
 
+## Wasm plugins
+
+| Flow | Layer | Where |
+|---|---|---|
+| Plugin `name` / `namespace` reject separators, dots, empty, and control chars | protocol | `lib/src/db/plugin_meta.rs` |
+| Filesystem joins stay inside the plugin scoped directory | protocol | `plugin_meta.rs` (`join_under_dir`, `join_relative_under_dir`) |
+| Uninstall rejects unsanitized identifiers and does not touch files outside the scoped dir | glue | `server/src/plugins/wasm.rs` (`path_safety_tests`, needs `wasm-plugins`) |
+| Zip extract stays inside the scoped dir; escaping `assets/` entries are refused | glue | `wasm.rs` (`path_safety_tests`) |
+
+Not covered in CI `light` (no `wasm-plugins`): the server-side `path_safety_tests`. Identifier and join helpers still run in `atomic_lib`. No HTTP-level plugin install/uninstall e2e.
+
 ## Documents
 
 | Flow | Layer | Where |

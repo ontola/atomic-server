@@ -15,7 +15,10 @@ use atomic_lib::{
     agents::{Agent, ForAgent},
     class_extender::ClassExtender,
     commit::{CommitBuilder, CommitOpts},
-    db::plugin_meta::{PermissionType, PluginManifest, PluginMeta},
+    db::plugin_meta::{
+        join_relative_under_dir, join_under_dir, validate_plugin_identifier, PermissionType,
+        PluginManifest, PluginMeta,
+    },
     errors::{AtomicError, AtomicResult},
     parse::{parse_json_ad_resource, ParseOpts, SaveOpts},
     storelike::{Query, ResourceResponse},
@@ -931,19 +934,18 @@ fn validate_plugin_zip(
             .by_index(i)
             .map_err(|e| AtomicError::from(e.to_string()))?;
         let name = file.name();
-        if name == "plugin.wasm"
-            || name == "plugin.json"
-            || name == "ui.js"
-            || name == "ui.css"
-            || name.starts_with("assets/")
-        {
+        if name == "plugin.wasm" || name == "plugin.json" || name == "ui.js" || name == "ui.css" {
             if name == "ui.js" {
                 has_ui_js = true;
             }
             continue;
         }
-        // If it's a directory "assets/", that's fine too.
-        if name == "assets/" {
+        if let Some(rest) = name.strip_prefix("assets/") {
+            // `assets/` itself has an empty remainder and is allowed.
+            // Anything else must stay inside that prefix.
+            if !rest.is_empty() {
+                join_relative_under_dir(Path::new("assets"), rest)?;
+            }
             continue;
         }
         return Err(AtomicError::from(format!(
@@ -968,6 +970,9 @@ fn extract_plugin_to_disk(
     namespace: &str,
     name: &str,
 ) -> AtomicResult<PathBuf> {
+    validate_plugin_identifier("name", name)?;
+    validate_plugin_identifier("namespace", namespace)?;
+
     let target_dir = plugins_dir
         .join(CLASS_EXTENDER_DIR_NAME)
         .join("scoped")
@@ -986,21 +991,22 @@ fn extract_plugin_to_disk(
         let file_name = file.name().to_string();
 
         let target_path = if file_name == "plugin.wasm" {
-            target_dir.join(format!("{}.{}.wasm", namespace, name))
+            join_under_dir(&target_dir, &format!("{}.{}.wasm", namespace, name))?
         } else if file_name == "plugin.json" {
-            target_dir.join(format!("{}.{}.json", namespace, name))
+            join_under_dir(&target_dir, &format!("{}.{}.json", namespace, name))?
         } else if file_name == "ui.js" {
-            target_dir.join(format!("{}.{}.ui.js", namespace, name))
+            join_under_dir(&target_dir, &format!("{}.{}.ui.js", namespace, name))?
         } else if file_name == "ui.css" {
-            target_dir.join(format!("{}.{}.ui.css", namespace, name))
+            join_under_dir(&target_dir, &format!("{}.{}.ui.css", namespace, name))?
         } else if file_name.starts_with("assets/") {
             // Replace "assets/" with "{namespace}/"
             let stripped = file_name.strip_prefix("assets/").unwrap();
+            let assets_dir = join_under_dir(&target_dir, namespace)?;
             if stripped.is_empty() {
                 // It is the "assets/" directory itself
-                target_dir.join(namespace)
+                assets_dir
             } else {
-                target_dir.join(namespace).join(stripped)
+                join_relative_under_dir(&assets_dir, stripped)?
             }
         } else {
             continue;
@@ -1107,6 +1113,11 @@ pub async fn uninstall_plugin(
     store: &Db,
     plugins_dir: &Path,
 ) -> AtomicResult<()> {
+    // Name/namespace are attacker-controlled on the Plugin resource. Validate
+    // before any path is joined so uninstall cannot leave the scoped dir.
+    validate_plugin_identifier("name", name)?;
+    validate_plugin_identifier("namespace", namespace)?;
+
     let encoded_subject = general_purpose::URL_SAFE.encode(drive_subject);
     let target_dir = plugins_dir
         .join(CLASS_EXTENDER_DIR_NAME)
@@ -1121,10 +1132,10 @@ pub async fn uninstall_plugin(
     }
 
     let wasm_filename = format!("{}.{}.wasm", namespace, name);
-    let wasm_path = target_dir.join(&wasm_filename);
-    let json_path = target_dir.join(format!("{}.{}.json", namespace, name));
-    let ui_js_path = target_dir.join(format!("{}.{}.ui.js", namespace, name));
-    let ui_css_path = target_dir.join(format!("{}.{}.ui.css", namespace, name));
+    let wasm_path = join_under_dir(&target_dir, &wasm_filename)?;
+    let json_path = join_under_dir(&target_dir, &format!("{}.{}.json", namespace, name))?;
+    let ui_js_path = join_under_dir(&target_dir, &format!("{}.{}.ui.js", namespace, name))?;
+    let ui_css_path = join_under_dir(&target_dir, &format!("{}.{}.ui.css", namespace, name))?;
 
     if !wasm_path.exists() {
         return Err(AtomicError::not_found(format!(
@@ -1197,7 +1208,7 @@ pub async fn uninstall_plugin(
     }
 
     if !namespace_still_used {
-        let assets_dir = target_dir.join(namespace);
+        let assets_dir = join_under_dir(&target_dir, namespace)?;
         if assets_dir.exists() && assets_dir.is_dir() {
             info!("Removing unused assets directory: {}", assets_dir.display());
             std::fs::remove_dir_all(&assets_dir).map_err(|e| {
@@ -1243,10 +1254,16 @@ pub async fn install_or_update_plugin(
         .join(CLASS_EXTENDER_DIR_NAME)
         .join("scoped")
         .join(&encoded_subject);
-    let wasm_path = target_dir.join(&wasm_target_name);
-    let json_path = target_dir.join(&json_target_name);
-    let ui_js_path = target_dir.join(format!("{}.{}.ui.js", manifest.namespace, manifest.name));
-    let ui_css_path = target_dir.join(format!("{}.{}.ui.css", manifest.namespace, manifest.name));
+    let wasm_path = join_under_dir(&target_dir, &wasm_target_name)?;
+    let json_path = join_under_dir(&target_dir, &json_target_name)?;
+    let ui_js_path = join_under_dir(
+        &target_dir,
+        &format!("{}.{}.ui.js", manifest.namespace, manifest.name),
+    )?;
+    let ui_css_path = join_under_dir(
+        &target_dir,
+        &format!("{}.{}.ui.css", manifest.namespace, manifest.name),
+    )?;
 
     // Determine if this is a fresh install or an update by saving the old metadata
     let meta_key = PluginMetaKey::new(drive_subject, &manifest.namespace, &manifest.name);
@@ -1713,4 +1730,169 @@ async fn compare_manifest_to_resource(
     }
 
     Ok(true)
+}
+
+#[cfg(test)]
+mod path_safety_tests {
+    use super::*;
+    use std::io::{Cursor, Write};
+    use zip::write::SimpleFileOptions;
+    use zip::ZipWriter;
+
+    fn scoped_dir(plugins_dir: &Path, drive: &str) -> PathBuf {
+        let encoded = general_purpose::URL_SAFE.encode(drive);
+        plugins_dir
+            .join(CLASS_EXTENDER_DIR_NAME)
+            .join("scoped")
+            .join(encoded)
+    }
+
+    fn unique_temp(prefix: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "{prefix}_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn zip_from_entries(entries: &[(&str, &[u8])]) -> ZipArchive<Cursor<Vec<u8>>> {
+        let buf = {
+            let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+            let options = SimpleFileOptions::default();
+            for (name, data) in entries {
+                writer.start_file(*name, options).unwrap();
+                writer.write_all(data).unwrap();
+            }
+            writer.finish().unwrap().into_inner()
+        };
+        ZipArchive::new(Cursor::new(buf)).unwrap()
+    }
+
+    #[tokio::test]
+    async fn uninstall_rejects_unsanitized_identifiers() {
+        let db = Db::init_temp("uninstall_rejects_unsanitized")
+            .await
+            .unwrap();
+        let (_agent, drive) = db.setup("Tester").await.unwrap();
+
+        let plugins_dir = unique_temp("atomic_plugin_uninstall");
+        let target_dir = scoped_dir(&plugins_dir, &drive);
+        std::fs::create_dir_all(&target_dir).unwrap();
+
+        let sentinel_dir = unique_temp("atomic_plugin_sentinel");
+        let sentinel = sentinel_dir.join("keep_me");
+        std::fs::write(&sentinel, b"keep").unwrap();
+
+        let result = uninstall_plugin(
+            "keep_me",
+            "../../../../../../../../../../tmp",
+            &drive,
+            &db,
+            &plugins_dir,
+        )
+        .await;
+
+        assert!(result.is_err(), "unsanitized namespace must be rejected");
+        assert!(
+            sentinel.exists(),
+            "a file outside the plugin scoped dir must remain"
+        );
+        assert!(target_dir.exists());
+
+        let _ = std::fs::remove_dir_all(&plugins_dir);
+        let _ = std::fs::remove_dir_all(&sentinel_dir);
+    }
+
+    #[tokio::test]
+    async fn uninstall_rejects_empty_namespace() {
+        let db = Db::init_temp("uninstall_rejects_empty_namespace")
+            .await
+            .unwrap();
+        let (_agent, drive) = db.setup("Tester").await.unwrap();
+
+        let plugins_dir = unique_temp("atomic_plugin_empty_ns");
+        let target_dir = scoped_dir(&plugins_dir, &drive);
+        std::fs::create_dir_all(&target_dir).unwrap();
+        std::fs::write(target_dir.join("keep.wasm"), b"x").unwrap();
+
+        let result = uninstall_plugin("", "calendar", &drive, &db, &plugins_dir).await;
+        assert!(result.is_err());
+        assert!(target_dir.exists());
+        assert!(target_dir.join("keep.wasm").exists());
+
+        let result = uninstall_plugin("calendar", "", &drive, &db, &plugins_dir).await;
+        assert!(result.is_err());
+        assert!(target_dir.exists());
+        assert!(target_dir.join("keep.wasm").exists());
+
+        let _ = std::fs::remove_dir_all(&plugins_dir);
+    }
+
+    #[tokio::test]
+    async fn uninstall_removes_only_scoped_plugin_files() {
+        let db = Db::init_temp("uninstall_removes_scoped").await.unwrap();
+        let (_agent, drive) = db.setup("Tester").await.unwrap();
+
+        let plugins_dir = unique_temp("atomic_plugin_happy");
+        let target_dir = scoped_dir(&plugins_dir, &drive);
+        std::fs::create_dir_all(target_dir.join("google")).unwrap();
+        std::fs::write(target_dir.join("google.calendar.wasm"), b"wasm").unwrap();
+        std::fs::write(target_dir.join("google.calendar.json"), b"{}").unwrap();
+        std::fs::write(target_dir.join("google").join("icon.png"), b"x").unwrap();
+        std::fs::write(target_dir.join("other.plugin.wasm"), b"keep").unwrap();
+
+        uninstall_plugin("calendar", "google", &drive, &db, &plugins_dir)
+            .await
+            .unwrap();
+
+        assert!(!target_dir.join("google.calendar.wasm").exists());
+        assert!(!target_dir.join("google.calendar.json").exists());
+        assert!(!target_dir.join("google").exists());
+        assert!(target_dir.join("other.plugin.wasm").exists());
+        assert!(target_dir.exists());
+
+        let _ = std::fs::remove_dir_all(&plugins_dir);
+    }
+
+    #[test]
+    fn validate_plugin_zip_rejects_escaping_asset_paths() {
+        let manifest = br#"{"name":"calendar","namespace":"google","version":"1.0.0"}"#;
+        let mut zip = zip_from_entries(&[
+            ("plugin.wasm", b"\0asm"),
+            ("plugin.json", manifest),
+            ("assets/../../../tmp/escaped", b"nope"),
+        ]);
+
+        let err = validate_plugin_zip(&mut zip).unwrap_err();
+        assert!(
+            err.to_string().contains("not contained") || err.to_string().contains("identifier"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn extract_plugin_stays_inside_scoped_dir() {
+        let manifest = br#"{"name":"calendar","namespace":"google","version":"1.0.0"}"#;
+        let mut zip = zip_from_entries(&[
+            ("plugin.wasm", b"\0asm"),
+            ("plugin.json", manifest),
+            ("assets/icon.png", b"png"),
+        ]);
+
+        let plugins_dir = unique_temp("atomic_plugin_extract");
+        let target =
+            extract_plugin_to_disk(&mut zip, &plugins_dir, "ZHJpdmU", "google", "calendar")
+                .unwrap();
+
+        assert!(target.join("google.calendar.wasm").exists());
+        assert!(target.join("google").join("icon.png").exists());
+        assert!(target.starts_with(&plugins_dir));
+
+        let _ = std::fs::remove_dir_all(&plugins_dir);
+    }
 }
