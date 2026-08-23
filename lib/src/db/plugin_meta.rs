@@ -85,13 +85,10 @@ impl PluginManifest {
     }
 
     pub fn validate(&self) -> Result<(), AtomicError> {
-        let forbidden = ['/', '.'];
-
-        for field_name in [("name", &self.name), ("namespace", &self.namespace)] {
-            if field_name.1.contains(forbidden) {
+        for (field, value) in [("name", &self.name), ("namespace", &self.namespace)] {
+            if !is_valid_plugin_identifier(value) {
                 return Err(AtomicError::from(format!(
-                    "{} cannot contain '/' or '.'",
-                    field_name.0
+                    "{field} must be a non-empty identifier without path characters ('.', '/', '\\')"
                 )));
             }
         }
@@ -104,5 +101,37 @@ impl PluginManifest {
             return permissions.iter().any(|p| p.permission == permission);
         }
         false
+    }
+}
+
+/// Plugin `name` / `namespace` are joined into filesystem paths under the
+/// server plugin directory. Reject empty values and anything that can change
+/// the destination directory (`..`, separators, NUL).
+pub fn is_valid_plugin_identifier(value: &str) -> bool {
+    if value.is_empty() {
+        return false;
+    }
+    !value.contains(['/', '\\', '.', '\0'])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_valid_plugin_identifier;
+
+    #[test]
+    fn accepts_plain_identifiers() {
+        assert!(is_valid_plugin_identifier("calendar"));
+        assert!(is_valid_plugin_identifier("my-plugin"));
+        assert!(is_valid_plugin_identifier("my_plugin"));
+    }
+
+    #[test]
+    fn rejects_path_characters() {
+        assert!(!is_valid_plugin_identifier(""));
+        assert!(!is_valid_plugin_identifier(".."));
+        assert!(!is_valid_plugin_identifier("foo.bar"));
+        assert!(!is_valid_plugin_identifier("foo/bar"));
+        assert!(!is_valid_plugin_identifier("foo\\bar"));
+        assert!(!is_valid_plugin_identifier("foo\0bar"));
     }
 }

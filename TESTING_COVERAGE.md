@@ -333,3 +333,13 @@ Not covered: leftover Yjs-era DocumentV2 bodies end-to-end (needs a stored `{ ty
 Not covered: Flutter `create_drive` still mints a random DID (the Rust
 `ensure_personal_drive` helper exists for `setup()`). E2E sign-in on a second
 machine with the old machine offline.
+
+## WASM plugins
+
+| Flow | Layer | Where |
+|---|---|---|
+| Plugin zip entries whose names leave `assets/` (parent dirs, absolute paths) are rejected before extract | glue | `server/src/plugins/wasm.rs` (`validate_rejects_zip_entries_that_escape_assets`, `extract_refuses_to_write_outside_the_plugin_directory`) |
+| A well-formed zip writes wasm/json/assets only under the drive-scoped plugin directory | glue | `server/src/plugins/wasm.rs` (`extract_writes_assets_under_the_namespace_directory`) |
+| Plugin namespace/name cannot be used as a path component | glue | `lib/src/db/plugin_meta.rs` (`is_valid_plugin_identifier`), `wasm.rs` (`extract_rejects_unsafe_namespace`) |
+
+Not covered: HTTP/commit install of a Plugin resource end-to-end; uninstall of a drive-scoped plugin through the UI.

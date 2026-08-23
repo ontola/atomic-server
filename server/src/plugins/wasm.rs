@@ -15,7 +15,7 @@ use atomic_lib::{
     agents::{Agent, ForAgent},
     class_extender::ClassExtender,
     commit::{CommitBuilder, CommitOpts},
-    db::plugin_meta::{PermissionType, PluginManifest, PluginMeta},
+    db::plugin_meta::{is_valid_plugin_identifier, PermissionType, PluginManifest, PluginMeta},
     errors::{AtomicError, AtomicResult},
     parse::{parse_json_ad_resource, ParseOpts, SaveOpts},
     storelike::{Query, ResourceResponse},
@@ -909,6 +909,112 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
     }
 }
 
+/// Well-known files allowed at the zip root. Anything else must live under `assets/`.
+const PLUGIN_ZIP_ROOT_FILES: &[&str] = &["plugin.wasm", "plugin.json", "ui.js", "ui.css"];
+
+#[derive(Debug, PartialEq, Eq)]
+enum PluginZipEntry {
+    RootFile(&'static str),
+    AssetsDir,
+    Asset(PathBuf),
+}
+
+fn is_unsafe_zip_entry_name(name: &str) -> bool {
+    if name.contains('\0') {
+        return true;
+    }
+    let unified = name.replace('\\', "/");
+    if unified.starts_with('/') {
+        return true;
+    }
+    // `C:...` / UNC-style prefixes must not be treated as relative assets.
+    if unified.chars().nth(1) == Some(':') {
+        return true;
+    }
+    unified.split('/').any(|component| component == "..")
+}
+
+fn plugin_zip_entry_kind(name: &str) -> Option<PluginZipEntry> {
+    let unified = name.replace('\\', "/");
+    if let Some(allowed) = PLUGIN_ZIP_ROOT_FILES
+        .iter()
+        .copied()
+        .find(|allowed| *allowed == unified)
+    {
+        return Some(PluginZipEntry::RootFile(allowed));
+    }
+    if unified == "assets" || unified == "assets/" {
+        return Some(PluginZipEntry::AssetsDir);
+    }
+    let rest = unified.strip_prefix("assets/")?;
+    if rest.is_empty() {
+        return Some(PluginZipEntry::AssetsDir);
+    }
+    if rest.starts_with('/') {
+        return None;
+    }
+    Some(PluginZipEntry::Asset(PathBuf::from(rest)))
+}
+
+/// Classify a zip entry. Unsafe names (`..`, absolute, NUL) are errors;
+/// unknown extra files return `Ok(None)` so validation can reject them and
+/// extraction can skip them.
+fn classify_plugin_zip_entry(name: &str) -> AtomicResult<Option<PluginZipEntry>> {
+    if is_unsafe_zip_entry_name(name) {
+        return Err(AtomicError::from(format!(
+            "Illegal path in plugin zip: {name}"
+        )));
+    }
+    Ok(plugin_zip_entry_kind(name))
+}
+
+fn normalize_lexically(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                let _ = out.pop();
+            }
+            other => out.push(other),
+        }
+    }
+    out
+}
+
+/// Join `child` under `base`, refusing anything that would escape `base`.
+fn join_within(base: &Path, child: &Path) -> AtomicResult<PathBuf> {
+    if child.is_absolute() {
+        return Err(AtomicError::from("Plugin path must be relative"));
+    }
+    for component in child.components() {
+        match component {
+            std::path::Component::Normal(_) | std::path::Component::CurDir => {}
+            _ => {
+                return Err(AtomicError::from("Plugin path contains illegal components"));
+            }
+        }
+    }
+    let candidate = base.join(child);
+    let base_normalized = normalize_lexically(base);
+    let candidate_normalized = normalize_lexically(&candidate);
+    if !candidate_normalized.starts_with(&base_normalized) {
+        return Err(AtomicError::from(
+            "Plugin path escapes the plugin directory",
+        ));
+    }
+    Ok(candidate)
+}
+
+fn require_plugin_identifiers(namespace: &str, name: &str) -> AtomicResult<()> {
+    if !is_valid_plugin_identifier(namespace) || !is_valid_plugin_identifier(name) {
+        return Err(AtomicError::from(
+            "Plugin namespace and name must be safe path identifiers",
+        ));
+    }
+    Ok(())
+}
+
 fn validate_plugin_zip(
     zip: &mut ZipArchive<std::io::Cursor<Vec<u8>>>,
 ) -> AtomicResult<PluginManifest> {
@@ -930,26 +1036,30 @@ fn validate_plugin_zip(
         let file = zip
             .by_index(i)
             .map_err(|e| AtomicError::from(e.to_string()))?;
+        if file.is_symlink() {
+            return Err(AtomicError::from(
+                "Plugin zip must not contain symbolic links",
+            ));
+        }
+        if file.enclosed_name().is_none() {
+            return Err(AtomicError::from(format!(
+                "Illegal path in plugin zip: {}",
+                file.name()
+            )));
+        }
         let name = file.name();
-        if name == "plugin.wasm"
-            || name == "plugin.json"
-            || name == "ui.js"
-            || name == "ui.css"
-            || name.starts_with("assets/")
-        {
-            if name == "ui.js" {
+        match classify_plugin_zip_entry(name)? {
+            Some(PluginZipEntry::RootFile("ui.js")) => {
                 has_ui_js = true;
             }
-            continue;
+            Some(_) => {}
+            None => {
+                return Err(AtomicError::from(format!(
+                    "Illegal file found in zip: {}. Only plugin.wasm, plugin.json, ui.js, ui.css and assets/ are allowed.",
+                    name
+                )));
+            }
         }
-        // If it's a directory "assets/", that's fine too.
-        if name == "assets/" {
-            continue;
-        }
-        return Err(AtomicError::from(format!(
-            "Illegal file found in zip: {}. Only plugin.wasm, plugin.json, ui.js, ui.css and assets/ are allowed.",
-            name
-        )));
     }
 
     if has_ui_js && !manifest.has_permission(PermissionType::CustomView) {
@@ -968,10 +1078,13 @@ fn extract_plugin_to_disk(
     namespace: &str,
     name: &str,
 ) -> AtomicResult<PathBuf> {
+    require_plugin_identifiers(namespace, name)?;
+
     let target_dir = plugins_dir
         .join(CLASS_EXTENDER_DIR_NAME)
         .join("scoped")
         .join(encoded_subject);
+    let assets_root = join_within(&target_dir, Path::new(namespace))?;
 
     // We do not clear the directory, as multiple plugins might share this scope.
     // Existing files (wasm, json) will be overwritten by zip extraction.
@@ -983,27 +1096,36 @@ fn extract_plugin_to_disk(
         let mut file = zip
             .by_index(i)
             .map_err(|e| AtomicError::from(e.to_string()))?;
-        let file_name = file.name().to_string();
+        if file.is_symlink() {
+            return Err(AtomicError::from(
+                "Plugin zip must not contain symbolic links",
+            ));
+        }
+        if file.enclosed_name().is_none() {
+            return Err(AtomicError::from(format!(
+                "Illegal path in plugin zip: {}",
+                file.name()
+            )));
+        }
 
-        let target_path = if file_name == "plugin.wasm" {
-            target_dir.join(format!("{}.{}.wasm", namespace, name))
-        } else if file_name == "plugin.json" {
-            target_dir.join(format!("{}.{}.json", namespace, name))
-        } else if file_name == "ui.js" {
-            target_dir.join(format!("{}.{}.ui.js", namespace, name))
-        } else if file_name == "ui.css" {
-            target_dir.join(format!("{}.{}.ui.css", namespace, name))
-        } else if file_name.starts_with("assets/") {
-            // Replace "assets/" with "{namespace}/"
-            let stripped = file_name.strip_prefix("assets/").unwrap();
-            if stripped.is_empty() {
-                // It is the "assets/" directory itself
-                target_dir.join(namespace)
-            } else {
-                target_dir.join(namespace).join(stripped)
+        let file_name = file.name().to_string();
+        let target_path = match classify_plugin_zip_entry(&file_name)? {
+            Some(PluginZipEntry::RootFile("plugin.wasm")) => {
+                join_within(&target_dir, Path::new(&format!("{namespace}.{name}.wasm")))?
             }
-        } else {
-            continue;
+            Some(PluginZipEntry::RootFile("plugin.json")) => {
+                join_within(&target_dir, Path::new(&format!("{namespace}.{name}.json")))?
+            }
+            Some(PluginZipEntry::RootFile("ui.js")) => {
+                join_within(&target_dir, Path::new(&format!("{namespace}.{name}.ui.js")))?
+            }
+            Some(PluginZipEntry::RootFile("ui.css")) => join_within(
+                &target_dir,
+                Path::new(&format!("{namespace}.{name}.ui.css")),
+            )?,
+            Some(PluginZipEntry::AssetsDir) => assets_root.clone(),
+            Some(PluginZipEntry::Asset(relative)) => join_within(&assets_root, &relative)?,
+            Some(PluginZipEntry::RootFile(_)) | None => continue,
         };
 
         if file.is_dir() {
@@ -1107,6 +1229,8 @@ pub async fn uninstall_plugin(
     store: &Db,
     plugins_dir: &Path,
 ) -> AtomicResult<()> {
+    require_plugin_identifiers(namespace, name)?;
+
     let encoded_subject = general_purpose::URL_SAFE.encode(drive_subject);
     let target_dir = plugins_dir
         .join(CLASS_EXTENDER_DIR_NAME)
@@ -1121,10 +1245,19 @@ pub async fn uninstall_plugin(
     }
 
     let wasm_filename = format!("{}.{}.wasm", namespace, name);
-    let wasm_path = target_dir.join(&wasm_filename);
-    let json_path = target_dir.join(format!("{}.{}.json", namespace, name));
-    let ui_js_path = target_dir.join(format!("{}.{}.ui.js", namespace, name));
-    let ui_css_path = target_dir.join(format!("{}.{}.ui.css", namespace, name));
+    let wasm_path = join_within(&target_dir, Path::new(&wasm_filename))?;
+    let json_path = join_within(
+        &target_dir,
+        Path::new(&format!("{}.{}.json", namespace, name)),
+    )?;
+    let ui_js_path = join_within(
+        &target_dir,
+        Path::new(&format!("{}.{}.ui.js", namespace, name)),
+    )?;
+    let ui_css_path = join_within(
+        &target_dir,
+        Path::new(&format!("{}.{}.ui.css", namespace, name)),
+    )?;
 
     if !wasm_path.exists() {
         return Err(AtomicError::not_found(format!(
@@ -1197,7 +1330,7 @@ pub async fn uninstall_plugin(
     }
 
     if !namespace_still_used {
-        let assets_dir = target_dir.join(namespace);
+        let assets_dir = join_within(&target_dir, Path::new(namespace))?;
         if assets_dir.exists() && assets_dir.is_dir() {
             info!("Removing unused assets directory: {}", assets_dir.display());
             std::fs::remove_dir_all(&assets_dir).map_err(|e| {
@@ -1713,4 +1846,141 @@ async fn compare_manifest_to_resource(
     }
 
     Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    const MANIFEST: &[u8] = br#"{"name":"p","namespace":"n","version":"1.0.0"}"#;
+    const WASM_BYTES: &[u8] = b"\0asm fake";
+
+    fn build_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut zip_buf = Vec::new();
+        {
+            let cursor = std::io::Cursor::new(&mut zip_buf);
+            let mut writer = zip::ZipWriter::new(cursor);
+            let opts = zip::write::SimpleFileOptions::default();
+            for (name, contents) in entries {
+                writer.start_file(*name, opts).expect("start zip entry");
+                writer.write_all(contents).expect("write zip entry");
+            }
+            writer.finish().expect("finish zip");
+        }
+        zip_buf
+    }
+
+    fn open_zip(bytes: Vec<u8>) -> ZipArchive<std::io::Cursor<Vec<u8>>> {
+        ZipArchive::new(std::io::Cursor::new(bytes)).expect("open zip")
+    }
+
+    fn temp_plugins_dir() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "atomic_plugin_zip_{}",
+            atomic_lib::utils::random_string(12)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn classify_rejects_parent_dir_components() {
+        let err = classify_plugin_zip_entry("assets/../../../../../../tmp/atomic_escaped.txt")
+            .unwrap_err();
+        assert!(err.to_string().contains("Illegal path"));
+        assert!(is_unsafe_zip_entry_name("assets/foo/../../../etc/passwd"));
+        assert!(is_unsafe_zip_entry_name("/tmp/evil"));
+        assert!(is_unsafe_zip_entry_name("assets/foo/../bar"));
+        assert!(!is_unsafe_zip_entry_name("assets/foo/bar.txt"));
+    }
+
+    #[test]
+    fn validate_rejects_zip_entries_that_escape_assets() {
+        let bytes = build_zip(&[
+            ("plugin.wasm", WASM_BYTES),
+            ("plugin.json", MANIFEST),
+            (
+                "assets/../../../../../../tmp/atomic_escaped.txt",
+                b"should not be written",
+            ),
+        ]);
+        let mut archive = open_zip(bytes);
+        let err = validate_plugin_zip(&mut archive).unwrap_err();
+        assert!(err.to_string().contains("Illegal path"));
+    }
+
+    #[test]
+    fn extract_refuses_to_write_outside_the_plugin_directory() {
+        let bytes = build_zip(&[(
+            "assets/../../../../../escaped.txt",
+            b"should not be written",
+        )]);
+        let mut archive = open_zip(bytes);
+
+        let tmp = temp_plugins_dir();
+        let plugins_dir = tmp.join("plugins");
+        std::fs::create_dir_all(&plugins_dir).unwrap();
+        let escaped = tmp.join("escaped.txt");
+        let _ = std::fs::remove_file(&escaped);
+
+        let result = extract_plugin_to_disk(
+            &mut archive,
+            &plugins_dir,
+            "ZW5jb2RlZC1kcml2ZS1zdWJqZWN0",
+            "attackerns",
+            "attackerplugin",
+        );
+
+        assert!(result.is_err(), "extraction must fail for escaping paths");
+        assert!(
+            !escaped.exists(),
+            "must not write outside the plugin directory"
+        );
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn extract_writes_assets_under_the_namespace_directory() {
+        let bytes = build_zip(&[
+            ("plugin.wasm", WASM_BYTES),
+            ("plugin.json", MANIFEST),
+            ("assets/hello.txt", b"hello"),
+            ("assets/sub/nested.txt", b"nested"),
+        ]);
+        let mut archive = open_zip(bytes);
+
+        let tmp = temp_plugins_dir();
+        let result = extract_plugin_to_disk(&mut archive, &tmp, "enc", "n", "p").unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(result.join("n").join("hello.txt")).unwrap(),
+            "hello"
+        );
+        assert_eq!(
+            std::fs::read_to_string(result.join("n").join("sub").join("nested.txt")).unwrap(),
+            "nested"
+        );
+        assert!(result.join("n.p.wasm").exists());
+        assert!(result.join("n.p.json").exists());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn extract_rejects_unsafe_namespace() {
+        let bytes = build_zip(&[("assets/hello.txt", b"hello")]);
+        let mut archive = open_zip(bytes);
+        let tmp = temp_plugins_dir();
+        let err = extract_plugin_to_disk(&mut archive, &tmp, "enc", "../escape", "p").unwrap_err();
+        assert!(err.to_string().contains("safe path identifiers"));
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn join_within_confines_paths() {
+        let base = Path::new("/tmp/plugins/scoped/enc");
+        assert!(join_within(base, Path::new("n/hello.txt")).is_ok());
+        assert!(join_within(base, Path::new("../escaped.txt")).is_err());
+        assert!(join_within(base, Path::new("/tmp/escaped.txt")).is_err());
+    }
 }
