@@ -42,7 +42,9 @@ the first install compiles `atomic_lib`.
 On **Windows** that compile needs [Visual Studio Build Tools] with the
 **Desktop development with C++** workload (`link.exe`). GNU/MinGW is not
 a supported target. `uv run pytest` will fail at link time without those
-tools — that is the host, not the package.
+tools — that is the host, not the package. GitHub Actions `Python SDK`
+uploads abi3 wheels (`cp39-abi3`) for Linux and Windows so you can
+`pip install` a CI artifact without a compiler.
 
 [Visual Studio Build Tools]: https://visualstudio.microsoft.com/visual-cpp-build-tools/
 
@@ -63,6 +65,10 @@ pytest
 
 Then `import atomic_data`.
 
+To skip the compile, download a wheel from a `Python SDK` Actions run
+(`atomic-data-ubuntu-latest` / `atomic-data-windows-latest`) and
+`pip install path/to/atomic_data-*.whl`. The extension is abi3 (Python 3.9+).
+
 ## Quick start
 
 ```python
@@ -82,8 +88,18 @@ note.save()
 got = store.get(note.subject)
 print(got["name"], got["description"])
 
+# Collection listing: children of a drive
 for child in store.query(parent=setup.drive_subject):
     print(child.subject, child.name)
+
+# Property / value filter (AND with parent / class_url when given)
+named = store.query(property="name", value="Hello")
+drafts = store.query(
+    parent=setup.drive_subject,
+    class_url=urls.PLAIN_TEXT,
+    property="description",
+    value="Edited offline",
+)
 
 store.flush()
 
@@ -122,8 +138,9 @@ before opening the same directory again — redb takes an exclusive file lock.
 
 - **Store** — `open(path, server=None)`, `in_memory(server=None)`, `setup(name)`,
   `load_agent(secret)`, `create(class_url, name, ...)`, `get(subject)` (HTTP
-  GET for unknown `https://` subjects), `search(query)`, `query(...)`,
-  `delete(subject)`, `flush()`, context manager
+  GET for unknown `https://` subjects), `search(query)` (server `/search`),
+  `query(parent=..., class_url=..., property=..., value=...)` (local index;
+  filters AND together), `delete(subject)`, `flush()`, context manager
 - **Iroh** — `start_peer()`, `peer_id`, `announce()`, `sync_with(node_id)`,
   `add_peer()`, `peers()`, `live_peers()`, `wait_for(subject)`
 - **Resource** — dict-like access, `.save()` (local + live-push if peers are

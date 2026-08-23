@@ -18,7 +18,8 @@ There is no PyPI wheel yet, so the first install compiles `atomic_lib`.
 
 On Windows, also install [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
 with the **Desktop development with C++** workload. `uv` / maturin link
-with MSVC's `link.exe`; GNU/MinGW is not supported.
+with MSVC's `link.exe`; GNU/MinGW is not supported. The `Python SDK`
+workflow uploads abi3 wheels for Linux and Windows as CI artifacts.
 
 ```bash
 cd python
@@ -53,11 +54,25 @@ note.save()
 got = store.get(note.subject)
 print(got["name"], got["description"])
 
+# Collection listing: children of a drive
 for child in store.query(parent=setup.drive_subject):
     print(child.subject, child.name)
 
+# Property / value filter (AND with parent / class_url when given)
+named = store.query(property="name", value="Hello")
+drafts = store.query(
+    parent=setup.drive_subject,
+    class_url=urls.PLAIN_TEXT,
+    property="description",
+    value="Edited offline",
+)
+
 store.flush()
 ```
+
+`query()` reads this store's index — it is not the HTTP `/query` endpoint.
+After `get()` / `save_remote()`, the cached copies are what `query()` sees.
+`search()` is the server full-text path.
 
 `setup.agent_secret` is the only way to sign writes after you reopen the
 store. Keep it.

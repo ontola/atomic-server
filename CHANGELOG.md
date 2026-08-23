@@ -11,7 +11,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   follows `develop`; production and live docs follow a tagged release. `master`
   is no longer a deploy or docs trigger, and `main` is not introduced as a
   copy of the latest tag.
-- **Python SDK** (`python/`, import `atomic_data`): bindings over `atomic_lib` via PyO3. Local redb plus Iroh P2P (`start_peer`, `sync_with`, live push on save). HTTP GET of `https://` subjects (schema / external resources); optional `server=` for `/search` and `save_remote()`.
+- **Python SDK** (`python/`, import `atomic_data`): bindings over `atomic_lib` via PyO3. Local redb plus Iroh P2P (`start_peer`, `sync_with`, live push on save). HTTP GET of `https://` subjects (schema / external resources); optional `server=` for `/search` and `save_remote()`. GitHub Actions uploads Linux/Windows abi3 wheels (no PyPI yet).
 - **Kotlin SDK** (`ffi/`, package `dev.atomicdata`): UniFFI bindings over `atomic_lib`. Same local redb + Iroh + HTTP surface as Python (`startPeer`, `syncWith`, `search`, `saveRemote`). JVM tests included; Android AAR is later.
 
 ## [v0.41.0-beta.2] - 2026-08-01
