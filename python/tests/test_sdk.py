@@ -102,6 +102,21 @@ def test_query_by_parent_and_class(store):
     assert a.subject not in subjects
 
 
+def test_query_by_property_value(store):
+    drive = store.active_drive
+    keep = store.create(urls.PLAIN_TEXT, name="keep", description="draft")
+    store.create(urls.PLAIN_TEXT, name="drop", description="other")
+
+    named = store.query(property="name", value="keep")
+    assert {n.subject for n in named} == {keep.subject}
+
+    drafts = store.query(parent=drive, property="description", value="draft")
+    assert {n.subject for n in drafts} == {keep.subject}
+
+    with pytest.raises(ValueError, match="value="):
+        store.query(property="name")
+
+
 def test_delete_removes_resource(store):
     # Folder has no extra required props; destroy/save validate schema.
     note = store.create(urls.FOLDER, name="ephemeral")

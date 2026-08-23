@@ -61,7 +61,7 @@ makes two devices converge today.
 - Blobs
 - History / time-travel
 - Code-first schema (see `json-schema-code-first.md`)
-- PyPI publish / Dagger CI job (GitHub Actions `Python SDK` covers pytest on Linux and Windows)
+- PyPI publish / Dagger CI job (GitHub Actions `Python SDK` covers pytest on Linux and Windows and uploads abi3 wheels as artifacts)
 
 ## Tests
 

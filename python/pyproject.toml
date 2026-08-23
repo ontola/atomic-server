@@ -35,7 +35,7 @@ Repository = "https://github.com/atomicdata-dev/atomic-server"
 dev = ["pytest>=8"]
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "maturin>=1.8,<2"]
 
 [tool.uv]
 default-groups = ["dev"]
