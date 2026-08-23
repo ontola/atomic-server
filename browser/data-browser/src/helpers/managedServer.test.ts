@@ -70,6 +70,36 @@ describe('accountCreationTarget', () => {
       }),
     ).toEqual({ kind: 'local' });
   });
+
+  it('a self-hosted node that has an owner → no account creation', () => {
+    expect(
+      accountCreationTarget({
+        managed: false,
+        portalUrl: null,
+        acceptsNewDrives: false,
+      }),
+    ).toEqual({ kind: 'unavailable', reason: 'node-has-owner' });
+  });
+
+  it('a node that says nothing about host mode still offers local creation', () => {
+    // Every node released before host mode existed. Reading silence as "gated"
+    // would remove the Create account button from all of them.
+    expect(accountCreationTarget({ managed: false, portalUrl: null })).toEqual({
+      kind: 'local',
+    });
+  });
+
+  it('an owner-gated managed node still routes to its portal', () => {
+    // Host mode gates *this disk*. Where accounts are made is the portal's
+    // business, and a managed node has one.
+    expect(
+      accountCreationTarget({
+        managed: true,
+        portalUrl: 'https://portal.example/',
+        acceptsNewDrives: false,
+      }),
+    ).toEqual({ kind: 'portal', url: 'https://portal.example/signin' });
+  });
 });
 
 describe('isAtomicServer', () => {

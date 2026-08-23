@@ -727,21 +727,33 @@ export function GettingStartedFlow({
             {/* alt='' because the heading above already names the app. */}
             <AtomicServerLogo key='logo' alt='' />
             <ButtonStack key='buttons'>
-              <CtaButton
-                key='create'
-                type='button'
-                onClick={() => {
-                  // Hosted build or managed node → create the account on the
-                  // portal (email verification). FOSS node → local identity.
-                  if (createTarget.kind === 'portal') {
-                    window.location.assign(createTarget.url);
-                  } else {
-                    setStep('create');
-                  }
-                }}
-              >
-                Create account
-              </CtaButton>
+              {/* A node with an owner has nowhere to put a new account, so
+                  offering one would be offering a dead end. Sign in and invites
+                  still work, and are what someone arriving here actually needs.
+                  Guarded rather than always-rendered: on every other node this
+                  subtree must not exist at all. */}
+              {createTarget.kind === 'unavailable' ? (
+                <CardSubtitle key='owned'>
+                  This server is run by one person for their own data. You can
+                  sign in, or open a drive you were invited to.
+                </CardSubtitle>
+              ) : (
+                <CtaButton
+                  key='create'
+                  type='button'
+                  onClick={() => {
+                    // Hosted build or managed node → create the account on the
+                    // portal (email verification). FOSS node → local identity.
+                    if (createTarget.kind === 'portal') {
+                      window.location.assign(createTarget.url);
+                    } else {
+                      setStep('create');
+                    }
+                  }}
+                >
+                  Create account
+                </CtaButton>
+              )}
               {/* The local path stays reachable in a hosted build, one tap
                   down rather than gone. Someone who already has an identity,
                   or who wants nothing to do with our account system, must not

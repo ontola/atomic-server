@@ -13,6 +13,10 @@ export const serverProps = {
   managed: 'https://atomicdata.dev/properties/server/managed',
   portalUrl: 'https://atomicdata.dev/properties/server/portalUrl',
   peers: 'https://atomicdata.dev/properties/server/peers',
+  /** `open` | `owner`. Absent on a node older than host mode — read as `open`. */
+  hostMode: 'https://atomicdata.dev/properties/server/hostMode',
+  acceptsNewDrives: 'https://atomicdata.dev/properties/server/acceptsNewDrives',
+  ownerSet: 'https://atomicdata.dev/properties/server/ownerSet',
 } as const;
 
 /** Property URLs of a nested `Peer` — a device the server syncs with. */
