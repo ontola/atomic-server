@@ -373,10 +373,7 @@ mod test {
             ..Default::default()
         }
         .to_string();
-        assert!(
-            !html.contains("<script>"),
-            "injected a script tag: {html}"
-        );
+        assert!(!html.contains("<script>"), "injected a script tag: {html}");
         assert!(!html.contains("<base"), "injected a base tag: {html}");
         assert!(
             !html.contains("http-equiv"),
