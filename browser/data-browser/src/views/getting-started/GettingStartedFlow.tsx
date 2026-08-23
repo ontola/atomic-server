@@ -120,9 +120,9 @@ export function GettingStartedFlow({
   // /node-info), account creation goes through the portal (email
   // verification). Self-hosted / FOSS nodes report nothing here, so we keep the
   // local DID-agent creation unchanged.
-  const [createTarget, setCreateTarget] = useState<AccountCreationTarget>({
-    kind: 'local',
-  });
+  const [createTarget, setCreateTarget] = useState<AccountCreationTarget | null>(
+    null,
+  );
   /**
    * Any control plane this build knows of, which is a weaker question than
    * `createTarget` answers.
@@ -732,7 +732,7 @@ export function GettingStartedFlow({
                   still work, and are what someone arriving here actually needs.
                   Guarded rather than always-rendered: on every other node this
                   subtree must not exist at all. */}
-              {createTarget.kind === 'unavailable' ? (
+              {createTarget?.kind === 'unavailable' ? (
                 <CardSubtitle key='owned'>
                   This server is run by one person for their own data. You can
                   sign in, or open a drive you were invited to.
@@ -741,7 +741,9 @@ export function GettingStartedFlow({
                 <CtaButton
                   key='create'
                   type='button'
+                  disabled={!createTarget}
                   onClick={() => {
+                    if (!createTarget) return;
                     // Hosted build or managed node → create the account on the
                     // portal (email verification). FOSS node → local identity.
                     if (createTarget.kind === 'portal') {
@@ -760,7 +762,7 @@ export function GettingStartedFlow({
                   be walled out of their own software — and on a FOSS build
                   "Create account" already is this, so offering it twice would
                   just be noise. */}
-              {createTarget.kind === 'portal' && (
+              {createTarget?.kind === 'portal' && (
                 <CtaButton
                   key='local'
                   type='button'
@@ -944,7 +946,9 @@ export function GettingStartedFlow({
                         key='create'
                         type='button'
                         subtle
+                        disabled={!createTarget || createTarget.kind === 'unavailable'}
                         onClick={() => {
+                          if (!createTarget || createTarget.kind === 'unavailable') return;
                           setError(undefined);
 
                           if (createTarget.kind === 'portal') {
