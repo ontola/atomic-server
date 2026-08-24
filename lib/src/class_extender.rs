@@ -30,6 +30,26 @@ pub type ResourceGetHandler = Arc<
 pub type CommitHandler =
     Arc<dyn for<'a> Fn(CommitExtenderContext<'a>) -> BoxFuture<'a, AtomicResult<()>> + Send + Sync>;
 
+/// The form of a subject that two references to the *same* resource always
+/// share.
+///
+/// Class matching is a string comparison, and a DID subject has more than one
+/// spelling. `did:ad:abc` and `did:ad:abc?drive=did:ad:xyz` name one class, but
+/// `Display` keeps the query string, so comparing raw strings silently answers
+/// "different class" — and a plugin that declared the bare DID never runs, with
+/// nothing logged to say why. `pure_id` drops the query and fragment, which is
+/// exactly the difference that does not change identity.
+///
+/// Note what this deliberately does NOT accept: the address-bar form
+/// (`http://host/did:ad:abc`). That is a server-specific URL for the resource,
+/// not its identity, and treating it as equal here would mean a plugin's
+/// declared class silently depended on which origin served it. It is a common
+/// enough mistake to be worth naming, so it is warned about at load time
+/// instead — see [`ClassExtender::warn_about_unmatchable_classes`].
+fn normalize_class(raw: &str) -> String {
+    crate::Subject::from_raw(raw.trim(), None).pure_id()
+}
+
 #[derive(Clone, Debug)]
 pub enum ClassExtenderScope {
     Global,
@@ -75,13 +95,16 @@ impl ClassExtenderBuilder {
         self
     }
 
+    /// Classes are normalized here rather than at comparison time, so a plugin
+    /// declaring `did:ad:abc?drive=…` and one declaring `did:ad:abc` are the
+    /// same extender as far as everything downstream is concerned.
     pub fn classes(mut self, classes: Vec<String>) -> Self {
-        self.classes = classes;
+        self.classes = classes.iter().map(|c| normalize_class(c)).collect();
         self
     }
 
     pub fn class(mut self, class: impl Into<String>) -> Self {
-        self.classes.push(class.into());
+        self.classes.push(normalize_class(&class.into()));
         self
     }
 
@@ -173,7 +196,45 @@ impl ClassExtender {
         };
 
         let resource_classes = is_a.to_subjects(None)?;
-        Ok(resource_classes.iter().any(|c| self.classes.contains(c)))
+        let matched = resource_classes
+            .iter()
+            .any(|c| self.classes.contains(&normalize_class(c)));
+
+        if !matched && !self.classes.is_empty() {
+            // The single most common reason a plugin "does nothing": it loaded,
+            // it registered, and its class never matched anything. Without this
+            // that is indistinguishable from a hook that ran and chose not to
+            // act.
+            tracing::debug!(
+                extender = self.id.as_deref().unwrap_or("<unnamed>"),
+                declares = ?self.classes,
+                resource_is_a = ?resource_classes,
+                "class extender skipped: no class in common"
+            );
+        }
+
+        Ok(matched)
+    }
+
+    /// Warn about declared classes that cannot ever match.
+    ///
+    /// A class is identified by its subject. The address-bar URL for a DID
+    /// resource (`http://host/did:ad:abc`) is not that subject, so declaring it
+    /// produces an extender that loads cleanly and never fires. Called once
+    /// when an extender is registered, because "never fires" is otherwise only
+    /// discoverable by reading this source.
+    pub fn warn_about_unmatchable_classes(&self) {
+        for class in &self.classes {
+            if let Some((_origin, tail)) = class.split_once("/did:") {
+                tracing::warn!(
+                    extender = self.id.as_deref().unwrap_or("<unnamed>"),
+                    declared = %class,
+                    "class extender declares a class by URL, not by subject — it will never \
+                     match. Use the bare DID instead: did:{}",
+                    tail
+                );
+            }
+        }
     }
 
     pub fn wrap_get_handler<F>(handler: F) -> ResourceGetHandler
@@ -209,7 +270,7 @@ impl ClassExtender {
             ClassExtenderScope::Drive(scope) => {
                 // If the resource is the scope itself we can just return true.
                 let subject = resource.get_subject().clone();
-                if subject == scope.clone() {
+                if normalize_class(&subject.to_string()) == normalize_class(scope) {
                     return Ok((true, Some(subject.to_string())));
                 }
 
@@ -225,7 +286,16 @@ impl ClassExtender {
                     root.get_subject().to_string()
                 };
 
-                if rs != *scope {
+                // Normalized for the same reason as the class match: the root
+                // this resolves to and the drive the plugin was scoped to are
+                // the same drive spelled two ways more often than not.
+                if normalize_class(&rs) != normalize_class(scope) {
+                    tracing::debug!(
+                        extender = self.id.as_deref().unwrap_or("<unnamed>"),
+                        scoped_to = %scope,
+                        resource_root = %rs,
+                        "class extender skipped: resource is in a different drive"
+                    );
                     return Ok((false, Some(rs)));
                 }
 
@@ -253,5 +323,90 @@ impl ClassExtender {
 
         // Check if the resource is a plugin, if so return false.
         !is_a_subjects.contains(&urls::PLUGIN.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Value;
+
+    const CLASS: &str = "did:ad:guDVPzQKpsfcS5Vpbgdh0cj19CFapvKuQ5NVyYfjcspo0ZMpua9UzgC8WkDZa1_Z";
+
+    fn extender_declaring(class: &str) -> ClassExtender {
+        ClassExtender::builder()
+            .id("test".to_string())
+            .classes(vec![class.to_string()])
+            .build()
+    }
+
+    fn resource_of_class(raw_is_a: &str) -> Resource {
+        let mut resource = Resource::new("did:ad:someresource".to_string());
+        resource
+            .set_unsafe(
+                urls::IS_A.into(),
+                Value::ResourceArray(vec![crate::Subject::from_raw(raw_is_a, None).into()]),
+            )
+            .unwrap();
+        resource
+    }
+
+    #[test]
+    fn a_bare_did_matches_itself() {
+        assert!(extender_declaring(CLASS)
+            .resource_has_extender(&resource_of_class(CLASS))
+            .unwrap());
+    }
+
+    #[test]
+    fn a_drive_hint_does_not_change_which_class_this_is() {
+        // The resource carries the hint, the plugin declared the bare DID.
+        // Comparing `Display` output made these different strings, so the hook
+        // never ran and nothing said why.
+        let hinted = format!("{CLASS}?drive=did:ad:somedrive");
+
+        assert!(extender_declaring(CLASS)
+            .resource_has_extender(&resource_of_class(&hinted))
+            .unwrap());
+
+        // And the other way round, since either side may carry it.
+        assert!(extender_declaring(&hinted)
+            .resource_has_extender(&resource_of_class(CLASS))
+            .unwrap());
+    }
+
+    #[test]
+    fn surrounding_whitespace_is_not_a_different_class() {
+        assert!(extender_declaring(&format!("  {CLASS}  "))
+            .resource_has_extender(&resource_of_class(CLASS))
+            .unwrap());
+    }
+
+    #[test]
+    fn an_address_bar_url_is_still_not_the_class() {
+        // Deliberate: that URL is how one server serves the resource, not what
+        // the resource is. Accepting it would make a plugin's declared class
+        // depend on the origin it was written against. `add_class_extender`
+        // warns about this shape instead.
+        assert!(!extender_declaring(CLASS)
+            .resource_has_extender(&resource_of_class(&format!(
+                "http://localhost:24797/{CLASS}"
+            )))
+            .unwrap());
+    }
+
+    #[test]
+    fn a_different_class_still_does_not_match() {
+        assert!(!extender_declaring(CLASS)
+            .resource_has_extender(&resource_of_class("did:ad:someotherclassentirely"))
+            .unwrap());
+    }
+
+    #[test]
+    fn a_resource_without_is_a_matches_nothing() {
+        let bare = Resource::new("did:ad:someresource".to_string());
+        assert!(!extender_declaring(CLASS)
+            .resource_has_extender(&bare)
+            .unwrap());
     }
 }

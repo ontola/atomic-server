@@ -1430,6 +1430,11 @@ impl Db {
     }
 
     pub fn add_class_extender(&self, class_extender: ClassExtender) -> AtomicResult<()> {
+        // At registration, not at match time: a class that can never match is a
+        // property of the extender, so say it once on load rather than on every
+        // commit that failed to match it.
+        class_extender.warn_about_unmatchable_classes();
+
         let mut extenders = self
             .class_extenders
             .write()
@@ -3025,6 +3030,13 @@ impl Storelike for Db {
             for extender in extenders.iter() {
                 if extender.resource_has_extender(resource)? {
                     if !extender.can_extend(resource) {
+                        // A plugin may not extend a plugin. Silently skipping
+                        // read as "the hook did not run" with no way to tell
+                        // this apart from a class mismatch.
+                        tracing::debug!(
+                            resource = %resource.get_subject(),
+                            "class extender skipped: a plugin cannot extend another plugin"
+                        );
                         continue;
                     }
 
