@@ -376,9 +376,7 @@ impl SyncPolicy for OwnerPolicy {
             // importing a backup. Refusing this would mean a gated node could
             // not finish booting.
             crate::agents::ForAgent::Sudo => true,
-            crate::agents::ForAgent::AgentSubject(subject) => {
-                subject.as_str() == self.owner_agent
-            }
+            crate::agents::ForAgent::AgentSubject(subject) => subject.as_str() == self.owner_agent,
             // An unauthenticated request is never the owner. Stated rather than
             // left to fall out of the comparison, because this is the case the
             // whole policy exists for.
