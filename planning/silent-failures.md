@@ -205,3 +205,14 @@ Two writers (dev server + a build, or two dev servers) corrupt the catalogs.
 Shows up much later as `[i18n-404]` or a misleading "Invalid hook call".
 *Should have:* a lock, or a refusal to extract while another extractor holds the
 catalogs.
+
+**An AI chat is unsaved for the whole time the model is generating.**
+A sidebar chat stays an in-memory draft until the first assistant reply
+*completes*, so a reload mid-turn loses the prompt, the partial reply and the
+chat resource — and the chat never appears in the AI Chats panel, because no
+resource was ever created. Nothing logs and nothing toasts: no error path is
+reached, because there was no failed write, only an absent one.
+*Should have:* said that a conversation was discarded. An absent write is not an
+event today, which is exactly why this went unnoticed until a long
+code-generation turn made the window wide enough to hit.
+See [`ai-chat-draft-persistence.md`](./ai-chat-draft-persistence.md).
