@@ -510,6 +510,9 @@ importers:
 
   form-renderer:
     dependencies:
+      downshift:
+        specifier: ^9.3.3
+        version: 9.3.3(react@19.2.6)
       react:
         specifier: ^19.2.6
         version: 19.2.6
