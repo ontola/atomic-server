@@ -7268,6 +7268,7 @@ msgstr ""
 
 #: src/actions/resourceActions.tsx
 #: src/actions/resourceActions.tsx
+#: src/chunks/AppPage/useRegisterAppCreation.ts
 msgid "New app"
 msgstr ""
 
