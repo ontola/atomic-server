@@ -52,6 +52,7 @@ import {
   type RecoverySecret,
 } from '../../helpers/managed/recovery';
 import { CodeBlock } from '../../components/CodeBlock';
+import { ExternalLink } from '../../components/ExternalLink';
 import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
 import { FaArrowLeft, FaKey } from 'react-icons/fa6';
 import { Logo } from '../../components/Logo';
@@ -732,10 +733,24 @@ export function GettingStartedFlow({
                   Guarded rather than always-rendered: on every other node this
                   subtree must not exist at all. */}
               {createTarget?.kind === 'unavailable' ? (
-                <CardSubtitle key='owned'>
-                  This server is run by one person for their own data. You can
-                  sign in, or open a drive you were invited to.
-                </CardSubtitle>
+                <Column key='owned' gap='0.75rem'>
+                  <CardSubtitle>
+                    This server is run by one person for their own data. You can
+                    sign in, or open a drive you were invited to.
+                  </CardSubtitle>
+                  {/* Nobody arrives here wanting to be told no. They wanted an
+                      account somewhere, so name the two places that still give
+                      them one — hosted, or their own machine. */}
+                  <CardSubtitle>Want a server of your own?</CardSubtitle>
+                  <OwnedElsewhere>
+                    <ExternalLink to='https://atomicserver.eu'>
+                      Get one hosted
+                    </ExternalLink>
+                    <ExternalLink to='https://github.com/atomicdata-dev/atomic-server'>
+                      Run it yourself
+                    </ExternalLink>
+                  </OwnedElsewhere>
+                </Column>
               ) : (
                 <CtaButton
                   key='create'
@@ -1314,6 +1329,13 @@ const AtomicServerLogo = styled(Logo)`
 `;
 
 /** Separates the offered passkey from the advanced agent-secret path below. */
+const OwnedElsewhere = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  justify-content: center;
+`;
+
 const OtherWaysLabel = styled.span`
   display: flex;
   align-items: center;
