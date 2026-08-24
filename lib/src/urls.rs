@@ -113,6 +113,12 @@ pub const SERVER_PORTAL_URL: &str = "https://atomicdata.dev/properties/server/po
 pub const SERVER_HOME_DRIVE: &str = "https://atomicdata.dev/properties/server/homeDrive";
 /// The devices this node syncs with directly — nested [PEER] resources.
 pub const SERVER_PEERS: &str = "https://atomicdata.dev/properties/server/peers";
+/// `open` or `owner` — who may create a new Drive here. Absent on a node older
+/// than host mode, which clients must read as `open`: that is what it does.
+pub const SERVER_HOST_MODE: &str = "https://atomicdata.dev/properties/server/hostMode";
+pub const SERVER_ACCEPTS_NEW_DRIVES: &str =
+    "https://atomicdata.dev/properties/server/acceptsNewDrives";
+pub const SERVER_OWNER_SET: &str = "https://atomicdata.dev/properties/server/ownerSet";
 
 // ... for Peers
 pub const PEER_NODE_ID: &str = "https://atomicdata.dev/properties/peer/nodeId";

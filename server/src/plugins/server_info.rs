@@ -32,6 +32,10 @@ pub struct ServerInfo {
     /// it must know before the first render. This is for every other client:
     /// the desktop app, the SaaS portal, scripts asking "what does `/` show?".
     pub home_drive: Option<String>,
+    /// Who may create a new Drive here. The welcome screen reads this to decide
+    /// whether offering "create account" would be offering something that
+    /// works.
+    pub host_mode: crate::host_mode::HostModeConfig,
 }
 
 pub fn server_info_endpoint(info: ServerInfo) -> Endpoint {
@@ -177,19 +181,49 @@ fn handle_get(
             Value::String(env!("CARGO_PKG_VERSION").into()),
         )?;
 
-        // Absent rather than null: a node with no p2p transport has no node ID.
-        if let Some(node_id) = crate::iroh_transport::get_node_id() {
-            resource.set_unsafe(
-                urls::SERVER_NODE_ID.into(),
-                Value::String(format!("did:ad:node:{node_id}")),
-            )?;
+        // A gated node's device list is an inventory of the owner's machines and
+        // a set of dial targets. The owner's own session still sees it — that is
+        // what the Sync page and the pairing QR are built on — but a stranger
+        // who can reach the origin has no business enumerating it.
+        //
+        // This hides a listing, it does not stand in for a check: someone who
+        // learns the node ID elsewhere can still attempt a connection, and gets
+        // refused by admission rather than by obscurity.
+        let hide_node_inventory = info.host_mode.is_owner_mode()
+            && matches!(context.for_agent, atomic_lib::agents::ForAgent::Public);
+
+        if !hide_node_inventory {
+            // Absent rather than null: a node with no p2p transport has no node ID.
+            if let Some(node_id) = crate::iroh_transport::get_node_id() {
+                resource.set_unsafe(
+                    urls::SERVER_NODE_ID.into(),
+                    Value::String(format!("did:ad:node:{node_id}")),
+                )?;
+            }
+
+            let peers = peer_resources(context.store);
+
+            if !peers.is_empty() {
+                resource.set_unsafe(urls::SERVER_PEERS.into(), Value::ResourceArray(peers))?;
+            }
         }
 
-        let peers = peer_resources(context.store);
-
-        if !peers.is_empty() {
-            resource.set_unsafe(urls::SERVER_PEERS.into(), Value::ResourceArray(peers))?;
-        }
+        // Said plainly and unconditionally, including on an open node: a client
+        // that cannot tell "open" from "too old to say" would have to guess, and
+        // the safe guess (assume gated) would hide account creation on every
+        // node that predates this.
+        resource.set_unsafe(
+            urls::SERVER_HOST_MODE.into(),
+            Value::String(info.host_mode.mode.as_str().to_string()),
+        )?;
+        resource.set_unsafe(
+            urls::SERVER_ACCEPTS_NEW_DRIVES.into(),
+            Value::Boolean(info.host_mode.mode.accepts_new_drives()),
+        )?;
+        resource.set_unsafe(
+            urls::SERVER_OWNER_SET.into(),
+            Value::Boolean(info.host_mode.owner_agent.is_some()),
+        )?;
 
         let managed = info.managed.load(std::sync::atomic::Ordering::Relaxed);
         resource.set_unsafe(urls::SERVER_MANAGED.into(), Value::Boolean(managed))?;

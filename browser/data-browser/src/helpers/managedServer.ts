@@ -37,6 +37,14 @@ export type ManagedInfo = {
   /** The devices this server syncs with — how a browser sees the phone that
    *  paired with its server, since a browser is not itself a node. */
   peers?: ServerPeer[];
+  /**
+   * Whether this node takes a new Drive from whoever asks.
+   *
+   * Defaults to `true`, and must: a node that predates host mode says nothing
+   * here, and that node does accept new Drives. Guessing the safe-looking
+   * `false` would hide account creation on every server currently running.
+   */
+  acceptsNewDrives?: boolean;
 };
 
 /** What a node reports when it is unreachable, or says nothing about itself. */
@@ -46,6 +54,7 @@ export const EMPTY_NODE_INFO: ManagedInfo = {
   nodeId: null,
   version: null,
   peers: [],
+  acceptsNewDrives: true,
 };
 
 const DEFAULT = EMPTY_NODE_INFO;
@@ -126,6 +135,9 @@ export async function fetchManagedInfo(
       nodeId: readString(data?.[serverProps.nodeId]),
       version: readString(data?.[serverProps.version]),
       peers,
+      // Only an explicit `false` closes this. Absent means an older node, which
+      // accepts new Drives.
+      acceptsNewDrives: data?.[serverProps.acceptsNewDrives] !== false,
     };
   } catch {
     // Older/self-hosted nodes have no such endpoint — treat as non-managed.
@@ -150,6 +162,8 @@ export function isAtomicServer(info: ManagedInfo): boolean {
  * {@link ManagedInfo}:
  *  - a managed node with a dashboard URL → the managed portal (which handles
  *    sign-up + email verification);
+ *  - a self-hosted node that has an owner → nothing; creating an account there
+ *    would mint an identity that cannot store anything;
  *  - anything else (self-hosted / FOSS, or managed-but-no-URL) → the local
  *    DID-agent creation flow. This is what keeps the FOSS UX intact.
  *
@@ -158,7 +172,13 @@ export function isAtomicServer(info: ManagedInfo): boolean {
  */
 export type AccountCreationTarget =
   | { kind: 'portal'; url: string }
-  | { kind: 'local' };
+  | { kind: 'local' }
+  /**
+   * This node has an owner and it is not you. Creating an account here would
+   * produce an identity with nowhere to put anything, so the welcome screen
+   * offers signing in and accepting an invite instead.
+   */
+  | { kind: 'unavailable'; reason: 'node-has-owner' };
 
 /**
  * The portal a build was compiled against, if any.
@@ -236,6 +256,15 @@ export function accountCreationTarget(
     } catch {
       return { kind: 'portal', url: info.portalUrl };
     }
+  }
+
+  // Last, deliberately: every branch above sends people somewhere that still
+  // works. A hosted build has its own portal, and a managed node's accounts are
+  // the portal's business no matter what this disk accepts. What is left is a
+  // self-hosted node, the only kind whose gate means "not here, and nowhere
+  // else either".
+  if (info.acceptsNewDrives === false) {
+    return { kind: 'unavailable', reason: 'node-has-owner' };
   }
 
   return { kind: 'local' };

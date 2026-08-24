@@ -12,6 +12,7 @@ pub mod context;
 mod errors;
 mod handlers;
 mod helpers;
+pub mod host_mode;
 #[cfg(feature = "https")]
 mod https;
 pub mod invite_token;

@@ -978,20 +978,37 @@ pub async fn import_sync_push(
             return (0, vec![]);
         }
     }
-    // If drive doesn't exist yet, allow import (bootstrap case — new drive arriving)
+    // Admission gate. A no-op under the default OpenPolicy (self-hosted / FOSS
+    // left open), so it bites only where a policy was installed: a managed node
+    // admits enrolled drives within quota, an owner-gated node admits the drives
+    // it hosts.
+    let policy = store.sync_policy();
+    let decision = policy.admit_decision(&push.drive);
 
-    // Managed admission gate. No-op under the default OpenPolicy (self-hosted /
-    // FOSS), so this only bites on a managed node: it admits writes to enrolled
-    // drives (within quota), plus a bootstrap grace for a drive whose enrollment
-    // is still propagating to the allowlist.
-    let decision = store.sync_policy().admit_decision(&push.drive);
     if !decision.is_admitted() {
-        tracing::warn!(
-            "import_sync_push: drive {} not admitted by sync policy ({:?})",
-            push.drive,
-            decision
-        );
-        return (0, vec![]);
+        // The drive not existing here used to be reason enough to accept it —
+        // "bootstrap case, a new drive is arriving". That is also exactly what
+        // a stranger's first push looks like, so the bootstrap now has to say
+        // who it is for. An open node still admits anyone, which is what keeps
+        // ordinary first-sync working.
+        let is_new_here = store.get_resource(&drive_subject).await.is_err();
+
+        if is_new_here && policy.may_enroll_drive(&push.drive, for_agent) {
+            tracing::info!(
+                "import_sync_push: enrolling new drive {} for {:?}",
+                push.drive,
+                for_agent
+            );
+            policy.enroll_drive(&push.drive);
+        } else {
+            tracing::warn!(
+                "import_sync_push: drive {} not admitted by sync policy ({:?}, agent {:?})",
+                push.drive,
+                decision,
+                for_agent
+            );
+            return (0, vec![]);
+        }
     }
 
     let mut count = 0;

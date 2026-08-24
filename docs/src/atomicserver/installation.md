@@ -168,9 +168,111 @@ ATOMIC_DOMAIN=example.com
 ATOMIC_PORT=80
 # Disable built-in letsencrypt
 ATOMIC_HTTPS=false
-# Since Atomic-server is no longer aware of the existence of the external HTTPS service, we need to set the full URL here:
-ATOMIC_SERVER_URL=https://example.com
 ```
+
+`ATOMIC_DOMAIN` is what the server uses to build its own links, so set it to the
+name your users type — not to `localhost`, even though that is where the proxy
+forwards to. Getting this wrong mostly shows up as links pointing at the wrong
+host.
+
+Behind a proxy the server cannot tell that it is reachable from the internet:
+the connection arrives from the proxy, on the local interface. It will not warn
+you. See [Putting your server on the internet](#putting-your-server-on-the-internet)
+for what to set so strangers cannot store their data on your disk.
+
+## Putting your server on the internet
+
+By default, **anyone who can reach your server can create an account on it and
+store their data on your disk.** That is the right behaviour on your laptop or a
+home network. On a public address it makes your server an open sign-up form for
+free storage.
+
+This is not about privacy of what you already have — your existing Drives stay
+as private as their permissions say. It is about who may put *new* data here.
+
+### Name yourself as the owner
+
+You need your Agent ID: a public identifier that looks like
+`did:ad:agent:AbCd...`. If you do not have one yet, run the server on your own
+machine first, click **Create account**, and copy the Agent ID from Settings.
+Your phone or the desktop app work equally well — an identity is a keypair, it
+does not belong to any particular server.
+
+Then set it on the server that will be public:
+
+```ini
+ATOMIC_OWNER_AGENT=did:ad:agent:AbCd...
+```
+
+That is the whole setup. Restart, and the server will say so at boot:
+
+```text
+Only its owner can create new Drives here (did:ad:agent:AbCd...).
+```
+
+> **Use the Agent ID, never the secret.** The ID is public and safe to put in a
+> config file. The secret is your private key; the server never needs it and
+> refuses to start if you paste one here.
+
+### What changes, and what does not
+
+| Still works | Now refused |
+| --- | --- |
+| Anyone reading a Drive you made public | A stranger creating an account here |
+| People you invited, in the Drives you invited them to | A stranger pushing a new Drive over sync |
+| Your own other devices, signing in as you | A stranger uploading files to a Drive they invented |
+| Every Drive already on this server, including guests' | |
+
+Drives that already exist keep working. Turning this on never revokes access to
+data that is already on the disk — including Drives created before you set it,
+or by people you invited.
+
+New Drives you create are enrolled automatically, because you are the owner. Your
+second device is the same Agent, so it needs nothing extra.
+
+### If you are behind a reverse proxy or a tunnel
+
+**The server cannot detect this, and will not warn you.** With nginx, Caddy,
+Traefik, Docker port mapping, a Cloudflare Tunnel, or Tailscale in front, every
+request arrives from the proxy on a local address, and `ATOMIC_DOMAIN` is often
+still `localhost`. As far as the process can tell, it is a private machine.
+
+If your server is reachable from the internet by any route, set
+`ATOMIC_OWNER_AGENT`. Nothing else infers it for you.
+
+### Running an open server on purpose
+
+If you *want* a server other people can sign up on — a shared instance for a
+team or a community — that is still supported, and is what you get by default.
+To keep it open and silence the boot warning, say so:
+
+```ini
+ATOMIC_HOST_MODE=open
+```
+
+Do this deliberately. It means anyone who can reach the address can store data
+on your disk, and there is currently no quota.
+
+### Troubleshooting
+
+**"ATOMIC_HOST_MODE=owner needs ATOMIC_OWNER_AGENT to be set"** — you asked for a
+gated server without saying whose it is. Set `ATOMIC_OWNER_AGENT`, or use
+`ATOMIC_HOST_MODE=open` if you meant to run an open one. The server refuses to
+start rather than falling back to open, because a typo in a config file should
+not quietly publish your disk.
+
+**"ATOMIC_OWNER_AGENT looks like an Agent *secret*"** — you pasted the private
+key. Open the secret and use the `subject` field inside it, or copy the Agent ID
+from Settings.
+
+**"This server does not host new Drives"** — someone (possibly you, in another
+browser) tried to create an account. Sign in with the owner's secret instead. If
+you meant to let this person in, invite them to a specific Drive rather than
+giving them one of their own.
+
+**I locked myself out.** You did not: `ATOMIC_OWNER_AGENT` is read fresh at every
+boot and is never stored. Change it and restart, or remove it to go back to an
+open server.
 
 ## Using `systemd` to run Atomic-Server as a service
 

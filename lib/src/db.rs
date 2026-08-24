@@ -1073,6 +1073,29 @@ impl Db {
         Ok(drives)
     }
 
+    /// Every Drive this node stores.
+    ///
+    /// A full scan of the resource tree, deliberately. The query indexes would
+    /// be faster, but an index that is stale or partial answers "fewer drives
+    /// than you have" — and the caller (owner-mode enrollment) would then
+    /// silently lock the owner out of their own data. Paying O(store) once at
+    /// boot for a certain answer is the right trade; do not "optimize" this into
+    /// a query without changing what a wrong answer costs.
+    pub async fn drive_subjects(&self) -> Vec<String> {
+        use crate::storelike::Storelike;
+
+        self.all_resources(false)
+            .filter(|resource| {
+                matches!(
+                    resource.get(crate::urls::IS_A),
+                    Ok(Value::ResourceArray(classes))
+                        if classes.iter().any(|class| class.to_string() == crate::urls::DRIVE)
+                )
+            })
+            .map(|resource| resource.get_subject().to_string())
+            .collect()
+    }
+
     /// Cheap local-presence check (no network fetch): is this subject's resource
     /// already stored locally? Used by managed-node replication to skip drives it
     /// already hosts before resolving/pulling them from a peer.

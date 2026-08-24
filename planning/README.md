@@ -25,6 +25,7 @@ Remaining work, not "this file exists."
 | --- | --- |
 | [`unified-sync.md`](./unified-sync.md) | **Active.** One sync API over WS or Iroh. Remaining: AUTH-before-SYNC fail-closed, signed destroys on the wire, outbox port to `atomic_lib`, Layer 2 provenance. |
 | [`serverless-p2p.md`](./serverless-p2p.md) | **Planned.** Same-agent device sync without a hub. P0 remaining: AUTH-before-SYNC, bind `AUTH.requestedSubject` to the drive, OQ5 bootstrap admission. |
+| [`foss-public-host-mode.md`](./foss-public-host-mode.md) | **Proposal.** A FOSS node on a public address must not host strangers' workspaces. `HostMode { Open, Owner }`, owner claimed by agent DID. Closes unified-sync OQ5 for Owner. |
 | [`authorization-sync.md`](./authorization-sync.md) | **Draft.** Signed commit authorization, grant-chain evidence, peer-sync trust boundaries. |
 | [`encryption.md`](./encryption.md) | **Exploration.** E2EE / blind replicas undecided. Local cache at rest **shipped** — see [`opfs-per-agent-encryption.md`](./opfs-per-agent-encryption.md). |
 | [`unified-data-layer.md`](./unified-data-layer.md) | Browser/JS: one ingress, one outbox, one subscription model. Sign-at-drain (S4a) shipped separately. |

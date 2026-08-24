@@ -103,6 +103,7 @@ impl AppState {
                 .map(str::trim)
                 .filter(|d| !d.is_empty())
                 .map(str::to_string),
+            host_mode: config.host_mode.clone(),
         };
 
         // Register all built-in endpoints
@@ -175,6 +176,11 @@ impl AppState {
                 .await
                 .map_err(|e| format!("Failed to repopulate defaults. {}", e))?;
         }
+
+        // Who may put a *new* Drive here. Installed after populate so the scan
+        // below sees every Drive already on disk, and before anything binds so
+        // no request can slip in under the default open policy.
+        crate::host_mode::install_policy(&store, &config.host_mode).await;
 
         // Initialize search constructs
         let search_state = SearchState::new(&config)

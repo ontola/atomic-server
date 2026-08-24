@@ -120,9 +120,8 @@ export function GettingStartedFlow({
   // /node-info), account creation goes through the portal (email
   // verification). Self-hosted / FOSS nodes report nothing here, so we keep the
   // local DID-agent creation unchanged.
-  const [createTarget, setCreateTarget] = useState<AccountCreationTarget>({
-    kind: 'local',
-  });
+  const [createTarget, setCreateTarget] =
+    useState<AccountCreationTarget | null>(null);
   /**
    * Any control plane this build knows of, which is a weaker question than
    * `createTarget` answers.
@@ -727,28 +726,46 @@ export function GettingStartedFlow({
             {/* alt='' because the heading above already names the app. */}
             <AtomicServerLogo key='logo' alt='' />
             <ButtonStack key='buttons'>
-              <CtaButton
-                key='create'
-                type='button'
-                onClick={() => {
-                  // Hosted build or managed node → create the account on the
-                  // portal (email verification). FOSS node → local identity.
-                  if (createTarget.kind === 'portal') {
-                    window.location.assign(createTarget.url);
-                  } else {
-                    setStep('create');
-                  }
-                }}
-              >
-                Create account
-              </CtaButton>
+              {/* A node with an owner has nowhere to put a new account, so
+                  offering one would be offering a dead end. Sign in and invites
+                  still work, and are what someone arriving here actually needs.
+                  Guarded rather than always-rendered: on every other node this
+                  subtree must not exist at all. */}
+              {createTarget?.kind === 'unavailable' ? (
+                <CardSubtitle key='owned'>
+                  This server is run by one person for their own data. You can
+                  sign in, or open a drive you were invited to.
+                </CardSubtitle>
+              ) : (
+                <CtaButton
+                  key='create'
+                  type='button'
+                  disabled={!createTarget}
+                  onClick={() => {
+                    // Belt and braces with `disabled`: the button is unclickable
+                    // until `/server` answers, so this only guards a
+                    // programmatic call.
+                    if (!createTarget) return;
+
+                    // Hosted build or managed node → create the account on the
+                    // portal (email verification). FOSS node → local identity.
+                    if (createTarget.kind === 'portal') {
+                      window.location.assign(createTarget.url);
+                    } else {
+                      setStep('create');
+                    }
+                  }}
+                >
+                  Create account
+                </CtaButton>
+              )}
               {/* The local path stays reachable in a hosted build, one tap
                   down rather than gone. Someone who already has an identity,
                   or who wants nothing to do with our account system, must not
                   be walled out of their own software — and on a FOSS build
                   "Create account" already is this, so offering it twice would
                   just be noise. */}
-              {createTarget.kind === 'portal' && (
+              {createTarget?.kind === 'portal' && (
                 <CtaButton
                   key='local'
                   type='button'
@@ -780,6 +797,31 @@ export function GettingStartedFlow({
                 Try the live demo
               </CtaButton>
             </ButtonStack>
+            {/* Below the buttons on purpose: what this node offers comes
+                first, and this is the consolation for someone it cannot
+                help. Plain links, no icon — an aside, not a third choice
+                competing with Sign in. */}
+            {createTarget?.kind === 'unavailable' ? (
+              <OwnedElsewhere key='elsewhere'>
+                Want a server of your own?{' '}
+                <PlainExternalLink
+                  href='https://atomicserver.eu'
+                  target='_blank'
+                  rel='noreferrer'
+                >
+                  Get one hosted
+                </PlainExternalLink>{' '}
+                or{' '}
+                <PlainExternalLink
+                  href='https://github.com/atomicdata-dev/atomic-server'
+                  target='_blank'
+                  rel='noreferrer'
+                >
+                  run it yourself
+                </PlainExternalLink>
+                .
+              </OwnedElsewhere>
+            ) : null}
             {error ? (
               <CardError key='error' role='alert'>
                 {error.message}
@@ -932,7 +974,15 @@ export function GettingStartedFlow({
                         key='create'
                         type='button'
                         subtle
+                        disabled={
+                          !createTarget || createTarget.kind === 'unavailable'
+                        }
                         onClick={() => {
+                          if (
+                            !createTarget ||
+                            createTarget.kind === 'unavailable'
+                          )
+                            return;
                           setError(undefined);
 
                           if (createTarget.kind === 'portal') {
@@ -1289,6 +1339,24 @@ const AtomicServerLogo = styled(Logo)`
 `;
 
 /** Separates the offered passkey from the advanced agent-secret path below. */
+const OwnedElsewhere = styled.p`
+  margin: 0;
+  width: 100%;
+  text-align: center;
+  /* pretty, not balance: balancing squeezed this to half the available
+     width and split a link across two lines. */
+  text-wrap: pretty;
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.85rem;
+`;
+
+const PlainExternalLink = styled.a`
+  color: ${p => p.theme.colors.main};
+  text-decoration: underline;
+  /* A link that reads as one thing should wrap as one thing. */
+  white-space: nowrap;
+`;
+
 const OtherWaysLabel = styled.span`
   display: flex;
   align-items: center;

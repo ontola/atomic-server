@@ -33,6 +33,21 @@ This could especially be helpful if you're running at `localhost:9883` and want 
 You can press the menu icon (the three dots in the navigation bar), go to sharing, and uncheck the public `read` right.
 See the [Hierarchy chapter](https://docs.atomicdata.dev/hierarchy.html) in the docs on more info of the authorization model.
 
+## Can strangers store their data on my server?
+
+By default, yes — anyone who can reach your server can create an account and a
+Drive on it. That is deliberate for a machine on your desk or your home network,
+and wrong for one on a public address.
+
+Being reachable is not the same as hosting strangers. To keep the first without
+the second, set `ATOMIC_OWNER_AGENT` to your Agent ID. Visitors keep reading
+whatever you shared and invited collaborators keep their access; only creating a
+*new* Drive becomes yours alone. See
+[Putting your server on the internet](./installation.md#putting-your-server-on-the-internet).
+
+If your server sits behind nginx, Caddy, Docker, or a tunnel, it cannot tell that
+it is public and will not warn you. Set it yourself.
+
 ## Items are missing in my Collections / Search results
 
 You might have a problem with your indexes.
