@@ -7292,7 +7292,7 @@ msgstr "Not synced yet"
 msgid "{0} failed: {1}"
 msgstr "{0} failed: {1}"
 
-#: src/chunks/AppPage/index.tsx
+#: src/chunks/AppPage/AppFrame.tsx
 msgid "This app has no entry point, so there is nothing to open."
 msgstr "This app has no entry point, so there is nothing to open."
 
