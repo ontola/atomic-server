@@ -409,6 +409,9 @@ export function useAtomicMCPTools({
   const addToOntology = useAddToOntology();
   const { drive } = useSettings();
   const runDocumentEdit = useDocumentEditAgent(editModel);
+  // Prefer the store: a setup chat can create a drive and `store.setDrive`
+  // before React has re-rendered `useSettings()`.
+  const currentDrive = () => store.getDrive() ?? drive;
 
   /** Resolves a `@class` shortname (or title) to a class subject on the
    *  current drive. Full URLs and `#refs` pass through/expand. */
@@ -419,7 +422,7 @@ export function useAtomicMCPTools({
       return nameOrSubject;
     }
 
-    const classSubjects = await getClassesOnDrive(drive, store);
+    const classSubjects = await getClassesOnDrive(currentDrive(), store);
     const wanted = nameOrSubject.toLowerCase();
     const matches: string[] = [];
 
@@ -512,7 +515,7 @@ export function useAtomicMCPTools({
             parents:
               parents && parents.length !== 0
                 ? parents.map(expandSubject)
-                : [drive],
+                : [currentDrive()],
             text_query,
           });
 
@@ -734,7 +737,7 @@ export function useAtomicMCPTools({
           'List all classes defined on the current drive. Returns each class as `<shortname>: <subject>`. Use this to discover available classes, then call `get_schema` for details on a specific class.',
         inputSchema: z.object({}),
         execute: async () => {
-          const classSubjects = await getClassesOnDrive(drive, store);
+          const classSubjects = await getClassesOnDrive(currentDrive(), store);
 
           return await Promise.all(
             classSubjects.map(async cls => {
@@ -1253,8 +1256,8 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
                 rows: rows ?? template.spec.rows,
               },
               {
-                parent: parent ? expandSubject(parent) : drive,
-                driveSubject: drive,
+                parent: parent ? expandSubject(parent) : currentDrive(),
+                driveSubject: currentDrive(),
                 addToOntology,
               },
             );
@@ -1294,7 +1297,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
             const result = await buildDashboardFromSpec(
               store,
               { name, blocks: blocks as DashboardBlockSpec[] },
-              { parent: parent ? expandSubject(parent) : drive },
+              { parent: parent ? expandSubject(parent) : currentDrive() },
             );
 
             return shortenRefsDeep({
@@ -1419,8 +1422,8 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
                 rows,
               },
               {
-                parent: parent ? expandSubject(parent) : drive,
-                driveSubject: drive,
+                parent: parent ? expandSubject(parent) : currentDrive(),
+                driveSubject: currentDrive(),
                 addToOntology,
               },
             );
