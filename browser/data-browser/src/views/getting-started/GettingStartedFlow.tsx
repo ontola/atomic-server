@@ -52,7 +52,6 @@ import {
   type RecoverySecret,
 } from '../../helpers/managed/recovery';
 import { CodeBlock } from '../../components/CodeBlock';
-import { ExternalLink } from '../../components/ExternalLink';
 import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
 import { FaArrowLeft, FaKey } from 'react-icons/fa6';
 import { Logo } from '../../components/Logo';
@@ -733,24 +732,10 @@ export function GettingStartedFlow({
                   Guarded rather than always-rendered: on every other node this
                   subtree must not exist at all. */}
               {createTarget?.kind === 'unavailable' ? (
-                <Column key='owned' gap='0.75rem'>
-                  <CardSubtitle>
-                    This server is run by one person for their own data. You can
-                    sign in, or open a drive you were invited to.
-                  </CardSubtitle>
-                  {/* Nobody arrives here wanting to be told no. They wanted an
-                      account somewhere, so name the two places that still give
-                      them one — hosted, or their own machine. */}
-                  <CardSubtitle>Want a server of your own?</CardSubtitle>
-                  <OwnedElsewhere>
-                    <ExternalLink to='https://atomicserver.eu'>
-                      Get one hosted
-                    </ExternalLink>
-                    <ExternalLink to='https://github.com/atomicdata-dev/atomic-server'>
-                      Run it yourself
-                    </ExternalLink>
-                  </OwnedElsewhere>
-                </Column>
+                <CardSubtitle key='owned'>
+                  This server is run by one person for their own data. You can
+                  sign in, or open a drive you were invited to.
+                </CardSubtitle>
               ) : (
                 <CtaButton
                   key='create'
@@ -812,6 +797,31 @@ export function GettingStartedFlow({
                 Try the live demo
               </CtaButton>
             </ButtonStack>
+            {/* Below the buttons on purpose: what this node offers comes
+                first, and this is the consolation for someone it cannot
+                help. Plain links, no icon — an aside, not a third choice
+                competing with Sign in. */}
+            {createTarget?.kind === 'unavailable' ? (
+              <OwnedElsewhere key='elsewhere'>
+                Want a server of your own?{' '}
+                <PlainExternalLink
+                  href='https://atomicserver.eu'
+                  target='_blank'
+                  rel='noreferrer'
+                >
+                  Get one hosted
+                </PlainExternalLink>{' '}
+                or{' '}
+                <PlainExternalLink
+                  href='https://github.com/atomicdata-dev/atomic-server'
+                  target='_blank'
+                  rel='noreferrer'
+                >
+                  run it yourself
+                </PlainExternalLink>
+                .
+              </OwnedElsewhere>
+            ) : null}
             {error ? (
               <CardError key='error' role='alert'>
                 {error.message}
@@ -1329,11 +1339,22 @@ const AtomicServerLogo = styled(Logo)`
 `;
 
 /** Separates the offered passkey from the advanced agent-secret path below. */
-const OwnedElsewhere = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1.25rem;
-  justify-content: center;
+const OwnedElsewhere = styled.p`
+  margin: 0;
+  width: 100%;
+  text-align: center;
+  /* pretty, not balance: balancing squeezed this to half the available
+     width and split a link across two lines. */
+  text-wrap: pretty;
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.85rem;
+`;
+
+const PlainExternalLink = styled.a`
+  color: ${p => p.theme.colors.main};
+  text-decoration: underline;
+  /* A link that reads as one thing should wrap as one thing. */
+  white-space: nowrap;
 `;
 
 const OtherWaysLabel = styled.span`
