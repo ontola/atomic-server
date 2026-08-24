@@ -1215,6 +1215,7 @@ msgid "Paste your JSON-AD..."
 msgstr "Collez votre JSON-AD..."
 
 #: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
+#: src/chunks/FormBuilder/FieldOptions/PictureChoiceOptions.tsx
 #: src/views/ImporterPage.tsx
 msgid "Options"
 msgstr "Options"
@@ -3606,10 +3607,12 @@ msgstr "Pas de texte alternatif"
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/Demo/SimulatedTypist.ts
+#: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
 #: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Text"
 msgstr "Texte"
 
+#: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
 #: src/chunks/TablePage/NewColumnButton.tsx
 #: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
 msgid "Number"
@@ -3688,6 +3691,8 @@ msgstr "<0/> Supprimer la propriété et ses enfants"
 msgid "Delete property"
 msgstr "Supprimer la propriété"
 
+#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
+#: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 msgid "Remove column"
 msgstr "Supprimer la colonne"
@@ -3868,6 +3873,7 @@ msgstr "Format numérique"
 msgid "Percentage"
 msgstr "Pourcentage"
 
+#: src/chunks/FormBuilder/FieldOptions/CurrencyOptions.tsx
 #: src/chunks/TablePage/PropertyForm/NumberPropertyForm.tsx
 msgid "Currency"
 msgstr "Devise"
@@ -5447,6 +5453,7 @@ msgstr "Ajouter une couverture"
 msgid "Pick an image shown as a banner at the top of this resource."
 msgstr "Choisissez une image affichée comme bannière en haut de cette ressource."
 
+#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
 #: src/components/ResourceDecorations.tsx
 msgid "Icon"
 msgstr "Icône"
@@ -5927,6 +5934,7 @@ msgstr "Un nombre fixe…"
 msgid "This table has no {0} column to use here yet."
 msgstr "Ce tableau n'a pas encore de colonne {0} à utiliser ici."
 
+#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 msgid "Add column"
 msgstr "Ajouter une colonne"
@@ -6966,24 +6974,29 @@ msgstr "Page sans titre"
 msgid "Delete page"
 msgstr "Supprimer la page"
 
+#: src/chunks/FormBuilder/FieldOptions/CurrencyOptions.tsx
 #: src/chunks/FormBuilder/FieldOptions/NumberOptions.tsx
 msgid "Min"
 msgstr "Min"
 
+#: src/chunks/FormBuilder/FieldOptions/CurrencyOptions.tsx
 #: src/chunks/FormBuilder/FieldOptions/NumberOptions.tsx
 msgid "Max"
 msgstr "Max"
 
 #: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
+#: src/chunks/FormBuilder/FieldOptions/PictureChoiceOptions.tsx
 msgid "Remove option"
 msgstr "Supprimer l'option"
 
-#: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
+#: src/chunks/FormBuilder/FieldOptions/PictureChoiceOptions.tsx
 msgid "<0/> Add option"
 msgstr "<0/> Ajouter une option"
 
-#. 0: list.length + 1
+#. 0: index
+#. 0: draft.options.length + 1
 #: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
+#: src/chunks/FormBuilder/FieldOptions/PictureChoiceOptions.tsx
 msgid "Option {0}"
 msgstr "Option {0}"
 
@@ -7200,3 +7213,107 @@ msgstr "Afficher la page quand"
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
 msgid "Show Field When"
 msgstr "Afficher le champ quand"
+
+#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
+msgid "points"
+msgstr "points"
+
+#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
+msgid "Scale"
+msgstr "Échelle"
+
+#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
+msgid "Low end label"
+msgstr "Étiquette basse"
+
+#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
+msgid "High end label"
+msgstr "Étiquette haute"
+
+#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
+msgid "Steps"
+msgstr "Étapes"
+
+#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
+msgid "★ Star"
+msgstr "★ Étoile"
+
+#: src/chunks/FormBuilder/FieldOptions/ScaleOptions.tsx
+msgid "♥ Heart"
+msgstr "♥ Cœur"
+
+#: src/chunks/FormBuilder/FieldOptions/PictureChoiceOptions.tsx
+msgid "Replace"
+msgstr "Remplacer"
+
+#: src/chunks/FormBuilder/FieldOptions/PictureChoiceOptions.tsx
+msgid "Add image"
+msgstr "Ajouter une image"
+
+#: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
+msgid "<0/> Add column"
+msgstr "<0/> Ajouter une colonne"
+
+#. 0: columns.length + 1
+#: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
+msgid "Column {0}"
+msgstr "Colonne {0}"
+
+#: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
+msgid "Columns"
+msgstr "Colonnes"
+
+#: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
+msgid "Min rows"
+msgstr "Lignes min"
+
+#: src/chunks/FormBuilder/FieldOptions/TableInputOptions.tsx
+msgid "Max rows"
+msgstr "Lignes max"
+
+#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
+msgid "Rows (statements)"
+msgstr "Lignes (déclarations)"
+
+#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
+msgid "Add row"
+msgstr "Ajouter une ligne"
+
+#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
+msgid "Remove row"
+msgstr "Supprimer la ligne"
+
+#. 0: index
+#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
+msgid "Statement {0}"
+msgstr "Déclaration {0}"
+
+#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
+msgid "Columns (answers)"
+msgstr "Colonnes (réponses)"
+
+#. 0: index
+#: src/chunks/FormBuilder/FieldOptions/MatrixOptions.tsx
+msgid "Answer {0}"
+msgstr "Réponse {0}"
+
+#: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
+msgid "Add option"
+msgstr "Ajouter une option"
+
+#: src/chunks/FormBuilder/FieldSettingsPanel.tsx
+msgid "The country the number selector starts on. Visitors can still pick another one."
+msgstr "Le pays sur lequel le sélecteur de numéro commence. Les visiteurs peuvent toujours en choisir un autre."
+
+#: src/chunks/FormBuilder/FieldSettingsPanel.tsx
+msgid "Pre-selected when the form opens. Leave on \"No default\" to make the visitor choose."
+msgstr "Présélectionné à l'ouverture du formulaire. Laissez sur \"Aucun défaut\" pour que le visiteur choisisse."
+
+#: src/chunks/FormBuilder/FieldOptions/CountryDefaultField.tsx
+#: src/chunks/FormBuilder/FieldOptions/CountryDefaultField.tsx
+msgid "No default"
+msgstr "Aucune valeur par défaut"
+
+#: src/chunks/FormBuilder/FieldOptions/CountryDefaultField.tsx
+msgid "Default country"
+msgstr "Pays par défaut"
