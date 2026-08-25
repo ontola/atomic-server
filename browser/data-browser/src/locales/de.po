@@ -1054,13 +1054,11 @@ msgstr ""
 msgid "Copy secret to continue"
 msgstr ""
 
-#: src/views/DocumentPage.tsx
-msgid "Update Document"
-msgstr ""
+#~ msgid "Update Document"
+#~ msgstr ""
 
-#: src/views/DocumentPage.tsx
-msgid "Could not update document"
-msgstr ""
+#~ msgid "Could not update document"
+#~ msgstr ""
 
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
@@ -4271,9 +4269,8 @@ msgstr ""
 msgid "This removes drives created for automated tests or local dev: names containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
 msgstr ""
 
-#: src/views/DocumentPage.tsx
-msgid "<0/> This document needs to be updated to the new format in order to be edited."
-msgstr ""
+#~ msgid "<0/> This document needs to be updated to the new format in order to be edited."
+#~ msgstr ""
 
 #: src/views/ResourcePage.tsx
 msgid "The resource at <0/> hasn't loaded after 15 seconds. It may not exist, or the server may be unreachable."
@@ -4635,7 +4632,7 @@ msgstr ""
 msgid "Creating table <0/>"
 msgstr ""
 
-#. 0.0: data.length
+#. 0.0: count
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Creating <0>{0} resources</0>"
 msgstr ""
