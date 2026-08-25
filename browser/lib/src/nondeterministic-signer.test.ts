@@ -66,8 +66,14 @@ describe('personal drive derivation under a non-deterministic signer', () => {
       `did:ad:agent:${keys.publicKey}`,
     );
 
+    // The wording is user-facing: this message is shown when creating a drive
+    // fails, so it has to name the thing the user knows ("private drive") and
+    // carry the one action that fixes it.
     await expect(agent.personalDriveSubject()).rejects.toThrow(
-      /personal drive/i,
+      /private drive/i,
+    );
+    await expect(agent.personalDriveSubject()).rejects.toThrow(
+      /sign in with the secret again/i,
     );
   });
 

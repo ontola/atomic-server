@@ -193,7 +193,7 @@ export class Agent implements AgentInterface {
 
     if (!this.#cryptoProvider.signsDeterministically) {
       throw new AtomicError(
-        "Cannot derive this agent's personal drive: its key signs " +
+        "Cannot work out this account's private drive: its key signs " +
           'non-deterministically and no derived subject was stored. ' +
           'Sign in with the secret again to recompute it.',
         ErrorType.Client,

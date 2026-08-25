@@ -310,6 +310,7 @@ msgstr "Connecter un modèle pour utiliser Atomic Assistant"
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/components/AI/AISettings.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "or"
 msgstr "ou"
 
@@ -724,6 +725,7 @@ msgstr "Impossible de se connecter au serveur Ollama. Vérifiez si le serveur es
 #: src/components/HighlightedCodeBlock.tsx
 #: src/components/Searchbar/TagSuggestionOverlay.tsx
 #: src/views/Card/ResourceCard.tsx
+#: src/views/Document/DocumentV2FullPage.tsx
 #: src/views/Document/DocumentV2FullPage.tsx
 #: src/views/File/FilePreview.tsx
 #: src/views/File/FilePreviewThumbnail.tsx
@@ -2449,9 +2451,8 @@ msgstr "Nouvelle étiquette"
 msgid "Add tag"
 msgstr "Ajouter une étiquette"
 
-#: src/hooks/usePersonalDriveList.ts
-msgid "Could not update your list: no personal drive is set up for this account yet."
-msgstr ""
+#~ msgid "Could not update your list: no personal drive is set up for this account yet."
+#~ msgstr ""
 
 #. 0: getTitle(resource)
 #. 0: getTitle(resource)
@@ -2960,9 +2961,8 @@ msgstr "Créer une nouvelle identité"
 msgid "Generating your identity..."
 msgstr "Génération de votre identité..."
 
-#: src/components/NewIdentitySection.tsx
-msgid "Creating your personal drive…"
-msgstr "Création de votre lecteur personnel…"
+#~ msgid "Creating your personal drive…"
+#~ msgstr "Création de votre lecteur personnel…"
 
 #: src/components/NewIdentitySection.tsx
 msgid "Atomic Server — agent secret backup"
@@ -7039,4 +7039,12 @@ msgstr ""
 
 #: src/components/Share/ShareDialog.tsx
 msgid "This is your <0>private drive</0>. Sharing it shares your drive list, favourites, notifications and AI chats along with it. To work with someone, make a drive for the work and share that instead."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Creating your private drive…"
+msgstr ""
+
+#: src/hooks/usePersonalDriveList.ts
+msgid "Could not update your list: no private drive is set up for this account yet."
 msgstr ""
