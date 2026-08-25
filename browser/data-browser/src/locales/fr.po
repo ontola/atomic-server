@@ -1529,7 +1529,6 @@ msgstr "Description textuelle <0/>"
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/components/AvatarCropper.tsx
-#: src/components/Share/ShareDialog.tsx
 #: src/components/forms/ResourceForm.tsx
 #: src/views/Article/ArticleDescription.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
@@ -3115,10 +3114,8 @@ msgstr "Il n'y a pas encore d'étiquettes."
 msgid "Open tag page"
 msgstr "Ouvrir la page des tags"
 
-#. 0: showInherited ? <FaChevronDown /> \\: <FaChevronRight />
-#: src/components/Share/ShareDialog.tsx
-msgid "{0} Inherited permissions"
-msgstr "{0} Permissions héritées"
+#~ msgid "{0} Inherited permissions"
+#~ msgstr "{0} Permissions héritées"
 
 #: src/components/Share/ShareDialog.tsx
 msgid "<0><0/> Back</0> Create Invite"
@@ -4442,9 +4439,8 @@ msgstr ""
 msgid "as a classtype."
 msgstr ""
 
-#: src/components/Share/ShareDialog.tsx
-msgid "Create Invite"
-msgstr "Créer une invitation"
+#~ msgid "Create Invite"
+#~ msgstr "Créer une invitation"
 
 #. 0: status.blockedCount
 #: src/components/SideBar/SyncMenuItem.tsx
@@ -7007,4 +7003,40 @@ msgstr ""
 #. 0: detail
 #: src/actions/resourceActions.tsx
 msgid "Could not delete: {0}"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Want a server of your own?"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "This server is run by one person for their own data. You can sign in, or open a drive you were invited to."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Get one hosted"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "run it yourself"
+msgstr ""
+
+#: src/handlers/errorHandler.ts
+msgid "Something failed, and reported no reason."
+msgstr ""
+
+#: src/views/Drive/DrivePage.tsx
+msgid "Your private drive keeps its name. It is tied to your account, not to a project."
+msgstr ""
+
+#: src/components/Drives/PersonalDriveBadge.tsx
+msgid "<0/> Private"
+msgstr ""
+
+#: src/components/Drives/PersonalDriveBadge.tsx
+msgid "This is your private drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project."
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "This is your <0>private drive</0>. Sharing it shares your drive list, favourites, notifications and AI chats along with it. To work with someone, make a drive for the work and share that instead."
 msgstr ""

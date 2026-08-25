@@ -15,6 +15,8 @@ import { Button } from '@components/Button';
 import { useSettings } from '@helpers/AppSettings';
 import { ResourcePageProps } from '../ResourcePage';
 import { EditableTitle } from '@components/EditableTitle';
+import { useIsPersonalDrive } from '@hooks/useIsPersonalDrive';
+import { PersonalDriveBadge } from '@components/Drives/PersonalDriveBadge';
 import { ResourceCoverImage } from '@components/ResourceDecorations';
 import { Column, Row } from '@components/Row';
 import { styled } from 'styled-components';
@@ -56,6 +58,7 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
 
   const defaultOntologyProp = useProperty(server.properties.defaultOntology);
   const canEdit = useCanWrite(resource);
+  const isPersonalDrive = useIsPersonalDrive(resource.subject);
 
   if (!baseURL) {
     setBaseURL(resource.subject);
@@ -67,7 +70,19 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
       <ContainerNarrow>
         <Column gap='2rem'>
           <Row align='center' wrapItems gap='1rem'>
-            <EditableTitle resource={resource} withDecorations />
+            <EditableTitle
+              resource={resource}
+              withDecorations={!isPersonalDrive}
+              // Its subject is derived from your key: there is exactly one and
+              // it cannot be swapped. A name like "Q3 Launch" on it would be a
+              // name that lies about what the thing is.
+              lockedReason={
+                isPersonalDrive
+                  ? 'Your private drive keeps its name. It is tied to your account, not to a project.'
+                  : undefined
+              }
+            />
+            {isPersonalDrive && <PersonalDriveBadge />}
             {vectorIndexing && <VectorIndexingIndicator />}
             {baseURL !== resource.subject && (
               <Button onClick={() => setBaseURL(resource.subject)}>
