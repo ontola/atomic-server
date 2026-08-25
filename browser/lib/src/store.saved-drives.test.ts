@@ -32,7 +32,7 @@ describe('recording a new drive on the personal drive', () => {
 
     vi.spyOn(store, 'ensurePersonalDrive').mockRejectedValue(
       new Error(
-        "Cannot derive this agent's personal drive: its key signs " +
+        "Cannot work out this account's private drive: its key signs " +
           'non-deterministically and no derived subject was stored. ' +
           'Sign in with the secret again to recompute it.',
       ),

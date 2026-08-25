@@ -443,7 +443,7 @@ export function NewIdentitySection({
 
       {step === 'creating-drive' && (
         <Column key='creating-drive' gap='1rem'>
-          <p>Creating your personal drive…</p>
+          <p>Creating your private drive…</p>
         </Column>
       )}
 
