@@ -1642,7 +1642,7 @@ export async function changeDrive(
     const driveLink = page.getByTestId(sidebarDriveButtonId);
     await expect(driveLink).toBeVisible();
     await openConfigureDrive(page);
-    // The input lives behind an "Open by URL" disclosure now — the drives
+    // The input lives behind an "Open" disclosure now — the drives
     // section leads with the drive list and "New drive", and only reveals the
     // URL/DID field when asked. Without this click the field is not in the DOM
     // at all, which reads as a locator timeout rather than a hidden element.
