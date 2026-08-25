@@ -1,7 +1,7 @@
 import { core, urls } from '@tomic/react';
 import type { JSX } from 'react';
 import { useSettings } from '../../helpers/AppSettings';
-import { usePersonalDriveList } from '../../hooks/usePersonalDriveList';
+import { usePrivateDriveList } from '../../hooks/usePrivateDriveList';
 import { SideBarPanel } from './SideBarPanel';
 import { SharedWithMeLink } from './SharedWithMeLink';
 
@@ -11,7 +11,7 @@ interface SideBarHomePanelsProps {
 
 /**
  * The per-user "home index" panels — Favorites and Shared-with-me — read from
- * the user's PRIVATE DRIVE (see {@link usePersonalDriveList}). Rendered in the
+ * the user's PRIVATE DRIVE (see {@link usePrivateDriveList}). Rendered in the
  * sidebar's bottom-pinned area (above App settings) rather than scrolling with
  * the active drive's tree, since they are cross-drive and not part of the
  * current drive's contents.
@@ -20,8 +20,8 @@ export function SideBarHomePanels({
   onItemClick,
 }: SideBarHomePanelsProps): JSX.Element | null {
   const { agent } = useSettings();
-  const [favorites] = usePersonalDriveList(urls.properties.favorites);
-  const [sharedWithMe] = usePersonalDriveList(core.properties.sharedWithMe);
+  const [favorites] = usePrivateDriveList(urls.properties.favorites);
+  const [sharedWithMe] = usePrivateDriveList(core.properties.sharedWithMe);
 
   if (!agent) {
     return null;

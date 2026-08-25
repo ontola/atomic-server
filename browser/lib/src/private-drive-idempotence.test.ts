@@ -4,16 +4,16 @@ import { testStore } from './test-store.js';
 
 /**
  * The product minted a fresh "My drive" on each sign-in. Derivation itself is
- * stable (see `subtle-personal-drive.test.ts`), so the churn has to come from
+ * stable (see `subtle-private-drive.test.ts`), so the churn has to come from
  * the path around it: a second call that does not recognise the drive the
  * first one made.
  */
-describe('ensurePersonalDrive is idempotent', () => {
+describe('ensurePrivateDrive is idempotent', () => {
   it('returns the same subject when called twice', async ({ expect }) => {
     const { store } = await testStore();
 
-    const first = await store.ensurePersonalDrive();
-    const second = await store.ensurePersonalDrive();
+    const first = await store.ensurePrivateDrive();
+    const second = await store.ensurePrivateDrive();
 
     expect(second.subject).toBe(first.subject);
   });
@@ -23,14 +23,14 @@ describe('ensurePersonalDrive is idempotent', () => {
   }) => {
     const { store } = await testStore();
 
-    const first = await store.ensurePersonalDrive();
+    const first = await store.ensurePrivateDrive();
 
     // What a reload looks like: same key, same store config, nothing cached.
     (
       store as unknown as { _resources: Map<string, unknown> }
     )._resources.clear();
 
-    const second = await store.ensurePersonalDrive();
+    const second = await store.ensurePrivateDrive();
 
     expect(second.subject).toBe(first.subject);
   });
@@ -40,9 +40,9 @@ describe('ensurePersonalDrive is idempotent', () => {
   }) => {
     const { store } = await testStore();
 
-    const first = await store.ensurePersonalDrive();
-    await store.ensurePersonalDrive();
-    const third = await store.ensurePersonalDrive();
+    const first = await store.ensurePrivateDrive();
+    await store.ensurePrivateDrive();
+    const third = await store.ensurePrivateDrive();
 
     const listed = third.getSubjects(server.properties.drives);
     const own = listed.filter(s => s === first.subject);

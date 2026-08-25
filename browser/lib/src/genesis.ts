@@ -33,7 +33,7 @@ export function domainSeparatorNonce(purpose: string): Uint8Array {
 
 /** Genesis certificate for the agent's personal drive: `createdAt = 0`,
  *  empty parent/drive, nonce = SHA-256(`atomic-personal-drive-v1`)[..16]. */
-export function personalDriveCert(signerPubkey: Uint8Array): GenesisCert {
+export function privateDriveCert(signerPubkey: Uint8Array): GenesisCert {
   return {
     signerPubkey,
     createdAt: 0,
@@ -43,11 +43,11 @@ export function personalDriveCert(signerPubkey: Uint8Array): GenesisCert {
   };
 }
 
-/** `did:ad:<sig>` of {@link personalDriveCert} signed by `privateKey`. */
-export async function personalDriveSubject(
+/** `did:ad:<sig>` of {@link privateDriveCert} signed by `privateKey`. */
+export async function privateDriveSubject(
   privateKey: Uint8Array,
 ): Promise<string> {
-  const cert = personalDriveCert(await getPublicKey(privateKey));
+  const cert = privateDriveCert(await getPublicKey(privateKey));
 
   return subjectForSignature(await signGenesisCert(cert, privateKey));
 }

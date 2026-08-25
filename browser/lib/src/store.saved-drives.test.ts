@@ -5,7 +5,7 @@ import { testStore } from './test-store.js';
 /**
  * What happens to a drive that cannot be recorded.
  *
- * `Agent.personalDriveSubject` refuses to derive a personal drive from a
+ * `Agent.privateDriveSubject` refuses to derive a personal drive from a
  * signature that is not reproducible — rightly, because signing anyway once
  * minted 411 "My drive"s in a single session. The refusal even names the one
  * action that fixes it.
@@ -19,7 +19,7 @@ describe('recording a new drive on the personal drive', () => {
     const { store } = await testStore();
 
     const drive = await store.createDrive('Work', { personal: false });
-    const personal = await store.ensurePersonalDrive();
+    const personal = await store.ensurePrivateDrive();
 
     expect(personal.getSubjects(server.properties.drives)).toContain(
       drive.subject,
@@ -30,7 +30,7 @@ describe('recording a new drive on the personal drive', () => {
     const { store } = await testStore();
     const before = store.getAllSubjects().length;
 
-    vi.spyOn(store, 'ensurePersonalDrive').mockRejectedValue(
+    vi.spyOn(store, 'ensurePrivateDrive').mockRejectedValue(
       new Error(
         "Cannot work out this account's private drive: its key signs " +
           'non-deterministically and no derived subject was stored. ' +

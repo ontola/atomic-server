@@ -5,7 +5,7 @@ import { useStore } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
-import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
+import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { paths } from '../routes/paths';
 import {
   SideBarMenuRow,
@@ -57,7 +57,7 @@ export function DemoExitMenuItem({
       const agent = store.getAgent();
       const home = agent
         ? await withTimeout(
-            fetchPersonalDriveSubject(store, agent).catch(() => undefined),
+            fetchPrivateDriveSubject(store, agent).catch(() => undefined),
             2500,
           )
         : undefined;

@@ -6,7 +6,7 @@ import {
   decodeGenesisCert,
   domainSeparatorNonce,
   PERSONAL_DRIVE_PURPOSE,
-  personalDriveSubject,
+  privateDriveSubject,
 } from './genesis.js';
 import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
@@ -26,7 +26,7 @@ describe('deterministic personal drive', () => {
   }) => {
     const { store, agentDID } = await testStore();
     const agent = store.getAgent()!;
-    const expected = await agent.personalDriveSubject();
+    const expected = await agent.privateDriveSubject();
 
     const drive = await store.createDrive('Home', { personal: true });
 
@@ -46,7 +46,7 @@ describe('deterministic personal drive', () => {
     expect,
   }) => {
     const keys = await Agent.generateKeyPair();
-    const expected = await personalDriveSubject(decodeB64(keys.privateKey));
+    const expected = await privateDriveSubject(decodeB64(keys.privateKey));
 
     const make = async () => {
       const store = new Store({ serverUrl: 'https://example.com' });
@@ -87,7 +87,7 @@ describe('deterministic personal drive', () => {
   }) => {
     const { store } = await testStore();
     const first = await store.createDrive('Home', { personal: true });
-    const second = await store.ensurePersonalDrive('Other name');
+    const second = await store.ensurePrivateDrive('Other name');
     expect(second.subject).toBe(first.subject);
     expect(second).toBe(first);
   });
@@ -102,7 +102,7 @@ describe('deterministic personal drive', () => {
     await drive.save();
 
     // Boot and sign-in both call this; neither may rewrite what is there.
-    const again = await store.ensurePersonalDrive('My drive');
+    const again = await store.ensurePrivateDrive('My drive');
 
     expect(again.subject).toBe(drive.subject);
     expect(again.get(core.properties.name)).toBe("Joep's stuff");
@@ -113,7 +113,7 @@ describe('deterministic personal drive', () => {
   }) => {
     const { store } = await testStore();
     const extra = await store.createDrive('Project', { personal: false });
-    const personal = await store.ensurePersonalDrive();
+    const personal = await store.ensurePrivateDrive();
     const listed = personal.getSubjects(server.properties.drives);
     expect(listed).toContain(extra.subject);
     expect(extra.subject).not.toBe(personal.subject);
@@ -151,9 +151,9 @@ describe('deterministic personal drive', () => {
     );
     await agentResource.set(core.properties.isA, [core.classes.agent], false);
 
-    const derived = await store.ensurePersonalDrive('Home');
+    const derived = await store.ensurePrivateDrive('Home');
 
-    expect(derived.subject).toBe(await agent.personalDriveSubject());
+    expect(derived.subject).toBe(await agent.privateDriveSubject());
     expect(derived.subject).not.toBe(oldHome.subject);
 
     const listed = derived.getSubjects(server.properties.drives);
@@ -184,7 +184,7 @@ describe('deterministic personal drive', () => {
     oldHome.push(FAVORITES, [starred], true);
     await oldHome.save();
 
-    // No `personalDrive` on the Agent resource — the shape of a self-hosted
+    // No `privateDrive` on the Agent resource — the shape of a self-hosted
     // account whose server never wrote one. `initialDrive`, which travels with
     // the secret rather than with any server's data, is the only record left.
     const agentResource = store.getResourceLoading(agentDID, {
@@ -193,9 +193,9 @@ describe('deterministic personal drive', () => {
     await agentResource.set(core.properties.isA, [core.classes.agent], false);
     agent.initialDrive = oldHome.subject;
 
-    const derived = await store.ensurePersonalDrive('Home');
+    const derived = await store.ensurePrivateDrive('Home');
 
-    expect(derived.subject).toBe(await agent.personalDriveSubject());
+    expect(derived.subject).toBe(await agent.privateDriveSubject());
     expect(derived.subject).not.toBe(oldHome.subject);
 
     const listed = derived.getSubjects(server.properties.drives);
@@ -242,7 +242,7 @@ describe('deterministic personal drive', () => {
       }
     ).adoptLegacyDriveList(agent, legacy, didAgent);
 
-    const derived = await store.getResource(await agent.personalDriveSubject());
+    const derived = await store.getResource(await agent.privateDriveSubject());
     const listed = derived.getSubjects(server.properties.drives);
 
     expect(listed).toContain('https://atomicdata.dev/drive/xzpv34r5ibr');

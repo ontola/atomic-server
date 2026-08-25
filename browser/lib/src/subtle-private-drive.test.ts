@@ -32,8 +32,8 @@ describe('derived personal drive under SubtleCrypto', () => {
     const a = await Agent.fromSecret(secret);
     const b = await Agent.fromSecret(secret);
 
-    const first = await a.personalDriveSubject();
-    const second = await b.personalDriveSubject();
+    const first = await a.privateDriveSubject();
+    const second = await b.privateDriveSubject();
 
     expect(first).toBe(second);
   });
@@ -41,8 +41,8 @@ describe('derived personal drive under SubtleCrypto', () => {
   it('is stable across repeated calls on one Agent', async ({ expect }) => {
     const agent = await Agent.fromSecret(await secretFor());
 
-    const first = await agent.personalDriveSubject();
-    const second = await agent.personalDriveSubject();
+    const first = await agent.privateDriveSubject();
+    const second = await agent.privateDriveSubject();
 
     expect(first).toBe(second);
   });
@@ -53,8 +53,8 @@ describe('derived personal drive under SubtleCrypto', () => {
     const subtle = await Agent.fromSecret(secret);
     const js = Agent.fromSecret(secret, 'js');
 
-    expect(await subtle.personalDriveSubject()).toBe(
-      await js.personalDriveSubject(),
+    expect(await subtle.privateDriveSubject()).toBe(
+      await js.privateDriveSubject(),
     );
   });
 });

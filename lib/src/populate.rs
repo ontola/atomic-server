@@ -138,7 +138,7 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
             data_type: DataType::AtomicUrl,
             shortname: "personal-drive".into(),
             description: "The agent's personal (private) drive on this server. Clients use this as home and for agent-scoped data such as shared-with-me. At most one per agent.".into(),
-            subject: urls::PERSONAL_DRIVE.into(),
+            subject: urls::PRIVATE_DRIVE.into(),
             allows_only: None,
         },
         Property {
@@ -190,7 +190,7 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
                 urls::PUBLIC_KEY.into(),
                 urls::NAME.into(),
                 urls::DESCRIPTION.into(),
-                urls::PERSONAL_DRIVE.into(),
+                urls::PRIVATE_DRIVE.into(),
                 urls::SHARED_WITH_ME.into(),
                 urls::DRIVES.into(),
             ],

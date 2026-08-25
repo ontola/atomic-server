@@ -3182,7 +3182,6 @@ msgid "Remove drive from list"
 msgstr "Remove drive from list"
 
 #: src/chunks/TablePage/NewColumnButton.tsx
-#: src/components/Drives/DriveRow.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 msgid "Select"
 msgstr "Select"
@@ -4858,7 +4857,6 @@ msgid "<0/> and{0} <1/> are typing"
 msgstr "<0/> and{0} <1/> are typing"
 
 #: src/components/SideBar/DriveSwitcher.tsx
-#: src/routes/SettingsAgent.tsx
 msgid "Private drive"
 msgstr "Private drive"
 
@@ -4874,13 +4872,11 @@ msgstr "Manage drives"
 msgid "View and organize all your drives."
 msgstr "View and organize all your drives."
 
-#: src/routes/SettingsAgent.tsx
-msgid "Your personal space — only visible to you."
-msgstr "Your personal space — only visible to you."
+#~ msgid "Your personal space — only visible to you."
+#~ msgstr "Your personal space — only visible to you."
 
-#: src/routes/SettingsAgent.tsx
-msgid "Unstar a drive to move it back to recently visited."
-msgstr "Unstar a drive to move it back to recently visited."
+#~ msgid "Unstar a drive to move it back to recently visited."
+#~ msgstr "Unstar a drive to move it back to recently visited."
 
 #: src/routes/SettingsAgent.tsx
 msgid "My drives"
@@ -7064,10 +7060,12 @@ msgid "Your private drive keeps its name. It is tied to your account, not to a p
 msgstr "Your private drive keeps its name. It is tied to your account, not to a project."
 
 #: src/components/Drives/PersonalDriveBadge.tsx
+#: src/components/Drives/PrivateDriveBadge.tsx
 msgid "<0/> Private"
 msgstr "<0/> Private"
 
 #: src/components/Drives/PersonalDriveBadge.tsx
+#: src/components/Drives/PrivateDriveBadge.tsx
 msgid "This is your private drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project."
 msgstr "This is your private drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project."
 
@@ -7080,5 +7078,14 @@ msgid "Creating your private drive…"
 msgstr "Creating your private drive…"
 
 #: src/hooks/usePersonalDriveList.ts
+#: src/hooks/usePrivateDriveList.ts
 msgid "Could not update your list: no private drive is set up for this account yet."
 msgstr "Could not update your list: no private drive is set up for this account yet."
+
+#: src/routes/SettingsAgent.tsx
+msgid "Your private drive is always first. Unstar any other drive to move it back to recently visited."
+msgstr "Your private drive is always first. Unstar any other drive to move it back to recently visited."
+
+#: src/components/Drives/DrivesCard.tsx
+msgid "Drives"
+msgstr "Drives"

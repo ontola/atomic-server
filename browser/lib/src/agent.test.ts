@@ -2,7 +2,7 @@ import { describe, it } from 'vitest';
 import { Agent } from './agent.js';
 import { decodeB64 } from './base64.js';
 import { JSCryptoProvider, legacySubjectFromSecret } from './CryptoProvider.js';
-import { personalDriveSubject } from './genesis.js';
+import { privateDriveSubject } from './genesis.js';
 
 describe('Agent', () => {
   const validPrivateKey = 'CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=';
@@ -50,10 +50,10 @@ describe('Agent', () => {
       new JSCryptoProvider(validPrivateKey),
       validSubject,
     );
-    const first = await agent.personalDriveSubject();
-    const second = await agent.personalDriveSubject();
+    const first = await agent.privateDriveSubject();
+    const second = await agent.privateDriveSubject();
     expect(first).toBe(second);
-    expect(first).toBe(await personalDriveSubject(decodeB64(validPrivateKey)));
+    expect(first).toBe(await privateDriveSubject(decodeB64(validPrivateKey)));
     expect(first.startsWith('did:ad:')).toBe(true);
     expect(first.startsWith('did:ad:agent:')).toBe(false);
   });

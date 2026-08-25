@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Agent, JSCryptoProvider, core, useStore } from '@tomic/react';
-import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
+import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { useSettings } from '../helpers/AppSettings';
 import { saveAgentToIDB } from '../helpers/agentStorage';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
@@ -158,11 +158,11 @@ export function NewIdentitySection({
   function handleProfileSave(name: string) {
     const trimmed = name.trim();
     setIdentity(prev => (prev ? { ...prev, profileName: trimmed } : null));
-    void createPersonalDrive(trimmed);
+    void createPrivateDrive(trimmed);
   }
 
   /** One private drive per user on this server; becomes default home / initialDrive. */
-  async function createPersonalDrive(username: string) {
+  async function createPrivateDrive(username: string) {
     if (!identity) return;
 
     setStep('creating-drive');
@@ -384,7 +384,7 @@ export function NewIdentitySection({
       await saveAgentToIDB(trimmedInput);
       setAgent(agent);
 
-      const home = await fetchPersonalDriveSubject(store, agent);
+      const home = await fetchPrivateDriveSubject(store, agent);
 
       if (home) {
         setDrive(home);

@@ -140,23 +140,22 @@ async function removeFromSavedDrives(
     if (!agentSubject) return;
 
     const agentResource = await store.getResource(agentSubject);
-    const personalDrive = agentResource.get(core.properties.personalDrive) as
+    const privateDrive = agentResource.get(core.properties.personalDrive) as
       | string
       | undefined;
-    if (!personalDrive) return;
+    if (!privateDrive) return;
 
-    const personalDriveResource = await store.getResource(personalDrive);
+    const privateDriveResource = await store.getResource(privateDrive);
     const SERVER_DRIVES = 'https://atomicdata.dev/properties/drives';
-    const current = (personalDriveResource.get(SERVER_DRIVES) ??
-      []) as string[];
+    const current = (privateDriveResource.get(SERVER_DRIVES) ?? []) as string[];
 
     if (!current.includes(drive)) return;
 
-    await personalDriveResource.set(
+    await privateDriveResource.set(
       SERVER_DRIVES,
       current.filter(d => d !== drive),
     );
-    await personalDriveResource.save();
+    await privateDriveResource.save();
   } catch {
     // Best-effort; a stale switcher entry is harmless.
   }

@@ -488,7 +488,7 @@ impl AtomicNfsFs {
     let mut drives: Vec<Subject> = Vec::new();
 
     // The home drive first, so it sorts as the user's primary entry.
-    if let Ok(value) = agent_resource.get(urls::PERSONAL_DRIVE) {
+    if let Ok(value) = agent_resource.get(urls::PRIVATE_DRIVE) {
       if let Some(subject) = value_string(value) {
         drives.push(Subject::from(subject.as_str()));
       }

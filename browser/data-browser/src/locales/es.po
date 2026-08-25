@@ -3182,7 +3182,6 @@ msgid "Remove drive from list"
 msgstr "Eliminar unidad de la lista"
 
 #: src/chunks/TablePage/NewColumnButton.tsx
-#: src/components/Drives/DriveRow.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 msgid "Select"
 msgstr "Seleccionar"
@@ -4824,7 +4823,6 @@ msgid "<0/> and{0} <1/> are typing"
 msgstr ""
 
 #: src/components/SideBar/DriveSwitcher.tsx
-#: src/routes/SettingsAgent.tsx
 msgid "Private drive"
 msgstr ""
 
@@ -4840,13 +4838,11 @@ msgstr ""
 msgid "View and organize all your drives."
 msgstr ""
 
-#: src/routes/SettingsAgent.tsx
-msgid "Your personal space — only visible to you."
-msgstr ""
+#~ msgid "Your personal space — only visible to you."
+#~ msgstr ""
 
-#: src/routes/SettingsAgent.tsx
-msgid "Unstar a drive to move it back to recently visited."
-msgstr ""
+#~ msgid "Unstar a drive to move it back to recently visited."
+#~ msgstr ""
 
 #: src/routes/SettingsAgent.tsx
 msgid "My drives"
@@ -7030,10 +7026,12 @@ msgid "Your private drive keeps its name. It is tied to your account, not to a p
 msgstr ""
 
 #: src/components/Drives/PersonalDriveBadge.tsx
+#: src/components/Drives/PrivateDriveBadge.tsx
 msgid "<0/> Private"
 msgstr ""
 
 #: src/components/Drives/PersonalDriveBadge.tsx
+#: src/components/Drives/PrivateDriveBadge.tsx
 msgid "This is your private drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project."
 msgstr ""
 
@@ -7046,5 +7044,14 @@ msgid "Creating your private drive…"
 msgstr ""
 
 #: src/hooks/usePersonalDriveList.ts
+#: src/hooks/usePrivateDriveList.ts
 msgid "Could not update your list: no private drive is set up for this account yet."
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Your private drive is always first. Unstar any other drive to move it back to recently visited."
+msgstr ""
+
+#: src/components/Drives/DrivesCard.tsx
+msgid "Drives"
 msgstr ""

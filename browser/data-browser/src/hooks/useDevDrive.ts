@@ -63,7 +63,7 @@ export function useDevDrive() {
 
       // `agentName` pipes `DEV_DRIVE_AGENT_NAME` into the same
       // agent-resource save that `createDrive` already does (to wire up
-      // `personalDrive` + `drives`). The agent shows up as "Dev User"
+      // `privateDrive` + `drives`). The agent shows up as "Dev User"
       // wherever its resource is rendered (commit author lines, chat
       // messages, etc.). E2E tests assert against this constant.
       const driveResource = await store.createDrive(DEV_DRIVE_DISPLAY_NAME, {

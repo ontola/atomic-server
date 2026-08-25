@@ -12,7 +12,7 @@
  * subjects are not renamed to match a label. Aligning the code to the UI would
  * be a migration paid by every existing account for no visible gain.
  *
- * So: `personalDrive` in identifiers and property names, "private drive" in
+ * So: `privateDrive` in identifiers and property names, "private drive" in
  * anything a user reads. Not an oversight — please leave it.
  *
  * Kept apart from the hook that feeds it so it can be read and tested on its
@@ -23,14 +23,14 @@
  * is briefly uneditable, or a warning that appears on an ordinary drive and
  * then vanishes, teaches people to ignore both.
  */
-export function isPersonalDrive(
+export function isPrivateDrive(
   subject: string | undefined,
-  personalDrive: string | undefined,
+  privateDrive: string | undefined,
   loading: boolean,
 ): boolean {
-  if (loading || !personalDrive || !subject) {
+  if (loading || !privateDrive || !subject) {
     return false;
   }
 
-  return subject === personalDrive;
+  return subject === privateDrive;
 }

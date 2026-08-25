@@ -11,8 +11,8 @@ import {
   verifyGenesisCert,
   subjectForSignature,
   genesisSignerDid,
-  personalDriveCert,
-  personalDriveSubject,
+  privateDriveCert,
+  privateDriveSubject,
   domainSeparatorNonce,
   PERSONAL_DRIVE_PURPOSE,
   type GenesisCert,
@@ -150,7 +150,7 @@ describe('GenesisCert', () => {
   }) => {
     const seed = new Uint8Array(32).fill(9);
     const pub = await getPublicKey(seed);
-    const cert = personalDriveCert(pub);
+    const cert = privateDriveCert(pub);
     expect(hex(cert.nonce)).toBe('5f62397980dc34a685e5ee57fa0ac058');
     expect(hex(domainSeparatorNonce(PERSONAL_DRIVE_PURPOSE))).toBe(
       hex(cert.nonce),
@@ -159,14 +159,14 @@ describe('GenesisCert', () => {
     expect(cert.parent).toBe('');
     expect(cert.drive).toBe('');
 
-    const first = await personalDriveSubject(seed);
-    const second = await personalDriveSubject(seed);
+    const first = await privateDriveSubject(seed);
+    const second = await privateDriveSubject(seed);
     expect(first).toBe(second);
     expect(first).toBe(
       'did:ad:uv-2o7-7LBEo69T8gj2ncUWOXgNn9oG_rwqJAqHeM0O2GQjE8236RjthBrYuIXQbO_b0TCkU41f-auIx-1AjBw',
     );
 
-    const other = await personalDriveSubject(new Uint8Array(32).fill(10));
+    const other = await privateDriveSubject(new Uint8Array(32).fill(10));
     expect(other).not.toBe(first);
   });
 });

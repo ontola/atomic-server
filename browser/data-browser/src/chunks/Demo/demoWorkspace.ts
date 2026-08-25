@@ -260,14 +260,14 @@ async function addToSavedDrives(store: Store, drive: string): Promise<void> {
     if (!agentSubject) return;
 
     const agentResource = await store.getResource(agentSubject);
-    const personalDrive = agentResource.get(core.properties.personalDrive) as
+    const privateDrive = agentResource.get(core.properties.personalDrive) as
       | string
       | undefined;
-    if (!personalDrive) return;
+    if (!privateDrive) return;
 
-    const personalDriveResource = await store.getResource(personalDrive);
-    personalDriveResource.push(server.properties.drives, [drive], true);
-    await personalDriveResource.save();
+    const privateDriveResource = await store.getResource(privateDrive);
+    privateDriveResource.push(server.properties.drives, [drive], true);
+    await privateDriveResource.save();
   } catch {
     // No personal drive (yet) — the demo still works via direct navigation.
   }

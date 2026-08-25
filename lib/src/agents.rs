@@ -96,7 +96,7 @@ impl Agent {
                 )]),
             )?;
             resource.set_unsafe(
-                urls::PERSONAL_DRIVE.into(),
+                urls::PRIVATE_DRIVE.into(),
                 Value::AtomicUrl(initial_drive.to_string().into()),
             )?;
         }
