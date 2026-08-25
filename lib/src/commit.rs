@@ -221,8 +221,8 @@ impl Commit {
     }
 
     /// Like [`Self::create_did`], but uses `cert` when given instead of a
-    /// random-nonce certificate. The personal drive path passes
-    /// [`crate::genesis::GenesisCert::for_personal_drive`] so every device
+    /// random-nonce certificate. The private drive path passes
+    /// [`crate::genesis::GenesisCert::for_private_drive`] so every device
     /// mints the same subject.
     pub async fn create_did_with_cert(
         mut commit_builder: CommitBuilder,
@@ -589,7 +589,7 @@ impl Commit {
 
         if let Some(explicit_genesis) = commit.is_genesis {
             if explicit_genesis && !is_new {
-                // Deterministic subjects (personal drive) emit a repeat genesis
+                // Deterministic subjects (private drive) emit a repeat genesis
                 // from every device. Accept when the cert verifies and names
                 // this commit's signer; apply_changes merges the Loro update.
                 if !commit.repeat_genesis_is_mergeable()? {
@@ -690,7 +690,7 @@ impl Commit {
         // - genesis commits (is_new): no stored state to lose to.
         // - REPEAT genesis: a second genesis for a subject that already exists
         //   is legitimate (`repeat_genesis_is_mergeable`) — every device mints
-        //   the same cert for a personal drive, so the same DID. Its propvals
+        //   the same cert for a private drive, so the same DID. Its propvals
         //   are the creation defaults, and losing them to whatever the resource
         //   has since become is the expected outcome, not evidence that the
         //   client failed to seed from server state. Without this, a device
@@ -702,7 +702,7 @@ impl Commit {
             && !is_new
             && commit.is_genesis != Some(true)
             // ...and not a repeat materialization that merely forgot to say so.
-            // A second device deriving the same personal drive builds its doc
+            // A second device deriving the same private drive builds its doc
             // from the creation defaults; whether that reaches us flagged
             // `is_genesis` or as an ordinary commit is an accident of which
             // client path drained it. The cert decides, not the flag: it has to
@@ -1796,13 +1796,13 @@ mod test {
     /// Applying both geneses merges the Loro docs instead of rejecting the
     /// second as "already exists".
     #[tokio::test]
-    async fn repeat_personal_drive_genesis_merges() {
+    async fn repeat_private_drive_genesis_merges() {
         let (store, agent) = store_with_known_agent().await;
         let pubkey: [u8; 32] = crate::agents::decode_base64(&agent.public_key)
             .unwrap()
             .try_into()
             .unwrap();
-        let cert = crate::genesis::GenesisCert::for_personal_drive(pubkey);
+        let cert = crate::genesis::GenesisCert::for_private_drive(pubkey);
         let opts = CommitOpts {
             validate_signature: true,
             validate_timestamp: false,
@@ -1831,10 +1831,8 @@ mod test {
         let subject = commit_a.subject.clone();
         assert_eq!(
             subject.to_string(),
-            crate::genesis::GenesisCert::personal_drive_subject(
-                agent.private_key.as_ref().unwrap()
-            )
-            .unwrap()
+            crate::genesis::GenesisCert::private_drive_subject(agent.private_key.as_ref().unwrap())
+                .unwrap()
         );
         store.apply_commit(commit_a, &opts).await.unwrap();
 
@@ -1896,7 +1894,7 @@ mod test {
             .unwrap()
             .try_into()
             .unwrap();
-        let cert = crate::genesis::GenesisCert::for_personal_drive(pubkey);
+        let cert = crate::genesis::GenesisCert::for_private_drive(pubkey);
         let opts = CommitOpts {
             validate_signature: true,
             validate_timestamp: false,
@@ -1979,7 +1977,7 @@ mod test {
             .unwrap()
             .try_into()
             .unwrap();
-        let cert = crate::genesis::GenesisCert::for_personal_drive(pubkey);
+        let cert = crate::genesis::GenesisCert::for_private_drive(pubkey);
         let opts = CommitOpts {
             validate_signature: true,
             validate_timestamp: false,
@@ -2275,10 +2273,7 @@ mod test {
             .set_property(urls::NAME, &Value::String("Test Agent".into()))
             .unwrap();
         loro_doc2
-            .set_property(
-                urls::DESCRIPTION,
-                &Value::String("My personal drive".into()),
-            )
+            .set_property(urls::DESCRIPTION, &Value::String("My private drive".into()))
             .unwrap();
         let delta = loro_doc2.export_updates_since(&genesis_version);
 
@@ -2299,7 +2294,7 @@ mod test {
         );
         assert_eq!(
             stored2.get(urls::DESCRIPTION).unwrap().to_string(),
-            "My personal drive",
+            "My private drive",
             "Description from follow-up commit should be persisted"
         );
         assert_eq!(

@@ -16,7 +16,7 @@ import {
 } from '../../components/pairing/PairingFlowProvider';
 import { useSettings } from '../../helpers/AppSettings';
 import { deviceHasDriveData } from '../../helpers/driveData';
-import { fetchPersonalDriveSubject } from '../../helpers/personalDrive';
+import { fetchPrivateDriveSubject } from '../../helpers/privateDrive';
 import { fetchManagedInfo } from '../../helpers/managedServer';
 import { normalizeServerUrl, serverLabel } from '../../helpers/serverUrl';
 import { isRunningInTauri } from '../../helpers/tauri';
@@ -96,7 +96,7 @@ export function ConnectDeviceStep({
     return (
       drive ??
       (agent
-        ? await fetchPersonalDriveSubject(store, agent).catch(() => undefined)
+        ? await fetchPrivateDriveSubject(store, agent).catch(() => undefined)
         : undefined)
     );
   }
@@ -121,7 +121,7 @@ export function ConnectDeviceStep({
         return;
       }
 
-      // Nothing locally, and `fetchPersonalDriveSubject` asks a *server* which
+      // Nothing locally, and `fetchPrivateDriveSubject` asks a *server* which
       // a device holding nothing may not have — the desktop and Android apps
       // embed their own, empty one. The control plane knows which drives this
       // account has backed up, and asking it is the whole point of arriving

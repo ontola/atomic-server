@@ -12,7 +12,7 @@ export interface CryptoProvider {
    * *implementation*, not something a caller may assume: WebCrypto is free to
    * randomize the nonce, and WebKit does. Anything that derives an identity
    * from a signature must refuse to run on a provider that says `false` —
-   * see `Agent.personalDriveSubject`.
+   * see `Agent.privateDriveSubject`.
    */
   signsDeterministically: boolean;
   sign(data: string): Promise<string>;

@@ -11,7 +11,7 @@ import { useSettings } from '../../helpers/AppSettings';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useDriveHistory } from '../../hooks/useDriveHistory';
 import { useSavedDrives } from '../../hooks/useSavedDrives';
-import { usePersonalDrive } from '../../hooks/usePersonalDrive';
+import { usePrivateDrive } from '../../hooks/usePrivateDrive';
 import { paths } from '../../routes/paths';
 import { type DropdownItem, DIVIDER, DropdownMenu } from '../Dropdown';
 import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
@@ -36,13 +36,13 @@ export function DriveSwitcher({
 }) {
   const navigate = useNavigateWithTransition();
   const { drive, setDrive, agent } = useSettings();
-  const { personalDrive } = usePersonalDrive();
+  const { privateDrive } = usePrivateDrive();
   const [savedDrives] = useSavedDrives();
   const [history, addToHistory] = useDriveHistory(savedDrives, 5);
 
   // The private drive leads the menu; keep it out of the lists below.
-  const myDrives = savedDrives.filter(subject => subject !== personalDrive);
-  const recentDrives = history.filter(subject => subject !== personalDrive);
+  const myDrives = savedDrives.filter(subject => subject !== privateDrive);
+  const recentDrives = history.filter(subject => subject !== privateDrive);
 
   const myDrivesMap = useResources(myDrives);
   const recentDrivesMap = useResources(recentDrives);
@@ -56,15 +56,15 @@ export function DriveSwitcher({
   const createNewResource = useNewResourceUI();
 
   const items: DropdownItem[] = [
-    ...(personalDrive
+    ...(privateDrive
       ? [
           {
-            id: personalDrive,
+            id: privateDrive,
             label: 'Private drive',
             helper: 'Your personal space — visible only to you.',
             disabled: false,
-            onClick: (): void => switchTo(personalDrive),
-            icon: personalDrive === drive ? <FaSquareCheck /> : <FaHouse />,
+            onClick: (): void => switchTo(privateDrive),
+            icon: privateDrive === drive ? <FaSquareCheck /> : <FaHouse />,
           },
         ]
       : []),

@@ -34,7 +34,7 @@ import { getOrCreateAiChatsFolder } from '@helpers/standardLocations';
 import { RealAIChat } from './RealAIChat';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { DEFAULT_AICHAT_NAME } from '@components/AI/aiContstants';
-import { usePersonalDrive } from '@hooks/usePersonalDrive';
+import { usePrivateDrive } from '@hooks/usePrivateDrive';
 import toast from 'react-hot-toast';
 
 type DraftChatResource = Resource<Ai.AiChat>;
@@ -138,7 +138,7 @@ const AISidebar: React.FC = () => {
   const [rerenderKey, updateRenderKey] = useReducer(prev => prev + 1, 0);
   const { shouldGenerateTitles } = useAISettings();
   const { isOpen, contextItems, setContextItems, setIsOpen } = useAISidebar();
-  const { personalDrive } = usePersonalDrive();
+  const { privateDrive } = usePrivateDrive();
 
   const [messages, setMessages] = useState<AtomicUIMessage[]>([]);
   const [compactedMessages, setCompactedMessages] = useState<AtomicUIMessage[]>(
@@ -179,7 +179,7 @@ const AISidebar: React.FC = () => {
       return chatResourceRef.current;
     }
 
-    if (!personalDrive) {
+    if (!privateDrive) {
       return undefined;
     }
 
@@ -194,7 +194,7 @@ const AISidebar: React.FC = () => {
         autoContextSubjectRef.current ?? currentSubjectRef.current;
       draftChatPromiseRef.current = getOrCreateAiChatsFolder(
         store,
-        personalDrive,
+        privateDrive,
       ).then(folder =>
         store.newResource<Ai.AiChat>({
           parent: folder,
@@ -224,7 +224,7 @@ const AISidebar: React.FC = () => {
     setChatResource(newChatResource);
 
     return newChatResource;
-  }, [personalDrive, store]);
+  }, [privateDrive, store]);
 
   /**
    * Loads a previously saved chat into the sidebar (used to re-open the chat
@@ -453,16 +453,16 @@ const AISidebar: React.FC = () => {
     chatGenerationRef.current += 1;
     draftChatPromiseRef.current = null;
     chatResourceRef.current = undefined;
-  }, [personalDrive]);
+  }, [privateDrive]);
 
   // Re-open the chat that was created on the current resource: when the
   // sidebar is open on subject X with a completely empty chat, load the most
   // recent saved chat whose `about` points at X. Attempted once per subject
   // so a not-found result (or an explicit New Chat) doesn't re-query forever.
-  // Waits for `personalDrive`: its resolution bumps chatGenerationRef (see the
+  // Waits for `privateDrive`: its resolution bumps chatGenerationRef (see the
   // effect above), which would discard a lookup started before it.
   useEffect(() => {
-    if (!isOpen || !currentSubject || !personalDrive) {
+    if (!isOpen || !currentSubject || !privateDrive) {
       return;
     }
 
@@ -494,7 +494,7 @@ const AISidebar: React.FC = () => {
       .catch(error => {
         console.error('Failed to re-open AI chat for resource:', error);
       });
-  }, [isOpen, currentSubject, personalDrive, store, loadExistingChat]);
+  }, [isOpen, currentSubject, privateDrive, store, loadExistingChat]);
 
   useEffect(() => {
     // Avoid re-adding the same subject after the user removes or changes the

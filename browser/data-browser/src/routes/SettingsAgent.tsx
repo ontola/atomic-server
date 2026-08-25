@@ -29,7 +29,7 @@ import { DeviceLockCard } from '../components/DeviceLockCard';
 import { NewInstanceButton } from '../components/NewInstanceButton';
 import { useSavedDrives } from '../hooks/useSavedDrives';
 import { useDriveHistory } from '../hooks/useDriveHistory';
-import { usePersonalDrive } from '../hooks/usePersonalDrive';
+import { usePrivateDrive } from '../hooks/usePrivateDrive';
 import { constructOpenURL } from '../helpers/navigation';
 import { paths } from './paths';
 import {
@@ -54,14 +54,22 @@ const SettingsAgent: React.FunctionComponent = () => {
   const effectiveAgent = agent ?? storeAgent ?? store.getAgent();
   const navigate = useNavigateWithTransition();
 
-  const { personalDrive } = usePersonalDrive();
+  const { privateDrive } = usePrivateDrive();
   const [savedDrives] = useSavedDrives();
   const [history, addToHistory, removeFromHistory] =
     useDriveHistory(savedDrives);
 
-  // The private drive gets its own section; keep it out of the lists.
-  const myDrives = savedDrives.filter(subject => subject !== personalDrive);
-  const recentDrives = history.filter(subject => subject !== personalDrive);
+  // One list, with the private drive pinned to the top of it.
+  //
+  // It used to have a section of its own, which said "these are two kinds of
+  // thing" when the honest statement is "these are your drives, and one of
+  // them is special". A reader with a single other drive met two headings and
+  // two cards to hold two rows.
+  const myDrives = privateDrive
+    ? [privateDrive, ...savedDrives.filter(subject => subject !== privateDrive)]
+    : savedDrives;
+  // Still kept out of Recently visited: it is not somewhere you happened to go.
+  const recentDrives = history.filter(subject => subject !== privateDrive);
 
   const driveUrlId = useId();
   const [driveInput, setDriveInput] = useState('');
@@ -198,20 +206,6 @@ const SettingsAgent: React.FunctionComponent = () => {
 
               <Margin />
 
-              {personalDrive && (
-                <>
-                  <Row center gap='1ch'>
-                    <Heading as='h2'>Private drive</Heading>
-                    <InfoHint title='Your personal space — only visible to you.' />
-                  </Row>
-                  <DrivesCard
-                    hideFavorite
-                    drives={[personalDrive]}
-                    onDriveSelect={handleSetDrive}
-                  />
-                </>
-              )}
-
               {/* Both drive actions live on the heading row, so the list
                   isn't bracketed by a card-row button above and a standalone
                   form below. The URL field stays hidden until asked for — it's
@@ -219,7 +213,7 @@ const SettingsAgent: React.FunctionComponent = () => {
               <SectionHeader>
                 <Row center gap='1ch'>
                   <Heading as='h2'>My drives</Heading>
-                  <InfoHint title='Unstar a drive to move it back to recently visited.' />
+                  <InfoHint title='Your private drive is always first. Unstar any other drive to move it back to recently visited.' />
                 </Row>
                 <Row gap='0.5rem'>
                   <NewInstanceButton
@@ -270,6 +264,7 @@ const SettingsAgent: React.FunctionComponent = () => {
               <DrivesCard
                 drives={myDrives}
                 testId='my-drives'
+                privateDrive={privateDrive}
                 onDriveSelect={handleSetDrive}
               />
 

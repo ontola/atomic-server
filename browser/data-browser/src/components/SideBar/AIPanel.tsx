@@ -15,7 +15,7 @@ import {
 } from '@tomic/react';
 import { useEffect, useState, type JSX } from 'react';
 import { FaPlus } from 'react-icons/fa6';
-import { usePersonalDrive } from '@hooks/usePersonalDrive';
+import { usePrivateDrive } from '@hooks/usePrivateDrive';
 import { useCreateAndNavigate } from '@hooks/useCreateAndNavigate';
 import { getOrCreateAiChatsFolder } from '@helpers/standardLocations';
 import { SharedWithMeLink } from './SharedWithMeLink';
@@ -34,13 +34,13 @@ import {
  */
 export function AIChatsPanel(): JSX.Element | null {
   const store = useStore();
-  const { personalDrive, loading } = usePersonalDrive();
-  const driveResource = useResource(personalDrive);
+  const { privateDrive, loading } = usePrivateDrive();
+  const driveResource = useResource(privateDrive);
   const canWriteToDrive = useCanWrite(driveResource);
   const [aiChatsFolder] = useString(driveResource, ai.properties.aiChatsFolder);
   const folderChats = useNewestFirstChildren(aiChatsFolder);
   const { subjects: rootChildren } = useChildren(
-    personalDrive ?? unknownSubject,
+    privateDrive ?? unknownSubject,
   );
   const createAndNavigate = useCreateAndNavigate();
   // Chats created from this panel, shown instantly (the collection catches up
@@ -54,11 +54,11 @@ export function AIChatsPanel(): JSX.Element | null {
   }, [store]);
 
   const createNewChat = async () => {
-    if (!personalDrive) {
+    if (!privateDrive) {
       return;
     }
 
-    const folder = await getOrCreateAiChatsFolder(store, personalDrive);
+    const folder = await getOrCreateAiChatsFolder(store, privateDrive);
 
     createAndNavigate(
       ai.classes.aiChat,
@@ -83,7 +83,7 @@ export function AIChatsPanel(): JSX.Element | null {
 
   return (
     <Wrapper>
-      {!loading && canWriteToDrive && personalDrive && (
+      {!loading && canWriteToDrive && privateDrive && (
         <NewChatButton onClick={createNewChat}>
           <SideBarMenuRowIcon>
             <FaPlus />

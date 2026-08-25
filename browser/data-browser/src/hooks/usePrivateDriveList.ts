@@ -1,6 +1,6 @@
 import { useArray, useResource, useStore } from '@tomic/react';
 import { useCallback } from 'react';
-import { usePersonalDrive } from './usePersonalDrive';
+import { usePrivateDrive } from './usePrivateDrive';
 
 const arrayOpts = { commit: true } as const;
 
@@ -16,7 +16,7 @@ const arrayOpts = { commit: true } as const;
  * not yet provisioned) the list is empty and add/remove surface an error
  * rather than failing silently.
  */
-export function usePersonalDriveList(
+export function usePrivateDriveList(
   property: string,
 ): [
   list: string[],
@@ -24,13 +24,13 @@ export function usePersonalDriveList(
   remove: (subject: string) => void,
 ] {
   const store = useStore();
-  const { personalDrive } = usePersonalDrive();
-  const driveResource = useResource(personalDrive);
+  const { privateDrive } = usePrivateDrive();
+  const driveResource = useResource(privateDrive);
   const [list, setList] = useArray(driveResource, property, arrayOpts);
 
   const persist = useCallback(
     (next: string[]) => {
-      if (!personalDrive) {
+      if (!privateDrive) {
         store.notifyError(
           new Error(
             'Could not update your list: no private drive is set up for this account yet.',
@@ -48,7 +48,7 @@ export function usePersonalDriveList(
           store.notifyError(e instanceof Error ? e : new Error(String(e))),
         );
     },
-    [personalDrive, setList, driveResource.stable, store],
+    [privateDrive, setList, driveResource.stable, store],
   );
 
   const add = useCallback(
@@ -73,5 +73,5 @@ export function usePersonalDriveList(
     [list, persist],
   );
 
-  return [personalDrive ? list : [], add, remove];
+  return [privateDrive ? list : [], add, remove];
 }

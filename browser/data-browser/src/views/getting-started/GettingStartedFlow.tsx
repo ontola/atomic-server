@@ -13,7 +13,7 @@ import { useWelcomeLayoutEffect } from '../../hooks/useWelcomeLayoutEffect';
 import { useSettings } from '../../helpers/AppSettings';
 import { saveAgentToIDB } from '../../helpers/agentStorage';
 import { beat } from '../../helpers/deviceLock';
-import { fetchPersonalDriveSubject } from '../../helpers/personalDrive';
+import { fetchPrivateDriveSubject } from '../../helpers/privateDrive';
 import { deviceHasDriveData } from '../../helpers/driveData';
 import { withDeadline } from '../../helpers/withDeadline';
 import { constructOpenURL } from '../../helpers/navigation';
@@ -596,7 +596,7 @@ export function GettingStartedFlow({
       const target =
         nextDrive ??
         (await withDeadline(
-          fetchPersonalDriveSubject(store, newAgent),
+          fetchPrivateDriveSubject(store, newAgent),
           SIGN_IN_LOOKUP_TIMEOUT_MS,
           undefined,
         ));
@@ -643,7 +643,7 @@ export function GettingStartedFlow({
 
       if (hasData) {
         // The home drive is derived from the key rather than looked up, so
-        // nothing else will ever write it — `fetchPersonalDriveSubject` above
+        // nothing else will ever write it — `fetchPrivateDriveSubject` above
         // computes the subject but does not materialize it. Signing in is the
         // one deliberate moment to do it; leaving it to whichever render-time
         // resolver asked first is what let a bad derivation mint hundreds of
@@ -656,7 +656,7 @@ export function GettingStartedFlow({
         // must not run before the gate: a drive written a moment ago is not
         // evidence that this device has the account's data.
         await withDeadline(
-          store.ensurePersonalDrive().then(() => undefined),
+          store.ensurePrivateDrive().then(() => undefined),
           SIGN_IN_LOOKUP_TIMEOUT_MS,
           undefined,
         );
@@ -1253,7 +1253,7 @@ export function GettingStartedFlow({
                       fromManaged ? enableEncryptedBackup : undefined
                     }
                     onDone={() => {
-                      // After verify, NewIdentitySection navigates to personalDrive / home
+                      // After verify, NewIdentitySection navigates to privateDrive / home
                     }}
                   />
                 )}

@@ -17,9 +17,9 @@
 use crate::agents::{decode_base64, encode_base64};
 use crate::errors::AtomicResult;
 
-/// Purpose string for the per-agent personal drive singleton.
+/// Purpose string for the per-agent private drive singleton.
 /// Version the suffix to derive a different subject without colliding.
-pub const PERSONAL_DRIVE_PURPOSE: &str = "atomic-personal-drive-v1";
+pub const PRIVATE_DRIVE_PURPOSE: &str = "atomic-personal-drive-v1";
 
 /// First 16 bytes of SHA-256(`purpose`) — a stable, cross-language nonce.
 pub fn domain_separator_nonce(purpose: &str) -> [u8; 16] {
@@ -177,27 +177,27 @@ impl GenesisCert {
         format!("did:ad:{signature}")
     }
 
-    /// Genesis certificate for the agent's personal drive: `created_at = 0`,
+    /// Genesis certificate for the agent's private drive: `created_at = 0`,
     /// empty parent/drive, nonce = SHA-256(`atomic-personal-drive-v1`)[..16].
     /// The same key always signs the same subject.
-    pub fn for_personal_drive(signer_pubkey: [u8; 32]) -> Self {
+    pub fn for_private_drive(signer_pubkey: [u8; 32]) -> Self {
         Self {
             signer_pubkey,
             created_at: 0,
-            nonce: domain_separator_nonce(PERSONAL_DRIVE_PURPOSE),
+            nonce: domain_separator_nonce(PRIVATE_DRIVE_PURPOSE),
             state_hash: None,
             parent: String::new(),
             drive: String::new(),
         }
     }
 
-    /// `did:ad:<sig>` of [`Self::for_personal_drive`] signed by `private_key`.
-    pub fn personal_drive_subject(private_key: &str) -> AtomicResult<String> {
+    /// `did:ad:<sig>` of [`Self::for_private_drive`] signed by `private_key`.
+    pub fn private_drive_subject(private_key: &str) -> AtomicResult<String> {
         let seed: [u8; 32] = decode_base64(private_key)?
             .try_into()
             .map_err(|_| "Ed25519 private key must be 32 bytes")?;
         let signing_key = ed25519_dalek::SigningKey::from_bytes(&seed);
-        let cert = Self::for_personal_drive(*signing_key.verifying_key().as_bytes());
+        let cert = Self::for_private_drive(*signing_key.verifying_key().as_bytes());
         let signature = cert.sign(private_key)?;
         Ok(Self::subject_for_signature(&signature))
     }
@@ -576,43 +576,43 @@ mod test {
     }
 
     #[test]
-    fn personal_drive_subject_is_deterministic() {
+    fn private_drive_subject_is_deterministic() {
         let (private_key, pubkey) = test_key(9);
-        let first = GenesisCert::personal_drive_subject(&private_key).unwrap();
-        let second = GenesisCert::personal_drive_subject(&private_key).unwrap();
+        let first = GenesisCert::private_drive_subject(&private_key).unwrap();
+        let second = GenesisCert::private_drive_subject(&private_key).unwrap();
         assert_eq!(first, second);
         assert!(first.starts_with("did:ad:"));
         assert!(!first.starts_with("did:ad:agent:"));
 
-        let cert = GenesisCert::for_personal_drive(pubkey);
+        let cert = GenesisCert::for_private_drive(pubkey);
         assert_eq!(cert.created_at, 0);
         assert_eq!(cert.parent, "");
         assert_eq!(cert.drive, "");
-        assert_eq!(cert.nonce, domain_separator_nonce(PERSONAL_DRIVE_PURPOSE));
+        assert_eq!(cert.nonce, domain_separator_nonce(PRIVATE_DRIVE_PURPOSE));
         let sig = cert.sign(&private_key).unwrap();
         assert_eq!(GenesisCert::subject_for_signature(&sig), first);
         cert.verify(&sig).unwrap();
     }
 
     #[test]
-    fn personal_drive_subject_differs_per_agent() {
+    fn private_drive_subject_differs_per_agent() {
         let (pk_a, _) = test_key(9);
         let (pk_b, _) = test_key(10);
-        let a = GenesisCert::personal_drive_subject(&pk_a).unwrap();
-        let b = GenesisCert::personal_drive_subject(&pk_b).unwrap();
+        let a = GenesisCert::private_drive_subject(&pk_a).unwrap();
+        let b = GenesisCert::private_drive_subject(&pk_b).unwrap();
         assert_ne!(a, b);
     }
 
     #[test]
-    fn personal_drive_cross_lang_vector() {
+    fn private_drive_cross_lang_vector() {
         // Pinned identically in `browser/lib/src/genesis.test.ts`. Seed [9; 32]
         // is unused by the existing golden vectors. Change only with a new
-        // PERSONAL_DRIVE_PURPOSE version.
+        // PRIVATE_DRIVE_PURPOSE version.
         let seed = [9u8; 32];
         let signing_key = SigningKey::from_bytes(&seed);
         let pubkey = *signing_key.verifying_key().as_bytes();
         let private_key = encode_base64(&seed);
-        let cert = GenesisCert::for_personal_drive(pubkey);
+        let cert = GenesisCert::for_private_drive(pubkey);
         assert_eq!(hex(&cert.nonce), "5f62397980dc34a685e5ee57fa0ac058");
         assert_eq!(
             encode_base64(&pubkey),
@@ -628,7 +628,7 @@ mod test {
             "did:ad:uv-2o7-7LBEo69T8gj2ncUWOXgNn9oG_rwqJAqHeM0O2GQjE8236RjthBrYuIXQbO_b0TCkU41f-auIx-1AjBw"
         );
         assert_eq!(
-            GenesisCert::personal_drive_subject(&private_key).unwrap(),
+            GenesisCert::private_drive_subject(&private_key).unwrap(),
             GenesisCert::subject_for_signature(&sig)
         );
         cert.verify(&sig).unwrap();

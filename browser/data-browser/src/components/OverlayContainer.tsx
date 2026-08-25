@@ -19,7 +19,7 @@ import {
   type Store,
 } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
-import { usePersonalDrive } from '../hooks/usePersonalDrive';
+import { usePrivateDrive } from '../hooks/usePrivateDrive';
 import { useQueryScopeHandler } from '../hooks/useQueryScope';
 import { Column, Row } from './Row';
 import { ErrorBoundary } from '../views/ErrorPage';
@@ -270,7 +270,7 @@ function parseSearchTags(
 function SearchOverlay(): JSX.Element {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const { drive } = useSettings();
-  const { personalDrive } = usePersonalDrive();
+  const { privateDrive } = usePrivateDrive();
   const { scope } = useQueryScopeHandler();
   const navigate = useNavigateWithTransition();
   const store = useStore();
@@ -331,7 +331,7 @@ function SearchOverlay(): JSX.Element {
     allowEmptyQuery: !filterIsEmpty,
   });
 
-  const showAIChatRow = !!personalDrive && query && results.length === 0;
+  const showAIChatRow = !!privateDrive && query && results.length === 0;
   const totalItemCount = results.length + (showAIChatRow ? 1 : 0);
 
   useEffect(() => {
@@ -364,8 +364,8 @@ function SearchOverlay(): JSX.Element {
           closeOverlay();
         } else if (showAIChatRow && selectedIndex === results.length) {
           // AI Chat row selected
-          if (personalDrive) {
-            await handleStartAIChat(query, store, personalDrive, navigate);
+          if (privateDrive) {
+            await handleStartAIChat(query, store, privateDrive, navigate);
             closeOverlay();
           }
         }
@@ -384,17 +384,17 @@ function SearchOverlay(): JSX.Element {
     e => {
       e.preventDefault();
 
-      if (!personalDrive) {
+      if (!privateDrive) {
         return;
       }
 
       void (async () => {
-        await handleStartAIChat(query, store, personalDrive, navigate);
+        await handleStartAIChat(query, store, privateDrive, navigate);
         closeOverlay();
       })();
     },
     { enableOnFormTags: ['INPUT'] },
-    [query, store, personalDrive, navigate],
+    [query, store, privateDrive, navigate],
   );
 
   useEffect(() => {
@@ -473,14 +473,14 @@ function SearchOverlay(): JSX.Element {
                       data-index={results.length}
                       $selected={selectedIndex === results.length}
                       onClick={async () => {
-                        if (!personalDrive) {
+                        if (!privateDrive) {
                           return;
                         }
 
                         await handleStartAIChat(
                           query,
                           store,
-                          personalDrive,
+                          privateDrive,
                           navigate,
                         );
                         closeOverlay();

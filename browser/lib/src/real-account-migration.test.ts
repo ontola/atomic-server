@@ -94,7 +94,7 @@ describe('migrating a real pre-DID account', () => {
       }
     ).adoptLegacyDriveList(agent, legacy, didAgent);
 
-    const derived = await store.getResource(await agent.personalDriveSubject());
+    const derived = await store.getResource(await agent.privateDriveSubject());
     const listed = derived.getSubjects(server.properties.drives);
 
     const from = (host: string) => listed.filter(s => s.includes(host)).length;

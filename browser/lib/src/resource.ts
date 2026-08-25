@@ -3165,7 +3165,7 @@ export class Resource<C extends OptionalClass = any> {
       // path (collection `parent=` queries after a reload) sees them locally
       // instead of returning a stale empty result. Covers two cases:
       //  - Agents: the server returns a synthetic just-in-time view (no
-      //    `drives`/`personalDrive`) until the commit durably persists, so a
+      //    `drives`/`privateDrive`) until the commit durably persists, so a
       //    refetch under load loses the user's saved drives.
       //  - Any genesis (e.g. table rows materialized from a virtual `_new:`
       //    placeholder): the resource is on the server but was never put in

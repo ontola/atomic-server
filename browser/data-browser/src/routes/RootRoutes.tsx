@@ -17,7 +17,7 @@ import ResourcePage from '../views/ResourcePage';
 import { useSettings } from '../helpers/AppSettings';
 import { isDev } from '../config';
 import { getLocalServerOrigin, isRunningInTauri } from '../helpers/tauri';
-import { fetchPersonalDriveSubject } from '../helpers/personalDrive';
+import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { constructOpenURL } from '../helpers/navigation';
 import { getHomeDrive } from '../helpers/homeDrive';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
@@ -136,7 +136,7 @@ const TopRouteComponent: React.FC = () => {
 
     let cancelled = false;
 
-    fetchPersonalDriveSubject(store, agent)
+    fetchPrivateDriveSubject(store, agent)
       .then(resolved => {
         if (cancelled) return;
 

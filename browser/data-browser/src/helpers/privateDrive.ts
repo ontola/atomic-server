@@ -3,11 +3,11 @@ import { Agent, Store } from '@tomic/react';
 /**
  * Resolves the agent's personal home drive: the DID derived from the Agent
  * key. Same secret → same subject on every device. The Agent's
- * `personalDrive` pointer is not identity.
+ * `privateDrive` pointer is not identity.
  *
  * Local-only / unsigned agents still fall back to `initialDrive`.
  */
-export async function fetchPersonalDriveSubject(
+export async function fetchPrivateDriveSubject(
   store: Store,
   agent: Agent,
 ): Promise<string | undefined> {
@@ -20,7 +20,7 @@ export async function fetchPersonalDriveSubject(
   }
 
   try {
-    return await agent.personalDriveSubject();
+    return await agent.privateDriveSubject();
   } catch {
     // `initialDrive` travels with an old secret and is usually an http(s) URL
     // on the server the account is migrating away from. Handing that to

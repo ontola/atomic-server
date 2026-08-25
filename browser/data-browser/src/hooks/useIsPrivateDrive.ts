@@ -1,5 +1,5 @@
-import { usePersonalDrive } from './usePersonalDrive';
-import { isPersonalDrive } from '@helpers/isPersonalDrive';
+import { usePrivateDrive } from './usePrivateDrive';
+import { isPrivateDrive } from '@helpers/isPrivateDrive';
 
 /**
  * Whether this subject is the agent's own home drive.
@@ -18,8 +18,8 @@ import { isPersonalDrive } from '@helpers/isPersonalDrive';
  * personal drive apart asks this, rather than each re-deriving what "personal"
  * means and drifting.
  */
-export function useIsPersonalDrive(subject: string | undefined): boolean {
-  const { personalDrive, loading } = usePersonalDrive();
+export function useIsPrivateDrive(subject: string | undefined): boolean {
+  const { privateDrive, loading } = usePrivateDrive();
 
-  return isPersonalDrive(subject, personalDrive, loading);
+  return isPrivateDrive(subject, privateDrive, loading);
 }

@@ -19,7 +19,7 @@ import { InviteForm } from '../InviteForm';
 import toast from 'react-hot-toast';
 import { Title } from '../Title';
 import { FaTriangleExclamation } from 'react-icons/fa6';
-import { useIsPersonalDrive } from '@hooks/useIsPersonalDrive';
+import { useIsPrivateDrive } from '@hooks/useIsPrivateDrive';
 import { ErrorLook } from '../ErrorLook';
 import { Column, Row } from '../Row';
 import {
@@ -48,7 +48,7 @@ export function ShareDialog({
   const [dialogProps, show, , isOpen] = useDialog();
   const resource = useResource(subject);
   const canWrite = useCanWrite(resource);
-  const isPersonalDrive = useIsPersonalDrive(subject);
+  const isPrivateDrive = useIsPrivateDrive(subject);
   const [err, setErr] = useState<Error | undefined>(undefined);
   const inheritedRights = useInheritedRights(resource);
   const [resourceRights, updateResourceRights] = useRights(resource, setErr);
@@ -111,7 +111,7 @@ export function ShareDialog({
             </Dialog.Title>
             <Dialog.Content>
               <Column gap='1rem'>
-                {isPersonalDrive && (
+                {isPrivateDrive && (
                   <PrivateDriveWarning role='alert'>
                     <FaTriangleExclamation />
                     <span>

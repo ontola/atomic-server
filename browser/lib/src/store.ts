@@ -38,7 +38,7 @@ import { initOntologies } from './ontologies/index.js';
 import { decodeB64, encodeB64, encodeB64Url } from './base64.js';
 import {
   encodeGenesisCert,
-  personalDriveCert,
+  privateDriveCert,
   subjectForSignature,
   type GenesisCert,
 } from './genesis.js';
@@ -277,12 +277,12 @@ export interface CreateDriveOpts {
   /** Subdomain to serve the drive on (e.g. 'my-drive'). */
   subdomain?: string;
   /** Name to persist on the Agent resource as part of the same commit that
-   *  links `personalDrive`. Only applies to personal drives — avoids a
+   *  links `privateDrive`. Only applies to personal drives — avoids a
    *  separate save for callers (e.g. dev-drive) that want the agent to be
    *  renderable as a named resource right away. */
   agentName?: string;
   /** A personal drive is the agent's derived home DID (same subject on every
-   *  device). It is linked as `personalDrive` for older clients and hosts the
+   *  device). It is linked as `privateDrive` for older clients and hosts the
    *  saved-drives switcher list. A non-personal drive is pushed onto that
    *  list. Defaults to true. */
   personal?: boolean;
@@ -2332,16 +2332,16 @@ export class Store {
     }
 
     if (personal) {
-      const existingDid = await agent.personalDriveSubject();
+      const existingDid = await agent.privateDriveSubject();
       const existing = this._resources.get(existingDid);
 
       if (existing && !existing.new && !existing.error) {
-        const oldPointer = await this.linkPersonalDrive(
+        const oldPointer = await this.linkPrivateDrive(
           existing,
           agent.subject,
           agentName,
         );
-        await this.maybeMigrateOldPersonalDrive(existing, [
+        await this.maybeMigrateOldPrivateDrive(existing, [
           oldPointer,
           agent.initialDrive,
         ]);
@@ -2358,12 +2358,12 @@ export class Store {
     // the listing failed, and the dialog said "Drive created" — leaving a real
     // resource the user had just been told about and could not find. Failing
     // here means nothing is made and the reason is the one thing they see.
-    const personalDriveResource = personal
+    const privateDriveResource = personal
       ? undefined
-      : await this.ensurePersonalDrive();
+      : await this.ensurePrivateDrive();
 
     const genesisCert = personal
-      ? personalDriveCert(decodeB64(await agent.getPublicKey()))
+      ? privateDriveCert(decodeB64(await agent.getPublicKey()))
       : undefined;
 
     // Pin the personal drive to the derived subject. `newResource` would
@@ -2372,7 +2372,7 @@ export class Store {
     // the drive up by, so the drive would be created under a subject no
     // subsequent lookup could ever find.
     const personalSubject = personal
-      ? await agent.personalDriveSubject()
+      ? await agent.privateDriveSubject()
       : undefined;
 
     const drive = await this.newResource({
@@ -2386,17 +2386,17 @@ export class Store {
     await drive.save();
 
     if (personal) {
-      const oldPointer = await this.linkPersonalDrive(
+      const oldPointer = await this.linkPrivateDrive(
         drive,
         agent.subject,
         agentName,
       );
-      await this.maybeMigrateOldPersonalDrive(drive, [
+      await this.maybeMigrateOldPrivateDrive(drive, [
         oldPointer,
         agent.initialDrive,
       ]);
     } else {
-      await this.addToSavedDrives(drive, personalDriveResource!);
+      await this.addToSavedDrives(drive, privateDriveResource!);
     }
 
     // Every drive gets a default Ontology: the home for classes and
@@ -2417,14 +2417,14 @@ export class Store {
    */
   /**
    * Seeds the switcher list on `drive` and, when a complete Agent resource is
-   * available, writes `personalDrive` for older clients.
+   * available, writes `privateDrive` for older clients.
    *
-   * Returns a previous `personalDrive` pointer when it named a different
+   * Returns a previous `privateDrive` pointer when it named a different
    * subject, so migration can union that drive's lists. The pointer is
    * captured before this write — otherwise migration would only ever see
    * the derived DID it just stored.
    */
-  private async linkPersonalDrive(
+  private async linkPrivateDrive(
     drive: Resource,
     agentSubject: string,
     agentName?: string,
@@ -2512,13 +2512,13 @@ export class Store {
    */
   private async addToSavedDrives(
     drive: Resource,
-    personalDriveResource: Resource,
+    privateDriveResource: Resource,
   ): Promise<void> {
-    const already = personalDriveResource.getSubjects(server.properties.drives);
+    const already = privateDriveResource.getSubjects(server.properties.drives);
 
     if (!already.includes(drive.subject)) {
-      personalDriveResource.push(server.properties.drives, [drive.subject]);
-      await personalDriveResource.save();
+      privateDriveResource.push(server.properties.drives, [drive.subject]);
+      await privateDriveResource.save();
     }
   }
 
@@ -2530,7 +2530,7 @@ export class Store {
    * Takes several candidates because the old home is recorded in two places
    * that go missing independently:
    *
-   * - `personalDrive` on the Agent **resource** — absent whenever the server
+   * - `privateDrive` on the Agent **resource** — absent whenever the server
    *   holding the account never wrote one, which is the common case for a
    *   self-hosted account whose drives were made ad hoc.
    * - `initialDrive` from the agent **secret** — the only record left on a
@@ -2540,7 +2540,7 @@ export class Store {
    * An account predating the derivation can have either, both, or (for a
    * genuinely new agent) neither.
    */
-  private async maybeMigrateOldPersonalDrive(
+  private async maybeMigrateOldPrivateDrive(
     derived: Resource,
     candidates: (string | undefined)[],
   ): Promise<void> {
@@ -2554,12 +2554,12 @@ export class Store {
       seen.add(candidate);
 
       // Per candidate: one unreachable old home must not strand the other.
-      await this.migrateOneOldPersonalDrive(derived, candidate);
+      await this.migrateOneOldPrivateDrive(derived, candidate);
     }
   }
 
   /** Union one old home's lists onto `derived`. See the caller for why. */
-  private async migrateOneOldPersonalDrive(
+  private async migrateOneOldPrivateDrive(
     derived: Resource,
     oldPointer: string,
   ): Promise<void> {
@@ -2884,21 +2884,21 @@ export class Store {
   }
 
   /** The agent's derived personal-drive DID. Same key → same subject. */
-  public async personalDriveSubject(): Promise<string> {
+  public async privateDriveSubject(): Promise<string> {
     const agent = this.getAgent();
 
     if (!agent) {
       throw new Error('Cannot derive a personal drive without an agent');
     }
 
-    return agent.personalDriveSubject();
+    return agent.privateDriveSubject();
   }
 
   /**
    * Materialize the derived personal drive if needed and return it.
    * Repeat genesis for the same subject merges on the server.
    */
-  public async ensurePersonalDrive(
+  public async ensurePrivateDrive(
     name = 'My drive',
     opts: Omit<CreateDriveOpts, 'personal'> = {},
   ): Promise<Resource> {
@@ -4322,8 +4322,8 @@ export class Store {
    * Copying the old list onto the Agent therefore restores nothing: "My
    * drives" stays empty because nothing looks there.
    *
-   * Worse, it actively misleads. With no `personalDrive` set,
-   * `fetchPersonalDriveSubject` falls back to `drives[0]` on the Agent — so
+   * Worse, it actively misleads. With no `privateDrive` set,
+   * `fetchPrivateDriveSubject` falls back to `drives[0]` on the Agent — so
    * one arbitrary drive out of the whole list gets promoted to "Private
    * drive" and the other 52 vanish. These are ordinary drives the user owns,
    * not their private one.
@@ -4333,7 +4333,7 @@ export class Store {
    * resurrected on the next sign-in — only genuinely-missing ones are added.
    *
    * A migrated user usually has NO private drive: the old server never had the
-   * concept, so nothing set `personalDrive`, and a legacy secret carries no
+   * concept, so nothing set `privateDrive`, and a legacy secret carries no
    * `initialDrive` either. Returning in that case — as this used to — skips
    * the adoption in precisely the situation the function exists for, which is
    * why "My drives" stayed empty while one drive was mislabelled "Private
@@ -4420,25 +4420,23 @@ export class Store {
 
     if (inherited.length === 0) return;
 
-    const personalDrive = await this.ensurePersonalDrive('My drive', {
+    const privateDrive = await this.ensurePrivateDrive('My drive', {
       agentName: legacy.get(core.properties.name) as string | undefined,
     });
 
-    if (personalDrive.error) return;
+    if (privateDrive.error) return;
 
-    const personalDriveSubject = personalDrive.subject;
+    const privateDriveSubject = privateDrive.subject;
 
-    const already = new Set(
-      personalDrive.getSubjects(server.properties.drives),
-    );
+    const already = new Set(privateDrive.getSubjects(server.properties.drives));
     const missing = inherited.filter(
-      subject => subject !== personalDriveSubject && !already.has(subject),
+      subject => subject !== privateDriveSubject && !already.has(subject),
     );
 
     if (missing.length === 0) return;
 
-    personalDrive.push(server.properties.drives, missing, true);
-    await personalDrive.save();
+    privateDrive.push(server.properties.drives, missing, true);
+    await privateDrive.save();
   }
 
   /** Sets the Server base URL, without the trailing slash. */

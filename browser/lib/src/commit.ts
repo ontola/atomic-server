@@ -254,7 +254,7 @@ export class CommitBuilder {
     // Any OTHER `did:ad:…` subject (agent, or a pre-derived drive/resource
     // DID) already has its canonical identity — substituting it would rename
     // the resource mid-flight and break downstream references (signer,
-    // personalDrive, invite target, …).
+    // privateDrive, invite target, …).
     const subjectIsPlaceholder =
       commitPreSigned.subject.startsWith('_new:') ||
       commitPreSigned.subject === 'did:ad:genesis';

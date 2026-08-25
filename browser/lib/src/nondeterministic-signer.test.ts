@@ -69,10 +69,8 @@ describe('personal drive derivation under a non-deterministic signer', () => {
     // The wording is user-facing: this message is shown when creating a drive
     // fails, so it has to name the thing the user knows ("private drive") and
     // carry the one action that fixes it.
-    await expect(agent.personalDriveSubject()).rejects.toThrow(
-      /private drive/i,
-    );
-    await expect(agent.personalDriveSubject()).rejects.toThrow(
+    await expect(agent.privateDriveSubject()).rejects.toThrow(/private drive/i);
+    await expect(agent.privateDriveSubject()).rejects.toThrow(
       /sign in with the secret again/i,
     );
   });
@@ -85,17 +83,17 @@ describe('personal drive derivation under a non-deterministic signer', () => {
       keys.privateKey,
       `did:ad:agent:${keys.publicKey}`,
     );
-    const derived = await Agent.personalDriveSubjectFromSecret(secret);
+    const derived = await Agent.privateDriveSubjectFromSecret(secret);
 
     const agent = new Agent(
       new RandomizingProvider(keys.privateKey),
       `did:ad:agent:${keys.publicKey}`,
     );
-    agent.personalDrive = derived;
+    agent.privateDrive = derived;
 
     // Stable across calls, and equal to what any other device would compute.
-    expect(await agent.personalDriveSubject()).toBe(derived);
-    expect(await agent.personalDriveSubject()).toBe(derived);
+    expect(await agent.privateDriveSubject()).toBe(derived);
+    expect(await agent.privateDriveSubject()).toBe(derived);
   });
 
   it('derives the same subject from the secret as from the raw key', async ({
@@ -107,10 +105,10 @@ describe('personal drive derivation under a non-deterministic signer', () => {
       `did:ad:agent:${keys.publicKey}`,
     );
 
-    const fromSecret = await Agent.personalDriveSubjectFromSecret(secret);
+    const fromSecret = await Agent.privateDriveSubjectFromSecret(secret);
     const jsAgent = Agent.fromSecret(secret, 'js');
 
-    expect(await jsAgent.personalDriveSubject()).toBe(fromSecret);
+    expect(await jsAgent.privateDriveSubject()).toBe(fromSecret);
     // And it is a signature by this key, not some other value.
     expect(
       await getPublicKey(new Uint8Array(decodeB64(keys.privateKey))),

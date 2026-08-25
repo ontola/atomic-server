@@ -11,8 +11,8 @@ import { decodeB64 } from './base64.js';
 import { AtomicError, ErrorType } from './error.js';
 import {
   encodeGenesisCert,
-  personalDriveCert,
-  personalDriveSubject as derivePersonalDriveSubject,
+  privateDriveCert,
+  privateDriveSubject as derivePrivateDriveSubject,
   subjectForSignature,
 } from './genesis.js';
 import { core } from './ontologies/core.js';
@@ -40,11 +40,11 @@ export class Agent implements AgentInterface {
   public legacySubject?: string;
   /**
    * The derived personal-drive DID, computed once from the raw private key at
-   * sign-in (see {@link personalDriveSubject} for why it cannot be recomputed
+   * sign-in (see {@link privateDriveSubject} for why it cannot be recomputed
    * from a non-extractable key). Persisted alongside the agent so a restored
    * session still knows which drive is its home.
    */
-  public personalDrive?: string;
+  public privateDrive?: string;
 
   #cryptoProvider: CryptoProvider;
 
@@ -94,8 +94,8 @@ export class Agent implements AgentInterface {
           agent.legacySubject = legacySubjectFromSecret(secretB64);
           // Last moment the raw key is in hand: the keypair above is
           // non-extractable, and this provider cannot reproduce the subject.
-          agent.personalDrive =
-            await Agent.personalDriveSubjectFromSecret(secretB64);
+          agent.privateDrive =
+            await Agent.privateDriveSubjectFromSecret(secretB64);
 
           resolve(agent);
         })
@@ -186,9 +186,9 @@ export class Agent implements AgentInterface {
    * available we throw rather than sign: an unreproducible subject is worse
    * than no subject, because minting under it silently creates junk.
    */
-  public async personalDriveSubject(): Promise<string> {
-    if (this.personalDrive) {
-      return this.personalDrive;
+  public async privateDriveSubject(): Promise<string> {
+    if (this.privateDrive) {
+      return this.privateDrive;
     }
 
     if (!this.#cryptoProvider.signsDeterministically) {
@@ -200,12 +200,12 @@ export class Agent implements AgentInterface {
       );
     }
 
-    const cert = personalDriveCert(decodeB64(await this.getPublicKey()));
+    const cert = privateDriveCert(decodeB64(await this.getPublicKey()));
     const subject = subjectForSignature(
       await this.signBytes(encodeGenesisCert(cert)),
     );
 
-    this.personalDrive = subject;
+    this.privateDrive = subject;
 
     return subject;
   }
@@ -216,12 +216,12 @@ export class Agent implements AgentInterface {
    * SubtleCrypto agent, whose key is non-extractable once stored — hence
    * computing it at sign-in, while the secret is still in hand.
    */
-  public static async personalDriveSubjectFromSecret(
+  public static async privateDriveSubjectFromSecret(
     secretB64: string,
   ): Promise<string> {
     const { privateKey } = decodeSecret(secretB64);
 
-    return derivePersonalDriveSubject(new Uint8Array(decodeB64(privateKey)));
+    return derivePrivateDriveSubject(new Uint8Array(decodeB64(privateKey)));
   }
 
   public createSignature(subject: string, timestamp: number): Promise<string> {
