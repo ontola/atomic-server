@@ -194,14 +194,6 @@ const SettingsAgent: React.FunctionComponent = () => {
                 >
                   Sign out
                 </Button>
-                <Button
-                  subtle
-                  title='Sign out and remove this device’s copy of your encrypted backup'
-                  onClick={handleSignOutAndForget}
-                  data-test='sign-out-forget'
-                >
-                  Sign out &amp; forget this device
-                </Button>
               </Row>
 
               <Margin />
@@ -220,15 +212,20 @@ const SettingsAgent: React.FunctionComponent = () => {
                     klass={server.classes.drive}
                     subtle
                     icon
-                    label='New drive'
+                    label='New'
                   />
                   <Button
                     subtle
+                    // Short on screen, specific to a screen reader — and to
+                    // anyone hovering, since the field it reveals is the
+                    // rarer of the two actions by a wide margin.
+                    aria-label='Open a drive by URL'
+                    title='Open a drive by URL or DID'
                     onClick={() => setShowDriveUrl(open => !open)}
                     aria-expanded={showDriveUrl}
                     data-test='open-drive-by-url'
                   >
-                    Open by URL
+                    Open
                   </Button>
                 </Row>
               </SectionHeader>
@@ -270,6 +267,7 @@ const SettingsAgent: React.FunctionComponent = () => {
 
               {recentDrives.length > 0 && (
                 <>
+                  <Margin />
                   <Row center gap='1ch'>
                     <Heading as='h2'>Recently visited</Heading>
                     <InfoHint title='Only stored on this device. Star a drive to keep it in My drives.' />
@@ -300,6 +298,20 @@ const SettingsAgent: React.FunctionComponent = () => {
                 agentSubject={effectiveAgent.subject}
                 onLockNow={handleLockNow}
               />
+              {/* Here rather than beside "Sign out", because what it does is
+                  to this device: it drops the copy of the encrypted backup
+                  held here. Next to an ordinary sign-out it read as a longer
+                  way of saying the same thing. */}
+              <Row>
+                <Button
+                  subtle
+                  title='Sign out and remove this device’s copy of your encrypted backup'
+                  onClick={handleSignOutAndForget}
+                  data-test='sign-out-forget'
+                >
+                  Sign out &amp; forget this device
+                </Button>
+              </Row>
             </Column>
           </>
         ) : null}

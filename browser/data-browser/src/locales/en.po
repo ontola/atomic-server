@@ -2131,6 +2131,7 @@ msgstr "Toggle whether this resource appears in your Favorites."
 #: src/chunks/DashboardPage/blocks/ViewBlock.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/routes/SettingsAgent.tsx
+#: src/routes/SettingsAgent.tsx
 msgid "Open"
 msgstr "Open"
 
@@ -2511,6 +2512,7 @@ msgid "<0/> Note"
 msgstr "<0/> Note"
 
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
+#: src/routes/SettingsAgent.tsx
 msgid "New"
 msgstr "New"
 
@@ -5494,7 +5496,6 @@ msgid "Create drive"
 msgstr "Create drive"
 
 #: src/routes/NewDriveRoute.tsx
-#: src/routes/SettingsAgent.tsx
 msgid "New drive"
 msgstr "New drive"
 
@@ -5941,9 +5942,8 @@ msgstr "Sign out & forget this device"
 msgid "Manage {0} on {1}"
 msgstr "Manage {0} on {1}"
 
-#: src/routes/SettingsAgent.tsx
-msgid "Open by URL"
-msgstr "Open by URL"
+#~ msgid "Open by URL"
+#~ msgstr "Open by URL"
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Continue as"
@@ -7089,3 +7089,11 @@ msgstr "Your private drive is always first. Unstar any other drive to move it ba
 #: src/components/Drives/DrivesCard.tsx
 msgid "Drives"
 msgstr "Drives"
+
+#: src/routes/SettingsAgent.tsx
+msgid "Open a drive by URL"
+msgstr "Open a drive by URL"
+
+#: src/routes/SettingsAgent.tsx
+msgid "Open a drive by URL or DID"
+msgstr "Open a drive by URL or DID"

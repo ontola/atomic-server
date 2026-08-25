@@ -2131,6 +2131,7 @@ msgstr ""
 #: src/chunks/DashboardPage/blocks/ViewBlock.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/routes/SettingsAgent.tsx
+#: src/routes/SettingsAgent.tsx
 msgid "Open"
 msgstr ""
 
@@ -2511,6 +2512,7 @@ msgid "<0/> Note"
 msgstr ""
 
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
+#: src/routes/SettingsAgent.tsx
 msgid "New"
 msgstr ""
 
@@ -5460,7 +5462,6 @@ msgid "Create drive"
 msgstr ""
 
 #: src/routes/NewDriveRoute.tsx
-#: src/routes/SettingsAgent.tsx
 msgid "New drive"
 msgstr ""
 
@@ -5907,9 +5908,8 @@ msgstr ""
 msgid "Manage {0} on {1}"
 msgstr ""
 
-#: src/routes/SettingsAgent.tsx
-msgid "Open by URL"
-msgstr ""
+#~ msgid "Open by URL"
+#~ msgstr ""
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Continue as"
@@ -7054,4 +7054,12 @@ msgstr ""
 
 #: src/components/Drives/DrivesCard.tsx
 msgid "Drives"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Open a drive by URL"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Open a drive by URL or DID"
 msgstr ""

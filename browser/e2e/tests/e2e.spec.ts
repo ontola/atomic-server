@@ -481,7 +481,7 @@ test.describe('data-browser', async () => {
     await expect(currentDriveTitle(page)).toHaveText(secondDriveTitle);
 
     // Switch back through the open-by-URL input on the drives page. The field
-    // is behind an "Open by URL" disclosure — the section leads with the drive
+    // is behind an "Open" disclosure — the section leads with the drive
     // list and "New drive" — so it is not in the DOM until this is clicked.
     await openConfigureDrive(page);
     await page.locator('[data-test="open-drive-by-url"]').click();
