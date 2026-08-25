@@ -18,6 +18,8 @@ import { Button } from '../Button';
 import { InviteForm } from '../InviteForm';
 import toast from 'react-hot-toast';
 import { Title } from '../Title';
+import { FaTriangleExclamation } from 'react-icons/fa6';
+import { useIsPersonalDrive } from '@hooks/useIsPersonalDrive';
 import { ErrorLook } from '../ErrorLook';
 import { Column, Row } from '../Row';
 import {
@@ -46,6 +48,7 @@ export function ShareDialog({
   const [dialogProps, show, , isOpen] = useDialog();
   const resource = useResource(subject);
   const canWrite = useCanWrite(resource);
+  const isPersonalDrive = useIsPersonalDrive(subject);
   const [err, setErr] = useState<Error | undefined>(undefined);
   const inheritedRights = useInheritedRights(resource);
   const [resourceRights, updateResourceRights] = useRights(resource, setErr);
@@ -108,6 +111,17 @@ export function ShareDialog({
             </Dialog.Title>
             <Dialog.Content>
               <Column gap='1rem'>
+                {isPersonalDrive && (
+                  <PrivateDriveWarning role='alert'>
+                    <FaTriangleExclamation />
+                    <span>
+                      This is your <strong>private drive</strong>. Sharing it
+                      shares your drive list, favourites, notifications and AI
+                      chats along with it. To work with someone, make a drive
+                      for the work and share that instead.
+                    </span>
+                  </PrivateDriveWarning>
+                )}
                 <Row>
                   <CopyLinkButton subject={subject} />
                   {canWrite && (
@@ -274,3 +288,28 @@ function RightsHeader({ children }: React.PropsWithChildren): JSX.Element {
     </RightsHeaderRow>
   );
 }
+
+/**
+ * Shown above the rights, not below them.
+ *
+ * By the time someone opens this dialog they have decided to share something;
+ * a caution underneath the controls arrives after the decision. What makes it
+ * work is naming what is actually in there — "private" alone reads as "not
+ * shared yet", which is an invitation rather than a warning.
+ */
+const PrivateDriveWarning = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid ${p => p.theme.colors.alert};
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.bg1};
+  color: ${p => p.theme.colors.text};
+
+  svg {
+    color: ${p => p.theme.colors.alert};
+    flex-shrink: 0;
+    margin-top: 0.2rem;
+  }
+`;

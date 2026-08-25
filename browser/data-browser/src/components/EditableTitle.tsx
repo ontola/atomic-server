@@ -42,6 +42,14 @@ export interface EditableTitleProps {
    * hover). Set on main page views; leave off in bars and panels.
    */
   withDecorations?: boolean;
+  /**
+   * Why this title cannot be changed, when rights are not the reason.
+   *
+   * Shown on hover in place of "Click to edit title". A field that silently
+   * does nothing when clicked reads as broken; one that says why reads as a
+   * decision.
+   */
+  lockedReason?: string;
 }
 
 const opts = {
@@ -57,6 +65,9 @@ export function EditableTitle({
   onCommit,
   transitionTag = PAGE_TITLE_TRANSITION_TAG,
   withDecorations,
+  // Destructured rather than left in `...props`, which is spread onto the
+  // input — React would warn about an unknown DOM attribute.
+  lockedReason,
   ...props
 }: EditableTitleProps): JSX.Element {
   const store = useStore();
@@ -66,7 +77,8 @@ export function EditableTitle({
   const innerRef = useRef<HTMLInputElement>(null);
   const ref = parentRef || innerRef;
 
-  const canEdit = useCanWrite(resource);
+  const canWrite = useCanWrite(resource);
+  const canEdit = canWrite && !lockedReason;
 
   useEffect(() => {
     // Two ways to learn this resource was just manually created:
@@ -150,7 +162,7 @@ export function EditableTitle({
       disabled={!canEdit}
       id={id}
       $canEdit={!!canEdit}
-      title={canEdit ? 'Click to edit title' : ''}
+      title={canEdit ? 'Click to edit title' : (lockedReason ?? '')}
       data-testid='editable-title'
       onClick={handleClick}
       $subtle={!!canEdit && !text}
