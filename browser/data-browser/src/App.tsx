@@ -201,11 +201,16 @@ function App(): JSX.Element {
   // Handle uncaught errors
   useEffect(() => {
     window.onerror = (message, _source, _lineno, _colno, error) => {
+      // `return`, because without it the synthesized error was reported and
+      // then `null` was reported straight after — and the second one threw
+      // from inside the handler, burying the first.
       if (!error) {
         errorHandler(new Error(`message: ${message}`));
+
+        return;
       }
 
-      errorHandler(error as Error);
+      errorHandler(error);
     };
 
     window.onunhandledrejection = event => {
