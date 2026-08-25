@@ -1054,13 +1054,11 @@ msgstr "Secret de l'Agent"
 msgid "Copy secret to continue"
 msgstr "Copier le secret pour continuer"
 
-#: src/views/DocumentPage.tsx
-msgid "Update Document"
-msgstr "Mettre à jour le document"
+#~ msgid "Update Document"
+#~ msgstr "Mettre à jour le document"
 
-#: src/views/DocumentPage.tsx
-msgid "Could not update document"
-msgstr "Impossible de mettre à jour le document"
+#~ msgid "Could not update document"
+#~ msgstr "Impossible de mettre à jour le document"
 
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
@@ -4271,9 +4269,8 @@ msgstr "Navigateur de données atomiques"
 msgid "This removes drives created for automated tests or local dev: names containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
 msgstr "Ceci supprime les lecteurs créés pour les tests automatisés ou le développement local : les noms contenant <0/> (E2E), ou les descriptions contenant{0} <1/> (de{1} <2/>)."
 
-#: src/views/DocumentPage.tsx
-msgid "<0/> This document needs to be updated to the new format in order to be edited."
-msgstr "<0/> Ce document doit être mis à jour vers le nouveau format afin de pouvoir être modifié."
+#~ msgid "<0/> This document needs to be updated to the new format in order to be edited."
+#~ msgstr "<0/> Ce document doit être mis à jour vers le nouveau format afin de pouvoir être modifié."
 
 #: src/views/ResourcePage.tsx
 msgid "The resource at <0/> hasn't loaded after 15 seconds. It may not exist, or the server may be unreachable."
@@ -4635,7 +4632,7 @@ msgstr "Le titre est utilisé pour construire le sujet, gardez à l'esprit que l
 msgid "Creating table <0/>"
 msgstr ""
 
-#. 0.0: data.length
+#. 0.0: count
 #: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
 msgid "Creating <0>{0} resources</0>"
 msgstr ""
