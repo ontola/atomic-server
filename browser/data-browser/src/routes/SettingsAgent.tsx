@@ -267,7 +267,11 @@ const SettingsAgent: React.FunctionComponent = () => {
                 </div>
               )}
 
-              <DrivesCard drives={myDrives} onDriveSelect={handleSetDrive} />
+              <DrivesCard
+                drives={myDrives}
+                testId='my-drives'
+                onDriveSelect={handleSetDrive}
+              />
 
               {recentDrives.length > 0 && (
                 <>

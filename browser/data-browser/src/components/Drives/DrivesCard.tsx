@@ -9,6 +9,8 @@ import type { JSX } from 'react';
 
 export interface DriveCardProps {
   drives: string[];
+  /** Lets a test name this list, since two of them render on the same page. */
+  testId?: string;
   showNewOption?: boolean;
   hideFavorite?: boolean;
   onDriveSelect: (drive: string) => void;
@@ -17,6 +19,7 @@ export interface DriveCardProps {
 
 export function DrivesCard({
   drives,
+  testId,
   showNewOption,
   hideFavorite,
   onDriveSelect,
@@ -25,11 +28,11 @@ export function DrivesCard({
   const { drive } = useSettings();
 
   if (drives.length === 0 && !showNewOption) {
-    return <span>Nothing to show</span>;
+    return <span data-testid={testId}>Nothing to show</span>;
   }
 
   return (
-    <ContainerCard>
+    <ContainerCard data-testid={testId}>
       <CardInsideFull>
         {drives.map((subject, i) => {
           return (
