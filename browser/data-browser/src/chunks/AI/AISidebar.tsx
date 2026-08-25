@@ -19,114 +19,24 @@ import {
   useStore,
   type Ai,
   type Resource,
-  type Store,
 } from '@tomic/react';
 import { useGenerativeData } from './useGenerativeData';
 import {
-  addMessageToChatResource,
   messageResourcesToDisplayMessages,
-  persistMessageResourceToServer,
   removeFollowingMessagesFromChatResource,
   removeMessageFromChatResource,
 } from './chatConversionUtils';
 import { findLatestAiChatAbout } from './findLatestAiChatAbout';
+import {
+  persistSidebarMessage,
+  type TitlePromise,
+} from './persistSidebarMessage';
 import { getOrCreateAiChatsFolder } from '@helpers/standardLocations';
 import { RealAIChat } from './RealAIChat';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { DEFAULT_AICHAT_NAME } from '@components/AI/aiContstants';
 import { usePersonalDrive } from '@hooks/usePersonalDrive';
 import toast from 'react-hot-toast';
-
-type DraftChatResource = Resource<Ai.AiChat>;
-type TitlePromise = Promise<string | undefined>;
-
-type PersistSidebarMessageArgs = {
-  message: AtomicUIMessage;
-  newMessages: AtomicUIMessage[];
-  store: Store;
-  getOrCreateDraftChatResource: () => Promise<DraftChatResource | undefined>;
-  isChatSavedRef: React.MutableRefObject<boolean>;
-  titlePromiseRef: React.MutableRefObject<TitlePromise | undefined>;
-  setMessageToResourceMap: React.Dispatch<
-    React.SetStateAction<Map<AtomicUIMessage, Resource>>
-  >;
-  messageToResourceMapRef: React.MutableRefObject<
-    Map<AtomicUIMessage, Resource>
-  >;
-  setIsChatSaved: React.Dispatch<React.SetStateAction<boolean>>;
-};
-
-const shouldFinalizeDraftChat = (
-  newMessages: AtomicUIMessage[],
-  message: AtomicUIMessage,
-) => newMessages.length >= 2 && message.role === 'assistant';
-
-// This logic was extracted from the component because the logic inside
-const persistSidebarMessage = async ({
-  message,
-  newMessages,
-  store,
-  getOrCreateDraftChatResource,
-  isChatSavedRef,
-  titlePromiseRef,
-  setMessageToResourceMap,
-  messageToResourceMapRef,
-  setIsChatSaved,
-}: PersistSidebarMessageArgs) => {
-  const resource = await getOrCreateDraftChatResource();
-
-  if (!resource) {
-    return;
-  }
-
-  const messageResource = await addMessageToChatResource(
-    message,
-    resource,
-    store,
-    {
-      saveChat: isChatSavedRef.current,
-      persistToServer: isChatSavedRef.current,
-    },
-  );
-
-  setMessageToResourceMap(prev => {
-    const next = new Map(prev);
-    next.set(message, messageResource);
-    messageToResourceMapRef.current = next;
-
-    return next;
-  });
-
-  // The sidebar chat stays as an unsaved draft until there is a real
-  // user/assistant exchange, avoiding empty chat resources.
-  if (shouldFinalizeDraftChat(newMessages, message)) {
-    if (titlePromiseRef.current) {
-      const name = await titlePromiseRef.current;
-
-      if (name) {
-        await resource.set(core.properties.name, name);
-      }
-
-      titlePromiseRef.current = undefined;
-    }
-
-    if (!isChatSavedRef.current) {
-      // Persist child messages (and their parts) before the chat resource
-      // references them on the server — matches AIChatPage / addMessageToChatResource.
-      for (const pendingMessageResource of messageToResourceMapRef.current.values()) {
-        await persistMessageResourceToServer(
-          pendingMessageResource as Resource<Ai.AiMessage>,
-          store,
-        );
-      }
-
-      await resource.save();
-
-      isChatSavedRef.current = true;
-      setIsChatSaved(true);
-    }
-  }
-};
 
 const handleSidebarMessageSaveError = (error: unknown) => {
   console.error(error);
@@ -288,6 +198,8 @@ const AISidebar: React.FC = () => {
       getOrCreateDraftChatResource,
       isChatSavedRef,
       titlePromiseRef,
+      shouldGenerateTitles,
+      generateTitle: generateTitleFromConversation,
       setMessageToResourceMap,
       messageToResourceMapRef,
       setIsChatSaved,
@@ -300,19 +212,6 @@ const AISidebar: React.FC = () => {
     messagesRef.current = newMessages;
     setMessages(newMessages);
 
-    // Start title generation as soon as the first assistant response completes,
-    // but save the resource even when title generation is disabled or fails.
-    if (
-      !isChatSavedRef.current &&
-      !titlePromiseRef.current &&
-      newMessages.length >= 2 &&
-      message.role === 'assistant'
-    ) {
-      titlePromiseRef.current = shouldGenerateTitles
-        ? generateTitleFromConversation(newMessages)
-        : Promise.resolve(undefined);
-    }
-
     persistSidebarMessage({
       message,
       newMessages,
@@ -323,6 +222,8 @@ const AISidebar: React.FC = () => {
       setMessageToResourceMap,
       messageToResourceMapRef,
       setIsChatSaved,
+      shouldGenerateTitles,
+      generateTitle: generateTitleFromConversation,
     }).catch(handleSidebarMessageSaveError);
   };
 
