@@ -2504,13 +2504,32 @@ export class Store {
   ): Promise<void> {
     // An agent whose personal drive cannot be derived (see
     // `Agent.personalDriveSubject`) must still be able to make ordinary
-    // drives; it just has nowhere to list them.
+    // drives — losing the user's work on top of this would be worse. But it
+    // has nowhere to list them, and that has to be said out loud.
     let personalDriveResource: Resource;
 
     try {
       personalDriveResource = await this.ensurePersonalDrive();
     } catch (e) {
-      console.warn('Could not record the new drive on the personal drive:', e);
+      // What this catches is a refusal, not a malfunction: deriving a personal
+      // drive from a signature that is not reproducible would mint a new one
+      // on every lookup, which once produced 411 of them in a single session.
+      // Refusing is correct, and the refusal already names the one action that
+      // fixes it.
+      //
+      // Sending that to `console.warn` threw away the only copy. The drive got
+      // created and then belonged to no list, which is indistinguishable from
+      // the drive having quietly failed to exist — and the user was never
+      // going to open a console to find out why.
+      const name = drive.get(core.properties.name);
+      const reason = e instanceof Error ? e.message : String(e);
+
+      this.notifyError(
+        new Error(
+          `${name ? `"${name}"` : 'The drive'} was created, but could not be ` +
+            `added to your list of drives, so you will not find it there: ${reason}`,
+        ),
+      );
 
       return;
     }
