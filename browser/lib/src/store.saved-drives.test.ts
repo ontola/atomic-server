@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
 import { testStore } from './test-store.js';
 
@@ -27,32 +26,27 @@ describe('recording a new drive on the personal drive', () => {
     );
   });
 
-  it('tells the user when it could not, instead of only the console', async () => {
+  it('refuses, rather than making a drive nobody can find', async () => {
     const { store } = await testStore();
+    const before = store.getAllSubjects().length;
 
     vi.spyOn(store, 'ensurePersonalDrive').mockRejectedValue(
-      new Error('Sign in with the secret again to recompute it.'),
+      new Error(
+        "Cannot derive this agent's personal drive: its key signs " +
+          'non-deterministically and no derived subject was stored. ' +
+          'Sign in with the secret again to recompute it.',
+      ),
     );
-    const notify = vi.spyOn(store, 'notifyError').mockImplementation(() => {
-      // Swallowed here so the test asserts on the call, not on a thrown error.
-    });
 
-    const drive = await store.createDrive('Work', { personal: false });
+    // Thrown, not reported alongside a success. The caller shows "Failed to
+    // create drive" and the reason; reporting it while also saying "Drive
+    // created" is how someone ends up with a drive they were told about and
+    // cannot find.
+    await expect(
+      store.createDrive('Work', { personal: false }),
+    ).rejects.toThrow('Sign in with the secret again');
 
-    // The drive is still made: failing to list it is not a reason to lose the
-    // user's work as well.
-    expect(drive.subject).toBeTruthy();
-    expect(drive.get(core.properties.name)).toBe('Work');
-
-    expect(notify).toHaveBeenCalledTimes(1);
-
-    const reported = notify.mock.calls[0][0] as Error;
-
-    // Names the drive, says what did not happen, and carries the remedy the
-    // refusal came with — a message that stops at "something went wrong"
-    // leaves the user with no way forward.
-    expect(reported.message).toContain('Work');
-    expect(reported.message).toContain('list of drives');
-    expect(reported.message).toContain('Sign in with the secret again');
+    // And nothing was written on the way out.
+    expect(store.getAllSubjects().length).toBe(before);
   });
 });

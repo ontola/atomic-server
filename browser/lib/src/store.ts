@@ -2350,6 +2350,18 @@ export class Store {
       }
     }
 
+    // An additional drive is only useful if the user can find it again, and
+    // the only place it gets listed is the personal drive. So having one is a
+    // precondition, checked before anything is written rather than after.
+    //
+    // Doing it afterwards produced the worst of both: the drive was created,
+    // the listing failed, and the dialog said "Drive created" — leaving a real
+    // resource the user had just been told about and could not find. Failing
+    // here means nothing is made and the reason is the one thing they see.
+    const personalDriveResource = personal
+      ? undefined
+      : await this.ensurePersonalDrive();
+
     const genesisCert = personal
       ? personalDriveCert(decodeB64(await agent.getPublicKey()))
       : undefined;
@@ -2384,7 +2396,7 @@ export class Store {
         agent.initialDrive,
       ]);
     } else {
-      await this.addToSavedDrives(drive, agent.subject);
+      await this.addToSavedDrives(drive, personalDriveResource!);
     }
 
     // Every drive gets a default Ontology: the home for classes and
@@ -2500,40 +2512,8 @@ export class Store {
    */
   private async addToSavedDrives(
     drive: Resource,
-    _agentSubject: string,
+    personalDriveResource: Resource,
   ): Promise<void> {
-    // An agent whose personal drive cannot be derived (see
-    // `Agent.personalDriveSubject`) must still be able to make ordinary
-    // drives — losing the user's work on top of this would be worse. But it
-    // has nowhere to list them, and that has to be said out loud.
-    let personalDriveResource: Resource;
-
-    try {
-      personalDriveResource = await this.ensurePersonalDrive();
-    } catch (e) {
-      // What this catches is a refusal, not a malfunction: deriving a personal
-      // drive from a signature that is not reproducible would mint a new one
-      // on every lookup, which once produced 411 of them in a single session.
-      // Refusing is correct, and the refusal already names the one action that
-      // fixes it.
-      //
-      // Sending that to `console.warn` threw away the only copy. The drive got
-      // created and then belonged to no list, which is indistinguishable from
-      // the drive having quietly failed to exist — and the user was never
-      // going to open a console to find out why.
-      const name = drive.get(core.properties.name);
-      const reason = e instanceof Error ? e.message : String(e);
-
-      this.notifyError(
-        new Error(
-          `${name ? `"${name}"` : 'The drive'} was created, but could not be ` +
-            `added to your list of drives, so you will not find it there: ${reason}`,
-        ),
-      );
-
-      return;
-    }
-
     const already = personalDriveResource.getSubjects(server.properties.drives);
 
     if (!already.includes(drive.subject)) {
