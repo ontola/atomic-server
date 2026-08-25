@@ -4,7 +4,7 @@ import { before, newDrive, openConfigureDrive } from './test-utils';
 /**
  * A drive you make is one of your drives.
  *
- * The list lives on the user's personal drive as its `drives` array, and
+ * The list lives on the user's private drive as its `drives` array, and
  * `createDrive` is supposed to append to it. Nothing asserted that it did: the
  * suite has several tests that create a drive, but they create one in order to
  * work in it, and the one test that opens this page checks that the headings
@@ -49,7 +49,7 @@ test.describe('saved drives', () => {
   }) => {
     const { driveTitle: first } = await newDrive(page);
 
-    // The list lives on the personal drive, and recording a new drive needs
+    // The list lives on the private drive, and recording a new drive needs
     // that resource in hand. Right after sign-in it is already in memory,
     // which is the only state the other tests here exercise. A reload empties
     // the store, so this is the ordinary case for anyone who made their

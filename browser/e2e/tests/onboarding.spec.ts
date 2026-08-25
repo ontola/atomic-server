@@ -30,7 +30,7 @@ test.describe('onboarding', () => {
 
     await page.getByRole('button', { name: 'Save & continue' }).click();
 
-    await expect(page.getByText('Creating your personal drive')).toBeVisible({
+    await expect(page.getByText('Creating your private drive')).toBeVisible({
       timeout: 5000,
     });
 
