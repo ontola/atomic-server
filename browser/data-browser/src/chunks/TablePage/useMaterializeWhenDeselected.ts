@@ -60,6 +60,17 @@ export function useMaterializeWhenDeselected(
   const store = useStore();
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const counted = useRef(false);
+  const unmounted = useRef(false);
+
+  // Declared before the effect below so that on unmount its cleanup runs
+  // first — React destroys effects in the order they were created — and the
+  // cleanup there can tell "my dependencies changed" from "this row is gone".
+  useEffect(
+    () => () => {
+      unmounted.current = true;
+    },
+    [],
+  );
 
   useEffect(() => {
     // The row's only copy lives in this timer until it fires, so the store has
@@ -119,13 +130,30 @@ export function useMaterializeWhenDeselected(
     }, delay);
 
     return () => {
+      if (timer.current === undefined) {
+        return;
+      }
+
+      // The row is gone, not merely deselected: the grid is virtualized, so
+      // scrolling a row past the fold unmounts it. Cancelling here would be
+      // the last word — nothing re-arms a timer for a row that no longer
+      // renders — so the pending save is left to fire. `setTimeout` does not
+      // belong to React and does not care that the component went away, and
+      // the resource it closes over is the store's, which outlives the row.
+      //
+      // Leaving it counted matters just as much: a row cancelled this way was
+      // dropped from `pendingDirtyCount` too, so the app reported "nothing
+      // pending, safe to reload" while rows existed in this tab and nowhere
+      // else. Under fast entry that silently lost 7 rows in 40.
+      if (unmounted.current) {
+        return;
+      }
+
       // Only release what this cleanup actually cancels: a save already in
       // flight releases itself when it settles.
-      if (timer.current !== undefined) {
-        clearTimeout(timer.current);
-        timer.current = undefined;
-        stopCounting();
-      }
+      clearTimeout(timer.current);
+      timer.current = undefined;
+      stopCounting();
     };
   }, [selectedRow, cursorMode, index, resource, store]);
 }
