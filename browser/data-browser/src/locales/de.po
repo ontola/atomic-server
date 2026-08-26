@@ -2826,6 +2826,7 @@ msgid "Invalid value"
 msgstr "Ungültiger Wert"
 
 #: src/chunks/FormBuilder/FieldSettingsPanel.tsx
+#: src/chunks/FormBuilder/useFormFieldPropertySync.ts
 #: src/chunks/TablePage/PropertyForm/PropertyForm.tsx
 #: src/components/forms/FilePicker/FilePicker.tsx
 #: src/components/forms/InputDate.tsx
@@ -6998,9 +6999,6 @@ msgstr "Max"
 msgid "Remove option"
 msgstr "Option entfernen"
 
-#~ msgid "<0/> Add option"
-#~ msgstr "<0/> Option hinzufügen"
-
 #. 0: allowsOnly.length + 1
 #: src/chunks/FormBuilder/FieldOptions/TagListEditor.tsx
 msgid "Option {0}"
@@ -7326,9 +7324,6 @@ msgstr "Kein Standardwert"
 msgid "Default country"
 msgstr "Standardland"
 
-#~ msgid "Page name"
-#~ msgstr "Seitenname"
-
 #: src/components/Tag/Tag.tsx
 msgid "Tag name"
 msgstr "Tag-Name"
@@ -7399,9 +7394,6 @@ msgstr "Verwenden Sie seine Tags als Optionen"
 msgid "Use each row, labelled by this column"
 msgstr "Verwenden Sie jede Zeile, gekennzeichnet durch diese Spalte"
 
-#~ msgid "and {0} more"
-#~ msgstr "und {0} weitere"
-
 #: src/chunks/FormBuilder/FieldRowOptions.tsx
 msgid "more"
 msgstr "mehr"
@@ -7413,3 +7405,19 @@ msgstr "Leere Überschrift"
 #: src/chunks/FormBuilder/FieldRow.tsx
 msgid "Empty paragraph"
 msgstr "Leerer Absatz"
+
+#: src/chunks/FormBuilder/useFormFieldPropertySync.ts
+msgid "Already used by another question"
+msgstr "Bereits von einer anderen Frage verwendet"
+
+#: src/chunks/FormBuilder/FieldSettingsPanel.tsx
+msgid "How this question is identified in the data, and the column header in the results table. Defaults to the label — clear it to follow the label again."
+msgstr "Wie diese Frage in den Daten identifiziert wird und die Spaltenüberschrift in der Ergebnistabelle. Standardmäßig wird das Label verwendet — löschen Sie es, um wieder dem Label zu folgen."
+
+#: src/chunks/FormBuilder/FieldSettingsPanel.tsx
+msgid "Edit data name"
+msgstr "Datenname bearbeiten"
+
+#: src/chunks/FormBuilder/FieldSettingsPanel.tsx
+msgid "Data name"
+msgstr "Datenname"
