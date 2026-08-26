@@ -275,6 +275,13 @@ test.describe('LocalizedText table columns', () => {
     await expect(page.getByRole('gridcell', { name: 'Hi' })).toBeVisible();
 
     // Both the value and the (un)split view state survive a reload.
+    //
+    // The barrier is the point: unsplitting writes the view's split list and
+    // `save()` returns before that commit is durable, so reloading straight
+    // after races it and the old, still-split view comes back from the
+    // server. `pendingDirtyCount === 0` is the app's own "safe to reload"
+    // signal, and it is what this line waits for.
+    await waitForSaved(page);
     await page.reload();
     await expect(page.getByRole('gridcell', { name: 'Hi' })).toBeVisible({
       timeout: 15000,

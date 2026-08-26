@@ -584,6 +584,13 @@ test.describe('data-browser', async () => {
       )
       .toBe(true);
 
+    // Neither signal above proves durability: the toast fires when the destroy
+    // is applied locally, and the sidebar drops the row on the same optimistic
+    // update. The reload then abandons anything still in flight — which this
+    // test knows, and which is exactly what made it fail under suite load.
+    // `pendingDirtyCount === 0` is the app's own "safe to reload" signal.
+    await waitForSynced(page);
+
     await page.reload();
     await openSubject(page, nestedResource);
 
