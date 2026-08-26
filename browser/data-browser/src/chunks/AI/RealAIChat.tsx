@@ -1014,7 +1014,11 @@ const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
   display: grid;
   grid-template-rows: ${p =>
     p.empty && p.fullView ? 'auto 1fr auto 1fr' : 'auto 1fr auto'};
-  height: '100%';
+  /* Unquoted, or the browser discards the declaration and the grid sizes to
+     its own content: the 1fr message row has nothing to expand into, so the
+     composer stops sitting at the bottom of the panel and slides up under the
+     last reply. */
+  height: 100%;
   width: min(100%, 70rem);
   margin-inline: auto;
   gap: 1rem;
