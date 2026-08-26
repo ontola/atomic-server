@@ -4058,9 +4058,20 @@ export class Store {
     // Tombstone in ClientDb (OPFS) so the resource doesn't reappear after a
     // page reload. The in-memory `resources` map is wiped on reload, but the
     // WASM DB persists; without this, cascade-deleted children survive
-    // restart and re-render. Fire-and-forget — the worker queues writes.
+    // restart and re-render.
+    //
+    // Counted while it is in flight, because until the worker has written it
+    // this deletion exists only in memory — reload now and the resource comes
+    // back. `pendingDirtyCount === 0` is documented to mean "safe to reload,
+    // nothing will be lost", and a delete that un-deletes itself is exactly
+    // the kind of loss that claim is about. It was fire-and-forget, so the
+    // status read as settled during the one window where it was not.
     if (this.clientDb) {
-      void this.clientDb.removeResource(resolved).catch(() => undefined);
+      this.startScheduledSave();
+      void this.clientDb
+        .removeResource(resolved)
+        .catch(() => undefined)
+        .then(() => this.finishScheduledSave());
     }
 
     // The stored state is gone, so the next write for this subject must not be
