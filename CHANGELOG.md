@@ -7,6 +7,9 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Desktop / Android: keep the boot splash up until the embedded server is
+  listening, and show the startup error on that splash if the node never comes
+  up (for example another atomic-server already has the data directory).
 - The outbox drains over a live Iroh link too (`sync::peer::LivePeerCommitTransport`):
   a device with no hub in reach delivers its queued writes to a paired peer as
   signed `COMMIT` frames, which the peer validates and applies like a hub

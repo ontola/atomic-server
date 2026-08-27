@@ -13,6 +13,7 @@ import {
   originMayLackNode,
   probeOriginForNode,
 } from './helpers/originNode';
+import { waitForEmbeddedServer } from './helpers/waitForEmbeddedServer';
 
 import { useEffect, type JSX } from 'react';
 import { RouterProvider } from '@tanstack/react-router';
@@ -123,7 +124,14 @@ enableLoro().catch(e =>
   console.warn('[Loro] init failed, edit/history features disabled:', e),
 );
 
-const storedAgent = await getAgentFromIDB();
+// The HTML splash stays up until this resolves. Creating the Store first
+// would fetch into a port the embed has not bound yet (webview is ready
+// before the server thread, especially on Android), and the page would
+// settle on "Could not reach the server". IndexedDB can load in parallel.
+const [storedAgent] = await Promise.all([
+  getAgentFromIDB(),
+  waitForEmbeddedServer(),
+]);
 
 // Device lock: withhold the stored agent when the gap since this app was
 // last open exceeds the user's policy (see `deviceLock.ts`). Enforced on the
