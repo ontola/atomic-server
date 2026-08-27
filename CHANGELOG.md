@@ -9,7 +9,9 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 - Desktop / Android: keep the boot splash up until the embedded server is
   listening, and show the startup error on that splash if the node never comes
-  up (for example another atomic-server already has the data directory).
+  up (for example another atomic-server already has the data directory). HTTP
+  now binds without waiting on the Iroh n0 relay (up to 10s), so first paint
+  no longer waits on a transport the webview does not need.
 
 - Git / CI: one integration branch (`develop`) plus stable `v*` tags. Staging
   follows `develop`; production and live docs follow a tagged release. `master`

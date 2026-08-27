@@ -131,8 +131,9 @@ fn load_or_create_secret_key(store: &Db) -> iroh::SecretKey {
 /// Start the Iroh peer node. Returns the NodeID and a Router that must be kept alive.
 ///
 /// The NodeID is persistent — derived from a secret key stored in the DB.
-/// Waits for the relay connection to be established before returning,
-/// so that other peers can discover and connect to us immediately.
+/// Relay connection happens in the background so HTTP / first paint is not
+/// blocked on the n0 relay (up to 10s on a slow or offline network). Same-LAN
+/// mDNS does not use the relay; WAN discovery still completes after return.
 pub async fn start(store: Db) -> anyhow::Result<(NodeId, Router)> {
     let secret_key = load_or_create_secret_key(&store);
     let endpoint: Endpoint = Endpoint::builder()
@@ -152,16 +153,22 @@ pub async fn start(store: Db) -> anyhow::Result<(NodeId, Router)> {
     NODE_ID.set(node_id.to_string()).ok();
     ENDPOINT.set(endpoint.clone()).ok();
 
-    // Wait for relay connection so discovery_n0 can find us
+    // Don't block boot on the n0 relay. `serve` used to await this before
+    // binding HTTP, so the Tauri splash sat for up to 10s on a slow or
+    // offline network — first contentful paint of the app, waiting on a
+    // transport the webview does not need. Same-LAN mDNS does not use the
+    // relay; WAN discovery still completes in the background.
     let relay = endpoint.home_relay();
-    tracing::info!("Iroh NodeID: {node_id}, waiting for relay...");
-    let relay_url =
-        tokio::time::timeout(std::time::Duration::from_secs(10), wait_for_relay(relay)).await;
-    match relay_url {
-        Ok(Some(url)) => tracing::info!("Iroh relay connected: {url}"),
-        Ok(None) => tracing::warn!("Iroh relay: none (direct connections only)"),
-        Err(_) => tracing::warn!("Iroh relay: timed out after 10s (connections may fail)"),
-    }
+    tokio::spawn(async move {
+        tracing::info!("Iroh NodeID: {node_id}, connecting to relay…");
+        let relay_url =
+            tokio::time::timeout(std::time::Duration::from_secs(10), wait_for_relay(relay)).await;
+        match relay_url {
+            Ok(Some(url)) => tracing::info!("Iroh relay connected: {url}"),
+            Ok(None) => tracing::warn!("Iroh relay: none (direct connections only)"),
+            Err(_) => tracing::warn!("Iroh relay: timed out after 10s (connections may fail)"),
+        }
+    });
 
     let bg_store = store.clone();
     let router = Router::builder(endpoint)

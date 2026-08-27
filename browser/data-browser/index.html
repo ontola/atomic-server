@@ -61,6 +61,8 @@
       `__WASM_VERSION__` is substituted at build time (vite.config.ts) and must
       stay in step with the urls the app itself requests, or these preloads
       warm a url nothing goes on to use.
+
+      The Tauri build strips these two links (ClientDb/OPFS is off there).
     -->
     <link
       rel="preload"
@@ -124,6 +126,33 @@
 
       body {
         background-color: var(--background-color);
+      }
+
+      /* Sibling of #root so React can mount without wiping the splash.
+         IdentityReconcileGate fades this once real children paint. */
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background-color: var(--background-color);
+        opacity: 1;
+        transition: opacity 300ms ease-out;
+      }
+
+      #boot-splash.is-hidden {
+        opacity: 0;
+        pointer-events: none;
+        visibility: hidden;
+        transition:
+          opacity 300ms ease-out,
+          visibility 0s linear 300ms;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #boot-splash,
+        #boot-splash.is-hidden {
+          transition: none;
+        }
       }
 
       .loader {
@@ -223,7 +252,7 @@
         // Broken localStorage value: fall back to the OS preference.
       }
     </script>
-    <div id="root">
+    <div id="boot-splash" aria-busy="true">
       <svg
         viewBox="9.06 32.95 698.61 75.3"
         fill="none"
@@ -524,6 +553,7 @@
         hidden
       ></p>
     </div>
+    <div id="root"></div>
 
     <script type="module" src="/src/index.tsx"></script>
   </body>

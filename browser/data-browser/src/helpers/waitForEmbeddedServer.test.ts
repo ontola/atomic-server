@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   waitForEmbeddedServer,
   showEmbeddedServerError,
+  hideBootSplash,
 } from './waitForEmbeddedServer';
 
 /**
@@ -69,6 +70,45 @@ describe('waitForEmbeddedServer', () => {
     );
 
     expect(fetchFn).toHaveBeenCalledTimes(2);
+  });
+
+  it('probes HTTP with HEAD so it does not download the SPA', async () => {
+    const fetchFn = vi
+      .fn()
+      .mockResolvedValue(new Response('', { status: 200 }));
+
+    await waitForEmbeddedServer(
+      deps({
+        fetchFn,
+        getStatus: async () => undefined,
+      }),
+    );
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      'http://localhost:9883',
+      expect.objectContaining({ method: 'HEAD' }),
+    );
+  });
+
+  it('does not HTTP-poll when IPC reports that the node is not ready', async () => {
+    const fetchFn = vi.fn();
+    let now = 0;
+
+    await expect(
+      waitForEmbeddedServer(
+        deps({
+          fetchFn,
+          getStatus: async () => ({ ready: false }),
+          now: () => now,
+          sleep: async () => {
+            now += 500;
+          },
+          timeoutMs: 1_000,
+        }),
+      ),
+    ).rejects.toThrow(/did not start in time/);
+
+    expect(fetchFn).not.toHaveBeenCalled();
   });
 
   it('treats any HTTP response as up, including 404', async () => {
@@ -140,27 +180,61 @@ describe('waitForEmbeddedServer', () => {
   });
 });
 
+function stubSplash(
+  overrides: {
+    splashFailed?: boolean;
+    splashHidden?: boolean;
+  } = {},
+) {
+  const classes = new Set<string>();
+  const attrs: Record<string, string> = {};
+  const status = { hidden: true, textContent: '' };
+  const loader = {
+    classList: {
+      add: (name: string) => {
+        classes.add(name);
+      },
+    },
+    setAttribute: (name: string, value: string) => {
+      attrs[name] = value;
+    },
+  };
+  const splash = {
+    classList: {
+      add: (name: string) => {
+        classes.add(name);
+      },
+      contains: (name: string) => {
+        if (name === 'is-failed') return !!overrides.splashFailed;
+        if (name === 'is-hidden') return !!overrides.splashHidden;
+
+        return classes.has(name);
+      },
+    },
+    setAttribute: (name: string, value: string) => {
+      attrs[name] = value;
+    },
+    querySelector: (selector: string) =>
+      selector === '.loader' ? loader : null,
+  };
+
+  vi.stubGlobal('document', {
+    getElementById: (id: string) => {
+      if (id === 'loader-status') return status;
+      if (id === 'boot-splash') return splash;
+
+      return null;
+    },
+    querySelector: (selector: string) =>
+      selector === '.loader' ? loader : null,
+  });
+
+  return { classes, attrs, status };
+}
+
 describe('showEmbeddedServerError', () => {
   it('unhides the splash status and stops the spinner', () => {
-    const classes = new Set<string>();
-    const attrs: Record<string, string> = {};
-    const status = { hidden: true, textContent: '' };
-    const loader = {
-      classList: {
-        add: (name: string) => {
-          classes.add(name);
-        },
-      },
-      setAttribute: (name: string, value: string) => {
-        attrs[name] = value;
-      },
-    };
-
-    vi.stubGlobal('document', {
-      getElementById: (id: string) => (id === 'loader-status' ? status : null),
-      querySelector: (selector: string) =>
-        selector === '.loader' ? loader : null,
-    });
+    const { classes, attrs, status } = stubSplash();
 
     showEmbeddedServerError('Database already open');
 
@@ -168,5 +242,33 @@ describe('showEmbeddedServerError', () => {
     expect(status.textContent).toBe('Database already open');
     expect(classes.has('is-failed')).toBe(true);
     expect(attrs['aria-busy']).toBe('false');
+  });
+});
+
+describe('hideBootSplash', () => {
+  it('fades the overlay so React can show the app', () => {
+    const { classes, attrs } = stubSplash();
+
+    hideBootSplash();
+
+    expect(classes.has('is-hidden')).toBe(true);
+    expect(attrs['aria-busy']).toBe('false');
+    expect(attrs['aria-hidden']).toBe('true');
+  });
+
+  it('leaves a failed splash up so the error stays readable', () => {
+    const { classes } = stubSplash({ splashFailed: true });
+
+    hideBootSplash();
+
+    expect(classes.has('is-hidden')).toBe(false);
+  });
+
+  it('is a no-op the second time', () => {
+    const { classes } = stubSplash({ splashHidden: true });
+
+    hideBootSplash();
+
+    expect(classes.has('is-hidden')).toBe(false);
   });
 });

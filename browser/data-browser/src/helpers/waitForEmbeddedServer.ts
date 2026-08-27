@@ -9,9 +9,10 @@
 // - `node_status` (Tauri IPC) knows when *our* node failed (DB lock) and
 //   when its HTTP port is accepting. Invoke is the only check that works
 //   on an Android release build, where cleartext HTTP to localhost is off.
-// - HTTP GET is the fallback for e2e tests that fake `__TAURI_INTERNALS__`
+// - HTTP HEAD is the fallback for e2e tests that fake `__TAURI_INTERNALS__`
 //   without a real invoke (see pairing-dialog.spec.ts). Those point at a
 //   server that is already up, so the wait resolves on the first poll.
+//   HEAD rather than GET so a real fallback does not download the SPA HTML.
 
 import { getLocalServerOrigin, isRunningInTauri } from './tauri';
 
@@ -51,16 +52,54 @@ export function showEmbeddedServerError(message: string): void {
     status.textContent = message;
   }
 
+  const splash = document.getElementById('boot-splash');
+  splash?.classList.add('is-failed');
+  splash?.setAttribute('aria-busy', 'false');
+
   const loader = document.querySelector('.loader');
   loader?.classList.add('is-failed');
   loader?.setAttribute('aria-busy', 'false');
 }
 
+/**
+ * Fade out the HTML splash once real app chrome is on screen.
+ * No-op if the node failed to start — that message must stay up.
+ */
+export function hideBootSplash(): void {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  const splash = document.getElementById('boot-splash');
+
+  if (
+    !splash ||
+    splash.classList.contains('is-failed') ||
+    splash.classList.contains('is-hidden')
+  ) {
+    return;
+  }
+
+  splash.classList.add('is-hidden');
+  splash.setAttribute('aria-busy', 'false');
+  splash.setAttribute('aria-hidden', 'true');
+
+  const loader = splash.querySelector('.loader');
+  loader?.setAttribute('aria-busy', 'false');
+}
+
+// Cache the invoke binding across polls. Re-importing `@tauri-apps/api/core`
+// every 100ms was wasted work on the boot path; the module itself is stable.
+let invokeNodeStatus: (() => Promise<NodeStatus>) | undefined;
+
 async function defaultGetStatus(): Promise<NodeStatus | undefined> {
   try {
-    const { invoke } = await import('@tauri-apps/api/core');
+    if (!invokeNodeStatus) {
+      const { invoke } = await import('@tauri-apps/api/core');
+      invokeNodeStatus = () => invoke<NodeStatus>('node_status');
+    }
 
-    return await invoke<NodeStatus>('node_status');
+    return await invokeNodeStatus();
   } catch {
     // No invoke (e2e fake, or the runtime has not injected yet). HTTP below.
     return undefined;
@@ -79,10 +118,10 @@ async function httpIsUp(
   const timer = setTimeout(() => controller.abort(), 1000);
 
   try {
-    // Any HTTP response means the listener is up — 401/404 included.
+    // Any HTTP response means the listener is up — 401/404/405 included.
     // Connection refused / abort / CORS-as-network-error: not yet.
     await fetchFn(origin, {
-      method: 'GET',
+      method: 'HEAD',
       signal: controller.signal,
       cache: 'no-store',
     });
@@ -135,7 +174,10 @@ export async function waitForEmbeddedServer(
       return;
     }
 
-    if (await httpIsUp(origin, fetchFn)) {
+    // IPC answered: this is *our* node, and it is not listening yet.
+    // Don't also download the SPA — HTTP is only for the e2e fake where
+    // invoke is missing (`status === undefined`).
+    if (!status && (await httpIsUp(origin, fetchFn))) {
       return;
     }
 

@@ -183,10 +183,13 @@ Paired-peer cards are covered too, by seeding `atomic-peers` in an init script.
 
 The boot splash wait (`waitForEmbeddedServer`) is unit-tested in
 `browser/data-browser/src/helpers/waitForEmbeddedServer.test.ts`: it no-ops in
-a browser, hides when `node_status` is ready, falls back to HTTP when invoke
-is missing (the e2e fake-Tauri case), and surfaces a startup error instead of
-spinning forever. The Tauri command itself (`node_status` in
-`desktop/src/lib.rs`) is not covered by a harness.
+a browser, hides when `node_status` is ready, falls back to HTTP HEAD when
+invoke is missing (the e2e fake-Tauri case), skips HTTP when IPC already
+answered `{ready:false}`, and surfaces a startup error instead of spinning
+forever. `hideBootSplash` keeps a failed splash up. The Tauri HTML transform
+(`stripUnusedTauriPreloads`) is tested against `index.html`. The Tauri
+command itself (`node_status` in `desktop/src/lib.rs`) is not covered by a
+harness.
 
 Still uncovered: `PairingLinkHandler`'s deep-link entry (the system camera
 launching the app) and `IdentityReconcileGate`. Anything that genuinely calls

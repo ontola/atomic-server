@@ -8,7 +8,10 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   accepting connections, instead of rendering the app against a port that is
   not listening yet (and landing on "Could not reach the server"). A node that
   fails to start (for example another atomic-server holding the data directory)
-  shows the reason on the splash rather than spinning forever.
+  shows the reason on the splash rather than spinning forever. First paint is
+  faster: HTTP binds without waiting on the Iroh relay, the splash lives
+  outside `#root` so React does not blank it, unused WASM preloads are omitted
+  from the Tauri shell, and readiness uses IPC (HEAD only as the e2e fallback).
 
 - Fix: opening a v1 document no longer shows a read-only page with an "Update Document" button that throws. Writable v1 documents migrate silently to the Loro-backed editor. Leftover Yjs-era V2 bodies still convert, but `yjs` is loaded only when those bytes are present.
 - Fix: opening an adopted HTTP drive no longer moves the home server. A bare origin (`https://host`) is still a server switch; an HTTP subject with a path is a workspace and is fetched cross-origin, so a pre-DID drive on `atomicdata.dev` cannot take the session with it (websocket, DID auth, every later fetch).

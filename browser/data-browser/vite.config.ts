@@ -10,6 +10,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { execSync } from 'node:child_process';
+import { stripUnusedTauriPreloads } from './src/helpers/tauriHtml';
 
 // TAURI=1 produces a Tauri-compatible bundle: no CSP nonces (Tauri serves
 // HTML verbatim, so the server's runtime ATOMICSERVER_NONCE substitution
@@ -140,7 +141,13 @@ export default defineConfig({
       transformIndexHtml: (html: string) =>
         html.replaceAll('__WASM_VERSION__', wasmVersionHash),
     },
-    !isVitest && webfontDownload(),
+    !isVitest && webfontDownload(isTauri ? { async: true } : undefined),
+    isTauri && {
+      // WASM preloads (~6MB) and atomicdata.dev preconnect are unused in
+      // the embed: ClientDb/OPFS is off, and the node is localhost.
+      name: 'atomic-tauri-html',
+      transformIndexHtml: stripUnusedTauriPreloads,
+    },
     !isVitest && wuchale(),
     // Native React Compiler (oxc-transform-react). Must run before JSX
     // transforms; this plugin does compiler + TS + JSX + Fast Refresh in one
