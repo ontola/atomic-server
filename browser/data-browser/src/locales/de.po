@@ -7160,7 +7160,7 @@ msgid "Add a question before this one first"
 msgstr "Fügen Sie zuerst eine Frage vor dieser hinzu"
 
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
-#: src/chunks/FormBuilder/FieldRowOptions.tsx
+#: src/chunks/FormBuilder/FieldPreview.tsx
 msgid "and"
 msgstr "und"
 
@@ -7389,7 +7389,7 @@ msgstr "Verwenden Sie seine Tags als Optionen"
 msgid "Use each row, labelled by this column"
 msgstr "Verwenden Sie jede Zeile, gekennzeichnet durch diese Spalte"
 
-#: src/chunks/FormBuilder/FieldRowOptions.tsx
+#: src/chunks/FormBuilder/FieldPreview.tsx
 msgid "more"
 msgstr "mehr"
 
@@ -7435,3 +7435,19 @@ msgstr "Stil"
 
 #~ msgid "Optional — leave empty for a box of text."
 #~ msgstr "Optional — leer lassen für eine Textbox."
+
+#: src/chunks/FormBuilder/FieldRow.tsx
+msgid "Untitled question"
+msgstr "Unbenannte Frage"
+
+#: src/chunks/FormBuilder/FieldPreview.tsx
+msgid "No options yet"
+msgstr "Noch keine Optionen"
+
+#: src/chunks/FormBuilder/FieldPreview.tsx
+msgid "No rows or columns yet"
+msgstr "Noch keine Zeilen oder Spalten"
+
+#: src/chunks/FormBuilder/FieldPreview.tsx
+msgid "No columns yet"
+msgstr "Noch keine Spalten"

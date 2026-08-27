@@ -7154,7 +7154,7 @@ msgid "Add a question before this one first"
 msgstr "Ajoutez d'abord une question avant celle-ci."
 
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
-#: src/chunks/FormBuilder/FieldRowOptions.tsx
+#: src/chunks/FormBuilder/FieldPreview.tsx
 msgid "and"
 msgstr "et"
 
@@ -7383,7 +7383,7 @@ msgstr "Utiliser ses étiquettes comme options"
 msgid "Use each row, labelled by this column"
 msgstr "Utiliser chaque ligne, étiquetée par cette colonne"
 
-#: src/chunks/FormBuilder/FieldRowOptions.tsx
+#: src/chunks/FormBuilder/FieldPreview.tsx
 msgid "more"
 msgstr "plus"
 
@@ -7429,3 +7429,19 @@ msgstr "Style"
 
 #~ msgid "Optional — leave empty for a box of text."
 #~ msgstr "Facultatif — laissez vide pour une boîte de texte."
+
+#: src/chunks/FormBuilder/FieldRow.tsx
+msgid "Untitled question"
+msgstr "Question sans titre"
+
+#: src/chunks/FormBuilder/FieldPreview.tsx
+msgid "No options yet"
+msgstr "Pas encore d'options"
+
+#: src/chunks/FormBuilder/FieldPreview.tsx
+msgid "No rows or columns yet"
+msgstr "Pas encore de lignes ni de colonnes"
+
+#: src/chunks/FormBuilder/FieldPreview.tsx
+msgid "No columns yet"
+msgstr "Pas encore de colonnes"
