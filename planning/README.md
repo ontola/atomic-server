@@ -67,6 +67,7 @@ Remaining work, not "this file exists."
 | [`tours.md`](./tours.md) | Design, not built. |
 | [`rust-dependency-upgrade-audit.md`](./rust-dependency-upgrade-audit.md) | Audit notes for a Rust dependency upgrade pass. |
 | [`e2e-light-heavy.md`](./e2e-light-heavy.md) | **Landing.** Playwright light on feature branches; full on `develop` / tags / opt-in. Steps 1–3 shipped. Remaining: grow vitest + `jsTestIntegration` before shrinking heavy. |
+| [`collections-and-saved-queries.md`](./collections-and-saved-queries.md) | **Proposal.** Collection resources vs `/query` vs Table Views. Recommend retire Collection resources, grow View as the persistable query. |
 
 ## Slices and companions
 
