@@ -4753,13 +4753,11 @@ msgstr "Drives verwalten"
 msgid "View and organize all your drives."
 msgstr "Alle deine Drives anzeigen und organisieren."
 
-#: src/routes/SettingsAgent.tsx
-msgid "Your personal space — only visible to you."
-msgstr "Ihr persönlicher Bereich – nur für Sie sichtbar."
+#~ msgid "Your personal space — only visible to you."
+#~ msgstr "Ihr persönlicher Bereich – nur für Sie sichtbar."
 
-#: src/routes/SettingsAgent.tsx
-msgid "Unstar a drive to move it back to recently visited."
-msgstr "Entfernen Sie einen Stern von einem Laufwerk, um es zurück zu \"Zuletzt besucht\" zu verschieben."
+#~ msgid "Unstar a drive to move it back to recently visited."
+#~ msgstr "Entfernen Sie einen Stern von einem Laufwerk, um es zurück zu \"Zuletzt besucht\" zu verschieben."
 
 #: src/routes/SettingsAgent.tsx
 msgid "My drives"
@@ -5171,12 +5169,6 @@ msgstr "Binden Sie Ihre Atomic-Laufwerke als Ordner auf diesem Computer ein. Ihr
 msgid "Switching to {0}…"
 msgstr "Wechsle zu {0}…"
 
-#: src/routes/SyncRoute.tsx
-msgid "Copy Node ID"
-msgstr "Knoten-ID kopieren"
-
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Node ID copied"
 msgstr "Knoten-ID kopiert"
@@ -5785,9 +5777,8 @@ msgstr "Abmelden & dieses Gerät vergessen"
 msgid "Manage {0} on {1}"
 msgstr "Verwalten Sie {0} auf {1}"
 
-#: src/routes/SettingsAgent.tsx
-msgid "Open by URL"
-msgstr "Per URL öffnen"
+#~ msgid "Open by URL"
+#~ msgstr "Per URL öffnen"
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Continue as"
@@ -6742,6 +6733,74 @@ msgstr "Ein ständig eingeschaltetes Gerät hat eine Adresse. Eines, das Sie mit
 msgid "An always-on device has an address. Type it here."
 msgstr "Ein ständig eingeschaltetes Gerät hat eine Adresse. Geben Sie sie hier ein."
 
+#. 0: detail
+#: src/actions/resourceActions.tsx
+msgid "Could not delete: {0}"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Want a server of your own?"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "This server is run by one person for their own data. You can sign in, or open a drive you were invited to."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Get one hosted"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "run it yourself"
+msgstr ""
+
+#: src/handlers/errorHandler.ts
+msgid "Something failed, and reported no reason."
+msgstr ""
+
+#: src/views/Drive/DrivePage.tsx
+msgid "Your private drive keeps its name. It is tied to your account, not to a project."
+msgstr ""
+
+#: src/components/Drives/PersonalDriveBadge.tsx
+#: src/components/Drives/PrivateDriveBadge.tsx
+msgid "<0/> Private"
+msgstr ""
+
+#: src/components/Drives/PersonalDriveBadge.tsx
+#: src/components/Drives/PrivateDriveBadge.tsx
+msgid "This is your private drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project."
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "This is your <0>private drive</0>. Sharing it shares your drive list, favourites, notifications and AI chats along with it. To work with someone, make a drive for the work and share that instead."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Creating your private drive…"
+msgstr ""
+
+#: src/hooks/usePersonalDriveList.ts
+#: src/hooks/usePrivateDriveList.ts
+msgid "Could not update your list: no private drive is set up for this account yet."
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Your private drive is always first. Unstar any other drive to move it back to recently visited."
+msgstr ""
+
+#: src/components/Drives/DrivesCard.tsx
+msgid "Drives"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Open a drive by URL"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Open a drive by URL or DID"
+msgstr ""
+
 #: src/chunks/FormBuilder/DeleteFormDialog.tsx
 msgid "Are you sure you want to delete this form?"
 msgstr "Sind Sie sicher, dass Sie dieses Formular löschen möchten?"
@@ -7095,73 +7154,6 @@ msgstr "Jede Antwort ist ein"
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewFormDialog.tsx
 msgid "Names the class of a single submission — e.g. every response of a Job Application form is an Application."
 msgstr "Benennt die Klasse einer einzelnen Übermittlung – z. B. ist jede Antwort eines Bewerbungsformulars eine Bewerbung."
-
-#. 0: detail
-#: src/actions/resourceActions.tsx
-msgid "Could not delete: {0}"
-msgstr ""
-
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Want a server of your own?"
-msgstr ""
-
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "This server is run by one person for their own data. You can sign in, or open a drive you were invited to."
-msgstr ""
-
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Get one hosted"
-msgstr ""
-
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "run it yourself"
-msgstr ""
-
-#: src/handlers/errorHandler.ts
-msgid "Something failed, and reported no reason."
-msgstr ""
-
-#: src/views/Drive/DrivePage.tsx
-msgid "Your private drive keeps its name. It is tied to your account, not to a project."
-msgstr ""
-
-#: src/components/Drives/PersonalDriveBadge.tsx
-#: src/components/Drives/PrivateDriveBadge.tsx
-msgid "<0/> Private"
-msgstr ""
-
-#: src/components/Drives/PersonalDriveBadge.tsx
-#: src/components/Drives/PrivateDriveBadge.tsx
-msgid "This is your private drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project."
-msgstr ""
-
-#: src/components/Share/ShareDialog.tsx
-msgid "This is your <0>private drive</0>. Sharing it shares your drive list, favourites, notifications and AI chats along with it. To work with someone, make a drive for the work and share that instead."
-msgstr ""
-
-#: src/components/NewIdentitySection.tsx
-msgid "Creating your private drive…"
-msgstr ""
-
-#: src/hooks/usePersonalDriveList.ts
-#: src/hooks/usePrivateDriveList.ts
-msgid "Could not update your list: no private drive is set up for this account yet."
-msgstr ""
-
-#: src/routes/SettingsAgent.tsx
-msgid "Your private drive is always first. Unstar any other drive to move it back to recently visited."
-msgstr ""
-
-#: src/components/Drives/DrivesCard.tsx
-msgid "Drives"
-msgstr ""
-
-#: src/routes/SettingsAgent.tsx
-msgid "Open a drive by URL"
-msgstr ""
-
-#: src/routes/SettingsAgent.tsx
-msgid "Open a drive by URL or DID"
 
 #: src/chunks/FormBuilder/ConditionsEditor.tsx
 msgid "Add a question before this one first"
