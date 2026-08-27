@@ -226,6 +226,42 @@ up. See [`personal-information-suite.md`](./personal-information-suite.md).
 Do not mix connector tokens with the OIDC session in D2. A Google
 Calendar refresh token is not proof of who may read a Drive.
 
+## Does this still match OIDC / OAuth?
+
+Yes for **login**. No for **calling Atomic as if it were an OAuth
+resource server.** That split is normal.
+
+The node is a confidential OIDC relying party. The browser hits
+`/oidc/start`, the node 302s to the IdP’s `authorization_endpoint`,
+the IdP 302s to `/oidc/callback` with a `code`, the node exchanges it
+at the `token_endpoint` (PKCE + client secret), validates the
+`id_token` (JWKS, `iss`, `aud`, `nonce`, `exp`). Discovery is
+`/.well-known/openid-configuration`. Any Keycloak, Authentik, Entra,
+Google, Okta IdP that speaks authorization-code OIDC works. We do not
+invent a flow.
+
+What we do **not** do is the next OAuth step: send
+`Authorization: Bearer <access_token>` to `POST /commit` or resource
+`GET`. Atomic’s resource server is not RFC 6750. We treat a valid
+`id_token` as an **authentication event**, then **token-exchange**
+into a SessionCert (RFC 8693’s idea: trade this token for that
+credential — the output here is Ed25519, not another JWT).
+
+That is the same cut Teleport/SSH-CA, SPIRE, and cloud STS make:
+OIDC proves who sat down; the system mints *its* short-lived key.
+Scopes on the IdP (`openid`, `email`) identify the person. Atomic
+`write` lists stay Agent DIDs. Connector OAuth (Gmail, Calendar) is
+a second, normal OAuth client on the node, talking to *those*
+resource servers with bearer tokens — unrelated to commit AUTH.
+
+Refresh and logout stay stock: `refresh_token` on the node can mint
+a new SessionCert without another redirect; RP-initiated logout hits
+the IdP `end_session_endpoint` and we stop issuing certs. Interactive
+login again when the refresh is gone or the cert’s `notAfter` hits.
+
+So: OIDC/OAuth **flows** match. OAuth **tokens as Atomic signatures**
+do not, on purpose.
+
 ## How it works
 
 This is authorization-code OIDC. The **node** is the relying party
@@ -504,8 +540,8 @@ still name the root. Verifiers chain session → cert → root.
 
 Changes:
 
-- New principal type (issued/session agent) and how rights inherit
-  from the root Agent. Draft PR #1275 was the app-key version.
+- New principal is just another Agent DID; rights stay on the root.
+  SessionCert is the chain, same compact-blob family as genesis certs.
 - Browser holds a key again, but it expires. XSS steals a bounded
   credential.
 - Offline works until TTL, then you need OIDC again (or the root).
