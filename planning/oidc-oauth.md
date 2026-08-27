@@ -415,6 +415,95 @@ It is not “OIDC as Atomic AUTH.” Commits still need an Ed25519
 signature. The danger is **custody of that key**, not a second auth
 stack on `GET`.
 
+## Session tokens as signatures
+
+A natural next idea: skip the Agent secret entirely for OIDC users and
+let a session token (JWT) *be* the thing that signs writes.
+
+That is how ordinary web apps work. It is not a small variant of
+[How it works](#how-it-works). Commits today are Ed25519 over
+deterministic JSON-AD; the public key *is* the signer DID; any replica
+verifies with no issuer, no clock, no network
+(`Commit::validate_signature`). Session tokens are the opposite:
+bearer, expiring, issuer-bound, JWKS-bound.
+
+Three ways to “let the token sign,” and what each actually changes:
+
+### A. Put a JWT in `commit.signature`
+
+Every verifier — this node, a phone on Iroh, a future replica, history
+playback — must accept something that is not Ed25519.
+
+Changes:
+
+- `validate_signature` in Rust and TS, WASM, Flutter.
+- Genesis: resource DIDs and genesis certs are Ed25519 signatures over
+  a cert. A JWT cannot mint `did:ad:{sig}` without a new DID form.
+- History: a commit lives forever; a JWT expires. Re-verifying a 2026
+  commit in 2029 needs the IdP’s (or this node’s) JWKS **as of
+  `createdAt`**, not today’s keys. You have to persist key history.
+- Replay: a still-valid JWT stored on a commit *is* a bearer
+  credential. Anyone who fetched history can use it until `exp`.
+- Peers: a desktop that never talked to this IdP cannot verify unless
+  it trusts this node as a CA and can reach JWKS.
+- Offline: you cannot mint a JWT without the IdP. OIDC-only users
+  become online-only writers. Sign-at-drain / outbox assume a local
+  key.
+
+You also get two classes of resource: self-verifying Agent-authored
+ones, and issuer-bound session-authored ones that some replicas cannot
+check.
+
+### B. Token authorizes the *node* to sign as the user
+
+Browser sends an unsigned patch plus the session cookie. The node
+holds the Agent secret and signs the commit.
+
+The commit log stays Ed25519. Peers verify as today. The token never
+appears in history.
+
+Changes:
+
+- The node becomes a signing oracle — a principal it currently is not.
+  `save()` is no longer local; every write needs this node.
+- Offline and P2P catch-up from a device that only has a cookie: no
+  writes.
+- XSS or a stolen cookie can ask the node to sign until the session
+  ends — no key in JS, but the node will sign whatever the session
+  sends. Same blast radius as a session, which is the *point* of
+  tokens, plus the node sees every plaintext patch.
+- Contradicts “the client holds the key and signs.”
+
+This is custodial *signing*, stronger (worse) than custodial *key
+release*.
+
+### C. Token mints a short-lived Ed25519 session agent
+
+OIDC succeeds → node (or client) creates an issued agent with TTL and
+puts *that* key in the browser. Commits stay Ed25519. Verifiers stay
+dumb. `write` lists and grant-chain need to treat “issued by X, not
+expired at `createdAt`” as authority.
+
+Changes:
+
+- New principal type (issued/session agent) and how rights inherit
+  from the root Agent. Draft PR #1275 was the app-key version.
+- Browser holds a key again, but it expires. XSS steals a bounded
+  credential.
+- Offline works until TTL, then you need OIDC again (or the root).
+- Root can stay on the node. Deprovision = stop issuing, wait out TTL.
+
+This is the one that fits Atomic. It is “session tokens” in the
+product sense (revocable, nothing to memorize) and “Agents” in the
+protocol sense. It is not a JWT in `signature`.
+
+### Recommendation
+
+Do not do A. Do not do B if we can help it. If OIDC users must not
+see a root secret, do C. If C is too much protocol work, root-key
+release after OIDC is the honest shortcut — still Ed25519, still
+local sign, custodial store.
+
 ## Why the original flow cannot be copied
 
 | 2022 step | Keep / change |
