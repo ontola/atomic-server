@@ -160,21 +160,7 @@ providers, the same way it already asks `acceptsNewDrives`. Buttons
 render only for **this** node’s configured IdP. An origin with no IdP
 config never shows “Sign in with Google”.
 
-Flow:
-
-```text
-IdP (operator’s)
-  → node OIDC callback
-    → node session  (not Ed25519; not a resource AUTH)
-      → fetch or store SecretEnvelope keyed by (iss, sub)
-        → client unwraps locally (passkey / recovery / first-run mint)
-          → client holds the agent secret and signs
-```
-
-First visit: client mints the Agent locally, wraps it, PUT envelope to
-the node under the OIDC session. Returning device: OIDC → GET envelope
-→ unwrap. The node stores ciphertext. It never sees the raw secret, and
-it never derives one from IdP claims.
+See [How it works](#how-it-works) for the HTTP walkthrough.
 
 HostMode is unchanged in v1. OIDC does not, by itself, let a stranger
 `createDrive` on an Owner node. Enrollment is still
@@ -209,6 +195,113 @@ up. See [`personal-information-suite.md`](./personal-information-suite.md).
 
 Do not mix connector tokens with the OIDC session in D2. A Google
 Calendar refresh token is not proof of who may read a Drive.
+
+## How it works
+
+This is authorization-code OIDC. The **node** is the relying party
+(confidential client). The browser never sees `ATOMIC_OIDC_CLIENT_SECRET`.
+PKCE is still used so a stolen redirect cannot be exchanged. Endpoint
+paths below are illustrative.
+
+There are two cookies, and they are not interchangeable:
+
+| Cookie | Who minted it | What it unlocks |
+| --- | --- | --- |
+| `atomic_oidc_session` | this node, after a valid ID token | `GET`/`PUT` on that user’s envelope only |
+| `atomic_session` | the client, Ed25519 Authentication Resource | resource `GET`, commits, WS — today’s AUTH |
+
+The OIDC cookie never passes `check_read` / `check_write`.
+
+### 0. Operator
+
+Set issuer, client id, secret, redirect URI
+(`https://<this-node>/oidc/callback`) on the IdP and in the node env.
+On boot the node fetches
+`{issuer}/.well-known/openid-configuration` and caches JWKS. If that
+fails, the node boots but advertises no providers (fail closed on the
+feature, not on the process).
+
+### 1. Welcome screen
+
+`GET /server` already drives `accountCreationTarget`. It grows an
+optional `oidcProviders: [{ label }]` (absent ⇒ today’s UI). The
+welcome screen shows **Sign in with {label}** only when that array is
+non-empty. No IdP config, no button, no IdP traffic.
+
+### 2. Start
+
+The button hits `GET /oidc/start` on **this** node. The node mints
+`state`, `nonce`, and a PKCE verifier, stores them (signed cookie or
+short-lived server record), and 302s to the IdP’s `authorization_endpoint`
+with `client_id`, `redirect_uri`, `scope=openid`, `state`, `nonce`,
+`code_challenge`.
+
+### 3. Callback
+
+IdP authenticates the person and 302s to
+`/oidc/callback?code=…&state=…`. The node:
+
+1. Checks `state`.
+2. Exchanges `code` + `code_verifier` at the token endpoint
+   (client secret stays on the node).
+3. Validates the ID token: signature against JWKS, `iss`, `aud`,
+   `nonce`, expiry.
+4. Reads stable `(iss, sub)` — not email as the key (emails get
+   reused; `sub` does not).
+5. Sets httpOnly `atomic_oidc_session` bound to that pair.
+6. 302s back into the app (`/app/welcome` or a dedicated restore
+   route).
+
+A failed validation is 401 and no cookie.
+
+### 4a. First visit (no envelope yet)
+
+`GET /oidc/envelope` under that cookie returns 404. The app runs the
+existing create-identity path: mint Ed25519 locally, wrap it with
+passkey and/or recovery code (`SecretEnvelope` in `lib/src/vault/`),
+`PUT /oidc/envelope` with the ciphertext. The node stores it keyed by
+`(iss, sub)`. It never sees plaintext. Then the client builds
+`atomic_session` as it does today and uses the Agent.
+
+### 4b. Returning device (envelope exists)
+
+`GET /oidc/envelope` returns the ciphertext. The app prompts passkey
+or recovery code, unwraps locally, `saveAgentToIDB`, builds
+`atomic_session`. Same Agent as the first device — same secret, not a
+second key on the Agent resource.
+
+If unwrap fails, OIDC cannot help. The IdP proved *who sat down*; it
+does not hold the DEK.
+
+### 5. After that, Atomic is unchanged
+
+Commits, resource GET, WS, Iroh AUTH are the Ed25519 Agent. The OIDC
+cookie is unused on those paths. Signing out of the Agent clears
+`atomic_session` as today. Signing out of the IdP is the IdP’s
+session; the node should also drop `atomic_oidc_session` on an
+explicit “disconnect this node login” action so a shared browser
+cannot fetch the envelope.
+
+### What a new browser does not get for free
+
+OIDC on a brand-new browser gets you the **ciphertext**. Opening it
+still needs a wrapper that browser can satisfy (a passkey registered
+to this origin, or the recovery code). That is the point: Google
+cannot impersonate the Agent if the IdP or the node is compromised.
+
+### Deprovision
+
+The operator removes the person in Keycloak. The next `/oidc/start`
+fails at the IdP, so a new browser cannot fetch the envelope. A
+device that already unwrapped the secret keeps working until that
+copy is deleted — same as stealing a secret JSON today. Historical
+commits stay valid; you cannot un-sign them.
+
+### Owner mode
+
+After unwrap, `createDrive` is still `admit_drive_write`. On an Owner
+node that means the Agent DID must be `ATOMIC_OWNER_AGENT`. OIDC
+success is not a Drive grant.
 
 ## Why the original flow cannot be copied
 
@@ -275,10 +368,9 @@ already is (`lib/src/vault/`).
 
 1. **One IdP user, several Agents.** Keep 1:1 `(iss, sub)` → one
    envelope for v1. Extra identities stay local and unbound.
-2. **Confidential client vs public + PKCE.** Browser welcome wants
-   PKCE (no client secret in the SPA). The node as RP can still be
-   confidential for the callback. Pick at implementation; both are
-   valid.
+2. **Confidential client vs public + PKCE.** Resolved for v1: the node
+   is the confidential client; the browser never holds the secret. PKCE
+   is still used on the redirect. See [How it works](#how-it-works).
 3. **Solid WebID-OIDC interop.** The gap is not “Atomic should speak
    OIDC on every GET”; it is “Solid pods authenticate with WebID-OIDC,
    Atomic authenticates with Ed25519 DIDs”. A mapping layer is a
