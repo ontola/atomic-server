@@ -129,6 +129,7 @@ Design intent, kept for direction. None has a line of code behind it.
 | [`social-apps.md`](./social-apps.md) | Requirements for social-network-shaped apps. Companion to `zones.md`. |
 | [`atomic-assistant-browser-extension.md`](./atomic-assistant-browser-extension.md) | Local-first Chromium extension. |
 | [`tours.md`](./tours.md) | Recorded tours; `unified-templates.md` defers them. |
+| [`collections-and-saved-queries.md`](./collections-and-saved-queries.md) | **Proposal.** Collection resources vs `/query` vs Table Views. Recommend retire Collection resources, grow View as the persistable query. |
 
 ## Slices and companions
 
