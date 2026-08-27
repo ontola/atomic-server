@@ -30,7 +30,7 @@ Remaining work, not "this file exists."
 | [`encryption.md`](./encryption.md) | **Exploration.** E2EE / blind replicas undecided. Local cache at rest **shipped** — see [`opfs-per-agent-encryption.md`](./opfs-per-agent-encryption.md). |
 | [`unified-data-layer.md`](./unified-data-layer.md) | Browser/JS: one ingress, one outbox, one subscription model. Sign-at-drain (S4a) shipped separately. |
 | [`loro-source-of-truth.md`](./loro-source-of-truth.md) | **Partial.** Sparse `datatypes` map + Phase 2a–2c shipped (`Tree::Resources` is a derived cache). Remaining: drop the untagged heuristic, Phase 1.6 `Value` reshape, Flutter undo. |
-| [`loro-crdt-write-paths.md`](./loro-crdt-write-paths.md) | **Active.** `push()` / `removeItems` are CRDT list ops; maps reuse identity; canvas + AI chat live-sync. Remaining: LoroText / MovableList / first-touch limits. |
+| [`loro-crdt-write-paths.md`](./loro-crdt-write-paths.md) | **Active.** List append/remove/move/delete-by-id, unique-merge, markdown LoroText, AI stream tokens. Remaining: MovableList container type, PropVals dual-write. |
 | [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) | Target: `atomic_lib` as the complete HTTP-optional local node runtime. |
 | [`genesis-self-verifying.md`](./genesis-self-verifying.md) | **Partial.** Server and browser mint and verify inline genesis certs. Remaining: DataRoute verify UI, `genesis` propval immutability. |
 | [`drive-reconciliation.md`](./drive-reconciliation.md) | **Partial.** Algorithm core in `lib/src/sync/rbsr.rs`. Not on the WS/Iroh wire yet; fingerprint tree still O(range). |

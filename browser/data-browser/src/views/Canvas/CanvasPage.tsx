@@ -224,9 +224,11 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const [hoveredBranchId, setHoveredBranchId] = useState<string | null>(null);
   const hoveredBranchIdRef = useRef<string | null>(null);
 
-  // Eraser drag state: indices of strokes the current drag has marked for
-  // deletion. Materialized as one atomic `replaceListItems` on release so the
-  // UndoManager records the whole erase as one undo step.
+  // Eraser drag state: Loro container ids of strokes the current drag has
+  // marked. Flushed as `removeListItemsById` on release so a remote append
+  // cannot retarget index `i`. Strokes without a `loroId` (legacy JSON
+  // arrays) fall back to index + `replaceListItems`.
+  const erasedIdsRef = useRef<Set<string>>(new Set());
   const erasedIndicesRef = useRef<Set<number>>(new Set());
 
   const scaleRef = useRef(scale);
@@ -298,7 +300,12 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   eraserModeRef.current = eraserMode;
 
   const reloadStrokesFromResource = useCallback((res: Resource) => {
-    setStrokes(parseCanvasStrokes(res.get(canvas.properties.strokeData)));
+    setStrokes(
+      parseCanvasStrokes(
+        res.get(canvas.properties.strokeData),
+        res.getListItemIds(canvas.properties.strokeData),
+      ),
+    );
   }, []);
 
   /** Persist the undo / redo stacks + branches under the canvas subject. */
@@ -875,23 +882,35 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   //
   // Identical hit-test to Flutter's `_eraseAt`: per stroke, any point within
   // `(15 + width/2)` screen pixels of the cursor marks the stroke. All
-  // marked strokes flush as one atomic `replaceListItems` on release so the
+  // marked strokes flush as one atomic delete-by-id on release so the
   // UndoManager records the erase as a single undo step.
 
   const eraseAt = useCallback((canvasX: number, canvasY: number) => {
     const hitRadius = ERASE_SCREEN_RADIUS / scaleRef.current;
-    const erased = erasedIndicesRef.current;
+    const erasedIds = erasedIdsRef.current;
+    const erasedIdx = erasedIndicesRef.current;
     const strokesNow = strokesRef.current;
     let changed = false;
 
     for (let i = 0; i < strokesNow.length; i++) {
-      if (erased.has(i)) continue;
       const stroke = strokesNow[i];
+
+      if (stroke.loroId) {
+        if (erasedIds.has(stroke.loroId)) continue;
+      } else if (erasedIdx.has(i)) {
+        continue;
+      }
+
       const radius = hitRadius + stroke.width / 2 / scaleRef.current;
 
       for (const [px, py] of stroke.path) {
         if (Math.hypot(canvasX - px, canvasY - py) < radius) {
-          erased.add(i);
+          if (stroke.loroId) {
+            erasedIds.add(stroke.loroId);
+          } else {
+            erasedIdx.add(i);
+          }
+
           changed = true;
           break;
         }
@@ -902,22 +921,32 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       // Optimistic visual: paint the canvas without the erased strokes.
       // We DON'T mutate the resource until pointer-up; this is preview
       // only. Reusing `previewStrokes` keeps `paint()` consistent.
-      const preview = strokesNow.filter((_, i) => !erased.has(i));
+      const preview = strokesNow.filter((stroke, i) =>
+        stroke.loroId
+          ? !erasedIds.has(stroke.loroId)
+          : !erasedIdx.has(i),
+      );
       setPreviewStrokes(preview);
     }
   }, []);
 
   const finishErase = useCallback(async () => {
-    if (erasedIndicesRef.current.size === 0) {
+    const erasedIds = [...erasedIdsRef.current];
+    const erasedIdx = erasedIndicesRef.current;
+
+    if (erasedIds.length === 0 && erasedIdx.size === 0) {
       setPreviewStrokes(null);
 
       return;
     }
 
     const preEdit = strokesRef.current;
-    const remaining = preEdit.filter(
-      (_, i) => !erasedIndicesRef.current.has(i),
+    const remaining = preEdit.filter((stroke, i) =>
+      stroke.loroId
+        ? !erasedIdsRef.current.has(stroke.loroId)
+        : !erasedIdx.has(i),
     );
+    erasedIdsRef.current = new Set();
     erasedIndicesRef.current = new Set();
     setPreviewStrokes(null);
 
@@ -928,10 +957,16 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
 
     try {
       await enableLoro();
-      resource.replaceListItems(
-        canvas.properties.strokeData,
-        remaining.map(strokeToJson),
-      );
+
+      if (erasedIds.length > 0 && erasedIdx.size === 0) {
+        resource.removeListItemsById(canvas.properties.strokeData, erasedIds);
+      } else {
+        resource.replaceListItems(
+          canvas.properties.strokeData,
+          remaining.map(strokeToJson),
+        );
+      }
+
       await resource.save();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));

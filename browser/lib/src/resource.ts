@@ -2,6 +2,7 @@ import type {
   LoroDoc,
   LoroList,
   LoroMap,
+  LoroText,
   UndoManager as LoroUndoManager,
   VersionVector,
 } from 'loro-crdt';
@@ -838,6 +839,13 @@ export class Resource<C extends OptionalClass = any> {
 
       const tag = datatypeTag(datatype, loroValue);
 
+      if (
+        tag === 'resourceArray' &&
+        datatypesMap.get(prop) === 'resourceArrayUnique'
+      ) {
+        continue;
+      }
+
       if (tag !== undefined && datatypesMap.get(prop) !== tag) {
         datatypesMap.set(prop, tag);
         wroteAnything = true;
@@ -892,7 +900,9 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     // Loro accepts primitives and containers directly
-    if (
+    if (typeof value === 'string' && this.isMarkdownProp(prop)) {
+      this.writeLoroTextInPlace(map, prop, value);
+    } else if (
       typeof value === 'string' ||
       typeof value === 'number' ||
       typeof value === 'boolean'
@@ -977,6 +987,20 @@ export class Resource<C extends OptionalClass = any> {
       ?.toString();
 
     return datatype === Datatype.LOCALIZEDTEXT;
+  }
+
+  /** True when `prop` is markdown (cache-only, plus `description` which is). */
+  private isMarkdownProp(prop: string): boolean {
+    if (prop === core.properties.description) {
+      return true;
+    }
+
+    const datatype = this._store?.resources
+      .get(prop)
+      ?.get(core.properties.datatype)
+      ?.toString();
+
+    return datatype === Datatype.MARKDOWN;
   }
 
   /**
@@ -1508,6 +1532,7 @@ export class Resource<C extends OptionalClass = any> {
 
         // Rebuild the read cache from the merged Loro doc
         this.rebuildCacheFromLoro();
+        this.dedupeUniqueLists();
         this.#cacheDirty = false;
         this.initLoroSaveCursorIfFresh();
       } else {
@@ -2347,6 +2372,7 @@ export class Resource<C extends OptionalClass = any> {
     const propVal = (this.get(propUrl) as JSONArray) ?? [];
 
     if (unique) {
+      this.markResourceArrayUnique(propUrl);
       values = values
         .filter(value => !propVal.includes(value))
         .filter((value, index, self) => self.indexOf(value) === index);
@@ -2390,6 +2416,49 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     this.deleteMatchingFromLoroList(propUrl, values);
+    this.#cache[propUrl] = next;
+    this.#cacheDirty = true;
+    this._dirty = true;
+    this.eventManager.emit(ResourceEvents.LocalChange, propUrl, next);
+  }
+
+  /**
+   * Move one list element without rewriting the rest. `to` is the index
+   * after removal (JS splice). Concurrent moves of the *same* item can
+   * duplicate; kanban uses per-card `sortOrder` instead.
+   */
+  public moveListItem(propUrl: string, from: number, to: number): void {
+    const propVal = (this.get(propUrl) as JSONArray) ?? [];
+
+    if (from < 0 || from >= propVal.length) {
+      return;
+    }
+
+    const next = [...propVal];
+    const [item] = next.splice(from, 1);
+    if (from === to || to === from + 1) {
+      return;
+    }
+
+    const insertAt = to > from ? to - 1 : to;
+    next.splice(Math.max(0, Math.min(insertAt, next.length)), 0, item);
+
+    const map = this.getLoroMap();
+    const existing = map?.get(propUrl);
+
+    if (
+      existing &&
+      typeof existing === 'object' &&
+      'delete' in existing &&
+      'insert' in existing
+    ) {
+      const list = existing as LoroList & {
+        insert: (index: number, value: JSONValue) => void;
+      };
+      list.delete(from, 1);
+      list.insert(insertAt, item as string);
+    }
+
     this.#cache[propUrl] = next;
     this.#cacheDirty = true;
     this._dirty = true;
@@ -2504,6 +2573,85 @@ export class Resource<C extends OptionalClass = any> {
     );
   }
 
+  /**
+   * Delete list elements whose nested container id is in `ids` (from
+   * `getShallowValue`). One commit so undo is a single step. Canvas erase
+   * uses this so a remote append cannot make index `i` point at the wrong
+   * stroke.
+   */
+  public removeListItemsById(propUrl: string, ids: string[]): void {
+    if (ids.length === 0) {
+      return;
+    }
+
+    const map = this.getLoroMap();
+    const existing = map?.get(propUrl);
+
+    if (
+      !existing ||
+      typeof existing !== 'object' ||
+      !('delete' in existing) ||
+      !('getShallowValue' in existing)
+    ) {
+      return;
+    }
+
+    const list = existing as LoroList & {
+      getShallowValue: () => unknown[];
+    };
+    const want = new Set(ids);
+    const shallow = list.getShallowValue();
+    const indexes: number[] = [];
+
+    for (let i = 0; i < shallow.length; i++) {
+      const v = shallow[i];
+
+      if (typeof v === 'string' && want.has(v)) {
+        indexes.push(i);
+      }
+    }
+
+    for (let i = indexes.length - 1; i >= 0; i--) {
+      list.delete(indexes[i], 1);
+    }
+
+    this.commitLoroEdit();
+    this.rebuildCacheFromLoro();
+    this.#cacheDirty = false;
+    this._dirty = true;
+    this.eventManager.emit(
+      ResourceEvents.LocalChange,
+      propUrl,
+      this.#cache[propUrl],
+    );
+  }
+
+  /**
+   * Container ids (`cid:…`) for nested map/list elements, or the primitive
+   * itself for string ResourceArray items. Canvas erase uses these so a
+   * remote append cannot retarget index `i`.
+   */
+  public getListItemIds(propUrl: string): string[] {
+    const map = this.getLoroMap();
+    const existing = map?.get(propUrl);
+
+    if (
+      !existing ||
+      typeof existing !== 'object' ||
+      !('getShallowValue' in existing)
+    ) {
+      return [];
+    }
+
+    const list = existing as LoroList & {
+      getShallowValue: () => unknown[];
+    };
+
+    return list
+      .getShallowValue()
+      .map(v => (typeof v === 'string' ? v : String(v)));
+  }
+
   private writeJsonToLoroMap(
     map: InstanceType<typeof LoroLoader.Loro.LoroMap>,
     obj: JSONObject,
@@ -2560,6 +2708,7 @@ export class Resource<C extends OptionalClass = any> {
       list = existing as LoroList;
     } else {
       list = map.setContainer(propUrl, new LoroListClass());
+      persistEmptyLoroList(list);
       this.writeJsonToLoroList(list, alreadyPresent);
     }
 
@@ -2658,6 +2807,117 @@ export class Resource<C extends OptionalClass = any> {
     this.syncJsonToLoroMap(target, obj);
   }
 
+  private markResourceArrayUnique(propUrl: string): void {
+    const doc = this.getLoroDoc();
+
+    if (!doc) {
+      return;
+    }
+
+    const datatypes = doc.getMap('datatypes');
+
+    if (datatypes.get(propUrl) !== 'resourceArrayUnique') {
+      datatypes.set(propUrl, 'resourceArrayUnique');
+    }
+  }
+
+  private writeLoroTextInPlace(
+    map: {
+      get: (key: string) => unknown;
+      setContainer: (key: string, container: LoroText) => LoroText;
+    },
+    prop: string,
+    next: string,
+  ): void {
+    const { LoroText: LoroTextClass } = LoroLoader.Loro;
+    const existing = map.get(prop);
+
+    let text: LoroText;
+
+    if (
+      existing &&
+      typeof existing === 'object' &&
+      'insert' in existing &&
+      'toString' in existing &&
+      !('pushContainer' in existing)
+    ) {
+      text = existing as LoroText;
+    } else {
+      text = map.setContainer(prop, new LoroTextClass());
+
+      if (typeof existing === 'string' && existing.length > 0) {
+        text.insert(0, existing);
+      }
+    }
+
+    applyLoroTextDiff(text, next);
+  }
+
+  private dedupeUniqueLists(): void {
+    const doc = this._loroDoc;
+    const map = this.getLoroMap();
+
+    if (!doc || !map) {
+      return;
+    }
+
+    const tags = doc.getMap('datatypes').toJSON() as
+      | Record<string, string>
+      | undefined;
+
+    if (!tags) {
+      return;
+    }
+
+    let changed = false;
+
+    for (const [prop, tag] of Object.entries(tags)) {
+      if (tag !== 'resourceArrayUnique') {
+        continue;
+      }
+
+      const existing = map.get(prop);
+
+      if (
+        !existing ||
+        typeof existing !== 'object' ||
+        !('delete' in existing) ||
+        !('toJSON' in existing)
+      ) {
+        continue;
+      }
+
+      const list = existing as LoroList;
+      const current = list.toJSON() as JSONValue[];
+      const seen = new Set<string>();
+      const indexes: number[] = [];
+
+      for (let i = 0; i < current.length; i++) {
+        const key =
+          typeof current[i] === 'string'
+            ? current[i]
+            : JSON.stringify(current[i]);
+
+        if (seen.has(key)) {
+          indexes.push(i);
+        } else {
+          seen.add(key);
+        }
+      }
+
+      for (let i = indexes.length - 1; i >= 0; i--) {
+        list.delete(indexes[i], 1);
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      this.rebuildCacheFromLoro();
+      this.#cacheDirty = false;
+      this._dirty = true;
+    }
+  }
+
   private syncJsonToLoroMap(map: LoroMap, obj: JSONObject): void {
     for (const [key, value] of Object.entries(obj)) {
       if (value === undefined || value === null) {
@@ -2703,6 +2963,7 @@ export class Resource<C extends OptionalClass = any> {
       }
     } else {
       list = map.setContainer(prop, new LoroListClass());
+      persistEmptyLoroList(list);
     }
 
     this.writeJsonToLoroList(list, value);
@@ -3686,6 +3947,7 @@ export class Resource<C extends OptionalClass = any> {
       // title after reload) or duplicate array items.
       if (replace) {
         this._loroSnapshotBytes = undefined;
+        this.dedupeUniqueLists();
         this.eventManager.emit(ResourceEvents.LocalChange, '', undefined);
 
         return { complete: true };
@@ -3693,6 +3955,7 @@ export class Resource<C extends OptionalClass = any> {
 
       const status = doc.import(loroUpdate);
       this.rebuildCacheFromLoro();
+      this.dedupeUniqueLists();
       this.#cacheDirty = false;
       this.initLoroSaveCursorIfFresh();
 
@@ -3804,6 +4067,72 @@ export class Resource<C extends OptionalClass = any> {
     const parent = this.store.getResourceLoading(parentSubject);
 
     return parent.new;
+  }
+}
+
+/** Loro drops op-less empty lists from snapshots. A push+delete leaves a
+ *  tombstone so later appends share identity instead of each minting a list. */
+function persistEmptyLoroList(list: LoroList): void {
+  if (list.length > 0) {
+    return;
+  }
+
+  list.push(null as never);
+  list.delete(0, 1);
+}
+
+function isHighSurrogate(code: number): boolean {
+  return code >= 0xd800 && code <= 0xdbff;
+}
+
+/** Splice `next` onto a LoroText by common UTF-16 prefix/suffix. An append
+ *  (AI stream) is a tail insert; concurrent edits to different regions merge.
+ *  Indexes are UTF-16 code units (JS string length); don't split surrogates. */
+function applyLoroTextDiff(text: LoroText, next: string): void {
+  const prev = text.toString();
+
+  if (prev === next) {
+    return;
+  }
+
+  let prefix = 0;
+  const maxPrefix = Math.min(prev.length, next.length);
+
+  while (prefix < maxPrefix && prev[prefix] === next[prefix]) {
+    prefix += 1;
+  }
+
+  if (prefix > 0 && isHighSurrogate(prev.charCodeAt(prefix - 1))) {
+    prefix -= 1;
+  }
+
+  let suffix = 0;
+  const maxSuffix = Math.min(prev.length - prefix, next.length - prefix);
+
+  while (
+    suffix < maxSuffix &&
+    prev[prev.length - 1 - suffix] === next[next.length - 1 - suffix]
+  ) {
+    suffix += 1;
+  }
+
+  if (
+    suffix > 0 &&
+    isHighSurrogate(prev.charCodeAt(prev.length - suffix))
+  ) {
+    suffix -= 1;
+  }
+
+  const deleteLen = prev.length - prefix - suffix;
+
+  if (deleteLen > 0) {
+    text.delete(prefix, deleteLen);
+  }
+
+  const insert = next.slice(prefix, next.length - suffix);
+
+  if (insert.length > 0) {
+    text.insert(prefix, insert);
   }
 }
 

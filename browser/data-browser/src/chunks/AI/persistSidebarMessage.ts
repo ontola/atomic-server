@@ -1,8 +1,9 @@
 import { core, type Resource, type Store, type Ai } from '@tomic/react';
 import type { AtomicUIMessage } from './types';
 import {
-  addMessageToChatResource,
   persistMessageResourceToServer,
+  findMessageResource,
+  upsertMessageInChat,
 } from './chatConversionUtils';
 import { DEFAULT_AICHAT_NAME } from '@components/AI/aiContstants';
 
@@ -25,6 +26,8 @@ export type PersistSidebarMessageArgs = {
   setIsChatSaved: React.Dispatch<React.SetStateAction<boolean>>;
   shouldGenerateTitles: boolean;
   generateTitle: (messages: AtomicUIMessage[]) => TitlePromise;
+  /** Token stream: mint once, then splice LoroText without HTTP save. */
+  streaming?: boolean;
 };
 
 /**
@@ -65,6 +68,7 @@ export const persistSidebarMessage = async ({
   setIsChatSaved,
   shouldGenerateTitles,
   generateTitle,
+  streaming = false,
 }: PersistSidebarMessageArgs) => {
   const resource = await getOrCreateDraftChatResource();
 
@@ -72,13 +76,20 @@ export const persistSidebarMessage = async ({
     return;
   }
 
-  const messageResource = await addMessageToChatResource(
+  const existing = findMessageResource(
+    messageToResourceMapRef.current,
+    message,
+  );
+
+  const messageResource = await upsertMessageInChat(
     message,
     resource,
     store,
+    existing,
     {
-      saveChat: isChatSavedRef.current,
-      persistToServer: isChatSavedRef.current,
+      saveChat: isChatSavedRef.current && (!streaming || !existing),
+      persistToServer: isChatSavedRef.current && (!streaming || !existing),
+      commitLoro: streaming && !!existing,
     },
   );
 
@@ -111,7 +122,11 @@ export const persistSidebarMessage = async ({
   // rather than in the component — the caller cannot know whether the chat has
   // been created yet, and a title generated against a chat that does not exist
   // is dropped without a word.
-  if (message.role === 'assistant' && newMessages.length >= 2) {
+  if (
+    !streaming &&
+    message.role === 'assistant' &&
+    newMessages.length >= 2
+  ) {
     if (
       !titlePromiseRef.current &&
       shouldGenerateTitles &&

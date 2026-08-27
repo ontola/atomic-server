@@ -251,6 +251,20 @@ Recorded because each one cost real debugging time.
   Concurrent edits to different keys lost one side. Guard:
   `resource.test.ts` ("set() of an object keeps the same LoroMap
   container"), `loro.rs::set_property_json_object_keeps_map_identity`.
+- **Canvas erase used `replaceListItems` of a stale snapshot.** A remote
+  append during an erase drag rewrote the whole list from the local view
+  and dropped the peer's stroke. Guard: `removeListItemsById` keyed by
+  `getShallowValue` container ids (`resource.test.ts` "removeListItemsById
+  deletes the matching nested container").
+- **`unique: true` was local-only.** Two peers pushing the same subject
+  still stored two copies. Tag `resourceArrayUnique` + post-import dedupe
+  (keep first). Guard: `resource.test.ts` "unique concurrent push of the
+  same subject dedupes on import", `loro.rs::unique_concurrent_same_subject_dedupes`.
+- **Markdown / `description` was an LWW string.** An AI stream rewrite of
+  the whole string and concurrent edits to different ends lost a side.
+  Now `LoroText` prefix/suffix splice. Guard: `resource.test.ts`
+  "markdown concurrent edits to different ends merge",
+  `loro.rs::markdown_concurrent_edits_to_different_ends_merge`.
 - **A test child process must not drop its `Db`.** redb's `Database::drop`
   closes cleanly and makes pending `Durability::None` commits durable, so a
   durability test that lets the store drop is testing a graceful shutdown.

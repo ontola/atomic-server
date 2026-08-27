@@ -852,18 +852,23 @@ impl Resource {
         // Materialize *before* updating propvals so a first-touch seed
         // does not already contain the item we are about to append.
         self.ensure_materialized()?;
-        if self
-            .loro()
-            .doc()
-            .get_map("datatypes")
-            .get(property)
-            .is_none()
         {
-            self.loro()
-                .doc()
-                .get_map("datatypes")
-                .insert(property, "resourceArray")
-                .map_err(|e| format!("Loro datatype tag error: {e}"))?;
+            let datatypes = self.loro().doc().get_map("datatypes");
+            let tag = if skip_existing {
+                "resourceArrayUnique"
+            } else {
+                "resourceArray"
+            };
+            let current_unique = matches!(
+                datatypes.get(property),
+                Some(loro::ValueOrContainer::Value(loro::LoroValue::String(s)))
+                    if s.as_ref() == "resourceArrayUnique"
+            );
+            if !current_unique {
+                datatypes
+                    .insert(property, tag)
+                    .map_err(|e| format!("Loro datatype tag error: {e}"))?;
+            }
         }
         self.loro()
             .push_to_loro_list(property, &serde_json::Value::String(value.to_string()))?;
@@ -871,6 +876,33 @@ impl Resource {
 
         vec.push(value.clone());
         self.propvals.insert(property.into(), vec.into());
+        Ok(self)
+    }
+
+    /// Move one ResourceArray element from `from` to `to` without rewriting
+    /// the rest of the list.
+    pub fn move_array_item(
+        &mut self,
+        property: &str,
+        from: usize,
+        to: usize,
+    ) -> AtomicResult<&mut Self> {
+        let mut vec = match self.propvals.get(property) {
+            Some(Value::ResourceArray(vec)) => vec.clone(),
+            None => return Ok(self),
+            Some(_) => return Err("Wrong datatype, expected ResourceArray".into()),
+        };
+        if from >= vec.len() {
+            return Err(format!("Index {from} out of bounds (len {})", vec.len()).into());
+        }
+        self.ensure_materialized()?;
+        self.loro().move_loro_list_item(property, from, to)?;
+        self.loro().commit();
+        let item = vec.remove(from);
+        let insert_at = if to > from { to - 1 } else { to };
+        vec.insert(insert_at.min(vec.len()), item);
+        self.propvals
+            .insert(property.into(), Value::ResourceArray(vec));
         Ok(self)
     }
 

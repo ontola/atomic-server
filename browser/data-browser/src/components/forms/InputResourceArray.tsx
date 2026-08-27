@@ -133,10 +133,16 @@ export default function InputResourceArray({
 
     const oldPos = array.indexOf(active.id as string);
     const newPos = over.id as number;
-    const newArray = [...array];
-    const [removed] = newArray.splice(oldPos, 1);
-    newArray.splice(newPos > oldPos ? newPos - 1 : newPos, 0, removed);
-    setArray(newArray);
+
+    if (oldPos === -1) {
+      return;
+    }
+
+    resource.moveListItem(property.subject, oldPos, newPos);
+
+    if (commit) {
+      resource.save();
+    }
   };
 
   return (

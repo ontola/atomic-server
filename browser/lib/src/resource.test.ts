@@ -170,6 +170,130 @@ describe('resource.ts', () => {
     ]);
   });
 
+  it('unique concurrent push of the same subject dedupes on import', async ({
+    expect,
+  }) => {
+    const prop = 'https://atomicdata.dev/properties/subresources';
+    const agent = 'https://example.com/agent';
+
+    const base = new Resource('https://example.com/chat');
+    await base.set(prop, [], false);
+    base.push(prop, [], true);
+    const snapshot = base.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    const peerA = new Resource('https://example.com/chat');
+    peerA.importLoroUpdate(snapshot);
+    peerA.push(prop, [agent], true);
+
+    const peerB = new Resource('https://example.com/chat');
+    peerB.importLoroUpdate(snapshot);
+    peerB.push(prop, [agent], true);
+
+    peerA.importLoroUpdate(peerB.getLoroDoc()!.export({ mode: 'snapshot' }));
+
+    expect(peerA.get(prop)).toEqual([agent]);
+  });
+
+  it('empty list dummy op survives a snapshot', async ({ expect }) => {
+    const prop = 'https://atomicdata.dev/properties/subresources';
+    const resource = new Resource('https://example.com/chat');
+    await resource.set(prop, [], false);
+    const snapshot = resource.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    const loaded = new Resource('https://example.com/chat');
+    loaded.importLoroUpdate(snapshot);
+
+    const existing = loaded.getLoroDoc()!.getMap('properties').get(prop);
+    expect(existing).toBeTruthy();
+
+    loaded.push(prop, ['https://example.com/a']);
+    expect(loaded.get(prop)).toEqual(['https://example.com/a']);
+  });
+
+  it('markdown set() writes a LoroText and appends as a tail insert', async ({
+    expect,
+  }) => {
+    const prop = core.properties.description;
+    const resource = new Resource('https://example.com/md');
+    await resource.set(prop, 'Hello', false);
+
+    const container = resource.getLoroDoc()!.getMap('properties').get(prop);
+    expect(container && typeof container === 'object').toBe(true);
+    expect(container && 'insert' in (container as object)).toBe(true);
+
+    await resource.set(prop, 'Hello world', false);
+    expect(resource.get(prop)).toBe('Hello world');
+  });
+
+  it('markdown concurrent edits to different ends merge', async ({ expect }) => {
+    const prop = core.properties.description;
+    const base = new Resource('https://example.com/md');
+    await base.set(prop, 'middle', false);
+    const snapshot = base.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    const peerA = new Resource('https://example.com/md');
+    peerA.importLoroUpdate(snapshot);
+    await peerA.set(prop, 'A middle', false);
+
+    const peerB = new Resource('https://example.com/md');
+    peerB.importLoroUpdate(snapshot);
+    await peerB.set(prop, 'middle B', false);
+
+    peerA.importLoroUpdate(peerB.getLoroDoc()!.export({ mode: 'snapshot' }));
+    expect(peerA.get(prop)).toBe('A middle B');
+  });
+
+  it('moveListItem reorders without rewriting list identity', async ({
+    expect,
+  }) => {
+    const prop = 'https://atomicdata.dev/properties/subresources';
+    const resource = new Resource('https://example.com/chat');
+    resource.push(prop, [
+      'https://example.com/a',
+      'https://example.com/b',
+      'https://example.com/c',
+    ]);
+
+    const originalId = (
+      resource.getLoroDoc()!.getMap('properties').get(prop) as unknown as {
+        id?: string;
+      }
+    )?.id;
+
+    resource.moveListItem(prop, 0, 3);
+    expect(resource.get(prop)).toEqual([
+      'https://example.com/b',
+      'https://example.com/c',
+      'https://example.com/a',
+    ]);
+
+    const newId = (
+      resource.getLoroDoc()!.getMap('properties').get(prop) as unknown as {
+        id?: string;
+      }
+    )?.id;
+    expect(newId).toBe(originalId);
+  });
+
+  it('removeListItemsById deletes the matching nested container', async ({
+    expect,
+  }) => {
+    const prop = 'https://atomicdata.dev/properties/json';
+    const resource = new Resource('https://example.com/canvas');
+    resource.pushListItem(prop, { color: 1, width: 2, path: [[0, 0]] });
+    resource.pushListItem(prop, { color: 3, width: 4, path: [[1, 1]] });
+
+    const ids = resource.getListItemIds(prop);
+    expect(ids).toHaveLength(2);
+
+    resource.removeListItemsById(prop, [ids[0]]);
+    expect(resource.getListItemIds(prop)).toEqual([ids[1]]);
+
+    const remaining = resource.get(prop) as Array<{ color: number }>;
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].color).toBe(3);
+  });
+
   it('getCreatedAt / getCreatedBy read the genesis change, surviving a snapshot round-trip', async ({
     expect,
   }) => {

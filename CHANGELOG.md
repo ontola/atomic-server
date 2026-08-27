@@ -13,7 +13,10 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   matching list elements by CRDT position (same merge for concurrent
   removes). `set_property` reuses list identity for arrays and map
   identity for `Json` objects / `LocalizedText` so a full replace does
-  not fork a second container.
+  not fork a second container. Markdown / `description` is a `LoroText`
+  (prefix/suffix splice). Unique arrays tag `resourceArrayUnique` and
+  drop duplicate subjects after import. Empty lists persist via a dummy
+  push+delete so later appends share identity.
 
 - Git / CI: one integration branch (`develop`) plus stable `v*` tags. Staging
   follows `develop`; production and live docs follow a tagged release. `master`
