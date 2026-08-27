@@ -2866,6 +2866,7 @@ msgstr "<0/> Löschen"
 msgid "Remove all items from this list"
 msgstr "Alle Elemente aus dieser Liste entfernen"
 
+#: src/chunks/FormBuilder/PageTabBar.tsx
 #: src/chunks/FormBuilder/ReorderableList.tsx
 #: src/components/forms/InputResourceArray.tsx
 msgid "Move item"
