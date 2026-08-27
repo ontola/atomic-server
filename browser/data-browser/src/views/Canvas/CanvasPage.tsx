@@ -11,6 +11,7 @@ import {
 } from '@tomic/lib';
 import type { ResourcePageProps } from '@views/ResourcePage';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLoroDocSync } from '@hooks/useLoroDocSync';
 import styled from 'styled-components';
 import { drawCanvasStrokes, screenToCanvas } from './canvas-draw';
 import {
@@ -111,6 +112,7 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
 
 export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
   const [darkMode] = useDarkMode();
+  useLoroDocSync(resource, resource.getLoroDoc());
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 

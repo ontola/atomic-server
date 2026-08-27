@@ -1,6 +1,7 @@
 import type {
   LoroDoc,
   LoroList,
+  LoroMap,
   UndoManager as LoroUndoManager,
   VersionVector,
 } from 'loro-crdt';
@@ -949,8 +950,9 @@ export class Resource<C extends OptionalClass = any> {
       // `pushListItem()`, which `list.push` onto this same container.
       this.writeLoroListInPlace(map, prop, value);
     } else {
-      // Objects: serialize to JSON string.
-      map.set(prop, JSON.stringify(value));
+      // Native LoroMap so concurrent edits to different keys merge.
+      // `JSON.stringify` made the whole object one LWW register.
+      this.writeLoroMapInPlace(map, prop, value as JSONObject);
     }
   }
 
@@ -2364,6 +2366,37 @@ export class Resource<C extends OptionalClass = any> {
   }
 
   /**
+   * Remove matching items from a ResourceArray without rewriting the list.
+   *
+   * Deletes every Loro list element whose current value equals any of
+   * `values`, so two peers removing different subjects keep the rest, and
+   * a revoke still works if `unique` concurrently duplicated a subject.
+   * `set(existing.filter(...))` is the replace path and duplicates the
+   * prefix under concurrency, same as the old `push()`.
+   */
+  public removeItems(propUrl: string, values: JSONArray): void {
+    const propVal = (this.get(propUrl) as JSONArray) ?? [];
+
+    if (values.length === 0 || propVal.length === 0) {
+      return;
+    }
+
+    const next = propVal.filter(
+      item => !values.some(v => loroListItemEqual(v, item)),
+    );
+
+    if (next.length === propVal.length) {
+      return;
+    }
+
+    this.deleteMatchingFromLoroList(propUrl, values);
+    this.#cache[propUrl] = next;
+    this.#cacheDirty = true;
+    this._dirty = true;
+    this.eventManager.emit(ResourceEvents.LocalChange, propUrl, next);
+  }
+
+  /**
    * Commit the pending Loro transaction as ONE logical edit, tagged with a
    * unique `e-<token>` message and a millisecond timestamp.
    *
@@ -2531,6 +2564,116 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     this.writeJsonToLoroList(list, items);
+  }
+
+  /**
+   * Delete every list element whose value equals any of `values`. Indices
+   * are deleted from the end so earlier positions stay valid. Loro records
+   * each delete against the element's CRDT id, so concurrent removes of
+   * different subjects merge.
+   */
+  private deleteMatchingFromLoroList(
+    propUrl: string,
+    values: JSONValue[],
+  ): void {
+    const map = this.getLoroMap();
+
+    if (!map || values.length === 0) {
+      return;
+    }
+
+    const existing = map.get(propUrl);
+
+    if (
+      !existing ||
+      typeof existing !== 'object' ||
+      !('delete' in existing) ||
+      !('toJSON' in existing)
+    ) {
+      return;
+    }
+
+    const list = existing as LoroList;
+    const current = list.toJSON() as JSONValue[];
+    const indexes: number[] = [];
+
+    for (let i = 0; i < current.length; i++) {
+      if (values.some(v => loroListItemEqual(v, current[i]))) {
+        indexes.push(i);
+      }
+    }
+
+    for (let i = indexes.length - 1; i >= 0; i--) {
+      list.delete(indexes[i], 1);
+    }
+  }
+
+  /**
+   * Write `obj` into a LoroMap, keeping the existing container when one is
+   * already there. Nested arrays/maps reuse identity the same way lists do.
+   */
+  private writeLoroMapInPlace(
+    map: {
+      get: (key: string) => unknown;
+      setContainer: (key: string, container: LoroMap) => LoroMap;
+    },
+    prop: string,
+    obj: JSONObject,
+  ): void {
+    const { LoroMap: LoroMapClass } = LoroLoader.Loro;
+    const existing = map.get(prop);
+
+    let target: LoroMap;
+
+    if (
+      existing &&
+      typeof existing === 'object' &&
+      'set' in existing &&
+      'keys' in existing &&
+      !('pushContainer' in existing)
+    ) {
+      target = existing as LoroMap;
+
+      for (const key of target.keys()) {
+        if (obj[key] === undefined) {
+          target.delete(key);
+        }
+      }
+    } else {
+      target = map.setContainer(prop, new LoroMapClass());
+
+      if (typeof existing === 'string' && existing.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(existing) as JSONObject;
+
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            this.syncJsonToLoroMap(target, parsed);
+          }
+        } catch {
+          // Legacy JSON that failed to parse — write `obj` onto the new map.
+        }
+      }
+    }
+
+    this.syncJsonToLoroMap(target, obj);
+  }
+
+  private syncJsonToLoroMap(map: LoroMap, obj: JSONObject): void {
+    for (const [key, value] of Object.entries(obj)) {
+      if (value === undefined || value === null) {
+        map.delete(key);
+      } else if (
+        typeof value === 'string' ||
+        typeof value === 'number' ||
+        typeof value === 'boolean'
+      ) {
+        map.set(key, value);
+      } else if (Array.isArray(value)) {
+        this.writeLoroListInPlace(map, key, value);
+      } else if (typeof value === 'object') {
+        this.writeLoroMapInPlace(map, key, value as JSONObject);
+      }
+    }
   }
 
   /**
@@ -3662,6 +3805,23 @@ export class Resource<C extends OptionalClass = any> {
 
     return parent.new;
   }
+}
+
+function loroListItemEqual(a: JSONValue, b: JSONValue): boolean {
+  if (a === b) {
+    return true;
+  }
+
+  if (
+    a === null ||
+    b === null ||
+    typeof a !== 'object' ||
+    typeof b !== 'object'
+  ) {
+    return false;
+  }
+
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 /**

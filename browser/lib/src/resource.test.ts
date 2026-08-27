@@ -85,6 +85,69 @@ describe('resource.ts', () => {
     expect(new Set(merged).size).toBe(3);
   });
 
+  it('concurrent removeItems keep the un-removed subject', async ({
+    expect,
+  }) => {
+    const prop = 'https://atomicdata.dev/properties/subresources';
+    const a = 'https://example.com/a';
+    const b = 'https://example.com/b';
+    const c = 'https://example.com/c';
+
+    const base = new Resource('https://example.com/chat');
+    base.push(prop, [a, b, c]);
+    const snapshot = base.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    const peerA = new Resource('https://example.com/chat');
+    peerA.importLoroUpdate(snapshot);
+    peerA.removeItems(prop, [b]);
+
+    const peerB = new Resource('https://example.com/chat');
+    peerB.importLoroUpdate(snapshot);
+    peerB.removeItems(prop, [c]);
+
+    peerA.importLoroUpdate(peerB.getLoroDoc()!.export({ mode: 'snapshot' }));
+
+    expect(peerA.get(prop)).toEqual([a]);
+  });
+
+  it('removeItems deletes every matching copy of a duplicated subject', async ({
+    expect,
+  }) => {
+    const prop = 'https://atomicdata.dev/properties/subresources';
+    const a = 'https://example.com/a';
+    const b = 'https://example.com/b';
+
+    const resource = new Resource('https://example.com/chat');
+    resource.push(prop, [a]);
+    resource.push(prop, [a]);
+    resource.push(prop, [b]);
+    expect(resource.get(prop)).toEqual([a, a, b]);
+
+    resource.removeItems(prop, [a]);
+    expect(resource.get(prop)).toEqual([b]);
+  });
+
+  it('set() of an object keeps the same LoroMap container', async ({
+    expect,
+  }) => {
+    const prop = 'https://atomicdata.dev/properties/json';
+    const resource = new Resource('https://example.com/obj');
+    await resource.set(prop, { a: 1 }, false);
+
+    const doc = resource.getLoroDoc()!;
+    const originalId = (
+      doc.getMap('properties').get(prop) as unknown as { id?: string }
+    )?.id;
+
+    await resource.set(prop, { a: 1, b: 2 }, false);
+
+    const newId = (
+      doc.getMap('properties').get(prop) as unknown as { id?: string }
+    )?.id;
+    expect(newId).toBe(originalId);
+    expect(resource.get(prop)).toEqual({ a: 1, b: 2 });
+  });
+
   it('push() keeps the same LoroList container', async ({ expect }) => {
     const prop = 'https://atomicdata.dev/properties/subresources';
     const resource = new Resource('https://example.com/chat');

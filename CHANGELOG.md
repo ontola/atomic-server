@@ -9,9 +9,11 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 - Fix: `Resource::push` now appends to the existing Loro list instead of
   rewriting the whole array. Two peers adding items to the same
-  `ResourceArray` keep both items. `set_property` for arrays reuses the
-  list container (same identity fix the TypeScript client already had)
-  so a full replace does not fork a second list.
+  `ResourceArray` keep both items. `Resource::remove_array_item` deletes
+  matching list elements by CRDT position (same merge for concurrent
+  removes). `set_property` reuses list identity for arrays and map
+  identity for `Json` objects / `LocalizedText` so a full replace does
+  not fork a second container.
 
 - Git / CI: one integration branch (`develop`) plus stable `v*` tags. Staging
   follows `develop`; production and live docs follow a tagged release. `master`

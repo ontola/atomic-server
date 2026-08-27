@@ -176,12 +176,7 @@ export const removeMessageFromChatResource = async (
   chatResource: Resource<Ai.AiChat>,
   { saveChat = true }: { saveChat?: boolean } = {},
 ): Promise<void> => {
-  await chatResource.set(
-    ai.properties.messages,
-    chatResource.props.messages?.filter(
-      subject => subject !== messageResource.subject,
-    ),
-  );
+  chatResource.removeItems(ai.properties.messages, [messageResource.subject]);
 
   if (saveChat) {
     await chatResource.save();
@@ -222,10 +217,7 @@ export const removeFollowingMessagesFromChatResource = async (
     }
   }
 
-  await chatResource.set(
-    ai.properties.messages,
-    chatResource.props.messages?.filter(x => !destroySubjects.includes(x)),
-  );
+  chatResource.removeItems(ai.properties.messages, destroySubjects);
 
   if (saveChat) {
     await chatResource.save();

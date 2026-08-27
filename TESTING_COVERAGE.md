@@ -239,6 +239,18 @@ Recorded because each one cost real debugging time.
   push() appends merge"), `resources.rs::resource_array_concurrent_push_merges`,
   `loro.rs::resource_array_concurrent_push_merges` and
   `set_property_resource_array_keeps_list_identity`.
+- **`set(existing.filter)` was the same rewrite on the remove path.**
+  Membership revoke (share rights, tags, ontology lists, chat messages,
+  private-drive favorites) filtered the cache and `set()` the remainder.
+  `Resource.removeItems` / `Resource::remove_array_item` now delete matching
+  Loro elements by CRDT id. Guard: `resource.test.ts` ("concurrent
+  removeItems keep the un-removed subject", "removeItems deletes every
+  matching copy"), `resources.rs::resource_array_concurrent_remove_merges`,
+  `loro.rs::resource_array_concurrent_remove_merges`.
+- **JSON objects were an LWW string (TS) or a new map each `set` (Rust).**
+  Concurrent edits to different keys lost one side. Guard:
+  `resource.test.ts` ("set() of an object keeps the same LoroMap
+  container"), `loro.rs::set_property_json_object_keeps_map_identity`.
 - **A test child process must not drop its `Db`.** redb's `Database::drop`
   closes cleanly and makes pending `Durability::None` commits durable, so a
   durability test that lets the store drop is testing a graceful shutdown.
