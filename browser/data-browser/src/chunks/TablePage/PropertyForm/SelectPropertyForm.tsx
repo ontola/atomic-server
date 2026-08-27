@@ -16,16 +16,12 @@ const valueOpts = {
   validate: false,
 };
 
-function removeFromArray<T>(array: T[], item: T) {
-  return array.filter(i => i !== item);
-}
-
 export function SelectPropertyForm({
   resource,
 }: PropertyCategoryFormProps): JSX.Element {
   const store = useStore();
 
-  const [allowOnly, setAllowOnly] = useArray(
+  const [allowOnly, , pushAllowOnly, removeAllowOnly] = useArray(
     resource,
     core.properties.allowsOnly,
     valueOpts,
@@ -33,11 +29,11 @@ export function SelectPropertyForm({
 
   const handleNewTag = useCallback(
     async (tag: Resource) => {
-      await setAllowOnly([...allowOnly, tag.subject]);
+      pushAllowOnly([tag.subject]);
 
       await tag.save();
     },
-    [allowOnly, setAllowOnly],
+    [pushAllowOnly],
   );
 
   const handleDeleteTag = useCallback(
@@ -45,9 +41,9 @@ export function SelectPropertyForm({
       const tag = store.getResourceLoading(subject);
       tag.destroy();
 
-      await setAllowOnly(removeFromArray(allowOnly, subject));
+      removeAllowOnly([subject]);
     },
-    [store, setAllowOnly, allowOnly],
+    [store, removeAllowOnly],
   );
 
   useEffect(() => {

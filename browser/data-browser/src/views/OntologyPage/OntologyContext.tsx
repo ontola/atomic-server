@@ -1,13 +1,5 @@
-import {
-  core,
-  Resource,
-  unknownSubject,
-  urls,
-  useArray,
-  useStore,
-} from '@tomic/react';
+import { core, Resource, unknownSubject, urls, useArray } from '@tomic/react';
 import { createContext, useCallback, useContext, useMemo } from 'react';
-import { sortSubjectList } from './sortSubjectList';
 
 interface OntologyContext {
   addClass: (subject: string) => Promise<void>;
@@ -37,12 +29,15 @@ export function OntologyContextProvider({
   ontology,
   children,
 }: React.PropsWithChildren<OntologyContextProviderProps>) {
-  const store = useStore();
-  const [classes, setClasses] = useArray(ontology, core.properties.classes, {
-    commit: true,
-  });
+  const [classes, , pushClasses, removeClasses] = useArray(
+    ontology,
+    core.properties.classes,
+    {
+      commit: true,
+    },
+  );
 
-  const [properties, setProperties] = useArray(
+  const [properties, , pushProperties, removeProperties] = useArray(
     ontology,
     urls.properties.properties,
     { commit: true },
@@ -50,32 +45,30 @@ export function OntologyContextProvider({
 
   const addClass = useCallback(
     async (subject: string) => {
-      await setClasses([...classes, subject]);
+      pushClasses([subject]);
     },
-    [classes, setClasses],
+    [pushClasses],
   );
 
   const removeClass = useCallback(
     async (subject: string) => {
-      await setClasses(classes.filter(s => s !== subject));
+      removeClasses([subject]);
     },
-    [classes, setClasses],
+    [removeClasses],
   );
 
   const addProperty = useCallback(
     async (subject: string) => {
-      await setProperties(
-        await sortSubjectList(store, [...properties, subject]),
-      );
+      pushProperties([subject]);
     },
-    [properties, setProperties],
+    [pushProperties],
   );
 
   const removeProperty = useCallback(
     async (subject: string) => {
-      await setProperties(properties.filter(s => s !== subject));
+      removeProperties([subject]);
     },
-    [properties, setProperties],
+    [removeProperties],
   );
 
   const hasProperty = useCallback(

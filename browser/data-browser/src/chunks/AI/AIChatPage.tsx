@@ -28,9 +28,11 @@ import { useAISettings } from '@components/AI/AISettingsContext';
 import { styled } from 'styled-components';
 import { consumePendingFirstMessage } from './pendingFirstMessage';
 import { userTiming } from '@helpers/userTiming';
+import { useLoroDocSync } from '@hooks/useLoroDocSync';
 
 const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   const store = useStore();
+  useLoroDocSync(resource, resource.getLoroDoc());
   const { shouldGenerateTitles } = useAISettings();
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<AtomicUIMessage[]>([]);

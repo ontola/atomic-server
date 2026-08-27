@@ -77,9 +77,13 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
     dataBrowser.properties.tagList,
     { commit: true },
   );
-  const [tags, setTags] = useArray(resource, dataBrowser.properties.tags, {
-    commit: true,
-  });
+  const [tags, , pushTags, removeTags] = useArray(
+    resource,
+    dataBrowser.properties.tags,
+    {
+      commit: true,
+    },
+  );
   const canCreateTags = useCanWrite(drive);
 
   useEffect(() => {
@@ -90,6 +94,19 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
     // Tag creation finishes asynchronously; append to the live resource
     // instead of replacing it with the array captured by an older render.
     pushDriveTags([newTag]);
+  };
+
+  const applySelectedTags = (next: string[]) => {
+    const added = next.filter(t => !tags.includes(t));
+    const removed = tags.filter(t => !next.includes(t));
+
+    if (added.length > 0) {
+      pushTags(added);
+    }
+
+    if (removed.length > 0) {
+      removeTags(removed);
+    }
   };
 
   if (driveSubject === undefined || resource.loading) {
@@ -106,7 +123,7 @@ function TagSelectPopoverWrapper({ resource }: { resource: Resource }) {
       <TagSelectPopover
         tags={driveTags}
         selectedTags={tags}
-        setSelectedTags={setTags}
+        setSelectedTags={applySelectedTags}
         onNewTag={canCreateTags ? handleNewTag : undefined}
         newTagParent={canCreateTags ? driveSubject : undefined}
         Trigger={

@@ -437,13 +437,21 @@ export function useTitle(
 
 /**
  * Hook for getting all URLs for some array. Returns the current Array (defaults
- * to empty array) and a callback for validation errors. See {@link useValue}
+ * to empty array), a `set` (replace), `push` (CRDT append), and `remove`
+ * (CRDT delete-by-value). Prefer `push` / `remove` for membership edits —
+ * `set([...old, x])` / `set(old.filter(...))` rewrite the list. See
+ * {@link useValue}
  */
 export function useArray(
   resource: Resource,
   propertyURL: string,
   opts?: useValueOptions,
-): [string[], SetValue<JSONArray>, (vals: string[]) => void] {
+): [
+  string[],
+  SetValue<JSONArray>,
+  (vals: string[]) => void,
+  (vals: string[]) => void,
+] {
   const [value, set] = useValue(resource, propertyURL, opts);
   const [stableEmptyResourceArray] = useState<JSONArray>([]);
 
@@ -467,7 +475,7 @@ export function useArray(
 
   const push = useCallback(
     (val: string[]) => {
-      resource.push(propertyURL, val);
+      resource.push(propertyURL, val, true);
 
       if (opts?.commit) {
         resource.save().catch(err => {
@@ -479,7 +487,19 @@ export function useArray(
     [resource, propertyURL, opts?.commit],
   );
 
-  return [values as string[], set, push];
+  const remove = useCallback(
+    (val: string[]) => {
+      resource.removeItems(propertyURL, val);
+
+      if (opts?.commit) {
+        resource.save();
+      }
+    },
+
+    [resource, propertyURL, opts?.commit],
+  );
+
+  return [values as string[], set, push, remove];
 }
 
 /** See {@link useValue} */

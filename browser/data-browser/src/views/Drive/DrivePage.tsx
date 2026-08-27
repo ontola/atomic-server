@@ -160,7 +160,7 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
 function DriveTagList({ resource }: { resource: Resource }) {
   const canEdit = useCanWrite(resource);
   const navigate = useNavigateWithTransition();
-  const [tags, setTags, pushTags] = useArray(
+  const [tags, , pushTags, removeTags] = useArray(
     resource,
     dataBrowser.properties.tagList,
     {
@@ -169,7 +169,7 @@ function DriveTagList({ resource }: { resource: Resource }) {
   );
 
   const handleDelete = (subject: string) => {
-    setTags(tags.filter(t => t !== subject));
+    removeTags([subject]);
   };
 
   const handleNewTag = async (tag: Resource) => {

@@ -62,7 +62,7 @@ const TagPanel: FC<TagPanelProps> = ({ resource, ontology }) => {
   const store = useStore();
   const [tags, setTags] = useState<string[]>([]);
 
-  const [allowsOnly, setAllowsOnly] = useArray(
+  const [allowsOnly, , , removeAllowsOnly] = useArray(
     resource,
     core.properties.allowsOnly,
     { commit: true },
@@ -82,10 +82,14 @@ const TagPanel: FC<TagPanelProps> = ({ resource, ontology }) => {
           return;
         }
 
-        setAllowsOnly(filteredTags);
+        const extra = allowsOnly.filter(s => !filteredTags.includes(s));
+
+        if (extra.length > 0) {
+          removeAllowsOnly(extra);
+        }
       },
     );
-  }, [resource, allowsOnly, setAllowsOnly]);
+  }, [resource, allowsOnly, removeAllowsOnly, store]);
 
   return (
     <Column>

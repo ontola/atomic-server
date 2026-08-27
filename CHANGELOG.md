@@ -9,9 +9,11 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 - Fix: `Resource::push` now appends to the existing Loro list instead of
   rewriting the whole array. Two peers adding items to the same
-  `ResourceArray` keep both items. `set_property` for arrays reuses the
-  list container (same identity fix the TypeScript client already had)
-  so a full replace does not fork a second list.
+  `ResourceArray` keep both items. `Resource::remove_array_item` deletes
+  matching list elements by CRDT position (same merge for concurrent
+  removes). `set_property` reuses list identity for arrays and map
+  identity for `Json` objects / `LocalizedText` so a full replace does
+  not fork a second container.
 - The outbox drains over a live Iroh link too (`sync::peer::LivePeerCommitTransport`):
   a device with no hub in reach delivers its queued writes to a paired peer as
   signed `COMMIT` frames, which the peer validates and applies like a hub
