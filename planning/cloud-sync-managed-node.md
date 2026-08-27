@@ -9,8 +9,9 @@ work, spanning `atomic-server` (this repo: data plane + browser) and
 
 - **atomic-server identity** = local DID agent secret (IndexedDB). Independent
   of the account **session** (email + `session_token` cookie). Both can be
-  signed-in/out independently. OIDC, if it ever lands, replaces the
-  magic-link hop on this session — it does not become an Agent. See
+  signed-in/out independently. OIDC is the same kind of session proof — on a
+  FOSS node against the operator’s IdP, or on this control-plane session
+  instead of magic-link. It does not become an Agent. See
   [`oidc-oauth.md`](./oidc-oauth.md).
 - **The control-plane client is NOT in the open core** (FOSS guardrail #3). The
   open `atomic-server` exposes only a generic embedder hook

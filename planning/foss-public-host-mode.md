@@ -105,7 +105,10 @@ Narrower than “has write on some hosted Drive”:
 1. The **owner agent** — the DID in `ATOMIC_OWNER_AGENT` /
    `--owner-agent`. That is the only claim mechanism.
 2. Later, and only if we add it: a comma-separated
-   `ATOMIC_OWNER_AGENTS` list, or a `createDrive` grant. Not v1.
+   `ATOMIC_OWNER_AGENTS` list, or a `createDrive` grant. Not v1. Mapping an
+   OIDC group/domain onto authorized-to-create is the same kind of later
+   grant — see [`oidc-oauth.md`](./oidc-oauth.md). Configuring an IdP does
+   not, by itself, let IdP users enroll Drives.
 
 A collaborator with `write` on Drive D may write to D. They may not
 genesis a new Drive on this node. Treating “write on an enrolled Drive”

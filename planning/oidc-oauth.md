@@ -1,18 +1,23 @@
 # OIDC / OAuth after DID and local-first
 
-> **Status:** Proposal (2026-08). Reconsiders
+> **Status:** Proposal (2026-08), revised same day. Reconsiders
 > [#277](https://github.com/ontola/atomic-server/issues/277) (filed 2022-01
 > against HTTP-origin Agents). Companion to
 > [`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md) (account session
 > vs agent), [`encrypted-vault-format.md`](./encrypted-vault-format.md)
 > (recovery), [`device-pairing.md`](./device-pairing.md) (same key, many
-> devices), [`foss-public-host-mode.md`](./foss-public-host-mode.md) (no
-> control plane in FOSS), and
+> devices), [`foss-public-host-mode.md`](./foss-public-host-mode.md) (who may
+> enroll a Drive), and
 > [`personal-information-suite.md`](./personal-information-suite.md)
 > (connector OAuth).
 >
 > The 2022 issue mixed three problems. This document splits them and says
-> where OpenID Connect still belongs.
+> where OpenID Connect and OAuth still belong.
+>
+> **Revision:** an earlier draft parked all OIDC on the closed control plane.
+> That mixed up guardrail #3 (do not phone home to Atomic’s SaaS) with “FOSS
+> nodes must not speak OAuth.” The second claim was wrong. Optional OAuth
+> belongs on the FOSS node; it still must not authorize commits.
 
 ## Goal
 
@@ -21,7 +26,8 @@ or OAuth, where that code would live, and what “Sign in with Google / Okta”
 is allowed to mean.
 
 The 2022 goal — *use an existing account, don’t mint a new one* — is still
-real. The proposed mechanism is not.
+real. The proposed mechanism (server-owned user, extra public keys on an
+HTTP Agent) is not.
 
 ## What #277 assumed (2022)
 
@@ -39,7 +45,7 @@ account lived. OIDC was a way to skip creating that account:
 The issue already knew step 5. Everything else assumed a server-owned user
 record that a public key could be *added to*.
 
-That world is gone.
+That world is gone. The useful part of steps 1–3 is not.
 
 ## What is true now
 
@@ -48,20 +54,21 @@ That world is gone.
 | Agent subject is an HTTP URL on a server | `did:ad:agent:{pubkey}` — the key *is* the identity |
 | Creating an account means creating an Agent on that server | Creating an account means generating a keypair locally. The personal-drive DID is derived from it |
 | A new device registers another public key on the same Agent | A new device imports the **same** secret (or unwraps it from a passkey / recovery envelope). Same-agent AUTH is the trust gate |
-| The server is the identity provider of last resort | The server stores, forwards, and serves. It never signs as the user. FOSS has no email, no portal, no phone-home |
-| “Link agent ↔ user” is a new table | Already exists on the **control plane**: enrollment `agent_subject`, `IdentityReconcileGate`, passkey-wrapped recovery |
+| The server is the identity provider of last resort | The server stores, forwards, and serves. It never signs as the user |
+| “Link agent ↔ user” is a new table | Binding is `(iss, sub) → agent DID + wrapped envelope`. Hosted: control plane. FOSS: the node, when an IdP is configured |
 
-Two identity layers already exist and are independent
+Two identity layers, independent
 ([`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md)):
 
 ```text
 Agent  = Ed25519 keypair in the client. Signs commits, HTTP, WS AUTH, Iroh AUTH.
-Account session = email + cookie on the control plane (atomic-saas).
-                 Pays, enrolls a drive on a managed node, holds the
-                 wrapped recovery envelope. Cannot sign a commit.
+Session = proof to *this node* (or the hosted control plane) that a person
+          may fetch their wrapped envelope / enroll under HostMode.
+          OIDC, magic-link, and passkey assertion are session proofs.
+          None of them can sign a commit.
 ```
 
-OIDC can only ever sit on the second layer. It cannot become the first.
+OIDC sits on the session layer. It cannot become the Agent.
 
 ## Three problems that were one issue
 
@@ -70,217 +77,256 @@ OIDC can only ever sit on the second layer. It cannot become the first.
 Answered. Agents are DIDs; writes are signed commits; reads are
 signed Authentication Resources (cookie / bearer / per-request /
 WS `AUTH` / Iroh `AUTH`). An OIDC access token is not an Atomic
-principal. Putting one in `Authorization` would be a second, weaker
-auth stack next to Ed25519.
+principal. Putting one in `Authorization` on a resource GET would be
+a second, weaker auth stack next to Ed25519.
 
-Do not build this.
+Do not build this. Dedicated OIDC endpoints are a different matter (D1).
 
 ### 2. Human login / recovery — prove you are the same person on a new device
 
-This is the remaining product. It is already shaped:
+This is the remaining product, and it is **not** hosted-only.
 
-- **FOSS:** secret or passkey. Owner is `ATOMIC_OWNER_AGENT`. Invites grant
-  rights to an existing agent. No IdP.
-- **Hosted:** magic-link email creates a control-plane session; that session
-  may create a drive enrollment and store a passkey-wrapped (or recovery-code
-  wrapped) copy of the agent secret. The session does not hold the raw key.
+- **Any node:** secret or passkey. Owner mode: `ATOMIC_OWNER_AGENT`.
+  Invites grant rights to an existing agent.
+- **FOSS node with an IdP configured:** OIDC proves the person to *this*
+  node, which may then hand back the wrapped envelope it already stores
+  for `(iss, sub)`. Same shape as magic-link, no control plane.
+- **Hosted:** the control plane is the session + billing + enrollment
+  directory. Magic-link today; OIDC as another proof. The node still
+  does not sign.
 
-“Sign in with Google” is a **better magic-link**, not a better Agent.
+“Sign in with Google / Keycloak” is a **better magic-link**, not a
+better Agent.
 
-Passkey + PRF (roadmap, [`docs/src/roadmap.md`](../docs/src/roadmap.md)) is
-the higher-leverage version of the same problem: one prompt restores the
-identity without an IdP at all. OIDC does not replace that work. It serves
-orgs that *mandate* an IdP.
+Passkey + PRF (roadmap, [`docs/src/roadmap.md`](../docs/src/roadmap.md))
+is the higher-leverage restore that needs no IdP at all. OIDC does not
+replace it. It serves people whose org *mandates* an IdP, including
+self-hosters.
 
 ### 3. Calling other companies’ APIs — Gmail, Calendar, Graph
 
 OAuth-as-connector. Orthogonal to identity. Already scoped in
 [`personal-information-suite.md`](./personal-information-suite.md) and
-[`importers.md`](./importers.md). Tokens live with the host acquisition
-service, never in the protocol, never as the user’s Atomic credential.
+[`importers.md`](./importers.md). Refresh tokens need an always-on
+process that is not a browser tab — that is FOSS `atomic-server` (or a
+plugin it loads), not the closed control plane.
 
-Do not mix this with #277.
+The Agent that signs the resulting resources is still the user’s DID,
+not `sub` from Google’s userinfo.
 
-A fourth, inverted problem showed up later and is also not #277:
+A fourth, inverted problem is also FOSS and also not #277:
 **Atomic as the authorization server** (an app asks the user to mint an
 issued agent / app key, OAuth-shaped consent, redirect back). That is
-“Sign in *with Atomic*”, not “Sign in to Atomic with Google”. Closed draft
-PR #1275 explored it; it does not belong in this issue.
+“Sign in *with Atomic*”. Closed draft PR #1275 explored it. It belongs
+on the node the user is signed into.
+
+## Why FOSS should speak OAuth
+
+Guardrail #3 in [`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md)
+is: do not put the **control-plane client** (heartbeat, billing, policy
+poll, phone-home to Atomic’s SaaS) in open `atomic-server`. The
+precedent for what *does* belong in FOSS is `AllowlistPolicy` /
+`HostMode` — generic mechanism, populated from **local** config.
+
+Talking to the operator’s own IdP, or to Google as *their* OAuth client,
+is local config. It does not phone home. A university running Keycloak
+next to `atomic-server` is the FOSS audience, not a SaaS upsell.
+
+Park OAuth only on `atomic-saas` and self-hosters with an IdP have to
+run a closed binary to get SSO. That is the wrong cut.
+
+The three OAuth roles that belong on an always-on FOSS node:
+
+| Role | What the node does | Not this |
+| --- | --- | --- |
+| **OIDC relying party** | Validate an ID token from the operator’s IdP; bind `(iss, sub)` to an envelope and optionally to enroll | Treat the token as `x-atomic-*` |
+| **OAuth client** (connectors) | Hold refresh tokens, run sync, commit as the user’s Agent | Use Google `sub` as the Agent |
+| **OAuth authorization server** (later) | Consent + issued agent for a third-party app | Replace the user’s Agent with a bearer token |
+
+None of these require Atomic’s control plane. Hosted product can reuse
+the same RP/envelope code and add billing on top.
 
 ## Decisions
 
-### D1. The data plane does not speak OIDC
+### D1. Commits and resource AUTH do not speak OIDC
 
-`atomic-server`, `atomic_lib`, and the commit / AUTH / invite paths never
-accept, issue, or validate OIDC tokens.
-
-Consequences:
-
-- No `ATOMIC_OIDC_*` env vars on the open server.
-- No `openidconnect-rs` (or equivalent) in this repo.
-- No “if the server has OAuth secrets, show a Google button” branch in
-  `RegisterSignIn` / `GettingStartedFlow` for FOSS.
-- Invite JWTs ([#544](https://github.com/ontola/atomic-server/issues/544))
-  stay what they are: signed grant tokens, not user sessions.
-
-An OIDC token cannot authorize a commit, a `GET`, a WS `AUTH`, or an Iroh
-`AUTH`. Authorization stays
+`POST /commit`, resource `GET`/`PUT`, WS `AUTH`, and Iroh `AUTH` never
+accept an OIDC token. Authorization stays
 [`authorization-sync.md`](./authorization-sync.md): signature + rights +
 (eventually) grant chain.
 
-### D2. Control-plane SSO is the remaining “Sign in with existing account”
+Invite JWTs ([#544](https://github.com/ontola/atomic-server/issues/544))
+stay signed grant tokens, not user sessions.
 
-`atomic-saas` already has a session independent of the agent. Magic-link is
-today’s identity provider. Google / GitHub / a generic OIDC client
-(Keycloak, Okta, Entra, Authentik) replace that hop:
+The server **may** validate OIDC on dedicated endpoints (`/oidc/*`,
+envelope fetch, a session cookie that means “this browser proved an
+IdP identity *to this node*”). That cookie is not `atomic_session` and
+does not pass `check_read` / `check_write`.
 
-```text
-IdP (OIDC)
-  → control-plane session cookie  (same as magic-link today)
-    → unwrap or create the recovery envelope
-      → client holds the agent secret and signs
+### D2. Optional OIDC/OAuth is a FOSS node feature
+
+`atomic-server` grows an optional relying party, configured by the
+operator, advertised on `GET /server` next to `hostMode` /
+`acceptsNewDrives`. Absent config, behaviour is unchanged: no provider
+buttons, no IdP traffic, no Google client id shipped by us.
+
+Suggested env (names not load-bearing):
+
+```env
+ATOMIC_OIDC_ISSUER=https://auth.example.edu
+ATOMIC_OIDC_CLIENT_ID=...
+ATOMIC_OIDC_CLIENT_SECRET=...   # confidential client; public+PKCE is fine too
+ATOMIC_OIDC_BUTTON_LABEL=Sign in with university
 ```
 
-The data-browser already redirects account creation to the portal when
-`accountCreationTarget` says the node is managed. SSO UI lives on the
-portal, not in the FOSS welcome screen. That keeps FOSS guardrail #3
-(control-plane client stays out of open `atomic-server`).
+Discovery: the data-browser asks `/server` “does this node have
+providers?” the same way it already asks `managed` and
+`acceptsNewDrives`. Buttons render only for **this** node’s configured
+IdP. A random FOSS origin never shows “Sign in with Google” using
+Atomic’s own OAuth client.
 
-Linking: one control-plane user ↔ one primary agent, same as
-`IdentityReconcileGate` today. The IdP subject (`sub` + `iss`) is a
-property of the **user row**, not of the Agent resource.
+Flow:
 
-The control plane still must not learn the raw agent secret. Envelope
-wrappers (passkey PRF, recovery code, and — if we ever add it — a
-server-held wrap under a user-specific key the IdP does not have) stay
-the only thing stored. An IdP outage must not be an identity-loss event
-if a passkey or recovery code exists; an IdP compromise must not let the
-attacker sign commits.
+```text
+IdP (operator’s)
+  → node OIDC callback
+    → node session  (not Ed25519; not a resource AUTH)
+      → fetch or store SecretEnvelope keyed by (iss, sub)
+        → client unwraps locally (passkey / recovery / first-run mint)
+          → client holds the agent secret and signs
+```
 
-### D3. FOSS `atomic-server` does not grow an IdP adapter
+First visit: client mints the Agent locally, wraps it, PUT envelope to
+the node under the OIDC session. Returning device: OIDC → GET envelope
+→ unwrap. The node stores ciphertext. It never sees the raw secret, and
+it never derives one from IdP claims.
 
-A public FOSS node’s owner is an agent DID
-([`foss-public-host-mode.md`](./foss-public-host-mode.md)). Collaborators
-arrive via invites. There is no email, no user table, no place to put an
-OIDC `sub`.
+HostMode is unchanged in v1. OIDC does not, by itself, let a stranger
+`createDrive` on an Owner node. Enrollment is still
+`ATOMIC_OWNER_AGENT` (or Open). A later, explicit flag can map an IdP
+group or `email_verified`+domain onto authorized-to-create — that is an
+Owner-mode expansion, not implied by configuring an issuer.
 
-Self-hosted operators who want “employees sign in with Okta” are asking
-for a **control plane**, not a flag on the data plane. Until someone
-builds a separable FOSS account adapter (a new product), the answer is:
-use invites, or run the hosted/control-plane path.
+`atomic-saas` keeps magic-link and billing. It should **reuse** this
+RP/envelope path rather than invent a second one. Managed welcome may
+still send account creation to the portal for plans and payment; the
+token validation and envelope format should not fork.
 
-Do not quietly reintroduce the 2022 `.env` OAuth client on `atomic-server`
-to satisfy this. That would make the node an identity broker, store
-client secrets, and create Agent records from IdP claims — the exact
-coupling DID was meant to kill.
+### D3. Do not mint Agents from `sub`
 
-### D4. SCIM is control-plane user provisioning, not Agent minting
+The coupling DID killed: a server-owned user record that *is* the
+Agent. `(iss, sub)` is a key for the envelope index, not an Agent
+subject, not a `publicKey` on an Agent resource, not a second auth
+stack.
+
+Multi-device stays secret-sharing (or envelope unwrap), not “add another
+public key to the Agent.”
+
+### D4. SCIM is the IdP’s job, or the control plane’s, not the data plane’s
 
 [#277](https://github.com/ontola/atomic-server/issues/277) asked about
-[SCIM](https://scim.cloud/). SCIM creates and deprovisions **users** in
-an org directory. In this model that directory is the control plane.
+[SCIM](https://scim.cloud/). On FOSS, the directory is the operator’s
+IdP. Deprovisioning is “the IdP no longer issues tokens,” so envelope
+fetch fails. Atomic does not need a parallel user table to SCIM into.
 
-SCIM must not mint agent keypairs. A provisioned user is an empty account
-that can later enroll a device (passkey / generated identity).
-Deprovisioning revokes the control-plane session and drive enrollments;
-it cannot un-sign historical commits. Tombstone the user’s access, don’t
-pretend the DID never existed.
+On hosted, SCIM provisions **control-plane** users after orgs exist. It
+must not mint agent keypairs. Deprovisioning revokes session and
+enrollment; it cannot un-sign historical commits.
 
-Sequence: orgs on the control plane, then OIDC, then SCIM. Not before.
+### D5. Connector OAuth is FOSS, and is not identity
 
-### D5. Connector OAuth stays in the importer/host, never in AUTH
+Refresh-token holding, background sync, and provider SDKs belong on
+the always-on node (or a plugin). That is open `atomic-server`, because
+that is the process that stays up. See
+[`personal-information-suite.md`](./personal-information-suite.md).
 
-Google Calendar tokens are not identity. They are credentials for a
-connector process that produces **client-signed** Atomic resources. See
-[`personal-information-suite.md`](./personal-information-suite.md). The
-Agent that signs those resources is still the user’s DID, not `sub` from
-Google’s userinfo endpoint.
+Do not mix connector tokens with the OIDC session in D2. A Google
+Calendar refresh token is not proof of who may read a Drive.
 
-## Why the original flow cannot be repaired
+## Why the original flow cannot be copied
 
-| 2022 step | Why it fails now |
+| 2022 step | Keep / change |
 | --- | --- |
-| Check OAuth secrets in AtomicServer `.env` | Secrets on the data plane; FOSS phone-home / broker role; D1/D3 |
-| Front-end asks the server which providers it supports | FOSS server has no providers. Hosted: ask the **portal** |
-| Client gets a token, server creates a user | Users are not Agents. The client creates the Agent. The server verifies signatures |
-| Attach a public key to the Agent resource | `did:ad:agent:{pubkey}` has exactly one key. A second key is a second Agent. Multi-device is secret-sharing, not key-adding |
-| Store agent ↔ user on the server | Already a control-plane binding. Duplicating it in `atomic-server` splits source of truth |
+| OAuth client in AtomicServer `.env` | **Keep**, as the operator’s IdP (D2). Not a required LogTo/Auth0 |
+| Front-end asks the server which providers it supports | **Keep**, via `GET /server`. No providers ⇒ no buttons |
+| Client gets a token, server creates a user | **Change.** Client creates the Agent. Server stores `(iss, sub) → envelope` |
+| Attach a public key to the Agent resource | **Drop.** `did:ad:agent:{pubkey}` has exactly one key |
+| Store agent ↔ user on the server | **Keep as envelope index**, not as the Agent resource |
 
 The “endpoint for adding a new public key to an Agent” TODO on #277 is
-**done in spirit and obsolete in form**. Device pairing shares the
-existing key; it does not grow a keyring on the Agent class.
+obsolete in form. Device pairing shares the existing key.
 
 Email magic-link as a way to *add keys* ([#276](https://github.com/ontola/atomic-server/issues/276))
-is the same obsolete form. Email proves the control-plane user; it does
-not mutate the Agent resource.
+is the same obsolete form. Email/OIDC prove a session; they do not
+mutate the Agent resource.
 
-## What “Sign in with Google” is allowed to do
+## What “Sign in with {IdP}” is allowed to do
 
 Allowed:
 
-1. Create or resume a **control-plane session** (hosted only).
-2. After that session exists, unlock a wrapped recovery envelope the
-   client already knows how to decrypt with a passkey / recovery code, or
-   start a new local identity and store a new envelope.
-3. Show the portal’s provider buttons, then return to the app with the
-   same `session_token` cookie magic-link already sets.
+1. Create or resume a **node session** after the operator configured
+   that IdP (FOSS) or the portal did (hosted).
+2. Fetch or store a wrapped recovery envelope keyed by `(iss, sub)`.
+   Unwrap still needs passkey / recovery / first-run mint on the client.
+3. Show provider buttons on the welcome screen **of a node that
+   advertised providers**.
 
 Forbidden:
 
 1. Treat an OIDC token as proof of write on a Drive.
-2. Let the IdP or the control plane sign commits, Iroh `AUTH`, or
+2. Let the IdP or the node sign commits, Iroh `AUTH`, or
    HTTP `x-atomic-*` headers.
-3. Derive the agent secret from IdP claims (Google can then impersonate
-   forever; so can anyone who steals the IdP client secret).
-4. Skip passkey / recovery because “they have Google”.
-5. Surface provider buttons on a FOSS welcome screen.
+3. Derive the agent secret from IdP claims.
+4. Skip passkey / recovery because “they have Google.”
+5. Show provider buttons on a node that has not configured an IdP
+   (never ship Atomic’s own Google client to random FOSS instances).
+6. Treat OIDC success as authorized-to-create on an Owner node, unless
+   a separate enroll grant says so.
 
 ## Sequencing
 
-Passkey + PRF restore is on the public roadmap and helps FOSS **and**
-hosted. Control-plane OIDC helps hosted orgs that already have an IdP.
-They do not block each other; passkey is the default restore, OIDC is
-the org login.
+Passkey + PRF restore helps every node and needs no IdP. OIDC is the
+org-login path. Connector OAuth is a different product. They do not
+block each other.
 
-Suggested order, none of it in this repo until the control plane grows
-the IdP client:
+1. This decision (this file).
+2. Passkey PRF as a first-class unwrap of the existing envelope.
+3. **FOSS OIDC relying party** in this repo: env, `/server`
+   advertisement, callback, envelope index, welcome buttons when
+   configured. HostMode enrollment unchanged.
+4. Hosted control plane reuses (3) instead of a parallel SSO.
+5. Optional: IdP group / domain → authorized-to-create (Owner-mode
+   expansion). Explicit flag, fail closed.
+6. Connector OAuth on the node when the personal-information suite
+   needs an always-on token holder.
+7. Optional later: Atomic-as-AS / issued agents. Not this issue.
 
-1. This decision (this file). Retarget #277; do not implement OIDC here.
-2. Passkey PRF as a first-class unwrap of the existing envelope
-   (`encrypted-vault-format.md` already allows additional wrappers).
-3. Generic OIDC on **atomic-saas** (one client config, many IdPs),
-   session cookie unchanged, envelope path unchanged.
-4. Convenience providers (Google, GitHub) as pre-set OIDC clients on
-   the portal.
-5. SCIM after control-plane orgs exist.
-6. Connector OAuth when the personal-information suite needs it.
-7. Optional later: Atomic-as-IdP / issued agents for third-party apps
-   (the inverted OAuth). Not this issue.
-
-The discarded 2022 PR is not a starting point. Joepio already said so on
-the issue; this document is the replacement.
+The discarded 2022 PR is not a starting point. The envelope format
+already is (`lib/src/vault/`).
 
 ## Open questions
 
-1. **Self-hosted SSO without a control plane.** A university running
-   stock `atomic-server` plus Keycloak. D3 says no for v1. A future FOSS
-   “account adapter” would be a separate crate/binary, not env vars on
-   the data plane. Leave closed until someone asks with a design that
-   doesn’t mint Agents from `sub`.
-2. **One IdP user, several Agents.** Today’s reconcile gate assumes one
-   primary. Keep 1:1 for SSO v1. Extra identities are local (anonymous
-   Agents) and unbound to the account.
-3. **Solid WebID-OIDC interop.** [`docs/src/interoperability/solid.md`](../docs/src/interoperability/solid.md)
-   listed “no OIDC” as a gap. The gap is not “Atomic should speak OIDC”;
-   it is “Solid pods authenticate with WebID-OIDC, Atomic authenticates
-   with Ed25519 DIDs”. A mapping layer (if anyone wants Solid interop) is
-   a translator, not a second auth stack inside Atomic. Out of scope
-   here.
+1. **~~Self-hosted SSO without a control plane.~~** Resolved: in scope
+   (D2). University + Keycloak is the motivating case.
+2. **One IdP user, several Agents.** Keep 1:1 `(iss, sub)` → one
+   envelope for v1. Extra identities stay local and unbound.
+3. **Confidential client vs public + PKCE.** Browser welcome wants
+   PKCE (no client secret in the SPA). The node as RP can still be
+   confidential for the callback. Pick at implementation; both are
+   valid.
+4. **Solid WebID-OIDC interop.** The gap is not “Atomic should speak
+   OIDC on every GET”; it is “Solid pods authenticate with WebID-OIDC,
+   Atomic authenticates with Ed25519 DIDs”. A mapping layer is a
+   translator. Out of scope here.
+5. **Managed nodes: OIDC on the node, the portal, or both?** Prefer one
+   RP implementation. UI may still start on the portal because of
+   billing. Do not fork token validation.
 
-## What not to open as follow-up in this repo
+## What not to open as follow-up
 
-- `ATOMIC_OIDC_CLIENT_ID` / LogTo / Auth0 env on `atomic-server`
-- Google button in `GettingStartedFlow` for unmanaged nodes
+- OIDC tokens on `POST /commit` or resource `GET`
 - Multi-public-key Agent resources
 - Server-side JWT sessions as a substitute for signed AUTH
-- SCIM against `atomic-server` itself
+- SCIM against `atomic-server` itself (use the IdP, or the control plane)
+- A hard-coded Atomic-owned Google/GitHub client on unmanaged nodes
+- Requiring `atomic-saas` to get SSO
