@@ -664,6 +664,156 @@ Connector OAuth is a different product.
 The discarded 2022 PR is not a starting point. The envelope format
 already is (`lib/src/vault/`).
 
+## Impact: what actually has to change
+
+Absent IdP config, **nothing changes**. Secret and passkey users never
+see a button. The blast radius is opt-in per node.
+
+With config, this is not a small feature. The OIDC dance is ordinary
+Actix + an OIDC crate. The costly part is **SessionCert in the write
+path**: every replica that accepts a commit must understand “signer is
+a leaf, person is the root.” Get that wrong and either OIDC writes are
+rejected, or a session DID gets into `write` lists and outlives the
+cert.
+
+### How big, honestly
+
+| Layer | Size | Why |
+| --- | --- | --- |
+| Product | Large for orgs / self-hosters who already have Google or Keycloak; zero for everyone else | One-click account is the #277 ask |
+| Protocol | Medium-hard | New cert blob + verify; AUTH identity becomes a chain, not a DID equality |
+| Server RP | Medium | Standard authorization-code; store wrapped roots; export/unlink |
+| Browser | Medium | Welcome button, session key in IDB, attach cert on drain, Settings exit |
+| Flutter / pairing | Later | Same AUTH change, or OIDC users stay HTTPS-to-node only at first |
+| Tests | Must match protocol | Cheap: cert verify vectors. Expensive: one Playwright Google-or-mock-IdP journey |
+
+Comparable to genesis certs (new compact signed blob, dual-accept in
+`validate_signature`), plus an OIDC plugin. Not comparable to “add a
+login button.”
+
+### Protocol and `atomic_lib` (the real work)
+
+- **`SessionCert`** — compact binary next to genesis certs
+  (`planning/genesis-self-verifying.md`): session pubkey, window, root
+  pubkey, root Ed25519 sig.
+- **`Commit::validate_signature`** (`lib/src/commit.rs`) — today the
+  signer DID *is* the key. Session commits: verify session sig, then
+  cert, then `createdAt` inside the window. **Rights use the root
+  DID**, not the session DID (`hierarchy::check_write`,
+  `admit_drive_write`, implicit creator). If `apply_commit` keeps
+  inserting `commit.signer` into `write`, every OIDC browser pollutes
+  ACLs with disposable DIDs — must insert/treat **root**.
+- **Personal drive** is derived from the Agent key
+  (`planning/deterministic-personal-drive.md`). Must use the **root**.
+  A session key in `store.getAgent()` would mint a different home.
+  The client needs two notions: *who I am* (root) vs *what I sign
+  with* (session).
+- **AUTH** (HTTP `x-atomic-*`, WS, Iroh `encode_auth`) — signed by the
+  session key, cert attached or already known. Iroh’s same-agent check
+  (`did:ad:agent:` byte equality) is wrong for two OIDC devices: they
+  are two leaves under one root. That is the pairing/P2P piece.
+- **Invites** already take a pubkey; guest can be a session pubkey if
+  the cert is presented, or they export first. Easiest v1: redeem as
+  root after export, or pass session+cert.
+
+### Server (`atomic-server`)
+
+- Env / clap next to `ATOMIC_OWNER_AGENT`: issuer, client id, secret,
+  button label, redirect (default `https://<ATOMIC_DOMAIN>/oidc/callback`).
+- Boot: OIDC discovery + JWKS. Failure ⇒ advertise no providers, still
+  serve.
+- Routes: `/oidc/start`, `/oidc/callback`, `POST /oidc/session` (issue
+  cert), export (step-up), unlink.
+- `GET /server`: `oidcProviders: [{ label }]` (no secrets).
+- Persist `(iss, sub) → wrapped root` (PluginMeta or a small tree).
+- Cookie `atomic_oidc_session` only for those routes.
+
+No change to Loro, search, or commit apply *except* signer-vs-root
+above.
+
+### Browser
+
+- `accountCreationTarget` / `GettingStartedFlow`: a provider button
+  when `/server` lists one.
+- After callback: mint session key, `POST /oidc/session`, persist
+  session key + cert + **root DID** (public).
+- Drain/`signChanges`: sign as session, attach cert.
+- Settings: export + unlink (D6).
+- Sign-out: drop session key; root was never there.
+
+### What we can phase
+
+1. **HTTP/WS only** — OIDC users talk to this node like today. P2P
+   between two Google logins waits. Still useful.
+2. **Iroh AUTH chain** — two devices, same root, session DIDs differ.
+3. **Flutter** — same session key + cert, or keep using secret/passkey
+   until then.
+
+Export (D6) should ship with v1 or people cannot leave Google.
+
+### Tests (cheapest that can fail)
+
+- Rust: SessionCert vectors; commit signed by leaf accepted iff root
+  has write; expired cert rejected; session DID not inserted into
+  `write`; personal-drive subject ignores session key.
+- Server: mock IdP (or oauth2-mock) for code → cert; export step-up;
+  unlink then Google does not mint a second root.
+- One Playwright `@smoke` only if the first-hour demo will *use* the
+  button; otherwise full suite + mock IdP.
+
+## How an operator sets up OAuth
+
+End users set up nothing. They click **Sign in with Google** (or
+whatever label you set) on a node that already has a client.
+
+The **operator** of `atomic-server` registers a client at the IdP and
+points the node at it.
+
+### Google
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → APIs &
+   Services → Credentials → Create OAuth client ID → Web application.
+2. Authorized redirect URI:
+   `https://<your-domain>/oidc/callback`
+   (localhost: `http://localhost:9885/oidc/callback` or whichever port
+   you actually serve; must match exactly).
+3. Consent screen: External or Internal (Workspace). App name, support
+   email. “Sign in with Google” branding needs their button guidelines.
+4. Copy client id and secret into the node env:
+
+```env
+ATOMIC_OIDC_ISSUER=https://accounts.google.com
+ATOMIC_OIDC_CLIENT_ID=….apps.googleusercontent.com
+ATOMIC_OIDC_CLIENT_SECRET=…
+ATOMIC_OIDC_BUTTON_LABEL=Sign in with Google
+```
+
+5. Restart `atomic-server`. `GET /server` lists the label. Welcome
+   shows the button.
+
+Google’s issuer is a normal OIDC provider
+(`https://accounts.google.com/.well-known/openid-configuration`).
+No special Google SDK.
+
+### Keycloak / Authentik / Entra / any OIDC
+
+Create a **confidential** client, standard authorization code, redirect
+`https://<your-domain>/oidc/callback`. Set
+`ATOMIC_OIDC_ISSUER` to that realm’s issuer URL (the value in
+discovery, not the admin UI home). Same other env vars. Button label
+e.g. `Sign in with university`.
+
+### Operator turning it off
+
+Unset the env, restart. Buttons vanish. Users who never **exported**
+cannot open a new browser. Warn before that. Session certs already
+issued work until `notAfter`.
+
+### What users never do
+
+They do not paste client secrets. They do not register a Google Cloud
+project. They do not configure JWKS. That is all on the node.
+
 ## Open questions
 
 1. **One IdP user, several Agents.** Keep 1:1 `(iss, sub)` → one
