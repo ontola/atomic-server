@@ -81,9 +81,9 @@ Atomic Data's [authentication model](../authentication.md) is more similar to ho
 Atomic identities are [`did:ad:agent:{publicKey}`](../did.md) Agents. Every
 read and write (HTTP, WebSocket, commit) is signed with that Agent's Ed25519
 key. There is no OIDC token in the protocol: an IdP session, if one exists,
-proves a person to a node (or a hosted account) so they can unwrap a recovery
-envelope. It cannot authorize a commit. Solid WebID-OIDC interop would be a
-mapping layer, not a second auth stack.
+proves a person to a node so they can unwrap a recovery envelope. It cannot
+authorize a commit. Solid WebID-OIDC interop would be a mapping layer, not a
+second auth stack.
 
 ## Hierarchy and authorization
 
