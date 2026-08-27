@@ -116,7 +116,7 @@ browser flow; standalone recovery remains self-managed.
 | [`android-data-reuse.md`](./android-data-reuse.md) | **Draft.** One store/agent/Iroh node per Android device. Nothing built. Supersedes `on-device-atomic-daemon.md`. |
 | [`SDK-API-design.md`](./SDK-API-design.md) | SDK / agent DX direction. |
 | [`api-plugins.md`](./api-plugins.md) | **Exploratory, off `develop`** — rebuilding PR #1383 (OpenAPI/OAuth imports) on the plugin model. LocalThought catalog/connect and Syncables typed imports are implemented on `codex/localthought-api-plugins`; live verification awaits proxy #25. |
-| [`oidc-oauth.md`](./oidc-oauth.md) | **Proposal.** OIDC is control-plane SSO, not protocol identity. Data plane stays DID/Ed25519. Retargets [#277](https://github.com/ontola/atomic-server/issues/277). |
+| [`oidc-oauth.md`](./oidc-oauth.md) | **Proposal.** Optional OIDC/OAuth on the FOSS node (operator’s IdP, envelope index). Commits stay Ed25519. Retargets [#277](https://github.com/ontola/atomic-server/issues/277). |
 
 ### Explorations with no code
 
