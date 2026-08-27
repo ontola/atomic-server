@@ -182,6 +182,24 @@
           animation-duration: 3s;
         }
       }
+
+      .loader-status {
+        max-width: 28rem;
+        margin: 1.25rem auto 0;
+        padding: 0 1.5rem;
+        text-align: center;
+        color: var(--text-splash);
+        font-family: 'Open Sans', system-ui, sans-serif;
+        font-size: 0.95rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
+      }
+
+      /* Boot failed: stop the spin so it does not read as still working. */
+      .loader.is-failed .loader-mark,
+      .loader.is-failed .loader-orb {
+        animation: none;
+      }
     </style>
     <!-- Meta tags and code added by Atomic-Server -->
     <!-- { inject_html_head } -->
@@ -220,6 +238,7 @@
           margin-top: 45vh;
         "
         class="loader"
+        aria-busy="true"
       >
         <path
           d="M9.06445 107L41.5125 34.2001H58.1525L90.7045 107H73.0245L46.4005 42.7281H53.0565L26.3285 107H9.06445ZM25.2885 91.4002L29.7605 78.6081H67.2005L71.7765 91.4002H25.2885Z"
@@ -497,6 +516,13 @@
           </linearGradient>
         </defs>
       </svg>
+      <p
+        id="loader-status"
+        class="loader-status"
+        role="status"
+        aria-live="polite"
+        hidden
+      ></p>
     </div>
 
     <script type="module" src="/src/index.tsx"></script>
