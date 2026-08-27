@@ -5,6 +5,8 @@ export type CanvasStroke = {
   color: number;
   width: number;
   path: [number, number][];
+  /** Loro map container id (`cid:…`) from the stroke list. Not serialized. */
+  loroId?: string;
 };
 
 export const DEFAULT_STROKE_WIDTH = 10;
@@ -18,17 +20,24 @@ export const DEFAULT_STROKE_WIDTH = 10;
  * was removed when the ontology moved off `string`; any pre-migration
  * canvas now needs a one-time rewrite.
  */
-export function parseCanvasStrokes(raw: JSONValue | undefined): CanvasStroke[] {
+export function parseCanvasStrokes(
+  raw: JSONValue | undefined,
+  itemIds?: string[],
+): CanvasStroke[] {
   if (!Array.isArray(raw)) {
     return [];
   }
 
   const strokes: CanvasStroke[] = [];
 
-  for (const item of raw) {
-    const stroke = strokeFromJson(item);
+  for (let i = 0; i < raw.length; i++) {
+    const stroke = strokeFromJson(raw[i]);
 
     if (stroke) {
+      if (itemIds?.[i]) {
+        stroke.loroId = itemIds[i];
+      }
+
       strokes.push(stroke);
     }
   }

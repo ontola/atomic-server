@@ -40,7 +40,58 @@ export function useLoroDocSync(
     }
 
     return store.subscribeLoroSync(subject, (update: Uint8Array) => {
-      doc.import(update);
+      resource.importLoroUpdate(update);
     });
-  }, [doc, subject, store]);
+  }, [doc, subject, store, resource]);
+}
+
+/**
+ * Live `LORO_SYNC` of many resources (AI chat messages + their parts).
+ * Subjects that are not yet in the store, or whose Loro doc is not
+ * loaded, are skipped until the next render.
+ */
+export function useLoroSyncForest(subjects: string[]): void {
+  const store = useStore();
+  const key = subjects.join('\0');
+
+  useLayoutEffect(() => {
+    const unsubs: Array<() => void> = [];
+
+    for (const subject of subjects) {
+      const resource = store.resources.get(subject);
+
+      if (!resource) {
+        continue;
+      }
+
+      const doc = resource.getLoroDoc();
+
+      if (!doc) {
+        continue;
+      }
+
+      unsubs.push(
+        doc.subscribeLocalUpdates(bytes => {
+          if (isAIReviewHeld(store, subject)) return;
+
+          store.broadcastLoroSyncUpdate(subject, bytes);
+          resource.markDirty();
+        }),
+      );
+
+      unsubs.push(
+        store.subscribeLoroSync(subject, (update: Uint8Array) => {
+          resource.importLoroUpdate(update);
+        }),
+      );
+    }
+
+    return () => {
+      for (const unsub of unsubs) {
+        unsub();
+      }
+    };
+    // `key` is the subjects list; store is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, store]);
 }

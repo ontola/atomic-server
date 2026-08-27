@@ -1,9 +1,8 @@
 # Loro write paths: stop rewriting what should merge
 
-> **Status:** Active. `Resource.push()` is a real `list.push` (2026-08-27).
-> This iteration: membership *remove*, map identity, and live sync outside
-> the document editor. Remaining: format-level limits Loro itself imposes
-> (MovableList, LoroText, first-touch empty list).
+> **Status:** Active. `push()` / `removeItems` / `moveListItem` /
+> `removeListItemsById` are CRDT list ops. Markdown is `LoroText`. Remaining:
+> MovableList container type, PropVals dual-write (other plan).
 > Companion to [`loro-source-of-truth.md`](./loro-source-of-truth.md) (storage)
 > and [`unify-resource-representations.md`](./unify-resource-representations.md)
 > (browser cache).
@@ -49,42 +48,40 @@ still whole-value rewrites.
 `set()` / `replaceListItems()` remain the explicit replace path (forms that
 reorder, canvas history-scrub, sorted ontology property lists).
 
-## Still naive (format / product; not a silent rewrite)
+## This iteration (delete-by-id, move, unique, LoroText)
 
-These need a datatype or product change, not another `list.push`. Tracked
-here so they are not rediscovered as "we forgot Loro."
-
-- [ ] **Index-based deletes of *objects*** (`removeListItem(i)` on canvas
-      strokes). Loro delete-at-index targets the CRDT id of whatever is at `i`
-      *now*. A stale session can erase the wrong stroke. Fix: delete by
-      container id, not integer. Overlay undo in `CanvasPage` still thinks in
-      snapshots; see [`canvas-undo-consolidation.md`](./canvas-undo-consolidation.md).
-- [ ] **Reorder** (`InputResourceArray` drag, kanban card order) rewrites the
-      list. Loro `MovableList` is the type (`loro.rs` `movable_list_for_kanban`
-      test only). Migrating stored `ResourceArray` order would change the
-      container type.
-- [ ] **`unique: true` is local.** Concurrent unique-push of the *same* subject
-      can still duplicate. A real CRDT set would be a `LoroMap` of URL → unit,
-      which is not `ResourceArray`. `removeItems` deletes every match, so a
-      later revoke still works.
-- [ ] **First append on a missing property.** Two peers each `insert_container`
-      a new list; the map entry is LWW and one list can drop. Empty lists are
-      not persisted by Loro (see `empty_required_array_is_dropped_from_genesis`),
-      so genesis cannot seed identity. Unfixable without a Loro change or a
-      dummy op on every array property at creation.
-- [ ] **`LoroText` for markdown / description / chat bodies.** Those properties
-      are LWW string registers. Only `documentContent` is collaborative text.
-      Switching datatype would migrate every name/description snapshot.
-- [ ] **AI streaming tokens** live in `useChat` until the turn finishes. A
-      collaborative stream wants `LoroText` on the message resource, plus
-      `useLoroDocSync` on each message — not just the parent `messages` list.
-- [ ] **Human chatrooms** already avoid a shared child-list (parent pointer +
+- [x] Canvas erase deletes stroke *containers by id*, not `replaceListItems`
+      of a stale snapshot. `removeListItem(i)` stays for callers that only
+      have an index. Overlay undo still thinks in snapshots —
+      [`canvas-undo-consolidation.md`](./canvas-undo-consolidation.md).
+- [x] `Resource.moveListItem` — `list.delete` + `list.insert` on the existing
+      LoroList (InputResourceArray drag). Not Loro `MovableList`: migrating
+      stored `ResourceArray` would change the container type. Kanban already
+      uses per-card fractional `sortOrder` (no shared list).
+- [x] `unique: true` writes datatype tag `resourceArrayUnique`. After a remote
+      import, duplicate string elements are deleted (keep first). Concurrent
+      unique-push of the same subject converges to one. A real CRDT set
+      (LoroMap of URL → unit) would drop order — not ResourceArray.
+- [x] New empty lists get a dummy push+delete so Loro persists the container.
+      Legacy snapshots still drop op-less empties
+      (`empty_required_array_is_dropped_from_genesis`). Two peers who both
+      *mint* a list before sharing a snapshot can still LWW; genesis that
+      includes the dummy op gives later appends a shared identity.
+- [x] Markdown / `description` writes a `LoroText` (prefix/suffix splice),
+      not an LWW string. Names, slugs, dates stay registers. Legacy string
+      registers convert on first markdown write.
+- [x] AI stream: persist the assistant message when tokens start, splice
+      `description` on the text part as LoroText, live-sync each message and
+      its parts. `onFinish` updates the existing resource instead of minting
+      a second one.
+- [x] Human chatrooms already avoid a shared child-list (parent pointer +
       query). Do not "fix" them onto `messages[]`.
-- [ ] **`CommitBuilder.push_propval`** still puts a full array on `set`. Fine
-      for genesis `isA`. Incremental use would drop items the builder does not
-      hold. Callers should `Resource::push`.
+- [x] `CommitBuilder.push_propval` callers are genesis `isA` only (chatroom
+      plugin). Incremental use is `Resource::push`.
 - [ ] **PropVals dual-write, untagged heuristic, Flutter undo trees** — already
       [`loro-source-of-truth.md`](./loro-source-of-truth.md).
+- [ ] **Loro `MovableList` container type** — would change stored ResourceArray
+      identity; not migrated. `moveListItem` is delete+insert on `LoroList`.
 
 ## How to write arrays from here
 
@@ -92,8 +89,10 @@ here so they are not rediscovered as "we forgot Loro."
 | --- | --- |
 | Append subject(s) | `push(prop, values, unique?)` |
 | Remove subject(s) | `removeItems(prop, values)` |
-| Replace / reorder / scrub | `set()` / `replaceListItems()` |
+| Move one subject | `moveListItem(prop, from, to)` |
+| Replace / scrub | `set()` / `replaceListItems()` |
 | Append JSON object (canvas) | `pushListItem` |
+| Delete JSON object by container id | `removeListItemsById` |
 | Delete JSON object by index | `removeListItem` (stale-index caveat) |
 
 Do not build `[...existing, x]` and `set()` it. Do not `set(existing.filter)`.

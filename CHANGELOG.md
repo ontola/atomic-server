@@ -13,7 +13,10 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   matching list elements by CRDT position (same merge for concurrent
   removes). `set_property` reuses list identity for arrays and map
   identity for `Json` objects / `LocalizedText` so a full replace does
-  not fork a second container.
+  not fork a second container. Markdown / `description` is a `LoroText`
+  (prefix/suffix splice). Unique arrays tag `resourceArrayUnique` and
+  drop duplicate subjects after import. Empty lists persist via a dummy
+  push+delete so later appends share identity.
 - The outbox drains over a live Iroh link too (`sync::peer::LivePeerCommitTransport`):
   a device with no hub in reach delivers its queued writes to a paired peer as
   signed `COMMIT` frames, which the peer validates and applies like a hub
