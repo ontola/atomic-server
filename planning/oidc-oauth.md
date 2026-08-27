@@ -302,7 +302,10 @@ over HTTPS. The app `saveAgentToIDB`, builds `atomic_session`. Same
 Agent as the first device. No second prompt.
 
 This endpoint is the whole prize: no-cache, httpOnly cookie, short
-TTL, audit log, rate limit. It is “download my signing key after SSO.”
+TTL, audit log, rate limit. It is “download my signing key after SSO,”
+and it is dangerous for the reasons in
+[Is this a good pattern?](#is-this-a-good-pattern). A session/issued
+agent with TTL is the same button with a bounded blast radius.
 
 ### 5. After that, Atomic is unchanged
 
@@ -331,6 +334,86 @@ same as a copied secret JSON. Historical commits stay valid.
 After the client has the Agent, `createDrive` is still
 `admit_drive_write`. On an Owner node that means the Agent DID must
 be `ATOMIC_OWNER_AGENT`. OIDC success is not a Drive grant.
+
+## Is this a good pattern?
+
+Split the question. The **login** is conventional. The **thing we hand
+the browser** is not, and that is where the danger lives.
+
+### The login is conventional
+
+“Sign in with the company IdP, nothing else to memorize” is how almost
+every org app works. Password-manager SSO, “trusted device after Okta,”
+Vault/KMS unwrap-after-OIDC, and “Sign in with Google” crypto wallets
+(Magic, Privy, Web3Auth) all do a version of this. Users who asked for
+#277 are asking for that, not for a second factor we invented.
+
+Passkeys are the other conventional “nothing to memorize” login. They
+keep the secret in the authenticator. OIDC-only cannot: the IdP has no
+hardware key to give us, so **someone we host** has to be able to
+unwrap. That someone is this node.
+
+### Releasing the root Agent is unconventional, and it is dangerous
+
+OIDC is designed to mint **short-lived, revocable** access tokens.
+Atomic Agents are **long-lived and non-rotatable**: the DID *is* the
+public key. `SecretEnvelope` already treats that as load-bearing
+(“an Ed25519 agent key can never be rotated”).
+
+`GET /oidc/secret` turns a session proof into that immortal key. After
+one successful download:
+
+| Event | Conventional OIDC app | This pattern |
+| --- | --- | --- |
+| Stolen session cookie | Attacker acts until expiry / revoke | Attacker has the Agent **forever** |
+| IdP admin impersonates | They get a session; revoke ends it | They can download the signing key |
+| Node disk + KEK stolen | Reset passwords, drop sessions | Every OIDC user’s identity leaks |
+| XSS on the origin | Session token, bounded | Signing key in JS, unbounded |
+| Deprovision in the IdP | Immediate on the server | New browsers blocked; every device that already unwrapped keeps working |
+
+That last row is not a bug in the walkthrough. It is what “the key
+*is* the person” means. Deprovision cannot un-sign history, and it
+cannot reach a laptop that already has the secret.
+
+So: **good as a login, bad as a key-distribution protocol.** Shipping
+the root Agent to JS after SSO is the social-login-wallet pattern.
+Security engineers dislike it for the table above; product engineers
+ship it because the UX is what people wanted. Both reads are true.
+
+### The less dangerous sibling (same UX)
+
+Keep the one-click OIDC button. Do **not** give the browser the root
+secret.
+
+```text
+IdP
+  → node checks ID token
+    → node (holding the root Agent) mints a short-lived device/session
+      key — an issued agent with TTL and scoped rights
+      → browser signs as that session agent
+        → root never leaves the node (ideally: node KEK in OS keyring / HSM)
+```
+
+Revoke = stop issuing, wait for TTL. XSS steals a key that expires.
+New device = new session key, not another copy of the root. This is
+how SSH certificates, SPIFFE, and cloud IAM already work. It needs
+issued/session agents as a real protocol object (draft PR #1275 was
+the app-key version of the same shape). Until that exists, OIDC-only
+has to choose: delay the feature, or accept root-key release and the
+table above.
+
+v1 in [How it works](#how-it-works) still describes root-key release
+because it is implementable on today’s Agent. It is not the shape we
+should be proud of. Prefer session keys if that work lands first; if
+we ship root release anyway, the endpoint is a key-exfiltration API
+and must be treated like one (HTTPS-only, no cache, short cookie TTL,
+audit, rate limit, no derive-from-`sub`).
+
+### What this is not
+
+It is not “OIDC as Atomic AUTH.” Commits still need an Ed25519
+signature. The danger is **custody of that key**, not a second auth
+stack on `GET`.
 
 ## Why the original flow cannot be copied
 
@@ -383,9 +466,12 @@ node) are both “nothing to memorize.” They do not block each other.
 Connector OAuth is a different product.
 
 1. This decision (this file).
-2. **OIDC relying party** in this repo: env, `/server` advertisement,
-   callback, node-held KEK wrap, `GET /oidc/secret` releases the Agent.
-   HostMode enrollment unchanged. First-run UX is one button.
+2. **Prefer session/issued agents** if that protocol work is available:
+   OIDC mints a TTL key; root stays on the node. Same one-click UX.
+3. Else **OIDC relying party + root-key release** (the walkthrough):
+   env, `/server`, callback, node-held KEK, `GET /oidc/secret`. Treat
+   that endpoint as key exfiltration. HostMode enrollment unchanged.
+   First-run UX is one button.
 3. Optional extra wrappers (passkey / recovery) on the same envelope,
    offered after login, not required.
 4. Optional: IdP group / domain → authorized-to-create (Owner-mode
