@@ -51,6 +51,62 @@ describe('resource.ts', () => {
     ).toStrictEqual([testsubject, testsubject2, testsubject, testsubject]);
   });
 
+  /**
+   * `push()` used to go through `loroSetProperty`, which deleted every list
+   * item and re-inserted the whole array. Two peers appending then minted
+   * new IDs for the shared prefix and the merge duplicated it. A real
+   * `list.push` keeps both new subjects and the original once.
+   */
+  it('concurrent push() appends merge without duplicating the prefix', async ({
+    expect,
+  }) => {
+    const prop = 'https://atomicdata.dev/properties/subresources';
+    const a = 'https://example.com/a';
+    const b = 'https://example.com/b';
+    const c = 'https://example.com/c';
+
+    const base = new Resource('https://example.com/chat');
+    base.push(prop, [a]);
+    const snapshot = base.getLoroDoc()!.export({ mode: 'snapshot' });
+
+    const peerA = new Resource('https://example.com/chat');
+    peerA.importLoroUpdate(snapshot);
+    peerA.push(prop, [b]);
+
+    const peerB = new Resource('https://example.com/chat');
+    peerB.importLoroUpdate(snapshot);
+    peerB.push(prop, [c]);
+
+    peerA.importLoroUpdate(peerB.getLoroDoc()!.export({ mode: 'snapshot' }));
+
+    const merged = peerA.get(prop) as string[];
+    expect(merged).toHaveLength(3);
+    expect(merged).toEqual(expect.arrayContaining([a, b, c]));
+    expect(new Set(merged).size).toBe(3);
+  });
+
+  it('push() keeps the same LoroList container', async ({ expect }) => {
+    const prop = 'https://atomicdata.dev/properties/subresources';
+    const resource = new Resource('https://example.com/chat');
+    resource.push(prop, ['https://example.com/a']);
+
+    const doc = resource.getLoroDoc()!;
+    const originalListId = (
+      doc.getMap('properties').get(prop) as unknown as { id?: string }
+    )?.id;
+
+    resource.push(prop, ['https://example.com/b']);
+
+    const newListId = (
+      doc.getMap('properties').get(prop) as unknown as { id?: string }
+    )?.id;
+    expect(newListId).toBe(originalListId);
+    expect(resource.get(prop)).toEqual([
+      'https://example.com/a',
+      'https://example.com/b',
+    ]);
+  });
+
   it('getCreatedAt / getCreatedBy read the genesis change, surviving a snapshot round-trip', async ({
     expect,
   }) => {

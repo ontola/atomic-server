@@ -7,6 +7,12 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Fix: `Resource::push` now appends to the existing Loro list instead of
+  rewriting the whole array. Two peers adding items to the same
+  `ResourceArray` keep both items. `set_property` for arrays reuses the
+  list container (same identity fix the TypeScript client already had)
+  so a full replace does not fork a second list.
+
 - Git / CI: one integration branch (`develop`) plus stable `v*` tags. Staging
   follows `develop`; production and live docs follow a tagged release. `master`
   is no longer a deploy or docs trigger, and `main` is not introduced as a

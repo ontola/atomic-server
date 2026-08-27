@@ -411,11 +411,11 @@ impl AtomicLoroDoc {
                     .map_err(|e| format!("Loro set error: {e}"))?;
             }
             Value::ResourceArray(arr) => {
-                // Use native LoroList for arrays — enables per-element CRDT merge.
-                let list = root
-                    .insert_container(property, loro::LoroList::new())
-                    .map_err(|e| format!("Loro insert_container error: {e}"))?;
-
+                // Native LoroList, reused in place. Minting a new container on
+                // every `set` forked list identity so concurrent appends and
+                // snapshot imports merged two lists (order flash / duplicates).
+                let list = get_or_create_list(&root, property)?;
+                clear_list(&list)?;
                 for item in arr {
                     list.push(item.to_string())
                         .map_err(|e| format!("Loro list push error: {e}"))?;
@@ -429,9 +429,8 @@ impl AtomicLoroDoc {
                     json_value_to_loro_map(json_val, &map)?;
                 }
                 serde_json::Value::Array(arr) => {
-                    let list = root
-                        .insert_container(property, loro::LoroList::new())
-                        .map_err(|e| format!("Loro insert_container error: {e}"))?;
+                    let list = get_or_create_list(&root, property)?;
+                    clear_list(&list)?;
                     for item in arr {
                         json_value_to_loro_list_item(item, &list)?;
                     }
@@ -482,18 +481,7 @@ impl AtomicLoroDoc {
     /// Push a JSON item to a property's LoroList.
     /// Creates the list if it doesn't exist. Does NOT replace existing items.
     pub fn push_to_loro_list(&self, property: &str, item: &serde_json::Value) -> AtomicResult<()> {
-        let root = self.doc.get_map("properties");
-
-        // Get or create the LoroList for this property
-        let list = match root.get(property) {
-            Some(loro::ValueOrContainer::Container(c)) => c
-                .into_list()
-                .map_err(|_| format!("{property} is not a list"))?,
-            _ => root
-                .insert_container(property, loro::LoroList::new())
-                .map_err(|e| format!("Loro insert_container error: {e}"))?,
-        };
-
+        let list = get_or_create_list(&self.doc.get_map("properties"), property)?;
         json_value_to_loro_list_item(item, &list)?;
         Ok(())
     }
@@ -1067,6 +1055,28 @@ fn json_value_to_loro_map(json: &serde_json::Value, map: &loro::LoroMap) -> Atom
     Ok(())
 }
 
+/// Get the existing LoroList for `property`, or insert an empty one.
+/// Reusing the container keeps list-item identities stable across `set`
+/// (full replace) so concurrent `push` ops still target the same list.
+fn get_or_create_list(root: &loro::LoroMap, property: &str) -> AtomicResult<loro::LoroList> {
+    if let Some(loro::ValueOrContainer::Container(c)) = root.get(property) {
+        if let Ok(list) = c.into_list() {
+            return Ok(list);
+        }
+    }
+    root.insert_container(property, loro::LoroList::new())
+        .map_err(|e| format!("Loro insert_container error: {e}").into())
+}
+
+fn clear_list(list: &loro::LoroList) -> AtomicResult<()> {
+    let len = list.len();
+    if len > 0 {
+        list.delete(0, len)
+            .map_err(|e| format!("Loro list delete error: {e}"))?;
+    }
+    Ok(())
+}
+
 /// Push a JSON value into a LoroList.
 fn json_value_to_loro_list_item(
     json: &serde_json::Value,
@@ -1242,6 +1252,7 @@ fn loro_value_to_json(lv: &loro::LoroValue) -> serde_json::Value {
 mod test {
     use super::*;
     use crate::Storelike;
+    use loro::ContainerTrait;
 
     fn get_doc_property(doc: &AtomicLoroDoc, prop: &str) -> Option<Value> {
         let props = doc.get_all_properties();
@@ -2732,6 +2743,88 @@ mod test {
         }
 
         println!("TEST PASSED: concurrent Json pushes merge correctly");
+    }
+
+    #[test]
+    fn resource_array_concurrent_push_merges() {
+        let prop = "https://atomicdata.dev/properties/children";
+
+        let base = AtomicLoroDoc::new();
+        base.set_property(
+            prop,
+            &Value::ResourceArray(vec!["https://example.com/a".into()]),
+        )
+        .unwrap();
+        base.doc().commit();
+        let base_snapshot = base.export_snapshot();
+
+        let doc_a = AtomicLoroDoc::from_snapshot(&base_snapshot).unwrap();
+        doc_a
+            .push_to_loro_list(prop, &serde_json::json!("https://example.com/b"))
+            .unwrap();
+        doc_a.doc().commit();
+
+        let doc_b = AtomicLoroDoc::from_snapshot(&base_snapshot).unwrap();
+        doc_b
+            .push_to_loro_list(prop, &serde_json::json!("https://example.com/c"))
+            .unwrap();
+        doc_b.doc().commit();
+
+        doc_b.import_update(&doc_a.export_snapshot()).unwrap();
+        let merged = get_doc_property(&doc_b, prop).unwrap();
+        match merged {
+            Value::ResourceArray(arr) => {
+                assert_eq!(arr.len(), 3, "got {arr:?}");
+                let s: Vec<String> = arr.iter().map(|x| x.to_string()).collect();
+                assert!(s.contains(&"https://example.com/a".into()));
+                assert!(s.contains(&"https://example.com/b".into()));
+                assert!(s.contains(&"https://example.com/c".into()));
+            }
+            other => panic!("Expected ResourceArray, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn set_property_resource_array_keeps_list_identity() {
+        let prop = "https://atomicdata.dev/properties/children";
+        let doc = AtomicLoroDoc::new();
+        doc.set_property(
+            prop,
+            &Value::ResourceArray(vec!["https://example.com/a".into()]),
+        )
+        .unwrap();
+        doc.doc().commit();
+
+        let id_before = {
+            let root = doc.doc().get_map("properties");
+            match root.get(prop) {
+                Some(loro::ValueOrContainer::Container(c)) => c.id(),
+                other => panic!("expected list container, got {other:?}"),
+            }
+        };
+
+        doc.set_property(
+            prop,
+            &Value::ResourceArray(vec![
+                "https://example.com/a".into(),
+                "https://example.com/b".into(),
+            ]),
+        )
+        .unwrap();
+        doc.doc().commit();
+
+        let id_after = {
+            let root = doc.doc().get_map("properties");
+            match root.get(prop) {
+                Some(loro::ValueOrContainer::Container(c)) => c.id(),
+                other => panic!("expected list container, got {other:?}"),
+            }
+        };
+
+        assert_eq!(
+            id_before, id_after,
+            "set_property on a ResourceArray must reuse the LoroList container"
+        );
     }
 
     #[test]

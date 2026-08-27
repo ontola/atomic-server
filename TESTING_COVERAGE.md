@@ -227,6 +227,18 @@ Recorded because each one cost real debugging time.
   damage from a stale editing session comes from *reads* — index-based deletes
   and whole-list rewrites — not from the append. A test written the obvious way
   passes with and without the fix.
+
+- **`Resource.push()` was a whole-list rewrite, not a CRDT append.** Arrays
+  have been native `LoroList`s since 2026-04 (`loro list update`), and canvas
+  `pushListItem` / `push_list_item` really do `list.push`. The older
+  `Resource.push()` (AI chat `messages`, rights, plugins, `isA`, …) still
+  built `[...existing, ...new]` and wrote the whole array back — TS via
+  `writeLoroListInPlace` (delete all + re-insert), Rust via `set_property`
+  which minted a *new* list container. Concurrent appends duplicated the
+  prefix (or forked list identity). Guard: `resource.test.ts` ("concurrent
+  push() appends merge"), `resources.rs::resource_array_concurrent_push_merges`,
+  `loro.rs::resource_array_concurrent_push_merges` and
+  `set_property_resource_array_keeps_list_identity`.
 - **A test child process must not drop its `Db`.** redb's `Database::drop`
   closes cleanly and makes pending `Durability::None` commits durable, so a
   durability test that lets the store drop is testing a graceful shutdown.

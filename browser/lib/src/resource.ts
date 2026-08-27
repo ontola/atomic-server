@@ -944,6 +944,9 @@ export class Resource<C extends OptionalClass = any> {
       // original list (OPFS cold-load, WS GET) merges two concurrent lists
       // and the array order flashes — table columns (`requires`/`recommends`)
       // and sidebar `isA` were the visible cases.
+      //
+      // This is the *replace* path (`set()`). Appends must use `push()` /
+      // `pushListItem()`, which `list.push` onto this same container.
       this.writeLoroListInPlace(map, prop, value);
     } else {
       // Objects: serialize to JSON string.
@@ -2332,7 +2335,12 @@ export class Resource<C extends OptionalClass = any> {
     this.store.removeResource(this.subject);
   }
 
-  /** Appends a Resource to a ResourceArray */
+  /** Appends items to a ResourceArray without rewriting the existing list.
+   *
+   * Records a Loro `list.push` per new item on the existing container so
+   * two peers appending at once keep both items. `set()` / `replaceListItems`
+   * still rewrite; this is the append path the Loro list migration was for.
+   */
   public push(propUrl: string, values: JSONArray, unique?: boolean): void {
     const propVal = (this.get(propUrl) as JSONArray) ?? [];
 
@@ -2342,11 +2350,17 @@ export class Resource<C extends OptionalClass = any> {
         .filter((value, index, self) => self.indexOf(value) === index);
     }
 
-    // Build a new array so that the reference changes. This is needed in most UI frameworks.
+    if (values.length === 0) {
+      return;
+    }
+
+    // New array reference so UI frameworks see a change.
     const newArray = [...propVal, ...values];
-    this.loroSetProperty(propUrl, newArray);
+    this.appendItemsToLoroList(propUrl, propVal, values);
+    this.#cache[propUrl] = newArray;
     this.#cacheDirty = true;
     this._dirty = true;
+    this.eventManager.emit(ResourceEvents.LocalChange, propUrl, newArray);
   }
 
   /**
@@ -2379,49 +2393,7 @@ export class Resource<C extends OptionalClass = any> {
     this.#cacheDirty = true;
     this._dirty = true;
 
-    const map = this.getLoroMap();
-
-    if (!map) {
-      return;
-    }
-
-    const { LoroList, LoroMap } = LoroLoader.Loro;
-    const existing = map.get(propUrl);
-
-    const append = (list: LoroList, value: JSONValue) => {
-      if (
-        value !== null &&
-        typeof value === 'object' &&
-        !Array.isArray(value)
-      ) {
-        const itemMap = list.pushContainer(new LoroMap());
-        this.writeJsonToLoroMap(itemMap, value as JSONObject);
-      } else {
-        list.push(value);
-      }
-    };
-
-    // A real LoroList container exposes `pushContainer`; a plain-array VALUE
-    // (e.g. strokes seeded via `.set()` rather than appended incrementally)
-    // only has `push`. Appending to the latter as if it were a container
-    // throws "pushContainer is not a function". Promote it to a fresh
-    // container seeded with its existing items, then append.
-    if (
-      existing &&
-      typeof existing === 'object' &&
-      'pushContainer' in existing
-    ) {
-      append(existing as LoroList, item);
-    } else {
-      const list = map.setContainer(propUrl, new LoroList());
-
-      for (const el of propVal) {
-        append(list, el);
-      }
-
-      append(list, item);
-    }
-
+    this.appendItemsToLoroList(propUrl, propVal, [item]);
     this.commitLoroEdit();
     this.eventManager.emit(
       ResourceEvents.LocalChange,
@@ -2520,6 +2492,45 @@ export class Resource<C extends OptionalClass = any> {
         this.writeJsonToLoroMap(nested, value as JSONObject);
       }
     }
+  }
+
+  /**
+   * Append `items` onto the property's LoroList without clearing it.
+   * Creates the list (seeded with `alreadyPresent`) if the property is not
+   * yet a list container. `set()` / `replaceListItems` still rewrite.
+   */
+  private appendItemsToLoroList(
+    propUrl: string,
+    alreadyPresent: JSONValue[],
+    items: JSONValue[],
+  ): void {
+    const map = this.getLoroMap();
+
+    if (!map || items.length === 0) {
+      return;
+    }
+
+    const { LoroList: LoroListClass } = LoroLoader.Loro;
+    const existing = map.get(propUrl);
+
+    let list: LoroList;
+
+    // A real LoroList container exposes `pushContainer`; a plain-array VALUE
+    // (e.g. strokes seeded via `.set()` rather than appended incrementally)
+    // only has `push`. Promote it to a container seeded with its existing
+    // items, then append.
+    if (
+      existing &&
+      typeof existing === 'object' &&
+      'pushContainer' in existing
+    ) {
+      list = existing as LoroList;
+    } else {
+      list = map.setContainer(propUrl, new LoroListClass());
+      this.writeJsonToLoroList(list, alreadyPresent);
+    }
+
+    this.writeJsonToLoroList(list, items);
   }
 
   /**
