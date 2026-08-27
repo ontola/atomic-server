@@ -73,7 +73,7 @@ Remaining work, not "this file exists."
 | [`SDK-API-design.md`](./SDK-API-design.md) | SDK / agent DX direction. |
 | [`plugins.md`](./plugins.md) | **Partial** — one plugin model (`run` end to end, per-app agents, unattended runs). The code lives on `feat/plugin-model` (PR #1307), not `develop`. Absorbed `llm-wasm-gui-plugins.md`, `importers.md`, `habits-app.md` (2026-09-01); the habits RPC-`query` blocker is a line in it. |
 | [`personal-information-suite.md`](./personal-information-suite.md) | Exploration: contacts, calendar, email. |
-| [`oidc-oauth.md`](./oidc-oauth.md) | **Proposal.** OIDC is control-plane SSO, not protocol identity. Data plane stays DID/Ed25519. Retargets [#277](https://github.com/ontola/atomic-server/issues/277). |
+| [`oidc-oauth.md`](./oidc-oauth.md) | **Proposal.** Optional OIDC/OAuth on the FOSS node (operator’s IdP, envelope index). Commits stay Ed25519. Retargets [#277](https://github.com/ontola/atomic-server/issues/277). |
 | [`social-apps.md`](./social-apps.md) | Requirements for social-network-shaped apps. Companion to `zones.md`. |
 | [`android-data-reuse.md`](./android-data-reuse.md) | **Draft.** One store/agent/Iroh node per Android device. Supersedes `on-device-atomic-daemon.md` (deleted 2026-09-01; desktop remainder is a note in `virtual-drive.md`). |
 | [`nextgraph-interop.md`](./nextgraph-interop.md) | **Proposal.** `did:ng:` via a scheme-routed Store backend. |
