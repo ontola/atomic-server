@@ -81,9 +81,9 @@ Atomic Data's [authentication model](../authentication.md) is more similar to ho
 Atomic identities are [`did:ad:agent:{publicKey}`](../did.md) Agents. Every
 read and write (HTTP, WebSocket, commit) is signed with that Agent's Ed25519
 key. There is no OIDC token in the protocol: an IdP session, if one exists,
-proves a person to a node so that node can release their Agent secret. It
-cannot authorize a commit. Solid WebID-OIDC interop would be a mapping
-layer, not a second auth stack.
+proves a person to a node so that node can certify a short-lived session
+Agent. It cannot authorize a commit. Solid WebID-OIDC interop would be a
+mapping layer, not a second auth stack.
 
 ## Hierarchy and authorization
 
@@ -148,7 +148,7 @@ Here's a list of things missing in Atomic Data, with links to their open issues 
 
 - No inbox or [notifications](https://www.w3.org/TR/ldn/) yet ([issue](https://github.com/ontola/atomic-data/issues/28))
 - No WebID-OIDC. Atomic authenticates with Ed25519 agent DIDs, not OIDC
-  tokens. Optional “Sign in with {IdP}” on a node releases the Agent secret
-  after SSO; it is not protocol identity
+  tokens. Optional “Sign in with {IdP}” issues a short-lived session Agent
+  certified by a root that stays on the node; it is not protocol identity
   ([issue](https://github.com/ontola/atomic-server/issues/277)).
 - No support from a big community, a well-funded business or the inventor of the world wide web.
