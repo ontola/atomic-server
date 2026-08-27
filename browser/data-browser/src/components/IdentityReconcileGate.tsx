@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useStore } from '@tomic/react';
 import { useLocation, useNavigate } from '@tanstack/react-router';
 import { useSettings } from '../helpers/AppSettings';
@@ -12,6 +18,7 @@ import {
   syncDeviceDirectory,
   writeManagedAccountBinding,
 } from '../helpers/managed';
+import { hideBootSplash } from '../helpers/waitForEmbeddedServer';
 import { paths } from '../routes/paths';
 import { Button } from './Button';
 import { Column } from './Row';
@@ -181,6 +188,14 @@ export function IdentityReconcileGate({
       void converge();
     }
   }
+
+  // The HTML splash lives outside `#root` so this gate's empty first paint
+  // does not blank the screen. Fade it once we are about to show children.
+  useLayoutEffect(() => {
+    if (skip || !checking) {
+      hideBootSplash();
+    }
+  }, [skip, checking]);
 
   if (skip) {
     return <>{children}</>;

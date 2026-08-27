@@ -19,7 +19,7 @@ import {
  * `pretendToBeTheApp` proxies that origin to `SERVER_URL` when they differ
  * (dagger CI). Boot now calls `node_status` (invoke) and falls back to HTTP
  * if invoke is missing, so an empty stand-in object is still sufficient —
- * the test server is already up, the splash wait resolves on the first GET.
+ * the test server is already up, the splash wait resolves on the first HEAD.
  *
  * `/iroh-sync` is intercepted rather than dialled for real: what is under test
  * is how the UI reports an outcome, and the endpoint itself is covered against

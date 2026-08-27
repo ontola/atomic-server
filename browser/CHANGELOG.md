@@ -8,7 +8,10 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   accepting connections, instead of rendering the app against a port that is
   not listening yet (and landing on "Could not reach the server"). A node that
   fails to start (for example another atomic-server holding the data directory)
-  shows the reason on the splash rather than spinning forever.
+  shows the reason on the splash rather than spinning forever. First paint is
+  faster: HTTP binds without waiting on the Iroh relay, the splash lives
+  outside `#root` so React does not blank it, unused WASM preloads are omitted
+  from the Tauri shell, and readiness uses IPC (HEAD only as the e2e fallback).
 - Local Thought connections install a folder after one access check and import in the browser without a preview dialog. Opening the folder or a table refreshes automatically, with five-minute refreshes while open, visible sync status, and local-edit preservation.
 - Fork bar: "Review changes" opens the per-property diff (the original's current value against the fork's) and names the properties the original also changed since the fork, so a reviewer sees what a merge writes over instead of a count.
 - A dashboard is reachable from its table: "Add view" offers **Dashboard**, which creates an empty Dashboard as a child of the table and shows it as a tab (`view-kind: dashboard`, `view-dashboard`). Switching an existing tab to Dashboard does the same. The Dashboard stays a resource of its own, so a Drive page or a document can still embed it.
