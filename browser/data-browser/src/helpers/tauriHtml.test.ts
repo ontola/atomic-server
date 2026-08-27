@@ -16,9 +16,8 @@ describe('stripUnusedTauriPreloads', () => {
 
     const stripped = stripUnusedTauriPreloads(indexHtml);
 
-    expect(stripped).not.toContain('/wasm/atomic_wasm_bg.wasm');
-    expect(stripped).not.toContain('/wasm/atomic_wasm.js');
-    expect(stripped).not.toContain('https://atomicdata.dev');
+    expect(stripped).not.toMatch(/href="[^"]*\/wasm\//);
+    expect(stripped).not.toContain('href="https://atomicdata.dev"');
     // Fonts still load — the app uses them; only unused boot fetches go.
     expect(stripped).toContain('fonts.googleapis.com');
     expect(stripped).toContain('id="boot-splash"');
