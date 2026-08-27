@@ -3457,7 +3457,10 @@ export class Store {
       });
     }
 
-    return this.resources.get(normalizedSubject)!;
+    // Resolve HTTP aliases of a DID (`https://host/did:ad:…` → `did:ad:…`)
+    // so a fetch by the address-bar URL returns the resource stored under
+    // its canonical `@id`.
+    return this.resources.get(this.resolveSubject(normalizedSubject))!;
   }
 
   public getAllSubjects(): string[] {
