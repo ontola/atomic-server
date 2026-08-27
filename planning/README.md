@@ -57,6 +57,7 @@ Remaining work, not "this file exists."
 | [`SDK-API-design.md`](./SDK-API-design.md) | SDK / agent DX direction. |
 | [`llm-wasm-gui-plugins.md`](./llm-wasm-gui-plugins.md) | **Proposal.** Browser-built JS/TS apps with scoped Loro docs. |
 | [`personal-information-suite.md`](./personal-information-suite.md) | Exploration: contacts, calendar, email. |
+| [`oidc-oauth.md`](./oidc-oauth.md) | **Proposal.** OIDC is control-plane SSO, not protocol identity. Data plane stays DID/Ed25519. Retargets [#277](https://github.com/ontola/atomic-server/issues/277). |
 | [`social-apps.md`](./social-apps.md) | Requirements for social-network-shaped apps. Companion to `zones.md`. |
 | [`android-data-reuse.md`](./android-data-reuse.md) | **Draft.** One store/agent/Iroh node per Android device. Supersedes `on-device-atomic-daemon.md`. |
 | [`nextgraph-interop.md`](./nextgraph-interop.md) | **Proposal.** `did:ng:` via a scheme-routed Store backend. |
