@@ -78,9 +78,11 @@ Solid's identity system is called WebID.
 There are multiple supported authentication protocols, the most common being [WebID-OIDC](https://github.com/solid/webid-oidc-spec).
 
 Atomic Data's [authentication model](../authentication.md) is more similar to how SSH works.
-Atomic Data identities (Agents) are a combination of HTTP based, and cryptography (public / private key) based.
-In Atomic, all actions (from GET requests to Commits) are signed using the private key of the Agent.
-This makes Atomic Data a bit more unconventional, but also makes its auth mechanism very decentralized and lightweight.
+Atomic identities are [`did:ad:agent:{publicKey}`](../did.md) Agents. Every
+read and write (HTTP, WebSocket, commit) is signed with that Agent's Ed25519
+key. There is no OIDC token in the protocol: an IdP session, if one exists,
+belongs to a hosted account layer and cannot authorize a commit. Solid
+WebID-OIDC interop would be a mapping layer, not a second auth stack.
 
 ## Hierarchy and authorization
 
@@ -144,5 +146,7 @@ Atomic Data is not even two years old, and although progress has been fast, it d
 Here's a list of things missing in Atomic Data, with links to their open issues and links to their existing Solid counterpart.
 
 - No inbox or [notifications](https://www.w3.org/TR/ldn/) yet ([issue](https://github.com/ontola/atomic-data/issues/28))
-- No OIDC support yet. ([issue](https://github.com/atomicdata-dev/atomic-server/issues/277))
+- No WebID-OIDC. Atomic authenticates with Ed25519 agent DIDs, not OIDC
+  tokens. Hosted “Sign in with Google / Okta” is a control-plane session, not
+  protocol identity ([issue](https://github.com/ontola/atomic-server/issues/277)).
 - No support from a big community, a well-funded business or the inventor of the world wide web.
