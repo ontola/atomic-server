@@ -226,6 +226,41 @@ up. See [`personal-information-suite.md`](./personal-information-suite.md).
 Do not mix connector tokens with the OIDC session in D2. A Google
 Calendar refresh token is not proof of who may read a Drive.
 
+### D6. Export the root, then unlink OIDC
+
+OIDC-only is a choice, not a trap. Anyone who signed in with Google
+must be able to **leave Google** and keep the same Agent.
+
+Settings, while signed in:
+
+1. **Export identity** — the node unwraps the root and shows the
+   secret once. The client installs it as the live Agent (they now
+   sign as the root, like any non-OIDC user). Session certs become
+   unnecessary.
+2. **Unlink {IdP}** — this `(iss, sub)` will no longer get
+   SessionCerts. The node **deletes its custodial wrap** of the root
+   so a later disk steal or operator cannot keep issuing as them.
+
+Order is load-bearing: export succeeds before unlink. Unlink without
+a copy is a lockout. The UI says that in one sentence.
+
+This is the dangerous endpoint from the rejected login path, used as
+a **rare, explicit exit**. A session cookie must not be enough:
+require a **fresh OIDC** (step-up) so XSS with a stolen
+`atomic_oidc_session` cannot dump the CA. Confirm in the UI. Audit
+the export.
+
+After unlink, **Sign in with Google** for that `sub` must not mint a
+new root (identity split). Fail closed: “this Google account was
+unlinked; use your secret / passkey.” Re-link is opt-in: they prove
+the root (sign a challenge) *and* complete OIDC, then the node stores
+a wrap again.
+
+Operator turning OIDC **off for the whole node** (unset env) is
+separate: no buttons, no new certs. Warn first. Anyone who never
+exported cannot open a new browser. Session keys already issued live
+until `notAfter`.
+
 ## Does this still match OIDC / OAuth?
 
 Yes for **login**. No for **calling Atomic as if it were an OAuth
@@ -389,6 +424,12 @@ cert’s issuer). On an Owner node that must be `ATOMIC_OWNER_AGENT`.
 OIDC success is not a Drive grant. A session cert does not widen
 enrollment.
 
+### Exit (ditch the IdP)
+
+Settings → Export identity (step-up OIDC) → client switches to the
+root Agent → Unlink Google. The node drops its wrap. See D6. The
+login path still never downloads the root.
+
 ## Is this a good pattern?
 
 Split the question. The **login** is conventional. The **thing we hand
@@ -544,7 +585,8 @@ Changes:
   SessionCert is the chain, same compact-blob family as genesis certs.
 - Browser holds a key again, but it expires. XSS steals a bounded
   credential.
-- Offline works until TTL, then you need OIDC again (or the root).
+- Offline works until TTL, then OIDC again — or **export the root**
+  (D6) and sign as a normal Agent.
 - Root can stay on the node. Deprovision = stop issuing, wait out TTL.
 
 This is the **decision** — see
@@ -572,19 +614,25 @@ resource.
 Allowed:
 
 1. One-click OIDC on a node that advertised providers.
-2. Store the **root** Agent on this node, wrapped, never in JS.
+2. Store the **root** Agent on this node, wrapped, not in JS **until
+   they export**.
 3. After OIDC, sign a SessionCert for a **browser-generated** session
    pubkey. The session Agent signs commits and AUTH.
 4. `write` lists name the root. Verifiers chain session → cert → root.
 5. Optionally offer a passkey wrapper on the root envelope. Never
    require it for the OIDC button.
+6. **Export + unlink:** step-up OIDC, download the root, then stop
+   issuing certs for that `(iss, sub)` and delete the node wrap.
+   Re-link only with root proof + OIDC. Unlinked Google must not mint
+   a second identity.
 
 Forbidden:
 
 1. Treat an OIDC token as proof of write on a Drive.
 2. Put a JWT in `commit.signature`, or let the node sign content
    commits as the user.
-3. Download the root Agent secret to the browser.
+3. Download the root Agent secret as the **login** path (no step-up,
+   no explicit export). Export is D6, not Sign in with Google.
 4. Derive keys from IdP claims (`sub`, email, ID token).
 5. Show provider buttons on a node that has not configured an IdP.
 6. Treat OIDC success as authorized-to-create on an Owner node, unless
@@ -605,11 +653,12 @@ Connector OAuth is a different product.
    button.
 4. Optional passkey wrapper on the root, offered after login, not
    required.
-5. Optional: IdP group / domain → authorized-to-create (Owner-mode
+5. **Export + unlink** (D6) so OIDC is reversible.
+6. Optional: IdP group / domain → authorized-to-create (Owner-mode
    expansion). Explicit flag, fail closed.
-6. Connector OAuth on the node when the personal-information suite
+7. Connector OAuth on the node when the personal-information suite
    needs an always-on token holder.
-7. App-key issued agents (PR #1275 shape) can share the SessionCert
+8. App-key issued agents (PR #1275 shape) can share the SessionCert
    verifier. Not a blocker for OIDC.
 
 The discarded 2022 PR is not a starting point. The envelope format
