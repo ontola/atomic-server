@@ -12,6 +12,11 @@
 >
 > The 2022 issue mixed three problems. This document splits them and says
 > where OpenID Connect and OAuth belong on `atomic-server`.
+>
+> **OIDC-only login:** people who pick “Sign in with {IdP}” must not also
+> have to remember a recovery code or register a passkey. Completing OIDC
+> is the credential. That makes this node custodial for that identity —
+> say so, don’t hide it behind a second factor the user didn’t ask for.
 
 ## Goal
 
@@ -47,20 +52,21 @@ That world is gone. The useful part of steps 1–3 is not.
 | --- | --- |
 | Agent subject is an HTTP URL on a server | `did:ad:agent:{pubkey}` — the key *is* the identity |
 | Creating an account means creating an Agent on that server | Creating an account means generating a keypair locally. The personal-drive DID is derived from it |
-| A new device registers another public key on the same Agent | A new device imports the **same** secret (or unwraps it from a passkey / recovery envelope). Same-agent AUTH is the trust gate |
-| The server is the identity provider of last resort | The server stores, forwards, and serves. It never signs as the user |
-| “Link agent ↔ user” is a new table | Binding is `(iss, sub) → agent DID + wrapped envelope` on the node that configured the IdP |
+| A new device registers another public key on the same Agent | A new device gets the **same** secret: passkey unwrap, or OIDC-only release from this node. Same-agent AUTH is the trust gate |
+| The server is the identity provider of last resort | Commits are still client-signed. OIDC-only restore means this node can unwrap the signing key after a valid IdP login |
+| “Link agent ↔ user” is a new table | Binding is `(iss, sub) → wrapped agent secret` on the node that configured the IdP |
 
 Two layers, independent:
 
 ```text
-Agent   = Ed25519 keypair in the client. Signs commits, HTTP, WS AUTH, Iroh AUTH.
-Session = proof to this node that a person may fetch their wrapped envelope.
-          OIDC and passkey assertion are session proofs.
-          Neither can sign a commit.
+Agent   = Ed25519 keypair. Signs commits, HTTP, WS AUTH, Iroh AUTH.
+          Lives in the client after login.
+Session = OIDC proof to this node. Enough, by itself, to release that
+          Agent secret to the client. Cannot be sent as resource AUTH.
 ```
 
-OIDC sits on the session layer. It cannot become the Agent.
+OIDC never becomes the Agent. It is allowed to **release** the Agent
+secret. That is the whole product.
 
 ## Three problems that were one issue
 
@@ -76,19 +82,29 @@ Do not build this. Dedicated OIDC endpoints are a different matter (D1).
 
 ### 2. Human login / recovery — prove you are the same person on a new device
 
-- **Any node:** secret or passkey. Owner mode: `ATOMIC_OWNER_AGENT`.
-  Invites grant rights to an existing agent.
-- **Node with an IdP configured:** OIDC proves the person to *this* node,
-  which may then hand back the wrapped envelope it already stores for
-  `(iss, sub)`.
+What #277 wanted, and what a “Sign in with Google” button still means
+to people: **one click, nothing to memorize or write down.**
 
-“Sign in with Google / Keycloak” is a way to find your envelope on this
-node, not a better Agent.
+That cannot be a ciphertext the client still needs a passkey or recovery
+code to open. Then OIDC is a lookup, not a login, and everyone who
+showed up for SSO is asked for a second credential they didn’t want.
 
-Passkey + PRF (roadmap, [`docs/src/roadmap.md`](../docs/src/roadmap.md))
-is the restore that needs no IdP at all. OIDC does not replace it. It
-serves operators whose org *mandates* an IdP — a university running
-Keycloak next to `atomic-server` is the motivating case.
+Two “nothing to memorize” restores exist. They have different trust:
+
+| Restore | User holds | Who can impersonate |
+| --- | --- | --- |
+| Passkey + PRF | platform authenticator | whoever has that passkey |
+| OIDC-only | nothing extra | whoever can complete OIDC as that `sub` **and** this node (IdP admin, stolen IdP session, node operator) |
+
+OIDC-only is custodial on purpose. The node holds a wrapping key,
+unwraps after a valid ID token, and hands the Agent secret to the
+client. Do not derive the secret from IdP claims (`sub` is public; ID
+tokens get logged). Do not make the user also unwrap.
+
+A passkey or recovery wrapper on the same envelope is **optional** —
+useful if this node dies — not part of the OIDC path. Passkey-only
+onboarding (no IdP) stays the restore for nodes that never configured
+one.
 
 ### 3. Calling other companies’ APIs — Gmail, Calendar, Graph
 
@@ -118,7 +134,7 @@ The three OAuth roles that belong on an always-on node:
 
 | Role | What the node does | Not this |
 | --- | --- | --- |
-| **OIDC relying party** | Validate an ID token from the operator’s IdP; bind `(iss, sub)` to an envelope | Treat the token as `x-atomic-*` |
+| **OIDC relying party** | Validate an ID token; release the Agent secret for `(iss, sub)` | Treat the token as `x-atomic-*`; HKDF the secret from `sub` |
 | **OAuth client** (connectors) | Hold refresh tokens, run sync, commit as the user’s Agent | Use Google `sub` as the Agent |
 | **OAuth authorization server** (later) | Consent + issued agent for a third-party app | Replace the user’s Agent with a bearer token |
 
@@ -134,10 +150,10 @@ accept an OIDC token. Authorization stays
 Invite JWTs ([#544](https://github.com/ontola/atomic-server/issues/544))
 stay signed grant tokens, not user sessions.
 
-The server **may** validate OIDC on dedicated endpoints (`/oidc/*`,
-envelope fetch, a session cookie that means “this browser proved an
-IdP identity *to this node*”). That cookie is not `atomic_session` and
-does not pass `check_read` / `check_write`.
+The server **may** validate OIDC on dedicated endpoints (`/oidc/*`).
+That cookie is not `atomic_session` and does not pass `check_read` /
+`check_write`. It **is** enough to release the Agent secret for that
+`(iss, sub)` — see D2.
 
 ### D2. Optional OIDC/OAuth is a node feature
 
@@ -171,21 +187,28 @@ Owner-mode expansion, not implied by configuring an issuer.
 ### D3. Do not mint Agents from `sub`
 
 The coupling DID killed: a server-owned user record that *is* the
-Agent. `(iss, sub)` is a key for the envelope index, not an Agent
+Agent. `(iss, sub)` is the index key for a wrapped secret, not an Agent
 subject, not a `publicKey` on an Agent resource, not a second auth
 stack.
 
-Multi-device stays secret-sharing (or envelope unwrap), not “add another
-public key to the Agent.”
+The client still mints the Ed25519 key on first visit. The node does
+not generate it, and does not derive it from IdP claims. After that,
+the node *holds a wrapping key* so OIDC-only restore works. Holding
+is not minting, and it is not signing: the client still signs every
+commit. The operator of this node could unwrap and sign if they
+chose; that is the custodial bargain, not a protocol change.
+
+Multi-device is the same secret released again, not a second key on
+the Agent.
 
 ### D4. SCIM is the IdP’s job
 
 [#277](https://github.com/ontola/atomic-server/issues/277) asked about
 [SCIM](https://scim.cloud/). The directory is the operator’s IdP.
-Deprovisioning is “the IdP no longer issues tokens,” so envelope fetch
-fails. `atomic-server` does not need a parallel user table to SCIM into.
-It must not mint agent keypairs from a directory event either.
-Deprovisioning cannot un-sign historical commits.
+`atomic-server` does not grow a user table to SCIM into. Deprovisioning
+is “the IdP no longer issues tokens,” so the node refuses to release
+the secret. A device that already has the key keeps working until that
+copy is deleted. Historical commits stay valid.
 
 ### D5. Connector OAuth is not identity
 
@@ -207,7 +230,7 @@ There are two cookies, and they are not interchangeable:
 
 | Cookie | Who minted it | What it unlocks |
 | --- | --- | --- |
-| `atomic_oidc_session` | this node, after a valid ID token | `GET`/`PUT` on that user’s envelope only |
+| `atomic_oidc_session` | this node, after a valid ID token | release of that user’s Agent secret |
 | `atomic_session` | the client, Ed25519 Authentication Resource | resource `GET`, commits, WS — today’s AUTH |
 
 The OIDC cookie never passes `check_read` / `check_write`.
@@ -254,54 +277,60 @@ IdP authenticates the person and 302s to
 
 A failed validation is 401 and no cookie.
 
-### 4a. First visit (no envelope yet)
+### 4a. First visit (no secret stored yet)
 
-`GET /oidc/envelope` under that cookie returns 404. The app runs the
-existing create-identity path: mint Ed25519 locally, wrap it with
-passkey and/or recovery code (`SecretEnvelope` in `lib/src/vault/`),
-`PUT /oidc/envelope` with the ciphertext. The node stores it keyed by
-`(iss, sub)`. It never sees plaintext. Then the client builds
-`atomic_session` as it does today and uses the Agent.
+`GET /oidc/secret` under that cookie returns 404. The app mints Ed25519
+locally (the user never sees it), then `PUT /oidc/secret` with the
+agent secret JSON. The node wraps it with a **node-held KEK**
+(`WrapperKind` to add next to the existing passkey / recovery wrappers
+in `lib/src/vault/secret_envelope.rs`) and stores the envelope keyed
+by `(iss, sub)`. Then the client builds `atomic_session` as today.
 
-### 4b. Returning device (envelope exists)
+No recovery code, no passkey prompt, nothing to copy. OIDC was the
+login.
 
-`GET /oidc/envelope` returns the ciphertext. The app prompts passkey
-or recovery code, unwraps locally, `saveAgentToIDB`, builds
-`atomic_session`. Same Agent as the first device — same secret, not a
-second key on the Agent resource.
+The node sees plaintext at PUT and at later release. At rest the
+secret is wrapped. Disk theft of the redb without the node KEK does
+not yield signing keys; the operator who holds the KEK can unwrap
+without OIDC. That is inherent to OIDC-only. Do not paper over it
+with a client-side factor the user didn’t ask for.
 
-If unwrap fails, OIDC cannot help. The IdP proved *who sat down*; it
-does not hold the DEK.
+### 4b. Returning device
+
+`GET /oidc/secret` unwraps on the node and returns the agent secret
+over HTTPS. The app `saveAgentToIDB`, builds `atomic_session`. Same
+Agent as the first device. No second prompt.
+
+This endpoint is the whole prize: no-cache, httpOnly cookie, short
+TTL, audit log, rate limit. It is “download my signing key after SSO.”
 
 ### 5. After that, Atomic is unchanged
 
 Commits, resource GET, WS, Iroh AUTH are the Ed25519 Agent. The OIDC
 cookie is unused on those paths. Signing out of the Agent clears
-`atomic_session` as today. Signing out of the IdP is the IdP’s
-session; the node should also drop `atomic_oidc_session` on an
-explicit “disconnect this node login” action so a shared browser
-cannot fetch the envelope.
+`atomic_session` as today. An explicit “disconnect this node login”
+drops `atomic_oidc_session` so a shared browser cannot release the
+secret again.
 
-### What a new browser does not get for free
+### Optional extra wrappers (not on the OIDC path)
 
-OIDC on a brand-new browser gets you the **ciphertext**. Opening it
-still needs a wrapper that browser can satisfy (a passkey registered
-to this origin, or the recovery code). That is the point: Google
-cannot impersonate the Agent if the IdP or the node is compromised.
+The same envelope *may* also carry a passkey or recovery wrapper so
+the identity survives this node dying. The OIDC button must not
+require them. Showing “also save a passkey” after first login is
+fine; blocking login until they do is not.
 
 ### Deprovision
 
-The operator removes the person in Keycloak. The next `/oidc/start`
-fails at the IdP, so a new browser cannot fetch the envelope. A
-device that already unwrapped the secret keeps working until that
-copy is deleted — same as stealing a secret JSON today. Historical
-commits stay valid; you cannot un-sign them.
+The operator removes the person in the IdP. The next `/oidc/start`
+fails at the IdP, so a new browser cannot get the secret. A device
+that already unwrapped keeps working until that copy is deleted —
+same as a copied secret JSON. Historical commits stay valid.
 
 ### Owner mode
 
-After unwrap, `createDrive` is still `admit_drive_write`. On an Owner
-node that means the Agent DID must be `ATOMIC_OWNER_AGENT`. OIDC
-success is not a Drive grant.
+After the client has the Agent, `createDrive` is still
+`admit_drive_write`. On an Owner node that means the Agent DID must
+be `ATOMIC_OWNER_AGENT`. OIDC success is not a Drive grant.
 
 ## Why the original flow cannot be copied
 
@@ -309,7 +338,7 @@ success is not a Drive grant.
 | --- | --- |
 | OAuth client in AtomicServer `.env` | **Keep**, as the operator’s IdP (D2). Not a required third-party auth vendor |
 | Front-end asks the server which providers it supports | **Keep**, via `GET /server`. No providers ⇒ no buttons |
-| Client gets a token, server creates a user | **Change.** Client creates the Agent. Server stores `(iss, sub) → envelope` |
+| Client gets a token, server creates a user | **Change.** Client mints the Agent. Node stores `(iss, sub) → secret`, wrapped with a node-held KEK, and releases it after OIDC |
 | Attach a public key to the Agent resource | **Drop.** `did:ad:agent:{pubkey}` has exactly one key |
 | Store agent ↔ user on the server | **Keep as envelope index**, not as the Agent resource |
 
@@ -326,34 +355,39 @@ Allowed:
 
 1. Create or resume a **node session** after the operator configured
    that IdP.
-2. Fetch or store a wrapped recovery envelope keyed by `(iss, sub)`.
-   Unwrap still needs passkey / recovery / first-run mint on the client.
-3. Show provider buttons on the welcome screen **of a node that
+2. On first visit, mint the Agent locally and store it on this node
+   under `(iss, sub)`, wrapped with a node-held KEK.
+3. On later visits, **release that Agent secret** to the client with
+   no other prompt.
+4. Show provider buttons on the welcome screen **of a node that
    advertised providers**.
+5. Optionally offer a passkey/recovery wrapper on the same envelope.
+   Never require it for the OIDC button to succeed.
 
 Forbidden:
 
 1. Treat an OIDC token as proof of write on a Drive.
 2. Let the IdP or the node sign commits, Iroh `AUTH`, or
-   HTTP `x-atomic-*` headers.
-3. Derive the agent secret from IdP claims.
-4. Skip passkey / recovery because “they have Google.”
-5. Show provider buttons on a node that has not configured an IdP
+   HTTP `x-atomic-*` headers. The client signs. The node may *hold*
+   the key; it must not use it as a principal.
+3. Derive the agent secret from IdP claims (`sub`, email, ID token).
+4. Show provider buttons on a node that has not configured an IdP
    (never ship a built-in Google client to random origins).
-6. Treat OIDC success as authorized-to-create on an Owner node, unless
+5. Treat OIDC success as authorized-to-create on an Owner node, unless
    a separate enroll grant says so.
 
 ## Sequencing
 
-Passkey + PRF restore helps every node and needs no IdP. OIDC is the
-org-login path. Connector OAuth is a different product. They do not
-block each other.
+Passkey-only restore (no IdP) and OIDC-only restore (custodial on this
+node) are both “nothing to memorize.” They do not block each other.
+Connector OAuth is a different product.
 
 1. This decision (this file).
-2. Passkey PRF as a first-class unwrap of the existing envelope.
-3. **OIDC relying party** in this repo: env, `/server` advertisement,
-   callback, envelope index, welcome buttons when configured. HostMode
-   enrollment unchanged.
+2. **OIDC relying party** in this repo: env, `/server` advertisement,
+   callback, node-held KEK wrap, `GET /oidc/secret` releases the Agent.
+   HostMode enrollment unchanged. First-run UX is one button.
+3. Optional extra wrappers (passkey / recovery) on the same envelope,
+   offered after login, not required.
 4. Optional: IdP group / domain → authorized-to-create (Owner-mode
    expansion). Explicit flag, fail closed.
 5. Connector OAuth on the node when the personal-information suite
