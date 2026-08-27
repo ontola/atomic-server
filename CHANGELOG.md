@@ -11,10 +11,9 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   follows `develop`; production and live docs follow a tagged release. `master`
   is no longer a deploy or docs trigger, and `main` is not introduced as a
   copy of the latest tag.
-- Docs / planning: OIDC and OAuth are retargeted after DID / local-first.
-  Protocol identity stays Ed25519 agent DIDs. Optional OIDC/OAuth belongs on
-  the node (operator’s IdP, envelope index, connector tokens) and still
-  cannot authorize a commit. See
+- Docs / planning: OIDC-only login is a root Agent as CA on the node plus
+  short-lived session Agents in the browser. Commits stay Ed25519; OIDC
+  tokens do not authorize writes. See
   [`planning/oidc-oauth.md`](planning/oidc-oauth.md) and
   [#277](https://github.com/ontola/atomic-server/issues/277).
 
