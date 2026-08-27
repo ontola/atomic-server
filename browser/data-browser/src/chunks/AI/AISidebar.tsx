@@ -252,10 +252,7 @@ const AISidebar: React.FC = () => {
   };
 
   const handleMessageDelete = async (message: AtomicUIMessage) => {
-    const messageResource = findMessageResource(
-      messageToResourceMap,
-      message,
-    );
+    const messageResource = findMessageResource(messageToResourceMap, message);
 
     if (chatResource && messageResource) {
       try {

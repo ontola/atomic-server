@@ -922,9 +922,7 @@ export const CanvasPage: React.FC<ResourcePageProps> = ({ resource }) => {
       // We DON'T mutate the resource until pointer-up; this is preview
       // only. Reusing `previewStrokes` keeps `paint()` consistent.
       const preview = strokesNow.filter((stroke, i) =>
-        stroke.loroId
-          ? !erasedIds.has(stroke.loroId)
-          : !erasedIdx.has(i),
+        stroke.loroId ? !erasedIds.has(stroke.loroId) : !erasedIdx.has(i),
       );
       setPreviewStrokes(preview);
     }

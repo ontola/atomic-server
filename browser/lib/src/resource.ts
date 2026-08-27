@@ -2436,6 +2436,7 @@ export class Resource<C extends OptionalClass = any> {
 
     const next = [...propVal];
     const [item] = next.splice(from, 1);
+
     if (from === to || to === from + 1) {
       return;
     }
@@ -2491,11 +2492,11 @@ export class Resource<C extends OptionalClass = any> {
    */
   public pushListItem(propUrl: string, item: JSONValue): void {
     const propVal = (this.get(propUrl) as JSONArray) ?? [];
+    this.appendItemsToLoroList(propUrl, propVal, [item]);
     this.#cache[propUrl] = [...propVal, item];
     this.#cacheDirty = true;
     this._dirty = true;
 
-    this.appendItemsToLoroList(propUrl, propVal, [item]);
     this.commitLoroEdit();
     this.eventManager.emit(
       ResourceEvents.LocalChange,
@@ -2893,10 +2894,12 @@ export class Resource<C extends OptionalClass = any> {
       const indexes: number[] = [];
 
       for (let i = 0; i < current.length; i++) {
-        const key =
-          typeof current[i] === 'string'
-            ? current[i]
-            : JSON.stringify(current[i]);
+        const item = current[i];
+        const key = typeof item === 'string' ? item : JSON.stringify(item);
+
+        if (typeof key !== 'string') {
+          continue;
+        }
 
         if (seen.has(key)) {
           indexes.push(i);
@@ -4116,10 +4119,7 @@ function applyLoroTextDiff(text: LoroText, next: string): void {
     suffix += 1;
   }
 
-  if (
-    suffix > 0 &&
-    isHighSurrogate(prev.charCodeAt(prev.length - suffix))
-  ) {
+  if (suffix > 0 && isHighSurrogate(prev.charCodeAt(prev.length - suffix))) {
     suffix -= 1;
   }
 

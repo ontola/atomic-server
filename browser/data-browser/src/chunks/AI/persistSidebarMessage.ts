@@ -122,11 +122,7 @@ export const persistSidebarMessage = async ({
   // rather than in the component — the caller cannot know whether the chat has
   // been created yet, and a title generated against a chat that does not exist
   // is dropped without a word.
-  if (
-    !streaming &&
-    message.role === 'assistant' &&
-    newMessages.length >= 2
-  ) {
+  if (!streaming && message.role === 'assistant' && newMessages.length >= 2) {
     if (
       !titlePromiseRef.current &&
       shouldGenerateTitles &&

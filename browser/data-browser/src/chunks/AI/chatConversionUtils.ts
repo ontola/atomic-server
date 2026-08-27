@@ -264,9 +264,7 @@ const syncExistingMessageFromUi = async (
 
   if (persistToServer) {
     const storedToolIds = new Set(
-      storedParts
-        .filter(resourceIsToolCallPart)
-        .map(part => part.props.toolId),
+      storedParts.filter(resourceIsToolCallPart).map(part => part.props.toolId),
     );
     const builder = partsToResourceBuilder(messageResource, store);
 
