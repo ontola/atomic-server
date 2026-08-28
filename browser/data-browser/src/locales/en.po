@@ -3326,21 +3326,17 @@ msgstr "Read a property: <0/>"
 msgid "<0/> Typescript"
 msgstr "<0/> Typescript"
 
-#: src/components/Drives/WSIndicator.tsx
-msgid "Websocket Connected"
-msgstr "Websocket Connected"
+#~ msgid "Websocket Connected"
+#~ msgstr "Websocket Connected"
 
-#: src/components/Drives/WSIndicator.tsx
-msgid "Websocket Closing"
-msgstr "Websocket Closing"
+#~ msgid "Websocket Closing"
+#~ msgstr "Websocket Closing"
 
-#: src/components/Drives/WSIndicator.tsx
-msgid "Websocket Closed"
-msgstr "Websocket Closed"
+#~ msgid "Websocket Closed"
+#~ msgstr "Websocket Closed"
 
-#: src/components/Drives/WSIndicator.tsx
-msgid "Websocket Connecting..."
-msgstr "Websocket Connecting..."
+#~ msgid "Websocket Connecting..."
+#~ msgstr "Websocket Connecting..."
 
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 msgid "Select a location"
@@ -6762,12 +6758,10 @@ msgstr "Something failed, and reported no reason."
 msgid "Your private drive keeps its name. It is tied to your account, not to a project."
 msgstr "Your private drive keeps its name. It is tied to your account, not to a project."
 
-#: src/components/Drives/PersonalDriveBadge.tsx
 #: src/components/Drives/PrivateDriveBadge.tsx
 msgid "<0/> Private"
 msgstr "<0/> Private"
 
-#: src/components/Drives/PersonalDriveBadge.tsx
 #: src/components/Drives/PrivateDriveBadge.tsx
 msgid "This is your private drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project."
 msgstr "This is your private drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project."
@@ -6780,7 +6774,6 @@ msgstr "This is your <0>private drive</0>. Sharing it shares your drive list, fa
 msgid "Creating your private drive…"
 msgstr "Creating your private drive…"
 
-#: src/hooks/usePersonalDriveList.ts
 #: src/hooks/usePrivateDriveList.ts
 msgid "Could not update your list: no private drive is set up for this account yet."
 msgstr "Could not update your list: no private drive is set up for this account yet."
@@ -7467,3 +7460,11 @@ msgstr "Max selected"
 #: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
 msgid "The most options a visitor may tick. Once they reach it the remaining options grey out."
 msgstr "The most options a visitor may tick. Once they reach it the remaining options grey out."
+
+#: src/chunks/FormBuilder/SettingsTab.tsx
+msgid "<0/> Animate page transitions"
+msgstr "<0/> Animate page transitions"
+
+#: src/chunks/FormBuilder/SettingsTab.tsx
+msgid "Pages zoom out and slide away on Next / Back. Visitors who ask their system for reduced motion never see the animation."
+msgstr "Pages zoom out and slide away on Next / Back. Visitors who ask their system for reduced motion never see the animation."

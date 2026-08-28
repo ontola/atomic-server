@@ -3326,21 +3326,17 @@ msgstr "Leer una propiedad: <0/>"
 msgid "<0/> Typescript"
 msgstr "<0/> Typescript"
 
-#: src/components/Drives/WSIndicator.tsx
-msgid "Websocket Connected"
-msgstr "Websocket Conectado"
+#~ msgid "Websocket Connected"
+#~ msgstr "Websocket Conectado"
 
-#: src/components/Drives/WSIndicator.tsx
-msgid "Websocket Closing"
-msgstr "Websocket Cerrando"
+#~ msgid "Websocket Closing"
+#~ msgstr "Websocket Cerrando"
 
-#: src/components/Drives/WSIndicator.tsx
-msgid "Websocket Closed"
-msgstr "Websocket Cerrado"
+#~ msgid "Websocket Closed"
+#~ msgstr "Websocket Cerrado"
 
-#: src/components/Drives/WSIndicator.tsx
-msgid "Websocket Connecting..."
-msgstr "Websocket Conectando..."
+#~ msgid "Websocket Connecting..."
+#~ msgstr "Websocket Conectando..."
 
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 msgid "Select a location"
@@ -6756,12 +6752,10 @@ msgstr "Algo falló y no reportó ninguna razón."
 msgid "Your private drive keeps its name. It is tied to your account, not to a project."
 msgstr "Su unidad privada mantiene su nombre. Está vinculada a su cuenta, no a un proyecto."
 
-#: src/components/Drives/PersonalDriveBadge.tsx
 #: src/components/Drives/PrivateDriveBadge.tsx
 msgid "<0/> Private"
 msgstr "<0/> Privado"
 
-#: src/components/Drives/PersonalDriveBadge.tsx
 #: src/components/Drives/PrivateDriveBadge.tsx
 msgid "This is your private drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project."
 msgstr "Esta es tu unidad privada. Contiene tu lista de unidades, favoritos, notificaciones y chats, y su dirección proviene de tu cuenta, por lo que solo hay una, y no es un lugar para un proyecto."
@@ -6774,7 +6768,6 @@ msgstr "Este es tu <0>disco privado</0>. Compartirlo comparte tu lista de discos
 msgid "Creating your private drive…"
 msgstr "Creando tu unidad privada…"
 
-#: src/hooks/usePersonalDriveList.ts
 #: src/hooks/usePrivateDriveList.ts
 msgid "Could not update your list: no private drive is set up for this account yet."
 msgstr "No se pudo actualizar su lista: aún no hay una unidad privada configurada para esta cuenta."
@@ -7461,3 +7454,11 @@ msgstr "Máximo seleccionado"
 #: src/chunks/FormBuilder/FieldOptions/ChoiceOptions.tsx
 msgid "The most options a visitor may tick. Once they reach it the remaining options grey out."
 msgstr "La mayor cantidad de opciones que un visitante puede marcar. Una vez que las alcance, las opciones restantes se atenúan."
+
+#: src/chunks/FormBuilder/SettingsTab.tsx
+msgid "<0/> Animate page transitions"
+msgstr "<0/> Animar transiciones de página"
+
+#: src/chunks/FormBuilder/SettingsTab.tsx
+msgid "Pages zoom out and slide away on Next / Back. Visitors who ask their system for reduced motion never see the animation."
+msgstr "Las páginas se alejan con zoom y se deslizan al presionar Siguiente / Anterior. Los visitantes que solicitan movimiento reducido en su sistema nunca ven la animación."
