@@ -542,12 +542,23 @@ test.describe('data-browser', async () => {
     const parentResource = await getCurrentSubject(page);
     // Empty-folder quick-create now renders dedicated "New Folder" / "New
     // Document" buttons instead of a generic "New Resource" + class picker.
+    const parentUrl = page.url();
     await page
       .getByRole('main')
       .getByRole('button', { name: 'New Folder' })
       .first()
       .click();
+    // QuickCreateRow's onClick fires createNewResource without awaiting, so
+    // the click returns before the navigation. Reading the subject here
+    // without waiting gives the PARENT's — which this test then destroyed and
+    // asserted was gone, passing without once exercising the cascade it
+    // exists to cover. Whether the navigation had landed depended on load,
+    // which is what made it look flaky.
+    await page.waitForURL(url => url.toString() !== parentUrl, {
+      timeout: 10000,
+    });
     const nestedResource = await getCurrentSubject(page);
+    expect(nestedResource).not.toBe(parentResource);
     await openSubject(page, parentResource);
     await contextMenuClick('delete', page);
     // Confirm the destroy in the dialog. Scoping to `dialog[open]` is needed
@@ -584,11 +595,22 @@ test.describe('data-browser', async () => {
       )
       .toBe(true);
 
-    // Neither signal above proves durability: the toast fires when the destroy
-    // is applied locally, and the sidebar drops the row on the same optimistic
-    // update. The reload then abandons anything still in flight — which this
-    // test knows, and which is exactly what made it fail under suite load.
-    // `pendingDirtyCount === 0` is the app's own "safe to reload" signal.
+    // Neither signal above says anything about the child. `destroy()` posts the
+    // parent's commit and awaits it, so the toast means the server applied
+    // THAT; the child is removed by the server's cascade, and this client only
+    // learns of it when that removal arrives over its drive subscription.
+    // Until then the child is still in the store, still in the local database,
+    // and a reload brings it back.
+    await page.waitForFunction(
+      nested => !window.store.resources?.get?.(nested),
+      nestedResource,
+      { timeout: 15000 },
+    );
+
+    // And then for that removal to be durable: tombstoning the child in the
+    // local database is queued work, and a reload before it lands resurrects
+    // it from OPFS. `pendingDirtyCount === 0` is the app's own "safe to
+    // reload" signal, and it covers that write.
     await waitForSynced(page);
 
     await page.reload();
