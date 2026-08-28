@@ -299,10 +299,12 @@ test.describe('data-browser', async () => {
       });
     }
 
-    // New agents land on the invite host when ancestry resolves (Dev drive
-    // in `/app/dev-drive` tests), otherwise on their personal `{name}'s Drive`.
+    // New agents land on the invite host when they can read it (Dev drive
+    // in `/app/dev-drive` tests). Chatroom invites typically grant the
+    // child but not the parent drive, so the sidebar stays on the
+    // invitee's `{name}'s Drive` (same as develop).
     await expect(page2.getByTestId('current-drive-title')).toHaveText(
-      /Dev drive|'s Drive/,
+      /Dev drive|'s Drive|My drive/,
       { timeout: 15_000 },
     );
     await expect(page2.getByTestId('shared-with-me')).toBeVisible();

@@ -207,30 +207,35 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
   };
 
   /**
-   * Make the invite's drive the active one, so the sidebar shows what the
-   * invitee was actually invited to. Falls back to their own drive when the
-   * destination's drive can't be resolved (a bare resource, or the ancestry
-   * walk failed) — which is also the new-agent case, where `drive` would
-   * otherwise still be `baseURL`. Reports whether it set anything, so
-   * `goToRedirect` knows not to overwrite it.
+   * Make the invite's drive the active one when the invitee can actually
+   * read it. Falls back to their private drive when the host is missing,
+   * unauthorized, or has no name (typical for a child-resource invite).
    */
   const activateDrive = async (drives: {
     privateDrive?: string;
     hostDrive?: string;
   }): Promise<boolean> => {
-    let target = drives.hostDrive ?? drives.privateDrive;
+    // Default to the invitee's home. A chatroom (or other child) invite
+    // often grants the destination but not the parent drive resource, so
+    // `hostDrive` is a DID whose name never loads — the sidebar then
+    // shows a truncated subject instead of "Dev drive" / "{name}'s Drive".
+    let target = drives.privateDrive;
 
-    if (drives.hostDrive) {
+    if (drives.hostDrive && drives.hostDrive !== drives.privateDrive) {
       try {
-        const host = await store.getResource(drives.hostDrive);
+        const host = await store.fetchResourceFromServer(drives.hostDrive);
+        const name = host.get(core.properties.name) as string | undefined;
+        const usable =
+          !host.error &&
+          !host.isUnauthorized() &&
+          typeof name === 'string' &&
+          name.length > 0;
 
-        if (host.error && drives.privateDrive) {
-          target = drives.privateDrive;
+        if (usable) {
+          target = drives.hostDrive;
         }
       } catch {
-        if (drives.privateDrive) {
-          target = drives.privateDrive;
-        }
+        // Keep the private drive.
       }
     }
 
