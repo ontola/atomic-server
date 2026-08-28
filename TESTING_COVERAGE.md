@@ -139,6 +139,9 @@ Both matter because `iroh_transport` holds the router and node identity in
 |---|---|---|
 | Extract agent mentions from TipTap JSON / chat text | glue | `browser/lib/src/mentions.test.ts` |
 | Populate includes NotificationItem / watches ontology | unit | `populate::notifications_ontology_is_populated` |
+| Child invite keeps session on private drive | unit | `inviteSessionDrive.test.ts` |
+| Drive-level invite activates the granted host | unit | same |
+| Chatroom invite sidebar is `{name}'s Drive` | flow | `browser/e2e/tests/e2e.spec.ts` (`chatroom` @smoke) |
 | Sidebar Notifications + empty inbox | flow | `browser/e2e/tests/notifications.spec.ts` |
 | `/app/dev-drive` workspace ≠ personal inbox drive | flow | `notifications.spec.ts` (`dev-drive workspace is not the personal inbox drive`) |
 | Seeded NotificationItem appears with unread badge | flow | `notifications.spec.ts` |

@@ -29,6 +29,7 @@ import { Logo } from '../components/Logo';
 import { useId, useState, type JSX } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { getResourcesDrive } from '@helpers/getResourcesDrive';
+import { inviteSessionDrive } from '@helpers/inviteSessionDrive';
 import { fetchPrivateDriveSubject } from '@helpers/privateDrive';
 import { saveAgentToIDB } from '@helpers/agentStorage';
 import { Dialog, useDialog } from '@components/Dialog';
@@ -236,9 +237,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
     hostDrive?: string;
     destinationIsDrive?: boolean;
   }): boolean => {
-    const target = drives.destinationIsDrive
-      ? (drives.hostDrive ?? drives.privateDrive)
-      : drives.privateDrive;
+    const target = inviteSessionDrive(drives);
 
     if (!target) {
       return false;
