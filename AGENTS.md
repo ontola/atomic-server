@@ -26,7 +26,7 @@ branch from the tag and merge back to `develop`. See `CONTRIBUTING.md`.
 
 ## Quick Dev Setup
 
-Use the Charlotte MCP server and navigate to `http://localhost:6747/app/dev-drive` to instantly create a fresh agent, a private **Personal** drive (inbox / watches), and a non-personal **Dev drive** workspace. You land on the workspace — it is not the agent's `personalDrive`.
+Use the Charlotte MCP server and navigate to `http://localhost:6747/app/dev-drive` to instantly create a fresh agent, a private drive (inbox / watches), and a non-personal **Dev drive** workspace. You land on the workspace — it is not the agent's `privateDrive`.
 
 In E2E tests, most specs use `test.beforeEach(before)` from `test-utils.ts`, which calls `devDrive(page)` and gives every test a fresh agent + that two-drive setup. For a second browser context signed in as the same user, use `getDevDriveSecret(page)` after `before` has run. Call `devDrive(page)` directly only when a spec does not use the shared `before` hook.
 
