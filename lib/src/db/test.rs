@@ -1817,6 +1817,101 @@ async fn db_events_say_whether_a_commit_produced_the_change() {
     );
 }
 
+/// A cascade-deleted child must say which drive it belonged to.
+///
+/// Destroying a folder removes its contents server-side, and the only way an
+/// open client hears about that is the removal event. Clients subscribe per
+/// drive — the per-resource subscribe is a no-op in the v2 protocol — so an
+/// event with no drive on it is routed to nobody: every other tab keeps
+/// rendering children that no longer exist, and the tab that issued the
+/// destroy keeps them in its local database, where a reload brings them back.
+///
+/// The drive has to be read here, while the resource still exists. A listener
+/// reacting to the event cannot look it up: by then the resource is gone.
+#[tokio::test]
+#[timeout(120000)]
+async fn a_cascade_deleted_child_names_its_drive() {
+    use crate::DbEvent;
+
+    let store = Db::init_temp("cascade_child_names_its_drive")
+        .await
+        .unwrap();
+    store.populate().await.unwrap();
+    let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+    let agent = store.get_default_agent().unwrap();
+
+    // Genesis commits with rights validation on, because that is the path that
+    // stamps `drive` onto a resource — and the drive is what this is about.
+    // A plain `save` skips the stamp, so the fanout would look broken here for
+    // a reason the app never hits.
+    let create_under = |parent: Subject| {
+        let store = &store;
+        let agent = agent.clone();
+        async move {
+            let mut resource = crate::Resource::new("did:ad:placeholder".into());
+            resource
+                .set(urls::PARENT.into(), Value::AtomicUrl(parent), store)
+                .await
+                .unwrap();
+
+            let mut commit_builder = resource.get_commit_builder().clone();
+            commit_builder.is_genesis = true;
+            let commit = commit_builder.sign(&agent, store, &resource).await.unwrap();
+            let signature = commit.signature.clone().unwrap();
+            let mut genesis_commit = commit;
+            genesis_commit.subject = Subject::from_raw(&format!("did:ad:{signature}"), None);
+
+            let opts = crate::commit::CommitOpts {
+                validate_schema: true,
+                validate_signature: true,
+                validate_timestamp: false,
+                validate_rights: true,
+                validate_previous_commit: false,
+                validate_loro_causality: false,
+                validate_for_agent: Some(agent.subject.to_string()),
+                update_index: true,
+                source_id: None,
+            };
+
+            store
+                .apply_commit(genesis_commit, &opts)
+                .await
+                .unwrap()
+                .resource_new
+                .unwrap()
+                .get_subject()
+                .clone()
+        }
+    };
+
+    let parent_subject = create_under(drive.clone()).await;
+    let child_subject = create_under(parent_subject.clone()).await.without_params();
+
+    let mut events = store.subscribe_events();
+
+    let mut doomed = store.get_resource(&parent_subject).await.unwrap();
+    doomed.destroy(&store).await.unwrap();
+
+    let child_drive = tokio::time::timeout(std::time::Duration::from_secs(30), async {
+        loop {
+            match events.recv().await.unwrap() {
+                DbEvent::Destroyed { subject, drive, .. } if subject == child_subject => {
+                    break drive;
+                }
+                _ => continue,
+            }
+        }
+    })
+    .await
+    .expect("the cascade never announced the child at all");
+
+    assert_eq!(
+        child_drive.map(|d| d.to_string()),
+        Some(drive.to_string()),
+        "a removal with no drive on it reaches no subscriber"
+    );
+}
+
 /// A resource created under a drive must be findable by that drive.
 ///
 /// `drive` is stamped onto the resource by the server (`commit.rs`, from the
