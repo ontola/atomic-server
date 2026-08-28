@@ -1,4 +1,10 @@
-import { enableLoro, isUnauthorized, server, type Store } from '@tomic/react';
+import {
+  Client,
+  enableLoro,
+  isUnauthorized,
+  server,
+  type Store,
+} from '@tomic/react';
 import { isOriginWithoutNode } from './originNode';
 
 /** Server-managed property stamping every resource with its drive at genesis. */
@@ -94,7 +100,21 @@ export async function adoptDriveFromDeepLink(store: Store): Promise<void> {
       drive = subject;
     }
 
-    if (!drive || drive === store.getDrive()) {
+    // Re-check after the await: invite accept may have set a real session
+    // drive (a `did:` private drive) while we waited on WS / Loro / fetch.
+    // The start-of-function gate is not enough — overwriting here is how
+    // a child-resource invitee ended up on an unreadable parent drive
+    // (`Unauthorized` / truncated DID in the sidebar).
+    //
+    // A bare origin is AppSettings' default, not an adopted workspace —
+    // still overwrite that so share links keep working.
+    const current = store.getDrive();
+
+    if (current && !Client.isBareHttpOrigin(current)) {
+      return;
+    }
+
+    if (!drive || drive === current) {
       return;
     }
 
