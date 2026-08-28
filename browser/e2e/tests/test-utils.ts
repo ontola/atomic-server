@@ -80,7 +80,7 @@ export async function openNotificationsInbox(page: Page) {
   await expect(page).toHaveURL(/\/app\/notifications/);
 }
 
-/** Personal drive via the same helper the app uses (not `store.getDrive()`). */
+/** Private drive via the same helper the app uses (not `store.getDrive()`). */
 export async function resolvePersonalDrive(page: Page): Promise<string> {
   await page.waitForFunction(
     () => !!window.__notificationsHelpers && !!window.store?.getAgent(),
@@ -143,8 +143,8 @@ async function waitUntilSignedIn(page: Page) {
 
 /**
  * Open a drive as the session drive. `/app/dev-drive` secrets pin
- * `initialDrive` to Personal, so a second context that only navigates to
- * `?subject=<workspace>` still has Personal as `store.getDrive()` — sidebar
+ * `initialDrive` to the private drive, so a second context that only navigates to
+ * `?subject=<workspace>` still has the home drive as `store.getDrive()` — sidebar
  * children, presence, and meetings then miss the workspace.
  */
 export async function openDrive(page: Page, drive: string) {
@@ -157,7 +157,7 @@ export async function openDrive(page: Page, drive: string) {
     { timeout: 15_000 },
   );
   // Don't rely on the Drive-page button appearing in time — after sign-in
-  // the session drive is Personal (`initialDrive`) and the workspace only
+  // the session drive is the private drive (`initialDrive`) and the workspace only
   // becomes current when we set it.
   await page.evaluate(d => {
     window.store.setDrive(d);
@@ -672,7 +672,7 @@ export async function signIn(page: Page, secret?: string) {
 
 /**
  * Quick dev setup: navigates to /app/dev-drive which creates a fresh agent,
- * a private Personal drive (inbox / watches), and a non-personal "Dev drive"
+ * a private drive (inbox / watches), and a non-personal "Dev drive"
  * workspace, then switches to the workspace.
  * Returns the agent secret so other pages/contexts can sign in as the same user.
  */
@@ -1817,9 +1817,9 @@ export async function openNewSubjectWindow(
     await openSubject(page, url);
   }
 
-  // Secret `initialDrive` is Personal. A second window that opens a
+  // Secret `initialDrive` is the private drive. A second window that opens a
   // workspace resource (canvas, document, drive) must join that
-  // resource's drive or live WS / presence stay on Personal.
+  // resource's drive or live WS / presence stay on the home drive.
   await page.waitForFunction(
     () =>
       !!window.store && window.store.getSyncStatus?.().serverConnected === true,
