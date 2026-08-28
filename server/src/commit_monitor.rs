@@ -186,12 +186,19 @@ impl Actor for CommitMonitor {
                         }
                         DbEvent::Destroyed {
                             subject,
+                            drive,
                             source_id,
                             from_commit: false,
                         } => {
                             addr.do_send(ExternalChange {
                                 subject: subject.to_string(),
-                                drive: None,
+                                // Without this the removal reaches only
+                                // subscribers of the subject itself, and the
+                                // client subscribes per drive — so a
+                                // cascade-deleted child was announced to
+                                // nobody and stayed in every open tab, and in
+                                // the local database across a reload.
+                                drive: drive.clone(),
                                 loro_snapshot: None,
                                 commit_id: None,
                                 destroyed: true,
