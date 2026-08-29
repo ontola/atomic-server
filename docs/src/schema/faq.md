@@ -1,6 +1,14 @@
 {{#title Atomic Schema FAQ}}
 # Atomic Schema FAQ
 
+## Do I have to define an ontology before I can store data?
+
+No. Classes and Properties are the recommended way to describe your model, but they are not a write-path requirement.
+
+A Resource is a subject plus property → value pairs. Property *keys* are URLs. A Property *resource* (shortname, datatype, description) is optional. A resource with no `isA` has no required properties. Commits and sync work either way.
+
+What you lose without a schema: required-field checks, shortnames, generated TypeScript/Rust types, generic forms and tables, and a shared meaning other apps can reuse. The easy path is still to declare an Atomic Schema — in code, once that API exists, or in the Ontology editor. The store will not reject a write just because you have not done that yet.
+
 ## Do you have an `enum` datatype?
 
 There is no dedicated `enum` datatype but you can use the `allows-only` property to achieve the same effect.

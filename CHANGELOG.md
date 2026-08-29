@@ -7,6 +7,9 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Schema is recommended, not required: `Resource::set` no longer fails when
+  the Property resource is missing. Datatype and `allowsOnly` still apply when
+  the Property exists. See [`planning/optional-schema.md`](./planning/optional-schema.md).
 - The outbox drains over a live Iroh link too (`sync::peer::LivePeerCommitTransport`):
   a device with no hub in reach delivers its queued writes to a paired peer as
   signed `COMMIT` frames, which the peer validates and applies like a hub
