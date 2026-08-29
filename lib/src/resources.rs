@@ -1328,16 +1328,33 @@ impl Resource {
     }
 
     /// Inserts a Property/Value combination.
-    /// Checks datatype.
     /// Overwrites existing.
     /// Adds the change to the commit builder's `set` map.
+    ///
+    /// Schema is recommended, not required. When a Property resource exists,
+    /// its datatype and `allowsOnly` are enforced. When it does not, the
+    /// `Value`'s own datatype is trusted — the same write is already possible
+    /// with `set_unsafe` and on the Loro commit path. See
+    /// `planning/optional-schema.md`.
     pub async fn set(
         &mut self,
         property: String,
         value: Value,
         store: &impl Storelike,
     ) -> AtomicResult<&mut Self> {
-        let full_prop = store.get_property(&property).await?;
+        let full_prop = match store.get_property(&property).await {
+            Ok(prop) => prop,
+            Err(e) => {
+                tracing::debug!(
+                    property = %property,
+                    subject = %self.get_subject(),
+                    error = %e,
+                    "No Property resource; writing value without schema check"
+                );
+                self.set_unsafe(property, value)?;
+                return Ok(self);
+            }
+        };
         if let Some(allowed) = full_prop.allows_only {
             let error = Err(format!(
                 "Property '{}' does not allow value '{}'. Allowed: {:?}",
@@ -1924,6 +1941,46 @@ mod test {
 
         let found_prop = found_resource.get(&property).unwrap().clone();
         assert_eq!(found_prop.to_string(), value.to_string());
+    }
+
+    /// An app can persist data without publishing Classes or Properties.
+    /// Schema is recommended, not required — see `planning/optional-schema.md`.
+    #[tokio::test]
+    async fn set_accepts_unknown_property_on_classless_resource() {
+        let store: crate::Db = init_store().await;
+        let unknown = "https://example.com/properties/customTitle";
+        let mut resource = Resource::new_generate_subject(&store).unwrap();
+        resource
+            .set(unknown.into(), Value::String("Buy milk".into()), &store)
+            .await
+            .unwrap();
+        resource
+            .set(urls::NAME.into(), Value::String("Note".into()), &store)
+            .await
+            .unwrap();
+        let subject = resource.get_subject().clone();
+        resource.save_locally(&store).await.unwrap();
+
+        let loaded = store.get_resource(&subject).await.unwrap();
+        assert!(
+            loaded.get(urls::IS_A).is_err(),
+            "classless write must not invent an isA"
+        );
+        assert_eq!(loaded.get(unknown).unwrap().to_string(), "Buy milk");
+    }
+
+    #[tokio::test]
+    async fn set_still_enforces_datatype_when_property_exists() {
+        let store: crate::Db = init_store().await;
+        let mut resource = Resource::new_generate_subject(&store).unwrap();
+        let err = resource
+            .set(urls::NAME.into(), Value::Integer(1), &store)
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("did not match"),
+            "known Property must still reject a datatype mismatch, got: {err}"
+        );
     }
 
     #[tokio::test]

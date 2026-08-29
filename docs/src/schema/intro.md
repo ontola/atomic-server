@@ -6,6 +6,8 @@ You can compare it to UML diagrams, or what XSD is for XML.
 Atomic Schema deals with validating and constraining the shape of data.
 It is designed for checking if all the required properties are present, and whether the values conform to the datatype requirements (e.g. `datetime`, or `URL`).
 
+Atomic Schema is **recommended, not required**. [Atomic Data Core](../core/concepts.md) is enough to store and sync resources: property keys are URLs, values are typed, commits are signed. You do not need to publish Classes or Property resources before writing data. Schema is what you add when you want required fields, shortnames, generated types, generic forms, and shared meaning. Libraries accept writes without a schema and enforce a schema when one is present.
+
 This section will define various Classes, Properties and Datatypes (discussed in [Atomic Core: Concepts](../core/concepts.md)).
 
 ## Design Goals

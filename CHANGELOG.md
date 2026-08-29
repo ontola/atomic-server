@@ -7,6 +7,9 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Schema is recommended, not required: `Resource::set` no longer fails when
+  the Property resource is missing. Datatype and `allowsOnly` still apply when
+  the Property exists. See [`planning/optional-schema.md`](./planning/optional-schema.md).
 - Git / CI: one integration branch (`develop`) plus stable `v*` tags. Staging
   follows `develop`; production and live docs follow a tagged release. `master`
   is no longer a deploy or docs trigger, and `main` is not introduced as a

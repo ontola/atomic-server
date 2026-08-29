@@ -304,6 +304,22 @@ is only kept in step by mirroring the tests, so do that deliberately.
 derivation (`personal_drive_subject` / `personalDriveSubject`). The cross-lang
 vector (`personal_drive_cross_lang_vector`) pins the nonce, signature, and DID.
 
+## Schema optionality
+
+Policy: [`planning/optional-schema.md`](./planning/optional-schema.md). Schema is
+recommended, not required on the write path.
+
+| Flow | Layer | Where |
+|---|---|---|
+| Classless resource + unknown Property URL saves and reloads | protocol | `lib/src/resources.rs::set_accepts_unknown_property_on_classless_resource` |
+| Known Property still rejects a datatype mismatch | protocol | `lib/src/resources.rs::set_still_enforces_datatype_when_property_exists` |
+| Unresolvable `isA` does not fail `check_required_props` | protocol | `lib/src/resources.rs` (existing class-skip test) |
+| `@tomic/lib` `set` skips validation when `getProperty` fails | glue | `browser/lib/src/resource.ts` (warn + write); no dedicated assertion |
+
+Not covered: JSON-AD parse of a key with no Property resource (still fails
+unless `skip_unknown_props`); a browser integration test that saves a
+classless custom-property resource through a real server.
+
 ## Documents
 
 | Flow | Layer | Where |
