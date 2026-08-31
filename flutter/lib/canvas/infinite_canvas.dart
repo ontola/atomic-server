@@ -9,6 +9,7 @@ import '../models/canvas_entry.dart';
 import '../gallery/canvas_store.dart';
 import '../atomic/atomic_client.dart';
 import 'canvas_painter.dart';
+import 'canvas_pop_scope.dart';
 import 'fan_helpers.dart';
 import 'thumbnail.dart';
 import '../widgets/bottom_toolbar.dart';
@@ -911,11 +912,8 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) widget.onClose();
-      },
+    return CanvasPopScope(
+      onClose: widget.onClose,
       child: Scaffold(
         backgroundColor: context.appColors.canvasBg,
         body: Stack(
