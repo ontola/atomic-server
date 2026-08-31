@@ -241,6 +241,12 @@ If you encounter serious security risks, please refrain from posting these publi
 We could minimize the impact by first patching the issue, publishing the patch, and then (after 30 days) disclose the bug.
 So please first send an e-mail to <joep@ontola.io> describing the issue, and then we will work on fixing it as soon as possible.
 
+## AI-assisted contributions
+
+Using AI tools or language models to help write, review, document, test, or understand code is welcome.
+Contributors remain responsible for everything they submit, regardless of how it was produced. In particular, AI-generated changes should be reviewed for correctness, security, licensing, maintainability, and unnecessary complexity before submission.
+We believe AI can be useful for improving software while also recognizing that increasingly capable AI systems may create serious societal and safety risks. Allowing AI-assisted development here should not be interpreted as an endorsement of unrestricted AI development or deployment.
+
 ## Releases, Versioning and Tagging
 
 1. Commit changes
