@@ -14,6 +14,7 @@ class AtomicSession {
   static const _keyServerUrl = 'atomic_server_url';
   static const _keySecret = 'atomic_agent_secret';
   static const _keyDrive = 'atomic_drive';
+  static const _keyOpenCanvas = 'atomic_open_canvas';
 
   static const _secure = FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
@@ -75,6 +76,35 @@ class AtomicSession {
     await _secure.delete(key: _keySecret);
     await prefs.remove(_keySecret); // legacy, if any
     await prefs.remove(_keyDrive);
+    await prefs.remove(_keyOpenCanvas);
+  }
+
+  // ── Open canvas ───────────────────────────────────────────────────
+  //
+  // The currently-open drawing is not a route, so a process death or an
+  // Android activity recreate (some OEMs still do this on rotation) would
+  // dump the user back on the gallery. Remember the subject so startup
+  // can reopen it. Cleared when they actually leave the canvas.
+
+  /// Persist the canvas the user is drawing on. Empty ids are ignored —
+  /// a brand-new canvas has no subject until the server (or local store)
+  /// assigns one.
+  static Future<void> saveOpenCanvas(String subject) async {
+    if (subject.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyOpenCanvas, subject);
+  }
+
+  static Future<void> clearOpenCanvas() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyOpenCanvas);
+  }
+
+  static Future<String?> loadOpenCanvas() async {
+    final prefs = await SharedPreferences.getInstance();
+    final id = prefs.getString(_keyOpenCanvas);
+    if (id == null || id.isEmpty) return null;
+    return id;
   }
 
   // ── Servers ───────────────────────────────────────────────────────

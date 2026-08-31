@@ -117,6 +117,7 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Bridge `peer_sync` to an unreachable node errors rather than hanging | `flutter/rust/src/api/simple/peer_tests.rs` | |
 | **`POST /iroh-sync` request shape, both sides** | `testdata/pairing-request.json` + `pairing.test.ts` + `iroh_pairing.rs` | shared fixture binds them |
 | Dart pairing-code parser, peer-sync result formatting | `flutter/test/atomic/` | pure parsers |
+| Rotation does not treat a metrics-change pop as "back to gallery" | `flutter/test/canvas/` | `CanvasPopScope` + `RotationPopGuard`; open-canvas subject is persisted in `AtomicSession` |
 
 ### Flow — the thin layer
 
