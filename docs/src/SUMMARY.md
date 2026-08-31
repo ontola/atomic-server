@@ -46,6 +46,8 @@
   - [Rust](rust.md)
     - [CLI](rust-cli.md)
     - [Lib](rust-lib.md)
+  - [Python](python.md)
+  - [Kotlin](kotlin.md)
 
 # Guides
 

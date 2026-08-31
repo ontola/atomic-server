@@ -111,6 +111,8 @@ the document itself.
 | [`presence-views.md`](./presence-views.md) | Presence on canvas, tables, navbar, sidebar. |
 | [`demo-experience.md`](./demo-experience.md) | v1 demo workspace. |
 | [`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md) | Bootstrap-grace admission gate for managed nodes. |
+| [`python-sdk.md`](./python-sdk.md) | Python bindings over `atomic_lib` via PyO3 (local redb, Iroh, HTTP schema/search/`save_remote`). |
+| [`kotlin-sdk.md`](./kotlin-sdk.md) | UniFFI crate `ffi/` + Kotlin package `dev.atomicdata`. Same local redb + Iroh + HTTP surface as Python. Android AAR still open. |
 
 ## Agent Workflow
 

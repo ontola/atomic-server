@@ -75,6 +75,8 @@ Atomic Server is a graph database with real-time sync, built on **Loro CRDT** fo
 - **`@tomic/react`** (`browser/react/`) — React hooks.
 - **`data-browser`** (`browser/data-browser/`) — The web app (React + TipTap + Loro), feels similar to notion. See the related AGENTS.md
 - **`flutter/`** — Cross-platform canvas app (Android/iOS/Web). Uses `flutter_rust_bridge` to call `atomic_lib`. See `flutter/README.md` and `flutter/AGENTS.md`.
+- **`python/`** — Python SDK (`atomic_data`). PyO3 bindings over `atomic_lib` (local redb, Iroh, HTTP schema/search/`save_remote`). Excluded from the Cargo workspace; build with `maturin`. See `python/README.md` and `planning/python-sdk.md`.
+- **`ffi/`** — UniFFI crate (`atomic-ffi`) and Kotlin SDK (`dev.atomicdata`). Same local redb + Iroh + HTTP surface as Python. Excluded from the Cargo workspace. See `ffi/README.md` and `planning/kotlin-sdk.md`.
 
 ### Data model
 
@@ -245,6 +247,8 @@ cd browser/lib && pnpm test                      # JS unit tests
 cd browser && pnpm run -r build                  # Full workspace build
 cd browser && pnpm run test-e2e:light            # Playwright @smoke (feature-branch CI)
 cd browser && pnpm run test-e2e                  # Full Playwright suite (develop / tags)
+cd python && uv run pytest                           # Python SDK (excluded from workspace)
+cd ffi && cargo test && cd kotlin && ./gradlew test  # Kotlin / UniFFI SDK (excluded from workspace)
 ```
 
 `atomic_lib`'s unit tests need the `db` feature — `hierarchy.rs`'s test module

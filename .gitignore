@@ -39,3 +39,14 @@ scratchpad
 
 .bin/
 .fastembed_cache
+
+# Python / UniFFI SDKs (excluded from the Cargo workspace, own target/)
+python/target
+python/.venv
+python/*.egg-info
+ffi/target
+ffi/kotlin/.gradle
+ffi/kotlin/build
+**/__pycache__
+**/.pytest_cache
+*.so
