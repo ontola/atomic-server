@@ -405,6 +405,222 @@ person — otherwise two OIDC browsers cannot peer-sync. That is the
 same-agent special case becoming the grant/cert case
 [`authorization-sync.md`](./authorization-sync.md) already wants.
 
+## How an implementation checks signatures and rights
+
+Today those are the same check, because the signer DID *is* the person.
+`Commit::validate_signature` takes the pubkey out of
+`did:ad:agent:{pubkey}` and verifies Ed25519 over deterministic JSON-AD.
+`hierarchy::check_write` then asks whether **that same DID** is in
+`write`. AUTH (`get_agent_from_auth_values_and_check`) returns
+`ForAgent::AgentSubject(signer)` and every GET / WS / Iroh path consumes
+it. Session keys split the two layers: the **key that signed** is not
+the **principal that has rights**.
+
+One helper, used everywhere. Get this wrong in a single call site and
+either OIDC writes 403, or a disposable session DID lands in an ACL
+and outlives the cert.
+
+### The helper
+
+```text
+effective_agent(signer, cert, t) → ForAgent
+```
+
+| Input | Result |
+| --- | --- |
+| No cert (secret / passkey / exported root) | `ForAgent::AgentSubject(signer)` — today's path |
+| Cert present | Verify the chain below; return `ForAgent::AgentSubject(did:ad:agent:{rootPub})` |
+
+`t` is the time bound for the window: `commit.createdAt` on a commit
+(historical writes stay valid after `notAfter`), AUTH timestamp on a
+live request (AUTH is already freshness-checked at ~10s). Never use
+wall-clock to reject an old commit whose `createdAt` was inside the
+window when it was signed.
+
+`hierarchy::check_rights` does **not** grow a cert case. After AUTH /
+`apply_commit` remap, it still compares a DID to `read` / `write` /
+self. The session key never appears in those lists.
+
+### What is on the wire
+
+**Commit** (new optional field, included in the signed JSON-AD so it
+is bound to this mutation):
+
+```text
+signer     = did:ad:agent:{sessionPub}     // the key that signed
+signature  = Ed25519_session(canonical JSON-AD)   // unchanged
+sessionCert = compact bytes (below)
+```
+
+**AUTH** (HTTP `x-atomic-*`, cookie, WS, Iroh `encode_auth`) — same
+four fields as today, plus the cert:
+
+```text
+publicKey / agent  = session
+signature          = Ed25519_session("{subject} {timestamp}")
+sessionCert        = same compact bytes
+```
+
+The OIDC cookie is not on this path. No JWKS, no IdP, no network at
+verify time. A replica that has never spoken to Google can still
+accept the commit.
+
+### SessionCert (compact, genesis-cert family)
+
+Not a DID. The signature lives in the blob, unlike genesis certs
+where the signature *is* the subject. Domain-separated by version
+byte so a genesis cert cannot be replayed as a session cert.
+
+```text
+offset  size  field
+------  ----  ------------------------------------------
+0       1     version          0x01
+1       32    sessionPubKey    Ed25519, raw
+33      8     notBefore        i64 unix ms, little-endian
+41      8     notAfter         i64 unix ms, little-endian
+49      32    rootPubKey       Ed25519, raw
+81      64    signature        Ed25519 by root over bytes [0, 81)
+```
+
+Fixed 145 bytes. Golden vectors shared across Rust / TS / WASM, same
+fixture pattern as `genesis_test_vectors.json`.
+
+`SessionCert::verify(bytes, claimed_session_pub, t) → root DID`:
+
+1. Decode; reject unknown version, truncated, trailing bytes.
+2. `sessionPubKey` equals the claimed signer / AUTH public key
+   (compare decoded bytes, not base64 spelling —
+   `public_keys_match`).
+3. Ed25519 verify `signature` under `rootPubKey` over bytes `[0, 81)`.
+4. `notBefore <= t <= notAfter`.
+5. Return `did:ad:agent:{base64url(rootPubKey)}`.
+
+No store lookup. The root does not have to be a stored Agent
+resource for the signature to check; rights later look that DID up
+in ACLs.
+
+### Commit path (`lib/src/commit.rs`)
+
+`validate_signature` stays “does this pubkey cover these bytes?” and
+grows a second step:
+
+1. Extract pubkey from `commit.signer` (session DID). Unchanged.
+2. Verify Ed25519 of `serialize_deterministically_json_ad`. Unchanged.
+3. **New.** If `sessionCert` is present: `SessionCert::verify(..., commit.created_at)`.
+   Fail closed on a bad / expired-at-signing / mismatched cert.
+4. If `sessionCert` is absent: stop. Signer **is** the person.
+
+Then `apply_commit` with `validate_rights`:
+
+```text
+effective = effective_agent(commit.signer, commit.session_cert, commit.created_at)
+check_append / check_write(..., &effective)     // not commit.signer
+admit / may_enroll_drive writer = effective     // not commit.signer
+genesis write-list insert = effective           // not commit.signer
+```
+
+`commit.signer` stays the session DID on the stored Commit resource
+(which device signed). `createdBy` / implicit creator / personal-drive
+derivation use `effective`.
+
+Today `apply_commit` inserts `commit.signer` into `write` on new DID
+resources (`lib/src/commit.rs`). If that line keeps using the session
+DID, every OIDC browser pollutes ACLs with keys that die at
+`notAfter`. Insert the **root**.
+
+Today `engine.rs` sets `validate_for_agent: Some(signer.to_string())`
+and auto-creates an Agent resource for an unknown signer. With a
+cert, `validate_for_agent` is the root, and **do not** auto-create an
+Agent resource for the session DID.
+
+### AUTH path (`lib/src/authentication.rs`)
+
+`check_auth_signature` is unchanged: Ed25519 of
+`"{requestedSubject} {timestamp}"` under the header public key
+(session). Timestamp freshness (`ACCEPTABLE_TIME_DIFFERENCE`) is
+unchanged.
+
+`get_agent_from_auth_values_and_check` then:
+
+1. Public key still must match `agent` (the session DID). Unchanged.
+2. **New.** If `sessionCert` is present: verify with `t = auth.timestamp`
+   (already required to be ~now), return `ForAgent` of the **root**.
+3. If absent: return the session DID as today.
+
+HTTP GET (`server/src/helpers.rs` `get_client_agent`), the
+`atomic_session` cookie, WS `AUTHENTICATE`, and Iroh
+`engine::handle_frame` AUTH all call this one function. Remap here
+and `check_read` / `check_write` on those transports see the person.
+No per-handler cert logic.
+
+Iroh pairing today is byte-equal `did:ad:agent:`. After the remap,
+two OIDC devices AUTH as different session keys but the engine's
+`for_agent` is the same root, so `check_write` “Agents can always
+edit themselves” applies to the **root** Agent resource. That is
+also what `own_agent_update_frame` must send — the root, not a
+session stub. The client keeps two notions: *who I am* (root DID,
+no private key until export) vs *what I sign with* (session).
+
+### Who is checked against what
+
+| Question | Function | Principal |
+| --- | --- | --- |
+| Did this key sign these bytes? | `validate_signature` / `check_auth_signature` | Session pubkey |
+| Is this cert a live delegation from that person? | `SessionCert::verify` | Root pubkey (issuer) |
+| May they read / write this resource? | `check_read` / `check_write` | **Root** DID |
+| May they enroll a Drive? | `admit_drive_write` / `may_enroll_drive` | **Root** DID |
+| Whose home is this? | `GenesisCert::private_drive_subject` | **Root** key |
+| Who shows up as author? | `createdBy` | **Root** DID |
+
+Self-write (`check_rights`: “Agents can always edit themselves”)
+fires when `resource.subject == for_agent`. After remap, an OIDC
+browser can edit the **root** Agent (name, `drives`). It cannot
+edit some other person's Agent. Session Agent resources are not
+created; there is nothing at `did:ad:agent:{sessionPub}` to own.
+
+### Dual-accept and old replicas
+
+No `sessionCert` ⇒ byte-identical to today. Secret and passkey users
+never send the field.
+
+An OIDC commit *with* the field is a protocol bump: `Commit`
+re-serializes from a struct, so an old verifier that drops unknown
+properties will re-hash without `sessionCert` and reject the
+signature. That is fail-closed. OIDC users only sync with replicas
+that understand SessionCert — true anyway, because those replicas
+must check rights against the root. Do not put the cert in an
+unsigned envelope to “stay compatible”; a stripped cert would make
+the session DID look like a stranger, and Iroh has no HTTP sidecar.
+
+### What this does not do
+
+- No CRL in v1. Stolen session key works until `notAfter`. Stolen
+  OIDC cookie can mint new certs until *that* cookie expires. Stop
+  issuing + short TTL is revoke.
+- Verify does not call the IdP. Deprovision is “no new certs,” not
+  “every replica phones Google.”
+- The OIDC cookie never enters `check_write`.
+- `commit.signature` stays Ed25519. Not a JWT (rejected option A).
+- The node never signs the commit (rejected option B). It only
+  signed the cert, earlier, under the OIDC cookie.
+
+### Tests that pin this (cheapest that can fail)
+
+Rust vectors, no server:
+
+- Session sig + valid cert + root in `write` → apply.
+- Same commit, root **not** in `write` → reject (rights, not sig).
+- `createdAt` outside `[notBefore, notAfter]` → reject.
+- Cert `sessionPub` ≠ `commit.signer` → reject.
+- Genesis of a document inserts **root** into `write`, never the
+  session DID.
+- No cert → today's `validate_signature` still passes (dual-accept).
+- AUTH with cert → `get_agent_from_auth_values_and_check` returns
+  the root DID; without cert, the signer DID.
+
+Mock IdP and Playwright stay at the issuance layer (earlier
+section). They do not replace these vectors.
+
 ### Optional extra wrappers (not on the OIDC path)
 
 The root envelope *may* also carry a passkey wrapper so the identity
@@ -645,9 +861,9 @@ node) are both “nothing to memorize.” They do not block each other.
 Connector OAuth is a different product.
 
 1. This decision (this file): SessionCert + root-as-CA.
-2. Compact SessionCert (binary, genesis-cert family) and verify in
-   `Commit::validate_signature` + AUTH (HTTP, WS, Iroh): signer may be
-   a session Agent if the cert chains to a root with rights.
+2. Compact SessionCert + `effective_agent` in `validate_signature` and
+   AUTH (HTTP, WS, Iroh): signer may be a session Agent; rights use the
+   root. See [signature / rights checks](#how-an-implementation-checks-signatures-and-rights).
 3. OIDC RP: env, `/server` advertisement, callback, `POST /oidc/session`
    issues the cert. HostMode enrollment unchanged. First-run UX is one
    button.
@@ -693,25 +909,24 @@ login button.”
 
 ### Protocol and `atomic_lib` (the real work)
 
-- **`SessionCert`** — compact binary next to genesis certs
-  (`planning/genesis-self-verifying.md`): session pubkey, window, root
-  pubkey, root Ed25519 sig.
-- **`Commit::validate_signature`** (`lib/src/commit.rs`) — today the
-  signer DID *is* the key. Session commits: verify session sig, then
-  cert, then `createdAt` inside the window. **Rights use the root
-  DID**, not the session DID (`hierarchy::check_write`,
-  `admit_drive_write`, implicit creator). If `apply_commit` keeps
-  inserting `commit.signer` into `write`, every OIDC browser pollutes
-  ACLs with disposable DIDs — must insert/treat **root**.
-- **Personal drive** is derived from the Agent key
-  (`planning/deterministic-personal-drive.md`). Must use the **root**.
-  A session key in `store.getAgent()` would mint a different home.
-  The client needs two notions: *who I am* (root) vs *what I sign
-  with* (session).
-- **AUTH** (HTTP `x-atomic-*`, WS, Iroh `encode_auth`) — signed by the
-  session key, cert attached or already known. Iroh’s same-agent check
-  (`did:ad:agent:` byte equality) is wrong for two OIDC devices: they
-  are two leaves under one root. That is the pairing/P2P piece.
+Verifier mechanics (helper, cert layout, every call site) are in
+[How an implementation checks signatures and rights](#how-an-implementation-checks-signatures-and-rights).
+Summary:
+
+- **`SessionCert`** — 145-byte blob next to genesis certs: session
+  pubkey, window, root pubkey, root Ed25519 sig.
+- **`effective_agent(signer, cert, t)`** — the one remap. Signature
+  checks the session key; rights / admit / genesis `write` insert /
+  AUTH’s returned `ForAgent` use the **root**. `check_rights` itself
+  does not grow a cert case.
+- **`Commit::validate_signature`** — session Ed25519 (unchanged), then
+  cert + `createdAt` in window. `apply_commit` must not keep inserting
+  `commit.signer` into `write`.
+- **Personal drive** from the **root** key, not `store.getAgent()` if
+  that is the session. Client: *who I am* vs *what I sign with*.
+- **AUTH** — session sig unchanged; `get_agent_from_auth_values_and_check`
+  returns the root when a cert is present. HTTP / WS / Iroh inherit.
+  Iroh same-agent becomes same-root.
 - **Invites** already take a pubkey; guest can be a session pubkey if
   the cert is presented, or they export first. Easiest v1: redeem as
   root after export, or pass session+cert.
