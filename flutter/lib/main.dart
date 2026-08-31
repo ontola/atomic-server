@@ -257,7 +257,7 @@ class _AtomicCanvasAppState extends State<AtomicCanvasApp>
     });
   }
 
-  void _openFromGallery(CanvasEntry canvas) async {
+  Future<void> _openFromGallery(CanvasEntry canvas) async {
     final isDarkMode = View.of(context).platformDispatcher.platformBrightness ==
         Brightness.dark;
     await _store.loadStrokes(canvas, isDarkMode: isDarkMode);
