@@ -6,7 +6,7 @@
     "background_color": "#ffffff",
     "theme_color": "#2210FF",
     "description": "Atomic Canvas - infinite drawing canvas",
-    "orientation": "any",
+    "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
         {

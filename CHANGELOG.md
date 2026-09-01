@@ -12,8 +12,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   is no longer a deploy or docs trigger, and `main` is not introduced as a
   copy of the latest tag.
 - Fix: Atomic Canvas no longer returns to the gallery when the screen rotates.
-  Android was treating the rotation as a back press; the open canvas is also
-  remembered across an activity recreate.
+  Android was treating the rotation as a back press.
 
 ## [v0.41.0-beta.2] - 2026-08-01
 

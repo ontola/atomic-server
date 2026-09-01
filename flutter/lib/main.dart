@@ -164,55 +164,11 @@ class _AtomicCanvasAppState extends State<AtomicCanvasApp>
         View.of(context).platformDispatcher.platformBrightness ==
             Brightness.dark;
     setState(() => _loggedIn = true);
-    _store.load().then((_) async {
-      await _restoreOpenCanvas();
+    _store.load().then((_) {
       if (mounted) setState(() {});
     });
     _startEventListener();
     _startBackgroundSync();
-  }
-
-  /// Reopen the canvas the user was drawing on after a process death or
-  /// an activity recreate (rotation on some Android OEMs). No-ops when
-  /// one is already open, or when the saved subject is gone from the
-  /// gallery.
-  Future<void> _restoreOpenCanvas() async {
-    if (_openCanvas != null) return;
-    final id = await AtomicSession.loadOpenCanvas();
-    if (id == null || !mounted) return;
-    CanvasEntry? canvas;
-    for (final entry in _store.canvases) {
-      if (entry.id == id) {
-        canvas = entry;
-        break;
-      }
-    }
-    if (canvas == null) {
-      await AtomicSession.clearOpenCanvas();
-      return;
-    }
-    await _openFromGallery(canvas);
-  }
-
-  void _rememberOpenCanvas(CanvasEntry canvas) {
-    if (canvas.id.isNotEmpty) {
-      unawaited(AtomicSession.saveOpenCanvas(canvas.id));
-      return;
-    }
-    unawaited(_rememberOpenCanvasWhenReady(canvas));
-  }
-
-  /// A brand-new canvas has no subject until the store creates it remotely.
-  /// Keep the gallery restore in sync once that id lands.
-  Future<void> _rememberOpenCanvasWhenReady(CanvasEntry canvas) async {
-    for (var i = 0; i < 50; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-      if (!mounted || !identical(_openCanvas, canvas)) return;
-      if (canvas.id.isNotEmpty) {
-        await AtomicSession.saveOpenCanvas(canvas.id);
-        return;
-      }
-    }
   }
 
   void _showDebouncedSnack(BuildContext ctx, String key, String message,
@@ -257,7 +213,7 @@ class _AtomicCanvasAppState extends State<AtomicCanvasApp>
     });
   }
 
-  Future<void> _openFromGallery(CanvasEntry canvas) async {
+  void _openFromGallery(CanvasEntry canvas) async {
     final isDarkMode = View.of(context).platformDispatcher.platformBrightness ==
         Brightness.dark;
     await _store.loadStrokes(canvas, isDarkMode: isDarkMode);
@@ -265,7 +221,6 @@ class _AtomicCanvasAppState extends State<AtomicCanvasApp>
       AtomicClient.wsSubscribeCanvas(canvas.id).catchError((_) {});
     }
     if (mounted) setState(() => _openCanvas = canvas);
-    _rememberOpenCanvas(canvas);
   }
 
   void _newCanvas({String? folderId}) {
@@ -274,7 +229,6 @@ class _AtomicCanvasAppState extends State<AtomicCanvasApp>
     }
     final canvas = _store.createCanvas(folderId: folderId);
     setState(() => _openCanvas = canvas);
-    _rememberOpenCanvas(canvas);
     if (canvas.id.isNotEmpty) {
       AtomicClient.wsSubscribeCanvas(canvas.id).catchError((_) {});
     }
@@ -293,7 +247,6 @@ class _AtomicCanvasAppState extends State<AtomicCanvasApp>
     if (_openCanvas != null && _openCanvas!.strokes.isEmpty) {
       _store.deleteCanvases([_openCanvas!.id]);
     }
-    unawaited(AtomicSession.clearOpenCanvas());
     setState(() => _openCanvas = null);
   }
 
@@ -356,7 +309,6 @@ class _AtomicCanvasAppState extends State<AtomicCanvasApp>
                       onOpen: _openFromGallery,
                       onNew: ({folderId}) => _newCanvas(folderId: folderId),
                       onSignOut: () {
-                        unawaited(AtomicSession.clearOpenCanvas());
                         setState(() {
                           _loggedIn = false;
                           _openCanvas = null;
