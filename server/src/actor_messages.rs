@@ -17,6 +17,13 @@ pub struct Subscribe {
     /// to subscribers whose `source_id` matches an event's `source_id`,
     /// so a client never receives its own commit back.
     pub source_id: String,
+    /// The wire frame this subscription came from — `"SUBSCRIBE"` for the
+    /// text frame, `"SUB"` for the binary drive subscription. Named in the
+    /// ERROR a refusal sends back. `None` for the companion subscription a
+    /// `SUB` adds for the drive resource itself: the `SubscribeDrive` sent
+    /// alongside it already answers that frame, and one frame gets one
+    /// answer.
+    pub refusal_frame: Option<&'static str>,
 }
 
 /// A message containing a Resource, which should be sent to subscribers
@@ -204,6 +211,31 @@ pub struct UnsubscribeAll {
 #[rtype(result = "()")]
 pub struct SendFrame {
     pub frame: Arc<[u8]>,
+}
+
+/// Tell a connection that a subscription it asked for was refused, as an
+/// `ERROR` frame (`request_id = 0`,
+/// [`atomic_lib::sync::protocol::error_code::UNAUTHORIZED_READ`]). Every
+/// subscription handler used to drop a failed `check_read` on the floor, so
+/// a client could not tell "subscribed, nothing has changed yet" from
+/// "never subscribed" — the same silence `SYNC_OK`-on-rejection produced
+/// for pushes. Sent from the actor that made the decision, since the
+/// connection actor fired the request off with `do_send` and is not
+/// waiting on a reply.
+pub fn refuse_subscription(
+    addr: &Addr<crate::handlers::web_sockets::WebSocketConnection>,
+    what: &str,
+    subject: &str,
+    reason: &str,
+) {
+    let frame = atomic_lib::sync::protocol::encode_error(
+        0,
+        atomic_lib::sync::protocol::error_code::UNAUTHORIZED_READ,
+        &format!("{what} refused for {subject}: {reason}"),
+    );
+    addr.do_send(SendFrame {
+        frame: Arc::from(frame),
+    });
 }
 
 /// Forwarded into `CommitMonitor` by the `DbEvent::QueryMembershipChanged`

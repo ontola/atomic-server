@@ -25,9 +25,10 @@ and doesn't need to. Three actor handlers + three fanout loops on every
 
 ## Observations
 
-- `SUBSCRIBE <subject>` has **no permission check** today. That's a
-  latent issue: any authenticated agent can SUB any subject and receive
-  every commit on it.
+- `SUBSCRIBE <subject>` used to have **no permission check**; it now runs
+  `check_read` on the subject in `CommitMonitor::Subscribe`, and (since
+  2026-09-01) every refused subscription answers `ERROR UNAUTHORIZED_READ`
+  instead of dropping silently, and needs `AUTH` first.
 - The `SUB <drive>` binary tag and the `SUBSCRIBE <subject>` text frame
   are doing nearly the same job. The former is "drive-scoped", the
   latter is "subject-scoped" — both could be a degenerate filter.

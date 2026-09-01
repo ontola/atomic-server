@@ -741,7 +741,7 @@ Layer 2 — Bulk reconcile (same-agent catch-up / offline gap)
 | Layer | Proves identity | Proves rights | Deletes |
 | --- | --- | --- | --- |
 | **1 — Live / COMMIT** | WS `AUTH` or HTTP auth | Hub `apply_commit` + hierarchy | Signed destroy commit → `DESTROY` |
-| **2 — Bulk** | `AUTH` on stream before `SYNC` (required policy — not yet enforced) | `check_read` on push; `check_write` + admission on import | `remove[]` from peer tombstones — **not** signed on the wire |
+| **2 — Bulk** | `AUTH` on stream before `SYNC` (enforced on Iroh accept 2026-09-01; WS gates writes + identity-bearing subs, anonymous reads stay `check_read`-gated) | `check_read` on push; `check_write` + admission on import | `remove[]` from peer tombstones — **not** signed on the wire |
 
 **Policy:** authoritative delete = Layer 1 on the hub. Layer 2 `remove` only prevents
 resurrection between honest replicas of the same agent.
@@ -790,9 +790,25 @@ resurrection between honest replicas of the same agent.
   destroyed via the initiator's ungated `SYNC_DIFF.remove[]` apply — that's F9 proper.
 - [x] **F11:** clear tombstone when a rights-checked commit re-creates the subject
   (2026-07-02).
-- [ ] **Require `AUTH` before `SYNC` / `SYNC_PUSH`** on accept paths (fail closed) —
-  F9 is the concrete exploit this abstract item was about.
-- [ ] **Bind `AUTH.requestedSubject` to `SYNC.drive`** for the session.
+- [x] **Require `AUTH` before `SYNC` / `SYNC_PUSH`** on accept paths (fail closed) —
+  F9 is the concrete exploit this abstract item was about. (2026-09-01) Iroh
+  `handle_stream` accepts only `AUTH` pre-auth and answers anything else with
+  `ERROR AUTH_REQUIRED (5)` + closed stream; a failed `AUTH` closes too; the
+  `register_live_peer` read loop refuses non-AUTH frames from a still-`Public`
+  peer we did not dial. WS: `SYNC_PUSH`, `BLOB_RESPONSE`, `LORO_SYNC_UPDATE`,
+  `LORO_EPHEMERAL_UPDATE`, `PRESENCE_UPDATE`, `SUBSCRIBE`, `SUBSCRIBE_QUERY`,
+  `LORO_SYNC_SUBSCRIBE`, `PRESENCE_SUBSCRIBE` require `AUTH`; anonymous
+  `GET` / `SUB` / `SYNC` / `SYNC_VV` stay open behind `check_read` (public share
+  links). Tests: `sync::peer::accept_gate_tests`, `server/tests/it/ws_auth_gate.rs`.
+- [x] **Bind `AUTH.requestedSubject` to `SYNC.drive`** for the session (2026-09-01,
+  Iroh accept path only: the first handshake `SYNC`/`SYNC_PUSH` must name the
+  drive the `AUTH` was signed for. Not possible over WS — the browser signs the
+  server origin, not a drive.)
+- [x] **`SYNC_PUSH` rejection is visible** (2026-09-01): `import_sync_push` returns
+  `Err(SyncPushRejected)` for a rights/policy refusal and the engine answers
+  `ERROR SYNC_REJECTED (6)` instead of `SYNC_OK`; subscriptions refused by
+  `check_read` answer `ERROR UNAUTHORIZED_READ (7)` instead of dropping silently.
+  Browser keeps the drive un-synced (`Store.failDriveSync`, `lastDriveSyncError`).
 - [ ] **Subscription identity refresh:** re-evaluate `SUBSCRIBE`/`SUBSCRIBE_QUERY`
   agent binding when a connection's AUTH lands or changes (see drift inventory).
 - [ ] **F6:** fence `apply_commit_json` (trusted-hub-only naming/docs); consider the
@@ -954,9 +970,10 @@ work in that plan's Phase P0, not a decision-gated maybe.
   `remote_agent` instead of `Sudo` on initiator `import_sync_push`; the initiator's
   ungated `apply_destroy` on `SYNC_DIFF.remove[]` for known subjects now gated via
   `apply_peer_remove` (closes the F10 known-subject residual). Revert-proven
-  `sync::peer::initiator_trust_tests`. The remaining P0 items (fail-closed AUTH-before-SYNC,
-  `AUTH.requestedSubject`↔drive binding, "deletes as signed destroy commits" per OQ4)
-  stay open in [`serverless-p2p.md`](./serverless-p2p.md) Phase P0.
+  `sync::peer::initiator_trust_tests`. Fail-closed AUTH-before-SYNC and the
+  `AUTH.requestedSubject`↔drive binding landed 2026-09-01 (see the ticked items
+  above); "deletes as signed destroy commits" per OQ4 stays open in
+  [`serverless-p2p.md`](./serverless-p2p.md) Phase P0.
 - [x] F10: reject phantom tombstones for locally-*unknown* subjects from
   unprivileged peers (2026-07-02). **Does not** cover a known subject destroyed via
   the initiator's ungated remove-apply — that's F9 proper, above.

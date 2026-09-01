@@ -45,9 +45,10 @@ pub enum ReplicateAuth {
     /// so this server can push as the owner without ever holding their key.
     /// The frame is timestamp-bound, so it must be minted for this attempt.
     PreSigned(Vec<u8>),
-    /// Connect anonymously. The remote then sees `ForAgent::Public`, which only
-    /// gets a drive in through the bootstrap carve-out (a drive it does not yet
-    /// have). Useful for public mirrors; useless for a private drive.
+    /// Connect anonymously. Only useful for *reading*: a WebSocket remote
+    /// refuses `SYNC_PUSH` before `AUTH` (`ERROR` code `AUTH_REQUIRED`), so an
+    /// anonymous replication can verify that a public drive is already in
+    /// sync, but can never land data.
     Anonymous,
 }
 
@@ -59,9 +60,11 @@ pub struct ReplicateOutcome {
     /// Blobs the remote asked for and we served.
     pub blobs_served: usize,
     /// The remote's drive hash matched ours on a second probe — i.e. the data
-    /// really landed. `SYNC_OK` alone does **not** prove this: the receiver
-    /// answers `SYNC_OK` even when it silently dropped the import for lack of
-    /// write rights, so we re-ask rather than trust the ack.
+    /// really landed. A refused import comes back as an `ERROR` frame
+    /// (`SYNC_REJECTED`) and fails the attempt outright; the second probe
+    /// guards against the subtler case where the remote accepted the push but
+    /// kept less than we sent (per-subject drops, quota), so we re-ask rather
+    /// than trust the per-chunk `SYNC_OK` ack.
     pub in_sync: bool,
 }
 
@@ -123,8 +126,8 @@ pub async fn replicate_drive_to_remote(
 
     // Round 2 — the honest verification. Re-offer our (unchanged) version
     // vector: if the push really landed, the remote's hash now matches ours and
-    // it answers SYNC_OK. A SYNC_DIFF here means it kept nothing, which is what
-    // a rights-rejected import looks like from the outside.
+    // it answers SYNC_OK. A SYNC_DIFF here means it kept less than we sent
+    // (an outright refusal would already have surfaced as an ERROR frame).
     outcome.in_sync = false;
     client
         .send_binary(build_sync_frame(store, drive).await)
@@ -171,9 +174,9 @@ async fn drive_exchange(
 
         match msg {
             // A SYNC_OK arriving before we pushed anything means our hashes
-            // already match. One arriving *after* is just a per-chunk ack, and
-            // acks prove nothing here — the receiver sends them for a dropped
-            // import too — so those fall through and we keep listening.
+            // already match. One arriving *after* is just a per-chunk ack —
+            // it says the chunk was admitted, not that every subject in it
+            // was kept — so those fall through and we keep listening.
             WsMessage::SyncOk { drive: d } if d == drive && sent_this_round == 0 => {
                 outcome.in_sync = true;
 

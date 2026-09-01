@@ -203,11 +203,18 @@ pub async fn handle_frame(
                 // WS): no owned-drive relaxation — the sender must itself hold
                 // write rights. The dial side calls import_sync_push directly
                 // with trust_owned=true.
-                let (_count, mut blob_requests) =
-                    import_sync_push(&push, store, agent, false).await;
-                let mut responses = vec![protocol::encode_sync_ok(&push.drive)];
-                responses.append(&mut blob_requests);
-                responses
+                match import_sync_push(&push, store, agent, false).await {
+                    Ok((_count, mut blob_requests)) => {
+                        let mut responses = vec![protocol::encode_sync_ok(&push.drive)];
+                        responses.append(&mut blob_requests);
+                        responses
+                    }
+                    // A refused import used to be answered with `SYNC_OK` all
+                    // the same, so a sender could never tell "landed" from
+                    // "dropped" (`replicate.rs` re-probed with a second SYNC
+                    // to find out). Say no when the answer is no.
+                    Err(rejected) => vec![rejected.to_error_frame()],
+                }
             } else {
                 vec![protocol::encode_error(
                     0,
@@ -953,18 +960,53 @@ pub(crate) async fn may_accept_drive_write(
     false
 }
 
+/// Why a `SYNC_PUSH` was refused as a whole. Distinct from "imported zero
+/// entries" (every entry tombstoned or malformed), which is still a
+/// successful import from the protocol's point of view.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncPushRejected {
+    /// The drive the push named.
+    pub drive: String,
+    /// Human-readable reason; goes on the wire in the `ERROR` frame.
+    pub reason: String,
+}
+
+impl SyncPushRejected {
+    /// The `ERROR` frame (`request_id = 0`, [`protocol::error_code::SYNC_REJECTED`])
+    /// that answers the push instead of `SYNC_OK`.
+    pub fn to_error_frame(&self) -> Vec<u8> {
+        protocol::encode_error(0, protocol::error_code::SYNC_REJECTED, &self.to_string())
+    }
+}
+
+impl std::fmt::Display for SyncPushRejected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "SYNC_PUSH rejected for drive {}: {}",
+            self.drive, self.reason
+        )
+    }
+}
+
 /// Import resources from a SYNC_PUSH message into the local store.
 ///
 /// `for_agent` is the identity the sending peer proved. `trust_owned` is true
 /// when WE dialed this peer, which lets a relayed push to a drive we own through
 /// even though the relaying peer is a different agent (see
 /// [`may_accept_drive_write`]). When importing locally, pass `Sudo`.
+///
+/// `Ok((imported, blob_requests))` when the push was admitted — `imported`
+/// may still be 0 if every entry was skipped. `Err` when the push was refused
+/// as a whole: the agent may not write the drive, or the sync policy does not
+/// admit it. Nothing is written in the `Err` case, and the caller must answer
+/// with the rejection's `ERROR` frame, never `SYNC_OK`.
 pub async fn import_sync_push(
     push: &protocol::DecodedSyncPush,
     store: &Db,
     for_agent: &crate::agents::ForAgent,
     trust_owned: bool,
-) -> (usize, Vec<Vec<u8>>) {
+) -> Result<(usize, Vec<Vec<u8>>), SyncPushRejected> {
     // Check write access to the drive
     let drive_subject = crate::Subject::from_raw(&push.drive, store.get_base_domain().as_deref());
     if let Ok(drive_resource) = store.get_resource(&drive_subject).await {
@@ -975,7 +1017,10 @@ pub async fn import_sync_push(
                 push.drive,
                 trust_owned
             );
-            return (0, vec![]);
+            return Err(SyncPushRejected {
+                drive: push.drive.clone(),
+                reason: format!("agent {for_agent} has no write right on the drive"),
+            });
         }
     }
     // Admission gate. A no-op under the default OpenPolicy (self-hosted / FOSS
@@ -1007,7 +1052,19 @@ pub async fn import_sync_push(
                 decision,
                 for_agent
             );
-            return (0, vec![]);
+            let reason = match decision {
+                super::policy::AdmitDecision::OverQuota => {
+                    format!(
+                        "drive {} is over its storage quota on this node",
+                        push.drive
+                    )
+                }
+                _ => policy.not_enrolled_message(&push.drive),
+            };
+            return Err(SyncPushRejected {
+                drive: push.drive.clone(),
+                reason,
+            });
         }
     }
 
@@ -1141,7 +1198,7 @@ pub async fn import_sync_push(
             entry.loro_bytes.len()
         );
     }
-    (count, blob_requests)
+    Ok((count, blob_requests))
 }
 
 /// Whether the owner deliberately dialled this node. Peer-to-peer sync only

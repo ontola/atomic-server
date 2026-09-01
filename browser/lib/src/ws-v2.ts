@@ -72,6 +72,18 @@ export const ErrorCode = {
    *  Blocking rather than terminal: the write is well-formed and would apply
    *  once the class arrives, so it must not be discarded. */
   MISSING_CLASS: 4,
+  /** A frame that needs an identity (SYNC_PUSH, LORO_SYNC_UPDATE,
+   *  SUBSCRIBE, ...) arrived before AUTH. Connection-level (`requestId`
+   *  0); the socket stays open and the frame is simply not processed. */
+  AUTH_REQUIRED: 5,
+  /** The server refused a SYNC_PUSH as a whole (no write right on the
+   *  drive, quota, not enrolled). Nothing from the push landed, and no
+   *  SYNC_OK follows for it. The message names the drive. */
+  SYNC_REJECTED: 6,
+  /** A subscription (SUB, SUBSCRIBE, SUBSCRIBE_QUERY, LORO_SYNC_SUBSCRIBE,
+   *  PRESENCE_SUBSCRIBE) was refused because the agent cannot read the
+   *  subject or drive. Nothing was subscribed. */
+  UNAUTHORIZED_READ: 7,
 } as const;
 
 // ---- Low-level read/write helpers ----
