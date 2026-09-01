@@ -8,6 +8,18 @@
 >
 > Prereqs and open findings referenced here (F1, F9-proper, OQ4–OQ6, the
 > consolidation inventory) live in [`unified-sync.md`](./unified-sync.md).
+>
+> **Current (2026-07-17).** The same-agent admission rule this document was
+> written around was removed in `683a25d4a` ("authorize relayed sync by owned
+> drive, not peer identity"): `is_same_agent_as_ours` no longer exists, peer
+> `AUTH` proves *an* agent, and what crosses the link is decided per subject by
+> `check_read` and per drive by `may_accept_drive_write`
+> (`lib/src/sync/engine.rs`); `KnownPeer` persistence is gated on who dialed
+> ([`device-pairing.md`](./device-pairing.md)). Every "same-agent only" /
+> "same agent ⇒ trust" line below is superseded wording — the newest statement
+> of the model is [`sync-onboarding-ux.md`](./sync-onboarding-ux.md) (2026-07-17).
+> Same-agent pairing is still the *first* product use, which is why the
+> remaining text reads as it does; it is no longer the gate.
 
 ## Goal
 
@@ -169,7 +181,10 @@ unblocked:
 - [ ] **Destroys become signed commits on the wire** (Principle 3): the live
   loop and bulk `remove[]` stop accepting naked deletes from peers; a
   destroy is a commit, validated like any other. Closes OQ4 and the F10
-  residual (known-subject tombstone injection) in one move.
+  residual (known-subject tombstone injection) in one move. *(OQ4 is
+  closed as a decision — see the table below — but this item is still
+  open: as of 2026-09-01 `peer.rs` still accepts the live `DESTROY` frame,
+  gated by the cached drive-level write verdict.)*
 - [ ] Pre-auth frame budget in the live read loop (the `matches!(agent,
   Public)` gate exists in `handle_stream`; mirror it in
   `register_live_peer`).
@@ -234,11 +249,12 @@ Same-agent pairing needs no consent dialog — the key is the consent
 
 - [ ] **QR contains routing only**: NodeID (+ relay hint). Scanning it dials
   the peer; both sides then mutual-`AUTH`.
-- [ ] **Auto-accept iff same agent**: the acceptor persists the `KnownPeer`
-  record only when the inbound AUTH proves the *same agent subject* as its
-  own default agent. Different agent → reject (cross-agent pairing is the
-  later product, via [`authorization-sync.md`](./authorization-sync.md)'s
-  knock/inbox primitive).
+- [x] ~~**Auto-accept iff same agent**~~ — superseded 2026-07-17 (see the
+  *Current* note at the top): AUTH admits any agent; the acceptor persists
+  `KnownPeer` based on who dialed, and rights decide what each side may read
+  or write. Cross-agent pairing therefore needs no separate admission path,
+  only the knock/inbox primitive in
+  [`authorization-sync.md`](./authorization-sync.md) for *granting* rights.
 - [ ] **`KnownPeer` becomes a capability record**: `{node_id, agent,
   drives[], name, paired_at}` — not just an address. Auto-connect dials only
   peers with a record, only for the drives in it.

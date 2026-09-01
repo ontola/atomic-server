@@ -972,9 +972,9 @@ work in that plan's Phase P0, not a decision-gated maybe.
   `WsClient` methods," `subscribeResource`/`unsubscribeResource`,
   `AUTHENTICATED` branches, `LIVE_CONNECTIONS` prune — not investigated; `EPHEMERAL`
   tag investigated and deliberately left (see Dead code inventory).
-- [ ] Consolidation item 1 (engine owns `AUTH`/`GET`) — the structural fix; see
-  the consolidation inventory. Do this before adding any new frame or frame
-  feature, or the copies drift further. Not touched this pass.
+- [x] Consolidation item 1 (engine owns `AUTH`/`GET`) — done 2026-07-07, see
+  the "Engine owns AUTH/GET" item above (this line still read "not touched"
+  until 2026-09-01; the checked item is authoritative).
 
 ### Phase 1 — WS session on mobile (primary)
 
@@ -1033,8 +1033,13 @@ work in that plan's Phase P0, not a decision-gated maybe.
 3. **Layer 2 provenance depth** — is `lastCommit`-id-only enough for same-agent
    replicas, or must `SYNC_PUSH` carry verifiable signed envelopes end-to-end
    (overlaps the high-audit profile in [`sign-at-drain.md`](./sign-at-drain.md))?
-4. **P2P `remove` policy** — accept peer tombstones for same-agent reconcile, or only
-   hub-signed destroys?
+4. **P2P `remove` policy** — ✅ **Resolved 2026-07-02 with OQ2**: destroys
+   become signed commits on the wire (see
+   [`serverless-p2p.md`](./serverless-p2p.md) § Destroys). Decision closed;
+   the implementation item there is still unchecked — today the live
+   `DESTROY` frame and `remove[]` are accepted but gated by the drive-level
+   write verdict (`lib/src/sync/peer.rs`). Original question: accept peer
+   tombstones for same-agent reconcile, or only hub-signed destroys?
 5. **Bootstrap admission (F2)** — what replaces `Err(_) => true` for a drive that
    doesn't exist locally yet: first-writer-wins with grace (as `AllowlistPolicy`
    does), explicit enrollment, or reject-until-known? **FOSS Owner mode
@@ -1045,7 +1050,13 @@ work in that plan's Phase P0, not a decision-gated maybe.
    left this carve-out unchanged — Owner mode is what replaces it on a public
    FOSS node. Managed nodes keep bootstrap grace because their allowlist is
    eventually consistent with a control plane.
-6. **What makes a peer "known"? (F9)** — today: any inbound connection. The fix says
+6. **What makes a peer "known"? (F9)** — ✅ **Resolved**: first with OQ2
+   (2026-07-02, "same-agent AUTH *is* the pairing"), then reframed 2026-07-17
+   (`683a25d4a`) — AUTH admits any agent, rights decide what crosses, and
+   `KnownPeer` is persisted based on who dialed
+   ([`device-pairing.md`](./device-pairing.md),
+   [`sync-onboarding-ux.md`](./sync-onboarding-ux.md)). Original text, kept
+   for context: today: any inbound connection. The fix says
    "pairing or explicit user action," but the pairing primitive itself is undefined
    (QR scan is one-directional trust; see [`sync.md`](./sync.md)'s handshake notes and
    the constrained append-only inbox in

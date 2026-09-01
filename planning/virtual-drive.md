@@ -1,6 +1,10 @@
 # Virtual Drive: Atomic as a Filesystem
 
-**Status:** Proposal. Nothing built.
+**Status:** Shipped in the Tauri desktop app as a local NFS mount
+(`desktop/src/vfs.rs`, first landed 2026-07-15, #1154) — see "Implementation
+status" below for what is done. Still proposal: a mount from the headless
+server, FUSE/WinFSP, native cloud-sync APIs, and the mobile providers.
+Header corrected 2026-09-01; it previously said "Nothing built".
 
 AtomicServer runs offline-first as a desktop app and syncs across devices.
 A natural extension is to expose its hierarchy as a filesystem that the OS can
@@ -769,6 +773,21 @@ platform-specific cloud-sync code lands.
   or a separate `atomic-mount` daemon talking to the server over the existing
   HTTP / WS APIs? The latter keeps `atomic-server` itself headless and lets
   the desktop app ship the mount as an optional component.
+  - *Desktop-daemon note (folded from the deleted `on-device-atomic-daemon.md`,
+    2026-09-01).* That plan proposed one local daemon per device that owns
+    the redb store, the agent secret and the Iroh node, with every app on the
+    device (data-browser, the desktop shell, this mount, third-party apps) as
+    an ordinary HTTP/WS client of `localhost`. Its four hard problems still
+    apply if the mount becomes a separate process: a single redb owner (two
+    processes cannot open the store), process lifecycle (who starts and
+    supervises the daemon), and — the one that decides the key question
+    above — *localhost is not trust*: any local process can reach a
+    localhost port, so a daemon holding the agent key must hand out
+    delegated per-app credentials rather than sign as the user for whoever
+    connects. On Android this went the Binder/`ContentProvider` route
+    ([`android-data-reuse.md`](./android-data-reuse.md)); on desktop, where
+    the Tauri app already runs the server in-process and the NFS mount lives
+    in `desktop/src/vfs.rs`, the daemon split stays an option, not a plan.
 - Drive selection: one mount per Drive, or a single root that lists all
   Drives the agent has access to as top-level directories?
 - How are blobs cached locally for offline use — full mirror, LRU eviction,

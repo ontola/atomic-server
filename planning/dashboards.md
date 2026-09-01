@@ -202,7 +202,7 @@ rather than by usefulness:
    category, "mine only"). Grafana's template variables.
 6. **Navigation tiles** — open a resource, a filtered view, another dashboard.
    Turns a dashboard into a home screen.
-7. **Arbitrary UI** — [[llm-wasm-gui-plugins]]. Different safety model, its own
+7. **Arbitrary UI** — [`plugins.md`](./plugins.md). Different safety model, its own
    doc.
 
 Only 2–5 are new, and they are new in two different ways.
@@ -311,7 +311,7 @@ What falls out of doing this thirteen times:
 - **Vega-Lite** — the chart grammar to constrain and build on.
 - Skipped: Retool/Appsmith-class app builders — *arbitrary components* are a
   much larger surface than "views over your data"
-  ([[llm-wasm-gui-plugins]] covers that direction separately). Write *actions*
+  ([`plugins.md`](./plugins.md) covers that direction separately). Write *actions*
   are no longer skipped: see Interactivity above, where they are a closed set of
   patch templates rather than components.
 

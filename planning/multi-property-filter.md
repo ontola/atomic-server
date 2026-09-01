@@ -6,6 +6,14 @@
 > → WASM client-db → React `useCollection`). UI lives in
 > [`table-view-filters.md`](./table-view-filters.md).
 >
+> **Scope (noted 2026-09-01):** "shipped" covers queries and collections. WS
+> **query subscriptions** are still a single `property=value` pair
+> (`server/src/commit_monitor.rs` `SUBSCRIBE_QUERY` → `QueryFilter::single`;
+> `QuerySubscriptionJSON` has no `filters` field), as
+> [`social-apps.md`](./social-apps.md) says. The index-side matcher already
+> ANDs (`query_index.rs` `resource_matches_filter`); the wire frame does not
+> expose it.
+>
 > **Phase 1 (Rust core) — DONE & tested.** `QueryFilter` now holds
 > `filters: Vec<PropVal>` (AND); `Query` keeps `property`/`value` and gains
 > `filters` + `.filter()` / `.class_filter()` builders; encoding serialises the

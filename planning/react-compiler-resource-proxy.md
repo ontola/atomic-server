@@ -3,6 +3,13 @@
 > Status: planned 2026-05-28. Bug class. See also
 > `memory/react-compiler-resource-proxy-pitfall.md` for the runbook-style
 > diagnostic.
+>
+> **Current (2026-09-01).** Still open. The React Compiler has been enabled
+> in data-browser since `224bd4816` (2026-08-19, `oxcReactCompiler` in
+> `browser/data-browser/vite.config.ts`, skipped under Vitest), so the
+> mismatch is live, not hypothetical: `pairing-ux-field-test.md` M15a
+> (2026-08-16) was one instance (data arrived, table did not re-render). The
+> audit below has not started.
 
 ## Symptom
 

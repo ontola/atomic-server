@@ -1,8 +1,11 @@
 # Table view: multi-property filtering UI (+ Views)
 
-> Status: **Default View shipped** (filters, sort, columns, operators).
-> Remaining: multi-view switcher (create / switch / delete); index-accelerated
-> range scans. Builds on the completed full-stack multi-property (AND)
+> Status: **Views shipped** — Default View (filters, sort, columns, operators)
+> and the multi-view switcher (`TableViewTabs.tsx` / `useTableView.ts`:
+> create, switch via `?view=`, duplicate, rename, delete; view kinds `table`,
+> `kanban`, `calendar`, `timer`; first landed 2026-06-14, #1220).
+> Remaining: index-accelerated range scans (`lib/src/storelike.rs` still
+> post-filters ranges). Builds on the completed full-stack multi-property (AND)
 > filtering core ([[multi-property-filter]] /
 > `planning/multi-property-filter.md`).
 
@@ -128,9 +131,9 @@ View creation; isA filter keeps Views out of rows.
   server, so the client fetches real atomicdata.dev first (404) then falls back
   to local. Functional but noisy. Fix: publish to atomicdata.dev, or namespace
   the new props under the local server. (Decision for the owner.)
-- **Multi-view switcher** (create / switch / delete multiple views) not built —
-  only the auto-managed default view + naming + columns. The data model
-  (`table-views` array + `table-default-view`) already supports it.
+- **Multi-view switcher** — shipped after this log was written
+  (`chunks/TablePage/TableViewTabs.tsx`, `useTableView.ts`; corrected
+  2026-09-01). The Phase B notes below are kept as the original design.
 - Rename persists on real blur (verified via the underlying set+save).
 
 ### Phase B (original notes) — persist via a **View** resource
