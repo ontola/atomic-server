@@ -20,6 +20,15 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   a store seeded by an older one. Existing values, including user edits to
   default resources, are never overwritten. `--repopulate-defaults` remains as
   a forced re-run with the same add-only semantics.
+- `atomic_lib`: `atomic_lib::runtime::AtomicNode` — a named node surface over
+  `Db` (`open`, `get`, `query`, `apply_commit(json, IngestPolicy)`, `mutate`,
+  `subscribe`, `sync_with_peer`). Thin delegation, no behaviour change; the
+  WASM `ClientDb` is the first adapter on it. `IngestPolicy::{Hub, Peer,
+  Replica, LocalCache}` names the four commit-validation profiles.
+  `sync::engine::ingest_commit` returns the `CommitResponse` that
+  `ingest_commit_json` serializes; `sync::ws_apply::apply_commit_json` now
+  returns the `CommitResponse` instead of `()`. See
+  `planning/runtime-boundary-decision.md`.
 
 ## [v0.41.0-beta.2] - 2026-08-01
 

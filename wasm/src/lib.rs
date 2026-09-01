@@ -7,15 +7,15 @@
 #![cfg(target_arch = "wasm32")]
 
 use atomic_lib::{
-    commit::CommitOpts,
     parse::ParseOpts,
+    runtime::{AtomicNode, IngestPolicy},
     storelike::{Query, QueryResult, Storelike},
     vault::dek::DriveVaultKey,
     vault::keys::{argon2id_derive_key, Argon2Params},
     vault::secret_envelope::{NewWrapper, SecretEnvelope, Unlock},
     vault::store::{MemoryVaultStore, VaultObjectStore},
     vault::sync::{commit_lane_state, drive_prefix, export_vault_delta, import_vault_batch},
-    Commit, Db, Resource, Subject, Value,
+    Db, Resource, Subject, Value,
 };
 use wasm_bindgen::prelude::*;
 
@@ -43,9 +43,20 @@ const STORAGE_BLOCKED_MARKER: &str = "ATOMIC_DB_STORAGE_BLOCKED";
 
 /// A client-side Atomic Data database backed by redb (in-memory, future OPFS).
 /// Provides indexed queries, resource storage, and commit application.
+///
+/// A JS binding over [`AtomicNode`]: query and commit application go through
+/// the node; the cache-shaped operations (raw get/put, blobs, version
+/// vectors, import/export, vault) still reach the store directly until the
+/// node names them.
 #[wasm_bindgen]
 pub struct ClientDb {
-    db: Db,
+    node: AtomicNode,
+}
+
+impl ClientDb {
+    fn db(&self) -> &Db {
+        self.node.db()
+    }
 }
 
 #[wasm_bindgen]
@@ -100,7 +111,9 @@ impl ClientDb {
             )
             .into(),
         );
-        Ok(ClientDb { db })
+        Ok(ClientDb {
+            node: AtomicNode::from_db(db),
+        })
     }
 
     /// Create a non-persistent in-memory ClientDb. Used in environments
@@ -109,7 +122,9 @@ impl ClientDb {
     #[wasm_bindgen(js_name = "newInMemory")]
     pub async fn new_in_memory(base_url: Option<String>) -> Result<ClientDb, JsError> {
         let db = Db::init_redb(base_url).await.map_err(to_js_err)?;
-        Ok(ClientDb { db })
+        Ok(ClientDb {
+            node: AtomicNode::from_db(db),
+        })
     }
 
     /// Persist buffered writes to durable OPFS storage.
@@ -122,7 +137,7 @@ impl ClientDb {
     /// server re-fetches) but data loss the moment you're disconnected. The
     /// worker calls this on a short periodic tick, mirroring the native server.
     pub fn flush(&self) -> Result<(), JsError> {
-        self.db.flush().map_err(to_js_err)
+        self.db().flush().map_err(to_js_err)
     }
 
     /// Get a resource by its subject URL. Returns JSON-AD string or null.
@@ -132,8 +147,8 @@ impl ClientDb {
         // URL it was served, while the store is keyed by `internal:`.
         // `Subject::from` drops the base domain and would look up an
         // `External` subject that does not exist here.
-        let subject = Subject::from_raw(subject, self.db.get_base_domain().as_deref());
-        match self.db.get_resource(&subject).await {
+        let subject = Subject::from_raw(subject, self.db().get_base_domain().as_deref());
+        match self.db().get_resource(&subject).await {
             Ok(resource) => {
                 let json = resource_to_json_ad(&resource, &self.origin())?;
                 Ok(JsValue::from_str(&json))
@@ -154,7 +169,7 @@ impl ClientDb {
         // the intended persistence step — it skips validation deliberately.
         let resource = atomic_lib::parse::parse_json_ad_resource(
             json_ad,
-            &self.db,
+            self.db(),
             &ParseOpts {
                 skip_unknown_props: true,
                 save: atomic_lib::parse::SaveOpts::DontSave,
@@ -163,7 +178,7 @@ impl ClientDb {
         )
         .await
         .map_err(to_js_err)?;
-        self.db
+        self.db()
             .add_resource_opts(&resource, false, true, true)
             .await
             .map_err(to_js_err)?;
@@ -174,36 +189,14 @@ impl ClientDb {
     /// This is the efficient incremental update path: the Loro diff
     /// determines exactly which atoms changed, so only affected index
     /// entries are updated. Use this for real-time updates (COMMIT messages).
+    ///
+    /// The server already validated the commit, so this is
+    /// [`IngestPolicy::LocalCache`]: no signature, rights, timestamp or
+    /// schema checks — index update only.
     #[wasm_bindgen(js_name = "applyCommit")]
     pub async fn apply_commit(&self, commit_json_ad: &str) -> Result<(), JsError> {
-        // `DontSave` is required: the default would store the parsed Commit
-        // resource via `add_resource()` (which validates required props)
-        // before `apply_commit` runs. `apply_commit` is the proper persistence
-        // path here.
-        let commit_resource = atomic_lib::parse::parse_json_ad_resource(
-            commit_json_ad,
-            &self.db,
-            &ParseOpts {
-                save: atomic_lib::parse::SaveOpts::DontSave,
-                ..Default::default()
-            },
-        )
-        .await
-        .map_err(to_js_err)?;
-        let commit = Commit::from_resource(commit_resource).map_err(to_js_err)?;
-        let opts = CommitOpts {
-            validate_schema: false,
-            validate_signature: false,
-            validate_timestamp: false,
-            validate_rights: false,
-            validate_previous_commit: false,
-            validate_loro_causality: false,
-            validate_for_agent: None,
-            update_index: true,
-            source_id: None,
-        };
-        self.db
-            .apply_commit(commit, &opts)
+        self.node
+            .apply_commit(commit_json_ad, IngestPolicy::LocalCache)
             .await
             .map_err(to_js_err)?;
         Ok(())
@@ -213,7 +206,10 @@ impl ClientDb {
     #[wasm_bindgen(js_name = "removeResource")]
     pub async fn remove_resource(&self, subject: &str) -> Result<(), JsError> {
         let subject = Subject::from(subject);
-        self.db.remove_resource(&subject).await.map_err(to_js_err)?;
+        self.db()
+            .remove_resource(&subject)
+            .await
+            .map_err(to_js_err)?;
         Ok(())
     }
 
@@ -244,7 +240,7 @@ impl ClientDb {
             operator: Option<String>,
         }
 
-        let base_domain = self.db.get_base_domain();
+        let base_domain = self.db().get_base_domain();
 
         let mut extra: Vec<atomic_lib::storelike::PropVal> =
             if filters.is_null() || filters.is_undefined() {
@@ -276,7 +272,7 @@ impl ClientDb {
             };
             let raw = raw.clone();
             filter.value = Some(
-                atomic_lib::collections::delocalize_filter_value(&self.db, Some(property), &raw)
+                atomic_lib::collections::delocalize_filter_value(self.db(), Some(property), &raw)
                     .await,
             );
         }
@@ -284,7 +280,7 @@ impl ClientDb {
         let value = match value {
             Some(raw) => Some(
                 atomic_lib::collections::delocalize_filter_value(
-                    &self.db,
+                    self.db(),
                     property.as_deref(),
                     &raw,
                 )
@@ -333,7 +329,7 @@ impl ClientDb {
             drive: drive.map(|d| Subject::from_raw(&d, base_domain.as_deref())),
         };
 
-        let result = self.db.query(&q).await.map_err(to_js_err)?;
+        let result = self.node.query(&q).await.map_err(to_js_err)?;
         let response = QueryResponse::from_result(&result, &self.origin())?;
         serde_wasm_bindgen::to_value(&response).map_err(|e| JsError::new(&e.to_string()))
     }
@@ -343,7 +339,7 @@ impl ClientDb {
     /// the wasm boundary must be a URL (or a DID) the client can actually
     /// fetch, matching what the server sends over HTTP.
     fn origin(&self) -> String {
-        self.db
+        self.db()
             .get_base_domain()
             .unwrap_or_else(|| "http://localhost".to_string())
     }
@@ -352,7 +348,7 @@ impl ClientDb {
     #[wasm_bindgen(js_name = "putLoroSnapshot")]
     pub fn put_loro_snapshot(&self, subject: &str, data: &[u8]) -> Result<(), JsError> {
         use atomic_lib::db::trees::Tree;
-        self.db
+        self.db()
             .kv
             .insert(Tree::LoroSnapshots, subject.as_bytes(), data)
             .map_err(to_js_err)
@@ -361,13 +357,13 @@ impl ClientDb {
     /// Opaque versioned state bytes for a resource. Returns null if not found.
     #[wasm_bindgen(js_name = "getStateSnapshot")]
     pub fn get_state_snapshot(&self, subject: &str) -> Result<JsValue, JsError> {
-        Self::state_snapshot_js(&self.db, subject)
+        Self::state_snapshot_js(self.db(), subject)
     }
 
     /// Back-compat alias for browser client-db (`getLoroSnapshot`).
     #[wasm_bindgen(js_name = "getLoroSnapshot")]
     pub fn get_loro_snapshot(&self, subject: &str) -> Result<JsValue, JsError> {
-        Self::state_snapshot_js(&self.db, subject)
+        Self::state_snapshot_js(self.db(), subject)
     }
 
     fn state_snapshot_js(db: &atomic_lib::Db, subject: &str) -> Result<JsValue, JsError> {
@@ -386,7 +382,7 @@ impl ClientDb {
         if hash.len() != 32 {
             return Err(to_js_err("Hash must be 32 bytes"));
         }
-        self.db
+        self.db()
             .kv
             .insert(Tree::Blobs, hash, data)
             .map_err(to_js_err)
@@ -399,7 +395,7 @@ impl ClientDb {
         if hash.len() != 32 {
             return Err(to_js_err("Hash must be 32 bytes"));
         }
-        match self.db.kv.get(Tree::Blobs, hash) {
+        match self.db().kv.get(Tree::Blobs, hash) {
             Ok(Some(data)) => Ok(js_sys::Uint8Array::from(data.as_slice()).into()),
             Ok(None) => Ok(JsValue::NULL),
             Err(e) => Err(to_js_err(e)),
@@ -422,7 +418,7 @@ impl ClientDb {
 
         let mut result: HashMap<String, HashMap<String, i32>> = HashMap::new();
 
-        for item in self.db.kv.iter_tree(Tree::LoroSnapshots) {
+        for item in self.db().kv.iter_tree(Tree::LoroSnapshots) {
             let (key_bytes, snapshot_bytes) = item.map_err(to_js_err)?;
             let subject = String::from_utf8(key_bytes).map_err(|e| JsError::new(&e.to_string()))?;
 
@@ -458,16 +454,16 @@ impl ClientDb {
         use std::collections::HashMap;
 
         let drive_subject =
-            atomic_lib::Subject::from_raw(&drive, self.db.get_base_domain().as_deref());
+            atomic_lib::Subject::from_raw(&drive, self.db().get_base_domain().as_deref());
         let subjects =
-            atomic_lib::sync::engine::collect_drive_subjects(&self.db, &drive_subject).await;
+            atomic_lib::sync::engine::collect_drive_subjects(self.db(), &drive_subject).await;
 
         let mut result: HashMap<String, HashMap<String, i32>> = HashMap::new();
 
         for subject in subjects {
             // `collect_drive_subjects` yields `pure_id()` strings, which are
             // exactly the `LoroSnapshots` keys.
-            match self.db.kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
+            match self.db().kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
                 Ok(Some(snapshot_bytes)) => {
                     match AtomicLoroDoc::vv_map_from_snapshot(&snapshot_bytes) {
                         Ok(vv) => {
@@ -499,7 +495,7 @@ impl ClientDb {
     #[wasm_bindgen(js_name = "allSubjects")]
     pub fn all_subjects(&self) -> Result<JsValue, JsError> {
         let subjects: Vec<String> = self
-            .db
+            .db()
             .all_resources(true)
             .map(|r| r.get_subject().to_string())
             .collect();
@@ -509,7 +505,7 @@ impl ClientDb {
     /// Populate the database with default Atomic Data vocabulary
     /// (classes, properties, datatypes).
     pub async fn populate(&self) -> Result<(), JsError> {
-        self.db.populate().await.map_err(to_js_err)
+        self.db().populate().await.map_err(to_js_err)
     }
 
     /// Export all resources as a JSON array of JSON-AD objects.
@@ -518,7 +514,7 @@ impl ClientDb {
     pub fn export_all_resources(&self) -> Result<String, JsError> {
         let mut resources = Vec::new();
 
-        for resource in self.db.all_resources(true) {
+        for resource in self.db().all_resources(true) {
             if let Ok(json_ad) = resource.to_json_ad(None) {
                 resources.push(json_ad);
             }
@@ -541,7 +537,7 @@ impl ClientDb {
 
             if let Ok(resource) = atomic_lib::parse::parse_json_ad_resource(
                 &json_str,
-                &self.db,
+                self.db(),
                 &ParseOpts {
                     skip_unknown_props: true,
                     save: atomic_lib::parse::SaveOpts::DontSave,
@@ -552,7 +548,7 @@ impl ClientDb {
             {
                 // Store without indexing — we build the index once at the end
                 if self
-                    .db
+                    .db()
                     .add_resource_opts(&resource, false, false, true)
                     .await
                     .is_ok()
@@ -563,7 +559,7 @@ impl ClientDb {
         }
 
         // Build the full index once
-        self.db.build_index(true).map_err(to_js_err)?;
+        self.db().build_index(true).map_err(to_js_err)?;
 
         Ok(count)
     }
@@ -899,11 +895,11 @@ impl ClientDb {
         segment: u32,
     ) -> Result<JsValue, JsError> {
         let key = drive_key(key_bytes, key_epoch)?;
-        let subject = Subject::from_raw(drive_subject, self.db.get_base_domain().as_deref());
+        let subject = Subject::from_raw(drive_subject, self.db().get_base_domain().as_deref());
         let staging = MemoryVaultStore::new();
 
         let summary = export_vault_delta(
-            &self.db,
+            self.db(),
             &subject,
             &key,
             &staging,
@@ -943,7 +939,7 @@ impl ClientDb {
         device_pubkey: &str,
         segment: u32,
     ) -> Result<(), JsError> {
-        commit_lane_state(&self.db, drive_pseudonym, device_pubkey, segment).map_err(to_js_err)
+        commit_lane_state(self.db(), drive_pseudonym, device_pubkey, segment).map_err(to_js_err)
     }
 
     /// Merge downloaded vault objects into this store.
@@ -978,7 +974,7 @@ impl ClientDb {
                 .map_err(to_js_err)?;
         }
 
-        let summary = import_vault_batch(&self.db, &key, &staging, &drive_prefix(drive_pseudonym))
+        let summary = import_vault_batch(self.db(), &key, &staging, &drive_prefix(drive_pseudonym))
             .await
             .map_err(to_js_err)?;
 

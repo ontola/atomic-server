@@ -6,7 +6,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::{
-    commit::{Commit, CommitOpts},
+    commit::{Commit, CommitOpts, CommitResponse},
     db::Db,
     errors::AtomicResult,
     parse::parse_json_ad_commit_resource,
@@ -335,7 +335,11 @@ pub async fn apply_destroy_checked(store: &Db, subject: &str) -> AtomicResult<()
 }
 
 /// Apply a JSON-AD commit received over WS (legacy text `COMMIT` or after fetch).
-pub async fn apply_commit_json(store: &Db, body: &str) -> AtomicResult<()> {
+///
+/// Replica policy: the hub already accepted this commit, so only the
+/// signature is re-checked — rights and timestamp are not. This is
+/// `crate::runtime::IngestPolicy::Replica`.
+pub async fn apply_commit_json(store: &Db, body: &str) -> AtomicResult<CommitResponse> {
     set_importing(true);
     let result = async {
         let resource = parse_json_ad_commit_resource(body, store).await?;
@@ -348,8 +352,7 @@ pub async fn apply_commit_json(store: &Db, body: &str) -> AtomicResult<()> {
             update_index: true,
             ..CommitOpts::no_validations_no_index()
         };
-        store.apply_commit(commit, &opts).await?;
-        Ok::<(), crate::AtomicError>(())
+        store.apply_commit(commit, &opts).await
     }
     .await;
     set_importing(false);
