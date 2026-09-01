@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 
 const INDEX_CELL_WIDTH = '6ch';
+/** Wider first track when the index column also holds a selection checkbox
+ * (checkbox + the open-resource button need to sit side by side). */
+const SELECTABLE_INDEX_CELL_WIDTH = '4.5rem';
 
 const parseSize = (size: string) => {
   try {
@@ -21,6 +24,9 @@ export function useCellSizes<T>(
   externalSizes: number[] | undefined,
   columns: T[],
   onSizesChange: (sizes: number[]) => void,
+  /** Widen the index column to fit a row-selection checkbox next to the
+   * open-resource button. */
+  selectable = false,
 ) {
   // CSS values for column sizes
   const [sizes, setSizes] = useState<string[]>(
@@ -87,10 +93,14 @@ export function useCellSizes<T>(
         ? toPixels(externalSizes)
         : Array(columns.length).fill(DEFAULT_SIZE_STR);
 
-  const templateColumns = `${INDEX_CELL_WIDTH} ${effectiveSizes.join(
+  const indexCellWidth = selectable
+    ? SELECTABLE_INDEX_CELL_WIDTH
+    : INDEX_CELL_WIDTH;
+
+  const templateColumns = `${indexCellWidth} ${effectiveSizes.join(
     ' ',
   )} minmax(50px, 1fr)`;
-  const contentRowWidth = `calc(${INDEX_CELL_WIDTH} + ${effectiveSizes.join(
+  const contentRowWidth = `calc(${indexCellWidth} + ${effectiveSizes.join(
     ' + ',
   )})`;
 

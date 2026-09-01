@@ -45,6 +45,9 @@ export interface CellProps {
 
 interface IndexCellProps extends CellProps {
   onExpand: (rowIndex: number) => void;
+  /** Optional selection control (a checkbox) shown to the left of the
+   * open-resource button. Rendered by the table when bulk selection is on. */
+  selector?: React.ReactNode;
 }
 
 export function Cell({
@@ -293,6 +296,7 @@ export function Cell({
 export function IndexCell({
   children,
   onExpand,
+  selector,
   ...props
 }: React.PropsWithChildren<IndexCellProps>): JSX.Element {
   const { markings } = useTableEditorContext();
@@ -300,7 +304,13 @@ export function IndexCell({
   const marking = markings.get(props.rowIndex);
 
   return (
-    <StyledIndexCell role='rowheader' {...props} hasMarking={!!marking}>
+    <StyledIndexCell
+      role='rowheader'
+      {...props}
+      hasMarking={!!marking}
+      hasSelector={!!selector}
+    >
+      {selector && <SelectorSlot>{selector}</SelectorSlot>}
       <IconButton
         title='Open resource'
         onClick={() => onExpand(props.rowIndex)}
@@ -314,12 +324,39 @@ export function IndexCell({
 
 const IndexNumber = styled.span``;
 
-const StyledIndexCell = styled(Cell)<{ hasMarking: boolean }>`
+/** Wraps the selection checkbox. Clicks here toggle the row, and must not
+ * bubble to the cell's mouse handlers (which would start a cell selection). */
+const SelectorSlot = styled.span`
+  display: flex;
+  align-items: center;
+`;
+
+const StyledIndexCell = styled(Cell)<{
+  hasMarking: boolean;
+  hasSelector: boolean;
+}>`
   justify-content: flex-end !important;
+  gap: 0.35rem;
   color: ${p => p.theme.colors.textLight};
 
   & button {
     display: none;
+  }
+
+  /* The checkbox is hidden at rest, but stays visible once its row is checked
+   * (via :has) or while the row is hovered/focused, so a selection is always
+   * legible without cluttering every idle row. */
+  & ${SelectorSlot} {
+    display: none;
+  }
+
+  &:hover
+    ${SelectorSlot},
+    &:focus-within
+    ${SelectorSlot},
+    &:has(input:checked)
+    ${SelectorSlot} {
+    display: flex;
   }
 
   &:hover ${IndexNumber}, &:focus-within ${IndexNumber} {
