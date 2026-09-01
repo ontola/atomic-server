@@ -1,19 +1,30 @@
 # Encryption and replica trust
 
-> **Status:** Exploration for live E2EE / blind replicas (problem 1 below),
-> still undecided. Two of the four problems have shipped since the 2026-06
-> draft: **local encryption at rest** (problem 2, 2026-07,
-> [`opfs-per-agent-encryption.md`](./opfs-per-agent-encryption.md)) and
-> **encrypted backups** (problem 3, vault v1 in `lib/src/vault/`, 2026-08-04,
-> [`encrypted-vault-format.md`](./encrypted-vault-format.md)). In practice
-> that is candidate model 2, "encrypted archive first"; whether blind *live*
-> replication (models 3–4) follows is the open question. Updated 2026-09-01.
+> **Status:** Closed: at-rest + vault (2026-09-01), per
+> [`trust-model-decision.md`](./trust-model-decision.md).
 >
-> The rest of this document records the design space. It is not an accepted
-> architecture for live encrypted replication: we have not decided whether
-> Atomic should support blind replicas, what metadata they may observe, how
-> encrypted-drive authorization works, or which encryption mode should be the
-> product default.
+> The open question this document explored — whether an external hosted server
+> can be a **blind replica** of a live drive — is closed as *not planned*. The
+> node that serves a drive is a **verifier**: it holds the drive key (or the
+> plaintext), materializes, indexes, authorizes, and fans out. What ships as
+> encryption is problems 2–4 below: local encryption at rest (shipped 2026-07, see
+> [`opfs-per-agent-encryption.md`](./opfs-per-agent-encryption.md)), server
+> encryption at rest (to build), and the blind vault for backups
+> (vault v1 in `lib/src/vault/`, shipped 2026-08-04,
+> [`encrypted-vault-format.md`](./encrypted-vault-format.md)). End-to-end
+> encrypted replication (problem 1) is not on the roadmap.
+>
+> **Reopen test.** This reopens only when a paying customer requires the
+> external hosted server to be a blind replica — never granted the drive key,
+> never a verifier for their drive — *and* accepts that this server then
+> provides none of the content-aware services listed under
+> [Search, queries, and server features](#search-queries-and-server-features):
+> no property queries, no full-text or vector search, no backlinks or derived
+> feeds, no server-side plugins, previews, moderation, or AI over that drive.
+> A customer who wants any of those from the host wants a trusted verifier,
+> which already exists. The sections below are kept as the design record for
+> that case; the "Keys" and "Blobs" sections remain the reference for server
+> at-rest and blob encryption.
 
 ## Question
 
@@ -31,9 +42,11 @@ This is broader than encrypting the redb file. The same logical drive may be:
 
 These are separate trust and storage decisions.
 
-## Current direction, not a decision
+## Node roles
 
-The most promising model is to distinguish a node's role **per drive**:
+The role model below is the vocabulary the decision uses. The **Blind replica**
+row is *not planned* for live drives; it survives only as the archive/backup
+target (the vault).
 
 | Role | Holds drive key | Imports Loro | Materializes and indexes | Stores/relays ciphertext |
 | --- | --- | --- | --- | --- |
@@ -172,7 +185,19 @@ Open key questions:
 - Does a server ever receive a drive key through an explicit "trusted verifier"
   grant?
 
-## Possible encrypted replication shape
+## Not planned: blind live replication
+
+The three sections below (replication shape, authorization, compaction)
+describe the blind-replica design space. They are retained as a record and are
+**not planned**; see the reopen test in the status box. One later change is
+worth noting against them: with commits stored as signed envelopes on the
+resource rather than as a retained log
+([`commit-retention-floor-decision.md`](./commit-retention-floor-decision.md),
+#1313), the "blind replica must retain every encrypted update" concern under
+[Compaction and retention](#compaction-and-retention) no longer applies to a
+verifier node; it would only return with a blind live replica.
+
+### Possible encrypted replication shape
 
 A blind replica cannot safely accept replacement ciphertext as the current
 resource state. It cannot decrypt, merge concurrent Loro changes, inspect a
@@ -226,7 +251,7 @@ A blind replica would:
 4. store and relay the envelope;
 5. never call `AtomicLoroDoc::from_snapshot` or index the resource contents.
 
-## Authorization is the hardest unresolved part
+### Authorization is the hardest unresolved part
 
 Atomic currently represents authorization in resource content:
 
@@ -265,7 +290,7 @@ Options under consideration:
 
 No option has been selected.
 
-## Compaction and retention
+### Compaction and retention
 
 A blind replica cannot create or validate the contents of a compacted Loro
 snapshot. Without another mechanism it must retain every encrypted update.
@@ -304,6 +329,10 @@ Open questions:
 - How does this compose with `retention = full | recent | none`?
 
 ## Blobs
+
+Still relevant: this is the shape of blob encryption before an S3 or other
+blind object store ships (`s3-blob-storage.md`, trust-model step 4). The blind
+blob GC problem below only applies to a blind object store, which does no GC.
 
 Encrypted blobs are related but do not need to use the same storage format as
 Loro updates.
@@ -426,28 +455,32 @@ authorization, synchronization, deduplication, and retention.
 
 ## Candidate product models
 
-These are options, not decisions:
+Outcome per [`trust-model-decision.md`](./trust-model-decision.md):
 
-1. **Trusted-server Atomic only**
-   - Add local encryption at rest and encrypted backups.
+1. **Trusted-server Atomic only** — *chosen*, combined with 2.
+   - Add local encryption at rest (shipped) and server encryption at rest (to
+     build).
    - Keep current server-side materialization/indexing model.
-   - Lowest complexity; no protection from the hosted server.
+   - Lowest complexity; no protection from the hosted server beyond at rest.
 
-2. **Encrypted archive first** — where the shipped code sits today (vault v1).
+2. **Encrypted archive first** — *shipped* as the vault.
    - External server stores encrypted checkpoints/backups, not live updates.
-   - Avoids blind live-sync authorization and compaction initially.
+   - Avoids blind live-sync authorization and compaction.
 
-3. **Blind replica plus local verifier**
+3. **Blind replica plus local verifier** — *not planned*.
    - External server stores and relays encrypted envelopes.
    - Clients merge/index locally.
    - Requires envelope sync, checkpointing, and a blind authorization model.
 
-4. **Optional trusted verifier**
+4. **Optional trusted verifier** — *not planned* as a separate mode; every
+   serving node is the trusted verifier.
    - Same encrypted replication format, but selected servers receive drive keys
      and run verifier services.
    - Most flexible, but key grants and role transitions become load-bearing.
 
-## Decisions required before implementation
+## Decisions that were required before blind replication
+
+Kept for the reopen case; none of these is being worked on.
 
 - What exact threat model and metadata-leakage budget are we targeting?
 - Is blind live replication a core requirement or should encrypted backups ship
