@@ -34,8 +34,9 @@ Import requests hide three distinct problems that need different machinery:
    regardless — those are products, not generated artifacts.
 
 Webhook ingestion (#976) and easy write APIs
-([`SDK-API-design.md`](./SDK-API-design.md)) are complementary push-side
-answers for systems that can call us. Importers are the pull side.
+([`SDK-API-design.md`](./SDK-API-design.md),
+[`ecosystem-integrations.md`](./ecosystem-integrations.md)) are complementary
+push-side answers for systems that can call us. Importers are the pull side.
 
 ## Key Architectural Claim: the LLM Writes Only the Mapping
 

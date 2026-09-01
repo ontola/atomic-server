@@ -62,6 +62,7 @@ Remaining work, not "this file exists."
 | [`nextgraph-interop.md`](./nextgraph-interop.md) | **Proposal.** `did:ng:` via a scheme-routed Store backend. |
 | [`s3-blob-storage.md`](./s3-blob-storage.md) | Pluggable blob backend (redb/S3/hybrid). |
 | [`importers.md`](./importers.md) | Analysis: sandboxed mapping functions; host owns acquire/parse/commit. |
+| [`ecosystem-integrations.md`](./ecosystem-integrations.md) | **Exploration.** Where Atomic should meet other apps. Webhooks (#976/#77) first; Resource Event is the missing primitive. |
 | [`habits-app.md`](./habits-app.md) | **Proposal.** External-app dogfood; RPC `query` is the hard blocker. |
 | [`atomic-assistant-browser-extension.md`](./atomic-assistant-browser-extension.md) | **Proposal.** Local-first Chromium extension. |
 | [`tours.md`](./tours.md) | Design, not built. |
