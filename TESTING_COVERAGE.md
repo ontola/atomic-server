@@ -334,3 +334,14 @@ Not covered: leftover Yjs-era DocumentV2 bodies end-to-end (needs a stored `{ ty
 Not covered: Flutter `create_drive` still mints a random DID (the Rust
 `ensure_personal_drive` helper exists for `setup()`). E2E sign-in on a second
 machine with the old machine offline.
+
+## Ontology codegen (`@tomic/cli`) and DID fetch
+
+| Flow | Where |
+|---|---|
+| HTTP path `https://host/did:ad:…` and `/did?subject=` extract the same DID | `browser/lib/src/subject.test.ts` |
+| JSON-AD parse accepts `@id: did:ad:…` when the request used the HTTP path alias | `browser/lib/src/parse.test.ts` |
+| `Client.fetchResourceHTTP` resolves DIDs via `/did?subject=` and does not touch `window` in Node | `browser/lib/src/client.fetch.test.ts` |
+| Store fetch by HTTP path alias returns the resource stored under the DID | `browser/lib/src/store.test.ts` |
+
+Not covered: `ad-generate ontologies` end-to-end against a live server (no CLI test runner).
