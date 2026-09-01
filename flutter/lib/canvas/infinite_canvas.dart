@@ -9,13 +9,19 @@ import '../models/canvas_entry.dart';
 import '../gallery/canvas_store.dart';
 import '../atomic/atomic_client.dart';
 import 'canvas_painter.dart';
-import 'canvas_pop_scope.dart';
 import 'fan_helpers.dart';
 import 'thumbnail.dart';
 import '../widgets/bottom_toolbar.dart';
 import '../widgets/fan_overlay.dart';
 import '../widgets/history_scrubber.dart';
 import '../theme.dart';
+
+/// Android re-registers the back callback when the window resizes, which
+/// looks like a back press. Ignore those for a beat after metrics change.
+@visibleForTesting
+bool ignorePopFromRotation(DateTime? lastMetricsChange, DateTime now) =>
+    lastMetricsChange != null &&
+    now.difference(lastMetricsChange) < const Duration(milliseconds: 600);
 
 class InfiniteCanvas extends StatefulWidget {
   final CanvasEntry canvas;
@@ -127,6 +133,9 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
   bool get _canUndoToolbar => _isHistoryMode ? _actionIndex > 0 : _loroCanUndo;
   bool get _canRedoToolbar => _isHistoryMode ? _actionIndex < _allActions.length : _loroCanRedo;
 
+  DateTime? _lastMetricsChange;
+  Size? _lastSize;
+
   @override
   void initState() {
     super.initState();
@@ -232,6 +241,21 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
         }
       }
     });
+  }
+
+  @override
+  void didChangeMetrics() {
+    _lastMetricsChange = DateTime.now();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final size = MediaQuery.sizeOf(context);
+    if (_lastSize != null && _lastSize != size) {
+      _lastMetricsChange = DateTime.now();
+    }
+    _lastSize = size;
   }
 
   @override
@@ -912,8 +936,15 @@ class _InfiniteCanvasState extends State<InfiniteCanvas>
 
   @override
   Widget build(BuildContext context) {
-    return CanvasPopScope(
-      onClose: widget.onClose,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop ||
+            ignorePopFromRotation(_lastMetricsChange, DateTime.now())) {
+          return;
+        }
+        widget.onClose();
+      },
       child: Scaffold(
         backgroundColor: context.appColors.canvasBg,
         body: Stack(
