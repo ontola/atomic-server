@@ -94,7 +94,7 @@ It takes an options object with the following properties:
 |----------|---------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
 | subject  | string                    | **(optional)** The subject the new resource should have, by default a random subject is generated                                 |
 | parent   | string                    | **(optional)** The parent of the new resource, defaults to the store's `serverUrl`                                                |
-| isA      | string \| string[]        | **(optional)** The 'type' of the resource. determines what class it is. Supports multiple classes.                                |
+| isA      | string \| string[]        | **(optional)** The class of the resource. Recommended — enables required fields, generated types, and generic forms. Not required to save. |
 | propVals | Record<string, JSONValue> | **(optional)** Any additional properties you want to set on the resource. Should be an object with subjects of properties as keys |
 
 ```typescript

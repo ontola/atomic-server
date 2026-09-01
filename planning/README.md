@@ -53,7 +53,8 @@ Remaining work, not "this file exists."
 | [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md) | **Proposal.** Commits stay signed write certificates; retention is node policy. |
 | [`p2p-presence.md`](./p2p-presence.md) | **Proposal.** Ephemeral presence over Iroh (`EPHEMERAL 0x40`). Same-agent only. |
 | [`reticulum-sync.md`](./reticulum-sync.md) | **Proposal.** Atomic sync protocol over Reticulum. |
-| [`json-schema-code-first.md`](./json-schema-code-first.md) | **Proposal.** Code-first JSON Schema → local DID-backed Class/Property resources. |
+| [`optional-schema.md`](./optional-schema.md) | **Decision.** Apps can store and sync without Classes/Properties. Nudge toward Atomic Schema; do not force it on the write path. |
+| [`json-schema-code-first.md`](./json-schema-code-first.md) | **Proposal.** Code-first JSON Schema → local DID-backed Class/Property resources. The recommended on-ramp, not a requirement — see [`optional-schema.md`](./optional-schema.md). |
 | [`SDK-API-design.md`](./SDK-API-design.md) | SDK / agent DX direction. |
 | [`llm-wasm-gui-plugins.md`](./llm-wasm-gui-plugins.md) | **Proposal.** Browser-built JS/TS apps with scoped Loro docs. |
 | [`personal-information-suite.md`](./personal-information-suite.md) | Exploration: contacts, calendar, email. |

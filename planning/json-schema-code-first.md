@@ -7,6 +7,11 @@
 Make Atomic usable by app developers who want to define their data model in
 code, without first publishing Classes and Properties at HTTP URLs.
 
+This is the recommended on-ramp, not a requirement. Persistence and sync
+already work with no schema — see [`optional-schema.md`](./optional-schema.md).
+`defineSchema` exists so choosing Atomic Schema is easy, not so skipping it
+is forbidden.
+
 The desired workflow:
 
 1. An app declares a JSON Schema-like model in TypeScript, Rust, or another SDK.

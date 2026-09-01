@@ -64,6 +64,19 @@ const newResource = await store.newResource({
 await newResource.save();
 ```
 
+A class is recommended, not required. This also works — you lose generated types and generic forms, not persistence:
+
+```ts
+const note = await store.newResource({
+  propVals: {
+    [core.properties.name]: 'Buy milk',
+    'https://example.com/done': false,
+  },
+});
+
+await note.save();
+```
+
 ### Subscribing to changes
 
 ```ts
