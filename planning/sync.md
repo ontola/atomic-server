@@ -9,8 +9,11 @@
 **Persisted commits over WS** — implemented (protocol, server, browser). See
 [Rollout](#rollout) below.
 
-**Still open:** test gaps (see [Test coverage gaps](#test-coverage-gaps)),
-Flutter on WS session (see [`unified-sync.md`](./unified-sync.md)).
+**Still open:** test gaps (see [Test coverage gaps](#test-coverage-gaps)).
+*Flutter on WS session* was listed here as open on 2026-05-28 but had already
+shipped (`flutter/rust/src/api/simple/ws_sync.rs`, first in `dd771c293`
+2026-05-21: authenticate, `SUB` the active drive, per-canvas subscribe); struck
+2026-09-01.
 
 **`QUERY_UPDATE` removed** — first narrowed in `dd771c29` (drive-wide only fired
 on membership), then deleted entirely. Drive-wide subscribers now receive
@@ -37,6 +40,14 @@ Outstanding product/UX issues (Iroh-era):
 
 - We can pair with QR code, and the QR code transfers some information about the name of the device. But this only gives ONE of the devices information about the other device - only the QR scanner knows the name of the other
 - The UX is odd. What if user A scans a QR of user B? That does not necessarily mean user B agrees that A should access this. I think this means we need to initialize a share request.
+  - **Current (2026-07-17).** Answered in two halves. The pairing code is
+    routing only ([`device-pairing.md`](./device-pairing.md), 2026-07-10), so
+    scanning grants nothing by itself. Since `683a25d4a` (2026-07-17) a
+    cross-user dial *passes* AUTH and B's node serves A only what A's agent
+    may `check_read`, per subject; `KnownPeer` persistence is gated on who
+    dialed. So "user B agrees" is expressed as rights on B's resources, not
+    as a pairing decision — and the share request below is the primitive for
+    *asking* for those rights, not for admitting the connection.
   - **Proposed primitive:** the constrained append-only inbox in
     [`authorization-sync.md` § Constrained append-only inbox](./authorization-sync.md#constrained-append-only-inbox-first-contact-and-bridges)
     is the share-request mechanism. A first-contact "knock" is appended

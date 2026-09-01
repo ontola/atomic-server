@@ -14,10 +14,14 @@
 
 ## Thesis
 
-A DID resource's identity is its genesis: `did:ad:<signature>`. Today that
-signature is over the first **commit** (which embeds the initial `loroUpdate`),
-and anything wanting to show or verify "who created this, when" must fetch the
-`did:ad:commit:<sig>` resource. Under sign-at-drain that commit is not reliably
+A DID resource's identity is its genesis: `did:ad:<signature>`. When this was
+written (2026-06-04) that signature was over the first **commit** (which
+embeds the initial `loroUpdate`), and anything wanting to show or verify "who
+created this, when" had to fetch the `did:ad:commit:<sig>` resource. *(Current
+2026-06-10: the cert model below shipped — `create_did_with_cert`,
+`lib/src/genesis.rs` — so the rest of this thesis describes the pre-cert state
+it replaced; the legacy commit-signature form is still accepted for old
+subjects.)* Under sign-at-drain that commit is not reliably
 refetchable, so creation metadata silently disappears on reload (the chatroom
 author/date bug).
 

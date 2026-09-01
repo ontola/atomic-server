@@ -9,6 +9,16 @@
 > and narrows OQ1 (LAN discovery) and OQ4 (drive enrollment). Trust rules are
 > inherited from serverless-p2p Principle 1 and are not renegotiated here.
 >
+> **Current (2026-07-17).** "Same-agent AUTH is the only trust gate" below is
+> superseded: `683a25d4a` removed `is_same_agent_as_ours`. AUTH proves *an*
+> agent; per-subject `check_read` / per-drive `may_accept_drive_write` decide
+> what crosses, and the acceptor persists `KnownPeer` based on who dialed
+> (`lib/src/sync/peer.rs` `is_paired_peer`). The routing-only envelope and
+> "the secret never goes in the QR" are unchanged — the rule that a stranger
+> "receives nothing" becomes "receives only what its agent may read".
+> Wording is left as written; see
+> [`sync-onboarding-ux.md`](./sync-onboarding-ux.md) for the current model.
+>
 > **2026-07-10 — the `onboard` kind is gone.** A pairing code is routing only.
 > It never carries an agent secret, and one that claims to is refused. See
 > "Why the secret does *not* go in the QR".

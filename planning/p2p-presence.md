@@ -9,6 +9,16 @@
 > Depends on the same-agent peer link being live (shipped: pairing, reconnect,
 > live `UPDATE` fan-out). Cross-agent multi-user presence over P2P is **out of
 > scope** — see [Scope](#scope-my-devices-not-collaborators).
+>
+> **Current (2026-07-17).** Peer sync is no longer same-agent only:
+> `is_same_agent_as_ours` was removed in `683a25d4a` and admission is
+> rights-based (`check_read` per subject; see
+> [`sync-onboarding-ux.md`](./sync-onboarding-ux.md)). The *scope choice* here
+> (presence only between your own devices) still holds as a product decision,
+> but Decision 8 ("same-agent is the whole ACL") can no longer lean on the
+> transport — a cross-agent peer can be connected, so the outbound filter in
+> OQ3 (`PresenceEntry.agent == our agent`) becomes the actual gate, not a
+> belt-and-braces one. Wording below that assumes the old rule is superseded.
 
 ## Goal
 

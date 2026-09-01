@@ -1,12 +1,19 @@
 # Encryption and replica trust
 
-> **Status:** Exploration / undecided (2026-06).
+> **Status:** Exploration for live E2EE / blind replicas (problem 1 below),
+> still undecided. Two of the four problems have shipped since the 2026-06
+> draft: **local encryption at rest** (problem 2, 2026-07,
+> [`opfs-per-agent-encryption.md`](./opfs-per-agent-encryption.md)) and
+> **encrypted backups** (problem 3, vault v1 in `lib/src/vault/`, 2026-08-04,
+> [`encrypted-vault-format.md`](./encrypted-vault-format.md)). In practice
+> that is candidate model 2, "encrypted archive first"; whether blind *live*
+> replication (models 3–4) follows is the open question. Updated 2026-09-01.
 >
-> This document records the current encryption design space. It is not an
-> accepted architecture or implementation plan. In particular, we have not
-> decided whether Atomic should support blind replicas, what metadata they may
-> observe, how encrypted-drive authorization works, or which encryption mode
-> should be the product default.
+> The rest of this document records the design space. It is not an accepted
+> architecture for live encrypted replication: we have not decided whether
+> Atomic should support blind replicas, what metadata they may observe, how
+> encrypted-drive authorization works, or which encryption mode should be the
+> product default.
 
 ## Question
 
@@ -56,7 +63,8 @@ The following features should not be treated as one toggle:
      [Local cache and session isolation](#local-cache-and-session-isolation).
    - Does not hide data from the running verifier process.
 
-3. **Encrypted backups**
+3. **Encrypted backups** — shipped as vault v1 (2026-08-04), see
+   [`encrypted-vault-format.md`](./encrypted-vault-format.md).
    - Protects exported checkpoints or Loro data.
    - Can be useful independently of live encrypted replication.
 
@@ -425,7 +433,7 @@ These are options, not decisions:
    - Keep current server-side materialization/indexing model.
    - Lowest complexity; no protection from the hosted server.
 
-2. **Encrypted archive first**
+2. **Encrypted archive first** — where the shipped code sits today (vault v1).
    - External server stores encrypted checkpoints/backups, not live updates.
    - Avoids blind live-sync authorization and compaction initially.
 

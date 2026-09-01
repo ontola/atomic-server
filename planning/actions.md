@@ -1,6 +1,16 @@
 # Unified Actions
 
-**Status:** Design. Nothing built.
+**Status:** Rollout step 1 shipped (2026-07-08, `30574b93b`): the registry in
+`browser/data-browser/src/actions/` (`ActionDefinition`, `resourceActions`,
+`useActionContext`) and the searchable ⌘M menu; `ResourceContextMenu` renders
+from it, and the fork verbs from
+[`drafts-and-suggestions.md`](./drafts-and-suggestions.md) already land there.
+Remaining: steps 2–4 — the ⌘K actions section (`SearchOverlay` still only
+navigates), hotkeys and the shortcuts page derived from the registry (today
+`resourceActions` imports `shortcuts` from `HotKeyWrapper`, the reverse of the
+plan), and AI-tool / MCP derivation.
+
+Corrected 2026-09-01; the previous "Nothing built" line predated step 1.
 
 ## Problem
 

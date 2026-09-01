@@ -1,10 +1,11 @@
 # Android data reuse — one Atomic store per device
 
-> Status: draft / design. No code yet. Successor to the Android-specific parts
-> of [`on-device-atomic-daemon.md`](./on-device-atomic-daemon.md): same goal
-> (one store, many apps), but replaces "localhost HTTP daemon" with Android's
-> native IPC (Binder: ContentProvider + bound Service), because a resident
-> localhost server is exactly what Android's process lifecycle fights against.
+> Status: draft / design. No code yet. Successor to `on-device-atomic-daemon.md`
+> (deleted 2026-09-01; its desktop remainder is a note in
+> [`virtual-drive.md`](./virtual-drive.md)): same goal (one store, many apps),
+> but replaces "localhost HTTP daemon" with Android's native IPC (Binder:
+> ContentProvider + bound Service), because a resident localhost server is
+> exactly what Android's process lifecycle fights against.
 
 ## Goal
 
@@ -43,7 +44,8 @@ store; the others must talk to it over IPC.
 
 ## Why Binder, not localhost HTTP
 
-The daemon doc proposed a foreground Service serving HTTP/WS on loopback.
+The earlier daemon plan proposed a foreground Service serving HTTP/WS on
+loopback.
 Binder IPC is the better fit on Android:
 
 | | localhost HTTP daemon | Binder (ContentProvider / AIDL) |
@@ -289,7 +291,7 @@ transport abstraction across them.
 
 ## Phasing
 
-- **Phase 0 — status quo interim** (per the daemon doc): shared-secret
+- **Phase 0 — status quo interim** (the earlier daemon plan's Phase 0): shared-secret
   handoff, dual stores reconciling over loopback Iroh. Correct but wasteful;
   everything below removes it.
 - **Phase 1 — extract + host.** Split the generic Rust API out of
@@ -308,7 +310,8 @@ transport abstraction across them.
 
 ## Open questions
 
-- Is the dedicated tiny "Atomic daemon" app (daemon doc option b) worth it
+- Is a dedicated tiny "Atomic daemon" app (the earlier daemon plan's option
+  b: every app, including the server UI, is a client of it) worth it
   once election exists, or does election make it unnecessary?
 - Does the host keep a foreground service *while syncing* (long Iroh
   reconciles) and stop after, or rely on `WorkManager` for background sync?
@@ -322,11 +325,15 @@ transport abstraction across them.
 
 ## Relationship to existing work
 
-- Supersedes the Android transport choice in
-  [`on-device-atomic-daemon.md`](./on-device-atomic-daemon.md); its problems
-  1/2/4 (single owner, lifecycle, client auth) are resolved here by election,
-  on-demand Binder components, and cert-bound tiers respectively. Its
-  localhost-daemon shape may still fit desktop.
+- Supersedes the Android transport choice in the former
+  `on-device-atomic-daemon.md`. That doc's four hard problems were: one process
+  must own the redb store (redb takes an exclusive lock; "first app wins" is
+  not a design), Android kills background services, canvas has to become a
+  client instead of owning a store, and a localhost server is reachable by any
+  app on the device so "came from localhost" is not trust. Problems 1/2/4 are
+  resolved here by election, on-demand Binder components, and cert-bound tiers
+  respectively; problem 3 is Phase 1–2 above. Its localhost-daemon shape may
+  still fit desktop — see the note in [`virtual-drive.md`](./virtual-drive.md).
 - Depends on the [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) direction
   (`atomic_lib` as a complete embeddable node) and on
   [`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md)

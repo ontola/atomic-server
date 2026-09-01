@@ -22,7 +22,24 @@ mutation is authorized. Signed commits are the write boundary.
 
 ## Current model
 
-The good parts are already present:
+> **Current (2026-06-10 server, 2026-07-10 browser).** DID identity is no
+> longer derived from the genesis *commit* signature. A `did:ad:` subject is
+> the signature of a small inline binary **genesis certificate**
+> (`create_did_with_cert`, `lib/src/genesis.rs`; browser `mintCertDid`) —
+> shipped in `0b1b13b36` and `232aca8a0`, documented in
+> [`genesis-self-verifying.md`](./genesis-self-verifying.md). The server
+> still dual-accepts the legacy commit-signature form for existing subjects
+> (`lib/src/commit.rs`, the `verify` fallback). Statements below that say the
+> subject is derived from, or verified via, the genesis commit are superseded
+> wording; "genesis commits are always retained" remains true as an audit
+> property, not as an identity requirement.
+> Also superseded: "acceptable only as same-agent/offline catch-up" below —
+> the same-agent peer rule was removed on 2026-07-17 (`683a25d4a`) and
+> `SYNC_PUSH` is gated per drive by `may_accept_drive_write`
+> (`lib/src/sync/engine.rs`); the point that bulk import is not a signed
+> per-resource write path still stands.
+
+The good parts were already present when this was written (2026-05-26):
 
 - `did:ad:{signature}` resource identity is derived from the genesis commit
   signature. For genesis commits, the subject is excluded from signed bytes, and
