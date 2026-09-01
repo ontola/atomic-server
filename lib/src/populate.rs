@@ -330,6 +330,13 @@ pub async fn populate_default_store(store: &impl Storelike) -> AtomicResult<()> 
         .import(include_str!("../defaults/i18n.json"), &ParseOpts::default())
         .await
         .map_err(|e| format!("Failed to import i18n.json: {e}"))?;
+    store
+        .import(
+            include_str!("../defaults/notifications.json"),
+            &ParseOpts::default(),
+        )
+        .await
+        .map_err(|e| format!("Failed to import notifications.json: {e}"))?;
     Ok(())
 }
 
@@ -375,4 +382,52 @@ pub async fn bootstrap(store: &impl Storelike) -> AtomicResult<()> {
     populate_default_store(store).await?;
     store.commit_batch()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod notifications_populate_tests {
+    use crate::Storelike;
+
+    #[tokio::test]
+    async fn notifications_ontology_is_populated() {
+        let store = crate::Store::init().await.unwrap();
+        store.populate().await.unwrap();
+        assert!(
+            store.has_stored_resource(&"https://atomicdata.dev/classes/NotificationItem".into()),
+            "NotificationItem class missing after populate"
+        );
+        assert!(
+            store.has_stored_resource(&"https://atomicdata.dev/properties/notificationRead".into()),
+            "notificationRead property missing after populate"
+        );
+        assert!(
+            store.has_stored_resource(&"https://atomicdata.dev/classes/WatchSubscription".into()),
+            "WatchSubscription class missing after populate"
+        );
+        assert!(
+            store.has_stored_resource(&"https://atomicdata.dev/classes/DevicePushToken".into()),
+            "DevicePushToken class missing after populate"
+        );
+        assert!(
+            store.has_stored_resource(&"https://atomicdata.dev/classes/DirectMessage".into()),
+            "DirectMessage class missing after populate"
+        );
+        assert!(
+            store.has_stored_resource(&"https://atomicdata.dev/classes/AccessRequest".into()),
+            "AccessRequest class missing after populate"
+        );
+        assert!(
+            store.has_stored_resource(&"https://atomicdata.dev/properties/requestedRight".into()),
+            "requestedRight property missing after populate"
+        );
+        assert!(
+            store.has_stored_resource(&"https://atomicdata.dev/properties/pushToken".into()),
+            "pushToken property missing after populate"
+        );
+        let class = store
+            .get_class("https://atomicdata.dev/classes/NotificationItem")
+            .await
+            .expect("get_class NotificationItem");
+        assert_eq!(class.shortname, "notification-item");
+    }
 }

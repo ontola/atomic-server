@@ -232,5 +232,16 @@ export default App;
 declare global {
   interface Window {
     store: Store;
+    __notificationEngine?: import('@tomic/react').NotificationEngine;
+    __notificationsHelpers?: {
+      getOrCreateNotificationsFolder: (
+        store: Store,
+        drive: string,
+      ) => Promise<string>;
+      fetchPersonalDriveSubject: (
+        store: Store,
+        agent: import('@tomic/react').Agent,
+      ) => Promise<string | undefined>;
+    };
   }
 }

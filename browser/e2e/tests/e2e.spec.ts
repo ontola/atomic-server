@@ -299,8 +299,11 @@ test.describe('data-browser', async () => {
       });
     }
 
+    // Child invites grant the chatroom, not the parent Dev drive. The
+    // session stays on the invitee's `{name}'s Drive` (same as develop).
     await expect(page2.getByTestId('current-drive-title')).toContainText(
       "'s Drive",
+      { timeout: 15_000 },
     );
     await expect(page2.getByTestId('shared-with-me')).toBeVisible();
     await expect(

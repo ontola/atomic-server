@@ -238,6 +238,9 @@ where
 
     let tracing_chrome_flush_guard = crate::trace::init_tracing(&config);
 
+    // Phase 5: FCM/APNs when env credentials are set; otherwise LoggingPushSender.
+    crate::push_provider::install_from_env();
+
     // Setup the database and more
     let appstate = crate::appstate::AppState::init(config.clone()).await?;
 

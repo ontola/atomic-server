@@ -286,6 +286,11 @@ export interface CreateDriveOpts {
    *  saved-drives switcher list. A non-personal drive is pushed onto that
    *  list. Defaults to true. */
   personal?: boolean;
+  /** Skip the default Ontology resource. Used by `/app/dev-drive` for the
+   *  private inbox drive — e2e never creates tables there, and the extra
+   *  save is the difference between `before()` fitting in the 60s budget
+   *  and blowing it. */
+  skipDefaultOntology?: boolean;
 }
 
 /**
@@ -2307,7 +2312,13 @@ export class Store {
     name: string,
     opts: CreateDriveOpts = {},
   ): Promise<Resource> {
-    const { description, subdomain, agentName, personal = true } = opts;
+    const {
+      description,
+      subdomain,
+      agentName,
+      personal = true,
+      skipDefaultOntology = false,
+    } = opts;
     const agent = this.getAgent();
 
     if (!agent?.subject) {
@@ -2403,7 +2414,9 @@ export class Store {
     // properties created inside the drive (e.g. table Row classes), so they
     // don't pile up directly under the drive itself. Skip if a previous
     // device already created one — two random ontology DIDs would fork.
-    if (!drive.get(server.properties.defaultOntology)) {
+    // `skipDefaultOntology` is for two-drive `/app/dev-drive` so Personal
+    // doesn't pay for an unused ontology in the e2e budget.
+    if (!skipDefaultOntology && !drive.get(server.properties.defaultOntology)) {
       await this.createDefaultOntology(drive);
     }
 

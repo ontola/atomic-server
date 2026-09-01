@@ -3,6 +3,7 @@ import {
   before,
   getCurrentSubject,
   getDevDriveSecret,
+  openDrive,
   signIn,
   FRONTEND_URL,
   smoke,
@@ -148,17 +149,18 @@ test('start a meeting, join it, follow along, and end it', async ({
   const { drive, folder } = created;
   const secret = await getDevDriveSecret(pageA);
 
-  await pageA.goto(
-    `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive)}`,
-  );
+  await openDrive(pageA, drive);
 
   // --- Session B (the follower): same agent, fresh context ---
   const ctxB = await browser.newContext();
   const pageB = await ctxB.newPage();
   await pageB.goto(FRONTEND_URL);
   await signIn(pageB, secret);
-  await pageB.goto(
-    `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive)}`,
+  await openDrive(pageB, drive);
+  await pageB.waitForFunction(
+    () => window.store?.getSyncStatus()?.serverConnected === true,
+    undefined,
+    { timeout: 20_000 },
   );
 
   // Both sessions see each other — presence is live.
@@ -244,17 +246,18 @@ test('records join and leave in the meeting chat', async ({ browser }) => {
   await pageA.waitForLoadState('load');
   const drive = await pageA.evaluate(() => window.store.getDrive());
   const secret = await getDevDriveSecret(pageA);
-  await pageA.goto(
-    `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive!)}`,
-  );
+  await openDrive(pageA, drive!);
 
   // Follower B: same agent, fresh context (no leader state of its own).
   const ctxB = await browser.newContext();
   const pageB = await ctxB.newPage();
   await pageB.goto(FRONTEND_URL);
   await signIn(pageB, secret);
-  await pageB.goto(
-    `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive!)}`,
+  await openDrive(pageB, drive!);
+  await pageB.waitForFunction(
+    () => window.store?.getSyncStatus()?.serverConnected === true,
+    undefined,
+    { timeout: 20_000 },
   );
 
   // Presence is live between the two sessions.

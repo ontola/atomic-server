@@ -6,6 +6,7 @@ import {
   core,
   dataBrowser,
   Datatype,
+  notifications,
   server,
 } from '@tomic/react';
 import { IconType } from 'react-icons';
@@ -61,6 +62,8 @@ const iconMap = new Map<string, IconType>([
   [core.classes.property, FaCubes],
   [dataBrowser.classes.table, FaTable],
   [dataBrowser.classes.dashboard, FaChartLine],
+  [notifications.classes.directMessage, FaComment],
+  [notifications.classes.accessRequest, FaShareFromSquare],
   [core.classes.property, FaHashtag],
   [core.classes.ontology, FaShapes],
   [dataBrowser.classes.tag, FaTag],

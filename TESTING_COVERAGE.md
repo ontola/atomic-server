@@ -134,6 +134,48 @@ Both matter because `iroh_transport` holds the router and node identity in
 
 ---
 
+## Notifications
+
+| Flow | Layer | Where |
+|---|---|---|
+| Extract agent mentions from TipTap JSON / chat text | glue | `browser/lib/src/mentions.test.ts` |
+| Populate includes NotificationItem / watches ontology | unit | `populate::notifications_ontology_is_populated` |
+| Child invite keeps session on private drive | unit | `inviteSessionDrive.test.ts` |
+| Drive-level invite activates the granted host | unit | same |
+| Chatroom invite sidebar is `{name}'s Drive` | flow | `browser/e2e/tests/e2e.spec.ts` (`chatroom` @smoke) |
+| Sidebar Notifications + empty inbox | flow | `browser/e2e/tests/notifications.spec.ts` |
+| `/app/dev-drive` workspace ≠ personal inbox drive | flow | `notifications.spec.ts` (`dev-drive workspace is not the personal inbox drive`) |
+| Seeded NotificationItem appears with unread badge | flow | `notifications.spec.ts` |
+| Mark all read clears unread styling | flow | `notifications.spec.ts` |
+| Table Watch toggle → Watching | flow | `notifications.spec.ts` |
+| Collection Watch toggle | flow | same `WatchToggle` on `CollectionPage` |
+| Watch → simulated other-agent row → inbox | flow | `notifications.spec.ts` (engine via `__notificationEngine`) |
+| Settings watches list (mute / remove) | flow | `WatchesList` in App Settings |
+| OS notification id hash + surface heuristics | unit | `osNotifications.test.ts` |
+| Local OS banner (browser / Tauri) | flow | manual / desktop smoke — Phase 4 wired |
+| DevicePushToken wake payload contract | unit | `devicePushToken.test.ts` + `push_wake` Rust tests |
+| Push wake sync→suppress-if-read | unit | `handlePushWake` in `devicePushToken.test.ts` |
+| Cold-start push tap / receive queues | unit | `pushWakeTap.test.ts` |
+| Remote push payload → receive queue | unit | `tauriPushBridge.test.ts` |
+| Hub mention → wake candidates | unit | `push_wake::mention_wakes_for_resource` |
+| Hub watch → wake candidates | unit | `push_wake::watch_owner_agent` / mute / enabled |
+| Hub DevicePushToken lookup + PushSender | unit | `push_wake` enqueue path (`LoggingPushSender`) |
+| Env FCM/APNs sender config | unit | `push_provider::tests` (no network) |
+| APNs/FCM JWT minting | unit | `push_credentials::tests` (throwaway keys) |
+| Visible FCM/APNs payload shape | unit | `push_provider::fcm_message_body` / `apns_alert_body` |
+| Generic lock-screen copy | unit | `visiblePushCopy` (JS) + `push_payload_test` (Dart) + `visible_body_for_type` |
+| OS / APNs / FCM delivery | flow | **gap** — needs a device + Firebase/APNs project; payload + token registry are unit-tested |
+| Mention → NotificationItem materialization (engine) | flow | `notifications.spec.ts` (fake other-agent actor) |
+| A mentions B → B sees unread (two agents / invite) | flow | `notifications.spec.ts` (invite + reconcile backlog) |
+| Mark read on A clears badge on B | flow | `notifications.spec.ts` (same agent, two contexts) |
+| Reverse query mentions ∋ agent | flow | same invite e2e (`reconcileMentionBacklog`) |
+| Collaborator list / rights merge / summaries | glue | `browser/lib/src/socialNotifications.test.ts` |
+| DirectMessage from other actor → inbox | flow | `notifications.spec.ts` |
+| AccessRequest from other actor → Grant in inbox | flow | `notifications.spec.ts` |
+| Send message button on notifications page | flow | `notifications.spec.ts` |
+
+---
+
 ## Blind spots
 
 Ordered by how much they would hurt.

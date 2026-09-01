@@ -778,6 +778,10 @@ impl Handler<CommitMessage> for CommitMonitor {
         // per-connection.
         let frame = encode_commit_frame(&self.store, &msg);
 
+        // Phase 5: mention + watch → wake candidates (token lookup + sender in async).
+        let push_resource = msg.commit_response.resource_new.clone();
+        let push_actor = msg.commit_response.commit.signer.to_string();
+
         if let Some(frame) = frame.as_ref() {
             // Per-resource subscribers
             if let Some(subscribers) = self.subscriptions.get(&target_subject) {
@@ -843,6 +847,16 @@ impl Handler<CommitMessage> for CommitMonitor {
 
         Box::pin(
             async move {
+                if let Some(resource) = push_resource.as_ref() {
+                    let wakes = crate::push_wake::wakes_for_committed_resource(
+                        &store,
+                        resource,
+                        Some(push_actor.as_str()),
+                    )
+                    .await;
+                    crate::push_wake::enqueue_push_wakes(&store, &wakes).await;
+                }
+
                 // Skip vector re-indexing when only non-text properties changed (e.g. parent adding
                 // a child to its subResources array). If the indexable text content is identical,
                 // neither a remove nor an add is needed — the existing vector entry is still correct.

@@ -76,7 +76,7 @@ function valueMatches(
  * server's "value-in-property" semantics: single-valued props compare directly,
  * multi-valued props (arrays like `isA`) test per-element.
  */
-function constraintMatches(
+export function constraintMatches(
   resource: Resource,
   property: string,
   value: string,

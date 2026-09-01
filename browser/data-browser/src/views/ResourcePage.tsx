@@ -9,6 +9,7 @@ import {
   core,
   ai,
   useArray,
+  notifications,
 } from '@tomic/react';
 
 import { ContainerNarrow } from '../components/Containers';
@@ -36,6 +37,8 @@ import { TagPage } from './TagPage/TagPage';
 import { AIChatPage } from '@views/AIChat/AIChatPage';
 import { DocumentV2FullPage } from './Document/DocumentV2FullPage';
 import { CanvasPage } from './Canvas/CanvasPage';
+import { DirectMessagePage } from './DirectMessagePage';
+import { AccessRequestPage } from './AccessRequestPage';
 import { canvas } from '@tomic/lib';
 import { PluginPage } from '@views/Plugin/PluginPage';
 import { useCustomViews } from '@components/CustomViewProvider';
@@ -228,6 +231,10 @@ function selectComponent(klass: string | undefined) {
       return DocumentV2FullPage;
     case dataBrowser.classes.meeting:
       return MeetingPage;
+    case notifications.classes.directMessage:
+      return DirectMessagePage;
+    case notifications.classes.accessRequest:
+      return AccessRequestPage;
     case canvas.classes.canvas:
       return CanvasPage;
     case server.classes.plugin:

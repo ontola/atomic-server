@@ -1,6 +1,6 @@
 import { Extension, type Editor, type Range } from '@tiptap/react';
 import { Suggestion, type SuggestionOptions } from '@tiptap/suggestion';
-import type { Store } from '@tomic/react';
+import { core, isAgentSubject, type Store } from '@tomic/react';
 import type { SuggestionItem } from '../types';
 import { getIconForClass } from '@helpers/iconMap';
 import { PluginKey } from '@tiptap/pm/state';
@@ -47,7 +47,25 @@ export const buildResourceSuggestion = (
 
     const resources = await Promise.all(results.map(x => store.getResource(x)));
 
-    return resources.map(r => ({
+    // Prefer Agents so `@` feels like a people mention first; resource embeds
+    // still appear after. Mentions of agents write the `mentions` property on
+    // save (planning/notifications.md).
+    const ranked = [...resources].sort((a, b) => {
+      const aAgent =
+        isAgentSubject(a.subject) ||
+        a.getClasses().includes(core.classes.agent);
+      const bAgent =
+        isAgentSubject(b.subject) ||
+        b.getClasses().includes(core.classes.agent);
+
+      if (aAgent === bAgent) {
+        return 0;
+      }
+
+      return aAgent ? -1 : 1;
+    });
+
+    return ranked.map(r => ({
       title: r.title,
       id: r.subject,
       icon: getIconForClass(r.getClasses()[0]),

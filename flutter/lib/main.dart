@@ -12,6 +12,7 @@ import 'screens/pair_screen.dart';
 import 'theme.dart';
 import 'atomic/atomic_client.dart';
 import 'atomic/session.dart';
+import 'atomic/push_notifications.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +20,7 @@ void main() async {
   final dir = await getApplicationDocumentsDirectory();
   await AtomicClient.openDb(dir.path);
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  await AtomicPush.start();
   runApp(const AtomicCanvasApp());
 }
 
@@ -169,6 +171,10 @@ class _AtomicCanvasAppState extends State<AtomicCanvasApp>
     });
     _startEventListener();
     _startBackgroundSync();
+    AtomicPush.registerAfterSignIn().then(
+      (_) {},
+      onError: (Object e) => debugPrint('Push register: $e'),
+    );
   }
 
   void _showDebouncedSnack(BuildContext ctx, String key, String message,

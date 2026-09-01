@@ -1,0 +1,952 @@
+import { CollectionBuilder } from './collectionBuilder.js';
+import { constraintMatches } from './collection.js';
+import {
+  applyMentionsProperty,
+  extractAgentMentionsFromText,
+  extractAgentMentionsFromTipTap,
+  mentionDedupeKey,
+  messageDedupeKey,
+  accessRequestDedupeKey,
+  resourceActor,
+  type MentionScanNode,
+  watchDedupeKey,
+} from './mentions.js';
+import { collections } from './ontologies/collections.js';
+import { core } from './ontologies/core.js';
+import { dataBrowser } from './ontologies/dataBrowser.js';
+import { notifications } from './ontologies/notifications.js';
+import type { Resource } from './resource.js';
+import { Store, StoreEvents } from './store.js';
+import {
+  accessRequestNotificationSummary,
+  messageNotificationSummary,
+} from './socialNotifications.js';
+
+export type NotificationType =
+  | 'mention'
+  | 'watch-membership'
+  | 'watch-content'
+  | 'message'
+  | 'access-request';
+
+export type WatchKind = 'membership' | 'content' | 'both';
+
+export interface NotificationEngineOptions {
+  store: Store;
+  /** Current agent subject (`did:ad:agent:…`). */
+  agentSubject: string;
+  /** Personal drive where NotificationItems / watches live. */
+  personalDrive: string;
+  /**
+   * Resolve (and lazily create) the notifications folder under the personal
+   * drive. Injected so the engine stays free of UI folder helpers.
+   */
+  getNotificationsFolder: (
+    store: Store,
+    personalDrive: string,
+  ) => Promise<string>;
+  /**
+   * Watch-event coalesce window (ms). Default 2000. Tests may pass `0` (or a
+   * small value) and call {@link NotificationEngine.flushPendingWatches}.
+   */
+  watchCoalesceMs?: number;
+}
+
+type Listener = () => void;
+
+type WatchEntry = {
+  subject: string;
+  kind: WatchKind;
+  mutedUntil?: number;
+  enabled: boolean;
+};
+
+/**
+ * Materializes personal `NotificationItem`s from drive traffic the recipient
+ * can already read. Mentions: `mentions` contains me. Watches: membership /
+ * content deltas against enabled `WatchSubscription`s.
+ *
+ * Idempotent via `dedupeKey`. Does not own push / OS delivery — callers
+ * subscribe and present.
+ */
+export class NotificationEngine {
+  private readonly store: Store;
+  private readonly agentSubject: string;
+  private readonly personalDrive: string;
+  private readonly getNotificationsFolder: NotificationEngineOptions['getNotificationsFolder'];
+  private readonly watchCoalesceMs: number;
+
+  private unsubUpdated?: () => void;
+  private unsubRemoved?: () => void;
+  private unsubDrive?: () => void;
+  private folderSubject?: string;
+  private started = false;
+  private readonly listeners = new Set<Listener>();
+  /** In-memory dedupe of keys we've already upserted this session. */
+  private readonly seenKeys = new Set<string>();
+  /** watchTarget → WatchSubscription */
+  private watches = new Map<string, WatchEntry>();
+  /** Coalesce bursts: `${type}|${watchTarget}` → pending */
+  private readonly watchCoalesce = new Map<
+    string,
+    {
+      count: number;
+      about: string;
+      actor: string;
+      type: NotificationType;
+      watchTarget: string;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+
+  /**
+   * Optional presenter hook (OS banner / toast). Fired only when a new
+   * NotificationItem is created — not on dedupe hits or mark-read.
+   */
+  private onItemCreated?: (item: {
+    subject: string;
+    summary: string;
+    about: string;
+    type: NotificationType;
+  }) => void;
+
+  constructor(opts: NotificationEngineOptions) {
+    this.store = opts.store;
+    this.agentSubject = opts.agentSubject;
+    this.personalDrive = opts.personalDrive;
+    this.getNotificationsFolder = opts.getNotificationsFolder;
+    this.watchCoalesceMs = opts.watchCoalesceMs ?? 2000;
+  }
+
+  /** Personal drive where NotificationItems / watches are stored. */
+  getPersonalDrive(): string {
+    return this.personalDrive;
+  }
+
+  /** Wire OS / toast presentation without coupling the engine to UI. */
+  setOnItemCreated(
+    cb?: (item: {
+      subject: string;
+      summary: string;
+      about: string;
+      type: NotificationType;
+    }) => void,
+  ): void {
+    this.onItemCreated = cb;
+  }
+
+  subscribe(listener: Listener): () => void {
+    this.listeners.add(listener);
+
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private emit() {
+    for (const listener of this.listeners) {
+      listener();
+    }
+  }
+
+  async start(): Promise<void> {
+    if (this.started) {
+      return;
+    }
+
+    this.started = true;
+    this.folderSubject = await this.getNotificationsFolder(
+      this.store,
+      this.personalDrive,
+    );
+    await this.reloadWatches();
+    await this.reconcileMentionBacklog();
+
+    this.unsubUpdated = this.store.on(StoreEvents.ResourceUpdated, resource => {
+      void this.onResourceUpdated(resource);
+    });
+    this.unsubRemoved = this.store.on(StoreEvents.ResourceRemoved, () => {
+      // Membership leave deferred — enter is the valuable v1 signal.
+    });
+    // Switching drives (e.g. after accepting an invite) should pick up
+    // mention backlog on the newly current drive via reverse query.
+    this.unsubDrive = this.store.on(StoreEvents.DriveChanged, () => {
+      void this.reconcileMentionBacklog();
+    });
+  }
+
+  stop(): void {
+    this.unsubUpdated?.();
+    this.unsubRemoved?.();
+    this.unsubDrive?.();
+    this.unsubUpdated = undefined;
+    this.unsubRemoved = undefined;
+    this.unsubDrive = undefined;
+
+    for (const pending of this.watchCoalesce.values()) {
+      clearTimeout(pending.timer);
+    }
+
+    this.watchCoalesce.clear();
+    this.started = false;
+  }
+
+  /**
+   * Flush coalesced watch events immediately (clears timers). Used by tests
+   * and e2e so they need not wait the full coalesce window.
+   */
+  async flushPendingWatches(): Promise<void> {
+    const keys = [...this.watchCoalesce.keys()];
+
+    for (const key of keys) {
+      const pending = this.watchCoalesce.get(key);
+
+      if (pending) {
+        clearTimeout(pending.timer);
+      }
+
+      await this.flushWatchCoalesce(key);
+    }
+  }
+
+  /** Refresh WatchSubscription cache from the personal drive. */
+  async reloadWatches(): Promise<void> {
+    const next = new Map<string, WatchEntry>();
+
+    const addFromResource = (res: Resource) => {
+      if (!res.getClasses().includes(notifications.classes.watchSubscription)) {
+        return;
+      }
+
+      if (res.error) {
+        return;
+      }
+
+      const target = res.get(notifications.properties.watchTarget);
+
+      if (typeof target !== 'string') {
+        return;
+      }
+
+      const kind =
+        (res.get(notifications.properties.watchKind) as
+          | WatchKind
+          | undefined) ?? 'membership';
+      const enabled =
+        (res.get(notifications.properties.notificationEnabled) as
+          | boolean
+          | undefined) ?? true;
+      const mutedUntil = res.get(notifications.properties.mutedUntil) as
+        | number
+        | undefined;
+
+      next.set(target, { subject: res.subject, kind, mutedUntil, enabled });
+    };
+
+    // Collection `/query` can lag a just-saved watch; keep in-memory
+    // subscriptions so `flushPendingWatches` still fires in e2e / live.
+    for (const res of this.store.resources.values()) {
+      addFromResource(res);
+    }
+
+    try {
+      const collection = await new CollectionBuilder(this.store)
+        .setDrive(this.personalDrive)
+        .setProperty(core.properties.isA)
+        .setValue(notifications.classes.watchSubscription)
+        .setPageSize(100)
+        .buildAndFetch();
+
+      for (let i = 0; i < collection.totalMembers; i++) {
+        const subject = await collection.getMemberWithIndex(i);
+
+        if (!subject) {
+          continue;
+        }
+
+        const res = await this.store.getResource(subject);
+        addFromResource(res);
+      }
+    } catch {
+      // Offline / empty index — in-memory watches above still apply.
+    }
+
+    this.watches = next;
+    this.emit();
+  }
+
+  /** Subject of the WatchSubscription for `target`, if cached. */
+  getWatchForTarget(target: string): string | undefined {
+    return this.watches.get(target)?.subject;
+  }
+
+  /** In-memory WatchSubscriptions (personal drive). */
+  listWatches(): Array<{
+    subject: string;
+    target: string;
+    enabled: boolean;
+    kind: WatchKind;
+  }> {
+    return [...this.watches.entries()].map(([target, watch]) => ({
+      subject: watch.subject,
+      target,
+      enabled: watch.enabled,
+      kind: watch.kind,
+    }));
+  }
+
+  /**
+   * Boot-time reverse query: resources whose `mentions` contain me.
+   * Creates missing NotificationItems (idempotent).
+   */
+  async reconcileMentionBacklog(): Promise<void> {
+    const drives = new Set<string>();
+    const current = this.store.getDrive();
+
+    if (current) {
+      drives.add(current);
+    }
+
+    drives.add(this.personalDrive);
+
+    for (const drive of drives) {
+      try {
+        const collection = await new CollectionBuilder(this.store)
+          .setDrive(drive)
+          .setProperty(notifications.properties.mentions)
+          .setValue(this.agentSubject)
+          .setPageSize(50)
+          .buildAndFetch();
+
+        for (let i = 0; i < collection.totalMembers; i++) {
+          const subject = await collection.getMemberWithIndex(i);
+
+          if (!subject) {
+            continue;
+          }
+
+          const res = await this.store.getResource(subject);
+          await this.considerMentionResource(res);
+        }
+      } catch {
+        // Drive may be unavailable offline — live updates still cover new ones.
+      }
+    }
+  }
+
+  private async onResourceUpdated(resource: Resource): Promise<void> {
+    if (
+      resource.getClasses().includes(notifications.classes.watchSubscription)
+    ) {
+      await this.reloadWatches();
+    }
+
+    await this.considerMentionResource(resource);
+    await this.considerWatchResource(resource);
+  }
+
+  private isMuted(mutedUntil?: number): boolean {
+    return typeof mutedUntil === 'number' && mutedUntil > Date.now();
+  }
+
+  private async considerMentionResource(resource: Resource): Promise<void> {
+    if (
+      resource.getClasses().includes(notifications.classes.notificationItem) ||
+      resource.getClasses().includes(notifications.classes.watchSubscription) ||
+      resource
+        .getClasses()
+        .includes(notifications.classes.notificationPreferences) ||
+      resource.getClasses().includes(notifications.classes.devicePushToken)
+    ) {
+      return;
+    }
+
+    const mentioned = resource.get(notifications.properties.mentions) as
+      | string[]
+      | undefined;
+
+    if (!Array.isArray(mentioned) || !mentioned.includes(this.agentSubject)) {
+      return;
+    }
+
+    const actor = resourceActor(resource);
+
+    if (!actor || actor === this.agentSubject) {
+      return;
+    }
+
+    const classes = resource.getClasses();
+    let type: NotificationType = 'mention';
+    let key = mentionDedupeKey(resource.subject, actor, this.agentSubject);
+    let summary: string;
+    let requestedRight: string | undefined;
+
+    if (classes.includes(notifications.classes.directMessage)) {
+      type = 'message';
+      key = messageDedupeKey(resource.subject, actor, this.agentSubject);
+      const body =
+        (resource.get(core.properties.description) as string | undefined) ?? '';
+      summary = messageNotificationSummary(body);
+    } else if (classes.includes(notifications.classes.accessRequest)) {
+      type = 'access-request';
+      requestedRight =
+        (resource.get(notifications.properties.requestedRight) as
+          | string
+          | undefined) ?? 'read';
+      const targetSubject = resource.get(dataBrowser.properties.about) as
+        | string
+        | undefined;
+      key = accessRequestDedupeKey(
+        targetSubject ?? resource.subject,
+        actor,
+        this.agentSubject,
+        requestedRight,
+      );
+      let targetTitle = targetSubject ?? 'a resource';
+
+      if (targetSubject) {
+        try {
+          const target = await this.store.getResource(targetSubject);
+          targetTitle =
+            (target.get(core.properties.name) as string | undefined) ??
+            targetSubject;
+        } catch {
+          // keep subject
+        }
+      }
+
+      summary = accessRequestNotificationSummary(requestedRight, targetTitle);
+    } else {
+      const title =
+        (resource.get(core.properties.name) as string | undefined) ??
+        resource.subject;
+      summary = `Mentioned you in ${title}`;
+    }
+
+    if (this.seenKeys.has(key)) {
+      return;
+    }
+
+    await this.upsertItem({
+      dedupeKey: key,
+      type,
+      about: resource.subject,
+      actor,
+      mentionedAgent: this.agentSubject,
+      summary,
+      name: summary,
+      requestedRight,
+    });
+  }
+
+  private async resourceMatchesWatch(
+    resource: Resource,
+    target: string,
+  ): Promise<boolean> {
+    const parent = resource.get(core.properties.parent) as string | undefined;
+
+    if (parent === target) {
+      return true;
+    }
+
+    if (resource.subject === target) {
+      return true;
+    }
+
+    try {
+      const targetRes = await this.store.getResource(target);
+      const targetClasses = targetRes.getClasses();
+
+      if (targetClasses.includes(dataBrowser.classes.table)) {
+        return parent === target;
+      }
+
+      if (targetClasses.includes(collections.classes.collection)) {
+        const prop = targetRes.get(collections.properties.property) as
+          | string
+          | undefined;
+        const value = targetRes.get(collections.properties.value) as
+          | string
+          | undefined;
+
+        if (prop && value) {
+          return constraintMatches(resource, prop, value);
+        }
+      }
+    } catch {
+      return false;
+    }
+
+    return false;
+  }
+
+  private async considerWatchResource(resource: Resource): Promise<void> {
+    if (this.watches.size === 0) {
+      return;
+    }
+
+    const classes = resource.getClasses();
+
+    if (
+      classes.includes(notifications.classes.notificationItem) ||
+      classes.includes(notifications.classes.watchSubscription) ||
+      classes.includes(notifications.classes.directMessage) ||
+      classes.includes(notifications.classes.accessRequest)
+    ) {
+      return;
+    }
+
+    const actor = resourceActor(resource);
+
+    if (actor === this.agentSubject) {
+      return;
+    }
+
+    for (const [target, watch] of this.watches) {
+      if (!watch.enabled || this.isMuted(watch.mutedUntil)) {
+        continue;
+      }
+
+      const matches = await this.resourceMatchesWatch(resource, target);
+
+      if (!matches) {
+        continue;
+      }
+
+      // Updating the watched resource itself is content; a new child is membership.
+      const isTargetSelf = resource.subject === target;
+      const type: NotificationType =
+        isTargetSelf || watch.kind === 'content'
+          ? 'watch-content'
+          : 'watch-membership';
+
+      if (watch.kind === 'membership' && isTargetSelf) {
+        continue;
+      }
+
+      if (watch.kind === 'content' && !isTargetSelf) {
+        // content-only watches still fire for member prop changes
+      }
+
+      this.queueWatchEvent(type, resource.subject, target, actor ?? 'unknown');
+    }
+  }
+
+  private queueWatchEvent(
+    type: NotificationType,
+    about: string,
+    watchTarget: string,
+    actor: string,
+  ): void {
+    const coalesceKey = `${type}|${watchTarget}`;
+    const existing = this.watchCoalesce.get(coalesceKey);
+
+    if (existing) {
+      existing.count += 1;
+      existing.about = about;
+      existing.actor = actor;
+      clearTimeout(existing.timer);
+      existing.timer = setTimeout(() => {
+        void this.flushWatchCoalesce(coalesceKey);
+      }, this.watchCoalesceMs);
+
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      void this.flushWatchCoalesce(coalesceKey);
+    }, this.watchCoalesceMs);
+
+    this.watchCoalesce.set(coalesceKey, {
+      count: 1,
+      about,
+      actor,
+      type,
+      watchTarget,
+      timer,
+    });
+  }
+
+  private async flushWatchCoalesce(coalesceKey: string): Promise<void> {
+    const pending = this.watchCoalesce.get(coalesceKey);
+    this.watchCoalesce.delete(coalesceKey);
+
+    if (!pending) {
+      return;
+    }
+
+    const { type, watchTarget, about, actor, count } = pending;
+    let targetTitle = watchTarget;
+
+    try {
+      const t = await this.store.getResource(watchTarget);
+      targetTitle =
+        (t.get(core.properties.name) as string | undefined) ?? watchTarget;
+    } catch {
+      // keep subject
+    }
+
+    const summary =
+      count > 1
+        ? `${count} updates in ${targetTitle}`
+        : `Update in ${targetTitle}`;
+
+    const baseKey = watchDedupeKey(
+      type === 'watch-content' ? 'watch-content' : 'watch-membership',
+      about,
+      watchTarget,
+      actor,
+    );
+    // Time-bucket so coalesced groups don't collapse forever into one item.
+    const bucketMs = Math.max(this.watchCoalesceMs, 1);
+    const bucketKey = `${baseKey}|${Math.floor(Date.now() / bucketMs)}`;
+
+    await this.upsertItem({
+      dedupeKey: bucketKey,
+      type,
+      about,
+      actor: actor === 'unknown' ? undefined : actor,
+      watchTarget,
+      summary,
+      name: summary,
+    });
+  }
+
+  private async upsertItem(input: {
+    dedupeKey: string;
+    type: NotificationType;
+    about: string;
+    actor?: string;
+    mentionedAgent?: string;
+    watchTarget?: string;
+    summary: string;
+    name: string;
+    requestedRight?: string;
+  }): Promise<void> {
+    if (this.seenKeys.has(input.dedupeKey)) {
+      return;
+    }
+
+    this.seenKeys.add(input.dedupeKey);
+
+    const folder =
+      this.folderSubject ??
+      (await this.getNotificationsFolder(this.store, this.personalDrive));
+    this.folderSubject = folder;
+
+    try {
+      const existing = await new CollectionBuilder(this.store)
+        .setDrive(this.personalDrive)
+        .setProperty(notifications.properties.dedupeKey)
+        .setValue(input.dedupeKey)
+        .setPageSize(1)
+        .buildAndFetch();
+
+      if (existing.totalMembers > 0) {
+        const subject = await existing.getMemberWithIndex(0);
+
+        if (subject) {
+          this.emit();
+
+          return;
+        }
+      }
+    } catch {
+      // continue to create
+    }
+
+    const item = await this.store.newResource({
+      parent: folder,
+      isA: [notifications.classes.notificationItem],
+      propVals: {
+        [notifications.properties.notificationType]: input.type,
+        [core.properties.name]: input.name,
+        [dataBrowser.properties.about]: input.about,
+        [notifications.properties.dedupeKey]: input.dedupeKey,
+        [notifications.properties.notificationRead]: false,
+        [notifications.properties.dismissed]: false,
+        [notifications.properties.notificationSummary]: input.summary,
+        ...(input.actor && {
+          [notifications.properties.notificationActor]: input.actor,
+        }),
+        ...(input.mentionedAgent && {
+          [notifications.properties.mentionedAgent]: input.mentionedAgent,
+        }),
+        ...(input.watchTarget && {
+          [notifications.properties.watchTarget]: input.watchTarget,
+        }),
+        ...(input.requestedRight && {
+          [notifications.properties.requestedRight]: input.requestedRight,
+        }),
+      },
+    });
+
+    await item.save();
+    this.onItemCreated?.({
+      subject: item.subject,
+      summary: input.summary,
+      about: input.about,
+      type: input.type,
+    });
+    this.emit();
+  }
+
+  async markRead(subject: string): Promise<void> {
+    const res = await this.store.getResource(subject);
+    await res.set(notifications.properties.notificationRead, true);
+    await res.save();
+    // Bump useSyncExternalStore snapshots (useResource) in addition to
+    // LocalChange (useValue) so badge / list styling refresh reliably.
+    this.store.notifyResourceUpdated(res);
+    this.emit();
+  }
+
+  async markAllRead(subjects: string[]): Promise<void> {
+    for (const subject of subjects) {
+      const res = await this.store.getResource(subject);
+      const read = res.get(notifications.properties.notificationRead);
+
+      if (read === true) {
+        continue;
+      }
+
+      await res.set(notifications.properties.notificationRead, true);
+      await res.save();
+      this.store.notifyResourceUpdated(res);
+    }
+
+    this.emit();
+  }
+
+  async dismiss(subject: string): Promise<void> {
+    const res = await this.store.getResource(subject);
+    await res.set(notifications.properties.dismissed, true);
+    await res.set(notifications.properties.notificationRead, true);
+    await res.save();
+    this.store.notifyResourceUpdated(res);
+    this.emit();
+  }
+}
+
+/**
+ * Inbox subjects already in the JS store, including not-yet-confirmed
+ * (`new`) rows so a just-upserted item renders before the collection
+ * index catches up. Used by the UI so a second device that receives
+ * items via drive sync does not depend on a one-shot WASM `/query`
+ * that can race `hasCompletedDriveSync` and stay empty.
+ */
+export function visibleNotificationItems(store: Store): Resource[] {
+  const items: Resource[] = [];
+
+  for (const res of store.resources.values()) {
+    if (!res.getClasses().includes(notifications.classes.notificationItem)) {
+      continue;
+    }
+
+    if (res.error) {
+      continue;
+    }
+
+    if (res.get(notifications.properties.dismissed) === true) {
+      continue;
+    }
+
+    items.push(res);
+  }
+
+  return items;
+}
+
+/**
+ * Server `/query` for NotificationItems on a drive. Second devices can finish
+ * drive sync before nested inbox rows are in the parent index, so a local
+ * WASM collection query stays empty; this path does not trust that empty.
+ */
+export async function fetchNotificationItemSubjectsFromServer(
+  store: Store,
+  drive: string,
+): Promise<string[]> {
+  const url = new URL(`${new URL(store.getServerUrl()).origin}/query`);
+  url.searchParams.set('property', core.properties.isA);
+  url.searchParams.set('value', notifications.classes.notificationItem);
+  url.searchParams.set('drive', drive);
+  url.searchParams.set('page_size', '100');
+  url.searchParams.set('current_page', '0');
+
+  const page = await store.fetchResourceFromServer(url.toString(), {
+    noWebSocket: true,
+  });
+
+  if (page.error) {
+    return [];
+  }
+
+  const subjects = page.getSubjects(collections.properties.members);
+
+  for (const subject of subjects) {
+    // Always HTTP-GET. Skipping a cached row left device B with a stale
+    // `notificationRead` after A marked the item read. Avoid the WS path
+    // here — fetching every inbox row over the socket can stall a fresh
+    // second-context handshake (e2e device B showed Offline).
+    const res = await store.fetchResourceFromServer(subject, {
+      noWebSocket: true,
+    });
+
+    if (!res.error) {
+      store.notifyResourceUpdated(res);
+    }
+  }
+
+  return subjects;
+}
+
+/**
+ * Non-dismissed inbox subjects: in-memory store, then personal-drive
+ * collection index, then a server `/query` refresh. Shared by the inbox
+ * route and the unread badge so those UIs cannot drift.
+ */
+export async function listInboxNotificationSubjects(
+  store: Store,
+  personalDrive?: string,
+): Promise<string[]> {
+  const seen = new Set<string>();
+  const next: string[] = [];
+
+  const consider = (subject: string) => {
+    if (seen.has(subject)) {
+      return;
+    }
+
+    seen.add(subject);
+    const res = store.getResourceLoading(subject);
+
+    if (res.get(notifications.properties.dismissed) === true) {
+      return;
+    }
+
+    next.push(subject);
+  };
+
+  for (const res of visibleNotificationItems(store)) {
+    consider(res.subject);
+  }
+
+  if (!personalDrive) {
+    return next;
+  }
+
+  try {
+    const collection = await new CollectionBuilder(store)
+      .setDrive(personalDrive)
+      .setProperty(core.properties.isA)
+      .setValue(notifications.classes.notificationItem)
+      .setPageSize(100)
+      .buildAndFetch();
+
+    for (let i = 0; i < collection.totalMembers; i++) {
+      const subject = await collection.getMemberWithIndex(i);
+
+      if (subject) {
+        consider(subject);
+      }
+    }
+  } catch {
+    // In-memory items still render if the index query races drive sync.
+  }
+
+  try {
+    const fromServer = await fetchNotificationItemSubjectsFromServer(
+      store,
+      personalDrive,
+    );
+
+    for (const subject of fromServer) {
+      consider(subject);
+    }
+  } catch {
+    // Offline / query 404 — keep whatever we already listed.
+  }
+
+  return next;
+}
+
+/** First NotificationItem on `drive` whose `about` is `about`. */
+export async function findNotificationItemForAbout(
+  store: Store,
+  drive: string,
+  about: string,
+): Promise<
+  | {
+      subject: string;
+      read: boolean;
+      dismissed: boolean;
+      summary?: string;
+    }
+  | undefined
+> {
+  try {
+    const collection = await new CollectionBuilder(store)
+      .setDrive(drive)
+      .setProperty(dataBrowser.properties.about)
+      .setValue(about)
+      .setPageSize(20)
+      .buildAndFetch();
+
+    for (let i = 0; i < collection.totalMembers; i++) {
+      const subject = await collection.getMemberWithIndex(i);
+
+      if (!subject) {
+        continue;
+      }
+
+      const res = await store.getResource(subject);
+
+      if (!res.getClasses().includes(notifications.classes.notificationItem)) {
+        continue;
+      }
+
+      return {
+        subject,
+        read: res.get(notifications.properties.notificationRead) === true,
+        dismissed: res.get(notifications.properties.dismissed) === true,
+        summary: res.get(notifications.properties.notificationSummary) as
+          | string
+          | undefined,
+      };
+    }
+  } catch {
+    // Index unavailable — treat as no item.
+  }
+
+  return undefined;
+}
+
+/** Apply mentions from TipTap JSON onto a document resource (no save). */
+export async function syncDocumentMentions(
+  resource: Resource,
+  tipTapDoc: MentionScanNode | null | undefined,
+): Promise<boolean> {
+  return applyMentionsProperty(
+    resource,
+    extractAgentMentionsFromTipTap(tipTapDoc),
+  );
+}
+
+/** Apply mentions from chat/markdown text onto a message resource (no save). */
+export async function syncTextMentions(
+  resource: Resource,
+  text: string,
+): Promise<boolean> {
+  return applyMentionsProperty(resource, extractAgentMentionsFromText(text));
+}
+
+export {
+  applyMentionsProperty,
+  extractAgentMentionsFromText,
+  extractAgentMentionsFromTipTap,
+  isAgentSubject,
+  mentionDedupeKey,
+  messageDedupeKey,
+  accessRequestDedupeKey,
+  watchDedupeKey,
+} from './mentions.js';

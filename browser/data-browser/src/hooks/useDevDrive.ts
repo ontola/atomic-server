@@ -19,6 +19,10 @@ export const DEV_DRIVE_PRUNE_MARKER = '[atomic-data:dev-drive]';
 
 const DEV_DRIVE_DISPLAY_NAME = 'Dev drive';
 
+/** Private/home drive created alongside the workspace. Inbox, watches, and
+ *  device tokens live here — not on {@link DEV_DRIVE_DISPLAY_NAME}. */
+const DEV_PERSONAL_DRIVE_DISPLAY_NAME = 'Personal';
+
 /** Name set on the dev-drive Agent resource. Visible anywhere the agent's
  *  resource title is rendered — commit author lines, chat messages, etc.
  *  E2E tests can assert against this exact string. */
@@ -38,9 +42,14 @@ function resolveDevServer(): string {
 }
 
 /**
- * Creates a fresh agent and drive on the current atomic-server (page origin
- * unless we're loaded from the Vite dev server, in which case localhost:9883)
- * and switches to it. Only intended for development / E2E-test use.
+ * Creates a fresh agent plus two drives on the current atomic-server (page
+ * origin unless we're loaded from the Vite dev server, in which case
+ * localhost:9883) and switches to the workspace. The private drive is
+ * named {@link DEV_PERSONAL_DRIVE_DISPLAY_NAME} (`personal: true`); the
+ * working drive is {@link DEV_DRIVE_DISPLAY_NAME} (`personal: false`).
+ * Inbox resources must not live on the workspace — matching real
+ * onboarding, where extra drives are never the agent's home.
+ * Only intended for development / E2E-test use.
  */
 export function useDevDrive() {
   const store = useStore();
@@ -61,20 +70,35 @@ export function useDevDrive() {
 
       store.setAgent(newAgent);
 
-      // `agentName` pipes `DEV_DRIVE_AGENT_NAME` into the same
-      // agent-resource save that `createDrive` already does (to wire up
-      // `privateDrive` + `drives`). The agent shows up as "Dev User"
-      // wherever its resource is rendered (commit author lines, chat
-      // messages, etc.). E2E tests assert against this constant.
+      // Private drive first: `createDrive(..., { personal: false })` appends
+      // the workspace to the home drive's saved-drives list, which only
+      // exists after `linkPrivateDrive`. `agentName` is written on that
+      // same Agent commit so "Dev User" shows up on author lines.
+      const personalDriveResource = await store.createDrive(
+        DEV_PERSONAL_DRIVE_DISPLAY_NAME,
+        {
+          description: `Private drive created via \`/app/dev-drive\` for local development and E2E. Notification inbox and watches live here. You can remove these with Prune test data on \`/app/prunetests\`. \n\n${DEV_DRIVE_PRUNE_MARKER}`,
+          agentName: DEV_DRIVE_AGENT_NAME,
+          // Inbox-only drive; skip the unused default Ontology so
+          // `before()` stays inside the 60s Playwright budget.
+          skipDefaultOntology: true,
+        },
+      );
+
       const driveResource = await store.createDrive(DEV_DRIVE_DISPLAY_NAME, {
-        description: `Created via \`/app/dev-drive\` for local development and E2E. You can remove these with Prune test data on \`/app/prunetests\`. \n\n${DEV_DRIVE_PRUNE_MARKER}`,
-        agentName: DEV_DRIVE_AGENT_NAME,
+        description: `Workspace created via \`/app/dev-drive\` for local development and E2E. Not the agent's private drive. You can remove these with Prune test data on \`/app/prunetests\`. \n\n${DEV_DRIVE_PRUNE_MARKER}`,
+        personal: false,
       });
 
+      // Secret `initialDrive` is the private drive. The engine and inbox
+      // fall back to this when the Agent resource is not yet fetched;
+      // pointing it at the workspace wrote NotificationItems onto Dev
+      // drive while the UI queried the home drive. Agent.privateDrive is
+      // set by createDrive above.
       const finalSecret = Agent.buildSecret(
         agentKeys.privateKey,
         agentDID,
-        driveResource.subject,
+        personalDriveResource.subject,
       );
 
       // Expose for E2E tests so they can sign in as the same agent on other pages.

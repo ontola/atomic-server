@@ -38,6 +38,7 @@ tauri-plugin-opener = "2"
 # without a human at the keyboard. Registered only under `debug_assertions`
 # (see `lib.rs`), so it is compiled but inert in release builds.
 tauri-plugin-mcp-bridge = "0.12"
+tauri-plugin-notification = "2"
 tokio = { version = "1", features = ["rt", "sync", "time"] }
 
 # Mobile-only: the in-app QR scanner for device pairing. The Android WebView
@@ -45,6 +46,9 @@ tokio = { version = "1", features = ["rt", "sync", "time"] }
 # can't work — this native scanner owns the camera + permission instead.
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 tauri-plugin-barcode-scanner = "2"
+# Remote push (APNs/FCM). Enable with `--features mobile-push` once
+# google-services.json + iOS Push entitlement exist — see planning/notifications.md.
+tauri-plugin-push-notifications = { version = "0.1", optional = true }
 
 # Unix-desktop-only: the NFS "virtual drive" mount.
 #
@@ -104,3 +108,6 @@ path = "src/main.rs"
 [features]
 custom-protocol = ["tauri/custom-protocol"]
 default = ["custom-protocol"]
+# Client remote-push plugin. Requires Firebase/APNs project files on device
+# builds: `cargo tauri android build --features mobile-push`
+mobile-push = ["dep:tauri-plugin-push-notifications"]

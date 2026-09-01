@@ -29,6 +29,7 @@ import { Logo } from '../components/Logo';
 import { useId, useState, type JSX } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { getResourcesDrive } from '@helpers/getResourcesDrive';
+import { inviteSessionDrive } from '@helpers/inviteSessionDrive';
 import { fetchPrivateDriveSubject } from '@helpers/privateDrive';
 import { saveAgentToIDB } from '@helpers/agentStorage';
 import { Dialog, useDialog } from '@components/Dialog';
@@ -117,18 +118,24 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
    * Order matters: the Agent's `privateDrive` must be saved before the drive's
    * lists, so the sidebar can resolve agent → privateDrive → lists.
    *
-   * Returns both drives the caller has to choose between: the invitee's own
-   * `privateDrive`, and `hostDrive` — the drive the invited resource lives on,
-   * which is the one they should land in.
+   * Returns the invitee's `privateDrive`, the destination's `hostDrive`
+   * (for the switcher bookmark), and whether the destination itself is a
+   * Drive so `activateDrive` can tell a drive-level invite from a child
+   * invite.
    */
   const persistAgentAfterInvite = async (
     subject: string,
     destination: string | undefined,
     name?: string,
-  ): Promise<{ privateDrive?: string; hostDrive?: string }> => {
+  ): Promise<{
+    privateDrive?: string;
+    hostDrive?: string;
+    destinationIsDrive?: boolean;
+  }> => {
     store.getResourceLoading(subject);
     let privateDriveSubject: string | undefined;
     let hostDriveSubject: string | undefined;
+    let destinationIsDrive = false;
 
     try {
       // --- 1. Agent identity: name, isA, privateDrive pointer ---
@@ -180,6 +187,9 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
         try {
           await store.fetchResourceFromServer(destination);
           const target = store.getResourceLoading(destination);
+          destinationIsDrive = target
+            .getClasses()
+            .includes(server.classes.drive);
           const hostDrive = await getResourcesDrive(target, store);
 
           if (hostDrive && hostDrive !== privateDriveSubject) {
@@ -203,38 +213,76 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
       );
     }
 
-    return { privateDrive: privateDriveSubject, hostDrive: hostDriveSubject };
+    return {
+      privateDrive: privateDriveSubject,
+      hostDrive: hostDriveSubject,
+      destinationIsDrive,
+    };
   };
 
   /**
-   * Make the invite's drive the active one, so the sidebar shows what the
-   * invitee was actually invited to. Falls back to their own drive when the
-   * destination's drive can't be resolved (a bare resource, or the ancestry
-   * walk failed) — which is also the new-agent case, where `drive` would
-   * otherwise still be `baseURL`. Reports whether it set anything, so
-   * `goToRedirect` knows not to overwrite it.
+   * Activate a session drive after accept.
+   *
+   * Drive-level invites land on that drive — the invite granted it, and the
+   * smoke "authorization, invite" spec asserts the sidebar title is the
+   * invited drive.
+   *
+   * Child invites (chatroom, document) grant the destination, not the
+   * parent. Walking ancestry still names the parent as `hostDrive`, but
+   * fetching it is racy (incomplete → looks readable, then Unauthorized
+   * / a truncated DID). Stay on the invitee's `{name}'s Drive`.
    */
   const activateDrive = (drives: {
     privateDrive?: string;
     hostDrive?: string;
+    destinationIsDrive?: boolean;
   }): boolean => {
-    const target = drives.hostDrive ?? drives.privateDrive;
+    const target = inviteSessionDrive(drives);
 
     if (!target) {
       return false;
     }
 
+    // Pin the store immediately so a still-in-flight `adoptDriveFromDeepLink`
+    // sees a real `did:` session drive and does not clobber it with the
+    // invite's parent. `setDrive` only writes React/localStorage; the
+    // matching `store.setDrive` otherwise waits for the next effect.
     setDrive(target);
+    store.setDrive(target);
 
     return true;
   };
 
+  const pinPersonalDriveOnAgent = (personalDrive: string) => {
+    if (!agentSecret) {
+      // Existing session: persistAgentAfterInvite already wrote
+      // `privateDrive` on the Agent resource; the engine remounts from that.
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(atob(agentSecret)) as {
+        privateKey: string;
+        subject: string;
+      };
+      const nextAgent = Agent.fromSecret(
+        Agent.buildSecret(parsed.privateKey, parsed.subject, personalDrive),
+        'js',
+      );
+      nextAgent.privateDrive = agent?.privateDrive ?? personalDrive;
+      store.setAgent(nextAgent);
+      setAgent(nextAgent);
+    } catch {
+      // Secret parse failed — inbox still follows the Agent resource pointer.
+    }
+  };
+
   const [dialogProps, show, hide] = useDialog({
     onSuccess: async () => {
-      setAgentSecret(undefined);
       const agentSubject = agent?.subject;
 
       if (!agentSubject) {
+        setAgentSecret(undefined);
         goToRedirect();
 
         return;
@@ -246,6 +294,14 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
         agentName,
       );
 
+      // Rebuild the Agent so `initialDrive` is the private drive — the
+      // notification engine remounts and writes inbox rows there. Sidebar
+      // activates the host only for drive-level invites (`activateDrive`).
+      if (drives.privateDrive) {
+        pinPersonalDriveOnAgent(drives.privateDrive);
+      }
+
+      setAgentSecret(undefined);
       goToRedirect(undefined, activateDrive(drives));
     },
   });
@@ -363,6 +419,10 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
           destination,
           undefined,
         );
+
+        if (drives.privateDrive) {
+          pinPersonalDriveOnAgent(drives.privateDrive);
+        }
 
         goToRedirect(destination, activateDrive(drives));
       })();

@@ -456,7 +456,8 @@ pub fn run() {
   let builder = tauri::Builder::default()
     .plugin(tauri_plugin_deep_link::init())
     .plugin(tauri_plugin_process::init())
-    .plugin(tauri_plugin_opener::init());
+    .plugin(tauri_plugin_opener::init())
+    .plugin(tauri_plugin_notification::init());
 
   // Lets an agent drive this window over a WebSocket — open a document, type,
   // read back the DOM — so collaborative editing can be tested end to end
@@ -471,6 +472,11 @@ pub fn run() {
       .bind_address("127.0.0.1")
       .build(),
   );
+
+  // Remote push (APNs/FCM): `cargo tauri … --features mobile-push` after
+  // google-services.json / iOS Push entitlement are present.
+  #[cfg(all(mobile, feature = "mobile-push"))]
+  let builder = builder.plugin(tauri_plugin_push_notifications::init());
 
   // In-app QR scanner for device pairing (Android/iOS only).
   #[cfg(mobile)]

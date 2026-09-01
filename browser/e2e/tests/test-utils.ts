@@ -44,6 +44,134 @@ export function spaUrl(url: string): string {
   }
 }
 
+/** Alias used by notification invite e2e; same rewrite as {@link spaUrl}. */
+export const appUrlOnFrontend = spaUrl;
+
+/**
+ * In-app navigate to the inbox. Full `page.goto` reloads the Store and can
+ * drop a just-upserted NotificationItem that is not in OPFS yet, so tests
+ * that seed the inbox in-memory must use this helper.
+ *
+ * The App menu sits at the bottom of a two-drive sidebar, often below the
+ * fold or inside a collapsed panel — force-click after scrolling rather
+ * than waiting for `getByRole('link', { name: 'Notifications' })`.
+ */
+export async function openNotificationsInbox(page: Page) {
+  const sidebar = page.getByTestId('sidebar');
+  const link = page.getByTestId('sidebar-notifications');
+  const expandApp = page.getByRole('button', { name: 'Expand App' });
+
+  if (await expandApp.isVisible().catch(() => false)) {
+    await expandApp.click();
+  }
+
+  await sidebar
+    .evaluate(el => {
+      el.scrollTop = el.scrollHeight;
+    })
+    .catch(() => undefined);
+
+  await expect(link).toBeAttached({ timeout: 15_000 });
+  await link.click({ force: true });
+  await expect(page).toHaveURL(/\/app\/notifications/);
+}
+
+/** Private drive via the same helper the app uses (not `store.getDrive()`). */
+export async function resolvePersonalDrive(page: Page): Promise<string> {
+  await page.waitForFunction(
+    () => !!window.__notificationsHelpers && !!window.store?.getAgent(),
+    undefined,
+    { timeout: 20_000 },
+  );
+
+  const personal = await page.evaluate(async () => {
+    const agent = window.store.getAgent();
+    const helpers = window.__notificationsHelpers;
+
+    if (!agent || !helpers) {
+      throw new Error('notifications helpers not ready');
+    }
+
+    return helpers.fetchPersonalDriveSubject(window.store, agent);
+  });
+
+  if (!personal) {
+    throw new Error('personal drive not resolved');
+  }
+
+  return personal;
+}
+
+/** Notifications folder via production `getOrCreateNotificationsFolder`. */
+export async function getOrCreateNotificationsFolder(
+  page: Page,
+  personalDrive: string,
+): Promise<string> {
+  await page.waitForFunction(() => !!window.__notificationsHelpers, undefined, {
+    timeout: 20_000,
+  });
+
+  return page.evaluate(async drive => {
+    const helpers = window.__notificationsHelpers;
+
+    if (!helpers) {
+      throw new Error('notifications helpers not ready');
+    }
+
+    return helpers.getOrCreateNotificationsFolder(window.store, drive);
+  }, personalDrive);
+}
+
+export async function waitForNotificationEngine(page: Page, timeout = 20_000) {
+  await page.waitForFunction(() => !!window.__notificationEngine, undefined, {
+    timeout,
+  });
+}
+
+/** Agent is in the JS store — not a sidebar label (dev-drive names it "Dev User"). */
+async function waitUntilSignedIn(page: Page) {
+  await page.waitForFunction(
+    () => !!window.store?.getAgent()?.subject,
+    undefined,
+    { timeout: 15_000 },
+  );
+}
+
+/**
+ * Open a drive as the session drive. `/app/dev-drive` secrets pin
+ * `initialDrive` to the private drive, so a second context that only navigates to
+ * `?subject=<workspace>` still has the home drive as `store.getDrive()` — sidebar
+ * children, presence, and meetings then miss the workspace.
+ */
+export async function openDrive(page: Page, drive: string) {
+  await page.goto(
+    `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive)}`,
+  );
+  await page.waitForFunction(
+    () => !!window.store?.getAgent()?.subject,
+    undefined,
+    { timeout: 15_000 },
+  );
+  // Don't rely on the Drive-page button appearing in time — after sign-in
+  // the session drive is the private drive (`initialDrive`) and the workspace only
+  // becomes current when we set it.
+  await page.evaluate(d => {
+    window.store.setDrive(d);
+  }, drive);
+  const adopt = page.getByRole('button', { name: 'Set as current drive' });
+
+  if (await adopt.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    await adopt.click();
+  }
+
+  await expect
+    .poll(async () => page.evaluate(() => window.store.getDrive() ?? ''), {
+      timeout: 10_000,
+    })
+    .toBe(drive);
+  await expect(adopt).toHaveCount(0, { timeout: 15_000 });
+}
+
 /**
  * Hostname the Node test process can actually reach.
  *
@@ -475,7 +603,7 @@ export async function signIn(page: Page, secret: string = SECRET) {
   // already-signed-in (state 1) when really we just hit the page too early.
   await page
     .locator(
-      'button:has-text("Sign in"), a:has-text("Login / New User"), a:has-text("User Settings")',
+      'button:has-text("Sign in"), a:has-text("Login / New User"), a:has-text("User Settings"), [aria-label="App menu"], [data-testid="sidebar-notifications"]',
     )
     .first()
     .waitFor({ state: 'visible', timeout: 10_000 })
@@ -491,14 +619,9 @@ export async function signIn(page: Page, secret: string = SECRET) {
   if (await signInButton.isVisible({ timeout: 1500 }).catch(() => false)) {
     await signInButton.click();
     await enterSecret(page, secret);
-    // Wait for the signed-in sidebar to appear. Without this, callers
-    // (e.g. `openSubject`) may navigate before the auth cookie + localStorage
-    // are written, leaving the next page anonymous (the sidebar then renders
-    // a "Login / New User" link instead of "User Settings").
-    await page
-      .getByRole('link', { name: 'User Settings' })
-      .waitFor({ state: 'visible', timeout: 10_000 })
-      .catch(() => undefined);
+    // `/app/dev-drive` names the agent "Dev User", so the settings row is
+    // not "User Settings". Wait for the store, not a sidebar label.
+    await waitUntilSignedIn(page);
 
     return;
   }
@@ -512,27 +635,33 @@ export async function signIn(page: Page, secret: string = SECRET) {
     await enterSecret(page, secret);
     // Sign-in has to have landed before navigating away: goBack() during the
     // in-flight sign-in leaves the previous page anonymous.
-    await page
-      .getByRole('link', { name: 'User Settings' })
-      .waitFor({ state: 'visible', timeout: 10_000 })
-      .catch(() => undefined);
+    await waitUntilSignedIn(page);
     await page.goBack();
 
     return;
   }
 
-  // State 1: already signed in. Nothing to do.
+  // State 1: already signed in. Confirm the store actually has an agent —
+  // a timed-out welcome-gate wait used to fall through here unsigned.
+  if (await page.evaluate(() => !!window.store?.getAgent()?.subject)) {
+    return;
+  }
+
+  await waitUntilSignedIn(page);
 }
 
 /**
- * Quick dev setup: navigates to /app/dev-drive which creates a fresh agent +
- * drive on localhost:9883 and switches to it automatically.
+ * Quick dev setup: navigates to /app/dev-drive which creates a fresh agent,
+ * a private drive (inbox / watches), and a non-personal "Dev drive"
+ * workspace, then switches to the workspace.
  * Returns the agent secret so other pages/contexts can sign in as the same user.
  */
 export async function devDrive(page: Page): Promise<string> {
   await page.goto(`${FRONTEND_URL}/app/dev-drive`);
-  await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
-  await expect(currentDriveTitle(page)).toBeVisible({ timeout: 15000 });
+  await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 45000 });
+  await expect(currentDriveTitle(page)).toHaveText('Dev drive', {
+    timeout: 20000,
+  });
 
   const secret = await page.evaluate(() =>
     localStorage.getItem('atomic-test.dev-drive-secret'),
@@ -552,6 +681,8 @@ export async function devDrive(page: Page): Promise<string> {
 export async function newDrive(page: Page) {
   // Create new drive to prevent polluting the main drive
   const driveTitle = `testdrive-${timestamp()}`;
+  // Optional: User Settings / other app routes have no `main[about]`.
+  const previousSubject = await getCurrentSubject(page).catch(() => undefined);
 
   await expect(sideBarDriveSwitcher(page)).toBeVisible({ timeout: 15000 });
 
@@ -569,11 +700,14 @@ export async function newDrive(page: Page) {
   await expect(createButton).toBeEnabled();
   await createButton.click();
 
-  // Wait for the URL to change to did:ad: (newly created drive)
-  await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
-  await expect(currentDriveTitle(page)).toHaveText(driveTitle);
+  // `/app/dev-drive` already lands on a `did:ad:` workspace, so waiting for
+  // that URL pattern returns immediately. Wait for the new title instead.
+  await expect(currentDriveTitle(page)).toHaveText(driveTitle, {
+    timeout: 30000,
+  });
   const driveURL = await getCurrentSubject(page);
   expect(driveURL).toBeTruthy();
+  expect(driveURL).not.toBe(previousSubject);
 
   return { driveURL: driveURL as string, driveTitle };
 }
@@ -1618,6 +1752,37 @@ export async function openNewSubjectWindow(
   } else {
     await openSubject(page, url);
   }
+
+  // Secret `initialDrive` is the private drive. A second window that opens a
+  // workspace resource (canvas, document, drive) must join that
+  // resource's drive or live WS / presence stay on the home drive.
+  await page.waitForFunction(
+    () =>
+      !!window.store && window.store.getSyncStatus?.().serverConnected === true,
+    undefined,
+    { timeout: 20_000 },
+  );
+  await page.evaluate(async () => {
+    const store = window.store;
+    const subject = new URLSearchParams(window.location.search).get('subject');
+
+    if (!subject) {
+      return;
+    }
+
+    const res = await store.getResource(subject);
+    const driveProp = res.get('https://atomicdata.dev/properties/drive');
+    const drive =
+      typeof driveProp === 'string' && driveProp.length > 0
+        ? driveProp
+        : res.getClasses().includes('https://atomicdata.dev/classes/Drive')
+          ? subject
+          : undefined;
+
+    if (drive && store.getDrive() !== drive) {
+      store.setDrive(drive);
+    }
+  });
 
   return page;
 }

@@ -7,11 +7,13 @@ plugins {
 def localProperties = new Properties()
 def localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
-    localPropertiesFile.withReader("UTF-8") { reader -> localProperties.load(reader) }
+    localPropertiesFile.withReader("UTF-8") { reader -> localProperties.load(it) }
 }
 
 def flutterVersionCode = localProperties.getProperty("flutter.versionCode", "1")
 def flutterVersionName = localProperties.getProperty("flutter.versionName", "1.0")
+
+def googleServicesFile = file("google-services.json")
 
 android {
     namespace "com.ontola.atomiccanvas_flutter"
@@ -19,6 +21,7 @@ android {
     ndkVersion "27.0.12077973"
 
     compileOptions {
+        coreLibraryDesugaringEnabled true
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
@@ -54,4 +57,12 @@ kotlin {
 
 flutter {
     source '../..'
+}
+
+dependencies {
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.4"
+}
+
+if (googleServicesFile.exists()) {
+    apply plugin: "com.google.gms.google-services"
 }

@@ -45,6 +45,9 @@
       "signingIdentity": "Developer ID Application: Argu B.V. (Q9WPWRTU7G)",
       "entitlements": null
     },
+    "iOS": {
+      "minimumSystemVersion": "15.0"
+    },
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
