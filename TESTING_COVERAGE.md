@@ -228,6 +228,44 @@ Recorded because each one cost real debugging time.
   damage from a stale editing session comes from *reads* — index-based deletes
   and whole-list rewrites — not from the append. A test written the obvious way
   passes with and without the fix.
+
+- **`Resource.push()` was a whole-list rewrite, not a CRDT append.** Arrays
+  have been native `LoroList`s since 2026-04 (`loro list update`), and canvas
+  `pushListItem` / `push_list_item` really do `list.push`. The older
+  `Resource.push()` (AI chat `messages`, rights, plugins, `isA`, …) still
+  built `[...existing, ...new]` and wrote the whole array back — TS via
+  `writeLoroListInPlace` (delete all + re-insert), Rust via `set_property`
+  which minted a *new* list container. Concurrent appends duplicated the
+  prefix (or forked list identity). Guard: `resource.test.ts` ("concurrent
+  push() appends merge"), `resources.rs::resource_array_concurrent_push_merges`,
+  `loro.rs::resource_array_concurrent_push_merges` and
+  `set_property_resource_array_keeps_list_identity`.
+- **`set(existing.filter)` was the same rewrite on the remove path.**
+  Membership revoke (share rights, tags, ontology lists, chat messages,
+  private-drive favorites) filtered the cache and `set()` the remainder.
+  `Resource.removeItems` / `Resource::remove_array_item` now delete matching
+  Loro elements by CRDT id. Guard: `resource.test.ts` ("concurrent
+  removeItems keep the un-removed subject", "removeItems deletes every
+  matching copy"), `resources.rs::resource_array_concurrent_remove_merges`,
+  `loro.rs::resource_array_concurrent_remove_merges`.
+- **JSON objects were an LWW string (TS) or a new map each `set` (Rust).**
+  Concurrent edits to different keys lost one side. Guard:
+  `resource.test.ts` ("set() of an object keeps the same LoroMap
+  container"), `loro.rs::set_property_json_object_keeps_map_identity`.
+- **Canvas erase used `replaceListItems` of a stale snapshot.** A remote
+  append during an erase drag rewrote the whole list from the local view
+  and dropped the peer's stroke. Guard: `removeListItemsById` keyed by
+  `getShallowValue` container ids (`resource.test.ts` "removeListItemsById
+  deletes the matching nested container").
+- **`unique: true` was local-only.** Two peers pushing the same subject
+  still stored two copies. Tag `resourceArrayUnique` + post-import dedupe
+  (keep first). Guard: `resource.test.ts` "unique concurrent push of the
+  same subject dedupes on import", `loro.rs::unique_concurrent_same_subject_dedupes`.
+- **Markdown / `description` was an LWW string.** An AI stream rewrite of
+  the whole string and concurrent edits to different ends lost a side.
+  Now `LoroText` prefix/suffix splice. Guard: `resource.test.ts`
+  "markdown concurrent edits to different ends merge",
+  `loro.rs::markdown_concurrent_edits_to_different_ends_merge`.
 - **A test child process must not drop its `Db`.** redb's `Database::drop`
   closes cleanly and makes pending `Durability::None` commits durable, so a
   durability test that lets the store drop is testing a graceful shutdown.

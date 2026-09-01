@@ -29,7 +29,7 @@ export function ExternalPropertyDialog({
   const [subject, setSubject] = useState<string | undefined>();
   const [isValid, setIsValid] = useState(false);
 
-  const [recommends, setRecommends] = useArray(
+  const [, , pushRecommends] = useArray(
     tableClassResource,
     urls.properties.recommends,
     { commit: true },
@@ -38,7 +38,7 @@ export function ExternalPropertyDialog({
 
   const onAddClick = () => {
     if (subject) {
-      setRecommends([...recommends, subject]);
+      pushRecommends([subject]);
       onCreated?.(subject);
       hide();
     }

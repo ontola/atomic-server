@@ -22,12 +22,12 @@ export function useRights(
     handleValidationError: onError,
   };
 
-  const [writers, setWriters] = useArray(
+  const [writers, , pushWriters, removeWriters] = useArray(
     resource,
     core.properties.write,
     valueOpts,
   );
-  const [readers, setReaders] = useArray(
+  const [readers, , pushReaders, removeReaders] = useArray(
     resource,
     core.properties.read,
     valueOpts,
@@ -67,18 +67,16 @@ export function useRights(
   }, [readers, writers]);
 
   function updateRights(agent: string, write: boolean, state: boolean) {
-    let agents = write ? writers : readers;
-
     if (state) {
-      agents = Array.from(new Set([...agents, agent]));
+      if (write) {
+        pushWriters([agent]);
+      } else {
+        pushReaders([agent]);
+      }
+    } else if (write) {
+      removeWriters([agent]);
     } else {
-      agents = agents.filter(s => s !== agent);
-    }
-
-    if (write) {
-      setWriters(agents);
-    } else {
-      setReaders(agents);
+      removeReaders([agent]);
     }
   }
 

@@ -30,16 +30,10 @@ export const PermissionRow = ({
     if (checked) {
       resource.push(core.properties.read, [pluginAgent], true);
     } else {
-      await resource.set(
-        core.properties.read,
-        reads.filter(agent => agent !== pluginAgent),
-      );
+      resource.removeItems(core.properties.read, [pluginAgent]);
 
       if (isWrite) {
-        await resource.set(
-          core.properties.write,
-          writes.filter(agent => agent !== pluginAgent),
-        );
+        resource.removeItems(core.properties.write, [pluginAgent]);
       }
     }
 
@@ -55,10 +49,7 @@ export const PermissionRow = ({
 
       resource.push(core.properties.write, [pluginAgent], true);
     } else {
-      await resource.set(
-        core.properties.write,
-        writes.filter(agent => agent !== pluginAgent),
-      );
+      resource.removeItems(core.properties.write, [pluginAgent]);
     }
 
     await resource.save();

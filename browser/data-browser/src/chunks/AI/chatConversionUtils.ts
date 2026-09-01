@@ -146,6 +146,157 @@ export const uiMessageToResource = async (
   return messageResource;
 };
 
+/** Find a persisted message by UI object identity, then by `message.id`. */
+export const findMessageResource = (
+  map: Map<AtomicUIMessage, Resource>,
+  message: AtomicUIMessage,
+): Resource | undefined => {
+  const direct = map.get(message);
+
+  if (direct) {
+    return direct;
+  }
+
+  for (const [m, resource] of map) {
+    if (m.id === message.id) {
+      return resource;
+    }
+  }
+
+  return undefined;
+};
+
+export type UpsertMessageOptions = {
+  saveChat?: boolean;
+  persistToServer?: boolean;
+  /** Commit Loro after splicing text (live sync) without an HTTP save. */
+  commitLoro?: boolean;
+};
+
+/**
+ * Persist a UI message, or update an existing resource in place.
+ *
+ * Streaming calls this on first tokens (mint) then on each splice
+ * (`persistToServer: false`, `commitLoro: true`). `onFinish` calls it
+ * with `persistToServer: true` so we do not mint a second message.
+ */
+export const upsertMessageInChat = async (
+  message: AtomicUIMessage,
+  chatResource: Resource<Ai.AiChat>,
+  store: Store,
+  existing: Resource | undefined,
+  {
+    saveChat = true,
+    persistToServer = true,
+    commitLoro = false,
+  }: UpsertMessageOptions = {},
+): Promise<Resource<Ai.AiMessage>> => {
+  if (!existing) {
+    return addMessageToChatResource(message, chatResource, store, {
+      saveChat,
+      persistToServer,
+    });
+  }
+
+  await syncExistingMessageFromUi(
+    message,
+    existing as Resource<Ai.AiMessage>,
+    store,
+    { persistToServer, commitLoro },
+  );
+
+  return existing as Resource<Ai.AiMessage>;
+};
+
+const syncExistingMessageFromUi = async (
+  message: AtomicUIMessage,
+  messageResource: Resource<Ai.AiMessage>,
+  store: Store,
+  {
+    persistToServer,
+    commitLoro,
+  }: { persistToServer: boolean; commitLoro: boolean },
+): Promise<void> => {
+  const partSubjects = messageResource.props.parts ?? [];
+  const storedParts = await Promise.all(
+    partSubjects.map(s => store.getResource(s)),
+  );
+  const uiParts = message.parts.filter(part => part.type !== 'step-start');
+  const uiTextish = uiParts.filter(
+    (part): part is TextUIPart | ReasoningUIPart =>
+      part.type === 'text' || part.type === 'reasoning',
+  );
+  const storedTextish = storedParts.filter(
+    part => resourceIsTextPart(part) || resourceIsReasoningPart(part),
+  );
+
+  for (let i = 0; i < uiTextish.length; i++) {
+    const next = uiTextish[i].text;
+
+    if (i < storedTextish.length) {
+      const partResource = storedTextish[i];
+      const prev =
+        (partResource.get(core.properties.description) as string) ?? '';
+
+      if (prev === next) {
+        continue;
+      }
+
+      await partResource.set(core.properties.description, next, false);
+
+      if (commitLoro) {
+        partResource.getLoroDoc()?.commit();
+      }
+
+      if (persistToServer) {
+        await partResource.save();
+      }
+    } else if (persistToServer) {
+      const builder = partsToResourceBuilder(messageResource, store);
+      const created =
+        uiTextish[i].type === 'text'
+          ? await builder.textPartToResource(uiTextish[i])
+          : await builder.reasoningPartToResource(uiTextish[i]);
+      await created.save();
+      messageResource.push(ai.properties.parts, [created.subject]);
+    }
+  }
+
+  if (persistToServer) {
+    const storedToolIds = new Set(
+      storedParts.filter(resourceIsToolCallPart).map(part => part.props.toolId),
+    );
+    const builder = partsToResourceBuilder(messageResource, store);
+
+    for (const part of uiParts) {
+      if (isToolUIPart(part) && !storedToolIds.has(part.toolCallId)) {
+        const created = await builder.toolCallPartToResource(part);
+        await created.save();
+        messageResource.push(ai.properties.parts, [created.subject]);
+        storedToolIds.add(part.toolCallId);
+      } else if (isToolUIPart(part)) {
+        const existingTool = storedParts.find(
+          p => resourceIsToolCallPart(p) && p.props.toolId === part.toolCallId,
+        );
+
+        if (existingTool && resourceIsToolCallPart(existingTool)) {
+          if (part.input) {
+            existingTool.props.toolInput = part.input as JSONObject;
+          }
+
+          if (part.output) {
+            existingTool.props.toolOutput = part.output as JSONObject;
+          }
+
+          await existingTool.save();
+        }
+      }
+    }
+
+    await messageResource.save();
+  }
+};
+
 export const addMessageToChatResource = async (
   message: AtomicUIMessage,
   chatResource: Resource<Ai.AiChat>,
@@ -176,12 +327,7 @@ export const removeMessageFromChatResource = async (
   chatResource: Resource<Ai.AiChat>,
   { saveChat = true }: { saveChat?: boolean } = {},
 ): Promise<void> => {
-  await chatResource.set(
-    ai.properties.messages,
-    chatResource.props.messages?.filter(
-      subject => subject !== messageResource.subject,
-    ),
-  );
+  chatResource.removeItems(ai.properties.messages, [messageResource.subject]);
 
   if (saveChat) {
     await chatResource.save();
@@ -222,10 +368,7 @@ export const removeFollowingMessagesFromChatResource = async (
     }
   }
 
-  await chatResource.set(
-    ai.properties.messages,
-    chatResource.props.messages?.filter(x => !destroySubjects.includes(x)),
-  );
+  chatResource.removeItems(ai.properties.messages, destroySubjects);
 
   if (saveChat) {
     await chatResource.save();

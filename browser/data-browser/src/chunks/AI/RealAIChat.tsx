@@ -83,6 +83,11 @@ interface RealAIChatProps {
   autoSubmitMessage?: string;
   onNewMessage: (message: AtomicUIMessage) => void;
   /**
+   * Assistant tokens as they arrive. Persist-on-first-token, then splice
+   * `description` as LoroText without waiting for `onFinish`.
+   */
+  onStreamMessage?: (message: AtomicUIMessage) => void;
+  /**
    * Called after compaction. All prior messages move to historical UI state;
    * only the summary is kept for LLM context.
    */
@@ -122,6 +127,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   chatSubject,
   setExternalContextItems,
   onNewMessage,
+  onStreamMessage,
   onCompacted,
   onSummaryDeleted,
   onDeleteMessage,
@@ -393,6 +399,45 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         }
       },
     });
+
+  const onStreamMessageRef = useRef(onStreamMessage);
+  onStreamMessageRef.current = onStreamMessage;
+  const streamTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const pendingStreamRef = useRef<AtomicUIMessage | null>(null);
+
+  useEffect(() => {
+    if (status !== 'streaming') {
+      if (streamTimerRef.current !== undefined) {
+        clearTimeout(streamTimerRef.current);
+        streamTimerRef.current = undefined;
+      }
+
+      pendingStreamRef.current = null;
+
+      return;
+    }
+
+    const last = messages[messages.length - 1];
+
+    if (!last || last.role !== 'assistant') {
+      return;
+    }
+
+    pendingStreamRef.current = last;
+
+    if (streamTimerRef.current !== undefined) {
+      return;
+    }
+
+    streamTimerRef.current = setTimeout(() => {
+      streamTimerRef.current = undefined;
+      const pending = pendingStreamRef.current;
+
+      if (pending) {
+        onStreamMessageRef.current?.(pending);
+      }
+    }, 50);
+  }, [messages, status]);
 
   const [isCompacting, setIsCompacting] = useState(false);
   const [scrollToCompactTrigger, setScrollToCompactTrigger] = useState(0);

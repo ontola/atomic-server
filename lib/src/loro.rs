@@ -380,13 +380,25 @@ impl AtomicLoroDoc {
         // string-likes (`Markdown`/`Slug`/`Uri`/`Date`/`Timestamp`) — see
         // [`datatype_tag`]. Plain `String` stays untagged as the default.
         if let Some(tag) = datatype_tag(value) {
-            self.doc
-                .get_map("datatypes")
-                .insert(property, tag)
-                .map_err(|e| format!("Loro datatype tag error: {e}"))?;
+            let datatypes = self.doc.get_map("datatypes");
+            let keep_unique = tag == "resourceArray"
+                && matches!(
+                    datatypes.get(property),
+                    Some(loro::ValueOrContainer::Value(loro::LoroValue::String(s)))
+                        if s.as_ref() == "resourceArrayUnique"
+                );
+            if !keep_unique {
+                datatypes
+                    .insert(property, tag)
+                    .map_err(|e| format!("Loro datatype tag error: {e}"))?;
+            }
         }
         match value {
-            Value::String(s) | Value::Markdown(s) | Value::Slug(s) | Value::Date(s) => {
+            Value::Markdown(s) => {
+                let text = get_or_create_text(&root, property)?;
+                apply_text_diff(&text, s)?;
+            }
+            Value::String(s) | Value::Slug(s) | Value::Date(s) => {
                 root.insert(property, s.as_str())
                     .map_err(|e| format!("Loro set error: {e}"))?;
             }
@@ -411,11 +423,11 @@ impl AtomicLoroDoc {
                     .map_err(|e| format!("Loro set error: {e}"))?;
             }
             Value::ResourceArray(arr) => {
-                // Use native LoroList for arrays — enables per-element CRDT merge.
-                let list = root
-                    .insert_container(property, loro::LoroList::new())
-                    .map_err(|e| format!("Loro insert_container error: {e}"))?;
-
+                // Native LoroList, reused in place. Minting a new container on
+                // every `set` forked list identity so concurrent appends and
+                // snapshot imports merged two lists (order flash / duplicates).
+                let list = get_or_create_list(&root, property)?;
+                clear_list(&list)?;
                 for item in arr {
                     list.push(item.to_string())
                         .map_err(|e| format!("Loro list push error: {e}"))?;
@@ -423,15 +435,12 @@ impl AtomicLoroDoc {
             }
             Value::Json(json_val) => match json_val {
                 serde_json::Value::Object(_) => {
-                    let map = root
-                        .insert_container(property, loro::LoroMap::new())
-                        .map_err(|e| format!("Loro insert_container error: {e}"))?;
-                    json_value_to_loro_map(json_val, &map)?;
+                    let map = get_or_create_map(&root, property)?;
+                    sync_loro_map(&map, json_val)?;
                 }
                 serde_json::Value::Array(arr) => {
-                    let list = root
-                        .insert_container(property, loro::LoroList::new())
-                        .map_err(|e| format!("Loro insert_container error: {e}"))?;
+                    let list = get_or_create_list(&root, property)?;
+                    clear_list(&list)?;
                     for item in arr {
                         json_value_to_loro_list_item(item, &list)?;
                     }
@@ -461,10 +470,20 @@ impl AtomicLoroDoc {
             Value::LocalizedText(translations) => {
                 // Native LoroMap keyed by language tag — each language is its
                 // own LWW register, so concurrent edits to different
-                // languages merge cleanly.
-                let map = root
-                    .insert_container(property, loro::LoroMap::new())
-                    .map_err(|e| format!("Loro insert_container error: {e}"))?;
+                // languages merge cleanly. Reuse the container; minting a
+                // new one on every `set` forked identity the same way lists
+                // used to.
+                let map = get_or_create_map(&root, property)?;
+                let keep: std::collections::HashSet<&str> =
+                    translations.iter().map(|(tag, _)| tag.as_str()).collect();
+                if let loro::LoroValue::Map(current) = map.get_deep_value() {
+                    for key in current.keys() {
+                        if !keep.contains(key.as_str()) {
+                            map.delete(key)
+                                .map_err(|e| format!("Loro map delete error: {e}"))?;
+                        }
+                    }
+                }
                 for (tag, s) in translations {
                     map.insert(tag, s.as_str())
                         .map_err(|e| format!("Loro map insert error: {e}"))?;
@@ -482,18 +501,7 @@ impl AtomicLoroDoc {
     /// Push a JSON item to a property's LoroList.
     /// Creates the list if it doesn't exist. Does NOT replace existing items.
     pub fn push_to_loro_list(&self, property: &str, item: &serde_json::Value) -> AtomicResult<()> {
-        let root = self.doc.get_map("properties");
-
-        // Get or create the LoroList for this property
-        let list = match root.get(property) {
-            Some(loro::ValueOrContainer::Container(c)) => c
-                .into_list()
-                .map_err(|_| format!("{property} is not a list"))?,
-            _ => root
-                .insert_container(property, loro::LoroList::new())
-                .map_err(|e| format!("Loro insert_container error: {e}"))?,
-        };
-
+        let list = get_or_create_list(&self.doc.get_map("properties"), property)?;
         json_value_to_loro_list_item(item, &list)?;
         Ok(())
     }
@@ -561,6 +569,167 @@ impl AtomicLoroDoc {
             }
             _ => Err(format!("{property} is not a list container").into()),
         }
+    }
+
+    /// Delete every list element whose current string value equals `needle`.
+    /// Each delete targets that element's CRDT id, so concurrent removes of
+    /// different subjects merge. No-ops (returns 0) if the property is not
+    /// a list container — does not mint one.
+    pub fn delete_matching_from_loro_list(
+        &self,
+        property: &str,
+        needle: &str,
+    ) -> AtomicResult<usize> {
+        let root = self.doc.get_map("properties");
+        let list = match root.get(property) {
+            Some(loro::ValueOrContainer::Container(c)) => c
+                .into_list()
+                .map_err(|_| format!("{property} is not a list"))?,
+            _ => return Ok(0),
+        };
+        let mut deleted = 0usize;
+        for i in (0..list.len()).rev() {
+            let Some(item) = list.get(i) else {
+                continue;
+            };
+            let Ok(loro::LoroValue::String(s)) = item.into_value() else {
+                continue;
+            };
+            if s.as_ref() == needle {
+                list.delete(i, 1)
+                    .map_err(|e| format!("Loro list delete error: {e}"))?;
+                deleted += 1;
+            }
+        }
+        Ok(deleted)
+    }
+
+    /// Move one list element from `from` to `to` (as the destination index
+    /// *after* removal, matching JS splice). Primitive values are re-inserted;
+    /// concurrent moves of the *same* item can duplicate — use MovableList
+    /// if that becomes a product requirement.
+    pub fn move_loro_list_item(&self, property: &str, from: usize, to: usize) -> AtomicResult<()> {
+        let list = get_or_create_list(&self.doc.get_map("properties"), property)?;
+        let len = list.len();
+        if from >= len {
+            return Err(format!("Index {from} out of bounds for {property} (len {len})").into());
+        }
+        let insert_at = if to > from { to - 1 } else { to };
+        if insert_at > len - 1 {
+            return Err(format!("Index {to} out of bounds for {property} (len {len})").into());
+        }
+        let item = list
+            .get(from)
+            .ok_or_else(|| format!("{property}[{from}] missing"))?;
+        let value = match item {
+            loro::ValueOrContainer::Value(v) => v,
+            loro::ValueOrContainer::Container(_) => {
+                return Err("Cannot move a nested container with move_loro_list_item".into());
+            }
+        };
+        list.delete(from, 1)
+            .map_err(|e| format!("Loro list delete error: {e}"))?;
+        match value {
+            loro::LoroValue::String(s) => {
+                list.insert(insert_at, s.as_ref())
+                    .map_err(|e| format!("Loro list insert error: {e}"))?;
+            }
+            loro::LoroValue::I64(i) => {
+                list.insert(insert_at, i)
+                    .map_err(|e| format!("Loro list insert error: {e}"))?;
+            }
+            loro::LoroValue::Double(f) => {
+                list.insert(insert_at, f)
+                    .map_err(|e| format!("Loro list insert error: {e}"))?;
+            }
+            loro::LoroValue::Bool(b) => {
+                list.insert(insert_at, b)
+                    .map_err(|e| format!("Loro list insert error: {e}"))?;
+            }
+            other => {
+                return Err(format!("Cannot move non-primitive list item: {other:?}").into());
+            }
+        }
+        Ok(())
+    }
+
+    /// Delete list elements whose nested container id (Display) is in `ids`.
+    /// Used for canvas strokes so a stale index cannot erase the wrong item.
+    pub fn delete_list_items_by_container_id(
+        &self,
+        property: &str,
+        ids: &[String],
+    ) -> AtomicResult<usize> {
+        use loro::ContainerTrait;
+        let root = self.doc.get_map("properties");
+        let list = match root.get(property) {
+            Some(loro::ValueOrContainer::Container(c)) => c
+                .into_list()
+                .map_err(|_| format!("{property} is not a list"))?,
+            _ => return Ok(0),
+        };
+        let want: std::collections::HashSet<&str> = ids.iter().map(String::as_str).collect();
+        let mut indexes = Vec::new();
+        for i in 0..list.len() {
+            let Some(item) = list.get(i) else {
+                continue;
+            };
+            if let loro::ValueOrContainer::Container(c) = item {
+                if want.contains(c.id().to_string().as_str()) {
+                    indexes.push(i);
+                }
+            }
+        }
+        let n = indexes.len();
+        for i in indexes.into_iter().rev() {
+            list.delete(i, 1)
+                .map_err(|e| format!("Loro list delete error: {e}"))?;
+        }
+        Ok(n)
+    }
+
+    /// Drop duplicate string elements on lists tagged `resourceArrayUnique`,
+    /// keeping the first occurrence. Called after importing a remote update.
+    pub fn dedupe_unique_lists(&self) -> AtomicResult<usize> {
+        let datatypes = self.doc.get_map("datatypes");
+        let root = self.doc.get_map("properties");
+        let loro::LoroValue::Map(tags) = datatypes.get_deep_value() else {
+            return Ok(0);
+        };
+        let mut deleted = 0usize;
+        for (prop, tag) in tags.iter() {
+            let loro::LoroValue::String(tag_s) = tag else {
+                continue;
+            };
+            if tag_s.as_ref() != "resourceArrayUnique" {
+                continue;
+            }
+            let Some(loro::ValueOrContainer::Container(c)) = root.get(prop) else {
+                continue;
+            };
+            let Ok(list) = c.into_list() else {
+                continue;
+            };
+            let mut seen = std::collections::HashSet::<String>::new();
+            let mut indexes = Vec::new();
+            for i in 0..list.len() {
+                let Some(item) = list.get(i) else {
+                    continue;
+                };
+                let Ok(loro::LoroValue::String(s)) = item.into_value() else {
+                    continue;
+                };
+                if !seen.insert(s.to_string()) {
+                    indexes.push(i);
+                }
+            }
+            for i in indexes.into_iter().rev() {
+                list.delete(i, 1)
+                    .map_err(|e| format!("Loro list delete error: {e}"))?;
+                deleted += 1;
+            }
+        }
+        Ok(deleted)
     }
 
     /// Ensure the UndoManager is initialized. Call before mutations that
@@ -884,7 +1053,8 @@ fn atomic_value_from_tag(lv: &loro::LoroValue, tag: &str) -> Option<Value> {
             let json = loro_value_to_json(lv);
             Value::localized_text_from_json(&json).ok()
         }
-        ("resourceArray", loro::LoroValue::List(items)) => {
+        ("resourceArray", loro::LoroValue::List(items))
+        | ("resourceArrayUnique", loro::LoroValue::List(items)) => {
             let subjects: Vec<crate::values::SubResource> = items
                 .iter()
                 .filter_map(|item| match item {
@@ -895,7 +1065,8 @@ fn atomic_value_from_tag(lv: &loro::LoroValue, tag: &str) -> Option<Value> {
             Some(Value::ResourceArray(subjects))
         }
         // Cosmetic string-likes: same primitive as a plain String, recovered
-        // to their variant via the tag.
+        // to their variant via the tag. Markdown may be a LoroText container
+        // whose deep value is still a String.
         ("markdown", loro::LoroValue::String(s)) => Some(Value::Markdown(s.to_string())),
         ("slug", loro::LoroValue::String(s)) => Some(Value::Slug(s.to_string())),
         ("uri", loro::LoroValue::String(s)) => Some(Value::Uri(s.to_string())),
@@ -1047,22 +1218,143 @@ fn json_value_to_loro_map(json: &serde_json::Value, map: &loro::LoroMap) -> Atom
                         .map_err(|e| format!("Loro map insert error: {e}"))?;
                 }
                 serde_json::Value::Array(arr) => {
-                    let list = map
-                        .insert_container(key, loro::LoroList::new())
-                        .map_err(|e| format!("Loro insert_container error: {e}"))?;
+                    let list = get_or_create_list(map, key)?;
+                    clear_list(&list)?;
                     for item in arr {
                         json_value_to_loro_list_item(item, &list)?;
                     }
                 }
                 serde_json::Value::Object(_) => {
-                    let nested = map
-                        .insert_container(key, loro::LoroMap::new())
-                        .map_err(|e| format!("Loro insert_container error: {e}"))?;
-                    json_value_to_loro_map(val, &nested)?;
+                    let nested = get_or_create_map(map, key)?;
+                    sync_loro_map(&nested, val)?;
                 }
                 serde_json::Value::Null => {}
             }
         }
+    }
+    Ok(())
+}
+
+/// Get the existing LoroList for `property`, or insert an empty one.
+/// Reusing the container keeps list-item identities stable across `set`
+/// (full replace) so concurrent `push` ops still target the same list.
+fn get_or_create_list(root: &loro::LoroMap, property: &str) -> AtomicResult<loro::LoroList> {
+    if let Some(loro::ValueOrContainer::Container(c)) = root.get(property) {
+        if let Ok(list) = c.into_list() {
+            return Ok(list);
+        }
+    }
+    let list = root
+        .insert_container(property, loro::LoroList::new())
+        .map_err(|e| format!("Loro insert_container error: {e}"))?;
+    // Loro drops containers with no ops from snapshots. A push+delete leaves
+    // a tombstone so two later peers append to the *same* list instead of
+    // each minting one (map-entry LWW).
+    persist_empty_list(&list)?;
+    Ok(list)
+}
+
+fn persist_empty_list(list: &loro::LoroList) -> AtomicResult<()> {
+    if list.len() > 0 {
+        return Ok(());
+    }
+    list.push(loro::LoroValue::Null)
+        .map_err(|e| format!("Loro list persist error: {e}"))?;
+    list.delete(0, 1)
+        .map_err(|e| format!("Loro list persist error: {e}"))?;
+    Ok(())
+}
+
+fn get_or_create_map(root: &loro::LoroMap, property: &str) -> AtomicResult<loro::LoroMap> {
+    if let Some(loro::ValueOrContainer::Container(c)) = root.get(property) {
+        if let Ok(map) = c.into_map() {
+            return Ok(map);
+        }
+    }
+    root.insert_container(property, loro::LoroMap::new())
+        .map_err(|e| format!("Loro insert_container error: {e}").into())
+}
+
+fn get_or_create_text(root: &loro::LoroMap, property: &str) -> AtomicResult<loro::LoroText> {
+    if let Some(loro::ValueOrContainer::Container(c)) = root.get(property) {
+        if let Ok(text) = c.into_text() {
+            return Ok(text);
+        }
+    }
+    let seed = match root.get(property) {
+        Some(loro::ValueOrContainer::Value(loro::LoroValue::String(s))) => Some(s.to_string()),
+        _ => None,
+    };
+    let text = root
+        .insert_container(property, loro::LoroText::new())
+        .map_err(|e| format!("Loro insert_container error: {e}"))?;
+    if let Some(s) = seed {
+        if !s.is_empty() {
+            text.insert(0, &s)
+                .map_err(|e| format!("Loro text seed error: {e}"))?;
+        }
+    }
+    Ok(text)
+}
+
+/// Splice `next` onto `text` by common prefix/suffix so an append (AI stream)
+/// is a tail insert, and concurrent edits to different regions merge.
+fn apply_text_diff(text: &loro::LoroText, next: &str) -> AtomicResult<()> {
+    let prev = text.to_string();
+    if prev == next {
+        return Ok(());
+    }
+    let prev_chars: Vec<char> = prev.chars().collect();
+    let next_chars: Vec<char> = next.chars().collect();
+    let mut prefix = 0usize;
+    let max_prefix = prev_chars.len().min(next_chars.len());
+    while prefix < max_prefix && prev_chars[prefix] == next_chars[prefix] {
+        prefix += 1;
+    }
+    let mut suffix = 0usize;
+    let max_suffix = (prev_chars.len() - prefix).min(next_chars.len() - prefix);
+    while suffix < max_suffix
+        && prev_chars[prev_chars.len() - 1 - suffix] == next_chars[next_chars.len() - 1 - suffix]
+    {
+        suffix += 1;
+    }
+    let delete_len = prev_chars.len() - prefix - suffix;
+    if delete_len > 0 {
+        text.delete(prefix, delete_len)
+            .map_err(|e| format!("Loro text delete error: {e}"))?;
+    }
+    let insert: String = next_chars[prefix..next_chars.len() - suffix]
+        .iter()
+        .collect();
+    if !insert.is_empty() {
+        text.insert(prefix, &insert)
+            .map_err(|e| format!("Loro text insert error: {e}"))?;
+    }
+    Ok(())
+}
+
+/// Replace `map`'s keys with `json` in place. Extra keys are deleted; nested
+/// lists/maps keep their container identity.
+fn sync_loro_map(map: &loro::LoroMap, json: &serde_json::Value) -> AtomicResult<()> {
+    let serde_json::Value::Object(obj) = json else {
+        return Ok(());
+    };
+    if let loro::LoroValue::Map(current) = map.get_deep_value() {
+        for key in current.keys() {
+            if !obj.contains_key(key) {
+                map.delete(key)
+                    .map_err(|e| format!("Loro map delete error: {e}"))?;
+            }
+        }
+    }
+    json_value_to_loro_map(json, map)
+}
+
+fn clear_list(list: &loro::LoroList) -> AtomicResult<()> {
+    let len = list.len();
+    if len > 0 {
+        list.delete(0, len)
+            .map_err(|e| format!("Loro list delete error: {e}"))?;
     }
     Ok(())
 }
@@ -1242,6 +1534,7 @@ fn loro_value_to_json(lv: &loro::LoroValue) -> serde_json::Value {
 mod test {
     use super::*;
     use crate::Storelike;
+    use loro::ContainerTrait;
 
     fn get_doc_property(doc: &AtomicLoroDoc, prop: &str) -> Option<Value> {
         let props = doc.get_all_properties();
@@ -2732,6 +3025,307 @@ mod test {
         }
 
         println!("TEST PASSED: concurrent Json pushes merge correctly");
+    }
+
+    #[test]
+    fn resource_array_concurrent_push_merges() {
+        let prop = "https://atomicdata.dev/properties/children";
+
+        let base = AtomicLoroDoc::new();
+        base.set_property(
+            prop,
+            &Value::ResourceArray(vec!["https://example.com/a".into()]),
+        )
+        .unwrap();
+        base.doc().commit();
+        let base_snapshot = base.export_snapshot();
+
+        let doc_a = AtomicLoroDoc::from_snapshot(&base_snapshot).unwrap();
+        doc_a
+            .push_to_loro_list(prop, &serde_json::json!("https://example.com/b"))
+            .unwrap();
+        doc_a.doc().commit();
+
+        let doc_b = AtomicLoroDoc::from_snapshot(&base_snapshot).unwrap();
+        doc_b
+            .push_to_loro_list(prop, &serde_json::json!("https://example.com/c"))
+            .unwrap();
+        doc_b.doc().commit();
+
+        doc_b.import_update(&doc_a.export_snapshot()).unwrap();
+        let merged = get_doc_property(&doc_b, prop).unwrap();
+        match merged {
+            Value::ResourceArray(arr) => {
+                assert_eq!(arr.len(), 3, "got {arr:?}");
+                let s: Vec<String> = arr.iter().map(|x| x.to_string()).collect();
+                assert!(s.contains(&"https://example.com/a".into()));
+                assert!(s.contains(&"https://example.com/b".into()));
+                assert!(s.contains(&"https://example.com/c".into()));
+            }
+            other => panic!("Expected ResourceArray, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn set_property_resource_array_keeps_list_identity() {
+        let prop = "https://atomicdata.dev/properties/children";
+        let doc = AtomicLoroDoc::new();
+        doc.set_property(
+            prop,
+            &Value::ResourceArray(vec!["https://example.com/a".into()]),
+        )
+        .unwrap();
+        doc.doc().commit();
+
+        let id_before = {
+            let root = doc.doc().get_map("properties");
+            match root.get(prop) {
+                Some(loro::ValueOrContainer::Container(c)) => c.id(),
+                other => panic!("expected list container, got {other:?}"),
+            }
+        };
+
+        doc.set_property(
+            prop,
+            &Value::ResourceArray(vec![
+                "https://example.com/a".into(),
+                "https://example.com/b".into(),
+            ]),
+        )
+        .unwrap();
+        doc.doc().commit();
+
+        let id_after = {
+            let root = doc.doc().get_map("properties");
+            match root.get(prop) {
+                Some(loro::ValueOrContainer::Container(c)) => c.id(),
+                other => panic!("expected list container, got {other:?}"),
+            }
+        };
+
+        assert_eq!(
+            id_before, id_after,
+            "set_property on a ResourceArray must reuse the LoroList container"
+        );
+    }
+
+    #[test]
+    fn resource_array_concurrent_remove_merges() {
+        let prop = "https://atomicdata.dev/properties/children";
+        let base = AtomicLoroDoc::new();
+        base.set_property(
+            prop,
+            &Value::ResourceArray(vec![
+                "https://example.com/a".into(),
+                "https://example.com/b".into(),
+                "https://example.com/c".into(),
+            ]),
+        )
+        .unwrap();
+        base.doc().commit();
+        let base_snapshot = base.export_snapshot();
+
+        let doc_a = AtomicLoroDoc::from_snapshot(&base_snapshot).unwrap();
+        doc_a
+            .delete_matching_from_loro_list(prop, "https://example.com/b")
+            .unwrap();
+        doc_a.doc().commit();
+
+        let doc_b = AtomicLoroDoc::from_snapshot(&base_snapshot).unwrap();
+        doc_b
+            .delete_matching_from_loro_list(prop, "https://example.com/c")
+            .unwrap();
+        doc_b.doc().commit();
+
+        doc_b.import_update(&doc_a.export_snapshot()).unwrap();
+        let merged = get_doc_property(&doc_b, prop).unwrap();
+        match merged {
+            Value::ResourceArray(arr) => {
+                let s: Vec<String> = arr.iter().map(|x| x.to_string()).collect();
+                assert_eq!(s.len(), 1, "got {s:?}");
+                assert_eq!(s[0], "https://example.com/a");
+            }
+            other => panic!("Expected ResourceArray, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn set_property_json_object_keeps_map_identity() {
+        let prop = "https://atomicdata.dev/properties/json";
+        let doc = AtomicLoroDoc::new();
+        doc.set_property(prop, &Value::Json(serde_json::json!({"a": 1})))
+            .unwrap();
+        doc.doc().commit();
+
+        let id_before = {
+            let root = doc.doc().get_map("properties");
+            match root.get(prop) {
+                Some(loro::ValueOrContainer::Container(c)) => c.id(),
+                other => panic!("expected map container, got {other:?}"),
+            }
+        };
+
+        doc.set_property(prop, &Value::Json(serde_json::json!({"a": 1, "b": 2})))
+            .unwrap();
+        doc.doc().commit();
+
+        let id_after = {
+            let root = doc.doc().get_map("properties");
+            match root.get(prop) {
+                Some(loro::ValueOrContainer::Container(c)) => c.id(),
+                other => panic!("expected map container, got {other:?}"),
+            }
+        };
+
+        assert_eq!(
+            id_before, id_after,
+            "set_property on a Json object must reuse the LoroMap container"
+        );
+    }
+
+    #[test]
+    fn delete_matching_removes_every_copy() {
+        let prop = "https://atomicdata.dev/properties/children";
+        let doc = AtomicLoroDoc::new();
+        doc.set_property(
+            prop,
+            &Value::ResourceArray(vec![
+                "https://example.com/a".into(),
+                "https://example.com/a".into(),
+                "https://example.com/b".into(),
+            ]),
+        )
+        .unwrap();
+        doc.doc().commit();
+
+        let n = doc
+            .delete_matching_from_loro_list(prop, "https://example.com/a")
+            .unwrap();
+        assert_eq!(n, 2);
+        doc.doc().commit();
+
+        let merged = get_doc_property(&doc, prop).unwrap();
+        match merged {
+            Value::ResourceArray(arr) => {
+                let s: Vec<String> = arr.iter().map(|x| x.to_string()).collect();
+                assert_eq!(s, vec!["https://example.com/b".to_string()]);
+            }
+            other => panic!("Expected ResourceArray, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn empty_list_dummy_op_survives_snapshot() {
+        let prop = "https://atomicdata.dev/properties/children";
+        let doc = AtomicLoroDoc::new();
+        doc.set_property(prop, &Value::ResourceArray(vec![]))
+            .unwrap();
+        doc.doc().commit();
+        let snap = doc.export_snapshot();
+        let loaded = AtomicLoroDoc::from_snapshot(&snap).unwrap();
+        assert!(
+            loaded.doc().get_map("properties").get(prop).is_some(),
+            "dummy-op empty list must survive a snapshot so later appends share identity"
+        );
+        loaded
+            .push_to_loro_list(
+                prop,
+                &serde_json::Value::String("https://example.com/a".into()),
+            )
+            .unwrap();
+        loaded.doc().commit();
+        match get_doc_property(&loaded, prop).unwrap() {
+            Value::ResourceArray(arr) => {
+                assert_eq!(arr.len(), 1);
+            }
+            other => panic!("Expected ResourceArray, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unique_concurrent_same_subject_dedupes() {
+        let prop = "https://atomicdata.dev/properties/read";
+        let doc = AtomicLoroDoc::new();
+        doc.set_property(prop, &Value::ResourceArray(vec![]))
+            .unwrap();
+        doc.doc()
+            .get_map("datatypes")
+            .insert(prop, "resourceArrayUnique")
+            .unwrap();
+        doc.doc().commit();
+        let snap = doc.export_snapshot();
+
+        let a = AtomicLoroDoc::from_snapshot(&snap).unwrap();
+        a.push_to_loro_list(
+            prop,
+            &serde_json::Value::String("https://example.com/agent".into()),
+        )
+        .unwrap();
+        a.doc().commit();
+
+        let b = AtomicLoroDoc::from_snapshot(&snap).unwrap();
+        b.push_to_loro_list(
+            prop,
+            &serde_json::Value::String("https://example.com/agent".into()),
+        )
+        .unwrap();
+        b.doc().commit();
+
+        b.import_update(&a.export_snapshot()).unwrap();
+        let n = b.dedupe_unique_lists().unwrap();
+        assert!(n >= 1, "expected to drop the duplicate unique push");
+        b.doc().commit();
+        match get_doc_property(&b, prop).unwrap() {
+            Value::ResourceArray(arr) => {
+                assert_eq!(arr.len(), 1, "got {arr:?}");
+            }
+            other => panic!("Expected ResourceArray, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn markdown_loro_text_append_is_tail_insert() {
+        let prop = "https://atomicdata.dev/properties/description";
+        let doc = AtomicLoroDoc::new();
+        doc.set_property(prop, &Value::Markdown("Hello".into()))
+            .unwrap();
+        doc.doc().commit();
+        doc.set_property(prop, &Value::Markdown("Hello world".into()))
+            .unwrap();
+        doc.doc().commit();
+        match get_doc_property(&doc, prop).unwrap() {
+            Value::Markdown(s) => assert_eq!(s, "Hello world"),
+            other => panic!("Expected Markdown, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn markdown_concurrent_edits_to_different_ends_merge() {
+        let prop = "https://atomicdata.dev/properties/description";
+        let base = AtomicLoroDoc::new();
+        base.set_property(prop, &Value::Markdown("middle".into()))
+            .unwrap();
+        base.doc().commit();
+        let snap = base.export_snapshot();
+
+        let a = AtomicLoroDoc::from_snapshot(&snap).unwrap();
+        a.set_property(prop, &Value::Markdown("A middle".into()))
+            .unwrap();
+        a.doc().commit();
+
+        let b = AtomicLoroDoc::from_snapshot(&snap).unwrap();
+        b.set_property(prop, &Value::Markdown("middle B".into()))
+            .unwrap();
+        b.doc().commit();
+
+        b.import_update(&a.export_snapshot()).unwrap();
+        match get_doc_property(&b, prop).unwrap() {
+            Value::Markdown(s) => {
+                assert!(s.contains('A'), "got {s:?}");
+                assert!(s.contains('B'), "got {s:?}");
+            }
+            other => panic!("Expected Markdown, got {other:?}"),
+        }
     }
 
     #[test]

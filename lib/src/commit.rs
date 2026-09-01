@@ -1351,7 +1351,11 @@ impl CommitBuilder {
         self.remove.insert(prop);
     }
 
-    /// Appends a URL or nested Resource to a ResourceArray.
+    /// Appends a URL to a ResourceArray on the *commit builder's* `set` map.
+    ///
+    /// Genesis / first-write only: the builder does not see the resource's
+    /// live list, so this rewrites whatever is already in `set`. Incremental
+    /// concurrent appends must go through [`crate::Resource::push`].
     pub fn push_propval(&mut self, property: &str, value: SubResource) -> AtomicResult<()> {
         let mut vec = match self.set.get(property) {
             Some(Value::ResourceArray(resources)) => resources.to_owned(),

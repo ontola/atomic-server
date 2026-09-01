@@ -7,6 +7,17 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Fix: `Resource::push` now appends to the existing Loro list instead of
+  rewriting the whole array. Two peers adding items to the same
+  `ResourceArray` keep both items. `Resource::remove_array_item` deletes
+  matching list elements by CRDT position (same merge for concurrent
+  removes). `set_property` reuses list identity for arrays and map
+  identity for `Json` objects / `LocalizedText` so a full replace does
+  not fork a second container. Markdown / `description` is a `LoroText`
+  (prefix/suffix splice). Unique arrays tag `resourceArrayUnique` and
+  drop duplicate subjects after import. Empty lists persist via a dummy
+  push+delete so later appends share identity.
+
 - Git / CI: one integration branch (`develop`) plus stable `v*` tags. Staging
   follows `develop`; production and live docs follow a tagged release. `master`
   is no longer a deploy or docs trigger, and `main` is not introduced as a

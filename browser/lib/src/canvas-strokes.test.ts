@@ -49,6 +49,17 @@ describe('canvas-strokes', () => {
     expect(parseCanvasStrokes([json])[0]).toEqual(stroke);
   });
 
+  it('attaches Loro container ids without serializing them', ({ expect }) => {
+    const json = {
+      color: 1,
+      width: 2,
+      path: [[0, 0]],
+    };
+    const [stroke] = parseCanvasStrokes([json], ['cid:0@1']);
+    expect(stroke.loroId).toBe('cid:0@1');
+    expect(strokeToJson(stroke)).toEqual(json);
+  });
+
   it('exports canvas ontology URLs', ({ expect }) => {
     expect(canvas.properties.strokeData).toContain('strokeData');
     expect(canvas.classes.canvas).toContain('Canvas');

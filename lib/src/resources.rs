@@ -813,8 +813,17 @@ impl Resource {
         Ok(resource)
     }
 
-    /// Appends a Resource to a specific property through the commitbuilder.
-    /// Useful if you want to have compact Commits that add things to existing ResourceArrays.
+    /// Appends a Resource to a ResourceArray.
+    ///
+    /// CRDT-friendly: records a Loro `list.push` on the existing list
+    /// container. Two peers appending at once keep both items. Do not go
+    /// through `set_property` with the whole array — that rewrites every
+    /// list-item identity and concurrent appends duplicate the prefix.
+    ///
+    /// The live doc is the write; `save` / `save_locally` export it via
+    /// `sync_loro_changes_to_commit_builder`. Putting the full array on
+    /// the commit builder would make `sign_at` `set_property` it again
+    /// and undo the append.
     pub fn push(
         &mut self,
         property: &str,
@@ -839,19 +848,93 @@ impl Resource {
             },
             None => Vec::new(),
         };
-        vec.push(value.clone());
-        let full_array: Value = vec.into();
-        self.propvals.insert(property.into(), full_array.clone());
-        // Mirror the change into the live Loro doc if it's been initialized.
-        // Without this, `sign()` exports a stale snapshot (it prefers the
-        // live doc over the commitbuilder's set map), and the appended
-        // element is silently dropped from the resulting commit's loroUpdate.
-        if let Some(doc) = &self.loro {
-            let _ = doc.set_property(property, &full_array);
+
+        // Materialize *before* updating propvals so a first-touch seed
+        // does not already contain the item we are about to append.
+        self.ensure_materialized()?;
+        {
+            let datatypes = self.loro().doc().get_map("datatypes");
+            let tag = if skip_existing {
+                "resourceArrayUnique"
+            } else {
+                "resourceArray"
+            };
+            let current_unique = matches!(
+                datatypes.get(property),
+                Some(loro::ValueOrContainer::Value(loro::LoroValue::String(s)))
+                    if s.as_ref() == "resourceArrayUnique"
+            );
+            if !current_unique {
+                datatypes
+                    .insert(property, tag)
+                    .map_err(|e| format!("Loro datatype tag error: {e}"))?;
+            }
         }
-        // Store the full array value in the commit builder so the Loro update
-        // contains the complete state, not just the appended item.
-        self.commit.set(property.into(), full_array);
+        self.loro()
+            .push_to_loro_list(property, &serde_json::Value::String(value.to_string()))?;
+        self.loro().commit();
+
+        vec.push(value.clone());
+        self.propvals.insert(property.into(), vec.into());
+        Ok(self)
+    }
+
+    /// Move one ResourceArray element from `from` to `to` without rewriting
+    /// the rest of the list.
+    pub fn move_array_item(
+        &mut self,
+        property: &str,
+        from: usize,
+        to: usize,
+    ) -> AtomicResult<&mut Self> {
+        let mut vec = match self.propvals.get(property) {
+            Some(Value::ResourceArray(vec)) => vec.clone(),
+            None => return Ok(self),
+            Some(_) => return Err("Wrong datatype, expected ResourceArray".into()),
+        };
+        if from >= vec.len() {
+            return Err(format!("Index {from} out of bounds (len {})", vec.len()).into());
+        }
+        self.ensure_materialized()?;
+        self.loro().move_loro_list_item(property, from, to)?;
+        self.loro().commit();
+        let item = vec.remove(from);
+        let insert_at = if to > from { to - 1 } else { to };
+        vec.insert(insert_at.min(vec.len()), item);
+        self.propvals
+            .insert(property.into(), Value::ResourceArray(vec));
+        Ok(self)
+    }
+
+    /// Remove every matching item from a ResourceArray without rewriting the
+    /// list. Deletes the Loro elements whose current value equals `value`,
+    /// so two peers removing different subjects keep the rest.
+    pub fn remove_array_item(
+        &mut self,
+        property: &str,
+        value: &SubResource,
+    ) -> AtomicResult<&mut Self> {
+        let vec = match self.propvals.get(property) {
+            Some(Value::ResourceArray(vec)) => vec.clone(),
+            None => return Ok(self),
+            Some(_) => return Err("Wrong datatype, expected ResourceArray".into()),
+        };
+        let needle = value.to_string();
+        if !vec.iter().any(|item| item.to_string() == needle) {
+            return Ok(self);
+        }
+
+        self.ensure_materialized()?;
+        self.loro()
+            .delete_matching_from_loro_list(property, &needle)?;
+        self.loro().commit();
+
+        let kept: Vec<SubResource> = vec
+            .into_iter()
+            .filter(|item| item.to_string() != needle)
+            .collect();
+        self.propvals
+            .insert(property.into(), Value::ResourceArray(kept));
         Ok(self)
     }
 
@@ -1956,6 +2039,80 @@ mod test {
             .unwrap();
         // Loro preserves the value as-given (no URL normalization on property values)
         assert_eq!(new_val.first().unwrap(), append_value);
+    }
+
+    #[tokio::test]
+    async fn resource_array_concurrent_push_merges() {
+        let store: crate::Db = init_store().await;
+        let property: String = urls::CHILDREN.into();
+        let mut base = Resource::new_generate_subject(&store).unwrap();
+        base.push(&property, "https://example.com/a".into(), false)
+            .unwrap();
+        base.save_locally(&store).await.unwrap();
+
+        let mut peer_a = base.clone();
+        let mut peer_b = base.clone();
+        peer_a
+            .push(&property, "https://example.com/b".into(), false)
+            .unwrap();
+        peer_b
+            .push(&property, "https://example.com/c".into(), false)
+            .unwrap();
+
+        let snap_a = peer_a.materialized_state().expect("peer A Loro snapshot");
+        let snap_b = peer_b.materialized_state().expect("peer B Loro snapshot");
+        let merged_doc = crate::loro::AtomicLoroDoc::from_snapshot(&snap_b).unwrap();
+        merged_doc.import_update(&snap_a).unwrap();
+        let mut merged = Resource::new(base.get_subject().to_string());
+        merged.apply_state_doc(merged_doc).unwrap();
+
+        let subjects = merged.get(&property).unwrap().to_subjects(None).unwrap();
+        assert_eq!(
+            subjects.len(),
+            3,
+            "concurrent Resource::push must keep base + both appends, got {subjects:?}"
+        );
+        assert!(subjects.iter().any(|s| s == "https://example.com/a"));
+        assert!(subjects.iter().any(|s| s == "https://example.com/b"));
+        assert!(subjects.iter().any(|s| s == "https://example.com/c"));
+    }
+
+    #[tokio::test]
+    async fn resource_array_concurrent_remove_merges() {
+        let store: crate::Db = init_store().await;
+        let property: String = urls::CHILDREN.into();
+        let mut base = Resource::new_generate_subject(&store).unwrap();
+        base.push(&property, "https://example.com/a".into(), false)
+            .unwrap();
+        base.push(&property, "https://example.com/b".into(), false)
+            .unwrap();
+        base.push(&property, "https://example.com/c".into(), false)
+            .unwrap();
+        base.save_locally(&store).await.unwrap();
+
+        let mut peer_a = base.clone();
+        let mut peer_b = base.clone();
+        peer_a
+            .remove_array_item(&property, &"https://example.com/b".into())
+            .unwrap();
+        peer_b
+            .remove_array_item(&property, &"https://example.com/c".into())
+            .unwrap();
+
+        let snap_a = peer_a.materialized_state().expect("peer A Loro snapshot");
+        let snap_b = peer_b.materialized_state().expect("peer B Loro snapshot");
+        let merged_doc = crate::loro::AtomicLoroDoc::from_snapshot(&snap_b).unwrap();
+        merged_doc.import_update(&snap_a).unwrap();
+        let mut merged = Resource::new(base.get_subject().to_string());
+        merged.apply_state_doc(merged_doc).unwrap();
+
+        let subjects = merged.get(&property).unwrap().to_subjects(None).unwrap();
+        assert_eq!(
+            subjects.len(),
+            1,
+            "concurrent Resource::remove_array_item must keep the un-removed item, got {subjects:?}"
+        );
+        assert_eq!(subjects[0], "https://example.com/a");
     }
 
     #[tokio::test]

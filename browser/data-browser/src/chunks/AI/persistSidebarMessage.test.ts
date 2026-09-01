@@ -4,6 +4,7 @@ import type { PersistSidebarMessageArgs } from './persistSidebarMessage';
 
 const saved: string[] = [];
 const serverPersisted: string[] = [];
+const upserted: string[] = [];
 
 vi.mock('./chatConversionUtils', () => ({
   addMessageToChatResource: vi.fn(async (added, chat, _store, opts) => {
@@ -14,6 +15,29 @@ vi.mock('./chatConversionUtils', () => ({
   persistMessageResourceToServer: vi.fn(
     async (resource: { subject: string }) => {
       serverPersisted.push(resource.subject);
+    },
+  ),
+  findMessageResource: (
+    map: Map<{ id: string }, unknown>,
+    message: { id: string },
+  ) => {
+    for (const [m, resource] of map) {
+      if (m.id === message.id) return resource;
+    }
+
+    return undefined;
+  },
+  upsertMessageInChat: vi.fn(
+    async (added, chat, _store, existing, opts) => {
+      if (existing) {
+        upserted.push(added.id);
+
+        return existing;
+      }
+
+      if (opts?.saveChat) saved.push(chat.subject);
+
+      return { subject: `message-${added.role}`, props: { parts: [] } };
     },
   ),
 }));
@@ -64,6 +88,7 @@ function args(
 beforeEach(() => {
   saved.length = 0;
   serverPersisted.length = 0;
+  upserted.length = 0;
 });
 
 /**
@@ -152,5 +177,25 @@ describe('persistSidebarMessage', () => {
     });
 
     expect(chat.get(NAME)).toBe('Untitled Chat');
+  });
+
+  it('updates an existing assistant resource instead of minting a second one', async () => {
+    const chat = fakeChat();
+    const assistant = message('assistant');
+    const existing = { subject: 'message-assistant', props: { parts: [] } };
+    const pending = new Map([[assistant, existing]]);
+
+    await persistSidebarMessage({
+      ...args(chat, {
+        isChatSavedRef: { current: true },
+        shouldGenerateTitles: false,
+        messageToResourceMapRef: { current: pending },
+      }),
+      message: { ...assistant, parts: [{ type: 'text', text: 'Hi' }] },
+      newMessages: [message('user'), assistant],
+    });
+
+    expect(upserted).toContain('assistant');
+    expect(saved.filter(s => s === 'chat-1').length).toBe(0);
   });
 });

@@ -25,6 +25,7 @@ import {
   messageResourcesToDisplayMessages,
   removeFollowingMessagesFromChatResource,
   removeMessageFromChatResource,
+  findMessageResource,
 } from './chatConversionUtils';
 import { findLatestAiChatAbout } from './findLatestAiChatAbout';
 import {
@@ -227,6 +228,23 @@ const AISidebar: React.FC = () => {
     }).catch(handleSidebarMessageSaveError);
   };
 
+  const handleStreamMessage = (message: AtomicUIMessage) => {
+    persistSidebarMessage({
+      message,
+      newMessages: messagesRef.current,
+      store,
+      getOrCreateDraftChatResource,
+      isChatSavedRef,
+      titlePromiseRef,
+      setMessageToResourceMap,
+      messageToResourceMapRef,
+      setIsChatSaved,
+      shouldGenerateTitles,
+      generateTitle: generateTitleFromConversation,
+      streaming: true,
+    }).catch(handleSidebarMessageSaveError);
+  };
+
   const handleSummaryDeleted = (restored: AtomicUIMessage[]) => {
     setCompactedMessages([]);
     messagesRef.current = restored;
@@ -234,7 +252,7 @@ const AISidebar: React.FC = () => {
   };
 
   const handleMessageDelete = async (message: AtomicUIMessage) => {
-    const messageResource = messageToResourceMap.get(message);
+    const messageResource = findMessageResource(messageToResourceMap, message);
 
     if (chatResource && messageResource) {
       try {
@@ -435,6 +453,7 @@ const AISidebar: React.FC = () => {
         initialMessages={messages}
         historicalMessages={compactedMessages}
         onNewMessage={addNewMessage}
+        onStreamMessage={handleStreamMessage}
         onCompacted={handleCompacted}
         onSummaryDeleted={handleSummaryDeleted}
         externalContextItems={contextItems}

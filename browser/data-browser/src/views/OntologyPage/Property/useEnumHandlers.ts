@@ -15,12 +15,12 @@ export function useEnumHandlers(
 ) {
   const store = useStore();
 
-  const [allowsOnly, setAllowsOnly] = useArray(
+  const [, , pushAllowsOnly, removeAllowsOnly] = useArray(
     property,
     core.properties.allowsOnly,
     { commit: true },
   );
-  const [instances, setInstances] = useArray(
+  const [, , pushInstances, removeInstances] = useArray(
     ontology,
     core.properties.instances,
     { commit: true },
@@ -28,33 +28,25 @@ export function useEnumHandlers(
 
   const addTag = useCallback(
     async (tag: Resource) => {
-      const newTags = [...allowsOnly, tag.subject];
-      const newInstances = [...(instances ?? []), tag.subject];
-
-      await setAllowsOnly(newTags);
-      await setInstances(newInstances);
+      pushAllowsOnly([tag.subject]);
+      pushInstances([tag.subject]);
 
       await tag.save();
     },
-    [instances, allowsOnly, setAllowsOnly, setInstances],
+    [pushAllowsOnly, pushInstances],
   );
 
   const removeTag = useCallback(
     async (subject: string) => {
-      const filteredTags = allowsOnly.filter(tag => tag !== subject);
-      await setAllowsOnly(filteredTags);
+      removeAllowsOnly([subject]);
 
       // If the tag is not used in any other property, remove from ontology and delete it.
       if (!(await isTagUsed(subject, ontology, store))) {
-        const filteredInstances = instances?.filter(
-          instance => instance !== subject,
-        );
-
-        await setInstances(filteredInstances);
+        removeInstances([subject]);
         await store.getResourceLoading(subject).destroy();
       }
     },
-    [allowsOnly, setAllowsOnly, instances, setInstances, store],
+    [removeAllowsOnly, removeInstances, ontology, store],
   );
 
   return {
