@@ -229,9 +229,49 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketConnecti
 }
 
 impl WebSocketConnection {
+    /// Whether this session has a proven identity: auth headers on the
+    /// upgrade request, or an `AUTH` frame that succeeded. A session that
+    /// has neither is `Public`.
+    fn is_authenticated(&self) -> bool {
+        !matches!(self.agent, ForAgent::Public)
+    }
+
+    /// Gate for frames that need an identity. Reads (`GET`, `SUB <drive>`,
+    /// `SYNC`, `SYNC_VV`) stay open to anonymous sessions, gated per subject
+    /// on `check_read` exactly like an anonymous HTTP GET — that is what
+    /// lets a public drive's share link show live updates without an
+    /// account. Everything that writes (`SYNC_PUSH`, `BLOB_RESPONSE`,
+    /// `LORO_SYNC_UPDATE`, `PRESENCE_UPDATE`, …) or that registers an
+    /// identity-bearing subscription goes through here, and an anonymous
+    /// session gets an `ERROR` (`AUTH_REQUIRED`, request_id 0) instead of
+    /// being handled as `Public`. The socket stays open: the client can
+    /// still `AUTH` and retry. See `docs/src/websockets.md`.
+    fn require_auth(&self, what: &str, ctx: &mut ws::WebsocketContext<Self>) -> bool {
+        if self.is_authenticated() {
+            return true;
+        }
+        tracing::debug!("ws {}: refused {what} before AUTH", self.connection_id);
+        ctx.binary(ws_v2::encode_error(
+            0,
+            ws_v2::error_code::AUTH_REQUIRED,
+            &format!("AUTH required before {what}"),
+        ));
+        false
+    }
+
     /// Handle a binary v2 frame.
     fn handle_binary(&mut self, bin: &[u8], ctx: &mut ws::WebsocketContext<Self>) {
         if bin.is_empty() {
+            return;
+        }
+
+        // Writes need an identity. The engine would refuse them for `Public`
+        // anyway (no write right, no admission) — but "refuse" used to mean
+        // a silent drop answered with `SYNC_OK`; now it is an explicit
+        // `AUTH_REQUIRED` before the frame is even looked at.
+        if matches!(bin[0], ws_v2::tag::SYNC_PUSH | ws_v2::tag::BLOB_RESPONSE)
+            && !self.require_auth(&format!("frame 0x{:02x}", bin[0]), ctx)
+        {
             return;
         }
 
@@ -357,6 +397,7 @@ impl WebSocketConnection {
                             subject: subject.clone(),
                             agent: self.agent.to_string(),
                             source_id: self.connection_id.clone(),
+                            refusal_frame: None,
                         });
                     self.subscribed.insert(subject);
                 }
@@ -403,6 +444,9 @@ impl WebSocketConnection {
                 }
             }
         } else if let Some(json) = text.strip_prefix("LORO_SYNC_SUBSCRIBE ") {
+            if !self.require_auth("LORO_SYNC_SUBSCRIBE", ctx) {
+                return;
+            }
             if let Ok(msg) =
                 serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
             {
@@ -425,6 +469,9 @@ impl WebSocketConnection {
                 );
             }
         } else if let Some(json) = text.strip_prefix("LORO_SYNC_UPDATE ") {
+            if !self.require_auth("LORO_SYNC_UPDATE", ctx) {
+                return;
+            }
             if let Ok(mut update) =
                 serde_json::from_str::<crate::actor_messages::LoroSyncUpdate>(json)
             {
@@ -432,6 +479,9 @@ impl WebSocketConnection {
                 self.loro_sync_broadcaster_addr.do_send(update);
             }
         } else if let Some(json) = text.strip_prefix("LORO_EPHEMERAL_UPDATE ") {
+            if !self.require_auth("LORO_EPHEMERAL_UPDATE", ctx) {
+                return;
+            }
             if let Ok(mut update) =
                 serde_json::from_str::<crate::actor_messages::LoroEphemeralUpdate>(json)
             {
@@ -441,6 +491,9 @@ impl WebSocketConnection {
         } else if let Some(json) = text.strip_prefix("PRESENCE_SUBSCRIBE ") {
             // Drive-scoped ephemeral presence (issue #1229). Reuses the
             // Loro subscription JSON shape: `{"subject": "<drive>"}`.
+            if !self.require_auth("PRESENCE_SUBSCRIBE", ctx) {
+                return;
+            }
             if let Ok(msg) =
                 serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
             {
@@ -463,6 +516,9 @@ impl WebSocketConnection {
                 );
             }
         } else if let Some(json) = text.strip_prefix("PRESENCE_UPDATE ") {
+            if !self.require_auth("PRESENCE_UPDATE", ctx) {
+                return;
+            }
             if let Ok(mut update) =
                 serde_json::from_str::<crate::actor_messages::PresenceUpdate>(json)
             {
@@ -475,6 +531,9 @@ impl WebSocketConnection {
             // `UPDATE` / `DESTROY` frames via `MembershipNotification`
             // — see `Handler<MembershipNotification>` below and
             // `planning/drop-query-update.md`.
+            if !self.require_auth("SUBSCRIBE_QUERY", ctx) {
+                return;
+            }
             if let Ok(query) =
                 serde_json::from_str::<crate::actor_messages::QuerySubscriptionJSON>(json)
             {
@@ -487,6 +546,9 @@ impl WebSocketConnection {
                     });
             }
         } else if let Some(json) = text.strip_prefix("SUBSCRIBE ") {
+            if !self.require_auth("SUBSCRIBE", ctx) {
+                return;
+            }
             let subject =
                 atomic_lib::Subject::from_raw(json, self.store.get_base_domain().as_deref());
             self.commit_monitor_addr
@@ -495,6 +557,7 @@ impl WebSocketConnection {
                     subject: subject.clone(),
                     agent: self.agent.to_string(),
                     source_id: self.connection_id.clone(),
+                    refusal_frame: Some("SUBSCRIBE"),
                 });
             self.subscribed.insert(subject);
         } else if let Some(json) = text.strip_prefix("SYNC_VV ") {

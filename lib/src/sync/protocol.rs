@@ -135,6 +135,27 @@ pub mod error_code {
     /// still arrive, at which point the same commit would apply — so dropping
     /// it would discard a good edit. Keep it, stop retrying, and say so.
     pub const MISSING_CLASS: u16 = 4;
+    /// The frame needs an authenticated session and none has been
+    /// established: no `AUTH` frame succeeded on this connection (and, on
+    /// WebSocket, no auth headers came with the upgrade). Sent with
+    /// `request_id = 0`. Iroh closes the stream right after; a WebSocket
+    /// stays open so the client can still `AUTH` and retry. The client should
+    /// authenticate first — retrying the same frame without an `AUTH`
+    /// changes nothing.
+    pub const AUTH_REQUIRED: u16 = 5;
+    /// A `SYNC_PUSH` was refused as a whole — the agent may not write the
+    /// drive, or this node's sync policy does not admit it — and **nothing**
+    /// from it landed. Replaces the old behaviour of silently dropping the
+    /// import and still answering `SYNC_OK`, which made the ack meaningless.
+    /// The message names the drive. Blocking, not terminal: keep the local
+    /// state, stop pushing, and surface it.
+    pub const SYNC_REJECTED: u16 = 6;
+    /// A subscription (`SUB`, `SUBSCRIBE`, `SUBSCRIBE_QUERY`,
+    /// `LORO_SYNC_SUBSCRIBE`, `PRESENCE_SUBSCRIBE`) was refused because the
+    /// session's agent may not read the subject or drive it named. Nothing
+    /// was registered; no frames will follow for it. Same verdict a `GET`
+    /// would get, delivered instead of the old silent drop.
+    pub const UNAUTHORIZED_READ: u16 = 7;
 }
 
 /// Classify a commit-application error message into a structured code for

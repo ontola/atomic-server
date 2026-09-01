@@ -20,7 +20,8 @@ We have three ways to ship "an app that is mostly a table":
    (`table` / `kanban` / `calendar` / `timer`). Real code, shipped in the
    data-browser, one `case` per app.
 3. **An external app** — a plugin or custom-view iframe, built only on public
-   surfaces. This is the route [`habits-app.md`](./habits-app.md) argues for,
+   surfaces. This is the route the habits app in [`plugins.md`](./plugins.md)
+   argues for,
    explicitly avoiding new `case`s in `ResourcePage.tsx`.
 
 The Timer took route 2, and that was the wrong call. Almost everything it
@@ -53,7 +54,7 @@ A list of plausible templates, and what each needs **beyond a plain table**.
 | Plant care / maintenance | last-done date, interval, next-due derived, overdue filter |
 | Inventory / collection | quantity, low-stock filter, location, total value |
 | Event guest list | RSVP select, +1 counts, headcount total |
-| Habit tracker | date heatmap, streaks — genuinely custom; see `habits-app.md` |
+| Habit tracker | date heatmap, streaks — genuinely custom; see the habits app in `plugins.md` |
 | Bookmarks library | url + preview, tags |
 
 ## What Recurs

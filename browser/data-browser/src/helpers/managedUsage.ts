@@ -2,6 +2,7 @@
 // base (same endpoint as the other managed helpers).
 import { PRODUCT_NAME } from './managed/product';
 import { getManagedApiBase } from './managed/api';
+import { createManagedSyncEnrollment } from './managed/enrollment';
 
 export type ManagedUser = {
   email: string;
@@ -75,29 +76,9 @@ export async function getDriveUsage(
   };
 }
 
-// [RECOVERY-RECONSTRUCTED] Only the signature `createManagedEnrollment({` survived.
-// Reconstructed from the equivalent helpers/managed/enrollment.ts:createManagedSyncEnrollment
-// (POST /sync-enrollments). No code currently imports this export.
-export async function createManagedEnrollment({
-  driveSubject,
-  agentSubject,
-}: {
-  driveSubject: string;
-  agentSubject: string;
-}): Promise<unknown> {
-  const response = await fetch(`${getManagedApiBase()}/sync-enrollments`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({
-      drive_subject: driveSubject,
-      agent_subject: agentSubject,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Could not enable ${PRODUCT_NAME} backup.`);
-  }
-
-  return response.json();
-}
+/**
+ * Enroll a drive for hosting. Delegates to `createManagedSyncEnrollment`, which
+ * signs the control plane's challenge when given the agent, so there is only
+ * one code path that talks to `POST /sync-enrollments`.
+ */
+export const createManagedEnrollment = createManagedSyncEnrollment;

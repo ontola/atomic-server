@@ -3,7 +3,9 @@
 > **Status:** Phase A landed (browser scrub gesture, `replaceListItems`,
 > `strokeData` datatype = `json` — `jsonArray` was retired; see
 > [`migrate-jsonarray-to-json.md`](./migrate-jsonarray-to-json.md), legacy
-> string parser dropped).
+> string parser dropped in the **browser** — `lib/src/loro.rs` still
+> tolerates a JSON-string value from older writers; see the *Current* note in
+> the migration doc, 2026-09-01).
 > **Phase C landed** (browser discarded-branches: hold the undo button →
 > version overlay + thumbnail panel; drag over a thumbnail and release to
 > restore; branches persist in `localStorage` alongside the undo/redo

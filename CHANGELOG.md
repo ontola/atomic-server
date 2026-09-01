@@ -11,6 +11,28 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   follows `develop`; production and live docs follow a tagged release. `master`
   is no longer a deploy or docs trigger, and `main` is not introduced as a
   copy of the latest tag.
+- Fix: Atomic Canvas no longer returns to the gallery when the screen rotates.
+  Android was treating the rotation as a back press.
+- Fix: built-in defaults (`lib/defaults/*.json` + base models) now reach
+  existing stores. The store records a fingerprint of the embedded defaults;
+  every open (server and browser/OPFS) re-seeds add-only when the fingerprint
+  changed, so a Property or Class added in a new release no longer 404s against
+  a store seeded by an older one. Existing values, including user edits to
+  default resources, are never overwritten. `--repopulate-defaults` remains as
+  a forced re-run with the same add-only semantics.
+- `atomic_lib`: `atomic_lib::runtime::AtomicNode` — a named node surface over
+  `Db` (`open`, `get`, `query`, `apply_commit(json, IngestPolicy)`, `mutate`,
+  `subscribe`, `sync_with_peer`). Thin delegation, no behaviour change; the
+  WASM `ClientDb` is the first adapter on it. `IngestPolicy::{Hub, Peer,
+  Replica, LocalCache}` names the four commit-validation profiles.
+  `sync::engine::ingest_commit` returns the `CommitResponse` that
+  `ingest_commit_json` serializes; `sync::ws_apply::apply_commit_json` now
+  returns the `CommitResponse` instead of `()`. See
+  `planning/runtime-boundary-decision.md`.
+- Docs / planning: OIDC and OAuth are retargeted after DID / local-first.
+  Protocol identity stays Ed25519 agent DIDs. Optional OIDC/OAuth belongs on
+  the node (operator’s IdP, envelope index, connector tokens) and still
+  cannot authorize a commit. See
 - Docs / planning: OIDC-only login is a root Agent as CA on the node plus
   short-lived session Agents in the browser. Commits stay Ed25519; OIDC
   tokens do not authorize writes. Verifiers check the session signature,

@@ -141,6 +141,28 @@ first attempt. Design + status: `atomic-saas/planning/ENFORCEMENT_GATE.md`.
 
 ## Status
 
+> **Qualified 2026-09-01.** Every "verified end-to-end" / "confirmed live"
+> line below was exercised against the SaaS `LocalProcessNodeProvider`
+> (`atomic-saas/src/infrastructure/local_process.rs`), which launches the
+> managed-node binary with `ATOMIC_MANAGED_URL` / `ATOMIC_MANAGED_NODE_SECRET`
+> wired. Production nodes are provisioned by
+> `atomic-saas/src/provisioning/templates/cloud-init.yaml`, which today
+> downloads the plain release `atomic-server` and starts it with
+> `--port 8080 --domain … --server-url …` — no managed wiring at all. So the
+> managed path is verified; the template fix (atomic-saas #22, merged
+> 2026-09-01) makes newly provisioned nodes run it. Read the checkmarks as "works when the node is
+> run managed".
+
+- ✅ **Signed enrollment proof (client half).** `createManagedSyncEnrollment`
+  (`helpers/managed/enrollment.ts`) now requests `POST /api/sync-enrollments/challenge`,
+  signs `"{challenge} {timestamp}"` with the agent's key via `@tomic/lib`'s
+  `createAuthentication`, and sends `proof: { nonce, public_key, timestamp, signature, genesis_cert? }`
+  — `genesis_cert` (the drive's `genesis` propval) only for a drive that is not the
+  agent's personal drive. A 404 on the challenge route (older control plane) falls back
+  to the unsigned request; 403 `enrollment_proof_required` / `enrollment_proof_invalid`
+  surface as a plain-language error. Server half: atomic-saas PR #24
+  (`ATOMIC_SAAS_REQUIRE_ENROLLMENT_PROOF` can be flipped on once this ships).
+
 - ✅ Onboarding: new user (username-from-email, auto cloud-sync, recovery backup), sign-in, restore (forgot secret).
 - ✅ Managed-node detection: `Create account` → portal when managed, else local (FOSS).
 - ✅ Drive sign-in guard: returning user on a new device → sign-in/recover → lands in the clicked drive.
@@ -197,6 +219,18 @@ control plane). The pkarr discovery hop isn't exercised locally.
 **Decision (2026-07-10).** The core design rule, prompted by the same-agent
 refusal (`peer.rs::is_same_agent_as_ours`) exposing that a managed node was
 trying to be a peer principal it isn't:
+
+> **Current (2026-07-17).** The same-agent refusal this section leans on was
+> removed one week later (`683a25d4a`, "authorize relayed sync by owned drive,
+> not peer identity"): `is_same_agent_as_ours` no longer exists, peer AUTH
+> admits any agent, and what crosses is decided per subject by `check_read`
+> and per drive by `may_accept_drive_write` (`lib/src/sync/engine.rs`). The
+> "rights-based on both sides" generalization the Deferred section below asks
+> for is therefore the shipped model, and the "same-agent" wording in the
+> boundary table and tier mapping is superseded — read "same-agent `AUTH`" as
+> "`AUTH` + per-subject rights". The rule itself (the node never signs as a
+> principal to pull) still stands; see
+> [`sync-onboarding-ux.md`](./sync-onboarding-ux.md) for the current wording.
 
 > The client holds the key and signs. The node stores, forwards, and serves —
 > it never authenticates to another peer *as itself* to obtain a user's private

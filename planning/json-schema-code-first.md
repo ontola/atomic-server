@@ -1,6 +1,10 @@
 # JSON Schema compatible, code-first schemas
 
-**Status:** Proposal. Nothing built.
+**Status:** Proposal. Nothing on `develop` (no `defineSchema`/`ensureSchema`
+in `browser/lib/src` or `lib/src`); an implementation of `defineSchema` plus
+frozen `did:ad:` schemas is in flight in PR #1262 (open, branch
+`cursor/did-frozen-schema-b359`: `browser/lib/src/schema.ts`, `freeze.ts`,
+`@tomic/cli schema`). Noted 2026-09-01.
 
 ## Goal
 

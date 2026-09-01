@@ -73,6 +73,31 @@ Before sending any other messages, the initiator must authenticate:
 1. The initiator sends `AUTH (0x01)` with a JSON payload containing signed credentials.
 2. The responder responds with `AUTH_OK (0x02)` or `ERROR (0x03)`.
 
+### What is refused before AUTH
+
+Until an `AUTH` has succeeded the connection is `Public`, and the responder
+fails closed on identity. A frame sent too early is answered with
+`ERROR (0x03)` carrying `request_id = 0` and code `AUTH_REQUIRED (5)`; the
+frame itself is not processed.
+
+**Iroh streams**: only `AUTH` is accepted before authentication. Any other
+frame — `SYNC`, `SYNC_PUSH`, `HELLO`, ... — gets the `ERROR` and the
+responder closes the stream. A failed `AUTH` also closes the stream. In
+addition, `AUTH.requestedSubject` is bound to the drive: the first `SYNC` /
+`SYNC_PUSH` on the stream must name the drive the `AUTH` was signed for
+(same code, message `AUTH was for <x>, not <y>`, stream closed).
+
+**Browser / WebSocket**: an anonymous session may still *read* — `GET`,
+`SUB <drive>`, `SYNC` / `SYNC_VV`, `RBSR_*` all stay open, each gated by
+`check_read` (this is what a public share link relies on for live updates).
+Frames that write, or that carry an identity to other peers, require
+`AUTH` first: `SYNC_PUSH`, `BLOB_RESPONSE`, `LORO_SYNC_UPDATE`,
+`LORO_EPHEMERAL_UPDATE`, `PRESENCE_UPDATE`, `SUBSCRIBE`, `SUBSCRIBE_QUERY`,
+`LORO_SYNC_SUBSCRIBE`, `PRESENCE_SUBSCRIBE`. The socket stays open after the
+refusal; the client may `AUTH` and retry on the same connection. The
+browser signs the server origin as `requestedSubject`, so no drive binding is
+possible over WebSocket.
+
 ## Peer Handshake (HELLO, Iroh streams only)
 
 On Iroh peer-to-peer streams (not browser WS), each side announces a
@@ -131,6 +156,10 @@ today (JSON-AD `did:ad:commit:<sig>`). On failure, the responder emits
 | `1`  | `GENESIS_COLLISION`          | Commit tried to create a subject that already exists.       |
 | `2`  | `MISSING_REQUIRED_PROPERTY`  | Commit is missing a property required by its class/shape.   |
 | `3`  | `UNAUTHORIZED_WRITE`         | Signer lacks write rights on the target subject/drive.      |
+| `4`  | `MISSING_CLASS`              | Commit names a class the responder does not hold; blocking, not terminal. |
+| `5`  | `AUTH_REQUIRED`              | Frame needs an authenticated identity; sent with `request_id = 0`. See *What is refused before AUTH*. |
+| `6`  | `SYNC_REJECTED`              | A `SYNC_PUSH` was refused as a whole; nothing from it landed. Message: `SYNC_PUSH rejected for drive <drive>: <reason>`. |
+| `7`  | `UNAUTHORIZED_READ`          | A subscription was refused: the agent cannot read the subject or drive. Message: `<FRAME> refused for <subject>: <reason>`. |
 
 Only these known codes are safe for callers to branch on (e.g. to decide
 whether to give up retrying vs. keep retrying); an unrecognized code should be
@@ -172,7 +201,18 @@ same response channel (`UPDATE (0x11)` / `DESTROY (0x12)`):
 
 All three require authorization at registration time — `check_read` on
 the drive (for `SUB` and `SUBSCRIBE_QUERY`) or on the resource (for
-`SUBSCRIBE`).
+`SUBSCRIBE`) — the same check a `GET` runs. A subscription that fails it
+(or names a subject the responder does not hold) is not registered, and the
+responder says so: `ERROR (0x03)` with `request_id = 0` and code
+`UNAUTHORIZED_READ (7)`, message `<FRAME> refused for <subject>: <reason>`,
+where `<FRAME>` is `SUB`, `SUBSCRIBE`, `SUBSCRIBE_QUERY`,
+`LORO_SYNC_SUBSCRIBE` or `PRESENCE_SUBSCRIBE`. One frame gets one answer:
+the companion resource subscription a `SUB` registers for the drive
+resource itself does not send a second one. A subscription that is
+accepted is silent. `SUBSCRIBE`, `SUBSCRIBE_QUERY` and the Loro / presence
+subscriptions additionally require `AUTH` first (`AUTH_REQUIRED (5)`);
+`SUB` does not, so an anonymous viewer of a public drive still gets live
+updates.
 
 > Historical: an earlier protocol revision included a dedicated `QUERY_UPDATE (0x36)` membership-notification frame carrying just the subject string, requiring the client to follow up with a `GET`. This was retired because the same information arrives with one fewer round-trip as a regular `UPDATE` carrying the snapshot. Tag `0x36` is reserved.
 
@@ -183,6 +223,26 @@ Drive sync ensures two peers have the same set of resources. It uses Loro CRDT v
 1. **`SYNC (0x30)`**: Peers exchange drive-level hashes and version vectors.
 2. **`SYNC_DIFF (0x32)`**: A peer determines which resources to `pull`, `push`, and `remove`.
 3. **`SYNC_PUSH (0x33)`**: Peers exchange binary Loro deltas for missing resources, **chunked**. Each chunk carries `[drive] [flags: u8] [count: u16] [entries...]`; bit 0 of `flags` is `LAST`. Senders cap chunks at 100 entries or 1 MiB (whichever fills first); receivers loop reading `SYNC_PUSH` frames until they see a chunk with `LAST` set. An empty push still emits a single `LAST`-flagged frame so the receiver doesn't hang.
+
+### `SYNC_PUSH` acknowledgement and rejection
+
+A receiver answers each admitted `SYNC_PUSH` chunk with `SYNC_OK (0x31)` for
+the drive (followed by any `BLOB_REQUEST`s the chunk gave rise to). `SYNC_OK`
+acknowledges the *chunk*: entries inside it may still be skipped
+individually (tombstoned locally, unreadable, malformed), so a sender that
+needs proof re-probes with a second `SYNC`.
+
+A push the receiver refuses *as a whole* — the connection's agent has no
+write right on the drive, the drive is over quota, or the node's sync
+policy does not admit it — is answered with `ERROR (0x03)`, `request_id =
+0`, code `SYNC_REJECTED (6)`, message `SYNC_PUSH rejected for drive
+<drive>: <reason>`. **No `SYNC_OK` is sent for a rejected push** and none
+of its entries land. (Earlier revisions answered `SYNC_OK` here too, which
+let a sender believe its data had arrived.) Senders should treat this as
+"nothing of mine was accepted": keep the local state, surface the reason,
+and offer it again once the cause is fixed. Over WebSocket, `SYNC_PUSH`
+before `AUTH` is refused with `AUTH_REQUIRED (5)` instead; the
+anonymous-bootstrap carve-out no longer exists.
 
 ### `SYNC_DIFF` payload
 

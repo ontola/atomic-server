@@ -186,12 +186,19 @@ impl Actor for CommitMonitor {
                         }
                         DbEvent::Destroyed {
                             subject,
+                            drive,
                             source_id,
                             from_commit: false,
                         } => {
                             addr.do_send(ExternalChange {
                                 subject: subject.to_string(),
-                                drive: None,
+                                // Without this the removal reaches only
+                                // subscribers of the subject itself, and the
+                                // client subscribes per drive — so a
+                                // cascade-deleted child was announced to
+                                // nobody and stayed in every open tab, and in
+                                // the local database across a reload.
+                                drive: drive.clone(),
                                 loro_snapshot: None,
                                 commit_id: None,
                                 destroyed: true,
@@ -303,6 +310,14 @@ impl Handler<Subscribe> for CommitMonitor {
                                     &msg.subject,
                                     unauthorized_err
                                 );
+                                if let Some(frame) = msg.refusal_frame {
+                                    crate::actor_messages::refuse_subscription(
+                                        &msg.addr,
+                                        frame,
+                                        &msg.subject.to_string(),
+                                        &unauthorized_err.to_string(),
+                                    );
+                                }
                                 None
                             }
                         }
@@ -314,6 +329,18 @@ impl Handler<Subscribe> for CommitMonitor {
                             msg.agent,
                             e
                         );
+                        // Same frame as a rights failure: whether the subject
+                        // is unreadable or absent is not something an agent
+                        // without read rights gets to learn here, any more
+                        // than a GET would tell it.
+                        if let Some(frame) = msg.refusal_frame {
+                            crate::actor_messages::refuse_subscription(
+                                &msg.addr,
+                                frame,
+                                &msg.subject.to_string(),
+                                "not readable",
+                            );
+                        }
                         None
                     }
                 }
@@ -353,6 +380,12 @@ impl Handler<SubscribeDrive> for CommitMonitor {
                     Ok(r) => r,
                     Err(e) => {
                         tracing::debug!("SubscribeDrive: drive {drive_subject} not found: {e}");
+                        crate::actor_messages::refuse_subscription(
+                            &msg.addr,
+                            "SUB",
+                            &drive_subject.to_string(),
+                            "not readable",
+                        );
                         return None;
                     }
                 };
@@ -368,6 +401,12 @@ impl Handler<SubscribeDrive> for CommitMonitor {
                         tracing::debug!(
                             "SubscribeDrive: {} cannot read drive {drive_subject}: {e}",
                             msg.agent
+                        );
+                        crate::actor_messages::refuse_subscription(
+                            &msg.addr,
+                            "SUB",
+                            &drive_subject.to_string(),
+                            &e.to_string(),
                         );
                         None
                     }
@@ -430,6 +469,12 @@ impl Handler<SubscribeQuery> for CommitMonitor {
                         tracing::debug!(
                             "Rejecting SUBSCRIBE_QUERY: drive {drive_subject} not found: {e}"
                         );
+                        crate::actor_messages::refuse_subscription(
+                            &msg.addr,
+                            "SUBSCRIBE_QUERY",
+                            &drive_subject.to_string(),
+                            "not readable",
+                        );
                         return None;
                     }
                 };
@@ -465,6 +510,12 @@ impl Handler<SubscribeQuery> for CommitMonitor {
                     Err(e) => {
                         tracing::debug!(
                             "Rejecting SUBSCRIBE_QUERY: {agent} cannot read drive {drive_subject}: {e}"
+                        );
+                        crate::actor_messages::refuse_subscription(
+                            &msg.addr,
+                            "SUBSCRIBE_QUERY",
+                            &drive_subject.to_string(),
+                            &e.to_string(),
                         );
                         None
                     }

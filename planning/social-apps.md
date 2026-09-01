@@ -3,7 +3,8 @@
 **Status: Requirements analysis (2026-07-17).** What the platform must grow for
 social-network-shaped apps (feed, follow, share, comment, like/rate). Driving
 example: a recipes app (Flutter, separate repo, hub-topology v1) — but these
-are platform gaps, not app features; like [`habits-app.md`](./habits-app.md),
+are platform gaps, not app features; like the habits app in
+[`plugins.md`](./plugins.md),
 the app is the dogfooding vehicle. The authorization/sync side of this lives in
 [`zones.md`](./zones.md); this doc covers everything else.
 
@@ -64,7 +65,9 @@ Platform gaps behind it, in eventual order of need:
 - **Server-side multi-zone feed endpoint** on the hub (all zones are local to
   it; fan-out server-side is cheap) once follows > ~hundreds.
 - **Query subscriptions** are single `property=value` per zone, no sorted-window
-  maintenance (`commit_monitor.rs:398`) — live feeds re-query today.
+  maintenance (`commit_monitor.rs`, the `SUBSCRIBE_QUERY` handler) — live feeds
+  re-query today. Still true 2026-09-01 even though queries themselves take
+  multiple AND constraints ([`multi-property-filter.md`](./multi-property-filter.md)).
 - **Aggregation**: counts are O(hits) (`query_index.rs:201`, #286/#290); no
   group-by / top-N. Ratings need client-side averaging until a maintained
   counter or small aggregation endpoint exists.
@@ -83,7 +86,7 @@ exists, no live code). Relates to [`device-pairing.md`](./device-pairing.md)
 
 A shared recipe link lands non-users on the generic data-browser resource view.
 Needed: a presentable per-class public view — either a data-browser view or a
-plugin view ([`llm-wasm-gui-plugins.md`](./llm-wasm-gui-plugins.md),
+plugin view ([`plugins.md`](./plugins.md),
 [`website-templates.md`](./website-templates.md)). This is the app's front
 door; generic-resource-JSON is not.
 

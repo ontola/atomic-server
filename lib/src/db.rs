@@ -124,6 +124,14 @@ pub enum DbEvent {
     /// Resource destroyed.
     Destroyed {
         subject: Subject,
+        /// The drive this resource belonged to, read before it was removed.
+        ///
+        /// Carried rather than looked up: by the time a listener reacts, the
+        /// resource is gone from the store, so the drive is unrecoverable. It
+        /// is what routes the removal to the drive's subscribers — and since
+        /// clients subscribe per drive and not per resource, a `None` here
+        /// means no client is ever told.
+        drive: Option<Subject>,
         /// Optional transport/source identity for echo suppression.
         source_id: Option<String>,
         /// See [`DbEvent::Changed::from_commit`].
@@ -201,6 +209,10 @@ pub struct ReplicationTarget {
 }
 
 const REPLICATION_PREFIX: &str = "replication:";
+
+/// `Tree::PluginMeta` key holding the fingerprint of the built-in defaults
+/// last seeded into this store. See `populate::bootstrap`.
+const DEFAULTS_FINGERPRINT_KEY: &[u8] = b"defaults_fingerprint";
 
 fn replication_key(drive: &str) -> String {
     format!("{REPLICATION_PREFIX}{drive}")
@@ -422,8 +434,10 @@ impl Db {
         // see the right state.
         store.populate_watched_queries_cache()?;
 
-        // Re-run on every startup so new vocabulary (properties, classes) added
-        // to default_store.json is available without a manual `populate` command.
+        // Runs on every open, but only writes when the embedded defaults
+        // (`lib/defaults/*.json` + base models) changed since this store was
+        // last seeded: `bootstrap` compares a fingerprint of them against the
+        // one stored in `Tree::PluginMeta` and adds what is missing.
         crate::populate::bootstrap(&store)
             .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
@@ -2653,11 +2667,16 @@ impl Db {
     /// Recursively removes a resource and its children from the database.
     /// `removed` collects the `pure_id()` of every deleted subject so the
     /// caller can tombstone them after the transaction is applied.
+    /// `inherited_drive` is the drive of the resource whose cascade brought us
+    /// here. A child that carries no `drive` of its own — anything created
+    /// before the server stamped it — is still in its parent's drive, and the
+    /// removal has to name one or it reaches no subscriber.
     async fn recursive_remove(
         &self,
         subject: &Subject,
         transaction: &mut Transaction,
         removed: &mut Vec<String>,
+        inherited_drive: Option<Subject>,
     ) -> AtomicResult<()> {
         // Key by `pure_id()` — that is how resources and Loro snapshots are
         // stored (`add_resource_tx`, `apply_commit`). Looking up by the raw
@@ -2672,6 +2691,7 @@ impl Db {
             // forever — only the WS/Iroh DESTROY path cleaned it before.
             transaction.push(Operation::remove_loro_snapshot(&subject_str));
             removed.push(subject_str.clone());
+            let drive = resource.get_drive().or(inherited_drive);
             let mut children = resource.get_children(self).await?;
             for child in children.iter_mut() {
                 // Notify subscribers so clients evict the cascade-deleted
@@ -2681,11 +2701,18 @@ impl Db {
                 // rendering them.
                 let _ = self.db_events.send(DbEvent::Destroyed {
                     subject: child.get_subject().without_params(),
+                    drive: child.get_drive().or_else(|| drive.clone()),
                     source_id: None,
                     from_commit: false,
                 });
                 // Because the function is async we need to box it to use recursion.
-                Box::pin(self.recursive_remove(child.get_subject(), transaction, removed)).await?;
+                Box::pin(self.recursive_remove(
+                    child.get_subject(),
+                    transaction,
+                    removed,
+                    drive.clone(),
+                ))
+                .await?;
             }
             for (prop, val) in resource.get_propvals() {
                 let remove_atom = crate::Atom::new(subject.clone(), prop.clone(), val.clone());
@@ -3144,6 +3171,10 @@ impl Storelike for Db {
         let event = if is_destroy {
             DbEvent::Destroyed {
                 subject,
+                drive: commit_response
+                    .resource_old
+                    .as_ref()
+                    .and_then(|old| old.get_drive()),
                 source_id: commit_response.source_id.clone(),
                 from_commit: true,
             }
@@ -3403,6 +3434,23 @@ impl Storelike for Db {
         self.get_propvals(&normalized.pure_id()).is_ok()
     }
 
+    fn get_defaults_fingerprint(&self) -> AtomicResult<Option<String>> {
+        Ok(self
+            .kv
+            .get(Tree::PluginMeta, DEFAULTS_FINGERPRINT_KEY)?
+            .and_then(|v| String::from_utf8(v).ok()))
+    }
+
+    fn set_defaults_fingerprint(&self, fingerprint: &str) -> AtomicResult<()> {
+        // Folds into the open bootstrap batch, so the fingerprint is only
+        // persisted together with the seed it describes.
+        self.kv.insert(
+            Tree::PluginMeta,
+            DEFAULTS_FINGERPRINT_KEY,
+            fingerprint.as_bytes(),
+        )
+    }
+
     #[instrument(skip_all)]
     async fn get_resource_extended(
         &self,
@@ -3605,14 +3653,14 @@ impl Storelike for Db {
     }
 
     async fn populate(&self) -> AtomicResult<()> {
-        crate::populate::bootstrap(self).await
+        crate::populate::bootstrap(self).await.map(|_| ())
     }
 
     #[instrument(skip_all)]
     async fn remove_resource(&self, subject: &Subject) -> AtomicResult<()> {
         let mut transaction = Transaction::new();
         let mut removed = Vec::new();
-        self.recursive_remove(subject, &mut transaction, &mut removed)
+        self.recursive_remove(subject, &mut transaction, &mut removed, None)
             .await?;
         self.apply_transaction(&mut transaction)?;
         // Tombstone every removed subject so bulk sync (Iroh / WS `SYNC`)

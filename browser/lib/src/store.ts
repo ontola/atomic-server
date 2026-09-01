@@ -144,6 +144,15 @@ export interface StoreSyncStatus {
     count: number;
     timestamp: number;
   };
+  /** Set when the server refused the last SYNC_PUSH for a drive
+   *  (`SYNC_REJECTED`: no write right, quota, not enrolled). Local edits
+   *  are kept and offered again on the next handshake. Cleared by the
+   *  next successful sync of that drive. */
+  lastDriveSyncError?: {
+    drive: string;
+    message: string;
+    timestamp: number;
+  };
 }
 
 /** Compact representation of all Loro version vectors in a drive, for sync comparison. */
@@ -542,6 +551,11 @@ export class Store {
    * `planning/outbox-drain-data-loss-race.md`.
    */
   private _scheduledSaves = 0;
+  private _lastDriveSyncError?: {
+    drive: string;
+    message: string;
+    timestamp: number;
+  };
   private _lastDriveSync?: {
     drive: string;
     count: number;
@@ -3887,6 +3901,30 @@ export class Store {
 
     if (drive) {
       this._syncedDrives.add(drive);
+
+      if (this._lastDriveSyncError?.drive === drive) {
+        this._lastDriveSyncError = undefined;
+      }
+    }
+
+    this.emitSyncStatus();
+  }
+
+  /**
+   * The server refused our SYNC_PUSH for `drive` outright (`SYNC_REJECTED`).
+   * Nothing we sent landed, so the drive is not recorded as synced —
+   * `hasCompletedDriveSyncFor` keeps answering false and collection queries
+   * keep asking the server — and nothing local is cleared: the resources we
+   * offered stay as they are and are offered again on the next handshake.
+   * Distinct from `finishDriveSync` so a UI can show "your changes were
+   * refused" instead of a green check.
+   */
+  public failDriveSync(drive: string, message: string): void {
+    this._driveSyncInProgress = false;
+    this._lastDriveSyncError = { drive, message, timestamp: Date.now() };
+
+    if (drive) {
+      this._syncedDrives.delete(drive);
     }
 
     this.emitSyncStatus();
@@ -3952,6 +3990,7 @@ export class Store {
       clientDbAttached: !!this.clientDb,
       clientDbError: this.clientDb?.initError?.message,
       lastDriveSync: this._lastDriveSync,
+      lastDriveSyncError: this._lastDriveSyncError,
     };
   }
 

@@ -221,6 +221,12 @@ so each verb appears in the context menu, ⌘K, ⌘M and the AI/MCP surface for 
 
 ## Known gap: seeding a new default ontology into existing stores
 
+> **Fixed.** `populate::bootstrap` now fingerprints the embedded base models +
+> `lib/defaults/*.json` and, on every `Db` open (server and OPFS/WASM), re-seeds
+> add-only when the fingerprint differs from the stored one. A new build carries
+> a new fingerprint, so both ends below pick up new defaults on next open;
+> `--repopulate-defaults` remains only as a forced re-run. Kept for history.
+
 `bootstrap()` is guarded by `has_stored_resource(SHORTNAME)`, so a store that was
 already populated never picks up a newly-added `lib/defaults/*.json`. That applies
 to **both** ends:

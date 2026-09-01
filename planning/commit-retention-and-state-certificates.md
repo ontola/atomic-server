@@ -7,6 +7,18 @@
 > commit afterwards). Retention is resolved **per resource** (user-controlled,
 > inherited down the parent chain), capped by node policy — see
 > "Per-resource retention" below.
+>
+> **Current (2026-06-10 server, 2026-07-10 browser).** DID identity is no
+> longer derived from the genesis *commit* signature. A `did:ad:` subject is
+> the signature of a small inline binary **genesis certificate**
+> (`create_did_with_cert`, `lib/src/genesis.rs`; browser `mintCertDid`) —
+> shipped in `0b1b13b36` and `232aca8a0`, documented in
+> [`genesis-self-verifying.md`](./genesis-self-verifying.md). The server
+> still dual-accepts the legacy commit-signature form for existing subjects
+> (`lib/src/commit.rs`, the `verify` fallback). Statements below that say the
+> subject is derived from, or verified via, the genesis commit are superseded
+> wording; "genesis commits are always retained" remains true as an audit
+> property, not as an identity requirement.
 
 ## Thesis
 

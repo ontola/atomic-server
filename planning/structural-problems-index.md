@@ -25,7 +25,7 @@ plans and can be tackled independently.
 
 | # | Plan | Class | Risk | First step |
 |---|---|---|---|---|
-| 1 | [react-compiler-resource-proxy.md](./react-compiler-resource-proxy.md) | Correctness | High | Audit all `.props.X` / `.isReady()` / `.loading` reads in render |
+| 1 | [react-compiler-resource-proxy.md](./react-compiler-resource-proxy.md) | Correctness | High | 🔴 **Still open as of 2026-08.** The compiler is now *on* in data-browser (`224bd4816`, 2026-08-19, via `oxc-transform-react` in `vite.config.ts`), and a live instance of the class was hit in the field on 2026-08-16 — [`pairing-ux-field-test.md`](./pairing-ux-field-test.md) M15a, a table not re-rendering after a peer row arrived. The audit of `.props.X` / `.isReady()` / `.loading` reads in render has not started. |
 | 2 | [unify-subscription-primitives.md](./unify-subscription-primitives.md) | Cleanup | Medium | Single `Subscription` shape with `Match::{Subject, Drive, Filter}` |
 | 3 | [unify-subscription-actors.md](./unify-subscription-actors.md) | Cleanup | Medium | Fold LoroSyncBroadcaster's subject-sub into CommitMonitor |
 | 5 | [unify-resource-dirty-signals.md](./unify-resource-dirty-signals.md) | Correctness | Medium | Single `getSaveState(subject)` enum |

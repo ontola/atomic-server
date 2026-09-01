@@ -8,8 +8,8 @@
 > engine). Related: [`s3-blob-storage.md`](./s3-blob-storage.md) (blob backend),
 > [`encryption.md`](./encryption.md) (encrypted envelope/checkpoint size +
 > blind-replica compaction), and
-> [`llm-wasm-gui-plugins.md`](./llm-wasm-gui-plugins.md) (app Loro payloads and
-> blob checkpoints inherit the same growth + retention concerns).
+> [`plugins.md`](./plugins.md) (app Loro payloads and blob checkpoints inherit
+> the same growth + retention concerns).
 
 ## Thesis
 
@@ -112,8 +112,8 @@ what the `commit.rs:1088` docstring already intended.
 - **Downstream wins:** the per-commit `loroUpdate` is also the payload that gets
   wrapped as a `kind: delta` envelope in
   [`encryption.md`](./encryption.md#possible-encrypted-replication-shape) and
-  synced for app Loro payloads in
-  [`llm-wasm-gui-plugins.md`](./llm-wasm-gui-plugins.md). Making it a true delta
+  synced for app Loro payloads in [`plugins.md`](./plugins.md) ("Application
+  state profiles"). Making it a true delta
   shrinks encrypted envelope size and per-update sync, not just on-disk history.
 
 ### 2. Automatic compaction
@@ -139,8 +139,8 @@ The same retention shape recurs for two consumers and should share a policy:
 - **Encrypted checkpoints** (`encryption.md` → "Compaction and retention"): a
   verifier issues a signed `EncryptedCheckpoint` so a blind replica can prune
   covered updates without decrypting. That's this fix, expressed for ciphertext.
-- **Blob checkpoints** (`llm-wasm-gui-plugins.md` → "Opaque checkpoint
-  application"): each `saveCheckpoint` stores full opaque bytes and keeps
+- **Blob checkpoints** (`plugins.md` → "Application state profiles", opaque
+  checkpoints): each `saveCheckpoint` stores full opaque bytes and keeps
   conflicting heads, so retained checkpoints + branches grow unbounded without a
   pruning/GC policy — the same dead-weight problem as retained Loro snapshots.
 

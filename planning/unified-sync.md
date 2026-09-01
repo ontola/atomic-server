@@ -741,7 +741,7 @@ Layer 2 — Bulk reconcile (same-agent catch-up / offline gap)
 | Layer | Proves identity | Proves rights | Deletes |
 | --- | --- | --- | --- |
 | **1 — Live / COMMIT** | WS `AUTH` or HTTP auth | Hub `apply_commit` + hierarchy | Signed destroy commit → `DESTROY` |
-| **2 — Bulk** | `AUTH` on stream before `SYNC` (required policy — not yet enforced) | `check_read` on push; `check_write` + admission on import | `remove[]` from peer tombstones — **not** signed on the wire |
+| **2 — Bulk** | `AUTH` on stream before `SYNC` (enforced on Iroh accept 2026-09-01; WS gates writes + identity-bearing subs, anonymous reads stay `check_read`-gated) | `check_read` on push; `check_write` + admission on import | `remove[]` from peer tombstones — **not** signed on the wire |
 
 **Policy:** authoritative delete = Layer 1 on the hub. Layer 2 `remove` only prevents
 resurrection between honest replicas of the same agent.
@@ -790,9 +790,25 @@ resurrection between honest replicas of the same agent.
   destroyed via the initiator's ungated `SYNC_DIFF.remove[]` apply — that's F9 proper.
 - [x] **F11:** clear tombstone when a rights-checked commit re-creates the subject
   (2026-07-02).
-- [ ] **Require `AUTH` before `SYNC` / `SYNC_PUSH`** on accept paths (fail closed) —
-  F9 is the concrete exploit this abstract item was about.
-- [ ] **Bind `AUTH.requestedSubject` to `SYNC.drive`** for the session.
+- [x] **Require `AUTH` before `SYNC` / `SYNC_PUSH`** on accept paths (fail closed) —
+  F9 is the concrete exploit this abstract item was about. (2026-09-01) Iroh
+  `handle_stream` accepts only `AUTH` pre-auth and answers anything else with
+  `ERROR AUTH_REQUIRED (5)` + closed stream; a failed `AUTH` closes too; the
+  `register_live_peer` read loop refuses non-AUTH frames from a still-`Public`
+  peer we did not dial. WS: `SYNC_PUSH`, `BLOB_RESPONSE`, `LORO_SYNC_UPDATE`,
+  `LORO_EPHEMERAL_UPDATE`, `PRESENCE_UPDATE`, `SUBSCRIBE`, `SUBSCRIBE_QUERY`,
+  `LORO_SYNC_SUBSCRIBE`, `PRESENCE_SUBSCRIBE` require `AUTH`; anonymous
+  `GET` / `SUB` / `SYNC` / `SYNC_VV` stay open behind `check_read` (public share
+  links). Tests: `sync::peer::accept_gate_tests`, `server/tests/it/ws_auth_gate.rs`.
+- [x] **Bind `AUTH.requestedSubject` to `SYNC.drive`** for the session (2026-09-01,
+  Iroh accept path only: the first handshake `SYNC`/`SYNC_PUSH` must name the
+  drive the `AUTH` was signed for. Not possible over WS — the browser signs the
+  server origin, not a drive.)
+- [x] **`SYNC_PUSH` rejection is visible** (2026-09-01): `import_sync_push` returns
+  `Err(SyncPushRejected)` for a rights/policy refusal and the engine answers
+  `ERROR SYNC_REJECTED (6)` instead of `SYNC_OK`; subscriptions refused by
+  `check_read` answer `ERROR UNAUTHORIZED_READ (7)` instead of dropping silently.
+  Browser keeps the drive un-synced (`Store.failDriveSync`, `lastDriveSyncError`).
 - [ ] **Subscription identity refresh:** re-evaluate `SUBSCRIBE`/`SUBSCRIBE_QUERY`
   agent binding when a connection's AUTH lands or changes (see drift inventory).
 - [ ] **F6:** fence `apply_commit_json` (trusted-hub-only naming/docs); consider the
@@ -954,9 +970,10 @@ work in that plan's Phase P0, not a decision-gated maybe.
   `remote_agent` instead of `Sudo` on initiator `import_sync_push`; the initiator's
   ungated `apply_destroy` on `SYNC_DIFF.remove[]` for known subjects now gated via
   `apply_peer_remove` (closes the F10 known-subject residual). Revert-proven
-  `sync::peer::initiator_trust_tests`. The remaining P0 items (fail-closed AUTH-before-SYNC,
-  `AUTH.requestedSubject`↔drive binding, "deletes as signed destroy commits" per OQ4)
-  stay open in [`serverless-p2p.md`](./serverless-p2p.md) Phase P0.
+  `sync::peer::initiator_trust_tests`. Fail-closed AUTH-before-SYNC and the
+  `AUTH.requestedSubject`↔drive binding landed 2026-09-01 (see the ticked items
+  above); "deletes as signed destroy commits" per OQ4 stays open in
+  [`serverless-p2p.md`](./serverless-p2p.md) Phase P0.
 - [x] F10: reject phantom tombstones for locally-*unknown* subjects from
   unprivileged peers (2026-07-02). **Does not** cover a known subject destroyed via
   the initiator's ungated remove-apply — that's F9 proper, above.
@@ -972,9 +989,9 @@ work in that plan's Phase P0, not a decision-gated maybe.
   `WsClient` methods," `subscribeResource`/`unsubscribeResource`,
   `AUTHENTICATED` branches, `LIVE_CONNECTIONS` prune — not investigated; `EPHEMERAL`
   tag investigated and deliberately left (see Dead code inventory).
-- [ ] Consolidation item 1 (engine owns `AUTH`/`GET`) — the structural fix; see
-  the consolidation inventory. Do this before adding any new frame or frame
-  feature, or the copies drift further. Not touched this pass.
+- [x] Consolidation item 1 (engine owns `AUTH`/`GET`) — done 2026-07-07, see
+  the "Engine owns AUTH/GET" item above (this line still read "not touched"
+  until 2026-09-01; the checked item is authoritative).
 
 ### Phase 1 — WS session on mobile (primary)
 
@@ -1033,8 +1050,13 @@ work in that plan's Phase P0, not a decision-gated maybe.
 3. **Layer 2 provenance depth** — is `lastCommit`-id-only enough for same-agent
    replicas, or must `SYNC_PUSH` carry verifiable signed envelopes end-to-end
    (overlaps the high-audit profile in [`sign-at-drain.md`](./sign-at-drain.md))?
-4. **P2P `remove` policy** — accept peer tombstones for same-agent reconcile, or only
-   hub-signed destroys?
+4. **P2P `remove` policy** — ✅ **Resolved 2026-07-02 with OQ2**: destroys
+   become signed commits on the wire (see
+   [`serverless-p2p.md`](./serverless-p2p.md) § Destroys). Decision closed;
+   the implementation item there is still unchecked — today the live
+   `DESTROY` frame and `remove[]` are accepted but gated by the drive-level
+   write verdict (`lib/src/sync/peer.rs`). Original question: accept peer
+   tombstones for same-agent reconcile, or only hub-signed destroys?
 5. **Bootstrap admission (F2)** — what replaces `Err(_) => true` for a drive that
    doesn't exist locally yet: first-writer-wins with grace (as `AllowlistPolicy`
    does), explicit enrollment, or reject-until-known? **FOSS Owner mode
@@ -1045,7 +1067,13 @@ work in that plan's Phase P0, not a decision-gated maybe.
    left this carve-out unchanged — Owner mode is what replaces it on a public
    FOSS node. Managed nodes keep bootstrap grace because their allowlist is
    eventually consistent with a control plane.
-6. **What makes a peer "known"? (F9)** — today: any inbound connection. The fix says
+6. **What makes a peer "known"? (F9)** — ✅ **Resolved**: first with OQ2
+   (2026-07-02, "same-agent AUTH *is* the pairing"), then reframed 2026-07-17
+   (`683a25d4a`) — AUTH admits any agent, rights decide what crosses, and
+   `KnownPeer` is persisted based on who dialed
+   ([`device-pairing.md`](./device-pairing.md),
+   [`sync-onboarding-ux.md`](./sync-onboarding-ux.md)). Original text, kept
+   for context: today: any inbound connection. The fix says
    "pairing or explicit user action," but the pairing primitive itself is undefined
    (QR scan is one-directional trust; see [`sync.md`](./sync.md)'s handshake notes and
    the constrained append-only inbox in

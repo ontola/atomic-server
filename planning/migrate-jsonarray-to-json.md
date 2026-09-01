@@ -3,6 +3,18 @@
 **Status:** Shipped. Canvas `strokeData` datatype is `json`. `jsonArray` is
 retired.
 
+**Current (2026-09-01) — what "backward compatible" means now.** The
+checklist below still says "handle both `Value::Json` and `Value::JsonArray`";
+`Value::JsonArray` no longer exists anywhere in the tree, so those lines are
+historical. What remains of legacy tolerance is split by layer:
+`lib/src/loro.rs` (`atomic_value_from_tag`, the `"json"` arm) still parses a
+JSON-*string* Loro value from older writers; the browser parser
+(`browser/lib/src/canvas-strokes.ts`) does **not** — a string payload yields
+`[]` (pinned by `canvas-strokes.test.ts`). So
+[`canvas-undo-consolidation.md`](./canvas-undo-consolidation.md)'s "legacy
+string parser dropped" is true of the browser only; pre-migration canvases
+still need the one-time rewrite it mentions.
+
 Change the datatype of `https://atomicdata.dev/ontology/canvas/strokeData` from the non-existent `jsonArray` datatype to the standard native `json` datatype, and update the Rust backend, browser frontend, and Flutter mobile clients to support it.
 
 ## Decision
