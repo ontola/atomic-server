@@ -61,6 +61,8 @@
       `__WASM_VERSION__` is substituted at build time (vite.config.ts) and must
       stay in step with the urls the app itself requests, or these preloads
       warm a url nothing goes on to use.
+
+      The Tauri build strips these two links (ClientDb/OPFS is off there).
     -->
     <link
       rel="preload"
@@ -126,6 +128,33 @@
         background-color: var(--background-color);
       }
 
+      /* Sibling of #root so React can mount without wiping the splash.
+         IdentityReconcileGate fades this once real children paint. */
+      #boot-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background-color: var(--background-color);
+        opacity: 1;
+        transition: opacity 300ms ease-out;
+      }
+
+      #boot-splash.is-hidden {
+        opacity: 0;
+        pointer-events: none;
+        visibility: hidden;
+        transition:
+          opacity 300ms ease-out,
+          visibility 0s linear 300ms;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #boot-splash,
+        #boot-splash.is-hidden {
+          transition: none;
+        }
+      }
+
       .loader {
         opacity: 1;
         transition:
@@ -182,6 +211,24 @@
           animation-duration: 3s;
         }
       }
+
+      .loader-status {
+        max-width: 28rem;
+        margin: 1.25rem auto 0;
+        padding: 0 1.5rem;
+        text-align: center;
+        color: var(--text-splash);
+        font-family: 'Open Sans', system-ui, sans-serif;
+        font-size: 0.95rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
+      }
+
+      /* Boot failed: stop the spin so it does not read as still working. */
+      .loader.is-failed .loader-mark,
+      .loader.is-failed .loader-orb {
+        animation: none;
+      }
     </style>
     <!-- Meta tags and code added by Atomic-Server -->
     <!-- { inject_html_head } -->
@@ -205,7 +252,7 @@
         // Broken localStorage value: fall back to the OS preference.
       }
     </script>
-    <div id="root">
+    <div id="boot-splash" aria-busy="true">
       <svg
         viewBox="9.06 32.95 698.61 75.3"
         fill="none"
@@ -220,6 +267,7 @@
           margin-top: 45vh;
         "
         class="loader"
+        aria-busy="true"
       >
         <path
           d="M9.06445 107L41.5125 34.2001H58.1525L90.7045 107H73.0245L46.4005 42.7281H53.0565L26.3285 107H9.06445ZM25.2885 91.4002L29.7605 78.6081H67.2005L71.7765 91.4002H25.2885Z"
@@ -497,7 +545,15 @@
           </linearGradient>
         </defs>
       </svg>
+      <p
+        id="loader-status"
+        class="loader-status"
+        role="status"
+        aria-live="polite"
+        hidden
+      ></p>
     </div>
+    <div id="root"></div>
 
     <script type="module" src="/src/index.tsx"></script>
   </body>

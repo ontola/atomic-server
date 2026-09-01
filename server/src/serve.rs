@@ -202,11 +202,12 @@ pub async fn serve(config: crate::config::Config) -> AtomicServerResult<()> {
     serve_with_hook(config, |_appstate| {}).await
 }
 
-/// Like [`serve`], but invokes `on_ready(&AppState)` once the store, indexes and
-/// transports are up but before the HTTP server begins accepting connections.
-/// Embedders (e.g. a managed-node wrapper) use this to install a sync policy and
-/// spawn background tasks without forking the server. Self-hosted use goes
-/// through [`serve`] with a no-op hook.
+/// Like [`serve`], but invokes `on_ready(&AppState)` once the store and indexes
+/// are up but before the HTTP server begins accepting connections.
+/// Iroh starts in the background after this hook — it is not a "transports
+/// are up" barrier. Embedders (e.g. a managed-node wrapper) use this to install
+/// a sync policy and spawn background tasks without forking the server.
+/// Self-hosted use goes through [`serve`] with a no-op hook.
 pub async fn serve_with_hook<F>(
     config: crate::config::Config,
     on_ready: F,
@@ -344,35 +345,34 @@ where
             .expect("spawn durable-flush thread");
     }
 
-    // Start Iroh peer-to-peer transport
-    let _iroh_router = {
+    // Iroh + pkarr in the background so HTTP can bind as soon as the store
+    // is up. `peer::start` used to wait for the n0 relay here (up to 10s),
+    // which delayed first paint of the desktop/Android app on a slow network
+    // for a transport the webview does not need. The Router is kept alive by
+    // the `ROUTER` static inside `start`.
+    {
         let store = appstate.store.clone();
-        match crate::iroh_transport::start(store.clone()).await {
-            Ok((node_id, router)) => {
-                tracing::info!(
-                    "Iroh transport ready as \"{}\". Connect with: did:ad:node:{node_id}",
-                    atomic_lib::sync::peer::effective_device_name(&store)
-                );
+        let appstate_for_pkarr = appstate.clone();
+        actix_web::rt::spawn(async move {
+            match crate::iroh_transport::start(store.clone()).await {
+                Ok((node_id, _router)) => {
+                    tracing::info!(
+                        "Iroh transport ready as \"{}\". Connect with: did:ad:node:{node_id}",
+                        atomic_lib::sync::peer::effective_device_name(&store)
+                    );
 
-                // Announce this server's NodeID via pkarr relay, one record per
-                // drive (see `announce_drives_pkarr`).
-                let appstate_clone = appstate.clone();
-                actix_web::rt::spawn(async move {
                     if let Err(e) =
-                        announce_drives_pkarr(&appstate_clone, &node_id.to_string()).await
+                        announce_drives_pkarr(&appstate_for_pkarr, &node_id.to_string()).await
                     {
                         tracing::warn!("Pkarr announcement failed: {e}");
                     }
-                });
-
-                Some(router)
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to start Iroh transport: {e}");
+                }
             }
-            Err(e) => {
-                tracing::warn!("Failed to start Iroh transport: {e}");
-                None
-            }
-        }
-    };
+        });
+    }
 
     // Catch up any drive the user asked us to replicate elsewhere. A target is
     // standing config, not a one-shot command, so anything committed while the
@@ -384,11 +384,12 @@ where
         crate::plugins::replicate::reconcile_replication_targets(&replication_store).await;
     });
 
-    // Embedder hook: the store, indexes and transports are up, but the HTTP
-    // server hasn't started accepting connections yet. A managed-node wrapper
-    // (atomic-saas/managed-node) uses this to flip the `managed` flag, install
-    // its sync admission policy, and spawn its control-plane tasks. The open
-    // server passes a no-op (see `serve`), so it never phones home.
+    // Embedder hook: the store and indexes are up, but the HTTP server hasn't
+    // started accepting connections yet. Iroh starts in the background (see
+    // above) so this is not a "transports are up" barrier. A managed-node
+    // wrapper (atomic-saas/managed-node) uses this to flip the `managed` flag,
+    // install its sync admission policy, and spawn its control-plane tasks.
+    // The open server passes a no-op (see `serve`), so it never phones home.
     on_ready(&appstate);
 
     let server = HttpServer::new(move || {

@@ -97,6 +97,10 @@ struct EmbeddedNode {
   /// reported "still starting up" forever. Recording the reason lets the UI say
   /// what actually went wrong.
   startup_error: std::sync::OnceLock<String>,
+  /// HTTP port the embed is supposed to bind. Used by `node_status` to tell
+  /// the splash when the server is actually accepting connections — `on_ready`
+  /// fires before `bind()`, so the store being set is not enough.
+  port: std::sync::OnceLock<u16>,
 }
 
 impl EmbeddedNode {
@@ -127,6 +131,53 @@ fn explain_startup_failure(error: &str) -> String {
   } else {
     error.to_string()
   }
+}
+
+/// Whether something is accepting TCP on this device at `port`.
+///
+/// Dual-stack: the server defaults to `[::]` which may or may not also
+/// listen on IPv4, so try both loopbacks. A 50ms timeout keeps the splash's
+/// poll snappy; a refused connection returns immediately anyway.
+fn is_http_listening(port: u16) -> bool {
+  let timeout = std::time::Duration::from_millis(50);
+  let v4 = std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, port));
+  if std::net::TcpStream::connect_timeout(&v4, timeout).is_ok() {
+    return true;
+  }
+  let v6 = std::net::SocketAddr::from((std::net::Ipv6Addr::LOCALHOST, port));
+  std::net::TcpStream::connect_timeout(&v6, timeout).is_ok()
+}
+
+/// What the boot splash asks: is the local node up yet, and if it will never
+/// be, why. `ready` is the HTTP listener, not merely the store — see `port`.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NodeStatus {
+  ready: bool,
+  error: Option<String>,
+}
+
+#[tauri::command]
+fn node_status(node: tauri::State<'_, std::sync::Arc<EmbeddedNode>>) -> NodeStatus {
+  if let Some(error) = node.startup_error.get() {
+    return NodeStatus {
+      ready: false,
+      error: Some(error.clone()),
+    };
+  }
+
+  // Store set (past init) AND the port accepting: `on_ready` runs before
+  // `bind()`, so either flag alone would hide the splash too early or — if
+  // something else already holds 9883 — too eagerly.
+  let ready = node.store.get().is_some()
+    && node
+      .port
+      .get()
+      .copied()
+      .map(is_http_listening)
+      .unwrap_or(false);
+
+  NodeStatus { ready, error: None }
 }
 
 /// Make this device's node act as the signed-in user, rather than as the
@@ -487,6 +538,7 @@ pub fn run() {
   let builder = builder
     .manage(std::sync::Arc::new(vfs::VfsController::default()))
     .invoke_handler(tauri::generate_handler![
+      node_status,
       adopt_agent,
       vault_export,
       vault_commit_segment,
@@ -498,6 +550,7 @@ pub fn run() {
     ]);
   #[cfg(not(all(desktop, unix)))]
   let builder = builder.invoke_handler(tauri::generate_handler![
+    node_status,
     adopt_agent,
     vault_export,
     vault_commit_segment,
@@ -608,6 +661,7 @@ pub fn run() {
       let _ = node_for_server
         .config_file
         .set(config.config_file_path.clone());
+      let _ = node_for_server.port.set(config.opts.port as u16);
       // This is not the cleanest solution, but running actix inside the tauri / tokio runtime is not
       std::thread::spawn(move || {
         #[cfg(target_os = "android")]
