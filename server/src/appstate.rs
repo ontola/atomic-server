@@ -154,25 +154,14 @@ impl AppState {
                 .await
                 .map_err(|e| format!("Failed to bootstrap store. {}", e))?;
         } else if config.repopulate_defaults {
-            // Re-import the built-in ontologies + default resources into an
-            // already-seeded store (without an index rebuild). `import` upserts,
-            // so this only adds new/changed default resources (e.g. a freshly
-            // added Class) and leaves user data untouched. Triggered by
-            // `ATOMIC_REPOPULATE_DEFAULTS=true`.
-            //
-            // `populate_base_models` must run too: `bootstrap()` only calls it
-            // once, on the very first init (`should_init` above), gated on
-            // `has_stored_resource(SHORTNAME)`. A store seeded before a new
-            // base-model property/class was added (e.g. `genesis`, `drive`,
-            // the `Commit` class) never gets it — `populate_default_store`
-            // alone only covers the JSON ontology imports, not this fixed set.
-            // Both writers use `overwrite_existing: true` / upsert import, so
-            // re-running them here is idempotent and safe on live data.
+            // Forced re-seed of the built-in base models + `lib/defaults/*.json`
+            // into an already-seeded store, ignoring the defaults fingerprint.
+            // Normally unnecessary: `Db` open (`bootstrap`) already re-seeds
+            // whenever the embedded defaults changed since the store was last
+            // seeded. Add-only either way — existing values are never
+            // overwritten. Triggered by `ATOMIC_REPOPULATE_DEFAULTS=true`.
             tracing::info!("Repopulating built-in ontologies and default resources...");
-            atomic_lib::populate::populate_base_models(&store)
-                .await
-                .map_err(|e| format!("Failed to repopulate base models. {}", e))?;
-            atomic_lib::populate::populate_default_store(&store)
+            atomic_lib::populate::repopulate_defaults(&store)
                 .await
                 .map_err(|e| format!("Failed to repopulate defaults. {}", e))?;
         }

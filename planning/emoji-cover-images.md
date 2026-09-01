@@ -16,7 +16,9 @@
 > - **Client-side `validate: false`** on the decoration setters: the new
 >   property subject doesn't resolve on atomicdata.dev yet, so client datatype
 >   validation would fail on the fetch. The server validates commits against
->   its local copy from `lib/defaults/`.
+>   its local copy from `lib/defaults/`. *(The bootstrap gap that left existing
+>   stores without new defaults is fixed: `Db` open re-seeds `lib/defaults/*.json`
+>   add-only when the embedded defaults' fingerprint changed. The workaround stays.)*
 > - Mounted in: ResourcePageDefault, ArticlePage, FolderPage,
 >   DocumentV2FullPage. Emoji glyph surfaces: sidebar, inline links, search
 >   ResultLine, resource cards. The emoji picker gained a "Remove emoji" action
@@ -197,7 +199,7 @@ Perf note: emoji lives on the resource itself, which these components have alrea
 1. Define `coverImage` in `lib/defaults/` (next to `emoji` in table.json, or default_store.json) so self-hosted servers have it locally.
 2. Publish the same property on atomicdata.dev, since the subject must resolve.
 3. Regenerate TS ontologies with `@tomic/cli` (`browser/lib/atomic.config.json` → `browser/lib/src/ontologies/`); until regen, the subject can be hardcoded in `urls.ts` the way `emoji` already is (`urls.ts:162`).
-4. Existing servers only pick up the new property + class `recommends` via `ATOMIC_REPOPULATE_DEFAULTS` — mention in release notes.
+4. Existing servers only pick up the new property + class `recommends` via `ATOMIC_REPOPULATE_DEFAULTS` — mention in release notes. *(No longer needed: existing stores re-seed on open, see `populate::bootstrap`.)*
 
 ## Edge cases
 

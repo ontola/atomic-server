@@ -13,6 +13,13 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   copy of the latest tag.
 - Fix: Atomic Canvas no longer returns to the gallery when the screen rotates.
   Android was treating the rotation as a back press.
+- Fix: built-in defaults (`lib/defaults/*.json` + base models) now reach
+  existing stores. The store records a fingerprint of the embedded defaults;
+  every open (server and browser/OPFS) re-seeds add-only when the fingerprint
+  changed, so a Property or Class added in a new release no longer 404s against
+  a store seeded by an older one. Existing values, including user edits to
+  default resources, are never overwritten. `--repopulate-defaults` remains as
+  a forced re-run with the same add-only semantics.
 
 ## [v0.41.0-beta.2] - 2026-08-01
 

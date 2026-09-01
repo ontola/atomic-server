@@ -447,6 +447,20 @@ pub trait Storelike: Sized + Send + Sync {
         false
     }
 
+    /// The fingerprint of the built-in defaults (`lib/defaults/*.json` + base
+    /// models) that were last seeded into this store, if the store persists
+    /// one. See [`crate::populate::bootstrap`]. Stores that do not persist it
+    /// return `None`, which makes every open re-run the (idempotent) seed.
+    fn get_defaults_fingerprint(&self) -> AtomicResult<Option<String>> {
+        Ok(None)
+    }
+
+    /// Records the defaults fingerprint after a successful seed. No-op for
+    /// stores that do not persist it.
+    fn set_defaults_fingerprint(&self, _fingerprint: &str) -> AtomicResult<()> {
+        Ok(())
+    }
+
     /// Returns an existing resource, or creates a new one with the given Subject
     async fn get_resource_new(&self, subject: &Subject) -> Resource {
         match self.get_resource(subject).await {
