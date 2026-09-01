@@ -149,9 +149,19 @@ first attempt. Design + status: `atomic-saas/planning/ENFORCEMENT_GATE.md`.
 > `atomic-saas/src/provisioning/templates/cloud-init.yaml`, which today
 > downloads the plain release `atomic-server` and starts it with
 > `--port 8080 --domain … --server-url …` — no managed wiring at all. So the
-> managed path is verified, but not yet the path provisioned nodes run; a fix
-> to the template is in flight. Read the checkmarks as "works when the node is
+> managed path is verified; the template fix (atomic-saas #22, merged
+> 2026-09-01) makes newly provisioned nodes run it. Read the checkmarks as "works when the node is
 > run managed".
+
+- ✅ **Signed enrollment proof (client half).** `createManagedSyncEnrollment`
+  (`helpers/managed/enrollment.ts`) now requests `POST /api/sync-enrollments/challenge`,
+  signs `"{challenge} {timestamp}"` with the agent's key via `@tomic/lib`'s
+  `createAuthentication`, and sends `proof: { nonce, public_key, timestamp, signature, genesis_cert? }`
+  — `genesis_cert` (the drive's `genesis` propval) only for a drive that is not the
+  agent's personal drive. A 404 on the challenge route (older control plane) falls back
+  to the unsigned request; 403 `enrollment_proof_required` / `enrollment_proof_invalid`
+  surface as a plain-language error. Server half: atomic-saas PR #24
+  (`ATOMIC_SAAS_REQUIRE_ENROLLMENT_PROOF` can be flipped on once this ships).
 
 - ✅ Onboarding: new user (username-from-email, auto cloud-sync, recovery backup), sign-in, restore (forgot secret).
 - ✅ Managed-node detection: `Create account` → portal when managed, else local (FOSS).
