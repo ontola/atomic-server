@@ -80,10 +80,10 @@ There are multiple supported authentication protocols, the most common being [We
 Atomic Data's [authentication model](../authentication.md) is more similar to how SSH works.
 Atomic identities are [`did:ad:agent:{publicKey}`](../did.md) Agents. Every
 read and write (HTTP, WebSocket, commit) is signed with that Agent's Ed25519
-key. There is no OIDC token in the protocol: an IdP session, if one exists,
-proves a person to a node so that node can certify a short-lived session
-Agent. It cannot authorize a commit. Solid WebID-OIDC interop would be a
-mapping layer, not a second auth stack.
+key. There is no OIDC token in the protocol. A planned, optional OIDC login
+would let an IdP session prove a person to a node so that node can certify a
+short-lived session Agent; even then the token could not authorize a commit.
+Solid WebID-OIDC interop would be a mapping layer, not a second auth stack.
 
 ## Hierarchy and authorization
 
@@ -147,8 +147,9 @@ Atomic Data is not even two years old, and although progress has been fast, it d
 Here's a list of things missing in Atomic Data, with links to their open issues and links to their existing Solid counterpart.
 
 - No inbox or [notifications](https://www.w3.org/TR/ldn/) yet ([issue](https://github.com/ontola/atomic-data/issues/28))
-- No WebID-OIDC. Atomic authenticates with Ed25519 agent DIDs, not OIDC
-  tokens. Optional “Sign in with {IdP}” issues a short-lived session Agent
-  certified by a root that stays on the node; it is not protocol identity
+- No WebID-OIDC, and no OIDC login yet. Atomic authenticates with Ed25519
+  agent DIDs, not OIDC tokens. A planned optional “Sign in with {IdP}” would
+  issue a short-lived session Agent certified by a root that stays on the
+  node; it would not be protocol identity
   ([issue](https://github.com/ontola/atomic-server/issues/277)).
 - No support from a big community, a well-funded business or the inventor of the world wide web.
