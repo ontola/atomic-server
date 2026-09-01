@@ -95,6 +95,9 @@ pub mod plugins;
 
 pub mod populate;
 pub mod resources;
+/// The node runtime boundary (`AtomicNode`). Wraps `Db`, so it needs `db`.
+#[cfg(feature = "db")]
+pub mod runtime;
 pub mod schema;
 pub mod serialize;
 pub mod store;

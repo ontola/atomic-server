@@ -336,6 +336,22 @@ pub async fn ingest_commit_json(
     commit_json: &str,
     opts: &CommitIngestOpts,
 ) -> crate::errors::AtomicResult<String> {
+    let response = ingest_commit(store, commit_json, opts).await?;
+    let base_domain = store.get_base_domain();
+    let origin = opts.response_origin.as_deref().or(base_domain.as_deref());
+    let json = response.commit_resource.to_json_ad(origin)?;
+    Ok(json)
+}
+
+/// [`ingest_commit_json`] minus the final JSON-AD serialization: the same
+/// validation and application, returning the full [`CommitResponse`] so an
+/// in-process caller (`crate::runtime::AtomicNode`) can use the changed
+/// resource and atoms without re-parsing its own output.
+pub async fn ingest_commit(
+    store: &Db,
+    commit_json: &str,
+    opts: &CommitIngestOpts,
+) -> crate::errors::AtomicResult<crate::commit::CommitResponse> {
     // Reject commits with deprecated set/push/remove fields — use loroUpdate instead.
     if commit_json.contains("\"https://atomicdata.dev/properties/set\"")
         || commit_json.contains("\"https://atomicdata.dev/properties/push\"")
@@ -445,23 +461,17 @@ pub async fn ingest_commit_json(
         source_id: opts.source_id.clone(),
     };
 
-    let base_domain = store.get_base_domain();
-
-    let response = if opts.suppress_live_echo {
+    if opts.suppress_live_echo {
         // Applying a remote peer's commit must not rebroadcast to live peers
         // (the sender included) — mirrors `ws_apply::apply_commit_json`'s
         // suppression of the same echo via the live push loop.
         super::ws_apply::set_importing(true);
         let result = store.apply_commit(incoming_commit, &commit_opts).await;
         super::ws_apply::set_importing(false);
-        result?
+        result
     } else {
-        store.apply_commit(incoming_commit, &commit_opts).await?
-    };
-
-    let origin = opts.response_origin.as_deref().or(base_domain.as_deref());
-    let json = response.commit_resource.to_json_ad(origin)?;
-    Ok(json)
+        store.apply_commit(incoming_commit, &commit_opts).await
+    }
 }
 
 /// Apply a JSON-AD `COMMIT` received over a peer transport, returning the
