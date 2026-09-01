@@ -1060,12 +1060,6 @@ msgstr "Secreto del Agente"
 msgid "Copy secret to continue"
 msgstr "Copiar secreto para continuar"
 
-#~ msgid "Update Document"
-#~ msgstr "Actualizar Documento"
-
-#~ msgid "Could not update document"
-#~ msgstr "No se pudo actualizar el documento"
-
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
 msgid "Retry"
@@ -2461,9 +2455,6 @@ msgstr "Nueva etiqueta"
 msgid "Add tag"
 msgstr "Añadir etiqueta"
 
-#~ msgid "Could not update your list: no personal drive is set up for this account yet."
-#~ msgstr "No se pudo actualizar tu lista: aún no hay una unidad personal configurada para esta cuenta."
-
 #. 0: getTitle(resource)
 #. 0: getTitle(resource)
 #: src/components/SideBar/DriveSwitcher.tsx
@@ -2976,9 +2967,6 @@ msgstr "Crear nueva identidad"
 msgid "Generating your identity..."
 msgstr "Generando tu identidad..."
 
-#~ msgid "Creating your personal drive…"
-#~ msgstr "Creando tu unidad personal…"
-
 #: src/components/NewIdentitySection.tsx
 msgid "Atomic Server — agent secret backup"
 msgstr "Atomic Server — copia de seguridad del secreto del agente"
@@ -3128,9 +3116,6 @@ msgstr "Aún no hay etiquetas."
 #: src/components/Tag/TagSelectPopover.tsx
 msgid "Open tag page"
 msgstr "Abrir página de etiquetas"
-
-#~ msgid "{0} Inherited permissions"
-#~ msgstr "{0} Permisos heredados"
 
 #: src/components/Share/ShareDialog.tsx
 msgid "<0><0/> Back</0> Create Invite"
@@ -3325,18 +3310,6 @@ msgstr "Leer una propiedad: <0/>"
 #: src/views/CodeUsage/ResourceCodeUsage.tsx
 msgid "<0/> Typescript"
 msgstr "<0/> Typescript"
-
-#~ msgid "Websocket Connected"
-#~ msgstr "Websocket Conectado"
-
-#~ msgid "Websocket Closing"
-#~ msgstr "Websocket Cerrando"
-
-#~ msgid "Websocket Closed"
-#~ msgstr "Websocket Cerrado"
-
-#~ msgid "Websocket Connecting..."
-#~ msgstr "Websocket Conectando..."
 
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 msgid "Select a location"
@@ -4262,9 +4235,6 @@ msgstr "Navegador de datos atómicos"
 msgid "This removes drives created for automated tests or local dev: names containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
 msgstr "Esto elimina las unidades creadas para pruebas automatizadas o desarrollo local: nombres que contienen <0/> (E2E), o descripciones que contienen{0} <1/> (de{1} <2/>)."
 
-#~ msgid "<0/> This document needs to be updated to the new format in order to be edited."
-#~ msgstr "<0/> Este documento debe actualizarse al nuevo formato para poder editarse."
-
 #: src/views/ResourcePage.tsx
 msgid "The resource at <0/> hasn't loaded after 15 seconds. It may not exist, or the server may be unreachable."
 msgstr "El recurso en <0/> no se ha cargado después de 15 segundos. Puede que no exista, o que el servidor sea inalcanzable."
@@ -4408,9 +4378,6 @@ msgstr "propiedades tienen"
 #: src/components/ResourceUsage/ClassUsage.tsx
 msgid "as a classtype."
 msgstr "como un tipo de clase."
-
-#~ msgid "Create Invite"
-#~ msgstr "Crear invitación"
 
 #. 0: status.blockedCount
 #: src/components/SideBar/SyncMenuItem.tsx
@@ -4742,12 +4709,6 @@ msgstr "Gestionar unidades"
 #: src/components/SideBar/DriveSwitcher.tsx
 msgid "View and organize all your drives."
 msgstr "Ver y organizar todas tus unidades."
-
-#~ msgid "Your personal space — only visible to you."
-#~ msgstr "Tu espacio personal — solo visible para ti."
-
-#~ msgid "Unstar a drive to move it back to recently visited."
-#~ msgstr "Quita la estrella de una unidad para moverla a visitadas recientemente."
 
 #: src/routes/SettingsAgent.tsx
 msgid "My drives"
@@ -5766,9 +5727,6 @@ msgstr "Cerrar sesión y olvidar este dispositivo"
 #: src/components/AgentProfileHeader.tsx
 msgid "Manage {0} on {1}"
 msgstr "Gestionar {0} en {1}"
-
-#~ msgid "Open by URL"
-#~ msgstr "Abrir por URL"
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Continue as"
@@ -7420,9 +7378,6 @@ msgstr "Cuadro de información vacío"
 msgid "Style"
 msgstr "Estilo"
 
-#~ msgid "Optional — leave empty for a box of text."
-#~ msgstr "Opcional — déjelo vacío para un cuadro de texto."
-
 #: src/chunks/FormBuilder/FieldRow.tsx
 msgid "Untitled question"
 msgstr "Pregunta sin título"
@@ -7462,3 +7417,7 @@ msgstr "<0/> Animar transiciones de página"
 #: src/chunks/FormBuilder/SettingsTab.tsx
 msgid "Pages zoom out and slide away on Next / Back. Visitors who ask their system for reduced motion never see the animation."
 msgstr "Las páginas se alejan con zoom y se deslizan al presionar Siguiente / Anterior. Los visitantes que solicitan movimiento reducido en su sistema nunca ven la animación."
+
+#: src/chunks/FormBuilder/SettingsTab.tsx
+msgid "Field spacing"
+msgstr "Espaciado de campo"

@@ -1060,12 +1060,6 @@ msgstr "Agent-Geheimnis"
 msgid "Copy secret to continue"
 msgstr "Geheimnis kopieren, um fortzufahren"
 
-#~ msgid "Update Document"
-#~ msgstr "Dokument aktualisieren"
-
-#~ msgid "Could not update document"
-#~ msgstr "Dokument konnte nicht aktualisiert werden"
-
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
 msgid "Retry"
@@ -2461,9 +2455,6 @@ msgstr "Neuer Tag"
 msgid "Add tag"
 msgstr "Tag hinzufügen"
 
-#~ msgid "Could not update your list: no personal drive is set up for this account yet."
-#~ msgstr "Ihre Liste konnte nicht aktualisiert werden: Für dieses Konto ist noch kein persönliches Laufwerk eingerichtet."
-
 #. 0: getTitle(resource)
 #. 0: getTitle(resource)
 #: src/components/SideBar/DriveSwitcher.tsx
@@ -2976,9 +2967,6 @@ msgstr "Neue Identität erstellen"
 msgid "Generating your identity..."
 msgstr "Ihre Identität wird generiert..."
 
-#~ msgid "Creating your personal drive…"
-#~ msgstr "Ihr persönliches Laufwerk wird erstellt…"
-
 #: src/components/NewIdentitySection.tsx
 msgid "Atomic Server — agent secret backup"
 msgstr "Atomic Server — Agent-Geheimnis-Backup"
@@ -3128,9 +3116,6 @@ msgstr "Es gibt noch keine Tags."
 #: src/components/Tag/TagSelectPopover.tsx
 msgid "Open tag page"
 msgstr "Tag-Seite öffnen"
-
-#~ msgid "{0} Inherited permissions"
-#~ msgstr "{0} Vererbte Berechtigungen"
 
 #: src/components/Share/ShareDialog.tsx
 msgid "<0><0/> Back</0> Create Invite"
@@ -3325,18 +3310,6 @@ msgstr "Eine Eigenschaft lesen: <0/>"
 #: src/views/CodeUsage/ResourceCodeUsage.tsx
 msgid "<0/> Typescript"
 msgstr "<0/> TypeScript"
-
-#~ msgid "Websocket Connected"
-#~ msgstr "Websocket verbunden"
-
-#~ msgid "Websocket Closing"
-#~ msgstr "Websocket wird geschlossen"
-
-#~ msgid "Websocket Closed"
-#~ msgstr "Websocket geschlossen"
-
-#~ msgid "Websocket Connecting..."
-#~ msgstr "Websocket wird verbunden..."
 
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 msgid "Select a location"
@@ -4265,9 +4238,6 @@ msgstr "Atomic Data Browser"
 msgid "This removes drives created for automated tests or local dev: names containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
 msgstr "Dies entfernt Laufwerke, die für automatisierte Tests oder lokale Entwicklung erstellt wurden: Namen, die <0/> (E2E) enthalten, oder Beschreibungen, die {0} <1/> (von {1} <2/>) enthalten."
 
-#~ msgid "<0/> This document needs to be updated to the new format in order to be edited."
-#~ msgstr "<0/> Dieses Dokument muss in das neue Format aktualisiert werden, um bearbeitet werden zu können."
-
 #: src/views/ResourcePage.tsx
 msgid "The resource at <0/> hasn't loaded after 15 seconds. It may not exist, or the server may be unreachable."
 msgstr "Die Ressource unter <0/> wurde nach 15 Sekunden nicht geladen. Möglicherweise existiert sie nicht oder der Server ist nicht erreichbar."
@@ -4414,9 +4384,6 @@ msgstr "Eigenschaften haben"
 #: src/components/ResourceUsage/ClassUsage.tsx
 msgid "as a classtype."
 msgstr "als ein Klassentyp."
-
-#~ msgid "Create Invite"
-#~ msgstr "Einladung erstellen"
 
 #. 0: status.blockedCount
 #: src/components/SideBar/SyncMenuItem.tsx
@@ -4748,12 +4715,6 @@ msgstr "Drives verwalten"
 #: src/components/SideBar/DriveSwitcher.tsx
 msgid "View and organize all your drives."
 msgstr "Alle deine Drives anzeigen und organisieren."
-
-#~ msgid "Your personal space — only visible to you."
-#~ msgstr "Ihr persönlicher Bereich – nur für Sie sichtbar."
-
-#~ msgid "Unstar a drive to move it back to recently visited."
-#~ msgstr "Entfernen Sie einen Stern von einem Laufwerk, um es zurück zu \"Zuletzt besucht\" zu verschieben."
 
 #: src/routes/SettingsAgent.tsx
 msgid "My drives"
@@ -5772,9 +5733,6 @@ msgstr "Abmelden & dieses Gerät vergessen"
 #: src/components/AgentProfileHeader.tsx
 msgid "Manage {0} on {1}"
 msgstr "Verwalten Sie {0} auf {1}"
-
-#~ msgid "Open by URL"
-#~ msgstr "Per URL öffnen"
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Continue as"
@@ -7426,9 +7384,6 @@ msgstr "Leeres Infofeld"
 msgid "Style"
 msgstr "Stil"
 
-#~ msgid "Optional — leave empty for a box of text."
-#~ msgstr "Optional — leer lassen für eine Textbox."
-
 #: src/chunks/FormBuilder/FieldRow.tsx
 msgid "Untitled question"
 msgstr "Unbenannte Frage"
@@ -7468,3 +7423,7 @@ msgstr "<0/> Seitenübergänge animieren"
 #: src/chunks/FormBuilder/SettingsTab.tsx
 msgid "Pages zoom out and slide away on Next / Back. Visitors who ask their system for reduced motion never see the animation."
 msgstr "Seiten zoomen heraus und gleiten bei Weiter / Zurück weg. Besucher, die in ihrem System reduzierte Bewegung anfordern, sehen die Animation nie."
+
+#: src/chunks/FormBuilder/SettingsTab.tsx
+msgid "Field spacing"
+msgstr "Feldabstand"

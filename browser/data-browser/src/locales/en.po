@@ -1060,12 +1060,6 @@ msgstr "Agent Secret"
 msgid "Copy secret to continue"
 msgstr "Copy secret to continue"
 
-#~ msgid "Update Document"
-#~ msgstr "Update Document"
-
-#~ msgid "Could not update document"
-#~ msgstr "Could not update document"
-
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
 msgid "Retry"
@@ -2461,9 +2455,6 @@ msgstr "New tag"
 msgid "Add tag"
 msgstr "Add tag"
 
-#~ msgid "Could not update your list: no personal drive is set up for this account yet."
-#~ msgstr "Could not update your list: no personal drive is set up for this account yet."
-
 #. 0: getTitle(resource)
 #. 0: getTitle(resource)
 #: src/components/SideBar/DriveSwitcher.tsx
@@ -2976,9 +2967,6 @@ msgstr "Create new identity"
 msgid "Generating your identity..."
 msgstr "Generating your identity..."
 
-#~ msgid "Creating your personal drive…"
-#~ msgstr "Creating your personal drive…"
-
 #: src/components/NewIdentitySection.tsx
 msgid "Atomic Server — agent secret backup"
 msgstr "Atomic Server — agent secret backup"
@@ -3128,9 +3116,6 @@ msgstr "There are no tags yet."
 #: src/components/Tag/TagSelectPopover.tsx
 msgid "Open tag page"
 msgstr "Open tag page"
-
-#~ msgid "{0} Inherited permissions"
-#~ msgstr "{0} Inherited permissions"
 
 #: src/components/Share/ShareDialog.tsx
 msgid "<0><0/> Back</0> Create Invite"
@@ -3325,18 +3310,6 @@ msgstr "Read a property: <0/>"
 #: src/views/CodeUsage/ResourceCodeUsage.tsx
 msgid "<0/> Typescript"
 msgstr "<0/> Typescript"
-
-#~ msgid "Websocket Connected"
-#~ msgstr "Websocket Connected"
-
-#~ msgid "Websocket Closing"
-#~ msgstr "Websocket Closing"
-
-#~ msgid "Websocket Closed"
-#~ msgstr "Websocket Closed"
-
-#~ msgid "Websocket Connecting..."
-#~ msgstr "Websocket Connecting..."
 
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 msgid "Select a location"
@@ -4265,9 +4238,6 @@ msgstr "Atomic Data Browser"
 msgid "This removes drives created for automated tests or local dev: names containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
 msgstr "This removes drives created for automated tests or local dev: names containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
 
-#~ msgid "<0/> This document needs to be updated to the new format in order to be edited."
-#~ msgstr "<0/> This document needs to be updated to the new format in order to be edited."
-
 #: src/views/ResourcePage.tsx
 msgid "The resource at <0/> hasn't loaded after 15 seconds. It may not exist, or the server may be unreachable."
 msgstr "The resource at <0/> hasn't loaded after 15 seconds. It may not exist, or the server may be unreachable."
@@ -4414,9 +4384,6 @@ msgstr "properties have"
 #: src/components/ResourceUsage/ClassUsage.tsx
 msgid "as a classtype."
 msgstr "as a classtype."
-
-#~ msgid "Create Invite"
-#~ msgstr "Create Invite"
 
 #. 0: status.blockedCount
 #: src/components/SideBar/SyncMenuItem.tsx
@@ -4748,12 +4715,6 @@ msgstr "Manage drives"
 #: src/components/SideBar/DriveSwitcher.tsx
 msgid "View and organize all your drives."
 msgstr "View and organize all your drives."
-
-#~ msgid "Your personal space — only visible to you."
-#~ msgstr "Your personal space — only visible to you."
-
-#~ msgid "Unstar a drive to move it back to recently visited."
-#~ msgstr "Unstar a drive to move it back to recently visited."
 
 #: src/routes/SettingsAgent.tsx
 msgid "My drives"
@@ -5772,9 +5733,6 @@ msgstr "Sign out & forget this device"
 #: src/components/AgentProfileHeader.tsx
 msgid "Manage {0} on {1}"
 msgstr "Manage {0} on {1}"
-
-#~ msgid "Open by URL"
-#~ msgstr "Open by URL"
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Continue as"
@@ -7426,9 +7384,6 @@ msgstr "Empty info box"
 msgid "Style"
 msgstr "Style"
 
-#~ msgid "Optional — leave empty for a box of text."
-#~ msgstr "Optional — leave empty for a box of text."
-
 #: src/chunks/FormBuilder/FieldRow.tsx
 msgid "Untitled question"
 msgstr "Untitled question"
@@ -7468,3 +7423,7 @@ msgstr "<0/> Animate page transitions"
 #: src/chunks/FormBuilder/SettingsTab.tsx
 msgid "Pages zoom out and slide away on Next / Back. Visitors who ask their system for reduced motion never see the animation."
 msgstr "Pages zoom out and slide away on Next / Back. Visitors who ask their system for reduced motion never see the animation."
+
+#: src/chunks/FormBuilder/SettingsTab.tsx
+msgid "Field spacing"
+msgstr "Field spacing"
