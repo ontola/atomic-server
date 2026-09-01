@@ -174,10 +174,14 @@ unblocked:
   (`sync::peer::initiator_trust_tests`), each proven against a reverted build
   (3 fail vulnerable, owner-still-works stays green); full 64-test sync suite
   incl. real two-endpoint Iroh e2e green.
-- [ ] **Require `AUTH` before `SYNC`/`SYNC_PUSH`/live frames** on accept
-  paths; reject instead of defaulting to `Public`.
-- [ ] **Bind `AUTH.requestedSubject` to the session's drive** so a proof for
-  one drive can't be replayed against another.
+- [x] **Require `AUTH` before `SYNC`/`SYNC_PUSH`/live frames** on accept
+  paths; reject instead of defaulting to `Public`. (2026-09-01: Iroh
+  `handle_stream` and the accept-side live loop answer `ERROR AUTH_REQUIRED`
+  and close; WS gates writes and identity-bearing subscriptions, anonymous
+  reads stay `check_read`-gated. `sync::peer::accept_gate_tests`.)
+- [x] **Bind `AUTH.requestedSubject` to the session's drive** so a proof for
+  one drive can't be replayed against another. (2026-09-01, Iroh accept
+  path; the browser signs the server origin so WS has nothing to bind.)
 - [ ] **Destroys become signed commits on the wire** (Principle 3): the live
   loop and bulk `remove[]` stop accepting naked deletes from peers; a
   destroy is a commit, validated like any other. Closes OQ4 and the F10
@@ -185,9 +189,11 @@ unblocked:
   closed as a decision — see the table below — but this item is still
   open: as of 2026-09-01 `peer.rs` still accepts the live `DESTROY` frame,
   gated by the cached drive-level write verdict.)*
-- [ ] Pre-auth frame budget in the live read loop (the `matches!(agent,
+- [x] Pre-auth frame budget in the live read loop (the `matches!(agent,
   Public)` gate exists in `handle_stream`; mirror it in
-  `register_live_peer`).
+  `register_live_peer`). (2026-09-01: the live loop now refuses every
+  non-AUTH frame from a still-`Public` peer we did not dial, which
+  subsumes the budget.)
 - [ ] **OQ5 for serverless:** a drive is admitted on a device iff the
   authenticated agent has write rights on it (same-agent: always true for
   your own drives). The `Err(_) => true` carve-out is replaced by "the

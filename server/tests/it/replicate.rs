@@ -43,8 +43,8 @@ async fn source_node(unique: &str) -> (Db, atomic_lib::agents::Agent, String, St
 /// The whole point of the feature: a drive on a server the target has never
 /// heard of, pushed to it, and *verifiably* present afterwards.
 ///
-/// `in_sync` is the assertion that matters. The receiver answers `SYNC_OK` even
-/// when it silently discards an import for lack of write rights, so only a
+/// `in_sync` is the assertion that matters. A refused import now comes back as
+/// an `ERROR` frame, but `SYNC_OK` still only acknowledges the chunk, so only a
 /// second version-vector probe agreeing proves the data is really there.
 #[tokio::test]
 async fn pushes_a_drive_to_a_server_that_has_never_seen_it() {

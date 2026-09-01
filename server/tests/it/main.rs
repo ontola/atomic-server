@@ -17,6 +17,7 @@ mod put_blob;
 mod replicate;
 mod server_cli;
 mod sync;
+mod ws_auth_gate;
 mod ws_commit;
 mod ws_commit_isolation;
 mod ws_destroy;

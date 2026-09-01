@@ -526,7 +526,8 @@ async fn e2e_engine_pull_after_iroh_bulk_sync() {
                     &ForAgent::Sudo,
                     false,
                 )
-                .await;
+                .await
+                .expect("Sudo import is never rejected");
                 imported += count;
             }
         }

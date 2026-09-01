@@ -102,7 +102,8 @@ mod peer_sync_tests {
                     );
                     let (count, _blob_requests) =
                         crate::sync::engine::import_sync_push(&push, &db_b, &ForAgent::Sudo, false)
-                            .await;
+                            .await
+                            .expect("Sudo import is never rejected");
                     total_imported += count;
                 }
             } else if tag == crate::sync::protocol::tag::SYNC_DIFF {
@@ -188,7 +189,8 @@ mod peer_sync_tests {
                             &ForAgent::Sudo,
                             false,
                         )
-                        .await;
+                        .await
+                        .expect("Sudo import is never rejected");
                         imported += count;
                     }
                 }
@@ -293,7 +295,8 @@ mod peer_sync_tests {
                 let push = crate::sync::protocol::decode_sync_push(&frame[1..]).unwrap();
                 let (_count, reqs) =
                     crate::sync::engine::import_sync_push(&push, &db_b, &ForAgent::Sudo, false)
-                        .await;
+                        .await
+                        .expect("Sudo import is never rejected");
                 blob_requests.extend(reqs);
             }
         }

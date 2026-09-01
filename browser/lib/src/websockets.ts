@@ -19,6 +19,7 @@ import {
 import {
   Tag,
   Flags,
+  ErrorCode,
   encodeAuth,
   encodeCommit,
   encodeGet,
@@ -863,6 +864,30 @@ export class WSClient {
           } else {
             this.takePendingCommit(msg.requestId)?.reject(err);
           }
+        } else if (msg.code === ErrorCode.SYNC_REJECTED) {
+          // Our SYNC_PUSH was refused as a whole (no write right on the
+          // drive, quota, not enrolled). Nothing we sent landed and no
+          // SYNC_OK will follow for it. `handleSyncDiff` may already have
+          // reported the drive as synced (it does so as soon as the
+          // server has nothing left to push), so correct that: the drive
+          // is NOT in sync and the local edits stay where they are, to be
+          // offered again on the next handshake.
+          console.error('[WS] SYNC_PUSH rejected:', msg.message);
+          this.store.failDriveSync(
+            this.driveFromRejection(msg.message),
+            msg.message,
+          );
+        } else if (
+          msg.code === ErrorCode.AUTH_REQUIRED ||
+          msg.code === ErrorCode.UNAUTHORIZED_READ
+        ) {
+          // Session-level refusals of a single frame: a subscription or
+          // push we sent without (enough) identity. The socket stays
+          // open and every other pending request is unaffected, so
+          // neither `rejectAllPending` nor a toast is right — an
+          // anonymous viewer of a shared page would see one on every
+          // navigation. Logged so it is diagnosable.
+          console.warn('[WS] refused:', msg.message);
         } else {
           this.rejectAllPending(msg.message);
           this.store.notifyError(msg.message);
@@ -1136,6 +1161,14 @@ export class WSClient {
     // Drive-wide live subscription. Previously sent only inside
     // `authenticate()`, so an anonymous session never subscribed at all.
     this.subscribeToDrive();
+
+    // Loro and presence subscriptions carry an identity (peers see who
+    // is editing), so the server refuses them before AUTH with
+    // `AUTH_REQUIRED`. Don't send them for a session without an agent;
+    // `authenticate()` calls back in here once one is set.
+    if (!this.store.getAgent()) {
+      return;
+    }
 
     for (const subject of this.store.getLoroSyncSubjects()) {
       this.subscribeLoroSync(subject);
@@ -1455,6 +1488,15 @@ export class WSClient {
   }
 
   // ---- Private: helpers ----
+
+  /** The drive a `SYNC_REJECTED` message is about. The server formats it
+   *  as `SYNC_PUSH rejected for drive <drive>: <reason>`; when that shape
+   *  is not recognised, fall back to the drive we are syncing. */
+  private driveFromRejection(message: string): string {
+    const match = /rejected for drive (\S+?):/.exec(message);
+
+    return match?.[1] ?? this.store.getDrive() ?? '';
+  }
 
   private async checkForMissingBlobs(resource: Resource) {
     const blobDid = resource.get(BLOB) as string | undefined;

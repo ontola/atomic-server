@@ -24,7 +24,7 @@ fn io_err(e: impl std::fmt::Display) -> crate::errors::AtomicError {
 }
 
 /// ALPN protocol identifier for Atomic Data over Iroh.
-const ATOMIC_ALPN: &[u8] = b"atomic/1";
+pub(crate) const ATOMIC_ALPN: &[u8] = b"atomic/1";
 
 /// Canonical 64-char lowercase hex NodeID for map keys and UI matching.
 pub fn normalize_node_id(id: &str) -> String {
@@ -988,6 +988,41 @@ fn register_live_peer(
                 continue;
             }
 
+            // Fail closed on identity (planning/serverless-p2p.md, principle 5):
+            // a peer that dialed us and never proved who it is gets no live
+            // frame processed — not even as `Public`. `handle_stream` already
+            // refuses to reach live mode without an AUTH, so this is the same
+            // rule restated where the frames actually land, in case the two
+            // ever drift. Only for connections dialed *into* us: on the dial
+            // side `agent` is the remote's best-effort auth-back, and every
+            // write there is gated on our own ownership (`initiated_by_us`).
+            if !initiated_by_us
+                && matches!(agent, ForAgent::Public)
+                && buf[0] != super::protocol::tag::AUTH
+            {
+                tracing::warn!(
+                    "[live] closing: 0x{:02x} from {} before AUTH",
+                    buf[0],
+                    &read_peer_id[..read_peer_id.len().min(12)]
+                );
+                let _ = tx_for_read
+                    .send(frame_with_len(&auth_required_error(buf[0])))
+                    .await;
+                break;
+            }
+
+            // The peer answered something we sent (a SYNC_PUSH it refused, a
+            // BLOB_REQUEST it couldn't serve) with an ERROR. Nothing to apply;
+            // say so and keep the link — an ERROR is a verdict, not a fault.
+            if buf[0] == super::protocol::tag::ERROR {
+                let msg = std::str::from_utf8(buf.get(5..).unwrap_or(&[])).unwrap_or("(non-utf8)");
+                tracing::warn!(
+                    "[live] {} answered with an error: {msg}",
+                    &read_peer_id[..read_peer_id.len().min(12)]
+                );
+                continue;
+            }
+
             // Live collaboration: presence, cursors, and the ops of an edit in
             // progress. Handled before every other frame type and returned from
             // immediately, because the one thing none of it may do is reach the
@@ -1706,16 +1741,25 @@ pub async fn sync_drive_with_peer_using_outcome(
                     // `import_sync_push` still runs the drive-level check + the
                     // admission gate, with the bootstrap carve-out for a drive
                     // that doesn't exist locally yet.
-                    let (count, blob_requests) =
-                        super::engine::import_sync_push(&push, store, &remote_agent, true).await;
-                    total_imported += count;
+                    match super::engine::import_sync_push(&push, store, &remote_agent, true).await {
+                        Ok((count, blob_requests)) => {
+                            total_imported += count;
 
-                    // Send blob requests if any
-                    for req_frame in blob_requests {
-                        send.write_u32(req_frame.len() as u32)
-                            .await
-                            .map_err(io_err)?;
-                        send.write_all(&req_frame).await.map_err(io_err)?;
+                            // Send blob requests if any
+                            for req_frame in blob_requests {
+                                send.write_u32(req_frame.len() as u32)
+                                    .await
+                                    .map_err(io_err)?;
+                                send.write_all(&req_frame).await.map_err(io_err)?;
+                            }
+                        }
+                        // We dialed this peer and asked for its state; the
+                        // refusal is our own admission gate saying no to what
+                        // came back. Nothing landed, and there is nothing to
+                        // tell the peer — it did not ask us for anything.
+                        Err(rejected) => {
+                            tracing::warn!("[sync] dropped incoming push: {rejected}");
+                        }
                     }
                 }
                 // SYNC_PUSH is chunked: keep reading until the LAST flag fires.
@@ -1747,12 +1791,24 @@ pub async fn sync_drive_with_peer_using_outcome(
                 break;
             }
             super::protocol::tag::ERROR => {
-                // [request_id: u16] [code: u16] [message: utf8] — `code`
-                // (F5, planning/unified-sync.md) isn't consumed here yet;
-                // Iroh live-mode just logs and drops the connection either
-                // way on an ERROR.
+                // [request_id: u16] [code: u16] [message: utf8] (F5,
+                // planning/unified-sync.md).
+                let code = payload
+                    .get(2..4)
+                    .map(|b| u16::from_be_bytes([b[0], b[1]]))
+                    .unwrap_or(super::protocol::error_code::UNKNOWN);
                 let msg =
                     std::str::from_utf8(payload.get(4..).unwrap_or(&[])).unwrap_or("unknown error");
+                // A refused push or a refused identity is the peer saying
+                // "nothing of yours landed". Going live and reporting
+                // `pushed` as if it had would tell the user the opposite of
+                // what happened, so this is the outcome of the sync.
+                if code == super::protocol::error_code::SYNC_REJECTED
+                    || code == super::protocol::error_code::AUTH_REQUIRED
+                {
+                    tracing::warn!("[sync] peer refused: {msg}");
+                    return Err(format!("Peer refused to sync: {msg}").into());
+                }
                 tracing::warn!("Peer returned error: {msg}");
                 break;
             }
@@ -2147,6 +2203,59 @@ pub fn remove_known_peer(store: &Db, node_id: &str) {
 /// Returns the number of resources imported from the remote peer.
 /// After SYNC_OK or SYNC_PUSH response, transitions to live mode by
 /// registering the stream for real-time updates.
+/// The `ERROR` frame a peer gets for sending `tag` before it authenticated.
+fn auth_required_error(tag: u8) -> Vec<u8> {
+    super::protocol::encode_error(
+        0,
+        super::protocol::error_code::AUTH_REQUIRED,
+        &format!("AUTH required before frame 0x{tag:02x}"),
+    )
+}
+
+/// Prefix a frame with the u32 length the Iroh stream framing expects.
+fn frame_with_len(frame: &[u8]) -> Vec<u8> {
+    let mut framed = Vec::with_capacity(4 + frame.len());
+    framed.extend_from_slice(&(frame.len() as u32).to_be_bytes());
+    framed.extend_from_slice(frame);
+    framed
+}
+
+/// Write `frames`, close our half of the stream, and wait (briefly) for the
+/// peer to acknowledge them. Best effort: the peer is being refused, so a
+/// failed write changes nothing. The wait matters, though: the caller
+/// returns straight after, `accept` then drops the connection, and QUIC
+/// would discard anything not yet delivered — the peer would see a closed
+/// stream with no ERROR in it, which is the silence this exists to replace.
+async fn refuse_stream(send: &mut iroh::endpoint::SendStream, frames: &[Vec<u8>]) {
+    for frame in frames {
+        let _ = send.write_all(&frame_with_len(frame)).await;
+    }
+    let _ = send.finish();
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(2), send.stopped()).await;
+}
+
+/// The drive an `AUTH` frame was signed for (`requestedSubject`). `None`
+/// when the payload does not parse — a frame that did not parse did not
+/// authenticate either, so nothing is bound.
+fn auth_requested_subject(payload: &[u8]) -> Option<String> {
+    let json = std::str::from_utf8(payload).ok()?;
+    let auth: crate::authentication::AuthValues = serde_json::from_str(json).ok()?;
+    Some(auth.requested_subject)
+}
+
+/// The drive a handshake `SYNC` / `SYNC_PUSH` names, or `None` for any other
+/// frame (and for a frame that does not decode — the engine will answer
+/// that one with its own ERROR).
+fn handshake_frame_drive(buf: &[u8]) -> Option<String> {
+    match *buf.first()? {
+        super::protocol::tag::SYNC => super::protocol::decode_sync(&buf[1..]).map(|s| s.drive),
+        super::protocol::tag::SYNC_PUSH => {
+            super::protocol::decode_sync_push(&buf[1..]).map(|p| p.drive)
+        }
+        _ => None,
+    }
+}
+
 async fn handle_stream(
     mut send: iroh::endpoint::SendStream,
     mut recv: iroh::endpoint::RecvStream,
@@ -2155,6 +2264,11 @@ async fn handle_stream(
 ) -> anyhow::Result<usize> {
     let remote_key = normalize_node_id(&remote_id);
     let mut agent = ForAgent::Public;
+    // The drive the peer's AUTH was signed for. The AUTH proof is bound to
+    // this (`requestedSubject` is what the signature covers), so a proof
+    // minted for one drive must not open a SYNC on another. Set once, when
+    // the AUTH succeeds; checked against every handshake SYNC / SYNC_PUSH.
+    let mut bound_drive: Option<crate::Subject> = None;
     let mut total_imported = 0;
     let mut sent_sync_ok = false;
     let mut hello_sent = false;
@@ -2183,11 +2297,56 @@ async fn handle_stream(
 
         let mut buf = vec![0u8; len];
         recv.read_exact(&mut buf).await.map_err(io_err)?;
+        let Some(&tag) = buf.first() else {
+            continue;
+        };
+
+        // Fail closed on identity (planning/serverless-p2p.md, principle 5;
+        // planning/authorization-sync.md phase 1). Until an AUTH has
+        // succeeded, the only frame this loop processes is AUTH. Anything
+        // else — SYNC, SYNC_PUSH, even HELLO — gets an ERROR and the stream
+        // closed, rather than being handled as `Public`. "Public semantics"
+        // was never nothing: an unauthenticated SYNC still walked the drive
+        // and served every publicly readable subject, and an unauthenticated
+        // SYNC_PUSH could bootstrap a brand-new drive onto an open node. A
+        // dialer that wants either can say who it is first; every initiator
+        // in this codebase already does.
+        if matches!(agent, ForAgent::Public) && tag != super::protocol::tag::AUTH {
+            tracing::warn!(
+                "[accept] closing: 0x{tag:02x} from {} before AUTH",
+                &remote_key[..remote_key.len().min(12)]
+            );
+            refuse_stream(&mut send, &[auth_required_error(tag)]).await;
+            return Ok(total_imported);
+        }
+
+        // AUTH.requestedSubject ↔ SYNC.drive binding: the proof the peer gave
+        // covers one drive, so a handshake frame for a different drive is a
+        // replay of that proof against something it was never signed for.
+        if let (Some(bound), Some(named)) = (&bound_drive, handshake_frame_drive(&buf)) {
+            let named = crate::Subject::from_raw(&named, store.get_base_domain().as_deref());
+            if &named != bound {
+                tracing::warn!(
+                    "[accept] closing: {} authenticated for {bound} but sent 0x{tag:02x} for {named}",
+                    &remote_key[..remote_key.len().min(12)]
+                );
+                refuse_stream(
+                    &mut send,
+                    &[super::protocol::encode_error(
+                        0,
+                        super::protocol::error_code::AUTH_REQUIRED,
+                        &format!("AUTH was for {bound}, not {named}"),
+                    )],
+                )
+                .await;
+                return Ok(total_imported);
+            }
+        }
 
         // HELLO is a peer-stream concern, not an engine concern. Browser WS
         // sessions never see it (they don't speak peer-sync). Intercept here
         // so the engine doesn't have to know about it.
-        if !buf.is_empty() && buf[0] == super::protocol::tag::HELLO {
+        if tag == super::protocol::tag::HELLO {
             if peer_display_name.is_none() {
                 peer_display_name = super::protocol::decode_hello(&buf[1..]);
                 if let Some(name) = &peer_display_name {
@@ -2216,25 +2375,48 @@ async fn handle_stream(
             continue;
         }
 
-        // Track imports from SYNC_PUSH frames
-        if !buf.is_empty() && buf[0] == super::protocol::tag::SYNC_PUSH {
+        let responses = super::engine::handle_frame(&buf, &store, &mut agent).await;
+
+        // Track imports from SYNC_PUSH frames. A push the engine refused
+        // (answered with ERROR instead of SYNC_OK) landed nothing.
+        if tag == super::protocol::tag::SYNC_PUSH
+            && responses
+                .iter()
+                .any(|r| r.first() == Some(&super::protocol::tag::SYNC_OK))
+        {
             if let Some(push) = super::protocol::decode_sync_push(&buf[1..]) {
                 total_imported += push.entries.len();
             }
         }
-
-        let responses = super::engine::handle_frame(&buf, &store, &mut agent).await;
 
         // Send our HELLO once, immediately after AUTH succeeded. We tack it
         // on to the AUTH_OK response so old peers that don't read past
         // AUTH_OK still get something coherent (an unknown tag they'll just
         // skip). Skipping HELLO before AUTH_OK would leak our hostname to
         // unauthenticated peers — small thing, but no reason to.
-        let just_authed = !buf.is_empty()
-            && buf[0] == super::protocol::tag::AUTH
+        let just_authed = tag == super::protocol::tag::AUTH
             && responses
                 .iter()
                 .any(|r| !r.is_empty() && r[0] == super::protocol::tag::AUTH_OK);
+
+        if tag == super::protocol::tag::AUTH {
+            if just_authed {
+                if bound_drive.is_none() {
+                    bound_drive = auth_requested_subject(&buf[1..])
+                        .map(|s| crate::Subject::from_raw(&s, store.get_base_domain().as_deref()));
+                }
+            } else {
+                // A failed AUTH leaves `agent` as Public; the next frame would
+                // be refused anyway. Say why and close now, rather than let a
+                // peer keep guessing on an open stream.
+                tracing::warn!(
+                    "[accept] closing: AUTH from {} failed",
+                    &remote_key[..remote_key.len().min(12)]
+                );
+                refuse_stream(&mut send, &responses).await;
+                return Ok(total_imported);
+            }
+        }
 
         // Who this agent is decides nothing here; what they may read decides
         // everything, per subject, in `check_read` — the same answer they would
@@ -2257,7 +2439,7 @@ async fn handle_stream(
         }
 
         // Check if the client sent us a SYNC_PUSH (bidirectional data exchange complete)
-        let client_pushed = !buf.is_empty() && buf[0] == super::protocol::tag::SYNC_PUSH;
+        let client_pushed = tag == super::protocol::tag::SYNC_PUSH;
         // Check if we responded with SYNC_OK (fast path — already in sync)
         let sync_ok = responses
             .iter()
@@ -2589,7 +2771,10 @@ mod initiator_trust_tests {
 
     /// Build a drive whose read/write is restricted to `owner` (no public
     /// grant) plus one child resource under it. Returns `(drive_did, child)`.
-    async fn private_drive_with_child(db: &Db, owner: &crate::agents::Agent) -> (String, String) {
+    pub(super) async fn private_drive_with_child(
+        db: &Db,
+        owner: &crate::agents::Agent,
+    ) -> (String, String) {
         let mut builder = crate::commit::CommitBuilder::new("placeholder".into());
         builder.set(
             crate::urls::IS_A.into(),
@@ -2809,6 +2994,258 @@ mod initiator_trust_tests {
         assert!(
             crate::sync::tombstones::is_tombstoned(&db, &child),
             "the owner's remove[] entry must record a tombstone"
+        );
+    }
+}
+
+#[cfg(all(test, feature = "db-redb"))]
+mod accept_gate_tests {
+    //! The accept side of the Iroh transport (`handle_stream`) and the sync
+    //! engine's `SYNC_PUSH` answer, exercised the way a hostile or merely
+    //! confused peer would hit them: frames before AUTH, AUTH for one drive
+    //! followed by a handshake for another, and a push from an agent with
+    //! no write right. Each refusal must be *visible* — an `ERROR` frame with
+    //! a registered code — never a silent drop or a `SYNC_OK` for nothing.
+    use super::initiator_trust_tests::private_drive_with_child;
+    use super::*;
+    use crate::sync::protocol::{self, error_code, tag};
+    use crate::Db;
+
+    /// `(request_id, code, message)` of an ERROR frame, or `None` for any
+    /// other frame.
+    fn parse_error(frame: &[u8]) -> Option<(u16, u16, String)> {
+        if frame.first() != Some(&tag::ERROR) || frame.len() < 5 {
+            return None;
+        }
+        let request_id = u16::from_be_bytes([frame[1], frame[2]]);
+        let code = u16::from_be_bytes([frame[3], frame[4]]);
+        let message = String::from_utf8_lossy(&frame[5..]).into_owned();
+        Some((request_id, code, message))
+    }
+
+    /// A SYNC_PUSH frame carrying the owner's current snapshot of `child`,
+    /// as a peer that replays it would send it.
+    async fn push_frame_for(
+        db: &Db,
+        owner: &crate::agents::Agent,
+        drive: &str,
+        child: &str,
+    ) -> Vec<u8> {
+        let snapshots = crate::sync::engine::collect_readable_snapshots(
+            db,
+            &ForAgent::AgentSubject(owner.subject.clone()),
+            &[child.to_string()],
+            None,
+        )
+        .await;
+        assert_eq!(snapshots.len(), 1, "owner can read its own child");
+        let entries: Vec<(&str, &[u8])> = snapshots
+            .iter()
+            .map(|(s, b)| (s.as_str(), b.as_slice()))
+            .collect();
+        protocol::encode_sync_push(drive, &entries, true)
+    }
+
+    #[tokio::test]
+    async fn import_sync_push_refuses_agent_without_write_right() {
+        let db = Db::init_temp("gate_import_stranger").await.unwrap();
+        let alice = crate::agents::Agent::new(Some("Alice")).unwrap();
+        db.set_default_agent(alice.clone());
+        let (drive, child) = private_drive_with_child(&db, &alice).await;
+        let mallory = crate::agents::Agent::new(Some("Mallory")).unwrap();
+
+        let frame = push_frame_for(&db, &alice, &drive, &child).await;
+        let push = protocol::decode_sync_push(&frame[1..]).unwrap();
+
+        for (who, agent) in [
+            ("Public", ForAgent::Public),
+            (
+                "a stranger",
+                ForAgent::AgentSubject(mallory.subject.clone()),
+            ),
+        ] {
+            let rejected = crate::sync::engine::import_sync_push(&push, &db, &agent, false)
+                .await
+                .expect_err(&format!(
+                    "{who} must not be able to push into a private drive"
+                ));
+            assert_eq!(rejected.drive, drive);
+            assert!(
+                rejected.reason.contains("no write right"),
+                "reason names the cause: {}",
+                rejected.reason
+            );
+        }
+
+        // The owner's push is admitted — the refusal is about rights, not a
+        // blanket one.
+        crate::sync::engine::import_sync_push(
+            &push,
+            &db,
+            &ForAgent::AgentSubject(alice.subject.clone()),
+            false,
+        )
+        .await
+        .expect("the owner may push into its own drive");
+    }
+
+    /// The wire-level consequence: a refused push is answered with ERROR
+    /// `SYNC_REJECTED`, and there is no `SYNC_OK` anywhere in the response.
+    /// Before this, the engine answered `SYNC_OK` for a push it had dropped,
+    /// so the sender believed its data had landed.
+    #[tokio::test]
+    async fn rejected_sync_push_is_answered_with_error_not_sync_ok() {
+        let db = Db::init_temp("gate_push_error_frame").await.unwrap();
+        let alice = crate::agents::Agent::new(Some("Alice")).unwrap();
+        db.set_default_agent(alice.clone());
+        let (drive, child) = private_drive_with_child(&db, &alice).await;
+        let mallory = crate::agents::Agent::new(Some("Mallory")).unwrap();
+
+        let frame = push_frame_for(&db, &alice, &drive, &child).await;
+        let mut as_mallory = ForAgent::AgentSubject(mallory.subject.clone());
+        let responses = crate::sync::engine::handle_frame(&frame, &db, &mut as_mallory).await;
+
+        assert!(
+            !responses.iter().any(|f| f.first() == Some(&tag::SYNC_OK)),
+            "a rejected push must never be acknowledged with SYNC_OK"
+        );
+        let (request_id, code, message) = responses
+            .iter()
+            .find_map(|f| parse_error(f))
+            .expect("a rejected push is answered with an ERROR frame");
+        assert_eq!(
+            request_id, 0,
+            "connection-level error, not tied to a request"
+        );
+        assert_eq!(code, error_code::SYNC_REJECTED);
+        assert!(
+            message.contains(&drive),
+            "the message names the drive so the sender can act on it: {message}"
+        );
+
+        // And the owner's push still gets its SYNC_OK.
+        let mut as_alice = ForAgent::AgentSubject(alice.subject.clone());
+        let responses = crate::sync::engine::handle_frame(&frame, &db, &mut as_alice).await;
+        assert!(
+            responses.iter().any(|f| f.first() == Some(&tag::SYNC_OK)),
+            "the owner's push is acknowledged"
+        );
+    }
+
+    /// Dial a running accept side with a raw endpoint and return the stream.
+    async fn raw_stream(
+        router: &Router,
+        node_id: &NodeId,
+    ) -> (
+        iroh::Endpoint,
+        iroh::endpoint::SendStream,
+        iroh::endpoint::RecvStream,
+    ) {
+        let ep = iroh::Endpoint::builder().bind().await.unwrap();
+        let addr = router.endpoint().node_addr().await.unwrap();
+        ep.add_node_addr(addr).unwrap();
+        let conn = ep.connect(*node_id, ATOMIC_ALPN).await.unwrap();
+        let (send, recv) = conn.open_bi().await.unwrap();
+        (ep, send, recv)
+    }
+
+    async fn write_frame(send: &mut iroh::endpoint::SendStream, frame: &[u8]) {
+        send.write_all(&frame_with_len(frame)).await.unwrap();
+    }
+
+    /// The next frame from the accept side, or `None` once it closed the
+    /// stream. The unsolicited HELLO and the auth-back AUTH the accept side
+    /// sends after AUTH_OK are skipped; they are not what these tests are
+    /// about.
+    async fn read_frame(recv: &mut iroh::endpoint::RecvStream) -> Option<Vec<u8>> {
+        loop {
+            let n = tokio::time::timeout(std::time::Duration::from_secs(10), recv.read_u32())
+                .await
+                .expect("accept side answers within 10s")
+                .ok()?;
+            let mut buf = vec![0u8; n as usize];
+            recv.read_exact(&mut buf).await.ok()?;
+            if !matches!(buf.first(), Some(&tag::HELLO) | Some(&tag::AUTH)) {
+                return Some(buf);
+            }
+        }
+    }
+
+    /// A handshake frame before AUTH — here a SYNC for a *public* drive,
+    /// which the old code would happily have served as `Public` — gets
+    /// `AUTH_REQUIRED` and a closed stream. Fail closed on identity.
+    #[tokio::test]
+    async fn iroh_sync_before_auth_is_refused_and_stream_closed() {
+        let db = Db::init_temp("gate_iroh_preauth").await.unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let (node_id, router) = start(db.clone()).await.unwrap();
+
+        let (_ep, mut send, mut recv) = raw_stream(&router, &node_id).await;
+        let sync = protocol::encode_sync(&drive, "", &[], &std::collections::HashMap::new());
+        write_frame(&mut send, &sync).await;
+
+        let reply = read_frame(&mut recv)
+            .await
+            .expect("an ERROR frame, not silence");
+        let (_, code, message) = parse_error(&reply).expect("ERROR frame");
+        assert_eq!(code, error_code::AUTH_REQUIRED, "{message}");
+        assert!(
+            read_frame(&mut recv).await.is_none(),
+            "the accept side closes the stream after refusing"
+        );
+    }
+
+    /// `AUTH.requestedSubject` is bound to the drive of the handshake that
+    /// follows: an AUTH signed for drive X does not open drive Y.
+    #[tokio::test]
+    async fn iroh_auth_for_one_drive_does_not_open_another() {
+        let db = Db::init_temp("gate_iroh_binding").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let (node_id, router) = start(db.clone()).await.unwrap();
+
+        let (_ep, mut send, mut recv) = raw_stream(&router, &node_id).await;
+        let auth = protocol::encode_auth(&alice, "did:key:z6MkSomeOtherDrive").unwrap();
+        write_frame(&mut send, &auth).await;
+        let reply = read_frame(&mut recv).await.expect("AUTH_OK");
+        assert_eq!(reply.first(), Some(&tag::AUTH_OK), "AUTH itself is valid");
+
+        let sync = protocol::encode_sync(&drive, "", &[], &std::collections::HashMap::new());
+        write_frame(&mut send, &sync).await;
+        let reply = read_frame(&mut recv)
+            .await
+            .expect("an ERROR frame, not a SYNC_DIFF");
+        let (_, code, message) = parse_error(&reply).expect("ERROR frame");
+        assert_eq!(code, error_code::AUTH_REQUIRED, "{message}");
+        assert!(message.contains(&drive), "{message}");
+        assert!(read_frame(&mut recv).await.is_none(), "stream closed");
+    }
+
+    /// The happy path through the same raw stream, so the two refusals
+    /// above are known to be about the gate and not about the fixture:
+    /// AUTH for the drive, then SYNC of it, yields a handshake answer.
+    #[tokio::test]
+    async fn iroh_auth_then_sync_for_same_drive_is_served() {
+        let db = Db::init_temp("gate_iroh_happy").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let (node_id, router) = start(db.clone()).await.unwrap();
+
+        let (_ep, mut send, mut recv) = raw_stream(&router, &node_id).await;
+        write_frame(&mut send, &protocol::encode_auth(&alice, &drive).unwrap()).await;
+        assert_eq!(
+            read_frame(&mut recv).await.unwrap().first(),
+            Some(&tag::AUTH_OK)
+        );
+
+        let sync = protocol::encode_sync(&drive, "", &[], &std::collections::HashMap::new());
+        write_frame(&mut send, &sync).await;
+        let reply = read_frame(&mut recv).await.expect("a handshake answer");
+        assert!(
+            matches!(
+                reply.first(),
+                Some(&tag::SYNC_DIFF) | Some(&tag::SYNC_PUSH) | Some(&tag::SYNC_OK)
+            ),
+            "expected a sync answer, got 0x{:02x}",
+            reply[0]
         );
     }
 }

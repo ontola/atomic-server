@@ -102,6 +102,12 @@ impl Handler<SubscribeLoroSync> for LoroSyncBroadcaster {
                                     &msg.subject,
                                     unauthorized_err
                                 );
+                                crate::actor_messages::refuse_subscription(
+                                    &msg.addr,
+                                    "LORO_SYNC_SUBSCRIBE",
+                                    &msg.subject.to_string(),
+                                    &unauthorized_err.to_string(),
+                                );
                                 return None;
                             }
                         }
@@ -287,6 +293,12 @@ impl Handler<SubscribePresence> for LoroSyncBroadcaster {
                         &msg.agent,
                         &msg.drive,
                         unauthorized_err
+                    );
+                    crate::actor_messages::refuse_subscription(
+                        &msg.addr,
+                        "PRESENCE_SUBSCRIBE",
+                        &msg.drive.to_string(),
+                        &unauthorized_err.to_string(),
                     );
                     return None;
                 }
