@@ -7,15 +7,18 @@
 //   1. There must be a managed account/session — without one there's nothing to
 //      enroll against, so we bail out asking the caller to send the user to the
 //      portal to sign up.
-//   2. Create the enrollment. The control plane picks an available node and
-//      returns its `http_origin`; only after the enrollment exists will that
-//      node ACCEPT the drive's pushed commits (open nodes admit anything; a
-//      managed node checks the enrollment first).
+//   2. Create the enrollment, signed: the control plane issues a challenge that
+//      the drive's agent signs with its key (plus the drive's genesis
+//      certificate for a non-personal drive), proving it controls the drive
+//      before anyone can host it under their account. The control plane then
+//      picks an available node and returns its `http_origin`; only after the
+//      enrollment exists will that node ACCEPT the drive's pushed commits
+//      (open nodes admit anything; a managed node checks the enrollment first).
 //   3. Point the app at that node and, if the drive was local-only, promote it
 //      so the sync engine actually pushes it up.
 
 import { getManagedAccount } from './session';
-import { createManagedSyncEnrollment } from './enrollment';
+import { createManagedSyncEnrollment, genesisCertOf } from './enrollment';
 import { getManagedEnrollments } from './enrollmentApi';
 import type { ManagedInfo } from '../managedServer';
 import { isRunningInTauri } from '../tauri';
@@ -212,9 +215,21 @@ export async function enableCloudSyncForDrive(params: {
 
   const wasLocalOnly = store.isLocalOnlyDrive(drive);
 
+  // The proof needs the key (the store's agent) and, for a drive that is not
+  // the agent's personal one, the drive's genesis certificate. A drive we
+  // cannot load locally is enrolled without the certificate; the control plane
+  // then decides whether it can still prove control from the key alone.
+  const agent = store.getAgent();
+  const genesisCert = await store
+    .getResource(drive)
+    .then(resource => genesisCertOf(resource))
+    .catch(() => undefined);
+
   const enrollment = await createManagedSyncEnrollment({
     driveSubject: drive,
     agentSubject,
+    agent: agent?.subject === agentSubject ? agent : undefined,
+    genesisCert,
   });
 
   const httpOrigin = enrollment.http_origin ?? null;
