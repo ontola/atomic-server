@@ -19,7 +19,7 @@ license = "MIT"
 name = "atomic-server"
 readme = "./README.md"
 repository = "https://github.com/atomicdata-dev/atomic-server"
-version = "0.41.0-beta.2"
+version = "0.41.0-beta.3"
 
 [[bin]]
 name = "atomic-server"
@@ -158,7 +158,7 @@ version = "4.13.0"
 # present, so it adds no runtime cost for fresh installs.
 features = ["config", "db-redb", "db-sled", "rdf", "discovery", "iroh", "ring", "ws"]
 path = "../lib"
-version = "0.41.0-beta.2"
+version = "0.41.0-beta.3"
 
 [dependencies.clap]
 features = ["derive", "env", "cargo"]

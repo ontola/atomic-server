@@ -7,6 +7,8 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+## [v0.41.0-beta.3] - 2026-09-01
+
 - Git / CI: one integration branch (`develop`) plus stable `v*` tags. Staging
   follows `develop`; production and live docs follow a tagged release. `master`
   is no longer a deploy or docs trigger, and `main` is not introduced as a
