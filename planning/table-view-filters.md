@@ -108,7 +108,8 @@ Reuses existing primitives (`Popover`, `ResourceSelector`, `BasicSelect`,
 atomicdata.dev, which doesn't have these yet). The dead `ATOMIC_REPOPULATE_DEFAULTS`
 flag was wired in `server/src/appstate.rs` to re-import defaults into an existing
 store (`populate_default_store`), so the running store picks up the new schema
-without a wipe.
+without a wipe. *(Since the bootstrap fingerprint landed this happens on `Db`
+open without the flag.)*
 
 **Frontend**: `useTableView` hook — local React state (instant UX) hydrated once
 from the active View and debounce-persisted back; lazily creates a "Default View"

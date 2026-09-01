@@ -5,19 +5,16 @@
 use crate::{
     datatype::DataType,
     errors::AtomicResult,
-    parse::ParseOpts,
+    parse::{ParseOpts, SaveOpts},
     schema::{Class, Property},
     urls, Storelike, Value,
 };
 
-/// Populates a store with some of the most fundamental Properties and Classes needed to bootstrap the whole.
-/// This is necessary to prevent a loop where Property X (like the `shortname` Property)
-/// cannot be added, because it's Property Y (like `description`) has to be fetched before it can be added,
-/// which in turn has property Property X (`shortname`) which needs to be fetched before.
-/// https://github.com/atomicdata-dev/atomic-server/issues/60
-pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
-    // Start with adding the most fundamental properties - the properties for Properties
-
+/// The hardcoded Properties and Classes that `populate_base_models` seeds.
+/// Kept as data (rather than inline in the seeding loop) so the defaults
+/// fingerprint can cover them: a base model added here must reach existing
+/// stores just like a new `lib/defaults/*.json` entry.
+fn base_models() -> (Vec<Property>, Vec<Class>) {
     let properties = vec![
         Property {
             class_type: None,
@@ -226,6 +223,16 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
             subject: urls::COMMIT.into(),
         },
     ];
+    (properties, classes)
+}
+
+/// Populates a store with some of the most fundamental Properties and Classes needed to bootstrap the whole.
+/// This is necessary to prevent a loop where Property X (like the `shortname` Property)
+/// cannot be added, because it's Property Y (like `description`) has to be fetched before it can be added,
+/// which in turn has property Property X (`shortname`) which needs to be fetched before.
+/// https://github.com/atomicdata-dev/atomic-server/issues/60
+pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
+    let (properties, classes) = base_models();
 
     // Only ever ADD. This runs again on a store that already holds part of the
     // vocabulary (see `bootstrap`), and on atomicdata.dev itself those
@@ -264,115 +271,252 @@ pub async fn populate_base_models(store: &impl Storelike) -> AtomicResult<()> {
     Ok(())
 }
 
+/// The embedded `lib/defaults/*.json` files, in import order. Properties a
+/// later file uses must be defined by an earlier one (or by the base models).
+/// This list is the single source for both `populate_default_store` and
+/// `defaults_fingerprint`, so a file cannot be imported without being
+/// fingerprinted or vice versa.
+const DEFAULT_FILES: &[(&str, &str)] = &[
+    (
+        "default_store.json",
+        include_str!("../defaults/default_store.json"),
+    ),
+    ("chatroom.json", include_str!("../defaults/chatroom.json")),
+    ("meeting.json", include_str!("../defaults/meeting.json")),
+    ("table.json", include_str!("../defaults/table.json")),
+    ("dashboard.json", include_str!("../defaults/dashboard.json")),
+    (
+        "ontologies.json",
+        include_str!("../defaults/ontologies.json"),
+    ),
+    ("ai.json", include_str!("../defaults/ai.json")),
+    ("plugins.json", include_str!("../defaults/plugins.json")),
+    ("forks.json", include_str!("../defaults/forks.json")),
+    ("i18n.json", include_str!("../defaults/i18n.json")),
+];
+
+/// Fingerprint of everything `bootstrap` seeds: the base models and the
+/// embedded default JSON files, byte for byte. Computed from the compiled-in
+/// data, so it is a property of the binary (or wasm bundle), and it changes
+/// whenever a default is added or edited in the source tree.
+///
+/// `bootstrap` stores it in the `Db` and re-seeds only when it differs, which
+/// is what lets a new `lib/defaults/*.json` Property or Class reach a store
+/// that was seeded by an older build, without a manual `--repopulate-defaults`.
+pub fn defaults_fingerprint() -> String {
+    let mut hasher = blake3::Hasher::new();
+    // Version the layout so a change in what is hashed cannot collide with an
+    // old fingerprint by accident.
+    hasher.update(b"atomic-defaults-fingerprint-v1\0");
+    let (properties, classes) = base_models();
+    let base_models_json =
+        serde_json::to_string(&(properties, classes)).expect("base models serialize to JSON");
+    hasher.update(base_models_json.as_bytes());
+    hasher.update(b"\0");
+    for (name, contents) in DEFAULT_FILES {
+        hasher.update(name.as_bytes());
+        hasher.update(b"\0");
+        hasher.update(contents.as_bytes());
+        hasher.update(b"\0");
+    }
+    hasher.finalize().to_hex().to_string()
+}
+
 /// Imports the Atomic Data Core items (the entire atomicdata.dev Ontology / Vocabulary)
+/// and the built-in app ontologies from `lib/defaults/*.json`.
+///
+/// Add-only: a resource that is already in the store keeps every value it
+/// has (those may have been edited by a user, or are the site's own content
+/// on atomicdata.dev itself); only the properties it lacks are added. See
+/// [`SaveOpts::Merge`]. Consequently a *changed* value of an existing default
+/// never propagates to an existing store — only new resources and new
+/// properties do.
 pub async fn populate_default_store(store: &impl Storelike) -> AtomicResult<()> {
-    store
-        .import(
-            include_str!("../defaults/default_store.json"),
-            &ParseOpts::default(),
-        )
-        .await
-        .map_err(|e| format!("Failed to import default_store.json: {e}"))?;
-    store
-        .import(
-            include_str!("../defaults/chatroom.json"),
-            &ParseOpts::default(),
-        )
-        .await
-        .map_err(|e| format!("Failed to import chatroom.json: {e}"))?;
-    store
-        .import(
-            include_str!("../defaults/meeting.json"),
-            &ParseOpts::default(),
-        )
-        .await
-        .map_err(|e| format!("Failed to import meeting.json: {e}"))?;
-    store
-        .import(
-            include_str!("../defaults/table.json"),
-            &ParseOpts::default(),
-        )
-        .await
-        .map_err(|e| format!("Failed to import table.json: {e}"))?;
-    store
-        .import(
-            include_str!("../defaults/dashboard.json"),
-            &ParseOpts::default(),
-        )
-        .await
-        .map_err(|e| format!("Failed to import dashboard.json: {e}"))?;
-    store
-        .import(
-            include_str!("../defaults/ontologies.json"),
-            &ParseOpts::default(),
-        )
-        .await
-        .map_err(|e| format!("Failed to import ontologies.json: {e}"))?;
-    store
-        .import(include_str!("../defaults/ai.json"), &ParseOpts::default())
-        .await
-        .map_err(|e| format!("Failed to import ai.json: {e}"))?;
-    store
-        .import(
-            include_str!("../defaults/plugins.json"),
-            &ParseOpts::default(),
-        )
-        .await
-        .map_err(|e| format!("Failed to import plugins.json: {e}"))?;
-    store
-        .import(
-            include_str!("../defaults/forks.json"),
-            &ParseOpts::default(),
-        )
-        .await
-        .map_err(|e| format!("Failed to import forks.json: {e}"))?;
-    store
-        .import(include_str!("../defaults/i18n.json"), &ParseOpts::default())
-        .await
-        .map_err(|e| format!("Failed to import i18n.json: {e}"))?;
+    let opts = ParseOpts {
+        save: SaveOpts::Merge,
+        ..ParseOpts::default()
+    };
+    for (name, contents) in DEFAULT_FILES {
+        store
+            .import(contents, &opts)
+            .await
+            .map_err(|e| format!("Failed to import {name}: {e}"))?;
+    }
     Ok(())
 }
 
-/// Bootstraps the store with core models and default ontologies.
-/// Uses `begin_batch`/`commit_batch` to fold all writes into a single DB transaction.
-pub async fn bootstrap(store: &impl Storelike) -> AtomicResult<()> {
-    // "Seeded" cannot be decided from one sentinel. `shortname` has existed
-    // since the beginning, so a store migrated from an older release passes
-    // that check while missing every property added to the vocabulary since
-    // its snapshot was taken — and the seeding is then skipped wholesale, so
-    // they are never added. On a store migrated from the pre-DID era that
-    // means `loroUpdate`, `genesis`, `drive` and `sortOrder` are simply
-    // absent, and since commit validation resolves `loroUpdate`'s Property
-    // definition, EVERY write fails: the server can't find it locally, tries
-    // to fetch `https://atomicdata.dev/properties/loroUpdate` from the real
-    // atomicdata.dev, and gets a 404 back.
-    //
-    // So probe for the newest thing the vocabulary is expected to contain as
-    // well. Both must be present to call the store seeded.
-    //
-    // This must be a local storage check, not `get_resource`: `get_resource`
-    // may fetch external Atomic URLs and can make a fresh store look seeded
-    // after fetching only the sentinel resource.
-    let has_legacy_sentinel = store.has_stored_resource(&crate::urls::SHORTNAME.into());
-    let has_current_sentinel = store.has_stored_resource(&crate::urls::LORO_UPDATE.into());
+/// What [`bootstrap`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BootstrapOutcome {
+    /// The stored fingerprint matches this build; nothing was written.
+    UpToDate,
+    /// The store had no defaults yet; everything was seeded.
+    Seeded,
+    /// The store was seeded by a different build (or predates fingerprints);
+    /// missing defaults were added, existing values left alone.
+    Updated,
+}
 
-    if has_legacy_sentinel && has_current_sentinel {
-        tracing::debug!("populate::bootstrap: store already seeded, skipping");
-        return Ok(());
+/// Bootstraps the store with core models and default ontologies.
+///
+/// Runs on every `Db` open. Compares [`defaults_fingerprint`] of this build
+/// against the one the store recorded when it was last seeded, and does
+/// nothing when they match. On a mismatch (new build, or a store from before
+/// fingerprints existed) it upserts the base models and `lib/defaults/*.json`
+/// add-only and records the new fingerprint. The whole thing is one DB
+/// transaction (`begin_batch`/`commit_batch`), so the fingerprint is only
+/// persisted together with the seed it describes.
+///
+/// [`repopulate_defaults`] is the forced variant that skips the comparison.
+pub async fn bootstrap(store: &impl Storelike) -> AtomicResult<BootstrapOutcome> {
+    let current = defaults_fingerprint();
+    let stored = store.get_defaults_fingerprint()?;
+    if stored.as_deref() == Some(current.as_str()) {
+        tracing::debug!("populate::bootstrap: defaults up to date, skipping");
+        return Ok(BootstrapOutcome::UpToDate);
     }
 
-    if has_legacy_sentinel {
+    // Local storage check, not `get_resource`: `get_resource` may fetch
+    // external Atomic URLs and could make a fresh store look seeded.
+    let outcome = if store.has_stored_resource(&urls::SHORTNAME.into()) {
         tracing::info!(
-            "populate::bootstrap: store predates part of the current vocabulary; \
-             adding what is missing (existing resources are left untouched)"
+            "populate::bootstrap: store was seeded by a different build; \
+             adding missing defaults (existing values are left untouched)"
         );
+        BootstrapOutcome::Updated
     } else {
         tracing::info!("populate::bootstrap: seeding base models and ontologies");
-    }
+        BootstrapOutcome::Seeded
+    };
 
+    seed_defaults(store, &current).await?;
+    Ok(outcome)
+}
+
+/// Forced re-seed, ignoring the stored fingerprint. Same add-only semantics
+/// as [`bootstrap`]: nothing that exists is overwritten or removed. Backs the
+/// server's `--repopulate-defaults` flag.
+pub async fn repopulate_defaults(store: &impl Storelike) -> AtomicResult<()> {
+    seed_defaults(store, &defaults_fingerprint()).await
+}
+
+async fn seed_defaults(store: &impl Storelike, fingerprint: &str) -> AtomicResult<()> {
     store.begin_batch();
     populate_base_models(store).await?;
     populate_default_store(store).await?;
+    store.set_defaults_fingerprint(fingerprint)?;
     store.commit_batch()?;
     Ok(())
+}
+
+#[cfg(all(test, feature = "db-redb", not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+    use crate::Db;
+
+    /// A Property that only `lib/defaults/chatroom.json` defines.
+    const NEW_DEFAULT: &str = "https://atomicdata.dev/properties/messages";
+
+    fn temp_paths(id: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        (
+            std::path::PathBuf::from(format!(".temp/db/{id}")),
+            std::path::PathBuf::from(format!(".temp/db/{id}/uploads")),
+        )
+    }
+
+    #[test]
+    fn fingerprint_is_deterministic() {
+        let a = defaults_fingerprint();
+        let b = defaults_fingerprint();
+        assert_eq!(a, b);
+        assert_eq!(a.len(), 64, "blake3 hex");
+    }
+
+    /// A store seeded by an older build (different fingerprint) picks up a
+    /// default it lacks on the next open — no `--repopulate-defaults` needed.
+    #[tokio::test]
+    async fn seeded_store_gains_new_default_on_reopen() {
+        let id = "populate_new_default_on_reopen";
+        let (db_path, uploads) = temp_paths(id);
+        {
+            let store = Db::init_temp(id).await.unwrap();
+            assert_eq!(
+                store.get_defaults_fingerprint().unwrap().as_deref(),
+                Some(defaults_fingerprint().as_str())
+            );
+            // Make it look like a store seeded before `messages` existed and
+            // by a build with a different set of defaults.
+            store.remove_resource(&NEW_DEFAULT.into()).await.unwrap();
+            assert!(!store.has_stored_resource(&NEW_DEFAULT.into()));
+            store.set_defaults_fingerprint("older-build").unwrap();
+            store.flush().unwrap();
+        }
+
+        let store = Db::init_redb_file(&db_path, Some("https://localhost".into()), &uploads)
+            .await
+            .unwrap();
+        assert!(
+            store.has_stored_resource(&NEW_DEFAULT.into()),
+            "a default missing from a store seeded by another build must be added on open"
+        );
+        assert_eq!(
+            store.get_defaults_fingerprint().unwrap().as_deref(),
+            Some(defaults_fingerprint().as_str()),
+            "the fingerprint is updated after the re-seed"
+        );
+    }
+
+    /// Re-seeding only adds; a value the user changed on a default resource
+    /// is kept, while a property the resource lost is put back.
+    #[tokio::test]
+    async fn user_edited_default_survives_reseed() {
+        let store = Db::init_temp("populate_user_edit_survives").await.unwrap();
+        let mut resource = store.get_resource(&NEW_DEFAULT.into()).await.unwrap();
+        resource
+            .set_unsafe(
+                urls::DESCRIPTION.into(),
+                Value::String("edited by a user".into()),
+            )
+            .unwrap();
+        resource.remove_propval(urls::IS_DYNAMIC).unwrap();
+        store
+            .add_resource_opts(&resource, false, true, true)
+            .await
+            .unwrap();
+
+        repopulate_defaults(&store).await.unwrap();
+
+        let after = store.get_resource(&NEW_DEFAULT.into()).await.unwrap();
+        assert_eq!(
+            after.get(urls::DESCRIPTION).unwrap().to_string(),
+            "edited by a user",
+            "an existing propval must not be clobbered by the default"
+        );
+        assert!(
+            after.get(urls::IS_DYNAMIC).is_ok(),
+            "a propval the default has and the resource lacks is added"
+        );
+    }
+
+    /// With a matching fingerprint `bootstrap` returns without writing.
+    #[tokio::test]
+    async fn bootstrap_is_a_noop_when_fingerprint_matches() {
+        let store = Db::init_temp("populate_noop").await.unwrap();
+        // If bootstrap wrote anything, this default would come back.
+        store.remove_resource(&NEW_DEFAULT.into()).await.unwrap();
+
+        let outcome = bootstrap(&store).await.unwrap();
+
+        assert_eq!(outcome, BootstrapOutcome::UpToDate);
+        assert!(
+            !store.has_stored_resource(&NEW_DEFAULT.into()),
+            "an up-to-date store must not be re-seeded"
+        );
+
+        // And a stale fingerprint is exactly what makes it write.
+        store.set_defaults_fingerprint("older-build").unwrap();
+        assert_eq!(bootstrap(&store).await.unwrap(), BootstrapOutcome::Updated);
+        assert!(store.has_stored_resource(&NEW_DEFAULT.into()));
+        assert_eq!(bootstrap(&store).await.unwrap(), BootstrapOutcome::UpToDate);
+    }
 }

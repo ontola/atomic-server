@@ -89,7 +89,8 @@ approach and it is worth paying.
   are generic, not website-ontology-specific. **Inherits the known bootstrap
   gap** (`drafts-and-suggestions.md` §Known gap): existing stores don't pick up
   new defaults without `--repopulate-defaults` / a rebuilt wasm bundle. i18n
-  ships behind whatever migration story closes that.
+  ships behind whatever migration story closes that. *(Closed: `Db` open
+  re-seeds defaults add-only whenever their build fingerprint changed.)*
 - `translationOf` points at the canonical resource, not at a minted
   "translation key". Asymmetric on purpose: it matches the `originalSubject`
   precedent, needs no key uniqueness machinery, and makes the reverse query
@@ -324,7 +325,8 @@ language on the canonical resource) and, later, a drive-wide saved query.
 - [x] **Defaults:** `localizedText` Datatype resource (`default_store.json`);
       `i18n.json` ontology with `language`, `translationOf`,
       `defaultLanguage`, `languages`; imported in `populate_default_store`.
-      Bootstrap gap applies — existing stores need `--repopulate-defaults`.
+      Bootstrap gap fixed — existing stores re-seed on open (fingerprint gate
+      in `populate::bootstrap`); `--repopulate-defaults` is only the forced path.
 - [x] **TS `@tomic/lib`:** `Datatype.LOCALIZEDTEXT`, `validateDatatype`,
       `datatypeTag` lockstep, `localizeText` resolver, `i18n` ontology
       binding, and a native-LoroMap write path in `loroSetProperty`

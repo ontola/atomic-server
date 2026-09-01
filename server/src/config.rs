@@ -18,7 +18,7 @@ pub struct Opts {
     #[clap(long, env = "ATOMIC_INITIALIZE")]
     pub initialize: bool,
 
-    /// Re-imports built-in ontologies and default server resources (`populate_all`) without rebuilding indexes or re-running full initialization.
+    /// Forces a re-import of the built-in ontologies and default server resources, ignoring the defaults fingerprint. Add-only (existing values are kept). Normally unnecessary: the store re-seeds itself on open whenever the built-in defaults changed.
     #[clap(long, env = "ATOMIC_REPOPULATE_DEFAULTS")]
     pub repopulate_defaults: bool,
 
