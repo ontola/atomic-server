@@ -17,6 +17,21 @@ Protocol reference lives in the public docs:
 discuss how that protocol is used internally, but should not duplicate the
 wire reference.
 
+## Decisions pending
+
+Decision documents: one question each, written as an RFC with a recommendation.
+Each starts with a **Decision needed by maintainer** box and ends with the
+consequences for open PRs. Once decided, fold the outcome into the owning plan
+and move the document to `completed/`.
+
+| Document | Question | Recommendation | Blocks |
+| --- | --- | --- | --- |
+| [`runtime-boundary-decision.md`](./runtime-boundary-decision.md) | Rust-only runtime vs twinned-by-design between `atomic_lib` and `@tomic/lib`. | Rust owns ingest, auth, sync, hashing, genesis; TS owns cache/reactivity/UI; twins only for pure functions with shared fixtures. First `AtomicNode` slice. | #1273, #1274, #1277, #1241, #1278 |
+| [`authority-unit-decision.md`](./authority-unit-decision.md) | Drive vs zone as the unit of authority; additive creator chain vs replace-and-replay. | Drive stays the identity/replication unit; zones only as a rights unit inside a drive, additive. | #1254, #1307, #1310 |
+| [`commit-retention-floor-decision.md`](./commit-retention-floor-decision.md) | What must be retained for authorization and audit before commits become envelopes. | Envelope-on-resource floor; sequence #1274 → #1313 → #1254. | #1313, #1250, #1254 |
+| [`trust-model-decision.md`](./trust-model-decision.md) | Blind vs trusted server. | The node that owns the URL is trusted with plaintext; the Vault is blind. Close `encryption.md` to at-rest + vault. | #1310, #1307, #1254 |
+| [`schema-routes-decision.md`](./schema-routes-decision.md) | Optional schema vs `did:ad:frozen` vs `lib/defaults/*.json`; the `--repopulate-defaults` gap. | One on-ramp; see document for the fate of each PR. | #1316, #1245, #1262, #1209, #1251 |
+
 ## Active
 
 Remaining work, not "this file exists."
