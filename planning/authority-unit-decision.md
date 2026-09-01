@@ -1,6 +1,6 @@
 # Unit of authority: drive, zone, or hybrid
 
-**Status:** Decision requested (2026-09-01).
+**Status:** Accepted 2026-09-01 — C + A2. The drive stays the authority unit; #1254 must restore the drive fast path, drop `collect_zone_subjects`, and keep the zone chain hybrid/additive.
 
 > **Decision needed by maintainer**
 >

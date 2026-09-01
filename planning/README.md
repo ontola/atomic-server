@@ -17,20 +17,21 @@ Protocol reference lives in the public docs:
 discuss how that protocol is used internally, but should not duplicate the
 wire reference.
 
-## Decisions pending
+## Decisions
 
 Decision documents: one question each, written as an RFC with a recommendation.
-Each starts with a **Decision needed by maintainer** box and ends with the
-consequences for open PRs. Once decided, fold the outcome into the owning plan
-and move the document to `completed/`.
+Each starts with a decision box and ends with the consequences for open PRs.
+All five below were **accepted on 2026-09-01**; the status line at the top of
+each document records the outcome. Fold each outcome into the owning plan, then
+move the document to `completed/`.
 
-| Document | Question | Recommendation | Blocks |
+| Document | Question | Outcome (accepted 2026-09-01) | Affects |
 | --- | --- | --- | --- |
-| [`runtime-boundary-decision.md`](./runtime-boundary-decision.md) | Rust-only runtime vs twinned-by-design between `atomic_lib` and `@tomic/lib`. | Rust owns ingest, auth, sync, hashing, genesis; TS owns cache/reactivity/UI; twins only for pure functions with shared fixtures. First `AtomicNode` slice. | #1273, #1274, #1277, #1241, #1278 |
-| [`authority-unit-decision.md`](./authority-unit-decision.md) | Drive vs zone as the unit of authority; additive creator chain vs replace-and-replay. | Hybrid: drive stays the identity/replication/fan-out/index unit; the zone chain is the rights unit, additive, creator always writes. Replace semantics deferred behind opt-in. | #1254, #1307, #1310 |
-| [`commit-retention-floor-decision.md`](./commit-retention-floor-decision.md) | What must be retained for authorization and audit before commits become envelopes. | Envelope-on-resource (`Tree::Envelopes`, latest signed envelope travels with the snapshot); Loro oplog is the history. Sequence #1274 → #1313 → #1254. | #1313, #1274, #1254 |
-| [`trust-model-decision.md`](./trust-model-decision.md) | Blind vs trusted server. | The node that owns the URL is trusted with plaintext; anything that only stores is blind. Close `encryption.md` to at-rest + vault. | #1310, #1307, #1254 |
-| [`schema-routes-decision.md`](./schema-routes-decision.md) | Optional schema vs `did:ad:frozen` vs `lib/defaults/*.json`; the `--repopulate-defaults` gap. | `did:ad:frozen` is the on-ramp; optional schema is the write-path policy; `lib/defaults/*.json` only serializes the built-in set. Defaults fingerprint on `Db` open closes the repopulate gap. | #1316, #1245, #1262, #1209, #1251, #1309 |
+| [`runtime-boundary-decision.md`](./runtime-boundary-decision.md) | Rust-only runtime vs twinned-by-design between `atomic_lib` and `@tomic/lib`. | `AtomicNode` in `lib/src/runtime/` is the binding runtime; #1277/#1241 bind it, no parallel `simple.rs`/`ffi/`. First slice on `feat/atomic-node-slice`. | #1273, #1274, #1277, #1241, #1278 |
+| [`authority-unit-decision.md`](./authority-unit-decision.md) | Drive vs zone as the unit of authority; additive creator chain vs replace-and-replay. | Drive stays the authority unit; #1254 restores the drive fast path, drops `collect_zone_subjects`, keeps the zone chain hybrid/additive. | #1254, #1307, #1310 |
+| [`commit-retention-floor-decision.md`](./commit-retention-floor-decision.md) | What must be retained for authorization and audit before commits become envelopes. | Envelope-on-resource. #1313 on hold until `Tree::Envelopes` exists; sequence #1274 → #1313 → #1254. | #1313, #1274, #1254 |
+| [`trust-model-decision.md`](./trust-model-decision.md) | Blind vs trusted server. | The node that owns the URL is trusted with plaintext; anything that only stores is blind. `encryption.md` closed to at-rest + vault. Sync F1 closed by the signed state root, not provenance-per-push. | #1310, #1307, #1254 |
+| [`schema-routes-decision.md`](./schema-routes-decision.md) | Optional schema vs `did:ad:frozen` vs `lib/defaults/*.json`; the `--repopulate-defaults` gap. | Accepted as policy (#1316): `did:ad:frozen` is the on-ramp, optional schema is the write-path policy. #1251 to become a frozen ontology; bootstrap sentinel-gate fix on `fix/defaults-bootstrap-gate`. | #1316, #1245, #1262, #1209, #1251, #1309 |
 
 ## Active
 

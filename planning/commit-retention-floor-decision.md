@@ -1,6 +1,6 @@
 # Commit retention floor
 
-**Status:** Decision requested (2026-09-01).
+**Status:** Accepted 2026-09-01 — option C. Hold #1313 until `Tree::Envelopes` exists; sequence #1274 → #1313 → #1254.
 
 > **Decision needed by maintainer**
 >

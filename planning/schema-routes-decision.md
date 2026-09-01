@@ -1,6 +1,6 @@
 # Schema routes: one on-ramp for Classes and Properties
 
-**Status:** Decision requested (2026-09-01).
+**Status:** Accepted 2026-09-01 as policy (#1316) — option B. #1251 is to be converted to a frozen ontology; the bootstrap sentinel-gate fix is being built on branch `fix/defaults-bootstrap-gate`.
 
 > **Decision needed by maintainer**
 >

@@ -1,6 +1,6 @@
 # Trust model: the node that owns the URL is trusted; anything that only stores is blind
 
-**Status:** Decision requested (2026-09-01).
+**Status:** Accepted 2026-09-01 — option C. For [`unified-sync.md`](./unified-sync.md) F1 the fix is the signed state root ([`drive-reconciliation.md`](./drive-reconciliation.md)), chosen over provenance-per-push envelopes on `SYNC_PUSH`.
 
 > **Decision needed by maintainer**
 >

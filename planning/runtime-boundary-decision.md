@@ -1,6 +1,6 @@
 # Runtime boundary: Rust-only vs twinned-by-design
 
-**Status:** Decision requested (2026-09-01).
+**Status:** Accepted 2026-09-01 — option C. `AtomicNode` in `lib/src/runtime/` is the binding runtime; #1277 and #1241 must bind it, no parallel `simple.rs` / `ffi/` surface. A first slice is being built on branch `feat/atomic-node-slice`.
 
 > **Decision needed by maintainer**
 >
