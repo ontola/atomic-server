@@ -1,0 +1,46 @@
+{
+  "version": "0.41.0-beta.3",
+  "author": "Polle Pas",
+  "homepage": "https://docs.atomicdata.dev/create-template/atomic-template",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/atomicdata-dev/atomic-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/atomicdata-dev/atomic-server/issues"
+  },
+  "dependencies": {
+    "@tomic/lib": "workspace:*",
+    "chalk": "^5.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3"
+  },
+  "description": "Generate templates using Atomic Data",
+  "license": "MIT",
+  "name": "@tomic/create-template",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "format-check": "oxfmt -c ../.oxfmtrc.json --check ./src",
+    "format": "oxfmt -c ../.oxfmtrc.json ./src",
+    "lint": "oxlint -c ../.oxlintrc.json . && pnpm format-check",
+    "lint-fix": "oxlint -c ../.oxlintrc.json --fix . && pnpm format",
+    "prepublishOnly": "pnpm run build && pnpm run lint && pnpm run lint-package",
+    "lint-package": "pnpm dlx publint",
+    "watch": "tsc --build --watch",
+    "start": "pnpm exec tsc --build --watch",
+    "tsc": "pnpm exec tsc --build",
+    "typecheck": "pnpm exec tsc --noEmit"
+  },
+  "bin": {
+    "create-template": "./bin/src/index.js"
+  },
+  "type": "module",
+  "peerDependencies": {
+    "@tomic/lib": "workspace:*"
+  }
+}

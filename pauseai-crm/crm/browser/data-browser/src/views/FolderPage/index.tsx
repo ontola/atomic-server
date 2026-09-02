@@ -1,0 +1,127 @@
+import {
+  classes,
+  useCanWrite,
+  useChildren,
+  useResources,
+  type DataBrowser,
+} from '@tomic/react';
+import { useMemo } from 'react';
+import { styled } from 'styled-components';
+import { EditableTitle } from '../../components/EditableTitle';
+import { ResourceCoverImage } from '../../components/ResourceDecorations';
+import { FileDropZone } from '../../components/forms/FileDropzone/FileDropzone';
+import { useNewRoute } from '../../helpers/useNewRoute';
+import { ResourcePageProps } from '../ResourcePage';
+import { DisplayStyleButton } from './DisplayStyleButton';
+import { GridView } from './GridView';
+import { ListView } from './ListView';
+import { useLocalStorage } from '../../hooks/useLocalStorage';
+
+import { Column, Row } from '../../components/Row';
+
+type PreferredFolderStyles = Record<string, string>;
+
+const viewMap = new Map([
+  [classes.displayStyles.list, ListView],
+  [classes.displayStyles.grid, GridView],
+]);
+
+const displayStyleStorageKey = 'folderDisplayPrefs';
+
+const useDisplayStyle = (
+  subject: string,
+): [
+  preferredStyle: string | undefined,
+  setPreferredStyle: (style: string) => void,
+] => {
+  const [preferredStyles, setPreferredStyles] =
+    useLocalStorage<PreferredFolderStyles>(displayStyleStorageKey, {});
+
+  const setPreferredStyle = (style: string) => {
+    setPreferredStyles({ ...preferredStyles, [subject]: style });
+  };
+
+  return [preferredStyles[subject], setPreferredStyle];
+};
+
+export function FolderPage({
+  resource,
+}: ResourcePageProps<DataBrowser.Folder>) {
+  const [preferedDisplayStyle, setPreferedDisplayStyle] = useDisplayStyle(
+    resource.subject,
+  );
+
+  const displayStyle = preferedDisplayStyle ?? resource.props.displayStyle;
+
+  const View = useMemo(
+    () => viewMap.get(displayStyle!) ?? ListView,
+    [displayStyle],
+  );
+
+  // Resources created under this folder set `parent` but don't get appended
+  // to the folder's `subResources` array, so reading `subResources` misses
+  // newly-created children. Query by parent instead, matching the sidebar.
+  const { subjects: childSubjects } = useChildren(resource.subject);
+  const subResources = useResources(childSubjects);
+  const navigateToNewRoute = useNewRoute(resource.subject);
+  const canEdit = useCanWrite(resource);
+
+  return (
+    <>
+      <ResourceCoverImage resource={resource} />
+      <FullPageWrapper view={displayStyle!}>
+        <Column>
+          <div>
+            <TitleBarInner justify='space-between'>
+              <EditableTitle resource={resource} withDecorations />
+              <DisplayStyleButton
+                onClick={setPreferedDisplayStyle}
+                displayStyle={displayStyle}
+              />
+            </TitleBarInner>
+          </div>
+
+          <Wrapper>
+            <FileDropZone parentResource={resource}>
+              <View
+                subResources={subResources}
+                onNewClick={navigateToNewRoute}
+                showNewButton={canEdit!}
+                parent={resource.subject}
+              />
+            </FileDropZone>
+          </Wrapper>
+        </Column>
+      </FullPageWrapper>
+    </>
+  );
+}
+
+const TitleBarInner = styled(Row)`
+  width: var(--container-width);
+  margin-inline: auto;
+
+  input {
+    margin-bottom: 0;
+  }
+`;
+
+const Wrapper = styled.div`
+  width: 100%;
+  flex: 1;
+`;
+
+interface FullPageWrapperProps {
+  view: string;
+}
+
+const FullPageWrapper = styled.div<FullPageWrapperProps>`
+  --container-width: min(1300px, 100%);
+  min-height: ${p => p.theme.heights.fullPage};
+  display: flex;
+  flex-direction: column;
+  width: var(--container-width);
+  margin-inline: auto;
+  padding: ${p => p.theme.size()};
+  padding-bottom: ${p => p.theme.heights.floatingSearchBarPadding};
+`;

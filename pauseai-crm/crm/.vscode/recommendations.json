@@ -1,0 +1,11 @@
+{
+  "recommendations": [
+    "matklad.rust-analyzer",
+    "sakamoto66.vscode-playwright-test-runner",
+    "ms-vscode.vscode-typescript-next",
+    "dbaeumer.vscode-eslint",
+    "antfu.vite",
+    "DavidAnson.vscode-markdownlint",
+    "ms-playwright.playwright"
+  ]
+}

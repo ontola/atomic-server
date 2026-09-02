@@ -1,0 +1,828 @@
+/*!
+## WebSockets
+
+Binary-first WebSocket protocol (v2). All resource data travels as raw Loro bytes.
+Text messages are only used for Loro collaborative editing sync (LORO_SYNC_*) and
+query subscription updates (QUERY_UPDATE), which will migrate to binary later.
+
+**Canonical wire-format spec:** `docs/src/websockets.md` (published as
+<https://docs.atomicdata.dev/websockets.html>). Frame encoders/decoders live
+in [`atomic_lib::sync::protocol`]; the TypeScript counterparts are
+`browser/lib/src/ws-v2.ts` (encoding) and `browser/lib/src/websockets.ts`
+(high-level client). Update all four together when changing the protocol.
+ */
+use actix::{
+    Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Handler, Message, Running,
+    StreamHandler, WrapFuture,
+};
+use actix_web::{web, HttpRequest, HttpResponse};
+use actix_web_actors::ws::{self, WsResponseBuilder};
+use atomic_lib::{
+    agents::ForAgent, authentication::get_agent_from_auth_values_and_check, Db, Storelike,
+};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use crate::{
+    actor_messages::SendFrame, appstate::AppState, commit_monitor::CommitMonitor,
+    errors::AtomicServerResult, handlers::ws_v2, helpers::get_auth_headers,
+    loro_sync_broadcaster::LoroSyncBroadcaster, vector_search::VectorSearchState,
+};
+
+const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
+// How long a connection can go without receiving anything from the
+// client before we declare it dead. Generous on purpose — TCP RST
+// already catches truly broken connections, and the renderer can
+// legitimately stall PONG delivery for several seconds when the JS
+// thread is saturated (parallel playwright workers, heavy WASM init).
+// A tighter budget here disconnects healthy clients under load.
+const CLIENT_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Per-process counter for generating WebSocket connection identifiers.
+/// Used as the `source_id` carried on `CommitOpts`/`CommitResponse` so
+/// the commit monitor can suppress same-source broadcasts (no echo of
+/// a client's own commit back to the connection that sent it).
+static CONNECTION_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn new_connection_id() -> String {
+    let n = CONNECTION_COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("ws-{n}")
+}
+
+/// Upgrade an HTTP request to a WebSocket connection.
+#[tracing::instrument(skip(appstate, stream))]
+pub async fn web_socket_handler(
+    req: HttpRequest,
+    stream: web::Payload,
+    appstate: web::Data<AppState>,
+    context: crate::context::RequestContext,
+) -> AtomicServerResult<HttpResponse> {
+    let auth_header_values = get_auth_headers(req.headers(), "ws")?;
+    let for_agent =
+        get_agent_from_auth_values_and_check(auth_header_values, &appstate.store).await?;
+
+    let result = WsResponseBuilder::new(
+        WebSocketConnection {
+            hb: Instant::now(),
+            subscribed: std::collections::HashSet::new(),
+            commit_monitor_addr: appstate.commit_monitor.clone(),
+            loro_sync_broadcaster_addr: appstate.loro_sync_broadcaster.clone(),
+            agent: for_agent,
+            store: appstate.store.clone(),
+            connection_id: new_connection_id(),
+            vector_search_state: appstate.vector_search_state.clone(),
+            index_status_broadcast: appstate.index_status_broadcast.clone(),
+            index_status_subscribed: std::collections::HashSet::new(),
+        },
+        &req,
+        stream,
+    )
+    .protocols(&["atomicdata-ws.v2"])
+    // actix-web-actors defaults `max_size` to 65 536 bytes (64 KiB). Real
+    // Loro snapshots — especially for documents with editing history or
+    // canvases with many strokes — routinely exceed that, and JSON/base64
+    // wrapping (SYNC_VV's text frames) adds another ~40% on top of the raw
+    // bytes. A frame over the limit causes actix to drop the TCP socket
+    // without sending a Close control frame, which the browser sees as a
+    // CloseEvent `code=1006, wasClean=false`: an unexplained reconnect
+    // every second when the client tries to ship a doc's snapshot back.
+    // 16 MiB is well above realistic doc sizes (Loro's own snapshot
+    // benchmarks top out in the low MBs even for multi-megabyte texts) and
+    // still far below the ~4 GiB WebSocket frame ceiling, so we don't risk
+    // silently truncating legitimate payloads.
+    .frame_size(16 * 1024 * 1024)
+    .start()?;
+
+    Ok(result)
+}
+
+pub struct WebSocketConnection {
+    hb: Instant,
+    subscribed: std::collections::HashSet<atomic_lib::Subject>,
+    commit_monitor_addr: Addr<CommitMonitor>,
+    loro_sync_broadcaster_addr: Addr<LoroSyncBroadcaster>,
+    agent: ForAgent,
+    store: Db,
+    /// Unique-per-process identifier. Threaded through `CommitOpts` into
+    /// `CommitResponse` and the emitted `DbEvent`s, so the commit monitor
+    /// can suppress broadcasts back to this connection.
+    connection_id: String,
+    vector_search_state: VectorSearchState,
+    index_status_broadcast: Arc<IndexStatusBroadcast>,
+    index_status_subscribed: std::collections::HashSet<String>,
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct IndexStatusPush {
+    pub drive: String,
+    pub indexing: bool,
+}
+
+/// Fan-out for `INDEX_STATUS` websocket messages (per subscribed drive).
+pub struct IndexStatusBroadcast {
+    inner: Arc<Mutex<std::collections::HashMap<String, Vec<Addr<WebSocketConnection>>>>>,
+}
+
+impl IndexStatusBroadcast {
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(std::collections::HashMap::new())),
+        }
+    }
+
+    pub fn subscribe(&self, drive: String, addr: Addr<WebSocketConnection>) {
+        let mut g = self.inner.lock().expect("index status broadcast mutex");
+        g.entry(drive).or_default().push(addr);
+    }
+
+    pub fn unsubscribe_drive(&self, drive: &str, addr: &Addr<WebSocketConnection>) {
+        let mut g = self.inner.lock().expect("index status broadcast mutex");
+        if let Some(v) = g.get_mut(drive) {
+            v.retain(|a: &Addr<WebSocketConnection>| a != addr);
+        }
+    }
+
+    pub fn unsubscribe_all_for_addr(&self, addr: &Addr<WebSocketConnection>) {
+        let mut g = self.inner.lock().expect("index status broadcast mutex");
+        for v in g.values_mut() {
+            v.retain(|a: &Addr<WebSocketConnection>| a != addr);
+        }
+    }
+
+    pub fn notify(&self, drive: &str, indexing: bool) {
+        let addrs: Vec<Addr<WebSocketConnection>> = {
+            let g = self.inner.lock().expect("index status broadcast mutex");
+            g.get(drive).cloned().unwrap_or_default()
+        };
+        for addr in addrs {
+            let _ = addr.do_send(IndexStatusPush {
+                drive: drive.to_string(),
+                indexing,
+            });
+        }
+    }
+}
+
+impl Actor for WebSocketConnection {
+    type Context = ws::WebsocketContext<Self>;
+
+    fn started(&mut self, ctx: &mut Self::Context) {
+        ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
+            if Instant::now().duration_since(act.hb) > CLIENT_TIMEOUT {
+                tracing::info!("Websocket heartbeat failed, disconnecting");
+                ctx.stop();
+
+                return;
+            }
+
+            ctx.ping(b"");
+        });
+    }
+
+    fn stopped(&mut self, ctx: &mut Self::Context) {
+        // Remove ourselves from every subscription map. Without this,
+        // closed connections leave stale `Addr`s in `CommitMonitor` and
+        // `LoroSyncBroadcaster`, which every subsequent fanout iterates
+        // over (do_send to a stopped actor silently no-ops). See
+        // `planning/connection-close-cleanup.md`.
+        let addr = ctx.address();
+        self.commit_monitor_addr
+            .do_send(crate::actor_messages::UnsubscribeAll { addr: addr.clone() });
+        self.loro_sync_broadcaster_addr
+            .do_send(crate::actor_messages::UnsubscribeAll { addr });
+    }
+    fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
+        self.index_status_broadcast
+            .unsubscribe_all_for_addr(&ctx.address());
+        Running::Stop
+    }
+}
+
+// ---- Incoming message routing ----
+
+impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketConnection {
+    fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
+        match msg {
+            Ok(ws::Message::Ping(msg)) => {
+                self.hb = Instant::now();
+                ctx.pong(&msg);
+            }
+            Ok(ws::Message::Pong(_)) => {
+                self.hb = Instant::now();
+            }
+            Ok(ws::Message::Binary(bin)) => {
+                self.handle_binary(&bin, ctx);
+            }
+            Ok(ws::Message::Text(text)) => {
+                // Remaining text messages: Loro sync, SYNC_VV, query subscriptions
+                self.handle_text(&text, ctx);
+            }
+            Ok(ws::Message::Close(reason)) => {
+                ctx.close(reason);
+                ctx.stop();
+            }
+            _ => ctx.stop(),
+        }
+    }
+}
+
+impl WebSocketConnection {
+    /// Whether this session has a proven identity: auth headers on the
+    /// upgrade request, or an `AUTH` frame that succeeded. A session that
+    /// has neither is `Public`.
+    fn is_authenticated(&self) -> bool {
+        !matches!(self.agent, ForAgent::Public)
+    }
+
+    /// Gate for frames that need an identity. Reads (`GET`, `SUB <drive>`,
+    /// `SYNC`, `SYNC_VV`) stay open to anonymous sessions, gated per subject
+    /// on `check_read` exactly like an anonymous HTTP GET — that is what
+    /// lets a public drive's share link show live updates without an
+    /// account. Everything that writes (`SYNC_PUSH`, `BLOB_RESPONSE`,
+    /// `LORO_SYNC_UPDATE`, `PRESENCE_UPDATE`, …) or that registers an
+    /// identity-bearing subscription goes through here, and an anonymous
+    /// session gets an `ERROR` (`AUTH_REQUIRED`, request_id 0) instead of
+    /// being handled as `Public`. The socket stays open: the client can
+    /// still `AUTH` and retry. See `docs/src/websockets.md`.
+    fn require_auth(&self, what: &str, ctx: &mut ws::WebsocketContext<Self>) -> bool {
+        if self.is_authenticated() {
+            return true;
+        }
+        tracing::debug!("ws {}: refused {what} before AUTH", self.connection_id);
+        ctx.binary(ws_v2::encode_error(
+            0,
+            ws_v2::error_code::AUTH_REQUIRED,
+            &format!("AUTH required before {what}"),
+        ));
+        false
+    }
+
+    /// Handle a binary v2 frame.
+    fn handle_binary(&mut self, bin: &[u8], ctx: &mut ws::WebsocketContext<Self>) {
+        if bin.is_empty() {
+            return;
+        }
+
+        // Writes need an identity. The engine would refuse them for `Public`
+        // anyway (no write right, no admission) — but "refuse" used to mean
+        // a silent drop answered with `SYNC_OK`; now it is an explicit
+        // `AUTH_REQUIRED` before the frame is even looked at.
+        if matches!(bin[0], ws_v2::tag::SYNC_PUSH | ws_v2::tag::BLOB_RESPONSE)
+            && !self.require_auth(&format!("frame 0x{:02x}", bin[0]), ctx)
+        {
+            return;
+        }
+
+        match bin[0] {
+            // AUTH is engine-owned (verify + assign identity). It's the one
+            // engine-delegated frame that MUTATES the session agent, so unlike
+            // the read-only delegations below we must write the (possibly
+            // changed) agent back onto the actor after the future resolves —
+            // a cloned agent handed to `handle_frame` would otherwise drop the
+            // identity the AUTH just proved.
+            ws_v2::tag::AUTH => {
+                let store = self.store.clone();
+                let mut agent = self.agent.clone();
+                let bin_vec = bin.to_vec();
+                ctx.spawn(
+                    async move {
+                        let responses =
+                            atomic_lib::sync::engine::handle_frame(&bin_vec, &store, &mut agent)
+                                .await;
+                        (responses, agent)
+                    }
+                    .into_actor(self)
+                    .map(|(responses, agent), actor, ctx| {
+                        actor.agent = agent;
+                        for response in responses {
+                            ctx.binary(response);
+                        }
+                    }),
+                );
+            }
+
+            // GET is engine-owned too (read-only: resolve subject, materialize
+            // state, emit UPDATE). The engine resolves `internal:/` against the
+            // node's base domain, so folding it in here also removed the drift
+            // where only the server resolved it and an Iroh peer received raw
+            // `internal:/` subjects. Delegated alongside the other read-only
+            // frames below.
+            ws_v2::tag::GET
+            | ws_v2::tag::SYNC
+            | ws_v2::tag::SYNC_PUSH
+            | ws_v2::tag::BLOB_REQUEST
+            | ws_v2::tag::BLOB_RESPONSE => {
+                let store = self.store.clone();
+                let mut agent = self.agent.clone();
+                let bin_vec = bin.to_vec();
+                ctx.spawn(
+                    async move {
+                        atomic_lib::sync::engine::handle_frame(&bin_vec, &store, &mut agent).await
+                    }
+                    .into_actor(self)
+                    .map(|responses, _actor, ctx| {
+                        for response in responses {
+                            ctx.binary(response);
+                        }
+                    }),
+                );
+            }
+
+            ws_v2::tag::COMMIT => {
+                let Some(decoded) = ws_v2::decode_commit(&bin[1..]) else {
+                    return;
+                };
+                let request_id = decoded.request_id;
+                let body = decoded.commit_json.to_string();
+                let store = self.store.clone();
+                let source_id = self.connection_id.clone();
+                let origin = self
+                    .store
+                    .get_base_domain()
+                    .unwrap_or_else(|| "http://localhost".to_string());
+                ctx.spawn(
+                    async move {
+                        let result = crate::handlers::commit::apply_commit_json(
+                            &store,
+                            &origin,
+                            &body,
+                            Some(source_id),
+                        )
+                        .await;
+                        (request_id, result)
+                    }
+                    .into_actor(self)
+                    .map(|(rid, res), _actor, ctx| match res {
+                        Ok(server_commit_json) => {
+                            ctx.binary(ws_v2::encode_commit_ok(rid, &server_commit_json));
+                        }
+                        Err(e) => {
+                            // F5 (planning/unified-sync.md): classify so the
+                            // outbox can switch on a structured code instead
+                            // of pattern-matching this exact message text.
+                            let msg = e.to_string();
+                            let code = ws_v2::classify_commit_error(&msg);
+                            ctx.binary(ws_v2::encode_error(rid, code, &msg));
+                        }
+                    }),
+                );
+            }
+
+            ws_v2::tag::SUB => {
+                if let Ok(subject_str) = std::str::from_utf8(&bin[1..]) {
+                    let subject = atomic_lib::Subject::from_raw(
+                        subject_str,
+                        self.store.get_base_domain().as_deref(),
+                    );
+                    // Drive-wide fanout: every commit under this drive lands
+                    // on the connection as a pre-encoded `SendFrame`
+                    // (UPDATE or DESTROY). Replaces the old SubscribeQuery /
+                    // QUERY_UPDATE pair.
+                    self.commit_monitor_addr
+                        .do_send(crate::actor_messages::SubscribeDrive {
+                            addr: ctx.address(),
+                            drive: subject_str.to_string(),
+                            agent: self.agent.to_string(),
+                            source_id: self.connection_id.clone(),
+                        });
+                    // Also subscribe to commits targeting the drive resource
+                    // itself (renames, ACL edits) so we receive those even
+                    // when the drive subject is a DID that wouldn't
+                    // prefix-match the commit subject above.
+                    self.commit_monitor_addr
+                        .do_send(crate::actor_messages::Subscribe {
+                            addr: ctx.address(),
+                            subject: subject.clone(),
+                            agent: self.agent.to_string(),
+                            source_id: self.connection_id.clone(),
+                            refusal_frame: None,
+                        });
+                    self.subscribed.insert(subject);
+                }
+            }
+
+            ws_v2::tag::UNSUB => {
+                if let Ok(subject_str) = std::str::from_utf8(&bin[1..]) {
+                    let subject = atomic_lib::Subject::from_raw(
+                        subject_str,
+                        self.store.get_base_domain().as_deref(),
+                    );
+                    self.subscribed.remove(&subject);
+                }
+            }
+
+            _ => {
+                tracing::debug!("Unhandled binary tag: 0x{:02x}", bin[0]);
+            }
+        }
+    }
+
+    /// Handle remaining text messages (Loro sync, SYNC_VV/DELTAS, query subs).
+    fn handle_text(&mut self, text: &str, ctx: &mut ws::WebsocketContext<Self>) {
+        if let Some(json) = text.strip_prefix("SUBSCRIBE_INDEX_STATUS ") {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
+                if let Some(drive) = v.get("drive").and_then(|d| d.as_str()) {
+                    let addr = ctx.address();
+                    self.index_status_broadcast
+                        .subscribe(drive.to_string(), addr.clone());
+                    self.index_status_subscribed.insert(drive.to_string());
+                    let indexing = self.vector_search_state.is_drive_indexing(drive);
+                    let payload = serde_json::json!({ "drive": drive, "indexing": indexing });
+                    if let Ok(s) = serde_json::to_string(&payload) {
+                        ctx.text(format!("INDEX_STATUS {s}"));
+                    }
+                }
+            }
+        } else if let Some(json) = text.strip_prefix("UNSUBSCRIBE_INDEX_STATUS ") {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
+                if let Some(drive) = v.get("drive").and_then(|d| d.as_str()) {
+                    self.index_status_broadcast
+                        .unsubscribe_drive(drive, &ctx.address());
+                    self.index_status_subscribed.remove(drive);
+                }
+            }
+        } else if let Some(json) = text.strip_prefix("LORO_SYNC_SUBSCRIBE ") {
+            if !self.require_auth("LORO_SYNC_SUBSCRIBE", ctx) {
+                return;
+            }
+            if let Ok(msg) =
+                serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
+            {
+                self.loro_sync_broadcaster_addr
+                    .do_send(crate::actor_messages::SubscribeLoroSync {
+                        addr: ctx.address(),
+                        subject: msg.subject,
+                        agent: self.agent.to_string(),
+                    });
+            }
+        } else if let Some(json) = text.strip_prefix("LORO_SYNC_UNSUBSCRIBE ") {
+            if let Ok(msg) =
+                serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
+            {
+                self.loro_sync_broadcaster_addr.do_send(
+                    crate::actor_messages::UnsubscribeLoroSync {
+                        addr: ctx.address(),
+                        subject: msg.subject,
+                    },
+                );
+            }
+        } else if let Some(json) = text.strip_prefix("LORO_SYNC_UPDATE ") {
+            if !self.require_auth("LORO_SYNC_UPDATE", ctx) {
+                return;
+            }
+            if let Ok(mut update) =
+                serde_json::from_str::<crate::actor_messages::LoroSyncUpdate>(json)
+            {
+                update.addr = Some(ctx.address());
+                self.loro_sync_broadcaster_addr.do_send(update);
+            }
+        } else if let Some(json) = text.strip_prefix("LORO_EPHEMERAL_UPDATE ") {
+            if !self.require_auth("LORO_EPHEMERAL_UPDATE", ctx) {
+                return;
+            }
+            if let Ok(mut update) =
+                serde_json::from_str::<crate::actor_messages::LoroEphemeralUpdate>(json)
+            {
+                update.addr = Some(ctx.address());
+                self.loro_sync_broadcaster_addr.do_send(update);
+            }
+        } else if let Some(json) = text.strip_prefix("PRESENCE_SUBSCRIBE ") {
+            // Drive-scoped ephemeral presence (issue #1229). Reuses the
+            // Loro subscription JSON shape: `{"subject": "<drive>"}`.
+            if !self.require_auth("PRESENCE_SUBSCRIBE", ctx) {
+                return;
+            }
+            if let Ok(msg) =
+                serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
+            {
+                self.loro_sync_broadcaster_addr
+                    .do_send(crate::actor_messages::SubscribePresence {
+                        addr: ctx.address(),
+                        drive: msg.subject,
+                        agent: self.agent.to_string(),
+                    });
+            }
+        } else if let Some(json) = text.strip_prefix("PRESENCE_UNSUBSCRIBE ") {
+            if let Ok(msg) =
+                serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
+            {
+                self.loro_sync_broadcaster_addr.do_send(
+                    crate::actor_messages::UnsubscribePresence {
+                        addr: ctx.address(),
+                        drive: msg.subject,
+                    },
+                );
+            }
+        } else if let Some(json) = text.strip_prefix("PRESENCE_UPDATE ") {
+            if !self.require_auth("PRESENCE_UPDATE", ctx) {
+                return;
+            }
+            if let Ok(mut update) =
+                serde_json::from_str::<crate::actor_messages::PresenceUpdate>(json)
+            {
+                update.addr = Some(ctx.address());
+                self.loro_sync_broadcaster_addr.do_send(update);
+            }
+        } else if let Some(json) = text.strip_prefix("SUBSCRIBE_QUERY ") {
+            // Filter subscription: `{property,value,drive[,sort_by]}`.
+            // Membership changes for this filter arrive as plain
+            // `UPDATE` / `DESTROY` frames via `MembershipNotification`
+            // — see `Handler<MembershipNotification>` below and
+            // `planning/drop-query-update.md`.
+            if !self.require_auth("SUBSCRIBE_QUERY", ctx) {
+                return;
+            }
+            if let Ok(query) =
+                serde_json::from_str::<crate::actor_messages::QuerySubscriptionJSON>(json)
+            {
+                self.commit_monitor_addr
+                    .do_send(crate::actor_messages::SubscribeQuery {
+                        addr: ctx.address(),
+                        query,
+                        agent: self.agent.to_string(),
+                        source_id: self.connection_id.clone(),
+                    });
+            }
+        } else if let Some(json) = text.strip_prefix("SUBSCRIBE ") {
+            if !self.require_auth("SUBSCRIBE", ctx) {
+                return;
+            }
+            let subject =
+                atomic_lib::Subject::from_raw(json, self.store.get_base_domain().as_deref());
+            self.commit_monitor_addr
+                .do_send(crate::actor_messages::Subscribe {
+                    addr: ctx.address(),
+                    subject: subject.clone(),
+                    agent: self.agent.to_string(),
+                    source_id: self.connection_id.clone(),
+                    refusal_frame: Some("SUBSCRIBE"),
+                });
+            self.subscribed.insert(subject);
+        } else if let Some(json) = text.strip_prefix("SYNC_VV ") {
+            if let Ok(request) = serde_json::from_str::<SyncVVRequest>(json) {
+                let store = self.store.clone();
+                let agent = self.agent.clone();
+                if request.probe {
+                    // Hash-first probe: the client sent only its hash. Compare
+                    // it to the drive's hash without it (or us) exchanging the
+                    // full O(drive) version vector. In sync → `SYNC_OK`;
+                    // otherwise ask for the full state via `SYNC_RESEND`.
+                    let drive = request.drive.clone();
+                    let client_hash = request.drive_hash.clone();
+                    ctx.spawn(
+                        async move {
+                            let server_hash =
+                                atomic_lib::sync::engine::drive_sync_hash(&store, &drive).await;
+                            (drive, server_hash == client_hash)
+                        }
+                        .into_actor(self)
+                        .map(|(drive, in_sync), _actor, ctx| {
+                            if in_sync {
+                                ctx.binary(atomic_lib::sync::protocol::encode_sync_ok(&drive));
+                            } else {
+                                ctx.text(format!("SYNC_RESEND {drive}"));
+                            }
+                        }),
+                    );
+                } else {
+                    ctx.spawn(
+                        async move { handle_sync_vv(request, store, agent).await }
+                            .into_actor(self)
+                            .map(|frames, _actor, ctx| {
+                                for frame in frames {
+                                    ctx.binary(frame);
+                                }
+                            }),
+                    );
+                }
+            }
+        } else if let Some(json) = text.strip_prefix("RBSR_FP ") {
+            // RBSR: answer range fingerprints so the client can find the
+            // differing subjects without transmitting the whole version vector.
+            // Stateless (rebuilds `drive_items` per request) — the incremental
+            // fingerprint tree that makes this cheaper is Phase 2c.
+            if let Ok(req) = serde_json::from_str::<RbsrFpRequest>(json) {
+                let store = self.store.clone();
+                ctx.spawn(
+                    async move {
+                        let items = atomic_lib::sync::engine::drive_items(&store, &req.drive).await;
+                        let fps: Vec<String> = req
+                            .ranges
+                            .iter()
+                            .map(|(lo, hi)| {
+                                hex::encode(atomic_lib::sync::rbsr::range_fingerprint(
+                                    &items,
+                                    lo,
+                                    hi.as_deref(),
+                                ))
+                            })
+                            .collect();
+                        serde_json::json!({ "drive": req.drive, "fps": fps }).to_string()
+                    }
+                    .into_actor(self)
+                    .map(|resp, _actor, ctx| ctx.text(format!("RBSR_FP {resp}"))),
+                );
+            }
+        } else if let Some(json) = text.strip_prefix("RBSR_ITEMS ") {
+            if let Ok(req) = serde_json::from_str::<RbsrItemsRequest>(json) {
+                let store = self.store.clone();
+                ctx.spawn(
+                    async move {
+                        let items = atomic_lib::sync::engine::drive_items(&store, &req.drive).await;
+                        let hi = req.hi.as_deref();
+                        let out: Vec<(String, Vec<(String, i32)>)> = items
+                            .into_iter()
+                            .filter(|(s, _)| {
+                                s.as_str() >= req.lo.as_str()
+                                    && hi.map(|h| s.as_str() < h).unwrap_or(true)
+                            })
+                            .map(|(s, vv)| (s, vv.into_iter().collect()))
+                            .collect();
+                        serde_json::json!({ "drive": req.drive, "items": out }).to_string()
+                    }
+                    .into_actor(self)
+                    .map(|resp, _actor, ctx| ctx.text(format!("RBSR_ITEMS {resp}"))),
+                );
+            }
+        } else {
+            tracing::debug!("Unknown text message: {}", &text[..text.len().min(50)]);
+        }
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct RbsrFpRequest {
+    drive: String,
+    /// `[lo, hi]` ranges; `hi == null` means unbounded above.
+    ranges: Vec<(String, Option<String>)>,
+}
+
+#[derive(serde::Deserialize)]
+struct RbsrItemsRequest {
+    drive: String,
+    lo: String,
+    hi: Option<String>,
+}
+
+// ---- Outgoing message handlers (Actor → WebSocket) ----
+
+impl Handler<SendFrame> for WebSocketConnection {
+    type Result = ();
+
+    /// Receives a pre-encoded `UPDATE` / `DESTROY` wire frame from
+    /// `CommitMonitor`'s fanout and writes it to the WebSocket. The
+    /// encoding work happened once at the fanout site; here we hand
+    /// the `Arc<[u8]>` to `Bytes::from_owner` so actix shares ownership
+    /// without copying the bytes.
+    fn handle(&mut self, msg: SendFrame, ctx: &mut ws::WebsocketContext<Self>) {
+        ctx.binary(actix_web::web::Bytes::from_owner(msg.frame));
+    }
+}
+
+impl Handler<crate::actor_messages::LoroSyncUpdate> for WebSocketConnection {
+    type Result = ();
+
+    fn handle(
+        &mut self,
+        msg: crate::actor_messages::LoroSyncUpdate,
+        ctx: &mut ws::WebsocketContext<Self>,
+    ) {
+        ctx.text(format!(
+            "LORO_SYNC_UPDATE {}",
+            serde_json::to_string(&msg).unwrap()
+        ));
+    }
+}
+
+impl Handler<crate::actor_messages::LoroEphemeralUpdate> for WebSocketConnection {
+    type Result = ();
+
+    fn handle(
+        &mut self,
+        msg: crate::actor_messages::LoroEphemeralUpdate,
+        ctx: &mut ws::WebsocketContext<Self>,
+    ) {
+        ctx.text(format!(
+            "LORO_EPHEMERAL_UPDATE {}",
+            serde_json::to_string(&msg).unwrap()
+        ));
+    }
+}
+
+impl Handler<crate::actor_messages::PresenceUpdate> for WebSocketConnection {
+    type Result = ();
+
+    fn handle(
+        &mut self,
+        msg: crate::actor_messages::PresenceUpdate,
+        ctx: &mut ws::WebsocketContext<Self>,
+    ) {
+        ctx.text(format!(
+            "PRESENCE_UPDATE {}",
+            serde_json::to_string(&msg).unwrap()
+        ));
+    }
+}
+
+impl Handler<crate::actor_messages::MembershipNotification> for WebSocketConnection {
+    type Result = ();
+
+    /// A subject entered or left one of this connection's filter
+    /// subscriptions. Encode as `UPDATE` (for `added`, using the
+    /// pre-fetched snapshot + commit_id — saves the client an extra
+    /// round-trip GET) or `DESTROY` (for removed). This is the same
+    /// wire shape as drive-wide / per-resource events; only the
+    /// trigger differs (membership change vs. direct commit).
+    fn handle(
+        &mut self,
+        msg: crate::actor_messages::MembershipNotification,
+        ctx: &mut ws::WebsocketContext<Self>,
+    ) {
+        let origin = self
+            .store
+            .get_base_domain()
+            .unwrap_or_else(|| "http://localhost".to_string());
+        let subject_resolved =
+            atomic_lib::Subject::from_raw(&msg.subject, self.store.get_base_domain().as_deref())
+                .resolve(&origin);
+
+        if msg.added {
+            let Some(snapshot) = msg.loro_snapshot.filter(|b| !b.is_empty()) else {
+                // Pre-fetch missed (resource gone, permission lost
+                // between listener queue and dispatch, etc.). Skip
+                // the emission — the client can still GET on demand.
+                return;
+            };
+            let mut flags = ws_v2::flags::SNAPSHOT | ws_v2::flags::PUSH;
+            if msg.commit_id.is_some() {
+                flags |= ws_v2::flags::HAS_COMMIT_ID;
+            }
+            ctx.binary(ws_v2::encode_update(
+                flags,
+                0,
+                &subject_resolved,
+                msg.commit_id.as_deref(),
+                &snapshot,
+            ));
+        } else {
+            ctx.binary(ws_v2::encode_destroy(0, &subject_resolved));
+        }
+    }
+}
+
+// ---- Sync protocol ----
+
+#[derive(serde::Deserialize)]
+struct SyncVVRequest {
+    drive: String,
+    #[serde(rename = "driveHash")]
+    drive_hash: String,
+    /// Hash-first probe: the client sent only its drive hash, not the full
+    /// version-vector state. `peers`/`resources` are absent. The server
+    /// answers `SYNC_OK` (in sync) or `SYNC_RESEND <drive>` (send full state).
+    #[serde(default)]
+    probe: bool,
+    #[serde(default)]
+    peers: Vec<String>,
+    #[serde(default)]
+    resources: std::collections::HashMap<String, Vec<i32>>,
+    /// RBSR reduced set: when present, only these subjects (the ones the client
+    /// found differing) are reconciled, and `resources` carries VVs for just
+    /// the ones the client has. Absent → full-drive reconcile.
+    #[serde(default)]
+    subjects: Option<Vec<String>>,
+}
+
+/// Delegate to atomic_lib sync engine.
+async fn handle_sync_vv(request: SyncVVRequest, store: Db, agent: ForAgent) -> Vec<Vec<u8>> {
+    let filter = request
+        .subjects
+        .as_ref()
+        .map(|s| s.iter().cloned().collect::<std::collections::HashSet<_>>());
+    atomic_lib::sync::engine::handle_sync_vv_filtered(
+        &request.drive,
+        &request.drive_hash,
+        &request.peers,
+        &request.resources,
+        filter.as_ref(),
+        &store,
+        &agent,
+    )
+    .await
+}
+
+impl Handler<IndexStatusPush> for WebSocketConnection {
+    type Result = ();
+
+    fn handle(&mut self, msg: IndexStatusPush, ctx: &mut ws::WebsocketContext<Self>) {
+        let payload = serde_json::json!({
+            "drive": msg.drive,
+            "indexing": msg.indexing,
+        });
+        if let Ok(s) = serde_json::to_string(&payload) {
+            ctx.text(format!("INDEX_STATUS {}", s));
+        }
+    }
+}

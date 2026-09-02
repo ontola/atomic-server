@@ -1,7 +1,7 @@
 From 645f24c2df695bd2918474ab01b6b061d8437767 Mon Sep 17 00:00:00 2001
 From: Claude <noreply@anthropic.com>
 Date: Wed, 2 Sep 2026 17:40:09 +0000
-Subject: [PATCH] Add the PauseAI CRM: volunteer, chapter and stakeholder
+Subject: [PATCH 1/2] Add the PauseAI CRM: volunteer, chapter and stakeholder
  management
 
 A new SvelteKit + Drizzle + PostgreSQL service in crm/, managed by PauseAI
@@ -11158,6 +11158,929 @@ index 0000000..a938f94
 +		testTimeout: 30_000
 +	}
 +})
+-- 
+2.43.0
+
+
+From 66aab01bc4422ae4e649d07810370f6b951976b4 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 2 Sep 2026 19:26:46 +0000
+Subject: [PATCH 2/2] Add the migration plan, use-case status and test coverage
+
+docs/plan.md: where the data lives today (every Airtable table and who
+reads or writes it), five stages from "mirror and observe" to retiring
+Airtable with exit criteria and rollback, seventeen use cases with their
+status, and measured test coverage with the gaps to close next.
+
+Also adds `pnpm test:coverage` (istanbul provider, server modules).
+
+Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01KhUdV6Uy3wrkfNomR3bZw2
+---
+ crm/.gitignore       |   1 +
+ crm/README.md        |   3 +-
+ crm/docs/plan.md     | 147 +++++++++++++++++
+ crm/docs/roadmap.md  |   2 +
+ crm/package.json     |   2 +
+ crm/pnpm-lock.yaml   | 385 ++++++++++++++++++++++++++++++++++++++++++-
+ crm/vitest.config.ts |   9 +-
+ 7 files changed, 545 insertions(+), 4 deletions(-)
+ create mode 100644 crm/docs/plan.md
+
+diff --git a/crm/.gitignore b/crm/.gitignore
+index 7a98020..ce3116f 100644
+--- a/crm/.gitignore
++++ b/crm/.gitignore
+@@ -6,3 +6,4 @@ build
+ !.env.example
+ .local-postgres
+ vite.config.ts.timestamp-*
++coverage
+diff --git a/crm/README.md b/crm/README.md
+index deee17e..8f9ecfb 100644
+--- a/crm/README.md
++++ b/crm/README.md
+@@ -2,7 +2,7 @@
+ 
+ One place for everyone the movement works with: volunteers, chapters and local groups, politicians, journalists and donors. Managed by PauseAI Global, usable by every national chapter, with each chapter seeing only its own people.
+ 
+-Status: **foundation**. The data model, Airtable import, Discord link, sign-in, chapter-scoped access, task templates with reminders and escalation, and a small UI exist and are tested. The bigger product surface (campaign email, segments, politician and journalist pipelines, WhatsApp) is designed but not built. Start with [docs/architecture.md](docs/architecture.md).
++Status: **foundation**. The data model, Airtable import, Discord link, sign-in, chapter-scoped access, task templates with reminders and escalation, and a small UI exist and are tested. The bigger product surface (campaign email, segments, politician and journalist pipelines, WhatsApp) is designed but not built. Start with [docs/plan.md](docs/plan.md) for where this is going and how far along it is, then [docs/architecture.md](docs/architecture.md).
+ 
+ ## Why a new project, and what already exists
+ 
+@@ -30,6 +30,7 @@ Import from Airtable once you have a read token: `AIRTABLE_API_KEY=... pnpm sync
+ | Command              | What it does                                                    |
+ | -------------------- | --------------------------------------------------------------- |
+ | `pnpm test`          | Vitest against a real PostgreSQL (`TEST_DATABASE_URL`, default local 54329) |
++| `pnpm test:coverage` | Same, with an istanbul coverage report for the server modules   |
+ | `pnpm check`         | svelte-check, strict TypeScript                                 |
+ | `pnpm build`         | Production build (Node adapter)                                 |
+ | `pnpm db:generate`   | Generate a migration after editing `src/lib/server/db/schema.ts` |
+diff --git a/crm/docs/plan.md b/crm/docs/plan.md
+new file mode 100644
+index 0000000..a341bb1
+--- /dev/null
++++ b/crm/docs/plan.md
+@@ -0,0 +1,147 @@
++# Plan: from Airtable to the CRM as system of record
++
++Date: 2026-09-02. Owner: PauseAI Global. Status: proposal for decision.
++
++This document answers three questions: what do we do with Airtable, what does the CRM have to be able to do for real people (use cases), and how far along is it, code and tests included. The short answer: **make the CRM the system of record in five stages, keep Airtable as a mirror until the ops team stops opening it, and never do a big-bang cut-over.**
++
++## 1. Where the data lives today
++
++Everything below was verified against the repositories on 2026-09-02.
++
++| Airtable table (base `appWPTGqZmUcs3NWu` unless noted) | Written by | Read by |
++| --- | --- | --- |
++| Members `tblL1icZBhTV1gQ9o` | Website join form (`/embed/onboarding-form?/submit`), `/api/verify` (email verification flag), pauseai-automation Stripe webhook (paying member), Airtable automations, ops by hand | Website `/api/about` (people page), the CRM import, Airtable automations (onboarder alert, US share, verification email, follow-up), Irina's volunteer view |
++| National groups `tblEQJ26hxBAEkaP8` | Ops by hand | Website `/api/national-groups` (communities page, chapter routing), the CRM import |
++| Signatories `tbl2emfOWNWoVz1kW` | Statement form, `/api/verify` | Website `/api/signatories` |
++| Contact form `tblPP2kM7uTheBrpw` | Website `/contact-us` | Ops |
++| Discord members `tblxeqggeTWU7Y8ME` | PauseBot | Airtable → PauseBot role webhook, ops |
++| UK Politicians base `appBInVvIm6opJ1Ob`: parliamentarians `tblH3ks9wqQHLpYx3`, web form emails `tblkzjrRHiZiqMDGR` | Ops, website `/api/uk-send-mp-email` | Website MP lookup and contact status, an Airtable automation that sends the emails |
++
++Also in the picture: the n8n instance (its Members automation is disabled), MailerSend (onboarding and verification emails from Airtable automations), Substack (newsletter, subscribed by the website), Luma (events, not integrated anywhere), and the earlier PauseAI Everything CRM (see ADR 0002).
++
++## 2. The stages
++
++Each stage has an exit criterion. Nothing in a later stage starts before the earlier one has met it. Effort is a rough count of focused developer days, assuming one person who knows the code.
++
++### Stage 0: mirror and observe (now, no risk)
++
++- Run the hourly Airtable import on a deployed CRM for two to three weeks.
++- Watch the drift report on the admin page; fix mappings; get the vocabularies in `vocab.ts` and the website's `options.ts` to agree.
++- Set `discord_role_id` on each national chapter so PauseBot events map to memberships.
++- Exit: three consecutive weeks with zero import errors and no unexplained drift. Effort: 2 days plus waiting.
++
++### Stage 1: first chapter uses it daily (PauseAI UK)
++
++- Admin UI for access grants and chapters (create local group, set Discord role, deactivate).
++- Interaction logging (note, call, meeting) on the person page; idle-volunteer list with "assign a next step".
++- Volunteer self-service: edit own details, see own consents, link Discord.
++- UK chapter admins get grants; volunteers sign in; reminders go live (`EMAIL_MODE=live`).
++- Exit: UK leads run one event from a template end to end and stop keeping a side spreadsheet. Effort: 8 to 10 days.
++
++### Stage 2: the CRM takes the writes (Airtable becomes a mirror)
++
++- A `POST /api/signups` endpoint with the same validation as the website's form action; the website form action calls it instead of Airtable. The CRM writes the row on to Airtable itself, so every existing view and automation keeps working unchanged.
++- Stripe webhook and `/api/verify` write to the CRM (the CRM mirrors to Airtable).
++- The onboarder alert becomes a CRM job (Discord ping via PauseBot, or email), with a log.
++- Exit: one month where every new row in Airtable Members was written by the CRM. Effort: 6 to 8 days plus a website pull request.
++
++### Stage 3: the website reads from the CRM
++
++- `/api/national-groups`, `/api/about` and the UK MP contact status read cached CRM endpoints (one hour cache, same shapes as today, same dev fallbacks).
++- Politicians imported from the UK base into `politician_profiles`; the email tool logs each send as an interaction.
++- Exit: the website has no read path to Airtable. Effort: 4 to 5 days across both repos.
++
++### Stage 4: ops moves in
++
++- A grid view with filters, sort, inline edit, saved views and CSV export, scoped by the actor's grants. This is the one thing Airtable does that nothing in the CRM does yet, and the reason not to retire Airtable earlier.
++- Segments over memberships, consents, profiles and recent interactions; campaign email through MailerSend with unsubscribe links and bounce handling (port the consent enforcement from PauseAI Everything).
++- Exit: the ops team and Comms have not edited Airtable for a month. Effort: 15 to 20 days.
++
++### Stage 5: retire Airtable
++
++- Stop the mirror; final export archived; delete API keys; move the Airtable automations inventory to "gone".
++- Keep a CSV export job so anyone can still get a spreadsheet.
++
++### Rollback at any stage
++
++Because the CRM mirrors to Airtable in stages 2 to 4, rolling back is "point the website back at Airtable", a one-line change per endpoint. Data is never only in the CRM until stage 5.
++
++### Conditions
++
++- Someone owns the CRM: deploy, backups, watching the admin page. Without an owner, stop at stage 0.
++- A decision on PauseAI Everything (ADR 0002) before stage 4, because that is where the two overlap.
++- A one-hour session with the Airtable admins to inventory automations before stage 2.
++
++## 3. Use cases and how far along each one is
++
++Legend: **Built** works end to end and has tests. **Partial** works for part of the flow. **Designed** has a data model and a documented plan, no code. **Not started** has neither.
++
++| # | Use case | Status | What exists | What is missing | Stage |
++| --- | --- | --- | --- | --- | --- |
++| 1 | Someone joins on pauseai.info and ends up in the CRM, routed to their chapter | Partial | Import maps every canonical Members field, consents and intent; routes by country and by distance to a local group; drift report | Signup endpoint so the website writes to the CRM directly; onboarder notification; geocoding so distance routing has coordinates | 0, 2 |
++| 2 | Someone joins Discord and is linked to their record; a country role makes them a chapter member | Built | PauseBot emitter, signed webhook, event store, username-claim matching, role → chapter mapping, leave handling | Chapter Discord role ids need to be set (admin UI in stage 1); Discord OAuth sign-in for self-service linking | 0, 1 |
++| 3 | A chapter lead sees their volunteers and nobody else's | Built | Grants scoped to a chapter subtree; SQL-level predicate; contact fields masked for team leads; person page with timeline | Admin UI to give and revoke grants (SQL today); audit log entries on grant changes | 1 |
++| 4 | A volunteer signs in with the email they joined with and sees their next step | Built | Magic-link sign-in gated on the imported Members table; my-tasks page; task detail with the email-your-MP action | Live Airtable lookup for people who joined minutes ago; a catalogue of standard actions to assign; Discord sign-in | 1 |
++| 5 | A chapter runs a known-good event from a template; missed deadlines escalate | Built | Three templates (screening plus emails plus pub, MP surgery visit, volunteer onboarding); relative deadlines; reminders; escalation to project owner, chapter admin, then Global | UI to start a project from a template and to reassign tasks; template editor; more templates from chapters | 1 |
++| 6 | Every active volunteer always has an open task | Partial | `idleVolunteers()` query | The page that shows it and the one-click assignment | 1 |
++| 7 | A local group grows too big and is split into two | Designed | Chapter tree with materialized paths; memberships move with a single update; distance routing | The admin action (create children, reassign by distance, deactivate parent), WhatsApp group creation stays manual | 1 |
++| 8 | Global or a chapter emails a segment ("Leicester volunteers who missed the last event") | Designed | Consents, memberships, interactions and coordinates are all in place; MailerSend adapter with sandbox | Segment builder, campaign composer, unsubscribe links, bounce webhook, send log | 4 |
++| 9 | Track every politician: how we contacted them, what they said, when their surgeries are | Designed | `politician_profiles` with level, party, constituency, stance, surgery info, parliament id; interaction kinds `statement` and `press_mention` | Import from the UK Politicians base; Hansard job; pipeline view; the email tool logging sends | 3 |
++| 10 | Track journalists and press coverage | Designed | `journalist_profiles`, interaction kinds | Import, pipeline view, coverage logging UI | 3 |
++| 11 | Paying members and donations | Partial | `paying_member` flag from Airtable; `donation` interaction kind | Stripe webhook writing to the CRM; donation history | 2 |
++| 12 | Events on Luma and who attended | Designed | `events` and `event_attendance` tables keyed by Luma id | Luma sync job | 4 |
++| 13 | GDPR: consent history, access request export, erasure | Partial | Append-only consents with source and evidence; soft delete flag; minimal field import | Per-person export; scrub job after erasure; retention policy for dormant records | 1, 2 |
++| 14 | The website shows chapters, the people page and MP contact status from the CRM | Designed | The data is present after import | Three cached read endpoints and the website changes | 3 |
++| 15 | Ops edit data in a grid with filters, views and CSV export | Not started | Search on the people list | The grid; this gates retiring Airtable | 4 |
++| 16 | Mass WhatsApp or SMS to people who agreed to it | Designed | Consent purposes `whatsapp` and `sms`; chapter WhatsApp links | A send adapter (WhatsApp Business Cloud API or an SMS provider) | 4 or later |
++| 17 | Web scraping people (from the UK notes) | Not started, deliberately | | A lawful basis first; then, at most, enrichment of politicians and journalists from public sources | none |
++
++### Against the UK notes, in one line each
++
++- Exhaustive database of everyone: the model covers it; imports exist for members and chapters only.
++- Track every volunteer's actions, events, communications: the timeline exists; Discord and tasks feed it; email sends, Luma and the website's actions do not yet.
++- Track politicians and journalists: modelled, not imported.
++- Volunteer hand-holding, gatekeeping, teams, roles, hierarchies: built at the data and permission level; the volunteer-facing UI is minimal.
++- Redraw local group boundaries: one admin action away.
++- Task deadlines with re-delegation: built and tested.
++- Project templates that "just work": three exist; chapters should write more.
++- Mass email, location-based email, SMS and WhatsApp: designed, not built.
++- Don't get hacked: see `permissions-and-security.md`; the honest gaps are no audit trail on grant changes yet and no rate limiting on the sign-in endpoint.
++- Good software, cheap to run: one container, one worker, one Postgres; tests against a real database; strict TypeScript.
++
++## 4. Testing: what is covered and what is not
++
++Measured with `pnpm test:coverage` (Vitest, istanbul provider, real PostgreSQL 16) on 2026-09-02: 24 tests in 6 files.
++
++| Area | Lines | Branches | Notes |
++| --- | --- | --- | --- |
++| Server modules overall (`src/lib/server`) | 83% | 66% | 727 statements |
++| `people.ts`, `chapters.ts`, `authz/people.ts` | 100% | 76 to 87% | Core rules: identity resolution, consent history, scoping |
++| Airtable mapping, vocab, chapters mapping | 96 to 100% | 87 to 100% | Drift canary covered |
++| Discord webhook verification | 100% | 92% | Plus a one-off check that a Python-signed event verifies |
++| Discord handlers | 97% | 55% | Join, roles, leave; the branch gaps are error paths |
++| Tasks and escalation | 92% | 56% | Reminder, escalation, "responded after reminder" case |
++| Auth (magic links, sessions) | 91% | 63% | Unknown email, single use, sign-out, bootstrap admin |
++| Airtable sync | 83% | 58% | Incremental cursor, pagination, limit; failure bookkeeping not exercised |
++| Job queue | 73% | 51% | Run, retry with backoff, dedupe, dead; the worker loop and stale-release are not |
++| MailerSend sender | 44% | 20% | Sandbox path only; the live HTTP path is untested |
++| `authz/guard.ts`, `jobs/handlers.ts`, `discord/pausebot.ts`, `db/migrate.ts` | 0% | | Thin wrappers; covered by the manual smoke test, not by tests |
++| Routes, hooks, form actions, the webhook endpoint | 0% | | No HTTP-level tests. Verified once by a manual smoke run: health, sign-in flow, scoped pages, a signed and a forged webhook |
++
++The PauseBot change has no tests at all (the repository has none); it was checked by compiling and by verifying its signature against the CRM's verifier.
++
++### What to add, in order
++
++1. HTTP-level tests for the webhook endpoint and the sign-in routes using SvelteKit's request handlers, so the 0% rows above disappear. About a day.
++2. A contract test that runs the PauseBot signer (Python) against the CRM verifier in CI, so the two cannot drift. Half a day.
++3. Error-path tests for the sync (Airtable 5xx mid-run, cursor not advanced) and the live MailerSend path with an injected `fetch`. Half a day.
++4. One Playwright journey per stage-1 feature (sign in, complete a task, admin grants a role). Two days, and the website already has the tooling.
++5. A CI workflow running `pnpm test:coverage`, `pnpm check` and `pnpm build` against a Postgres service container, with the coverage thresholds set at today's numbers so they only go up.
++
++## 5. Decisions needed
++
++1. Go ahead with stages 0 and 1 for PauseAI UK (yes or no, and who owns the deployment).
++2. PauseAI Everything: continue this project or fold into that one (ADR 0002). Needed before stage 4.
++3. Hosting: Railway next to PauseBot is the default; say if it should be elsewhere.
++4. Branding: apply the pauseai.info tokens and fonts to the CRM in stage 1 (small).
++5. Web scraping stays out until there is a written lawful basis.
+diff --git a/crm/docs/roadmap.md b/crm/docs/roadmap.md
+index 5e00fc7..5d3fb8d 100644
+--- a/crm/docs/roadmap.md
++++ b/crm/docs/roadmap.md
+@@ -1,5 +1,7 @@
+ # Roadmap
+ 
++The migration plan, use-case status and test coverage live in [plan.md](plan.md); this page is the shorter milestone list.
++
+ Milestones are small on purpose: each one should be usable by a real chapter before the next starts.
+ 
+ ## M0: foundation (this pull request)
+diff --git a/crm/package.json b/crm/package.json
+index ecf6b04..faffd73 100644
+--- a/crm/package.json
++++ b/crm/package.json
+@@ -17,6 +17,7 @@
+     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+     "test": "vitest run",
+     "test:watch": "vitest",
++    "test:coverage": "vitest run --coverage",
+     "db:generate": "drizzle-kit generate",
+     "db:migrate": "tsx scripts/migrate.ts",
+     "db:seed": "tsx scripts/seed.ts",
+@@ -36,6 +37,7 @@
+   "devDependencies": {
+     "@sveltejs/vite-plugin-svelte": "^7.3.0",
+     "@types/node": "^24.13.3",
++    "@vitest/coverage-istanbul": "^4.1.11",
+     "drizzle-kit": "^0.31.0",
+     "svelte-check": "^4.7.6",
+     "tsx": "^4.23.12",
+diff --git a/crm/pnpm-lock.yaml b/crm/pnpm-lock.yaml
+index be9eb68..7b83a33 100644
+--- a/crm/pnpm-lock.yaml
++++ b/crm/pnpm-lock.yaml
+@@ -36,6 +36,9 @@ importers:
+       '@types/node':
+         specifier: ^24.13.3
+         version: 24.13.3
++      '@vitest/coverage-istanbul':
++        specifier: ^4.1.11
++        version: 4.1.11(vitest@4.1.11)
+       drizzle-kit:
+         specifier: ^0.31.0
+         version: 0.31.10
+@@ -53,10 +56,77 @@ importers:
+         version: 8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(tsx@4.23.13)
+       vitest:
+         specifier: ^4.1.11
+-        version: 4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(tsx@4.23.13))
++        version: 4.1.11(@types/node@24.13.3)(@vitest/coverage-istanbul@4.1.11)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(tsx@4.23.13))
+ 
+ packages:
+ 
++  '@babel/code-frame@7.29.7':
++    resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
++    engines: {node: '>=6.9.0'}
++
++  '@babel/compat-data@7.29.7':
++    resolution: {integrity: sha512-locTkQyKvwIEgBzVrn8693ebc97F2U8ZHjbXwDXJ5Fn2TCpNwTlKcaKLkdHop5c/icOFE7qt7Q9JC5hnKNa6Gg==}
++    engines: {node: '>=6.9.0'}
++
++  '@babel/core@7.29.7':
++    resolution: {integrity: sha512-RgHBCvtjbOK2gXSNBNIkNoEc9qoVEtau3hj8gEqKQuL3HZAibKarWFEI3Lfm6EYKkLalOh8eSrj9b+ch9H/VBA==}
++    engines: {node: '>=6.9.0'}
++
++  '@babel/generator@7.29.8':
++    resolution: {integrity: sha512-gZbepsdh3WDtgZKWL+vTPh71LSBrm/Y4/QDZBVCcYfmeTEEuoOYwlSy+G1StfJg+/Zy550u/3TATbm7qDbbMtg==}
++    engines: {node: '>=6.9.0'}
++
++  '@babel/helper-compilation-targets@7.29.7':
++    resolution: {integrity: sha512-wem6WaBj4NaVYVdNhLPPVacES6ZJ+KBBfSkTMD3YZxbP3rm3Di85tJU5ljaUNhaOynt+Aj0xruhYuzQBt8n71g==}
++    engines: {node: '>=6.9.0'}
++
++  '@babel/helper-globals@7.29.7':
++    resolution: {integrity: sha512-3nQVUAtvkKH9zahfWgw96Jc/uFOmjACE1kQz82E2lqWmHBgjzbNlsC22nuQTfahmWeQtTq5nQ/4Nnd2A1wj4zA==}
++    engines: {node: '>=6.9.0'}
++
++  '@babel/helper-module-imports@7.29.7':
++    resolution: {integrity: sha512-ejHwrQQYcm9xnTivShn2IDOlIzInN34AXskvq9QicvCtEzq1Vzclu/tKF8Jq1Cg8JG2GL6/EmjgsCT7lXepE3g==}
++    engines: {node: '>=6.9.0'}
++
++  '@babel/helper-module-transforms@7.29.7':
++    resolution: {integrity: sha512-UPUVSyXbOh627KiCIGQSgwWzGeBKLkaJ9PJEdrngIwMSzxLR4jS4+f1f1jb7VzBbg8nFLaYotvVPFCTqdrmTAg==}
++    engines: {node: '>=6.9.0'}
++    peerDependencies:
++      '@babel/core': ^7.0.0
++
++  '@babel/helper-string-parser@7.29.7':
++    resolution: {integrity: sha512-Pb5ijPrZ89GDH8223L4UP8i6QApWxs04RbPQJTeWDV0/keR2E36MeKnyr6LYmUUvqRRI+Iv87SuF1W6ErINzYw==}
++    engines: {node: '>=6.9.0'}
++
++  '@babel/helper-validator-identifier@7.29.7':
++    resolution: {integrity: sha512-qehxGkRj55h/ff8EMaJ+cYhyaKlHIxqYDn682wQD7RNp9UujOQsHog2uS0r2vzr4pW+sXf90NeeayjcNaX3fFg==}
++    engines: {node: '>=6.9.0'}
++
++  '@babel/helper-validator-option@7.29.7':
++    resolution: {integrity: sha512-N9ZErrD+yW5geCDtBqnOoxmR8+tNKiGuxKlDpuJxfsqpa2dFcexaziGAE/qoHLiDDreVNMupxGmSoNlyvsA3gw==}
++    engines: {node: '>=6.9.0'}
++
++  '@babel/helpers@7.29.7':
++    resolution: {integrity: sha512-1k2lAGRMfHTcwuNYcCNUmaUffmQv8KWMfh2iJUUeRlwlwH4FdNG7mfPI10NPfLHJFThE4Tyr4mv7kTNZOiPuBg==}
++    engines: {node: '>=6.9.0'}
++
++  '@babel/parser@7.29.8':
++    resolution: {integrity: sha512-E8lTAYNB1KW+FH+VGJuZM1ioAx2E6oVlvQFRrf5P8ZZmsiJXYAD9vTFV7yyEURNzgh1dFqMZuO6tUwcARbqFCA==}
++    engines: {node: '>=6.0.0'}
++    hasBin: true
++
++  '@babel/template@7.29.7':
++    resolution: {integrity: sha512-puq+Gf35oI24FeN11LkoUQFqv9uwNeWpxXZi/Ji3rRIoKAzKnxRaZ+Gkj0vKS9ZCiTESfng1N9LyOyXvo+m+Gg==}
++    engines: {node: '>=6.9.0'}
++
++  '@babel/traverse@7.29.8':
++    resolution: {integrity: sha512-I5z7H3bf/41ktsNVLtpN0wAa336HkqIHQ5BuPLEhTkt1jVSyZpeNKIzTgEWmlxjdg81R0IgUCcaE+Ok3NvrfZg==}
++    engines: {node: '>=6.9.0'}
++
++  '@babel/types@7.29.8':
++    resolution: {integrity: sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==}
++    engines: {node: '>=6.9.0'}
++
+   '@drizzle-team/brocli@0.10.2':
+     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
+ 
+@@ -512,6 +582,10 @@ packages:
+     cpu: [x64]
+     os: [win32]
+ 
++  '@istanbuljs/schema@0.1.6':
++    resolution: {integrity: sha512-+Sg6GCR/wy1oSmQDFq4LQDAhm3ETKnorxN+y5nbLULOR3P0c14f2Wurzj3/xqPXtasLFfHd5iRFQ7AJt4KH2cw==}
++    engines: {node: '>=8'}
++
+   '@jridgewell/gen-mapping@0.3.13':
+     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
+ 
+@@ -881,6 +955,11 @@ packages:
+   '@types/resolve@1.20.2':
+     resolution: {integrity: sha512-60BCwRFOZCQhDncwQdxxeOEEkbc5dIMccYLwbxsS4TUNeVECQ/pBJ0j09mrHOl/JJvpRPGwO9SvE4nR2Nb/a4Q==}
+ 
++  '@vitest/coverage-istanbul@4.1.11':
++    resolution: {integrity: sha512-pK9LJtOS534bmUwdwLpGD9qL52DeqVWSInrXFMNqrvWLbbAhuIPAlRup3UbsjFOMqCC/p3MmmX7uXV7ZTkcFfQ==}
++    peerDependencies:
++      vitest: 4.1.11
++
+   '@vitest/expect@4.1.11':
+     resolution: {integrity: sha512-VX2x5vNJXET47KAFzwERI+KRMtTTCSWTfSMKsW7JsUsXV4psq++e3DvZpuTDOpHcxytiDs6p2nhVb2tVDiiUYw==}
+ 
+@@ -927,9 +1006,22 @@ packages:
+     resolution: {integrity: sha512-qIj0G9wZbMGNLjLmg1PT6v2mE9AH2zlnADJD/2tC6E00hgmhUOfEB6greHPAfLRSufHqROIUTkw6E+M3lH0PTQ==}
+     engines: {node: '>= 0.4'}
+ 
++  baseline-browser-mapping@2.11.20:
++    resolution: {integrity: sha512-H0ulySigv6icDJ1F7SjtdCD6PrhTpdYCmP0CactWy1+ekh0AFd0o1Wn5T8b+hnTmdBx19u9yhL6wvCylXMY7zw==}
++    engines: {node: '>=6.0.0'}
++    hasBin: true
++
++  browserslist@4.28.8:
++    resolution: {integrity: sha512-V2NpofLblG64mfOtSgDhOJESZEGogzDMBv/q+W6oc4LXWP/q75eOXoOaaOu1EOadB9U4Bwx/e0yzbvwKH8zalA==}
++    engines: {node: ^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7}
++    hasBin: true
++
+   buffer-from@1.1.2:
+     resolution: {integrity: sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==}
+ 
++  caniuse-lite@1.0.30001810:
++    resolution: {integrity: sha512-TITQPUkaz+aVk5GL6NhOdwk1aEaNTSDPsGFWrTuhKGtjTF70jL/Oht2W4c6rXUe5fu7Ie19VIahAXHIIiWWNeg==}
++
+   chai@6.2.2:
+     resolution: {integrity: sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg==}
+     engines: {node: '>=18'}
+@@ -952,6 +1044,15 @@ packages:
+     resolution: {integrity: sha512-U71cyTamuh1CRNCfpGY6to28lxvNwPG4Guz/EVjgf3Jmzv0vlDp1atT9eS5dDjMYHucpHbWns6Lwf3BKz6svdw==}
+     engines: {node: '>= 0.6'}
+ 
++  debug@4.4.3:
++    resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
++    engines: {node: '>=6.0'}
++    peerDependencies:
++      supports-color: '*'
++    peerDependenciesMeta:
++      supports-color:
++        optional: true
++
+   deepmerge@4.3.1:
+     resolution: {integrity: sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A==}
+     engines: {node: '>=0.10.0'}
+@@ -1063,6 +1164,9 @@ packages:
+       sqlite3:
+         optional: true
+ 
++  electron-to-chromium@1.5.419:
++    resolution: {integrity: sha512-nHMPn8x4yCxCI0iSnL+LlHL5sUoUfjLXkcRIagZ4GBdrfFLFaiLNvzJWbJqZhFT9IAhw5tUSNlhggWN+otvp/A==}
++
+   es-errors@1.3.0:
+     resolution: {integrity: sha512-Zf5H2Kxt2xjTvbJvP2ZWLEICxA6j+hAmMzIlypy4xcBg1vKVnx89Wy0GbS+kf5cwCVFFzdCFh2XSCFNULS6csw==}
+     engines: {node: '>= 0.4'}
+@@ -1085,6 +1189,10 @@ packages:
+     engines: {node: '>=18'}
+     hasBin: true
+ 
++  escalade@3.2.0:
++    resolution: {integrity: sha512-WUj2qlxaQtO4g6Pq5c29GTcWGDyd8itL8zTlipgECz3JesAiiOKotd8JU6otB3PACgG6xkJUyVhboMS+bje/jA==}
++    engines: {node: '>=6'}
++
+   esm-env@1.2.2:
+     resolution: {integrity: sha512-Epxrv+Nr/CaL4ZcFGPJIYLWFom+YeV1DqMLHJoEd9SYRxNbaFruBwfEX/kkHUJf55j2+TUbmDcmuilbP1TmXHA==}
+ 
+@@ -1123,13 +1231,24 @@ packages:
+   function-bind@1.1.2:
+     resolution: {integrity: sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA==}
+ 
++  gensync@1.0.0-beta.2:
++    resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
++    engines: {node: '>=6.9.0'}
++
+   get-tsconfig@4.14.3:
+     resolution: {integrity: sha512-++QEw4DIY7WGoukz+/+A/8dGYPT9l9yIadnmSgZ8Rjr3YVSVDipQSO9CdnJo9ePqFqUUqh+wk9uIaoiAwsiPkA==}
+ 
++  has-flag@4.0.0:
++    resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
++    engines: {node: '>=8'}
++
+   hasown@2.0.4:
+     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
+     engines: {node: '>= 0.4'}
+ 
++  html-escaper@2.0.2:
++    resolution: {integrity: sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg==}
++
+   is-core-module@2.16.2:
+     resolution: {integrity: sha512-evOr8xfXKxE6qSR0hSXL2r3sd7ALj8+7jQEUvPYcm5sgZFdJ+AYzT6yNmJenvIYQBgIGwfwz08sL8zoL7yq2BA==}
+     engines: {node: '>= 0.4'}
+@@ -1143,6 +1262,31 @@ packages:
+   is-reference@3.0.3:
+     resolution: {integrity: sha512-ixkJoqQvAP88E6wLydLGGqCJsrFUnqoH6HnaczB8XmDH1oaWU+xxdptvikTgaEhtZ53Ky6YXiBuUI2WXLMCwjw==}
+ 
++  istanbul-lib-coverage@3.2.2:
++    resolution: {integrity: sha512-O8dpsF+r0WV/8MNRKfnmrtCWhuKjxrq2w+jpzBL5UZKTi2LeVWnWOmWRxFlesJONmc+wLAGvKQZEOanko0LFTg==}
++    engines: {node: '>=8'}
++
++  istanbul-lib-report@3.0.1:
++    resolution: {integrity: sha512-GCfE1mtsHGOELCU8e/Z7YWzpmybrx/+dSTfLrvY8qRmaY6zXTKWn6WQIjaAFw069icm6GVMNkgu0NzI4iPZUNw==}
++    engines: {node: '>=10'}
++
++  istanbul-reports@3.2.0:
++    resolution: {integrity: sha512-HGYWWS/ehqTV3xN10i23tkPkpH46MLCIMFNCaaKNavAXTF1RkqxawEPtnjnGZ6XKSInBKkiOA5BKS+aZiY3AvA==}
++    engines: {node: '>=8'}
++
++  js-tokens@4.0.0:
++    resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
++
++  jsesc@3.1.0:
++    resolution: {integrity: sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA==}
++    engines: {node: '>=6'}
++    hasBin: true
++
++  json5@2.2.3:
++    resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
++    engines: {node: '>=6'}
++    hasBin: true
++
+   kleur@4.1.5:
+     resolution: {integrity: sha512-o+NO+8WrRiQEE4/7nwRJhN1HWpVmJm511pBHUxPLtp0BUISzlBplORYSmTclCnJvQq2tKu/sgl3xVpkc7ZWuQQ==}
+     engines: {node: '>=6'}
+@@ -1224,12 +1368,22 @@ packages:
+   locate-character@3.0.0:
+     resolution: {integrity: sha512-SW13ws7BjaeJ6p7Q6CO2nchbYEc3X3J6WrmTTDto7yMPqVSZTUyY5Tjbid+Ab8gLnATtygYtiDIJGQRRn2ZOiA==}
+ 
++  lru-cache@5.1.1:
++    resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
++
+   magic-string@0.30.21:
+     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
+ 
+   magic-string@1.2.3:
+     resolution: {integrity: sha512-Bpb0W2TbLKOZ7vJnOUnVRGq3WL2p+ISV29M6hYPL1AFCpyKZpdr5ytiXoTSSxRVhg8YW7f65+6gbG8WG6PCa/g==}
+ 
++  magicast@0.5.4:
++    resolution: {integrity: sha512-llBEhWm1SacoRwgHUoQJYtwp4PBLF4faQi5TCpIGyGs9n4y5+juI0tDgyKIfpqxckRHaHzouUEph3THklWh03w==}
++
++  make-dir@4.0.0:
++    resolution: {integrity: sha512-hXdUTZYIVOt1Ex//jAQi+wTZZpUpwBj/0QsOzqegb3rGMMeJiSEu5xLHnYfBrRV4RH2+OCSOO95Is/7x1WJ4bw==}
++    engines: {node: '>=10'}
++
+   mri@1.2.0:
+     resolution: {integrity: sha512-tzzskb3bG8LvYGFF/mDTpq3jpI6Q9wc3LEmBaghu+DdCssd1FakN7Bc0hVNmEyGq1bq3RgfkCb3cmQLpNPOroA==}
+     engines: {node: '>=4'}
+@@ -1238,11 +1392,18 @@ packages:
+     resolution: {integrity: sha512-Y3wQdFg2Va6etvQ5I82yUhGdsKrcYox6p7FfL1LbK2J4V01F9TGlepTIhnK24t7koZibmg82KGglhA1XK5IsLQ==}
+     engines: {node: '>=10'}
+ 
++  ms@2.1.3:
++    resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
++
+   nanoid@3.3.18:
+     resolution: {integrity: sha512-DTg4MJbGMWkfi6VZFdNt2/caMbQy4Ou+Op/hJQvGEWcnVfoA1QA+xzRKAzw9jD6+GVOOeYr/mIcuDSdug6F6+w==}
+     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
+     hasBin: true
+ 
++  node-releases@2.0.54:
++    resolution: {integrity: sha512-YHs7BmmcsdAI5Ozuf8JZo6PT0mv2GIWC9vMfvUC3dp65M8hn7Ux8CPL+2oBI7juNuj9d0ndhTcznq2ODBps9cQ==}
++    engines: {node: '>=18'}
++
+   obug@2.1.4:
+     resolution: {integrity: sha512-4a+OsYv9UktOJKE+l1A4OufDgdRF9PifWj+tJnHURo/P+WOxpG4GzUFL9qCalmWauao6ogiG+QvnCovwPoyAWA==}
+     engines: {node: '>=12.20.0'}
+@@ -1294,6 +1455,15 @@ packages:
+     resolution: {integrity: sha512-xal3CZX1Xlo/k4ApwCFrHVACi9fBqJ7V+mwhBsuf/1IOKbBy098Fex+Wa/5QMubw09pSZ/u8EY8PWgevJsXp1A==}
+     engines: {node: '>=6'}
+ 
++  semver@6.3.1:
++    resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
++    hasBin: true
++
++  semver@7.8.5:
++    resolution: {integrity: sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==}
++    engines: {node: '>=10'}
++    hasBin: true
++
+   set-cookie-parser@3.1.2:
+     resolution: {integrity: sha512-5/r/lTwbJ3zQ+qwdUFZYeRNqda7P5HD8zQKqlSjdGt1/S0cjLAphHusj4Y58ahDtWn/g32xrIS58/ikOvwl0Lw==}
+ 
+@@ -1321,6 +1491,10 @@ packages:
+   std-env@4.2.0:
+     resolution: {integrity: sha512-oCUKSupKTHX53EyjDtuZQ64pjLJ6yYCtpmEw0goYxtjG9KpbRe8KAsl2tBUGU9DyMcJ0RwJ8GqJAFzMXcXW1Rw==}
+ 
++  supports-color@7.2.0:
++    resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
++    engines: {node: '>=8'}
++
+   supports-preserve-symlinks-flag@1.0.0:
+     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
+     engines: {node: '>= 0.4'}
+@@ -1369,6 +1543,12 @@ packages:
+   undici-types@7.18.2:
+     resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
+ 
++  update-browserslist-db@1.3.2:
++    resolution: {integrity: sha512-UQ+MSxlhRm1bzjhU+DcuXfjFO1FzNtqhK5+9Yvlp90ItDLk5vT932A0rFu619nf7RVS+Y/VeaUW1jaRDqZ8VJw==}
++    hasBin: true
++    peerDependencies:
++      browserslist: '>= 4.21.0'
++
+   vite@8.2.2:
+     resolution: {integrity: sha512-cFKLV/PRgAUlIRm5WjMjJ86jrftzpqcgH+Us+DS8mI3CDNiH30Whrz8uHL3+MOLPAgqbMBAqWdAHAphOAM+z/Q==}
+     engines: {node: ^20.19.0 || >=22.12.0}
+@@ -1466,6 +1646,9 @@ packages:
+     engines: {node: '>=8'}
+     hasBin: true
+ 
++  yallist@3.1.1:
++    resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
++
+   zimmerframe@1.1.5:
+     resolution: {integrity: sha512-msJxIvYDYcoNL+PJsu+7qmpDWsYmAxTY+2TNYXXF0hzBzBk0BMecOqDOG/EckUoKCuKwObfbugIl8QpqHDXeFA==}
+ 
+@@ -1474,6 +1657,106 @@ packages:
+ 
+ snapshots:
+ 
++  '@babel/code-frame@7.29.7':
++    dependencies:
++      '@babel/helper-validator-identifier': 7.29.7
++      js-tokens: 4.0.0
++      picocolors: 1.1.1
++
++  '@babel/compat-data@7.29.7': {}
++
++  '@babel/core@7.29.7':
++    dependencies:
++      '@babel/code-frame': 7.29.7
++      '@babel/generator': 7.29.8
++      '@babel/helper-compilation-targets': 7.29.7
++      '@babel/helper-module-transforms': 7.29.7(@babel/core@7.29.7)
++      '@babel/helpers': 7.29.7
++      '@babel/parser': 7.29.8
++      '@babel/template': 7.29.7
++      '@babel/traverse': 7.29.8
++      '@babel/types': 7.29.8
++      '@jridgewell/remapping': 2.3.5
++      convert-source-map: 2.0.0
++      debug: 4.4.3
++      gensync: 1.0.0-beta.2
++      json5: 2.2.3
++      semver: 6.3.1
++    transitivePeerDependencies:
++      - supports-color
++
++  '@babel/generator@7.29.8':
++    dependencies:
++      '@babel/parser': 7.29.8
++      '@babel/types': 7.29.8
++      '@jridgewell/gen-mapping': 0.3.13
++      '@jridgewell/trace-mapping': 0.3.31
++      jsesc: 3.1.0
++
++  '@babel/helper-compilation-targets@7.29.7':
++    dependencies:
++      '@babel/compat-data': 7.29.7
++      '@babel/helper-validator-option': 7.29.7
++      browserslist: 4.28.8
++      lru-cache: 5.1.1
++      semver: 6.3.1
++
++  '@babel/helper-globals@7.29.7': {}
++
++  '@babel/helper-module-imports@7.29.7':
++    dependencies:
++      '@babel/traverse': 7.29.8
++      '@babel/types': 7.29.8
++    transitivePeerDependencies:
++      - supports-color
++
++  '@babel/helper-module-transforms@7.29.7(@babel/core@7.29.7)':
++    dependencies:
++      '@babel/core': 7.29.7
++      '@babel/helper-module-imports': 7.29.7
++      '@babel/helper-validator-identifier': 7.29.7
++      '@babel/traverse': 7.29.8
++    transitivePeerDependencies:
++      - supports-color
++
++  '@babel/helper-string-parser@7.29.7': {}
++
++  '@babel/helper-validator-identifier@7.29.7': {}
++
++  '@babel/helper-validator-option@7.29.7': {}
++
++  '@babel/helpers@7.29.7':
++    dependencies:
++      '@babel/template': 7.29.7
++      '@babel/types': 7.29.8
++
++  '@babel/parser@7.29.8':
++    dependencies:
++      '@babel/types': 7.29.8
++
++  '@babel/template@7.29.7':
++    dependencies:
++      '@babel/code-frame': 7.29.7
++      '@babel/parser': 7.29.8
++      '@babel/types': 7.29.8
++
++  '@babel/traverse@7.29.8':
++    dependencies:
++      '@babel/code-frame': 7.29.7
++      '@babel/generator': 7.29.8
++      '@babel/helper-globals': 7.29.7
++      '@babel/parser': 7.29.8
++      '@babel/template': 7.29.7
++      '@babel/types': 7.29.8
++      debug: 4.4.3
++    transitivePeerDependencies:
++      - supports-color
++
++  '@babel/types@7.29.8':
++    dependencies:
++      '@babel/helper-string-parser': 7.29.7
++      '@babel/helper-validator-identifier': 7.29.7
++
+   '@drizzle-team/brocli@0.10.2': {}
+ 
+   '@esbuild-kit/core-utils@3.3.2':
+@@ -1708,6 +1991,8 @@ snapshots:
+   '@esbuild/win32-x64@0.28.2':
+     optional: true
+ 
++  '@istanbuljs/schema@0.1.6': {}
++
+   '@jridgewell/gen-mapping@0.3.13':
+     dependencies:
+       '@jridgewell/sourcemap-codec': 1.6.0
+@@ -1962,6 +2247,22 @@ snapshots:
+ 
+   '@types/resolve@1.20.2': {}
+ 
++  '@vitest/coverage-istanbul@4.1.11(vitest@4.1.11)':
++    dependencies:
++      '@babel/core': 7.29.7
++      '@istanbuljs/schema': 0.1.6
++      '@jridgewell/gen-mapping': 0.3.13
++      '@jridgewell/trace-mapping': 0.3.31
++      istanbul-lib-coverage: 3.2.2
++      istanbul-lib-report: 3.0.1
++      istanbul-reports: 3.2.0
++      magicast: 0.5.4
++      obug: 2.1.4
++      tinyrainbow: 3.1.1
++      vitest: 4.1.11(@types/node@24.13.3)(@vitest/coverage-istanbul@4.1.11)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(tsx@4.23.13))
++    transitivePeerDependencies:
++      - supports-color
++
+   '@vitest/expect@4.1.11':
+     dependencies:
+       '@standard-schema/spec': 1.1.0
+@@ -2011,8 +2312,20 @@ snapshots:
+ 
+   axobject-query@4.1.0: {}
+ 
++  baseline-browser-mapping@2.11.20: {}
++
++  browserslist@4.28.8:
++    dependencies:
++      baseline-browser-mapping: 2.11.20
++      caniuse-lite: 1.0.30001810
++      electron-to-chromium: 1.5.419
++      node-releases: 2.0.54
++      update-browserslist-db: 1.3.2(browserslist@4.28.8)
++
+   buffer-from@1.1.2: {}
+ 
++  caniuse-lite@1.0.30001810: {}
++
+   chai@6.2.2: {}
+ 
+   chokidar@4.0.3:
+@@ -2027,6 +2340,10 @@ snapshots:
+ 
+   cookie@0.6.0: {}
+ 
++  debug@4.4.3:
++    dependencies:
++      ms: 2.1.3
++
+   deepmerge@4.3.1: {}
+ 
+   detect-libc@2.1.2: {}
+@@ -2046,6 +2363,8 @@ snapshots:
+     optionalDependencies:
+       postgres: 3.4.9
+ 
++  electron-to-chromium@1.5.419: {}
++
+   es-errors@1.3.0: {}
+ 
+   es-module-lexer@2.3.2: {}
+@@ -2133,6 +2452,8 @@ snapshots:
+       '@esbuild/win32-ia32': 0.28.2
+       '@esbuild/win32-x64': 0.28.2
+ 
++  escalade@3.2.0: {}
++
+   esm-env@1.2.2: {}
+ 
+   esrap@2.3.6:
+@@ -2156,14 +2477,20 @@ snapshots:
+ 
+   function-bind@1.1.2: {}
+ 
++  gensync@1.0.0-beta.2: {}
++
+   get-tsconfig@4.14.3:
+     dependencies:
+       resolve-pkg-maps: 1.0.0
+ 
++  has-flag@4.0.0: {}
++
+   hasown@2.0.4:
+     dependencies:
+       function-bind: 1.1.2
+ 
++  html-escaper@2.0.2: {}
++
+   is-core-module@2.16.2:
+     dependencies:
+       hasown: 2.0.4
+@@ -2178,6 +2505,25 @@ snapshots:
+     dependencies:
+       '@types/estree': 1.0.9
+ 
++  istanbul-lib-coverage@3.2.2: {}
++
++  istanbul-lib-report@3.0.1:
++    dependencies:
++      istanbul-lib-coverage: 3.2.2
++      make-dir: 4.0.0
++      supports-color: 7.2.0
++
++  istanbul-reports@3.2.0:
++    dependencies:
++      html-escaper: 2.0.2
++      istanbul-lib-report: 3.0.1
++
++  js-tokens@4.0.0: {}
++
++  jsesc@3.1.0: {}
++
++  json5@2.2.3: {}
++
+   kleur@4.1.5: {}
+ 
+   lightningcss-android-arm64@1.33.0:
+@@ -2231,6 +2577,10 @@ snapshots:
+ 
+   locate-character@3.0.0: {}
+ 
++  lru-cache@5.1.1:
++    dependencies:
++      yallist: 3.1.1
++
+   magic-string@0.30.21:
+     dependencies:
+       '@jridgewell/sourcemap-codec': 1.6.0
+@@ -2239,12 +2589,26 @@ snapshots:
+     dependencies:
+       '@jridgewell/sourcemap-codec': 1.6.0
+ 
++  magicast@0.5.4:
++    dependencies:
++      '@babel/parser': 7.29.8
++      '@babel/types': 7.29.8
++      source-map-js: 1.2.1
++
++  make-dir@4.0.0:
++    dependencies:
++      semver: 7.8.5
++
+   mri@1.2.0: {}
+ 
+   mrmime@2.0.1: {}
+ 
++  ms@2.1.3: {}
++
+   nanoid@3.3.18: {}
+ 
++  node-releases@2.0.54: {}
++
+   obug@2.1.4: {}
+ 
+   path-parse@1.0.7: {}
+@@ -2331,6 +2695,10 @@ snapshots:
+     dependencies:
+       mri: 1.2.0
+ 
++  semver@6.3.1: {}
++
++  semver@7.8.5: {}
++
+   set-cookie-parser@3.1.2: {}
+ 
+   siginfo@2.0.0: {}
+@@ -2354,6 +2722,10 @@ snapshots:
+ 
+   std-env@4.2.0: {}
+ 
++  supports-color@7.2.0:
++    dependencies:
++      has-flag: 4.0.0
++
+   supports-preserve-symlinks-flag@1.0.0: {}
+ 
+   svelte-check@4.7.6(picomatch@4.0.7)(svelte@5.57.0)(typescript@6.0.3):
+@@ -2412,6 +2784,12 @@ snapshots:
+ 
+   undici-types@7.18.2: {}
+ 
++  update-browserslist-db@1.3.2(browserslist@4.28.8):
++    dependencies:
++      browserslist: 4.28.8
++      escalade: 3.2.0
++      picocolors: 1.1.1
++
+   vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(tsx@4.23.13):
+     dependencies:
+       lightningcss: 1.33.0
+@@ -2429,7 +2807,7 @@ snapshots:
+     optionalDependencies:
+       vite: 8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(tsx@4.23.13)
+ 
+-  vitest@4.1.11(@types/node@24.13.3)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(tsx@4.23.13)):
++  vitest@4.1.11(@types/node@24.13.3)(@vitest/coverage-istanbul@4.1.11)(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(tsx@4.23.13)):
+     dependencies:
+       '@vitest/expect': 4.1.11
+       '@vitest/mocker': 4.1.11(vite@8.2.2(@types/node@24.13.3)(esbuild@0.28.2)(tsx@4.23.13))
+@@ -2453,6 +2831,7 @@ snapshots:
+       why-is-node-running: 2.3.0
+     optionalDependencies:
+       '@types/node': 24.13.3
++      '@vitest/coverage-istanbul': 4.1.11(vitest@4.1.11)
+     transitivePeerDependencies:
+       - msw
+ 
+@@ -2461,6 +2840,8 @@ snapshots:
+       siginfo: 2.0.0
+       stackback: 0.0.2
+ 
++  yallist@3.1.1: {}
++
+   zimmerframe@1.1.5: {}
+ 
+   zod@4.5.4: {}
+diff --git a/crm/vitest.config.ts b/crm/vitest.config.ts
+index a938f94..f9355b0 100644
+--- a/crm/vitest.config.ts
++++ b/crm/vitest.config.ts
+@@ -15,6 +15,13 @@ export default defineConfig({
+ 		globalSetup: ['./src/test/global-setup.ts'],
+ 		fileParallelism: false,
+ 		environment: 'node',
+-		testTimeout: 30_000
++		testTimeout: 30_000,
++		coverage: {
++			provider: 'istanbul',
++			include: ['src/lib/server/**/*.ts'],
++			exclude: ['src/lib/server/__tests__/**'],
++			reporter: ['text', 'json-summary'],
++			reportsDirectory: './coverage'
++		}
+ 	}
+ })
 -- 
 2.43.0
 

@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Core permissions for the main window.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:webview:allow-create-webview-window",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "mcp-bridge:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://*" },
+        { "url": "http://*" },
+        { "url": "mailto:*" },
+        { "url": "tel:*" }
+      ]
+    }
+  ]
+}

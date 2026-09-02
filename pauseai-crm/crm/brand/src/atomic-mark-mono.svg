@@ -1,0 +1,17 @@
+<!--
+  Atomic — single-colour lockup, for contexts that flatten the mark to one
+  ink: Safari pinned-tab (mask-icon.svg), stencils, embroidery.
+
+  The colour mark separates orb from sweep with a white keyline, which
+  carries no information once everything is one colour. Unlike the old ring
+  mark, though, the sweep does not need that gap re-engineered: the orb sits
+  on the end of the stroke rather than floating above it, so flattening them
+  together reads as a stroke with a ball terminal — still unmistakably the
+  same mark. Geometry is therefore identical to the colour version.
+
+  currentColor lets consumers ink it; Safari overrides the fill anyway.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="512" height="512" fill="none">
+  <path d="M74 52 A 24 24 0 1 1 50 28" stroke="currentColor" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="50" cy="28" r="12" fill="currentColor"/>
+</svg>

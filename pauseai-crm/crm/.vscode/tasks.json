@@ -1,0 +1,96 @@
+{
+	// See https://go.microsoft.com/fwlink/?LinkId=733558
+	// for the documentation about the tasks.json format
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "run atomic-server (cargo run)",
+			"type": "shell",
+			"command": "~/.cargo/bin/cargo",
+			"args": [
+				"run",
+				"--bin",
+				"atomic-server"
+			],
+			"group": "build",
+			"problemMatcher": []
+		},
+		{
+			"label": "test atomic-server (cargo nextest run)",
+			"type": "shell",
+			"command": "~/.cargo/bin/cargo",
+			"args": [
+				"nextest",
+				"run"
+			],
+			"group": "test"
+		},
+		{
+			"label": "test end-to-end / E2E (npm playwright)",
+			"type": "shell",
+			"command": "cd server/e2e_tests/ && npm i && npm run test",
+			"group": "test"
+		},
+		{
+			"label": "build desktop atomic-server tauri",
+			"type": "shell",
+			"command": "cd desktop && cargo tauri build",
+			"group": "build"
+		},
+		{
+			"label": "dev desktop atomic-server tauri",
+			"type": "shell",
+			"command": "cd desktop && cargo tauri dev",
+			"group": "build"
+		},
+		{
+			"label": "benchmark criterion atomic-server",
+			"type": "shell",
+			"command": "cd server && cargo criterion",
+			"group": "test"
+		},
+		{
+			"label": "run SigNoz for tracing locally (using docker)",
+			"type": "shell",
+			"command": "git clone https://github.com/SigNoz/signoz.git /tmp/signoz 2>/dev/null || true && cd /tmp/signoz/deploy && docker compose up",
+			"group": "none",
+			"problemMatcher": []
+		},
+		{
+			"label": "dagger call rust-build",
+			"type": "shell",
+			"command": "dagger call rust-build",
+			"group": "none",
+			"problemMatcher": []
+		},
+		{
+			"type": "npm",
+			"script": "start",
+			"problemMatcher": [
+				"$tsc-watch"
+			],
+			"label": "run data-browser dev server (pnpm start)",
+			"detail": "pnpm workspace @tomic/data-browser start",
+			"isBackground": true,
+			"path": "browser",
+			"group": "build"
+		},
+		{
+			"type": "npm",
+			"script": "test-e2e",
+			"problemMatcher": [
+				"$tsc-watch"
+			],
+			"label": "test data-browser e2e",
+			"path": "browser",
+			"detail": "pnpm test-e2e",
+			"isBackground": true,
+			"group": "test"
+		},
+		{
+			"type": "shell",
+			"label": "docs atomic data (mdbook serve)",
+			"command": "cd docs && mdbook serve",
+		}
+	]
+}

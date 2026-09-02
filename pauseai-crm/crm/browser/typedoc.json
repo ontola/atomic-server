@@ -1,0 +1,13 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPointStrategy": "packages",
+  "entryPoints": [
+    "lib",
+    "react"
+  ],
+  "excludeExternals": true,
+  "includeVersion": true,
+  "readme": "typedoc-entry.md",
+  "name": "@tomic",
+  "out": "data-browser/publish/docs"
+}

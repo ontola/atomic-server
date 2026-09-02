@@ -1,0 +1,186 @@
+name: Deployment (re-use)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      remote_host:
+        required: true
+        type: string
+      ref:
+        description: >-
+          Commit to build and deploy. Callers triggered by `workflow_run` MUST
+          pass `github.event.workflow_run.head_sha`: that event checks out the
+          default branch by default, not the commit whose CI just passed, so
+          omitting this silently deploys something other than what was tested.
+        required: true
+        type: string
+    secrets:
+      REMOTE_USER:
+        required: true
+      SSH_PRIVATE_KEY:
+        required: true
+
+jobs:
+  deploy:
+    environment: ${{ inputs.environment }}
+    # Deliberately NOT CI_RUNNER. Publishing and deploying must not depend on a
+    # particular machine being switched on: GitHub does not fall back when a
+    # self-hosted runner is offline, it queues for 24h and then fails. A tag
+    # push once left crates.io publishing queued for a day for exactly that
+    # reason. Self-hosted is for main.yml, where a warm Dagger cache is worth
+    # having and a stall only costs slow CI.
+    runs-on: ubuntu-latest
+    env:
+      REMOTE_USER: ${{ secrets.REMOTE_USER }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Deploy using Dagger
+        id: deploy
+        uses: dagger/dagger-for-github@8.0.0
+        with:
+          version: "latest"
+          verb: call
+          args: deploy-server --remote-host ${{ inputs.remote_host }} --remote-user env://REMOTE_USER --ssh-private-key env://SSH_PRIVATE_KEY
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+
+      # A deploy that copies a binary and restarts a unit reports success as
+      # soon as systemd accepts the restart -- it does not wait to find out
+      # whether the process stayed up. On 2026-07-25 this job went green while
+      # staging panicked on boot, restarted five times, and was left dead for
+      # over an hour; the outage was found by hand, not by CI.
+      #
+      # `/server` is the cheapest endpoint that proves the store opened and the
+      # thing is actually serving. Retried because a real start takes a few
+      # seconds, and a database migration can take considerably longer.
+      - name: Wait for the deployed server to answer
+        id: health
+        run: |
+          for attempt in $(seq 1 30); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
+              "https://${{ inputs.remote_host }}/server" || echo 000)
+
+            if [ "$code" = "200" ]; then
+              echo "${{ inputs.remote_host }} answered 200 after ${attempt} attempt(s)."
+              exit 0
+            fi
+
+            echo "attempt ${attempt}: HTTP ${code}"
+            sleep 10
+          done
+
+          echo "::error::${{ inputs.remote_host }} never returned 200 — the deploy landed but the server is not serving."
+          exit 1
+
+      # Fires when the deploy step fails too, not only the health check.
+      #
+      # The remote script replaces `~/atomic-server` as its FIRST action and
+      # only then stops the unit, exports, and starts it again. So a failure
+      # anywhere after that `mv` — a failed export, a unit that will not start,
+      # a non-zero `systemctl status` — leaves the new binary installed AND the
+      # service stopped, which is the outage this rollback exists to end. Gating
+      # on the health check alone missed every one of those: a skipped step has
+      # outcome `skipped`, not `failure`, so the condition was never true.
+      #
+      # Each deploy leaves a timestamped copy of the binary it installed, so a
+      # previous one is on disk and is by definition the last binary that served
+      # traffic. Restoring it beats leaving the host down while someone is
+      # found: on 2026-07-25 a crash-looping staging sat dead for over an hour.
+      #
+      # Deliberately does NOT touch the store. If the new binary migrated it on
+      # boot, an older binary may not read it back, and a rollback that silently
+      # mangles data is worse than an outage. That case needs the export taken
+      # during deploy, and a human. Note this is now MORE likely to matter: a
+      # deploy that failed in `atomic-server export` has already opened the
+      # store with the new binary. The rollback still only swaps the binary —
+      # if the service does not come back, that is the case to look at first.
+      - name: Roll back to the previous binary
+        if: failure() && (steps.health.outcome == 'failure' || steps.deploy.outcome == 'failure')
+        env:
+          # Which failure brought us here. Decided on the runner, not remotely:
+          # the remote script cannot see step outcomes, and it needs this to
+          # tell "the deploy never touched the host" from "the deploy installed
+          # a bad binary". Resolved here so the remote side is a plain value.
+          ROLLBACK_REASON: ${{ steps.health.outcome == 'failure' && 'health' || 'deploy' }}
+        run: |
+          echo "::warning::Deploy or health check failed — restoring the previous binary on ${{ inputs.remote_host }}."
+          install -m 600 /dev/null key && printf '%s' "$SSH_PRIVATE_KEY" > key
+          ssh-keyscan -H "${{ inputs.remote_host }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+          ssh -i key -o StrictHostKeyChecking=accept-new \
+            "$REMOTE_USER@${{ inputs.remote_host }}" '
+              set -e
+              # Quotes close and reopen so the runner expands ROLLBACK_REASON;
+              # the remote receives a literal word.
+              reason='"$ROLLBACK_REASON"'
+
+              newest=$(ls -1t ~/atomic-server-2* 2>/dev/null | head -1)
+              current=$(sha256sum ~/atomic-server 2>/dev/null | cut -d" " -f1 || echo none)
+              newest_sum=""
+              [ -n "$newest" ] && newest_sum=$(sha256sum "$newest" | cut -d" " -f1)
+
+              # Whether to skip needs BOTH signals, because neither alone is
+              # enough.
+              #
+              # Service state alone is not: a build or rsync failure never
+              # reaches the `mv`, so the old process is still serving and a
+              # rollback would drag a healthy host BACKWARDS a version for
+              # nothing.
+              #
+              # Checksums alone are not either — and this is the trap the
+              # previous version fell into. The remote script copies its backup
+              # IMMEDIATELY after the `mv`, so "installed == newest backup" is
+              # equally true when nothing happened and when the deploy died
+              # three steps later in `export`/`start`/`status` with the service
+              # down. Skipping on that alone declined to roll back in exactly
+              # the outage this exists to end.
+              #
+              # Together they separate the three real cases:
+              #   unit dead                       -> roll back, whatever the sums say
+              #   unit up   + installed == newest -> host untouched, leave it
+              #   unit up   + installed != newest -> binary swapped but the old
+              #                                      process still serving; restore
+              #                                      it before the next restart
+              #                                      picks up the bad one
+              if [ "$reason" = "deploy" ] &&
+                 systemctl is-active --quiet atomic &&
+                 [ -n "$newest_sum" ] && [ "$newest_sum" = "$current" ]; then
+                echo "atomic is still serving and the installed binary is unchanged — this deploy never touched the host. Nothing to roll back."
+                exit 0
+              fi
+
+              # Otherwise pick the newest backup that DIFFERS from what is
+              # installed, rather than assuming the installed one is the newest
+              # backup. A health-check failure means the newest backup is the
+              # bad binary and we want the next one down; a deploy that died
+              # after `mv` but before `cp` left the newest backup as the good
+              # binary we want to restore. A fixed `sed -n 2p` is wrong for the
+              # second case — it rolls back one version too far.
+              previous=""
+              for candidate in $(ls -1t ~/atomic-server-2* 2>/dev/null); do
+                if [ "$(sha256sum "$candidate" | cut -d" " -f1)" != "$current" ]; then
+                  previous="$candidate"
+                  break
+                fi
+              done
+
+              if [ -z "$previous" ]; then
+                echo "No previous binary to roll back to." >&2
+                exit 1
+              fi
+
+              echo "Restoring $previous"
+              systemctl stop atomic || true
+              cp "$previous" ~/atomic-server
+              systemctl start atomic
+              sleep 5
+              systemctl is-active atomic
+            '
+
+          echo "Rolled back. The store was left untouched — check it before redeploying."

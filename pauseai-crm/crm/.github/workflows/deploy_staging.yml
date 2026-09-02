@@ -1,0 +1,30 @@
+name: Deployment Staging
+
+# Staging follows `develop`. Production follows a stable `v*` tag, not a
+# branch. Same rule otherwise: deploy the commit whose pipeline passed, not
+# merely the latest commit. See deploy_production.yml for why `workflow_run`
+# rather than `push`, and why the head_sha has to be passed explicitly.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit or branch to deploy"
+        required: false
+        default: develop
+        type: string
+  workflow_run:
+    workflows: ["Main pipeline: build, lint, test"]
+    branches: ["develop"]
+    types: [completed]
+
+jobs:
+  deploy-staging:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    uses: "./.github/workflows/deployment.yml"
+    with:
+      environment: staging
+      remote_host: staging.atomicdata.dev
+      ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.event.workflow_run.head_sha }}
+    secrets: inherit

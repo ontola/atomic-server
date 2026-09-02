@@ -1,0 +1,64 @@
+Atomic brand assets — licence
+=============================
+
+Copyright (c) 2020 Joep Meindertsma / Ontola.io. All rights reserved.
+
+THE CONTENTS OF THIS DIRECTORY ARE NOT COVERED BY THE MIT LICENCE THAT
+APPLIES TO THE REST OF THIS REPOSITORY.
+
+The MIT licence in the repository root grants rights in the *software*. It
+does not grant any right to use the names, logos, marks or other brand
+features of Atomic Server, Atomic Data, Atomic Canvas or Ontola. Those are
+reserved. This directory — the source marks in `src/`, the generated
+artifacts in `dist/`, and every icon this package renders into the apps —
+is licensed separately, on the terms below.
+
+Nothing here restricts your rights under the MIT licence with respect to
+the software itself. You may fork, modify, redistribute and sell the code.
+What you may not do is present your version as though it were ours.
+
+
+What you may do without asking
+------------------------------
+
+1. Use the marks to refer accurately to the Atomic projects — in articles,
+   talks, documentation, comparison tables, "works with Atomic Server"
+   integration notices, and similar factual reference.
+
+2. Redistribute an *unmodified* build of the software with its icons in
+   place. Packaging Atomic Server for a distro or app store is fine.
+
+3. Reproduce the marks with their proportions and colours intact. Do not
+   recolour, rotate, stretch, add effects, or rebuild them from memory —
+   generate from `brand/src/`.
+
+
+What requires written permission
+--------------------------------
+
+1. Using the marks on a *modified* build or a fork. If you change the
+   software, replace the branding. This is the rule that keeps the marks
+   meaningful, and it is deliberately the same one the Linux distributions
+   apply to Firefox and Chromium.
+
+2. Any use suggesting sponsorship, endorsement, affiliation or an official
+   relationship that does not exist.
+
+3. Use in your own product name, company name, domain name, app-store
+   listing name, or logo.
+
+4. Merchandise, or any commercial use of the marks as a selling feature.
+
+Requests: joep@ontola.io
+
+
+Why this carve-out exists
+-------------------------
+
+Atomic is free software and is meant to stay that way. Trademark is the
+mechanism that lets it stay free: anyone may run, fork and sell the code,
+while the *name* continues to denote software that actually comes from
+this project. Reserving the marks is what makes a sustainable business
+possible around an MIT codebase without ever having to restrict the code.
+
+See TRADEMARKS.md in the repository root for the full policy.

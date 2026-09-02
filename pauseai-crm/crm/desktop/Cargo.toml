@@ -1,0 +1,106 @@
+[package]
+authors = ["joep@ontola.io"]
+build = "src/build.rs"
+description = "Atomic Server - Tauri desktop"
+edition = "2021"
+license = "MIT"
+name = "atomic-server-tauri"
+# Ships as a Tauri bundle (.dmg/.AppImage/.apk), never as a crate. It also
+# depends on `atomic-server` and `atomic_lib` by path with no version, which
+# crates.io forbids — see the note on `publish` in ../wasm/Cargo.toml.
+publish = false
+repository = "https://github.com/atomicdata-dev/atomic-server"
+version = "0.41.0-beta.3"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+actix-rt = "2.6.0"
+# Cloud Vault IPC: base64 for the bytes crossing it, tokio for the
+# current-thread runtime the non-`Send` vault futures need. Shared rather
+# than desktop-only — Android is the platform that needed this most.
+base64 = "0.22"
+clap = "4"
+serde_json = "1.0"
+tauri = { version = "2", features = ["tray-icon", "image-png", "devtools"] }
+tauri-plugin-deep-link = "2"
+tauri-plugin-process = "2"
+# Opening a URL in the system browser: the tray menu, and what an <a
+# target="_blank"> ultimately needs in a webview with nowhere to put a tab.
+# Deliberately the only plugin here that opens things — `tauri-plugin-shell`
+# also injects a click handler for `_blank` links, and because it listens on
+# `body` it wins the race against this one and calls `shell.open`, which is
+# denied by our ACL and fails on Android with EACCES regardless.
+tauri-plugin-opener = "2"
+# Drives the running app over a WebSocket so an agent can open documents,
+# type, and read the DOM — used to test collaborative editing end to end
+# without a human at the keyboard. Registered only under `debug_assertions`
+# (see `lib.rs`), so it is compiled but inert in release builds.
+tauri-plugin-mcp-bridge = "0.12"
+tokio = { version = "1", features = ["rt", "sync", "time"] }
+
+# Mobile-only: the in-app QR scanner for device pairing. The Android WebView
+# doesn't grant getUserMedia to web content, so a web BarcodeDetector scanner
+# can't work — this native scanner owns the camera + permission instead.
+[target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
+tauri-plugin-barcode-scanner = "2"
+
+# Unix-desktop-only: the NFS "virtual drive" mount.
+#
+# Two separate exclusions, for two different reasons. Neither mobile OS can
+# mount NFS (they use provider APIs instead — see planning/virtual-drive.md).
+# And `nfsserve` itself is unix-only: it reaches for
+# `std::os::unix::fs::{MetadataExt, PermissionsExt}` in fs_util.rs, so it does
+# not compile for windows at all.
+#
+# That second one is why there was no Windows build. The gate used to be
+# `not(any(android, ios))`, which still includes windows, so the target could
+# never link — release.yml carried a "windows-latest currently not supported"
+# comment describing the symptom rather than the cause.
+#
+# Cargo evaluates these selectors itself, before any build script runs, so the
+# `desktop` alias tauri-build provides is not available here — hence the long
+# form. lib.rs says the same thing as `cfg(all(desktop, unix))`.
+[target.'cfg(all(unix, not(any(target_os = "android", target_os = "ios"))))'.dependencies]
+nfsserve = "0.10"
+hex = "0.4"
+blake3 = "1"
+fastcdc = "3"
+async-trait = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[dependencies.atomic-server]
+# No HTTPS for desktop, but include Iroh for p2p sync
+default-features = false
+path = "../server"
+
+[dependencies.atomic_lib]
+path = "../lib"
+features = ["db-redb", "iroh"]
+
+[dependencies.serde]
+features = ["derive"]
+version = "1.0"
+
+# reqwest's rustls backend delegates certificate verification to the Android
+# system trust store; that bridge must be initialized with the app's JVM
+# context at startup (see lib.rs) or every outbound HTTPS request panics.
+[target.'cfg(target_os = "android")'.dependencies]
+jni = { version = "0.22", default-features = false }
+rustls-platform-verifier = "0.7"
+# Android reports its hostname as "localhost"; the real device name lives in
+# the system properties (see `android_device_name` in lib.rs).
+android_system_properties = "0.1"
+
+[lib]
+name = "atomic_server_tauri"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "atomic-server-tauri"
+path = "src/main.rs"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+default = ["custom-protocol"]

@@ -1,0 +1,300 @@
+import {
+  ai,
+  dataBrowser,
+  server,
+  useCanWrite,
+  useChildren,
+  useResource,
+  useStore,
+  useString,
+  useTitle,
+} from '@tomic/react';
+import { Fragment, useEffect, useMemo, useState, type JSX } from 'react';
+import { styled } from 'styled-components';
+import { useSettings } from '../../helpers/AppSettings';
+import { constructOpenURL } from '../../helpers/navigation';
+import { Button } from '../Button';
+import { ResourceSideBar } from './ResourceSideBar/ResourceSideBar';
+import { SideBarHeader } from './SideBarHeader';
+import { SimpleErrorBlock } from '../ErrorLook';
+import { DriveSwitcher } from './DriveSwitcher';
+import { Row } from '../Row';
+import { IconButton } from '../IconButton/IconButton';
+import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
+import { FaSort } from 'react-icons/fa6';
+import { useCurrentSubject } from '../../helpers/useCurrentSubject';
+import { ScrollArea } from '../ScrollArea';
+import { useSidebarDnd } from './useSidebarDnd';
+import { closestCenter, DndContext, DragOverlay } from '@dnd-kit/core';
+import { SidebarItemTitle } from './ResourceSideBar/SidebarItemTitle';
+import { DropEdge } from './ResourceSideBar/DropEdge';
+import { createPortal } from 'react-dom';
+import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
+import { LoaderInline } from '../Loader';
+import { QuickCreateRow } from '../NewInstanceButton';
+
+interface SideBarDriveProps {
+  onItemClick: () => unknown;
+  onIsRearangingChange: (isRearanging: boolean) => void;
+}
+
+/** Shows the current Drive, it's children and an option to change to a different Drive */
+export function SideBarDrive({
+  onItemClick,
+  onIsRearangingChange,
+}: SideBarDriveProps): JSX.Element {
+  const store = useStore();
+  const { drive, agent } = useSettings();
+  const {
+    handleDragStart,
+    handleDragEnd,
+    draggingResource,
+    sensors,
+    animateDrop,
+    dndExplanation,
+    announcements,
+  } = useSidebarDnd(onIsRearangingChange);
+  const driveResource = useResource(drive);
+  const { subjects: allChildren, loading: childrenLoading } =
+    useChildren(drive);
+
+  // The drive's default ontology is schema plumbing (auto-created by
+  // `createDrive`) — hide it from the tree so users aren't confronted with an
+  // "Ontology" they never made. It stays reachable via the drive page and
+  // class/property links. Ontologies the user creates themselves still show.
+  const [defaultOntology] = useString(
+    driveResource,
+    server.properties.defaultOntology,
+  );
+  // Same for the Comments folder (the standard location holding comment
+  // Messages, created lazily on the first comment): comments are reached
+  // through the Comments panel, not by browsing the folder.
+  const [commentsFolder] = useString(
+    driveResource,
+    dataBrowser.properties.commentsFolder,
+  );
+  // And the AI Chats folder (on the personal drive): chats re-open through
+  // the AI sidebar on the resource they were started on.
+  const [aiChatsFolder] = useString(driveResource, ai.properties.aiChatsFolder);
+  const subResources = useMemo(
+    () =>
+      allChildren.filter(
+        subject =>
+          subject !== defaultOntology &&
+          subject !== commentsFolder &&
+          subject !== aiChatsFolder,
+      ),
+    [allChildren, defaultOntology, commentsFolder, aiChatsFolder],
+  );
+  const [title] = useTitle(driveResource);
+  const navigate = useNavigateWithTransition();
+  const agentCanWrite = useCanWrite(driveResource);
+  const [currentSubject] = useCurrentSubject();
+  const currentResource = useResource(currentSubject);
+  const [ancestry, setAncestry] = useState<string[]>([]);
+
+  useEffect(() => {
+    store.getResourceAncestry(currentResource.stable).then(result => {
+      setAncestry(result);
+    });
+  }, [store, currentResource.stable]);
+
+  const driveName = driveResource.isUnauthorized()
+    ? 'Unauthorized'
+    : title || drive;
+
+  return (
+    <>
+      <SideBarHeader>
+        <TitleButton
+          resource={drive}
+          clean
+          current={drive === currentSubject}
+          data-testid='sidebar-drive-open'
+          onClick={() => {
+            onItemClick();
+            navigate(constructOpenURL(drive));
+          }}
+        >
+          <DriveTitle data-testid='current-drive-title'>{driveName}</DriveTitle>
+        </TitleButton>
+        <DriveSwitcher Trigger={DriveSwitcherTrigger} />
+      </SideBarHeader>
+      <DndContext
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        sensors={sensors}
+        // `closestCenter` lets the 3-pixel `DropEdge` strips between
+        // siblings win over the much-taller "drop onto folder row"
+        // targets when the dragged item is over a sibling gap. With the
+        // default `rectIntersection` the bigger row always swallowed
+        // every drop and inter-sibling reordering became unreachable.
+        collisionDetection={closestCenter}
+        accessibility={{
+          announcements,
+          screenReaderInstructions: {
+            draggable: dndExplanation,
+          },
+        }}
+      >
+        <StyledScrollArea>
+          <ListWrapper>
+            <DropEdge
+              parentHierarchy={[drive]}
+              index={0}
+              prevSubject={undefined}
+              nextSubject={subResources[0]}
+            />
+            {/* Gate on `subResources` (reactive `useChildren` state), NOT on
+                `driveResource.isReady()`. The latter is a proxy read the React
+                Compiler memoizes on the stable ref, so when the drive flips to
+                ready it doesn't re-render and the sidebar stays empty even
+                though the children are in state (confirmed: `setSubjects([3])`
+                ran but the list rendered nothing). If we HAVE children, show
+                them; otherwise fall back to a loader / error. */}
+            {subResources.length > 0 ? (
+              subResources.map((child, index) => {
+                return (
+                  <Fragment key={child}>
+                    <ResourceSideBar
+                      subject={child}
+                      renderedHierarchy={[drive]}
+                      ancestry={ancestry}
+                      onClick={onItemClick}
+                    />
+                    <DropEdge
+                      parentHierarchy={[drive]}
+                      index={index + 1}
+                      prevSubject={child}
+                      nextSubject={subResources[index + 1]}
+                    />
+                  </Fragment>
+                );
+              })
+            ) : childrenLoading ? (
+              <SideBarLoader />
+            ) : driveResource.error ? (
+              <SideBarErr>
+                {driveResource.isUnauthorized()
+                  ? agent
+                    ? 'unauthorized'
+                    : 'This drive is private, sign in to view it'
+                  : driveResource.error.message}
+              </SideBarErr>
+            ) : null}
+            {agentCanWrite && (
+              <NewResourceRow gap='0' center>
+                <QuickCreateRow
+                  parent={drive}
+                  newResourceButtonTestId='sidebar-new-resource'
+                  onItemClick={onItemClick}
+                />
+              </NewResourceRow>
+            )}
+          </ListWrapper>
+        </StyledScrollArea>
+        {createPortal(
+          <DragOverlay dropAnimation={animateDrop}>
+            {draggingResource && (
+              <SidebarItemTitle
+                subject={draggingResource}
+                hideActionButtons
+                isDragging
+              />
+            )}
+          </DragOverlay>,
+          document.body,
+        )}
+      </DndContext>
+    </>
+  );
+}
+
+const DriveTitle = styled.h2`
+  margin: 0;
+  padding: 0;
+  font-size: 1.4rem;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+/**
+ * The title and the drive-switcher caret form one segmented control: flush
+ * edges, shared rounding, each half highlighting on its own hover.
+ */
+const TitleButton = styled(Button)<{ current?: boolean }>`
+  text-align: left;
+  /* Fill the header so the switcher caret is always pinned to the right;
+     the name truncates when longer than the sidebar. */
+  flex: 1;
+  min-width: 0;
+  /* Lines the title text up with the tree rows below: SideBarHeader's
+     padding-inline plus SideBarItem's own padding. */
+  padding: 0.4rem 0.2rem;
+  border-radius: ${props => props.theme.radius} 0 0
+    ${props => props.theme.radius};
+
+  ${({ current, theme }) =>
+    current &&
+    `
+    color: ${theme.colors.main};
+  `}
+
+  &:hover {
+    background-color: ${props => props.theme.colors.bg1};
+  }
+  &:active {
+    background-color: ${props => props.theme.colors.bg2};
+  }
+`;
+
+const SwitcherButton = styled(IconButton)`
+  align-self: stretch;
+  height: auto;
+  width: auto;
+  padding-inline: 0.4rem;
+  border-radius: 0 ${p => p.theme.radius} ${p => p.theme.radius} 0;
+  color: ${p => p.theme.colors.textLight};
+
+  &:hover,
+  &:focus-visible {
+    background-color: ${p => p.theme.colors.bg1};
+    color: ${p => p.theme.colors.text};
+  }
+  &:active {
+    background-color: ${p => p.theme.colors.bg2};
+  }
+`;
+
+const DriveSwitcherTrigger = buildDefaultTrigger(
+  <FaSort />,
+  'Switch Drive',
+  SwitcherButton,
+);
+
+const SideBarErr = styled(SimpleErrorBlock)`
+  margin-inline-end: ${props => props.theme.size()};
+`;
+
+const ListWrapper = styled.div`
+  overflow-x: hidden;
+  position: relative;
+  padding-inline: ${p => p.theme.margin}rem;
+`;
+
+const StyledScrollArea = styled(ScrollArea)`
+  overflow: hidden;
+`;
+
+const SideBarLoader = styled(LoaderInline)`
+  display: block;
+  height: 1.5rem;
+  margin-block: 0.3rem;
+`;
+
+const NewResourceRow = styled(Row)`
+  padding-bottom: 1rem;
+  overflow: visible;
+`;

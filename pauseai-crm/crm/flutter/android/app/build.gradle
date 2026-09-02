@@ -1,0 +1,57 @@
+plugins {
+    id "com.android.application"
+    id "org.jetbrains.kotlin.android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader("UTF-8") { reader -> localProperties.load(reader) }
+}
+
+def flutterVersionCode = localProperties.getProperty("flutter.versionCode", "1")
+def flutterVersionName = localProperties.getProperty("flutter.versionName", "1.0")
+
+android {
+    namespace "com.ontola.atomiccanvas_flutter"
+    compileSdk 36
+    ndkVersion "27.0.12077973"
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    defaultConfig {
+        applicationId "com.ontola.atomiccanvas_flutter"
+        minSdkVersion flutter.minSdkVersion
+        targetSdk 36
+        versionCode flutterVersionCode.toInteger()
+        versionName flutterVersionName
+        ndk {
+            // only build for joep's local android devices
+            abiFilters 'arm64-v8a'
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+        }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
+flutter {
+    source '../..'
+}

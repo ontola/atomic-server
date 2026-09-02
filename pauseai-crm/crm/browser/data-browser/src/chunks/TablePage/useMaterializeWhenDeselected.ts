@@ -1,0 +1,159 @@
+import { Resource, useStore } from '@tomic/react';
+import { useEffect, useRef } from 'react';
+import {
+  CursorMode,
+  useTableEditorContext,
+} from '@chunks/TableEditor/TableEditorContext';
+
+/** Delay before persisting a row the user has moved off of *while still
+ * editing the table* (moved to another row, Edit mode still on). A short
+ * debounce coalesces the burst of deselects during rapid Enter-Enter entry and
+ * keeps each save out of the keystroke path. */
+const MATERIALIZE_DEBOUNCE = 50;
+
+/** Delay before persisting when the user has *left Edit mode* entirely (Escape
+ * / click-away). This is the calm "I'm done" signal — there is no entry storm
+ * to coalesce, and the last row (never deselected) must be saved promptly so a
+ * follow-up "is everything synced?" check doesn't race ahead of it. A
+ * microtask (delay 0) starts the save before the next poll/paint while still
+ * running outside React's render cycle. */
+const MATERIALIZE_FLUSH = 0;
+
+/**
+ * Materialize a virtual (`_new:`) row a short while after the user moves off
+ * it.
+ *
+ * New rows are held purely locally while the user types ({@link TableNewRow}
+ * renders a `_new:` resource and {@link TableCell} never persists it) — no
+ * commit, no re-fetch, no remount reaches the cell mid-entry, which is what
+ * makes rapid row entry stable. Once the active cell has been on a *different*
+ * row for {@link MATERIALIZE_DEBOUNCE}ms, the row is saved: that signs its
+ * genesis commit and renames `_new:` → `did:ad:` (the store keeps an alias so
+ * the still-mounted `TableNewRow` resolves the same resource — it does not flip
+ * to a collection member, see `TableResource`).
+ *
+ * The row is considered "in use" only while it is BOTH the selected row AND
+ * the table is in Edit mode; otherwise the debounce timer runs. So a row
+ * materializes when the user moves to another row (deselect) *or* leaves Edit
+ * mode on it (the final Escape / click-away) — the latter is what persists the
+ * last row, which is never deselected. A transient Edit→Visual→Edit blip (e.g.
+ * the tag picker's Escape) is shorter than the debounce, so the timer is
+ * cancelled before it fires and the active row is left undisturbed.
+ *
+ * Two properties make this safe under rapid entry:
+ *  - The "in use" guard keeps the row the user is actively editing virtual.
+ *  - The save is **deferred** (debounced via `setTimeout`), so it runs in its
+ *    own macrotask well outside React's render/commit cycle. Calling `save()`
+ *    synchronously from the effect lets its store mutations + notify cascade
+ *    re-enter an in-progress render ("setState while rendering" → runaway
+ *    recursion that crashes the tab). The timer also coalesces the burst of
+ *    deselects during fast entry into far fewer signs.
+ *
+ * @param resource The row's virtual resource.
+ * @param index    This row's grid index (matches the editor's `selectedRow`).
+ */
+export function useMaterializeWhenDeselected(
+  resource: Resource,
+  index: number,
+): void {
+  const { selectedRow, cursorMode } = useTableEditorContext();
+  const store = useStore();
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const counted = useRef(false);
+  const unmounted = useRef(false);
+
+  // Declared before the effect below so that on unmount its cleanup runs
+  // first — React destroys effects in the order they were created — and the
+  // cleanup there can tell "my dependencies changed" from "this row is gone".
+  useEffect(
+    () => () => {
+      unmounted.current = true;
+    },
+    [],
+  );
+
+  useEffect(() => {
+    // The row's only copy lives in this timer until it fires, so the store has
+    // to count it as pending work — `pendingDirtyCount === 0` is documented to
+    // mean "safe to reload/navigate — nothing will be lost", and a row waiting
+    // on `setTimeout` is neither in the outbox nor saving. `useDebouncedSave`
+    // reports its own window the same way; this path had no equivalent, so a
+    // reload during it dropped the row while sync status read as settled.
+    const stopCounting = () => {
+      if (counted.current) {
+        counted.current = false;
+        store.finishScheduledSave();
+      }
+    };
+
+    // Actively editing THIS row — keep it virtual and cancel any pending
+    // materialize (the user came back to it before the timer fired).
+    if (selectedRow === index && cursorMode === CursorMode.Edit) {
+      if (timer.current !== undefined) {
+        clearTimeout(timer.current);
+        timer.current = undefined;
+      }
+
+      stopCounting();
+
+      return;
+    }
+
+    // Leaving Edit mode is the calm "done" signal → flush promptly. Moving
+    // between rows while still editing is the rapid-entry path → debounce.
+    const delay =
+      cursorMode === CursorMode.Edit ? MATERIALIZE_DEBOUNCE : MATERIALIZE_FLUSH;
+
+    if (!counted.current) {
+      counted.current = true;
+      store.startScheduledSave();
+    }
+
+    timer.current = setTimeout(() => {
+      timer.current = undefined;
+
+      // Already materialized (subject renamed on a prior save), or an empty
+      // placeholder (only the seeded `isA` + `parent`) — nothing to persist.
+      if (
+        !resource.subject.startsWith('_new:') ||
+        resource.getEntries().length <= 2
+      ) {
+        stopCounting();
+
+        return;
+      }
+
+      void resource
+        .save()
+        .catch(() => undefined)
+        .then(stopCounting);
+    }, delay);
+
+    return () => {
+      if (timer.current === undefined) {
+        return;
+      }
+
+      // The row is gone, not merely deselected: the grid is virtualized, so
+      // scrolling a row past the fold unmounts it. Cancelling here would be
+      // the last word — nothing re-arms a timer for a row that no longer
+      // renders — so the pending save is left to fire. `setTimeout` does not
+      // belong to React and does not care that the component went away, and
+      // the resource it closes over is the store's, which outlives the row.
+      //
+      // Leaving it counted matters just as much: a row cancelled this way was
+      // dropped from `pendingDirtyCount` too, so the app reported "nothing
+      // pending, safe to reload" while rows existed in this tab and nowhere
+      // else. Under fast entry that silently lost 7 rows in 40.
+      if (unmounted.current) {
+        return;
+      }
+
+      // Only release what this cleanup actually cancels: a save already in
+      // flight releases itself when it settles.
+      clearTimeout(timer.current);
+      timer.current = undefined;
+      stopCounting();
+    };
+  }, [selectedRow, cursorMode, index, resource, store]);
+}

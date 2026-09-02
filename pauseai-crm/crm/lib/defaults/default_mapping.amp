@@ -1,0 +1,18 @@
+# Classes
+class=https://atomicdata.dev/classes/Class
+property=https://atomicdata.dev/classes/Property
+
+# Properties
+shortname=https://atomicdata.dev/properties/shortname
+description=https://atomicdata.dev/properties/description
+
+# Datatypes
+atomicurl=https://atomicdata.dev/datatypes/atomicURL
+date=https://atomicdata.dev/datatypes/date
+timestamp=https://atomicdata.dev/datatypes/timestamp
+integer=https://atomicdata.dev/datatypes/integer
+slug=https://atomicdata.dev/datatypes/slug
+string=https://atomicdata.dev/datatypes/string
+
+# Methods
+insert=https://atomicdata.dev/methods/insert

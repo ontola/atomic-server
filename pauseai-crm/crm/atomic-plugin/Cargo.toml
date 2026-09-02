@@ -1,0 +1,33 @@
+[package]
+name = "atomic-plugin"
+version = "0.1.1"
+edition = "2021"
+description = "Helper library for building Atomic Data class extender plugins in Wasm"
+# Unlike the other `publish = false` members (see ../wasm/Cargo.toml) this one
+# COULD publish today — it has no path dependencies, so nothing blocks it.
+# It is held back on purpose, not because it is unpublishable.
+#
+# The name `atomic-plugin` is unclaimed on crates.io. Whoever writes a plugin
+# outside this repo needs this crate from a registry, so publishing it is
+# probably right eventually — but taking a public crate name is a one-way door,
+# and it should be a decision, not a side effect of the first release whose
+# workspace happened to include this directory.
+#
+# To publish: drop this line, and treat 0.1.1 as the number that goes out.
+publish = false
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+wit-bindgen = { version = "0.48.1", features = ["realloc", "macros"] }
+wit-bindgen-rt = "0.44.0"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+clap = { version = "4.5", features = ["derive"] }
+zip = "0.6"
+anyhow = "1.0"
+walkdir = "2"
+
+[[bin]]
+name = "atomic-plugin"
+path = "src/bin.rs"

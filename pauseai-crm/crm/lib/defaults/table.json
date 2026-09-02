@@ -1,0 +1,491 @@
+[
+  {
+    "@id": "https://atomicdata.dev/properties/max",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "The maximum size of the value",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "max"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/color",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The color of something in hex format. For example #1b50d8 or #1b50d840 for a transparent color.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "color"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/FormattedNumber",
+    "https://atomicdata.dev/properties/description": "A number that should be displayed in a certain way, using a specific [`NumberFormat`](https://atomicdata.dev/classes/NumberFormat).",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/decimalPlaces"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/numberFormatting"
+    ],
+    "https://atomicdata.dev/properties/shortname": "formatted-number"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/DateFormat",
+    "https://atomicdata.dev/properties/description": "The way the date value should be displayed.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/shortname"
+    ],
+    "https://atomicdata.dev/properties/shortname": "date-format"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/FormattedDate",
+    "https://atomicdata.dev/properties/description": "A date that is to be displayed according to its formatting.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/dateFormat"
+    ],
+    "https://atomicdata.dev/properties/shortname": "formatted-date"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/NumberFormat",
+    "https://atomicdata.dev/properties/description": "The way a number should be displayed",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/decimalPlaces"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/shortname"
+    ],
+    "https://atomicdata.dev/properties/shortname": "number-format"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/RangeProperty",
+    "https://atomicdata.dev/properties/description": "A property whose value is contained by a min and/or max size.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/min",
+      "https://atomicdata.dev/properties/max"
+    ],
+    "https://atomicdata.dev/properties/shortname": "range-property"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/dateFormat",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/DateFormat",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The way the date value should be displayed.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "date-format"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Tag",
+    "https://atomicdata.dev/properties/description": "A tag describes an enum attribute of a resource.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/color",
+      "https://atomicdata.dev/properties/emoji"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/shortname"
+    ],
+    "https://atomicdata.dev/properties/shortname": "tag"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/maxFloat",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float",
+    "https://atomicdata.dev/properties/description": "The maximum size of the value",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "max-float"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/SelectProperty",
+    "https://atomicdata.dev/properties/description": "A property that has a set selection of possible resources as value.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/max"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/allowsOnly"
+    ],
+    "https://atomicdata.dev/properties/shortname": "select-property"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/decimalPlaces",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "The number of decimals that should be shown",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "decimal-places"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/FloatRangeProperty",
+    "https://atomicdata.dev/properties/description": "A property whose float value is contained by a min and/or max size.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/minFloat",
+      "https://atomicdata.dev/properties/maxFloat"
+    ],
+    "https://atomicdata.dev/properties/shortname": "float-range-property"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/numberFormatting",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/NumberFormat",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The way a number should be displayed",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "number-formatting"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/minFloat",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/float",
+    "https://atomicdata.dev/properties/description": "The minimum size of the value",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "min-float"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/min",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/integer",
+    "https://atomicdata.dev/properties/description": "The minimum size of the value",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "min"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Table",
+    "https://atomicdata.dev/properties/description": "A table that holds children of a specific classtype",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/tableColumnWidths",
+      "https://atomicdata.dev/properties/table-views",
+      "https://atomicdata.dev/properties/table-default-view"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/classtype",
+      "https://atomicdata.dev/properties/name"
+    ],
+    "https://atomicdata.dev/properties/shortname": "table"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/tableColumnWidths",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The widths (in pixels) of the columns of a Table, stored as a JSON array of numbers — one per column, in column order.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "table-column-widths"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/emoji",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A UTF-8 Emoji",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "emoji"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/DateFormat/localLong",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/DateFormat"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes/DateFormat",
+    "https://atomicdata.dev/properties/shortname": "local-long"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/DateFormat/localRelative",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/DateFormat"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes/DateFormat",
+    "https://atomicdata.dev/properties/shortname": "local-relative"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/DateFormat/localNumeric",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/DateFormat"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes/DateFormat",
+    "https://atomicdata.dev/properties/shortname": "local-numeric"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/NumberFormat/number",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/NumberFormat"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes/NumberFormat",
+    "https://atomicdata.dev/properties/shortname": "number"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/NumberFormat/Percentage",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/NumberFormat"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes/NumberFormat",
+    "https://atomicdata.dev/properties/shortname": "number"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/View",
+    "https://atomicdata.dev/properties/description": "A saved view configuration for displaying a collection of resources (e.g. the rows of a Table): which filters are applied, how the data is sorted, and which kind of view (table, kanban, …) renders it.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/view-filters",
+      "https://atomicdata.dev/properties/view-sort-by",
+      "https://atomicdata.dev/properties/view-sort-desc",
+      "https://atomicdata.dev/properties/view-columns",
+      "https://atomicdata.dev/properties/view-group-by",
+      "https://atomicdata.dev/properties/view-end-prop",
+      "https://atomicdata.dev/properties/view-timer-exclusive",
+      "https://atomicdata.dev/properties/view-split-languages",
+      "https://atomicdata.dev/properties/view-derived-columns",
+      "https://atomicdata.dev/properties/view-aggregates",
+      "https://atomicdata.dev/properties/view-group-by-column",
+      "https://atomicdata.dev/properties/view-group-granularity",
+      "https://atomicdata.dev/properties/view-column-order",
+      "https://atomicdata.dev/properties/view-row-actions",
+      "https://atomicdata.dev/properties/view-quick-add"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/view-kind"
+    ],
+    "https://atomicdata.dev/properties/shortname": "view"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-kind",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The kind of view that renders the data, e.g. 'table' or 'kanban'.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-kind"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-filters",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The active filters of a view, stored as a JSON array of { property, operator, value } constraints combined with AND.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-filters"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-sort-by",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The property that the view sorts its results by.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-sort-by"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-sort-desc",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "Whether the view sorts in descending order.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-sort-desc"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-columns",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "The properties shown as columns in this view, in display order. Properties of the class that are omitted from this list are hidden.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-columns"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-group-by",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The property a view arranges its rows by. For grouped views (e.g. kanban) the SelectProperty whose tags define the groups/columns; for calendar views the date property that places rows on days; for timer views the timestamp property holding each entry's start.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-group-by"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-end-prop",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "For interval views (e.g. timer), the timestamp property holding each entry's end. Its start is stored in view-group-by; an entry with a start but no end is still running.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-end-prop"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-timer-exclusive",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "For timer views: whether starting an entry stops whatever else is running, so only one timer runs at a time. Defaults to true when unset.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-timer-exclusive"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-split-languages",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "The LocalizedText properties of this view that are split into one column per language tag.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-split-languages"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-derived-columns",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The computed columns of a view, stored as a JSON array of { id, label, kind, args, width } specs. Each is shown next to the stored columns but read off the row rather than out of it: 'kind' names one of a fixed set of generators (difference, elapsed, daysSince, product, offset) and 'args' maps that generator's arguments to property subjects or literal numbers.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-derived-columns"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-column-order",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The display order of a view's columns, as a JSON array of column keys: a property subject for a stored column, 'derived:<id>' for a computed one, or a key the view kind owns (e.g. 'timer-action' for the start/stop button). Columns missing from the list follow the ones in it, so a newly added column appears rather than disappearing. Separate from view-columns, which decides which properties are visible at all — this one can also place columns that are not properties.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-column-order"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-aggregates",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The statistics a view shows under its rows, as a JSON array of { id, property, function } specs (function is one of sum / count / avg / min / max). The store computes them over every row the view matches — not just the loaded page — so a total is exact without fetching the rows.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-aggregates"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-row-actions",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The buttons a view puts on each row, as a JSON array of { id, label, kind, property, value } specs. `kind` is one of setNow / setValue / toggle / increment — a closed vocabulary of patches, not code, so a person can edit one in a dialog and an assistant can write one. Pressing a button is an ordinary commit on that row, so it is rights-checked, synced and in history.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-row-actions"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-quick-add",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "A button above the rows that creates one, as a JSON object { label, field?, placeholder?, presets? }. `field` names a property to type into first (usually the row's name); each preset is { kind, property, value? } using the same closed patch vocabulary as view-row-actions, applied to the new row — so `setNow` stamps the moment the button was pressed. Absent means the view offers no quick-add.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-quick-add"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-group-by-column",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Property",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The property a view breaks its statistics down by: one subtotal per distinct value. Deliberately separate from view-group-by, which is the property a kanban, calendar or timer view arranges its rows by — a view can be grouped one way and subtotalled another.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-group-by-column"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/view-group-granularity",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "How a date or timestamp view-group-by-column is bucketed for subtotals: 'day', 'month', or 'exact' (one bucket per distinct value). Defaults to 'day' for timestamps, whose exact values are unique per row.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "view-group-granularity"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/table-views",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/View",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "The saved Views of a Table, in display order.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "table-views"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/table-default-view",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/View",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The View that is shown by default when opening a Table.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "table-default-view"
+  }
+]
