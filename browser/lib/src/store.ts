@@ -13,7 +13,12 @@ import {
   type Commit,
 } from './commit.js';
 import { datatypeFromUrl, type Datatype } from './datatypes.js';
-import { AtomicError, ErrorType, isTransportError } from './error.js';
+import {
+  AtomicError,
+  ErrorType,
+  isTransportError,
+  NOT_AVAILABLE_LOCALLY_MESSAGE,
+} from './error.js';
 import { EventManager } from './EventManager.js';
 import { hasBrowserAPI } from './hasBrowserAPI.js';
 import { collections } from './ontologies/collections.js';
@@ -3243,7 +3248,7 @@ export class Store {
               this.failResource(
                 subject,
                 new AtomicError(
-                  'Offline: resource not available locally. Reconnect to fetch.',
+                  NOT_AVAILABLE_LOCALLY_MESSAGE,
                   ErrorType.Transport,
                 ),
               );

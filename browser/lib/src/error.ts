@@ -46,6 +46,21 @@ export function isTransportError(error?: Error): boolean {
   return error instanceof AtomicError && error.type === ErrorType.Transport;
 }
 
+/**
+ * The message a fetch fails with when the Store has no server to ask and the
+ * local database does not hold the resource. Named so callers can tell this
+ * apart from other transport errors: it means "nothing here", not "try again".
+ */
+export const NOT_AVAILABLE_LOCALLY_MESSAGE =
+  'Offline: resource not available locally. Reconnect to fetch.';
+
+/** True when the resource failed because no copy of it exists on this device. */
+export function isNotAvailableLocally(error?: Error): boolean {
+  return (
+    isTransportError(error) && error!.message === NOT_AVAILABLE_LOCALLY_MESSAGE
+  );
+}
+
 /** Pass any error. If the error is an AtomicError and it's Unauthorized, return true */
 export function isUnauthorized(error?: Error): boolean {
   if (error instanceof AtomicError) {
