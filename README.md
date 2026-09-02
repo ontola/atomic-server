@@ -2,7 +2,7 @@
 
 [![Netlify Status](https://api.netlify.com/api/v1/badges/290ed007-d791-4047-b486-ad6a3f7e818d/deploy-status)](https://app.netlify.com/projects/pauseai-automation/deploys)
 
-This repository contains webhook endpoints for updating the payment status of paying members in Airtable.
+This repository contains webhook endpoints for updating the payment status of paying members in Airtable, and, in [`crm/`](./crm), the **PauseAI CRM**: a volunteer, chapter and stakeholder management service for PauseAI Global and the national chapters. The CRM has its own README, docs and test suite; it is a separate package so this Netlify function keeps deploying unchanged.
 
 ## How it works
 
