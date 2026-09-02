@@ -13,6 +13,7 @@ import { AtomicLink } from '../components/AtomicLink';
 import { paths } from '../routes/paths';
 import { isRootWelcomeResourceError } from '../helpers/isRootWelcomeResourceError';
 import { isDriveSignInError } from '../helpers/isDriveSignInError';
+import { isOriginWithoutNode } from '../helpers/originNode';
 import { RootWelcomeGate } from './RootWelcomeGate';
 import { VaultRestoreAction } from '../components/Vault/VaultRestoreAction';
 
@@ -33,7 +34,9 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
   // panel's sign-in step, carrying the resource as `next` so we return the user
   // here once they sign in. (Already signed in? No redirect — that agent just
   // lacks access, handled below.)
-  const isDriveSignIn = isDriveSignInError(resource, agent, baseURL);
+  const isDriveSignIn = isDriveSignInError(resource, agent, baseURL, {
+    originWithoutNode: isOriginWithoutNode(store.getServerUrl()),
+  });
   const shouldGoToWelcome = (!agent && isHomeWelcome) || isDriveSignIn;
 
   React.useEffect(() => {
