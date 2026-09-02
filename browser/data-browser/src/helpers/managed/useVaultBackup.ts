@@ -15,6 +15,7 @@ import {
   type VaultKeyOps,
   type VaultProofSigner,
 } from './vault';
+import { setVaultOptOut } from './vaultAutoBackup';
 
 /**
  * Cloud Vault state for one drive, ready to bind to a UI.
@@ -223,6 +224,9 @@ export function useVaultBackup({
         agentSecret: await agentVaultProof(signer!, proofMessage!),
       });
       driveKey.current = key;
+      // Turning it on by hand lifts an earlier opt-out, so automatic backups
+      // resume as well.
+      setVaultOptOut(driveSubject!, false);
       // First backup immediately, so enabling produces something restorable
       // rather than an empty vault waiting on a tick the user cannot see.
       await runVaultBackup({
@@ -252,9 +256,12 @@ export function useVaultBackup({
     await run(async () => {
       await disableVault(status.enrollment.drive_pseudonym);
       driveKey.current = null;
+      // Backup is on for everyone by default; switching it off here must not
+      // be undone by the next sign-in (see vaultAutoBackup.ts).
+      setVaultOptOut(driveSubject!, true);
       await refresh();
     });
-  }, [run, status, refresh]);
+  }, [run, status, driveSubject, refresh]);
 
   const backupNow = useCallback(async () => {
     if (status.state !== 'on') return;

@@ -11,6 +11,7 @@ import { pathNames, paths } from './paths';
 import { Providers } from '../Providers';
 import { IdentityReconcileGate } from '../components/IdentityReconcileGate';
 import { DeviceLockWatcher } from '../components/DeviceLockWatcher';
+import { CloudVaultWatcher } from '../components/CloudVaultWatcher';
 import { PairingLinkHandler } from '../components/PairingLinkHandler';
 import { PairingFlowProvider } from '../components/pairing/PairingFlowProvider';
 import ResourcePage from '../views/ResourcePage';
@@ -46,6 +47,9 @@ export const rootRoute = createRootRoute({
         {/* Keeps the device-lock heartbeat alive and enforces idle policies
             while the app is open (no-op unless a policy is set). */}
         <DeviceLockWatcher />
+        {/* Enrols the personal drive in Cloud Vault and backs it up after
+            edits (no-op without an account session). */}
+        <CloudVaultWatcher />
       </PairingFlowProvider>
       {/* Uncomment to get Tanstack Router Devtools */}
       {/* <TanStackRouterDevtools position='bottom-right' /> */}
