@@ -51,6 +51,13 @@ interface FancyTableProps<T> {
   rowHeight?: number;
   columnToKey: (column: T) => string;
   labelledBy: string;
+  /**
+   * The rows are still being fetched. Rendered as `aria-busy` on the grid so
+   * assistive tech, and tests, can tell a loading grid from a settled one:
+   * the placeholder row is drawn before the collection answers, so "a row is
+   * visible" no longer means "the data has arrived".
+   */
+  busy?: boolean;
   onUndoCommand?: () => void;
   onClearRow?: (index: number) => void;
   onClearCells?: (cells: CellIndex<T>[]) => void;
@@ -113,6 +120,7 @@ function FancyTableInner<T>({
   columnSizes,
   columnToKey,
   labelledBy,
+  busy = false,
   onCellResize = () => undefined,
   onClearCells,
   onClearRow,
@@ -312,6 +320,7 @@ function FancyTableInner<T>({
       </VisuallyHidden>
       <Table
         aria-labelledby={labelledBy}
+        aria-busy={busy}
         aria-rowcount={itemCount}
         aria-colcount={columns.length + 2}
         aria-describedby={ariaUsageId}

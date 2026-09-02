@@ -1184,6 +1184,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
               // load shift the row's index, not its key (`itemKey` offsets by
               // `memberCount`), so nothing remounts.
               itemCount={memberCount + newRowSubjects.length}
+              busy={!ready}
               itemKey={itemKey}
               columnToKey={columnToKey}
               labelledBy={titleId}

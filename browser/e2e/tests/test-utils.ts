@@ -1317,6 +1317,12 @@ export async function waitForDriveSettled(page: Page, timeoutMs = 30_000) {
  */
 export async function waitForGridMounted(page: Page, timeoutMs = 30_000) {
   await expect(page.getByRole('grid')).toBeVisible({ timeout: timeoutMs });
+  // The empty entry row renders before the collection has answered, so a
+  // visible row no longer means the data (and the ClientDb queue in front of
+  // it) has settled. The grid says so itself: `aria-busy` while loading.
+  await expect(page.locator('[role="grid"][aria-busy="false"]')).toBeVisible({
+    timeout: timeoutMs,
+  });
   await expect(page.locator('[aria-rowindex="2"]')).toBeVisible({
     timeout: timeoutMs,
   });

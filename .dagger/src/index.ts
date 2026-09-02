@@ -560,7 +560,7 @@ export class AtomicServer {
           this.source.directory('atomic-plugin'),
         )
         .withDirectory('/code/tools', this.source.directory('tools'))
-        .withMountedCache('/code/target', dag.cacheVolume('rust-wasm-target'))
+        .withMountedCache('/code/target', dag.cacheVolume('rust-wasm-target-v2'))
         .withWorkdir('/code/wasm')
         // Install + build in a single exec so the install is part of the
         // build step's own cache key. Splitting them lets dagger cache the
@@ -626,7 +626,7 @@ export class AtomicServer {
           this.source.directory('atomic-plugin'),
         )
         .withDirectory('/code/tools', this.source.directory('tools'))
-        .withMountedCache('/code/target', dag.cacheVolume('rust-slim-target'))
+        .withMountedCache('/code/target', dag.cacheVolume('rust-slim-target-v2'))
         .withWorkdir('/code')
         .withEnvVariable('ATOMICSERVER_SKIP_JS_BUILD', 'true')
         // build.rs still wants to bundle the data-browser dist as embedded
@@ -1065,7 +1065,7 @@ export class AtomicServer {
       )
       .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
       .withDirectory('/code/tools', source.directory('tools'))
-      .withMountedCache('/code/target', dag.cacheVolume('rust-target'))
+      .withMountedCache('/code/target', dag.cacheVolume('rust-target-v2'))
       .withWorkdir('/code')
       .withExec(['cargo', 'fetch']);
 
@@ -1227,7 +1227,7 @@ export class AtomicServer {
         )
         .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
         .withDirectory('/code/tools', source.directory('tools'))
-        .withMountedCache('/code/target', dag.cacheVolume('rust-checks-target'))
+        .withMountedCache('/code/target', dag.cacheVolume('rust-checks-target-v2'))
         .withWorkdir('/code')
         // build.rs in atomic-server wants to bundle a JS dist. Skip it —
         // fmt/clippy/test don't need it and including the bundle would
