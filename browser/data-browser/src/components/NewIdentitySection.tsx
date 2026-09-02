@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Agent, JSCryptoProvider, core, useStore } from '@tomic/react';
 import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
+import { isOriginWithoutNode } from '../helpers/originNode';
 import { useSettings } from '../helpers/AppSettings';
 import { saveAgentToIDB } from '../helpers/agentStorage';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
@@ -136,6 +137,19 @@ export function NewIdentitySection({
       const newAgent = new Agent(agentProvider, agentDID);
 
       store.setAgent(newAgent);
+
+      // With no node behind the app's origin (the hosted build on the free
+      // tier — see `originNode.ts`) this identity exists nowhere but here.
+      // Its own resource, and the drive made below, must route to local
+      // storage from their first save, or every commit parks in the outbox
+      // waiting for a server that is not coming. Same registration the demo
+      // guest uses; `enableCloudSyncForDrive` lifts it when a node is
+      // assigned. Registered right after `setAgent` and before anything
+      // async, so no consumer can mount `useResource(agent)` and fetch first.
+      if (isOriginWithoutNode(store.getServerUrl())) {
+        store.registerLocalOnlyDrive(agentDID);
+        store.registerLocalOnlyDrive(await newAgent.privateDriveSubject());
+      }
 
       setIdentity({
         secret: '', // will be built after drive is created

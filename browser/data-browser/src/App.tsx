@@ -8,6 +8,11 @@ import { registerCustomCreateActions } from './components/forms/NewForm/CustomCr
 import { serverURLStorage } from './helpers/serverURLStorage';
 import { driveStorage } from './helpers/driveStorage';
 import { isRunningInTauri } from './helpers/tauri';
+import {
+  isOriginWithoutNode,
+  originMayLackNode,
+  probeOriginForNode,
+} from './helpers/originNode';
 
 import { useEffect, type JSX } from 'react';
 import { RouterProvider } from '@tanstack/react-router';
@@ -91,6 +96,15 @@ const embeddedNodeWins =
 const serverUrl =
   storedIsValid && !embeddedNodeWins ? storedServerUrl! : defaultServerUrl;
 
+// The hosted build may be served by something that is not a node (see
+// `originNode.ts`). Find out before the Store exists: it opens its WebSocket
+// in the constructor, and it is also the moment `createPrivateDrive` needs
+// the answer for — a workspace made against a non-node is local-only from
+// its first save. One same-origin request, hosted builds only.
+if (originMayLackNode() && serverUrl === window.location.origin) {
+  await probeOriginForNode(serverUrl);
+}
+
 // Fire-and-forget — first paint doesn't wait. Catch so a failed import
 // (offline + no cached module) doesn't show up as an unhandledrejection
 // in the console; LoroLoader.isLoaded() stays false and code paths
@@ -128,6 +142,7 @@ const initalAgent = locked ? undefined : storedAgent;
 const store = new Store({
   agent: initalAgent,
   serverUrl,
+  connect: !isOriginWithoutNode(serverUrl),
 });
 
 const initialDrive = driveStorage.get();

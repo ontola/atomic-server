@@ -110,6 +110,17 @@ export interface StoreOpts {
   serverUrl?: string;
   /** Default Agent, used for signing commits. Is required for posting things. */
   agent?: Agent;
+  /**
+   * Whether to open a WebSocket to `serverUrl` right away. Defaults to true.
+   *
+   * `false` is for a `serverUrl` that is known not to run an atomic-server:
+   * the managed deployment serves this app from a shared origin that is a
+   * plain static host, and a socket to it can only fail — every few seconds,
+   * forever, with an error toast each time. The URL is still needed (relative
+   * subjects resolve against it), so it is kept; only the connection is not
+   * attempted. A later `setServerUrl` to a real node connects as usual.
+   */
+  connect?: boolean;
 }
 
 export interface StoreSyncStatus {
@@ -600,7 +611,10 @@ export class Store {
     this.webSockets = new Map();
     this.subscribers = new Map();
 
-    if (opts.serverUrl) this.setServerUrl(opts.serverUrl);
+    if (opts.serverUrl) {
+      this.setServerUrl(opts.serverUrl, { connect: opts.connect ?? true });
+    }
+
     if (opts.agent) this.setAgent(opts.agent);
 
     // Initialize drive from localStorage if available.
@@ -4489,8 +4503,12 @@ export class Store {
     await privateDrive.save();
   }
 
-  /** Sets the Server base URL, without the trailing slash. */
-  public setServerUrl(url: string): void {
+  /**
+   * Sets the Server base URL, without the trailing slash.
+   *
+   * `connect: false` keeps the socket closed — see `StoreOpts.connect`.
+   */
+  public setServerUrl(url: string, { connect = true } = {}): void {
     Client.tryValidSubject(url);
 
     if (url.substring(-1) === '/') {
@@ -4524,7 +4542,7 @@ export class Store {
         typeof localStorage !== 'undefined' &&
         localStorage.getItem('ws-disconnected') === '1';
 
-      if (!userDisconnected) {
+      if (!userDisconnected && connect) {
         this.openWebSocket(url);
       }
     }

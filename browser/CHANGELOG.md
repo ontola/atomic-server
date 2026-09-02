@@ -4,6 +4,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: the hosted build no longer treats the origin it is served from as its server when that origin runs no atomic-server. The managed deployment serves the app from a shared static origin; someone on the free tier has no node, and the app kept retrying a WebSocket to that origin (with an error toast on the first screen), polled `/server` for a JSON document that came back as `index.html`, parked every commit in the outbox, and the Sync page counted the origin as "1 other device" and called Cloud Server "a migration, not a backup". The hosted build now asks its origin once at boot (`GET /server`); when the answer is not a node, the Store keeps the URL but opens no socket (`StoreOpts.connect: false`, `@tomic/lib`), a new identity and its personal drive are registered local-only from their first save (the same routing the demo uses), and switching Cloud Server on promotes both to the assigned node. Source builds and the desktop shell are unaffected: only the hosted distribution probes.
+
 ## [v0.41.0-beta.3] - 2026-09-01
 
 - Fix: opening a v1 document no longer shows a read-only page with an "Update Document" button that throws. Writable v1 documents migrate silently to the Loro-backed editor. Leftover Yjs-era V2 bodies still convert, but `yjs` is loaded only when those bytes are present.

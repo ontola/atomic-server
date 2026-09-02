@@ -62,6 +62,7 @@ import {
   forgetServerPeer,
   type NodeDriveUsage,
 } from '../helpers/managedServer';
+import { isOriginWithoutNode } from '../helpers/originNode';
 import { getDriveUsage } from '../helpers/managedUsage';
 import {
   normalizeServerUrl,
@@ -921,8 +922,14 @@ function SyncPage() {
     isNode &&
     (serverHostname === 'localhost' || serverHostname === '127.0.0.1');
   // Show a server connection card whenever the active server isn't this
-  // device's own embedded one (browser: always; Tauri: only a real remote).
-  const showServerConn = !!status.serverUrl && !embeddedActive;
+  // device's own embedded one (browser: always; Tauri: only a real remote) —
+  // and is a server at all. The hosted build's shared origin is not (see
+  // `originNode.ts`): counting it made a free-tier workspace "sync with 1
+  // other device" and call moving it to Cloud Server "a migration".
+  const showServerConn =
+    !!status.serverUrl &&
+    !embeddedActive &&
+    !isOriginWithoutNode(status.serverUrl);
   const pairedPeers = isNode ? knownPeers : [];
   // A browser is not a node, so it cannot pair with a device itself. But the
   // server it reads from can — and reports who, over `/server`. So a phone

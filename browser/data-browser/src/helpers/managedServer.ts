@@ -2,6 +2,7 @@ import { signRequest, type Agent } from '@tomic/react';
 import { serverProps, peerProps } from './serverOntology';
 import { rememberManagedPortalUrl } from './managed/api';
 import { isRunningInTauri } from './tauri';
+import { isOriginWithoutNode } from './originNode';
 
 /** A device the server syncs with directly, from `/server`'s `peers`. */
 export type ServerPeer = {
@@ -66,6 +67,10 @@ export async function fetchManagedInfo(
   serverUrl: string,
 ): Promise<ManagedInfo> {
   if (!serverUrl) return DEFAULT;
+
+  // Already asked at boot and answered "not a node" — the Sync page re-polls
+  // this every few seconds, and index.html does not change its mind.
+  if (isOriginWithoutNode(serverUrl)) return DEFAULT;
 
   try {
     const res = await fetch(new URL('/server', serverUrl).toString(), {

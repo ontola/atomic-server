@@ -214,6 +214,12 @@ export async function enableCloudSyncForDrive(params: {
   }
 
   const wasLocalOnly = store.isLocalOnlyDrive(drive);
+  // An identity minted against a non-node origin registered its own agent
+  // resource as local-only too (see `NewIdentitySection`), so the node has
+  // never seen the profile that names this account. It is promoted alongside
+  // the drive: `promoteLocalDrive` reconciles a subject and what it parents,
+  // and for a free-standing agent DID that is the agent resource itself.
+  const agentWasLocalOnly = store.isLocalOnlyDrive(agentSubject);
 
   // The proof needs the key (the store's agent) and, for a drive that is not
   // the agent's personal one, the drive's genesis certificate. A drive we
@@ -240,14 +246,24 @@ export async function enableCloudSyncForDrive(params: {
     // node's origin resyncs through the normal reconnect.
     setServer(httpOrigin);
 
-    if (wasLocalOnly) {
+    if (wasLocalOnly || agentWasLocalOnly) {
       await waitForServerConnected(store);
-      await store.promoteLocalDrive(drive);
+      await promoteLocalOnly();
     }
-  } else if (wasLocalOnly && store.getSyncStatus().serverConnected) {
+  } else if (
+    (wasLocalOnly || agentWasLocalOnly) &&
+    store.getSyncStatus().serverConnected
+  ) {
     // No origin came back (older control plane) — best effort against whatever
     // node is currently connected.
-    await store.promoteLocalDrive(drive);
+    await promoteLocalOnly();
+  }
+
+  async function promoteLocalOnly() {
+    // Agent first: the drive's commits are signed by it, and a node that can
+    // resolve the signer before the drive arrives has nothing to defer.
+    if (agentWasLocalOnly) await store.promoteLocalDrive(agentSubject);
+    if (wasLocalOnly) await store.promoteLocalDrive(drive);
   }
 
   return { ok: true, httpOrigin };
