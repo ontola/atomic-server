@@ -117,7 +117,30 @@ export interface OutboxDrainContext {
  * than retrying forever. Add new entries only with the server-side error
  * string they correspond to.
  */
+/**
+ * Whether `subject` names a Commit: the `did:ad:commit:<sig>` form, or the
+ * older `https://host/commits/<sig>` the server minted for HTTP-subject drives.
+ * Commits are immutable and never sync as edits — the server answers "Commits
+ * cannot be edited." on every attempt.
+ */
+export function isCommitSubject(subject: string): boolean {
+  if (subject.startsWith('did:ad:commit:')) return true;
+
+  try {
+    return new URL(subject).pathname.startsWith('/commits/');
+  } catch {
+    return false;
+  }
+}
+
 export function isTerminalCommitErrorMessage(message: string): boolean {
+  // Server emits "Commits cannot be edited." (`commit.rs`) when the commit's
+  // subject is itself a Commit. Found in the field as a queue of three
+  // `/commits/<sig>` entries refused on every reload, forever.
+  if (message.includes('Commits cannot be edited')) {
+    return true;
+  }
+
   // Genesis collision: client tried to (re-)create a resource that
   // already exists. Happens when local state lost `lastCommit` and a
   // follow-up save built a genesis commit. The resource is fine on the
@@ -330,6 +353,8 @@ export class LocalOutbox {
   /** Mark a subject as having local Loro edits that need to drain.
    *  Idempotent; called once per Loro local-updates fire. */
   markDirty(subject: string): void {
+    if (isCommitSubject(subject)) return;
+
     const existing = this.entries.get(subject);
 
     if (existing) {
@@ -774,6 +799,8 @@ export class LocalOutbox {
     if (typeof p !== 'object' || p === null) return;
     const obj = p as Record<string, unknown>;
     if (typeof obj.subject !== 'string') return;
+    // Queued by an older build that let commit pages mark themselves dirty.
+    if (isCommitSubject(obj.subject)) return;
 
     let signedGenesis: Commit | undefined;
 

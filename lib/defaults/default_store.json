@@ -1396,7 +1396,8 @@
       "https://atomicdata.dev/properties/isUninitialized",
       "https://atomicdata.dev/properties/server/hostMode",
       "https://atomicdata.dev/properties/server/acceptsNewDrives",
-      "https://atomicdata.dev/properties/server/ownerSet"
+      "https://atomicdata.dev/properties/server/ownerSet",
+      "https://atomicdata.dev/properties/server/homeDrive"
     ],
     "https://atomicdata.dev/properties/requires": [
       "https://atomicdata.dev/properties/shortname"
@@ -1630,6 +1631,16 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
     "https://atomicdata.dev/properties/shortname": "portal-url"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/server/homeDrive",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The Drive this server serves as its front page (`ATOMIC_HOME_DRIVE`). Absent when `/` falls back to the sign-in flow.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "home-drive"
   },
   {
     "@id": "https://atomicdata.dev/properties/versionId",

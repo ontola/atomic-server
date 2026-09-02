@@ -2372,7 +2372,7 @@ export class Store {
     }
 
     if (personal) {
-      const existingDid = await agent.privateDriveSubject();
+      const existingDid = await this.resolvePrivateDriveSubject(agent);
       const existing = this._resources.get(existingDid);
 
       if (existing && !existing.new && !existing.error) {
@@ -2412,7 +2412,7 @@ export class Store {
     // the drive up by, so the drive would be created under a subject no
     // subsequent lookup could ever find.
     const personalSubject = personal
-      ? await agent.privateDriveSubject()
+      ? await this.resolvePrivateDriveSubject(agent)
       : undefined;
 
     const drive = await this.newResource({
@@ -2931,7 +2931,57 @@ export class Store {
       throw new Error('Cannot derive a personal drive without an agent');
     }
 
-    return agent.privateDriveSubject();
+    return this.resolvePrivateDriveSubject(agent);
+  }
+
+  /**
+   * `Agent.privateDriveSubject`, with one fallback: an agent restored from a
+   * non-extractable keypair that was stored before the derived subject was
+   * recorded beside it (a session predating that field) can neither read the
+   * cached value nor recompute it. The pointer `linkPrivateDrive` wrote onto
+   * the Agent resource is the durable copy, so read it from there — local
+   * copy first, then the server — and cache it on the agent for this session.
+   * Without this, every returning account on such a device fails at "Cannot
+   * work out this account's private drive" instead of opening its home.
+   */
+  private async resolvePrivateDriveSubject(agent: Agent): Promise<string> {
+    try {
+      return await agent.privateDriveSubject();
+    } catch (error) {
+      if (!agent.subject) throw error;
+
+      const pointer = await this.personalDrivePointer(agent.subject);
+
+      if (!pointer) throw error;
+
+      agent.privateDrive = pointer;
+
+      return pointer;
+    }
+  }
+
+  /** The `personalDrive` recorded on the Agent resource, if any. */
+  private async personalDrivePointer(
+    agentSubject: string,
+  ): Promise<string | undefined> {
+    const read = (resource: Resource | undefined) =>
+      resource?.isReady()
+        ? (resource.get(core.properties.personalDrive) as string | undefined)
+        : undefined;
+
+    const local = read(this._resources.get(agentSubject));
+
+    if (local) return local;
+
+    try {
+      return read(
+        await this.fetchResourceFromServer(agentSubject, {
+          noWebSocket: true,
+        }),
+      );
+    } catch {
+      return undefined;
+    }
   }
 
   /**
