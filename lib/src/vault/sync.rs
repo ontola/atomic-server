@@ -146,6 +146,32 @@ pub struct RestoreSummary {
     pub tombstones_applied: usize,
 }
 
+/// The agents named in a drive's `read` and `write` rights.
+///
+/// A drive walk never reaches them: an agent resource has no parent, it is
+/// nobody's child. Yet the name typed on the first device lives there, and on
+/// an origin without a node — the hosted app — nowhere else. Restored from a
+/// pack that leaves it out, the drive opens fine and settings shows an empty
+/// name: the account came back, the person did not. So the agents a drive
+/// grants rights to travel with it.
+///
+/// Rights the drive cannot be read for are treated as no agents: a drive that
+/// exports at all has already been read once, and a missing property is the
+/// ordinary case for a drive nobody was ever invited to.
+async fn drive_agent_subjects(store: &Db, drive: &Subject) -> Vec<String> {
+    let Ok(resource) = store.get_resource(drive).await else {
+        return Vec::new();
+    };
+
+    [crate::urls::READ, crate::urls::WRITE]
+        .iter()
+        .filter_map(|right| resource.get(right).ok())
+        .filter_map(|value| value.to_subjects(None).ok())
+        .flatten()
+        .filter(|subject| Subject::from_raw(subject, None).is_agent_did())
+        .collect()
+}
+
 /// Export a drive's history into one sealed pack and write it to `vault`.
 ///
 /// Every resource's full oplog is exported here. Incremental export against a
@@ -164,7 +190,8 @@ pub async fn export_vault_delta(
     device_pubkey: &str,
     segment: u32,
 ) -> AtomicResult<Option<BackupSummary>> {
-    let subjects = crate::sync::engine::collect_drive_subjects(store, drive).await;
+    let mut subjects = crate::sync::engine::collect_drive_subjects(store, drive).await;
+    subjects.extend(drive_agent_subjects(store, drive).await);
 
     let mut entries = Vec::new();
     for subject_str in &subjects {
@@ -467,7 +494,8 @@ mod tests {
                 .await
                 .unwrap()
                 .expect("a populated drive must produce a pack");
-        assert_eq!(backup.resources, before.len());
+        // The drive, its children, and the one agent the drive grants rights to.
+        assert_eq!(backup.resources, before.len() + 1);
 
         // The device is gone: a brand new store, sharing nothing with the old.
         let restored = Db::init_temp("vault_round_trip_restored").await.unwrap();
@@ -475,10 +503,56 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(result.packs_read, 1);
-        assert_eq!(result.resources_restored, before.len());
+        assert_eq!(result.resources_restored, before.len() + 1);
 
         let after = drive_contents(&restored, &drive_subject).await;
         assert_eq!(after, before, "restored drive must match the original");
+    }
+
+    /// The person comes back with the account, not just the files.
+    ///
+    /// An agent resource is nobody's child, so the drive walk never sees it;
+    /// on the hosted app there is no node to fetch it from either. Left out of
+    /// the pack, a restore on a second browser opened the drive with an empty
+    /// name in settings — the first thing a returning user noticed.
+    #[tokio::test]
+    async fn the_drive_owner_is_restored_with_the_drive() {
+        let source = Db::init_temp("vault_agent_source").await.unwrap();
+        let (agent, drive) = source.setup("alice").await.unwrap();
+        let agent_subject = agent.subject.clone();
+        let mut profile = source.get_resource(&agent_subject).await.unwrap();
+        profile
+            .set_unsafe(
+                crate::urls::NAME.into(),
+                crate::Value::String("Alice Returning".into()),
+            )
+            .unwrap();
+        source
+            .add_resource_opts(&profile, false, true, true)
+            .await
+            .unwrap();
+
+        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
+        let key = key();
+        let vault = MemoryVaultStore::new();
+        export_vault_delta(&source, &drive_subject, &key, &vault, PSEUDONYM, DEVICE, 1)
+            .await
+            .unwrap()
+            .expect("a populated drive must produce a pack");
+
+        let restored = Db::init_temp("vault_agent_restored").await.unwrap();
+        import_vault_batch(&restored, &key, &vault, &lane_prefix(PSEUDONYM, DEVICE))
+            .await
+            .unwrap();
+
+        let name = restored
+            .get_resource(&agent_subject)
+            .await
+            .expect("the drive's agent must come back with the drive")
+            .get(crate::urls::NAME)
+            .expect("with its profile")
+            .to_string();
+        assert_eq!(name, "Alice Returning");
     }
 
     /// The bug a backup must not have: a resource deleted after an earlier

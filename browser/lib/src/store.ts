@@ -3902,6 +3902,31 @@ export class Store {
   }
 
   /**
+   * Look at a resource again the way a first look does: the local database
+   * first, the server only if that has nothing.
+   *
+   * For a cached failure the store has since been given the answer to. A
+   * vault restore writes a drive straight into the local database; the copy
+   * in memory is still the fetch that sent the user to the restore offer — a
+   * 401 from before they signed in, or "not available locally". Asking the
+   * server (`fetchResourceFromServer`) is the wrong repair: on an origin
+   * without a node it asks the origin and gets `index.html` back, and the
+   * user's own workspace opens as "Could not parse JSON".
+   */
+  public async reloadResource(subject: string): Promise<void> {
+    const resolved = this.resolveSubject(subject);
+    const resource = this.resources.get(resolved);
+
+    if (resource) {
+      resource.error = undefined;
+      resource.loading = true;
+      this.notify(resource);
+    }
+
+    await this.fetchResourceWithLocalFallback(resolved);
+  }
+
+  /**
    * When coming back online, re-fetch resources whose state was affected by
    * being offline:
    *   - errored because we couldn't reach the server (the offline fallback's
