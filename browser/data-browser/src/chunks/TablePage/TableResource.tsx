@@ -1174,11 +1174,16 @@ export const TableResource: React.FC<TableResourceProps> = ({
               readOnly={!canWrite}
               columns={gridColumns}
               columnSizes={gridColumnSizes}
-              itemCount={
-                ready
-                  ? memberCount + newRowSubjects.length
-                  : collection.totalMembers
-              }
+              // The session's empty entry row is local state: it needs
+              // nothing from the collection, so it is not gated on `ready`.
+              // Gating it made a fresh table wait for the collection's first
+              // fetch, and when the socket is not authenticated yet that fetch
+              // sits out a 3s `waitForServerConnected` grace period
+              // (`Collection.fetchPage`) before an empty page lands — five
+              // seconds with no row to type into. Members that arrive during
+              // load shift the row's index, not its key (`itemKey` offsets by
+              // `memberCount`), so nothing remounts.
+              itemCount={memberCount + newRowSubjects.length}
               itemKey={itemKey}
               columnToKey={columnToKey}
               labelledBy={titleId}
