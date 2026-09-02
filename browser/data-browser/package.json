@@ -27,6 +27,7 @@
     "@radix-ui/react-popover": "^1.1.15",
     "@radix-ui/react-scroll-area": "^1.2.10",
     "@radix-ui/react-tabs": "^1.1.13",
+    "@sentry/react": "^10.73.0",
     "@tanstack/react-router": "^1.170.7",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-barcode-scanner": "^2.4.5",

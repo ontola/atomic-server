@@ -27,9 +27,10 @@ pub async fn single_page(
     };
 
     let script = format!(
-        "<script nonce=\"{}\">{}{}</script>",
+        "<script nonce=\"{}\">{}{}{}</script>",
         csp_nonce,
         home_drive_script(appstate.config.opts.home_drive.as_deref(), &origin),
+        sentry_script(appstate.config.opts.sentry_dsn_browser.as_deref()),
         appstate.config.opts.script
     );
 
@@ -222,6 +223,26 @@ fn home_drive_script(home_drive: Option<&str>, origin: &str) -> String {
     }
 }
 
+/// Hands the front-end its Sentry DSN and environment at runtime, so the same
+/// build reports to Sentry only on servers that opted in via
+/// `--sentry-dsn-browser`. Empty (no script at all) by default.
+fn sentry_script(dsn: Option<&str>) -> String {
+    let Some(dsn) = dsn.map(str::trim).filter(|d| !d.is_empty()) else {
+        return String::new();
+    };
+    let environment = std::env::var("SENTRY_ENVIRONMENT").unwrap_or_default();
+    let encode = |v: &str| {
+        serde_json::to_string(v)
+            .map(|e| e.replace('<', "\\u003C"))
+            .unwrap_or_else(|_| "\"\"".into())
+    };
+    format!(
+        "window.__ATOMIC_SENTRY__={{dsn:{},environment:{}}};",
+        encode(dsn),
+        encode(&environment)
+    )
+}
+
 fn generate_nonce() -> Result<String, ring::error::Unspecified> {
     use base64::{engine::general_purpose, Engine as _};
     use ring::rand::{SecureRandom, SystemRandom};
@@ -311,5 +332,24 @@ mod test {
         .to_string();
         println!("{}", html);
         assert!(!html.contains("<script>"));
+    }
+}
+
+#[cfg(test)]
+mod sentry_script_tests {
+    use super::sentry_script;
+
+    #[test]
+    fn empty_without_dsn() {
+        assert_eq!(sentry_script(None), "");
+        assert_eq!(sentry_script(Some("  ")), "");
+    }
+
+    #[test]
+    fn escapes_html_in_values() {
+        let out = sentry_script(Some("https://k@o.ingest.sentry.io/1</script>"));
+        assert!(out.starts_with("window.__ATOMIC_SENTRY__={dsn:\"https://k@o.ingest.sentry.io/1"));
+        assert!(!out.contains("</script>"));
+        assert!(out.contains("\\u003C/script>"));
     }
 }

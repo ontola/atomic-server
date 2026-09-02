@@ -25,7 +25,12 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
             "{log_level},tantivy=warn,loro_internal=warn,pkarr=warn,reqwest=warn"
         ))
     });
-    let tracing_registry = tracing_subscriber::registry().with(filter);
+    // Sentry layer: `error!` events become Sentry issues, `warn!`/`info!`
+    // become breadcrumbs attached to the next issue. A no-op when no Sentry
+    // client is bound (see `init_sentry`), so it is always safe to install.
+    let tracing_registry = tracing_subscriber::registry()
+        .with(filter)
+        .with(sentry::integrations::tracing::layer());
 
     match config.opts.trace {
         crate::config::Tracing::Stdout => {
@@ -134,4 +139,37 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
     }
 
     None
+}
+
+/// Starts the Sentry client if `--sentry-dsn` / `SENTRY_DSN` is set. Returns
+/// a guard that must be kept alive for the lifetime of the server: dropping it
+/// flushes pending events, so hold it in `serve_with_hook` and drop it last.
+///
+/// Call this *before* `init_tracing`, so the tracing layer has a client to
+/// report to, and before the async runtime spawns work, so the panic hook is
+/// in place for every task.
+///
+/// Privacy: this is strictly opt-in. Without a DSN no client is created, no
+/// network connection is opened, and nothing about the install ever leaves
+/// the machine. A stock self-hosted atomic-server has no DSN.
+pub fn init_sentry(config: &crate::config::Config) -> Option<sentry::ClientInitGuard> {
+    let dsn = config.opts.sentry_dsn.as_deref()?.trim();
+    if dsn.is_empty() {
+        return None;
+    }
+    let options = sentry::ClientOptions::new()
+        .dsn(dsn)
+        .release(concat!("atomic-server@", env!("CARGO_PKG_VERSION")))
+        // Errors only: performance tracing is left at its default (disabled).
+        // OpenTelemetry already covers it, and the free Sentry tier has a
+        // small event quota.
+        .attach_stacktrace(true)
+        .send_default_pii(false);
+    let guard = sentry::init(options);
+    if guard.is_enabled() {
+        println!("Sentry error reporting enabled");
+    } else {
+        eprintln!("SENTRY_DSN is set but invalid; Sentry error reporting is disabled");
+    }
+    Some(guard)
 }
