@@ -10,6 +10,7 @@ PauseBot is a Discord bot designed to streamline the onboarding pipeline for Pau
 - **Member Export**: Administrators and authorized users can use the `!export_members` command to download a CSV file containing all members and their roles.
 - **Discord Notification Channel**: Logs successful and failed email attempts directly to a designated Discord channel (e.g., `#onboarding-pipeline`).
 - **Role-based Logic**: Easily map new or existing Discord Role IDs to specific email addresses.
+- **CRM Events (optional)**: When `CRM_WEBHOOK_URL` and `CRM_WEBHOOK_SECRET` are set, the bot posts signed `member.joined`, `member.roles_updated` and `member.left` events to the PauseAI CRM (`pauseai-automation/crm`), which links Discord accounts to volunteer records and maps country roles to chapters. Unset means off; a CRM outage never affects onboarding.
 
 ## Prerequisites
 
@@ -53,6 +54,7 @@ PauseBot is a Discord bot designed to streamline the onboarding pipeline for Pau
    - `AIRTABLE_PERSONAL_ACCESS_TOKEN`: The PAT from your Airtable account.
    - `WEBHOOK_SECRET`: A secret string of your choosing. Required if using the webhooks for assigning roles.
    - `PORT`: (Optional) Custom port for the web server to run over (defaults to 8080).
+   - `CRM_WEBHOOK_URL`, `CRM_WEBHOOK_SECRET`: (Optional) Where to send signed member events for the PauseAI CRM. Signature: HMAC-SHA256 of `<timestamp>.<body>`, sent in `X-PauseBot-Signature` / `X-PauseBot-Timestamp`.
 
 5. **Configure Roles and Channels (in `main.py`):**
    - Update `AIRTABLE_BASE_ID` with your target Airtable base's ID.

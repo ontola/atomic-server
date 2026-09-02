@@ -7,6 +7,10 @@ import asyncio
 import csv
 import io
 import re
+import hmac
+import hashlib
+import json
+import uuid
 from discord.ext import commands
 from dotenv import load_dotenv
 from aiohttp import web
@@ -18,6 +22,11 @@ MAILERSEND_API_KEY = os.getenv('MAILERSEND_API_KEY')
 AIRTABLE_PERSONAL_ACCESS_TOKEN = os.getenv('AIRTABLE_PERSONAL_ACCESS_TOKEN')
 WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET')
 PORT = int(os.getenv('PORT', 8080))
+
+# Optional: forward member events to the PauseAI CRM (pauseai-automation/crm).
+# When CRM_WEBHOOK_URL is unset nothing is sent and the bot behaves as before.
+CRM_WEBHOOK_URL = os.getenv('CRM_WEBHOOK_URL')
+CRM_WEBHOOK_SECRET = os.getenv('CRM_WEBHOOK_SECRET')
 
 ALLOWED_EXPORT_ROLE_ID = 1409324452545822793
 
@@ -72,6 +81,52 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 # Shared aiohttp session — created once on startup, reused for all HTTP calls
 http_session: aiohttp.ClientSession | None = None
+
+def _crm_member_payload(member):
+    return {
+        "id": str(member.id),
+        "username": member.name,
+        "global_name": getattr(member, 'global_name', None),
+        "nick": member.nick,
+        "joined_at": member.joined_at.isoformat() if member.joined_at else None,
+        "role_ids": [str(r.id) for r in member.roles if r.name != "@everyone"],
+    }
+
+async def crm_emit(event_type, member, **extra):
+    """
+    POST a signed event to the CRM. Signature is HMAC-SHA256 over
+    "<unix timestamp>.<raw json body>" with CRM_WEBHOOK_SECRET, matching
+    pauseai-automation/crm/src/lib/server/integrations/discord/webhook.ts.
+    Never raises: a CRM outage must not affect Discord onboarding.
+    """
+    if not CRM_WEBHOOK_URL or not CRM_WEBHOOK_SECRET or http_session is None:
+        return
+    event = {
+        "id": str(uuid.uuid4()),
+        "type": event_type,
+        "at": datetime.datetime.now(datetime.UTC).isoformat(),
+        "member": _crm_member_payload(member),
+        **extra,
+    }
+    body = json.dumps(event, separators=(",", ":"), sort_keys=True)
+    timestamp = str(int(datetime.datetime.now(datetime.UTC).timestamp()))
+    signature = hmac.new(CRM_WEBHOOK_SECRET.encode(), f"{timestamp}.{body}".encode(), hashlib.sha256).hexdigest()
+    headers = {
+        "Content-Type": "application/json",
+        "X-PauseBot-Timestamp": timestamp,
+        "X-PauseBot-Signature": signature,
+    }
+    for attempt in range(3):
+        try:
+            async with http_session.post(CRM_WEBHOOK_URL, data=body, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status < 500:
+                    if response.status >= 400:
+                        print(f"CRM rejected {event_type} for {member.name}: {response.status} - {await response.text()}")
+                    return
+                print(f"CRM error {response.status} for {event_type}, attempt {attempt + 1}")
+        except Exception as e:
+            print(f"CRM unreachable for {event_type} ({attempt + 1}/3): {e}")
+        await asyncio.sleep(2 ** attempt)
 
 async def handle_webhook(request):
     auth_header = request.headers.get("Authorization")
@@ -441,6 +496,7 @@ async def on_member_join(member):
         return
 
     print(f"User {member.name} joined! Preparing initial Airtable sync...")
+    asyncio.create_task(crm_emit("member.joined", member))
     asyncio.create_task(_handle_member_join(member))
 
     # If they are NOT pending (meaning no Rules Screening), send Welcome DM on a timer
@@ -461,6 +517,13 @@ async def on_member_update(before, after):
     # Check if any new roles were added
     new_roles = [role for role in after.roles if role not in before.roles]
     added_country_roles = [role for role in new_roles if role.id in COUNTRY_DATA]
+    if new_roles:
+        removed_roles = [role for role in before.roles if role not in after.roles]
+        asyncio.create_task(crm_emit(
+            "member.roles_updated", after,
+            added_role_ids=[str(r.id) for r in new_roles],
+            removed_role_ids=[str(r.id) for r in removed_roles],
+        ))
     
     if not added_country_roles:
         return
@@ -519,6 +582,7 @@ async def on_member_remove(member):
         return
         
     print(f"User {member.name} left the server!")
+    asyncio.create_task(crm_emit("member.left", member))
     
     if not AIRTABLE_PERSONAL_ACCESS_TOKEN:
         return
