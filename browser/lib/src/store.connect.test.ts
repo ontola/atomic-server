@@ -64,6 +64,20 @@ describe('Store connect option', () => {
     expect(store.getSyncStatus().serverConnected).toBe(false);
   });
 
+  it('setting the drive to that same origin still opens nothing', ({ expect }) => {
+    // The drive defaults to the server URL, and `setDrive(origin)` goes
+    // through `setServerUrl` again — which is how the hosted build ended up
+    // with a socket after all.
+    globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+
+    const store = new Store({ serverUrl: STATIC_HOST, connect: false });
+    store.setDrive(STATIC_HOST);
+    store.setServerUrl(STATIC_HOST);
+
+    expect(FakeWebSocket.opened).toEqual([]);
+    expect(store.getDefaultWebSocket()).toBeUndefined();
+  });
+
   it('switching to a real node afterwards connects as usual', ({ expect }) => {
     globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
 
