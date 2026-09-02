@@ -64,7 +64,9 @@ describe('Store connect option', () => {
     expect(store.getSyncStatus().serverConnected).toBe(false);
   });
 
-  it('setting the drive to that same origin still opens nothing', ({ expect }) => {
+  it('setting the drive to that same origin still opens nothing', ({
+    expect,
+  }) => {
     // The drive defaults to the server URL, and `setDrive(origin)` goes
     // through `setServerUrl` again — which is how the hosted build ended up
     // with a socket after all.
