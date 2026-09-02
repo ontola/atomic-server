@@ -11,6 +11,14 @@ on:
           - full
         default: auto
 
+# One pipeline at a time on the shared runner. Mancave picks up several jobs
+# at once, and a full suite is 4 shards x 2 browsers plus four debug servers
+# next to clippy and nextest; two of those overlapping is what turns the e2e
+# suite red run to run (reload-heavy specs time out waiting for the server).
+# Queue instead of overlap; never cancel a run that is already going.
+concurrency:
+  group: main-pipeline
+  cancel-in-progress: false
 
 # Main prefers Mancave (self-hosted) so Dagger cache volumes stay warm.
 # GitHub-hosted runs ONLY when Mancave is unavailable — never as a retry
