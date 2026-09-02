@@ -6,3 +6,4 @@ build
 !.env.example
 .local-postgres
 vite.config.ts.timestamp-*
+coverage

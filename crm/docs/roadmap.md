@@ -1,5 +1,7 @@
 # Roadmap
 
+The migration plan, use-case status and test coverage live in [plan.md](plan.md); this page is the shorter milestone list.
+
 Milestones are small on purpose: each one should be usable by a real chapter before the next starts.
 
 ## M0: foundation (this pull request)

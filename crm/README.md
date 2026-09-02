@@ -2,7 +2,7 @@
 
 One place for everyone the movement works with: volunteers, chapters and local groups, politicians, journalists and donors. Managed by PauseAI Global, usable by every national chapter, with each chapter seeing only its own people.
 
-Status: **foundation**. The data model, Airtable import, Discord link, sign-in, chapter-scoped access, task templates with reminders and escalation, and a small UI exist and are tested. The bigger product surface (campaign email, segments, politician and journalist pipelines, WhatsApp) is designed but not built. Start with [docs/architecture.md](docs/architecture.md).
+Status: **foundation**. The data model, Airtable import, Discord link, sign-in, chapter-scoped access, task templates with reminders and escalation, and a small UI exist and are tested. The bigger product surface (campaign email, segments, politician and journalist pipelines, WhatsApp) is designed but not built. Start with [docs/plan.md](docs/plan.md) for where this is going and how far along it is, then [docs/architecture.md](docs/architecture.md).
 
 ## Why a new project, and what already exists
 
@@ -30,6 +30,7 @@ Import from Airtable once you have a read token: `AIRTABLE_API_KEY=... pnpm sync
 | Command              | What it does                                                    |
 | -------------------- | --------------------------------------------------------------- |
 | `pnpm test`          | Vitest against a real PostgreSQL (`TEST_DATABASE_URL`, default local 54329) |
+| `pnpm test:coverage` | Same, with an istanbul coverage report for the server modules   |
 | `pnpm check`         | svelte-check, strict TypeScript                                 |
 | `pnpm build`         | Production build (Node adapter)                                 |
 | `pnpm db:generate`   | Generate a migration after editing `src/lib/server/db/schema.ts` |

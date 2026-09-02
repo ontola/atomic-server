@@ -15,6 +15,13 @@ export default defineConfig({
 		globalSetup: ['./src/test/global-setup.ts'],
 		fileParallelism: false,
 		environment: 'node',
-		testTimeout: 30_000
+		testTimeout: 30_000,
+		coverage: {
+			provider: 'istanbul',
+			include: ['src/lib/server/**/*.ts'],
+			exclude: ['src/lib/server/__tests__/**'],
+			reporter: ['text', 'json-summary'],
+			reportsDirectory: './coverage'
+		}
 	}
 })

@@ -17,6 +17,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
@@ -36,6 +37,7 @@
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@types/node": "^24.13.3",
+    "@vitest/coverage-istanbul": "^4.1.11",
     "drizzle-kit": "^0.31.0",
     "svelte-check": "^4.7.6",
     "tsx": "^4.23.12",
