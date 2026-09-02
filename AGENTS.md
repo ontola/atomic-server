@@ -1,4 +1,4 @@
-# AGENTS.md
+# ATOMIC DATA
 
 Guidance for coding agents working in this repo.
 

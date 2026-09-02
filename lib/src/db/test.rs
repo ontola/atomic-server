@@ -386,6 +386,153 @@ async fn unauthorized_query_count_matches_subjects() {
     );
 }
 
+async fn genesis_child(store: &Db, parent: &Subject) -> Subject {
+    let mut res = Resource::new("did:ad:placeholder".into());
+    res.set(urls::PARENT.into(), Value::AtomicUrl(parent.clone()), store)
+        .await
+        .unwrap();
+    res.save_as_genesis(store)
+        .await
+        .unwrap()
+        .resource_new
+        .unwrap()
+        .get_subject()
+        .clone()
+}
+
+fn parent_query(parent: &Subject, limit: Option<usize>, for_agent: ForAgent) -> Query {
+    Query {
+        property: Some(urls::PARENT.into()),
+        value: Some(Value::AtomicUrl(parent.clone())),
+        filters: Vec::new(),
+        limit,
+        start_val: None,
+        end_val: None,
+        offset: 0,
+        sort_by: None,
+        sort_desc: false,
+        include_external: true,
+        include_nested: false,
+        for_agent,
+        drive: None,
+        aggregation: None,
+        expression_filters: Vec::new(),
+    }
+}
+
+/// Synthetic repro from `planning/slow-collection-queries.md`: drive → folder
+/// → form → many private children, queried `parent=form` as a non-authorized
+/// agent. Pins remaining cost to *call counts* (a fresh store's snapshots are
+/// too small to show wall-clock):
+///
+/// The rights walk must not full-decode ancestors (`get_resource` stays 0)
+/// and must not re-fetch a parent whose verdict is already cached. Each
+/// member is still shallow-fetched — a later readable sibling after a
+/// private streak must not be skipped.
+#[tokio::test]
+async fn unauthorized_collection_query_bounds_fetch_counts() {
+    let store = Db::init_temp("unauthorized_collection_query_bounds_fetch_counts")
+        .await
+        .unwrap();
+    crate::test_utils::setup_test_env(&store).await.unwrap();
+
+    let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+    let folder = genesis_child(&store, &drive).await;
+    let form = genesis_child(&store, &folder).await;
+
+    const CHILDREN: usize = 100;
+    for _ in 0..CHILDREN {
+        genesis_child(&store, &form).await;
+    }
+
+    let sudo = store
+        .query(&parent_query(&form, Some(500), ForAgent::Sudo))
+        .await
+        .unwrap();
+    assert_eq!(
+        sudo.subjects.len(),
+        CHILDREN,
+        "sanity: the form has {CHILDREN} children visible to sudo"
+    );
+
+    store.reset_fetch_counters();
+
+    let denied = store
+        .query(&parent_query(&form, Some(1), urls::PUBLIC_AGENT.into()))
+        .await
+        .unwrap();
+    assert!(
+        denied.subjects.is_empty(),
+        "the public agent must not see private invite-code children"
+    );
+
+    let full_decodes = store.get_resource_call_count();
+    let shallow = store.get_resource_shallow_call_count();
+    assert_eq!(
+        full_decodes, 0,
+        "rights walk must not Loro-decode ancestors; get_resource was called {full_decodes} times"
+    );
+    assert!(
+        shallow >= CHILDREN,
+        "every member must still be shallow-fetched (a readable row after a private streak would otherwise be skipped); got {shallow}"
+    );
+    assert!(
+        shallow <= CHILDREN + 8,
+        "expected one shallow fetch per member plus a handful of ancestors, got {shallow} — \
+         the parent memo is not skipping refetches"
+    );
+}
+
+/// Denied members must not consume the page: a public child after a long
+/// private streak is still returned. Each member can carry its own grant,
+/// so a run of private siblings must not stop the scan.
+#[tokio::test]
+async fn unauthorized_query_skips_denials_to_fill_the_page() {
+    let store = Db::init_temp("unauthorized_query_skips_denials_to_fill_the_page")
+        .await
+        .unwrap();
+    crate::test_utils::setup_test_env(&store).await.unwrap();
+
+    let drive = crate::test_utils::create_test_drive(&store).await.unwrap();
+    let form = genesis_child(&store, &drive).await;
+
+    for _ in 0..20 {
+        genesis_child(&store, &form).await;
+    }
+
+    let mut public_child = Resource::new("did:ad:placeholder".into());
+    public_child
+        .set(urls::PARENT.into(), Value::AtomicUrl(form.clone()), &store)
+        .await
+        .unwrap();
+    public_child
+        .set(
+            urls::READ.into(),
+            Value::ResourceArray(vec![urls::PUBLIC_AGENT.into()]),
+            &store,
+        )
+        .await
+        .unwrap();
+    let public_subject = public_child
+        .save_as_genesis(&store)
+        .await
+        .unwrap()
+        .resource_new
+        .unwrap()
+        .get_subject()
+        .clone();
+
+    let res = store
+        .query(&parent_query(&form, Some(1), urls::PUBLIC_AGENT.into()))
+        .await
+        .unwrap();
+    assert_eq!(
+        res.subjects,
+        vec![public_subject],
+        "a public child after many private siblings must still fill page_size=1"
+    );
+}
+
 #[tokio::test]
 async fn get_extended_resource_pagination() {
     let store = Db::init_temp("get_extended_resource_pagination")

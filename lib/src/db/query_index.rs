@@ -271,7 +271,10 @@ pub async fn query_sorted_indexed(
         let kv = kv?;
         // The user's maximum amount of results has not yet been reached
         // and
-        // The users minimum starting distance (offset) has been reached
+        // The users minimum starting distance (offset) has been reached.
+        // Denied members do not grow `subjects`, so we keep resolving until
+        // the page is full of *authorized* hits — a private streak must not
+        // hide a later readable row.
         let in_selection = subjects.len() < limit && i >= q.offset;
         // Tracks whether this iter step should bump the visible count.
         // Defaults to true so entries past the page limit still count

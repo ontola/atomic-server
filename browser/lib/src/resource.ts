@@ -18,6 +18,7 @@ import { validateDatatype, datatypeTag, Datatype } from './datatypes.js';
 import { isUnauthorized } from './error.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
+import { forms } from './ontologies/forms.js';
 import { server } from './ontologies/server.js';
 
 import {
@@ -68,6 +69,10 @@ const DERIVED_BY_SERVER: ReadonlySet<string> = new Set<string>([
   properties.commit.lastCommit,
   commits.properties.createdAt,
   properties.createdBy,
+  // Class-extender output: a summary only the server may compute. Letting it
+  // into the Loro doc would turn it into a local op that a later save signs
+  // into a commit, persisting a stale copy.
+  forms.properties.formSubmissionSummary,
 ]);
 
 /** True for a propval the server derives — see {@link DERIVED_BY_SERVER}. */
@@ -1092,6 +1097,21 @@ export class Resource<C extends OptionalClass = any> {
     }
   }
 
+  /**
+   * Drop the save cursor entirely so the next drain export falls back to a
+   * FULL snapshot instead of a delta. Recovery path for the server's
+   * pending-deps rejection ("your update depends on ops I don't have"): the
+   * cursor sits past ops the server never received — usually because an
+   * earlier commit was lost in transit after the cursor advanced — so every
+   * delta exported from it is un-importable. A snapshot is self-contained:
+   * the server merges it and recovers the missing range along the way.
+   *
+   * @internal store-level drain only — not part of the public API.
+   */
+  public clearLoroSaveCursor(): void {
+    this._loroVersionAtLastSave = undefined;
+  }
+
   /** Base64-encode the current save cursor (last-synced Loro version) for
    *  durable storage. Returns undefined when nothing has synced yet (the
    *  cursor is the resource's whole history → handled as a first commit).
@@ -1287,8 +1307,18 @@ export class Resource<C extends OptionalClass = any> {
     this._loroDoc.import(snapshot);
     this._loroMap = this._loroDoc.getMap('properties');
 
+    // Carry over the source's cursor VALUE, not the doc's current version.
+    // Stamping `oplogVersion()` here would mark any not-yet-drained local
+    // ops as "already saved" — the next export would start past them and
+    // silently drop the edit on the wire (the incident class described in
+    // `initLoroSaveCursorIfFresh`). Copy via encode/decode: the clone's doc
+    // was seeded from the source's full snapshot, so the vector is valid
+    // for it, and sharing the WASM object would tie its lifetime to the
+    // source doc.
     this._loroVersionAtLastSave = resource._loroVersionAtLastSave
-      ? this._loroDoc.oplogVersion()
+      ? LoroLoader.Loro.VersionVector.decode(
+          resource._loroVersionAtLastSave.encode(),
+        )
       : undefined;
   }
 
@@ -1431,6 +1461,14 @@ export class Resource<C extends OptionalClass = any> {
       throw new Error('Cannot merge resources with different subjects');
     }
 
+    // Captured before any mutation below: does `this` already carry real
+    // content? A failed fetch (e.g. a 404 for a subject only known to the
+    // locally-connected server, never published upstream) produces an empty
+    // placeholder Resource with nothing but `.error` set. Letting that
+    // clobber `.error` here would flip an otherwise fully-populated,
+    // healthy resource into a permanent "not found" state.
+    const hadContent = this.getEntries().length > 0;
+
     const incomingSnapshot = Resource.extractLoroSnapshot(resourceB);
 
     if (
@@ -1540,7 +1578,17 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     this.new = resourceB.new;
-    this.error = resourceB.error;
+
+    // Adopt the incoming error UNLESS it's a content-free failure trying to
+    // override a resource that already had something better. A successful
+    // incoming resource (no error) always wins — that's the recovery path.
+    const incomingIsEmptyFailure =
+      resourceB.error !== undefined && resourceB.getEntries().length === 0;
+
+    if (!incomingIsEmptyFailure || !hadContent) {
+      this.error = resourceB.error;
+    }
+
     this.commitError = resourceB.commitError;
 
     // Only update _lastCommit if the remote version has one and we don't have one,

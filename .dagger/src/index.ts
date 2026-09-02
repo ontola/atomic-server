@@ -15,6 +15,30 @@ import {
 const NODE_IMAGE = 'node:22';
 const RUST_IMAGE = 'rust:bookworm';
 
+// Must match `packageManager` in `browser/package.json`, exactly.
+//
+// Installing any *other* version means the first pnpm invocation inside a
+// workspace tries to self-switch to the declared one, and pnpm 10 cannot
+// switch to pnpm 11: it downloads `@pnpm/<platform>` and then looks for the
+// CLI at `.tools/@pnpm+<platform>/<version>/bin`, which pnpm 11 no longer
+// ships that way. The switch dies with
+//   ERROR  Failed to switch pnpm to v11.10.0. Looks like pnpm CLI is missing
+// and takes every JS container with it. Upstream: pnpm/pnpm#12528.
+//
+// So: install the exact version, and never let the self-switch run.
+const PNPM_VERSION = '11.10.0';
+
+// Where `get.pnpm.io/install.sh` puts the CLI, for the containers that install
+// pnpm that way instead of via `npm --global` (the playwright image).
+//
+// pnpm 10 dropped the binary straight into `$PNPM_HOME`; pnpm 11 installs
+// `@pnpm/exe` and leaves shims in `$PNPM_HOME/bin` instead. Pointing PATH at
+// `$PNPM_HOME` — correct until the version bump above — now yields
+//   exec: "pnpm": executable file not found in $PATH
+// on the container's first `pnpm install`. The install script's own PATH
+// advice (`export PATH="$PNPM_HOME/bin:$PATH"`) is the authority here.
+const PNPM_BIN_DIR = '/root/.local/share/pnpm/bin';
+
 // Must match `@playwright/test` in `browser/e2e/package.json`.
 //
 // The image bakes in the browser builds its own Playwright wants, and each
@@ -686,9 +710,25 @@ export class AtomicServer {
     const pnpmContainer = dag
       .container()
       .from(NODE_IMAGE)
-      .withExec(['npm', 'install', '--global', 'corepack@latest'])
-      .withExec(['corepack', 'enable'])
-      .withExec(['corepack', 'prepare', 'pnpm@latest-10', '--activate'])
+      // Straight to the declared version — see PNPM_VERSION. Going through
+      // corepack with a 10.x line meant pnpm had to self-switch to 11 on
+      // first use, which is broken.
+      .withExec(['npm', 'install', '--global', `pnpm@${PNPM_VERSION}`])
+      // Hoisting must be a *persistent* setting, not a CLI flag. pnpm 11
+      // (see browser/package.json `packageManager`) runs a deps-status check
+      // before every `pnpm run`, and re-invokes `pnpm install` itself when
+      // node_modules looks stale. That implicit install doesn't inherit
+      // `--shamefully-hoist`, so it sees a changed hoisting config, decides
+      // node_modules must be purged, and — with no TTY to confirm — aborts
+      // with ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY. `PNPM_CONFIG_*` is
+      // read by every pnpm invocation in the container, implicit ones
+      // included, so the two agree and no purge is ever proposed.
+      //
+      // Deliberately an env var rather than `shamefullyHoist: true` in
+      // pnpm-workspace.yaml: that file is shared with developers, and
+      // flattening node_modules locally would hide undeclared dependencies
+      // that currently fail fast.
+      .withEnvVariable('PNPM_CONFIG_SHAMEFULLY_HOIST', 'true')
       .withWorkdir('/repo/browser');
 
     // Mount workspace package manifests for caching and `pnpm install`.
@@ -747,11 +787,10 @@ export class AtomicServer {
         'store-dir',
         '/repo/browser/.pnpm-store',
       ])
-      .withExec([
-        'sh',
-        '-c',
-        'yes | pnpm install --frozen-lockfile --shamefully-hoist',
-      ]);
+      // Hoisting comes from PNPM_CONFIG_SHAMEFULLY_HOIST above, and the
+      // `yes |` that used to answer the purge prompt is no longer needed —
+      // nothing prompts once the setting is persistent.
+      .withExec(['pnpm', 'install', '--frozen-lockfile']);
 
     // Drop in @tomic/lib source. Other packages are unused by the
     // integration tests, so we don't bother mounting them.
@@ -923,9 +962,13 @@ export class AtomicServer {
     const pnpmContainer = dag
       .container()
       .from(NODE_IMAGE)
-      .withExec(['npm', 'install', '--global', 'corepack@latest'])
-      .withExec(['corepack', 'enable'])
-      .withExec(['corepack', 'prepare', 'pnpm@latest-10', '--activate'])
+      // Exact declared version, no corepack, no self-switch — see PNPM_VERSION.
+      .withExec(['npm', 'install', '--global', `pnpm@${PNPM_VERSION}`])
+      // See jsTestIntegration() for why hoisting is an env var and not a
+      // `--shamefully-hoist` flag: pnpm 11's pre-run deps check re-invokes
+      // `pnpm install` without the flag, reads that as a hoisting-config
+      // change, and aborts trying to purge node_modules without a TTY.
+      .withEnvVariable('PNPM_CONFIG_SHAMEFULLY_HOIST', 'true')
       .withWorkdir('/app');
 
     // Copy workspace files first for caching node_modules.
@@ -956,11 +999,7 @@ export class AtomicServer {
       // `/app/.pnpm-store` without the config command.
       .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
       .withExec(['pnpm', 'config', 'set', 'store-dir', '/app/.pnpm-store'])
-      .withExec([
-        'sh',
-        '-c',
-        'yes | pnpm install --frozen-lockfile --shamefully-hoist',
-      ]);
+      .withExec(['pnpm', 'install', '--frozen-lockfile']);
 
     // data-browser bootstrap JSON lives in repo-root lib/defaults. Vite resolves ../../../lib
     // from data-browser/src to filesystem /lib if /app is only browser — do not mount there
@@ -993,6 +1032,13 @@ export class AtomicServer {
       .withFile(
         '/testdata/pairing-request.json',
         this.source.file('testdata/pairing-request.json'),
+      )
+      // Likewise form-renderer/src/conditions.test.ts reads the shared
+      // form-condition golden cases at
+      // `../../../testdata/form-conditions.json` from /app/form-renderer/src.
+      .withFile(
+        '/testdata/form-conditions.json',
+        this.source.file('testdata/form-conditions.json'),
       );
 
     // Build all packages since they may depend on each other's built artifacts
@@ -1069,11 +1115,40 @@ export class AtomicServer {
       .withWorkdir('/code')
       .withExec(['cargo', 'fetch']);
 
-    const browserDir = this.jsBuild(e2e).directory('/app/data-browser/dist');
-    const containerWithAssets = sourceContainer.withDirectory(
-      '/code/server/assets_tmp',
-      browserDir,
-    );
+    const jsContainer = this.jsBuild(e2e);
+    const formAppDist = jsContainer.directory('/app/form-app/dist');
+    // The published-form runtime (`browser/form-app`) is a SECOND bundle,
+    // separate from the data-browser one. `server/build.rs::copy_form_assets`
+    // copies it from `../browser/form-app/dist` into
+    // `assets_tmp/form-assets/`, which `handlers/form.rs` `include_str!`s and
+    // `static_files::generate()` serves at `/form-assets/*`. Mounting only
+    // `data-browser/dist` left that path absent, so every dagger-built server
+    // — the e2e one AND the release binary this same function produces —
+    // embedded build.rs's placeholder shell: `/form/{id}` answered with an
+    // inert "form runtime not built" page carrying no <script>. Silent,
+    // because a missing form-app build is only a `cargo:warning` (it has to
+    // be: the fmt/clippy/nextest containers stub `assets_tmp` and run no JS
+    // build at all).
+    //
+    // Both halves are needed. The mount under `/code/browser` is what
+    // `copy_form_assets` reads — without it, a build.rs that DOES run
+    // overwrites any bundle we place with the placeholder. Pre-placing the
+    // same bundle inside `assets_tmp` covers the opposite case: `/code/target`
+    // is a cache volume shared across runs, and cargo will happily treat the
+    // build script as fresh (replaying its stored output) while still
+    // recompiling the lib — leaving `include_str!` to read whatever the
+    // mounted `assets_tmp` holds.
+    //
+    // Only `dist` goes under `/code/browser`, deliberately: mounting
+    // `form-app/src` too would make `should_build()` see source newer than a
+    // (missing) `data-browser/dist` and try to run `pnpm build` inside the
+    // rust container.
+    const assetsDir = jsContainer
+      .directory('/app/data-browser/dist')
+      .withDirectory('form-assets', formAppDist);
+    const containerWithAssets = sourceContainer
+      .withDirectory('/code/server/assets_tmp', assetsDir)
+      .withDirectory('/code/browser/form-app/dist', formAppDist);
 
     // Scope the build to `atomic-server` so cargo doesn't try to build
     // workspace siblings like the wasm cdylib plugin examples — which
@@ -1215,6 +1290,16 @@ export class AtomicServer {
         .withFile(
           '/code/testdata/pairing-request.json',
           source.file('testdata/pairing-request.json'),
+        )
+        // Same deal for the form-condition golden cases, except this one is
+        // an `include_str!` in `server/src/forms.rs`'s test module rather
+        // than a runtime read — so a missing file is a *compile* error that
+        // takes out every `--all-targets` build (clippy and nextest both),
+        // not just one failing test. `form-renderer/src/conditions.test.ts`
+        // checks the same fixture from the TS side; see jsBuild()'s mount.
+        .withFile(
+          '/code/testdata/form-conditions.json',
+          source.file('testdata/form-conditions.json'),
         )
         .withDirectory('/code/server', source.directory('server'))
         .withDirectory('/code/lib', source.directory('lib'))
@@ -1541,13 +1626,16 @@ export class AtomicServer {
       .withEnvVariable('NPM_CONFIG_PREFIX', '/opt/npm-global')
       .withEnvVariable(
         'PATH',
-        '/root/.local/share/pnpm:/opt/npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        `${PNPM_BIN_DIR}:/opt/npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`,
       )
       .withExec([
         '/bin/sh',
         '-c',
-        'curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=10.15.1 ENV="$HOME/.shrc" SHELL="$(which sh)" sh - && ' +
-          'export PATH=/root/.local/share/pnpm:/opt/npm-global/bin:$PATH && ' +
+        // PNPM_VERSION is the version browser/package.json declares. Pinning
+        // anything older here made the first `pnpm install` below self-switch
+        // to it, which is the failure documented at PNPM_VERSION.
+        `curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=${PNPM_VERSION} ENV="$HOME/.shrc" SHELL="$(which sh)" sh - && ` +
+          `export PATH=${PNPM_BIN_DIR}:/opt/npm-global/bin:$PATH && ` +
           '/bin/apt update && /bin/apt install -y zip && ' +
           'if [ ! -x /opt/npm-global/bin/netlify ]; then npm install -g netlify-cli --quiet; fi && netlify --version',
       ]);

@@ -52,6 +52,7 @@ import { DrivePresenceManager } from './presence.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 import {
   LocalOutbox,
+  isPendingDepsCommitErrorMessage,
   isTerminalCommitError,
   isUnrecoverableCommitError,
   type OutboxEntry,
@@ -1495,7 +1496,25 @@ export class Store {
     builder.setLoroUpdate(delta);
     const commit = await builder.sign(agent);
 
-    const created = await this.postCommit(commit, endpoint);
+    let created: Commit;
+
+    try {
+      created = await this.postCommit(commit, endpoint);
+    } catch (e) {
+      // Pending-deps rejection: the delta we just sent starts past ops the
+      // server never received (an earlier commit was lost after the save
+      // cursor advanced). Retrying the same delta can never succeed — the
+      // missing base won't appear server-side. Drop the cursor so the next
+      // drain attempt (scheduled by the outbox backoff) exports a
+      // self-contained snapshot, which the server can always merge; that
+      // re-delivers the lost range too.
+      if (e instanceof Error && isPendingDepsCommitErrorMessage(e.message)) {
+        resource.clearLoroSaveCursor();
+      }
+
+      throw e;
+    }
+
     const commitId = commitIdOf(created);
 
     if (commit.signature) {
@@ -3706,6 +3725,21 @@ export class Store {
       throw new Error(
         `Resource ${subjectRaw} not found locally and server is offline`,
       );
+    }
+
+    // Before hitting the network, check the local WASM DB (OPFS). Default
+    // ontology resources — core vocab and user-defined defaults from
+    // `lib/defaults/*.json` — are seeded there so every client can resolve
+    // them without a round-trip. This matters most for custom (non-core)
+    // defaults: their subject is a `https://atomicdata.dev/...` URL for
+    // consistency, but they were never published to the real atomicdata.dev,
+    // so skipping this check would 404 against that host on every cache-miss
+    // (e.g. the first time `resource.set()`'s datatype validation touches
+    // one) even though the locally-connected server has them.
+    const fromDb = await this.fetchResourceFromClientDb(resolved);
+
+    if (fromDb && fromDb.isReady()) {
+      return fromDb;
     }
 
     const result = await this.fetchResourceFromServer(resolved);

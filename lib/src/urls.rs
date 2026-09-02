@@ -30,6 +30,14 @@ pub const TAG: &str = "https://atomicdata.dev/classes/Tag";
 pub const PEER: &str = "https://atomicdata.dev/classes/Peer";
 pub const PLAIN_TEXT: &str = "https://atomicdata.dev/classes/PlainText";
 pub const FORK: &str = "https://atomicdata.dev/classes/Fork";
+pub const FORM: &str = "https://atomicdata.dev/classes/Form";
+pub const FORM_PAGE: &str = "https://atomicdata.dev/classes/FormPage";
+pub const FORM_FIELD: &str = "https://atomicdata.dev/classes/FormField";
+pub const FORM_HEADING: &str = "https://atomicdata.dev/classes/FormHeading";
+pub const FORM_PARAGRAPH: &str = "https://atomicdata.dev/classes/FormParagraph";
+pub const FORM_INFO_BOX: &str = "https://atomicdata.dev/classes/FormInfoBox";
+pub const FORM_INVITE_CODE: &str = "https://atomicdata.dev/classes/FormInviteCode";
+pub const FORM_CONDITION: &str = "https://atomicdata.dev/classes/FormCondition";
 
 // Properties
 pub const ORIGINAL_SUBJECT: &str = "https://atomicdata.dev/properties/originalSubject";
@@ -57,6 +65,9 @@ pub const IS_LOCKED: &str = "https://atomicdata.dev/properties/isLocked";
 pub const DATATYPE_PROP: &str = "https://atomicdata.dev/properties/datatype";
 pub const CLASSTYPE_PROP: &str = "https://atomicdata.dev/properties/classtype";
 pub const ALLOWS_ONLY: &str = "https://atomicdata.dev/properties/allowsOnly";
+// ... for Tags
+pub const COLOR: &str = "https://atomicdata.dev/properties/color";
+pub const EMOJI: &str = "https://atomicdata.dev/properties/emoji";
 // ... for Classes
 pub const REQUIRES: &str = "https://atomicdata.dev/properties/requires";
 pub const RECOMMENDS: &str = "https://atomicdata.dev/properties/recommends";
@@ -233,6 +244,32 @@ pub const JSON_SCHEMA: &str = "https://atomicdata.dev/properties/jsonSchema";
 pub const PLUGIN_AUTHOR: &str = "https://atomicdata.dev/properties/pluginAuthor";
 pub const PLUGIN_AGENT: &str = "https://atomicdata.dev/properties/pluginAgent";
 pub const PLUGIN_PERMISSIONS: &str = "https://atomicdata.dev/properties/pluginPermissions";
+// ... for Forms
+pub const FORM_DATA_CLASS: &str = "https://atomicdata.dev/properties/form-data-class";
+pub const FORM_TARGET_TABLE: &str = "https://atomicdata.dev/properties/form-target-table";
+pub const FORM_PAGES: &str = "https://atomicdata.dev/properties/form-pages";
+pub const FORM_PUBLISHED_AT: &str = "https://atomicdata.dev/properties/form-published-at";
+pub const FORM_SETTINGS: &str = "https://atomicdata.dev/properties/form-settings";
+pub const FORM_PUBLISH_ID: &str = "https://atomicdata.dev/properties/form-publish-id";
+pub const FORM_FIELDS: &str = "https://atomicdata.dev/properties/form-fields";
+pub const COVER_IMAGE: &str = "https://atomicdata.dev/properties/cover-image";
+pub const IMAGE_POSITION: &str = "https://atomicdata.dev/properties/image-position";
+pub const FORM_MAPS_TO: &str = "https://atomicdata.dev/properties/form-maps-to";
+pub const REQUIRED: &str = "https://atomicdata.dev/properties/required";
+pub const FORM_FIELD_TYPE: &str = "https://atomicdata.dev/properties/form-field-type";
+pub const FORM_FIELD_OPTIONS: &str = "https://atomicdata.dev/properties/form-field-options";
+pub const FORM_STYLING: &str = "https://atomicdata.dev/properties/form-styling";
+pub const FORM_SUBMISSION_SUMMARY: &str =
+    "https://atomicdata.dev/properties/form-submission-summary";
+pub const FORM_ACCESS: &str = "https://atomicdata.dev/properties/form-access";
+pub const FORM_CODE: &str = "https://atomicdata.dev/properties/form-code";
+pub const USED_AT: &str = "https://atomicdata.dev/properties/used-at";
+pub const FORM_CONDITIONS: &str = "https://atomicdata.dev/properties/form-conditions";
+pub const FORM_CONDITION_FIELD: &str = "https://atomicdata.dev/properties/form-condition-field";
+pub const FORM_CONDITION_OPERATOR: &str =
+    "https://atomicdata.dev/properties/form-condition-operator";
+pub const FORM_CONDITION_VALUE: &str = "https://atomicdata.dev/properties/form-condition-value";
+pub const FORM_INFO_BOX_STYLE: &str = "https://atomicdata.dev/properties/form-info-box-style";
 // AI
 pub const TEXT_PART: &str = "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/text-part";
 pub const REASONING_PART: &str =

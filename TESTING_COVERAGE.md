@@ -338,3 +338,145 @@ Not covered: leftover Yjs-era DocumentV2 bodies end-to-end (needs a stored `{ ty
 Not covered: Flutter `create_drive` still mints a random DID (the Rust
 `ensure_personal_drive` helper exists for `setup()`). E2E sign-in on a second
 machine with the old machine offline.
+
+---
+
+## Collection query authorization
+
+| Flow | Where |
+|---|---|
+| Destroyed children don't inflate `parent=` `totalMembers` | `lib/src/db/test.rs` `destroy_clears_parent_index_count` |
+| In-page auth-denied members: `count` equals `subjects.len()` | `unauthorized_query_count_matches_subjects` |
+| Public child after a private streak still fills the page | `unauthorized_query_skips_denials_to_fill_the_page` (20 private, then one public) |
+| Auth-denied listing does not full-decode ancestors; each member is still shallow-fetched | `unauthorized_collection_query_bounds_fetch_counts` (call counts, not wall clock) |
+
+Not covered: wall-clock on a large real store (the 21.7KB-parent form from
+`planning/slow-collection-queries.md`); per-GET rights walks on the invite-code
+panel (memo is per-query, not per-request).
+
+---
+
+## Commit delivery and the Loro save cursor
+
+The client exports each commit as a delta starting at its save cursor
+(`_loroVersionAtLastSave`). If the cursor ever sits past ops the server never
+received, every later delta is un-importable server-side — and Loro parks such
+ops as *pending* (VV unchanged, empty diff), which without a guard is
+indistinguishable from an idempotent replay. This lost a real user's
+`form-pages` write in 2026-08.
+
+| Flow | Where |
+|---|---|
+| Server rejects a delta whose deps it never received (pending import), and accepts the full-range re-send | `lib/src/commit.rs::commit_with_pending_loro_deps_is_rejected` |
+| Idempotent replay of an already-applied commit is still accepted | `lib/src/commit.rs::idempotent_commit_replay_is_accepted` |
+| Drain reacts to the pending-deps rejection by clearing the cursor and re-sending a self-contained snapshot | `browser/lib/src/store.test.ts` ("recovers from a server pending-deps rejection…") |
+| `clone()` / `merge(replaceLoroDocs)` carries the cursor VALUE, not the current doc version | `browser/lib/src/resource.test.ts` ("clone preserves the save cursor value…") |
+| Imports/echoes don't advance the cursor past unsigned local edits | `browser/lib/src/resource.test.ts` ("importLoroUpdate does not advance…") |
+
+Not covered: the OPFS-suppression window (edits live only in memory between
+`markDirty` and a successful drain — an app kill in that window still loses
+them, `store.ts` `addResource`'s `!hasPendingCommits` gate); WS `COMMIT_OK`
+acks carrying no server-side apply confirmation beyond the echoed commit.
+
+---
+
+## Forms
+
+| Flow | Where |
+|---|---|
+| FormCondition evaluator (visibility + hidden-field validation skip) | Shared fixtures `testdata/form-conditions.json` loaded by `server/src/forms.rs::condition_fixtures_match_ts` **and** `browser/form-renderer/src/conditions.test.ts`. A fix to one is a fix to the other. |
+| Definition serializer inlines FormCondition resources as `{field, operator, value}` | `server/src/forms.rs::definition_inlines_field_conditions` |
+| Form ontology populate (incl. FormCondition) | `lib/src/store.rs::populate_forms_ontology` |
+| Publish → anonymous submit of a branching follow-up | `browser/e2e/tests/forms-submission.spec.ts` ("branching hides a follow-up unless its condition matches") |
+| Extended question types: validation + coercion per type (phone/url shape, currency bounds, dropdown membership, likert/rating range, matrix rows/columns + completeness, table columns/types/row bounds, address subfields), and all-empty composites reading as unanswered | `server/src/forms.rs` (`phone_field_accepts_common_shapes_and_rejects_junk` … `all_empty_composites_count_as_unanswered`) |
+| Extended types route onto the existing summary shapes (choice counts / histogram / answer sample) | `server/src/forms.rs::extended_types_reuse_the_existing_summary_shapes` |
+| `picture-choice` option images: subjects rewritten into `/form/{id}/image?file=`, and that route refuses files the form doesn't reference | `server/src/forms.rs::rewrite_option_images_only_touches_option_image_subjects` + `server/src/tests.rs::form_submission_flow` (step 3d) |
+| Choice options resolve from the mapped SelectProperty's `allowsOnly` Tags into inline `{value,label,color,emoji,image}` objects, in order, with unset keys omitted | `server/src/forms.rs::resolves_choice_options_from_the_mapped_propertys_tags` |
+| Option membership fails closed: a question with no options allows nothing, and a *label* is not an answer (answers are option subjects) | `server/src/forms.rs::choice_options_are_empty_when_the_property_allows_nothing` + `browser/form-renderer/src/validation.test.ts` ("choice option membership") |
+| Non-choice questions keep their options bag untouched by option resolution | `server/src/forms.rs::non_choice_fields_keep_their_options_bag` |
+| A question can borrow another column's Tags (`optionsSource.property`) — the source's list wins over the question's own | `server/src/forms.rs::choice_options_can_mirror_another_columns_tags` |
+| A question can offer a table's *rows* (`optionsSource.table`) — answers are row subjects, a row *label* is not an answer | `server/src/forms.rs::choice_options_can_be_the_rows_of_a_table` |
+| An `optionsSource` pointing at a deleted Property/Table fails closed (empty list) rather than falling back to the question's own tags | `server/src/forms.rs::an_unresolvable_options_source_allows_nothing` |
+| A row whose label column is empty is left out of the options instead of falling back to its `name` | `server/src/forms.rs::rows_the_label_column_is_empty_for_are_not_offered` |
+| A freshly added choice question has *no* options (no placeholder Tag resources) | `browser/e2e/tests/forms.spec.ts` ("create a form, add every field type…", step 4) |
+| Every choice type stores a `resourceArray` of option subjects, single-pick included | `server/src/forms.rs::dropdowns_enforce_option_membership` |
+| Multi-pick selection bounds (`minSelected`/`maxSelected`): too few / too many rejected, membership checked first, an empty answer still reads as unanswered, unusable bounds ignored | `server/src/forms.rs::multi_picks_enforce_selection_bounds` + `browser/form-renderer/src/validation.test.ts` ("multi-select selection bounds") |
+| A maximum set in the builder reaches the rendered form: the hint line, options disabled at the cap, re-enabled on untick | `browser/e2e/tests/forms.spec.ts` ("a multi-select respects the maximum set in the builder") |
+| Renaming an option in the builder rewrites the label in place (options are Tags, not copied strings) | `browser/e2e/tests/forms.spec.ts` ("create a form, add every field type…", step 4) |
+| Builder can add every question type and they survive a reload | `browser/e2e/tests/forms.spec.ts` ("create a form, add every field type…") |
+| `phone` accepts both the renderer's E.164 output and loosely formatted national numbers, and rejects a half-typed one | `browser/form-renderer/src/validation.test.ts` + `server/src/forms.rs::phone_field_accepts_common_shapes_and_rejects_junk` |
+| `country` stores an ISO 3166-1 code: the list is complete and named, names localize, and a country *name* is rejected | `browser/form-renderer/src/validation.test.ts` + `server/src/forms.rs::country_field_takes_an_iso_code_and_rejects_a_name` |
+| `country` summaries count picked codes by popularity (no configured option list to zero-fill) | `server/src/forms.rs::country_counts_rank_by_popularity_then_code` |
+| Builder → publish → anonymous submit → row, for one type per value shape (dropdown/rating/address) | `browser/e2e/tests/forms-submission.spec.ts` ("extended field types round-trip from builder to submission") |
+| Page transitions: off until the builder's Animate-page-transitions switch is on, then the page leaves in the right direction and the arriving page fades in one element at a time — a choice question's options included, each taking the slot after its own question — and `prefers-reduced-motion` still skips both | `browser/e2e/tests/forms.spec.ts` ("page transitions animate once switched on") + `browser/form-renderer/src/pageTransition.test.ts` |
+| Every element in the cascade gets its own delay, in order, and a long page compresses the step rather than capping it (a cap made later options arrive with the question below them) | `browser/e2e/tests/forms.spec.ts` ("page transitions animate once switched on", computed-delay checks) + `pageTransition.test.ts::enterEnvelopeMs` |
+| The animation opt-in survives the definition round-trip (unset = no animation, `true` = animated) | `server/src/forms.rs::definition_can_enable_page_animations` + `definition_includes_styling` |
+| Drafts: what gets stored (answered values only, with each answer's field type), and what is dropped on load — another version, an expired draft, a deleted or retyped question, a page index the form no longer reaches. Storage that is absent or refuses (private mode, quota, partitioned iframe) leaves the form working | `browser/form-renderer/src/draft.test.ts` |
+| Drafts end to end: returning to a half-filled form opens the resume dialog over the seeded answers, Continue keeps them, Reset wipes them on screen *and* on disk, and submitting clears the draft so the next visitor on that browser gets a blank form | `browser/e2e/tests/forms-submission.spec.ts` ("an unfinished form is restored from the visitor's own device") |
+| The drafts opt-out survives the definition round-trip (unset = drafts on and the key absent from the wire format, `false` = off) | `server/src/forms.rs::definition_can_disable_drafts` |
+
+Not covered (extended types): the client-side mirror of the new validators in
+`browser/form-renderer/src/validation.ts` is only unit-tested for `phone` (the
+one rule that deliberately diverges — it is stricter than the server for E.164
+values); every other type is tested on the Rust side only, and the two are
+hand-mirrored, so they can drift (the
+same known gap as `buildFormDefinition.ts` vs `build_form_definition`); the
+option-image *picker* in `PictureChoiceOptions.tsx` (uploading or picking a file
+for an option) is only exercised manually; `choice-matrix` / `table-input` /
+`picture-choice` are rendered and validated but never submitted end-to-end in
+e2e.
+
+Not covered (options as resources): that a form's choice column is usable *as a
+table column* — picking its tags in `SelectCell`, grouping a kanban by it — is
+untested, even though making that work is the reason the mapped Property is a
+real SelectProperty. `max` enforcement in `SelectCell` (how single-pick is
+expressed) has no test either. Deleting an option that submissions already
+reference folds those answers into the summary's "Other" bucket; that path is
+reasoned about but not pinned by a test.
+
+Not covered (options from another table): the whole builder side is manual —
+`LinkOptionsDialog` (picking a table + column), the "linked to X" panel and
+unlinking, and everything `applyOptionsSource` does to the mapped Property
+(mirroring `allowsOnly`, switching to a relation column for row-sourced
+questions, destroying the question's own orphaned Tags). The client mirror
+`rowOptions`/`tagOptions` in `buildFormDefinition.ts` has no test either — the
+same hand-mirroring drift as the rest of that file. `OPTIONS_ROW_LIMIT`
+truncation (a table with more than 1,000 rows silently offering only the first
+1,000, and rejecting a pick past the cap) is untested, and the preview
+deliberately applies no cap at all.
+
+Not covered (drafts): the debounce/flush wiring in `useFormDraft` — the
+`pagehide` and `visibilitychange` flushes in particular — is only exercised
+through the e2e (which waits for the debounced write rather than forcing a
+flush); a tab closed mid-keystroke is reasoned about, not pinned. The
+`saveDrafts` opt-out is tested at the definition layer but never toggled in
+the builder UI, and multi-page draft resume (the stored `pageIndex`) is unit
+tested only. The resume dialog is exercised through its buttons; dismissing it
+with Escape (which maps to Continue) is not.
+
+Not covered: builder UI for adding/removing conditions (the e2e walks it once as setup, not as its own assertion); page-level (not field-level) branching in e2e (unit fixtures cover it); add/delete-page write ordering in `PageTabBar` (both now `await` the form's `form-pages` save — add before selecting, delete before destroying — but no test pins that ordering).
+
+---
+
+## Files and image previews
+
+| Flow | Where |
+|---|---|
+| Upload → blob stored → content-addressed download round-trip | `server/src/tests.rs::upload_download_test` |
+| `/download/files/{hash}` answers with the File's real mimetype, not `application/octet-stream` | `server/src/tests.rs::upload_download_test` |
+| An uploaded SVG actually decodes in the preview (local `blob:` URL **and** the server `downloadURL`) | `browser/e2e/tests/filePicker.spec.ts` ("uploaded SVG renders in the preview") |
+| File picker lists files, filters by name, previews text | `browser/e2e/tests/filePicker.spec.ts` |
+| Upload while offline, then reconnect | `browser/e2e/tests/file-upload-offline.spec.ts`, `browser/lib/tests/upload-offline-reconnect.integration.test.ts` |
+
+Both halves of the SVG row guard the same class of bug and neither implies the
+other: a `blob:` URL takes its Content-Type from the `Blob`'s `type`, the
+network URL from the response header, and an `<img>` renders SVG only when that
+type is exactly `image/svg+xml` (raster formats it will sniff; SVG it never
+will). `user_blob_response` also sets `nosniff`, so an `application/octet-stream`
+answer breaks *every* image type on the network path, not just SVG.
+
+Not covered: that the network `downloadURL` path is what actually renders once
+the local bytes are evicted — the e2e asserts the header directly rather than
+clearing the ClientDb and re-rendering. No test pins the `?w=`/`?f=` rendition
+route's refusal to process SVG (`is_image_bytes` rejects it); the app avoids
+that route for SVG, but nothing enforces that it keeps doing so.
