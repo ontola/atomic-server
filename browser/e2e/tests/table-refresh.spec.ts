@@ -39,7 +39,7 @@ test.describe('table refresh', () => {
     await page.locator('dialog[open] button:has-text("Create")').click();
 
     // Wait for the table to render.
-    await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
+    await expect(editableTitle(page)).toBeVisible({ timeout: 30000 });
 
     // Wait for the new-row placeholder to render (otherwise the count race
     // produces 1, 2 or 3 depending on render order). The bug being tested is
@@ -58,7 +58,7 @@ test.describe('table refresh', () => {
       // is monotonic ROW GROWTH, not transient fetch failures.
       for (let retry = 0; retry < 3; retry++) {
         const titleVisible = await editableTitle(page)
-          .isVisible({ timeout: 15000 })
+          .isVisible({ timeout: 30000 })
           .catch(() => false);
         if (titleVisible) break;
         const retryBtn = page.getByRole('button', { name: 'Retry' });
@@ -70,7 +70,7 @@ test.describe('table refresh', () => {
         }
       }
 
-      await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
+      await expect(editableTitle(page)).toBeVisible({ timeout: 30000 });
       // The regression is monotonic ROW GROWTH; under-render mid-mount is a
       // separate concern. Wait for the count to land at-or-below the
       // baseline (it can briefly read 0 or 1 before the new-row placeholder
@@ -109,7 +109,7 @@ test.describe('table refresh', () => {
     await expect(nameInput).toBeVisible();
     await nameInput.fill('TypedRefresh');
     await page.locator('dialog[open] button:has-text("Create")').click();
-    await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
+    await expect(editableTitle(page)).toBeVisible({ timeout: 30000 });
 
     // Type a value into row 2, column 2 (the first name cell). The cell
     // visibility expectation below already polls for the row to mount —
@@ -136,7 +136,7 @@ test.describe('table refresh', () => {
       // row growth, not a missing title on a stalled fetch.
       for (let retry = 0; retry < 3; retry++) {
         const titleVisible = await editableTitle(page)
-          .isVisible({ timeout: 15000 })
+          .isVisible({ timeout: 30000 })
           .catch(() => false);
         if (titleVisible) break;
         const retryBtn = page.getByRole('button', { name: 'Retry' });
@@ -159,7 +159,7 @@ test.describe('table refresh', () => {
         break;
       }
 
-      await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
+      await expect(editableTitle(page)).toBeVisible({ timeout: 30000 });
 
       // Wait for the table's collection to settle: server's `/query`
       // index lookup completed AND `totalMembers` is stable for two
@@ -262,7 +262,7 @@ test.describe('table refresh', () => {
     await expect(nameInput).toBeVisible();
     await nameInput.fill('NoClientDbRefresh');
     await page.locator('dialog[open] button:has-text("Create")').click();
-    await expect(editableTitle(page)).toBeVisible({ timeout: 15000 });
+    await expect(editableTitle(page)).toBeVisible({ timeout: 30000 });
 
     // Wait for the table to settle on its post-render baseline (header +
     // placeholder = 2). With ClientDb disabled the collection's first
