@@ -1623,7 +1623,7 @@ export class AtomicServer {
   }
 
   /** Unique per `dagger call`; see `e2eShardContainer`. */
-  private readonly e2eRunNonce = `${Date.now()}-${process.pid}`;
+  private readonly e2eRunNonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   /** One Playwright shard against its own atomic-server service. */
   private e2eShardContainer(base: Container, shardIndex: number): Container {
