@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   AtomicError,
   ErrorType,
+  LOCAL_ONLY_NOT_FOUND_MESSAGE,
   NOT_AVAILABLE_LOCALLY_MESSAGE,
   type Agent,
   type Resource,
@@ -14,6 +15,10 @@ const unauthorized = new AtomicError('Unauthorized', ErrorType.Unauthorized);
 const notFound = new AtomicError('not here', ErrorType.NotFound);
 const notLocal = new AtomicError(
   NOT_AVAILABLE_LOCALLY_MESSAGE,
+  ErrorType.Transport,
+);
+const localOnlyGone = new AtomicError(
+  LOCAL_ONLY_NOT_FOUND_MESSAGE,
   ErrorType.Transport,
 );
 const offline = new AtomicError('fetch failed', ErrorType.Transport);
@@ -54,6 +59,18 @@ describe('isDriveSignInError', () => {
   it('not held locally on an origin without a node → guard', () => {
     expect(
       isDriveSignInError(res(DRIVE, notLocal), undefined, BASE, {
+        originWithoutNode: true,
+      }),
+    ).toBe(true);
+  });
+
+  // A drive made on this device, after sign-out: the local-only registration
+  // outlives the per-agent database, so the fetch fails as "local-only, not
+  // in storage" rather than "not available locally". Same visitor, same way
+  // in — sign in.
+  it('a local-only drive gone from storage, no node → guard', () => {
+    expect(
+      isDriveSignInError(res(DRIVE, localOnlyGone), undefined, BASE, {
         originWithoutNode: true,
       }),
     ).toBe(true);

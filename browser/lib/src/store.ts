@@ -17,6 +17,7 @@ import {
   AtomicError,
   ErrorType,
   isTransportError,
+  LOCAL_ONLY_NOT_FOUND_MESSAGE,
   NOT_AVAILABLE_LOCALLY_MESSAGE,
 } from './error.js';
 import { EventManager } from './EventManager.js';
@@ -3199,9 +3200,7 @@ export class Store {
       if (!hasLocalData) {
         this.failResource(
           subject,
-          new Error(
-            'This resource belongs to a local-only drive but was not found in local storage.',
-          ),
+          new AtomicError(LOCAL_ONLY_NOT_FOUND_MESSAGE, ErrorType.Transport),
         );
       }
 

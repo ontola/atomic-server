@@ -54,10 +54,22 @@ export function isTransportError(error?: Error): boolean {
 export const NOT_AVAILABLE_LOCALLY_MESSAGE =
   'Offline: resource not available locally. Reconnect to fetch.';
 
+/**
+ * The same situation for a drive this device registered as local-only: no
+ * server will ever be asked, and the local database has no copy. Signing out
+ * leaves that registration in place while the (per-agent) database goes, so a
+ * signed-out visitor to a drive they made here ends up exactly where a visitor
+ * to one they never held does — and should be sent the same way, to sign in.
+ */
+export const LOCAL_ONLY_NOT_FOUND_MESSAGE =
+  'This resource belongs to a local-only drive but was not found in local storage.';
+
 /** True when the resource failed because no copy of it exists on this device. */
 export function isNotAvailableLocally(error?: Error): boolean {
   return (
-    isTransportError(error) && error!.message === NOT_AVAILABLE_LOCALLY_MESSAGE
+    isTransportError(error) &&
+    (error!.message === NOT_AVAILABLE_LOCALLY_MESSAGE ||
+      error!.message === LOCAL_ONLY_NOT_FOUND_MESSAGE)
   );
 }
 
