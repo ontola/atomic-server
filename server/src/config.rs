@@ -95,6 +95,21 @@ pub struct Opts {
     #[clap(value_enum, long, env = "ATOMIC_TRACING", default_value = "stdout")]
     pub trace: Tracing,
 
+    /// Sentry DSN for error reporting. When set, panics and `error!`-level
+    /// tracing events are sent to Sentry, with HTTP request context and
+    /// recent log lines as breadcrumbs. Leave unset to disable entirely.
+    /// `SENTRY_ENVIRONMENT` (e.g. `staging`, `production`) and
+    /// `SENTRY_RELEASE` are read from the environment as well.
+    #[clap(long, env = "SENTRY_DSN")]
+    pub sentry_dsn: Option<String>,
+
+    /// Sentry DSN for the bundled data-browser front-end. Injected into the
+    /// served HTML so the browser reports its own errors. Separate from
+    /// `--sentry-dsn` because browser DSNs are public. Leave unset to serve
+    /// a front-end that never contacts Sentry (the default).
+    #[clap(long, env = "SENTRY_DSN_BROWSER")]
+    pub sentry_dsn_browser: Option<String>,
+
     /// Introduces random delays in the server, to simulate a slow connection. Useful for testing.
     #[clap(long, env = "ATOMIC_SLOW_MODE")]
     pub slow_mode: bool,

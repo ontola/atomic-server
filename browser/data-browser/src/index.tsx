@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { sha256, sha512 } from '@noble/hashes/sha2.js';
 import App from './App';
+import { initSentry } from './helpers/sentry';
 // Side-effect import: installs a global capture-phase `wheel` listener
 // before any route mounts. CanvasPage uses it to ignore momentum-scroll
 // tails carried over from the previous view (see the file's doc-comment).
@@ -60,6 +61,9 @@ if (
     };
   }
 }
+
+// Before the first render, so errors thrown while mounting are reported too.
+initSentry();
 
 const root = createRoot(document.getElementById('root')!);
 root.render(

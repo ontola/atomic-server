@@ -26,6 +26,31 @@ that code compiled into a code path that runs by default — it installs an open
 sync policy (every drive allowed, no quotas) and passes a no-op readiness hook.
 So running your own node keeps your data, and your traffic, entirely yours.
 
+The only exception is [error reporting](#error-reporting-opt-in), which is off
+unless you configure it yourself.
+
+## Error reporting (opt-in)
+
+AtomicServer can report crashes and `error`-level log events to a
+[Sentry](https://sentry.io) project (or a self-hosted Sentry). This is off by
+default: without a DSN no Sentry client is created and nothing leaves the
+machine. To enable it, set:
+
+```sh
+# Server-side: panics and error logs, with the HTTP request that caused them.
+SENTRY_DSN=https://<key>@<host>/<project>
+# Front-end: hands the bundled data-browser its own (public) DSN at runtime,
+# so browser errors are reported too. Separate, because browser DSNs are public.
+SENTRY_DSN_BROWSER=https://<key>@<host>/<project>
+# Tag events with where they came from (optional).
+SENTRY_ENVIRONMENT=production
+```
+
+Only errors are sent. Performance tracing stays off (use `ATOMIC_TRACING=opentelemetry`
+for that), no personal data is attached, and the served front-end bundle is
+identical whether or not a DSN is set: it only contacts Sentry when the server
+injects one.
+
 ## 1. Run using docker
 
 - Run: `docker run -p 80:80 -p 443:443 -v atomic-storage:/atomic-storage ghcr.io/ontola/atomic-server`

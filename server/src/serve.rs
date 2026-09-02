@@ -236,6 +236,9 @@ where
         let _ = rustls::crypto::ring::default_provider().install_default();
     }
 
+    // Sentry first, so the tracing layer below has a client to report to.
+    // The guard is held until the end of this function; dropping it flushes.
+    let _sentry_guard = crate::trace::init_sentry(&config);
     let tracing_chrome_flush_guard = crate::trace::init_tracing(&config);
 
     // Setup the database and more
@@ -398,6 +401,10 @@ where
             .app_data(web::PayloadConfig::new(PAYLOAD_MAX))
             .app_data(web::Data::new(appstate.clone()))
             .wrap(cors)
+            // Attaches the request (method, url, headers) to any Sentry event
+            // raised while handling it, and reports handler panics and 5xx
+            // errors. No-op without a bound Sentry client.
+            .wrap(sentry_actix::Sentry::new())
             .wrap(middleware::DefaultHeaders::new().add((SERVER_VERSION_HEADER, SERVER_VERSION)))
             .wrap(tracing_actix_web::TracingLogger::<AtomicRootSpanBuilder>::new())
             .wrap(middleware::Compress::default())
