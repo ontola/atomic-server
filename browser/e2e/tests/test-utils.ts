@@ -2011,3 +2011,5 @@ export async function acceptInvite(page: Page) {
     40000,
   );
 }
+
+// CI cache-bust 2026-09-02: forces a real e2e execution for this branch.
