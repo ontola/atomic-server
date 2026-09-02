@@ -1,0 +1,8 @@
+node_modules
+build
+.svelte-kit
+.env
+.env.*
+!.env.example
+.local-postgres
+vite.config.ts.timestamp-*
