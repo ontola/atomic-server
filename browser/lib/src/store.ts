@@ -444,6 +444,13 @@ export class Store {
   /** The base URL of an Atomic Server. Where commits, search, and
    *  new-instance requests are sent. */
   private serverUrl: string;
+  /**
+   * A server URL that was set with `connect: false` — an origin known to run
+   * no atomic-server. Remembered so a later `setServerUrl`/`setDrive` back to
+   * the same URL (the drive defaults to it) does not open the socket after
+   * all. Switching to any other URL connects as usual.
+   */
+  private serverUrlWithoutSocket?: string;
   /** The current Drive subject (DID or HTTP URL). `undefined` until
    *  `setDrive` is called — there is no implicit fallback to the
    *  server URL: a host URL is not a real drive subject and treating
@@ -4587,12 +4594,16 @@ export class Store {
 
     this.eventManager.emit(StoreEvents.ServerURLChanged, url);
 
+    if (!connect) {
+      this.serverUrlWithoutSocket = url;
+    }
+
     if (supportsWebSockets()) {
       const userDisconnected =
         typeof localStorage !== 'undefined' &&
         localStorage.getItem('ws-disconnected') === '1';
 
-      if (!userDisconnected && connect) {
+      if (!userDisconnected && url !== this.serverUrlWithoutSocket) {
         this.openWebSocket(url);
       }
     }

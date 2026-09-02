@@ -28,14 +28,11 @@ import {
   accountCreationTarget,
   type AccountCreationTarget,
 } from '../../helpers/managedServer';
-import { loadVaultKeyOps } from '../../helpers/managed/vaultKeyOps';
 import {
-  agentVaultProof,
-  runVaultBackup,
-  setUpVaultForDrive,
-  vaultLaneId,
-} from '../../helpers/managed/vault';
-import { getOrCreateDeviceId } from '../../helpers/managed/devices';
+  ensureVaultBackup,
+  restoreFromVault,
+} from '../../helpers/managed/vaultAutoBackup';
+import { isOriginWithoutNode } from '../../helpers/originNode';
 import {
   buildEnvelopeV2,
   buildEnvelopeWithPasskey,
@@ -97,6 +94,14 @@ type Props = {
  * that never stopped, on a device holding nothing.
  */
 const SIGN_IN_LOOKUP_TIMEOUT_MS = 8_000;
+
+/**
+ * How long sign-in waits for a vault restore before falling through to the
+ * connect-device step. Longer than a lookup, because it downloads the drive;
+ * bounded, because the step it falls through to offers the same restore by
+ * hand, with a progress bar, which is the better place to wait a long time.
+ */
+const VAULT_RESTORE_TIMEOUT_MS = 45_000;
 
 const swapIn = keyframes`
   from {
@@ -242,42 +247,10 @@ export function GettingStartedFlow({
    */
   async function enableEncryptedBackup(driveSubject: string) {
     newDriveSubject.current = driveSubject;
-    const agentSubject = store.getAgent()?.subject;
-    const agent = store.getAgent();
-
-    if (!agentSubject || !agent) return;
-
-    try {
-      const keys = await loadVaultKeyOps();
-      const { enrollment, driveKey } = await setUpVaultForDrive({
-        keys,
-        driveSubject,
-        agentSubject,
-        // The agent signs a fixed message; its key is never read. That is what
-        // keeps non-extractable and hardware-backed keys usable here.
-        agentSecret: await agentVaultProof(agent, keys.proofMessage),
-      });
-
-      const db = store.getClientDb();
-      const deviceId = getOrCreateDeviceId();
-
-      if (!db || !deviceId) return;
-
-      // Back up straight away, exactly as turning it on by hand does. Enrolling
-      // alone would leave the account with backup "on" and nothing in it —
-      // reporting a protection it does not yet have, which is the failure this
-      // whole feature keeps producing. It is also the moment it costs least: a
-      // brand-new drive is a few KB.
-      await runVaultBackup({
-        db,
-        driveSubject,
-        drivePseudonym: enrollment.drive_pseudonym,
-        devicePubkey: await vaultLaneId(deviceId),
-        driveKey,
-      });
-    } catch {
-      // swallow — see above.
-    }
+    // Enrols and backs up straight away. A brand-new drive is a few KB, and an
+    // enrollment with nothing in it would report a protection the account
+    // does not yet have. Failures are swallowed inside — see above.
+    await ensureVaultBackup(store, driveSubject);
   }
 
   function requireAgentSubject(): string {
@@ -625,12 +598,39 @@ export function GettingStartedFlow({
       // secret minted after derivation carries no `initialDrive`.
       const legacyHome = newAgent.initialDrive;
 
-      const hasData =
+      let hasData =
         !!target &&
         ((await canRead(target)) ||
           (!!legacyHome &&
             legacyHome !== target &&
             (await canRead(legacyHome))));
+
+      // A device holding nothing may still be one download from holding
+      // everything: every account on a managed origin gets an encrypted backup
+      // of its drive, so ask the vault before telling the user their data is
+      // on another device. Signing in as the account is what unlocks it — the
+      // key envelope opens with the agent's signature — so this is the first
+      // moment it can happen. Anything short of a restore (no session, no
+      // backup, an empty one, a failure) falls through to the connect-device
+      // step, which still offers the same restore by hand.
+      if (!hasData && target) {
+        const restored = await withDeadline(
+          restoreFromVault(store, target),
+          VAULT_RESTORE_TIMEOUT_MS,
+          { status: 'no-backup' as const, reason: 'timed out' },
+        );
+
+        if (restored.status === 'restored') {
+          // On an origin with no node the restored drive lives only here,
+          // exactly like one made here; without this every commit would park
+          // in the outbox waiting for a server that is not coming.
+          if (isOriginWithoutNode(store.getServerUrl())) {
+            store.registerLocalOnlyDrive(target);
+          }
+
+          hasData = await canRead(target);
+        }
+      }
 
       // Name the account's drive even when its data hasn't arrived: the Sync
       // page says "your data is on another device" about *that* drive, which
@@ -660,6 +660,12 @@ export function GettingStartedFlow({
           SIGN_IN_LOOKUP_TIMEOUT_MS,
           undefined,
         );
+
+        // Every account gets a backup, not only the ones onboarding made
+        // here: this is the one moment an existing account is known to be on
+        // a device that holds its data. Not awaited — the first pass seals
+        // the whole drive, and sign-in should not wait on an upload.
+        void ensureVaultBackup(store, target!);
 
         navigate(constructOpenURL(target!));
       } else {

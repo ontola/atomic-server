@@ -14,6 +14,7 @@ import { paths } from '../routes/paths';
 import { isRootWelcomeResourceError } from '../helpers/isRootWelcomeResourceError';
 import { isDriveSignInError } from '../helpers/isDriveSignInError';
 import { RootWelcomeGate } from './RootWelcomeGate';
+import { VaultRestoreAction } from '../components/Vault/VaultRestoreAction';
 
 import type { JSX } from 'react';
 
@@ -99,6 +100,8 @@ function ErrorPage({ resource }: ResourcePageProps): JSX.Element {
       <Column>
         <h1>Could not open {resource.subject}</h1>
         <ErrorBlock error={resource.error!} />
+        {/* A drive this device never held may be in the account's vault. */}
+        {agent && <VaultRestoreAction subject={resource.subject} />}
         {resource.subject === baseURL && (
           <p>
             If you have not set up an identity on this server yet,{' '}
