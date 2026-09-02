@@ -162,6 +162,48 @@ describe('deterministic personal drive', () => {
     expect(derived.getSubjects(FAVORITES)).toContain(starred);
   });
 
+  it('falls back to the pointer on the Agent resource when the key cannot derive', async ({
+    expect,
+  }) => {
+    // A keypair restored from a record that predates `Agent.privateDrive`:
+    // non-deterministic signer, nothing cached.
+    const { store, agentDID } = await testStore();
+    const agent = store.getAgent()!;
+    const home = await agent.privateDriveSubject();
+    agent.privateDrive = undefined;
+    vi.spyOn(agent, 'privateDriveSubject').mockRejectedValue(
+      new Error('signs non-deterministically'),
+    );
+
+    const agentResource = store.getResourceLoading(agentDID, {
+      newResource: true,
+    });
+    await agentResource.set(core.properties.personalDrive, home, false);
+    await agentResource.set(core.properties.isA, [core.classes.agent], false);
+
+    expect(await store.privateDriveSubject()).toBe(home);
+    // Cached for the session: no second lookup needed.
+    expect(agent.privateDrive).toBe(home);
+
+    const drive = await store.ensurePrivateDrive('Home');
+    expect(drive.subject).toBe(home);
+  });
+
+  it('still fails when neither the key nor the Agent resource knows the home', async ({
+    expect,
+  }) => {
+    const { store } = await testStore();
+    const agent = store.getAgent()!;
+    agent.privateDrive = undefined;
+    vi.spyOn(agent, 'privateDriveSubject').mockRejectedValue(
+      new Error('signs non-deterministically'),
+    );
+
+    await expect(store.privateDriveSubject()).rejects.toThrow(
+      'signs non-deterministically',
+    );
+  });
+
   it('unions lists from the home named in the agent secret when the Agent resource has no pointer', async ({
     expect,
   }) => {
