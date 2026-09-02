@@ -9,9 +9,7 @@
 
 - A running `atomic-server` (default `http://localhost:9883`) initialized with
   `ATOMIC_INITIALIZE=true`, its store carrying the new `view-group-by` ontology
-  property (fresh init, or `ATOMIC_REPOPULATE_DEFAULTS=true`; a store opened by
-  a build that embeds the property picks it up on its own since the bootstrap
-  fingerprint landed).
+  property (fresh init, or `ATOMIC_REPOPULATE_DEFAULTS=true`).
 - The data-browser served against it — either the Vite dev server (source, HMR)
   or the built bundle. Front-end must include this branch's changes.
 - Signed-in agent with write access to a drive.

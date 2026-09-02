@@ -64,15 +64,6 @@ pub enum SaveOpts {
     /// Removes existing properties that are not present in the imported resource.
     /// Does not perform authorization checks.
     Save,
-    /// Add-only upsert, used for seeding built-in defaults into a store that
-    /// may already hold (possibly user-edited) copies of them.
-    /// Missing resources are added; on an existing resource only the
-    /// properties it does not have yet are added. Existing values are never
-    /// overwritten or removed, and nothing is written when there is nothing
-    /// to add.
-    /// Does not validate required properties, does not create Commits,
-    /// does not perform authorization checks.
-    Merge,
     /// Create Commits for every change.
     /// Does not remove existing properties.
     /// Performs authorization cheks (if enabled)
@@ -787,43 +778,6 @@ async fn parse_json_ad_map_to_resource(
             r.set_propvals_unsafe(propvals);
             store.add_resource(&r).await?;
             r
-        }
-        SaveOpts::Merge => {
-            let subj = subject.ok_or_else(|| {
-                AtomicError::parse_error("No @id or localId found in resource", None, None)
-            })?;
-            // `has_stored_resource`, not `get_resource`: the latter may fetch
-            // an `https://` subject from the network and would turn a missing
-            // default into a remote copy instead of the embedded one.
-            let stored = if store.has_stored_resource(&subj.as_str().into()) {
-                Some(store.get_resource(&subj.as_str().into()).await?)
-            } else {
-                None
-            };
-            match stored {
-                Some(mut existing) => {
-                    let mut added = false;
-                    for (prop, val) in propvals {
-                        if existing.get_propvals().contains_key(&prop) {
-                            continue;
-                        }
-                        existing.set_unsafe(prop, val)?;
-                        added = true;
-                    }
-                    if added {
-                        store
-                            .add_resource_opts(&existing, false, true, true)
-                            .await?;
-                    }
-                    existing
-                }
-                None => {
-                    let mut r = Resource::new(subj);
-                    r.set_propvals_unsafe(propvals);
-                    store.add_resource_opts(&r, false, true, true).await?;
-                    r
-                }
-            }
         }
         SaveOpts::Commit => {
             let signer = parse_opts
