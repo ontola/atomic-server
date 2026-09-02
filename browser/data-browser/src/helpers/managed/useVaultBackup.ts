@@ -15,7 +15,7 @@ import {
   type VaultKeyOps,
   type VaultProofSigner,
 } from './vault';
-import { setVaultOptOut } from './vaultAutoBackup';
+import { onVaultChanged, setVaultOptOut } from './vaultAutoBackup';
 
 /**
  * Cloud Vault state for one drive, ready to bind to a UI.
@@ -151,6 +151,16 @@ export function useVaultBackup({
       setStatus({ state: 'unavailable', reason: (e as Error).message });
     }
   }, [driveSubject]);
+
+  // The automatic path (sign-in, the boot watcher) may enrol this drive after
+  // the first read came back "off"; re-read when it says so.
+  useEffect(
+    () =>
+      onVaultChanged(changed => {
+        if (changed === driveSubject) void refresh();
+      }),
+    [driveSubject, refresh],
+  );
 
   useEffect(() => {
     if (ready) {

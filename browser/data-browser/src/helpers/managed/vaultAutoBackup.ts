@@ -53,7 +53,13 @@ export type VaultAutoBackupDeps = {
   loadKeys: () => Promise<VaultKeyOps & { proofMessage: Uint8Array }>;
   /** The lane this device writes to, or null when it has no identity yet. */
   laneId: () => Promise<string | null>;
-  db: (store: Store) => VaultCapableDb | null;
+  /**
+   * The local store the drive lives in, once it is attached — or null when
+   * this build has none. Async because the ClientDb attaches a few hundred ms
+   * after sign-in, and a restore or first backup asked for in that window
+   * must wait for it rather than conclude there is nothing to write to.
+   */
+  db: (store: Store) => Promise<VaultCapableDb | null>;
   setUpVaultForDrive: typeof setUpVaultForDrive;
   runVaultBackup: typeof runVaultBackup;
   listVaultDrives: typeof listVaultDrives;
@@ -115,7 +121,13 @@ const defaultDeps: VaultAutoBackupDeps = {
   },
   // Same choice `useDriveVault` makes: the desktop and Android apps keep the
   // drive in their embedded node and have no ClientDb.
-  db: store => (isRunningInTauri() ? nodeVault : (store.getClientDb() ?? null)),
+  db: async store => {
+    if (isRunningInTauri()) return nodeVault;
+
+    await store.waitForClientDb(CLIENT_DB_WAIT_MS);
+
+    return store.getClientDb() ?? null;
+  },
   setUpVaultForDrive,
   runVaultBackup,
   listVaultDrives,
@@ -174,15 +186,52 @@ export function ensureVaultBackup(
 
   if (existing) return existing;
 
-  const pass = ensureVaultBackupOnce(store, driveSubject, deps).finally(() => {
-    ensuring.delete(driveSubject);
-  });
+  const pass = ensureVaultBackupOnce(store, driveSubject, deps)
+    .then(outcome => {
+      // Skips are by design, but the reason is exactly what someone looking
+      // at a Sync page that still says "off" needs to see.
+      if (outcome.status === 'skipped') {
+        console.info('[cloud-vault] backup skipped:', outcome.reason);
+      }
+
+      return outcome;
+    })
+    .finally(() => {
+      ensuring.delete(driveSubject);
+    });
   ensuring.set(driveSubject, pass);
 
   return pass;
 }
 
 const ensuring = new Map<string, Promise<EnsureVaultOutcome>>();
+
+/**
+ * How long to wait for the ClientDb to attach after sign-in. Deriving the
+ * database name and unwrapping the agent's key takes a few hundred ms on a
+ * laptop; a phone with a slow key unwrap wants a generous ceiling.
+ */
+const CLIENT_DB_WAIT_MS = 20_000;
+
+type VaultChangeListener = (driveSubject: string) => void;
+const vaultChangeListeners = new Set<VaultChangeListener>();
+
+/**
+ * Called when a drive's enrollment or backup changed through the automatic
+ * path, so a screen that shows the vault's status (the Sync page) re-reads it
+ * rather than keeping the "off" it rendered a moment earlier.
+ */
+export function onVaultChanged(listener: VaultChangeListener): () => void {
+  vaultChangeListeners.add(listener);
+
+  return () => {
+    vaultChangeListeners.delete(listener);
+  };
+}
+
+function notifyVaultChanged(driveSubject: string): void {
+  for (const listener of vaultChangeListeners) listener(driveSubject);
+}
 
 async function ensureVaultBackupOnce(
   store: Store,
@@ -198,7 +247,7 @@ async function ensureVaultBackupOnce(
   }
 
   try {
-    const db = deps.db(store);
+    const db = await deps.db(store);
     const lane = await deps.laneId();
 
     if (!db || !lane) {
@@ -225,13 +274,16 @@ async function ensureVaultBackupOnce(
       enrolled.set(driveSubject, known);
     }
 
-    return await deps.runVaultBackup({
+    const outcome = await deps.runVaultBackup({
       db,
       driveSubject,
       drivePseudonym: known.drivePseudonym,
       devicePubkey: lane,
       driveKey: known.driveKey,
     });
+    notifyVaultChanged(driveSubject);
+
+    return outcome;
   } catch (error) {
     // A stale key or enrollment must not be reused after a failure; the next
     // attempt re-derives both from the control plane.
@@ -278,7 +330,7 @@ export async function restoreFromVault(
   if (!agent?.subject) return { status: 'no-backup', reason: 'not signed in' };
 
   try {
-    const db = deps.db(store);
+    const db = await deps.db(store);
 
     if (!db) return { status: 'no-backup', reason: 'no local database' };
 
@@ -320,6 +372,7 @@ export async function restoreFromVault(
       drivePseudonym: enrollment.drive_pseudonym,
       driveKey,
     });
+    notifyVaultChanged(driveSubject);
 
     return { status: 'restored', outcome };
   } catch (error) {

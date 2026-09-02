@@ -3,6 +3,7 @@ import { Agent, JSCryptoProvider, Store } from '@tomic/lib';
 import {
   ensureVaultBackup,
   forgetEnrolledVaults,
+  onVaultChanged,
   restoreFromVault,
   watchForVaultBackups,
   type VaultAutoBackupDeps,
@@ -56,7 +57,7 @@ function fakeDeps(overrides: Partial<VaultAutoBackupDeps> = {}) {
     hasAccount: vi.fn(async () => true),
     loadKeys: vi.fn(async () => keys),
     laneId: vi.fn(async () => LANE),
-    db: vi.fn(() => ({}) as never),
+    db: vi.fn(async () => ({}) as never),
     setUpVaultForDrive: vi.fn(async () => ({ enrollment, driveKey: KEY })),
     runVaultBackup: vi.fn(async () => ({
       status: 'backed-up' as const,
@@ -199,6 +200,54 @@ describe('ensureVaultBackup', () => {
     const second = await ensureVaultBackup(store, DRIVE, deps);
     expect(second.status).toBe('nothing-to-do');
     expect(deps.setUpVaultForDrive).toHaveBeenCalledTimes(2);
+  });
+
+  it('waits for the local database rather than skipping', async () => {
+    const store = await signedInStore();
+    let attach!: () => void;
+    const deps = fakeDeps({
+      db: vi.fn(
+        () =>
+          new Promise<never>(resolve => {
+            attach = () => resolve({} as never);
+          }),
+      ),
+    });
+
+    const pass = ensureVaultBackup(store, DRIVE, deps);
+    await Promise.resolve();
+    expect(deps.setUpVaultForDrive).not.toHaveBeenCalled();
+
+    attach();
+    expect((await pass).status).toBe('backed-up');
+  });
+
+  it('skips when this build has no local database', async () => {
+    const store = await signedInStore();
+    const deps = fakeDeps({ db: vi.fn(async () => null) });
+
+    const outcome = await ensureVaultBackup(store, DRIVE, deps);
+
+    expect(outcome).toEqual({
+      status: 'skipped',
+      reason: 'no local database or device id',
+    });
+    expect(deps.setUpVaultForDrive).not.toHaveBeenCalled();
+  });
+
+  it('tells vault-status listeners which drive changed', async () => {
+    const store = await signedInStore();
+    const deps = fakeDeps();
+    const changed: string[] = [];
+    const off = onVaultChanged(drive => changed.push(drive));
+
+    await ensureVaultBackup(store, DRIVE, deps);
+    expect(changed).toEqual([DRIVE]);
+
+    off();
+    forgetEnrolledVaults();
+    await ensureVaultBackup(store, DRIVE, deps);
+    expect(changed).toEqual([DRIVE]);
   });
 });
 

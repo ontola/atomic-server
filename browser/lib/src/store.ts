@@ -732,8 +732,13 @@ export class Store {
   /**
    * Resolves `true` once a ClientDb is attached, `false` if none arrives
    * within `timeoutMs` — or immediately, if none was ever expected.
+   *
+   * Public because the attach lands a few hundred ms after boot and a few
+   * hundred ms after each agent change, and anything that needs the local
+   * database right after sign-in (a vault restore, a first backup) would
+   * otherwise read `getClientDb()` as "this app has no database".
    */
-  private waitForClientDb(timeoutMs: number): Promise<boolean> {
+  public waitForClientDb(timeoutMs: number): Promise<boolean> {
     if (this.clientDb) return Promise.resolve(true);
     if (!this.clientDbExpected) return Promise.resolve(false);
 
