@@ -5,6 +5,7 @@ import {
   isUnrecoverableCommitErrorMessage,
   isTerminalCommitError,
   isUnrecoverableCommitError,
+  isCommitSubject,
   drainBackoffMs,
   BLOCK_AFTER_FAILURES,
   type OutboxEntry,
@@ -57,6 +58,53 @@ describe('isTerminalCommitErrorMessage', () => {
     expect(isTerminalCommitErrorMessage('Invalid signature')).toBe(false);
     expect(isTerminalCommitErrorMessage('Network timeout')).toBe(false);
     expect(isTerminalCommitErrorMessage('')).toBe(false);
+  });
+
+  it('flags edits to a commit', ({ expect }) => {
+    expect(isTerminalCommitErrorMessage('Commits cannot be edited.')).toBe(
+      true,
+    );
+  });
+});
+
+describe('commit subjects never queue', () => {
+  const HTTP_COMMIT =
+    'https://staging.atomicdata.dev/commits//Ybe1N6CuUMUowBWeFYEjuP20Mp4MiTI2ELtuXveh2UnegO2mCdqucz8dG+J7Ldq9cxSzvo6JMdMNqn+VWqrDg==';
+
+  it('recognises both commit subject forms', ({ expect }) => {
+    expect(isCommitSubject('did:ad:commit:abc=')).toBe(true);
+    expect(isCommitSubject(HTTP_COMMIT)).toBe(true);
+    expect(isCommitSubject('https://example.com/commits')).toBe(false);
+    expect(isCommitSubject('https://example.com/folder/commits/x')).toBe(false);
+    expect(isCommitSubject(SUBJECT)).toBe(false);
+    expect(isCommitSubject('_new:abc')).toBe(false);
+  });
+
+  it('markDirty ignores them', ({ expect }) => {
+    const outbox = new LocalOutbox();
+    outbox.markDirty(HTTP_COMMIT);
+    outbox.markDirty('did:ad:commit:abc=');
+    outbox.markDirty(SUBJECT);
+    expect(outbox.size).toBe(1);
+  });
+
+  it('entries persisted by an older build are dropped on hydrate', ({
+    expect,
+  }) => {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.clear();
+    // Same shape an older build wrote (anonymous namespace); it had no
+    // commit guard.
+    localStorage.setItem(
+      'atomic.outbox.__anonymous__',
+      JSON.stringify([
+        { subject: SUBJECT, enqueuedAt: 1 },
+        { subject: HTTP_COMMIT, enqueuedAt: 2 },
+      ]),
+    );
+
+    const rehydrated = new LocalOutbox();
+    expect(rehydrated.size).toBe(1);
   });
 });
 

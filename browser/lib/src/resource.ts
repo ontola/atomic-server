@@ -36,6 +36,7 @@ import {
   type MergeForkOptions,
 } from './forks.js';
 import { GENESIS, properties, instances } from './urls.js';
+import { isCommitSubject } from './local-outbox.js';
 import {
   valToArray,
   type JSONValue,
@@ -570,7 +571,7 @@ export class Resource<C extends OptionalClass = any> {
         if (batch.by !== 'local') return;
         if (batch.origin?.startsWith(SYSTEM_COMMIT_ORIGIN)) return;
         if (!this._store) return;
-        if (this.subject.startsWith('did:ad:commit:')) return;
+        if (isCommitSubject(this.subject)) return;
         // A resource still under construction (created, not yet `save()`d):
         // its property writes belong to the genesis commit, which is signed and
         // stashed at creation and drained by `save()`. Marking it dirty here

@@ -788,6 +788,60 @@ async fn server_info_endpoint() {
     );
 }
 
+/// With `ATOMIC_HOME_DRIVE` set, `/server` carries the drive as `homeDrive`.
+/// The property was used by the endpoint before it existed in the default
+/// store, so every node with a home drive answered 500 on `/server` — and the
+/// data-browser then took its own origin for "not a node": no known server,
+/// no place to register a private drive on sign-in.
+#[actix_rt::test]
+async fn server_info_endpoint_with_home_drive() {
+    let unique_string = atomic_lib::utils::random_string(10);
+    use clap::Parser;
+    let opts = Opts::parse_from([
+        "atomic-server",
+        "--initialize",
+        "--data-dir",
+        &format!("./.temp/{}/db", unique_string),
+        "--config-dir",
+        &format!("./.temp/{}/config", unique_string),
+        "--home-drive",
+        "http://localhost/",
+    ]);
+
+    let mut config = config::build_config(opts).expect("failed init config");
+    config.search_index_path = format!("./.temp/{}/search_index", unique_string).into();
+    let appstate = crate::appstate::AppState::init(config.clone())
+        .await
+        .expect("failed init appstate");
+
+    let data = Data::new(appstate.clone());
+    let app = test::init_service(
+        App::new()
+            .app_data(data)
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    // Plain JSON (not JSON-AD) needs every property's datatype to render, so
+    // this is the representation that failed: the JSON-AD one got away with
+    // the property missing from the store.
+    let req = build_request_authenticated("/server", &appstate)
+        .insert_header(("Accept", "application/json"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    let status = resp.status();
+    let body = get_body(resp);
+    assert!(status.is_success(), "/server status {status}: {body}");
+
+    let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+    // Plain JSON keys by shortname.
+    assert_eq!(
+        json["home-drive"].as_str(),
+        Some("http://localhost/"),
+        "homeDrive should be the configured drive: {body}"
+    );
+}
+
 /// The versioning round trip: `/all-versions` lists a resource's versions, and
 /// each link it hands out resolves to that resource as it was then. Both read
 /// the Loro oplog. Nothing covered either endpoint before, which is how they
