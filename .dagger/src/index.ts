@@ -1622,6 +1622,9 @@ export class AtomicServer {
       );
   }
 
+  /** Unique per `dagger call`; see `e2eShardContainer`. */
+  private readonly e2eRunNonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
   /** One Playwright shard against its own atomic-server service. */
   private e2eShardContainer(base: Container, shardIndex: number): Container {
     const shardCount = this.e2eRun.shardCount;
@@ -1633,6 +1636,15 @@ export class AtomicServer {
         '-c',
         `for i in $(seq 1 30); do curl -fsS http://${ATOMIC_DOMAIN}:9883/setup && exit 0 || sleep 1; done; exit 1`,
       ])
+      // Dagger caches an exec by its inputs, and the shard script always
+      // exits 0 (the real exit code goes to a file), so a run whose sources
+      // matched an earlier one replayed that run's output verbatim: a
+      // workflow-only change, an empty commit or `gh run rerun` all "passed"
+      // or "failed" with the previous run's exact log and shard timings. A
+      // per-invocation nonce on this step makes the browsers run every time.
+      // It sits after the service binding and the setup probe, so the build
+      // layers above stay cached; only the Playwright exec is unique.
+      .withEnvVariable('E2E_RUN_NONCE', this.e2eRunNonce)
       .withExec([
         '/bin/bash',
         '-c',
