@@ -387,9 +387,9 @@ test.describe('tables', async () => {
       },
       values.length,
       // Forty genesis commits + OPFS puts. 15s is enough on a quiet runner
-      // and routinely not under dagger load (the post-reload wait below
-      // already uses 30s for the same queue).
-      { timeout: 30_000 },
+      // and routinely not under dagger load; 30s still tripped on an idle
+      // Mancave runner (2026-09-02), so match the post-reload wait below.
+      { timeout: 60_000 },
     );
 
     // Spot-check the bottom of the list is rendered (the active cell stayed in
