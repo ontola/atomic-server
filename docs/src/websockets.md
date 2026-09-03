@@ -821,14 +821,17 @@ case, covering `AUTH_OK` with and without capabilities, `ERROR`, `GET`,
 
 The Rust test module `protocol::wire_vectors` asserts that every encoder
 produces the recorded bytes and that the recorded bytes decode to the
-recorded fields. `browser/lib/src/ws-v2.test.ts` reads the **same file** and
-asserts the same for the TypeScript codec. Every frame both sides can encode
-must come out byte-identical.
+recorded fields. `browser/lib/src/ws-v2.test.ts` asserts the same for the
+TypeScript codec against `browser/lib/src/protocol_vectors.json`, a
+byte-identical copy kept inside the browser package because CI runs the
+TypeScript tests in a container that holds only `browser/`. The Rust test
+`wire_vectors::browser_copy_is_identical` fails when the two copies drift.
+Every frame both sides can encode must come out byte-identical.
 
 After a deliberate wire change, regenerate with
 `cargo test -p atomic_lib print_wire_vectors -- --ignored --nocapture`, paste
-the printed JSON into `protocol_vectors.json`, and update this page in the
-same commit.
+the printed JSON into both copies of `protocol_vectors.json`, and update this
+page in the same commit.
 
 ## Implementation
 

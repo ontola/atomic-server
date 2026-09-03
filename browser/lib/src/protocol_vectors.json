@@ -1,0 +1,89 @@
+{
+  "note": "Golden wire frames for lib/src/sync/protocol.rs and browser/lib/src/ws-v2.ts. Regenerate with `cargo test -p atomic_lib print_wire_vectors -- --ignored --nocapture`.",
+  "vectors": [
+    {
+      "hex": "025b226b656570616c697665222c22756e737562225d",
+      "name": "auth_ok_caps"
+    },
+    {
+      "hex": "02",
+      "name": "auth_ok_bare"
+    },
+    {
+      "hex": "0300070007535542207265667573656420666f72206469643a61643a643a206e6f",
+      "name": "error"
+    },
+    {
+      "hex": "1000016469643a61643a78",
+      "name": "get"
+    },
+    {
+      "hex": "1106000000086469643a61643a7800116469643a61643a636f6d6d69743a616263010203",
+      "name": "update_delta_push"
+    },
+    {
+      "hex": "1101000500086469643a61643a78ff",
+      "name": "update_snapshot"
+    },
+    {
+      "hex": "1200006469643a61643a78",
+      "name": "destroy"
+    },
+    {
+      "hex": "1300097b2261223a317d",
+      "name": "commit"
+    },
+    {
+      "hex": "1400097b2261223a317d",
+      "name": "commit_ok"
+    },
+    {
+      "hex": "206469643a61643a64",
+      "name": "sub"
+    },
+    {
+      "hex": "216469643a61643a64",
+      "name": "unsub"
+    },
+    {
+      "hex": "3000086469643a61643a6400066162633132337b227065657273223a5b227031222c227032225d2c227265736f7572636573223a7b226469643a61643a78223a5b332c305d7d7d",
+      "name": "sync"
+    },
+    {
+      "hex": "3100086469643a61643a64",
+      "name": "sync_ok"
+    },
+    {
+      "hex": "3200086469643a61643a647b2270756c6c223a5b226469643a61643a79225d2c2270756c6c46726f6d223a7b226469643a61643a79223a7b227031223a327d7d2c2270757368223a5b226469643a61643a78225d2c2272656d6f7665223a5b226469643a61643a7a225d7d",
+      "name": "sync_diff"
+    },
+    {
+      "hex": "3300086469643a61643a6401000100086469643a61643a78000000020102",
+      "name": "sync_push_last"
+    },
+    {
+      "hex": "34abababababababababababababababababababababababababababababababab",
+      "name": "blob_request"
+    },
+    {
+      "hex": "35abababababababababababababababababababababababababababababababab0909",
+      "name": "blob_response"
+    },
+    {
+      "hex": "37000844657620f09f9a805b226b656570616c697665225d",
+      "name": "hello_caps"
+    },
+    {
+      "hex": "370003446576",
+      "name": "hello_bare"
+    },
+    {
+      "hex": "41",
+      "name": "keepalive"
+    },
+    {
+      "hex": "400100086469643a61643a64000e6469643a61643a6167656e743a6107",
+      "name": "ephemeral_presence"
+    }
+  ]
+}

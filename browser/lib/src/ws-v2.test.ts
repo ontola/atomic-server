@@ -44,12 +44,16 @@ describe('decodeError (F5: planning/unified-sync.md)', () => {
 
 // ---- Cross-implementation golden vectors ----
 //
-// `lib/src/sync/protocol_vectors.json` is written by the Rust codec
-// (`cargo test -p atomic_lib print_wire_vectors -- --ignored --nocapture`).
+// `protocol_vectors.json` is written by the Rust codec
+// (`cargo test -p atomic_lib print_wire_vectors -- --ignored --nocapture`)
+// into `lib/src/sync/protocol_vectors.json`; the copy next to this file is
+// what CI's browser-only container can reach, and a Rust test
+// (`wire_vectors::browser_copy_is_identical`) fails when the two drift.
 // Every frame this codec can encode must come out byte-identical; every
 // frame it decodes must yield the recorded fields. A failure here means the
 // two implementations drifted: fix the codec, or regenerate the vectors
-// deliberately and update `docs/src/websockets.md` in the same change.
+// deliberately (both copies) and update `docs/src/websockets.md` in the same
+// change.
 
 import { readFileSync } from 'node:fs';
 import {
@@ -78,10 +82,7 @@ import {
 const vectors: Record<string, Uint8Array> = Object.fromEntries(
   (
     JSON.parse(
-      readFileSync(
-        new URL('../../../lib/src/sync/protocol_vectors.json', import.meta.url),
-        'utf8',
-      ),
+      readFileSync(new URL('./protocol_vectors.json', import.meta.url), 'utf8'),
     ).vectors as Array<{ name: string; hex: string }>
   ).map(v => [v.name, hexToBytes(v.hex)]),
 );

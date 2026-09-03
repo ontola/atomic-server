@@ -1571,7 +1571,28 @@ mod wire_vectors {
         assert_eq!(eph.kind, ephemeral_kind::PRESENCE);
     }
 
-    /// Regenerator. Prints the JSON to paste into `protocol_vectors.json`.
+    /// The browser package keeps its own copy of the vectors
+    /// (`browser/lib/src/protocol_vectors.json`) because CI runs the
+    /// TypeScript tests in a container that holds only `browser/`. The two
+    /// files must be byte-identical; this catches a regeneration that
+    /// updated one and not the other. Skipped when the browser tree is not
+    /// present (a published crate, a partial checkout).
+    #[test]
+    fn browser_copy_is_identical() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../browser/lib/src/protocol_vectors.json");
+        let Ok(browser_copy) = std::fs::read_to_string(&path) else {
+            eprintln!("skipping: {} not present", path.display());
+            return;
+        };
+        assert_eq!(
+            browser_copy, VECTORS_JSON,
+            "browser/lib/src/protocol_vectors.json differs from lib/src/sync/protocol_vectors.json; copy the regenerated file to both places"
+        );
+    }
+
+    /// Regenerator. Prints the JSON to paste into `protocol_vectors.json`
+    /// (both copies, see `browser_copy_is_identical`).
     #[test]
     #[ignore]
     fn print_wire_vectors() {
