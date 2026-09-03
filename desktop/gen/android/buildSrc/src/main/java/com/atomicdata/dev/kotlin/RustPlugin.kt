@@ -17,13 +17,19 @@ open class RustPlugin : Plugin<Project> {
     override fun apply(project: Project) = with(project) {
         config = extensions.create("rust", Config::class.java)
 
-        val defaultAbiList = listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64");
+        // Phones and tablets we actually install on are arm64. Shipping
+        // armeabi-v7a / x86 / x86_64 as well packed four copies of
+        // libatomic_server_tauri.so (~100 MB each) into the sideloadable
+        // universal APK — 369 MB on v0.41.0-beta.3. Override with Gradle
+        // properties (or `cargo tauri android build --target …`) if an
+        // Intel emulator build is needed.
+        val defaultAbiList = listOf("arm64-v8a")
         val abiList = (findProperty("abiList") as? String)?.split(',') ?: defaultAbiList
 
-        val defaultArchList = listOf("arm64", "arm", "x86", "x86_64");
+        val defaultArchList = listOf("arm64")
         val archList = (findProperty("archList") as? String)?.split(',') ?: defaultArchList
 
-        val targetsList = (findProperty("targetList") as? String)?.split(',') ?: listOf("aarch64", "armv7", "i686", "x86_64")
+        val targetsList = (findProperty("targetList") as? String)?.split(',') ?: listOf("aarch64")
 
         extensions.configure<ApplicationExtension> {
             @Suppress("UnstableApiUsage")

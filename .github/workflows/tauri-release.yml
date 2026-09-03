@@ -392,7 +392,11 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android,wasm32-unknown-unknown
+          # arm64 only: phones/tablets we ship to. The other three Android
+          # targets were Tauri's generated default and made the universal APK
+          # ~4× (369 MB on v0.41.0-beta.3). wasm32 is for `pnpm -C browser
+          # build`, which wasm-packs the ClientDb before the APK is assembled.
+          targets: aarch64-linux-android,wasm32-unknown-unknown
 
       - uses: swatinem/rust-cache@v2
         with:
@@ -475,7 +479,7 @@ jobs:
           echo "Signing configured (keystore at $keystore)."
 
       - name: Build
-        run: cargo tauri android build --apk --aab
+        run: cargo tauri android build --target aarch64 --apk --aab
         working-directory: desktop
 
       - name: Collect artifacts

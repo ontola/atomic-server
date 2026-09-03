@@ -37,6 +37,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
     Rust and TypeScript codecs byte-for-byte.
   - Integration tests bind the test server to `127.0.0.1` and fall back to an
     OS-assigned port when `portpicker` finds none (hosts without IPv6).
+- Tauri Android: ship `arm64-v8a` only. The sideloadable universal APK was ~369 MB because it bundled four copies of `libatomic_server_tauri.so` (armeabi-v7a / x86 / x86_64 as well). Phones and tablets we install on are arm64; override with `cargo tauri android build --target …` for an Intel emulator.
 
 ## [v0.41.0-beta.4] - 2026-09-03
 
