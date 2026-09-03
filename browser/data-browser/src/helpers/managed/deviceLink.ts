@@ -161,6 +161,34 @@ export function isDeviceLinked(): boolean {
 }
 
 /**
+ * Can this client sign in to the provider the ordinary way — by holding its
+ * session cookie?
+ *
+ * Only a page on the provider's own site can: the cookie is set for the
+ * portal's registrable domain, which covers `app.` on the same domain and
+ * nothing else. The desktop and Android apps live on `tauri://localhost`, a
+ * self-hoster's app on their own origin; sending either to the portal's sign-in
+ * page ends with a session in some browser and none in the app. Those link
+ * instead — see {@link requestDeviceLink}.
+ */
+export function canHoldProviderCookie(portalUrl: string | null): boolean {
+  if (!portalUrl) return false;
+
+  if (typeof window === 'undefined') return false;
+
+  if (!/^https?:$/.test(window.location.protocol)) return false;
+
+  try {
+    const portalHost = new URL(portalUrl).hostname;
+    const here = window.location.hostname;
+
+    return here === portalHost || here.endsWith(`.${portalHost}`);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * The provider this install linked to, so a later session knows where its token
  * is valid. Stored separately from the token: knowing the address is not the
  * same as being able to use it.

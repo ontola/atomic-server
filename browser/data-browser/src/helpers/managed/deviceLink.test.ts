@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   approvalUrl,
   awaitDeviceLink,
+  canHoldProviderCookie,
   isDeviceLinked,
   pollDeviceLink,
   requestDeviceLink,
@@ -215,5 +216,49 @@ describe('approvalUrl', () => {
     expect(approvalUrl(`${PORTAL}/`, 'K3F9-2XQP')).toBe(
       'https://portal.example/link?code=K3F9-2XQP',
     );
+  });
+});
+
+describe('canHoldProviderCookie', () => {
+  const saved = globalThis.window;
+
+  function at(href: string) {
+    globalThis.window = { location: new URL(href) } as unknown as Window &
+      typeof globalThis;
+  }
+
+  afterEach(() => {
+    globalThis.window = saved;
+  });
+
+  it('is true on the portal itself and on a subdomain of it', () => {
+    at('https://portal.example/app');
+    expect(canHoldProviderCookie(PORTAL)).toBe(true);
+
+    at('https://app.portal.example/app');
+    expect(canHoldProviderCookie(PORTAL)).toBe(true);
+  });
+
+  it('is true across ports in local development (cookies ignore the port)', () => {
+    at('http://localhost:6747/app');
+    expect(canHoldProviderCookie('http://localhost:49237')).toBe(true);
+  });
+
+  it('is false for the desktop and Android apps on tauri://localhost', () => {
+    at('tauri://localhost/app');
+    expect(canHoldProviderCookie(PORTAL)).toBe(false);
+  });
+
+  it('is false on a different site, and a look-alike is a different site', () => {
+    at('https://my-own-server.example/app');
+    expect(canHoldProviderCookie(PORTAL)).toBe(false);
+
+    at('https://notportal.example/app');
+    expect(canHoldProviderCookie(PORTAL)).toBe(false);
+  });
+
+  it('is false with no portal to hold a cookie for', () => {
+    at('https://portal.example/app');
+    expect(canHoldProviderCookie(null)).toBe(false);
   });
 });

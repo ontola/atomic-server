@@ -5948,9 +5948,8 @@ msgstr "Could not reach your backup. Try again."
 msgid "Paste your agent secret"
 msgstr "Paste your agent secret"
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Use my account instead"
-msgstr "Use my account instead"
+#~ msgid "Use my account instead"
+#~ msgstr "Use my account instead"
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "That doesn’t look like a valid agent secret."
@@ -7160,3 +7159,13 @@ msgstr "Keep it somewhere safe. You'll need it — plus your email — to get ba
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Cloud Vault had nothing for this workspace:"
 msgstr "Cloud Vault had nothing for this workspace:"
+
+#. 0: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Forgot it? Restore from {0}"
+msgstr "Forgot it? Restore from {0}"
+
+#. 0: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Your backup is kept by your {0} account. Connect this device to it to restore."
+msgstr "Your backup is kept by your {0} account. Connect this device to it to restore."
