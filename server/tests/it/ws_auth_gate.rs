@@ -359,6 +359,38 @@ async fn auth_signed_for_another_origin_is_refused() {
         .expect("a fresh proof for this origin authenticates");
 }
 
+/// A server is often reachable under a name other than its configured URL
+/// (a proxy, a container network, this test dialling `127.0.0.1` while the
+/// server calls itself `localhost`). The browser signs the origin it used,
+/// so a proof for the *request's* host is accepted too, as the HTTP auth
+/// headers have always done.
+#[tokio::test]
+async fn auth_signed_for_the_request_host_is_accepted() {
+    let port = start_server("ws_gate_auth_request_host");
+    wait_for_server(port).await;
+    let server_url = format!("http://localhost:{port}");
+
+    let client = Client::new(&server_url).await.unwrap();
+    let alice = client.new_agent("Alice").await.unwrap();
+
+    // `WsClient` signs the origin of the URL it dialled: `http://127.0.0.1:{port}`,
+    // which is not the configured `http://localhost:{port}`.
+    let ws = WsClient::connect(&format!("ws://127.0.0.1:{port}/ws"))
+        .await
+        .unwrap();
+    assert_eq!(ws.origin(), format!("http://127.0.0.1:{port}"));
+    ws.authenticate(&alice)
+        .await
+        .expect("a proof for the host the socket was opened on authenticates");
+
+    // A third name, neither the request host nor the configured URL, still fails.
+    let ws2 = WsClient::connect(&format!("ws://127.0.0.1:{port}/ws"))
+        .await
+        .unwrap();
+    let foreign = protocol::encode_auth(&alice, &format!("http://atomic.example:{port}")).unwrap();
+    assert!(ws2.authenticate_with_frame(foreign).await.is_err());
+}
+
 /// An AUTH proof expires. A captured frame replayed later is refused
 /// instead of staying a permanent key.
 #[tokio::test]

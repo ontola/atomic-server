@@ -38,6 +38,14 @@ pub enum AuthBinding<'a> {
     /// another server, or an HTTP auth header for some resource URL, is not
     /// a WebSocket session here.
     Origin(&'a str),
+    /// Like [`AuthBinding::Origin`], but any of several origins is accepted.
+    /// A server is commonly reachable under more than one name (its
+    /// configured URL, the host a proxy or a test harness dials it on), and
+    /// the client signs the one it used. The WebSocket responder passes the
+    /// origin the upgrade request arrived on together with its configured
+    /// server URL, which is the same tolerance the HTTP auth headers have
+    /// always had (they compare against the request URL).
+    Origins(&'a [&'a str]),
 }
 
 /// `scheme://host[:port]` of a URL, lower-cased, or `None` for anything that
@@ -81,19 +89,26 @@ pub async fn handle_auth_frame(
         Err(e) => return refuse(format!("Invalid auth JSON: {e}")),
     };
 
-    if let AuthBinding::Origin(expected) = binding {
-        let expected_origin = url_origin(expected);
+    let expected: Vec<&str> = match binding {
+        AuthBinding::Unbound => Vec::new(),
+        AuthBinding::Origin(one) => vec![one],
+        AuthBinding::Origins(many) => many.to_vec(),
+    };
+    // Only absolute http(s) URLs can bind. A responder that knows none of
+    // its origins (no base domain configured) falls back to the unbound
+    // behaviour; that is the localhost / test default, not a public host.
+    let expected_origins: Vec<String> = expected.iter().filter_map(|o| url_origin(o)).collect();
+    if !expected_origins.is_empty() {
         let signed_origin = url_origin(&auth.requested_subject);
-        // A responder that does not know its own origin (no base domain
-        // configured) cannot bind and falls back to the unbound behaviour;
-        // that is the localhost / test default, not a public host.
-        if let Some(expected_origin) = expected_origin {
-            if signed_origin.as_deref() != Some(expected_origin.as_str()) {
-                return refuse(format!(
-                    "Auth failed: requestedSubject {} does not name this server ({})",
-                    auth.requested_subject, expected_origin
-                ));
-            }
+        let named_this_server = signed_origin
+            .as_deref()
+            .is_some_and(|signed| expected_origins.iter().any(|e| e == signed));
+        if !named_this_server {
+            return refuse(format!(
+                "Auth failed: requestedSubject {} does not name this server ({})",
+                auth.requested_subject,
+                expected_origins.join(" or ")
+            ));
         }
     }
 

@@ -62,9 +62,18 @@ pub async fn web_socket_handler(
     let for_agent =
         get_agent_from_auth_values_and_check(auth_header_values, &appstate.store).await?;
 
+    // The origin this socket was opened on, as the client sees it (scheme
+    // and `Host`, honouring forwarded headers the way the rest of the server
+    // does). The browser signs exactly this as `AUTH.requestedSubject`.
+    let request_origin = {
+        let info = req.connection_info();
+        Some(format!("{}://{}", info.scheme(), info.host()))
+    };
+
     let result = WsResponseBuilder::new(
         WebSocketConnection {
             hb: Instant::now(),
+            request_origin,
             subscribed: std::collections::HashSet::new(),
             commit_monitor_addr: appstate.commit_monitor.clone(),
             loro_sync_broadcaster_addr: appstate.loro_sync_broadcaster.clone(),
@@ -99,6 +108,10 @@ pub async fn web_socket_handler(
 
 pub struct WebSocketConnection {
     hb: Instant,
+    /// `scheme://host[:port]` the upgrade request arrived on; one of the two
+    /// origins an `AUTH.requestedSubject` may name (the other is the
+    /// configured server URL).
+    request_origin: Option<String>,
     subscribed: std::collections::HashSet<atomic_lib::Subject>,
     commit_monitor_addr: Addr<CommitMonitor>,
     loro_sync_broadcaster_addr: Addr<LoroSyncBroadcaster>,
@@ -285,6 +298,7 @@ impl WebSocketConnection {
                 let store = self.store.clone();
                 let mut agent = self.agent.clone();
                 let bin_vec = bin.to_vec();
+                let request_origin = self.request_origin.clone();
                 ctx.spawn(
                     async move {
                         // The browser signs the server origin as
@@ -292,19 +306,24 @@ impl WebSocketConnection {
                         // signed for another server (or an HTTP auth header
                         // for some resource URL) does not open a session
                         // here. Iroh binds the subject to the drive instead,
-                        // in `peer.rs`. A store with no configured base
-                        // domain does not know its own origin and cannot
-                        // bind; that is not a running server's case.
+                        // in `peer.rs`. Two origins are acceptable, the same
+                        // way the HTTP auth headers compare against the
+                        // request URL: the origin this upgrade request came
+                        // in on (a proxy or a test harness may reach the
+                        // server under a name other than its configured
+                        // URL, and the browser signs the one it used) and
+                        // the configured server URL.
                         let base_domain = store.get_base_domain();
-                        let binding = match base_domain.as_deref() {
-                            Some(origin) => atomic_lib::sync::engine::AuthBinding::Origin(origin),
-                            None => atomic_lib::sync::engine::AuthBinding::Unbound,
-                        };
+                        let accepted: Vec<&str> =
+                            [request_origin.as_deref(), base_domain.as_deref()]
+                                .into_iter()
+                                .flatten()
+                                .collect();
                         let responses = atomic_lib::sync::engine::handle_auth_frame(
                             &bin_vec[1..],
                             &store,
                             &mut agent,
-                            binding,
+                            atomic_lib::sync::engine::AuthBinding::Origins(&accepted),
                         )
                         .await;
                         (responses, agent)

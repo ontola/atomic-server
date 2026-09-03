@@ -13,9 +13,11 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
     (`atomic_lib::authentication::AUTH_MAX_AGE_MS`) is refused, on WebSocket,
     Iroh and the HTTP auth headers alike. Until now only future-dated
     timestamps were rejected, so a captured proof never expired.
-  - Over WebSocket, `AUTH.requestedSubject` must name the server's own origin
-    (`AuthBinding::Origin`); a proof signed for another server, or for the
-    agent's own subject, no longer opens a session. A refused `AUTH` answers
+  - Over WebSocket, `AUTH.requestedSubject` must name the server: either the
+    origin the socket was opened on or the configured server URL
+    (`AuthBinding::Origins`, the same tolerance the HTTP auth headers have); a
+    proof signed for another server, or for the agent's own subject, no
+    longer opens a session. A refused `AUTH` answers
     with the new error code `AUTH_FAILED (8)`. The Rust `WsClient` now signs
     the server origin (it signed the agent subject before). The Iroh
     initiator only accepts an auth-back signed for its own node id.
