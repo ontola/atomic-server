@@ -45,6 +45,17 @@ concurrency:
 permissions:
   contents: write
 
+# Baked into the frontend by `build:tauri` on every target (Vite reads VITE_*
+# at build time; see desktop/README.md). The apps embed their own node, which
+# is not managed and names no portal, so without this a fresh install has no
+# provider: the Sync page shows no "Sync with AtomicServer.eu", and restoring
+# an account has nowhere to restore from. This names the provider only — the
+# app stays a FOSS build (no VITE_ATOMIC_HOSTED_DISTRIBUTION): it creates its
+# identity locally and *links* to the account by device code, because a
+# webview on `tauri://localhost` cannot hold the portal's session cookie.
+env:
+  VITE_MANAGED_PORTAL_URL: https://atomicserver.eu
+
 jobs:
   # Secrets are not readable from a job-level `if:`, so the availability of each
   # signing identity is resolved once here and passed down as plain booleans.

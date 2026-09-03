@@ -340,13 +340,13 @@ test.describe('Cloud Vault backup and restore', () => {
       await fresh.goto(await signUpAndGetMagicLink(email));
       await fresh.goto(driveUrl);
 
-      // "Use my account instead" is the portal path: the account is known from
+      // "Forgot it? Restore from …" is the portal path: the account is known from
       // the session cookie the magic link just set, so all it needs is the
       // recovery code. Minting a second agent here instead would leave the
       // vault's key envelope unopenable — the objects would still be stored and
       // permanently unreadable, which is the worst failure this feature has.
       await fresh
-        .getByRole('button', { name: 'Use my account instead' })
+        .getByRole('button', { name: /^Forgot it\? Restore from/ })
         .click({ timeout: 30_000 });
       await expect(
         fresh.getByRole('heading', { name: 'Restore account' }),

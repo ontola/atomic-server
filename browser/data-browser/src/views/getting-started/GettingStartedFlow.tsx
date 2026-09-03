@@ -52,6 +52,11 @@ import { InputStyled, InputWrapper } from '../../components/forms/InputStyles';
 import { FaArrowLeft, FaKey } from 'react-icons/fa6';
 import { Logo } from '../../components/Logo';
 import { ConnectDeviceStep } from './ConnectDeviceStep';
+import { LinkProviderPanel } from '../../components/Vault/LinkProviderPanel';
+import {
+  canHoldProviderCookie,
+  getRememberedProvider,
+} from '../../helpers/managed/deviceLink';
 import {
   Shell,
   CardTitle,
@@ -146,7 +151,10 @@ export function GettingStartedFlow({
       if (cancelled) return;
 
       setCreateTarget(accountCreationTarget(info));
-      setKnownPortalUrl(getManagedPortalUrl(info));
+      // The remembered provider covers the desktop and Android apps: their
+      // embedded node names no portal, and the build may not either, but a
+      // device that linked once knows exactly where its account lives.
+      setKnownPortalUrl(getManagedPortalUrl(info) ?? getRememberedProvider());
     });
 
     return () => {
@@ -178,6 +186,10 @@ export function GettingStartedFlow({
   // The drive a freshly signed-in device is missing, handed to the
   // connect-device step. Undefined when no drive resolved at all.
   const [missingDrive, setMissingDrive] = useState<string | undefined>();
+  /** Why the vault had nothing for `missingDrive`, if sign-in asked it. */
+  const [missingDriveVaultReason, setMissingDriveVaultReason] = useState<
+    string | undefined
+  >();
   const stepDotsSlotRef = useRef<HTMLDivElement | null>(null);
   const [secretValue, setSecretValue] = useState('');
   /** Shown only after blur/Enter — every prefix of a valid secret is invalid,
@@ -343,6 +355,13 @@ export function GettingStartedFlow({
   // the sign-in step: a returning user with a passkey should be offered it
   // straight away, not asked to paste an agent secret with recovery hidden
   // behind "Forgot your secret?".
+  /**
+   * Bumped when this device gains a provider session mid-step (a device link
+   * approved elsewhere), so the check below runs again without leaving the
+   * step. A page reload would do the same and lose the user's place.
+   */
+  const [restoreAttempt, setRestoreAttempt] = useState(0);
+
   useEffect(() => {
     if (step !== 'restore' && step !== 'signin') return;
     let cancelled = false;
@@ -385,7 +404,7 @@ export function GettingStartedFlow({
     return () => {
       cancelled = true;
     };
-  }, [step]);
+  }, [step, restoreAttempt]);
 
   /**
    * Unlock a backup with its passkey — one prompt, no typing. Returns whether
@@ -617,6 +636,11 @@ export function GettingStartedFlow({
       // moment it can happen. Anything short of a restore (no session, no
       // backup, an empty one, a failure) falls through to the connect-device
       // step, which still offers the same restore by hand.
+      // Why the vault had nothing, for the connect-device step to show. Five
+      // different situations answer `no-backup`; a screen that says only
+      // "your data is on another device" hides which one this is.
+      let vaultReason: string | undefined;
+
       if (!hasData && target) {
         const restored = await withDeadline(
           restoreFromVault(store, target),
@@ -625,25 +649,35 @@ export function GettingStartedFlow({
         );
 
         if (restored.status === 'restored') {
-          // On an origin with no node the restored drive lives only here,
-          // exactly like one made here; without this every commit would park
-          // in the outbox waiting for a server that is not coming.
-          if (isOriginWithoutNode(store.getServerUrl())) {
-            store.registerLocalOnlyDrive(target);
-          }
-
           hasData = await canRead(target);
+        } else if (restored.status === 'no-backup') {
+          vaultReason = restored.reason;
+        } else {
+          vaultReason = restored.error.message;
         }
       }
 
-      // Name the account's drive even when its data hasn't arrived: the Sync
-      // page says "your data is on another device" about *that* drive, which
-      // is true and useful. But when the account's drive cannot be named at
-      // all, no drive is the honest answer — the value here otherwise falls
-      // back to whatever was last open, or to the default, which is the
-      // server's own root. Showing that as your workspace is how signing in
-      // ends with somebody else's data on screen.
-      setDrive(hasData ? target! : '');
+      // On an origin with no node the account's drive lives only here — a
+      // restored one exactly like one made here, and one whose data has not
+      // arrived yet just as much: it is still the place this identity writes
+      // to. Without this every commit would park in the outbox waiting for a
+      // server that is not coming. The agent's own subject is deliberately
+      // not registered: `fetchPrivateDriveSubject` answers a local-only agent
+      // with its secret's `initialDrive`, which for an account made elsewhere
+      // is that server's URL, and handing that to `setDrive` moves the app.
+      if (target && isOriginWithoutNode(store.getServerUrl())) {
+        store.registerLocalOnlyDrive(target);
+      }
+
+      // Name the account's drive even when its data hasn't arrived: it is
+      // derived from the key, so it is the one place this identity can write
+      // right away, and the Sync page says "your data is on another device"
+      // about *that* drive, which is true and useful. Only when the drive
+      // cannot be named at all is no drive the honest answer — the value here
+      // otherwise falls back to whatever was last open, or to the default,
+      // which is the server's own root. Showing that as your workspace is how
+      // signing in ends with somebody else's data on screen.
+      setDrive(target ?? '');
 
       if (hasData) {
         // The home drive is derived from the key rather than looked up, so
@@ -674,6 +708,7 @@ export function GettingStartedFlow({
         navigate(constructOpenURL(target!));
       } else {
         setMissingDrive(target);
+        setMissingDriveVaultReason(vaultReason);
         setStep('connect-device');
       }
     } catch (err) {
@@ -950,8 +985,11 @@ export function GettingStartedFlow({
                     ) : null}
                     {/* Hidden once accounts are listed above: that picker is
                         already the "recover via my account" route, and a
-                        second door to the same room just adds a button. */}
-                    {knownAccounts.length === 0 ? (
+                        second door to the same room just adds a button. Also
+                        hidden when no portal is known — a source build with
+                        nothing to restore from — because the step behind it
+                        can then only say "sign in first" with nowhere to. */}
+                    {knownAccounts.length === 0 && knownPortalUrl ? (
                       <Button
                         key='forgot'
                         type='button'
@@ -964,7 +1002,7 @@ export function GettingStartedFlow({
                           setStep('restore');
                         }}
                       >
-                        Use my account instead
+                        {`Forgot it? Restore from ${PRODUCT_NAME}`}
                       </Button>
                     ) : null}
                     {nextDrive ? (
@@ -1027,6 +1065,7 @@ export function GettingStartedFlow({
         <Swap key='connect-device'>
           <ConnectDeviceStep
             drive={missingDrive}
+            vaultReason={missingDriveVaultReason}
             onConnected={target => {
               setDrive(target);
               navigate(constructOpenURL(target));
@@ -1052,26 +1091,48 @@ export function GettingStartedFlow({
                 {restore.phase === 'checking' ? (
                   <p key='checking'>{`Checking your ${PRODUCT_NAME} account…`}</p>
                 ) : restore.phase === 'no-session' ? (
-                  <Column key='no-session' gap='0.75rem'>
-                    <p key='copy'>
-                      {`To restore your account, sign in to your ${PRODUCT_NAME} account first, then come back here.`}
-                    </p>
-                    {knownPortalUrl && (
-                      <Button
-                        key='signin'
-                        type='button'
-                        onClick={() => {
-                          // `/signin` rather than the root, which is the sales
-                          // page — someone mid-recovery should land on the form.
-                          window.location.assign(
-                            new URL('/signin', knownPortalUrl).toString(),
-                          );
-                        }}
-                      >
-                        {`Sign in to your ${PRODUCT_NAME} account`}
-                      </Button>
-                    )}
-                  </Column>
+                  // Two ways to get a session, and only one works per client.
+                  // A page on the portal's own site signs in there and comes
+                  // back with the cookie. The desktop and Android apps, and a
+                  // self-hosted origin, cannot hold that cookie: sending them
+                  // to the portal's sign-in ends with a session in some
+                  // browser and none here — which used to be this screen's
+                  // only advice, with the button missing on top when the
+                  // build knew no portal. They link this device instead, with
+                  // a code approved wherever they are already signed in.
+                  !canHoldProviderCookie(knownPortalUrl) ? (
+                    <Column key='no-session-link' gap='0.75rem'>
+                      <p key='copy'>
+                        {`Your backup is kept by your ${PRODUCT_NAME} account. Connect this device to it to restore.`}
+                      </p>
+                      <LinkProviderPanel
+                        key='link'
+                        portalUrl={knownPortalUrl}
+                        onLinked={() => setRestoreAttempt(n => n + 1)}
+                      />
+                    </Column>
+                  ) : (
+                    <Column key='no-session' gap='0.75rem'>
+                      <p key='copy'>
+                        {`To restore your account, sign in to your ${PRODUCT_NAME} account first, then come back here.`}
+                      </p>
+                      {knownPortalUrl && (
+                        <Button
+                          key='signin'
+                          type='button'
+                          onClick={() => {
+                            // `/signin` rather than the root, which is the sales
+                            // page — someone mid-recovery should land on the form.
+                            window.location.assign(
+                              new URL('/signin', knownPortalUrl).toString(),
+                            );
+                          }}
+                        >
+                          {`Sign in to your ${PRODUCT_NAME} account`}
+                        </Button>
+                      )}
+                    </Column>
+                  )
                 ) : restore.phase === 'no-backup' ? (
                   <p key='no-backup'>
                     No recovery backup was found for {restore.email}. Account

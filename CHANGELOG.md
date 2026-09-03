@@ -37,6 +37,9 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
     Rust and TypeScript codecs byte-for-byte.
   - Integration tests bind the test server to `127.0.0.1` and fall back to an
     OS-assigned port when `portpicker` finds none (hosts without IPv6).
+
+## [v0.41.0-beta.4] - 2026-09-03
+
 - Fix: with `ATOMIC_HOME_DRIVE` set, `GET /server` answered 500 for plain JSON and JSON-LD (`Accept: application/json`): the `homeDrive` property the endpoint sets was never defined in the default store, so rendering tried to fetch it from atomicdata.dev. JSON-AD (what the data-browser asks for) was unaffected. The property is now part of the defaults.
 
 ## [v0.41.0-beta.3] - 2026-09-01
