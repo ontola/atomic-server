@@ -71,6 +71,7 @@ Remaining work, not "this file exists."
 | [`reticulum-sync.md`](./reticulum-sync.md) | **Proposal.** Atomic sync protocol over Reticulum. |
 | [`json-schema-code-first.md`](./json-schema-code-first.md) | **Proposal**; `defineSchema` + frozen `did:ad:` schemas in flight in PR #1262 (not on `develop`). Code-first JSON Schema → local DID-backed Class/Property resources. |
 | [`SDK-API-design.md`](./SDK-API-design.md) | SDK / agent DX direction. |
+| [`mcp-endpoint.md`](./mcp-endpoint.md) | **Proposal.** Atomic as an MCP server. Local stdio signs as the user; remote HTTP is read-only until issued-agent writes. Does not wait on #1310; remote auth is the #1275 AS shape. |
 | [`plugins.md`](./plugins.md) | **Partial** — one plugin model (`run` end to end, per-app agents, unattended runs). The code lives on `feat/plugin-model` (PR #1307), not `develop`. Absorbed `llm-wasm-gui-plugins.md`, `importers.md`, `habits-app.md` (2026-09-01); the habits RPC-`query` blocker is a line in it. |
 | [`personal-information-suite.md`](./personal-information-suite.md) | Exploration: contacts, calendar, email. |
 | [`social-apps.md`](./social-apps.md) | Requirements for social-network-shaped apps. Companion to `zones.md`. |
