@@ -765,27 +765,14 @@ export function GettingStartedFlow({
                   Create account
                 </CtaButton>
               )}
-              {/* The local path stays reachable in a hosted build, one tap
-                  down rather than gone. Someone who already has an identity,
-                  or who wants nothing to do with our account system, must not
-                  be walled out of their own software — and on a FOSS build
-                  "Create account" already is this, so offering it twice would
-                  just be noise.
-
-                  Named for what it does (a fresh local identity, no account),
-                  not for what the user brings: "Use my own secret" read as
-                  "paste the secret I have", which is the Sign in button below
-                  it — and pressing it minted a new secret instead. */}
-              {createTarget?.kind === 'portal' && (
-                <CtaButton
-                  key='local'
-                  type='button'
-                  subtle
-                  onClick={() => setStep('create')}
-                >
-                  Continue without an account
-                </CtaButton>
-              )}
+              {/* No account-less create path in a hosted build. It minted a
+                  second identity that the portal then swapped away the
+                  moment its owner signed in with an email that already had
+                  one (staging, 2026-09-03). One email, one identity: the
+                  hosted welcome creates through the portal or signs in with
+                  an existing secret — nothing in between. A FOSS build's
+                  "Create account" is the local path, and someone with their
+                  own secret has Sign in below. */}
               <CtaButton
                 key='signin'
                 type='button'

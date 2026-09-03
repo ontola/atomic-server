@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { evaluateServerReconciliation } from './reconcile';
+import {
+  evaluateServerReconciliation,
+  localAgentIsDisposable,
+} from './reconcile';
 import type { ManagedEnrollmentSummary } from './enrollmentApi';
 
 /**
@@ -204,5 +207,46 @@ describe('evaluateServerReconciliation', () => {
     );
 
     expect(result).toEqual({ ok: true });
+  });
+});
+
+describe('localAgentIsDisposable', () => {
+  const personalDrive = 'https://atomicdata.dev/properties/personalDrive';
+
+  function reader(resource: { error?: unknown; props?: Record<string, unknown> }) {
+    return {
+      getResource: () =>
+        Promise.resolve({
+          error: resource.error,
+          get: (property: string) => resource.props?.[property],
+        }),
+    };
+  }
+
+  it('keeps an agent that has a workspace', async () => {
+    const store = reader({ props: { [personalDrive]: 'did:ad:drive1' } });
+
+    expect(await localAgentIsDisposable(store, 'did:ad:agent:a')).toBe(false);
+  });
+
+  it('treats a guest (no personal drive) as disposable', async () => {
+    expect(
+      await localAgentIsDisposable(reader({ props: {} }), 'did:ad:agent:a'),
+    ).toBe(true);
+  });
+
+  it('treats an agent whose resource cannot load as disposable', async () => {
+    expect(
+      await localAgentIsDisposable(
+        reader({ error: new Error('nope') }),
+        'did:ad:agent:a',
+      ),
+    ).toBe(true);
+  });
+
+  it('treats a throwing store as disposable rather than blocking', async () => {
+    const store = { getResource: () => Promise.reject(new Error('down')) };
+
+    expect(await localAgentIsDisposable(store, 'did:ad:agent:a')).toBe(true);
   });
 });
