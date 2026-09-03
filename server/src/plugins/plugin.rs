@@ -5,13 +5,13 @@ use std::path::PathBuf;
 #[cfg(feature = "wasm-plugins")]
 use atomic_lib::urls::{DOWNLOAD_URL, MIMETYPE};
 use atomic_lib::{
+    AtomicError, Db, Resource, Storelike, Value,
     agents::{Agent, ForAgent},
     class_extender::{BoxFuture, ClassExtender, CommitExtenderContext, GetExtenderContext},
-    db::plugin_meta::PluginMetaKey,
+    db::plugin_meta::{PluginMetaKey, validate_plugin_identifier, validate_plugin_identifiers},
     errors::AtomicResult,
     storelike::ResourceResponse,
     urls::{self},
-    AtomicError, Db, Resource, Storelike, Value,
 };
 #[cfg(feature = "wasm-plugins")]
 use tracing::{error, info};
@@ -71,6 +71,9 @@ fn get_namespace_and_name(resource: &Resource) -> AtomicResult<(String, String)>
         )));
     };
 
+    // These values are user-controlled and end up in filesystem paths.
+    validate_plugin_identifiers(namespace, name)?;
+
     Ok((namespace.to_string(), name.to_string()))
 }
 
@@ -83,19 +86,8 @@ async fn do_uninstall_plugin(
 ) -> AtomicResult<()> {
     tracing::info!("destroying plugin {}", resource.get_subject());
 
-    let Ok(Value::String(name)) = resource.get(urls::NAME) else {
-        return Err(AtomicError::from(format!(
-            "Plugin {} has no name",
-            resource.get_subject()
-        )));
-    };
-
-    let Ok(Value::String(namespace)) = resource.get(urls::NAMESPACE) else {
-        return Err(AtomicError::from(format!(
-            "Plugin {} has no namespace",
-            resource.get_subject()
-        )));
-    };
+    // Validates namespace/name so path traversal payloads never reach the filesystem.
+    let (namespace, name) = get_namespace_and_name(resource)?;
 
     tracing::info!(
         "uninstalling plugin {} in namespace {} for drive {}",
@@ -106,7 +98,15 @@ async fn do_uninstall_plugin(
 
     // Even if the uninstall fails we still want to continue the commit
     // If we don't do this the resource will not be able to be deleted.
-    let _ = uninstall_plugin(name, namespace, parent_subject, store, plugins_dir).await;
+    if let Err(e) = uninstall_plugin(&name, &namespace, parent_subject, store, plugins_dir).await {
+        tracing::warn!(
+            "Failed to uninstall plugin {}.{} for drive {}: {}",
+            namespace,
+            name,
+            parent_subject,
+            e
+        );
+    }
 
     Ok(())
 }
@@ -319,6 +319,14 @@ fn on_before_commit(
                     ));
                 }
             } else {
+                // Reject unsafe identifiers at creation time, so a traversal payload can never be
+                // stored and later reach the uninstall path.
+                for (field, prop) in [("name", urls::NAME), ("namespace", urls::NAMESPACE)] {
+                    if let Ok(Value::String(value)) = resource.get(prop) {
+                        validate_plugin_identifier(field, value)?;
+                    }
+                }
+
                 // For new plugins, check if name/namespace are already used on this drive.
                 if let Ok((namespace, name)) = get_namespace_and_name(resource) {
                     let key = PluginMetaKey::new(&parent_subject, &namespace, &name);
@@ -366,7 +374,11 @@ fn on_resource_get(context: GetExtenderContext) -> BoxFuture<AtomicResult<Resour
 
         let drive = get_parent_drive(db_resource, store).await?;
 
-        let (namespace, name) = get_namespace_and_name(db_resource)?;
+        // A resource with missing or invalid identifiers has no meta to enrich it with.
+        // Return it untouched so it can still be viewed and deleted.
+        let Ok((namespace, name)) = get_namespace_and_name(db_resource) else {
+            return Ok(db_resource.clone().into());
+        };
 
         let Some(meta) = store.get_plugin_meta(&PluginMetaKey::new(&drive, &namespace, &name))?
         else {
