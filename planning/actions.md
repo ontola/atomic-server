@@ -27,7 +27,7 @@ the JS API — but each surface enumerates and implements them independently:
 - The ⌘K overlay exposes exactly one verb (navigate to search result).
 - Coverage is inconsistent: Delete has no hotkey and no AI tool; Share/History/
   Favorite exist only in the context menu.
-- There is no MCP server yet; when one exists it would be a fifth enumeration.
+- There is no MCP server yet; when one exists it would be a fifth enumeration. Plan: [`mcp-endpoint.md`](./mcp-endpoint.md).
 
 ## Design
 
