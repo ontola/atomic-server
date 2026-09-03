@@ -37,6 +37,7 @@ Check out the [Roadmap](https://docs.atomicdata.dev/roadmap.html) if you want to
   - [Publishing manually - doing the CI's work](#publishing-manually---doing-the-cis-work)
     - [Building and publishing binaries](#building-and-publishing-binaries)
     - [Publishing to Cargo](#publishing-to-cargo)
+    - [Publishing to npm](#publishing-to-npm)
     - [Publishing server to Docker](#publishing-server-to-docker)
     - [Deploying to atomicdata.dev](#deploying-to-atomicdatadev)
     - [Publishing atomic-cli to WAPM](#publishing-atomic-cli-to-wapm)
@@ -314,6 +315,7 @@ We believe AI can be useful for improving software while also recognizing that i
 The following should be triggered automatically:
 
 - Push the `v*` tag, a Release will automatically be created on Github with the binaries. This will read `CHANGELOG.md`, so make sure to add the changes from there.
+- The same tag publishes Rust crates to crates.io and `@tomic/*` packages to npm (`latest` for a stable tag, the pre-release identifier — `beta`, `rc`, … — otherwise).
 - The main action required on this repo, is to _update the changelog_ and _tag releases_. The tags trigger the build and publish processes in the CI.
 
 Note:
@@ -413,7 +415,7 @@ environment is already declared, so no workflow change is needed.
 
 ### Publishing manually - doing the CI's work
 
-If the CI scripts for some reason do not do their job (buildin releases, docker file, publishing to cargo), you can follow these instructions:
+If the CI scripts for some reason do not do their job (building releases, docker file, publishing to cargo or npm), you can follow these instructions:
 
 #### Building and publishing binaries
 
