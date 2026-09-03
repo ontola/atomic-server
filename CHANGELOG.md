@@ -7,6 +7,8 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Tauri Android: ship `arm64-v8a` only. The sideloadable universal APK was ~369 MB because it bundled four copies of `libatomic_server_tauri.so` (armeabi-v7a / x86 / x86_64 as well). Phones and tablets we install on are arm64; override with `cargo tauri android build --target …` for an Intel emulator.
+
 ## [v0.41.0-beta.4] - 2026-09-03
 
 - Fix: with `ATOMIC_HOME_DRIVE` set, `GET /server` answered 500 for plain JSON and JSON-LD (`Accept: application/json`): the `homeDrive` property the endpoint sets was never defined in the default store, so rendering tried to fetch it from atomicdata.dev. JSON-AD (what the data-browser asks for) was unaffected. The property is now part of the defaults.
