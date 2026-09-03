@@ -411,6 +411,7 @@ mod test {
     /// refused — and because the walk then ascends and fails closed, the
     /// failure is a silent 401 rather than anything that looks like a bug.
     #[tokio::test]
+    #[cfg(feature = "db")]
     async fn legacy_internal_agent_grant_still_authorizes_its_did() {
         use crate::agents::ForAgent;
         use crate::hierarchy::{check_rights, Right};
@@ -460,6 +461,7 @@ mod test {
     /// the agent resource, and that read was refused: an agent grants `read` to
     /// nobody but itself and belongs to no drive, so no grant could reach it.
     #[tokio::test]
+    #[cfg(feature = "db")]
     async fn agents_are_readable_by_anyone_but_writable_only_by_their_owner() {
         use crate::agents::ForAgent;
         use crate::hierarchy::{check_rights, Right};

@@ -5,13 +5,13 @@ use std::path::PathBuf;
 #[cfg(feature = "wasm-plugins")]
 use atomic_lib::urls::{DOWNLOAD_URL, MIMETYPE};
 use atomic_lib::{
-    AtomicError, Db, Resource, Storelike, Value,
     agents::{Agent, ForAgent},
     class_extender::{BoxFuture, ClassExtender, CommitExtenderContext, GetExtenderContext},
-    db::plugin_meta::{PluginMetaKey, validate_plugin_identifier, validate_plugin_identifiers},
+    db::plugin_meta::{validate_plugin_identifier, validate_plugin_identifiers, PluginMetaKey},
     errors::AtomicResult,
     storelike::ResourceResponse,
     urls::{self},
+    AtomicError, Db, Resource, Storelike, Value,
 };
 #[cfg(feature = "wasm-plugins")]
 use tracing::{error, info};
