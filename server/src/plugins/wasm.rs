@@ -12,30 +12,31 @@ use std::{
 };
 
 use atomic_lib::{
+    AtomicErrorType,
+    class_extender::{self, ClassExtenderScope},
+};
+use atomic_lib::{
+    Commit, Db, Resource, Storelike, Value,
     agents::{Agent, ForAgent},
     class_extender::ClassExtender,
     commit::{CommitBuilder, CommitOpts},
-    db::plugin_meta::{PermissionType, PluginManifest, PluginMeta},
+    db::plugin_meta::{PermissionType, PluginManifest, PluginMeta, validate_plugin_identifiers},
     errors::{AtomicError, AtomicResult},
-    parse::{parse_json_ad_resource, ParseOpts, SaveOpts},
+    parse::{ParseOpts, SaveOpts, parse_json_ad_resource},
     storelike::{Query, ResourceResponse},
-    urls, Commit, Db, Resource, Storelike, Value,
+    urls,
 };
-use atomic_lib::{
-    class_extender::{self, ClassExtenderScope},
-    AtomicErrorType,
-};
-use base64::{engine::general_purpose, Engine as _};
-use ring::digest::{digest, SHA256};
+use base64::{Engine as _, engine::general_purpose};
+use ring::digest::{SHA256, digest};
 use tracing::{error, info, warn};
 use wasmtime::{
-    component::{Component, Linker, ResourceTable},
     Config, Engine, ResourceLimiter, Store, StoreLimits, StoreLimitsBuilder, Trap,
+    component::{Component, Linker, ResourceTable},
 };
-use wasmtime_wasi::{p2, DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView, p2};
 use wasmtime_wasi_http::{
-    p2::{add_only_http_to_linker_async, WasiHttpCtxView, WasiHttpView},
     WasiHttpCtx,
+    p2::{WasiHttpCtxView, WasiHttpView, add_only_http_to_linker_async},
 };
 
 use atomic_lib::db::plugin_meta::PluginMetaKey;
@@ -996,11 +997,20 @@ fn extract_plugin_to_disk(
         } else if file_name.starts_with("assets/") {
             // Replace "assets/" with "{namespace}/"
             let stripped = file_name.strip_prefix("assets/").unwrap();
+            let assets_dir = target_dir.join(namespace);
             if stripped.is_empty() {
                 // It is the "assets/" directory itself
-                target_dir.join(namespace)
+                assets_dir
             } else {
-                target_dir.join(namespace).join(stripped)
+                // Zip entry names are attacker-controlled: reject anything that is not a
+                // plain relative path made of normal components (no `..`, no absolute paths).
+                let relative = safe_relative_path(stripped).ok_or_else(|| {
+                    AtomicError::from(format!(
+                        "Plugin zip contains an unsafe asset path: {}",
+                        file_name
+                    ))
+                })?;
+                assets_dir.join(relative)
             }
         } else {
             continue;
@@ -1100,6 +1110,46 @@ fn setup_plugin_data_dir(wasm_file_path: &Path, plugin_dir: &Path) -> Option<Pat
     }
 }
 
+/// Returns `Some(path)` if `raw` is a relative path consisting only of normal components
+/// (no `..`, no root/prefix, no `.`), otherwise `None`.
+fn safe_relative_path(raw: &str) -> Option<PathBuf> {
+    use std::path::Component;
+
+    // Zip archives always use `/`, but be strict about backslashes too so a Windows-style
+    // traversal cannot slip through on any platform.
+    if raw.contains('\\') || raw.contains('\0') {
+        return None;
+    }
+    let path = Path::new(raw);
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::Normal(part) => out.push(part),
+            _ => return None,
+        }
+    }
+    if out.as_os_str().is_empty() {
+        return None;
+    }
+    Some(out)
+}
+
+/// Errors unless `child` is exactly one path component below `parent`.
+fn ensure_direct_child(parent: &Path, child: &Path) -> AtomicResult<()> {
+    let is_direct_child = child.parent() == Some(parent)
+        && matches!(
+            child.components().next_back(),
+            Some(std::path::Component::Normal(_))
+        );
+    if !is_direct_child {
+        return Err(AtomicError::from(format!(
+            "Refusing to touch path outside plugin directory: {}",
+            child.display()
+        )));
+    }
+    Ok(())
+}
+
 pub async fn uninstall_plugin(
     name: &str,
     namespace: &str,
@@ -1107,6 +1157,11 @@ pub async fn uninstall_plugin(
     store: &Db,
     plugins_dir: &Path,
 ) -> AtomicResult<()> {
+    // `namespace` and `name` may come straight from a user-controlled Plugin resource
+    // (see `plugin.rs`), not only from a validated manifest. They are used to build
+    // filesystem paths below, so they must be plain path segments (GHSA-vr56-vwrw-w2vg).
+    validate_plugin_identifiers(namespace, name)?;
+
     let encoded_subject = general_purpose::URL_SAFE.encode(drive_subject);
     let target_dir = plugins_dir
         .join(CLASS_EXTENDER_DIR_NAME)
@@ -1125,6 +1180,18 @@ pub async fn uninstall_plugin(
     let json_path = target_dir.join(format!("{}.{}.json", namespace, name));
     let ui_js_path = target_dir.join(format!("{}.{}.ui.js", namespace, name));
     let ui_css_path = target_dir.join(format!("{}.{}.ui.css", namespace, name));
+    let assets_dir = target_dir.join(namespace);
+
+    // Defense in depth: every path we are about to delete must be a direct child of `target_dir`.
+    for path in [
+        &wasm_path,
+        &json_path,
+        &ui_js_path,
+        &ui_css_path,
+        &assets_dir,
+    ] {
+        ensure_direct_child(&target_dir, path)?;
+    }
 
     if !wasm_path.exists() {
         return Err(AtomicError::not_found(format!(
@@ -1196,18 +1263,15 @@ pub async fn uninstall_plugin(
         }
     }
 
-    if !namespace_still_used {
-        let assets_dir = target_dir.join(namespace);
-        if assets_dir.exists() && assets_dir.is_dir() {
-            info!("Removing unused assets directory: {}", assets_dir.display());
-            std::fs::remove_dir_all(&assets_dir).map_err(|e| {
-                AtomicError::from(format!(
-                    "Failed to remove assets directory {}: {}",
-                    assets_dir.display(),
-                    e
-                ))
-            })?;
-        }
+    if !namespace_still_used && assets_dir.is_dir() {
+        info!("Removing unused assets directory: {}", assets_dir.display());
+        std::fs::remove_dir_all(&assets_dir).map_err(|e| {
+            AtomicError::from(format!(
+                "Failed to remove assets directory {}: {}",
+                assets_dir.display(),
+                e
+            ))
+        })?;
     }
 
     delete_plugin_meta(store, drive_subject, namespace, name).await?;
@@ -1713,4 +1777,68 @@ async fn compare_manifest_to_resource(
     }
 
     Ok(true)
+}
+
+#[cfg(test)]
+mod path_safety_tests {
+    use super::*;
+
+    #[test]
+    fn safe_relative_path_rejects_traversal() {
+        assert!(safe_relative_path("../x").is_none());
+        assert!(safe_relative_path("a/../../x").is_none());
+        assert!(safe_relative_path("/etc/passwd").is_none());
+        assert!(safe_relative_path("a\\..\\b").is_none());
+        assert!(safe_relative_path("").is_none());
+        assert_eq!(
+            safe_relative_path("img/logo.png"),
+            Some(PathBuf::from("img/logo.png"))
+        );
+    }
+
+    #[test]
+    fn ensure_direct_child_rejects_escapes() {
+        let parent = Path::new("/plugins/scoped/abc");
+        assert!(ensure_direct_child(parent, &parent.join("ns.name.wasm")).is_ok());
+        assert!(ensure_direct_child(parent, &parent.join("../x")).is_err());
+        assert!(ensure_direct_child(parent, &parent.join("a/b")).is_err());
+        assert!(ensure_direct_child(parent, parent).is_err());
+    }
+
+    /// Regression test for GHSA-vr56-vwrw-w2vg: a traversal payload in namespace/name must
+    /// never delete anything outside the drive's scoped plugin directory.
+    #[tokio::test]
+    async fn uninstall_rejects_path_traversal() {
+        let db = Db::init_temp("uninstall_rejects_path_traversal")
+            .await
+            .unwrap();
+        let (_agent, drive) = db.setup("Attacker").await.unwrap();
+
+        let plugins_dir =
+            std::env::temp_dir().join(format!("atomic_uninstall_traversal_{}", std::process::id()));
+        let victim_dir = plugins_dir.join("victim");
+        std::fs::create_dir_all(&victim_dir).unwrap();
+        let victim_file = victim_dir.join("target.wasm");
+        std::fs::write(&victim_file, b"do not delete").unwrap();
+
+        let encoded_subject = general_purpose::URL_SAFE.encode(&drive);
+        let target_dir = plugins_dir
+            .join(CLASS_EXTENDER_DIR_NAME)
+            .join("scoped")
+            .join(&encoded_subject);
+        std::fs::create_dir_all(&target_dir).unwrap();
+
+        // Traverses from target_dir up to plugins_dir/victim/target.wasm
+        let result =
+            uninstall_plugin("target", "../../../victim/", &drive, &db, &plugins_dir).await;
+        assert!(result.is_err(), "traversal namespace must be rejected");
+        assert!(victim_file.exists(), "victim file must not be deleted");
+
+        // Same for the assets dir branch: namespace resolving to a directory outside target_dir.
+        let result = uninstall_plugin("target", "../../../victim", &drive, &db, &plugins_dir).await;
+        assert!(result.is_err());
+        assert!(victim_dir.exists(), "victim directory must not be deleted");
+
+        std::fs::remove_dir_all(&plugins_dir).ok();
+    }
 }
