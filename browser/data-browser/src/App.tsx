@@ -162,6 +162,33 @@ if (initialDrive) {
   }
 }
 
+// On an origin with no node, a signed-in device with no drive of its own
+// gets the account's key-derived one. The stored default is otherwise the
+// origin itself — a server root that a node-less origin cannot serve, so the
+// sidebar showed "/" with an offline error and nowhere to write. The derived
+// drive is the one place this identity can write before anything has synced,
+// and it lives only here until it does, hence local-only. A node-backed origin
+// keeps the origin as its main drive (atomicdata.dev); this is not about
+// which drive is open but about there being no server behind it. Only the
+// drive is registered, not the agent: `fetchPrivateDriveSubject` treats a
+// local-only agent as one whose drive is its secret's `initialDrive`.
+if (
+  initalAgent?.subject &&
+  isOriginWithoutNode(serverUrl) &&
+  (!initialDrive || Client.isBareHttpOrigin(initialDrive))
+) {
+  try {
+    const home = await initalAgent.privateDriveSubject();
+    store.registerLocalOnlyDrive(home);
+    driveStorage.set(home);
+    store.setDrive(home);
+  } catch (e) {
+    // A key that signs non-deterministically and no cached subject: the
+    // sign-in flow recomputes it. Better no drive than a made-up one.
+    console.warn('[atomic] Could not derive the personal drive:', e);
+  }
+}
+
 // A deep link into a resource (share/show `?subject=` entry URL) starts the
 // session in that resource's drive, overriding the stored/fallback drive.
 // Fire-and-forget: resolves once the resource is fetched, and `setDrive`

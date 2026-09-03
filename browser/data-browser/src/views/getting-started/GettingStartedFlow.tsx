@@ -178,6 +178,10 @@ export function GettingStartedFlow({
   // The drive a freshly signed-in device is missing, handed to the
   // connect-device step. Undefined when no drive resolved at all.
   const [missingDrive, setMissingDrive] = useState<string | undefined>();
+  /** Why the vault had nothing for `missingDrive`, if sign-in asked it. */
+  const [missingDriveVaultReason, setMissingDriveVaultReason] = useState<
+    string | undefined
+  >();
   const stepDotsSlotRef = useRef<HTMLDivElement | null>(null);
   const [secretValue, setSecretValue] = useState('');
   /** Shown only after blur/Enter — every prefix of a valid secret is invalid,
@@ -617,6 +621,11 @@ export function GettingStartedFlow({
       // moment it can happen. Anything short of a restore (no session, no
       // backup, an empty one, a failure) falls through to the connect-device
       // step, which still offers the same restore by hand.
+      // Why the vault had nothing, for the connect-device step to show. Five
+      // different situations answer `no-backup`; a screen that says only
+      // "your data is on another device" hides which one this is.
+      let vaultReason: string | undefined;
+
       if (!hasData && target) {
         const restored = await withDeadline(
           restoreFromVault(store, target),
@@ -625,25 +634,35 @@ export function GettingStartedFlow({
         );
 
         if (restored.status === 'restored') {
-          // On an origin with no node the restored drive lives only here,
-          // exactly like one made here; without this every commit would park
-          // in the outbox waiting for a server that is not coming.
-          if (isOriginWithoutNode(store.getServerUrl())) {
-            store.registerLocalOnlyDrive(target);
-          }
-
           hasData = await canRead(target);
+        } else if (restored.status === 'no-backup') {
+          vaultReason = restored.reason;
+        } else {
+          vaultReason = restored.error.message;
         }
       }
 
-      // Name the account's drive even when its data hasn't arrived: the Sync
-      // page says "your data is on another device" about *that* drive, which
-      // is true and useful. But when the account's drive cannot be named at
-      // all, no drive is the honest answer — the value here otherwise falls
-      // back to whatever was last open, or to the default, which is the
-      // server's own root. Showing that as your workspace is how signing in
-      // ends with somebody else's data on screen.
-      setDrive(hasData ? target! : '');
+      // On an origin with no node the account's drive lives only here — a
+      // restored one exactly like one made here, and one whose data has not
+      // arrived yet just as much: it is still the place this identity writes
+      // to. Without this every commit would park in the outbox waiting for a
+      // server that is not coming. The agent's own subject is deliberately
+      // not registered: `fetchPrivateDriveSubject` answers a local-only agent
+      // with its secret's `initialDrive`, which for an account made elsewhere
+      // is that server's URL, and handing that to `setDrive` moves the app.
+      if (target && isOriginWithoutNode(store.getServerUrl())) {
+        store.registerLocalOnlyDrive(target);
+      }
+
+      // Name the account's drive even when its data hasn't arrived: it is
+      // derived from the key, so it is the one place this identity can write
+      // right away, and the Sync page says "your data is on another device"
+      // about *that* drive, which is true and useful. Only when the drive
+      // cannot be named at all is no drive the honest answer — the value here
+      // otherwise falls back to whatever was last open, or to the default,
+      // which is the server's own root. Showing that as your workspace is how
+      // signing in ends with somebody else's data on screen.
+      setDrive(target ?? '');
 
       if (hasData) {
         // The home drive is derived from the key rather than looked up, so
@@ -674,6 +693,7 @@ export function GettingStartedFlow({
         navigate(constructOpenURL(target!));
       } else {
         setMissingDrive(target);
+        setMissingDriveVaultReason(vaultReason);
         setStep('connect-device');
       }
     } catch (err) {
@@ -1027,6 +1047,7 @@ export function GettingStartedFlow({
         <Swap key='connect-device'>
           <ConnectDeviceStep
             drive={missingDrive}
+            vaultReason={missingDriveVaultReason}
             onConnected={target => {
               setDrive(target);
               navigate(constructOpenURL(target));

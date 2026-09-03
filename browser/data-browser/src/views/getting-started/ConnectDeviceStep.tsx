@@ -46,6 +46,13 @@ const WATCH_INTERVAL_MS = 3_000;
 interface ConnectDeviceStepProps {
   /** The drive that should be here but isn't. Absent if none resolved. */
   drive?: string;
+  /**
+   * Why sign-in's own vault restore of `drive` came back empty-handed, in the
+   * vault's words ("drive is not backed up", "the vault is empty", …). Shown
+   * when there is nothing to restore, so the screen says which of the several
+   * "no backup" situations this is instead of a generic shrug.
+   */
+  vaultReason?: string;
   /** Enter the app anyway, without its data. */
   onSkip: () => void;
   /** The drive's data arrived — open it. */
@@ -70,6 +77,7 @@ interface ConnectDeviceStepProps {
  */
 export function ConnectDeviceStep({
   drive,
+  vaultReason,
   onSkip,
   onConnected,
 }: ConnectDeviceStepProps): JSX.Element {
@@ -115,23 +123,40 @@ export function ConnectDeviceStep({
 
       if (cancelled) return;
 
-      if (local) {
-        setVaultDrive(local);
+      if (local) setVaultDrive(local);
 
-        return;
-      }
-
-      // Nothing locally, and `fetchPrivateDriveSubject` asks a *server* which
-      // a device holding nothing may not have — the desktop and Android apps
-      // embed their own, empty one. The control plane knows which drives this
-      // account has backed up, and asking it is the whole point of arriving
-      // with nothing: without this the restore offer never appears on exactly
-      // the device that needs it.
+      // The control plane knows which drives this account has backed up, and
+      // asking it matters in two cases. With no drive name at all: a device
+      // holding nothing may have no server to derive one from — the desktop
+      // and Android apps embed their own, empty one — and without this the
+      // restore offer never appears on exactly the device that needs it. With
+      // a name: the key-derived drive is only the *default* home. An account
+      // whose data lives in another drive (made before the derived scheme, or
+      // made by hand) has that one backed up and the derived one enrolled but
+      // empty, and asking about the empty one says "nothing to restore" while
+      // the backup sits one entry over.
       try {
         const enrolled = await listVaultDrives();
-        const backed = enrolled.find(e => e.status === 'active') ?? enrolled[0];
 
-        if (!cancelled && backed) setVaultDrive(backed.drive_subject);
+        if (cancelled) return;
+
+        const mine = enrolled.filter(
+          e =>
+            e.status === 'active' &&
+            (!agent || !e.agent_subject || e.agent_subject === agent.subject),
+        );
+        const named = local
+          ? mine.find(e => e.drive_subject === local)
+          : undefined;
+
+        if (named?.last_backup_at) return;
+
+        const backed = mine
+          .filter(e => e.last_backup_at)
+          .sort((a, b) => b.last_backup_at! - a.last_backup_at!)[0];
+
+        if (backed) setVaultDrive(backed.drive_subject);
+        else if (!local && mine[0]) setVaultDrive(mine[0].drive_subject);
       } catch {
         // No session, or no control plane at all. Nothing to offer, which the
         // panel renders as nothing rather than as an error.
@@ -368,6 +393,16 @@ export function ConnectDeviceStep({
                 'You’re signed in, and this workspace has an encrypted backup. We stored it sealed, so only this device can open it.'
               : 'You’re signed in, but this device doesn’t have your workspace yet. Signing in restores who you are — your data stays where you made it.'}
           </CardSubtitle>
+
+          {/* The vault's own account of why there is nothing to restore. Five
+              situations answer "no backup" — no session, never enrolled,
+              enrolled but never uploaded, … — and they want different fixes
+              on the other device, so name it. */}
+          {!canRestoreFromVault && vaultReason && (
+            <Explainer data-testid='vault-no-backup-reason'>
+              Cloud Vault had nothing for this workspace: {vaultReason}.
+            </Explainer>
+          )}
 
           {/* First, because it is the only route that needs nothing but this
               device. Everything below wants a second device that is switched
