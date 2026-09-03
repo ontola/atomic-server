@@ -5,7 +5,7 @@
 use crate::{
     actor_messages::{
         CommitMessage, ExternalChange, MembershipNotification, SendFrame, Subscribe,
-        SubscribeDrive, SubscribeQuery, UnsubscribeAll, UnsubscribeQuery,
+        SubscribeDrive, SubscribeQuery, UnsubscribeAll, UnsubscribeDrive, UnsubscribeQuery,
     },
     handlers::{web_sockets::WebSocketConnection, ws_v2},
     search::SearchState,
@@ -44,7 +44,7 @@ use std::sync::Arc;
 ///   subjects (with pre-fetched snapshot + commit_id so the receiver
 ///   doesn't need a follow-up GET) or `DESTROY` for removed ones. The
 ///   legacy `QUERY_UPDATE (0x36)` binary frame was retired in
-///   `planning/drop-query-update.md`; the SUBSCRIBE_QUERY registration
+///   `planning/sync.md` ("QUERY_UPDATE removed"); the SUBSCRIBE_QUERY registration
 ///   primitive itself was kept because it lets a client say "watch this
 ///   set of resources" without binding to a whole drive.
 #[allow(clippy::mutable_key_type)]
@@ -189,6 +189,7 @@ impl Actor for CommitMonitor {
                             drive,
                             source_id,
                             from_commit: false,
+                            ..
                         } => {
                             addr.do_send(ExternalChange {
                                 subject: subject.to_string(),
@@ -421,6 +422,34 @@ impl Handler<SubscribeDrive> for CommitMonitor {
                 }
             }),
         )
+    }
+}
+
+impl Handler<UnsubscribeDrive> for CommitMonitor {
+    type Result = ();
+
+    /// The inverse of [`Handler<SubscribeDrive>`]. Until 2026-09 the `UNSUB`
+    /// frame only edited a set on the connection actor that nothing read, so
+    /// the fan-out kept firing for the life of the socket.
+    #[allow(clippy::mutable_key_type)]
+    fn handle(&mut self, msg: UnsubscribeDrive, _ctx: &mut Context<Self>) {
+        if let Some(subs) = self.drive_subscriptions.get_mut(&msg.drive) {
+            subs.remove(&msg.addr);
+            if subs.is_empty() {
+                self.drive_subscriptions.remove(&msg.drive);
+            }
+        }
+        // The companion per-resource subscription `SUB` registers on the
+        // drive resource itself (so edits to the drive's own properties
+        // reach the subscriber) goes too.
+        let drive_subject =
+            atomic_lib::Subject::from_raw(&msg.drive, self.store.get_base_domain().as_deref());
+        if let Some(subs) = self.subscriptions.get_mut(&drive_subject) {
+            subs.remove(&msg.addr);
+            if subs.is_empty() {
+                self.subscriptions.remove(&drive_subject);
+            }
+        }
     }
 }
 

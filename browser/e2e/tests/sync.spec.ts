@@ -192,8 +192,9 @@ test.describe('sync', () => {
   //    (below, step 2) also times out intermittently — NOT a CI/dagger
   //    thing, reproduces locally with no other processes competing for
   //    CPU. Root-caused, not just relabeled "environmental": see the
-  //    comment at that `waitForFunction` call for the actual race. Not
-  //    fixed yet — tracked in planning/sync.md's Test coverage gaps.
+  //    comment at that `waitForFunction` call for the actual race. Fixed
+  //    2026-08-25: `WsClient.close()` now flips `serverConnected` and fails
+  //    pending requests synchronously (see websockets.ts).
   test('offline edits sync to server when connection is restored', async ({
     page,
     context,

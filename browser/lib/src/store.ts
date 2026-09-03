@@ -572,7 +572,7 @@ export class Store {
    * edit is only in memory — not in the outbox, not `isSaving` — so
    * without this counter `getSyncStatus()` reports fully-synced while a
    * write is still pending in a timer, and a reload loses it. See
-   * `planning/outbox-drain-data-loss-race.md`.
+   * `planning/completed/outbox-drain-data-loss-race.md`.
    */
   private _scheduledSaves = 0;
   private _lastDriveSyncError?: {

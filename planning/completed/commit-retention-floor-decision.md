@@ -47,7 +47,7 @@ and only uses the `lastCommit` propval of a version for a "Show Commit" link
 (`HistoryDesktopView.tsx` L67–102). Server `/all-versions` and `/version` are
 already Loro-backed (`server/src/plugins/versioning.rs`, `lib/src/history.rs`);
 the "Phase 3" blocker in
-[`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md)
+[`commit-retention-and-state-certificates.md`](../commit-retention-and-state-certificates.md)
 is stale. The oplog change message is a random drain token (`browser/lib/src/store.ts`
 ~L1438 `c-<random>`), so the oplog knows *what/when/peer-hex*, never *which agent*.
 
@@ -59,15 +59,15 @@ is stale. The oplog change message is a random drain token (`browser/lib/src/sto
 vault format stores **no commits**: `lib/src/vault/pack.rs` `PackEntry { subject, update }`
 is `export_updates_since` bytes per drive subject plus tombstones
 (`lib/src/vault/sync.rs` `export_vault_delta`); the encrypted-vault spec
-([`encrypted-vault-format.md`](./encrypted-vault-format.md)) never mentions commits.
+([`encrypted-vault-format.md`](../encrypted-vault-format.md)) never mentions commits.
 Only the live `COMMIT` frame (`0x13`, `[request_id][commit_json]`) moves an
 envelope, and every receiver discards it after apply except the hub's own
 `Tree::Resources` row. A device bootstrapped by bulk sync or vault restore has
 zero envelopes today, under every option.
 
-**The floor as written.** [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md)
+**The floor as written.** [`commit-retention-and-state-certificates.md`](../commit-retention-and-state-certificates.md)
 "Required persistence": Loro snapshot/oplog, projection, tombstones, sync
-metadata; genesis always retained. [`authorization-sync.md`](./authorization-sync.md)
+metadata; genesis always retained. [`authorization-sync.md`](../authorization-sync.md)
 § "Relationship to node-level retention policy": the floor is genesis +
 rights-changing (`read`/`write`/`append`) + parent-changing + destroy commits,
 "regardless of node policy or class" — and § P2 notes retention is moot until
@@ -197,7 +197,7 @@ is retention policy, and the Loro oplog — not commits — is the history.*
 - **#1313** — change: keep the deletion and the `is_critical()` gate; add
   `Tree::Envelopes` + the F6 write in both `apply_commit` bodies, the
   `SYNC_PUSH` `WITH_ENVELOPES` flag, and a `getLatestEnvelope` read for
-  `CommitDetail`/History. Move `auditability-loro-history.md` onto `develop`
+  `CommitDetail`/History. Move `auditability-loro-history.md` (branch-only) onto `develop`
   with the side-tree decision recorded (its "prefer in-doc" open question 1–2
   is resolved: in-doc makes the envelope sign a doc that contains itself).
   Rebase after #1274.

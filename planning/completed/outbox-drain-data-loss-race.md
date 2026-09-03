@@ -8,7 +8,7 @@
 > Found while writing `browser/e2e/tests/forms.spec.ts` (Forms builder
 > Phase 2). Reproduced independently of Forms and of React — this was a
 > `@tomic/lib` core save/sync issue. Related to, but distinct from,
-> [`unify-resource-dirty-signals.md`](./unify-resource-dirty-signals.md).
+> [`unify-resource-dirty-signals.md`](../unify-resource-dirty-signals.md).
 
 ## Problem (as observed)
 

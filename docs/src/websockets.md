@@ -1,330 +1,911 @@
-{{#title Atomic Data WebSocket Protocol — sync, real-time collaboration, and offline-first}}
+{{#title The Atomic sync protocol: WebSocket and Iroh peer streams}}
 
-# WebSocket Protocol
+# The Atomic sync protocol (WebSocket and Iroh peer streams)
 
-The WebSocket protocol is the primary communication channel for Atomic Data synchronization. It handles authentication, real-time updates, collaborative editing, drive synchronization, and blob storage.
+One binary frame format, spoken over two transports: a browser-facing
+WebSocket and a node-to-node Iroh QUIC stream. This page is the canonical
+wire-format reference. It describes what the code on this branch actually
+sends and accepts, including which side sends each frame and which
+responders have an arm for it.
 
-Because the protocol is binary-first and transport-agnostic, it works identically across:
+Encoders and decoders live in `lib/src/sync/protocol.rs` (Rust, source of
+truth for tag bytes and layouts) and `browser/lib/src/ws-v2.ts`
+(TypeScript). A golden-vector file pins the two together; see
+[Conformance](#conformance).
 
-- **Client ↔ Server** (WebSocket)
-- **Peer ↔ Peer** (Iroh QUIC streams)
-- **Browser ↔ WASM Worker** (Web Worker messages)
+## Overview and transports
 
-## Protocol Versions
+A frame is `[tag: u8] [payload...]`. There is no envelope, no version
+prefix, and no base64: Loro bytes travel raw.
 
-The server supports two protocols, negotiated via the `Sec-WebSocket-Protocol` header:
+**WebSocket.** The browser connects to the responder's `/ws` endpoint and
+requests the subprotocol `atomicdata-ws.v2`; the server offers exactly that
+one. WebSocket supplies its own framing, so a frame is one binary message and
+`binaryType` is `arraybuffer`. Some low-volume registration and reconcile
+messages are still UTF-8 text frames with a keyword prefix, listed under
+[Text frames](#text-frames).
 
-1.  **`atomicdata-ws.v2` (Binary, Preferred)**: A binary-first protocol designed for efficiency and zero-copy parsing. All resource data travels as raw binary Loro bytes.
-2.  **`atomicdata-ws.v0.1` (Legacy)**: A text-based protocol using UTF-8 JSON frames.
+The Rust `WsClient` (`lib/src/client/ws.rs`, used by the CLI, the Flutter FRB
+bridge and tests) connects with `connect_async(url)` and does **not** request
+the subprotocol. The server accepts it anyway, since nothing branches on the
+negotiated name. Only the browser reads `ws.protocol` back, to record a
+server version hint.
 
-This document describes the **v2 Binary Protocol**.
+**Iroh QUIC peer streams.** Peers dial each other on the ALPN `atomic/1`
+and open one bidirectional stream. QUIC streams are byte streams, not
+message streams, so every frame is wrapped in a length envelope:
 
-## Connection
+```
+[len: u32 big-endian] [tag: u8] [payload...]      // len covers tag + payload
+```
 
-A connection is established over a WebSocket (typically to a responder's `/ws` endpoint) or a native QUIC stream.
+Both directions use it, for every frame including `KEEPALIVE`. A reader that
+sees `len == 0`, or a `len` over the applicable cap (see
+[Size limits](#size-limits)), drops the connection.
 
-- **Protocol**: `atomicdata-ws.v2`
-- **Binary Type**: `arraybuffer`
-- **Frame Format**: `[type: u8] [payload...]`
+A peer stream has two phases. During the **handshake** the accept side runs
+`peer::handle_stream`, which is `AUTH`-gated and delegates everything it does
+not intercept to `sync::engine::handle_frame`. Once the bulk exchange
+completes both sides move to **live mode** (`peer::register_live_peer`): a
+read loop plus a write loop that handle `UPDATE`, `EPHEMERAL`, `KEEPALIVE`
+and `COMMIT`, and delegate the rest back to the engine.
 
-## Message Tags (v2)
+## Versioning and capabilities
 
-| Tag    | Name            | Role        | Payload                                                                                                                             |
-| ------ | --------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `0x01` | `AUTH`          | Init → Resp | UTF-8 JSON (Agent credentials)                                                                                                      |
-| `0x02` | `AUTH_OK`       | Resp → Init | (empty)                                                                                                                             |
-| `0x03` | `ERROR`         | either      | `[request_id: u16] [code: u16] [message: string]`                                                                                    |
-| `0x10` | `GET`           | either      | `[request_id: u16] [subject: string]`                                                                                               |
-| `0x11` | `UPDATE`        | either      | `[flags: u8] [request_id: u16] [subject_len: u16] [subject] [commit_id_len: u16 (optional)] [commit_id (optional)] [loro_bytes...]` |
-| `0x12` | `DESTROY`       | either      | `[request_id: u16] [subject: string]`                                                                                               |
-| `0x13` | `COMMIT`        | Init → Resp | `[request_id: u16] [commit_json_utf8]`                                                                                              |
-| `0x14` | `COMMIT_OK`     | Resp → Init | `[request_id: u16] [server_commit_json_utf8]`                                                                                       |
-| `0x20` | `SUB`           | either      | UTF-8 String (Subject)                                                                                                              |
-| `0x21` | `UNSUB`         | either      | UTF-8 String (Subject)                                                                                                              |
-| `0x30` | `SYNC`          | either      | `[drive_len: u16] [drive] [hash_len: u16] [hash] [json_vv]`                                                                         |
-| `0x31` | `SYNC_OK`       | either      | `[drive_len: u16] [drive]`                                                                                                          |
-| `0x32` | `SYNC_DIFF`     | either      | `[drive_len: u16] [drive] [json_diff]`                                                                                              |
-| `0x33` | `SYNC_PUSH`     | either      | `[drive_len: u16] [drive] [flags: u8] [count: u16] entries...` (chunked; bit 0 = LAST)                                              |
-| `0x34` | `BLOB_REQUEST`  | either      | `[blake3_hash: 32 bytes]`                                                                                                           |
-| `0x35` | `BLOB_RESPONSE` | either      | `[blake3_hash: 32 bytes] [bytes...]`                                                                                                |
-| `0x36` | *reserved*      | —           | Previously `QUERY_UPDATE`. Retired in `planning/drop-query-update.md`; the `SUBSCRIBE_QUERY` text-frame registrar is still supported, but membership changes are now delivered as plain `UPDATE` (0x11) / `DESTROY` (0x12) frames. |
-| `0x37` | `HELLO`         | either      | `[name_len: u16] [name_utf8]` — peer-stream only (Iroh / QUIC). Browser WS connections do not use this frame.                        |
-| `0x40` | `EPHEMERAL`     | either      | (Protocol-specific transient data)                                                                                                  |
+There is no version number on the wire. A responder advertises named
+capabilities and a client adapts to them. Anything not advertised is assumed
+absent, which is the pre-2026-09 baseline.
 
-## UPDATE (0x11) Payload Layout and Flags
+`AUTH_OK (0x02)`'s payload is a JSON array of capability names, UTF-8, with
+no length prefix. A responder with nothing to advertise sends a bare
+`[0x02]`, which is what every pre-2026-09 build sends; decoders match on the
+tag alone, so the payload was additive. `HELLO (0x37)` carries the same array
+after the name field, so peers on an Iroh stream learn each other's
+capabilities too.
 
-The `UPDATE` message payload (after the `0x11` type tag) is laid out as follows:
+The current list (`protocol::CAPABILITIES`):
 
-1. **`flags: u8`** - A bitfield containing options:
-   - **`0x01` (`SNAPSHOT`)**: The update contains a full Loro snapshot. If `0`, it is a Loro delta (incremental update).
-   - **`0x02` (`HAS_COMMIT_ID`)**: A commit ID is present on the wire.
-   - **`0x04` (`PUSH`)**: The update is a subscription-driven push from the server, not a response to a `GET` request.
-2. **`request_id: u16`** - Network request ID (in big-endian).
-3. **`subject_len: u16`** - Length of the subject string (in big-endian).
-4. **`subject: UTF-8 String`** - The subject of the resource being updated.
-5. **`commit_id_len: u16`** (Conditional) - Only present if the `HAS_COMMIT_ID (0x02)` flag bit is set. The length of the commit ID string (in big-endian).
-6. **`commit_id: UTF-8 String`** (Conditional) - Only present if the `HAS_COMMIT_ID (0x02)` flag bit is set. The subject of the commit that produced this update.
-7. **`loro_bytes: Binary`** - The remaining bytes of the payload contain the raw Loro snapshot or delta bytes.
+| Name | Meaning |
+| --- | --- |
+| `auth-max-age` | `AUTH` proofs older than `AUTH_MAX_AGE_MS` are refused, and a failed `AUTH` answers with `AUTH_FAILED (8)`. |
+| `keepalive` | Understands `KEEPALIVE (0x41)`, and echoes it over WebSocket. |
+| `rbsr` | Answers the `RBSR_FP` / `RBSR_ITEMS` text frames and the hash-first `SYNC_VV` probe. |
+| `pull-from` | `SYNC_DIFF` carries a `pullFrom` map of per-subject version vectors. |
+| `signed-destroy` | On a peer stream, destroys travel as signed `COMMIT` frames; a naked `DESTROY` from a peer is ignored. |
+| `unsub` | `UNSUB (0x21)` actually cancels a drive subscription. |
+
+The list is **additive only**: a name is never renamed or reused once
+shipped. Treat an absent name as "not supported" and fall back, never as an
+error. The browser stores the list per origin; the Rust client exposes it as
+`WsClient::server_capabilities()`.
+
+
+## Binary tag table
+
+"Sender" is who actually emits the frame in this codebase. "Handled by" says
+which responder has an arm for it. A tag with no arm on a transport is
+logged and dropped, not answered.
+
+| Tag | Name | Sender | Handled by |
+| --- | --- | --- | --- |
+| `0x01` | `AUTH` | initiator; also the Iroh accept side, as auth-back | WS handler (binds origin), engine, Iroh handshake and live loop |
+| `0x02` | `AUTH_OK` | responder | client / initiator only |
+| `0x03` | `ERROR` | either | client / initiator; the Iroh live loop logs and keeps the link |
+| `0x10` | `GET` | client, peer | engine (both transports) |
+| `0x11` | `UPDATE` | responder, and Iroh peers in live mode | client; Iroh live loop. **No WS server arm**: an `UPDATE` from a browser is dropped. |
+| `0x12` | `DESTROY` | responder | client. **No WS server arm.** The Iroh live loop explicitly ignores it (see [Deletes](#deletes)). |
+| `0x13` | `COMMIT` | client; Iroh live push loop, for destroys | WS handler (hub semantics), engine (peer semantics) |
+| `0x14` | `COMMIT_OK` | responder | client / initiator only |
+| `0x20` | `SUB` | client | WS handler only. **No engine arm**, so an Iroh peer cannot subscribe. |
+| `0x21` | `UNSUB` | client | WS handler only. **No engine arm.** |
+| `0x30` | `SYNC` | Iroh initiator | engine (both transports). The browser uses the text `SYNC_VV` form instead. |
+| `0x31` | `SYNC_OK` | responder | client / initiator only |
+| `0x32` | `SYNC_DIFF` | responder | client / initiator only |
+| `0x33` | `SYNC_PUSH` | either | engine (both transports) |
+| `0x34` | `BLOB_REQUEST` | either | engine (both transports); the browser also answers from its local blob store |
+| `0x35` | `BLOB_RESPONSE` | either | engine (both transports) |
+| `0x36` | *reserved* | nobody | nobody. Previously `QUERY_UPDATE`; retired, never reuse. |
+| `0x37` | `HELLO` | both peers on an Iroh stream | Iroh handshake and live loop. Never sent or handled over WebSocket. |
+| `0x40` | `EPHEMERAL` | Iroh peers | Iroh live loop only. **No WS arm**: the browser uses the `LORO_*` / `PRESENCE_*` text frames, and the server bridges between the two. |
+| `0x41` | `KEEPALIVE` | both sides, on their own schedule | WS server **echoes** it; Iroh **never** echoes it. |
+
+## Frame layouts
+
+All integers are big-endian. A trailing field with no length prefix runs to
+the end of the frame.
+
+### Small frames
+
+```
+[0x01] [auth_json_utf8]                          // AUTH, see Authentication
+[0x02] [capabilities_json_utf8]?                 // AUTH_OK, JSON array, may be absent
+[0x03] [request_id: u16] [code: u16] [message_utf8]      // ERROR
+[0x10] [request_id: u16] [subject_utf8]                  // GET
+[0x12] [request_id: u16] [subject_utf8]                  // DESTROY
+[0x13] [request_id: u16] [signed_commit_json_ad_utf8]    // COMMIT
+[0x14] [request_id: u16] [created_commit_json_ad_utf8]   // COMMIT_OK
+[0x20] [drive_subject_utf8]                              // SUB
+[0x21] [drive_subject_utf8]                              // UNSUB
+[0x31] [drive_len: u16] [drive_utf8]                     // SYNC_OK
+[0x34] [hash: 32 bytes]                                  // BLOB_REQUEST
+[0x35] [hash: 32 bytes] [blob_bytes...]                  // BLOB_RESPONSE
+[0x41]                                                   // KEEPALIVE, no payload
+```
+
+An `ERROR`'s `request_id` is `0` for connection-level errors, meaning
+everything that does not answer a specific request; see
+[Error codes](#error-codes). `hash` is the raw 32-byte BLAKE3 hash of the
+blob. A `COMMIT` payload is the same signed JSON-AD body HTTP `POST /commit`
+accepts.
+
+### UPDATE (0x11)
+
+```
+[0x11] [flags: u8] [request_id: u16] [subject_len: u16] [subject_utf8]
+       [commit_id_len: u16] [commit_id_utf8]        // only if HAS_COMMIT_ID
+       [loro_bytes...]
+```
+
+Flags: `0x01` `SNAPSHOT` (`loro_bytes` is a full Loro snapshot; clear means a
+delta), `0x02` `HAS_COMMIT_ID` (the two commit-id fields are present),
+`0x04` `PUSH` (a subscription-driven push, not a `GET` response).
+
+`commit_id` is the full `did:ad:commit:<signature>` DID, which the receiver
+stores as `lastCommit` and uses as `previousCommit` on its next write.
+
+### SYNC (0x30)
+
+```
+[0x30] [drive_len: u16] [drive_utf8] [hash_len: u16] [hash_hex_utf8]
+       [json_utf8]
+```
+
+`hash_hex_utf8` is the drive hash as a lower-case hex **string**, not raw
+bytes. `json_utf8` is:
+
+```json
+{ "peers": ["<peer id>", "..."],
+  "resources": { "<subject>": [<counter>, <counter>, ...] } }
+```
+
+Each `resources` entry is a version vector compacted against the `peers`
+array: position *i* is that subject's counter for `peers[i]`. Zero counters
+are dropped on decode. The drive hash is SHA-256 over
+`"{subject}:{c0},{c1}|{subject}:{c0},{c1}|…"` with subjects sorted and
+counters ordered by the sorted peer set (`engine::compute_drive_hash`; the
+browser builds the byte-identical string and hashes it with
+`crypto.subtle`).
+
+### SYNC_DIFF (0x32)
+
+```
+[0x32] [drive_len: u16] [drive_utf8] [json_utf8]
+```
+
+```json
+{
+  "pull":   ["<subject>", "..."],
+  "push":   ["<subject>", "..."],
+  "remove": ["<subject>", "..."],
+  "pullFrom": { "<subject>": { "<peer id>": <counter> } }
+}
+```
+
+- `pull`: subjects the **receiver** should send back as `SYNC_PUSH`.
+- `push`: subjects the sender is about to push, in the `SYNC_PUSH` frames
+  that follow immediately in the same response batch.
+- `remove`: subjects the receiver should delete locally. The sender holds a
+  tombstone for them and they are absent from its version vectors. Without
+  this, a bulk reconcile resurrects deleted resources.
+- `pullFrom`: for each `pull` subject, the sender's own version vector, so
+  the receiver exports updates *since* that vector rather than a full
+  snapshot. A subject absent from `pullFrom`, or mapped to `{}`, means "send
+  everything".
+
+The encoder always emits all four keys; decoders default `remove` and
+`pullFrom` to empty, so a pre-`pull-from` responder still parses.
+
+### SYNC_PUSH (0x33)
+
+```
+[0x33] [drive_len: u16] [drive_utf8] [flags: u8] [count: u16] [entry × count]
+
+entry := [subject_len: u16] [subject_utf8] [bytes_len: u32] [loro_bytes...]
+```
+
+Flags: `0x01` `LAST` marks the final chunk of a run. See
+[Chunking](#sync_push-chunking-and-acknowledgement).
+
+### HELLO (0x37)
+
+```
+[0x37] [name_len: u16] [name_utf8] [capabilities_json_utf8]?
+```
+
+A self-reported display name, capped at 64 Unicode scalar values; a longer
+name is **rejected**, not truncated. Control characters are stripped on
+decode so a peer cannot smuggle line breaks into logs. Display only:
+authorization uses the authenticated agent and the Iroh NodeId, never this. A
+decoder that predates capabilities ignores the trailing bytes.
+
+### EPHEMERAL (0x40)
+
+```
+[0x40] [kind: u8] [drive_len: u16] [drive_utf8] [agent_len: u16] [agent_utf8]
+       [payload...]
+```
+
+The agent travels with the frame because a peer link is node-to-node while
+presence is per-agent: one node may relay several agents' cursors.
+
+| `kind` | Name | Bridges to the WS text frame | Gate on receipt | Max payload |
+| --- | --- | --- | --- | --- |
+| `0` | `LORO` | `LORO_EPHEMERAL_UPDATE` | `check_read` on the scope subject | 64 KiB |
+| `1` | `PRESENCE` | `PRESENCE_UPDATE` | `check_read` on the scope subject | 64 KiB |
+| `2` | `DOC` | `LORO_SYNC_UPDATE` | drive-level **write** verdict | 1 MiB |
+
+`DOC` carries the ops of an edit in progress, so it is content rather than a
+cursor: it gets the stricter gate and the looser size cap. Nothing on this
+channel is ever persisted. A frame over its cap fails to decode and is
+dropped whole.
 
 ## Authentication
 
-Before sending any other messages, the initiator must authenticate:
+An `AUTH` payload is a JSON object with these five fields, all required (the
+deserializer has no defaults):
 
-1. The initiator sends `AUTH (0x01)` with a JSON payload containing signed credentials.
-2. The responder responds with `AUTH_OK (0x02)` or `ERROR (0x03)`.
-
-### What is refused before AUTH
-
-Until an `AUTH` has succeeded the connection is `Public`, and the responder
-fails closed on identity. A frame sent too early is answered with
-`ERROR (0x03)` carrying `request_id = 0` and code `AUTH_REQUIRED (5)`; the
-frame itself is not processed.
-
-**Iroh streams**: only `AUTH` is accepted before authentication. Any other
-frame — `SYNC`, `SYNC_PUSH`, `HELLO`, ... — gets the `ERROR` and the
-responder closes the stream. A failed `AUTH` also closes the stream. In
-addition, `AUTH.requestedSubject` is bound to the drive: the first `SYNC` /
-`SYNC_PUSH` on the stream must name the drive the `AUTH` was signed for
-(same code, message `AUTH was for <x>, not <y>`, stream closed).
-
-**Browser / WebSocket**: an anonymous session may still *read* — `GET`,
-`SUB <drive>`, `SYNC` / `SYNC_VV`, `RBSR_*` all stay open, each gated by
-`check_read` (this is what a public share link relies on for live updates).
-Frames that write, or that carry an identity to other peers, require
-`AUTH` first: `SYNC_PUSH`, `BLOB_RESPONSE`, `LORO_SYNC_UPDATE`,
-`LORO_EPHEMERAL_UPDATE`, `PRESENCE_UPDATE`, `SUBSCRIBE`, `SUBSCRIBE_QUERY`,
-`LORO_SYNC_SUBSCRIBE`, `PRESENCE_SUBSCRIBE`. The socket stays open after the
-refusal; the client may `AUTH` and retry on the same connection. The
-browser signs the server origin as `requestedSubject`, so no drive binding is
-possible over WebSocket.
-
-## Peer Handshake (HELLO, Iroh streams only)
-
-On Iroh peer-to-peer streams (not browser WS), each side announces a
-human-readable device name immediately after `AUTH_OK`:
-
-```
--> HELLO (0x37) [name_len: u16] [name_utf8]
-<- HELLO (0x37) [name_len: u16] [name_utf8]
+```json
+{
+  "https://atomicdata.dev/properties/auth/agent": "did:ad:agent:<pubkey>",
+  "https://atomicdata.dev/properties/auth/requestedSubject": "<subject>",
+  "https://atomicdata.dev/properties/auth/publicKey": "<base64 ed25519>",
+  "https://atomicdata.dev/properties/auth/timestamp": 1756900000000,
+  "https://atomicdata.dev/properties/auth/signature": "<base64 ed25519>"
+}
 ```
 
-Display-only. The name is capped at `HELLO_MAX_CHARS` Unicode scalar values
-(see `lib/src/sync/protocol.rs`); over-long frames are rejected rather than
-truncated so receivers can show the literal value safely. Peers that don't
-implement `HELLO` simply skip it — receivers treat the absence as "unknown
-peer".
+The signed message is exactly `"{requestedSubject} {timestamp}"`, where
+`timestamp` is milliseconds since the epoch. Base64 is accepted in both the
+url-safe and the legacy standard alphabet, and keys are compared by decoded
+bytes. (The verifier also retries the signature against the path and the
+query-stripped URL of `requestedSubject`, a multi-tenant carve-out from the
+HTTP auth headers that share this code.)
 
-## Resource Fetching
+**Freshness.** A proof is refused if its timestamp is more than 10 000 ms in
+the future, or older than `AUTH_MAX_AGE_MS` (5 minutes,
+`lib/src/authentication.rs`). Clients sign immediately before sending, so
+this window is clock-skew slack, not a session lifetime.
+
+**Binding.** `requestedSubject` is inside the signature, so it is what stops
+a proof signed for one place from opening another. Each transport binds it
+differently (`engine::AuthBinding`):
+
+| Responder | What the client signs | How the responder binds it |
+| --- | --- | --- |
+| WebSocket server | the server origin (`new URL(ws.url).origin` in the browser, `http(s)://host[:port]` in `WsClient`) | `AuthBinding::Origin(server_url)`. The proof's `requestedSubject` must have the same `scheme://host[:port]` as the responder's own server URL, so a full resource URL under that origin is accepted too. A responder whose configured server URL is not an absolute http(s) URL cannot bind, and falls through to unbound. |
+| Iroh accept side | the drive the initiator is about to sync | `AuthBinding::Unbound` at verification time. The accepted `requestedSubject` is recorded as `bound_drive`, and every subsequent handshake `SYNC` / `SYNC_PUSH` must name that same drive, or the stream is closed with `AUTH_REQUIRED` and the message `AUTH was for <x>, not <y>`. |
+| Iroh initiator, receiving the accept side's auth-back | the initiator's node key | The initiator accepts the auth-back only when its `requestedSubject` normalises to the initiator's own node id (`normalize_node_id`); a proof signed for anything else is logged and ignored, and the remote stays `Public` for that connection. |
+
+**Failure.** A refused `AUTH` answers with `ERROR`, `request_id = 0`, code
+`AUTH_FAILED (8)`: bad signature, unknown agent, a timestamp outside the
+window, or a `requestedSubject` that does not name this responder. Resending
+the same frame changes nothing. Over WebSocket the socket stays open and the
+client may retry. On an Iroh stream the responder writes the error, finishes
+its half, and closes.
+
+**Late AUTH.** `AUTH` is not restricted to the start of a connection. The
+WebSocket handler writes the proven identity back onto the connection actor,
+and the Iroh live read loop holds a mutable agent that a mid-session `AUTH`
+upgrades, invalidating the per-connection drive-verdict cache so a `Public`
+verdict cached before the upgrade does not stick. Subscriptions already
+registered are **not** re-evaluated (see [Known gaps](#known-gaps)).
+
+**Iroh mutual auth.** After a successful `AUTH` the accept side writes, in
+order: `AUTH_OK`, its own `HELLO`, then an `AUTH` of its own back to the
+initiator, signed for the remote node key. Best effort: a node with no
+default agent does not send it and stays unidentified, with `Public`
+semantics. The initiator's own order is `AUTH`, wait for `AUTH_OK`, `HELLO`,
+`SYNC`.
+
+## What is refused before AUTH
+
+Until an `AUTH` succeeds the session's agent is `Public`. Anything refused
+for that reason answers with `ERROR`, `request_id = 0`, code
+`AUTH_REQUIRED (5)`, and the frame is not processed.
+
+**Iroh streams: everything except `AUTH`.** The accept-side dispatch loop
+refuses any other tag, including `HELLO` and `SYNC`, and closes the stream.
+"Public semantics" was never nothing here: an unauthenticated `SYNC` still
+served every publicly readable subject of the drive, and an unauthenticated
+`SYNC_PUSH` could bootstrap a new drive onto an open node. The live read loop
+restates the same rule for connections dialled into us.
+
+**WebSocket: an anonymous session may read.** This is what a public share
+link relies on for live updates. The `require_auth` gate covers exactly:
+
+- binary `SYNC_PUSH (0x33)` and `BLOB_RESPONSE (0x35)`;
+- the identity-bearing text frames `SUBSCRIBE`, `SUBSCRIBE_QUERY`,
+  `LORO_SYNC_SUBSCRIBE`, `LORO_SYNC_UPDATE`, `LORO_EPHEMERAL_UPDATE`,
+  `PRESENCE_SUBSCRIBE`, `PRESENCE_UPDATE`.
+
+Everything else is open to an anonymous socket and gated per subject by
+`check_read` instead:
+
+- `GET`, `SUB`, binary `SYNC`, text `SYNC_VV` (including the hash-first
+  probe), and `RBSR_FP` / `RBSR_ITEMS`. The probe and the RBSR frames answer
+  over `drive_items_for`, which requires the drive resource itself to be
+  readable and drops every subject the agent cannot read. Filtering also
+  makes the fingerprints agree: a client only ever holds what it may read.
+- `COMMIT (0x13)` is **not** gated. A commit is a self-authorizing
+  certificate: its signature, its signer's rights and its schema are all
+  validated on application, so the connection's own identity is not the
+  authority.
+- `BLOB_REQUEST (0x34)` is **not** gated, on either transport, and runs no
+  rights check. Knowing the 32-byte content hash is the capability. A
+  deliberate, accepted decision: the hash is only learnable from a resource
+  the requester was already served.
+- Unsubscribing (`UNSUB`, `LORO_SYNC_UNSUBSCRIBE`, `PRESENCE_UNSUBSCRIBE`,
+  `UNSUBSCRIBE_INDEX_STATUS`) is never gated.
+
+## Error codes
+
+`ERROR` carries a `u16` code from one registry, shared with the HTTP
+`/commit` error body.
+
+| Code | Name | Meaning |
+| --- | --- | --- |
+| `0` | `UNKNOWN` | No structured classification. Only the message text is meaningful. |
+| `1` | `GENESIS_COLLISION` | The commit's subject already exists. Terminal: this write can never succeed. |
+| `2` | `MISSING_REQUIRED_PROPERTY` | The result is missing a property its class requires. Terminal. |
+| `3` | `UNAUTHORIZED_WRITE` | The signer has no write right on the target or its parents. Blocking, not terminal. |
+| `4` | `MISSING_CLASS` | The commit names a class this node does not hold, so validation cannot run. Blocking, not terminal: the class may still arrive. |
+| `5` | `AUTH_REQUIRED` | The frame needs an authenticated session. `request_id = 0`. |
+| `6` | `SYNC_REJECTED` | A `SYNC_PUSH` was refused as a whole and nothing from it landed. `request_id = 0`. Message: `SYNC_PUSH rejected for drive <drive>: <reason>`. |
+| `7` | `UNAUTHORIZED_READ` | A subscription or a read-side reconcile frame was refused. `request_id = 0`. Message: `<FRAME> refused for <subject>: <reason>`. |
+| `8` | `AUTH_FAILED` | An `AUTH` frame was refused. `request_id = 0`. |
+
+Codes `1` to `4` come from `classify_commit_error`, which pattern-matches the
+underlying error text where the frame is built. Many other engine failures
+are **not** classified and go out as `UNKNOWN` with a descriptive message: an
+invalid frame of any kind, `No state`, a failed `GET` lookup,
+`Blob not found`, `Unsolicited blob response`, `Drive not admitted for sync`.
+Treat an unrecognized code the same as `UNKNOWN` and fall back to the
+message.
+
+## Resource fetching
 
 ```
 -> GET (0x10) [request_id] [subject]
-<- UPDATE (0x11) [flags=SNAPSHOT|HAS_COMMIT_ID] [request_id] [subject_len] [subject]
-                 [commit_id_len] [commit_id] [loro_snapshot_bytes]
+<- UPDATE (0x11) [flags=SNAPSHOT|HAS_COMMIT_ID] [request_id] ... [snapshot]
 ```
 
-A peer fetches the current state of a resource as a binary Loro snapshot. The
-responder should set `HAS_COMMIT_ID` and include the resource's current
-`lastCommit` subject so the requester can build follow-up commits with a
-correct `previousCommit` pointer. Without this field a client that received
-state only over WS has no way to know which commit produced the state and may
-incorrectly mark its next save as a genesis commit (the resource exists, so
-the server rejects it).
+The responder materializes the resource's Loro state, resolves any
+`internal:/…` subject against its own origin (an `internal:` subject must
+never cross the wire, since the receiver keys its cache on whatever subject
+arrives), and sets `HAS_COMMIT_ID` with the resource's `lastCommit` when
+there is one. Without that field a client whose only source of state is the
+socket cannot know which commit produced it, and marks its next save as a
+genesis commit, which the responder rejects. A resource with no state answers
+`ERROR` `UNKNOWN` `No state`; an unreadable or missing subject answers
+`ERROR` `UNKNOWN` with the lookup error, on the same `request_id`.
 
-> Implementation note: Both subscription pushes (`PUSH` flag) and direct GET responses carry the `lastCommit` identifier as `commit_id` when available, enabling the recipient to maintain the correct version history.
-
-## Persisted Commits
-
-Persisted writes can travel over the WebSocket instead of the HTTP `/commit`
-endpoint. The on-wire commit payload is the same signed JSON-AD body the HTTP
-endpoint accepts — only the transport changes, so deterministic signing and
-commit parsing are unaffected.
+## Persisted commits
 
 ```
--> COMMIT (0x13) [request_id] [commit_json]
-<- COMMIT_OK (0x14) [request_id] [server_commit_json]
-<- UPDATE (0x11) ...     # sent to OTHER subscribers, not the origin connection
+-> COMMIT (0x13) [request_id] [signed_commit_json_ad]
+<- COMMIT_OK (0x14) [request_id] [created_commit_json_ad]
+<- UPDATE (0x11) ...        # to OTHER subscribers, not the origin connection
 ```
 
-`server_commit_json` is the same created commit resource HTTP `/commit` returns
-today (JSON-AD `did:ad:commit:<sig>`). On failure, the responder emits
-`ERROR (0x03)` with the matching `request_id` and a machine-readable `code`
-(see the `error_code` module in `lib/src/sync/protocol.rs`):
+The payload is the same signed JSON-AD body HTTP `POST /commit` accepts, so
+deterministic signing and commit parsing are unaffected by the transport.
+`created_commit_json_ad` is the created commit resource
+(`did:ad:commit:<sig>`) that `/commit` also returns. On failure the responder
+answers `ERROR` with the matching `request_id` and a classified code. HTTP
+`POST /commit` remains the fallback path.
 
-| Code | Name                         | Meaning                                                     |
-| ---- | ---------------------------- | ------------------------------------------------------------|
-| `0`  | `UNKNOWN`                    | Unclassified error; only the message text is meaningful.    |
-| `1`  | `GENESIS_COLLISION`          | Commit tried to create a subject that already exists.       |
-| `2`  | `MISSING_REQUIRED_PROPERTY`  | Commit is missing a property required by its class/shape.   |
-| `3`  | `UNAUTHORIZED_WRITE`         | Signer lacks write rights on the target subject/drive.      |
-| `4`  | `MISSING_CLASS`              | Commit names a class the responder does not hold; blocking, not terminal. |
-| `5`  | `AUTH_REQUIRED`              | Frame needs an authenticated identity; sent with `request_id = 0`. See *What is refused before AUTH*. |
-| `6`  | `SYNC_REJECTED`              | A `SYNC_PUSH` was refused as a whole; nothing from it landed. Message: `SYNC_PUSH rejected for drive <drive>: <reason>`. |
-| `7`  | `UNAUTHORIZED_READ`          | A subscription was refused: the agent cannot read the subject or drive. Message: `<FRAME> refused for <subject>: <reason>`. |
+**Echo suppression.** Each WebSocket connection has a per-process id
+(`ws-<n>`). The server threads it through as the commit's `source_id`, stamps
+it on the emitted database events, and the commit monitor skips subscribers
+registered under the same id, so the client never sees its own write return
+as a push. Other connections, including other tabs of the same agent, do
+receive it. An HTTP commit has no source id and reaches everyone.
 
-Only these known codes are safe for callers to branch on (e.g. to decide
-whether to give up retrying vs. keep retrying); an unrecognized code should be
-treated the same as `UNKNOWN` and fall back to string-matching the message.
+**The peer `COMMIT` arm differs deliberately** (`engine::handle_frame`, via
+`apply_peer_commit`):
 
-Each WebSocket connection has a per-process identifier. The responder tags the
-emitted database events with that id and skips broadcasting follow-up `UPDATE`
-or `DESTROY` frames back to the connection that originated the commit — the
-client never sees its own change return as a subscription push. Other
-subscribers, including additional tabs/devices owned by the same agent, do
-receive the update on their own connections.
+| | WS server (hub) | Engine (peer) |
+| --- | --- | --- |
+| Signature, schema, signer rights | validated | validated |
+| Timestamp | validated | validated (bounds replay of a captured signed destroy) |
+| `validate_loro_causality` | on | **off**: concurrent writes between peers are expected |
+| Subject ownership | enforced | **off**: hosting subjects it does not own is what a replica is |
+| `previousCommit` | not validated | not validated |
+| `source_id` echo suppression | yes | none: peers do not fan out through the commit monitor |
+| Live-echo suppression | no | yes, so the live push loop does not bounce the commit back |
 
-HTTP `POST /commit` continues to work and remains the fallback path; HTTP
-commits have no connection id and are broadcast to every matching subscriber.
+Both roles auto-create the signer's agent resource when it is absent and the
+signer is an agent DID.
 
 ## Subscriptions
 
-The server offers three subscription shapes, all delivered through the
-same response channel (`UPDATE (0x11)` / `DESTROY (0x12)`):
+All subscriptions deliver through the same two frames: `UPDATE (0x11)` and
+`DESTROY (0x12)`. All of them are registered on the WebSocket transport
+only.
 
-- **`SUB (0x20)` on a drive subject.** Every commit on a resource that
-  lives under that drive is delivered to the subscriber as `UPDATE`
-  (with full snapshot + commit id) or `DESTROY`. Carries creates, edits,
-  and destroys. Drive subscribers are a strict superset of resource
-  subscribers (which still exist for finer-grained subscriptions on
-  individual subjects).
-- **`SUBSCRIBE <subject>` (text frame).** Per-resource subscription —
-  receive `UPDATE` / `DESTROY` only for commits targeting that exact
-  subject.
-- **`SUBSCRIBE_QUERY <json>` (text frame).** Filter subscription —
-  receive `UPDATE` / `DESTROY` whenever a resource enters or leaves the
-  result set of a watched filter. JSON shape:
-  `{ property, value, drive, sort_by? }`; the property+value pair and
-  the drive scope are required. When a resource joins the filter the
-  subscriber gets an `UPDATE` carrying the full snapshot; when it leaves
-  (or is destroyed) the subscriber gets a `DESTROY`. Useful for table /
-  collection views that watch "all resources where `parent` = X" or
-  similar without binding to a whole drive.
+**`SUB (0x20) <drive>`** registers a drive-wide subscription: every commit on
+a resource under that drive is fanned out to the connection. It also
+registers a companion per-resource subscription on the drive resource itself,
+so renames and ACL edits arrive even when the drive subject is a DID that
+would not prefix-match a commit subject. No `AUTH` needed; gated on
+`check_read` of the drive resource.
 
-All three require authorization at registration time — `check_read` on
-the drive (for `SUB` and `SUBSCRIBE_QUERY`) or on the resource (for
-`SUBSCRIBE`) — the same check a `GET` runs. A subscription that fails it
-(or names a subject the responder does not hold) is not registered, and the
-responder says so: `ERROR (0x03)` with `request_id = 0` and code
-`UNAUTHORIZED_READ (7)`, message `<FRAME> refused for <subject>: <reason>`,
-where `<FRAME>` is `SUB`, `SUBSCRIBE`, `SUBSCRIBE_QUERY`,
-`LORO_SYNC_SUBSCRIBE` or `PRESENCE_SUBSCRIBE`. One frame gets one answer:
-the companion resource subscription a `SUB` registers for the drive
-resource itself does not send a second one. A subscription that is
-accepted is silent. `SUBSCRIBE`, `SUBSCRIBE_QUERY` and the Loro / presence
-subscriptions additionally require `AUTH` first (`AUTH_REQUIRED (5)`);
-`SUB` does not, so an anonymous viewer of a public drive still gets live
-updates.
+**`UNSUB (0x21) <drive>`** cancels it, under the same raw key `SUB`
+registered with, so the fan-out entry is actually found. It removes the
+companion per-resource entry too. Nothing is sent in reply.
 
-> Historical: an earlier protocol revision included a dedicated `QUERY_UPDATE (0x36)` membership-notification frame carrying just the subject string, requiring the client to follow up with a `GET`. This was retired because the same information arrives with one fewer round-trip as a regular `UPDATE` carrying the snapshot. Tag `0x36` is reserved.
+**`SUBSCRIBE <subject>`** (text) is a per-resource subscription. Requires
+`AUTH`, gated on `check_read` of that subject. There is no `UNSUBSCRIBE`
+counterpart, and the browser does not use this frame at all.
 
-## Drive Synchronization
+**`SUBSCRIBE_QUERY <json>`** (text) watches a filter. Requires `AUTH`. The
+shape is `{ "property"?, "value"?, "sort_by"?, "drive" }` and **only `drive`
+is enforced**: a filter with no drive is dropped silently, with no refusal
+frame and no registration. The drive is gated on `check_read`, and `value` is
+de-localized the same way the HTTP `/query` path does, so client and index
+agree on the filter id. Membership changes arrive as `UPDATE` (joined, with a
+pre-fetched snapshot so no follow-up `GET` is needed) or `DESTROY` (left or
+destroyed).
 
-Drive sync ensures two peers have the same set of resources. It uses Loro CRDT version vectors for efficient diffing.
-
-1. **`SYNC (0x30)`**: Peers exchange drive-level hashes and version vectors.
-2. **`SYNC_DIFF (0x32)`**: A peer determines which resources to `pull`, `push`, and `remove`.
-3. **`SYNC_PUSH (0x33)`**: Peers exchange binary Loro deltas for missing resources, **chunked**. Each chunk carries `[drive] [flags: u8] [count: u16] [entries...]`; bit 0 of `flags` is `LAST`. Senders cap chunks at 100 entries or 1 MiB (whichever fills first); receivers loop reading `SYNC_PUSH` frames until they see a chunk with `LAST` set. An empty push still emits a single `LAST`-flagged frame so the receiver doesn't hang.
-
-### `SYNC_PUSH` acknowledgement and rejection
-
-A receiver answers each admitted `SYNC_PUSH` chunk with `SYNC_OK (0x31)` for
-the drive (followed by any `BLOB_REQUEST`s the chunk gave rise to). `SYNC_OK`
-acknowledges the *chunk*: entries inside it may still be skipped
-individually (tombstoned locally, unreadable, malformed), so a sender that
-needs proof re-probes with a second `SYNC`.
-
-A push the receiver refuses *as a whole* — the connection's agent has no
-write right on the drive, the drive is over quota, or the node's sync
-policy does not admit it — is answered with `ERROR (0x03)`, `request_id =
-0`, code `SYNC_REJECTED (6)`, message `SYNC_PUSH rejected for drive
-<drive>: <reason>`. **No `SYNC_OK` is sent for a rejected push** and none
-of its entries land. (Earlier revisions answered `SYNC_OK` here too, which
-let a sender believe its data had arrived.) Senders should treat this as
-"nothing of mine was accepted": keep the local state, surface the reason,
-and offer it again once the cause is fixed. Over WebSocket, `SYNC_PUSH`
-before `AUTH` is refused with `AUTH_REQUIRED (5)` instead; the
-anonymous-bootstrap carve-out no longer exists.
-
-### `SYNC_DIFF` payload
-
-After the drive subject, the payload is UTF-8 JSON:
-
-```json
-{ "pull": ["subject", "..."], "push": ["subject", "..."], "remove": ["subject", "..."] }
-```
-
-- **`pull`**: Subjects the *initiator* should send to the *responder* (initiator has newer or missing data).
-- **`push`**: Subjects the *responder* will send via `SYNC_PUSH` (initiator is behind or missing data).
-- **`remove`**: Subjects the *initiator* should delete locally. The responder destroyed these (or has tombstoned them) and they are absent from its version vectors; without `remove`, bulk sync could resurrect deleted resources.
-
-`remove` is optional for backward compatibility (`[]` if omitted). Receivers apply removals the same way as `DESTROY (0x12)` frames.
-
-**Live deletes** use `COMMIT` (destroy) → `DESTROY` to each subscriber of the destroyed subject and to each drive-wide subscriber of the drive it lived under; `remove` is for **bulk reconcile** after offline or Iroh pairing.
-
-## Content-Addressed Blob Syncing
-
-When a peer receives a `File` resource via sync that contains a `blake3` hash it doesn't have locally, it initiates a blob fetch:
+**Refusal frame.** A subscription refused for rights, or naming a subject the
+responder does not hold, is not registered and answers with:
 
 ```
--> BLOB_REQUEST (0x34) [blake3_hash (32 bytes)]
-<- BLOB_RESPONSE (0x35) [blake3_hash (32 bytes)] [binary_file_bytes...]
+ERROR (0x03) request_id=0 code=UNAUTHORIZED_READ(7)
+             "<FRAME> refused for <subject>: <reason>"
 ```
 
-This allows binary files to sync across the mesh network independently of the Loro metadata, supporting offline-first uploads and content-addressed deduplication.
+`<FRAME>` is one of `SUB`, `SUBSCRIBE`, `SUBSCRIBE_QUERY`,
+`LORO_SYNC_SUBSCRIBE`, `PRESENCE_SUBSCRIBE`. A missing subject and an
+unreadable one give the same reason (`not readable`): which of the two it is
+is not something an agent without read rights gets to learn. One frame gets
+one answer, so the companion resource subscription a `SUB` registers does not
+emit a second. An accepted subscription is silent.
 
-## Text Messages (Legacy/Hybrid)
+**Identity is frozen at registration.** The agent string is captured when the
+subscription is registered and never re-read; a later `AUTH` on the same
+connection does not re-evaluate it.
 
-A few low-volume or registration-side messages still use text frames (prefixed by keyword) during the transition to v2:
+**What a fan-out `UPDATE` carries.** This differs by trigger, and it matters:
 
-- `SUBSCRIBE <subject>`: per-resource subscription (resource subs are surfaced as `UPDATE` / `DESTROY` on the binary path).
-- `SUBSCRIBE_QUERY <json>`: filter subscription — `{ property, value, drive, sort_by? }`. Property + value + drive are required. Membership changes arrive as `UPDATE` / `DESTROY` (no dedicated response frame); see Subscriptions above.
-- `LORO_SYNC_SUBSCRIBE <json>` / `LORO_SYNC_UNSUBSCRIBE <json>`: register/unregister live collaborative-editing fanout for a Loro subject.
-- `LORO_SYNC_UPDATE <json>`: Collaborative editing deltas.
-- `LORO_EPHEMERAL_UPDATE <json>`: Cursors and presence.
+| Trigger | Flags | Payload |
+| --- | --- | --- |
+| A commit under a subscribed drive or subject | `HAS_COMMIT_ID \| PUSH` | the commit's Loro **delta**, not a snapshot |
+| A commit with `destroy` | (a `DESTROY` frame) | subject only |
+| An external change, meaning a write with no commit behind it, such as a peer sync writing straight to the store | `SNAPSHOT \| PUSH`, plus `HAS_COMMIT_ID` when a `lastCommit` exists | the full stored snapshot |
+| A filter-membership join | `SNAPSHOT \| PUSH`, plus `HAS_COMMIT_ID` when known | the pre-fetched snapshot |
+| A filter-membership leave, or an external destroy | (a `DESTROY` frame) | subject only |
 
-## Typical Session Flow
+The `SNAPSHOT` flag on the external-change path is load-bearing. Labelling
+full state as a delta makes the client merge it into a document it does not
+have, producing a class-less partial resource.
+
+## Drive synchronization over WebSocket
+
+This is the sequence the browser runs on connect, after draining its outbox.
+
+**1. Hash-first probe.** The client computes its drive state but sends only
+the hash:
 
 ```
-Peer A                              Peer B
-  |                                    |
-  |-- AUTH (0x01) {credentials} ------>|
-  |<------------- AUTH_OK (0x02) ------|
-  |                                    |
-  |-- SYNC (0x30) {drive, hash, vvs} ->|
-  |<------------- SYNC_OK (0x31) ------|  (fast path: hashes match)
-  |                                    |
-  |  OR if hashes differ:              |
-  |<----------- SYNC_DIFF (0x32) ------|
-  |<----------- SYNC_PUSH (0x33) ------|
-  |-- SYNC_PUSH (0x33) {deltas} ------>|
-  |                                    |
-  |  If a File blob is missing:        |
-  |-- BLOB_REQUEST (0x34) {hash} ----->|
-  |<----------- BLOB_RESPONSE (0x35) --|
-  |                                    |
-  |<----- UPDATE (0x11) {subject,delta}|  (subscription push)
-  |                                    |
-  |-- COMMIT (0x13) {commit_json} ---->|
-  |<----------- COMMIT_OK (0x14) ------|  (no echo back to Peer A)
-  |                                    |
-  |-- GET (0x10) {subject} ----------->|
-  |<----------- UPDATE (0x11) ---------|
+-> SYNC_VV {"drive":"<drive>","driveHash":"<hex>","probe":true}
 ```
+
+The server recomputes the hash over the subjects this session's agent may
+read and answers `SYNC_OK (0x31)` (binary, in sync, nothing more is
+exchanged) or `SYNC_RESEND <drive>` (text). A drive the agent cannot read
+answers `ERROR` `UNAUTHORIZED_READ`.
+
+**2. Range-based set reconciliation.** On `SYNC_RESEND` the client descends
+over subject ranges with the server, comparing fingerprints, rather than
+sending the whole version vector:
+
+```
+-> RBSR_FP {"drive":"<drive>","ranges":[["<lo>","<hi>"|null], ...]}
+<- RBSR_FP {"drive":"<drive>","fps":["<hex>", ...]}
+-> RBSR_ITEMS {"drive":"<drive>","lo":"<lo>","hi":"<hi>"|null}
+<- RBSR_ITEMS {"drive":"<drive>","items":[["<subject>",[["<peer>",<counter>], ...]], ...]}
+```
+
+Ranges are half-open `[lo, hi)`, with `hi = null` meaning unbounded above.
+A range whose fingerprints match is pruned with zero transfer; a mismatching
+range is split (branching factor 4) until it holds few enough items (4) to
+fetch and diff directly.
+
+The fingerprint is defined in `lib/src/sync/rbsr.rs` and mirrored in
+`browser/lib/src/rbsr.ts`:
+
+```
+item_fingerprint(subject, vv) = SHA-256( "{subject}={peer}:{counter},{peer}:{counter},…" )
+                                 with the (peer, counter) pairs sorted by peer
+range_fingerprint(lo, hi)     = XOR of the item fingerprints in [lo, hi)
+```
+
+XOR makes a range fingerprint order-independent and incremental, and matching
+items cancel out. Both sides emit lower-case hex; the empty range is 32 zero
+bytes. The two implementations must agree byte for byte or the descent never
+converges.
+
+**3. Reduced reconcile.** The client sends version vectors for only the
+differing subjects it actually holds:
+
+```
+-> SYNC_VV {"drive":"<drive>","driveHash":"<hex>",
+            "subjects":["<subject>", ...],
+            "peers":[...],"resources":{...}}
+```
+
+The server builds version vectors for just that set rather than walking the
+whole drive, and both of its comparison loops skip anything outside it. Any
+RBSR failure (timeout, parse error, closed socket) falls back to sending the
+full `SYNC_VV` state, so the drive always reconciles.
+
+*Limitation of the reduced path:* the full path also pulls a subject whose
+version vector **matches** but whose blob the server lacks, the backstop for
+metadata that arrived over HTTP `POST /commit` while the bytes stayed on the
+client. A version-vector fingerprint cannot encode blob presence, so that
+backstop does not run for pruned subjects. Accepted.
+
+**4. Diff and transfer.** The server answers `SYNC_DIFF (0x32)`, followed
+immediately by the `SYNC_PUSH (0x33)` chunks for everything in its `push`
+list. The client applies the removals, then sends its own `SYNC_PUSH` chunks
+for the `pull` list, exporting updates since the matching `pullFrom` vector
+where one is given.
+
+## Drive synchronization over Iroh
+
+Same engine, binary handshake, no text frames:
+
+```
+-> AUTH (0x01)                 signed for the drive
+<- AUTH_OK (0x02) [caps]
+<- HELLO (0x37)                accept side introduces itself
+<- AUTH (0x01)                 accept side's auth-back (best effort)
+-> HELLO (0x37)
+-> SYNC (0x30)                 drive + hash + full compacted VVs
+<- SYNC_OK (0x31)              fast path, hashes match, done
+   or
+<- SYNC_DIFF (0x32)
+<- SYNC_PUSH (0x33) × n        last chunk flagged LAST
+-> SYNC_PUSH (0x33) × n        the initiator's answer to `pull`
+```
+
+The initiator sends the full `SYNC` state; there is no probe and no RBSR on
+this transport. If the `SYNC_DIFF` has an empty `push` list the initiator
+sends its pushback immediately and stops reading, rather than waiting for
+`SYNC_PUSH` frames that will not come.
+
+Both sides then transition to live mode. On the accept side that happens once
+the bulk exchange completes, including the case of a `SYNC_DIFF` whose `pull`
+list is empty: without that check the accept side stays in handshake mode and
+later live `UPDATE` frames go to the sync engine, which has no arm for them.
+
+Serving a peer's `pull` list is gated per subject on `check_read` for the
+identity the peer proved, exactly as the accept side's `SYNC_DIFF` is. Dialing
+a peer never establishes that peer's rights. A peer the local user
+deliberately paired with is additionally served whatever *this node* may
+read, never more.
+
+## SYNC_PUSH chunking and acknowledgement
+
+A push run is one or more `SYNC_PUSH` frames; only the last has `LAST` set. A
+receiver **must** loop until it sees `LAST`, or it will terminate early or
+hang. An empty push still emits one `LAST`-flagged frame so the receiver does
+not wait forever. Sender-side chunk caps are a local choice, not a protocol
+rule: both senders close a chunk at 100 entries, the Rust sender also at
+1 MiB and the browser at 48 KiB so a slow uplink shows progress per chunk. A
+single entry larger than the byte budget is still sent alone, and receivers
+accept either.
+
+An admitted chunk is answered with `SYNC_OK (0x31)` for the drive, followed
+by any `BLOB_REQUEST` frames the chunk gave rise to. `SYNC_OK` acknowledges
+the **chunk, not its contents**: individual entries may still be skipped
+(tombstoned locally, unreadable, a failed Loro import). A sender that needs
+proof re-probes.
+
+A push refused **as a whole** is answered with `ERROR`, `request_id = 0`,
+code `SYNC_REJECTED (6)`, message
+`SYNC_PUSH rejected for drive <drive>: <reason>`, and **no `SYNC_OK`**.
+Nothing from it landed. The two reasons are that the sending agent has no
+write right on the drive, or that the node's sync policy does not admit it
+(not enrolled, or over quota). A drive that does not exist locally yet may be
+enrolled on the spot if the policy allows it, which is what keeps ordinary
+first sync working on an open node.
+
+On an accept-side connection the sender must hold write rights itself. On a
+connection the node **dialled**, a relayed push to a drive this node's own
+agent may write is accepted even though the relaying peer authenticates as a
+different agent: a server holding your drive is not you, and gating on its
+identity is what made a phone stop receiving a browser's edits.
+
+## Deletes
+
+There are three separate paths and they do not share a mechanism.
+
+**Live, over WebSocket.** The client sends a signed destroy `COMMIT (0x13)`.
+The server validates and applies it, then fans a `DESTROY (0x12)` out to
+every subscriber of that subject and to every drive-wide subscriber of the
+drive it lived under, skipping the originating connection.
+
+**Live, over an Iroh peer link.** A destroy crosses as the signed
+`COMMIT (0x13)` that caused it, so the peer validates signature, rights and
+timestamp exactly as for any other commit. A **naked `DESTROY (0x12)` from a
+peer is ignored**, logged and never applied, whoever sent it: it carries no
+signature and no signer, so the only thing it could be checked against is the
+connection's drive-level write verdict, which is not what authorizes a
+delete. A removal no commit authorized (a cascade-deleted child, a local
+eviction) is not propagated live at all; the peer's own apply of the parent
+commit cascades there too.
+
+**Bulk, during reconcile.** `SYNC_DIFF.remove` lists subjects the sender
+holds a tombstone for. These are not signed. The receiver applies each one
+only if the sending identity is admitted for that subject's drive, the same
+drive-level write verdict, with the dial-side "trust owned" relaxation. A
+subject whose drive cannot be resolved locally is destroyed without that
+check.
+
+## Blobs
+
+```
+-> BLOB_REQUEST (0x34) [blake3_hash: 32 bytes]
+<- BLOB_RESPONSE (0x35) [blake3_hash: 32 bytes] [bytes...]
+```
+
+`BLOB_REQUEST` is ungated on both transports and runs no rights check: the
+hash is the capability. A miss answers `ERROR` `UNKNOWN` `Blob not found`.
+`BLOB_RESPONSE` is accepted **only for a hash this node actually requested**.
+Importing a `SYNC_PUSH` entry whose `File` resource names a blob the node
+lacks records the hash against the (already admitted) drive and emits the
+request. The response handler consumes that record and re-checks the drive
+against the sync policy, since enrollment or quota can change in between. A
+response with no matching record answers `ERROR` `UNKNOWN`
+`Unsolicited blob response`; one for a no-longer-admitted drive answers
+`Drive not admitted for sync`. A pending request expires after 5 minutes.
+
+Over WebSocket, `BLOB_RESPONSE` additionally requires `AUTH`.
+
+## Liveness
+
+**WebSocket.** The server pings every 5 s and drops a connection that has
+sent nothing at all for 60 s. That budget is deliberately generous: a
+saturated renderer can stall pong delivery for seconds.
+
+A browser cannot observe protocol-level pings, so it has its own probe. When
+the server advertised `keepalive`, the client checks every 5 s: after 20 s
+with no inbound frame it sends one `KEEPALIVE (0x41)`; if nothing has arrived
+after 45 s it closes the socket and lets the reconnect loop take over. Any
+inbound frame resets both. The server **echoes** `KEEPALIVE` verbatim, which
+is the whole point of it. Against a server that did not advertise
+`keepalive` the client does not probe, since an unanswered probe would make
+every idle socket look dead.
+
+**Iroh.** Each side's write loop sends a `KEEPALIVE` whenever it has had
+nothing else to send for 10 s (`KEEPALIVE_INTERVAL`). It is **never echoed**:
+both sides send on their own schedule, so each read loop always has something
+arriving. A read loop that hears nothing for 35 s (`LIVENESS_TIMEOUT`) treats
+the link as dead and tears it down, but **only once that peer has sent at
+least one `KEEPALIVE`**. Silence from a peer that has never sent one carries
+no information, and treating it as death turned every idle connection to an
+older build into a 35-second reconnect loop.
+
+This exists because a half-open connection is otherwise invisible: one side's
+stream dies, the other keeps queueing writes into it and the reconnect loop
+skips it as "connected". Observed gap before this was added: 15 minutes, with
+every local change silently dropped.
+
+## Size limits
+
+| Limit | Value | Where |
+| --- | --- | --- |
+| WebSocket frame | 16 MiB | actix `frame_size`. A frame over the limit makes actix drop the TCP socket with no close frame, which the browser sees as `code=1006`. |
+| Iroh frame, authenticated | 50 000 000 bytes | `IROH_FRAME_MAX_BYTES` |
+| Iroh frame, before AUTH | 10 000 000 bytes | `IROH_PREAUTH_FRAME_MAX_BYTES`, so an unauthenticated dialer cannot force a 50 MB allocation |
+| `EPHEMERAL` payload, `LORO` / `PRESENCE` | 64 KiB | `EPHEMERAL_MAX_PAYLOAD` |
+| `EPHEMERAL` payload, `DOC` | 1 MiB | `LIVE_DOC_MAX_PAYLOAD` |
+| `HELLO` name | 64 Unicode scalar values | `HELLO_MAX_CHARS`; over-long is rejected, not truncated |
+| `SYNC_PUSH` chunk, Rust sender | 100 entries or 1 MiB | sender-side only |
+| `SYNC_PUSH` chunk, browser sender | 100 entries or 48 KiB | sender-side only |
+
+The Iroh frame cap is chosen per frame from the connection's *current*
+identity, in both loops, so a connection that authenticates mid-stream moves
+up to the larger budget and one that never does never leaves the tight one.
+
+## Text frames
+
+WebSocket only. Format is `PREFIX ` followed by the payload; the prefix
+includes its trailing space. Payloads are JSON except where noted.
+
+Client to server:
+
+| Frame | Payload | Needs AUTH |
+| --- | --- | --- |
+| `SUBSCRIBE <subject>` | raw subject string, not JSON | yes |
+| `SUBSCRIBE_QUERY` | `{"property"?,"value"?,"sort_by"?,"drive"}` | yes |
+| `LORO_SYNC_SUBSCRIBE` | `{"subject"}` | yes |
+| `LORO_SYNC_UNSUBSCRIBE` | `{"subject"}` | no |
+| `LORO_SYNC_UPDATE` | `{"subject","update"}` | yes |
+| `LORO_EPHEMERAL_UPDATE` | `{"subject","update"}` | yes |
+| `PRESENCE_SUBSCRIBE` | `{"subject":"<drive>"}` | yes |
+| `PRESENCE_UNSUBSCRIBE` | `{"subject":"<drive>"}` | no |
+| `PRESENCE_UPDATE` | `{"subject","update"}` | yes |
+| `SUBSCRIBE_INDEX_STATUS` | `{"drive"}` | no |
+| `UNSUBSCRIBE_INDEX_STATUS` | `{"drive"}` | no |
+| `SYNC_VV` | `{"drive","driveHash","probe"?,"peers"?,"resources"?,"subjects"?}` | no |
+| `RBSR_FP` | `{"drive","ranges":[["<lo>","<hi>"\|null], ...]}` | no |
+| `RBSR_ITEMS` | `{"drive","lo","hi"\|null}` | no |
+
+Server to client:
+
+| Frame | Payload |
+| --- | --- |
+| `SYNC_RESEND <drive>` | raw drive subject, not JSON |
+| `RBSR_FP` | `{"drive","fps":["<hex>", ...]}` |
+| `RBSR_ITEMS` | `{"drive","items":[["<subject>",[["<peer>",<counter>], ...]], ...]}` |
+| `INDEX_STATUS` | `{"drive","indexing"}` |
+| `LORO_SYNC_UPDATE` | `{"subject","update"}` |
+| `LORO_EPHEMERAL_UPDATE` | `{"subject","update"}` |
+| `PRESENCE_UPDATE` | `{"subject","update"}` |
+
+`update` is an opaque string carrying a Loro update or `EphemeralStore`
+payload, relayed without inspection. `SUBSCRIBE_INDEX_STATUS` is answered
+immediately with one `INDEX_STATUS`. Prefixes are matched longest-conflicting
+first (`SUBSCRIBE_INDEX_STATUS` and `SUBSCRIBE_QUERY` before `SUBSCRIBE`); an
+unrecognized text frame is logged and ignored.
+
+## Session flows
+
+**Browser over WebSocket**
+
+```
+-> upgrade, Sec-WebSocket-Protocol: atomicdata-ws.v2
+-> AUTH (0x01) signed for the origin
+<- AUTH_OK (0x02) ["auth-max-age", "keepalive", ...]
+-> SUB (0x20) <drive>
+-> SYNC_VV {drive, driveHash, probe:true}
+<- SYNC_RESEND <drive>
+   ... RBSR_FP / RBSR_ITEMS range descent ...
+-> SYNC_VV {drive, driveHash, subjects, peers, resources}
+<- SYNC_DIFF (0x32)
+<- SYNC_PUSH (0x33) x n, last one flagged LAST
+-> SYNC_PUSH (0x33) x n, last one flagged LAST
+-> COMMIT (0x13)
+<- COMMIT_OK (0x14)                              (no UPDATE echoed back)
+<- UPDATE (0x11) delta | HAS_COMMIT_ID | PUSH    (someone else's commit)
+-> GET (0x10)
+<- UPDATE (0x11) SNAPSHOT | HAS_COMMIT_ID
+-> KEEPALIVE (0x41)                              (after 20 s idle)
+<- KEEPALIVE (0x41)                              (echo)
+```
+
+**Iroh peer.** Every line is length-prefixed; `->` is the initiator.
+
+```
+-> QUIC connect, ALPN atomic/1, open_bi
+-> AUTH (0x01) signed for <drive>
+<- AUTH_OK (0x02) [caps]
+<- HELLO (0x37) name + caps
+<- AUTH (0x01) auth-back, signed for the initiator's node key
+-> HELLO (0x37)
+-> SYNC (0x30) drive + hash + version vectors
+<- SYNC_DIFF (0x32)
+<- SYNC_PUSH (0x33) x n ... LAST
+-> SYNC_PUSH (0x33) x n ... LAST
+-> BLOB_REQUEST (0x34)
+<- BLOB_RESPONSE (0x35)
+   === both sides enter live mode ===
+<- UPDATE (0x11) delta
+-> COMMIT (0x13) signed destroy
+-> EPHEMERAL (0x40) kind=PRESENCE
+-> KEEPALIVE (0x41)                (every 10 s idle, never echoed)
+<- KEEPALIVE (0x41)
+```
+
+## Conformance
+
+`lib/src/sync/protocol_vectors.json` holds one golden frame as hex per named
+case, covering `AUTH_OK` with and without capabilities, `ERROR`, `GET`,
+`UPDATE` as delta and as snapshot, `DESTROY`, `COMMIT`, `COMMIT_OK`, `SUB`,
+`UNSUB`, `SYNC`, `SYNC_OK`, `SYNC_DIFF`, `SYNC_PUSH`, `BLOB_REQUEST`,
+`BLOB_RESPONSE`, `HELLO` with and without capabilities, `KEEPALIVE`, and
+`EPHEMERAL`.
+
+The Rust test module `protocol::wire_vectors` asserts that every encoder
+produces the recorded bytes and that the recorded bytes decode to the
+recorded fields. `browser/lib/src/ws-v2.test.ts` reads the **same file** and
+asserts the same for the TypeScript codec. Every frame both sides can encode
+must come out byte-identical.
+
+After a deliberate wire change, regenerate with
+`cargo test -p atomic_lib print_wire_vectors -- --ignored --nocapture`, paste
+the printed JSON into `protocol_vectors.json`, and update this page in the
+same commit.
 
 ## Implementation
 
-This page is the canonical wire-format spec. Every implementation file below
-links back here in its module header; keep this doc in sync when you touch any
-of them.
+Every file below links back here from its module header. Keep this page in
+step when you touch any of them.
 
-**Browser / TypeScript**
+| File | Role |
+| --- | --- |
+| `lib/src/sync/protocol.rs` | Tags, flags, error codes, `CAPABILITIES`, encoders and decoders, size limits, golden vectors. |
+| `lib/src/sync/engine.rs` | Transport-agnostic frame handling: `AUTH` verification and binding, `GET`, commit ingest, `SYNC` / `SYNC_DIFF` / `SYNC_PUSH`, blob bookkeeping. |
+| `lib/src/sync/rbsr.rs` | Range fingerprints and the reconcile driver. |
+| `lib/src/sync/peer.rs` | Iroh QUIC transport: length envelope, handshake, live loops, keepalive, ephemeral relay. |
+| `lib/src/authentication.rs` | `AuthValues`, signature check, freshness window. |
+| `lib/src/client/ws.rs` | The Rust WebSocket client. |
+| `server/src/handlers/web_sockets.rs` | The Actix WebSocket handler: binary arms, text frames, `require_auth`, heartbeat. |
+| `server/src/commit_monitor.rs` | Subscription registries and commit fan-out. |
+| `server/src/actor_messages.rs` | Subscription messages and the refusal frame. |
+| `server/src/loro_sync_broadcaster.rs`, `server/src/serve.rs` | Bridge between `EPHEMERAL` frames and the `LORO_*` / `PRESENCE_*` text frames. |
+| `browser/lib/src/ws-v2.ts` | Frame encode and decode. |
+| `browser/lib/src/websockets.ts` | The browser client: auth, pending requests, subscriptions, commit over WS, liveness, drive reconcile. |
+| `browser/lib/src/rbsr.ts` | The TypeScript reconcile, byte-identical to `rbsr.rs`. |
+| `flutter/rust/src/api/simple/ws_sync.rs` | The Flutter FRB bridge over `WsClient`. |
 
-- [`browser/lib/src/ws-v2.ts`](https://github.com/atomicdata-dev/atomic-server/blob/master/browser/lib/src/ws-v2.ts) — frame encode/decode (tags, flags, `Frame*` helpers).
-- [`browser/lib/src/websockets.ts`](https://github.com/atomicdata-dev/atomic-server/blob/master/browser/lib/src/websockets.ts) — high-level client (auth, pending requests, subscriptions, commit-over-WS).
+## Known gaps
 
-**Server / Rust**
+Tracked in [`planning/unified-sync.md`](https://github.com/atomicdata-dev/atomic-server/blob/master/planning/unified-sync.md),
+"Remaining work".
 
-- [`server/src/handlers/web_sockets.rs`](https://github.com/atomicdata-dev/atomic-server/blob/master/server/src/handlers/web_sockets.rs) — Actix WebSocket handler (browser-facing).
-- [`lib/src/sync/protocol.rs`](https://github.com/atomicdata-dev/atomic-server/blob/master/lib/src/sync/protocol.rs) — shared tag constants, flag bits, encode/decode helpers used by both transports.
-- [`lib/src/sync/engine.rs`](https://github.com/atomicdata-dev/atomic-server/blob/master/lib/src/sync/engine.rs) — transport-agnostic drive sync engine (`SYNC`, `SYNC_DIFF`, `SYNC_PUSH`).
-- [`lib/src/sync/peer.rs`](https://github.com/atomicdata-dev/atomic-server/blob/master/lib/src/sync/peer.rs) — Iroh QUIC peer transport (HELLO handshake, peer streams).
-- [`lib/src/client/ws.rs`](https://github.com/atomicdata-dev/atomic-server/blob/master/lib/src/client/ws.rs) — Rust WebSocket client (used by CLI and tests).
+- **`SUB` / `UNSUB` are not engine-owned.** The last hand-rolled tags in the
+  server WebSocket handler, which is why an Iroh peer cannot subscribe to
+  anything. A prerequisite for "every peer is a hub".
+- **No Layer-2 provenance on `SYNC_PUSH`.** Entries carry raw Loro bytes with
+  no `lastCommit` and no signed envelope, so an import cannot verify or
+  record who authored the state it merged.
+- **`AUTH` is a timestamp-bounded bearer proof, not a nonce exchange.** A
+  captured frame is replayable inside the freshness window against the
+  responder it was signed for. A challenge-response `AUTH` would close it.
+- **Subscription identity is never refreshed.** The agent is captured at
+  registration; an `AUTH` landing later on the same connection does not
+  re-evaluate what that connection is already subscribed to.
+
+## Changed in 2026-09
+
+Wire-visible changes in this revision:
+
+- **`AUTH` freshness and origin binding.** Proofs older than
+  `AUTH_MAX_AGE_MS` (5 minutes) are refused, and the WebSocket responder
+  requires `requestedSubject` to name its own origin. A refused `AUTH` now
+  answers with the new code `AUTH_FAILED (8)`.
+- **Capability payloads.** `AUTH_OK` carries a JSON array of capability
+  names, `HELLO` the same array after the name. Both are optional trailing
+  bytes, so older decoders are unaffected.
+- **`UNSUB (0x21)` is implemented.** It previously edited a set nothing read;
+  it now removes the drive fan-out entry and the companion per-resource
+  entry.
+- **`KEEPALIVE (0x41)` over WebSocket.** The server echoes it, and the
+  browser uses it as a liveness probe once the server advertises `keepalive`.
+- **The hash-first probe and the RBSR frames are read-gated.** `SYNC_VV` with
+  `probe: true`, `RBSR_FP` and `RBSR_ITEMS` now answer only over the subjects
+  the asking agent may `check_read`, and refuse an unreadable drive with
+  `UNAUTHORIZED_READ`. Previously an anonymous socket could enumerate every
+  subject and version vector of any drive it could name.
+- **Iroh destroys travel as signed `COMMIT` frames.** A naked `DESTROY` from
+  a peer is now ignored rather than applied on the connection's drive-level
+  write verdict.
+- **TypeScript `encodeSync` layout fix.** It wrote a raw 32-byte hash with no
+  length prefix, which the Rust decoder misparsed; it now writes
+  `[hash_len: u16] [hash_hex_utf8]`. Exported but never sent, since the
+  browser speaks the text `SYNC_VV` form.
+
+Corrections to what this page previously claimed:
+
+- `SUB` was said to deliver a full snapshot per commit. A commit fan-out
+  `UPDATE` carries the commit's **delta** with `HAS_COMMIT_ID | PUSH`;
+  `SNAPSHOT` appears only on external-change and filter-membership pushes.
+- `UNSUB` was said to work. It did not, until this revision.
+- `SUBSCRIBE_QUERY` was said to require `property` and `value`. Only `drive`
+  is enforced; a filter without one is dropped silently.
+- `SYNC_DIFF.remove` was said to be optional. The encoder always emits it;
+  only decoders tolerate its absence.

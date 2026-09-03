@@ -6,6 +6,10 @@ frozen `did:ad:` schemas is in flight in PR #1262 (open, branch
 `cursor/did-frozen-schema-b359`: `browser/lib/src/schema.ts`, `freeze.ts`,
 `@tomic/cli schema`). Noted 2026-09-01.
 
+**Decision (accepted 2026-09-01):** `did:ad:frozen` is the on-ramp and optional
+schema is the write-path policy; #1251 becomes a frozen ontology
+([`completed/schema-routes-decision.md`](./completed/schema-routes-decision.md)).
+
 ## Goal
 
 Make Atomic usable by app developers who want to define their data model in

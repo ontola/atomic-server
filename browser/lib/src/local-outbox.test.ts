@@ -209,7 +209,7 @@ describe('LocalOutbox.drain', () => {
   });
 });
 
-describe('LocalOutbox drain re-entrancy (planning/outbox-drain-data-loss-race.md)', () => {
+describe('LocalOutbox drain re-entrancy (planning/completed/outbox-drain-data-loss-race.md)', () => {
   beforeEach(() => {
     if (typeof localStorage !== 'undefined') localStorage.clear();
   });

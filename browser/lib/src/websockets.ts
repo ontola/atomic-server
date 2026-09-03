@@ -7,7 +7,10 @@
 
 import { createAuthentication } from './authentication.js';
 import { Resource } from './resource.js';
-import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
+import {
+  recordServerVersionFromWsProtocol,
+  recordServerWsCapabilities,
+} from './serverCapabilities.js';
 import { StoreEvents, type Store, type DriveSyncState } from './store.js';
 import { reconcile, type Item, type RemoteRange } from './rbsr.js';
 import { AtomicError, ErrorType } from './error.js';
@@ -24,6 +27,9 @@ import {
   encodeCommit,
   encodeGet,
   encodeSub,
+  encodeUnsub,
+  encodeKeepalive,
+  decodeAuthOk,
   decodeCommit,
   decodeUpdate,
   decodeError,
@@ -47,6 +53,33 @@ import { perfMark, perfSpan } from './perf-trace.js';
 // failure mode is a real server hang or stuck WS, not transient slowness.
 const REQUEST_TIMEOUT = 10000;
 const WS_PROTOCOL = 'atomicdata-ws.v2';
+
+/** After this long without any inbound frame, send a `KEEPALIVE` probe. */
+export const LIVENESS_IDLE_MS = 20_000;
+/** After this long without any inbound frame, the socket is presumed dead
+ *  and closed so the reconnect loop takes over. Comfortably more than the
+ *  idle threshold plus a round trip, so one slow echo is not a disconnect. */
+export const LIVENESS_DEADLINE_MS = 45_000;
+/** How often the liveness timer looks. */
+export const LIVENESS_CHECK_MS = 5_000;
+
+export type LivenessAction = 'none' | 'probe' | 'close';
+
+/**
+ * What the liveness timer should do given how long the socket has been
+ * silent and whether a probe is already outstanding. Pure, so it is testable
+ * without a socket: `probe` once past the idle threshold, `close` once past
+ * the deadline, otherwise nothing.
+ */
+export function livenessAction(
+  idleMs: number,
+  probeSent: boolean,
+): LivenessAction {
+  if (idleMs >= LIVENESS_DEADLINE_MS) return 'close';
+  if (idleMs >= LIVENESS_IDLE_MS && !probeSent) return 'probe';
+
+  return 'none';
+}
 
 const connectionFailedMessage = (url: URL): string =>
   `Could not connect to ${url.origin}. Check that the server is running and reachable.`;
@@ -192,6 +225,16 @@ export class WSClient {
    *  if that changes. */
   private _rbsrFpQueue: Array<(fps: string[]) => void> = [];
   private _rbsrItemsQueue: Array<(items: Item[]) => void> = [];
+  /** What the server said it speaks, from its `AUTH_OK` payload. */
+  private _serverCaps: string[] = [];
+  /** Liveness: when the last inbound frame arrived, whether a `KEEPALIVE`
+   *  probe is outstanding, and the timer that checks both. A browser cannot
+   *  observe the server's protocol-level pings, so without this a socket
+   *  the network silently dropped stays "connected" until the next write
+   *  fails — every subscription push in between is lost. */
+  private _lastFrameAt = 0;
+  private _probeSent = false;
+  private _livenessTimer: ReturnType<typeof setInterval> | undefined;
 
   /** When true, all WS frames are logged to the console in human-readable form. */
   public debug =
@@ -337,6 +380,8 @@ export class WSClient {
 
         this.reportConnected(false, error);
         this.rejectAllPending('WebSocket closed before response arrived');
+        this.stopLiveness();
+        this._serverCaps = [];
 
         if (!this._closed) {
           this._retryTimer = setTimeout(() => {
@@ -464,6 +509,7 @@ export class WSClient {
     // but both calls are idempotent (flag re-set to false, empty maps).
     this.reportConnected(false);
     this.rejectAllPending('WebSocket closed by client');
+    this.stopLiveness();
 
     this.ws.close();
   }
@@ -533,31 +579,26 @@ export class WSClient {
 
   // ---- Resource operations ----
 
-  /** Fetch a resource over WebSocket. Returns a promise that resolves when the UPDATE arrives. */
-  public subscribeResource(subject: string): void {
+  /**
+   * Cancel the drive-wide subscription `subscribeToDrive` registered
+   * (binary `UNSUB`, 0x21). The server stops fanning that drive's commits
+   * to this connection; nothing is answered. Per-resource `SUBSCRIBE` /
+   * `UNSUBSCRIBE` text frames are not used by the browser (it is drive-`SUB`
+   * only), so there is no per-resource counterpart here.
+   */
+  public unsubscribeFromDrive(drive: string): void {
     if (this.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket is not open, cannot subscribe to resource');
-
       return;
     }
 
-    this.authPromise
-      .catch(() => {
-        // We don't want to log the error here, as it's already handled in the authenticate() method
-      })
-      .finally(() => {
-        this.ws.send('SUBSCRIBE ' + subject);
-      });
+    this.sendBinary(encodeUnsub(drive));
   }
 
-  public unsubscribeResource(subject: string): void {
-    if (this.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket is not open, cannot unsubscribe from resource');
-
-      return;
-    }
-
-    this.ws.send('UNSUBSCRIBE ' + subject);
+  /** Capability names the server advertised on `AUTH_OK` (see
+   *  `ServerCapability`). Empty before authentication and for servers older
+   *  than 2026-09. */
+  public get serverCapabilities(): string[] {
+    return [...this._serverCaps];
   }
 
   /** Subscribe to vector index status updates for a drive root (see server `SUBSCRIBE_INDEX_STATUS`). */
@@ -818,6 +859,10 @@ export class WSClient {
   }
 
   private handleMessage(ev: MessageEvent) {
+    // Any inbound frame proves the socket is alive.
+    this._lastFrameAt = Date.now();
+    this._probeSent = false;
+
     if (ev.data instanceof ArrayBuffer) {
       this.handleBinary(new Uint8Array(ev.data));
     } else if (typeof ev.data === 'string') {
@@ -840,7 +885,15 @@ export class WSClient {
 
     switch (tag) {
       case Tag.AUTH_OK:
-        // Resolved by waitForTag
+        // Resolved by waitForTag. The payload is the server's capability
+        // list; remember it so features negotiate instead of guessing.
+        this._serverCaps = decodeAuthOk(payload);
+        recordServerWsCapabilities(this.serverOrigin, this._serverCaps);
+        break;
+
+      case Tag.KEEPALIVE:
+        // The echo of our liveness probe; `handleMessage` already noted the
+        // arrival, which is all a keepalive is for.
         break;
 
       case Tag.ERROR: {
@@ -1186,8 +1239,51 @@ export class WSClient {
 
   // ---- Private: connection lifecycle ----
 
+  /**
+   * Start the liveness timer for the current socket. Only probes a server
+   * that advertised `keepalive` (older servers do not echo the frame, and a
+   * probe that is never answered would make an idle socket look dead every
+   * `LIVENESS_DEADLINE_MS`). Anonymous sessions never authenticate, so they
+   * learn no capabilities and keep the pre-2026-09 reactive behaviour.
+   */
+  private startLiveness() {
+    this.stopLiveness();
+    this._lastFrameAt = Date.now();
+    this._probeSent = false;
+    this._livenessTimer = setInterval(() => {
+      if (this.readyState !== WebSocket.OPEN) return;
+      if (!this._serverCaps.includes('keepalive')) return;
+
+      const action = livenessAction(
+        Date.now() - this._lastFrameAt,
+        this._probeSent,
+      );
+
+      if (action === 'probe') {
+        this._probeSent = true;
+        this.sendBinary(encodeKeepalive());
+      } else if (action === 'close') {
+        console.warn(
+          `[WS] no frame from the server for ${LIVENESS_DEADLINE_MS}ms (probe unanswered); closing so the reconnect loop takes over`,
+        );
+        this.stopLiveness();
+        // Closing fires the `close` handler, which reports disconnection,
+        // fails pending requests, and schedules the reconnect.
+        this.ws.close();
+      }
+    }, LIVENESS_CHECK_MS);
+  }
+
+  private stopLiveness() {
+    if (this._livenessTimer !== undefined) {
+      clearInterval(this._livenessTimer);
+      this._livenessTimer = undefined;
+    }
+  }
+
   private handleOpen() {
     perfMark('ws.open');
+    this.startLiveness();
     const drive = this.store.getDrive();
 
     const doSync = async () => {

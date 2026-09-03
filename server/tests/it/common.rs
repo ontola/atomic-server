@@ -8,12 +8,18 @@ use std::time::Duration;
 /// concurrent and repeated runs isolated.
 pub fn start_server(name: &str) -> u16 {
     let unique = format!("{}_{}", name, atomic_lib::utils::random_string(10));
-    let port = portpicker::pick_unused_port().expect("no free port");
+    let port = pick_port();
 
     use clap::Parser;
     let opts = atomic_server::config::Opts::parse_from([
         "atomic-server",
         "--initialize",
+        // Loopback IPv4 rather than the `::` default: the tests connect to
+        // `localhost` anyway, and a host without IPv6 (containers, some CI
+        // sandboxes) cannot bind `::` at all, which used to kill every suite
+        // at startup.
+        "--ip",
+        "127.0.0.1",
         "--port",
         &port.to_string(),
         "--data-dir",
@@ -33,6 +39,21 @@ pub fn start_server(name: &str) -> u16 {
     });
 
     port
+}
+
+/// A free TCP port on localhost. `portpicker` insists that the port be free
+/// for TCP *and* UDP on both IPv4 and IPv6, and reports "no free port" on a
+/// host without a loopback IPv6 address (containers, some CI sandboxes),
+/// which failed every suite here before any server started. The server only
+/// needs IPv4 TCP, so fall back to asking the OS for one.
+fn pick_port() -> u16 {
+    if let Some(port) = portpicker::pick_unused_port() {
+        return port;
+    }
+    std::net::TcpListener::bind("127.0.0.1:0")
+        .and_then(|l| l.local_addr())
+        .map(|a| a.port())
+        .expect("no free port")
 }
 
 /// Poll until the server answers HTTP. Every suite in this binary boots its

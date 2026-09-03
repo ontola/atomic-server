@@ -9,7 +9,9 @@
 **Persisted commits over WS** — implemented (protocol, server, browser). See
 [Rollout](#rollout) below.
 
-**Still open:** test gaps (see [Test coverage gaps](#test-coverage-gaps)).
+**Still open (2026-09-03):** `ws_errors.rs`, an `UNSUB` test at any layer, and
+dedicated browser `WSClient.postCommit()` COMMIT_OK / ERROR tests. See
+[Test coverage gaps](#test-coverage-gaps).
 *Flutter on WS session* was listed here as open on 2026-05-28 but had already
 shipped (`flutter/rust/src/api/simple/ws_sync.rs`, first in `dd771c293`
 2026-05-21: authenticate, `SUB` the active drive, per-canvas subscribe); struck
@@ -251,8 +253,10 @@ Add or update tests at these levels:
 > Audit pass 2026-05-28 against `docs/src/websockets.md` (canonical wire spec).
 > Layers in play: codec unit (`lib/src/sync/protocol.rs` `#[cfg(test)]`),
 > engine / lib e2e (`lib/src/sync/tests.rs`, `iroh_e2e.rs`), server integration
-> (`server/tests/*.rs`), browser lib (`browser/lib/src/*.test.ts`), browser e2e
-> (`browser/e2e/tests/sync.spec.ts`).
+> (one binary: `server/tests/it/*.rs`), browser lib (`browser/lib/src/*.test.ts`),
+> browser e2e (`browser/e2e/tests/sync.spec.ts`).
+>
+> **Updated 2026-09-03:** most of this list is closed — see the ticks below.
 
 ### Coverage matrix (load-bearing frames)
 
@@ -264,7 +268,7 @@ Add or update tests at these levels:
 | UPDATE — `SNAPSHOT`       | yes   | yes    | yes         | yes         |
 | UPDATE — `HAS_COMMIT_ID`  | yes   | —      | **—**       | —           |
 | UPDATE — `PUSH`           | yes   | yes    | yes         | implicit    |
-| DESTROY (standalone)      | —     | —      | **—**       | —           |
+| DESTROY (standalone)      | —     | —      | yes (`ws_destroy`) | —    |
 | COMMIT / COMMIT_OK        | yes   | —      | yes         | yes         |
 | SUB                       | yes   | yes    | yes (×5)    | —           |
 | UNSUB                     | **—** | **—**  | **—**       | —           |
@@ -273,50 +277,36 @@ Add or update tests at these levels:
 | Drive-wide membership (UPDATE/DESTROY via SUB) | n/a | partial | `ws_drive_membership` (×1) | implicit |
 | Drive-scoped fan-out isolation (no cross-tenant leak) | n/a | n/a | `ws_commit_isolation` (×1) | n/a |
 | HELLO (Iroh-only)         | yes (×8) | happy-path only | n/a | —    |
-| EPHEMERAL (0x40 binary)   | **—** | **—**  | **—**       | —           |
+| EPHEMERAL (0x40 binary)   | yes (×5) | yes (`iroh_e2e`) | **—**  | —   |
 
 ### Gaps to close
 
-- [x] **`server/tests/ws_get.rs`** — client `GET`, assert response is `UPDATE`
+- [x] **`server/tests/it/ws_get.rs`** — client `GET`, assert response is `UPDATE`
   with `HAS_COMMIT_ID` set and `commit_id == resource.lastCommit`. Regression
   test for the canvas-genesis-save bug fix (shipped 2026-05-28).
-- [ ] **`server/tests/ws_destroy.rs`** — assert standalone `DESTROY` frame
-  delivery to subscribers (today only reached via COMMIT-destroy).
-- [ ] **`server/tests/ws_errors.rs`** — assert `ERROR` frame format/`request_id`
+- [x] **`server/tests/it/ws_destroy.rs`** — standalone `DESTROY` frame delivery
+  to subscribers (`ws_destroy_broadcasts_to_subscriber`).
+- [ ] **`server/tests/it/ws_errors.rs`** — assert `ERROR` frame format/`request_id`
   for invalid `previousCommit`, wrong signer, unknown subject.
 - [ ] **`UNSUB`** — no test at any layer; add a unit/engine test that subscribes,
   unsubs, and confirms no further `UPDATE` arrives.
-- [ ] **`EPHEMERAL (0x40)` binary tag** — declared in the tag table but no
-  encoder/decoder/test. Decide if it's used; if not, mark `reserved` in
-  `docs/src/websockets.md` so the tag table stops looking like a gap.
-- [ ] **Real bug, not flake: `WsClient.close()` doesn't deterministically flip
-  `serverConnected` before the `close` event fires (2026-07-02).** Found via
-  `browser/e2e/tests/sync.spec.ts`'s "offline edits sync to server when
-  connection is restored", which times out intermittently waiting for
-  `serverConnected === false` after a manual `getDefaultWebSocket()?.close()`
-  — a legitimately-flaky-*looking* symptom that got waved off as
-  "environmental" (leftover dev processes, worker contention) across three
-  review rounds. Root-caused this pass: killing the suspected leftover
-  processes and running serially both failed to fix it, and the actual trace
-  shows a commit's own 10s internal timeout firing before the WS `close`
-  event lands — meaning `setServerConnected(false)` (only called from that
-  event, see `websockets.ts`) doesn't fire promptly for a locally-initiated
-  close under Playwright's `context.setOffline(true)`. Likely real-world
-  impact, not just a test artifact: any code path that closes the socket
-  itself (not just this test) may see the same delay before
-  `store.serverConnected` reflects reality. **Not fixed yet** — this needs an
-  actual fix, not a longer timeout (per the no-timeouts-as-a-fix rule): make
-  `WsClient.close()` call `setServerConnected(false)` + `rejectAllPending`
-  synchronously itself (the caller already knows it initiated the close),
-  rather than waiting for the `close` event to race whatever else is in
-  flight. See the comment on the test's `waitForFunction` call for the full
-  trace evidence.
+- [x] **`EPHEMERAL (0x40)` binary tag** — live, not reserved: codec in
+  `lib/src/sync/protocol.rs` (`ephemeral_frame_tests`, 5 tests) and an Iroh e2e
+  (`iroh_e2e.rs` `e2e_presence_crosses_the_link_without_being_stored`). Server
+  integration coverage is still missing.
+- [x] **`WsClient.close()` now flips `serverConnected` synchronously**
+  (fixed 2026-08-25, commit `8d13b67`). `close()` calls `reportConnected(false)`
+  + `rejectAllPending` itself instead of waiting for the `close` event, which
+  Chromium can delay or suppress once the transport is already blocked
+  (`browser/lib/src/websockets.ts:457-468`). Found via the intermittent
+  "offline edits sync to server when connection is restored" e2e in
+  `browser/e2e/tests/sync.spec.ts`, long misread as environmental flake.
 
 ### Overlap to thin
 
 - AUTH happy-path is exercised by every server integration test. One dedicated
-  `server/tests/ws_auth.rs` should carry it; the others can assume an
-  authed session.
+  `server/tests/it/ws_auth.rs` should carry it (`ws_auth_gate.rs` covers the
+  fail-closed half); the others can assume an authed session.
 - `SYNC_PUSH` chunking semantics (LAST flag, multi-chunk drain) are repeated
   across codec + engine + integration. Keep the codec assertions; let the
   integration tests stop poking at chunking internals.
@@ -326,11 +316,11 @@ Add or update tests at these levels:
 ### Status
 
 - [x] Audit (this section) — 2026-05-28
-- [ ] `ws_get.rs` + canvas-genesis-save fix (in flight)
-- [ ] `ws_destroy.rs`
+- [x] `ws_get.rs` + canvas-genesis-save fix
+- [x] `ws_destroy.rs`
 - [ ] `ws_errors.rs`
 - [ ] `UNSUB` test
-- [ ] EPHEMERAL doc decision
+- [x] EPHEMERAL decision — it is live (codec + Iroh e2e), not reserved
 - [ ] Overlap trim (AUTH-handshake repetition, SYNC_PUSH chunking, HELLO codec tests)
 
 ### Rollout
@@ -342,7 +332,7 @@ Add or update tests at these levels:
 - [x] Add browser `WSClient.postCommit()`.
 - [x] Switch browser `Store.postCommit()` to prefer WS with HTTP fallback.
 - [x] Update docs.
-- [x] Server WS integration: `server/tests/ws_commit.rs` (COMMIT + subscriber UPDATE).
+- [x] Server WS integration: `server/tests/it/ws_commit.rs` (COMMIT + subscriber UPDATE).
 - [x] Run server integration (`sync`, `query_subscribe`, `ws_commit`) + browser lib vitest.
 - [ ] Browser lib: dedicated `WSClient.postCommit()` COMMIT_OK / ERROR tests (still mocked in commit tests).
 - [ ] E2E save flows (browser `test-e2e`).

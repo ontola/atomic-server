@@ -185,8 +185,7 @@ impl Actor for WebSocketConnection {
         // Remove ourselves from every subscription map. Without this,
         // closed connections leave stale `Addr`s in `CommitMonitor` and
         // `LoroSyncBroadcaster`, which every subsequent fanout iterates
-        // over (do_send to a stopped actor silently no-ops). See
-        // `planning/connection-close-cleanup.md`.
+        // over (do_send to a stopped actor silently no-ops).
         let addr = ctx.address();
         self.commit_monitor_addr
             .do_send(crate::actor_messages::UnsubscribeAll { addr: addr.clone() });
@@ -288,9 +287,26 @@ impl WebSocketConnection {
                 let bin_vec = bin.to_vec();
                 ctx.spawn(
                     async move {
-                        let responses =
-                            atomic_lib::sync::engine::handle_frame(&bin_vec, &store, &mut agent)
-                                .await;
+                        // The browser signs the server origin as
+                        // `requestedSubject`; hold it to that, so a proof
+                        // signed for another server (or an HTTP auth header
+                        // for some resource URL) does not open a session
+                        // here. Iroh binds the subject to the drive instead,
+                        // in `peer.rs`. A store with no configured base
+                        // domain does not know its own origin and cannot
+                        // bind; that is not a running server's case.
+                        let base_domain = store.get_base_domain();
+                        let binding = match base_domain.as_deref() {
+                            Some(origin) => atomic_lib::sync::engine::AuthBinding::Origin(origin),
+                            None => atomic_lib::sync::engine::AuthBinding::Unbound,
+                        };
+                        let responses = atomic_lib::sync::engine::handle_auth_frame(
+                            &bin_vec[1..],
+                            &store,
+                            &mut agent,
+                            binding,
+                        )
+                        .await;
                         (responses, agent)
                     }
                     .into_actor(self)
@@ -410,7 +426,23 @@ impl WebSocketConnection {
                         self.store.get_base_domain().as_deref(),
                     );
                     self.subscribed.remove(&subject);
+                    // Same raw key `SUB` registered under, so the fan-out
+                    // entry is actually found and removed.
+                    self.commit_monitor_addr
+                        .do_send(crate::actor_messages::UnsubscribeDrive {
+                            addr: ctx.address(),
+                            drive: subject_str.to_string(),
+                        });
                 }
+            }
+
+            // Liveness probe from the browser. A browser cannot see the
+            // protocol-level pings this actor sends, so it sends this and
+            // expects it back; no answer within its deadline means the socket
+            // is dead and it reconnects. Peer (QUIC) streams never echo it —
+            // see `protocol::tag::KEEPALIVE`.
+            ws_v2::tag::KEEPALIVE => {
+                ctx.binary(atomic_lib::sync::protocol::encode_keepalive());
             }
 
             _ => {
@@ -530,7 +562,7 @@ impl WebSocketConnection {
             // Membership changes for this filter arrive as plain
             // `UPDATE` / `DESTROY` frames via `MembershipNotification`
             // — see `Handler<MembershipNotification>` below and
-            // `planning/drop-query-update.md`.
+            // `planning/sync.md` ("QUERY_UPDATE removed").
             if !self.require_auth("SUBSCRIBE_QUERY", ctx) {
                 return;
             }
@@ -569,21 +601,31 @@ impl WebSocketConnection {
                     // it to the drive's hash without it (or us) exchanging the
                     // full O(drive) version vector. In sync → `SYNC_OK`;
                     // otherwise ask for the full state via `SYNC_RESEND`.
+                    // Hashed over what this session's agent may read, both so
+                    // it can match the client's and so an anonymous socket
+                    // learns nothing about a drive it cannot read.
                     let drive = request.drive.clone();
                     let client_hash = request.drive_hash.clone();
                     ctx.spawn(
                         async move {
-                            let server_hash =
-                                atomic_lib::sync::engine::drive_sync_hash(&store, &drive).await;
-                            (drive, server_hash == client_hash)
+                            let verdict = atomic_lib::sync::engine::drive_sync_hash_for(
+                                &store, &drive, &agent,
+                            )
+                            .await
+                            .map(|server_hash| server_hash == client_hash);
+                            (drive, verdict)
                         }
                         .into_actor(self)
-                        .map(|(drive, in_sync), _actor, ctx| {
-                            if in_sync {
-                                ctx.binary(atomic_lib::sync::protocol::encode_sync_ok(&drive));
-                            } else {
-                                ctx.text(format!("SYNC_RESEND {drive}"));
+                        .map(|(drive, verdict), _actor, ctx| match verdict {
+                            Ok(true) => {
+                                ctx.binary(atomic_lib::sync::protocol::encode_sync_ok(&drive))
                             }
+                            Ok(false) => ctx.text(format!("SYNC_RESEND {drive}")),
+                            Err(reason) => ctx.binary(ws_v2::encode_error(
+                                0,
+                                ws_v2::error_code::UNAUTHORIZED_READ,
+                                &format!("SYNC_VV refused for {drive}: {reason}"),
+                            )),
                         }),
                     );
                 } else {
@@ -603,47 +645,79 @@ impl WebSocketConnection {
             // differing subjects without transmitting the whole version vector.
             // Stateless (rebuilds `drive_items` per request) — the incremental
             // fingerprint tree that makes this cheaper is Phase 2c.
+            //
+            // Gated on `check_read` per subject for this session's agent, like
+            // the full `SYNC_VV` exchange. Without that an anonymous socket
+            // could enumerate every subject and version vector of any drive.
             if let Ok(req) = serde_json::from_str::<RbsrFpRequest>(json) {
                 let store = self.store.clone();
+                let agent = self.agent.clone();
                 ctx.spawn(
                     async move {
-                        let items = atomic_lib::sync::engine::drive_items(&store, &req.drive).await;
-                        let fps: Vec<String> = req
-                            .ranges
-                            .iter()
-                            .map(|(lo, hi)| {
-                                hex::encode(atomic_lib::sync::rbsr::range_fingerprint(
-                                    &items,
-                                    lo,
-                                    hi.as_deref(),
-                                ))
+                        let items =
+                            atomic_lib::sync::engine::drive_items_for(&store, &req.drive, &agent)
+                                .await;
+                        items
+                            .map(|items| {
+                                let fps: Vec<String> = req
+                                    .ranges
+                                    .iter()
+                                    .map(|(lo, hi)| {
+                                        hex::encode(atomic_lib::sync::rbsr::range_fingerprint(
+                                            &items,
+                                            lo,
+                                            hi.as_deref(),
+                                        ))
+                                    })
+                                    .collect();
+                                serde_json::json!({ "drive": req.drive, "fps": fps }).to_string()
                             })
-                            .collect();
-                        serde_json::json!({ "drive": req.drive, "fps": fps }).to_string()
+                            .map_err(|reason| (req.drive.clone(), reason))
                     }
                     .into_actor(self)
-                    .map(|resp, _actor, ctx| ctx.text(format!("RBSR_FP {resp}"))),
+                    .map(|resp, _actor, ctx| match resp {
+                        Ok(resp) => ctx.text(format!("RBSR_FP {resp}")),
+                        Err((drive, reason)) => ctx.binary(ws_v2::encode_error(
+                            0,
+                            ws_v2::error_code::UNAUTHORIZED_READ,
+                            &format!("RBSR_FP refused for {drive}: {reason}"),
+                        )),
+                    }),
                 );
             }
         } else if let Some(json) = text.strip_prefix("RBSR_ITEMS ") {
             if let Ok(req) = serde_json::from_str::<RbsrItemsRequest>(json) {
                 let store = self.store.clone();
+                let agent = self.agent.clone();
                 ctx.spawn(
                     async move {
-                        let items = atomic_lib::sync::engine::drive_items(&store, &req.drive).await;
-                        let hi = req.hi.as_deref();
-                        let out: Vec<(String, Vec<(String, i32)>)> = items
-                            .into_iter()
-                            .filter(|(s, _)| {
-                                s.as_str() >= req.lo.as_str()
-                                    && hi.map(|h| s.as_str() < h).unwrap_or(true)
+                        let items =
+                            atomic_lib::sync::engine::drive_items_for(&store, &req.drive, &agent)
+                                .await;
+                        items
+                            .map(|items| {
+                                let hi = req.hi.as_deref();
+                                let out: Vec<(String, Vec<(String, i32)>)> = items
+                                    .into_iter()
+                                    .filter(|(s, _)| {
+                                        s.as_str() >= req.lo.as_str()
+                                            && hi.map(|h| s.as_str() < h).unwrap_or(true)
+                                    })
+                                    .map(|(s, vv)| (s, vv.into_iter().collect()))
+                                    .collect();
+                                serde_json::json!({ "drive": req.drive, "items": out }).to_string()
                             })
-                            .map(|(s, vv)| (s, vv.into_iter().collect()))
-                            .collect();
-                        serde_json::json!({ "drive": req.drive, "items": out }).to_string()
+                            .map_err(|reason| (req.drive.clone(), reason))
                     }
                     .into_actor(self)
-                    .map(|resp, _actor, ctx| ctx.text(format!("RBSR_ITEMS {resp}"))),
+                    .map(|resp, _actor, ctx| match resp {
+                        Ok(resp) => ctx.text(format!("RBSR_ITEMS {resp}")),
+                        Err((drive, reason)) => ctx.binary(ws_v2::encode_error(
+                            0,
+                            ws_v2::error_code::UNAUTHORIZED_READ,
+                            &format!("RBSR_ITEMS refused for {drive}: {reason}"),
+                        )),
+                    }),
                 );
             }
         } else {

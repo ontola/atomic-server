@@ -144,10 +144,22 @@ pub struct SubscribeDrive {
     pub source_id: String,
 }
 
+/// Cancel a drive subscription made with [`SubscribeDrive`] (the `UNSUB`
+/// frame). Removes this connection from the drive's fan-out set and from the
+/// companion subscription on the drive resource itself. No answer frame: an
+/// `UNSUB` for a drive the connection never subscribed is a no-op.
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct UnsubscribeDrive {
+    pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
+    /// Drive subject, as passed to `SubscribeDrive::drive`.
+    pub drive: String,
+}
+
 // === Filter (query) subscription messages ===
 //
 // The legacy `QUERY_UPDATE (0x36)` binary frame was retired in
-// `planning/drop-query-update.md`, but the *registration* primitive
+// `planning/sync.md` ("QUERY_UPDATE removed"), but the *registration* primitive
 // remains: a client can say "send me updates for resources matching
 // `property=value` in `drive`" via `SUBSCRIBE_QUERY <json>`. Membership
 // changes for those filters are delivered as plain `UPDATE` / `DESTROY`

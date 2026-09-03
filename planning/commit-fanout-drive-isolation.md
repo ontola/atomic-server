@@ -37,8 +37,8 @@ Scope the fan-out to the resource's **owning drive**:
   (`resource_new.get_drive()` for DID resources, else the subject itself) and delivers
   only to subscribers where `owner.is_within_drive(subscribed_drive)`. A DID resource
   with no drive reaches no drive subscriber rather than fanning out blindly.
-- Tests: `server/tests/ws_commit_isolation.rs` (new — two agents, two private drives,
-  asserts A never sees B's commit) + `server/tests/ws_drive_membership.rs` (updated to
+- Tests: `server/tests/it/ws_commit_isolation.rs` (new — two agents, two private drives,
+  asserts A never sees B's commit) + `server/tests/it/ws_drive_membership.rs` (updated to
   the production `create_did` path so the new resource carries its `drive`).
 
 All green: `ws_commit_isolation`, `ws_drive_membership`, `subject::tests::test_is_within_drive`.

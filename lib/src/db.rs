@@ -136,6 +136,14 @@ pub enum DbEvent {
         source_id: Option<String>,
         /// See [`DbEvent::Changed::from_commit`].
         from_commit: bool,
+        /// The signed destroy commit that caused this, as JSON-AD, when a
+        /// commit did. This is what a peer transport forwards: a destroy
+        /// crosses the link as a `COMMIT` frame the receiver validates
+        /// (signature + the signer's rights), never as a naked `DESTROY`.
+        /// `None` for removals no commit authorises (a cascade-deleted
+        /// child, a local cache eviction) — those are not propagated live;
+        /// the peer's own apply of the parent commit cascades there too.
+        commit_json: Option<String>,
     },
     /// A resource entered or left the result set of a watched query. Emitted
     /// from `apply_transaction` after a successful write that touches
@@ -2704,6 +2712,7 @@ impl Db {
                     drive: child.get_drive().or_else(|| drive.clone()),
                     source_id: None,
                     from_commit: false,
+                    commit_json: None,
                 });
                 // Because the function is async we need to box it to use recursion.
                 Box::pin(self.recursive_remove(
@@ -3169,6 +3178,11 @@ impl Storelike for Db {
         let subject = commit_response.commit.subject.without_params();
         let is_destroy = commit_response.commit.destroy.unwrap_or(false);
         let event = if is_destroy {
+            // The signed destroy itself, so a peer transport can forward it
+            // as a `COMMIT` frame. Serialisation failure is not fatal for the
+            // local apply; the event just carries no commit and the destroy
+            // reaches peers on the next bulk reconcile instead.
+            let commit_json = commit_response.commit_resource.to_json_ad(None).ok();
             DbEvent::Destroyed {
                 subject,
                 drive: commit_response
@@ -3177,6 +3191,7 @@ impl Storelike for Db {
                     .and_then(|old| old.get_drive()),
                 source_id: commit_response.source_id.clone(),
                 from_commit: true,
+                commit_json,
             }
         } else {
             DbEvent::Changed {

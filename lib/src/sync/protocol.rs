@@ -33,21 +33,49 @@ pub mod tag {
     pub const SYNC_PUSH: u8 = 0x33;
     pub const BLOB_REQUEST: u8 = 0x34;
     pub const BLOB_RESPONSE: u8 = 0x35;
-    /// Reserved (do not reuse). Previously `QUERY_UPDATE` — retired in
-    /// `planning/drop-query-update.md`. Drive-wide and resource-level
-    /// commits now travel exclusively as `UPDATE` (0x11) and `DESTROY`
-    /// (0x12) frames carrying the full snapshot + commit_id.
+    /// Reserved (do not reuse). Previously `QUERY_UPDATE` — retired (see
+    /// `planning/sync.md`, "QUERY_UPDATE removed"). Drive-wide and
+    /// resource-level commits now travel exclusively as `UPDATE` (0x11) and
+    /// `DESTROY` (0x12) frames carrying the snapshot or delta + commit_id.
     pub const QUERY_UPDATE_RESERVED: u8 = 0x36;
-    /// Self-reported display name swap on peer-sync streams. Sent by both
-    /// sides after `AUTH_OK`, before `SYNC_VV`. Display only; never used for
+    /// Self-reported display name (plus, optionally, a capability list) on
+    /// peer-sync streams. Sent by both sides right after `AUTH_OK`, before
+    /// the binary `SYNC` handshake. Display only; never used for
     /// authorization (the authenticated agent + Iroh NodeId are).
     pub const HELLO: u8 = 0x37;
     pub const EPHEMERAL: u8 = 0x40;
-    /// Liveness probe. Payload-free, never answered — its only job is to give
-    /// the peer's read loop something to receive, so silence can be treated as
-    /// a dead link rather than an idle one.
+    /// Liveness probe. Payload-free. On a QUIC peer stream it is never
+    /// answered — both sides send it on their own schedule, so each read loop
+    /// has something to receive and silence can be treated as a dead link
+    /// rather than an idle one. Over a browser WebSocket the responder echoes
+    /// it back: a browser cannot observe protocol-level pings, so this is the
+    /// only way it can tell a silently dead socket from an idle one.
     pub const KEEPALIVE: u8 = 0x41;
 }
+
+/// Feature names a responder advertises in the `AUTH_OK` payload and both
+/// peers advertise in `HELLO`, so a client can adapt to what the other side
+/// speaks instead of guessing from a version string. Additive only: never
+/// rename or reuse a name once shipped. A peer that sends no list is treated
+/// as advertising nothing (the pre-2026-09 baseline).
+///
+/// - `auth-max-age`: `AUTH` proofs older than `AUTH_MAX_AGE_MS` are refused
+///   and a failed `AUTH` carries `error_code::AUTH_FAILED`.
+/// - `keepalive`: understands `KEEPALIVE` (0x41); echoes it over WebSocket.
+/// - `rbsr`: answers the `RBSR_FP` / `RBSR_ITEMS` text frames and the
+///   hash-first `SYNC_VV` probe.
+/// - `pull-from`: `SYNC_DIFF` carries `pullFrom` version vectors.
+/// - `signed-destroy`: on a peer stream, destroys travel as signed `COMMIT`
+///   frames and a naked `DESTROY` from a peer is ignored.
+/// - `unsub`: `UNSUB` (0x21) actually cancels a drive subscription.
+pub const CAPABILITIES: &[&str] = &[
+    "auth-max-age",
+    "keepalive",
+    "rbsr",
+    "pull-from",
+    "signed-destroy",
+    "unsub",
+];
 
 /// How often an otherwise-idle live connection sends a `KEEPALIVE`.
 pub const KEEPALIVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
@@ -156,6 +184,36 @@ pub mod error_code {
     /// was registered; no frames will follow for it. Same verdict a `GET`
     /// would get, delivered instead of the old silent drop.
     pub const UNAUTHORIZED_READ: u16 = 7;
+    /// An `AUTH` frame was refused: bad signature, unknown agent, a timestamp
+    /// outside the accepted window (`AUTH_MAX_AGE_MS`), or a
+    /// `requestedSubject` that does not name this responder. Sent with
+    /// `request_id = 0`. The client must sign a fresh proof for the right
+    /// subject; resending the same frame changes nothing.
+    pub const AUTH_FAILED: u16 = 8;
+}
+
+/// Decode the payload of an `ERROR` frame (slice *after* the tag byte):
+/// `[request_id: u16] [code: u16] [message: utf8]`. One decoder for the four
+/// places that used to hand-slice the offsets.
+pub fn decode_error(data: &[u8]) -> Option<DecodedError> {
+    if data.len() < 4 {
+        return None;
+    }
+    let request_id = u16::from_be_bytes([data[0], data[1]]);
+    let code = u16::from_be_bytes([data[2], data[3]]);
+    let message = std::str::from_utf8(&data[4..]).ok()?.to_string();
+    Some(DecodedError {
+        request_id,
+        code,
+        message,
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecodedError {
+    pub request_id: u16,
+    pub code: u16,
+    pub message: String,
 }
 
 /// Classify a commit-application error message into a structured code for
@@ -362,7 +420,8 @@ pub fn encode_error(request_id: u16, code: u16, message: &str) -> Vec<u8> {
     buf
 }
 
-/// Encode SUB: subscribe to drive-scoped updates (server pushes QUERY_UPDATE + UPDATE).
+/// Encode SUB: subscribe to drive-scoped updates (the responder pushes
+/// `UPDATE` / `DESTROY` for every commit under the drive).
 pub fn encode_sub(drive_subject: &str) -> Vec<u8> {
     let drive_bytes = drive_subject.as_bytes();
     let mut buf = Vec::with_capacity(1 + drive_bytes.len());
@@ -371,9 +430,46 @@ pub fn encode_sub(drive_subject: &str) -> Vec<u8> {
     buf
 }
 
-/// Encode AUTH_OK.
+/// Encode UNSUB: cancel a drive subscription made with `SUB`. Same payload
+/// shape as `SUB`: `[0x21] [drive_utf8]`.
+pub fn encode_unsub(drive_subject: &str) -> Vec<u8> {
+    let drive_bytes = drive_subject.as_bytes();
+    let mut buf = Vec::with_capacity(1 + drive_bytes.len());
+    buf.push(tag::UNSUB);
+    buf.extend_from_slice(drive_bytes);
+    buf
+}
+
+/// Encode AUTH_OK with this build's [`CAPABILITIES`] as its payload.
 pub fn encode_auth_ok() -> Vec<u8> {
-    vec![tag::AUTH_OK]
+    encode_auth_ok_with_caps(CAPABILITIES)
+}
+
+/// Encode AUTH_OK: `[0x02] [caps_json_utf8]`, where the payload is a JSON
+/// array of capability names. The payload is optional on the wire: a
+/// pre-2026-09 responder sends a bare `[0x02]`, and every decoder in the
+/// tree matches on the tag alone, so adding it broke nothing.
+pub fn encode_auth_ok_with_caps(caps: &[&str]) -> Vec<u8> {
+    let mut buf = vec![tag::AUTH_OK];
+    if !caps.is_empty() {
+        buf.extend_from_slice(&serde_json::to_vec(caps).unwrap_or_default());
+    }
+    buf
+}
+
+/// Decode the payload of an AUTH_OK frame (slice *after* the tag byte) into
+/// the responder's capability names. Empty when the responder sent none.
+pub fn decode_auth_ok(data: &[u8]) -> Vec<String> {
+    if data.is_empty() {
+        return Vec::new();
+    }
+    serde_json::from_slice::<Vec<String>>(data).unwrap_or_default()
+}
+
+/// A single unframed `KEEPALIVE` frame, for transports that frame
+/// themselves (WebSocket). Peer streams use [`encode_keepalive_wire_msg`].
+pub fn encode_keepalive() -> Vec<u8> {
+    vec![tag::KEEPALIVE]
 }
 
 /// Encode SYNC_OK.
@@ -485,15 +581,48 @@ pub fn encode_sync_push_chunks(drive: &str, entries: &[(&str, &[u8])]) -> Vec<Ve
 /// "Unknown device". This frame is purely informational; downstream auth
 /// decisions must use the authenticated agent or Iroh NodeId.
 pub fn encode_hello(name: &str) -> Vec<u8> {
+    encode_hello_with_caps(name, CAPABILITIES)
+}
+
+/// Encode a HELLO frame with an explicit capability list:
+/// `[0x37] [name_len: u16] [name_utf8] [caps_json_utf8]`.
+///
+/// The capability list is a trailing, optional JSON array. `decode_hello`
+/// has always ignored bytes after the name, so a pre-2026-09 peer reads the
+/// name and skips the list; a current peer reads both via
+/// [`decode_hello_caps`].
+pub fn encode_hello_with_caps(name: &str, caps: &[&str]) -> Vec<u8> {
     let name_bytes = name.as_bytes();
     // u16 length prefix bounds the wire size at ~64 KB even if the caller
     // hands us a giant string. `decode_hello` enforces the real display cap.
     let len = name_bytes.len().min(u16::MAX as usize);
-    let mut buf = Vec::with_capacity(3 + len);
+    let caps_bytes = if caps.is_empty() {
+        Vec::new()
+    } else {
+        serde_json::to_vec(caps).unwrap_or_default()
+    };
+    let mut buf = Vec::with_capacity(3 + len + caps_bytes.len());
     buf.push(tag::HELLO);
     buf.extend_from_slice(&(len as u16).to_be_bytes());
     buf.extend_from_slice(&name_bytes[..len]);
+    buf.extend_from_slice(&caps_bytes);
     buf
+}
+
+/// The capability names carried after the name in a HELLO payload (slice
+/// *after* the tag byte). Empty for a malformed frame or a peer that sent
+/// none.
+pub fn decode_hello_caps(data: &[u8]) -> Vec<String> {
+    if data.len() < 2 {
+        return Vec::new();
+    }
+    let len = u16::from_be_bytes([data[0], data[1]]) as usize;
+    match data.get(2 + len..) {
+        Some(rest) if !rest.is_empty() => {
+            serde_json::from_slice::<Vec<String>>(rest).unwrap_or_default()
+        }
+        _ => Vec::new(),
+    }
 }
 
 /// Largest ephemeral payload accepted from a peer. Presence is cursor
@@ -1049,7 +1178,8 @@ mod tests {
 
     #[test]
     fn hello_truncated_payload_returns_none() {
-        let mut encoded = encode_hello("hello");
+        // Bare frame (no capability suffix), so truncating cuts the name.
+        let mut encoded = encode_hello_with_caps("hello", &[]);
         encoded.truncate(encoded.len() - 2);
         assert!(decode_hello(&encoded[1..]).is_none());
     }
@@ -1275,5 +1405,187 @@ mod ephemeral_frame_tests {
         );
 
         assert!(decode_ephemeral(&frame[1..]).is_none());
+    }
+}
+
+/// Golden wire frames shared with the TypeScript codec
+/// (`browser/lib/src/ws-v2.test.ts` reads the same file). Every frame both
+/// sides can encode must come out byte-identical; every frame either side
+/// decodes must decode to the recorded fields. Regenerate with
+/// `cargo test -p atomic_lib print_wire_vectors -- --ignored --nocapture`
+/// after a deliberate wire change, and update `docs/src/websockets.md` in
+/// the same commit.
+#[cfg(test)]
+mod wire_vectors {
+    use super::*;
+
+    const VECTORS_JSON: &str = include_str!("protocol_vectors.json");
+
+    fn build() -> Vec<(&'static str, Vec<u8>)> {
+        let mut resources = std::collections::HashMap::new();
+        resources.insert("did:ad:x".to_string(), vec![3, 0]);
+        let mut pull_from = std::collections::HashMap::new();
+        let mut from = std::collections::HashMap::new();
+        from.insert("p1".to_string(), 2);
+        pull_from.insert("did:ad:y".to_string(), from);
+        vec![
+            (
+                "auth_ok_caps",
+                encode_auth_ok_with_caps(&["keepalive", "unsub"]),
+            ),
+            ("auth_ok_bare", encode_auth_ok_with_caps(&[])),
+            (
+                "error",
+                encode_error(
+                    7,
+                    error_code::UNAUTHORIZED_READ,
+                    "SUB refused for did:ad:d: no",
+                ),
+            ),
+            ("get", encode_get(1, "did:ad:x")),
+            (
+                "update_delta_push",
+                encode_update(
+                    flags::HAS_COMMIT_ID | flags::PUSH,
+                    0,
+                    "did:ad:x",
+                    Some("did:ad:commit:abc"),
+                    &[1, 2, 3],
+                ),
+            ),
+            (
+                "update_snapshot",
+                encode_update(flags::SNAPSHOT, 5, "did:ad:x", None, &[0xff]),
+            ),
+            ("destroy", encode_destroy(0, "did:ad:x")),
+            ("commit", encode_commit(9, "{\"a\":1}")),
+            ("commit_ok", encode_commit_ok(9, "{\"a\":1}")),
+            ("sub", encode_sub("did:ad:d")),
+            ("unsub", encode_unsub("did:ad:d")),
+            (
+                "sync",
+                encode_sync(
+                    "did:ad:d",
+                    "abc123",
+                    &["p1".to_string(), "p2".to_string()],
+                    &resources,
+                ),
+            ),
+            ("sync_ok", encode_sync_ok("did:ad:d")),
+            (
+                "sync_diff",
+                encode_sync_diff(
+                    "did:ad:d",
+                    &["did:ad:y".to_string()],
+                    &["did:ad:x".to_string()],
+                    &["did:ad:z".to_string()],
+                    &pull_from,
+                ),
+            ),
+            (
+                "sync_push_last",
+                encode_sync_push("did:ad:d", &[("did:ad:x", &[1, 2])], true),
+            ),
+            ("blob_request", encode_blob_request(&[0xab; 32])),
+            ("blob_response", encode_blob_response(&[0xab; 32], &[9, 9])),
+            (
+                "hello_caps",
+                encode_hello_with_caps("Dev 🚀", &["keepalive"]),
+            ),
+            ("hello_bare", encode_hello_with_caps("Dev", &[])),
+            ("keepalive", encode_keepalive()),
+            (
+                "ephemeral_presence",
+                encode_ephemeral(ephemeral_kind::PRESENCE, "did:ad:d", "did:ad:agent:a", &[7]),
+            ),
+        ]
+    }
+
+    fn recorded() -> std::collections::BTreeMap<String, String> {
+        let parsed: serde_json::Value = serde_json::from_str(VECTORS_JSON).unwrap();
+        parsed["vectors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| {
+                (
+                    v["name"].as_str().unwrap().to_string(),
+                    v["hex"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn rust_encoders_match_recorded_wire_vectors() {
+        let recorded = recorded();
+        let built = build();
+        assert_eq!(
+            recorded.len(),
+            built.len(),
+            "protocol_vectors.json and build() list different frames; regenerate"
+        );
+        for (name, frame) in built {
+            let expected = recorded
+                .get(name)
+                .unwrap_or_else(|| panic!("no recorded vector named {name}; regenerate"));
+            assert_eq!(
+                &hex::encode(&frame),
+                expected,
+                "wire layout of `{name}` changed; if deliberate, regenerate the vectors and update docs/src/websockets.md"
+            );
+        }
+    }
+
+    #[test]
+    fn recorded_vectors_decode() {
+        let recorded = recorded();
+        let hex_of = |name: &str| hex::decode(recorded.get(name).unwrap()).unwrap();
+
+        let e = decode_error(&hex_of("error")[1..]).unwrap();
+        assert_eq!((e.request_id, e.code), (7, error_code::UNAUTHORIZED_READ));
+        assert_eq!(
+            decode_auth_ok(&hex_of("auth_ok_caps")[1..]),
+            vec!["keepalive", "unsub"]
+        );
+        assert!(decode_auth_ok(&hex_of("auth_ok_bare")[1..]).is_empty());
+        let u = decode_update(&hex_of("update_delta_push")[1..]).unwrap();
+        assert_eq!(u.commit_id.as_deref(), Some("did:ad:commit:abc"));
+        assert_eq!(u.loro_bytes, &[1, 2, 3]);
+        let s = decode_sync(&hex_of("sync")[1..]).unwrap();
+        assert_eq!(s.drive_hash, "abc123");
+        assert_eq!(s.peers, vec!["p1", "p2"]);
+        let d = decode_sync_diff(&hex_of("sync_diff")[1..]).unwrap();
+        assert_eq!(d.remove, vec!["did:ad:z"]);
+        assert_eq!(d.pull_from["did:ad:y"]["p1"], 2);
+        let p = decode_sync_push(&hex_of("sync_push_last")[1..]).unwrap();
+        assert!(p.last);
+        assert_eq!(p.entries.len(), 1);
+        assert_eq!(decode_hello(&hex_of("hello_caps")[1..]).unwrap(), "Dev 🚀");
+        assert_eq!(
+            decode_hello_caps(&hex_of("hello_caps")[1..]),
+            vec!["keepalive"]
+        );
+        assert!(decode_hello_caps(&hex_of("hello_bare")[1..]).is_empty());
+        let eph = decode_ephemeral(&hex_of("ephemeral_presence")[1..]).unwrap();
+        assert_eq!(eph.kind, ephemeral_kind::PRESENCE);
+    }
+
+    /// Regenerator. Prints the JSON to paste into `protocol_vectors.json`.
+    #[test]
+    #[ignore]
+    fn print_wire_vectors() {
+        let vectors: Vec<serde_json::Value> = build()
+            .into_iter()
+            .map(|(name, frame)| serde_json::json!({ "name": name, "hex": hex::encode(frame) }))
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "note": "Golden wire frames for lib/src/sync/protocol.rs and browser/lib/src/ws-v2.ts. Regenerate with `cargo test -p atomic_lib print_wire_vectors -- --ignored --nocapture`.",
+                "vectors": vectors
+            }))
+            .unwrap()
+        );
     }
 }

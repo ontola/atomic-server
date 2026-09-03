@@ -20,7 +20,7 @@ model (`check_rights`) merely *consults* one of them as a fast path.
 | S1 | Genesis cert signs `drive` into identity | `lib/src/genesis.rs:57-61` (`GenesisCert.drive`), encoded at `:97-103`; minted in `lib/src/commit.rs:239-305` | Immutable birth drive inside the signed DID. Cannot hold a mutable value (a zone is mutable). |
 | S2 | WS fan-out and drive stamp | `server/src/commit_monitor.rs:57` `drive_subscriptions: HashMap<String, …>` keyed by drive subject; handler matches `resource.get_drive()` via `Subject::is_within_drive` (`:815-829`); `Resource::get_drive` `lib/src/resources.rs:657`; stamp re-derived on genesis and re-parent in `lib/src/commit.rs:866-897` | Mutable `drive` propval, server-derived from the parent, never trusted from the client. |
 | S3 | `(drive, property)` watched-query index | `lib/src/db/query_index.rs:31-40` (`QueryFilter.drive` mandatory), routing at `:479-485`; `watched_queries_by_drive` `lib/src/db.rs:304` | Drive prefix for HTTP subjects; **`did:` atoms already fall back to every drive's property bucket** (`query_index.rs:480-481`) — the cert's `drive` is not yet used here. |
-| S4 | Deterministic personal drive | `lib/src/genesis.rs:180-200` (`for_private_drive`, `private_drive_subject`); `Db::create_drive` seeds `write`/`read` at `lib/src/db.rs:836-850`; [`deterministic-personal-drive.md`](./deterministic-personal-drive.md) landed | Drive DID derived from the agent key. The drive is a fact about identity. |
+| S4 | Deterministic personal drive | `lib/src/genesis.rs:180-200` (`for_private_drive`, `private_drive_subject`); `Db::create_drive` seeds `write`/`read` at `lib/src/db.rs:836-850`; [`deterministic-personal-drive.md`](../deterministic-personal-drive.md) landed | Drive DID derived from the agent key. The drive is a fact about identity. |
 
 Rights today (`lib/src/hierarchy.rs:223-395`): preludes (sudo, self, server agent, public
 agent read) → explicit grant on the resource → **drive-first fast path** on the `drive`
@@ -34,23 +34,23 @@ explicit `write` array**. The browser reimplements the additive walk in
 `browser/lib/src/resource.ts:1328-1390` (`canWrite`) with no genesis-signer check.
 
 `AuthImpact` (`hierarchy.rs:49-90`) classifies genesis/read/write/append/parent/destroy
-commits; retention of exactly those is what [`authorization-sync.md`](./authorization-sync.md)
+commits; retention of exactly those is what [`authorization-sync.md`](../authorization-sync.md)
 Phase 2 and PR #1313 ("genesis and rights/parent/destroy still are [stored]") rely on.
 
-What the sources propose: [`zones.md`](./zones.md) — zone = unit of ACL *and* sync, quota,
+What the sources propose: [`zones.md`](../zones.md) — zone = unit of ACL *and* sync, quota,
 keys; nested ACL **replaces** outer; `drive` stamp removed from authored state; index
-derived. [`authorization-sync.md`](./authorization-sync.md) — implicit creator write
+derived. [`authorization-sync.md`](../authorization-sync.md) — implicit creator write
 (`effective_write = {genesis_signer} ∪ explicit_write` plus inherited), remove the
-auto-insert, replay grant chains. [`genesis-self-verifying.md`](./genesis-self-verifying.md)
+auto-insert, replay grant chains. [`genesis-self-verifying.md`](../genesis-self-verifying.md)
 — `drive` in the cert because "a resource effectively never moves between drives".
-[`partial-sync.md`](./partial-sync.md) — wants subtree/zone scope, but notes it works
+[`partial-sync.md`](../partial-sync.md) — wants subtree/zone scope, but notes it works
 "without zones" over `collect_drive_subjects` (its lines 64-70).
 
 ## Options
 
 ### Axis 1 — unit of authority
 
-| Cost against | (A) Drive-as-authority | (B) Zone-as-authority ([`zones.md`](./zones.md) as written) | (C) Hybrid: drive = identity/replication, zone = rights within a drive |
+| Cost against | (A) Drive-as-authority | (B) Zone-as-authority ([`zones.md`](../zones.md) as written) | (C) Hybrid: drive = identity/replication, zone = rights within a drive |
 | --- | --- | --- | --- |
 | S1 cert `drive` | Unchanged; the "read the cert's `drive` in `check_rights`" item stays. | Field becomes provenance only. Zone cannot be signed in (mutable). Genesis "gets smaller" per zones.md — a v2 cert layout. | Unchanged; cert `drive` = replication root, still the race-free fast path. |
 | S2 fan-out / stamp | Unchanged. | Re-key `drive_subscriptions` to zone; clients subscribe per zone; promote/demote re-keys live subscriptions and re-stamps nothing (index is derived) — but every open tab must re-subscribe. Stamp removed from authored state (`commit.rs:866-897` deleted). | Unchanged. Stamp stays server-derived (as #1254 already keeps it). |
@@ -108,7 +108,7 @@ Migration order:
    from `AuthImpact` commits; browser mirror in the store. Closes zones.md OQ2.
 6. Replace semantics behind an explicit zone marker, plus a one-time migration that strips
    creator entries equal to the genesis signer from `write`. Only now may B2 be enabled.
-7. Zone-scoped sync/quota (`collect_zone_subjects`, [`partial-sync.md`](./partial-sync.md))
+7. Zone-scoped sync/quota (`collect_zone_subjects`, [`partial-sync.md`](../partial-sync.md))
    — drive remains the sync unit until then.
 
 ### What PR #1254 must change if zones win as the rights unit (C + A2)
@@ -134,7 +134,8 @@ Migration order:
 - `docs/src/hierarchy.md` (diff): must say "nearest zone first, then enclosing zones,
   additive", not "replaces".
 - Split out `lib/src/discovery.rs` agent-keyed pkarr, `didResolve.ts`, DID open/share
-  hints, Android manifests, `planning/atomic-uris.md`: orthogonal to rights.
+  hints, Android manifests, the branch-only `atomic-uris.md` note (#1254, not in
+  `planning/`): orthogonal to rights.
 
 ### What PR #1254 must change if drives stay (A)
 

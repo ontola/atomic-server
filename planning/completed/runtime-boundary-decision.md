@@ -12,7 +12,7 @@
 ## Context
 
 There is no runtime boundary today. `AtomicNode` and `lib/src/runtime/` from
-[`atomic-lib-runtime.md`](./atomic-lib-runtime.md) do not exist: `git grep AtomicNode`
+[`atomic-lib-runtime.md`](../atomic-lib-runtime.md) do not exist: `git grep AtomicNode`
 matches only `planning/*.md`; `lib/src/runtime` is absent. Instead there are
 **five hand-rolled wrappers of `Db`**, none in `atomic_lib`:
 
@@ -55,7 +55,7 @@ Its recommendation: "do not move `Resource.get` / the JS cache into WASM".
 | Commit verify + apply | `commit.rs` `validate_signature`, `apply_changes` (:1014); `lib/src/sync/engine.rs` `ingest_commit_json` (:327); `wasm/src/lib.rs` `applyCommit` | `commit.ts` `applyCommitToResource` — import only, no verify | n/a | **Rust-only.** TS keeps in-memory Loro import for the UI doc; persistence and verification go through the WASM node. |
 | Genesis cert encode/sign/verify | `lib/src/genesis.rs` `GenesisCert::{encode,decode,sign,verify}` (:67-226) | `browser/lib/src/genesis.ts` `encodeGenesisCert`, `signGenesisCert`, `verifyGenesisCert` (:79-234) | **Yes.** `lib/src/genesis_test_vectors.json`, loaded by `genesis.rs:545` (`matches_the_golden_vectors`), `genesis.test.ts:184`, and `flutter/test/atomic/signing_golden_vectors_test.dart:19`. | Keep twin. This is the model every other twin must copy. |
 | RBSR item/range fingerprint + reconcile | `lib/src/sync/rbsr.rs` `item_fingerprint` (:44), `range_fingerprint` (:67), `reconcile` (:117); server side `server/src/handlers/web_sockets.rs:552` | `browser/lib/src/rbsr.ts` same three; client side runs `reconcile` in `websockets.ts:1085` | **Inline only.** Same hex in `rbsr.rs:414` and `rbsr.test.ts:37-40`; not a shared file. | Keep twin until `AtomicNode::sync_with` reaches WASM; promote vector to `testdata/`. |
-| Canonical drive hash (SYNC_VV probe) | `lib/src/sync/engine.rs` `compute_drive_hash` (:570) | `browser/lib/src/canonical-drive-hash.ts` (40 lines) | **Inline only.** `lib/src/sync/tests.rs:2302` and `canonical-drive-hash.test.ts:11-14` pin the same hex. | Keep twin; [`drive-reconciliation.md`](./drive-reconciliation.md) calls byte-parity "the load-bearing task". Promote to `testdata/`. |
+| Canonical drive hash (SYNC_VV probe) | `lib/src/sync/engine.rs` `compute_drive_hash` (:570) | `browser/lib/src/canonical-drive-hash.ts` (40 lines) | **Inline only.** `lib/src/sync/tests.rs:2302` and `canonical-drive-hash.test.ts:11-14` pin the same hex. | Keep twin; [`drive-reconciliation.md`](../drive-reconciliation.md) calls byte-parity "the load-bearing task". Promote to `testdata/`. |
 | Authorization / hierarchy | `lib/src/hierarchy.rs` (917 lines) | `resource.ts` `canWrite` (60 lines, UI hint) | None | **Rust-only.** `canWrite` stays as a hint; it is never a gate. |
 | Loro materialize + datatype tags | `lib/src/loro.rs` `loro_value_to_atomic_value_tagged` (:848), `datatype_tag` (:828) | `resource.ts` `rebuildCacheFromLoro` (:739), `writeDatatypeTags` (:807); `datatypes.ts` `datatypeTag` (:69) | None | Keep twin for tags (pure) with a fixture. Materialization stays twinned because TipTap needs a main-thread `LoroDoc` (#1278). |
 | JSON-AD parse / serialize | `lib/src/parse.rs` (1552), `lib/src/serialize.rs` (490) | `browser/lib/src/parse.ts` `JSONADParser` (133) | None | Keep twin; adapter format, not authority. |
@@ -149,15 +149,15 @@ showing `ClientDb` shrinking.
 4. `ffi/` (#1277) and `python/` call `AtomicNode`; `flutter/rust/src/api/simple.rs` store
    group calls `AtomicNode`, canvas functions stay FRB-specific.
 5. `server/src/handlers/commit.rs` → `node.apply_commit(_, Hub)`
-   ([`atomic-lib-runtime.md`](./atomic-lib-runtime.md) Phase 2).
+   ([`atomic-lib-runtime.md`](../atomic-lib-runtime.md) Phase 2).
 6. Only then: `AtomicNode::sync_with(transport)` in WASM, after which `rbsr.ts` and
    `canonical-drive-hash.ts` become deletable (kind 1, lines must drop).
 
 ## Consequences for open PRs
 
 - **#1278** (duplication analysis): merge-as-is. Its "must-match ~1.5–2.5k lines stays JS" and
-  "do not move `Resource.get` into WASM" are adopted here; link
-  `planning/ts-wasm-duplication.md` to this decision.
+  "do not move `Resource.get` into WASM" are adopted here; link #1278's branch-only
+  `ts-wasm-duplication.md` to this decision.
 - **#1273** (contract + measure script): merge-as-is, then add one sentence to kind 3:
   twins must be pure functions (no I/O, no verification, no writes).
 - **#1274** (ingest policies, bind-twin fixtures): merge-as-is. `CommitIngestOpts::{hub,peer,replica}`
