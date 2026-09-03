@@ -1,0 +1,42 @@
+name: Notify atomic-saas staging
+
+# Every push to develop tells ontola/atomic-saas to redeploy its staging
+# (staging.atomicserver.eu) against exactly this commit. Its
+# deploy_staging.yml listens for the `atomic-server-develop` event and reads
+# `client_payload.sha`. Until 2026-09-03 the same thing took a pin-bump PR
+# over there plus a manual dispatch per change.
+#
+# Fires on the push, not on the main pipeline passing: PRs are green before
+# they merge, the deploy verifies itself (health check, smoke test, rollback
+# on the box), and waiting on the pipeline would tie staging to Mancave being
+# awake. deploy_staging.yml in this repo (staging.atomicdata.dev) still waits
+# for the pipeline; that is a different box with a different bar.
+#
+# ATOMIC_SAAS_DISPATCH_TOKEN: a fine-grained PAT for ontola/atomic-saas with
+# Contents: read and write (repository_dispatch needs write). GITHUB_TOKEN
+# cannot cross repositories. Missing token → the step fails loudly rather
+# than staging silently going stale.
+
+on:
+  push:
+    branches: [develop]
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch a staging deploy in atomic-saas
+        env:
+          GH_TOKEN: ${{ secrets.ATOMIC_SAAS_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::ATOMIC_SAAS_DISPATCH_TOKEN is not set; atomic-saas staging will not follow this push."
+            exit 1
+          fi
+          gh api repos/ontola/atomic-saas/dispatches \
+            -f event_type=atomic-server-develop \
+            -f "client_payload[sha]=${{ github.sha }}" \
+            -f "client_payload[ref]=${{ github.ref }}"
+          echo "Dispatched: atomic-saas staging will build against ${{ github.sha }}."
