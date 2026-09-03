@@ -410,7 +410,9 @@ dist-tag, not `latest`.
 
 1. `cd browser && pnpm install --frozen-lockfile`
 1. `pnpm --filter @tomic/lib --filter @tomic/react --filter @tomic/cli --filter @tomic/svelte --filter @tomic/create-template --filter @tomic/plugin --filter @tomic/edit-mode run build`
-1. `pnpm publish -r --no-git-checks --access public --tag <latest|beta>`
+1. `pnpm publish -r --no-git-checks --ignore-scripts --access public --tag <latest|beta>`
+   - `--ignore-scripts` skips `prepublishOnly`. Build first (step 2);
+     `@tomic/lib`'s `attw` currently crashes and would fail the publish.
    - DONT run `pnpm npm publish`: it skips the `workspace:*` rewrite and
      publishes a package that cannot resolve `@tomic/lib`.
 

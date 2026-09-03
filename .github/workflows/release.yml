@@ -228,8 +228,13 @@ jobs:
         run: |
           set -euo pipefail
           cd browser
-          pnpm --filter "@tomic/lib" \
-               --filter "@tomic/react" \
+          # lib first: cli / react / svelte / plugin / edit-mode / create-template
+          # all import `@tomic/lib` types. A single `--filter` list runs them
+          # concurrently, and tsc then fails with TS2307 on a fresh checkout
+          # — the same order the workspace `pnpm run build` already uses.
+          # data-browser is not in this list (wasm-pack).
+          pnpm --filter "@tomic/lib" run build
+          pnpm --filter "@tomic/react" \
                --filter "@tomic/cli" \
                --filter "@tomic/svelte" \
                --filter "@tomic/create-template" \
@@ -265,12 +270,19 @@ jobs:
           # `--access public`: scoped packages default to restricted, and
           # `@tomic/plugin` / `@tomic/edit-mode` have never been published
           # so they have no registry-side access flag yet.
+          # `--ignore-scripts`: skip prepublishOnly. We already built
+          # above, and `@tomic/lib`'s `lint-package` → `attw` currently
+          # crashes (`Cannot read properties of undefined (reading
+          # 'filename')`), which would fail every release. Lint and
+          # packaging checks belong in the main pipeline. The
+          # `workspace:*` rewrite is done by `pnpm publish` itself, not
+          # by those scripts.
           # Recursive publish skips `private: true` (@tomic/root,
           # data-browser, e2e) and any version already on the registry.
           # DONT use `pnpm npm publish` — that skips the workspace:*
           # rewrite and would publish a package that cannot resolve
           # `@tomic/lib` (browser/CONTRIBUTING.md).
-          pnpm publish -r --no-git-checks --access public --tag "$dist_tag" --report-summary
+          pnpm publish -r --no-git-checks --ignore-scripts --access public --tag "$dist_tag" --report-summary
 
           if [ -f pnpm-publish-summary.json ]; then
             echo "Publish summary:"
