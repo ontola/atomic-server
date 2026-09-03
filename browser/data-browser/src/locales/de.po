@@ -5669,7 +5669,6 @@ msgid "Are you sure you've stored this code somewhere safe? You cannot recover y
 msgstr ""
 
 #: src/components/NewIdentitySection.tsx
-#: src/components/NewIdentitySection.tsx
 msgid "Generating…"
 msgstr ""
 
@@ -5735,21 +5734,17 @@ msgid "Use your passkey instead"
 msgstr ""
 
 #: src/components/AccountRecoveryCard.tsx
-#: src/components/NewIdentitySection.tsx
 msgid "Could not add a recovery code."
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "This passkey only works on this device"
-msgstr ""
+#~ msgid "This passkey only works on this device"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Give me a recovery code"
-msgstr ""
+#~ msgid "Give me a recovery code"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Continue without one"
-msgstr ""
+#~ msgid "Continue without one"
+#~ msgstr ""
 
 #: src/routes/SettingsAgent.tsx
 msgid "How you get back in on a new device — and where to find your agent secret."
@@ -5789,9 +5784,8 @@ msgstr ""
 msgid "Protect your account"
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Use your fingerprint, face, or screen lock — the same one that unlocks this device. Nothing to write down, and it works on your other devices too."
-msgstr ""
+#~ msgid "Use your fingerprint, face, or screen lock — the same one that unlocks this device. Nothing to write down, and it works on your other devices too."
+#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Use a passkey"
@@ -5814,13 +5808,11 @@ msgstr ""
 msgid "{0}{1} You'll also need to sign in to your email to use it, so it's safe to keep in a password manager or on paper."
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "It isn't synced to your other devices, so losing this one would lock you out. A recovery code is a spare key — you'll need your email to use it, so it's safe to keep on paper."
-msgstr ""
+#~ msgid "It isn't synced to your other devices, so losing this one would lock you out. A recovery code is a spare key — you'll need your email to use it, so it's safe to keep on paper."
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Keep this somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
-msgstr ""
+#~ msgid "Keep this somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
+#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Protect my account"
@@ -7113,4 +7105,19 @@ msgstr ""
 #. 0: PRODUCT_NAME
 #: src/components/IdentityReconcileGate.tsx
 msgid "Signs this browser out of {0}. Nothing here is backed up until it has an account of its own."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Your passkey opens this account on this device and wherever it syncs to. This code opens it on every other device — a phone, a different browser, a new computer."
+msgstr ""
+
+#~ msgid "{0} Keep it somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
+#~ msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Use your fingerprint, face, or screen lock — the same one that unlocks this device. You'll also get a recovery code for devices your passkey doesn't sync to."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Keep it somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
 msgstr ""

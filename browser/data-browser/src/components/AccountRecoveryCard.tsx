@@ -16,7 +16,7 @@ import { getRememberedManagedPortalUrl } from '../helpers/managed/api';
 import {
   addRecoveryCodeWrapper,
   buildEnvelopeV2,
-  buildEnvelopeWithPasskey,
+  buildEnvelopeWithPasskeyAndCode,
   envelopeWrapperKinds,
   getRecoverySecret,
   isPasskeySupported,
@@ -295,14 +295,18 @@ export function AccountRecoveryCard({
 
       let request;
 
+      // Passkey plus code, as at onboarding: the passkey reaches only the
+      // devices its vendor syncs it to, the code reaches the rest.
       if (await isPasskeySupported()) {
         try {
-          ({ request } = await buildEnvelopeWithPasskey({
+          const built = await buildEnvelopeWithPasskeyAndCode({
             secret: typed,
             agentSubject: subject,
             driveSubject,
             userName: accountEmail ?? 'Atomic account',
-          }));
+          });
+          request = built.request;
+          setNewCode(built.recoveryCode);
         } catch (e) {
           // Only knowable by trying, so this is a normal outcome rather than a
           // failure: fall through to the code path instead of dead-ending on

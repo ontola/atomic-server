@@ -35,7 +35,7 @@ import {
 import { isOriginWithoutNode } from '../../helpers/originNode';
 import {
   buildEnvelopeV2,
-  buildEnvelopeWithPasskey,
+  buildEnvelopeWithPasskeyAndCode,
   saveRecoverySecret,
   getRecoverySecret,
   getUnlockableRecoverySecret,
@@ -45,7 +45,6 @@ import {
   decryptEnvelopeWithPasskey,
   envelopeWrapperKinds,
   upgradeToEnvelopeV2,
-  type PasskeyDurability,
   type RecoverySecret,
 } from '../../helpers/managed/recovery';
 import { CodeBlock } from '../../components/CodeBlock';
@@ -268,11 +267,16 @@ export function GettingStartedFlow({
     return emailParam ?? managedUsername ?? 'Atomic account';
   }
 
-  // The default backup: a random DEK encrypts the agent secret, and a newly
-  // registered passkey's PRF output wraps the DEK. Nothing comes back for the
-  // user to store — the passkey *is* the recovery credential.
-  async function backupWithPasskey(secret: string): Promise<PasskeyDurability> {
-    const { request, durability } = await buildEnvelopeWithPasskey({
+  // The default backup: a random DEK encrypts the agent secret, wrapped both
+  // by a newly registered passkey's PRF output and by a generated recovery
+  // code. The passkey is the everyday key; the code is for every device the
+  // passkey does not reach. A passkey "syncs" only within one vendor's
+  // keychain (one made in Firefox on a Mac is not in Google Password Manager
+  // on an Android phone), so a passkey-only backup locked people out of their
+  // own account on their second device. Returns the plaintext code for
+  // NewIdentitySection to show once — it's never sent anywhere.
+  async function backupWithPasskey(secret: string): Promise<string> {
+    const { request, recoveryCode } = await buildEnvelopeWithPasskeyAndCode({
       secret,
       agentSubject: requireAgentSubject(),
       driveSubject: newDriveSubject.current ?? null,
@@ -280,7 +284,7 @@ export function GettingStartedFlow({
     });
     await saveRecoverySecret(request);
 
-    return durability;
+    return recoveryCode;
   }
 
   // The fallback: the DEK is wrapped by a generated recovery code (Argon2id)

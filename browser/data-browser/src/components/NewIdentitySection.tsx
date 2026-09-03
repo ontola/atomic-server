@@ -18,10 +18,8 @@ import { InputStyled, InputWrapper } from './forms/InputStyles';
 import Field from './forms/Field';
 import { PRODUCT_NAME } from '../helpers/managed';
 import {
-  addRecoveryCodeWrapper,
   isPasskeySupported,
   PrfUnsupportedError,
-  type PasskeyDurability,
 } from '../helpers/managed/recovery';
 
 type Step =
@@ -55,12 +53,13 @@ interface NewIdentitySectionProps {
    * makes sense when signed in to a managed account that can store it.
    */
   offerRecoveryBackup?: boolean;
-  /** Encrypt + store the secret under a newly registered passkey. Resolves
-   * with whether that passkey is synced across the user's devices or bound to
-   * this one — a device-bound passkey is the only case that still warrants
-   * offering a recovery code. Rejects with `PrfUnsupportedError` if this
-   * device can't do PRF, which moves the step onto the recovery-code path. */
-  onBackupWithPasskey?: (secret: string) => Promise<PasskeyDurability>;
+  /** Encrypt + store the secret under a newly registered passkey AND a
+   * freshly generated recovery code. Resolves with the plaintext code to
+   * show the user once: the passkey only reaches the devices its vendor
+   * syncs it to, the code reaches the rest. Rejects with
+   * `PrfUnsupportedError` if this device can't do PRF, which moves the step
+   * onto the code-only path. */
+  onBackupWithPasskey?: (secret: string) => Promise<string>;
   /** Encrypt + store the secret under a freshly generated recovery code.
    * Resolves with the plaintext code to show the user once. The fallback for
    * devices without passkey support, or when the user asks for it. */
@@ -103,12 +102,11 @@ export function NewIdentitySection({
   const [identity, setIdentity] = useState<IdentityData | null>(null);
   /** True after the user copies the secret or saves the backup file. */
   const [secretBackedUp, setSecretBackedUp] = useState(false);
-  /** Set once `onBackupWithCode` resolves; shown once, then never again. */
+  /** Set once a backup resolves; shown once, then never again. */
   const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
-  /** The registered passkey is bound to this device (not synced), so losing
-   * the device would lose the account — the only case that warrants pushing
-   * a recovery code on the user. */
-  const [deviceBoundPasskey, setDeviceBoundPasskey] = useState(false);
+  /** The backup also has a passkey wrapper, so the code screen can say what
+   * each key is for. */
+  const [passkeyRegistered, setPasskeyRegistered] = useState(false);
   /** null while the capability probe is still running. */
   const [passkeySupported, setPasskeySupported] = useState<boolean | null>(
     null,
@@ -251,8 +249,8 @@ export function NewIdentitySection({
   // ─── Step: Back up secret (encrypted recovery) ───────────────────────────
 
   // Probed once the backup step is reached, so the step can lead with the
-  // passkey path (nothing to store) and only fall back to a recovery code
-  // where PRF genuinely isn't available.
+  // passkey path (passkey + code) and only fall back to a code alone where
+  // PRF genuinely isn't available.
   useEffect(() => {
     if (step !== 'recovery-backup') return;
     let cancelled = false;
@@ -298,17 +296,9 @@ export function NewIdentitySection({
     setError(undefined);
 
     try {
-      const durability = await onBackupWithPasskey(identity.secret);
-
-      if (durability === 'device-bound') {
-        // This passkey lives on one device only, so it genuinely is a single
-        // point of failure — the one case worth interrupting for.
-        setDeviceBoundPasskey(true);
-
-        return;
-      }
-
-      finishWithoutSecretStep();
+      const code = await onBackupWithPasskey(identity.secret);
+      setPasskeyRegistered(true);
+      setRecoveryCode(code);
     } catch (e) {
       if (e instanceof PrfUnsupportedError) {
         // The authenticator turned out not to support PRF (only knowable by
@@ -323,23 +313,6 @@ export function NewIdentitySection({
             : 'Could not back up your secret. You can still save it yourself.',
         );
       }
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  /** Device-bound passkey: re-seal under both that passkey and a new code. */
-  async function handleAddCodeToPasskey() {
-    setLoading(true);
-    setError(undefined);
-
-    try {
-      const { recoveryCode: code } = await addRecoveryCodeWrapper();
-      setRecoveryCode(code);
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : 'Could not add a recovery code.',
-      );
     } finally {
       setLoading(false);
     }
@@ -469,15 +442,13 @@ export function NewIdentitySection({
           passkeySupported={passkeySupported}
           useCodeFallback={useCodeFallback || !onBackupWithPasskey}
           recoveryCode={recoveryCode}
-          deviceBoundPasskey={deviceBoundPasskey}
+          passkeyRegistered={passkeyRegistered}
           onUsePasskey={handleBackupWithPasskey}
           onUseCodeInstead={() => {
             setError(undefined);
             setUseCodeFallback(true);
           }}
           onGenerate={handleGenerateRecoveryCode}
-          onAddCodeToPasskey={handleAddCodeToPasskey}
-          onKeepPasskeyOnly={finishWithoutSecretStep}
           onContinue={finishWithoutSecretStep}
           onSkip={() => {
             setError(undefined);
@@ -774,12 +745,10 @@ function RecoveryBackupStep({
   passkeySupported,
   useCodeFallback,
   recoveryCode,
-  deviceBoundPasskey,
+  passkeyRegistered,
   onUsePasskey,
   onUseCodeInstead,
   onGenerate,
-  onAddCodeToPasskey,
-  onKeepPasskeyOnly,
   onContinue,
   onSkip,
 }: {
@@ -788,12 +757,10 @@ function RecoveryBackupStep({
   passkeySupported: boolean | null;
   useCodeFallback: boolean;
   recoveryCode: string | null;
-  deviceBoundPasskey: boolean;
+  passkeyRegistered: boolean;
   onUsePasskey: () => void;
   onUseCodeInstead: () => void;
   onGenerate: () => void;
-  onAddCodeToPasskey: () => void;
-  onKeepPasskeyOnly: () => void;
   onContinue: () => void;
   onSkip: () => void;
 }) {
@@ -831,48 +798,21 @@ function RecoveryBackupStep({
     );
   }
 
-  // Passkey registered, but bound to this one device — the single case where
-  // "lose the device, lose the account" is literally true, so it's the only
-  // case worth asking anyone to store something.
-  if (deviceBoundPasskey && !recoveryCode) {
-    return (
-      <Column gap='1rem'>
-        <h3 key='title'>This passkey only works on this device</h3>
-        <p key='copy'>
-          It isn&apos;t synced to your other devices, so losing this one would
-          lock you out. A recovery code is a spare key — you&apos;ll need your
-          email to use it, so it&apos;s safe to keep on paper.
-        </p>
-        {error && <ErrorText key='error'>{error}</ErrorText>}
-        <Row key='actions' gap='1rem' wrapItems>
-          <ContinueButton
-            type='button'
-            onClick={onAddCodeToPasskey}
-            disabled={loading}
-          >
-            {loading ? 'Generating…' : 'Give me a recovery code'}
-          </ContinueButton>
-          <Button
-            type='button'
-            subtle
-            onClick={onKeepPasskeyOnly}
-            disabled={loading}
-          >
-            Continue without one
-          </Button>
-        </Row>
-      </Column>
-    );
-  }
-
   if (recoveryCode) {
     return (
       <Column gap='1rem'>
         <h3 key='title'>Save your recovery code</h3>
+        {passkeyRegistered && (
+          <p key='why'>
+            Your passkey opens this account on this device and wherever it
+            syncs to. This code opens it on every other device — a phone, a
+            different browser, a new computer.
+          </p>
+        )}
         <p key='important'>
-          Keep this somewhere safe. You&apos;ll need it — plus your email — to
-          get back in. We can&apos;t show it again, but you can generate a new
-          one from Settings whenever you like.
+          Keep it somewhere safe. You&apos;ll need it — plus your email — to get
+          back in. We can&apos;t show it again, but you can generate a new one
+          from Settings whenever you like.
         </p>
         <StyledCodeBlock
           key='code'
@@ -942,14 +882,17 @@ function RecoveryBackupStep({
     );
   }
 
-  // The default path: one prompt, nothing for the user to keep.
+  // The default path: a passkey for everyday unlocking, plus a recovery code
+  // for the devices the passkey does not reach. Passkeys sync within one
+  // vendor's keychain only, so "it works on your other devices" was true for
+  // some of them; the code is what makes it true for all.
   return (
     <Column gap='1rem'>
       <h3 key='title'>Protect your account</h3>
       <p key='copy'>
         Use your fingerprint, face, or screen lock — the same one that unlocks
-        this device. Nothing to write down, and it works on your other devices
-        too.
+        this device. You&apos;ll also get a recovery code for devices your
+        passkey doesn&apos;t sync to.
       </p>
       {error && <ErrorText key='error'>{error}</ErrorText>}
       <Row key='actions' gap='1rem' wrapItems>
