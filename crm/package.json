@@ -21,6 +21,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
+    "demo:data": "tsx scripts/demo-data.ts",
     "db:local": "bash scripts/local-postgres.sh",
     "sync:airtable": "tsx scripts/sync-airtable.ts",
     "prepare": "svelte-kit sync"
