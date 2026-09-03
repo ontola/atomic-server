@@ -213,7 +213,10 @@ describe('evaluateServerReconciliation', () => {
 describe('localAgentIsDisposable', () => {
   const personalDrive = 'https://atomicdata.dev/properties/personalDrive';
 
-  function reader(resource: { error?: unknown; props?: Record<string, unknown> }) {
+  function reader(resource: {
+    error?: unknown;
+    props?: Record<string, unknown>;
+  }) {
     return {
       getResource: () =>
         Promise.resolve({

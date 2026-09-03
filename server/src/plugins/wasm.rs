@@ -12,31 +12,30 @@ use std::{
 };
 
 use atomic_lib::{
-    AtomicErrorType,
-    class_extender::{self, ClassExtenderScope},
-};
-use atomic_lib::{
-    Commit, Db, Resource, Storelike, Value,
     agents::{Agent, ForAgent},
     class_extender::ClassExtender,
     commit::{CommitBuilder, CommitOpts},
-    db::plugin_meta::{PermissionType, PluginManifest, PluginMeta, validate_plugin_identifiers},
+    db::plugin_meta::{validate_plugin_identifiers, PermissionType, PluginManifest, PluginMeta},
     errors::{AtomicError, AtomicResult},
-    parse::{ParseOpts, SaveOpts, parse_json_ad_resource},
+    parse::{parse_json_ad_resource, ParseOpts, SaveOpts},
     storelike::{Query, ResourceResponse},
-    urls,
+    urls, Commit, Db, Resource, Storelike, Value,
 };
-use base64::{Engine as _, engine::general_purpose};
-use ring::digest::{SHA256, digest};
+use atomic_lib::{
+    class_extender::{self, ClassExtenderScope},
+    AtomicErrorType,
+};
+use base64::{engine::general_purpose, Engine as _};
+use ring::digest::{digest, SHA256};
 use tracing::{error, info, warn};
 use wasmtime::{
-    Config, Engine, ResourceLimiter, Store, StoreLimits, StoreLimitsBuilder, Trap,
     component::{Component, Linker, ResourceTable},
+    Config, Engine, ResourceLimiter, Store, StoreLimits, StoreLimitsBuilder, Trap,
 };
-use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView, p2};
+use wasmtime_wasi::{p2, DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{
+    p2::{add_only_http_to_linker_async, WasiHttpCtxView, WasiHttpView},
     WasiHttpCtx,
-    p2::{WasiHttpCtxView, WasiHttpView, add_only_http_to_linker_async},
 };
 
 use atomic_lib::db::plugin_meta::PluginMetaKey;
