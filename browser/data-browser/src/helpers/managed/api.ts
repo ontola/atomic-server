@@ -55,6 +55,20 @@ export function getRememberedManagedPortalUrl(): string | null {
   return rememberedPortalUrl;
 }
 
+/**
+ * The portal a build was compiled against, if any. Read here rather than via
+ * `managedServer.ts`'s `managedPortalOverride()` because that module imports
+ * this one.
+ */
+function portalFromEnv(): string | null {
+  const fromEnv =
+    typeof import.meta !== 'undefined'
+      ? (import.meta.env?.VITE_MANAGED_PORTAL_URL as string | undefined)
+      : undefined;
+
+  return fromEnv ? trimTrailingSlashes(fromEnv) : null;
+}
+
 /** Base URL of the control-plane API (includes the `/api` prefix). */
 export function getManagedApiBase(): string {
   const fromEnv =
@@ -68,12 +82,13 @@ export function getManagedApiBase(): string {
   // webview's origin is `tauri://localhost`, whose hostname is literally
   // `localhost`. Falling through would point every desktop build — shipped
   // ones included — at whatever happens to run on a dev machine's :3030.
-  // There is no same-origin `/api` here either, so the only real answer is
-  // the control plane the connected managed node named. Before any node has
+  // There is no same-origin `/api` here either, so the real answers are the
+  // control plane the connected managed node named, or the one the build was
+  // compiled against (the store apps; see tauri-release.yml). Before either
   // (pure self-hosted, or nothing fetched yet) these fetches just fail, which
   // every caller already treats as "no control plane".
   if (isRunningInTauri()) {
-    const portalUrl = getRememberedManagedPortalUrl();
+    const portalUrl = getRememberedManagedPortalUrl() ?? portalFromEnv();
 
     return portalUrl ? `${portalUrl}/api` : '/api';
   }
