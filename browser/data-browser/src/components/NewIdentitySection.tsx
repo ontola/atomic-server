@@ -804,9 +804,9 @@ function RecoveryBackupStep({
         <h3 key='title'>Save your recovery code</h3>
         {passkeyRegistered && (
           <p key='why'>
-            Your passkey opens this account on this device and wherever it
-            syncs to. This code opens it on every other device — a phone, a
-            different browser, a new computer.
+            Your passkey opens this account on this device and wherever it syncs
+            to. This code opens it on every other device — a phone, a different
+            browser, a new computer.
           </p>
         )}
         <p key='important'>
