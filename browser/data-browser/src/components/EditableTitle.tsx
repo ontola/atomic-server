@@ -141,8 +141,8 @@ export function EditableTitle({
       <TitleIcon resource={resource} />
       <TitleInput
         ref={ref}
-        data-testid='editable-title'
-        type='text'
+        data-testid="editable-title"
+        type="text"
         {...props}
         onFocus={handleClick}
         placeholder={placeholder}
@@ -163,7 +163,7 @@ export function EditableTitle({
       id={id}
       $canEdit={!!canEdit}
       title={canEdit ? 'Click to edit title' : (lockedReason ?? '')}
-      data-testid='editable-title'
+      data-testid="editable-title"
       onClick={handleClick}
       $subtle={!!canEdit && !text}
       $subject={resource.subject}
