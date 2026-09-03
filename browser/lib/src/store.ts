@@ -17,6 +17,7 @@ import {
   AtomicError,
   ErrorType,
   isTransportError,
+  LOCAL_ONLY_NOT_FOUND_MESSAGE,
   NOT_AVAILABLE_LOCALLY_MESSAGE,
 } from './error.js';
 import { EventManager } from './EventManager.js';
@@ -3199,9 +3200,7 @@ export class Store {
       if (!hasLocalData) {
         this.failResource(
           subject,
-          new Error(
-            'This resource belongs to a local-only drive but was not found in local storage.',
-          ),
+          new AtomicError(LOCAL_ONLY_NOT_FOUND_MESSAGE, ErrorType.Transport),
         );
       }
 
@@ -3899,6 +3898,31 @@ export class Store {
     // `refetchOfflineErroredResources` here would re-do the drain (the
     // outbox guard absorbs it) and race the refetch with the WS handshake.
     // Letting handleOpen own the sequence keeps one chain to reason about.
+  }
+
+  /**
+   * Look at a resource again the way a first look does: the local database
+   * first, the server only if that has nothing.
+   *
+   * For a cached failure the store has since been given the answer to. A
+   * vault restore writes a drive straight into the local database; the copy
+   * in memory is still the fetch that sent the user to the restore offer — a
+   * 401 from before they signed in, or "not available locally". Asking the
+   * server (`fetchResourceFromServer`) is the wrong repair: on an origin
+   * without a node it asks the origin and gets `index.html` back, and the
+   * user's own workspace opens as "Could not parse JSON".
+   */
+  public async reloadResource(subject: string): Promise<void> {
+    const resolved = this.resolveSubject(subject);
+    const resource = this.resources.get(resolved);
+
+    if (resource) {
+      resource.error = undefined;
+      resource.loading = true;
+      this.notify(resource);
+    }
+
+    await this.fetchResourceWithLocalFallback(resolved);
   }
 
   /**

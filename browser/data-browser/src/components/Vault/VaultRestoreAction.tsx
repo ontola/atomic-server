@@ -1,9 +1,7 @@
-import { useStore } from '@tomic/react';
 import { FaRotateLeft } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import { Button } from '../Button';
 import { useDriveVault } from '../../helpers/managed/useDriveVault';
-import { isOriginWithoutNode } from '../../helpers/originNode';
 
 import type { JSX } from 'react';
 
@@ -25,29 +23,12 @@ export function VaultRestoreAction({
 }: {
   subject: string;
 }): JSX.Element | null {
-  const store = useStore();
   const vault = useDriveVault(subject);
 
   const canRestore =
     vault.status.state === 'on' && vault.status.details.confirmed_objects > 0;
 
   if (!canRestore) return null;
-
-  async function restore() {
-    const outcome = await vault.restore();
-
-    if (!outcome) return;
-
-    // On an origin with no node the restored drive lives only here, like one
-    // made here; without this every commit would park in the outbox.
-    if (isOriginWithoutNode(store.getServerUrl())) {
-      store.registerLocalOnlyDrive(subject);
-    }
-
-    // The failed fetch that brought us here is cached; ask again now that the
-    // drive is in local storage.
-    await store.fetchResourceFromServer(subject, { setLoading: true });
-  }
 
   return (
     <Offer data-testid='vault-restore-offer'>
@@ -58,7 +39,7 @@ export function VaultRestoreAction({
       )}
       <Button
         data-testid='vault-restore-now'
-        onClick={restore}
+        onClick={vault.restore}
         disabled={vault.busy}
       >
         <FaRotateLeft />{' '}

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useStore } from '@tomic/react';
+import { reopenRestoredDrive } from '../driveData';
 import { loadVaultKeyOps } from './vaultKeyOps';
 import { vaultLaneId, type VaultKeyOps } from './vault';
 import { getOrCreateDeviceId } from './devices';
@@ -53,7 +54,7 @@ export function useDriveVault(driveSubject: string | null): UseVaultBackup {
 
   const agent = store.getAgent();
 
-  return useVaultBackup({
+  const vault = useVaultBackup({
     // Whichever local store this build actually keeps the drive in. A browser
     // has the ClientDb; the desktop and Android apps have the embedded node and
     // deliberately no ClientDb, since a second copy of the same drive is the
@@ -68,4 +69,22 @@ export function useDriveVault(driveSubject: string | null): UseVaultBackup {
     proofMessage,
     devicePubkey: laneId,
   });
+
+  // A restore writes to the local database, which the store does not watch.
+  // Three screens offer the restore; one of them used to refetch the drive
+  // afterwards and the other two navigated straight into the cached "could
+  // not open" that had brought the user there. Done here, so an offer cannot
+  // forget.
+  const { restore: importFromVault } = vault;
+  const restore = useCallback(async () => {
+    const outcome = await importFromVault();
+
+    if (outcome && driveSubject) {
+      await reopenRestoredDrive(store, driveSubject);
+    }
+
+    return outcome;
+  }, [importFromVault, driveSubject, store]);
+
+  return { ...vault, restore };
 }

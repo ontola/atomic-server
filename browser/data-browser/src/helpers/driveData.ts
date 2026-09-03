@@ -1,4 +1,41 @@
 import type { Store } from '@tomic/lib';
+import { isOriginWithoutNode } from './originNode';
+
+/**
+ * Make a drive that a vault restore just put into local storage show up.
+ *
+ * The store still holds whatever fetch sent the user to the restore offer:
+ * on a node-backed origin a 401, fetched as the public agent before they
+ * signed in; on an origin without a node a "not available locally". Left
+ * alone, that cached answer is what the workspace renders after the restore
+ * — "Unauthorized" as the drive title, over a sidebar that already lists the
+ * restored folders — so look again, local database first, now that the data
+ * is there.
+ *
+ * On an origin with no node the restored drive lives only on this device,
+ * like one made here; without registering it as such every later commit
+ * would park in the outbox waiting for a server that does not exist.
+ *
+ * The pack also carries the drive's agent — the profile with the name typed
+ * on the first device — which the store looked up the same way, before it was
+ * there. Reloaded too, so settings shows the person and not an empty field.
+ */
+export async function reopenRestoredDrive(
+  store: Store,
+  drive: string,
+): Promise<void> {
+  if (isOriginWithoutNode(store.getServerUrl())) {
+    store.registerLocalOnlyDrive(drive);
+  }
+
+  await store.reloadResource(drive);
+
+  const agent = store.getAgent()?.subject;
+
+  if (agent) {
+    await store.reloadResource(agent);
+  }
+}
 
 /**
  * Whether this device can actually load the drive.
