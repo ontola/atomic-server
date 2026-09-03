@@ -1,1 +1,0 @@
-export { OntologyPage } from './OntologyPage';

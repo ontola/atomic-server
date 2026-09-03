@@ -1,5 +1,0 @@
-{
-    "exclude": [
-        "create-template/templates/**/*"
-    ]
-}

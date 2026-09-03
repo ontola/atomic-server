@@ -1,13 +1,15 @@
+# Local development database. `docker compose up -d`, then set
+# DATABASE_URL=postgres://postgres:postgres@localhost:5432/pauseai_crm in .env.
 services:
-  atomic-server:
-    # You can create a .env using `atomic-server generate-dotenv`
-    env_file: ".env"
-    image: ghcr.io/ontola/atomic-server
-    container_name: atomic-server
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pauseai_crm
     ports:
-      - 80:80
+      - '5432:5432'
     volumes:
-      - atomic-storage:/atomic-storage
+      - crm-postgres:/var/lib/postgresql/data
 volumes:
-  atomic-storage:
-    driver: local
+  crm-postgres:
