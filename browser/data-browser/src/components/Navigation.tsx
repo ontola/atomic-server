@@ -22,6 +22,7 @@ import { useSettings } from '../helpers/AppSettings';
 import { ChromeTheme } from '../styling';
 import { paths } from '../routes/paths';
 import { useRootWelcomeLayout } from '../context/RootWelcomeLayoutContext';
+import { isHostedDistribution } from '../helpers/managedServer';
 
 interface NavWrapperProps {
   children: React.ReactNode;
@@ -33,7 +34,7 @@ const FollowSessionPanelMemo = React.memo(FollowSessionPanelContainer);
 
 /** Wraps the entire app and adds a navbar at the top or bottom */
 export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
-  const { navbarTop } = useSettings();
+  const { navbarTop, agent } = useSettings();
   const { rootWelcomeChromeHidden } = useRootWelcomeLayout();
   const [subject] = useCurrentSubject();
   const { pathname, searchStr } = useLocation();
@@ -47,11 +48,19 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
   // full-screen moment; rendering it between the sidebars reads as a
   // broken page.
   const demoSplash = pathname === paths.demo;
+  // The hosted product has no signed-out mode: the sidebar's "new user /
+  // sign in" affordances next to a spinner or an error read as a broken
+  // account rather than as a page for a visitor. Until an identity is
+  // loaded, whatever is on screen (a loading state, a sign-in guard, a
+  // public share) stands on its own. A self-hosted node keeps its chrome
+  // for anonymous browsing.
+  const signedOutHosted = isHostedDistribution() && !agent;
   const hideGlobalChrome =
     rootWelcomeChromeHidden ||
     onboardingOrChild ||
     welcomeOrChild ||
-    demoSplash;
+    demoSplash ||
+    signedOutHosted;
 
   const search = useMemo(() => new URLSearchParams(searchStr), [searchStr]);
 
