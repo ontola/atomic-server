@@ -47,6 +47,7 @@ import {
 } from '../helpers/managed/session';
 import { getRememberedManagedPortalUrl } from '../helpers/managed/api';
 import {
+  envelopeWrapperKinds,
   getRecoverySecret,
   readCachedBackups,
 } from '../helpers/managed/recovery';
@@ -636,12 +637,19 @@ function SyncPage() {
    * loses the account. Settings reads that local copy too, so a two-state
    * answer here had the two pages contradicting each other in plain sight.
    *
+   * `passkey-only` is stored, but the only thing that opens it is a passkey.
+   * That is the default onboarding leaves behind, and it is the case this row
+   * used to describe as "this email gets you back in on a new device" — while
+   * a browser the passkey never synced to (Firefox next to Safari, say)
+   * offered nothing but a field for the agent secret. Nothing was lost, but
+   * the promise was not kept, so the row must not be drawn as covered.
+   *
    * `null` until asked, and on failure — "we could not check" is not "you have
    * none", and telling someone their recovery is missing when the control
    * plane was merely unreachable is the one wrong answer this row can give.
    */
   const [recoveryBackup, setRecoveryBackup] = useState<
-    'stored' | 'device-only' | 'none' | null
+    'stored' | 'passkey-only' | 'device-only' | 'none' | null
   >(null);
 
   useEffect(() => {
@@ -656,7 +664,9 @@ function SyncPage() {
         if (cancelled) return;
 
         if (stored) {
-          setRecoveryBackup('stored');
+          const { hasPasskey, hasCode } = envelopeWrapperKinds(stored);
+
+          setRecoveryBackup(hasPasskey && !hasCode ? 'passkey-only' : 'stored');
 
           return;
         }
@@ -1381,9 +1391,11 @@ function SyncPage() {
                       ? `Signed in as ${managedAccount.email}.`
                       : recoveryBackup === 'stored'
                         ? `${managedAccount.email}. We hold your key sealed, so this email gets you back in on a new device.`
-                        : recoveryBackup === 'device-only'
-                          ? `${managedAccount.email}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
-                          : `${managedAccount.email}. No recovery backup stored, so losing every device loses this workspace.`}
+                        : recoveryBackup === 'passkey-only'
+                          ? `${managedAccount.email}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would.`
+                          : recoveryBackup === 'device-only'
+                            ? `${managedAccount.email}. Your backup is sealed in this browser and nowhere else, so it unlocks here but a new device could not get you back in.`
+                            : `${managedAccount.email}. No recovery backup stored, so losing every device loses this workspace.`}
                 </ConnSub>
                 {/* Signed out, the account itself is the missing piece, and it
                     is made in the portal: on a device that cannot hold our
@@ -1408,12 +1420,18 @@ function SyncPage() {
                     </LearnMore>
                   </ConnActions>
                 ) : recoveryBackup === 'none' ||
-                  recoveryBackup === 'device-only' ? (
+                  recoveryBackup === 'device-only' ||
+                  recoveryBackup === 'passkey-only' ? (
                   <ConnActions>
-                    <LearnMoreLink to={paths.agentSettings}>
+                    <LearnMoreLink
+                      to={paths.agentSettings}
+                      data-testid='recovery-row-action'
+                    >
                       {recoveryBackup === 'device-only'
                         ? 'Store it with ' + PRODUCT_NAME
-                        : 'Set up email recovery'}
+                        : recoveryBackup === 'passkey-only'
+                          ? 'Add a recovery code'
+                          : 'Set up email recovery'}
                     </LearnMoreLink>
                   </ConnActions>
                 ) : null}

@@ -770,7 +770,12 @@ export function GettingStartedFlow({
                   or who wants nothing to do with our account system, must not
                   be walled out of their own software — and on a FOSS build
                   "Create account" already is this, so offering it twice would
-                  just be noise. */}
+                  just be noise.
+
+                  Named for what it does (a fresh local identity, no account),
+                  not for what the user brings: "Use my own secret" read as
+                  "paste the secret I have", which is the Sign in button below
+                  it — and pressing it minted a new secret instead. */}
               {createTarget?.kind === 'portal' && (
                 <CtaButton
                   key='local'
@@ -778,7 +783,7 @@ export function GettingStartedFlow({
                   subtle
                   onClick={() => setStep('create')}
                 >
-                  Use my own secret
+                  Continue without an account
                 </CtaButton>
               )}
               <CtaButton
@@ -907,7 +912,9 @@ export function GettingStartedFlow({
                       >
                         Use a recovery code instead
                       </Button>
-                    ) : null}
+                    ) : (
+                      <PasskeyOnlyHint />
+                    )}
                     <OtherWaysLabel>or sign in another way</OtherWaysLabel>
                   </Column>
                 ) : null}
@@ -1113,7 +1120,9 @@ export function GettingStartedFlow({
                       >
                         Use a recovery code instead
                       </Button>
-                    ) : null}
+                    ) : (
+                      <PasskeyOnlyHint key='passkey-only' />
+                    )}
                   </Column>
                 ) : (
                   <form key='ready' onSubmit={handleRestore}>
@@ -1355,6 +1364,26 @@ const OwnedElsewhere = styled.p`
   color: ${p => p.theme.colors.textLight};
   font-size: 0.85rem;
 `;
+
+/**
+ * Shown under the passkey button when the backup has no recovery-code
+ * wrapper — the shape onboarding leaves behind by default. Without this the
+ * code button simply did not render, and someone on a browser their passkey
+ * never synced to (Firefox next to Safari on the same laptop) was left with a
+ * passkey prompt that finds nothing and a field for an agent secret they were
+ * never shown. Says where the way out is, since the guard itself cannot add a
+ * code: that is a write to the backup, which needs the passkey that is
+ * missing here.
+ */
+function PasskeyOnlyHint(): React.JSX.Element {
+  return (
+    <OwnedElsewhere data-testid='passkey-only-hint'>
+      Only your passkey opens this account. If it isn&apos;t on this device,
+      unlock on the one where you set it up and add a recovery code under
+      Settings — that gets you in anywhere.
+    </OwnedElsewhere>
+  );
+}
 
 const PlainExternalLink = styled.a`
   color: ${p => p.theme.colors.main};
