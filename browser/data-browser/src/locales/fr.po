@@ -4010,6 +4010,7 @@ msgid "Enter the recovery password you set for {0}."
 msgstr ""
 
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultRestoreAction.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Restoring…"
@@ -6664,9 +6665,8 @@ msgstr ""
 msgid "Safari"
 msgstr ""
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Use my own secret"
-msgstr ""
+#~ msgid "Use my own secret"
+#~ msgstr ""
 
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Restore this workspace"
@@ -7059,4 +7059,29 @@ msgstr ""
 
 #: src/routes/SettingsAgent.tsx
 msgid "Open a drive by URL or DID"
+msgstr ""
+
+#: src/components/Vault/VaultRestoreAction.tsx
+msgid "This workspace has an encrypted backup in Cloud Vault."
+msgstr ""
+
+#: src/components/Vault/VaultRestoreAction.tsx
+msgid "Restore from Cloud Vault"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Continue without an account"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
+msgstr ""
+
+#. 0: managedAccount.email
+#: src/routes/SyncRoute.tsx
+msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Add a recovery code"
 msgstr ""

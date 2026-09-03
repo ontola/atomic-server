@@ -4010,6 +4010,7 @@ msgid "Enter the recovery password you set for {0}."
 msgstr "Enter the recovery password you set for {0}."
 
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultRestoreAction.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Restoring…"
@@ -6698,9 +6699,8 @@ msgstr "Chrome"
 msgid "Safari"
 msgstr "Safari"
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Use my own secret"
-msgstr "Use my own secret"
+#~ msgid "Use my own secret"
+#~ msgstr "Use my own secret"
 
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Restore this workspace"
@@ -7094,3 +7094,28 @@ msgstr "Open a drive by URL"
 #: src/routes/SettingsAgent.tsx
 msgid "Open a drive by URL or DID"
 msgstr "Open a drive by URL or DID"
+
+#: src/components/Vault/VaultRestoreAction.tsx
+msgid "This workspace has an encrypted backup in Cloud Vault."
+msgstr "This workspace has an encrypted backup in Cloud Vault."
+
+#: src/components/Vault/VaultRestoreAction.tsx
+msgid "Restore from Cloud Vault"
+msgstr "Restore from Cloud Vault"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Continue without an account"
+msgstr "Continue without an account"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
+msgstr "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
+
+#. 0: managedAccount.email
+#: src/routes/SyncRoute.tsx
+msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
+msgstr "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
+
+#: src/routes/SyncRoute.tsx
+msgid "Add a recovery code"
+msgstr "Add a recovery code"
