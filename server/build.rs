@@ -73,11 +73,24 @@ fn main() -> std::io::Result<()> {
             start_copy.elapsed().as_secs_f32()
         );
     } else if dirs.js_dist_tmp.exists() && !dist_is_newer_than_tmp(&dirs) {
-        p!(
-            "{} is current with {}, skipping copy",
-            dirs.js_dist_tmp.display(),
-            dirs.js_dist_source.display()
-        );
+        // `dist_is_newer_than_tmp` answers "false" for two very different
+        // situations: the embedded copy really is up to date, and there is no
+        // `dist` at all to compare it against. Reporting the second as "current"
+        // is how an empty `assets_tmp` used to sail through this build script
+        // and fail hundreds of lines away in `include_str!`.
+        if dirs.js_dist_source.exists() {
+            p!(
+                "{} is current with {}, skipping copy",
+                dirs.js_dist_tmp.display(),
+                dirs.js_dist_source.display()
+            );
+        } else {
+            p!(
+                "No {} to copy from; keeping the existing contents of {}",
+                dirs.js_dist_source.display(),
+                dirs.js_dist_tmp.display()
+            );
+        }
     } else if dirs.js_dist_tmp.exists() {
         // `needs_build` is false and the embedded copy still has to be
         // refreshed: `should_build` answers "are the JS SOURCES newer than
@@ -141,6 +154,32 @@ fn main() -> std::io::Result<()> {
         );
     } else {
         p!("Skipping asset pre-compression (debug build; runtime middleware compresses on the fly). Set ATOMICSERVER_PRECOMPRESS=true to force.");
+    }
+
+    // `handlers::single_page_app` does `include_str!("../../assets_tmp/index.html")`,
+    // so an empty `assets_tmp` does not fail here -- it fails in the compiler,
+    // as "couldn't read ... No such file or directory" against a source line
+    // that has nothing to do with the cause. Every branch above can leave the
+    // directory without an `index.html`: a checkout where the frontend was
+    // never built, an interrupted `pnpm build`, or `ATOMICSERVER_SKIP_JS_BUILD`
+    // set against an `assets_tmp` that was never populated. Check once, here,
+    // while the reason is still known and can be spelled out.
+    let index_html = dirs.js_dist_tmp.join("index.html");
+    if !index_html.exists() {
+        panic!(
+            "no frontend bundle to embed: {} does not exist.\n\
+             \n\
+             Build the browser assets, then build again:\n\
+             \x20   cd browser && pnpm install && pnpm run build\n\
+             \n\
+             Note that cargo will not re-run this build script until something \
+             under {} changes, so `touch browser` first if an earlier run \
+             cached a skipped JS build. If ATOMICSERVER_SKIP_JS_BUILD is set, \
+             unset it -- it assumes {} is already populated.",
+            index_html.display(),
+            dirs.browser_root.display(),
+            dirs.js_dist_tmp.display(),
+        );
     }
 
     // Makes the static files available for compilation
