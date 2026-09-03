@@ -7103,9 +7103,8 @@ msgstr "This workspace has an encrypted backup in Cloud Vault."
 msgid "Restore from Cloud Vault"
 msgstr "Restore from Cloud Vault"
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Continue without an account"
-msgstr "Continue without an account"
+#~ msgid "Continue without an account"
+#~ msgstr "Continue without an account"
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
@@ -7119,3 +7118,33 @@ msgstr "{0}. We hold your key sealed, but only your passkey opens it. A browser 
 #: src/routes/SyncRoute.tsx
 msgid "Add a recovery code"
 msgstr "Add a recovery code"
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Signing out…"
+msgstr "Signing out…"
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Keep this one"
+msgstr "Keep this one"
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "This email already has an identity"
+msgstr "This email already has an identity"
+
+#. 0: conflict.managedAccountEmail
+#: src/components/IdentityReconcileGate.tsx
+msgid "{0} is backed up with an identity that is not the one this browser is using. An account has one identity — which one should this be?"
+msgstr "{0} is backed up with an identity that is not the one this browser is using. An account has one identity — which one should this be?"
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Switch to my account's identity"
+msgstr "Switch to my account's identity"
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Restores it here. The identity you made in this browser stays reachable only with its agent secret."
+msgstr "Restores it here. The identity you made in this browser stays reachable only with its agent secret."
+
+#. 0: PRODUCT_NAME
+#: src/components/IdentityReconcileGate.tsx
+msgid "Signs this browser out of {0}. Nothing here is backed up until it has an account of its own."
+msgstr "Signs this browser out of {0}. Nothing here is backed up until it has an account of its own."

@@ -1,3 +1,4 @@
+import { core } from '@tomic/react';
 import { PRODUCT_NAME } from './product';
 import {
   clearManagedAccountBinding,
@@ -214,6 +215,42 @@ export async function assertAgentMatchesManagedAccount(
   throw new Error(
     `This device is signed in to a different Atomic agent than your ${PRODUCT_NAME} account. Resolve the identity mismatch before continuing.`,
   );
+}
+
+/**
+ * The least a store needs to answer `localAgentIsDisposable`. Narrow so the
+ * test can hand in a stub instead of a whole Store.
+ */
+export type AgentResourceReader = {
+  getResource(subject: string): Promise<{
+    error?: unknown;
+    get(property: string): unknown;
+  }>;
+};
+
+/**
+ * Whether the device's agent is one nobody would miss: the demo guest, or an
+ * identity that never got a workspace. Real accounts get a personal drive
+ * during onboarding; guests never do (same test `ensureAgentForDemo` uses).
+ *
+ * This is what decides whether the reconcile gate may swap the agent out
+ * silently. It used to swap every time — and a fresh local identity with a
+ * workspace on it was replaced, without a word, the moment its owner signed
+ * in to the portal with an email that already had one (staging, 2026-09-03).
+ */
+export async function localAgentIsDisposable(
+  store: AgentResourceReader,
+  agentSubject: string,
+): Promise<boolean> {
+  try {
+    const resource = await store.getResource(agentSubject);
+
+    if (resource.error) return true;
+
+    return !resource.get(core.properties.personalDrive);
+  } catch {
+    return true;
+  }
 }
 
 export function shortDid(subject: string): string {
