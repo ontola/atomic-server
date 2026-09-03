@@ -76,9 +76,28 @@ test.describe('signing in on a device that holds none of the account’s data', 
     );
 
     // The default is the server's origin. Anything of the server's own is not
-    // this account's, and must not be sitting there waiting to be opened.
-    expect(drive, 'signing in without data must not leave a drive active').toBe(
-      '',
+    // this account's, and must not be sitting there waiting to be opened. The
+    // account's own key-derived drive is fine — that one is empty, not
+    // somebody else's, and it is where this identity writes.
+    expect(
+      drive,
+      'signing in without data must not leave another workspace active',
+    ).not.toMatch(/^https?:/);
+  });
+
+  test('names the account’s own drive as the place to write', async ({
+    page,
+  }) => {
+    await signInAsAStranger(page);
+
+    await expect(page.getByText('Your data is on another device')).toBeVisible({
+      timeout: 20_000,
+    });
+
+    const drive = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem('drive') ?? '""'),
     );
+
+    expect(drive).toMatch(/^did:ad:/);
   });
 });

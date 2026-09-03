@@ -4012,6 +4012,7 @@ msgstr ""
 #: src/components/Vault/VaultPanel.tsx
 #: src/components/Vault/VaultRestoreAction.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
+#: src/views/getting-started/ConnectDeviceStep.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Restoring…"
 msgstr ""
@@ -7120,4 +7121,8 @@ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Keep it somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
+msgstr ""
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Cloud Vault had nothing for this workspace:"
 msgstr ""

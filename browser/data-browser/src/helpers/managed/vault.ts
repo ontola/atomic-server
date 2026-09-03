@@ -107,6 +107,8 @@ type DownloadUrl = {
 export type VaultEnrollment = {
   id: string;
   drive_subject: string;
+  /** The agent that enrolled it; an account may hold several agents' drives. */
+  agent_subject?: string;
   drive_pseudonym: string;
   status: string;
   used_bytes: number;
