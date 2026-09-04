@@ -115,8 +115,8 @@ test.describe('search', async () => {
 
     // Don't rely on a fixed 6.5s sleep — under parallel load the index can
     // lag noticeably longer. Poll the real search endpoint until the new
-    // folder appears. Probe the server resource directly so local MiniSearch
-    // hits don't make this readiness check pass before Tantivy is committed.
+    // folder appears. Probe the server resource directly so local KV hits
+    // don't make this readiness check pass before Tantivy is committed.
     await waitForServerSearch(page, unique, driveSubject, [folderSubject]);
 
     // Go somewhere else so navigation via search is observable.
@@ -287,9 +287,9 @@ test.describe('search', async () => {
     await page.keyboard.press('Escape');
   });
 
-  // Offline search must resolve from the client-side MiniSearch index
-  // (`LocalSearch`) — no server round-trip. A regression here makes search
-  // silently return nothing while disconnected.
+  // Offline search must resolve from the ClientDb KV index — no server
+  // round-trip. A regression here makes search silently return nothing
+  // while disconnected.
   test('search works offline against the local index', async ({
     page,
     context,
@@ -307,45 +307,39 @@ test.describe('search', async () => {
       timeout: 10000,
     });
 
-    // Offline search reads the client-side MiniSearch index. The folder is
-    // created (commit 1) and named via `setTitle` (commit 2); the local index
-    // only picks up the *name* once that rename commit round-trips and
-    // re-ingests — the sidebar shows the name optimistically well before. So
-    // going offline on sidebar-visibility races the indexing (under load the
-    // name reaches the local index hundreds of ms later, intermittently more).
-    // Wait for the exact signal offline search depends on: the local index
-    // returns the folder for its name. `store.search()` can't be used here —
-    // online it falls back to the server when the local index misses, which
-    // would mask the very gap we must close.
-    const folderSubject = await getCurrentSubject(page);
+    // The folder is created (commit 1) and named via `setTitle` (commit 2);
+    // the KV index only picks up the *name* once that rename commit
+    // applies. The sidebar shows the name optimistically well before.
+    // Wait for ClientDb.search — `store.search()` online merges Tantivy
+    // and would mask a local-index miss.
     await expect
       .poll(
-        () =>
-          page.evaluate(
-            ({ subj, q }) => {
-              const store = window.store as unknown as {
-                driveOf(s: string): string;
-                localSearch: {
-                  search(
-                    q: string,
-                    d: string,
-                    n: number,
-                  ): {
-                    subjects: string[];
-                  };
-                };
-              };
+        async () =>
+          page.evaluate(async q => {
+            const store = window.store as unknown as {
+              getDrive(): string | undefined;
+              getClientDb():
+                | {
+                    isReady: boolean;
+                    search(
+                      query: string,
+                      opts?: { parents?: string },
+                    ): Promise<string[]>;
+                  }
+                | undefined;
+            };
 
-              try {
-                const drive = store.driveOf(subj);
+            try {
+              const db = store.getClientDb();
+              const drive = store.getDrive();
 
-                return store.localSearch.search(q, drive, 30).subjects.length;
-              } catch {
-                return 0;
-              }
-            },
-            { subj: folderSubject, q: unique },
-          ),
+              if (!db?.isReady || !drive) return 0;
+
+              return (await db.search(q, { parents: drive })).length;
+            } catch {
+              return 0;
+            }
+          }, unique),
         { timeout: 15000 },
       )
       .toBeGreaterThan(0);

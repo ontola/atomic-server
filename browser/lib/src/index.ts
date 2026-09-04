@@ -71,7 +71,6 @@ export * from './presence.js';
 export * from './CryptoProvider.js';
 export { ClientDbWorker } from './client-db.js';
 export type { ClientDbQueryOpts, ClientDbQueryResult } from './client-db.js';
-export { LocalSearch } from './local-search.js';
 export {
   LocalOutbox,
   isTerminalCommitErrorMessage,

@@ -4,10 +4,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
-- `@tomic/lib`: `Store.search` prefers the durable WASM/OPFS inverted index
-  (`ClientDb.search`) when the local database is ready. MiniSearch remains
-  the fallback for sessions without ClientDb; online searches still merge
-  with Tantivy. `ClientDbWorker.search` / `NodeClientDb.search` added.
+- `@tomic/lib`: `Store.search` uses the durable WASM/OPFS inverted index
+  (`ClientDb.search`) for local hits. The MiniSearch in-memory index is
+  removed. Online searches still merge with hosted Tantivy. Offline
+  without ClientDb returns no local hits. `ClientDbWorker.search` /
+  `NodeClientDb.search` added.
 - `@tomic/lib` live collaboration speaks binary `EPHEMERAL`. Edits in progress, cursors and drive presence are sent and received as `EPHEMERAL (0x40)` frames (`encodeEphemeral` / `decodeEphemeral`, `EphemeralKind`), raw bytes instead of base64 JSON in the `LORO_SYNC_UPDATE` / `LORO_EPHEMERAL_UPDATE` / `PRESENCE_UPDATE` text frames, which are gone. `WSClient.sendLoroSyncUpdate`, `sendLoroEphemeralUpdate` and `sendPresenceUpdate` now take `(subject, bytes)`; `Store.__handleLoroSyncMessage`, `__handleLoroEphemeralMessage` and `__handlePresenceMessage` take `(subject, bytes)`. The subscribe / unsubscribe frames are still text.
 - `@tomic/lib` drive sync speaks binary `SYNC`. The hash-first probe on connect and the reduced reconcile after the RBSR descent are sent as `SYNC (0x30)` with `"probe": true` / `"subjects": [...]` in the JSON tail, and a stale probe is answered with the new `SYNC_RESEND (0x38)` (`decodeSyncResend`, `Tag.SYNC_RESEND`). The text `SYNC_VV` request and text `SYNC_RESEND` answer are gone; the `RBSR_FP` / `RBSR_ITEMS` descent is still text. Servers advertise `sync-probe`; an older server ignores the two keys and runs a full reconcile.
 - `@tomic/lib` cleanup. Switching drives now `UNSUB`s the previous drive's fan-out (until now every drive opened in a session kept pushing its commits to the socket). `Store.waitForServerConnected(timeoutMs)` is public and is the one implementation of a wait that existed four times over (`Collection` and two data-browser helpers now use it). Removed: the write-only `serverHasCapability` / `getServerWsCapabilities` cache (the live list is `WSClient.serverCapabilities`), `Store.logIncomingCommit`, the `debugFrame` codec helper and the exported `supportsWebSockets` (all without callers), and a skipped integration test targeting APIs that no longer exist. Liveness constants moved to `liveness.ts`.

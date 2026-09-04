@@ -597,8 +597,9 @@ pub trait SearchBackend: Send + Sync {
 
 Initial implementations:
 
-- No-op/local indexed search for small runtimes.
-- Tantivy backend for server/native.
+- KV inverted index in `atomic_lib::search` (redb / OPFS / sled).
+- Tantivy remains the hosted HTTP `/search` adapter until the KV engine
+  can honour filters at server scale (see [`local-search.md`](./local-search.md)).
 
 Plugins should remain explicitly optional in `NodeConfig`. A runtime can support
 core resources, commits, blobs, queries, and sync without supporting plugin UI or
