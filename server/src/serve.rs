@@ -57,17 +57,8 @@ async fn rebuild_indexes(
         mode,
         crate::config::RebuildIndexMode::All | crate::config::RebuildIndexMode::Search
     ) {
-        tracing::info!("Removing existing search index...");
-        appstate
-            .search_state
-            .writer
-            .write()
-            .expect("Could not get a lock on search writer")
-            .delete_all_documents()?;
-        appstate
-            .search_state
-            .add_all_resources(&appstate.store)
-            .await?;
+        tracing::info!("Rebuilding full-text search index...");
+        atomic_lib::search::build_search_index(&appstate.store)?;
     }
 
     if matches!(
@@ -111,15 +102,12 @@ async fn clear_remote_cache(appstate: &crate::appstate::AppState) -> AtomicServe
 
     for subject in subjects_to_remove {
         appstate.store.remove_resource(&subject).await?;
-        appstate.search_state.remove_resource(subject.as_str())?;
         let _ = appstate
             .vector_search_state
             .remove_resource(subject.as_str())
             .await;
         count += 1;
     }
-
-    appstate.search_state.writer.write()?.commit()?;
 
     tracing::info!("Successfully removed {} remote resources.", count);
     Ok(())

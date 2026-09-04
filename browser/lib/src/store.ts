@@ -2513,15 +2513,14 @@ export class Store {
     });
 
     // Local hits come from the durable KV index in ClientDb (title,
-    // description, Loro body, 1-edit prefix fuzzy). No in-memory JS
-    // index. `filters` (property-value constraints) are not in the KV
-    // query yet — skip local and let Tantivy honour them when online.
+    // description, Loro body, 1-edit prefix fuzzy, PropValSub filters).
     const clientDb = this.clientDb;
     const kvResults =
-      clientDb?.isReady && typeof clientDb.search === 'function' && !hasFilters
+      clientDb?.isReady && typeof clientDb.search === 'function'
         ? await clientDb.search(query, {
             limit: opts.limit ?? 30,
             parents: parentScope,
+            filters: opts.filters,
           })
         : [];
 
@@ -2529,20 +2528,21 @@ export class Store {
       searchDebug('[search] local kv →', kvResults.length, kvResults);
     }
 
-    // Offline: hosted Tantivy is unreachable. Return whatever the local
-    // index has (empty if ClientDb is down or filters were requested).
+    // Offline: hosted `/search` is unreachable. Return whatever the local
+    // index has (empty if ClientDb is down).
     if (!this._serverConnected) {
       searchDebug('[search] OFFLINE kv →', kvResults.length, kvResults);
 
       return kvResults;
     }
 
-    // Merge with hosted Tantivy `/search`.
+    // Merge with hosted `/search` (same KV engine) so OPFS lag still
+    // picks up hits the server already indexed.
     const searchSubject = buildSearchSubject(this.serverUrl, query, opts);
     searchDebug('[search] server search →', searchSubject);
     // Search URLs are dynamic query resources without commit identities. Keeping
     // one in the normal resource cache makes a later retry merge against the
-    // previous response and discard it as "unchanged", even when Tantivy now
+    // previous response and discard it as "unchanged", even when `/search` now
     // returns new matches. Evict only the in-memory synthetic resource so every
     // retry observes the server's current result set.
     this._resources.delete(this.resolveSubject(searchSubject));

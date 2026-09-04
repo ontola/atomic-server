@@ -199,12 +199,17 @@ export class NodeClientDb {
 
   async search(
     query: string,
-    opts: { limit?: number; parents?: string | string[] } = {},
+    opts: {
+      limit?: number;
+      parents?: string | string[];
+      filters?: Record<string, string | number | string[]>;
+    } = {},
   ): Promise<string[]> {
     const r = this.requireDb().search(
       query,
       opts.limit ?? null,
       opts.parents ?? null,
+      opts.filters ?? null,
     );
 
     return ((await r) as string[]) ?? [];

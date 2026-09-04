@@ -262,7 +262,7 @@ test.describe('search', async () => {
     );
     expect(tagSubjects).toHaveLength(2);
 
-    // Tag filters are Tantivy-only, so wait for the exact filtered server
+    // Tag filters go through PropValSub; wait for the exact filtered
     // query instead of sleeping for an assumed index interval.
     await waitForFilteredServerSearch(
       page,
@@ -310,7 +310,7 @@ test.describe('search', async () => {
     // The folder is created (commit 1) and named via `setTitle` (commit 2);
     // the KV index only picks up the *name* once that rename commit
     // applies. The sidebar shows the name optimistically well before.
-    // Wait for ClientDb.search — `store.search()` online merges Tantivy
+    // Wait for ClientDb.search — `store.search()` online merges `/search`
     // and would mask a local-index miss.
     await expect
       .poll(

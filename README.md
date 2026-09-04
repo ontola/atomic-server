@@ -34,7 +34,7 @@ _Status: alpha. [Breaking changes](CHANGELOG.md) are expected until 1.0._
 - 💻  **Runs everywhere** (linux, windows, mac, arm)
 - 🔧  **Custom data models**: create your own classes, properties and schemas using the built-in Ontology Editor. All data is verified and the models are sharable using [Atomic Schema](https://docs.atomicdata.dev/schema/intro.html)
 - ⚙️  **Restful API**, with [JSON-AD](https://docs.atomicdata.dev/core/json-ad.html) responses.
-- 🔎  **Full-text search** with fuzzy search and various operators, often <3ms responses. Powered by [tantivy](https://github.com/quickwit-inc/tantivy).
+- 🔎  **Full-text search** with prefix typeahead and 1-edit fuzzy matching, often <3ms responses. Same KV index on the server and in the browser.
 - ✨  **AI** with [MCP](https://modelcontextprotocol.io/) support, use any model via OpenRouter or host your own with Ollama.
 - 🗄️  **Tables**, with strict schema validation, keyboard support, copy / paste support. Similar to Airtable.
 - 📄  **Documents**, collaborative, rich text, similar to Google Docs / Notion.

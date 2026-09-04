@@ -56,7 +56,6 @@ serde_jcs = "0.2"
 serde_with = "3.20"
 simple-server-timing-header = "0.1"
 static-files = "0.3.1"
-tantivy = "0.26.1"
 tracing = "0.1.44"
 # Error reporting. No-op unless SENTRY_DSN is set (see trace.rs). Built on
 # rustls + reqwest to match the rest of the server; no native-tls.

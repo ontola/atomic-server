@@ -114,7 +114,7 @@ export async function startServer(): Promise<ServerHandle> {
     ATOMIC_PORT: String(port),
     ATOMIC_DATA_DIR: dataDir,
     ATOMIC_CONFIG_DIR: configDir,
-    // Cache dir holds the tantivy search index lockfile — must be unique per
+    // Cache dir must be unique per server process so parallel tests do not collide.
     // server instance so parallel test files don't collide.
     ATOMIC_CACHE_DIR: path.join(tmpDir, 'cache'),
     ATOMIC_DOMAIN: 'localhost',

@@ -2,7 +2,7 @@
 /// Also optionally creates a Chrome trace file. Starts OpenTelemetry if configured.
 /// Returns a [tracing_chrome::FlushGuard] that should be dropped when the server is no longer needed.
 pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::FlushGuard> {
-    // Enable logging, but hide most tantivy logs
+    // Enable logging, but keep chatty crates quiet.
     let log_level = match config.opts.log_level {
         crate::config::LogLevel::Warn => "warn",
         crate::config::LogLevel::Info => "info",
@@ -16,13 +16,12 @@ pub fn init_tracing(config: &crate::config::Config) -> Option<tracing_chrome::Fl
     // init_tracing call.
     //
     // Third-party libraries kept at `warn` or higher to prevent log floods:
-    // - tantivy: normal indexing operations log at info, drowns our logs.
     // - loro_internal: every snapshot export logs per-block-section counters.
     // - pkarr / reqwest: chatty DHT/HTTP internals.
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
     let filter = tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         tracing_subscriber::EnvFilter::new(format!(
-            "{log_level},tantivy=warn,loro_internal=warn,pkarr=warn,reqwest=warn"
+            "{log_level},loro_internal=warn,pkarr=warn,reqwest=warn"
         ))
     });
     // Sentry layer: `error!` events become Sentry issues, `warn!`/`info!`

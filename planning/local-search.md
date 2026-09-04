@@ -1,21 +1,22 @@
 # Local full-text search (KV inverted index)
 
-Status: **Landing.** The engine lives in `atomic_lib::search` on redb / sled /
-BTreeMap (OPFS and desktop share it). The browser talks to it through
-`ClientDb.search`. Hosted `atomic-server` still serves Tantivy over `/search`
-and the browser merges those hits when online.
+Status: **Landed.** The engine lives in `atomic_lib::search` on redb / sled /
+BTreeMap (OPFS and desktop share it). Hosted `atomic-server` `/search` is a
+thin adapter over the same engine. The browser talks to it through
+`ClientDb.search` and merges with `/search` when online (covers OPFS lag).
 
 ## Why
 
 Dropping the embedded Actix server from Tauri (see
-[`atomic-lib-runtime.md`](./atomic-lib-runtime.md)) also drops mmap-Tantivy.
+[`atomic-lib-runtime.md`](./atomic-lib-runtime.md)) also dropped mmap-Tantivy.
 OPFS never had it. MiniSearch was an in-memory name/description/shortname
 index rebuilt lazily — that JS path is gone. Local search is the product
-path, not a fallback.
+path, not a fallback. Tantivy is gone from the server too: one engine
+everywhere.
 
-The bar is prefix typeahead + document text + persistence + Tantivy's
-1-edit prefix-fuzzy (`FuzzyTermQuery::new_prefix(term, 1, true)`), so
-`avacado` finds `avocado` and `avo` typeahead works.
+The bar is prefix typeahead + document text + persistence + 1-edit
+prefix-fuzzy (`avacado` finds `avocado` and `avo` typeahead works), plus
+exact `property:"value"` filters for the file picker and class selector.
 
 ## Shape
 
@@ -36,9 +37,15 @@ Trees (names in `lib/src/db/trees.rs`):
 Fields: title (name / shortname / filename), description, Loro body
 (`AtomicLoroDoc::extract_document_plain_text`). Commits are skipped.
 
-Query: tokenize, AND tokens, BM25 with Tantivy-like boosts (title exact 10,
-title prefix 6, title fuzzy 4, description/body lower). Parent/drive scope
-walks `SearchDocs.parent` / `drive` (same semantics as Tantivy `parents=`).
+Query: tokenize, AND tokens, BM25 with title exact 10 / prefix 6 / fuzzy 4,
+description/body lower. Parent/drive scope walks `SearchDocs.parent` /
+`drive`, falling back to the resource when it has no searchable text.
+
+Filters: AND of exact property-value pairs, served from the existing
+`PropValSub` index (same `{property}-{value}-{subject}` collections already
+use). Empty `q` + filters lists those subjects (file picker `isA:File`,
+class selector, ontology panel). The HTTP `filters=` string keeps the
+historical `prop:"value" AND …` shape so existing clients keep working.
 
 Fuzzy:
 
@@ -48,37 +55,16 @@ Fuzzy:
 3. Longer tokens: trigram candidates, then
    `min_prefix_levenshtein(q, term) ≤ 1`.
 
-Not in v1: distance 2, stemming, phrase positions, Lucene query language,
-JSON propval `property:"value"` as a first-class posting (JS `Store.search`
-skips the KV path when `filters` is set and lets Tantivy honour them).
-Table `contains` still planned via this index.
+Not in this engine: distance 2, stemming, phrase positions, Lucene query
+language. Table `contains` still planned via this index.
 
 ## Upgrade
 
 Opening a store that has resources but no search trees rebuilds the index
 once (`PluginMeta` key `search_index_v1`). New writes index incrementally.
-`Db::build_index` also reindexes FTS.
-
-## Hosted server / Tantivy
-
-Keep Tantivy as the HTTP `/search` adapter **for now**. Local nodes (OPFS,
-desktop, future Tauri-without-Actix) use the KV index. Vector search stays
-opt-in LanceDB on the server.
-
-Retiring Tantivy is a later slice, not this one. Preconditions:
-
-- KV query honours `filters` (JSON `property:"value"` postings, or a cheap
-  post-check that is good enough for hosted `/search`).
-- Hosted scale is acceptable (or we shard / keep a server-side KV replica).
-- Table `contains` and the file-picker `isA:` filters no longer need the
-  Tantivy query language.
-- Actix `/search` becomes a thin adapter over `atomic_lib::search`.
-
-Until then the browser merges local KV hits with Tantivy when online.
+`Db::build_index` and `--rebuild-indexes search` also reindex FTS.
 
 ## Remaining
 
-- JSON propvals / `property:"value"` as indexed postings.
 - Table `contains` through this engine (`planning/table-view-filters.md`).
 - Flutter `AtomicNode::search` wiring in the bridge.
-- Replace hosted Tantivy with this engine (see above).
