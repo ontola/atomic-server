@@ -36,30 +36,12 @@ fn base_url(server_url: &str) -> Url {
     url
 }
 
-// Characters the HTTP `filters=` string still escapes, so existing clients
-// (`escapeTantivyKey` in `@tomic/lib`) keep working against this server.
-const SPECIAL_CHARS_FILTER: &[char] = &[
-    '+', '^', '`', ':', '{', '}', '"', '[', ']', '(', ')', '!', '\\', '*', ' ', '.',
-];
-
-fn escape_filter_key(key: &str) -> String {
-    key.chars()
-        .map(|c| {
-            if SPECIAL_CHARS_FILTER.contains(&c) {
-                format!("\\{}", c)
-            } else {
-                c.to_string()
-            }
-        })
-        .collect()
-}
-
 fn build_filter_string(filters: &HashMap<String, String>) -> String {
     filters
         .iter()
         .filter_map(|(key, value)| {
             if !value.is_empty() {
-                Some(format!("{}:\"{}\"", escape_filter_key(key), value))
+                Some(format!("{}:\"{}\"", key, value))
             } else {
                 None
             }
@@ -104,13 +86,6 @@ mod tests {
         let server_url = "http://example.com";
         let expected_url = "http://example.com/search";
         assert_eq!(base_url(server_url).to_string(), expected_url);
-    }
-
-    #[test]
-    fn test_escape_filter_key() {
-        let key = "+^`:{}\"[]()!\\* .";
-        let expected_escaped_key = "\\+\\^\\`\\:\\{\\}\\\"\\[\\]\\(\\)\\!\\\\\\*\\ \\.";
-        assert_eq!(escape_filter_key(key), expected_escaped_key);
     }
 
     #[test]

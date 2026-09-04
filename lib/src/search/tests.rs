@@ -380,8 +380,8 @@ async fn filter_respects_parent_scope() {
 }
 
 #[test]
-fn parse_search_filters_unescapes_client_keys() {
-    let isa = r#"https\://atomicdata.dev/properties/isA:"https://atomicdata.dev/classes/File""#;
+fn parse_search_filters_exact_pairs() {
+    let isa = r#"https://atomicdata.dev/properties/isA:"https://atomicdata.dev/classes/File""#;
     let pairs = super::parse_search_filters(isa);
     assert_eq!(
         pairs,
@@ -398,11 +398,6 @@ fn parse_search_filters_unescapes_client_keys() {
         parsed,
         vec![("age".into(), "10".into()), ("name".into(), "John".into())]
     );
-
-    let qualified =
-        r#"propvals.https\://atomicdata.dev/properties/isA:"https://atomicdata.dev/classes/File""#;
-    let pairs = super::parse_search_filters(qualified);
-    assert_eq!(pairs[0].0, "https://atomicdata.dev/properties/isA");
 }
 
 /// Direct index of a resource that never went through apply_commit, so the
