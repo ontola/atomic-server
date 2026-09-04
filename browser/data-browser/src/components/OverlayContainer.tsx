@@ -1,10 +1,22 @@
 import { useEffect, useRef, useState, type JSX, useMemo } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { styled } from 'styled-components';
-import { displayShortcut, shortcuts } from './HotKeyWrapper';
+import { displayShortcut, shortcuts } from '../actions/shortcuts';
+import { listShortcutHelp } from '../actions/catalog';
+import { matchActionsForPalette } from '../actions/matchActions';
+import { resourceActions } from '../actions/resourceActions';
+import { runAction } from '../actions/runAction';
+import { useActionContext } from '../actions/useActionContext';
+import type { ActionDefinition } from '../actions/types';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
+import {
+  ConfirmationDialog,
+  ConfirmationDialogTheme,
+} from './ConfirmationDialog';
+import { ResourceInline } from '../views/ResourceInline';
+import { ResourceUsage } from './ResourceUsage';
 import {
   useServerSearch,
   useStore,
@@ -31,28 +43,16 @@ import ResourceCard from '../views/Card/ResourceCard';
 import ResourceRow from '@views/ResourceRow';
 import { DEFAULT_AICHAT_NAME } from './AI/aiContstants';
 import { setPendingFirstMessage } from '@chunks/AI/pendingFirstMessage';
+import {
+  closeOverlay,
+  openSearchOverlay,
+  openShortcutsOverlay,
+  setOverlay,
+  subscribeOverlay,
+  type OverlayType,
+} from './overlayState';
 
-// ─── Module-level overlay state ────────────────────────────────────────────────
-
-type OverlayType = 'search' | 'shortcuts' | null;
-
-const overlayListeners = new Set<(overlay: OverlayType) => void>();
-
-function setOverlay(overlay: OverlayType): void {
-  overlayListeners.forEach(listener => listener(overlay));
-}
-
-export function openSearchOverlay(_query?: string): void {
-  setOverlay('search');
-}
-
-export function openShortcutsOverlay(): void {
-  setOverlay('shortcuts');
-}
-
-export function closeOverlay(): void {
-  setOverlay(null);
-}
+export { closeOverlay, openSearchOverlay, openShortcutsOverlay };
 
 // ─── Module-level search state (shared between SearchOverlay and PreviewPane) ───
 
@@ -211,6 +211,54 @@ const PreviewFloat = styled.div`
   overflow-y: auto;
 `;
 
+const SectionHeading = styled.div`
+  padding: 0.5rem 1rem 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: ${p => p.theme.colors.textLight};
+`;
+
+const ActionRow = styled.button<{ $selected?: boolean }>`
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  border: none;
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  background: ${p => (p.$selected ? p.theme.colors.bg1 : 'transparent')};
+  color: ${p => p.theme.colors.text};
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background 80ms;
+
+  &:hover {
+    background: ${p => p.theme.colors.bg1};
+  }
+
+  svg {
+    color: ${p => p.theme.colors.textLight};
+    flex-shrink: 0;
+  }
+
+  span {
+    flex: 1;
+  }
+`;
+
+const ActionShortcut = styled.kbd`
+  background: ${p => p.theme.colors.bg1};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: 0.2rem;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.7rem;
+  color: ${p => p.theme.colors.textLight};
+  font-family: inherit;
+`;
+
 const AIChatRow = styled.button<{ $selected?: boolean }>`
   display: flex;
   align-items: center;
@@ -267,6 +315,11 @@ function parseSearchTags(
   };
 }
 
+type PaletteRow =
+  | { kind: 'action'; action: ActionDefinition }
+  | { kind: 'result'; subject: string }
+  | { kind: 'aiChat' };
+
 function SearchOverlay(): JSX.Element {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const { drive } = useSettings();
@@ -274,6 +327,9 @@ function SearchOverlay(): JSX.Element {
   const { scope } = useQueryScopeHandler();
   const navigate = useNavigateWithTransition();
   const store = useStore();
+  const [currentSubject] = useCurrentSubject();
+  const actionCtx = useActionContext(currentSubject ?? '');
+  const [confirmingAction, setConfirmingAction] = useState<ActionDefinition>();
   const driveResource = useResource<Server.Drive>(drive);
   const [driveTags] = useArray(driveResource, dataBrowser.properties.tagList);
   const tagResources = useResources(driveTags);
@@ -331,8 +387,16 @@ function SearchOverlay(): JSX.Element {
     allowEmptyQuery: !filterIsEmpty,
   });
 
+  const actionHits = currentSubject
+    ? matchActionsForPalette(query, resourceActions, actionCtx)
+    : [];
   const showAIChatRow = !!privateDrive && query && results.length === 0;
-  const totalItemCount = results.length + (showAIChatRow ? 1 : 0);
+  const rows: PaletteRow[] = [
+    ...actionHits.map(action => ({ kind: 'action' as const, action })),
+    ...results.map(subject => ({ kind: 'result' as const, subject })),
+    ...(showAIChatRow ? [{ kind: 'aiChat' as const }] : []),
+  ];
+  const totalItemCount = rows.length;
 
   useEffect(() => {
     const timer = setTimeout(() => inputRef.current?.focus(), 50);
@@ -343,6 +407,37 @@ function SearchOverlay(): JSX.Element {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setQuery(e.target.value);
     setSelected(0);
+  };
+
+  const activateRow = async (row: PaletteRow | undefined): Promise<void> => {
+    if (!row) {
+      return;
+    }
+
+    if (row.kind === 'action') {
+      if (row.action.danger && row.action.confirmation) {
+        setConfirmingAction(row.action);
+
+        return;
+      }
+
+      runAction(row.action, actionCtx);
+      closeOverlay();
+
+      return;
+    }
+
+    if (row.kind === 'result') {
+      navigate(constructOpenURL(row.subject));
+      closeOverlay();
+
+      return;
+    }
+
+    if (privateDrive) {
+      await handleStartAIChat(query, store, privateDrive, navigate);
+      closeOverlay();
+    }
   };
 
   const handleKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -357,19 +452,7 @@ function SearchOverlay(): JSX.Element {
         break;
       case 'Enter':
         e.preventDefault();
-
-        if (results[selectedIndex]) {
-          const openURL = constructOpenURL(results[selectedIndex]);
-          navigate(openURL);
-          closeOverlay();
-        } else if (showAIChatRow && selectedIndex === results.length) {
-          // AI Chat row selected
-          if (privateDrive) {
-            await handleStartAIChat(query, store, privateDrive, navigate);
-            closeOverlay();
-          }
-        }
-
+        await activateRow(rows[selectedIndex]);
         break;
       case 'Escape':
         e.preventDefault();
@@ -406,10 +489,17 @@ function SearchOverlay(): JSX.Element {
     }
   }, [selectedIndex]);
 
-  // Sync results + index to module state for the preview
+  // Sync results + index to module state for the preview. Actions are not
+  // previewed — an action at selectedIndex 0 must not show results[0].
   useEffect(() => {
-    setSearchResults(results, selectedIndex);
-  }, [results, selectedIndex]);
+    const actionCount = actionHits.length;
+    const resultIndex =
+      selectedIndex >= actionCount &&
+      selectedIndex < actionCount + results.length
+        ? selectedIndex - actionCount
+        : -1;
+    setSearchResults(results, resultIndex);
+  }, [results, selectedIndex, actionHits.length]);
 
   return (
     <ErrorBoundary>
@@ -452,26 +542,56 @@ function SearchOverlay(): JSX.Element {
             <ResultsList>
               <ResultsArea ref={resultsRef}>
                 <Column gap='0'>
-                  {results.map((subject, index) => (
-                    <ResultCard
-                      key={subject}
-                      subject={subject}
-                      index={index}
-                      selected={index === selectedIndex}
-                      onSelect={() => {
+                  {actionHits.length > 0 && (
+                    <SectionHeading>Actions</SectionHeading>
+                  )}
+                  {actionHits.map((action, index) => (
+                    <ActionRow
+                      key={action.id}
+                      data-index={index}
+                      data-testid={`palette-action-${action.id}`}
+                      $selected={index === selectedIndex}
+                      onClick={() => {
                         setSelected(index);
-                        setTimeout(() => {
-                          const openURL = constructOpenURL(subject);
-                          navigate(openURL);
-                          closeOverlay();
-                        }, 80);
+                        void activateRow({ kind: 'action', action });
                       }}
-                    />
+                    >
+                      {action.icon?.(actionCtx)}
+                      <span>{action.label(actionCtx)}</span>
+                      {action.shortcut && (
+                        <ActionShortcut>
+                          {displayShortcut(action.shortcut)}
+                        </ActionShortcut>
+                      )}
+                    </ActionRow>
                   ))}
+                  {results.length > 0 && actionHits.length > 0 && (
+                    <SectionHeading>Resources</SectionHeading>
+                  )}
+                  {results.map((subject, resultIndex) => {
+                    const index = actionHits.length + resultIndex;
+
+                    return (
+                      <ResultCard
+                        key={subject}
+                        subject={subject}
+                        index={index}
+                        selected={index === selectedIndex}
+                        onSelect={() => {
+                          setSelected(index);
+                          setTimeout(() => {
+                            void activateRow({ kind: 'result', subject });
+                          }, 80);
+                        }}
+                      />
+                    );
+                  })}
                   {showAIChatRow && (
                     <AIChatRow
-                      data-index={results.length}
-                      $selected={selectedIndex === results.length}
+                      data-index={actionHits.length + results.length}
+                      $selected={
+                        selectedIndex === actionHits.length + results.length
+                      }
                       onClick={async () => {
                         if (!privateDrive) {
                           return;
@@ -501,7 +621,7 @@ function SearchOverlay(): JSX.Element {
                 <kbd>↑</kbd> <kbd>↓</kbd> navigate
               </span>
               <span>
-                <kbd>↵</kbd> open / chat
+                <kbd>↵</kbd> open / run
               </span>
               <span>
                 <kbd>⇧↵</kbd> chat
@@ -518,6 +638,35 @@ function SearchOverlay(): JSX.Element {
           </FooterRow>
         </>
       )}
+      <ConfirmationDialog
+        title={confirmingAction?.confirmation?.title(actionCtx) ?? ''}
+        show={confirmingAction !== undefined}
+        bindShow={show => {
+          if (!show) {
+            setConfirmingAction(undefined);
+          }
+        }}
+        theme={ConfirmationDialogTheme.Alert}
+        confirmLabel={confirmingAction?.confirmation?.confirmLabel(actionCtx)}
+        onConfirm={() => {
+          if (confirmingAction) {
+            runAction(confirmingAction, actionCtx);
+            closeOverlay();
+          }
+        }}
+      >
+        {confirmingAction?.id === 'delete' ? (
+          <>
+            <p>
+              Are you sure you want to delete{' '}
+              <ResourceInline subject={actionCtx.subject} />
+            </p>
+            <ResourceUsage resource={actionCtx.resource} />
+          </>
+        ) : (
+          confirmingAction?.confirmation?.body(actionCtx)
+        )}
+      </ConfirmationDialog>
     </ErrorBoundary>
   );
 }
@@ -615,27 +764,15 @@ function ShortcutsOverlay(): JSX.Element {
     }
   };
 
-  // Rendered from the central `shortcuts` registry so this overlay can't
-  // drift from the actual bindings.
-  const shortcuts_list = [
-    { key: shortcuts.search, label: 'Open search' },
-    { key: shortcuts.keyboardShortcuts, label: 'Show keyboard shortcuts' },
-    { key: shortcuts.edit, label: 'Edit resource' },
-    { key: shortcuts.data, label: 'Show data view' },
-    { key: shortcuts.home, label: 'Go home' },
-    { key: shortcuts.parent, label: 'Go to parent' },
-    { key: shortcuts.new, label: 'New resource' },
-    { key: shortcuts.menu, label: 'Open menu' },
-    { key: shortcuts.userSettings, label: 'User settings' },
-    { key: shortcuts.themeSettings, label: 'Theme settings' },
-    { key: shortcuts.sidebarToggle, label: 'Show or hide the sidebar' },
-  ];
+  // Rendered from the action registry so this overlay can't drift from
+  // the actual bindings or the `/app/shortcuts` page.
+  const shortcuts_list = listShortcutHelp();
 
   const search = query.trim().toLowerCase();
   const visibleShortcuts = shortcuts_list.filter(
-    ({ key, label }) =>
+    ({ shortcut, label }) =>
       label.toLowerCase().includes(search) ||
-      displayShortcut(key).toLowerCase().includes(search),
+      displayShortcut(shortcut).toLowerCase().includes(search),
   );
 
   return (
@@ -655,10 +792,10 @@ function ShortcutsOverlay(): JSX.Element {
         <ShortcutHint onClick={closeOverlay}>esc</ShortcutHint>
       </OverlayInputWrapper>
       <ShortcutsList>
-        {visibleShortcuts.map(({ key, label }) => (
-          <ShortcutRow key={key}>
+        {visibleShortcuts.map(({ id, shortcut, label }) => (
+          <ShortcutRow key={id}>
             <ShortcutLabel>{label}</ShortcutLabel>
-            <ShortcutKey>{displayShortcut(key)}</ShortcutKey>
+            <ShortcutKey>{displayShortcut(shortcut)}</ShortcutKey>
           </ShortcutRow>
         ))}
         {visibleShortcuts.length === 0 && (
@@ -691,13 +828,7 @@ export function OverlayContainer(): JSX.Element | null {
     index: 0,
   });
 
-  useEffect(() => {
-    overlayListeners.add(setOverlayState);
-
-    return () => {
-      overlayListeners.delete(setOverlayState);
-    };
-  }, []);
+  useEffect(() => subscribeOverlay(setOverlayState), []);
 
   useEffect(() => {
     const handler = (isOpen: boolean, results: string[], index: number) => {

@@ -1,4 +1,10 @@
-import { useCanWrite, useDrive, useResource, useStore } from '@tomic/react';
+import {
+  useCanWrite,
+  useDrive,
+  useResource,
+  useStore,
+  type Store,
+} from '@tomic/react';
 import { useCurrentSubject } from '../helpers/useCurrentSubject';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { useQueryScopeHandler } from '../hooks/useQueryScope';
@@ -19,6 +25,66 @@ export interface ActionContextOverrides {
   openEmojiPicker?: () => void;
   openCoverPicker?: () => void;
   onAfterDelete?: () => void;
+  toggleSidebar?: () => void;
+}
+
+/** Fields needed to assemble an ActionContext outside a React render. */
+export interface BuildActionContextInput {
+  subject: string;
+  store: Store;
+  navigate: (to: string) => void;
+  favorites: string[];
+  addFavorite: (subject: string) => void;
+  removeFavorite: (subject: string) => void;
+  currentSubject?: string;
+  drive?: string;
+  addToChat?: () => void;
+  enableScope?: () => void;
+  addChild?: () => void;
+  toggleSidebar?: () => void;
+}
+
+/**
+ * Build an {@link ActionContext} from already-resolved store state — used by
+ * AI tools, which run after the subject is known.
+ */
+export async function buildActionContext(
+  input: BuildActionContextInput,
+): Promise<ActionContext> {
+  const resource = await input.store.getResource(input.subject);
+  const agent = input.store.getAgent();
+  let canWrite = false;
+
+  if (agent?.subject) {
+    if (resource.new) {
+      canWrite = true;
+    } else {
+      const [allowed] = await resource.canWrite(agent.subject);
+      canWrite =
+        !!allowed ||
+        (input.subject.startsWith('did:ad:') &&
+          agent.subject.startsWith('did:ad:'));
+    }
+  }
+
+  return {
+    store: input.store,
+    navigate: input.navigate,
+    subject: input.subject,
+    resource,
+    canWrite,
+    currentSubject: input.currentSubject,
+    pathname: typeof window === 'undefined' ? '' : window.location.pathname,
+    isFavorite: input.favorites.includes(input.subject),
+    addFavorite: input.addFavorite,
+    removeFavorite: input.removeFavorite,
+    addToChat: input.addToChat ?? (() => undefined),
+    enableScope: input.enableScope ?? (() => undefined),
+    addChild: input.addChild ?? (() => undefined),
+    drive: input.drive,
+    titleAffordancesInline: false,
+    toggleSidebar: input.toggleSidebar,
+  };
 }
 
 /**

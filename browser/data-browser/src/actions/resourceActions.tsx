@@ -30,9 +30,7 @@ import {
   shareURL,
 } from '../helpers/navigation';
 import { paths } from '../routes/paths';
-import { shortcuts } from '../components/HotKeyWrapper';
-import { ResourceInline } from '../views/ResourceInline';
-import { ResourceUsage } from '../components/ResourceUsage';
+import { shortcuts } from './shortcuts';
 import type { ActionContext, ActionDefinition } from './types';
 
 const getParent = (ctx: ActionContext): string | undefined =>
@@ -62,6 +60,7 @@ export const resourceActions: ActionDefinition[] = [
     helper: () => 'View the resource and its properties in the Data View.',
     keywords: ['json', 'raw', 'properties'],
     shortcut: shortcuts.data,
+    shortcutLabel: () => 'Show data view',
     disabled: ctx => ctx.pathname.startsWith(paths.data),
     run: ctx => ctx.navigate(dataURL(ctx.subject)),
   },
@@ -74,6 +73,8 @@ export const resourceActions: ActionDefinition[] = [
     helper: () => 'Toggle whether this resource appears in your Favorites.',
     keywords: ['star', 'bookmark', 'pin'],
     icon: ctx => (ctx.isFavorite ? <FaStar /> : <FaRegStar />),
+    asTool: true,
+    toolName: 'favorite_resource',
     run: ctx =>
       ctx.isFavorite
         ? ctx.removeFavorite(ctx.subject)
@@ -98,6 +99,7 @@ export const resourceActions: ActionDefinition[] = [
     keywords: ['change', 'modify', 'form'],
     icon: () => <FaPencil />,
     shortcut: shortcuts.edit,
+    shortcutLabel: () => 'Edit resource',
     available: ctx => ctx.canWrite,
     run: ctx => ctx.navigate(editURL(ctx.subject)),
   },
@@ -268,6 +270,8 @@ export const resourceActions: ActionDefinition[] = [
     helper: () => 'Edit permissions and create invites.',
     keywords: ['share', 'access', 'rights', 'invite'],
     icon: () => <FaShare />,
+    asTool: true,
+    toolName: 'open_share_settings',
     run: ctx => ctx.navigate(shareURL(ctx.subject)),
   },
   {
@@ -278,6 +282,8 @@ export const resourceActions: ActionDefinition[] = [
     helper: () => 'Show the history of this resource',
     keywords: ['versions', 'changes', 'undo'],
     icon: () => <FaClock />,
+    asTool: true,
+    toolName: 'show_history',
     run: ctx => ctx.navigate(historyURL(ctx.subject)),
   },
   {
@@ -289,6 +295,7 @@ export const resourceActions: ActionDefinition[] = [
     keywords: ['up', 'back', 'enclosing', 'folder'],
     icon: () => <FaTurnUp />,
     shortcut: shortcuts.parent,
+    shortcutLabel: () => 'Go to parent',
     available: ctx => !!getParent(ctx),
     run: ctx => {
       const parent = getParent(ctx);
@@ -318,19 +325,17 @@ export const resourceActions: ActionDefinition[] = [
     keywords: ['remove', 'destroy', 'trash'],
     icon: () => <FaTrash />,
     available: ctx => ctx.canWrite,
+    asTool: true,
+    toolName: 'delete_resource',
     danger: true,
     dangerLabel: () => 'Confirm Delete',
     confirmation: {
       title: () => 'Delete resource',
       confirmLabel: () => 'Delete',
       body: ctx => (
-        <>
-          <p>
-            Are you sure you want to delete{' '}
-            <ResourceInline subject={ctx.subject} />
-          </p>
-          <ResourceUsage resource={ctx.resource} />
-        </>
+        <p>
+          Are you sure you want to delete {ctx.resource.title || ctx.subject}?
+        </p>
       ),
     },
     run: async ctx => {
