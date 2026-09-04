@@ -25,7 +25,6 @@ import { ParentContextMenuTrigger } from './ResourceContextMenu/ParentContextMen
 import {
   FaArrowLeft,
   FaArrowRight,
-  FaArrowUp,
   FaBars,
   FaComments,
   FaMagnifyingGlass,
@@ -181,33 +180,6 @@ function DirectParent({ subject }: { subject: string }): JSX.Element | null {
       </Breadcrumb>
       <Divider>/</Divider>
     </>
-  );
-}
-
-/**
- * Single "go to parent" arrow shown on narrow bars in place of the breadcrumb
- * trail. Hidden if the parent is unauthorized, like {@link DirectParent}.
- */
-function ParentUpButton({ subject }: { subject: string }): JSX.Element | null {
-  const resource = useResource(subject, { allowIncomplete: true });
-  const [title] = useTitle(resource);
-  const navigate = useNavigateWithTransition();
-
-  if (resource.error || resource.isUnauthorized()) {
-    return null;
-  }
-
-  return (
-    <NarrowOnly>
-      <NavIconButton
-        color='textLight'
-        type='button'
-        title={`Go to ${title}`}
-        onClick={() => navigate(constructOpenURL(subject))}
-      >
-        <FaArrowUp />
-      </NavIconButton>
-    </NarrowOnly>
   );
 }
 
@@ -370,7 +342,6 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
         <FaMagnifyingGlass />
       </NavIconButton>
       <VerticalDivider />
-      {parent && <ParentUpButton subject={parent} />}
       <CrumbGroup $iconOnly={iconOnly}>
         {parent && <DirectParent subject={parent} />}
         <EditableBreadcrumb resource={resource} fallback={title} />
@@ -509,7 +480,8 @@ const CrumbGroup = styled.div<{ $iconOnly: boolean }>`
   overflow: hidden;
   flex-shrink: ${p => (p.$iconOnly ? 1 : 0)};
 
-  /* On narrow bars the whole trail is replaced by ParentUpButton. */
+  /* Narrow bars drop the trail: the sidebar and the OS back gesture cover
+     navigation, and the title is right below the bar. */
   @container breadcrumb-bar (max-width: 600px) {
     display: none;
   }
@@ -524,14 +496,6 @@ const WideOnly = styled.span`
 
   @container breadcrumb-bar (max-width: 600px) {
     display: none;
-  }
-`;
-
-const NarrowOnly = styled.span`
-  display: none;
-
-  @container breadcrumb-bar (max-width: 600px) {
-    display: contents;
   }
 `;
 
