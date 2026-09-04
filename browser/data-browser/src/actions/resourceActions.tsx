@@ -124,7 +124,9 @@ export const resourceActions: ActionDefinition[] = [
       'decorate',
     ],
     icon: () => <FaFaceSmile />,
-    searchOnly: true,
+    // Inline title buttons cover this on desktop; on touch and narrow
+    // viewports the menu is the only entry point, so list it.
+    searchOnly: ctx => ctx.titleAffordancesInline,
     available: ctx => ctx.canWrite && ctx.openEmojiPicker !== undefined,
     run: ctx => ctx.openEmojiPicker?.(),
   },
@@ -141,7 +143,9 @@ export const resourceActions: ActionDefinition[] = [
       'Pick an image shown as a banner at the top of this resource.',
     keywords: ['cover', 'banner', 'image', 'header', 'photo', 'decorate'],
     icon: () => <FaImage />,
-    searchOnly: true,
+    // Inline title buttons cover this on desktop; on touch and narrow
+    // viewports the menu is the only entry point, so list it.
+    searchOnly: ctx => ctx.titleAffordancesInline,
     available: ctx => ctx.canWrite && ctx.openCoverPicker !== undefined,
     run: ctx => ctx.openCoverPicker?.(),
   },

@@ -15,6 +15,7 @@ import {
 import { LAYOUT_CONTAINER } from '../helpers/containers';
 import { transition } from '../helpers/transition';
 import { UnsavedIndicator } from './UnsavedIndicator';
+import { useInlineTitleAffordances } from '../hooks/useInlineTitleAffordances';
 import { Flex } from './Row';
 import {
   AffordanceRow,
@@ -38,8 +39,10 @@ export interface EditableTitleProps {
    */
   transitionTag?: string;
   /**
-   * Show the "Add icon" / "Add cover" affordances above the title (revealed on
-   * hover). Set on main page views; leave off in bars and panels.
+   * Show the "Add icon" / "Add cover" affordances next to the title (revealed
+   * on hover). Set on main page views; leave off in bars and panels. Only
+   * honoured on hover-capable, wide-enough viewports — elsewhere the resource
+   * context menu carries the same actions (see `useInlineTitleAffordances`).
    */
   withDecorations?: boolean;
   /**
@@ -79,6 +82,7 @@ export function EditableTitle({
 
   const canWrite = useCanWrite(resource);
   const canEdit = canWrite && !lockedReason;
+  const inlineAffordances = useInlineTitleAffordances();
 
   useEffect(() => {
     // Two ways to learn this resource was just manually created:
@@ -181,7 +185,7 @@ export function EditableTitle({
     </Title>
   );
 
-  if (!withDecorations) {
+  if (!withDecorations || !inlineAffordances) {
     return titleElement;
   }
 
@@ -211,7 +215,7 @@ interface TitleProps {
  *  full-size heading force aggressive mid-word wrapping. */
 const narrowTitleFontSize = css`
   @container ${LAYOUT_CONTAINER} (max-width: 500px) {
-    font-size: 1.5rem;
+    font-size: 1.35rem;
   }
 `;
 
@@ -310,6 +314,11 @@ const EditingRow = styled.div`
 
 const TitleWrapper = styled.div`
   display: flex;
+  /* The affordances sit beside the title when there is room and drop
+     below it when there is not (split views, side panels). Without this
+     they keep their width and the heading is squeezed into breaking
+     mid-word, even on a wide, hover-capable screen. */
+  flex-wrap: wrap;
   align-items: center;
   gap: ${p => p.theme.size()};
   min-width: 0;
