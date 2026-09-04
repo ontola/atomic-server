@@ -4,6 +4,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+## [v0.41.0-beta.5] - 2026-09-04
+
 - `@tomic/lib`: `Store.search` uses the durable WASM/OPFS inverted index
   (`ClientDb.search`) for local hits, including `filters`. The MiniSearch
   in-memory index is removed. Online searches merge with hosted `/search`
@@ -11,6 +13,41 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   `ClientDbWorker.search` / `NodeClientDb.search` added. Removed
   `escapeTantivyKey` — `filters=` is exact `property:"value"` pairs, no
   query language.
+- Fix: [#1358](https://github.com/atomicdata-dev/atomic-server/issues/1358)
+  Cloud Vault restore on Safari (and any WebCrypto signer) failed with "no
+  wrapper in this envelope accepted that credential". The agent vault proof
+  asked the signed-in agent's provider for a signature, which on WebKit is
+  WebCrypto with a randomized nonce — a different valid signature every
+  call, so the KEK never matched. The proof is now derived once with noble
+  (RFC 8032, matching the server) from the raw key at sign-in and persisted
+  beside the keypair. When no stored proof exists, a live signature is only
+  accepted if signing twice reproduces it.
+- Fix: signing in with a passkey or secret on a browser that has no
+  control-plane session no longer ends on "Your data is on another device"
+  with nothing to do. The connect-device step checks for a session first
+  and, when there is none, offers sign-in on the portal (or the device-link
+  panel in a webview that cannot hold the cookie).
+- Onboarding: the connect-device screen names one way in — restore from the
+  backup, sign in to the account that keeps it, or the second-device routes
+  — and folds the rest under "…or bring it over from another device".
+- Sidebar drive switcher is a two-part control: the drive's emoji or icon
+  (home for the private drive) plus its name, both halves bordered like a
+  segmented button.
+- Quick-create class shortcuts reveal on hover and stay hidden on touch
+  (the New page still has them).
+- [#1338](https://github.com/atomicdata-dev/atomic-server/issues/1338) Title
+  row on touch and narrow screens: the Add icon / Add cover ghost buttons
+  next to a page title only render where the viewport can hover and is at
+  least 600px wide; elsewhere they appear in the resource context menu.
+- Title editor wraps like the heading (a textarea that grows with the text)
+  instead of becoming a single-line input that scrolls sideways. Clicking a
+  title places the caret under the pointer instead of selecting the whole
+  title (a freshly created resource still selects its placeholder). The
+  go-to-parent arrow on narrow nav bars is gone.
+- The unsaved-changes asterisk is gone. Autosaving editors set the dirty
+  flag between every keystroke and its commit, so it blinked on every tap
+  and told the user nothing; the sidebar sync item already spins while
+  commits are in flight.
 - `@tomic/lib` live collaboration speaks binary `EPHEMERAL`. Edits in progress, cursors and drive presence are sent and received as `EPHEMERAL (0x40)` frames (`encodeEphemeral` / `decodeEphemeral`, `EphemeralKind`), raw bytes instead of base64 JSON in the `LORO_SYNC_UPDATE` / `LORO_EPHEMERAL_UPDATE` / `PRESENCE_UPDATE` text frames, which are gone. `WSClient.sendLoroSyncUpdate`, `sendLoroEphemeralUpdate` and `sendPresenceUpdate` now take `(subject, bytes)`; `Store.__handleLoroSyncMessage`, `__handleLoroEphemeralMessage` and `__handlePresenceMessage` take `(subject, bytes)`. The subscribe / unsubscribe frames are still text.
 - `@tomic/lib` drive sync speaks binary `SYNC`. The hash-first probe on connect and the reduced reconcile after the RBSR descent are sent as `SYNC (0x30)` with `"probe": true` / `"subjects": [...]` in the JSON tail, and a stale probe is answered with the new `SYNC_RESEND (0x38)` (`decodeSyncResend`, `Tag.SYNC_RESEND`). The text `SYNC_VV` request and text `SYNC_RESEND` answer are gone; the `RBSR_FP` / `RBSR_ITEMS` descent is still text. Servers advertise `sync-probe`; an older server ignores the two keys and runs a full reconcile.
 - `@tomic/lib` cleanup. Switching drives now `UNSUB`s the previous drive's fan-out (until now every drive opened in a session kept pushing its commits to the socket). `Store.waitForServerConnected(timeoutMs)` is public and is the one implementation of a wait that existed four times over (`Collection` and two data-browser helpers now use it). Removed: the write-only `serverHasCapability` / `getServerWsCapabilities` cache (the live list is `WSClient.serverCapabilities`), `Store.logIncomingCommit`, the `debugFrame` codec helper and the exported `supportsWebSockets` (all without callers), and a skipped integration test targeting APIs that no longer exist. Liveness constants moved to `liveness.ts`.

@@ -7,6 +7,8 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+## [v0.41.0-beta.5] - 2026-09-04
+
 - **Local full-text search** in `atomic_lib` (`lib/src/search/`): a KV inverted
   index on the existing redb / sled / BTreeMap (OPFS) store. Indexes title,
   description, and Loro document body on every commit; queries AND tokens,
