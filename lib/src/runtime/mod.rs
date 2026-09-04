@@ -4,8 +4,11 @@
 //!
 //! Slice 1 (`planning/atomic-lib-runtime.md`, `planning/completed/runtime-boundary-decision.md`)
 //! is a thin wrapper: every method delegates to code that already existed, so
-//! there is no behaviour change — only a named place for it.
+//! there is no behaviour change — only a named place for it. The surface is
+//! deliberately no wider than what binds to it today (the WASM `ClientDb`):
+//! `from_db`, `db`, the agent accessors, `query` and `apply_commit` under an
+//! [`IngestPolicy`].
 
 mod node;
 
-pub use node::{AtomicNode, IngestPolicy, NodeConfig, NodeStorage, ResourceEdit};
+pub use node::{AtomicNode, IngestPolicy};

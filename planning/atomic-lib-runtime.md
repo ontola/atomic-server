@@ -6,48 +6,36 @@
 binding runtime — #1277/#1241 bind it, no parallel `simple.rs` / `ffi/` node
 surface ([`completed/runtime-boundary-decision.md`](./completed/runtime-boundary-decision.md)).
 
-**Slice 1 shipped:** `lib/src/runtime/` exists. `AtomicNode` wraps `Db` with
-`open` / `from_db`, `get`, `query`, `apply_commit(json, IngestPolicy)`,
-`mutate(ResourceEdit)`, `subscribe`, and (behind `iroh`) `sync_with_peer`.
-Every method delegates to a function that already existed — see the doc
-comment on each one in `lib/src/runtime/node.rs`. `IngestPolicy::{Hub, Peer,
-LocalCache}` names the three commit-validation profiles that used to be
-inline `CommitOpts` / `CommitIngestOpts` literals in `server/src/handlers/commit.rs`,
-`sync/engine.rs`, `sync/ws_apply.rs`, and `wasm/src/lib.rs`. The WASM
-`ClientDb` is the first adapter on it: `applyCommit` is
+**Slice 1 shipped, then cut back (2026-09-04):** `lib/src/runtime/` exists.
+`AtomicNode` wraps `Db` with `from_db`, `db`, `agent` / `set_agent`, `query`
+and `apply_commit(json, IngestPolicy)`. `IngestPolicy::{Hub, Peer, LocalCache}`
+names the three commit-validation profiles; `Hub` and `Peer` are
+`CommitIngestOpts::hub` / `::peer`, the presets `server/src/handlers/commit.rs`
+and `sync/engine.rs` also use, and `LocalCache` is the WASM cache's no-checks
+apply. The WASM `ClientDb` is the one adapter on it: `applyCommit` is
 `node.apply_commit(_, LocalCache)` and `query` is `node.query`. Tests:
-`runtime::node::tests` — two in-process nodes, `mutate` on one, `apply_commit(Peer)`
-on the other, `query`/`get`/`subscribe` reflect it; `LocalCache` accepts what `Peer`
-rejects; `mutate` without an agent errors.
+`runtime::node::tests` — a genesis on one in-process node ingested on another
+under `Peer`; `LocalCache` accepts what `Peer` rejects.
 
-What slice 1 did **not** do (deliberately — no behaviour change):
-
-- `mutate` still applies through `Resource::save_locally` / `save_as_genesis`
-  (local opts: signature and rights not re-checked), not through
-  `apply_commit(Hub)`. Routing it through `Hub` would add a JSON round-trip and
-  ownership/causality checks that today's local save does not run.
-- `LocalCache` delegates to the
-  former WASM `CommitOpts` respectively, because `CommitIngestOpts` on `develop`
-  has no `validate_rights` / `validate_timestamp` knobs yet. Once #1274 lands,
-  fold both into `ingest_commit` with `CommitIngestOpts::{replica, local_cache}`.
-- `sync_with_peer` wraps `sync::peer::sync_drive_with_peer_outcome` and so needs
-  the global Iroh endpoint (`peer::start`) — the node does not own that lifecycle.
-- No `NodeEvent`, blob service, outbox, or `AtomicTransport`; `subscribe` is
-  `Db::subscribe_events` (`DbEvent`) as-is.
-- WASM `getResource` keeps the raw `Db::get_resource` (no rights check, no
-  dynamic properties) — that is what the cache semantics require; the node's
-  `get` is the rights-checked extended read.
+Slice 1 originally also shipped `open(NodeConfig)` over a `NodeStorage` enum,
+`get`, `mutate(ResourceEdit)`, `subscribe` and (behind `iroh`)
+`sync_with_peer`. Three days later nothing but the WASM binding had bound to
+the node, and it used none of those, so they were removed rather than left as
+an API with no consumer (a 250-line surface with a single four-method user was
+the largest dead block in the sync stack). Each is one line over `Db` when an
+adapter needs it: `Db::init_*`, `get_resource_extended`, `save_locally` /
+`save_as_genesis`, `subscribe_events`, `peer::sync_drive_with_peer_outcome`.
+`Replica` (the hub-relayed text `COMMIT` profile) went with that frame the
+same day.
 
 Next:
 
-1. #1274 merges → `IngestPolicy` maps 1:1 onto `CommitIngestOpts` constructors
-   and the `LocalCache` arm loses its separate code path. (`Replica`, the
-   hub-relayed text `COMMIT` profile, was removed 2026-09-04 with the frame.)
-2. `server/src/handlers/commit.rs` → `node.apply_commit(_, Hub { source_id,
+1. `server/src/handlers/commit.rs` → `node.apply_commit(_, Hub { source_id,
    response_origin })` (Phase 2 below); `AppState` holds an `AtomicNode`.
-3. `ffi/` (#1277) and `python/` bind `AtomicNode`; `flutter/rust/src/api/simple.rs`
-   store group calls it (#1241 follow-up).
-4. Shared fixtures for the remaining pure twins
+2. `ffi/` (#1277) and `python/` bind `AtomicNode`; `flutter/rust/src/api/simple.rs`
+   store group calls it (#1241 follow-up). Grow the surface then, from what
+   those bindings actually call.
+3. Shared fixtures for the remaining pure twins
    (`planning/completed/runtime-boundary-decision.md`, sequencing step 3).
 
 This document describes the target architecture for making

@@ -1,88 +1,32 @@
 //! [`AtomicNode`]: a thin, named surface over [`Db`].
 //!
 //! Every method here delegates to a function that already existed before the
-//! runtime module did (the doc comment on each one names it). The point of
-//! this slice is not new behaviour but one place for adapters to bind, so
-//! that `wasm/src/lib.rs`, `flutter/rust/src/api/simple.rs`, `ffi/`,
-//! `python/` and the Actix handlers stop each re-wrapping `Db` with their own
-//! copy of the commit-validation knobs.
-
-use tokio::sync::broadcast;
+//! runtime module did (the doc comment on each one names it). The point is
+//! not new behaviour but one place for adapters to bind, so that
+//! `wasm/src/lib.rs` and the other bindings stop each re-wrapping `Db` with
+//! their own copy of the commit-validation knobs.
+//!
+//! Slice 1 (2026-09-01) shipped this with a wider aspirational API — `open`
+//! with a storage config, `get`, `mutate`, `subscribe`, `sync_with_peer`.
+//! Three days later nothing but the WASM binding had bound to it, and the
+//! WASM binding used four methods. The surface was cut down to those on
+//! 2026-09-04; the seam stays, and grows again when a second adapter binds
+//! to it (`planning/atomic-lib-runtime.md`).
 
 use crate::{
-    agents::{Agent, ForAgent},
+    agents::Agent,
     commit::CommitResponse,
-    db::{Db, DbEvent},
+    db::Db,
     errors::AtomicResult,
-    storelike::{Query, QueryResult, ResourceResponse},
+    storelike::{Query, QueryResult},
     sync::engine::{ingest_commit, CommitIngestOpts},
-    Resource, Storelike, Subject,
+    Storelike,
 };
 
-/// Where a node keeps its data. Each variant maps to exactly one existing
-/// `Db` constructor.
-#[derive(Debug, Clone)]
-pub enum NodeStorage {
-    /// `Db::init_memory` — BTreeMap store, no persistence. Tests and small
-    /// embedded runtimes.
-    Memory,
-    /// `Db::init_redb` — redb with an in-memory backend. What the WASM
-    /// `ClientDb.newInMemory` uses.
-    #[cfg(feature = "db-redb")]
-    RedbMemory,
-    /// `Db::init_redb_file` — redb on disk. Native servers and apps.
-    #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
-    RedbFile {
-        path: std::path::PathBuf,
-        uploads_path: std::path::PathBuf,
-    },
-    /// `Db::init_redb_opfs` — redb in the browser's OPFS, optionally
-    /// encrypted at rest. What the WASM `ClientDb` constructor uses.
-    #[cfg(all(feature = "db-redb", target_arch = "wasm32"))]
-    Opfs {
-        filename: String,
-        encryption_key: Option<[u8; 32]>,
-    },
-}
-
-/// How to open an [`AtomicNode`].
-#[derive(Debug, Clone)]
-pub struct NodeConfig {
-    pub storage: NodeStorage,
-    /// The node's own origin (`https://example.com`). `None` for a pure
-    /// client cache that owns no subjects.
-    pub base_domain: Option<String>,
-    /// The local agent that signs [`AtomicNode::mutate`] commits. Set as the
-    /// store's default agent; `None` leaves the node read-only for local
-    /// edits until one is set via [`AtomicNode::set_agent`].
-    pub agent: Option<Agent>,
-}
-
-impl NodeConfig {
-    /// In-memory node with no owned domain and no agent.
-    pub fn memory() -> Self {
-        Self {
-            storage: NodeStorage::Memory,
-            base_domain: None,
-            agent: None,
-        }
-    }
-
-    pub fn with_base_domain(mut self, base_domain: impl Into<String>) -> Self {
-        self.base_domain = Some(base_domain.into());
-        self
-    }
-
-    pub fn with_agent(mut self, agent: Agent) -> Self {
-        self.agent = Some(agent);
-        self
-    }
-}
-
-/// The trust role under which a signed commit is ingested. Names follow
-/// `CommitIngestOpts::{hub, peer, replica}` (PR #1274); `LocalCache` is the
-/// "fourth policy" that PR left out — the browser's WASM cache applying a
-/// commit the server already accepted.
+/// The trust role under which a signed commit is ingested. `Hub` and `Peer`
+/// are [`CommitIngestOpts::hub`] and [`CommitIngestOpts::peer`];
+/// `LocalCache` is the browser's WASM cache applying a commit the server
+/// already accepted.
 ///
 /// | policy | signature | rights | timestamp | ownership | loro causality | live echo |
 /// | --- | --- | --- | --- | --- | --- | --- |
@@ -109,28 +53,6 @@ pub enum IngestPolicy {
     LocalCache,
 }
 
-impl IngestPolicy {
-    /// Hub policy with no source id and the store's own base domain as origin.
-    pub fn hub() -> Self {
-        Self::Hub {
-            source_id: None,
-            response_origin: None,
-        }
-    }
-}
-
-/// A local edit for [`AtomicNode::mutate`]. Both arms sign with the node's
-/// agent and apply locally, without validating the signature or rights
-/// again (the node trusts its own agent) and without any network I/O.
-pub enum ResourceEdit<'a> {
-    /// Sign and apply the pending changes on an existing resource
-    /// (`Resource::save_locally`).
-    Update(&'a mut Resource),
-    /// Mint a new DID resource from this draft; its subject becomes
-    /// `did:ad:{signature}` (`Resource::save_as_genesis`).
-    Genesis(&'a mut Resource),
-}
-
 /// A running Atomic node: durable store plus the local agent that signs for
 /// it. Cheap to clone (`Db` is a bundle of `Arc`s); clones share the store,
 /// its event channel and its default agent.
@@ -140,46 +62,14 @@ pub struct AtomicNode {
 }
 
 impl AtomicNode {
-    /// Open a node. Delegates to `Db::init_memory` / `init_redb` /
-    /// `init_redb_file` / `init_redb_opfs` depending on
-    /// [`NodeConfig::storage`], then installs the agent as the store's
-    /// default agent.
-    pub async fn open(config: NodeConfig) -> AtomicResult<Self> {
-        let NodeConfig {
-            storage,
-            base_domain,
-            agent,
-        } = config;
-        let db = match storage {
-            NodeStorage::Memory => Db::init_memory(base_domain).await?,
-            #[cfg(feature = "db-redb")]
-            NodeStorage::RedbMemory => Db::init_redb(base_domain).await?,
-            #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
-            NodeStorage::RedbFile { path, uploads_path } => {
-                Db::init_redb_file(&path, base_domain, &uploads_path).await?
-            }
-            #[cfg(all(feature = "db-redb", target_arch = "wasm32"))]
-            NodeStorage::Opfs {
-                filename,
-                encryption_key,
-            } => Db::init_redb_opfs(base_domain, &filename, encryption_key.as_ref()).await?,
-        };
-        let node = Self::from_db(db);
-        if let Some(agent) = agent {
-            node.set_agent(agent);
-        }
-        Ok(node)
-    }
-
-    /// Wrap an already-opened store. For adapters that still construct `Db`
-    /// themselves (the WASM `ClientDb`, the server's `AppState`) while they
-    /// migrate to [`AtomicNode::open`].
+    /// Wrap an already-opened store. Adapters construct `Db` themselves
+    /// (the WASM `ClientDb`, the server's `AppState`) and bind here.
     pub fn from_db(db: Db) -> Self {
         Self { db }
     }
 
-    /// The underlying store, for operations this slice does not name yet
-    /// (blobs, version vectors, import/export, drive setup).
+    /// The underlying store, for operations this surface does not name
+    /// (blobs, version vectors, import/export, drive setup, events).
     pub fn db(&self) -> &Db {
         &self.db
     }
@@ -193,19 +83,6 @@ impl AtomicNode {
     /// (`Storelike::set_default_agent`).
     pub fn set_agent(&self, agent: Agent) {
         self.db.set_default_agent(agent);
-    }
-
-    /// Read a resource as `for_agent` would see it, including dynamic
-    /// (endpoint / class-extender) properties and the read-rights check
-    /// (`Storelike::get_resource_extended` with `skip_dynamic = false`).
-    pub async fn get(
-        &self,
-        subject: &Subject,
-        for_agent: &ForAgent,
-    ) -> AtomicResult<ResourceResponse> {
-        self.db
-            .get_resource_extended(subject, false, for_agent)
-            .await
     }
 
     /// Run an indexed query (`Storelike::query`). Rights are checked per hit
@@ -263,63 +140,29 @@ impl AtomicNode {
             }
         }
     }
-
-    /// Sign a local edit with the node's agent and apply it to this store
-    /// (`Resource::save_locally` / `Resource::save_as_genesis`). Nothing is
-    /// sent anywhere: hand `CommitResponse::commit` to a transport (or to
-    /// another node's [`apply_commit`](Self::apply_commit)) to propagate it.
-    ///
-    /// Fails with the store's "No agent set" error when the node has no agent.
-    pub async fn mutate(&self, edit: ResourceEdit<'_>) -> AtomicResult<CommitResponse> {
-        match edit {
-            ResourceEdit::Update(resource) => resource.save_locally(&self.db).await,
-            ResourceEdit::Genesis(resource) => resource.save_as_genesis(&self.db).await,
-        }
-    }
-
-    /// Change notifications for every write to this store, whatever path it
-    /// came in on (`Db::subscribe_events`). Lagging receivers drop the
-    /// oldest events, as with any `tokio::sync::broadcast` channel.
-    pub fn subscribe(&self) -> broadcast::Receiver<DbEvent> {
-        self.db.subscribe_events()
-    }
-
-    /// Bulk-sync `drive` with an Iroh peer
-    /// (`sync::peer::sync_drive_with_peer_outcome`). Requires the global Iroh
-    /// endpoint to be running (`sync::peer::start`); that lifecycle is not
-    /// owned by the node yet.
-    #[cfg(feature = "iroh")]
-    pub async fn sync_with_peer(
-        &self,
-        node_id: &str,
-        drive: &Subject,
-    ) -> AtomicResult<crate::sync::peer::PeerSyncOutcome> {
-        crate::sync::peer::sync_drive_with_peer_outcome(node_id, drive.as_str(), &self.db).await
-    }
 }
 
 #[cfg(all(test, feature = "db-redb"))]
 mod tests {
     use super::*;
-    use crate::{client::commit_to_wire_json, urls, Value};
+    use crate::{
+        agents::ForAgent, client::commit_to_wire_json, db::DbEvent, urls, Resource, Subject, Value,
+    };
 
     async fn open_test_node(label: &str) -> AtomicNode {
-        let node = AtomicNode::open(NodeConfig {
-            storage: NodeStorage::RedbMemory,
-            ..NodeConfig::memory().with_base_domain("https://localhost")
-        })
-        .await
-        .unwrap_or_else(|e| panic!("{label}: open failed: {e}"));
-        node.db().populate().await.unwrap();
-        node
+        let db = Db::init_redb(Some("https://localhost".into()))
+            .await
+            .unwrap_or_else(|e| panic!("{label}: open failed: {e}"));
+        db.populate().await.unwrap();
+        AtomicNode::from_db(db)
     }
 
-    /// Two nodes in one process, no Actix: a genesis commit minted on one via
-    /// `mutate` is ingested on the other via `apply_commit(Peer)`, after which
-    /// `query` and `get` on the second node reflect it and `subscribe` on the
-    /// second node saw exactly one change.
+    /// Two nodes in one process, no Actix: a genesis commit minted on one is
+    /// ingested on the other via `apply_commit(Peer)`, after which `query`
+    /// on the second node reflects it and the store's event channel saw the
+    /// change.
     #[tokio::test]
-    async fn two_nodes_mutate_then_peer_ingest() {
+    async fn two_nodes_genesis_then_peer_ingest() {
         let alice_node = open_test_node("alice").await;
         let (alice, drive) = alice_node.db().setup("Alice").await.unwrap();
         let drive = Subject::from(drive);
@@ -330,7 +173,7 @@ mod tests {
 
         let bob_node = open_test_node("bob").await;
         bob_node.db().setup("Bob").await.unwrap();
-        let mut bob_events = bob_node.subscribe();
+        let mut bob_events = bob_node.db().subscribe_events();
 
         // Alice mints a classless DID document under her drive.
         let mut draft = Resource::new("did:ad:placeholder".into());
@@ -340,10 +183,7 @@ mod tests {
         draft
             .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.clone()))
             .unwrap();
-        let response = alice_node
-            .mutate(ResourceEdit::Genesis(&mut draft))
-            .await
-            .unwrap();
+        let response = draft.save_as_genesis(alice_node.db()).await.unwrap();
         let subject = response.commit.subject.clone();
         assert!(subject.as_str().starts_with("did:ad:"), "got {subject}");
         assert!(
@@ -361,9 +201,10 @@ mod tests {
             .expect("bob must accept alice's signed genesis commit under Peer policy");
         assert_eq!(ingested.commit.signer, alice.subject);
 
-        // `get` sees it (as sudo: bob has no rights on alice's doc).
+        // The store sees it (as sudo: bob has no rights on alice's doc).
         let got = bob_node
-            .get(&subject, &ForAgent::Sudo)
+            .db()
+            .get_resource_extended(&subject, false, &ForAgent::Sudo)
             .await
             .unwrap()
             .to_single();
@@ -381,8 +222,8 @@ mod tests {
             .unwrap();
         assert_eq!(result.subjects, vec![subject.clone()]);
 
-        // `subscribe` saw the ingest: the ingest stores the commit resource
-        // and the document, each emitting a `Changed` event.
+        // The event channel saw the ingest: the ingest stores the commit
+        // resource and the document, each emitting a `Changed` event.
         let mut changed = Vec::new();
         while let Ok(event) = bob_events.try_recv() {
             if let DbEvent::Changed { subject, .. } = event {
@@ -410,7 +251,7 @@ mod tests {
         draft
             .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive))
             .unwrap();
-        let response = hub.mutate(ResourceEdit::Genesis(&mut draft)).await.unwrap();
+        let response = draft.save_as_genesis(hub.db()).await.unwrap();
         // What the hub pushes to its caches over WS: the stored commit
         // resource, `@id` included (`ingest_commit_json`'s return value).
         let mut wire: serde_json::Value =
@@ -425,7 +266,8 @@ mod tests {
             .await
             .expect("LocalCache applies without validating the signature");
         cache
-            .get(&response.commit.subject, &ForAgent::Sudo)
+            .db()
+            .get_resource_extended(&response.commit.subject, false, &ForAgent::Sudo)
             .await
             .expect("cached resource is readable");
 
@@ -433,19 +275,5 @@ mod tests {
         peer.apply_commit(&tampered, IngestPolicy::Peer)
             .await
             .expect_err("Peer validates the signature and must reject the tampered commit");
-    }
-
-    /// Without an agent, `mutate` fails with the store's own error instead
-    /// of panicking or silently signing with nothing.
-    #[tokio::test]
-    async fn mutate_without_agent_is_an_error() {
-        let node = AtomicNode::open(NodeConfig::memory()).await.unwrap();
-        assert!(node.agent().is_none());
-        let mut draft = Resource::new("did:ad:placeholder".into());
-        let err = node
-            .mutate(ResourceEdit::Genesis(&mut draft))
-            .await
-            .expect_err("no agent, no signature");
-        assert!(err.to_string().contains("No agent set"), "got: {err}");
     }
 }
