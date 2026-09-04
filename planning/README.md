@@ -41,7 +41,7 @@ Remaining work, not "this file exists."
 | [`authorization-sync.md`](./authorization-sync.md) | **Draft.** Signed commit authorization, grant-chain evidence, peer-sync trust boundaries. |
 | [`unified-data-layer.md`](./unified-data-layer.md) | **Partial.** Browser/JS: one ingress, one outbox, one subscription model. Atomic writes and the single outbox shipped; the ingress/subscription half and `SaveState` are open. |
 | [`loro-source-of-truth.md`](./loro-source-of-truth.md) | **Partial.** Sparse `datatypes` map + Phase 2a–2c shipped (`Tree::Resources` is a derived cache). Remaining: drop the untagged heuristic, Phase 1.6 `Value` reshape, Flutter undo. |
-| [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) | **Partial.** `AtomicNode` is the binding runtime; the WASM `ClientDb` is its only adapter and the unused surface was cut back 2026-09-04. Open: the other bindings. |
+| [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) | **Partial.** `AtomicNode` is the binding runtime; the WASM `ClientDb` is its only adapter and the unused surface was cut back 2026-09-04. Open: the other bindings. Local KV FTS landed in [`local-search.md`](./local-search.md). |
 | [`genesis-self-verifying.md`](./genesis-self-verifying.md) | **Partial.** Server and browser mint and verify inline genesis certs. Remaining: DataRoute verify UI, `genesis` propval immutability. |
 | [`drive-reconciliation.md`](./drive-reconciliation.md) | **Partial.** Core in `lib/src/sync/rbsr.rs` + TS mirror; **on the WS wire** as the stateless text frames `RBSR_FP`/`RBSR_ITEMS` (full-VV fallback). Not on Iroh; fingerprints still O(range); canonical cross-impl hash unspecified. |
 | [`zones.md`](./zones.md) | **Proposal.** Nothing built. Structural fix for the permission-check half of [`index-performance.md`](./index-performance.md). |
@@ -73,7 +73,7 @@ Remaining work, not "this file exists."
 | [`s3-blob-storage.md`](./s3-blob-storage.md) | Pluggable blob backend (redb/S3/hybrid). |
 | [`atomic-assistant-browser-extension.md`](./atomic-assistant-browser-extension.md) | **Proposal.** Local-first Chromium extension. |
 | [`tours.md`](./tours.md) | Design, not built. |
-| [`e2e-light-heavy.md`](./e2e-light-heavy.md) | **Landing.** Playwright light on feature branches; full on `develop` / tags / opt-in. Steps 1–3 shipped. Remaining: grow vitest + `jsTestIntegration` before shrinking heavy. |
+| [`local-search.md`](./local-search.md) | **Landing.** KV inverted index in `atomic_lib` (redb/OPFS/sled): BM25 + prefix + 1-edit prefix-fuzzy. Hosted Tantivy unchanged. |
 
 ## Slices and companions
 

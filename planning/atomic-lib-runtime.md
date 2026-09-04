@@ -119,8 +119,9 @@ sync its own data.
 - Rewriting `Db`. The first step is a runtime wrapper around the existing store.
 - Making every feature available in WASM on day one. Some features may remain
   native-only or server-only until bindings and storage support catch up.
-- Solving plugin sandboxing, S3 blobs, or search indexing in the same first PR.
-  Those should move behind runtime services incrementally.
+- Solving plugin sandboxing or S3 blobs in the same first PR.
+  Search indexing moved behind the runtime as `atomic_lib::search` (KV FTS on
+  the existing store); see [`local-search.md`](./local-search.md).
 
 ## Current Shape
 
@@ -143,7 +144,8 @@ sync its own data.
 - `Resource::save_remote` means "sign then POST to `/commit`".
 - `Storelike::fetch_resource` fetches through client helpers and saves the
   response.
-- `Storelike::search` builds a `/search` subject and fetches it.
+- `Storelike::search` on `Db` queries the local KV index. The default
+  `Storelike` impl still builds a `/search` URL for HTTP clients.
 - Upload/download/blob handling is partly implemented in server handlers and
   partly as direct `Tree::Blobs` access.
 - Tauri desktop starts `atomic-server` locally and makes the frontend talk to

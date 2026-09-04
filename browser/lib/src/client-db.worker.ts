@@ -61,6 +61,13 @@ export type WorkerRequest =
        *  pass. */
       expressionFilters?: unknown;
     }
+  | {
+      id: number;
+      type: 'search';
+      query: string;
+      limit?: number;
+      parents?: string | string[];
+    }
   | { id: number; type: 'allSubjects' }
   | { id: number; type: 'populate' }
   | { id: number; type: 'flush' }
@@ -238,6 +245,12 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
         msg.aggregation ?? null,
         msg.expressionFilters ?? null,
       );
+    }
+
+    case 'search': {
+      await ensureInit();
+
+      return db!.search(msg.query, msg.limit ?? null, msg.parents ?? null);
     }
 
     case 'allSubjects': {

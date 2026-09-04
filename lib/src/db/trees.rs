@@ -2,7 +2,7 @@ use crate::atoms::IndexAtom;
 
 use super::{prop_val_sub_index::propvalsub_key, val_prop_sub_index::valpropsub_key};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tree {
     /// Full resources, Key: Subject, Value: [Propvals](crate::resources::PropVals)
     Resources,
@@ -27,6 +27,14 @@ pub enum Tree {
     LoroSnapshots,
     /// Content-addressed storage for binary files, keyed by BLAKE3 hash.
     Blobs,
+    /// Full-text search postings: `field_id || token || 0x00 || subject` → tf (u32 BE).
+    SearchPostings,
+    /// Per-document FTS metadata: subject → `{drive, parent, field_lens}`.
+    SearchDocs,
+    /// Tokens stored per subject so a delete can drop the matching postings.
+    SearchDocTokens,
+    /// Trigram → term map for 1-edit candidate generation on longer tokens.
+    SearchTrigrams,
 }
 
 const RESOURCES: &str = "resources_v3";
@@ -49,6 +57,10 @@ const DRIVE_MAPPING: &str = "drive_mapping";
 const DID_MAPPING: &str = "did_mapping";
 const LORO_SNAPSHOTS: &str = "loro_snapshots";
 const BLOBS: &str = "blobs";
+const SEARCH_POSTINGS: &str = "search_postings_v1";
+const SEARCH_DOCS: &str = "search_docs_v1";
+const SEARCH_DOC_TOKENS: &str = "search_doc_tokens_v1";
+const SEARCH_TRIGRAMS: &str = "search_trigrams_v1";
 
 impl std::fmt::Display for Tree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -63,6 +75,10 @@ impl std::fmt::Display for Tree {
             Tree::DidMapping => f.write_str(DID_MAPPING),
             Tree::LoroSnapshots => f.write_str(LORO_SNAPSHOTS),
             Tree::Blobs => f.write_str(BLOBS),
+            Tree::SearchPostings => f.write_str(SEARCH_POSTINGS),
+            Tree::SearchDocs => f.write_str(SEARCH_DOCS),
+            Tree::SearchDocTokens => f.write_str(SEARCH_DOC_TOKENS),
+            Tree::SearchTrigrams => f.write_str(SEARCH_TRIGRAMS),
         }
     }
 }
@@ -81,6 +97,10 @@ impl AsRef<[u8]> for Tree {
             Tree::DidMapping => DID_MAPPING.as_bytes(),
             Tree::LoroSnapshots => LORO_SNAPSHOTS.as_bytes(),
             Tree::Blobs => BLOBS.as_bytes(),
+            Tree::SearchPostings => SEARCH_POSTINGS.as_bytes(),
+            Tree::SearchDocs => SEARCH_DOCS.as_bytes(),
+            Tree::SearchDocTokens => SEARCH_DOC_TOKENS.as_bytes(),
+            Tree::SearchTrigrams => SEARCH_TRIGRAMS.as_bytes(),
         }
     }
 }
