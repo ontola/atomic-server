@@ -10,6 +10,11 @@ import {
   type Resource,
   type Store,
 } from '@tomic/react';
+import { createApp, describeApp, updateApp } from '@tomic/lib';
+import { useAppVerifier } from '@chunks/AppPage/AppVerifierContext';
+import { appCheckReport } from '@chunks/AppPage/appCheckReport';
+import { CREATE_APP_DESCRIPTION } from '@chunks/AppPage/createAppDescription';
+import { handOverAppKey } from '@chunks/AppPage/appAgent';
 import { tool } from 'ai';
 import { z } from 'zod';
 import { useSettings } from '@helpers/AppSettings';
@@ -17,6 +22,12 @@ import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { useAddToOntology } from '@hooks/useAddToOntology';
 import { constructOpenURL } from '@helpers/navigation';
 import { buildTableFromSpec } from '@chunks/TablePage/createTableFromSpec';
+import {
+  createPlugin,
+  prepareRun,
+  setPluginSchedule,
+  setPluginSource,
+} from '@chunks/PluginRuns/runScript';
 import {
   addTableColumns,
   configureView,
@@ -77,7 +88,22 @@ export const TOOL_NAMES = {
   CREATE_DASHBOARD: 'create_dashboard',
   DESCRIBE_DASHBOARD: 'describe_dashboard',
   CONFIGURE_BLOCK: 'configure_block',
+  CREATE_PLUGIN: 'create_plugin',
+  RUN_PLUGIN: 'run_plugin',
+  SCHEDULE_PLUGIN: 'schedule_plugin',
+  CREATE_APP: 'create_app',
+  DESCRIBE_APP: 'describe_app',
+  UPDATE_APP: 'update_app',
 } as const;
+
+/**
+ * When a run began.
+ *
+ * Module scope so the compiler's purity rule can tell this clock is not read
+ * while rendering: every caller is an async tool `execute`, which runs when the
+ * model invokes the tool, not when the component renders.
+ */
+const startedAt = () => Date.now();
 
 /** One column of a table, in the compact vocabulary `create_table` uses. */
 const columnSchema = z.object({
@@ -409,6 +435,7 @@ export function useAtomicMCPTools({
   const addToOntology = useAddToOntology();
   const { drive } = useSettings();
   const runDocumentEdit = useDocumentEditAgent(editModel);
+  const { verifyApp } = useAppVerifier();
 
   /** Resolves a `@class` shortname (or title) to a class subject on the
    *  current drive. Full URLs and `#refs` pass through/expand. */
@@ -860,7 +887,7 @@ export function useAtomicMCPTools({
       }),
       [TOOL_NAMES.LIST_TABLE_TEMPLATES]: tool({
         description:
-          'List the ready-made table templates. Start from one of these when it fits what the user asked for — then adapt it with add_table_columns and configure_view — rather than deriving the same schema from scratch.',
+          'List the ready-made table templates. This is the FIRST thing to try when someone asks for a screen backed by their data — an issue tracker, a CRM, project tasks, expenses, a reading list and a dozen others already exist, complete with their kanban and calendar views, computed columns and totals. Start from one when it fits and adapt it with add_table_columns and configure_view, rather than deriving the same schema from scratch or, worse, writing it by hand as an app.',
         inputSchema: z.object({}),
         execute: async () => {
           return TABLE_TEMPLATES.filter(template => template.spec).map(
@@ -1366,9 +1393,295 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
         },
         strict: true,
       }),
+      [TOOL_NAMES.CREATE_APP]: tool({
+        description: CREATE_APP_DESCRIPTION,
+        inputSchema: z.object({
+          name: z.string().describe('Display name of the app.'),
+          emoji: z
+            .string()
+            .describe(
+              'One emoji for the app, shown wherever it is listed. Pick something about what the app is FOR, not a generic 📱 or ✨.',
+            ),
+          rowNameSingular: z
+            .string()
+            .describe(
+              "What ONE of the app's records is called, in the user's words: 'Feeding session', 'Contact', 'Workout'. Never 'Item' or 'Record'. This names the class, and it is what the table's rows are called everywhere in the UI.",
+            ),
+          rowNamePlural: z
+            .string()
+            .describe(
+              "The plural of rowNameSingular: 'Feeding sessions', 'Contacts', 'Workouts'. This becomes the table's title, so it is what the user reads in the sidebar.",
+            ),
+          source: z
+            .string()
+            .describe(
+              'The full JavaScript module, exporting `view({root, store})`.',
+            ),
+          description: z.string().optional(),
+        }),
+        execute: async ({
+          name,
+          emoji,
+          rowNameSingular,
+          rowNamePlural,
+          source,
+          description,
+        }) => {
+          try {
+            const created = await createApp(store, {
+              drive,
+              name,
+              source,
+              description,
+              emoji,
+              rowName: { singular: rowNameSingular, plural: rowNamePlural },
+            });
+
+            // The node needs the key to write as this app when nobody is
+            // present. Reported rather than thrown: the app exists and works
+            // either way, it just cannot act on its own yet.
+            let unattended = true;
+            let keyProblem: string | undefined;
+
+            try {
+              await handOverAppKey(store, {
+                drive,
+                app: created.app,
+                secret: created.secret,
+              });
+            } catch (e) {
+              unattended = false;
+              keyProblem = (e as Error).message;
+            }
+
+            // Run it once before saying it works. A typo, a property that does
+            // not exist, a view that draws nothing — none of those are visible
+            // in source the model just wrote, and all of them are obvious the
+            // moment something executes it.
+            const check = await verifyApp(created.app, drive);
+
+            return {
+              app: shortenSubject(created.app),
+              ontology: shortenSubject(created.ontology),
+              entrypoint: shortenSubject(created.entrypoint),
+              data: shortenSubject(created.data),
+              rowClass: shortenSubject(created.rowClass),
+              created: true,
+              unattended,
+              ...(keyProblem ? { keyProblem } : {}),
+              ...appCheckReport(check),
+              next: 'Give the rows their fields with add_table_columns on `data`, then tell the user to open the app. To change it later, use update_app.',
+            };
+          } catch (e) {
+            return { error: (e as Error).message };
+          }
+        },
+      }),
+      [TOOL_NAMES.DESCRIBE_APP]: tool({
+        description:
+          'Read an app back: its name, emoji, its full source, and the table and row class its data lives in. Call this BEFORE update_app whenever you did not write the source yourself in this conversation — fixing a bug means editing the code that is actually running, not the code you would have written.',
+        inputSchema: z.object({
+          app: z.string().describe('Subject (or #ref) of the app.'),
+        }),
+        execute: async ({ app: reference }) => {
+          try {
+            const described = await describeApp(
+              store,
+              drive,
+              expandSubject(reference),
+            );
+
+            return shortenRefsDeep(described);
+          } catch (e) {
+            return { error: (e as Error).message };
+          }
+        },
+        strict: true,
+      }),
+      [TOOL_NAMES.UPDATE_APP]: tool({
+        description:
+          'Change an existing app: its source, its name, its emoji, or any combination. Use this to fix a bug, add a feature, or rename — never create_app a second time, which would leave the user with two apps and strand the rows in the first.\n\n' +
+          '`source` REPLACES the whole module, so pass the complete file, not a fragment or a diff. Call describe_app first if you do not already have the current source in front of you.\n\n' +
+          "The app's table, row class, schema, identity and rights all survive this — only the code changes. So the user's existing rows are still there after a fix, and your new source has to keep reading them the same way.\n\n" +
+          'If the fix needs a field the rows do not have yet, add it with add_table_columns first, then write source that uses it.\n\n' +
+          "The app is run before this tool returns, and the result comes back as `ran`. A fix that does not make `ran` say 'ok' is not a fix — keep going.",
+        inputSchema: z.object({
+          app: z.string().describe('Subject (or #ref) of the app to change.'),
+          source: z
+            .string()
+            .optional()
+            .describe(
+              'The complete replacement module, exporting `view({root, store})`. Omit to leave the code alone.',
+            ),
+          name: z.string().optional().describe('A new display name.'),
+          emoji: z.string().optional().describe('A new emoji.'),
+        }),
+        execute: async ({ app: reference, source, name, emoji }) => {
+          try {
+            const updated = await updateApp(store, drive, {
+              app: expandSubject(reference),
+              source,
+              name,
+              emoji,
+            });
+
+            const check = await verifyApp(updated.app, drive);
+
+            return {
+              app: shortenSubject(updated.app),
+              updated: true,
+              data: shortenSubject(updated.data ?? ''),
+              rowClass: shortenSubject(updated.rowClass ?? ''),
+              ...appCheckReport(check),
+              next: 'Tell the user to reload the app to see the change.',
+            };
+          } catch (e) {
+            return { error: (e as Error).message };
+          }
+        },
+      }),
+      [TOOL_NAMES.CREATE_PLUGIN]: tool({
+        description:
+          "Create or update a plugin: JavaScript that proposes changes for the user to review. Use this for imports from an external service, or any repeatable transformation of the user's data. " +
+          "A plugin is a JavaScript module that PROPOSES changes and never writes. It must `export function run(ctx)` returning `{ intents: [...], problems: [...] }`. Intents are the only way to change data: `{op:'create', localId, parent, isA:[classSubject], set:{[propertySubject]: value}}`, `{op:'set', subject, set:{...}}`, `{op:'remove', subject, properties:[...]}`, `{op:'destroy', subject}`. Refer to something the same run creates as `'local:<localId>'` — links resolve in any order. Property and class keys are full subjects; use get_user_classes or create a table first if you need them. Problems are `{severity:'error'|'warning', message}`; an error blocks the whole run. \n\nWhat ctx gives you: `ctx.trigger.at` (the ONLY clock — Date.now() is frozen to it and Math.random is seeded, so runs are reproducible), `ctx.http({method,url,headers,body})` returning `{status, body}`, `ctx.read(subject)`, `ctx.query(property, value)`. There is no fetch, no process, no filesystem. \n\nCredentials: put `'Bearer secret:<name>'` in a HEADER VALUE and the host substitutes the real value; the plugin never sees it. A `secret:` handle in a URL or body is refused. DECLARE every secret you use, or the user has to work out what to enter: `export const manifest = { secrets: [{ name: 'google', origin: 'https://www.googleapis.com', description: 'Google Calendar token' }] };` — the plugin page then shows one labelled field per declared secret, and the origin allowlist comes from this. `manifest` and `run` are the only exports that mean anything; anything else you export is ignored. You cannot store a secret yourself, so write the plugin, then tell the user to open it and fill in the fields. If the user wants this to happen regularly rather than on a button press, call schedule_plugin afterwards; `ctx.trigger.kind` is then `'cron'` instead of `'manual'`, and a scheduled run's changes wait for the user to review rather than being written.",
+        inputSchema: z.object({
+          name: z.string().describe('Display name of the plugin.'),
+          source: z
+            .string()
+            .describe(
+              'The full JavaScript module, exporting `run(ctx)`. Replaces the previous source when `plugin` is given.',
+            ),
+          plugin: z
+            .string()
+            .optional()
+            .describe(
+              'Subject of an existing plugin to update. Omit to create a new one.',
+            ),
+          parent: z
+            .string()
+            .optional()
+            .describe('Where to create it. Defaults to the current drive.'),
+        }),
+        execute: async ({ name, source, plugin, parent }) => {
+          try {
+            if (plugin) {
+              const subject = expandSubject(plugin);
+              await setPluginSource(store, subject, drive, source);
+
+              return { plugin: shortenSubject(subject), updated: true };
+            }
+
+            const subject = await createPlugin(
+              store,
+              { parent: parent ? expandSubject(parent) : drive, drive },
+              name,
+              source,
+            );
+
+            return {
+              plugin: shortenSubject(subject),
+              created: true,
+              next: 'Run it with run_plugin to see what it proposes. If it needs a credential, ask the user to add a secret on the plugin page and name the origin.',
+            };
+          } catch (e) {
+            return { error: (e as Error).message };
+          }
+        },
+      }),
+      [TOOL_NAMES.RUN_PLUGIN]: tool({
+        description:
+          'Run a plugin and see what it proposes, WITHOUT writing anything. Use this after create_plugin to check your work, and again after each fix — the problems it returns are how you correct the plugin. Nothing is written: the user reviews and approves the changes themselves.',
+        inputSchema: z.object({
+          plugin: z.string().describe('Subject of the plugin to run.'),
+        }),
+        execute: async ({ plugin }) => {
+          try {
+            const subject = expandSubject(plugin);
+            const resource = await store.getResource(subject);
+            const source = Object.entries(resource.getPropVals()).find(
+              ([, value]) =>
+                typeof value === 'string' && value.includes('function run'),
+            )?.[1] as string | undefined;
+
+            if (!source) {
+              return { error: 'That resource has no plugin source.' };
+            }
+
+            const prepared = await prepareRun(
+              store,
+              source,
+              { kind: 'manual', at: startedAt(), subject },
+              { plugin: subject, drive },
+            );
+
+            const { plan } = prepared;
+
+            return {
+              placement: prepared.serverPlaced ? 'server' : 'browser',
+              blocked: plan.blocked,
+              // Problems are the feedback loop: they name the property that
+              // does not exist, the datatype that does not match, the secret
+              // that is not there.
+              problems: [
+                ...plan.problems,
+                ...plan.changes.flatMap(c => c.problems),
+              ].slice(0, 25),
+              // Enough of the diff to check the mapping, not the whole import.
+              changes: plan.changes.slice(0, 10).map(change => ({
+                op: change.op,
+                subject: change.localId ?? shortenSubject(change.subject),
+                properties: change.properties.map(p => ({
+                  property: p.shortname ?? p.property,
+                  to: p.to,
+                })),
+              })),
+              totalChanges: plan.changes.length,
+              next: plan.blocked
+                ? 'Fix the errors and call create_plugin again with the corrected source.'
+                : 'Looks runnable. Tell the user to open the plugin and press Run to review and apply it.',
+            };
+          } catch (e) {
+            return { error: (e as Error).message };
+          }
+        },
+      }),
+      [TOOL_NAMES.SCHEDULE_PLUGIN]: tool({
+        description:
+          "Run a plugin on a schedule, for a user who asked for something to happen regularly rather than when they press a button. A scheduled run FETCHES BUT DOES NOT WRITE — nobody is there to approve at 3am — so what it proposes waits on the plugin page until the user reviews it. Say so when you set one. The plugin sees `ctx.trigger.kind === 'cron'`. Minimum 60 seconds, and prefer much longer: a plugin hammering an API gets the user's credential rate-limited.",
+        inputSchema: z.object({
+          plugin: z.string().describe('Subject of the plugin.'),
+          intervalSeconds: z
+            .number()
+            .nullable()
+            .describe(
+              'How often to run, in seconds. Use 3600 for hourly, 86400 for daily. Pass null to stop running it on a schedule.',
+            ),
+        }),
+        execute: async ({ plugin, intervalSeconds }) => {
+          try {
+            const subject = expandSubject(plugin);
+            await setPluginSchedule(
+              store,
+              { plugin: subject, drive },
+              intervalSeconds,
+            );
+
+            return {
+              plugin: shortenSubject(subject),
+              intervalSeconds,
+              next:
+                intervalSeconds === null
+                  ? 'It now runs only when the user presses Run.'
+                  : 'Tell the user it will run on its own, and that its proposed changes will wait on the plugin page for them to review.',
+            };
+          } catch (e) {
+            return { error: (e as Error).message };
+          }
+        },
+      }),
       [TOOL_NAMES.CREATE_TABLE]: tool({
         description:
-          'Create a fully-configured table in ONE call: its row Class, all columns, any saved views (table, kanban, calendar or timer) including their computed columns, and optionally its initial rows. Prefer this over creating the class, properties, table and rows separately with create_resource. The response contains everything needed for follow-up work — the table subject, and per column its property subject plus (for select columns) each tag option subject — so you never need get_schema afterwards.',
+          'Check list_table_templates FIRST — a template that fits brings tested columns and views with it, and adapting one is both less work and a better result than deriving the same thing from scratch. Use this when none fits. Create a fully-configured table in ONE call: its row Class, all columns, any saved views (table, kanban, calendar or timer) including their computed columns, and optionally its initial rows. Prefer this over creating the class, properties, table and rows separately with create_resource. The response contains everything needed for follow-up work — the table subject, and per column its property subject plus (for select columns) each tag option subject — so you never need get_schema afterwards.',
         inputSchema: z.object({
           name: z.string().describe('The display name of the table.'),
           parent: z

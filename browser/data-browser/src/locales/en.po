@@ -126,6 +126,7 @@ msgstr "<0/> Create New Agent"
 #: src/chunks/AI/MCPConfigTab.tsx
 #: src/chunks/AI/SkillsConfigTab.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/chunks/Plugins/UpdatePluginButton.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
@@ -783,6 +784,7 @@ msgstr "AI Chats"
 msgid "Ontologies"
 msgstr "Ontologies"
 
+#: src/chunks/AppPage/AppFrame.tsx
 #: src/components/SideBar/index.tsx
 msgid "App"
 msgstr "App"
@@ -1053,12 +1055,6 @@ msgstr "Agent Secret"
 #: src/views/InvitePage.tsx
 msgid "Copy secret to continue"
 msgstr "Copy secret to continue"
-
-#~ msgid "Update Document"
-#~ msgstr "Update Document"
-
-#~ msgid "Could not update document"
-#~ msgstr "Could not update document"
 
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
@@ -2450,8 +2446,9 @@ msgstr "New tag"
 msgid "Add tag"
 msgstr "Add tag"
 
-#~ msgid "Could not update your list: no personal drive is set up for this account yet."
-#~ msgstr "Could not update your list: no personal drive is set up for this account yet."
+#: src/hooks/usePersonalDriveList.ts
+msgid "Could not update your list: no personal drive is set up for this account yet."
+msgstr "Could not update your list: no personal drive is set up for this account yet."
 
 #. 0: getTitle(resource)
 #. 0: getTitle(resource)
@@ -4274,9 +4271,6 @@ msgstr "Atomic Data Browser"
 msgid "This removes drives created for automated tests or local dev: names containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
 msgstr "This removes drives created for automated tests or local dev: names containing <0/> (E2E), or descriptions containing{0} <1/> (from{1} <2/>)."
 
-#~ msgid "<0/> This document needs to be updated to the new format in order to be edited."
-#~ msgstr "<0/> This document needs to be updated to the new format in order to be edited."
-
 #: src/views/ResourcePage.tsx
 msgid "The resource at <0/> hasn't loaded after 15 seconds. It may not exist, or the server may be unreachable."
 msgstr "The resource at <0/> hasn't loaded after 15 seconds. It may not exist, or the server may be unreachable."
@@ -5145,6 +5139,7 @@ msgstr "Drafts"
 msgid "Work in progress. Resources here are visible to people who can write to this drive, and are published by moving them somewhere publicly readable."
 msgstr "Work in progress. Resources here are visible to people who can write to this drive, and are published by moving them somewhere publicly readable."
 
+#: src/chunks/PluginRuns/PluginSchedule.tsx
 #: src/components/ForkBar.tsx
 msgid "Discard"
 msgstr "Discard"
@@ -6591,9 +6586,8 @@ msgstr "Set up Cloud Server"
 msgid "Cloud Server"
 msgstr "Cloud Server"
 
-#: src/helpers/managed/cloudSync.ts
-msgid "Timed out connecting to the Cloud Server node."
-msgstr "Timed out connecting to the Cloud Server node."
+#~ msgid "Timed out connecting to the Cloud Server node."
+#~ msgstr "Timed out connecting to the Cloud Server node."
 
 #. 0: PRODUCT_NAME
 #: src/components/Vault/VaultPanel.tsx
@@ -6889,20 +6883,6 @@ msgid "Paired"
 msgstr "Paired"
 
 #: src/routes/SyncRoute.tsx
-msgid "Paired device"
-msgstr "Paired device"
-
-#: src/routes/SyncRoute.tsx
-#: src/routes/SyncRoute.tsx
-msgid "Not synced yet"
-msgstr "Not synced yet"
-
-#. 0: label; 1: detail
-#: src/components/ResourceContextMenu/index.tsx
-msgid "{0} failed: {1}"
-msgstr "{0} failed: {1}"
-
-#: src/routes/SyncRoute.tsx
 msgid "Sign in →"
 msgstr "Sign in →"
 
@@ -6985,6 +6965,8 @@ msgstr "Store it with "
 msgid "Could not store your backup with {0}."
 msgstr "Could not store your backup with {0}."
 
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+#: src/chunks/PluginRuns/PluginSecrets.tsx
 #: src/components/AccountRecoveryCard.tsx
 msgid "Storing…"
 msgstr "Storing…"
@@ -7017,97 +6999,353 @@ msgstr "An always-on device has an address. One you carry has a code instead, sh
 msgid "An always-on device has an address. Type it here."
 msgstr "An always-on device has an address. Type it here."
 
+#: src/actions/resourceActions.tsx
+msgid "Run"
+msgstr "Run"
+
+#: src/actions/resourceActions.tsx
+msgid "Run this plugin and review what it proposes before anything is written."
+msgstr "Run this plugin and review what it proposes before anything is written."
+
+#. 0: e.message
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "Could not run this plugin: {0}"
+msgstr "Could not run this plugin: {0}"
+
+#. 0: result.message
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "Could not apply: {0}"
+msgstr "Could not apply: {0}"
+
+#. 0: report.applied; 1: report.failed
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "Applied {0}, {1} failed"
+msgstr "Applied {0}, {1} failed"
+
+#. 0: report.applied
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "Applied {0} changes"
+msgstr "Applied {0} changes"
+
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "Applying…"
+msgstr "Applying…"
+
+#. 0: plan?.changes.length ?? 0
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "Apply {0} changes"
+msgstr "Apply {0} changes"
+
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "This plugin ran too long and was stopped. Nothing was planned."
+msgstr "This plugin ran too long and was stopped. Nothing was planned."
+
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "Nothing can be written until these are fixed."
+msgstr "Nothing can be written until these are fixed."
+
+#: src/chunks/PluginRuns/RunPluginDialog.tsx
+msgid "This run proposes no changes."
+msgstr "This run proposes no changes."
+
+#: src/actions/resourceActions.tsx
+msgid "New plugin"
+msgstr "New plugin"
+
+#: src/actions/resourceActions.tsx
+msgid "Create a plugin here. It proposes changes that you review before anything is written."
+msgstr "Create a plugin here. It proposes changes that you review before anything is written."
+
+#: src/chunks/PluginRuns/PluginPage.tsx
+#: src/chunks/PluginRuns/PluginRunHistory.tsx
+msgid "Loading…"
+msgstr "Loading…"
+
+#: src/chunks/PluginRuns/PluginRunHistory.tsx
+msgid "This plugin has not run yet."
+msgstr "This plugin has not run yet."
+
+#: src/chunks/PluginRuns/PluginRunHistory.tsx
+msgid "Runs"
+msgstr "Runs"
+
+#. 0: applied
+#: src/chunks/PluginRuns/PluginRunHistory.tsx
+msgid "{0} applied"
+msgstr "{0} applied"
+
+#. 0: failed
+#: src/chunks/PluginRuns/PluginRunHistory.tsx
+msgid "{0} failed"
+msgstr "{0} failed"
+
+#. 0: secret.name
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "Stored {0}"
+msgstr "Stored {0}"
+
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "<0/> Secrets"
+msgstr "<0/> Secrets"
+
+#. 0: secret.name
+#. 0: name
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "Revoke {0}"
+msgstr "Revoke {0}"
+
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "Store"
+msgstr "Store"
+
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "Not signed in"
+msgstr "Not signed in"
+
+#: src/chunks/PluginRuns/PluginPage.tsx
+msgid "Source"
+msgstr "Source"
+
+#: src/chunks/PluginRuns/PluginPage.tsx
+msgid "<0/> Run"
+msgstr "<0/> Run"
+
+#: src/chunks/PluginRuns/PluginPage.tsx
+msgid "This plugin has no source yet."
+msgstr "This plugin has no source yet."
+
+#: src/chunks/PluginRuns/PluginPage.tsx
+msgid "<0/> Edit"
+msgstr "<0/> Edit"
+
+#. 0: describeUse(secret)
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "No longer asked for by this plugin — {0}"
+msgstr "No longer asked for by this plugin — {0}"
+
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "<0/> Revoke"
+msgstr "<0/> Revoke"
+
+#. 0: ' '
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "Sent only to <0/>. The plugin uses it as{0} <1/> and never sees the value."
+msgstr "Sent only to <0/>. The plugin uses it as{0} <1/> and never sees the value."
+
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "<0/> Stored"
+msgstr "<0/> Stored"
+
+#. 0: secret.name
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "Paste the value for {0}"
+msgstr "Paste the value for {0}"
+
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "This plugin asks for no credentials. To use one, have it declare what it needs —"
+msgstr "This plugin asks for no credentials. To use one, have it declare what it needs —"
+
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "— or reference"
+msgstr "— or reference"
+
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "in a header and a slot will appear here."
+msgstr "in a header and a slot will appear here."
+
+#. 0: name
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "Value for {0}"
+msgstr "Value for {0}"
+
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid "Used as"
+msgstr "Used as"
+
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid ", sent only to"
+msgstr ", sent only to"
+
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid ". Undeclared, so this was read from the URLs it requests."
+msgstr ". Undeclared, so this was read from the URLs it requests."
+
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid ". This plugin requests several origins — pick the one this credential belongs to."
+msgstr ". This plugin requests several origins — pick the one this credential belongs to."
+
+#: src/chunks/PluginRuns/PluginSecrets.tsx
+msgid ". Its URLs are built at run time, so say which origin it may be sent to."
+msgstr ". Its URLs are built at run time, so say which origin it may be sent to."
+
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "<0/> Schedule"
+msgstr "<0/> Schedule"
+
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "Only when I press Run"
+msgstr "Only when I press Run"
+
+#. 0: new Date(schedule.lastRunAt).toLocaleString()
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "Last ran {0}"
+msgstr "Last ran {0}"
+
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "Has not run yet"
+msgstr "Has not run yet"
+
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "The last background run failed:"
+msgstr "The last background run failed:"
+
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "A background run has changes waiting"
+msgstr "A background run has changes waiting"
+
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "It ran without writing anything, because nothing is applied without you seeing it first."
+msgstr "It ran without writing anything, because nothing is applied without you seeing it first."
+
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "Review"
+msgstr "Review"
+
+#. 0: seconds / 86400
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "Every {0} day(s)"
+msgstr "Every {0} day(s)"
+
+#. 0: seconds / 3600
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "Every {0} hour(s)"
+msgstr "Every {0} hour(s)"
+
+#. 0: seconds / 60
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "Every {0} minute(s)"
+msgstr "Every {0} minute(s)"
+
+#. 0: seconds
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "Every {0} seconds"
+msgstr "Every {0} seconds"
+
+#. 0: schedule.autoApply.agent
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "Allowed by {0}. Every write is still checked against what that account may change."
+msgstr "Allowed by {0}. Every write is still checked against what that account may change."
+
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "Available once you have run this plugin and applied its changes at least once."
+msgstr "Available once you have run this plugin and applied its changes at least once."
+
+#: src/chunks/PluginRuns/PluginSchedule.tsx
+msgid "Apply background runs without asking me"
+msgstr "Apply background runs without asking me"
+
+#: src/oxc-styled-components.test.ts
+msgid "Button.tsx"
+msgstr "Button.tsx"
+
 #. 0: detail
 #: src/actions/resourceActions.tsx
 msgid "Could not delete: {0}"
 msgstr "Could not delete: {0}"
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Want a server of your own?"
-msgstr "Want a server of your own?"
+#: src/routes/SyncRoute.tsx
+msgid "Paired device"
+msgstr "Paired device"
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "This server is run by one person for their own data. You can sign in, or open a drive you were invited to."
-msgstr "This server is run by one person for their own data. You can sign in, or open a drive you were invited to."
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+msgid "Not synced yet"
+msgstr "Not synced yet"
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Get one hosted"
-msgstr "Get one hosted"
+#. 0: label; 1: detail
+#: src/components/ResourceContextMenu/index.tsx
+msgid "{0} failed: {1}"
+msgstr "{0} failed: {1}"
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "run it yourself"
-msgstr "run it yourself"
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "This app has no entry point, so there is nothing to open."
+msgstr "This app has no entry point, so there is nothing to open."
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Sign in to open this app."
+msgstr "Sign in to open this app."
+
+#: src/actions/resourceActions.tsx
+#: src/actions/resourceActions.tsx
+#: src/chunks/AppPage/useRegisterAppCreation.ts
+msgid "New app"
+msgstr "New app"
+
+#: src/actions/resourceActions.tsx
+msgid "Create an app here: a screen you open, backed by its own data."
+msgstr "Create an app here: a screen you open, backed by its own data."
+
+#. 0: (e as Error).message
+#: src/actions/resourceActions.tsx
+msgid "This app cannot write on its own: {0}"
+msgstr "This app cannot write on its own: {0}"
+
+#~ msgid "No verifier is mounted."
+#~ msgstr "No verifier is mounted."
+
+#~ msgid "Another app is being checked."
+#~ msgstr "Another app is being checked."
+
+#~ msgid "The app had not finished rendering after 8 seconds. It may be slow rather than broken."
+#~ msgstr "The app had not finished rendering after 8 seconds. It may be slow rather than broken."
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Something went wrong."
+msgstr "Something went wrong."
+
+#~ msgid "This app has no entry point, so there is nothing to run."
+#~ msgstr "This app has no entry point, so there is nothing to run."
+
+#~ msgid "The app I have open just hit an error. Read its source with"
+#~ msgstr "The app I have open just hit an error. Read its source with"
+
+#~ msgid "Error ({0}): {1}"
+#~ msgstr "Error ({0}): {1}"
+
+#~ msgid "Stack:"
+#~ msgstr "Stack:"
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "This app hit an error."
+msgstr "This app hit an error."
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Fix it"
+msgstr "Fix it"
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Dismiss"
+msgstr "Dismiss"
+
+#~ msgid "The app you just wrote does NOT run — this is the error it threw when opened. Fix it with update_app and let it be checked again. Do not tell the user the app is ready until it runs."
+#~ msgstr "The app you just wrote does NOT run — this is the error it threw when opened. Fix it with update_app and let it be checked again. Do not tell the user the app is ready until it runs."
+
+#~ msgid "The app ran without throwing but drew nothing, so the user sees an empty panel. An app with no rows yet still needs to render its heading and a way to add the first one. Fix it with update_app."
+#~ msgstr "The app ran without throwing but drew nothing, so the user sees an empty panel. An app with no rows yet still needs to render its heading and a way to add the first one. Fix it with update_app."
 
 #: src/handlers/errorHandler.ts
 msgid "Something failed, and reported no reason."
 msgstr "Something failed, and reported no reason."
 
-#: src/views/Drive/DrivePage.tsx
-msgid "Your private drive keeps its name. It is tied to your account, not to a project."
-msgstr "Your private drive keeps its name. It is tied to your account, not to a project."
-
-#: src/components/Drives/PersonalDriveBadge.tsx
-#: src/components/Drives/PrivateDriveBadge.tsx
-msgid "<0/> Private"
-msgstr "<0/> Private"
-
-#: src/components/Drives/PersonalDriveBadge.tsx
-#: src/components/Drives/PrivateDriveBadge.tsx
-msgid "This is your private drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project."
-msgstr "This is your private drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project."
-
-#: src/components/Share/ShareDialog.tsx
-msgid "This is your <0>private drive</0>. Sharing it shares your drive list, favourites, notifications and AI chats along with it. To work with someone, make a drive for the work and share that instead."
-msgstr "This is your <0>private drive</0>. Sharing it shares your drive list, favourites, notifications and AI chats along with it. To work with someone, make a drive for the work and share that instead."
-
-#: src/components/NewIdentitySection.tsx
-msgid "Creating your private drive…"
-msgstr "Creating your private drive…"
-
-#: src/hooks/usePersonalDriveList.ts
 #: src/hooks/usePrivateDriveList.ts
 msgid "Could not update your list: no private drive is set up for this account yet."
 msgstr "Could not update your list: no private drive is set up for this account yet."
-
-#: src/routes/SettingsAgent.tsx
-msgid "Your private drive is always first. Unstar any other drive to move it back to recently visited."
-msgstr "Your private drive is always first. Unstar any other drive to move it back to recently visited."
-
-#: src/components/Drives/DrivesCard.tsx
-msgid "Drives"
-msgstr "Drives"
-
-#: src/routes/SettingsAgent.tsx
-msgid "Open a drive by URL"
-msgstr "Open a drive by URL"
-
-#: src/routes/SettingsAgent.tsx
-msgid "Open a drive by URL or DID"
-msgstr "Open a drive by URL or DID"
-
-#: src/components/Vault/VaultRestoreAction.tsx
-msgid "This workspace has an encrypted backup in Cloud Vault."
-msgstr "This workspace has an encrypted backup in Cloud Vault."
-
-#: src/components/Vault/VaultRestoreAction.tsx
-msgid "Restore from Cloud Vault"
-msgstr "Restore from Cloud Vault"
-
-#~ msgid "Continue without an account"
-#~ msgstr "Continue without an account"
-
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
-msgstr "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
-
-#. 0: managedAccount.email
-#: src/routes/SyncRoute.tsx
-msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
-msgstr "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
-
-#: src/routes/SyncRoute.tsx
-msgid "Add a recovery code"
-msgstr "Add a recovery code"
 
 #: src/components/IdentityReconcileGate.tsx
 msgid "Signing out…"
@@ -7139,24 +7377,41 @@ msgstr "Restores it here. The identity you made in this browser stays reachable 
 msgid "Signs this browser out of {0}. Nothing here is backed up until it has an account of its own."
 msgstr "Signs this browser out of {0}. Nothing here is backed up until it has an account of its own."
 
-#: src/components/NewIdentitySection.tsx
-msgid "Your passkey opens this account on this device and wherever it syncs to. This code opens it on every other device — a phone, a different browser, a new computer."
-msgstr "Your passkey opens this account on this device and wherever it syncs to. This code opens it on every other device — a phone, a different browser, a new computer."
+#: src/views/Drive/DrivePage.tsx
+msgid "Your private drive keeps its name. It is tied to your account, not to a project."
+msgstr "Your private drive keeps its name. It is tied to your account, not to a project."
 
-#~ msgid "{0} Keep it somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
-#~ msgstr "{0} Keep it somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
+#: src/components/Vault/VaultRestoreAction.tsx
+msgid "This workspace has an encrypted backup in Cloud Vault."
+msgstr "This workspace has an encrypted backup in Cloud Vault."
 
-#: src/components/NewIdentitySection.tsx
-msgid "Use your fingerprint, face, or screen lock — the same one that unlocks this device. You'll also get a recovery code for devices your passkey doesn't sync to."
-msgstr "Use your fingerprint, face, or screen lock — the same one that unlocks this device. You'll also get a recovery code for devices your passkey doesn't sync to."
+#: src/components/Vault/VaultRestoreAction.tsx
+msgid "Restore from Cloud Vault"
+msgstr "Restore from Cloud Vault"
 
-#: src/components/NewIdentitySection.tsx
-msgid "Keep it somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
-msgstr "Keep it somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
+#: src/components/Drives/PrivateDriveBadge.tsx
+msgid "<0/> Private"
+msgstr "<0/> Private"
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Cloud Vault had nothing for this workspace:"
-msgstr "Cloud Vault had nothing for this workspace:"
+#: src/components/Drives/PrivateDriveBadge.tsx
+msgid "This is your private drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project."
+msgstr "This is your private drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project."
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Want a server of your own?"
+msgstr "Want a server of your own?"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "This server is run by one person for their own data. You can sign in, or open a drive you were invited to."
+msgstr "This server is run by one person for their own data. You can sign in, or open a drive you were invited to."
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Get one hosted"
+msgstr "Get one hosted"
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "run it yourself"
+msgstr "run it yourself"
 
 #. 0: PRODUCT_NAME
 #: src/views/getting-started/GettingStartedFlow.tsx
@@ -7167,3 +7422,70 @@ msgstr "Forgot it? Restore from {0}"
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Your backup is kept by your {0} account. Connect this device to it to restore."
 msgstr "Your backup is kept by your {0} account. Connect this device to it to restore."
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
+msgstr "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
+
+#: src/components/Share/ShareDialog.tsx
+msgid "This is your <0>private drive</0>. Sharing it shares your drive list, favourites, notifications and AI chats along with it. To work with someone, make a drive for the work and share that instead."
+msgstr "This is your <0>private drive</0>. Sharing it shares your drive list, favourites, notifications and AI chats along with it. To work with someone, make a drive for the work and share that instead."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Creating your private drive…"
+msgstr "Creating your private drive…"
+
+#: src/components/NewIdentitySection.tsx
+msgid "Your passkey opens this account on this device and wherever it syncs to. This code opens it on every other device — a phone, a different browser, a new computer."
+msgstr "Your passkey opens this account on this device and wherever it syncs to. This code opens it on every other device — a phone, a different browser, a new computer."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Keep it somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
+msgstr "Keep it somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
+
+#: src/components/NewIdentitySection.tsx
+msgid "Use your fingerprint, face, or screen lock — the same one that unlocks this device. You'll also get a recovery code for devices your passkey doesn't sync to."
+msgstr "Use your fingerprint, face, or screen lock — the same one that unlocks this device. You'll also get a recovery code for devices your passkey doesn't sync to."
+
+#. 0: PRODUCT_NAME
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Your backup, if you made one, is kept by your {0} account — and this browser isn’t signed in to it."
+msgstr "Your backup, if you made one, is kept by your {0} account — and this browser isn’t signed in to it."
+
+#. 0: PRODUCT_NAME
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Sign in to {0}"
+msgstr "Sign in to {0}"
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Cloud Vault had nothing for this workspace:"
+msgstr "Cloud Vault had nothing for this workspace:"
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "I’ve signed in"
+msgstr "I’ve signed in"
+
+#: src/routes/SettingsAgent.tsx
+msgid "Your private drive is always first. Unstar any other drive to move it back to recently visited."
+msgstr "Your private drive is always first. Unstar any other drive to move it back to recently visited."
+
+#: src/routes/SettingsAgent.tsx
+msgid "Open a drive by URL"
+msgstr "Open a drive by URL"
+
+#: src/routes/SettingsAgent.tsx
+msgid "Open a drive by URL or DID"
+msgstr "Open a drive by URL or DID"
+
+#. 0: managedAccount.email
+#: src/routes/SyncRoute.tsx
+msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
+msgstr "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
+
+#: src/routes/SyncRoute.tsx
+msgid "Add a recovery code"
+msgstr "Add a recovery code"
+
+#: src/components/Drives/DrivesCard.tsx
+msgid "Drives"
+msgstr "Drives"

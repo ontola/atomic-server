@@ -387,6 +387,14 @@ where
         crate::plugins::replicate::reconcile_replication_targets(&replication_store).await;
     });
 
+    // Runs plugins nobody is watching. Sleeps on a server with no schedules.
+    #[cfg(feature = "wasm-plugins")]
+    crate::plugins::scheduler::spawn(appstate.clone());
+
+    // Runs plugins because the data moved. Idle on a server with no triggers.
+    #[cfg(feature = "wasm-plugins")]
+    crate::plugins::triggers::spawn(appstate.clone());
+
     // Embedder hook: the store, indexes and transports are up, but the HTTP
     // server hasn't started accepting connections yet. A managed-node wrapper
     // (atomic-saas/managed-node) uses this to flip the `managed` flag, install

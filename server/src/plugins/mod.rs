@@ -33,23 +33,41 @@ Contrary to Endpoints, these can be any type of Class.
 They are used for performing custom queries, or calculating dynamic attributes.
 */
 
+#[cfg(feature = "wasm-plugins")]
+pub mod apply;
 pub mod bind_drive;
 pub mod bookmark;
 pub mod chatroom;
 pub mod did;
+pub mod egress;
 pub mod export;
 pub mod files;
 pub mod importer;
 pub mod invite;
+#[cfg(feature = "wasm-plugins")]
+pub mod js_runtime;
 pub mod path;
+#[cfg(feature = "wasm-plugins")]
+pub mod plan;
 pub mod plugin;
 pub mod prunetests;
 pub mod query;
 pub mod replicate;
+#[cfg(feature = "wasm-plugins")]
+pub mod run_log;
+#[cfg(feature = "wasm-plugins")]
+pub mod scheduler;
 pub mod search;
 pub mod server_info;
+#[cfg(feature = "wasm-plugins")]
+pub mod store_host;
+#[cfg(all(test, feature = "wasm-plugins"))]
+pub mod test_fixture;
+#[cfg(feature = "wasm-plugins")]
+pub mod triggers;
 #[cfg(feature = "vector-search")]
 pub mod vector_search;
 pub mod versioning;
+pub mod view_token;
 #[cfg(feature = "wasm-plugins")]
 pub mod wasm;

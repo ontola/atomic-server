@@ -215,7 +215,50 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
     .service(web::resource("/iroh-sync").to(iroh_sync_handler))
     .service(web::resource("/export").to(handlers::export::handle_export))
     .service(web::resource("/plugin-ui").to(handlers::plugin_ui::handle_plugin_ui))
+    .service(
+        web::resource("/plugin-view-token")
+            .guard(guard::Method(Method::POST))
+            .to(handlers::plugin_ui::handle_mint_view_token),
+    )
     .service(web::resource("/plugin-list").to(handlers::plugin_ui::handle_plugin_list))
+    .service(
+        web::resource("/plugin-run")
+            .guard(guard::Method(Method::POST))
+            .to(handlers::plugin_run::handle_plugin_run),
+    )
+    .service(
+        web::resource("/plugin-schedule")
+            .route(web::post().to(handlers::plugin_schedule::handle_set_schedule))
+            .route(web::get().to(handlers::plugin_schedule::handle_get_schedule))
+            .route(web::delete().to(handlers::plugin_schedule::handle_clear_pending)),
+    )
+    .service(
+        web::resource("/plugin-auto-apply")
+            .guard(guard::Method(Method::POST))
+            .to(handlers::plugin_schedule::handle_set_auto_apply),
+    )
+    .service(
+        web::resource("/app-write")
+            .guard(guard::Method(Method::POST))
+            .to(handlers::app_write::handle_app_write),
+    )
+    .service(
+        web::resource("/app-agent")
+            .route(web::post().to(handlers::app_agent::handle_set_app_agent))
+            .route(web::get().to(handlers::app_agent::handle_get_app_agent))
+            .route(web::delete().to(handlers::app_agent::handle_delete_app_agent)),
+    )
+    .service(
+        web::resource("/plugin-trigger")
+            .route(web::post().to(handlers::plugin_trigger::handle_set_trigger))
+            .route(web::get().to(handlers::plugin_trigger::handle_get_trigger)),
+    )
+    .service(
+        web::resource("/plugin-secret")
+            .route(web::post().to(handlers::plugin_secret::handle_set_secret))
+            .route(web::get().to(handlers::plugin_secret::handle_list_secrets))
+            .route(web::delete().to(handlers::plugin_secret::handle_delete_secret)),
+    )
     // Serve pre-compressed brotli assets when:
     //   - The client sends `Accept-Encoding: br`, AND
     //   - The build script wrote a `<path>.br` sibling into the
