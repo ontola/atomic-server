@@ -668,13 +668,18 @@ export class ClientDbWorker {
 
   async search(
     query: string,
-    opts: { limit?: number; parents?: string | string[] } = {},
+    opts: {
+      limit?: number;
+      parents?: string | string[];
+      filters?: Record<string, string | number | string[]>;
+    } = {},
   ): Promise<string[]> {
     const r = await this.send({
       type: 'search',
       query,
       limit: opts.limit,
       parents: opts.parents,
+      filters: opts.filters,
     });
 
     return (r as string[]) ?? [];

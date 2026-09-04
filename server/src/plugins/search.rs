@@ -9,7 +9,7 @@ use atomic_lib::{
 pub fn search_endpoint() -> Endpoint {
     Endpoint::builder("/search")
         .params([urls::SEARCH_QUERY, urls::SEARCH_LIMIT, urls::SEARCH_PROPERTY])
-        .description("Full text-search endpoint. You can use the keyword `AND` and `OR`, or use `\"` for advanced searches. ")
+        .description("Full-text search. Filter with `filters=property:\"value\"` (AND of exact pairs). Empty `q` plus a filter lists matching resources.")
         .handle(handle_search)
         .build()
 }

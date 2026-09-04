@@ -67,6 +67,7 @@ export type WorkerRequest =
       query: string;
       limit?: number;
       parents?: string | string[];
+      filters?: Record<string, string | number | string[]>;
     }
   | { id: number; type: 'allSubjects' }
   | { id: number; type: 'populate' }
@@ -250,7 +251,12 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
     case 'search': {
       await ensureInit();
 
-      return db!.search(msg.query, msg.limit ?? null, msg.parents ?? null);
+      return db!.search(
+        msg.query,
+        msg.limit ?? null,
+        msg.parents ?? null,
+        msg.filters ?? null,
+      );
     }
 
     case 'allSubjects': {

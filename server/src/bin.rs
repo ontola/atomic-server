@@ -24,7 +24,6 @@ pub mod serve;
 pub mod vector_search;
 // #[cfg(feature = "search")]
 mod iroh_transport;
-mod search;
 #[cfg(test)]
 mod tests;
 mod trace;
@@ -92,12 +91,8 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
             };
             println!("Importing...");
             appstate.store.import(&readstring, &parse_opts).await?;
-            appstate
-                .search_state
-                .add_all_resources(&appstate.store)
-                .await?;
+            atomic_lib::search::build_search_index(&appstate.store)?;
             println!("Successfully imported {:?} to store.", import_opts.file);
-            println!("WARNING: Your search index is not yet updated with these imported items. Run `--rebuild-indexes search` to fix that.");
             Ok(())
         }
         Some(config::Command::ShowConfig) => {
@@ -149,7 +144,7 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
             .unwrap()
             {
                 std::fs::remove_dir_all(config.store_path).map(|e| format!("unable to remove directory: {:?}", e))?;
-                std::fs::remove_dir_all(config.search_index_path).map(|e| format!("unable to remove directory: {:?}", e))?;
+                let _ = std::fs::remove_dir_all(&config.search_index_path);
                 println!("Done");
             } else {
                 println!("Ok, not removing anything.");

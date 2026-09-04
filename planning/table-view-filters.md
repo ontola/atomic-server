@@ -56,9 +56,9 @@ and shows the rest disabled. Roll out by cost (cheapest first):
    dates/timestamps already sort right), an `operator` field on `PropVal`, and
    the query path translating gt/lt/prefix into bounds. One ranged constraint
    per query (it must be the scanned key); the planner picks which.
-3. **Text `contains` (substring)** — route to the existing **Tantivy full-text
-   search index**, not the query index; intersect the search hits with the
-   collection. Different subsystem, moderate work.
+3. **Text `contains` (substring)** — route to the KV full-text search index
+   (`atomic_lib::search`), not the query index; intersect the search hits with
+   the collection. Different subsystem, moderate work.
 4. **`is not` / `is empty` / OR** — need the query planner (option C in
    [[multi-property-filter]]): scan a base set and post-filter / set-difference,
    or union AND-collections for OR. Largest build.

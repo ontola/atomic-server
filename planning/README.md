@@ -73,7 +73,7 @@ Remaining work, not "this file exists."
 | [`s3-blob-storage.md`](./s3-blob-storage.md) | Pluggable blob backend (redb/S3/hybrid). |
 | [`atomic-assistant-browser-extension.md`](./atomic-assistant-browser-extension.md) | **Proposal.** Local-first Chromium extension. |
 | [`tours.md`](./tours.md) | Design, not built. |
-| [`local-search.md`](./local-search.md) | **Landing.** KV inverted index in `atomic_lib` (redb/OPFS/sled): BM25 + prefix + 1-edit prefix-fuzzy. MiniSearch removed; hosted Tantivy stays until KV can serve `/search`. |
+| [`local-search.md`](./local-search.md) | **Landed.** KV inverted index in `atomic_lib` (redb/OPFS/sled): BM25 + prefix + 1-edit prefix-fuzzy + PropValSub filters. Hosted `/search` is the same engine; Tantivy is gone. |
 
 ## Slices and companions
 

@@ -1,9 +1,6 @@
-//! Regression test: reproduces the reported File-picker bug — uploading a
-//! File and then searching for it with `parents=<drive>&filters=isA:File`
-//! (the exact query `FilePickerDialog` issues) used to return nothing,
-//! because the `filters` clause wasn't qualified with the `propvals.` JSON
-//! field prefix tantivy requires. See `qualify_propvals_clauses` in
-//! `server/src/handlers/search.rs`.
+//! Regression test: uploading a File and then searching for it with
+//! `parents=<drive>&filters=isA:File` (the exact query `FilePickerDialog`
+//! issues) must return the file. Filters are exact PropValSub pairs.
 //!
 //! Run: cargo test -p atomic-server --test it file_search_repro -- --nocapture
 
@@ -12,8 +9,8 @@ use atomic_lib::{client::connected::Client, errors::AtomicResult};
 use crate::common::{start_server, wait_for_server};
 
 /// Matches the browser's `escapeTantivyKey` (`browser/lib/src/search.ts`):
-/// backslash-escapes every tantivy special char, including `.` and `:`.
-fn escape_tantivy_key(key: &str) -> String {
+/// backslash-escapes every special char, including `.` and `:`.
+fn escape_filter_key(key: &str) -> String {
     let mut out = String::with_capacity(key.len());
     for c in key.chars() {
         if "+^`:{}\"[]()!\\* .".contains(c) {
@@ -83,12 +80,9 @@ async fn uploaded_file_is_findable_via_search() -> AtomicResult<()> {
     println!("upload response ({status}): {body}");
     assert!(status.is_success(), "upload must succeed");
 
-    // Give the batched Tantivy writer time to commit (default 5s tick).
-    tokio::time::sleep(std::time::Duration::from_secs(6)).await;
-
     // Exactly what FilePickerDialog issues: filters built via
     // `escapeTantivyKey`/`buildFilterString`, scoped with `parents=<drive>`.
-    let isa_key = escape_tantivy_key("https://atomicdata.dev/properties/isA");
+    let isa_key = escape_filter_key("https://atomicdata.dev/properties/isA");
     let filters = format!(r#"{isa_key}:"https://atomicdata.dev/classes/File""#);
 
     let both = run_search(

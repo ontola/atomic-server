@@ -8,7 +8,6 @@ use crate::{
     handlers::web_sockets::IndexStatusBroadcast,
     loro_sync_broadcaster::{self, LoroSyncBroadcaster},
     plugins,
-    search::SearchState,
 };
 use atomic_lib::{agents::Agent, commit::CommitResponse, config::SharedConfig, Storelike};
 
@@ -30,7 +29,6 @@ pub struct AppState {
     /// The Actix Address of the CommitMonitor, which should receive updates when a commit is applied
     pub commit_monitor: actix::Addr<CommitMonitor>,
     pub loro_sync_broadcaster: actix::Addr<LoroSyncBroadcaster>,
-    pub search_state: SearchState,
     pub vector_search_state: crate::vector_search::VectorSearchState,
     pub index_status_broadcast: Arc<IndexStatusBroadcast>,
     /// Whether this node is managed (reports to a control plane). Set at runtime
@@ -171,15 +169,6 @@ impl AppState {
         // no request can slip in under the default open policy.
         crate::host_mode::install_policy(&store, &config.host_mode).await;
 
-        // Initialize search constructs
-        let search_state = SearchState::new(&config)
-            .map_err(|e| format!("Failed to start search service: {}", e))?;
-
-        if should_init {
-            tracing::info!("Adding all resources to search index");
-            search_state.add_all_resources(&store).await?;
-        }
-
         let index_status_broadcast = Arc::new(IndexStatusBroadcast::new());
         let index_notifier: Arc<dyn Fn(&str, bool) + Send + Sync> = {
             let b = index_status_broadcast.clone();
@@ -196,7 +185,6 @@ impl AppState {
         // Initialize commit monitor, which watches commits and sends these to the commit_monitor actor
         let commit_monitor = crate::commit_monitor::create_commit_monitor(
             store.clone(),
-            search_state.clone(),
             vector_search_state.clone(),
         );
 
@@ -224,7 +212,6 @@ impl AppState {
             config,
             commit_monitor,
             loro_sync_broadcaster,
-            search_state,
             vector_search_state,
             index_status_broadcast,
             managed: server_info.managed,
@@ -235,8 +222,6 @@ impl AppState {
     /// Is called when AppState goes out of scope (e.g. when the application closes)
     /// Cleanup code, writing buffers, committing changes, etc.
     fn exit(&self) -> AtomicServerResult<()> {
-        self.search_state.writer.write()?.commit()?;
-
         // `flush_pending` is async; sync teardown (`exit`) runs outside/normal teardown contexts where we cannot safely call `Handle::block_on()`
         // — nesting Tokio block-on triggers panic ("cannot block_on runtime inside runtime").
         let vs = self.vector_search_state.clone();

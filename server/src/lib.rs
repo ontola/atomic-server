@@ -25,7 +25,6 @@ pub mod serve;
 pub mod vector_search;
 // #[cfg(feature = "search")]
 pub mod iroh_transport;
-mod search;
 #[cfg(test)]
 mod tests;
 mod trace;

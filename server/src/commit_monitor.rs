@@ -1,6 +1,6 @@
 //! The Commit Monitor checks for new commits and notifies listeners.
 //! It is used for WebSockets to notify front-end clients of changes in Resources,
-//! and to update the Search index.
+//! and to flush the vector search index.
 
 use crate::{
     actor_messages::{
@@ -8,7 +8,6 @@ use crate::{
         UnsubscribeAll,
     },
     handlers::{web_sockets::WebSocketConnection, ws_v2},
-    search::SearchState,
     vector_search::VectorSearchState,
 };
 use actix::{
@@ -60,27 +59,19 @@ pub struct CommitMonitor {
     /// Drive-wide subscriptions: keyed by drive subject string.
     drive_subscriptions: HashMap<String, Subscribers>,
     store: Db,
-    search_state: SearchState,
     vector_search_state: VectorSearchState,
-    /// Set by every commit handler that adds a doc to the tantivy
-    /// writer. A standalone `tokio::spawn` task drains this flag and
-    /// calls `writer.commit()` to flush. The actor itself never owns
-    /// the flush — that decoupling matters because the actor mailbox
-    /// is shared with `CommitMessage` / `Subscribe` / drive-broadcast
-    /// notifications, all of which can back up under suite load and
-    /// stall a `run_interval` callback. With the flush off-actor the
-    /// search-index visibility window is bounded by `REBUILD_INDEX_TIME`
-    /// regardless of mailbox depth.
+    /// Set by every commit handler that may have queued a vector-index
+    /// write. A standalone `tokio::spawn` task drains this flag and
+    /// calls `flush_pending()`. The actor itself never owns the flush —
+    /// that decoupling matters because the actor mailbox is shared with
+    /// `CommitMessage` / `Subscribe` / drive-broadcast notifications.
     pending_commit: Arc<AtomicBool>,
 }
 
-// Only runs expensive index operation (tantivy) once every x seconds.
 const DEFAULT_REBUILD_INDEX_MS: u64 = 5000;
 
-/// Search-index flush cadence. Defaults to 5s (keeps tantivy commit churn low
-/// in production), but `ATOMIC_SEARCH_INDEX_INTERVAL_MS` can lower it so the
-/// e2e suite sees freshly-created resources become searchable in well under a
-/// second instead of waiting out a 5s batch window.
+/// Vector-index flush cadence. Defaults to 5s.
+/// `ATOMIC_SEARCH_INDEX_INTERVAL_MS` can lower it for tests.
 fn rebuild_index_interval() -> std::time::Duration {
     let ms = std::env::var("ATOMIC_SEARCH_INDEX_INTERVAL_MS")
         .ok()
@@ -98,51 +89,22 @@ impl Actor for CommitMonitor {
     fn started(&mut self, ctx: &mut Context<Self>) {
         tracing::debug!("CommitMonitor started");
         if tokio::runtime::Handle::try_current().is_ok() {
-            // Tantivy flush runs OFF the actor on its own tokio task.
-            // The previous design used `ctx.run_interval(...)` which
-            // queued a `tick()` message on the actor mailbox — and the
-            // mailbox is shared with every `CommitMessage`,
-            // `Subscribe`, drive/membership notification, etc., so
-            // under suite-wide load (multiple Playwright workers
-            // hammering commits) the tick fired well after its 5s
-            // schedule, leaving the search index 30s+ behind. This
-            // task holds clones of the writer + flag and is
-            // unaffected by mailbox depth.
+            // Vector-index flush runs OFF the actor on its own tokio task.
             let flag = self.pending_commit.clone();
-            let writer = self.search_state.writer.clone();
-            let reader = self.search_state.reader.clone();
             let vector_search_state = self.vector_search_state.clone();
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(rebuild_index_interval());
                 // `interval.tick()` returns immediately on first call;
-                // skip it so we don't commit an empty writer at boot.
+                // skip it so we don't flush at boot.
                 interval.tick().await;
                 loop {
                     interval.tick().await;
                     if !flag.swap(false, Ordering::AcqRel) {
                         continue;
                     }
-                    match writer.write() {
-                        Ok(mut guard) => {
-                            if let Err(e) = guard.commit() {
-                                tracing::error!("Tantivy commit failed: {}", e);
-                                // Re-arm so the next pass retries.
-                                flag.store(true, Ordering::Release);
-                                continue;
-                            }
-                            drop(guard);
-                            if let Err(e) = reader.reload() {
-                                tracing::error!("Tantivy reader reload failed: {}", e);
-                                flag.store(true, Ordering::Release);
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!("Tantivy writer lock poisoned: {}", e);
-                            flag.store(true, Ordering::Release);
-                        }
-                    }
                     if let Err(e) = vector_search_state.flush_pending().await {
                         tracing::error!("Vector index periodic flush failed: {}", e);
+                        flag.store(true, Ordering::Release);
                     }
                 }
             });
@@ -414,42 +376,6 @@ impl Handler<ExternalChange> for CommitMonitor {
     /// subscribers of its drive — the same two audiences, and the same
     /// drive-boundary check, that `Handler<CommitMessage>` serves.
     fn handle(&mut self, msg: ExternalChange, _ctx: &mut Context<Self>) {
-        // Keep search in step with the store. A change that no commit produced
-        // — a peer sync writing straight through `add_resource_opts` — never
-        // reaches `Handler<CommitMessage>`, which is where indexing lives. So
-        // resources arriving over Iroh were stored and listed (the query index
-        // IS updated) but invisible to search: 49 resources synced, zero
-        // INDEXING events. Someone who reaches for search first concludes their
-        // data never arrived.
-        if !msg.destroyed {
-            let search_state = self.search_state.clone();
-            let store = self.store.clone();
-            let subject_for_index = msg.subject.clone();
-            tokio::spawn(async move {
-                let subject = atomic_lib::Subject::from_raw(
-                    &subject_for_index,
-                    store.get_base_domain().as_deref(),
-                );
-
-                match store.get_resource(&subject).await {
-                    Ok(resource) => {
-                        let _ = search_state.remove_resource(&subject_for_index);
-
-                        if let Err(e) = search_state.add_resource(&resource, &store).await {
-                            tracing::warn!(
-                                "CommitMonitor: could not index peer-synced {}: {e}",
-                                &subject_for_index[..subject_for_index.len().min(40)]
-                            );
-                        }
-                    }
-                    Err(e) => tracing::debug!(
-                        "CommitMonitor: peer-synced {} not indexable: {e}",
-                        &subject_for_index[..subject_for_index.len().min(40)]
-                    ),
-                }
-            });
-        }
-
         let base_domain = self.store.get_base_domain();
         let subject = atomic_lib::Subject::from_raw(&msg.subject, base_domain.as_deref());
 
@@ -701,7 +627,6 @@ impl Handler<CommitMessage> for CommitMonitor {
         }
 
         let store = self.store.clone();
-        let search_state = self.search_state.clone();
         let vector_search_state = self.vector_search_state.clone();
         let resource_old = msg.commit_response.resource_old.clone();
         let resource_new = msg.commit_response.resource_new.clone();
@@ -713,19 +638,14 @@ impl Handler<CommitMessage> for CommitMonitor {
                 // a child to its subResources array). If the indexable text content is identical,
                 // neither a remove nor an add is needed — the existing vector entry is still correct.
                 // This is important for performance!
-                let vector_text_unchanged = resource_old.as_ref().zip(resource_new.as_ref()).is_some_and(
-                    |(old, new)| {
+                let vector_text_unchanged = resource_old
+                    .as_ref()
+                    .zip(resource_new.as_ref())
+                    .is_some_and(|(old, new)| {
                         crate::vector_search::get_resource_text_parts(old)
                             == crate::vector_search::get_resource_text_parts(new)
-                    },
-                );
+                    });
 
-                search_state.remove_resource(&target_str).map_err(|e| {
-                    format!(
-                        "Handling commit in CommitMonitor failed, cache may not be fully updated: {}",
-                        e
-                    )
-                })?;
                 if let Some(resource) = resource_new.as_ref() {
                     if let Ok(classes) = resource.get(atomic_lib::urls::IS_A) {
                         if let Ok(subjects) = classes.to_subjects(None) {
@@ -734,37 +654,19 @@ impl Handler<CommitMessage> for CommitMonitor {
                             }
                         }
                     }
-                    // We could one day re-(allow) to keep old resources,
-                    // but then we also should index the older versions when re-indexing.
-                    // Add new resource to search index
-                    tracing::debug!(
-                        "CommitMonitor: adding resource to search index: {}",
-                        resource.get_subject()
-                    );
-                    search_state
-                        .add_resource(resource, &store)
-                        .await
-                        .map_err(|e| {
-                            tracing::error!(
-                                "CommitMonitor: FAILED to add resource {} to search index: {}",
-                                resource.get_subject(),
-                                e
-                            );
-                            format!(
-                    "Handling commit in CommitMonitor failed, cache may not be fully updated: {}",
-                    e
-                )
-                        })?;
                 }
 
                 if vector_search_state.is_enabled() && !vector_text_unchanged {
                     if resource_old.is_some() {
-                        vector_search_state.remove_resource(&target_str).await.map_err(|e| {
-                            format!(
-                                "Handling commit in CommitMonitor failed for vector search: {}",
-                                e
-                            )
-                        })?;
+                        vector_search_state
+                            .remove_resource(&target_str)
+                            .await
+                            .map_err(|e| {
+                                format!(
+                                    "Handling commit in CommitMonitor failed for vector search: {}",
+                                    e
+                                )
+                            })?;
                     }
                     if let Some(resource) = resource_new {
                         vector_search_state
@@ -786,9 +688,7 @@ impl Handler<CommitMessage> for CommitMonitor {
                     tracing::error!("{}", e);
                 }
                 // Off-actor flush task picks this up on its next tick.
-                actor
-                    .pending_commit
-                    .store(true, Ordering::Release);
+                actor.pending_commit.store(true, Ordering::Release);
             }),
         )
     }
@@ -847,7 +747,6 @@ fn encode_commit_frame(store: &Db, msg: &CommitMessage) -> Option<Arc<[u8]>> {
 /// Spawns a commit monitor actor
 pub fn create_commit_monitor(
     store: Db,
-    search_state: SearchState,
     vector_search_state: VectorSearchState,
 ) -> Addr<CommitMonitor> {
     tracing::info!("spawning commit monitor");
@@ -856,7 +755,6 @@ pub fn create_commit_monitor(
             subscriptions: HashMap::new(),
             drive_subscriptions: HashMap::new(),
             store,
-            search_state,
             vector_search_state,
             pending_commit: Arc::new(AtomicBool::new(false)),
         }

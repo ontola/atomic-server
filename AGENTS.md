@@ -70,7 +70,7 @@ Atomic Server is a graph database with real-time sync, built on **Loro CRDT** fo
 - **`docs`** (`docs`) — Public-facing Atomic Data spec and product documentation. Describes how the protocol works, very important.
 - **`planning`** (`planning/`) — Internal design notes and larger technical direction. Read `planning/README.md` and the relevant plan before broad architectural work.
 - **`atomic_lib`** (`lib/`) — Core library powering atomic-server + WASM / OPFS browser storage.
-- **`atomic-server`** (`server/`) — Actix-web HTTP/WS server. Uses `atomic_lib` + search (tantivy).
+- **`atomic-server`** (`server/`) — Actix-web HTTP/WS server. Uses `atomic_lib` (KV full-text search + optional LanceDB vector search).
 - **`@tomic/lib`** (`browser/lib/`) — TypeScript client library, powering the other JS projects
 - **`@tomic/react`** (`browser/react/`) — React hooks.
 - **`data-browser`** (`browser/data-browser/`) — The web app (React + TipTap + Loro), feels similar to notion. See the related AGENTS.md
@@ -317,5 +317,5 @@ auto-memoizing that component and the app still serves and HMRs normally.
 
 | Service | Dir | Dev command | Port |
 | --- | --- | --- | --- |
-| AtomicServer (Rust: HTTP/WS, redb, tantivy, Loro sync) | `server/` | `cargo run -- --port 9885` | 9885 |
+| AtomicServer (Rust: HTTP/WS, redb, Loro sync) | `server/` | `cargo run -- --port 9885` | 9885 |
 | Frontend (Vite) + `@tomic/lib`/`@tomic/react` watch | `browser/` | `pnpm start` | 6747 |
