@@ -1,6 +1,17 @@
 # Unify the three subscription primitives
 
-> Status: planned 2026-05-28. Cleanup. Server-side scope only.
+> Status: **done in the reduced form, 2026-09-04.** The server has one
+> registration frame, `SUB <subject>`: a drive subject registers drive-wide
+> fan-out plus the drive resource itself, anything else registers that one
+> resource (`Handler<Subscribe>` in `server/src/commit_monitor.rs`). The
+> text `SUBSCRIBE` frame is gone, and `SUBSCRIBE_QUERY` was deleted rather
+> than folded: no client outside the Rust integration tests ever sent it,
+> and the lib's watched-query index it sat on is still there for when a
+> client needs live filters. The `Match::Filter` arm and the binary
+> `{scope, target}` body below are therefore not built; the text of this
+> plan is kept as the design record.
+>
+> Original status: planned 2026-05-28. Cleanup. Server-side scope only.
 >
 > The browser-side dual ("one subscription channel" replacing
 > resources/queries/drives plumbing) lives in the broader

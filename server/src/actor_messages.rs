@@ -5,27 +5,6 @@ use actix::{prelude::Message, Addr};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-/// Subscribes a WebSocketConnection to a Subject.
-#[derive(Message)]
-#[rtype(result = "()")]
-pub struct Subscribe {
-    pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
-    pub subject: atomic_lib::Subject,
-    pub agent: String,
-    /// Identifier of the originating WS connection. The commit monitor
-    /// stores this alongside the subscriber address and skips broadcasts
-    /// to subscribers whose `source_id` matches an event's `source_id`,
-    /// so a client never receives its own commit back.
-    pub source_id: String,
-    /// The wire frame this subscription came from — `"SUBSCRIBE"` for the
-    /// text frame, `"SUB"` for the binary drive subscription. Named in the
-    /// ERROR a refusal sends back. `None` for the companion subscription a
-    /// `SUB` adds for the drive resource itself: the `SubscribeDrive` sent
-    /// alongside it already answers that frame, and one frame gets one
-    /// answer.
-    pub refusal_frame: Option<&'static str>,
-}
-
 /// An `AUTH` on a connection changed its identity. The commit monitor
 /// re-evaluates every subscription the connection holds against the new
 /// agent and drops the ones it may no longer read; the ones it keeps are
@@ -143,74 +122,35 @@ pub struct RemotePresenceUpdate {
     pub update: String,
 }
 
-/// Subscribe to all commits on resources living under a drive. Every
-/// commit under the drive fans out to this connection as a `CommitMessage`
-/// (encoded as UPDATE / DESTROY by the WebSocketConnection handler).
+/// The `SUB <subject>` frame: subscribe this connection to a subject. For a
+/// drive that means every commit under it plus the drive resource itself;
+/// for any other resource, that one subject. The commit monitor decides
+/// which by looking at the resource (`Handler<Subscribe>`).
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct SubscribeDrive {
+pub struct Subscribe {
     pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
-    /// Drive subject (HTTP URL or DID).
-    pub drive: String,
+    /// The subject as it came off the wire (HTTP URL or DID). Drive
+    /// fan-out is keyed by this raw string, so `UNSUB` must send the same.
+    pub subject: String,
     pub agent: String,
-    /// Same role as [`Subscribe::source_id`].
+    /// Identifier of the originating WS connection. The commit monitor
+    /// stores this alongside the subscriber address and skips broadcasts
+    /// to subscribers whose `source_id` matches an event's `source_id`,
+    /// so a client never receives its own commit back.
     pub source_id: String,
 }
 
-/// Cancel a drive subscription made with [`SubscribeDrive`] (the `UNSUB`
-/// frame). Removes this connection from the drive's fan-out set and from the
-/// companion subscription on the drive resource itself. No answer frame: an
-/// `UNSUB` for a drive the connection never subscribed is a no-op.
+/// The `UNSUB <subject>` frame: cancel a [`Subscribe`]. Removes this
+/// connection from the drive fan-out set and from the per-resource
+/// subscription. No answer frame: an `UNSUB` for a subject the connection
+/// never subscribed is a no-op.
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct UnsubscribeDrive {
+pub struct Unsubscribe {
     pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
-    /// Drive subject, as passed to `SubscribeDrive::drive`.
-    pub drive: String,
-}
-
-// === Filter (query) subscription messages ===
-//
-// The legacy `QUERY_UPDATE (0x36)` binary frame was retired in
-// `planning/sync.md` ("QUERY_UPDATE removed"), but the *registration* primitive
-// remains: a client can say "send me updates for resources matching
-// `property=value` in `drive`" via `SUBSCRIBE_QUERY <json>`. Membership
-// changes for those filters are delivered as plain `UPDATE` / `DESTROY`
-// frames — same channel that already carries drive-wide and per-resource
-// events — by way of [`MembershipNotification`].
-
-/// JSON shape of the `SUBSCRIBE_QUERY <json>` text-frame payload.
-///
-/// - `property` + `value`: watch resources whose `property` currently
-///   equals `value`. Both must be present together.
-/// - `drive` is required (auth boundary — only resources in this drive
-///   are considered, and the agent must have read access).
-/// - `sort_by` is informational; it's stored in the encoded filter so
-///   sorted-collection consumers can dispatch on it.
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct QuerySubscriptionJSON {
-    pub property: Option<String>,
-    pub value: Option<String>,
-    pub sort_by: Option<String>,
-    pub drive: Option<String>,
-}
-
-/// Register a filter subscription with the `CommitMonitor`.
-#[derive(Message)]
-#[rtype(result = "()")]
-pub struct SubscribeQuery {
-    pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
-    pub query: QuerySubscriptionJSON,
-    pub agent: String,
-    /// Same role as [`Subscribe::source_id`].
-    pub source_id: String,
-}
-
-/// Drop every filter subscription this connection holds.
-#[derive(Message)]
-#[rtype(result = "()")]
-pub struct UnsubscribeQuery {
-    pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
+    /// The subject, as passed to `Subscribe::subject`.
+    pub subject: String,
 }
 
 /// Sent by `WebSocketConnection::stopped` to every subscription-holding
@@ -263,33 +203,6 @@ pub fn refuse_subscription(
     });
 }
 
-/// Forwarded into `CommitMonitor` by the `DbEvent::QueryMembershipChanged`
-/// listener task: a resource entered or left a watched filter's result
-/// set. Routed to each filter subscriber as an `UPDATE` (added — full
-/// snapshot + commit_id pre-fetched here so the receiving actor doesn't
-/// have to round-trip through the store) or a `DESTROY` (removed).
-#[derive(Message, Clone, Debug)]
-#[rtype(result = "()")]
-pub struct MembershipNotification {
-    /// Filter the subject moved into/out of (compact query id — see
-    /// `atomic_lib::db::query_index::query_id`).
-    pub query_id: Vec<u8>,
-    /// Subject whose membership changed.
-    pub subject: String,
-    /// True iff the subject is now a member; false iff it left.
-    pub added: bool,
-    /// Pre-fetched Loro snapshot bytes — only populated when `added`.
-    /// Empty / `None` skips the UPDATE emission (the subscriber can
-    /// still GET the subject explicitly). `Arc<[u8]>` so the fanout
-    /// loop in `CommitMonitor::Handler<MembershipNotification>` does
-    /// O(1) clones per subscriber instead of O(snapshot size).
-    pub loro_snapshot: Option<Arc<[u8]>>,
-    /// Pre-fetched `lastCommit` propval — only populated when `added`.
-    pub commit_id: Option<String>,
-    /// Source connection id for echo suppression.
-    pub source_id: Option<String>,
-}
-
 /// Forwarded into `CommitMonitor` by the `DbEvent` listener task: a resource
 /// changed *without* an applied commit, so `handle_commit` never ran and
 /// nothing has told the subscribed clients.
@@ -299,8 +212,8 @@ pub struct MembershipNotification {
 /// this existed, the second device held the new data on disk and went on
 /// rendering the old, until it was restarted.
 ///
-/// The snapshot and `commit_id` are pre-fetched off-actor, as
-/// `MembershipNotification` does, so the fanout loop stays O(1) per subscriber.
+/// The snapshot and `commit_id` are pre-fetched off-actor, so the fanout loop
+/// stays O(1) per subscriber.
 #[derive(Message, Clone)]
 #[rtype(result = "()")]
 pub struct ExternalChange {

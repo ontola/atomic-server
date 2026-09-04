@@ -4,8 +4,8 @@
 
 use crate::{
     actor_messages::{
-        CommitMessage, ExternalChange, MembershipNotification, RebindAgent, SendFrame, Subscribe,
-        SubscribeDrive, SubscribeQuery, UnsubscribeAll, UnsubscribeDrive, UnsubscribeQuery,
+        CommitMessage, ExternalChange, RebindAgent, SendFrame, Subscribe, Unsubscribe,
+        UnsubscribeAll,
     },
     handlers::{web_sockets::WebSocketConnection, ws_v2},
     search::SearchState,
@@ -15,7 +15,7 @@ use actix::{
     prelude::{Actor, AsyncContext, Context, Handler},
     ActorFutureExt, Addr, ResponseActFuture, WrapFuture,
 };
-use atomic_lib::{agents::ForAgent, db::QueryFilter, Db, DbEvent, Storelike, Value};
+use atomic_lib::{agents::ForAgent, Db, DbEvent, Storelike};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -30,9 +30,6 @@ pub struct Subscriber {
     /// string. Kept so [`Handler<RebindAgent>`] can re-evaluate the
     /// registration when the connection's `AUTH` changes it.
     agent: String,
-    /// Filter subscriptions only: the drive the filter is scoped to, which
-    /// is what the read check runs against.
-    drive: Option<String>,
 }
 
 type Subscribers = HashMap<Addr<WebSocketConnection>, Subscriber>;
@@ -40,30 +37,20 @@ type Subscribers = HashMap<Addr<WebSocketConnection>, Subscriber>;
 /// The Commit Monitor is an Actor that manages subscriptions for subjects and sends Commits to listeners.
 /// It's also responsible for checking whether the rights are present.
 ///
-/// Three subscription shapes:
+/// Two subscription maps, both fed by the one `SUB <subject>` frame
+/// (`Handler<Subscribe>`):
 ///
-/// - **Resource subscriptions** (`subscriptions`): one subject per SUB.
-///   Match commits whose target matches exactly. The `CommitMessage`
-///   handler scans this map directly.
-/// - **Drive subscriptions** (`drive_subscriptions`): drive only.
-///   Match every commit on resources that belong to that drive — a
-///   resource's owning drive is its genesis-stamped `drive` propval (DID
+/// - **Resource subscriptions** (`subscriptions`): one subject each. Match
+///   commits whose target matches exactly. The `CommitMessage` handler scans
+///   this map directly.
+/// - **Drive subscriptions** (`drive_subscriptions`): a `SUB` whose subject
+///   is a drive. Match every commit on resources that belong to that drive —
+///   a resource's owning drive is its genesis-stamped `drive` propval (DID
 ///   subjects) or its own URL under the drive (HTTP subjects), tested via
 ///   [`atomic_lib::Subject::is_within_drive`]. A commit only ever reaches
 ///   subscribers of its OWN drive — never others (no cross-drive leak).
 ///   Subscribers receive a `SendFrame` carrying the pre-encoded `UPDATE` /
 ///   `DESTROY` wire bytes, encoded once at the fanout site and Arc-shared.
-/// - **Filter subscriptions** (`query_subscriptions`): keyed by encoded
-///   `QueryFilter` bytes — registered via the `SUBSCRIBE_QUERY` text
-///   frame. When a resource enters / leaves the filter set,
-///   [`MembershipNotification`] arrives via the DbEvent listener below;
-///   the receiving WebSocketConnection encodes an `UPDATE` for added
-///   subjects (with pre-fetched snapshot + commit_id so the receiver
-///   doesn't need a follow-up GET) or `DESTROY` for removed ones. The
-///   legacy `QUERY_UPDATE (0x36)` binary frame was retired in
-///   `planning/sync.md` ("QUERY_UPDATE removed"); the SUBSCRIBE_QUERY registration
-///   primitive itself was kept because it lets a client say "watch this
-///   set of resources" without binding to a whole drive.
 #[allow(clippy::mutable_key_type)]
 pub struct CommitMonitor {
     /// Maintains a list of all the resources that are being subscribed to, and maps these to websocket connections.
@@ -72,8 +59,6 @@ pub struct CommitMonitor {
     subscriptions: HashMap<atomic_lib::Subject, Subscribers>,
     /// Drive-wide subscriptions: keyed by drive subject string.
     drive_subscriptions: HashMap<String, Subscribers>,
-    /// Filter subscriptions: keyed by encoded `QueryFilter` bytes.
-    query_subscriptions: HashMap<Vec<u8>, Subscribers>,
     store: Db,
     search_state: SearchState,
     vector_search_state: VectorSearchState,
@@ -162,20 +147,11 @@ impl Actor for CommitMonitor {
                 }
             });
 
-            // Bridge DbEvents to actor messages. Drive-wide and resource
-            // subscription notifications no longer need a listener — every
-            // commit already routes through `Handler<CommitMessage>` (set
-            // via `set_handle_commit` in `appstate.rs`), which fans the
-            // full commit (snapshot + commit_id) to those subscribers.
-            //
-            // What we *do* listen for here is filter-membership changes:
-            // `QueryMembershipChanged` events fire when a resource's
-            // properties change in a way that affects a watched
-            // `SUBSCRIBE_QUERY`. We pre-fetch the resource state for
-            // additions so the receiving WebSocketConnection can encode
-            // an `UPDATE` (full snapshot + commit_id) directly, without
-            // a follow-up store hop. Removals just forward the subject
-            // and let the receiver encode `DESTROY`.
+            // Bridge DbEvents to actor messages. Commits already route
+            // through `Handler<CommitMessage>` (set via `set_handle_commit`
+            // in `appstate.rs`); what this listener carries is the
+            // commit-less change (a peer sync writing straight into the
+            // store) that would otherwise never reach a subscriber.
             let mut events_rx = self.store.subscribe_events();
             let addr = ctx.address();
             let store_for_listener = self.store.clone();
@@ -226,65 +202,6 @@ impl Actor for CommitMonitor {
                         }
                         _ => {}
                     }
-
-                    if let DbEvent::QueryMembershipChanged {
-                        query_id,
-                        subject,
-                        added,
-                        source_id,
-                    } = event
-                    {
-                        // Pre-fetch state for additions so the inner
-                        // hot path (subscriber fanout in the actor)
-                        // stays cheap. For removals we don't need
-                        // anything beyond the subject.
-                        let (loro_snapshot, commit_id) = if added {
-                            match store_for_listener
-                                .get_resource(&atomic_lib::Subject::from_raw(
-                                    &subject,
-                                    store_for_listener.get_base_domain().as_deref(),
-                                ))
-                                .await
-                            {
-                                Ok(resource) => {
-                                    let snapshot = resource
-                                        .materialized_state()
-                                        .or_else(|| {
-                                            resource
-                                                .build_state_doc()
-                                                .ok()
-                                                .map(|doc| doc.export_snapshot())
-                                        })
-                                        .unwrap_or_default();
-                                    let cid = resource
-                                        .get(atomic_lib::urls::LAST_COMMIT)
-                                        .ok()
-                                        .map(|v| v.to_string())
-                                        .filter(|s| !s.is_empty());
-                                    (
-                                        if snapshot.is_empty() {
-                                            None
-                                        } else {
-                                            Some(Arc::from(snapshot.into_boxed_slice()))
-                                        },
-                                        cid,
-                                    )
-                                }
-                                Err(_) => (None, None),
-                            }
-                        } else {
-                            (None, None)
-                        };
-
-                        addr.do_send(MembershipNotification {
-                            query_id,
-                            subject,
-                            added,
-                            loro_snapshot,
-                            commit_id,
-                            source_id,
-                        });
-                    }
                 }
             });
         } else {
@@ -296,189 +213,124 @@ impl Actor for CommitMonitor {
 impl Handler<Subscribe> for CommitMonitor {
     type Result = ResponseActFuture<Self, ()>;
 
-    // A message comes in when a client subscribes to a subject.
+    /// The one registration frame, `SUB <subject>`. Auth gate: the agent must
+    /// have read access on the subject. What gets registered depends on what
+    /// the subject is:
+    ///
+    /// - a **drive** (`isA` includes `Drive`): the connection joins
+    ///   `drive_subscriptions` so [`Handler<CommitMessage>`] fans every
+    ///   commit under the drive to it, *and* `subscriptions` for the drive
+    ///   resource itself (renames, ACL edits), which a DID drive subject
+    ///   would otherwise never prefix-match;
+    /// - anything else: `subscriptions` for that one subject.
+    ///
+    /// Until 2026-09-04 the second case was a separate text frame
+    /// (`SUBSCRIBE <subject>`) with its own actor message and handler, and a
+    /// `SUB` on a non-drive subject registered a drive fan-out entry that
+    /// delivered every commit twice for URL subjects.
     #[tracing::instrument(
         name = "handle_subscribe",
         skip_all,
-        fields(to = %msg.subject, agent = %msg.agent)
+        fields(subject = %msg.subject, agent = %msg.agent)
     )]
     fn handle(&mut self, msg: Subscribe, _ctx: &mut Context<Self>) -> Self::Result {
         let store = self.store.clone();
         Box::pin(
             async move {
-                // check if the agent has the rights to subscribe to this resource
-                if !msg.subject.is_local() {
-                    tracing::warn!("can't subscribe to external resource: {}", msg.subject);
+                let subject =
+                    atomic_lib::Subject::from_raw(&msg.subject, store.get_base_domain().as_deref());
+                if !subject.is_local() {
+                    tracing::warn!("can't subscribe to external resource: {subject}");
                     return None;
                 }
-                match store.get_resource(&msg.subject).await {
-                    Ok(resource) => {
-                        match atomic_lib::hierarchy::check_read(
-                            &store,
-                            &resource,
-                            &ForAgent::AgentSubject(msg.agent.clone().into()),
-                        )
-                        .await
-                        {
-                            Ok(_explanation) => Some(msg),
-                            Err(unauthorized_err) => {
-                                tracing::debug!(
-                                    "Not allowed {} to subscribe to {}: {}",
-                                    &msg.agent,
-                                    &msg.subject,
-                                    unauthorized_err
-                                );
-                                if let Some(frame) = msg.refusal_frame {
-                                    crate::actor_messages::refuse_subscription(
-                                        &msg.addr,
-                                        frame,
-                                        &msg.subject.to_string(),
-                                        &unauthorized_err.to_string(),
-                                    );
-                                }
-                                None
-                            }
-                        }
-                    }
+                let resource = match store.get_resource(&subject).await {
+                    Ok(r) => r,
                     Err(e) => {
-                        tracing::debug!(
-                            "Subscribe failed for {} by {}: {}",
-                            &msg.subject,
-                            msg.agent,
-                            e
-                        );
+                        tracing::debug!("Subscribe: {subject} not found: {e}");
                         // Same frame as a rights failure: whether the subject
                         // is unreadable or absent is not something an agent
                         // without read rights gets to learn here, any more
                         // than a GET would tell it.
-                        if let Some(frame) = msg.refusal_frame {
-                            crate::actor_messages::refuse_subscription(
-                                &msg.addr,
-                                frame,
-                                &msg.subject.to_string(),
-                                "not readable",
-                            );
-                        }
-                        None
-                    }
-                }
-            }
-            .into_actor(self)
-            .map(|msg, actor, _ctx| {
-                #[allow(clippy::mutable_key_type)]
-                if let Some(msg) = msg {
-                    let set = actor.subscriptions.entry(msg.subject.clone()).or_default();
-                    set.insert(
-                        msg.addr,
-                        Subscriber {
-                            source_id: msg.source_id,
-                            agent: msg.agent,
-                            drive: None,
-                        },
-                    );
-                    tracing::debug!("handle subscribe {} ", msg.subject);
-                }
-            }),
-        )
-    }
-}
-
-impl Handler<SubscribeDrive> for CommitMonitor {
-    type Result = ResponseActFuture<Self, ()>;
-
-    /// Auth gate: agent must have read access on the drive resource.
-    /// Same shape as [`Handler<Subscribe>`] but the result lands in
-    /// `drive_subscriptions` so [`Handler<CommitMessage>`] fans every
-    /// commit under that drive to this connection.
-    #[tracing::instrument(
-        name = "handle_subscribe_drive",
-        skip_all,
-        fields(drive = %msg.drive, agent = %msg.agent)
-    )]
-    fn handle(&mut self, msg: SubscribeDrive, _ctx: &mut Context<Self>) -> Self::Result {
-        let store = self.store.clone();
-        Box::pin(
-            async move {
-                let drive_subject =
-                    atomic_lib::Subject::from_raw(&msg.drive, store.get_base_domain().as_deref());
-                let resource = match store.get_resource(&drive_subject).await {
-                    Ok(r) => r,
-                    Err(e) => {
-                        tracing::debug!("SubscribeDrive: drive {drive_subject} not found: {e}");
                         crate::actor_messages::refuse_subscription(
                             &msg.addr,
                             "SUB",
-                            &drive_subject.to_string(),
+                            &subject.to_string(),
                             "not readable",
                         );
                         return None;
                     }
                 };
-                match atomic_lib::hierarchy::check_read(
+                if let Err(e) = atomic_lib::hierarchy::check_read(
                     &store,
                     &resource,
-                    &ForAgent::AgentSubject(msg.agent.clone().into()),
+                    &ForAgent::from(msg.agent.clone()),
                 )
                 .await
                 {
-                    Ok(_) => Some(msg),
-                    Err(e) => {
-                        tracing::debug!(
-                            "SubscribeDrive: {} cannot read drive {drive_subject}: {e}",
-                            msg.agent
-                        );
-                        crate::actor_messages::refuse_subscription(
-                            &msg.addr,
-                            "SUB",
-                            &drive_subject.to_string(),
-                            &e.to_string(),
-                        );
-                        None
-                    }
+                    tracing::debug!("Subscribe: {} cannot read {subject}: {e}", msg.agent);
+                    crate::actor_messages::refuse_subscription(
+                        &msg.addr,
+                        "SUB",
+                        &subject.to_string(),
+                        &e.to_string(),
+                    );
+                    return None;
                 }
+                let is_drive = resource
+                    .get(atomic_lib::urls::IS_A)
+                    .ok()
+                    .and_then(|classes| classes.to_subjects(None).ok())
+                    .is_some_and(|classes| classes.iter().any(|c| c == atomic_lib::urls::DRIVE));
+                Some((msg, subject, is_drive))
             }
             .into_actor(self)
-            .map(|maybe_msg, actor, _ctx| {
+            .map(|admitted, actor, _ctx| {
                 #[allow(clippy::mutable_key_type)]
-                if let Some(msg) = maybe_msg {
-                    let entry = actor.drive_subscriptions.entry(msg.drive).or_default();
-                    entry.insert(
-                        msg.addr,
-                        Subscriber {
-                            source_id: msg.source_id,
-                            agent: msg.agent,
-                            drive: None,
-                        },
-                    );
+                if let Some((msg, subject, is_drive)) = admitted {
+                    let subscriber = Subscriber {
+                        source_id: msg.source_id,
+                        agent: msg.agent,
+                    };
+                    if is_drive {
+                        actor
+                            .drive_subscriptions
+                            .entry(msg.subject)
+                            .or_default()
+                            .insert(msg.addr.clone(), subscriber.clone());
+                    }
+                    actor
+                        .subscriptions
+                        .entry(subject)
+                        .or_default()
+                        .insert(msg.addr, subscriber);
                 }
             }),
         )
     }
 }
 
-impl Handler<UnsubscribeDrive> for CommitMonitor {
+impl Handler<Unsubscribe> for CommitMonitor {
     type Result = ();
 
-    /// The inverse of [`Handler<SubscribeDrive>`]. Until 2026-09 the `UNSUB`
-    /// frame only edited a set on the connection actor that nothing read, so
-    /// the fan-out kept firing for the life of the socket.
+    /// The inverse of [`Handler<Subscribe>`] (`UNSUB <subject>`): drops both
+    /// the drive fan-out entry (keyed by the raw subject string `SUB`
+    /// registered under) and the per-resource entry. Until 2026-09 the
+    /// `UNSUB` frame only edited a set on the connection actor that nothing
+    /// read, so the fan-out kept firing for the life of the socket.
     #[allow(clippy::mutable_key_type)]
-    fn handle(&mut self, msg: UnsubscribeDrive, _ctx: &mut Context<Self>) {
-        if let Some(subs) = self.drive_subscriptions.get_mut(&msg.drive) {
+    fn handle(&mut self, msg: Unsubscribe, _ctx: &mut Context<Self>) {
+        if let Some(subs) = self.drive_subscriptions.get_mut(&msg.subject) {
             subs.remove(&msg.addr);
             if subs.is_empty() {
-                self.drive_subscriptions.remove(&msg.drive);
+                self.drive_subscriptions.remove(&msg.subject);
             }
         }
-        // The companion per-resource subscription `SUB` registers on the
-        // drive resource itself (so edits to the drive's own properties
-        // reach the subscriber) goes too.
-        let drive_subject =
-            atomic_lib::Subject::from_raw(&msg.drive, self.store.get_base_domain().as_deref());
-        if let Some(subs) = self.subscriptions.get_mut(&drive_subject) {
+        let subject =
+            atomic_lib::Subject::from_raw(&msg.subject, self.store.get_base_domain().as_deref());
+        if let Some(subs) = self.subscriptions.get_mut(&subject) {
             subs.remove(&msg.addr);
             if subs.is_empty() {
-                self.subscriptions.remove(&drive_subject);
+                self.subscriptions.remove(&subject);
             }
         }
     }
@@ -492,116 +344,6 @@ impl Handler<UnsubscribeDrive> for CommitMonitor {
 /// commit, internal write) and we deliver to everyone.
 fn skip_same_source(event_source: Option<&str>, subscriber_source: &str) -> bool {
     event_source.is_some_and(|s| s == subscriber_source)
-}
-
-impl Handler<SubscribeQuery> for CommitMonitor {
-    type Result = ResponseActFuture<Self, ()>;
-
-    /// Auth gate: the filter must name a drive, and the requesting agent
-    /// must have read access on that drive. The filter is encoded as a
-    /// `QueryFilter` and watched in `Tree::WatchedQueries`, so
-    /// `DbEvent::QueryMembershipChanged` will fire whenever a resource
-    /// enters/leaves the result set — see the listener task in
-    /// `Actor::started`.
-    fn handle(&mut self, msg: SubscribeQuery, _ctx: &mut Context<Self>) -> Self::Result {
-        let store = self.store.clone();
-        let agent = msg.agent.clone();
-        let drive_opt = msg.query.drive.clone();
-
-        Box::pin(
-            async move {
-                let drive_str = match drive_opt {
-                    Some(s) => s,
-                    None => {
-                        tracing::debug!(
-                            "Rejecting SUBSCRIBE_QUERY: filter has no drive scope (agent={agent})"
-                        );
-                        return None;
-                    }
-                };
-                let drive_subject = atomic_lib::Subject::from_raw(
-                    &drive_str,
-                    store.get_base_domain().as_deref(),
-                );
-                let resource = match store.get_resource(&drive_subject).await {
-                    Ok(r) => r,
-                    Err(e) => {
-                        tracing::debug!(
-                            "Rejecting SUBSCRIBE_QUERY: drive {drive_subject} not found: {e}"
-                        );
-                        crate::actor_messages::refuse_subscription(
-                            &msg.addr,
-                            "SUBSCRIBE_QUERY",
-                            &drive_subject.to_string(),
-                            "not readable",
-                        );
-                        return None;
-                    }
-                };
-                match atomic_lib::hierarchy::check_read(
-                    &store,
-                    &resource,
-                    &ForAgent::AgentSubject(agent.clone().into()),
-                )
-                .await
-                {
-                    Ok(_) => {
-                        // Same de-localization the HTTP `/query` path applies
-                        // (`collections::collect_members`). Both sides must
-                        // agree: the subscription is keyed by `query_id`, a
-                        // hash over the filter, so a client that subscribes
-                        // with the localized subject it was served would
-                        // register under a different id than the one the
-                        // index fires membership events for, and never
-                        // receive an update.
-                        let mut msg = msg;
-                        if let Some(raw) = msg.query.value.as_deref() {
-                            let delocalized = atomic_lib::collections::delocalize_filter_value(
-                                &store,
-                                msg.query.property.as_deref(),
-                                raw,
-                            )
-                            .await;
-                            msg.query.value = Some(delocalized.to_string());
-                        }
-
-                        Some(msg)
-                    }
-                    Err(e) => {
-                        tracing::debug!(
-                            "Rejecting SUBSCRIBE_QUERY: {agent} cannot read drive {drive_subject}: {e}"
-                        );
-                        crate::actor_messages::refuse_subscription(
-                            &msg.addr,
-                            "SUBSCRIBE_QUERY",
-                            &drive_subject.to_string(),
-                            &e.to_string(),
-                        );
-                        None
-                    }
-                }
-            }
-            .into_actor(self)
-            .map(|maybe_msg, actor, _ctx| {
-                #[allow(clippy::mutable_key_type)]
-                if let Some(msg) = maybe_msg {
-                    actor.register_filter_subscription(msg);
-                }
-            }),
-        )
-    }
-}
-
-impl Handler<UnsubscribeQuery> for CommitMonitor {
-    type Result = ();
-
-    fn handle(&mut self, msg: UnsubscribeQuery, _ctx: &mut Context<Self>) {
-        for conns in self.query_subscriptions.values_mut() {
-            conns.remove(&msg.addr);
-        }
-        self.query_subscriptions
-            .retain(|_, conns| !conns.is_empty());
-    }
 }
 
 impl Handler<UnsubscribeAll> for CommitMonitor {
@@ -621,12 +363,6 @@ impl Handler<UnsubscribeAll> for CommitMonitor {
             conns.remove(&msg.addr);
         }
         self.drive_subscriptions
-            .retain(|_, conns| !conns.is_empty());
-
-        for conns in self.query_subscriptions.values_mut() {
-            conns.remove(&msg.addr);
-        }
-        self.query_subscriptions
             .retain(|_, conns| !conns.is_empty());
     }
 }
@@ -769,99 +505,12 @@ impl Handler<ExternalChange> for CommitMonitor {
     }
 }
 
-impl Handler<MembershipNotification> for CommitMonitor {
-    type Result = ();
-
-    /// Fan a filter membership change out to every subscriber of that
-    /// filter. The receiving WebSocketConnection encodes an `UPDATE`
-    /// (for `added`, using the pre-fetched snapshot + commit_id) or a
-    /// `DESTROY` (for removed).
-    fn handle(&mut self, msg: MembershipNotification, _ctx: &mut Context<Self>) {
-        let Some(subscribers) = self.query_subscriptions.get(&msg.query_id) else {
-            return;
-        };
-        if subscribers.is_empty() {
-            return;
-        }
-
-        for (addr, subscriber) in subscribers {
-            if skip_same_source(msg.source_id.as_deref(), &subscriber.source_id) {
-                continue;
-            }
-            addr.do_send(msg.clone());
-        }
-    }
-}
-
-impl CommitMonitor {
-    /// Register a filter subscription. Called only after the auth check
-    /// in `Handler<SubscribeQuery>` has passed.
-    #[allow(clippy::mutable_key_type)]
-    fn register_filter_subscription(&mut self, msg: SubscribeQuery) {
-        let SubscribeQuery {
-            addr,
-            query,
-            agent,
-            source_id,
-        } = msg;
-
-        let drive_str = match query.drive.as_ref() {
-            Some(d) => d.clone(),
-            None => return,
-        };
-
-        // Property+value filter → encode as QueryFilter and watch.
-        // Property-only / drive-only filters aren't supported here; the
-        // drive-wide case is already covered by `SUB <drive>`.
-        let (Some(prop), Some(val_str)) = (query.property.as_ref(), query.value.as_ref()) else {
-            tracing::debug!(
-                "SUBSCRIBE_QUERY without both property and value — drive-wide subs use SUB"
-            );
-            return;
-        };
-
-        let drive_subject =
-            atomic_lib::Subject::from_raw(&drive_str, self.store.get_base_domain().as_deref());
-        let q_filter = QueryFilter::single(
-            Some(prop.clone()),
-            Some(Value::String(val_str.clone())),
-            query.sort_by.clone(),
-            drive_subject,
-        );
-
-        // Subscriptions are keyed by the same compact id `QueryMembershipChanged`
-        // events carry (a hash of the filter's canonical encoding).
-        let query_id = match atomic_lib::db::query_id(&q_filter) {
-            Ok(id) => id.to_vec(),
-            Err(e) => {
-                tracing::warn!("SUBSCRIBE_QUERY: failed to encode QueryFilter: {e}");
-                return;
-            }
-        };
-
-        if let Err(e) = q_filter.watch(&self.store) {
-            tracing::warn!("SUBSCRIBE_QUERY: failed to register in WatchedQueries: {e}");
-        }
-
-        let entry = self.query_subscriptions.entry(query_id).or_default();
-        entry.insert(
-            addr,
-            Subscriber {
-                source_id,
-                agent,
-                drive: Some(drive_str),
-            },
-        );
-    }
-}
-
-/// What one connection holds in one of the three subscription maps, for
+/// What one connection holds in one of the two subscription maps, for
 /// [`Handler<RebindAgent>`]. Carries the map key so the verdict can be
 /// applied after the async read checks come back.
 enum Held {
     Subject(atomic_lib::Subject),
     Drive(String),
-    Query(Vec<u8>),
 }
 
 /// Apply a re-evaluation verdict to one registration: keep it under the
@@ -920,16 +569,6 @@ impl Handler<RebindAgent> for CommitMonitor {
                 ));
             }
         }
-        for (query_id, subs) in &self.query_subscriptions {
-            if let Some(sub) = subs.get(&msg.addr) {
-                if let Some(drive) = sub.drive.as_deref() {
-                    checks.push((
-                        Held::Query(query_id.clone()),
-                        atomic_lib::Subject::from_raw(drive, base_domain.as_deref()),
-                    ));
-                }
-            }
-        }
         if checks.is_empty() {
             return Box::pin(async {}.into_actor(self));
         }
@@ -965,13 +604,6 @@ impl Handler<RebindAgent> for CommitMonitor {
                         Held::Drive(drive) => rebind_one(
                             &mut actor.drive_subscriptions,
                             &drive,
-                            &addr,
-                            &agent,
-                            readable,
-                        ),
-                        Held::Query(query_id) => rebind_one(
-                            &mut actor.query_subscriptions,
-                            &query_id,
                             &addr,
                             &agent,
                             readable,
@@ -1223,7 +855,6 @@ pub fn create_commit_monitor(
         CommitMonitor {
             subscriptions: HashMap::new(),
             drive_subscriptions: HashMap::new(),
-            query_subscriptions: HashMap::new(),
             store,
             search_state,
             vector_search_state,

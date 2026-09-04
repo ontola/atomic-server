@@ -35,8 +35,7 @@ async fn test_multi_client_gallery_sync() -> AtomicResult<()> {
 
     // Start WS session for Tablet (Device A). Drive-wide SUB fans every
     // commit under the drive (creates / edits / destroys) to this connection
-    // as `UPDATE` / `DESTROY` frames. Replaces the legacy `SUBSCRIBE_QUERY`
-    // text-frame registrar — see `planning/sync.md` ("QUERY_UPDATE removed").
+    // as `UPDATE` / `DESTROY` frames.
     let ws_a = WsClient::connect(&ws_url).await?;
     ws_a.authenticate(&agent).await?;
     ws_a.subscribe_drive(&drive_subject).await?;

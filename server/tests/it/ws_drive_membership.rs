@@ -1,7 +1,6 @@
 //! Drive-wide membership signals over WebSocket.
 //!
-//! After `planning/sync.md` ("QUERY_UPDATE removed") retired the QUERY_UPDATE /
-//! SUBSCRIBE_QUERY channel, drive-wide subscribers receive resource
+//! Drive-wide subscribers receive resource
 //! creates as `UPDATE (0x11)` frames (with full snapshot + commit_id)
 //! and destroys as `DESTROY (0x12)` frames — same channel that was
 //! already carrying edits.
@@ -44,8 +43,8 @@ async fn drive_subscriber_receives_update_for_new_resource() -> AtomicResult<()>
     // `subscribe_drive` sends the binary `SUB (0x20)` frame, registering Bob
     // in the server's drive_subscriptions map. Every commit on a resource
     // living under the drive then fans out to him as `UPDATE` / `DESTROY`.
-    // (`subscribe_resource` uses the legacy text `SUBSCRIBE` frame, which
-    // only registers a per-subject sub — not drive-wide.)
+    // (`subscribe_resource` sends the same frame for one resource; the
+    // server registers drive-wide fan-out only when the subject is a drive.)
     ws_b.subscribe_drive(&drive).await?;
     let mut rx = ws_b.subscribe();
     // Give the SUB registration a moment to land.

@@ -364,9 +364,9 @@ restates the same rule for connections dialled into us.
 link relies on for live updates. The `require_auth` gate covers exactly:
 
 - binary `SYNC_PUSH (0x33)` and `BLOB_RESPONSE (0x35)`;
-- the identity-bearing text frames `SUBSCRIBE`, `SUBSCRIBE_QUERY`,
-  `LORO_SYNC_SUBSCRIBE`, `LORO_SYNC_UPDATE`, `LORO_EPHEMERAL_UPDATE`,
-  `PRESENCE_SUBSCRIBE`, `PRESENCE_UPDATE`.
+- the identity-bearing text frames `LORO_SYNC_SUBSCRIBE`,
+  `LORO_SYNC_UPDATE`, `LORO_EPHEMERAL_UPDATE`, `PRESENCE_SUBSCRIBE`,
+  `PRESENCE_UPDATE`.
 
 Everything else is open to an anonymous socket and gated per subject by
 `check_read` instead:
@@ -488,29 +488,25 @@ All subscriptions deliver through the same two frames: `UPDATE (0x11)` and
 `DESTROY (0x12)`. All of them are registered on the WebSocket transport
 only.
 
-**`SUB (0x20) <drive>`** registers a drive-wide subscription: every commit on
-a resource under that drive is fanned out to the connection. It also
-registers a companion per-resource subscription on the drive resource itself,
-so renames and ACL edits arrive even when the drive subject is a DID that
-would not prefix-match a commit subject. No `AUTH` needed; gated on
-`check_read` of the drive resource.
+**`SUB (0x20) <subject>`** is the one registration frame. What it registers
+depends on the subject:
 
-**`UNSUB (0x21) <drive>`** cancels it, under the same raw key `SUB`
+- a **drive** (`isA` includes `Drive`): a drive-wide subscription, so every
+  commit on a resource under that drive is fanned out to the connection, plus
+  a per-resource subscription on the drive resource itself, so renames and
+  ACL edits arrive even though a DID drive subject would never prefix-match
+  a commit subject;
+- **any other resource**: a per-resource subscription on that one subject.
+
+No `AUTH` needed; gated on `check_read` of the subject. Until 2026-09-04 the
+per-resource case was a separate text frame (`SUBSCRIBE <subject>`, `AUTH`
+required, no unsubscribe), and a filter subscription (`SUBSCRIBE_QUERY`)
+existed that no client outside the Rust integration tests ever sent; both
+are gone.
+
+**`UNSUB (0x21) <subject>`** cancels it, under the same raw string `SUB`
 registered with, so the fan-out entry is actually found. It removes the
-companion per-resource entry too. Nothing is sent in reply.
-
-**`SUBSCRIBE <subject>`** (text) is a per-resource subscription. Requires
-`AUTH`, gated on `check_read` of that subject. There is no `UNSUBSCRIBE`
-counterpart, and the browser does not use this frame at all.
-
-**`SUBSCRIBE_QUERY <json>`** (text) watches a filter. Requires `AUTH`. The
-shape is `{ "property"?, "value"?, "sort_by"?, "drive" }` and **only `drive`
-is enforced**: a filter with no drive is dropped silently, with no refusal
-frame and no registration. The drive is gated on `check_read`, and `value` is
-de-localized the same way the HTTP `/query` path does, so client and index
-agree on the filter id. Membership changes arrive as `UPDATE` (joined, with a
-pre-fetched snapshot so no follow-up `GET` is needed) or `DESTROY` (left or
-destroyed).
+per-resource entry too. Nothing is sent in reply.
 
 **Refusal frame.** A subscription refused for rights, or naming a subject the
 responder does not hold, is not registered and answers with:
@@ -520,12 +516,10 @@ ERROR (0x03) request_id=0 code=UNAUTHORIZED_READ(7)
              "<FRAME> refused for <subject>: <reason>"
 ```
 
-`<FRAME>` is one of `SUB`, `SUBSCRIBE`, `SUBSCRIBE_QUERY`,
-`LORO_SYNC_SUBSCRIBE`, `PRESENCE_SUBSCRIBE`. A missing subject and an
-unreadable one give the same reason (`not readable`): which of the two it is
-is not something an agent without read rights gets to learn. One frame gets
-one answer, so the companion resource subscription a `SUB` registers does not
-emit a second. An accepted subscription is silent.
+`<FRAME>` is one of `SUB`, `LORO_SYNC_SUBSCRIBE`, `PRESENCE_SUBSCRIBE`. A
+missing subject and an unreadable one give the same reason (`not readable`):
+which of the two it is is not something an agent without read rights gets to
+learn. One frame gets one answer. An accepted subscription is silent.
 
 **Identity follows the connection.** Each registration remembers the agent
 it was admitted under. When an `AUTH` changes the connection's identity, the
@@ -546,8 +540,7 @@ re-authenticated as a stranger.
 | A commit under a subscribed drive or subject | `HAS_COMMIT_ID \| PUSH` | the commit's Loro **delta**, not a snapshot |
 | A commit with `destroy` | (a `DESTROY` frame) | subject only |
 | An external change, meaning a write with no commit behind it, such as a peer sync writing straight to the store | `SNAPSHOT \| PUSH`, plus `HAS_COMMIT_ID` when a `lastCommit` exists | the full stored snapshot |
-| A filter-membership join | `SNAPSHOT \| PUSH`, plus `HAS_COMMIT_ID` when known | the pre-fetched snapshot |
-| A filter-membership leave, or an external destroy | (a `DESTROY` frame) | subject only |
+| An external destroy | (a `DESTROY` frame) | subject only |
 
 The `SNAPSHOT` flag on the external-change path is load-bearing. Labelling
 full state as a delta makes the client merge it into a document it does not
@@ -792,8 +785,6 @@ Client to server:
 
 | Frame | Payload | Needs AUTH |
 | --- | --- | --- |
-| `SUBSCRIBE <subject>` | raw subject string, not JSON | yes |
-| `SUBSCRIBE_QUERY` | `{"property"?,"value"?,"sort_by"?,"drive"}` | yes |
 | `LORO_SYNC_SUBSCRIBE` | `{"subject"}` | yes |
 | `LORO_SYNC_UNSUBSCRIBE` | `{"subject"}` | no |
 | `LORO_SYNC_UPDATE` | `{"subject","update"}` | yes |
@@ -822,8 +813,7 @@ Server to client:
 `update` is an opaque string carrying a Loro update or `EphemeralStore`
 payload, relayed without inspection. `SUBSCRIBE_INDEX_STATUS` is answered
 immediately with one `INDEX_STATUS`. Prefixes are matched longest-conflicting
-first (`SUBSCRIBE_INDEX_STATUS` and `SUBSCRIBE_QUERY` before `SUBSCRIBE`); an
-unrecognized text frame is logged and ignored.
+first; an unrecognized text frame is logged and ignored.
 
 ## Session flows
 
@@ -973,10 +963,17 @@ Wire-visible changes in this revision:
   the Rust `WsClient::post_commit` no longer fails on an unrelated `ERROR`.
   `WsMessage::Error` carries `request_id` and `code`.
 - **Subscriptions re-bound on `AUTH`.** When a connection's identity changes,
-  its subject, drive and filter subscriptions are re-checked as the new agent
-  and the unreadable ones dropped (`rebind-on-auth`).
+  its subject and drive subscriptions are re-checked as the new agent and
+  the unreadable ones dropped (`rebind-on-auth`).
 - **`INVALID_SIGNATURE (9)`.** A `COMMIT` whose signature does not verify is
   classified instead of going out as `UNKNOWN`.
+- **One subscription frame (2026-09-04).** `SUB <subject>` registers a
+  drive-wide subscription for a drive and a per-resource one for anything
+  else; the text `SUBSCRIBE <subject>` frame and the filter subscription
+  `SUBSCRIBE_QUERY` are removed (the browser never sent either; the Rust
+  client's `subscribe_resource` now sends `SUB`). The `MembershipNotification`
+  fan-out and the commit monitor's filter map went with them; the lib's
+  watched-query index stays for the Flutter event stream.
 - **The hash-first probe and the RBSR frames are read-gated.** `SYNC_VV` with
   `probe: true`, `RBSR_FP` and `RBSR_ITEMS` now answer only over the subjects
   the asking agent may `check_read`, and refuse an unreadable drive with
@@ -994,9 +991,7 @@ Corrections to what this page previously claimed:
 
 - `SUB` was said to deliver a full snapshot per commit. A commit fan-out
   `UPDATE` carries the commit's **delta** with `HAS_COMMIT_ID | PUSH`;
-  `SNAPSHOT` appears only on external-change and filter-membership pushes.
+  `SNAPSHOT` appears only on external-change pushes.
 - `UNSUB` was said to work. It did not, until this revision.
-- `SUBSCRIBE_QUERY` was said to require `property` and `value`. Only `drive`
-  is enforced; a filter without one is dropped silently.
 - `SYNC_DIFF.remove` was said to be optional. The encoder always emits it;
   only decoders tolerate its absence.

@@ -76,7 +76,6 @@ pub async fn web_socket_handler(
             request_origin,
             auth_nonce: atomic_lib::sync::protocol::new_challenge_nonce(),
             client_capabilities: Vec::new(),
-            subscribed: std::collections::HashSet::new(),
             commit_monitor_addr: appstate.commit_monitor.clone(),
             loro_sync_broadcaster_addr: appstate.loro_sync_broadcaster.clone(),
             agent: for_agent,
@@ -121,7 +120,6 @@ pub struct WebSocketConnection {
     /// Capability names the client listed in a `HELLO` (0x37), if it sent
     /// one. Consulted before answering `COMMIT` with a slim `COMMIT_OK`.
     client_capabilities: Vec<String>,
-    subscribed: std::collections::HashSet<atomic_lib::Subject>,
     commit_monitor_addr: Addr<CommitMonitor>,
     loro_sync_broadcaster_addr: Addr<LoroSyncBroadcaster>,
     agent: ForAgent,
@@ -244,7 +242,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketConnecti
                 self.handle_binary(&bin, ctx);
             }
             Ok(ws::Message::Text(text)) => {
-                // Remaining text messages: Loro sync, SYNC_VV, query subscriptions
+                // Remaining text messages: Loro sync, presence, SYNC_VV, RBSR
                 self.handle_text(&text, ctx);
             }
             Ok(ws::Message::Close(reason)) => {
@@ -454,52 +452,31 @@ impl WebSocketConnection {
                 );
             }
 
+            // The one subscription frame. The monitor looks at the subject:
+            // a drive registers drive-wide fan-out plus the drive resource
+            // itself, anything else registers that one subject. Not
+            // AUTH-gated: an anonymous session of a public share link
+            // subscribes to what it may read; `check_read` decides.
             ws_v2::tag::SUB => {
-                if let Ok(subject_str) = std::str::from_utf8(&bin[1..]) {
-                    let subject = atomic_lib::Subject::from_raw(
-                        subject_str,
-                        self.store.get_base_domain().as_deref(),
-                    );
-                    // Drive-wide fanout: every commit under this drive lands
-                    // on the connection as a pre-encoded `SendFrame`
-                    // (UPDATE or DESTROY). Replaces the old SubscribeQuery /
-                    // QUERY_UPDATE pair.
-                    self.commit_monitor_addr
-                        .do_send(crate::actor_messages::SubscribeDrive {
-                            addr: ctx.address(),
-                            drive: subject_str.to_string(),
-                            agent: self.agent.to_string(),
-                            source_id: self.connection_id.clone(),
-                        });
-                    // Also subscribe to commits targeting the drive resource
-                    // itself (renames, ACL edits) so we receive those even
-                    // when the drive subject is a DID that wouldn't
-                    // prefix-match the commit subject above.
+                if let Ok(subject) = std::str::from_utf8(&bin[1..]) {
                     self.commit_monitor_addr
                         .do_send(crate::actor_messages::Subscribe {
                             addr: ctx.address(),
-                            subject: subject.clone(),
+                            subject: subject.to_string(),
                             agent: self.agent.to_string(),
                             source_id: self.connection_id.clone(),
-                            refusal_frame: None,
                         });
-                    self.subscribed.insert(subject);
                 }
             }
 
             ws_v2::tag::UNSUB => {
-                if let Ok(subject_str) = std::str::from_utf8(&bin[1..]) {
-                    let subject = atomic_lib::Subject::from_raw(
-                        subject_str,
-                        self.store.get_base_domain().as_deref(),
-                    );
-                    self.subscribed.remove(&subject);
+                if let Ok(subject) = std::str::from_utf8(&bin[1..]) {
                     // Same raw key `SUB` registered under, so the fan-out
                     // entry is actually found and removed.
                     self.commit_monitor_addr
-                        .do_send(crate::actor_messages::UnsubscribeDrive {
+                        .do_send(crate::actor_messages::Unsubscribe {
                             addr: ctx.address(),
-                            drive: subject_str.to_string(),
+                            subject: subject.to_string(),
                         });
                 }
             }
@@ -535,7 +512,7 @@ impl WebSocketConnection {
         }
     }
 
-    /// Handle remaining text messages (Loro sync, SYNC_VV/DELTAS, query subs).
+    /// Handle the remaining text messages (Loro sync, presence, SYNC_VV, RBSR).
     fn handle_text(&mut self, text: &str, ctx: &mut ws::WebsocketContext<Self>) {
         if let Some(json) = text.strip_prefix("SUBSCRIBE_INDEX_STATUS ") {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
@@ -641,41 +618,6 @@ impl WebSocketConnection {
                 update.addr = Some(ctx.address());
                 self.loro_sync_broadcaster_addr.do_send(update);
             }
-        } else if let Some(json) = text.strip_prefix("SUBSCRIBE_QUERY ") {
-            // Filter subscription: `{property,value,drive[,sort_by]}`.
-            // Membership changes for this filter arrive as plain
-            // `UPDATE` / `DESTROY` frames via `MembershipNotification`
-            // — see `Handler<MembershipNotification>` below and
-            // `planning/sync.md` ("QUERY_UPDATE removed").
-            if !self.require_auth("SUBSCRIBE_QUERY", ctx) {
-                return;
-            }
-            if let Ok(query) =
-                serde_json::from_str::<crate::actor_messages::QuerySubscriptionJSON>(json)
-            {
-                self.commit_monitor_addr
-                    .do_send(crate::actor_messages::SubscribeQuery {
-                        addr: ctx.address(),
-                        query,
-                        agent: self.agent.to_string(),
-                        source_id: self.connection_id.clone(),
-                    });
-            }
-        } else if let Some(json) = text.strip_prefix("SUBSCRIBE ") {
-            if !self.require_auth("SUBSCRIBE", ctx) {
-                return;
-            }
-            let subject =
-                atomic_lib::Subject::from_raw(json, self.store.get_base_domain().as_deref());
-            self.commit_monitor_addr
-                .do_send(crate::actor_messages::Subscribe {
-                    addr: ctx.address(),
-                    subject: subject.clone(),
-                    agent: self.agent.to_string(),
-                    source_id: self.connection_id.clone(),
-                    refusal_frame: Some("SUBSCRIBE"),
-                });
-            self.subscribed.insert(subject);
         } else if let Some(json) = text.strip_prefix("SYNC_VV ") {
             if let Ok(request) = serde_json::from_str::<SyncVVRequest>(json) {
                 let store = self.store.clone();
@@ -881,41 +823,6 @@ impl Handler<crate::actor_messages::PresenceUpdate> for WebSocketConnection {
             "PRESENCE_UPDATE {}",
             serde_json::to_string(&msg).unwrap()
         ));
-    }
-}
-
-impl Handler<crate::actor_messages::MembershipNotification> for WebSocketConnection {
-    type Result = ();
-
-    /// A subject entered or left one of this connection's filter
-    /// subscriptions. Encode as `UPDATE` (for `added`, using the
-    /// pre-fetched snapshot + commit_id — saves the client an extra
-    /// round-trip GET) or `DESTROY` (for removed). This is the same
-    /// wire shape as drive-wide / per-resource events; only the
-    /// trigger differs (membership change vs. direct commit).
-    fn handle(
-        &mut self,
-        msg: crate::actor_messages::MembershipNotification,
-        ctx: &mut ws::WebsocketContext<Self>,
-    ) {
-        let subject =
-            atomic_lib::Subject::from_raw(&msg.subject, self.store.get_base_domain().as_deref());
-        let change = if msg.added {
-            let Some(snapshot) = msg.loro_snapshot.as_ref().filter(|b| !b.is_empty()) else {
-                // Pre-fetch missed (resource gone, permission lost
-                // between listener queue and dispatch, etc.). Skip
-                // the emission — the client can still GET on demand.
-                return;
-            };
-            ws_v2::Change::Snapshot {
-                bytes: snapshot,
-                commit_id: msg.commit_id.as_deref(),
-            }
-        } else {
-            ws_v2::Change::Destroyed
-        };
-        let frame = ws_v2::encode_change_frame(&self.store, &subject, change);
-        ctx.binary(actix_web::web::Bytes::from_owner(frame));
     }
 }
 
