@@ -160,7 +160,9 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
     );
     expect(toHex(encodeHello('Dev', []))).toBe(toHex(vectors.hello_bare));
     expect(toHex(encodeChallenge('0badf00d'))).toBe(toHex(vectors.challenge));
-    expect(toHex(encodeSyncResend('did:ad:d'))).toBe(toHex(vectors.sync_resend));
+    expect(toHex(encodeSyncResend('did:ad:d'))).toBe(
+      toHex(vectors.sync_resend),
+    );
     expect(decodeSyncResend(payload('sync_resend'))).toBe('did:ad:d');
     expect(toHex(encodeAuthOk(['keepalive', 'unsub']))).toBe(
       toHex(vectors.auth_ok_caps),
