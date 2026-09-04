@@ -77,12 +77,21 @@ async fn presence_relays_caches_and_gates() -> AtomicResult<()> {
     // ----- Relay: Alice broadcasts, Bob receives, Alice gets no echo -----
     // Bytes are opaque to the server; production sends
     // `EphemeralStore.encodeAll()`, a distinctive blob suffices here.
+    // The broadcaster admits an update only from a connection whose
+    // subscribe has finished its read check, and that check is a store
+    // read the actor runs concurrently; on a loaded host the first update
+    // can land before it. Production re-announces on a heartbeat, so do
+    // the same here rather than sleeping longer.
     let alice_state: Vec<u8> = b"alice-presence-state".to_vec();
-    ws_a.send_presence_update(&drive, &alice_state).await?;
-
-    let received = recv_presence(&mut rx_b, &drive, 5)
-        .await
-        .expect("Bob should receive Alice's presence update");
+    let mut received = None;
+    for _ in 0..10 {
+        ws_a.send_presence_update(&drive, &alice_state).await?;
+        if let Some(bytes) = recv_presence(&mut rx_b, &drive, 1).await {
+            received = Some(bytes);
+            break;
+        }
+    }
+    let received = received.expect("Bob should receive Alice's presence update");
     assert_eq!(
         received, alice_state,
         "Bob should receive the exact bytes Alice broadcast"

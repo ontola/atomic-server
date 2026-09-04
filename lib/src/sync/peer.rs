@@ -3164,7 +3164,21 @@ mod accept_gate_tests {
                 .ok()?;
             let mut buf = vec![0u8; n as usize];
             recv.read_exact(&mut buf).await.ok()?;
-            if !matches!(buf.first(), Some(&tag::HELLO) | Some(&tag::AUTH)) {
+            // Not the answer being waited for: the accept side's handshake
+            // chatter, the KEEPALIVE its live loop sends after
+            // `KEEPALIVE_INTERVAL` of silence, and the live fan-out
+            // (`UPDATE`, signed-destroy `COMMIT`) of writes made by the
+            // *other* tests in this process, which reaches every stream in
+            // the process-global peer registry. None of these tests waits
+            // for a fan-out frame.
+            if !matches!(
+                buf.first(),
+                Some(&tag::HELLO)
+                    | Some(&tag::AUTH)
+                    | Some(&tag::KEEPALIVE)
+                    | Some(&tag::UPDATE)
+                    | Some(&tag::COMMIT)
+            ) {
                 return Some(buf);
             }
         }
