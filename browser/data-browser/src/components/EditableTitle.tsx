@@ -14,7 +14,6 @@ import {
 } from '../helpers/transitionName';
 import { LAYOUT_CONTAINER } from '../helpers/containers';
 import { transition } from '../helpers/transition';
-import { UnsavedIndicator } from './UnsavedIndicator';
 import { useInlineTitleAffordances } from '../hooks/useInlineTitleAffordances';
 import { Flex } from './Row';
 import {
@@ -220,10 +219,7 @@ export function EditableTitle({
     >
       <>
         <TitleIcon resource={resource} />
-        <TitleText data-title-text>
-          {text || placeholder}
-          <UnsavedIndicator resource={resource} />
-        </TitleText>
+        <TitleText data-title-text>{text || placeholder}</TitleText>
         {canEdit && <Icon />}
       </>
     </Title>
