@@ -34,7 +34,15 @@ export function NodeSelectMenu(): React.JSX.Element {
     }),
   });
 
-  if (!editor) return <></>;
+  // `editor.isDestroyed`, not just `!editor`: a torn-down editor is still a
+  // truthy object, and its `commands` getter throws (`commandManager` is
+  // nulled on destroy). React Compiler hoists `editor.commands` out of
+  // `changeNodeType` into that closure's memo dependency — so the getter is
+  // read *during render*, not when the select changes, and a concurrent
+  // render that resumes after the editor was destroyed throws here. Bailing
+  // out first is also what this component means: a dead editor has no node
+  // type to show or to set.
+  if (!editor || editor.isDestroyed) return <></>;
 
   const changeNodeType = (nodeType: string) => {
     const [targetNodeTitle, level] = nodeData(nodeType);
