@@ -964,7 +964,7 @@ msgstr "Stack trace:"
 msgid "Not found!"
 msgstr "Not found!"
 
-#: src/components/OverlayContainer.tsx
+#: src/actions/appActions.ts
 #: src/routes/Router.tsx
 msgid "Go home"
 msgstr "Go home"
@@ -1104,6 +1104,7 @@ msgstr "Set as current drive"
 msgid "Add description"
 msgstr "Add description"
 
+#: src/components/OverlayContainer.tsx
 #: src/views/Drive/DrivePage.tsx
 msgid "Resources"
 msgstr "Resources"
@@ -1351,9 +1352,8 @@ msgstr "Start AI Chat with \"{0}\""
 msgid "<0/> <1/> navigate"
 msgstr "<0/> <1/> navigate"
 
-#: src/components/OverlayContainer.tsx
-msgid "<0/> open / chat"
-msgstr "<0/> open / chat"
+#~ msgid "<0/> open / chat"
+#~ msgstr "<0/> open / chat"
 
 #: src/components/OverlayContainer.tsx
 msgid "<0/> chat"
@@ -1364,37 +1364,37 @@ msgstr "<0/> chat"
 msgid "<0>esc</0> close"
 msgstr "<0>esc</0> close"
 
-#: src/components/OverlayContainer.tsx
+#: src/actions/appActions.ts
 msgid "Open search"
 msgstr "Open search"
 
-#: src/components/OverlayContainer.tsx
+#: src/actions/appActions.ts
 msgid "Show keyboard shortcuts"
 msgstr "Show keyboard shortcuts"
 
-#: src/components/OverlayContainer.tsx
+#: src/actions/resourceActions.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
 msgid "Edit resource"
 msgstr "Edit resource"
 
-#: src/components/OverlayContainer.tsx
+#: src/actions/resourceActions.tsx
 msgid "Show data view"
 msgstr "Show data view"
 
+#: src/actions/appActions.ts
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
-#: src/components/OverlayContainer.tsx
 msgid "New resource"
 msgstr "New resource"
 
-#: src/components/OverlayContainer.tsx
+#: src/actions/appActions.ts
 msgid "Open menu"
 msgstr "Open menu"
 
-#: src/components/OverlayContainer.tsx
+#: src/actions/appActions.ts
 msgid "User settings"
 msgstr "User settings"
 
-#: src/components/OverlayContainer.tsx
+#: src/actions/appActions.ts
 msgid "Theme settings"
 msgstr "Theme settings"
 
@@ -1706,45 +1706,35 @@ msgstr "You're using a local Agent, which cannot authenticate on other domains, 
 msgid "Global"
 msgstr "Global"
 
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> Search"
-msgstr "<0/> Search"
+#~ msgid "<0/> Search"
+#~ msgstr "<0/> Search"
 
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> Show or hide the sidebar"
-msgstr "<0/> Show or hide the sidebar"
+#~ msgid "<0/> Show or hide the sidebar"
+#~ msgstr "<0/> Show or hide the sidebar"
 
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> Show these keyboard shortcuts"
-msgstr "<0/> Show these keyboard shortcuts"
+#~ msgid "<0/> Show these keyboard shortcuts"
+#~ msgstr "<0/> Show these keyboard shortcuts"
 
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> <1/>dit resource"
-msgstr "<0/> <1/>dit resource"
+#~ msgid "<0/> <1/>dit resource"
+#~ msgstr "<0/> <1/>dit resource"
 
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> Show <1>d</1>ata for resource"
-msgstr "<0/> Show <1>d</1>ata for resource"
+#~ msgid "<0/> Show <1>d</1>ata for resource"
+#~ msgstr "<0/> Show <1>d</1>ata for resource"
 
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> Show <1>h</1>ome page"
-msgstr "<0/> Show <1>h</1>ome page"
+#~ msgid "<0/> Show <1>h</1>ome page"
+#~ msgstr "<0/> Show <1>h</1>ome page"
 
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> <1/>ew resource"
-msgstr "<0/> <1/>ew resource"
+#~ msgid "<0/> <1/>ew resource"
+#~ msgstr "<0/> <1/>ew resource"
 
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> Open <1>m</1>enu"
-msgstr "<0/> Open <1>m</1>enu"
+#~ msgid "<0/> Open <1>m</1>enu"
+#~ msgstr "<0/> Open <1>m</1>enu"
 
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> <1/>ser settings"
-msgstr "<0/> <1/>ser settings"
+#~ msgid "<0/> <1/>ser settings"
+#~ msgstr "<0/> <1/>ser settings"
 
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> <1/>heme settings"
-msgstr "<0/> <1/>heme settings"
+#~ msgid "<0/> <1/>heme settings"
+#~ msgstr "<0/> <1/>heme settings"
 
 #: src/routes/SyncRoute.tsx
 msgid "In sync"
@@ -4699,7 +4689,7 @@ msgid "No matching actions"
 msgstr "No matching actions"
 
 #: src/actions/resourceActions.tsx
-#: src/components/OverlayContainer.tsx
+#: src/actions/resourceActions.tsx
 msgid "Go to parent"
 msgstr "Go to parent"
 
@@ -4708,15 +4698,16 @@ msgid "Open the parent of this resource."
 msgstr "Open the parent of this resource."
 
 #. 0: ' '
-#: src/actions/resourceActions.tsx
+#. 0: ' '
+#: src/components/OverlayContainer.tsx
+#: src/components/ResourceContextMenu/index.tsx
 msgid "Are you sure you want to delete{0} <0/>"
 msgstr "Are you sure you want to delete{0} <0/>"
 
-#: src/routes/ShortcutsRoute.tsx
-msgid "<0/> Go to parent resource"
-msgstr "<0/> Go to parent resource"
+#~ msgid "<0/> Go to parent resource"
+#~ msgstr "<0/> Go to parent resource"
 
-#: src/components/OverlayContainer.tsx
+#: src/actions/appActions.ts
 msgid "Show or hide the sidebar"
 msgstr "Show or hide the sidebar"
 
@@ -5011,17 +5002,14 @@ msgstr "Switch to"
 msgid "Connect to that device"
 msgstr "Connect to that device"
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "You’re signed in, but this device doesn’t have your workspace yet. Signing in restores who you are — your data stays where you made it."
-msgstr "You’re signed in, but this device doesn’t have your workspace yet. Signing in restores who you are — your data stays where you made it."
+#~ msgid "You’re signed in, but this device doesn’t have your workspace yet. Signing in restores who you are — your data stays where you made it."
+#~ msgstr "You’re signed in, but this device doesn’t have your workspace yet. Signing in restores who you are — your data stays where you made it."
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "…or let it scan this device"
-msgstr "…or let it scan this device"
+#~ msgid "…or let it scan this device"
+#~ msgstr "…or let it scan this device"
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Scan this code from your other device instead. It only says where to reach this one — the other side still proves it holds your key."
-msgstr "Scan this code from your other device instead. It only says where to reach this one — the other side still proves it holds your key."
+#~ msgid "Scan this code from your other device instead. It only says where to reach this one — the other side still proves it holds your key."
+#~ msgstr "Scan this code from your other device instead. It only says where to reach this one — the other side still proves it holds your key."
 
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Skip for now"
@@ -5031,9 +5019,8 @@ msgstr "Skip for now"
 msgid "Paste a pairing code or did:ad:node:…"
 msgstr "Paste a pairing code or did:ad:node:…"
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Open <0>Sync</0> there to show its code, then scan or paste it here."
-msgstr "Open <0>Sync</0> there to show its code, then scan or paste it here."
+#~ msgid "Open <0>Sync</0> there to show its code, then scan or paste it here."
+#~ msgstr "Open <0>Sync</0> there to show its code, then scan or paste it here."
 
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "Pairing device"
@@ -5364,18 +5351,14 @@ msgstr "Or paste theirs"
 msgid "Scan this from that device"
 msgstr "Scan this from that device"
 
-#. 0: serverLabel(baseURL)
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Syncs your workspace with {0}, which this browser reads from. Safe to show: a code only routes."
-msgstr "Syncs your workspace with {0}, which this browser reads from. Safe to show: a code only routes."
+#~ msgid "Syncs your workspace with {0}, which this browser reads from. Safe to show: a code only routes."
+#~ msgstr "Syncs your workspace with {0}, which this browser reads from. Safe to show: a code only routes."
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Connect a device that has it"
-msgstr "Connect a device that has it"
+#~ msgid "Connect a device that has it"
+#~ msgstr "Connect a device that has it"
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "An always-on device has an address — add it and your workspace appears."
-msgstr "An always-on device has an address — add it and your workspace appears."
+#~ msgid "An always-on device has an address — add it and your workspace appears."
+#~ msgstr "An always-on device has an address — add it and your workspace appears."
 
 #: src/routes/SyncRoute.tsx
 msgid "Error: could not disconnect that device"
@@ -6354,8 +6337,8 @@ msgstr "Pick an option…"
 msgid "Button says"
 msgstr "Button says"
 
+#: src/actions/runAction.ts
 #: src/chunks/TablePage/NewColumnButton.tsx
-#: src/components/ResourceContextMenu/index.tsx
 msgid "Action"
 msgstr "Action"
 
@@ -6591,9 +6574,8 @@ msgstr "Set up Cloud Server"
 msgid "Cloud Server"
 msgstr "Cloud Server"
 
-#: src/helpers/managed/cloudSync.ts
-msgid "Timed out connecting to the Cloud Server node."
-msgstr "Timed out connecting to the Cloud Server node."
+#~ msgid "Timed out connecting to the Cloud Server node."
+#~ msgstr "Timed out connecting to the Cloud Server node."
 
 #. 0: PRODUCT_NAME
 #: src/components/Vault/VaultPanel.tsx
@@ -6644,10 +6626,8 @@ msgstr "Open{0} <0>{0}/link</0>{1} on a device where you are signed in, and ente
 msgid "Waiting for you to approve it…"
 msgstr "Waiting for you to approve it…"
 
-#. 0: providerName(portalUrl)
-#: src/components/Vault/LinkProviderPanel.tsx
-msgid "This app cannot sign in on its own, so approve it from somewhere you already are. Then it can keep an encrypted copy of your workspaces — sealed here, so {0} stores it without being able to read it."
-msgstr "This app cannot sign in on its own, so approve it from somewhere you already are. Then it can keep an encrypted copy of your workspaces — sealed here, so {0} stores it without being able to read it."
+#~ msgid "This app cannot sign in on its own, so approve it from somewhere you already are. Then it can keep an encrypted copy of your workspaces — sealed here, so {0} stores it without being able to read it."
+#~ msgstr "This app cannot sign in on its own, so approve it from somewhere you already are. Then it can keep an encrypted copy of your workspaces — sealed here, so {0} stores it without being able to read it."
 
 #: src/components/Vault/LinkProviderPanel.tsx
 msgid "Getting a code…"
@@ -6661,6 +6641,9 @@ msgstr "Connect this device"
 msgid "Android"
 msgstr "Android"
 
+#: src/actions/shortcuts.ts
+#: src/actions/shortcuts.ts
+#: src/actions/shortcuts.ts
 #: src/helpers/managed/deviceLink.ts
 msgid "Mac"
 msgstr "Mac"
@@ -6692,21 +6675,18 @@ msgstr "Safari"
 #~ msgid "Use my own secret"
 #~ msgstr "Use my own secret"
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "Restore this workspace"
-msgstr "Restore this workspace"
+#~ msgid "Restore this workspace"
+#~ msgstr "Restore this workspace"
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "You’re signed in, and this workspace has an encrypted backup. We stored it sealed, so only this device can open it."
-msgstr "You’re signed in, and this workspace has an encrypted backup. We stored it sealed, so only this device can open it."
+#~ msgid "You’re signed in, and this workspace has an encrypted backup. We stored it sealed, so only this device can open it."
+#~ msgstr "You’re signed in, and this workspace has an encrypted backup. We stored it sealed, so only this device can open it."
 
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Restore my workspace"
 msgstr "Restore my workspace"
 
-#: src/views/getting-started/ConnectDeviceStep.tsx
-msgid "…or bring it from another device instead"
-msgstr "…or bring it from another device instead"
+#~ msgid "…or bring it from another device instead"
+#~ msgstr "…or bring it from another device instead"
 
 #. 0: PRODUCT_NAME
 #: src/components/Vault/VaultPanel.tsx
@@ -6898,7 +6878,7 @@ msgid "Not synced yet"
 msgstr "Not synced yet"
 
 #. 0: label; 1: detail
-#: src/components/ResourceContextMenu/index.tsx
+#: src/actions/runAction.ts
 msgid "{0} failed: {1}"
 msgstr "{0} failed: {1}"
 
@@ -7167,3 +7147,152 @@ msgstr "Forgot it? Restore from {0}"
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Your backup is kept by your {0} account. Connect this device to it to restore."
 msgstr "Your backup is kept by your {0} account. Connect this device to it to restore."
+
+#. 0: action.label(ctx)
+#: src/actions/deriveTools.ts
+msgid "Cannot {0} this resource."
+msgstr "Cannot {0} this resource."
+
+#. 0: action.label(ctx)
+#: src/actions/deriveTools.ts
+msgid "{0} succeeded."
+msgstr "{0} succeeded."
+
+#. 0: action.toolName ?? action.id; 1: subject; 2: error
+#: src/actions/deriveTools.ts
+msgid "Error running {0} on {1}: {2}"
+msgstr "Error running {0} on {1}: {2}"
+
+#: src/actions/deriveTools.ts
+msgid "The subject (URL or #ref) of the resource"
+msgstr "The subject (URL or #ref) of the resource"
+
+#. 0: ctx.resource.title || ctx.subject
+#: src/actions/resourceActions.tsx
+msgid "Are you sure you want to delete {0}?"
+msgstr "Are you sure you want to delete {0}?"
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Deleting resource"
+msgstr "Deleting resource"
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Toggling favorite"
+msgstr "Toggling favorite"
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Opening share settings"
+msgstr "Opening share settings"
+
+#: src/chunks/AI/AIChatMessageParts/MessageToolPart.tsx
+msgid "Opening history"
+msgstr "Opening history"
+
+#: src/actions/appActions.ts
+msgid "Open the command palette to find resources and run actions."
+msgstr "Open the command palette to find resources and run actions."
+
+#: src/actions/appActions.ts
+msgid "Open the list of keyboard shortcuts."
+msgstr "Open the list of keyboard shortcuts."
+
+#: src/actions/appActions.ts
+msgid "Open the home page."
+msgstr "Open the home page."
+
+#: src/actions/appActions.ts
+msgid "Create a new resource."
+msgstr "Create a new resource."
+
+#: src/actions/appActions.ts
+msgid "Open the actions menu for the current resource."
+msgstr "Open the actions menu for the current resource."
+
+#: src/actions/appActions.ts
+msgid "Open your agent / user settings."
+msgstr "Open your agent / user settings."
+
+#: src/actions/appActions.ts
+msgid "Open appearance and theme settings."
+msgstr "Open appearance and theme settings."
+
+#: src/actions/appActions.ts
+msgid "Lock or unlock the sidebar."
+msgstr "Lock or unlock the sidebar."
+
+#: src/components/OverlayContainer.tsx
+msgid "Actions"
+msgstr "Actions"
+
+#: src/components/OverlayContainer.tsx
+msgid "<0/> open / run"
+msgstr "<0/> open / run"
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Open <0>Sync</0> there and scan or paste its code here."
+msgstr "Open <0>Sync</0> there and scan or paste its code here."
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "…or let it scan this one"
+msgstr "…or let it scan this one"
+
+#. 0: serverLabel(baseURL)
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "It syncs your workspace to {0}, which this browser reads from."
+msgstr "It syncs your workspace to {0}, which this browser reads from."
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Connect a server that has it"
+msgstr "Connect a server that has it"
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Restore your workspace"
+msgstr "Restore your workspace"
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Bring your data back"
+msgstr "Bring your data back"
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "There’s an encrypted backup, sealed so only you can open it."
+msgstr "There’s an encrypted backup, sealed so only you can open it."
+
+#. 0: PRODUCT_NAME
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Your backup is kept by your {0} account. Sign in to it and it comes back here."
+msgstr "Your backup is kept by your {0} account. Sign in to it and it comes back here."
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Signing in restores who you are. Your workspace still lives on the device you made it with."
+msgstr "Signing in restores who you are. Your workspace still lives on the device you made it with."
+
+#. 0: PRODUCT_NAME
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Sign in to {0}"
+msgstr "Sign in to {0}"
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "I’ve signed in — check again"
+msgstr "I’ve signed in — check again"
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "…or bring it over from another device"
+msgstr "…or bring it over from another device"
+
+#. 0: providerName(portalUrl)
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "Couldn’t reach {0}. Check your connection and try again."
+msgstr "Couldn’t reach {0}. Check your connection and try again."
+
+#. 0: providerName(portalUrl)
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "Connect to {0}"
+msgstr "Connect to {0}"
+
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "This app cannot sign in on its own, so approve it from somewhere you already are. Then it can keep an encrypted copy of your workspaces — sealed here, so"
+msgstr "This app cannot sign in on its own, so approve it from somewhere you already are. Then it can keep an encrypted copy of your workspaces — sealed here, so"
+
+#: src/components/Vault/LinkProviderPanel.tsx
+msgid "stores it without being able to read it."
+msgstr "stores it without being able to read it."
