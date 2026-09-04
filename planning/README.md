@@ -39,24 +39,22 @@ Remaining work, not "this file exists."
 | [`serverless-p2p.md`](./serverless-p2p.md) | **Planned.** Device sync without a hub (written same-agent-first; admission is rights-based since 2026-07-17). AUTH-before-SYNC and the `AUTH.requestedSubject`↔drive binding landed 2026-09-01 (Iroh). Live-link destroys travel as signed `COMMIT` frames since 2026-09-03. P0 remaining: signed bulk `remove[]`, OQ5 bootstrap admission, then `SyncSession` / `AtomicTransport`. |
 | [`foss-public-host-mode.md`](./foss-public-host-mode.md) | **Proposal.** A FOSS node on a public address must not host strangers' workspaces. `HostMode { Open, Owner }`, owner claimed by agent DID. Closes unified-sync OQ5 for Owner. |
 | [`authorization-sync.md`](./authorization-sync.md) | **Draft.** Signed commit authorization, grant-chain evidence, peer-sync trust boundaries. |
-| [`encryption.md`](./encryption.md) | **Exploration.** Live E2EE / blind replicas undecided. Shipped since the draft: local cache at rest ([`opfs-per-agent-encryption.md`](./opfs-per-agent-encryption.md)) and the encrypted archive ([`encrypted-vault-format.md`](./encrypted-vault-format.md), candidate model 2). |
-| [`unified-data-layer.md`](./unified-data-layer.md) | Browser/JS: one ingress, one outbox, one subscription model. Sign-at-drain (S4a) shipped separately. |
+| [`unified-data-layer.md`](./unified-data-layer.md) | **Partial.** Browser/JS: one ingress, one outbox, one subscription model. Atomic writes and the single outbox shipped; the ingress/subscription half and `SaveState` are open. |
 | [`loro-source-of-truth.md`](./loro-source-of-truth.md) | **Partial.** Sparse `datatypes` map + Phase 2a–2c shipped (`Tree::Resources` is a derived cache). Remaining: drop the untagged heuristic, Phase 1.6 `Value` reshape, Flutter undo. |
-| [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) | Target: `atomic_lib` as the complete HTTP-optional local node runtime. |
+| [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) | **Partial.** `AtomicNode` is the binding runtime; the WASM `ClientDb` is its only adapter and the unused surface was cut back 2026-09-04. Open: the other bindings. |
 | [`genesis-self-verifying.md`](./genesis-self-verifying.md) | **Partial.** Server and browser mint and verify inline genesis certs. Remaining: DataRoute verify UI, `genesis` propval immutability. |
 | [`drive-reconciliation.md`](./drive-reconciliation.md) | **Partial.** Core in `lib/src/sync/rbsr.rs` + TS mirror; **on the WS wire** as the stateless text frames `RBSR_FP`/`RBSR_ITEMS` (full-VV fallback). Not on Iroh; fingerprints still O(range); canonical cross-impl hash unspecified. |
 | [`zones.md`](./zones.md) | **Proposal.** Nothing built. Structural fix for the permission-check half of [`index-performance.md`](./index-performance.md). |
 | [`partial-sync.md`](./partial-sync.md) | **Proposal.** Replicate part of a drive per device. |
 | [`drafts-and-suggestions.md`](./drafts-and-suggestions.md) | **Mechanism shipped** (`Fork` class, `diffFork`/`mergeFork`, document body CRDT merge). Review/diff UI, suggest-for-non-writers, Canvas fork still open. |
-| [`device-pairing.md`](./device-pairing.md) | **Proposal.** One-scan pairing; QR is routing only (no secret). C0 and M6 closed. Remaining: extra-workspace inventory, M4. |
-| [`pairing-ux-field-test.md`](./pairing-ux-field-test.md) | **Field notes (through 2026-08-20).** C0 and M6 closed. Open: M4 (pre-0.40 auth), M8 (desktop "saved locally" toast), M12 (presence over Iroh), extra-workspace inventory. |
+| [`device-pairing.md`](./device-pairing.md) | **Proposal.** One-scan pairing; QR is routing only (no secret). C0 and M6 closed. Remaining: extra-workspace inventory, M4 (carried over from the field test). |
 | [`json-ad-compact.md`](./json-ad-compact.md) | **Phase 1–2 shipped** (resolver, tool I/O, context providers). Remaining: rebase `create_table.rows` on `fromCompact`; server `format=compact`. |
 | [`table-view-filters.md`](./table-view-filters.md) | **Views shipped** — Default View (filters, sort, columns, operators) and the multi-view switcher (`TableViewTabs`, `?view=`). Remaining: index-accelerated range scans. |
-| [`table-templates-and-mini-apps.md`](./table-templates-and-mini-apps.md) | Steps 3–6 shipped (computed columns, aggregates, assistant tools, catalogue). Remaining: derived columns in filters/aggregates. |
+| [`table-templates-and-mini-apps.md`](./table-templates-and-mini-apps.md) | **Partial.** Steps 3–6 shipped (computed columns, aggregates, assistant tools, catalogue). Remaining: derived columns in filters/aggregates. |
 | [`dashboards.md`](./dashboards.md) | **First slice shipped.** Remaining: the sixth action verb, parameters, reaching a dashboard from its table. |
 | [`content-i18n.md`](./content-i18n.md) | **LocalizedText + template locales shipped.** Remaining: TranslationsBar, `useTranslation`, `/query` `lang`, search language filter. |
 | [`website-templates.md`](./website-templates.md) | Template repair complete (DID). Remaining CMS product: drafts-from-site, i18n tooling, canonical paths. |
-| [`structural-problems-index.md`](./structural-problems-index.md) | Ranked structural issues. Highest remaining: React Compiler / Resource proxy (#1) — still open as of 2026-08, compiler now enabled. |
+| [`structural-problems-index.md`](./structural-problems-index.md) | **Live index.** Highest remaining: React Compiler / Resource proxy (#1), audit not started while the compiler is on. #6 mostly shipped; #2/#3 server side done 2026-09-04. |
 | [`react-compiler-resource-proxy.md`](./react-compiler-resource-proxy.md) | **Planned, audit not started.** Stale UI from Compiler memoizing Resource proxy reads; compiler on since 2026-08-19, field instance M15a. |
 | [`canvas-undo-consolidation.md`](./canvas-undo-consolidation.md) | Phase A + C landed (browser). Phase B (Flutter action-stack removal) open. |
 | [`index-performance.md`](./index-performance.md) | First tranche shipped. Structural permission-check fix is `zones.md`, not built. |
@@ -67,8 +65,8 @@ Remaining work, not "this file exists."
 | [`reticulum-sync.md`](./reticulum-sync.md) | **Proposal.** Atomic sync protocol over Reticulum. |
 | [`json-schema-code-first.md`](./json-schema-code-first.md) | **Proposal**; `defineSchema` + frozen `did:ad:` schemas in flight in PR #1262 (not on `develop`). Code-first JSON Schema → local DID-backed Class/Property resources. |
 | [`SDK-API-design.md`](./SDK-API-design.md) | SDK / agent DX direction. |
-| [`plugins.md`](./plugins.md) | **Partial** — one plugin model (`run` end to end, per-app agents, unattended runs). The code lives on `feat/plugin-model` (PR #1307), not `develop`. Absorbed `llm-wasm-gui-plugins.md`, `importers.md`, `habits-app.md` (2026-09-01); the habits RPC-`query` blocker is a line in it. |
-| [`personal-information-suite.md`](./personal-information-suite.md) | Exploration: contacts, calendar, email. |
+| [`plugins.md`](./plugins.md) | **Partial, off `develop`** — one plugin model (`run` end to end, per-app agents, unattended runs). The code lives on `feat/plugin-model` (PR #1307), not `develop`. Absorbed `llm-wasm-gui-plugins.md`, `importers.md`, `habits-app.md` (2026-09-01); the habits RPC-`query` blocker is a line in it. |
+| [`personal-information-suite.md`](./personal-information-suite.md) | **Exploration.** Contacts, calendar, email. Nothing built. |
 | [`social-apps.md`](./social-apps.md) | Requirements for social-network-shaped apps. Companion to `zones.md`. |
 | [`android-data-reuse.md`](./android-data-reuse.md) | **Draft.** One store/agent/Iroh node per Android device. Supersedes `on-device-atomic-daemon.md` (deleted 2026-09-01; desktop remainder is a note in `virtual-drive.md`). |
 | [`nextgraph-interop.md`](./nextgraph-interop.md) | **Proposal.** `did:ng:` via a scheme-routed Store backend. |
@@ -83,21 +81,23 @@ Not top-level plans. Indexed so they do not go missing.
 
 | Document | Status |
 | --- | --- |
-| [`unify-subscription-primitives.md`](./unify-subscription-primitives.md) | Planned. Server-side: one `Subscription` shape. Slice of [`unified-data-layer.md`](./unified-data-layer.md). |
-| [`unify-subscription-actors.md`](./unify-subscription-actors.md) | Planned. Fold LoroSyncBroadcaster into CommitMonitor. |
-| [`unify-resource-representations.md`](./unify-resource-representations.md) | Planned. Browser dual of [`loro-source-of-truth.md`](./loro-source-of-truth.md) (`Resource._cache`). |
-| [`unify-resource-dirty-signals.md`](./unify-resource-dirty-signals.md) | Planned. Single `getSaveState(subject)` enum. |
-| [`subject-types-end-to-end.md`](./subject-types-end-to-end.md) | Partial. Brand type in `@tomic/lib`; Rust `DidKind` shipped. Consumer migration open. |
+| [`unify-subscription-primitives.md`](./unify-subscription-primitives.md) | **Done in reduced form (2026-09-04).** One `SUB <subject>` frame; `SUBSCRIBE` and `SUBSCRIBE_QUERY` removed. Design text kept as the record. |
+| [`unify-subscription-actors.md`](./unify-subscription-actors.md) | Planned, not started. Fold LoroSyncBroadcaster into CommitMonitor. |
+| [`unify-resource-representations.md`](./unify-resource-representations.md) | **Mostly shipped.** `Resource#cache` is derived from the Loro doc. Remaining: the `_auxValues` overlay. |
+| [`unify-resource-dirty-signals.md`](./unify-resource-dirty-signals.md) | Planned, not started. Single `getSaveState(subject)` enum. |
+| [`subject-types-end-to-end.md`](./subject-types-end-to-end.md) | Partial. Rust `DidKind` shipped; the browser brand still has no consumer. |
 | [`arc-actor-message-payloads.md`](./arc-actor-message-payloads.md) | Partial. WS encode-once shipped; `CommitMessage` Arc-wrap deferred. |
-| [`sync-onboarding-ux.md`](./sync-onboarding-ux.md) | Cross-client copy for what can reach what. Companion to [`device-pairing.md`](./device-pairing.md). |
+| [`sync-onboarding-ux.md`](./sync-onboarding-ux.md) | Reference. Cross-client copy for what can reach what. Companion to [`device-pairing.md`](./device-pairing.md). |
 | [`main-drive-and-paths.md`](./main-drive-and-paths.md) | Strategy. DID-branch deployment: root drive, legacy URLs, human-readable paths. |
 | [`actions.md`](./actions.md) | **Step 1 shipped** (registry + ⌘M menu, 2026-07-08). Remaining: ⌘K section, hotkeys/shortcuts page derived from the registry, AI-tool derivation. |
-| [`table-creation-ux-audit.md`](./table-creation-ux-audit.md) | Observation log (2026-07-03). First pass addressed. |
-| [`kanban-views-test-spec.md`](./kanban-views-test-spec.md) | Manual test spec for kanban + `create_table`. |
-| [`silent-failures.md`](./silent-failures.md) | Running list of error-handling failures that reported success (2026-08-21). Companion to [`pairing-ux-field-test.md`](./pairing-ux-field-test.md). |
+| [`silent-failures.md`](./silent-failures.md) | Living log of error-handling failures that reported success (2026-08-21). Carries M8 from the pairing field test. |
 
-Closed decisions, as-built records and fixed notes live in
-[`completed/`](./completed/).
+Closed decisions, as-built records, closed explorations and fixed notes live
+in [`completed/`](./completed/): the five decisions above, the 2026-07 sync
+audit, the outbox data-loss race, `encryption.md` (closed 2026-09-01: at-rest
+plus vault), the pairing field test (2026-08, open items carried into
+`device-pairing.md`, `silent-failures.md` and `p2p-presence.md`), the
+table-creation observation log and the kanban test spec.
 
 ## Landed
 
@@ -111,7 +111,7 @@ the document itself.
 | [`commit-fanout-drive-isolation.md`](./commit-fanout-drive-isolation.md) | Drive-scoped WS commit fan-out + server-side drive safety net. |
 | [`cleanup-update-encoding.md`](./cleanup-update-encoding.md) | Unified `decode_update`; TS client exports compact Loro deltas. |
 | [`sign-at-drain.md`](./sign-at-drain.md) | One signed commit per dirty subject per drain pass. |
-| [`sync.md`](./sync.md) | WS `COMMIT`, echo suppression, unified `UPDATE`/`DESTROY`; Flutter WS session shipped. `ws_get`/`ws_destroy` and the `WsClient.close()` fix landed; remaining test gaps: `ws_errors.rs`, an `UNSUB` test, browser `postCommit` COMMIT_OK/ERROR tests. |
+| [`sync.md`](./sync.md) | WS `COMMIT`, echo suppression, unified `UPDATE`/`DESTROY`; Flutter WS session shipped. The last test gaps (`ws_errors.rs`, `ws_unsub.rs`, browser `postCommit`) closed 2026-09-04. |
 | [`encrypted-vault-format.md`](./encrypted-vault-format.md) | Vault backup v1 in `lib/src/vault/` (2026-08-04). |
 | [`opfs-per-agent-encryption.md`](./opfs-per-agent-encryption.md) | One encrypted OPFS database per agent. Session isolation on sign-out. |
 | [`meetings.md`](./meetings.md) | Meeting resource, page, prepare-then-start flow. |
@@ -120,7 +120,7 @@ the document itself.
 | [`emoji-cover-images.md`](./emoji-cover-images.md) | Emoji + cover images on resources. |
 | [`presence-views.md`](./presence-views.md) | Presence on canvas, tables, navbar, sidebar. |
 | [`demo-experience.md`](./demo-experience.md) | v1 demo workspace. |
-| [`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md) | Bootstrap-grace admission gate for managed nodes. Verified against the SaaS `LocalProcessNodeProvider` only; provisioned nodes still run the unmanaged binary (fix in flight). |
+| [`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md) | Onboarding, managed-node detection, enrollment, heartbeat and replication pull. Verified against the SaaS `LocalProcessNodeProvider` only; the sync-path admission gate is not built. |
 
 ## Agent Workflow
 

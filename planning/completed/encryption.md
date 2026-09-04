@@ -1,17 +1,17 @@
 # Encryption and replica trust
 
 > **Status:** Closed: at-rest + vault (2026-09-01), per
-> [`trust-model-decision.md`](./completed/trust-model-decision.md).
+> [`trust-model-decision.md`](./trust-model-decision.md).
 >
 > The open question this document explored — whether an external hosted server
 > can be a **blind replica** of a live drive — is closed as *not planned*. The
 > node that serves a drive is a **verifier**: it holds the drive key (or the
 > plaintext), materializes, indexes, authorizes, and fans out. What ships as
 > encryption is problems 2–4 below: local encryption at rest (shipped 2026-07, see
-> [`opfs-per-agent-encryption.md`](./opfs-per-agent-encryption.md)), server
+> [`opfs-per-agent-encryption.md`](../opfs-per-agent-encryption.md)), server
 > encryption at rest (to build), and the blind vault for backups
 > (vault v1 in `lib/src/vault/`, shipped 2026-08-04,
-> [`encrypted-vault-format.md`](./encrypted-vault-format.md)). End-to-end
+> [`encrypted-vault-format.md`](../encrypted-vault-format.md)). End-to-end
 > encrypted replication (problem 1) is not on the roadmap.
 >
 > **Reopen test.** This reopens only when a paying customer requires the
@@ -77,7 +77,7 @@ The following features should not be treated as one toggle:
    - Does not hide data from the running verifier process.
 
 3. **Encrypted backups** — shipped as vault v1 (2026-08-04), see
-   [`encrypted-vault-format.md`](./encrypted-vault-format.md).
+   [`encrypted-vault-format.md`](../encrypted-vault-format.md).
    - Protects exported checkpoints or Loro data.
    - Can be useful independently of live encrypted replication.
 
@@ -89,7 +89,7 @@ The following features should not be treated as one toggle:
 
 > **Status: shipped (2026-07).** The mechanism below is implemented — one
 > encrypted OPFS database per agent, keyed to the active session. See
-> [`opfs-per-agent-encryption.md`](./opfs-per-agent-encryption.md) for the
+> [`opfs-per-agent-encryption.md`](../opfs-per-agent-encryption.md) for the
 > as-built design, key hierarchy, migration, and accepted gaps.
 
 "Local encryption at rest" (#2 above) is usually motivated by a lost or stolen
@@ -192,7 +192,7 @@ describe the blind-replica design space. They are retained as a record and are
 **not planned**; see the reopen test in the status box. One later change is
 worth noting against them: with commits stored as signed envelopes on the
 resource rather than as a retained log
-([`commit-retention-floor-decision.md`](./completed/commit-retention-floor-decision.md),
+([`commit-retention-floor-decision.md`](./commit-retention-floor-decision.md),
 #1313), the "blind replica must retain every encrypted update" concern under
 [Compaction and retention](#compaction-and-retention) no longer applies to a
 verifier node; it would only return with a blind live replica.
@@ -226,7 +226,7 @@ missing updates, route subscriptions, and compact retained history.
 The `ciphertext` size of a `kind: delta` envelope is dominated by the plaintext
 Loro update it wraps. Today the server stores a **full Loro snapshot** per
 commit (see
-[`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md)),
+[`disk-storage-and-persistence-optimization.md`](../disk-storage-and-persistence-optimization.md)),
 so naively reusing that payload would make every encrypted delta envelope a
 full-state blob — bloating both the blind replica's retained log and sync
 bandwidth, and worsening the metadata leak (ciphertext size tracks document
@@ -455,7 +455,7 @@ authorization, synchronization, deduplication, and retention.
 
 ## Candidate product models
 
-Outcome per [`trust-model-decision.md`](./completed/trust-model-decision.md):
+Outcome per [`trust-model-decision.md`](./trust-model-decision.md):
 
 1. **Trusted-server Atomic only** — *chosen*, combined with 2.
    - Add local encryption at rest (shipped) and server encryption at rest (to

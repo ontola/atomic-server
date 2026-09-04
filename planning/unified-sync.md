@@ -171,12 +171,12 @@ that turned out to be already done, or blocked by a finding, say so inline.
   the signed-destroy `COMMIT` the push loop forwards from `DbEvent::Destroyed`
   (this doc).
 - [ ] M4 — no authentication against a pre-0.40 server; adopted drives read 401.
-  ([`pairing-ux-field-test.md`](./pairing-ux-field-test.md))
+  ([`pairing-ux-field-test.md`](./completed/pairing-ux-field-test.md))
 - [ ] M8 — desktop "your changes are saved locally" is false with the ClientDb
-  off. ([`pairing-ux-field-test.md`](./pairing-ux-field-test.md))
+  off. ([`pairing-ux-field-test.md`](./completed/pairing-ux-field-test.md))
 - [ ] M12 — presence across a peer link: the `EPHEMERAL` wire and the server
   bridge landed, the two-device verification has not.
-  ([`pairing-ux-field-test.md`](./pairing-ux-field-test.md),
+  ([`pairing-ux-field-test.md`](./completed/pairing-ux-field-test.md),
   [`p2p-presence.md`](./p2p-presence.md))
 - [ ] Extra-workspace inventory — pairing syncs the named drive; there is still
   no "ask the peer which drives you have".

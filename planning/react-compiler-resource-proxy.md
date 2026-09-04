@@ -1,6 +1,6 @@
 # React Compiler vs `Resource` proxy mismatch
 
-> Status: planned 2026-05-28. Bug class. See also
+> Status: planned 2026-05-28; **audit not started as of 2026-09-04**, while the React Compiler has been on since 2026-08-19 and `Resource.props` is still a `Proxy`. Bug class. See also
 > `memory/react-compiler-resource-proxy-pitfall.md` for the runbook-style
 > diagnostic.
 >

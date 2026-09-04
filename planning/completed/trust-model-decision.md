@@ -11,7 +11,7 @@
 
 ## Context
 
-[`encryption.md`](../encryption.md) is marked "Exploration / undecided (2026-06)" and lists
+[`encryption.md`](./encryption.md) is marked "Exploration / undecided (2026-06)" and lists
 "blind replica" and "trusted verifier" as open roles. Two pieces have since shipped and
 fixed the shape of the answer:
 
@@ -90,7 +90,7 @@ are both trusted; a self-hosted MinIO bucket and the SaaS Vault are both blind.
 
 Consequences per area:
 
-- **[`encryption.md`](../encryption.md)** — close the E2EE / blind-replica question as
+- **[`encryption.md`](./encryption.md)** — close the E2EE / blind-replica question as
   **"at-rest + vault"**: local cache at rest (shipped), server at rest (to build, see
   step 2), blind vault (shipped). Mark "Blind replica" and "Optional trusted verifier"
   candidate models as *not planned*. Reopen only if a concrete design demonstrates, on

@@ -1,5 +1,7 @@
 # Sync & Onboarding UX
 
+> **Status:** Reference, not a build plan. The current cross-client model of what can reach what, the agreed language, the existing paths, where the logic lives and what is tested. Update it when a sync or onboarding screen changes; it has no "done".
+
 How we talk about sync, what can actually reach what, and which paths exist.
 Read this before changing any sync/onboarding screen in **any** client — the
 same person meets several of them, and should not have to learn each one.

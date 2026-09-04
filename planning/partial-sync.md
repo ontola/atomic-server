@@ -193,7 +193,7 @@ confirm no peer deletes anything.
    `lib/src/sync/policy.rs` and with who is authoritative for a drive). In scope
    for the model, out of scope for the first implementation?
 4. **Interaction with encryption.** Per-zone keys
-   ([`encryption.md`](./encryption.md)) make zone-granular scope natural — a
+   ([`encryption.md`](./completed/encryption.md)) make zone-granular scope natural — a
    device without a zone's key has no reason to replicate it. Does scope then
    become *derived* from key possession for encrypted zones?
 5. **Does fill state need to be per-scope-element?** One flag per drive is

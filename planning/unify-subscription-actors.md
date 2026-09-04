@@ -1,6 +1,6 @@
 # Unify subscription actors
 
-> Status: planned 2026-05-28. Cleanup. Pairs with
+> Status: planned 2026-05-28. Cleanup. Pairs with. **not started as of 2026-09-04 (`LoroSyncBroadcaster` and `CommitMonitor` still keep parallel maps); the server-side primitive unification landed the same day in `unify-subscription-primitives.md`.**
 > [unify-subscription-primitives.md](./unify-subscription-primitives.md).
 
 ## Problem

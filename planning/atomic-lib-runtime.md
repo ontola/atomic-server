@@ -1,5 +1,7 @@
 # Atomic Lib Runtime: HTTP-Optional Local Node
 
+> **Status:** Partial. `AtomicNode` in `lib/src/runtime/` is the binding runtime (`from_db`, `db`, the agent accessors, `query`, `apply_commit` under `IngestPolicy::{Hub, Peer, LocalCache}`); the WASM `ClientDb` is its only adapter, and the unused `open` / `get` / `mutate` / `subscribe` / `sync_with_peer` surface was cut back 2026-09-04. Open: binding the remaining adapters (#1277 / #1241).
+
 ## Status
 
 **Decision (accepted 2026-09-01):** `AtomicNode` in `lib/src/runtime/` is *the*

@@ -4,12 +4,12 @@
 > a drive) is superseded — both sides derive. M6 (opening an HTTP drive moves
 > the home server) is closed. Open: M4 (pre-0.40 DID auth), M8 (desktop
 > “saved locally” toast), M12 (presence over Iroh), extra-workspace inventory.
-> Companion to [`device-pairing.md`](./device-pairing.md), which owns the
+> Companion to [`device-pairing.md`](../device-pairing.md), which owns the
 > pairing/onboarding UX; anything adopted from here belongs there.
 >
 > **Outcome (revised 2026-08-20):** C0 below is a pre-derivation finding.
 > The personal-drive DID is derived from the Agent key
-> ([`deterministic-personal-drive.md`](./deterministic-personal-drive.md)), so
+> ([`deterministic-personal-drive.md`](../deterministic-personal-drive.md)), so
 > two devices with the same secret name the same home. They cannot invent
 > disjoint personal-drive subjects. Pairing + live sync between desktop and
 > the HA node was verified 2026-08-17. The 2026-08-15 header ("a blank node

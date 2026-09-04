@@ -24,7 +24,7 @@
 > "Why the secret does *not* go in the QR".
 >
 > **2026-08-15 — field test.**
-> [`pairing-ux-field-test.md`](./pairing-ux-field-test.md) walks this UX on a
+> [`pairing-ux-field-test.md`](./completed/pairing-ux-field-test.md) walks this UX on a
 > real self-hosted server plus the desktop app. C0 (a blank node minting a
 > *different* personal-drive DID because it looked up the `personalDrive`
 > pointer) is **superseded**: the home subject is derived from the Agent key,
@@ -395,3 +395,30 @@ one-scan onboarding, by design.
 3. **Multi-agent devices** — the flows assume one default agent per device.
    If/when a device holds several agents, the Sync page needs to say *which*
    identity a pairing code belongs to, since AUTH is per-agent.
+
+## Carried over from the pairing field test (2026-09-04)
+
+The field notes moved to [`completed/pairing-ux-field-test.md`](./completed/pairing-ux-field-test.md); the item below is the one still open that belongs here.
+
+### M4 — No authentication against a pre-0.40 server (open)
+
+Adopted drives all return `401 — not publicly readable`. The client logs:
+
+```text
+[atomic-lib] Skipping DID authentication request to 'https://atomicdata.dev':
+             server version unknown (assuming <0.40).
+```
+
+`shouldSkipDidAuthForLegacyServer` (`serverCapabilities.ts`) suppresses DID
+auth for an origin that sends no `X-Atomic-Server-Version` header — and
+nothing takes its place, so the requests go out anonymous.
+
+What is missing is a legacy fallback: against a pre-0.40 origin, sign as
+`agent.legacySubject` rather than the DID. Same key, same scheme the old
+server already accepts; only the identifier differs, and the secret carries
+it.
+
+This is required whether migration *links* the old drives or eventually
+*copies* them — either way they must be readable first. Until it exists, a
+migrated account gets a list of drives it cannot open, which is arguably worse
+than an empty list because it looks like it worked.

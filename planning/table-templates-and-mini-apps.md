@@ -1,5 +1,7 @@
 # Table Templates and Mini-Apps
 
+> **Status:** Partial. Steps 3 to 6 shipped 2026-07-31 (derived and computed columns, aggregation with breakdowns, assistant tools, the template catalogue). Remaining: derived columns usable in filters and aggregates.
+
 ## Status
 
 Steps 3–6 shipped (2026-07-31). Prompted by the Timer view: building it as a

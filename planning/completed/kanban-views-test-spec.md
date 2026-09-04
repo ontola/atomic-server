@@ -1,5 +1,7 @@
 # Test spec: Kanban views + `create_table` API
 
+> **Status:** Manual test spec for shipped work (kanban views and `create_table`). Kept as a reproducible checklist, not an open plan; moved to `completed/` 2026-09-04.
+
 > Manual/Charlotte verification for the kanban view work and the assistant
 > `create_table` tool. Covers the ontology change, the renderer, drag-and-drop,
 > the no-enum fallback, the view-kind picker, the table template, and the

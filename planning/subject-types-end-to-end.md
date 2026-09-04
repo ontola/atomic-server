@@ -1,6 +1,6 @@
 # Subject types end-to-end
 
-> Status: first step landed 2026-05-28 in
+> Status: first step landed 2026-05-28 in **Re-checked 2026-09-04:** the Rust `DidKind` half is real; the browser brand (`asSubject` / `tryAsSubject`) still has no consumer outside `subject.ts` and its test.
 > `browser/lib/src/subject.ts` (brand type + `asSubject` /
 > `tryAsSubject` / `isValidSubject` / `isDidSubject` / `isHttpSubject`
 > + `InvalidSubjectError`; 8 passing tests). The brand is exported but

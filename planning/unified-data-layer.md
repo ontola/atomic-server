@@ -1,5 +1,7 @@
 # Unified data layer — proposal
 
+> **Status:** Partial. The atomic-write core landed 2026-07-07: `OpfsPersistor` atomic writes, `local-outbox.ts` as the single durable outbox, most of the resource-save decomposition. Open: the one-ingress / one-subscription-model half and the `SaveState` surface, tracked in the slices `unify-resource-dirty-signals.md`, `unify-resource-representations.md`, `unify-subscription-primitives.md`.
+
 > Scope note: this proposal focuses on the browser/JS data layer and the OPFS
 > flakes that exposed it. The broader runtime direction is in
 > [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) (`AtomicNode` API). Transport
