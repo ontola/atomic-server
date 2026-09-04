@@ -2758,6 +2758,7 @@ export class Store {
     if (!this._serverConnected) {
       if (kvResults.length > 0) {
         searchDebug('[search] OFFLINE kv →', kvResults.length, kvResults);
+
         return kvResults;
       }
 
