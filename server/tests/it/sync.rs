@@ -94,8 +94,8 @@ async fn two_clients_sync() -> AtomicResult<()> {
                         ));
                     }
                 }
-                Ok(WsMessage::Error(e)) => {
-                    tracing::warn!("WS error: {}", e);
+                Ok(WsMessage::Error { message, .. }) => {
+                    tracing::warn!("WS error: {}", message);
                 }
                 Ok(_) => continue,
                 Err(e) => {

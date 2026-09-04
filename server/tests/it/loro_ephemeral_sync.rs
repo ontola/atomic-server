@@ -90,8 +90,8 @@ async fn ephemeral_update_broadcasts_to_other_subscribers() -> AtomicResult<()> 
                         return Ok::<Vec<u8>, atomic_lib::errors::AtomicError>(update);
                     }
                 }
-                Ok(WsMessage::Error(e)) => {
-                    tracing::warn!("WS B error: {}", e);
+                Ok(WsMessage::Error { message, .. }) => {
+                    tracing::warn!("WS B error: {}", message);
                 }
                 Ok(_) => continue,
                 Err(e) => {

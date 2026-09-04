@@ -7,6 +7,43 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- **Sync protocol follow-ups** (see `docs/src/websockets.md`, "Changed in
+  2026-09"):
+  - Challenge-bound `AUTH` over WebSocket: the server's first frame is
+    `CHALLENGE (0x42)` with a per-connection nonce; a client signs
+    `requestedSubject = "{origin}#{nonce}"` and the proof is good on that
+    socket only, so a captured frame can no longer be replayed elsewhere
+    inside the five-minute window. Nonce-less proofs are still accepted
+    (`engine::AuthChallenge::Issued`); `AuthChallenge::Required` is the
+    strict mode, not yet wired to an option. Capability `auth-nonce`.
+  - The WebSocket handler reads a client `HELLO` (capability `client-hello`)
+    and answers `COMMIT` with a slim `COMMIT_OK` of `[request_id] [commit_id]`
+    for a client that listed `commit-ok-slim` (the browser and the Rust
+    `WsClient` both do). `protocol::decode_commit_ok` reads both forms.
+  - Subscriptions follow the connection's identity: when an `AUTH` changes
+    it, the commit monitor re-runs `check_read` for every subject, drive and
+    filter subscription the connection holds and drops the unreadable ones
+    (`RebindAgent`, capability `rebind-on-auth`). Until now a `SUB` accepted
+    as the owner kept delivering after the socket re-authenticated as a
+    stranger.
+  - `WsMessage::Error` is a struct (`request_id`, `code`, `message`);
+    `WsClient::post_commit` settles only on its own `request_id` and returns
+    the commit id, so several commits can be in flight on one connection.
+    Unknown text frames surface as `WsMessage::Unrecognized` instead of an
+    error. `WsClient` sends a `HELLO` on connect and answers the server's
+    challenge automatically (`WsClient::auth_subject`).
+  - New error code `INVALID_SIGNATURE (9)` for a `COMMIT` whose signature
+    does not verify; it went out as `UNKNOWN` before.
+  - Iroh: `LIVE_CONNECTIONS` is keyed by peer and pruned when the peer is
+    removed. It was an append-only list that pinned every QUIC connection
+    ever dialed for the life of the process.
+  - `ws_apply::apply_commit_json` (the replica applier that skips rights
+    checks) is renamed `apply_trusted_hub_commit` and documented as
+    trusted-hub-only (audit finding F6); it no longer shares a name with the
+    server's rights-checked `handlers::commit::apply_commit_json`.
+  - New integration tests: `ws_errors` (ERROR format, `request_id` echo and
+    codes), the nonce, the identity re-bind, and the slim ack.
+
 - **Sync protocol hardening** (WebSocket and Iroh; wire reference rewritten in
   `docs/src/websockets.md`, see its "Changed in 2026-09" section):
   - `AUTH` proofs expire: a signed authentication older than five minutes

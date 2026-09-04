@@ -58,7 +58,16 @@ describe('decodeError (F5: planning/unified-sync.md)', () => {
 import { readFileSync } from 'node:fs';
 import {
   decodeAuthOk,
+  decodeChallenge,
   decodeCommit,
+  decodeCommitOk,
+  decodeHelloCaps,
+  encodeAuthOk,
+  encodeChallenge,
+  encodeCommitOk,
+  encodeCommitOkSlim,
+  encodeError,
+  encodeHello,
   decodeGet,
   decodeSubject,
   decodeSyncDiff,
@@ -122,6 +131,10 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
       'blob_request',
       'blob_response',
       'keepalive',
+      'commit_ok_slim',
+      'challenge',
+      'hello_caps',
+      'hello_bare',
     ]) {
       expect(vectors[name], name).toBeDefined();
     }
@@ -133,6 +146,30 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
     expect(toHex(encodeSub('did:ad:d'))).toBe(toHex(vectors.sub));
     expect(toHex(encodeUnsub('did:ad:d'))).toBe(toHex(vectors.unsub));
     expect(toHex(encodeKeepalive())).toBe(toHex(vectors.keepalive));
+    expect(toHex(encodeHello('Dev 🚀', ['keepalive']))).toBe(
+      toHex(vectors.hello_caps),
+    );
+    expect(toHex(encodeHello('Dev', []))).toBe(toHex(vectors.hello_bare));
+    expect(toHex(encodeChallenge('0badf00d'))).toBe(toHex(vectors.challenge));
+    expect(toHex(encodeAuthOk(['keepalive', 'unsub']))).toBe(
+      toHex(vectors.auth_ok_caps),
+    );
+    expect(toHex(encodeAuthOk([]))).toBe(toHex(vectors.auth_ok_bare));
+    expect(
+      toHex(
+        encodeError(
+          7,
+          ErrorCode.UNAUTHORIZED_READ,
+          'SUB refused for did:ad:d: no',
+        ),
+      ),
+    ).toBe(toHex(vectors.error));
+    expect(toHex(encodeCommitOk(9, '{"a":1}'))).toBe(toHex(vectors.commit_ok));
+    expect(toHex(encodeCommitOkSlim(9, 'did:ad:commit:abc'))).toBe(
+      toHex(vectors.commit_ok_slim),
+    );
+    expect(decodeHelloCaps(payload('hello_caps'))).toEqual(['keepalive']);
+    expect(decodeHelloCaps(payload('hello_bare'))).toEqual([]);
     expect(toHex(encodeBlobRequest(new Uint8Array(32).fill(0xab)))).toBe(
       toHex(vectors.blob_request),
     );
@@ -214,6 +251,28 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
       requestId: 9,
       commitJson: '{"a":1}',
     });
+
+    // Both COMMIT_OK forms decode to the same shape; the legacy vector has no
+    // `@id`, which is a malformed ack rather than an id-less one.
+    expect(decodeCommitOk(payload('commit_ok'))).toBeUndefined();
+    expect(decodeCommitOk(payload('commit_ok_slim'))).toEqual({
+      requestId: 9,
+      commitId: 'did:ad:commit:abc',
+    });
+    const legacy = new TextEncoder().encode(
+      '{"@id":"did:ad:commit:full","https://atomicdata.dev/properties/signature":"s"}',
+    );
+    const legacyFrame = new Uint8Array(2 + legacy.length);
+    legacyFrame[1] = 9;
+    legacyFrame.set(legacy, 2);
+    expect(decodeCommitOk(legacyFrame)).toEqual({
+      requestId: 9,
+      commitId: 'did:ad:commit:full',
+      commitJson: new TextDecoder().decode(legacy),
+    });
+
+    expect(decodeChallenge(payload('challenge'))).toBe('0badf00d');
+    expect(decodeChallenge(new Uint8Array(0))).toBeUndefined();
 
     expect(decodeSyncOk(payload('sync_ok'))).toEqual({ drive: 'did:ad:d' });
 

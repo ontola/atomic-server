@@ -26,6 +26,19 @@ pub struct Subscribe {
     pub refusal_frame: Option<&'static str>,
 }
 
+/// An `AUTH` on a connection changed its identity. The commit monitor
+/// re-evaluates every subscription the connection holds against the new
+/// agent and drops the ones it may no longer read; the ones it keeps are
+/// re-bound to the new agent. Sent by the WebSocket actor only when the
+/// identity actually changed.
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct RebindAgent {
+    pub addr: Addr<crate::handlers::web_sockets::WebSocketConnection>,
+    /// The new identity as a subject string (`ForAgent`'s `Display`).
+    pub agent: String,
+}
+
 /// A message containing a Resource, which should be sent to subscribers
 #[derive(Message, Clone, Debug)]
 #[rtype(result = "()")]

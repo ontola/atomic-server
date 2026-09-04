@@ -68,7 +68,20 @@ async fn ws_commit_syncs_to_subscriber() -> AtomicResult<()> {
     let ws_a = WsClient::connect(&ws_url).await?;
     ws_a.authenticate(&agent_a).await?;
     let request_id = REQ_ID.fetch_add(1, Ordering::Relaxed);
-    let _ok = ws_a.post_commit(request_id, &commit_json).await?;
+    let commit_id = ws_a.post_commit(request_id, &commit_json).await?;
+    // `WsClient` lists `commit-ok-slim` in its HELLO, so the ack is the bare
+    // commit id, not the commit JSON; `post_commit` returns it either way.
+    assert!(
+        commit_id.starts_with("did:ad:commit:") || commit_id.contains("/commits/"),
+        "COMMIT_OK should carry the server's commit id, got {commit_id}"
+    );
+    assert!(
+        ws_a.server_capabilities()
+            .iter()
+            .any(|c| c == "commit-ok-slim"),
+        "{:?}",
+        ws_a.server_capabilities()
+    );
 
     // Bob should receive an UPDATE for the resource
     let received = tokio::time::timeout(Duration::from_secs(10), async {

@@ -81,6 +81,11 @@ export function drainBackoffMs(failures: number): number {
 // few-second window an ordering race needs.
 export const BLOCK_AFTER_FAILURES = 8;
 
+/** How many subjects of one tier are drained at once when the caller
+ *  supplies `tierOf`. Bounded so a reconnect with hundreds of dirty
+ *  subjects does not open hundreds of concurrent COMMITs. */
+export const DEFAULT_DRAIN_CONCURRENCY = 8;
+
 export interface OutboxDrainContext {
   /** Drain ONE subject: POST signedGenesis if present, then export the
    *  Loro delta, sign one commit, POST, advance the export cursor.
@@ -88,6 +93,19 @@ export interface OutboxDrainContext {
   drainSubject: (subject: string) => Promise<void>;
   /** Caller-supplied ordering (agents → drive → children). */
   sort: (entries: readonly OutboxEntry[]) => OutboxEntry[];
+  /** Optional: the ordering tier an entry belongs to. Entries of one tier
+   *  have no ordering dependency on each other (siblings under an
+   *  already-synced parent), so the drain runs a tier's subjects
+   *  concurrently — the COMMIT frames pipeline on the socket and the acks
+   *  match by request id — and barriers between tiers, so a child's
+   *  genesis never races ahead of its parent's. The tier keys of the sorted
+   *  entries must be grouped (all of one tier adjacent). Without it every
+   *  entry is its own tier: the sequential, one-round-trip-per-subject
+   *  drain. */
+  tierOf?: (entry: OutboxEntry) => string;
+  /** Optional: how many subjects of one tier to drain at once. Defaults to
+   *  `DEFAULT_DRAIN_CONCURRENCY`; only consulted when `tierOf` is given. */
+  concurrency?: number;
   /** Optional: classify a drain failure as terminal (the entry can never
    *  succeed, e.g. genesis collision against an existing server resource).
    *  Terminal entries are cleared from the outbox after `onTerminalDrop`
@@ -581,13 +599,30 @@ export class LocalOutbox {
 
     // Snapshot subjects at start. Newly-dirtied subjects mid-drain
     // get picked up by the next drain trigger (microtask onChange).
-    for (const entry of ctx.sort([...this.entries.values()])) {
+    const sorted = ctx.sort([...this.entries.values()]);
+
+    for (const tier of groupTiers(sorted, ctx.tierOf)) {
+      await runBounded(
+        tier,
+        ctx.tierOf ? (ctx.concurrency ?? DEFAULT_DRAIN_CONCURRENCY) : 1,
+        entry => this.drainOne(entry, ctx),
+      );
+    }
+  }
+
+  /** Attempt one entry: skip it if blocked or backing off, otherwise run
+   *  `ctx.drainSubject` and record the outcome on the entry. Never throws. */
+  private async drainOne(
+    entry: OutboxEntry,
+    ctx: OutboxDrainContext,
+  ): Promise<void> {
+    {
       const live = this.entries.get(entry.subject);
-      if (!live) continue;
+      if (!live) return;
 
       // Blocked: an unrecoverable failure (e.g. 401) parked this entry. It
       // waits for a fresh `markDirty` to re-arm — never retried on its own.
-      if (live.blocked) continue;
+      if (live.blocked) return;
 
       // Backoff: skip an entry still inside its post-failure window. The next
       // drain (scheduled at `nextDueAt`) re-attempts it once it's due. Prevents
@@ -597,7 +632,7 @@ export class LocalOutbox {
         live.lastAttemptAt !== undefined &&
         Date.now() < live.lastAttemptAt + drainBackoffMs(live.failures)
       ) {
-        continue;
+        return;
       }
 
       live.lastAttemptAt = Date.now();
@@ -829,4 +864,56 @@ export class LocalOutbox {
         typeof obj.baseVersion === 'string' ? obj.baseVersion : undefined,
     });
   }
+}
+
+/** Split sorted entries into runs of equal `tierOf` key. Without `tierOf`
+ *  every entry is its own run, which keeps the drain strictly sequential. */
+export function groupTiers(
+  sorted: readonly OutboxEntry[],
+  tierOf?: (entry: OutboxEntry) => string,
+): OutboxEntry[][] {
+  if (!tierOf) return sorted.map(e => [e]);
+
+  const tiers: OutboxEntry[][] = [];
+  let currentKey: string | undefined;
+
+  for (const entry of sorted) {
+    const key = tierOf(entry);
+
+    if (tiers.length === 0 || key !== currentKey) {
+      tiers.push([entry]);
+      currentKey = key;
+    } else {
+      tiers[tiers.length - 1].push(entry);
+    }
+  }
+
+  return tiers;
+}
+
+/** Run `task` over `items` with at most `limit` in flight, in order of
+ *  start. Resolves once every task settled; tasks are expected not to throw
+ *  (`drainOne` records failures on the entry instead). */
+export async function runBounded<T>(
+  items: readonly T[],
+  limit: number,
+  task: (item: T) => Promise<void>,
+): Promise<void> {
+  const width = Math.max(1, Math.min(limit, items.length));
+  let next = 0;
+
+  const worker = async () => {
+    while (next < items.length) {
+      const item = items[next++];
+
+      try {
+        await task(item);
+      } catch {
+        // `task` handles its own failures; a throw here would only strand
+        // the remaining items of the tier.
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: width }, worker));
 }

@@ -7,6 +7,8 @@ import {
   isUnrecoverableCommitError,
   isCommitSubject,
   drainBackoffMs,
+  groupTiers,
+  runBounded,
   BLOCK_AFTER_FAILURES,
   type OutboxEntry,
 } from './local-outbox.js';
@@ -826,5 +828,141 @@ describe('outbox backoff', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('LocalOutbox.drain tiers (pipelined COMMITs)', () => {
+  beforeEach(() => {
+    if (typeof localStorage !== 'undefined') localStorage.clear();
+  });
+
+  const subjects = (n: number, prefix: string) =>
+    Array.from({ length: n }, (_, i) => `did:ad:${prefix}${i}`);
+
+  it('groups sorted entries into runs of equal tier', ({ expect }) => {
+    const entries = ['a', 'b', 'c', 'd'].map(s => ({
+      subject: s,
+      enqueuedAt: 1,
+    }));
+    const tier = (e: { subject: string }) => (e.subject < 'c' ? '0' : '1');
+
+    expect(groupTiers(entries, tier).map(t => t.map(e => e.subject))).toEqual([
+      ['a', 'b'],
+      ['c', 'd'],
+    ]);
+    // No tierOf: strictly sequential, one entry per tier.
+    expect(groupTiers(entries).map(t => t.length)).toEqual([1, 1, 1, 1]);
+  });
+
+  it('runBounded never has more than `limit` tasks in flight', async ({
+    expect,
+  }) => {
+    let inFlight = 0;
+    let peak = 0;
+    const started: number[] = [];
+
+    await runBounded([1, 2, 3, 4, 5, 6, 7], 3, async item => {
+      started.push(item);
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise(r => setTimeout(r, 1));
+      inFlight--;
+    });
+
+    expect(peak).toBe(3);
+    expect(started).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it('drains a tier concurrently and barriers between tiers', async ({
+    expect,
+  }) => {
+    const outbox = new LocalOutbox();
+    const parents = subjects(2, 'parent');
+    const children = subjects(6, 'child');
+    for (const s of [...parents, ...children]) outbox.markDirty(s);
+
+    let inFlight = 0;
+    let peak = 0;
+    const order: string[] = [];
+    const release = new Map<string, () => void>();
+
+    const drainSubject = (subject: string) =>
+      new Promise<void>(resolve => {
+        order.push(subject);
+        inFlight++;
+        peak = Math.max(peak, inFlight);
+        release.set(subject, () => {
+          inFlight--;
+          outbox.clearDirty(subject);
+          resolve();
+        });
+      });
+
+    const drain = outbox.drain({
+      sort: e => [...e].sort((a, b) => a.subject.localeCompare(b.subject)),
+      tierOf: e => (e.subject.includes('parent') ? 'parents' : 'children'),
+      concurrency: 4,
+      drainSubject,
+    });
+
+    // Sorted: children come before parents alphabetically; the first tier
+    // is the six children, of which four are in flight at once.
+    await new Promise(r => setTimeout(r, 0));
+    expect(order).toHaveLength(4);
+    expect(order.every(s => s.includes('child'))).toBe(true);
+    expect(peak).toBe(4);
+
+    // No parent starts until every child settled — the tier barrier.
+    for (const s of children) release.get(s)?.();
+    await new Promise(r => setTimeout(r, 0));
+    for (const s of children) release.get(s)?.();
+    await new Promise(r => setTimeout(r, 0));
+    expect(order.filter(s => s.includes('parent'))).toHaveLength(2);
+    expect(order.slice(0, 6).every(s => s.includes('child'))).toBe(true);
+
+    for (const s of parents) release.get(s)?.();
+    await drain;
+    expect(outbox.size).toBe(0);
+    expect(peak).toBe(4);
+  });
+
+  it('without tierOf the drain stays sequential', async ({ expect }) => {
+    const outbox = new LocalOutbox();
+    for (const s of subjects(3, 's')) outbox.markDirty(s);
+    let inFlight = 0;
+    let peak = 0;
+
+    await outbox.drain({
+      sort: e => [...e],
+      drainSubject: async subject => {
+        inFlight++;
+        peak = Math.max(peak, inFlight);
+        await new Promise(r => setTimeout(r, 1));
+        inFlight--;
+        outbox.clearDirty(subject);
+      },
+    });
+
+    expect(peak).toBe(1);
+    expect(outbox.size).toBe(0);
+  });
+
+  it('a failing subject does not strand the rest of its tier', async ({
+    expect,
+  }) => {
+    const outbox = new LocalOutbox();
+    for (const s of subjects(3, 's')) outbox.markDirty(s);
+
+    await outbox.drain({
+      sort: e => [...e],
+      tierOf: () => 'one',
+      drainSubject: async subject => {
+        if (subject.endsWith('1')) throw new Error('boom');
+        outbox.clearDirty(subject);
+      },
+    });
+
+    expect(outbox.size).toBe(1);
+    expect(outbox.getEntry('did:ad:s1')?.failures).toBe(1);
   });
 });

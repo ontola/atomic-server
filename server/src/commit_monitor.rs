@@ -4,7 +4,7 @@
 
 use crate::{
     actor_messages::{
-        CommitMessage, ExternalChange, MembershipNotification, SendFrame, Subscribe,
+        CommitMessage, ExternalChange, MembershipNotification, RebindAgent, SendFrame, Subscribe,
         SubscribeDrive, SubscribeQuery, UnsubscribeAll, UnsubscribeDrive, UnsubscribeQuery,
     },
     handlers::{web_sockets::WebSocketConnection, ws_v2},
@@ -47,16 +47,33 @@ use std::sync::Arc;
 ///   `planning/sync.md` ("QUERY_UPDATE removed"); the SUBSCRIBE_QUERY registration
 ///   primitive itself was kept because it lets a client say "watch this
 ///   set of resources" without binding to a whole drive.
+/// One connection's registration on a subject, drive or filter.
+#[derive(Debug, Clone)]
+pub struct Subscriber {
+    /// Connection id; a change this connection originated is not echoed back
+    /// to it (see [`skip_same_source`]).
+    source_id: String,
+    /// The identity the subscription was admitted under, as a subject
+    /// string. Kept so [`Handler<RebindAgent>`] can re-evaluate the
+    /// registration when the connection's `AUTH` changes it.
+    agent: String,
+    /// Filter subscriptions only: the drive the filter is scoped to, which
+    /// is what the read check runs against.
+    drive: Option<String>,
+}
+
+type Subscribers = HashMap<Addr<WebSocketConnection>, Subscriber>;
+
 #[allow(clippy::mutable_key_type)]
 pub struct CommitMonitor {
     /// Maintains a list of all the resources that are being subscribed to, and maps these to websocket connections.
-    /// Inner map: subscriber `Addr` → `source_id`. The id is used to suppress
-    /// broadcasts back to the connection that originated the change.
-    subscriptions: HashMap<atomic_lib::Subject, HashMap<Addr<WebSocketConnection>, String>>,
+    /// Inner map: subscriber `Addr` → [`Subscriber`] (its `source_id` is used
+    /// to suppress broadcasts back to the connection that originated the change).
+    subscriptions: HashMap<atomic_lib::Subject, Subscribers>,
     /// Drive-wide subscriptions: keyed by drive subject string.
-    drive_subscriptions: HashMap<String, HashMap<Addr<WebSocketConnection>, String>>,
+    drive_subscriptions: HashMap<String, Subscribers>,
     /// Filter subscriptions: keyed by encoded `QueryFilter` bytes.
-    query_subscriptions: HashMap<Vec<u8>, HashMap<Addr<WebSocketConnection>, String>>,
+    query_subscriptions: HashMap<Vec<u8>, Subscribers>,
     store: Db,
     search_state: SearchState,
     vector_search_state: VectorSearchState,
@@ -351,7 +368,14 @@ impl Handler<Subscribe> for CommitMonitor {
                 #[allow(clippy::mutable_key_type)]
                 if let Some(msg) = msg {
                     let set = actor.subscriptions.entry(msg.subject.clone()).or_default();
-                    set.insert(msg.addr, msg.source_id);
+                    set.insert(
+                        msg.addr,
+                        Subscriber {
+                            source_id: msg.source_id,
+                            agent: msg.agent,
+                            drive: None,
+                        },
+                    );
                     tracing::debug!("handle subscribe {} ", msg.subject);
                 }
             }),
@@ -418,7 +442,14 @@ impl Handler<SubscribeDrive> for CommitMonitor {
                 #[allow(clippy::mutable_key_type)]
                 if let Some(msg) = maybe_msg {
                     let entry = actor.drive_subscriptions.entry(msg.drive).or_default();
-                    entry.insert(msg.addr, msg.source_id);
+                    entry.insert(
+                        msg.addr,
+                        Subscriber {
+                            source_id: msg.source_id,
+                            agent: msg.agent,
+                            drive: None,
+                        },
+                    );
                 }
             }),
         )
@@ -719,8 +750,8 @@ impl Handler<ExternalChange> for CommitMonitor {
         let source = msg.source_id.as_deref();
 
         if let Some(subscribers) = self.subscriptions.get(&subject) {
-            for (connection, sub_source) in subscribers {
-                if skip_same_source(source, sub_source) {
+            for (connection, subscriber) in subscribers {
+                if skip_same_source(source, &subscriber.source_id) {
                     continue;
                 }
                 connection.do_send(SendFrame {
@@ -741,8 +772,8 @@ impl Handler<ExternalChange> for CommitMonitor {
             if !owner.is_within_drive(&drive_subject) {
                 continue;
             }
-            for (connection, sub_source) in subscribers {
-                if skip_same_source(source, sub_source) {
+            for (connection, subscriber) in subscribers {
+                if skip_same_source(source, &subscriber.source_id) {
                     continue;
                 }
                 connection.do_send(SendFrame {
@@ -768,8 +799,8 @@ impl Handler<MembershipNotification> for CommitMonitor {
             return;
         }
 
-        for (addr, sub_source) in subscribers {
-            if skip_same_source(msg.source_id.as_deref(), sub_source) {
+        for (addr, subscriber) in subscribers {
+            if skip_same_source(msg.source_id.as_deref(), &subscriber.source_id) {
                 continue;
             }
             addr.do_send(msg.clone());
@@ -785,7 +816,7 @@ impl CommitMonitor {
         let SubscribeQuery {
             addr,
             query,
-            agent: _,
+            agent,
             source_id,
         } = msg;
 
@@ -828,7 +859,152 @@ impl CommitMonitor {
         }
 
         let entry = self.query_subscriptions.entry(query_id).or_default();
-        entry.insert(addr, source_id);
+        entry.insert(
+            addr,
+            Subscriber {
+                source_id,
+                agent,
+                drive: Some(drive_str),
+            },
+        );
+    }
+}
+
+/// What one connection holds in one of the three subscription maps, for
+/// [`Handler<RebindAgent>`]. Carries the map key so the verdict can be
+/// applied after the async read checks come back.
+enum Held {
+    Subject(atomic_lib::Subject),
+    Drive(String),
+    Query(Vec<u8>),
+}
+
+/// Apply a re-evaluation verdict to one registration: keep it under the
+/// new agent, or drop it (and the key, if that emptied it). Returns whether
+/// something was dropped.
+#[allow(clippy::mutable_key_type)]
+fn rebind_one<K: std::hash::Hash + Eq>(
+    map: &mut HashMap<K, Subscribers>,
+    key: &K,
+    addr: &Addr<WebSocketConnection>,
+    agent: &str,
+    readable: bool,
+) -> bool {
+    let Some(subs) = map.get_mut(key) else {
+        return false;
+    };
+    if readable {
+        if let Some(sub) = subs.get_mut(addr) {
+            sub.agent = agent.to_string();
+        }
+        return false;
+    }
+    let dropped = subs.remove(addr).is_some();
+    if subs.is_empty() {
+        map.remove(key);
+    }
+    dropped
+}
+
+impl Handler<RebindAgent> for CommitMonitor {
+    type Result = ResponseActFuture<Self, ()>;
+
+    /// A connection's identity changed (an `AUTH` landed, or a different
+    /// agent authenticated on an already-authenticated socket). Until
+    /// 2026-09 the agent a subscription was admitted under was checked once
+    /// and then forgotten, so a `SUB` accepted as Alice kept delivering
+    /// after the socket re-authenticated as Mallory. Every registration this
+    /// connection holds is re-checked against the new identity: readable
+    /// ones are re-bound to it, the rest are dropped silently (the client
+    /// that switched agents re-subscribes on its own, and gets the refusal
+    /// then).
+    #[allow(clippy::mutable_key_type)]
+    fn handle(&mut self, msg: RebindAgent, _ctx: &mut Context<Self>) -> Self::Result {
+        let base_domain = self.store.get_base_domain();
+        let mut checks: Vec<(Held, atomic_lib::Subject)> = Vec::new();
+        for (subject, subs) in &self.subscriptions {
+            if subs.contains_key(&msg.addr) {
+                checks.push((Held::Subject(subject.clone()), subject.clone()));
+            }
+        }
+        for (drive, subs) in &self.drive_subscriptions {
+            if subs.contains_key(&msg.addr) {
+                checks.push((
+                    Held::Drive(drive.clone()),
+                    atomic_lib::Subject::from_raw(drive, base_domain.as_deref()),
+                ));
+            }
+        }
+        for (query_id, subs) in &self.query_subscriptions {
+            if let Some(sub) = subs.get(&msg.addr) {
+                if let Some(drive) = sub.drive.as_deref() {
+                    checks.push((
+                        Held::Query(query_id.clone()),
+                        atomic_lib::Subject::from_raw(drive, base_domain.as_deref()),
+                    ));
+                }
+            }
+        }
+        if checks.is_empty() {
+            return Box::pin(async {}.into_actor(self));
+        }
+
+        let store = self.store.clone();
+        let agent = msg.agent.clone();
+        let addr = msg.addr;
+        Box::pin(
+            async move {
+                let for_agent = ForAgent::from(agent.clone());
+                let mut verdicts = Vec::with_capacity(checks.len());
+                for (held, target) in checks {
+                    let readable = match store.get_resource(&target).await {
+                        Ok(resource) => {
+                            atomic_lib::hierarchy::check_read(&store, &resource, &for_agent)
+                                .await
+                                .is_ok()
+                        }
+                        Err(_) => false,
+                    };
+                    verdicts.push((held, readable));
+                }
+                (verdicts, agent, addr)
+            }
+            .into_actor(self)
+            .map(|(verdicts, agent, addr), actor, _ctx| {
+                let mut dropped = 0usize;
+                for (held, readable) in verdicts {
+                    let was_dropped = match held {
+                        Held::Subject(subject) => {
+                            rebind_one(&mut actor.subscriptions, &subject, &addr, &agent, readable)
+                        }
+                        Held::Drive(drive) => rebind_one(
+                            &mut actor.drive_subscriptions,
+                            &drive,
+                            &addr,
+                            &agent,
+                            readable,
+                        ),
+                        Held::Query(query_id) => rebind_one(
+                            &mut actor.query_subscriptions,
+                            &query_id,
+                            &addr,
+                            &agent,
+                            readable,
+                        ),
+                    };
+                    if was_dropped {
+                        dropped += 1;
+                    }
+                }
+                if dropped > 0 {
+                    tracing::debug!(
+                        agent = %agent,
+                        dropped,
+                        "rebind: dropped subscriptions the new identity cannot read"
+                    );
+                }
+            }),
+        )
     }
 }
 
@@ -859,8 +1035,8 @@ impl Handler<CommitMessage> for CommitMonitor {
                     target_subject,
                     subscribers.len()
                 );
-                for (connection, sub_source) in subscribers {
-                    if skip_same_source(event_source, sub_source) {
+                for (connection, subscriber) in subscribers {
+                    if skip_same_source(event_source, &subscriber.source_id) {
                         continue;
                     }
                     connection.do_send(SendFrame {
@@ -896,8 +1072,8 @@ impl Handler<CommitMessage> for CommitMonitor {
                 if !owner.is_within_drive(&drive_subject) {
                     continue;
                 }
-                for (connection, sub_source) in subscribers {
-                    if skip_same_source(event_source, sub_source) {
+                for (connection, subscriber) in subscribers {
+                    if skip_same_source(event_source, &subscriber.source_id) {
                         continue;
                     }
                     connection.do_send(SendFrame {
