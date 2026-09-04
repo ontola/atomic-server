@@ -7,6 +7,15 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- **`atomic_lib::runtime::AtomicNode` is cut down to what binds to it.** The
+  WASM `ClientDb` is the only adapter on the node and uses `from_db`, `db`,
+  `query` and `apply_commit`; those, plus the agent accessors and
+  `IngestPolicy::{Hub, Peer, LocalCache}`, are what remains. `open` /
+  `NodeConfig` / `NodeStorage`, `get`, `mutate` / `ResourceEdit`, `subscribe`
+  and `sync_with_peer` are removed (each was one line over `Db`, with no
+  consumer three days after landing). The seam stays and grows again from
+  what the next binding actually calls (`planning/atomic-lib-runtime.md`).
+
 - **Sync stack cleanup.** No wire changes. `WsMessage` lost its `Commit` and
   `Resource` variants and the client no longer parses the pre-v2 `COMMIT `,
   `RESOURCE `, `AUTHENTICATED` and `ERROR ` text frames (nothing has sent
