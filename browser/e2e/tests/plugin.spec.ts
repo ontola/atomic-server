@@ -21,9 +21,8 @@ test.describe('Plugins', () => {
   test('install a plugin', async ({ page }) => {
     // Two upload + commit + plugin-install chains, a full bird-creation
     // form, an iframe-driven picker, plus a reload-and-verify. The test
-    // routinely needs 40-50s on a dev machine even when nothing is wrong;
-    // the default 60s budget leaves no headroom for the search-index
-    // poll below. test.slow() triples it.
+    // routinely needs 40-50s on a dev machine even when nothing is wrong.
+    // test.slow() triples the default 60s budget.
     test.slow();
     await signIn(page);
     await newDrive(page);
@@ -148,39 +147,16 @@ test.describe('Plugins', () => {
         await expect(
           dialog.getByText("Pick the bird's favorite folder"),
         ).toBeVisible();
-        // Fill an explicit query so the picker filters down to the renamed
-        // folder. Empty queries depend on search-index ordering, which can
-        // race with the plugin's host.commit rename under suite-wide load.
-        // Poll the search input by retyping until the result lands, so
-        // the SearchBox's local debounce can't swallow a just-renamed hit.
+        // Type a query so the picker filters to the renamed folder.
+        // KV search is immediate; wait only for the SearchBox debounce.
         const pickOption = await fillSearchBox(
           dialog,
           'Search for a folder',
           'My',
         );
-        const resultLocator = dialog
-          .getByTestId('searchbox-results')
-          .getByText('My Problem');
-        const searchInput = dialog.getByPlaceholder(/Search for a folder/);
-        // Each retype waits 1.5s for the result to appear. Keep the poll
-        // budget well under the outer test.slow() timeout so the test
-        // doesn't burn its full budget here on a hung loop.
-        const deadline = Date.now() + 30000;
-
-        while (Date.now() < deadline) {
-          if (
-            await resultLocator.isVisible({ timeout: 1500 }).catch(() => false)
-          ) {
-            break;
-          }
-
-          // Retype to retrigger the search — covers cases where the
-          // SearchBox cached an earlier empty result.
-          await searchInput.fill('');
-          await searchInput.fill('My');
-        }
-
-        await expect(resultLocator).toBeVisible({ timeout: 5000 });
+        await expect(
+          dialog.getByTestId('searchbox-results').getByText('My Problem'),
+        ).toBeVisible({ timeout: 5000 });
         await pickOption('My Problem');
         await closeWith('Confirm');
       });

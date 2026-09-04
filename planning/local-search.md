@@ -44,8 +44,8 @@ description/body lower. Parent/drive scope walks `SearchDocs.parent` /
 Filters: AND of exact property-value pairs, served from the existing
 `PropValSub` index (same `{property}-{value}-{subject}` collections already
 use). Empty `q` + filters lists those subjects (file picker `isA:File`,
-class selector, ontology panel). The HTTP `filters=` string keeps the
-historical `prop:"value" AND …` shape so existing clients keep working.
+class selector, ontology panel). The HTTP `filters=` string is exact
+`property:"value"` pairs joined by ` AND `. No query language.
 
 Fuzzy:
 

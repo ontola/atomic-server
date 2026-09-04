@@ -31,35 +31,6 @@ const baseURL = (serverURL: string) => {
   return url;
 };
 
-// Historical escaping kept so existing `filters=` URLs keep working against
-// the KV `/search` adapter. The server unescapes these keys.
-const specialCharsFilter = [
-  '+',
-  '^',
-  '`',
-  ':',
-  '{',
-  '}',
-  '"',
-  '[',
-  ']',
-  '(',
-  ')',
-  '!',
-  '\\',
-  '*',
-  ' ',
-  '.',
-];
-
-/** Escape a property URL for the HTTP `filters=` string. */
-export function escapeTantivyKey(key: string) {
-  return key.replace(
-    new RegExp(`([${specialCharsFilter.join('\\')}])`, 'g'),
-    '\\$1',
-  );
-}
-
 /** `property:"value" AND …` — exact pairs, consumed by `/search`. */
 function buildFilterString(
   filters: Record<string, string | number | string[]>,
@@ -71,10 +42,10 @@ function buildFilterString(
       }
 
       if (Array.isArray(value)) {
-        return value.map(v => `${escapeTantivyKey(key)}:"${v}"`).join(' AND ');
+        return value.map(v => `${key}:"${v}"`).join(' AND ');
       }
 
-      return `${escapeTantivyKey(key)}:"${value}"`;
+      return `${key}:"${value}"`;
     })
     .filter(x => x !== undefined)
     .join(' AND ');

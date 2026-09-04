@@ -8,19 +8,6 @@ use atomic_lib::{client::connected::Client, errors::AtomicResult};
 
 use crate::common::{start_server, wait_for_server};
 
-/// Matches the browser's `escapeTantivyKey` (`browser/lib/src/search.ts`):
-/// backslash-escapes every special char, including `.` and `:`.
-fn escape_filter_key(key: &str) -> String {
-    let mut out = String::with_capacity(key.len());
-    for c in key.chars() {
-        if "+^`:{}\"[]()!\\* .".contains(c) {
-            out.push('\\');
-        }
-        out.push(c);
-    }
-    out
-}
-
 async fn run_search(server_url: &str, agent: &atomic_lib::agents::Agent, query: &str) -> String {
     let search_url = format!("{}/search?{}", server_url, query);
     let auth_headers =
@@ -80,17 +67,15 @@ async fn uploaded_file_is_findable_via_search() -> AtomicResult<()> {
     println!("upload response ({status}): {body}");
     assert!(status.is_success(), "upload must succeed");
 
-    // Exactly what FilePickerDialog issues: filters built via
-    // `escapeTantivyKey`/`buildFilterString`, scoped with `parents=<drive>`.
-    let isa_key = escape_filter_key("https://atomicdata.dev/properties/isA");
-    let filters = format!(r#"{isa_key}:"https://atomicdata.dev/classes/File""#);
+    // What FilePickerDialog issues: `property:"value"` + `parents=<drive>`.
+    let filters = r#"https://atomicdata.dev/properties/isA:"https://atomicdata.dev/classes/File""#;
 
     let both = run_search(
         &server_url,
         &agent,
         &format!(
             "limit=30&filters={}&parents={}",
-            urlencoding::encode(&filters),
+            urlencoding::encode(filters),
             urlencoding::encode(&drive)
         ),
     )

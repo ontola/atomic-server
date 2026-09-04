@@ -342,9 +342,9 @@ fn opts_filter_pairs(opts: &SearchOpts) -> Vec<(String, String)> {
     out
 }
 
-/// Parse the HTTP `filters=` string (`prop:"value" AND prop2:"value2"`).
-/// Keys may still use the historical backslash-escaping (`https\://…`).
-/// `OR` is treated as another AND separator — the client only emits AND.
+/// Parse the HTTP `filters=` string: exact `property:"value"` pairs joined
+/// by ` AND `. Property URLs are taken literally — there is no query
+/// language and no special-character escaping.
 pub fn parse_search_filters(filters: &str) -> Vec<(String, String)> {
     let mut pairs = Vec::new();
     let mut rest = filters;
@@ -360,26 +360,13 @@ pub fn parse_search_filters(filters: &str) -> Vec<(String, String)> {
 
 fn split_filter_clause(input: &str) -> (&str, &str) {
     let mut in_quotes = false;
-    let mut escaped = false;
     let bytes = input.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
-        let c = bytes[i] as char;
-        if escaped {
-            escaped = false;
-            i += 1;
-            continue;
-        }
-        match c {
-            '\\' => escaped = true,
+        match bytes[i] as char {
             '"' => in_quotes = !in_quotes,
-            ' ' if !in_quotes => {
-                if input[i..].starts_with(" AND ") {
-                    return (&input[..i], &input[i + 5..]);
-                }
-                if input[i..].starts_with(" OR ") {
-                    return (&input[..i], &input[i + 4..]);
-                }
+            ' ' if !in_quotes && input[i..].starts_with(" AND ") => {
+                return (&input[..i], &input[i + 5..]);
             }
             _ => {}
         }
@@ -393,58 +380,16 @@ fn parse_filter_clause(clause: &str) -> Option<(String, String)> {
     if clause.is_empty() {
         return None;
     }
-    let colon = find_unescaped_colon(clause)?;
-    let key = unescape_filter_text(&clause[..colon]);
-    let key = key
-        .strip_prefix("propvals.")
-        .unwrap_or(key.as_str())
-        .to_string();
-    let value = parse_filter_value(&clause[colon + 1..]);
+    // `:"` is the delimiter so property URLs (`https://…`) stay intact.
+    let idx = clause.find(":\"")?;
+    let key = clause[..idx].trim();
+    let rest = &clause[idx + 2..];
+    let end = rest.find('"').unwrap_or(rest.len());
+    let value = rest[..end].trim();
     if key.is_empty() || value.is_empty() {
         return None;
     }
-    Some((key, value))
-}
-
-fn find_unescaped_colon(s: &str) -> Option<usize> {
-    let mut escaped = false;
-    for (i, c) in s.char_indices() {
-        if escaped {
-            escaped = false;
-            continue;
-        }
-        match c {
-            '\\' => escaped = true,
-            ':' => return Some(i),
-            _ => {}
-        }
-    }
-    None
-}
-
-fn unescape_filter_text(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut escaped = false;
-    for c in s.chars() {
-        if escaped {
-            out.push(c);
-            escaped = false;
-        } else if c == '\\' {
-            escaped = true;
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}
-
-fn parse_filter_value(raw: &str) -> String {
-    let trimmed = raw.trim();
-    if let Some(inner) = trimmed.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
-        unescape_filter_text(inner)
-    } else {
-        unescape_filter_text(trimmed)
-    }
+    Some((key.to_string(), value.to_string()))
 }
 
 fn subjects_matching_filters(

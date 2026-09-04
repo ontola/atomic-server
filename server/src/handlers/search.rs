@@ -21,7 +21,6 @@ pub struct SearchQuery {
     #[serde_as(as = "Option<StringWithSeparator::<CommaSeparator, String>>")]
     pub parents: Option<Vec<String>>,
     /// Filter on exact property-value pairs: `prop:"value" AND prop2:"value2"`.
-    /// Keys may use the historical backslash-escaping from `@tomic/lib`.
     pub filters: Option<String>,
     pub include: Option<bool>,
 }
