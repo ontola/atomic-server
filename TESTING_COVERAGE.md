@@ -132,8 +132,9 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Update replaces old title; delete drops postings; commits skipped | protocol | `lib/src/search/tests.rs` |
 | Tokenizer + prefix-Levenshtein | protocol | `lib/src/search/tokenize.rs`, `fuzzy.rs` |
 | Query latency vs N (1k / 10k / 50k) | protocol | `lib/benches/search_bench.rs` (`--features db-redb`) |
+| `Store.search` offline hits `ClientDb.search` | JS | `browser/lib/src/store.test.ts` |
 
-Not covered: JSON `property:"value"` postings; table `contains`; Playwright search overlay on the KV path; Flutter bridge `search`. Hosted Tantivy `/search` stays in `server/src/search.rs`.
+Not covered: JSON `property:"value"` postings; table `contains`; Playwright search overlay on the KV path; Flutter bridge `search`. Hosted Tantivy `/search` stays in `server/src/search.rs` until the KV engine can replace it. MiniSearch is gone — offline E2E polls `ClientDb.search`.
 
 ### Flow — the thin layer
 

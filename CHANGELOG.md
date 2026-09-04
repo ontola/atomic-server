@@ -11,9 +11,9 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   index on the existing redb / sled / BTreeMap (OPFS) store. Indexes title,
   description, and Loro document body on every commit; queries AND tokens,
   rank with BM25, and match Tantivy's 1-edit prefix-fuzzy (`avacado` finds
-  `avocado`). `Db` / `AtomicNode` / WASM `ClientDb.search` expose it; the
-  browser prefers this index when ClientDb is ready (MiniSearch remains the
-  no-DB fallback; hosted `/search` stays Tantivy). Scale benches:
+  `avocado`).   `Db` / `AtomicNode` / WASM `ClientDb.search` expose it; the
+  browser uses this index (MiniSearch is gone) and still merges with
+  hosted Tantivy `/search` when online. Scale benches:
   `cargo bench -p atomic_lib --bench search_bench --features db-redb`.
   See `planning/local-search.md`.
 - **Live collaboration is one binary frame on both transports.** Edits in

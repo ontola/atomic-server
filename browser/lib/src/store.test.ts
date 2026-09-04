@@ -156,90 +156,35 @@ describe('Store', () => {
     expect(normalizedDID).toBe('did:ad:123');
   });
 
-  it('rehydrates local search from the ClientDb so offline search survives a reload', async ({
-    expect,
-  }) => {
-    // `LocalSearch` is in-memory and starts empty on every page load.
-    // `setClientDb` must rebuild it from the persistent ClientDb so a
-    // reloaded, offline session can still search its whole local dataset.
+  it('uses ClientDb.search for offline local hits', async ({ expect }) => {
     const store = new Store({ serverUrl: 'https://atomicdata.dev' });
     const driveSubject = 'https://atomicdata.dev/test-drive';
     const subject = 'https://atomicdata.dev/offline-search-target';
     const name = 'ZephyrQuokkaOfflineTarget';
-    const exported = JSON.stringify([
-      {
-        '@id': subject,
-        [core.properties.name]: name,
-        [core.properties.parent]: driveSubject,
-      },
-    ]);
-
+    let searched: { query: string; parents?: string | string[] } | undefined;
     const fakeClientDb = {
       isReady: true,
       isInitialized: true,
       initError: undefined,
       waitForReady: async () => true,
-      exportAllResources: async () => exported,
-      // No KV index in this stub — MiniSearch rehydration is the path
-      // under test. Returning [] keeps Store.search on that fallback.
-      search: async () => [] as string[],
-    };
+      search: async (
+        query: string,
+        opts: { parents?: string | string[] } = {},
+      ) => {
+        searched = { query, parents: opts.parents };
 
-    store.setClientDb(
-      fakeClientDb as unknown as Parameters<Store['setClientDb']>[0],
-    );
-
-    // Rehydration runs in the background — poll until the resource is
-    // searchable from the local index (no server is reachable here).
-    let results: string[] = [];
-
-    for (let i = 0; i < 100 && results.length === 0; i++) {
-      await new Promise(resolve => setTimeout(resolve, 10));
-      results = await store.search(name, { parents: driveSubject });
-    }
-
-    expect(results).toContain(subject);
-  });
-
-  it('only rehydrates local search once when ensureDriveIndexed is called', async ({
-    expect,
-  }) => {
-    // We now index lazily on first search, not eagerly on setClientDb.
-    // ensureDriveIndexed deduplicates concurrent or sequential builds.
-    const store = new Store({ serverUrl: 'https://atomicdata.dev' });
-    let exportCallCount = 0;
-    const fakeClientDb = {
-      isReady: true,
-      isInitialized: true,
-      initError: undefined,
-      waitForReady: async () => true,
-      exportAllResources: async () => {
-        exportCallCount++;
-
-        return JSON.stringify([]);
+        return query === name ? [subject] : [];
       },
     };
 
     store.setClientDb(
       fakeClientDb as unknown as Parameters<Store['setClientDb']>[0],
     );
-    store.setClientDb(
-      fakeClientDb as unknown as Parameters<Store['setClientDb']>[0],
-    );
 
-    // Verify eager rehydration did not occur
-    await new Promise(resolve => setTimeout(resolve, 50));
-    expect(exportCallCount).toBe(0);
+    const results = await store.search(name, { parents: driveSubject });
 
-    // Trigger drive indexing concurrently
-    const drive = 'https://atomicdata.dev/test-drive';
-    await Promise.all([
-      store.ensureDriveIndexed(drive),
-      store.ensureDriveIndexed(drive),
-      store.ensureDriveIndexed(drive),
-    ]);
-
-    expect(exportCallCount).toBe(1);
+    expect(searched).toEqual({ query: name, parents: driveSubject });
+    expect(results).toEqual([subject]);
   });
 
   it('excludes subjects with a pending outbox entry from the VV sync state (F1 interim)', async ({
