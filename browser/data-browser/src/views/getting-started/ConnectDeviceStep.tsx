@@ -348,19 +348,14 @@ export function ConnectDeviceStep({
       <Section>
         <SectionTitle>Connect to that device</SectionTitle>
         <Explainer>
-          Open <strong>Sync</strong> there to show its code, then scan or paste
-          it here.
+          Open <strong>Sync</strong> there and scan or paste its code here.
         </Explainer>
         <ConnectToDeviceForm onCode={connectWithCode} />
       </Section>
 
       {nodeDid && (
         <Section>
-          <SectionTitle>…or let it scan this device</SectionTitle>
-          <Explainer>
-            Scan this code from your other device instead. It only says where to
-            reach this one — the other side still proves it holds your key.
-          </Explainer>
+          <SectionTitle>…or let it scan this one</SectionTitle>
           <QrRow>
             <PairingCode nodeDid={nodeDid} />
           </QrRow>
@@ -373,8 +368,8 @@ export function ConnectDeviceStep({
         <Section>
           <SectionTitle>Scan this from that device</SectionTitle>
           <Explainer>
-            Syncs your workspace with {serverLabel(baseURL)}, which this browser
-            reads from. Safe to show: a code only routes.
+            It syncs your workspace to {serverLabel(baseURL)}, which this
+            browser reads from.
           </Explainer>
           <QrRow>
             <PairingCode nodeDid={reachableNodeDid} />
@@ -385,13 +380,9 @@ export function ConnectDeviceStep({
       <Section>
         <SectionTitle>
           {reachableNodeDid
-            ? '…or read it from somewhere else'
-            : 'Connect a device that has it'}
+            ? '…or read it from a server'
+            : 'Connect a server that has it'}
         </SectionTitle>
-        <Explainer>
-          An always-on device has an address — add it and your workspace
-          appears.
-        </Explainer>
         <form
           onSubmit={(e: React.FormEvent) => {
             e.preventDefault();
@@ -421,57 +412,71 @@ export function ConnectDeviceStep({
     </>
   );
 
+  // One thing at a time. The screen names a single way in — the backup when
+  // it is in reach, the account sign-in that puts it in reach, and only
+  // failing both the second-device routes. Whatever is not the one way in
+  // folds away below it: still there, no longer competing.
+  //
+  // `restore` is the only route that needs nothing but this device; the
+  // others want a second device that is switched on and reachable, which for
+  // someone restoring after losing one may not exist. `session` is the case
+  // this screen used to render as "your data is on another device" with no
+  // way to fix it: the backup is behind the account, and signing in as the
+  // agent did not sign in to the account.
+  const primary: 'restore' | 'session' | 'none' = canRestoreFromVault
+    ? 'restore'
+    : needsSession
+      ? 'session'
+      : 'none';
+
+  const title = {
+    restore: 'Restore your workspace',
+    session: 'Bring your data back',
+    none: 'Your data is on another device',
+  }[primary];
+
+  // The default line says the data stays where it was made, which is exactly
+  // wrong for someone with an encrypted backup: theirs is in the vault,
+  // sealed, and restorable right here. Telling them otherwise sends them
+  // hunting for a device they may no longer have.
+  const subtitle = {
+    restore: 'There’s an encrypted backup, sealed so only you can open it.',
+    session: `Your backup is kept by your ${PRODUCT_NAME} account. Sign in to it and it comes back here.`,
+    none: 'Signing in restores who you are. Your workspace still lives on the device you made it with.',
+  }[primary];
+
   return (
     <OnboardingWrap>
       <OnboardingCard>
         <Column gap='1rem'>
           <Badge>
-            {canRestoreFromVault ? (
-              <FaLock aria-hidden />
-            ) : (
+            {primary === 'none' ? (
               <FaMobileScreenButton aria-hidden />
+            ) : (
+              <FaLock aria-hidden />
             )}
           </Badge>
-          <CardTitle>
-            {canRestoreFromVault
-              ? 'Restore this workspace'
-              : 'Your data is on another device'}
-          </CardTitle>
-          <CardSubtitle>
-            {canRestoreFromVault
-              ? // The default copy below says the data stays where it was made,
-                // which is exactly wrong for someone with an encrypted backup:
-                // theirs is also in the vault, sealed, and restorable right
-                // here. Telling them otherwise sends them hunting for a second
-                // device they may no longer have.
-                'You’re signed in, and this workspace has an encrypted backup. We stored it sealed, so only this device can open it.'
-              : 'You’re signed in, but this device doesn’t have your workspace yet. Signing in restores who you are — your data stays where you made it.'}
-          </CardSubtitle>
+          <CardTitle>{title}</CardTitle>
+          <CardSubtitle>{subtitle}</CardSubtitle>
 
           {/* The vault's own account of why there is nothing to restore. Five
-              situations answer "no backup" — no session, never enrolled,
-              enrolled but never uploaded, … — and they want different fixes
-              on the other device, so name it. */}
-          {!canRestoreFromVault && vaultReason && !needsSession && (
+              situations answer "no backup" — never enrolled, enrolled but
+              never uploaded, … — and they want different fixes on the other
+              device, so name it. */}
+          {primary === 'none' && vaultReason && (
             <Explainer data-testid='vault-no-backup-reason'>
               Cloud Vault had nothing for this workspace: {vaultReason}.
             </Explainer>
           )}
 
-          {/* The backup is behind the account, and signing in as the agent did
-              not sign in to the account. Say so, and offer the way in — before
-              the second-device routes, because for someone who has a backup
-              this is the only route that needs nothing else. Two ways to get
-              a session, one per client (see the restore step): a page on the
-              portal's site signs in there and keeps the cookie; the apps and
-              a self-hosted origin cannot, and link this device instead. */}
-          {!canRestoreFromVault && needsSession && (
+          {/* Two ways to get a session, one per client (see the restore
+              step): a page on the portal's site signs in there and keeps the
+              cookie; the apps and a self-hosted origin cannot, and link this
+              device instead. */}
+          {primary === 'session' && (
             <VaultOffer data-testid='vault-needs-session'>
-              <Explainer>
-                {`Your backup, if you made one, is kept by your ${PRODUCT_NAME} account — and this browser isn’t signed in to it.`}
-              </Explainer>
               {canHoldProviderCookie(portalUrl) ? (
-                <Row gap='0.5rem' justify='center' wrapItems>
+                <>
                   <Button
                     type='button'
                     data-testid='vault-sign-in'
@@ -487,12 +492,13 @@ export function ConnectDeviceStep({
                   >
                     {`Sign in to ${PRODUCT_NAME}`}
                   </Button>
-                  <Button type='button' subtle onClick={sessionArrived}>
-                    I’ve signed in
-                  </Button>
-                </Row>
+                  <TextButton type='button' onClick={sessionArrived}>
+                    I’ve signed in — check again
+                  </TextButton>
+                </>
               ) : (
                 <LinkProviderPanel
+                  compact
                   portalUrl={portalUrl}
                   onLinked={sessionArrived}
                 />
@@ -500,47 +506,36 @@ export function ConnectDeviceStep({
             </VaultOffer>
           )}
 
-          {/* First, because it is the only route that needs nothing but this
-              device. Everything below wants a second device that is switched
-              on and reachable — which, for someone restoring after losing one,
-              may not exist. */}
-          {canRestoreFromVault && (
+          {primary === 'restore' && (
             <VaultOffer data-testid='vault-restore-offer'>
-              {/* No heading: the card's own title and subtitle already say what
-                  this is, and repeating it in a third register reads like two
-                  different offers. */}
               {vault.error && <ErrorText role='alert'>{vault.error}</ErrorText>}
               {vault.restoreProgress !== null && (
                 <Explainer>
                   Restoring… {Math.round(vault.restoreProgress * 100)}%
                 </Explainer>
               )}
-              <Row gap='0.5rem'>
-                <Button
-                  type='button'
-                  data-testid='vault-restore-now'
-                  onClick={restoreFromVault}
-                  disabled={vault.busy}
-                >
-                  {vault.busy ? 'Restoring…' : 'Restore my workspace'}
-                </Button>
-              </Row>
+              <Button
+                type='button'
+                data-testid='vault-restore-now'
+                onClick={restoreFromVault}
+                disabled={vault.busy}
+              >
+                {vault.busy ? 'Restoring…' : 'Restore my workspace'}
+              </Button>
             </VaultOffer>
           )}
 
-          {canRestoreFromVault ? (
-            /* Demoted, not removed. Someone with a backup should see one
-               obvious action, but the second-device routes are still the
-               answer for a workspace that was never backed up, or a vault
-               whose most recent changes were made elsewhere. */
+          {primary === 'none' ? (
+            otherDeviceRoutes
+          ) : (
+            /* Demoted, not removed: still the answer for a workspace that was
+               never backed up, or whose latest changes were made elsewhere. */
             <OtherRoutes>
               <OtherRoutesSummary>
-                …or bring it from another device instead
+                …or bring it over from another device
               </OtherRoutesSummary>
               {otherDeviceRoutes}
             </OtherRoutes>
-          ) : (
-            otherDeviceRoutes
           )}
         </Column>
       </OnboardingCard>
@@ -588,7 +583,24 @@ const VaultOffer = styled.section`
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 0.6rem;
   text-align: center;
+  padding: 0.5rem 0 0.25rem;
+`;
+
+/** A secondary action that should not compete with the one above it. */
+const TextButton = styled.button`
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.85rem;
+  text-decoration: underline;
+
+  &:hover {
+    color: ${p => p.theme.colors.text};
+  }
 `;
 
 const ErrorText = styled.p`

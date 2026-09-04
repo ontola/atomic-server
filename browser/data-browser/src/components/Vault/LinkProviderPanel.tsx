@@ -36,10 +36,17 @@ import {
 export function LinkProviderPanel({
   portalUrl,
   onLinked,
+  compact = false,
 }: {
   /** Absent on a build with no provider — the panel then renders nothing. */
   portalUrl: string | null;
   onLinked: () => void;
+  /**
+   * Just the action, no card around it: for a screen that has already said
+   * what connecting is for and only needs the button (and the code, once
+   * there is one). The full panel inside another card reads as two offers.
+   */
+  compact?: boolean;
 }) {
   const [request, setRequest] = useState<LinkRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,10 +85,67 @@ export function LinkProviderPanel({
       }
     } catch (e) {
       setRequest(null);
-      setError((e as Error).message);
+      // A network failure surfaces as `TypeError: Failed to fetch`, which
+      // tells the person nothing about what to do.
+      setError(
+        e instanceof TypeError
+          ? `Couldn’t reach ${providerName(portalUrl)}. Check your connection and try again.`
+          : (e as Error).message,
+      );
     } finally {
       setBusy(false);
     }
+  }
+
+  const body = request ? (
+    <>
+      <Sub>
+        Open{' '}
+        <Link
+          href={approvalUrl(portalUrl, request.user_code)}
+          target='_blank'
+          rel='noreferrer'
+        >
+          {hostOf(portalUrl)}/link
+        </Link>{' '}
+        on a device where you are signed in, and enter this code.
+      </Sub>
+      <Code data-testid='link-user-code'>{request.user_code}</Code>
+      <Sub>Waiting for you to approve it…</Sub>
+    </>
+  ) : (
+    <>
+      {!compact && (
+        <Sub>
+          This app cannot sign in on its own, so approve it from somewhere you
+          already are. Then it can keep an encrypted copy of your workspaces —
+          sealed here, so {providerName(portalUrl)} stores it without being able
+          to read it.
+        </Sub>
+      )}
+      {error && <ErrorText data-testid='link-error'>{error}</ErrorText>}
+      <Actions $compact={compact}>
+        <Button
+          data-testid='link-provider-start'
+          onClick={start}
+          disabled={busy}
+        >
+          {busy
+            ? 'Getting a code…'
+            : compact
+              ? `Connect to ${providerName(portalUrl)}`
+              : 'Connect this device'}
+        </Button>
+      </Actions>
+    </>
+  );
+
+  if (compact) {
+    return (
+      <Compact data-testid='link-provider-panel'>
+        <Body $center>{body}</Body>
+      </Compact>
+    );
   }
 
   return (
@@ -91,43 +155,7 @@ export function LinkProviderPanel({
       </Icon>
       <Body>
         <Title>Connect your {providerName(portalUrl)} account</Title>
-
-        {request ? (
-          <>
-            <Sub>
-              Open{' '}
-              <Link
-                href={approvalUrl(portalUrl, request.user_code)}
-                target='_blank'
-                rel='noreferrer'
-              >
-                {hostOf(portalUrl)}/link
-              </Link>{' '}
-              on a device where you are signed in, and enter this code.
-            </Sub>
-            <Code data-testid='link-user-code'>{request.user_code}</Code>
-            <Sub>Waiting for you to approve it…</Sub>
-          </>
-        ) : (
-          <>
-            <Sub>
-              This app cannot sign in on its own, so approve it from somewhere
-              you already are. Then it can keep an encrypted copy of your
-              workspaces — sealed here, so {providerName(portalUrl)} stores it
-              without being able to read it.
-            </Sub>
-            {error && <ErrorText data-testid='link-error'>{error}</ErrorText>}
-            <Actions>
-              <Button
-                data-testid='link-provider-start'
-                onClick={start}
-                disabled={busy}
-              >
-                {busy ? 'Getting a code…' : 'Connect this device'}
-              </Button>
-            </Actions>
-          </>
-        )}
+        {body}
       </Body>
     </Panel>
   );
@@ -175,11 +203,20 @@ const Icon = styled.div`
   color: white;
 `;
 
-const Body = styled.div`
+/** No surface of its own: it borrows the card it is placed in. */
+const Compact = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+`;
+
+const Body = styled.div<{ $center?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: ${CARD_BODY_GAP};
   min-width: 0;
+  ${p => p.$center && 'align-items: center; text-align: center;'}
 `;
 
 const Title = styled.h3`
@@ -213,9 +250,9 @@ const Code = styled.output`
   color: ${p => p.theme.colors.text};
 `;
 
-const Actions = styled.div`
+const Actions = styled.div<{ $compact?: boolean }>`
   display: flex;
   flex-wrap: wrap;
   gap: ${CARD_ACTIONS_GAP};
-  margin-top: ${CARD_ACTIONS_GAP};
+  margin-top: ${p => (p.$compact ? 0 : CARD_ACTIONS_GAP)};
 `;
