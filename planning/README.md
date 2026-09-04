@@ -76,6 +76,7 @@ Remaining work, not "this file exists."
 | [`atomic-assistant-browser-extension.md`](./atomic-assistant-browser-extension.md) | **Proposal.** Local-first Chromium extension. |
 | [`tours.md`](./tours.md) | Design, not built. |
 | [`e2e-light-heavy.md`](./e2e-light-heavy.md) | **Landing.** Playwright light on feature branches; full on `develop` / tags / opt-in. Steps 1–3 shipped. Remaining: grow vitest + `jsTestIntegration` before shrinking heavy. |
+| [`collections-and-saved-queries.md`](./collections-and-saved-queries.md) | **Proposal.** Collection resources vs `/query` vs Table Views. Recommend retire Collection resources, grow View as the persistable query. |
 
 ## Slices and companions
 
