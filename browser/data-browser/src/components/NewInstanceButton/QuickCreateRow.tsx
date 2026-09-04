@@ -6,7 +6,7 @@ import {
   FaTable,
   FaVideo,
 } from 'react-icons/fa6';
-import { type JSX } from 'react';
+import type { CSSProperties, JSX } from 'react';
 import { styled } from 'styled-components';
 import { Row } from '../Row';
 import { IconButton } from '../IconButton/IconButton';
@@ -40,7 +40,7 @@ export function QuickCreateRow({
   const navigateToNewRoute = useNewRoute(parent);
 
   return (
-    <Row gap='0.15rem' center align='center' className={className}>
+    <QuickRow gap='0.15rem' center align='center' className={className}>
       <NewResourceOpacity>
         <NewResourceTrigger
           type='button'
@@ -57,7 +57,7 @@ export function QuickCreateRow({
           <NewLabelText>New</NewLabelText>
         </NewResourceTrigger>
       </NewResourceOpacity>
-      <IconButtonWrapper>
+      <IconButtonWrapper style={{ '--i': 0 } as CSSProperties}>
         <IconButton
           color='textLight'
           title='New Meeting'
@@ -69,7 +69,7 @@ export function QuickCreateRow({
           <FaVideo />
         </IconButton>
       </IconButtonWrapper>
-      <IconButtonWrapper>
+      <IconButtonWrapper style={{ '--i': 1 } as CSSProperties}>
         <IconButton
           color='textLight'
           title='New Document'
@@ -81,7 +81,7 @@ export function QuickCreateRow({
           <FaFileLines />
         </IconButton>
       </IconButtonWrapper>
-      <IconButtonWrapper>
+      <IconButtonWrapper style={{ '--i': 2 } as CSSProperties}>
         <IconButton
           color='textLight'
           title='New Table'
@@ -93,7 +93,7 @@ export function QuickCreateRow({
           <FaTable />
         </IconButton>
       </IconButtonWrapper>
-      <IconButtonWrapper>
+      <IconButtonWrapper style={{ '--i': 3 } as CSSProperties}>
         <IconButton
           color='textLight'
           title='New Folder'
@@ -105,7 +105,7 @@ export function QuickCreateRow({
           <FaFolder />
         </IconButton>
       </IconButtonWrapper>
-      <IconButtonWrapper>
+      <IconButtonWrapper style={{ '--i': 4 } as CSSProperties}>
         <IconButton
           color='textLight'
           title='New ChatRoom'
@@ -117,7 +117,7 @@ export function QuickCreateRow({
           <FaComment />
         </IconButton>
       </IconButtonWrapper>
-    </Row>
+    </QuickRow>
   );
 }
 
@@ -175,11 +175,40 @@ const NewLabelText = styled.span`
   font-size: 0.9rem;
 `;
 
-const IconButtonWrapper = styled.span`
-  opacity: 0.5;
-  transition: opacity 0.2s;
+/**
+ * Only "New" shows at rest. The class shortcuts slide in left to right when
+ * the row is hovered or focused — a hint of what's there without a
+ * permanent strip of grey icons under every tree. Touch has no hover, so
+ * there they stay hidden and the "New" page carries the same choices.
+ */
+const QuickRow = styled(Row)``;
 
-  &:hover {
+const IconButtonWrapper = styled.span`
+  @media (hover: none) {
+    display: none;
+  }
+
+  opacity: 0;
+  transform: translateX(-0.4rem);
+  transition:
+    opacity 0.15s ease-out,
+    transform 0.15s ease-out;
+  /* Stagger: each icon follows the previous one. */
+  transition-delay: calc(var(--i, 0) * 40ms);
+
+  ${QuickRow}:hover &,
+  ${QuickRow}:focus-within & {
+    opacity: 0.5;
+    transform: none;
+  }
+
+  ${QuickRow}:hover &:hover,
+  &:focus-within {
     opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transform: none;
+    transition-delay: 0s;
   }
 `;
