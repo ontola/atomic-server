@@ -2708,10 +2708,12 @@ export class Store {
 
     // Prefer the durable KV index in ClientDb (title + description + Loro
     // body, 1-edit prefix fuzzy) over MiniSearch when the WASM store is up.
-    // MiniSearch stays as a fallback for sessions without a local DB.
+    // MiniSearch stays as a fallback for sessions without a local DB, and
+    // for test stubs that don't implement `search`.
+    const clientDb = this.clientDb;
     const kvResults =
-      this.clientDb?.isReady && !hasFilters
-        ? await this.clientDb.search(query, {
+      clientDb?.isReady && typeof clientDb.search === 'function' && !hasFilters
+        ? await clientDb.search(query, {
             limit: opts.limit ?? 30,
             parents: parentScope,
           })
