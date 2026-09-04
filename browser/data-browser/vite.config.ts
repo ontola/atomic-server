@@ -1,4 +1,4 @@
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, searchForWorkspaceRoot } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { oxcReactCompiler } from './oxcReactCompilerPlugin';
@@ -17,6 +17,30 @@ import { execSync } from 'node:child_process';
 // outDir so the server build keeps its own nonce'd dist.
 const isTauri = process.env.TAURI === '1';
 const isVitest = process.env.VITEST === 'true';
+
+// Where the optional NextGraph mirror lives, when it is linked from a sibling
+// checkout rather than installed.
+//
+// It ships TypeScript sources and runs its wasm engine in a module worker.
+// Vite serves that worker entry over `/@fs/…` as a separate request, and
+// refuses any path outside the workspace root — so without this the worker
+// 403s, the mirror falls back to running the engine on the main thread, and
+// nothing says why. Installed from a registry it sits in `node_modules` and
+// none of this applies.
+function ngBridgeRoots(): string[] {
+  try {
+    // `<bridge>/packages/ui` → `<bridge>`, so the engine package beside it is
+    // covered too.
+    const linked = fs.realpathSync(
+      path.resolve(__dirname, 'node_modules/@tomic/ng-bridge-react'),
+    );
+
+    return [path.resolve(linked, '../..')];
+  } catch {
+    // Not installed, or not linked. Then there is no worker to serve.
+    return [];
+  }
+}
 
 // Source maps are 28MB of the 48MB dist -- and that dist is compiled into the
 // atomic-server binary by build.rs, so every user downloads ~60% debugging
@@ -360,6 +384,19 @@ export default defineConfig(({ mode }) => {
           theme: 'default',
         }),
     ],
+    // The optional NextGraph mirror runs its wasm engine in a module worker, so
+    // `vite-plugin-wasm` has to apply to worker builds too — `plugins` here is
+    // deliberately separate from the array above and does not inherit it.
+    // Without this the worker fails to build and the mirror silently falls back
+    // to running the engine on the main thread, where a long SPARQL call
+    // competes with rendering.
+    //
+    // Costs nothing when the mirror is not enabled: no worker is spawned, so no
+    // worker bundle is produced.
+    worker: {
+      format: 'es',
+      plugins: () => [wasm()],
+    },
     optimizeDeps: {
       // React Compiler emits `import { c as _c } from "react/compiler-runtime"`
       // in every memoised component. Without this hint, Vite only discovers
@@ -445,7 +482,15 @@ export default defineConfig(({ mode }) => {
       // directly, so every watch rebuild shows up on a plain reload (the documented
       // workspace-link workaround). They don't drag in WASM/ProseMirror, so there's
       // no single-instance concern like `loro-crdt` below.
-      exclude: ['loro-crdt', '@tomic/lib', '@tomic/react'],
+      exclude: [
+        'loro-crdt',
+        '@tomic/lib',
+        '@tomic/react',
+        // Same rule as `loro-crdt` above, for the same reason: a WASM dep that
+        // esbuild prebundles has its init hang forever rather than fail. Only
+        // reached when the NextGraph mirror is enabled.
+        '@ng-org/lib-wasm',
+      ],
       //
       // Vite's boot-time dep scan only follows static imports from index.html, so
       // it never sees the deps behind `React.lazy` chunks (RTE/tiptap, AI SDK,
@@ -495,6 +540,11 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       host: true,
       allowedHosts: ['.tunn.dev', 't-1sk9qbdw.tunn.dev'],
+      fs: {
+        // Setting this replaces Vite's default rather than extending it, so the
+        // workspace root has to be listed explicitly alongside the addition.
+        allow: [searchForWorkspaceRoot(process.cwd()), ...ngBridgeRoots()],
+      },
       // Pre-transform the lazy AI chunk's source graph in the background at
       // boot, so the first time the sidebar opens its modules are already
       // through the React Compiler pass instead of being transformed on-demand
