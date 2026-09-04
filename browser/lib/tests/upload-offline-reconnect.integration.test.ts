@@ -6,7 +6,7 @@
  *    `dirtyForSync`.
  * 2. Download URL returns 404 — server has nothing yet.
  * 3. Restore HTTP, call `store.syncDirtyResources()`.
- * 4. The resource lands on the server, `Resource.pushCommits` fires
+ * 4. The resource lands on the server, the outbox drain fires
  *    `Store.maybePushBlobForResource` over WS, server stores the bytes.
  * 5. `/download/files/<hash>` now serves the bytes.
  */
@@ -84,7 +84,7 @@ describe('upload offline → reconnect → server has blob', () => {
     // Let the WS handshake authenticate. We DON'T close it during the
     // offline window — only the HTTP layer is intercepted, so commit POSTs
     // fail. The blob push (`maybePushBlobForResource`) is only called from
-    // `pushCommits`'s success path, so it's gated on the commit succeeding,
+    // the drain's success path, so it's gated on the commit succeeding,
     // not on the WS being open.
     await delay(500);
 
@@ -97,7 +97,7 @@ describe('upload offline → reconnect → server has blob', () => {
       if (!online) {
         // Match the browser's canonical error so `isNetworkError` in
         // resource.ts catches it and routes the save through the
-        // applyPendingCommitsLocally + markDirtyForSync path.
+        // mark-dirty path.
         return Promise.reject(new TypeError('Failed to fetch'));
       }
 

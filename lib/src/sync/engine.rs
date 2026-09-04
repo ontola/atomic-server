@@ -444,6 +444,36 @@ pub struct CommitIngestOpts {
     pub response_origin: Option<String>,
 }
 
+impl CommitIngestOpts {
+    /// Hub semantics: this node owns the subject and is the authority (HTTP
+    /// `/commit`, the WebSocket `COMMIT` frame). Every check on.
+    pub fn hub(source_id: Option<String>, response_origin: Option<String>) -> Self {
+        Self {
+            source_id,
+            validate_loro_causality: true,
+            enforce_subject_ownership: true,
+            suppress_live_echo: false,
+            response_origin,
+        }
+    }
+
+    /// Peer semantics: a signed commit from another full node over a peer
+    /// transport. Signature, schema and rights still run; ownership and Loro
+    /// causality do not (a replica hosts subjects it does not own, and
+    /// concurrent writes are expected), and the live push loop is muted so
+    /// the commit is not echoed back to the peers it came from. No
+    /// `source_id`: peers do not fan out through the commit monitor.
+    pub fn peer() -> Self {
+        Self {
+            source_id: None,
+            validate_loro_causality: false,
+            enforce_subject_ownership: false,
+            suppress_live_echo: true,
+            response_origin: None,
+        }
+    }
+}
+
 /// Ingest a signed JSON-AD `COMMIT`, returning the server-created commit
 /// resource as JSON-AD. This is the single implementation shared by the
 /// server's HTTP/WS commit application and peer-transport `COMMIT` frames
@@ -586,8 +616,8 @@ pub async fn ingest_commit(
 
     if opts.suppress_live_echo {
         // Applying a remote peer's commit must not rebroadcast to live peers
-        // (the sender included) — mirrors `ws_apply::apply_trusted_hub_commit`'s
-        // suppression of the same echo via the live push loop.
+        // (the sender included) — the same mute the peer read loop holds
+        // around `persist_update`.
         super::ws_apply::set_importing(true);
         let result = store.apply_commit(incoming_commit, &commit_opts).await;
         super::ws_apply::set_importing(false);
@@ -614,18 +644,7 @@ pub async fn ingest_commit(
 /// to another domain): a peer replica legitimately hosts subjects it doesn't
 /// own — that's what replication is — so no such gate applies here.
 async fn apply_peer_commit(store: &Db, commit_json: &str) -> crate::errors::AtomicResult<String> {
-    ingest_commit_json(
-        store,
-        commit_json,
-        &CommitIngestOpts {
-            source_id: None,
-            validate_loro_causality: false,
-            enforce_subject_ownership: false,
-            suppress_live_echo: true,
-            response_origin: None,
-        },
-    )
-    .await
+    ingest_commit_json(store, commit_json, &CommitIngestOpts::peer()).await
 }
 
 /// Collects all resource subjects belonging to a drive via BFS on parent relationships.
@@ -788,38 +807,6 @@ pub fn build_drive_vvs(
     }
 
     vvs
-}
-
-/// The drive's resources as sorted range-reconciliation items
-/// (`(subject, version-vector)`), the input to
-/// [`crate::sync::rbsr`]. Same VVs `handle_sync_vv` builds, re-shaped as a
-/// sorted `Vec` with per-item `BTreeMap` VVs so a range fingerprint is
-/// deterministic. The server answers RBSR range queries by slicing this;
-/// making the slice O(log n) rather than an O(range) scan is the incremental
-/// fingerprint tree, a later step (planning/drive-reconciliation.md Phase 2c).
-pub async fn drive_items(store: &Db, drive: &str) -> Vec<crate::sync::rbsr::Item> {
-    let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
-    let drive_subjects = collect_drive_subjects(store, &drive_subject).await;
-    let vvs = build_drive_vvs(store, &drive_subjects);
-
-    let mut items: Vec<crate::sync::rbsr::Item> = vvs
-        .into_iter()
-        .map(|(subject, vv)| (subject, vv.into_iter().collect()))
-        .collect();
-    items.sort_by(|a, b| a.0.cmp(&b.0));
-    items
-}
-
-/// The drive's version-vector hash — the same value `handle_sync_vv` compares
-/// against for its fast path, computed on its own. Used by the hash-first probe
-/// path: a client sends only its hash, and the server answers "in sync" or
-/// "resend your full state" without the client ever transmitting an
-/// O(drive-size) version vector when nothing changed.
-pub async fn drive_sync_hash(store: &Db, drive: &str) -> String {
-    let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
-    let drive_subjects = collect_drive_subjects(store, &drive_subject).await;
-    let server_vvs = build_drive_vvs(store, &drive_subjects);
-    compute_drive_hash(&server_vvs)
 }
 
 /// The drive's RBSR items as `agent` may see them: the drive resource itself

@@ -14,6 +14,7 @@
 import MiniSearch, { type SearchResult } from 'minisearch';
 import { core } from './ontologies/core.js';
 import type { Resource } from './resource.js';
+import { isCommitSubject } from './local-outbox.js';
 
 /** Fields we extract from resources for indexing */
 const INDEXED_FIELDS = ['name', 'description', 'shortname'] as const;
@@ -28,11 +29,6 @@ const FIELD_TO_PROP: Record<string, string> = {
 export interface LocalSearchResult {
   /** Subject URLs of matching resources, ordered by relevance */
   subjects: string[];
-}
-
-/** Commits are write-time metadata, never searchable content. */
-function isCommitSubject(subject: string): boolean {
-  return subject.startsWith('did:ad:commit:');
 }
 
 export class LocalSearch {

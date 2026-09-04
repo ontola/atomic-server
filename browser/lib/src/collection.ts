@@ -2,7 +2,7 @@ import { isNumber } from './datatypes.js';
 import { enableLoro } from './loro-loader.js';
 import { Collections, collections } from './ontologies/collections.js';
 import { Resource, normalizeLoroChangeTimestampMs } from './resource.js';
-import { Store, StoreEvents } from './store.js';
+import { Store } from './store.js';
 import { commits } from './ontologies/commits.js';
 import { dataBrowser } from './ontologies/dataBrowser.js';
 
@@ -844,33 +844,12 @@ export class Collection {
       // Offline AND no OPFS: brief window for the WS to come up.
       // Without this, the constructor's `_waitForReady` resolves to
       // an empty page and the UI freezes in a "no rows" state.
-      await this.waitForServerConnected(3000);
+      await this.store.waitForServerConnected(3000);
 
       if (this.store.serverConnected) {
         await this.fetchPageFromServer(page).catch(() => undefined);
       }
     }
-  }
-
-  private waitForServerConnected(timeoutMs: number): Promise<void> {
-    if (this.store.serverConnected) return Promise.resolve();
-
-    return new Promise<void>(resolve => {
-      const unsub = this.store.on(
-        StoreEvents.ConnectionChanged,
-        (connected: boolean) => {
-          if (connected) {
-            unsub();
-            clearTimeout(timer);
-            resolve();
-          }
-        },
-      );
-      const timer = setTimeout(() => {
-        unsub();
-        resolve();
-      }, timeoutMs);
-    });
   }
 
   /**

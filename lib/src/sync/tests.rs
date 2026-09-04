@@ -2083,7 +2083,7 @@ mod peer_sync_tests {
     #[tokio::test]
     async fn drive_sync_hash_matches_fast_path_and_moves_on_change() {
         use crate::sync::engine::{
-            build_drive_vvs, collect_drive_subjects, compute_drive_hash, drive_sync_hash,
+            build_drive_vvs, collect_drive_subjects, compute_drive_hash, drive_sync_hash_for,
         };
 
         let db = Db::init_temp("drive_sync_hash").await.unwrap();
@@ -2096,7 +2096,9 @@ mod peer_sync_tests {
             &db,
             &collect_drive_subjects(&db, &drive_subject).await,
         ));
-        let probe_hash = drive_sync_hash(&db, &drive).await;
+        let probe_hash = drive_sync_hash_for(&db, &drive, &ForAgent::Sudo)
+            .await
+            .unwrap();
         assert_eq!(
             probe_hash, fast_path_hash,
             "the probe hash must equal the hash handle_sync_vv compares against, or a probe can never hit SYNC_OK"
@@ -2112,7 +2114,9 @@ mod peer_sync_tests {
         )
         .await
         .unwrap();
-        let hash_after = drive_sync_hash(&db, &drive).await;
+        let hash_after = drive_sync_hash_for(&db, &drive, &ForAgent::Sudo)
+            .await
+            .unwrap();
         assert_ne!(
             probe_hash, hash_after,
             "adding a resource to the drive must change its sync hash"
@@ -2128,7 +2132,7 @@ mod peer_sync_tests {
     /// the baseline, which is the failure mode the whole design guards against.
     #[tokio::test]
     async fn rbsr_reduced_matches_full_sync_vv() {
-        use crate::sync::engine::{drive_items, handle_sync_vv, handle_sync_vv_filtered};
+        use crate::sync::engine::{drive_items_for, handle_sync_vv, handle_sync_vv_filtered};
         use crate::sync::rbsr::{reconcile, Item, RemoteRange};
         use std::collections::{HashMap, HashSet};
 
@@ -2157,7 +2161,7 @@ mod peer_sync_tests {
         //  - R2: client rolled back to empty VV → server ahead → push.
         //  - R3: client doesn't have it → server has, client lacks → push.
         //  - R4: client-only synthetic → server lacks → pull.
-        let server_items = drive_items(&db, &drive).await;
+        let server_items = drive_items_for(&db, &drive, &ForAgent::Sudo).await.unwrap();
         let mut client_vvs: HashMap<String, std::collections::BTreeMap<String, i32>> =
             server_items.iter().cloned().collect();
         client_vvs.get_mut(&r2p).unwrap().clear(); // behind on R2
@@ -2284,7 +2288,7 @@ mod peer_sync_tests {
     /// resource — over VVs derived from a real store, not hand-built maps.
     #[tokio::test]
     async fn reconcile_over_real_store_finds_the_lagging_resource() {
-        use crate::sync::engine::drive_items;
+        use crate::sync::engine::drive_items_for;
         use crate::sync::rbsr::{
             item_fingerprint, range_fingerprint, reconcile, Item, RemoteRange,
         };
@@ -2310,7 +2314,7 @@ mod peer_sync_tests {
             .unwrap();
 
         // Local: the store's real drive items (drive root + two canvases).
-        let local = drive_items(&db, &drive).await;
+        let local = drive_items_for(&db, &drive, &ForAgent::Sudo).await.unwrap();
         assert!(
             local.len() >= 3,
             "expected drive root + 2 canvases, got {}",

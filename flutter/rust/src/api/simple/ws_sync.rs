@@ -140,13 +140,6 @@ async fn handle_ws_message(store: &atomic_lib::Db, msg: WsMessage) -> Result<(),
         WsMessage::Destroy { subject } => {
             ws_apply::apply_destroy(store, &subject).await.map_err(err)?;
         }
-        WsMessage::Commit(json) => {
-            // The hub we are subscribed to already rights-checked this commit;
-            // this replica only re-verifies the signature.
-            ws_apply::apply_trusted_hub_commit(store, &json)
-                .await
-                .map_err(err)?;
-        }
         WsMessage::Error { code, message, .. } => {
             tracing::warn!("[ws_sync] server error (code {code}): {message}")
         }

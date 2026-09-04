@@ -67,36 +67,6 @@ export async function driveHasCloudEnrollment(drive: string): Promise<boolean> {
   );
 }
 
-/** Resolve once the store reports a live server connection, or reject on timeout. */
-function waitForServerConnected(
-  store: Store,
-  timeoutMs = 20_000,
-): Promise<void> {
-  if (store.getSyncStatus().serverConnected) return Promise.resolve();
-
-  return new Promise((resolve, reject) => {
-    const finish = (err?: Error) => {
-      clearTimeout(timer);
-      unsubscribe();
-
-      if (err) {
-        reject(err);
-      } else {
-        resolve();
-      }
-    };
-
-    const timer = setTimeout(
-      () => finish(new Error('Timed out connecting to the Cloud Server node.')),
-      timeoutMs,
-    );
-
-    const unsubscribe = store.on(StoreEvents.ConnectionChanged, () => {
-      if (store.getSyncStatus().serverConnected) finish();
-    });
-  });
-}
-
 /** A window hosting the portal's login/signup UI, abstracted over Tauri vs web. */
 type AuthWindowHandle = {
   close: () => Promise<void>;
@@ -247,7 +217,9 @@ export async function enableCloudSyncForDrive(params: {
     setServer(httpOrigin);
 
     if (wasLocalOnly || agentWasLocalOnly) {
-      await waitForServerConnected(store);
+      if (!(await store.waitForServerConnected(20_000))) {
+        throw new Error('Timed out connecting to the Cloud Server node.');
+      }
       await promoteLocalOnly();
     }
   } else if (

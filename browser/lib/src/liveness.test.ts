@@ -3,7 +3,7 @@ import {
   livenessAction,
   LIVENESS_DEADLINE_MS,
   LIVENESS_IDLE_MS,
-} from './websockets.js';
+} from './liveness.js';
 
 /**
  * The browser cannot see the server's protocol-level pings, so `WSClient`
