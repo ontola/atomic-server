@@ -31,7 +31,9 @@ import {
   decodeChallenge,
   decodeCommit,
   decodeCommitOk,
+  decodeSyncResend,
   decodeUpdate,
+  encodeSync,
   CLIENT_CAPABILITIES,
   CLIENT_HELLO_NAME,
   decodeError,
@@ -198,7 +200,7 @@ export class WSClient {
   private _onlineListener: (() => void) | undefined;
   private _driveUnsub: (() => void) | undefined;
   /** Drive-sync state computed for a hash-first probe, kept until the server
-   *  either accepts it (SYNC_OK) or asks for the full state (SYNC_RESEND). */
+   *  either accepts it (`SYNC_OK`) or asks for a reconcile (`SYNC_RESEND`). */
   private _pendingSyncState = new Map<
     string,
     Awaited<ReturnType<Store['computeDriveSyncState']>>
@@ -1013,6 +1015,14 @@ export class WSClient {
         this._challengeNonce = decodeChallenge(payload);
         break;
 
+      case Tag.SYNC_RESEND: {
+        // The hash-first probe missed: reconcile via RBSR (find only the
+        // differing subjects) and send version vectors for just those.
+        const drive = decodeSyncResend(payload);
+        if (drive) void this.sendReducedSyncState(drive);
+        break;
+      }
+
       case Tag.UPDATE: {
         const msg = decodeUpdate(payload);
 
@@ -1203,11 +1213,6 @@ export class WSClient {
       } catch {
         console.warn('Invalid INDEX_STATUS message:', json);
       }
-    } else if (text.startsWith('SYNC_RESEND ')) {
-      // The hash-first probe missed: reconcile via RBSR (find only the
-      // differing subjects) and send version vectors for just those.
-      const drive = text.slice('SYNC_RESEND '.length);
-      void this.sendReducedSyncState(drive);
     } else if (text.startsWith('RBSR_FP ')) {
       try {
         const { fps } = JSON.parse(text.slice('RBSR_FP '.length)) as {
@@ -1363,7 +1368,7 @@ export class WSClient {
       // store and starved the per-conn actor for seconds (see the
       // `anon_ws_get_during_sync_vv_is_fast` bench in
       // `server/tests/ws_get_unauthorized_latency.rs`).
-      // Local-only drives never reconcile with a server: a SYNC_VV would
+      // Local-only drives never reconcile with a server: a SYNC would
       // upload the whole local drive's version state for nothing.
       if (drive && this.store.isLiveSyncedDrive(drive)) {
         await this.startVVSync(drive);
@@ -1419,20 +1424,19 @@ export class WSClient {
       // Hash-first: compute our state (needed for the hash) but send only the
       // hash as a probe. In the common "nothing changed" case the server
       // answers SYNC_OK and we never transmit the O(drive-size) version vector.
-      // On a mismatch the server replies SYNC_RESEND and `sendReducedSyncState`
-      // reconciles from the state stashed here.
+      // On a mismatch the server replies `SYNC_RESEND` and
+      // `sendReducedSyncState` reconciles from the state stashed here.
       const syncState = await this.store.computeDriveSyncState(drive);
       close({ resourceCount: Object.keys(syncState.resources).length });
       this._pendingSyncState.set(drive, syncState);
-      this.ws.send(
-        'SYNC_VV ' +
-          JSON.stringify({
-            drive,
-            driveHash: syncState.driveHash,
-            probe: true,
-          }),
+      this.sendBinary(
+        encodeSync(
+          drive,
+          syncState.driveHash,
+          JSON.stringify({ peers: [], resources: {}, probe: true }),
+        ),
       );
-      perfMark('ws.SYNC_VV.sent');
+      perfMark('ws.SYNC.probe.sent');
     } catch (e) {
       close({ err: String(e) });
       console.warn('[WS] VV sync failed:', e);
@@ -1491,15 +1495,16 @@ export class WSClient {
         }
       }
 
-      this.ws.send(
-        'SYNC_VV ' +
+      this.sendBinary(
+        encodeSync(
+          drive,
+          syncState.driveHash,
           JSON.stringify({
-            drive,
-            driveHash: syncState.driveHash,
-            subjects: differing,
             peers: syncState.peers,
             resources: reducedResources,
+            subjects: differing,
           }),
+        ),
       );
     } catch (e) {
       // Safety net: any RBSR failure (query timeout, socket close, parse) falls
@@ -1508,7 +1513,16 @@ export class WSClient {
       console.warn('[WS] RBSR reconcile failed, sending full VV:', e);
 
       if (this.readyState === WebSocket.OPEN) {
-        this.ws.send('SYNC_VV ' + JSON.stringify(syncState));
+        this.sendBinary(
+          encodeSync(
+            drive,
+            syncState.driveHash,
+            JSON.stringify({
+              peers: syncState.peers,
+              resources: syncState.resources,
+            }),
+          ),
+        );
       }
     }
   }

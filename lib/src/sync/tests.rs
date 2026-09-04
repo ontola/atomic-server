@@ -2076,6 +2076,43 @@ mod peer_sync_tests {
         }
     }
 
+    /// The binary `SYNC` probe: the hash over what the session may read
+    /// decides between `SYNC_OK` and `SYNC_RESEND`, and an unreadable drive
+    /// is refused, all through `handle_frame`, so the Iroh transport gets
+    /// it for free.
+    #[tokio::test]
+    async fn sync_probe_through_handle_frame() {
+        use crate::sync::engine::{drive_sync_hash_for, handle_frame};
+        use crate::sync::protocol::{decode_error, encode_sync_probe, error_code, tag};
+
+        let db = Db::init_temp("sync_probe_frame").await.unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let mut sudo = ForAgent::Sudo;
+        let hash = drive_sync_hash_for(&db, &drive, &sudo).await.unwrap();
+
+        let hit = handle_frame(&encode_sync_probe(&drive, &hash), &db, &mut sudo).await;
+        assert_eq!(hit.len(), 1);
+        assert_eq!(hit[0][0], tag::SYNC_OK, "a matching hash is SYNC_OK");
+
+        let miss = handle_frame(&encode_sync_probe(&drive, "stale"), &db, &mut sudo).await;
+        assert_eq!(miss.len(), 1);
+        assert_eq!(miss[0][0], tag::SYNC_RESEND, "a stale hash is SYNC_RESEND");
+        assert_eq!(
+            crate::sync::protocol::decode_sync_resend(&miss[0][1..]),
+            Some(drive.as_str())
+        );
+
+        // Anonymous, private drive: refused, and the hash is not leaked
+        // through a SYNC_RESEND either.
+        let mut public = ForAgent::Public;
+        let refused = handle_frame(&encode_sync_probe(&drive, &hash), &db, &mut public).await;
+        assert_eq!(refused.len(), 1);
+        assert_eq!(refused[0][0], tag::ERROR);
+        let err = decode_error(&refused[0][1..]).unwrap();
+        assert_eq!(err.code, error_code::UNAUTHORIZED_READ);
+        assert!(err.message.contains("SYNC refused"), "{}", err.message);
+    }
+
     /// The hash-first probe answers "in sync" purely from `drive_sync_hash`.
     /// For that to ever say yes, the standalone hash MUST equal the hash
     /// `handle_sync_vv` compares against — and it MUST change when the drive's

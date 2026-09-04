@@ -52,6 +52,10 @@ export const Tag = {
    *  good on this connection only; a client that ignores it still
    *  authenticates on its timestamp. */
   CHALLENGE: 0x42,
+  /** Server → client, the negative answer to a `SYNC` probe: `[0x38]
+   *  [drive_utf8]`. The drive hashes differ; reconcile (RBSR, then a `SYNC`
+   *  for the differing subjects). The positive answer is `SYNC_OK`. */
+  SYNC_RESEND: 0x38,
 } as const;
 
 // ---- UPDATE flags ----
@@ -131,7 +135,10 @@ export type ServerCapability =
   | 'client-hello'
   /** Re-checks this connection's subscriptions when an AUTH changes its
    *  identity, dropping the ones it may no longer read. */
-  | 'rebind-on-auth';
+  | 'rebind-on-auth'
+  /** The binary `SYNC` payload may carry `probe` and `subjects`; a probe is
+   *  answered with `SYNC_OK` or `SYNC_RESEND`. */
+  | 'sync-probe';
 
 /** Capability names this client lists in the `HELLO` it sends on open
  *  (mirrors `protocol::CLIENT_CAPABILITIES`). */
@@ -337,11 +344,12 @@ export function encodeSub(driveSubject: string): Uint8Array {
 
 /**
  * Binary SYNC (0x30): `[drive_len: u16] [drive] [hash_len: u16] [hash_utf8]
- * [json_vv]`. `hash` is the hex drive hash as a string (what
+ * [json]`. `hash` is the hex drive hash as a string (what
  * `compute_drive_hash` / `computeDriveSyncState` produce), matching
- * `protocol::decode_sync`. Until 2026-09 this wrote a raw 32-byte hash with
- * no length prefix, which the Rust decoder misparsed; it was never sent
- * because the browser speaks the text `SYNC_VV` form, but it is exported.
+ * `protocol::decode_sync`. The JSON tail is `{peers, resources}` plus,
+ * optionally, `probe: true` (hash-first probe, answered with `SYNC_OK` or
+ * `SYNC_RESEND`) and `subjects: [...]` (reconcile only these). Until
+ * 2026-09-04 the browser sent the same JSON as the text frame `SYNC_VV`.
  */
 export function encodeSync(
   driveSubject: string,
@@ -710,6 +718,24 @@ export function decodeSubject(data: Uint8Array): string {
   return decoder.decode(data);
 }
 
+/** The drive named by a SYNC_RESEND payload (after the tag byte). */
+export function decodeSyncResend(data: Uint8Array): string | undefined {
+  if (data.length === 0) return undefined;
+
+  return decoder.decode(data);
+}
+
+/** SYNC_RESEND: `[0x38] [drive_utf8]`. Server-sent; the encoder is for
+ *  tests and symmetry with the Rust codec. */
+export function encodeSyncResend(drive: string): Uint8Array {
+  const payload = encoder.encode(drive);
+  const buf = new Uint8Array(1 + payload.length);
+  buf[0] = Tag.SYNC_RESEND;
+  buf.set(payload, 1);
+
+  return buf;
+}
+
 // ---- Debug logging ----
 
 const TAG_NAMES: Record<number, string> = {
@@ -734,6 +760,7 @@ const TAG_NAMES: Record<number, string> = {
   [Tag.EPHEMERAL]: 'EPHEMERAL',
   [Tag.KEEPALIVE]: 'KEEPALIVE',
   [Tag.CHALLENGE]: 'CHALLENGE',
+  [Tag.SYNC_RESEND]: 'SYNC_RESEND',
 };
 
 /**

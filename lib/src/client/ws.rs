@@ -2,7 +2,7 @@
 //!
 //! Hybrid v2 protocol: auth and resource UPDATEs are binary frames
 //! (`sync::protocol`); legacy collaboration and query messages are still
-//! text frames (`LORO_SYNC_*`, `LORO_EPHEMERAL_UPDATE`, `SYNC_VV`). `SYNC_DELTAS` was removed (F8,
+//! text frames (`LORO_SYNC_*`, `LORO_EPHEMERAL_UPDATE`). `SYNC_DELTAS` was removed (F8,
 //! planning/unified-sync.md) — it imported peer-supplied Loro deltas with
 //! no rights check at all; `SYNC` → `SYNC_PUSH` (binary v2, admission- and
 //! rights-checked via `import_sync_push`) is the real replacement and
@@ -70,6 +70,9 @@ pub enum WsMessage {
     /// chunk was accepted. Note the server sends this for an accepted *and* a
     /// rights-rejected import alike, so it is not proof the data landed.
     SyncOk { drive: String },
+    /// A `SYNC_RESEND` (0x38) frame: our hash-first `SYNC` probe missed;
+    /// reconcile and send the version vectors.
+    SyncResend { drive: String },
     /// A `SYNC_DIFF` (0x32) frame: the server's verdict on our version vector.
     /// `pull` is what it wants us to send it; `push` is what it will send us.
     SyncDiff {
@@ -609,6 +612,9 @@ fn parse_binary_message(bin: &[u8]) -> Option<WsMessage> {
         }
         tag::CHALLENGE => Some(WsMessage::Challenge {
             nonce: protocol::decode_challenge(&bin[1..])?.to_string(),
+        }),
+        tag::SYNC_RESEND => Some(WsMessage::SyncResend {
+            drive: protocol::decode_sync_resend(&bin[1..])?.to_string(),
         }),
         tag::SYNC_OK => {
             // [tag] [drive_len: u16] [drive]

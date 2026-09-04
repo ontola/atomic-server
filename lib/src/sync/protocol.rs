@@ -61,6 +61,14 @@ pub mod tag {
     /// initiator speaks first and the QUIC handshake already binds the link
     /// to a node key.
     pub const CHALLENGE: u8 = 0x42;
+    /// Responder → client, the negative answer to a `SYNC` probe:
+    /// `[0x38] [drive_utf8]`. The drive hashes differ, so the client should
+    /// reconcile (RBSR over the text frames, then a `SYNC` for the
+    /// differing subjects). The positive answer is `SYNC_OK`. Until
+    /// 2026-09-04 this was the text frame `SYNC_RESEND <drive>` and the
+    /// probe itself was the text `SYNC_VV`; both transports now speak the
+    /// binary form.
+    pub const SYNC_RESEND: u8 = 0x38;
 }
 
 /// Feature names a responder advertises in the `AUTH_OK` payload and both
@@ -72,8 +80,7 @@ pub mod tag {
 /// - `auth-max-age`: `AUTH` proofs older than `AUTH_MAX_AGE_MS` are refused
 ///   and a failed `AUTH` carries `error_code::AUTH_FAILED`.
 /// - `keepalive`: understands `KEEPALIVE` (0x41); echoes it over WebSocket.
-/// - `rbsr`: answers the `RBSR_FP` / `RBSR_ITEMS` text frames and the
-///   hash-first `SYNC_VV` probe.
+/// - `rbsr`: answers the `RBSR_FP` / `RBSR_ITEMS` text frames.
 /// - `pull-from`: `SYNC_DIFF` carries `pullFrom` version vectors.
 /// - `signed-destroy`: on a peer stream, destroys travel as signed `COMMIT`
 ///   frames and a naked `DESTROY` from a peer is ignored.
@@ -88,6 +95,8 @@ pub mod tag {
 /// - `rebind-on-auth`: re-evaluates this connection's subscriptions against
 ///   the new identity when an `AUTH` lands, dropping the ones it may no
 ///   longer read.
+/// - `sync-probe`: the binary `SYNC` payload may carry `probe` and
+///   `subjects`; a probe is answered with `SYNC_OK` or `SYNC_RESEND` (0x38).
 pub const CAPABILITIES: &[&str] = &[
     "auth-max-age",
     "keepalive",
@@ -99,6 +108,7 @@ pub const CAPABILITIES: &[&str] = &[
     "commit-ok-slim",
     "client-hello",
     "rebind-on-auth",
+    "sync-probe",
 ];
 
 /// Capability names a *client* may list in the `HELLO` it sends a responder
@@ -1052,9 +1062,45 @@ pub fn encode_sync(
     peers: &[String],
     resources: &std::collections::HashMap<String, Vec<i32>>,
 ) -> Vec<u8> {
+    encode_sync_json(
+        drive,
+        drive_hash,
+        serde_json::json!({ "peers": peers, "resources": resources }),
+    )
+}
+
+/// A hash-first `SYNC` probe: the drive and its hash, no version vectors.
+/// The responder answers `SYNC_OK` when its hash over what this session may
+/// read matches, `SYNC_RESEND` when not, and `ERROR UNAUTHORIZED_READ` for
+/// a drive the session may not read. Payload: `{"peers":[],"resources":{},"probe":true}`.
+pub fn encode_sync_probe(drive: &str, drive_hash: &str) -> Vec<u8> {
+    encode_sync_json(
+        drive,
+        drive_hash,
+        serde_json::json!({ "peers": [], "resources": {}, "probe": true }),
+    )
+}
+
+/// A `SYNC` over only `subjects` (the ones an RBSR descent found
+/// differing): the responder builds version vectors for that set instead
+/// of walking the drive, and both comparison loops skip anything outside it.
+pub fn encode_sync_filtered(
+    drive: &str,
+    drive_hash: &str,
+    peers: &[String],
+    resources: &std::collections::HashMap<String, Vec<i32>>,
+    subjects: &[String],
+) -> Vec<u8> {
+    encode_sync_json(
+        drive,
+        drive_hash,
+        serde_json::json!({ "peers": peers, "resources": resources, "subjects": subjects }),
+    )
+}
+
+fn encode_sync_json(drive: &str, drive_hash: &str, json: serde_json::Value) -> Vec<u8> {
     let drive_bytes = drive.as_bytes();
     let hash_bytes = drive_hash.as_bytes();
-    let json = serde_json::json!({ "peers": peers, "resources": resources });
     let json_bytes = serde_json::to_vec(&json).unwrap_or_default();
 
     let mut buf =
@@ -1074,6 +1120,11 @@ pub struct DecodedSync {
     pub drive_hash: String,
     pub peers: Vec<String>,
     pub resources: std::collections::HashMap<String, Vec<i32>>,
+    /// Hash-first probe: only `drive_hash` is meaningful; answer with
+    /// `SYNC_OK` or `SYNC_RESEND` rather than a diff.
+    pub probe: bool,
+    /// When present, reconcile only these subjects (the RBSR-reduced set).
+    pub subjects: Option<Vec<String>>,
 }
 
 /// Decode a SYNC message (after the type tag).
@@ -1094,8 +1145,14 @@ pub fn decode_sync(data: &[u8]) -> Option<DecodedSync> {
 
     #[derive(serde::Deserialize)]
     struct SyncJson {
+        #[serde(default)]
         peers: Vec<String>,
+        #[serde(default)]
         resources: std::collections::HashMap<String, Vec<i32>>,
+        #[serde(default)]
+        probe: bool,
+        #[serde(default)]
+        subjects: Option<Vec<String>>,
     }
 
     let parsed: SyncJson = serde_json::from_slice(json_bytes).ok()?;
@@ -1105,7 +1162,26 @@ pub fn decode_sync(data: &[u8]) -> Option<DecodedSync> {
         drive_hash: hash.to_string(),
         peers: parsed.peers,
         resources: parsed.resources,
+        probe: parsed.probe,
+        subjects: parsed.subjects,
     })
+}
+
+/// Encode SYNC_RESEND: `[0x38] [drive_utf8]`. See [`tag::SYNC_RESEND`].
+pub fn encode_sync_resend(drive: &str) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(1 + drive.len());
+    buf.push(tag::SYNC_RESEND);
+    buf.extend_from_slice(drive.as_bytes());
+    buf
+}
+
+/// Decode a SYNC_RESEND payload (slice *after* the tag byte): the drive.
+pub fn decode_sync_resend(data: &[u8]) -> Option<&str> {
+    let drive = std::str::from_utf8(data).ok()?;
+    if drive.is_empty() {
+        return None;
+    }
+    Some(drive)
 }
 
 /// Decoded SYNC_DIFF message.
@@ -1620,6 +1696,18 @@ mod wire_vectors {
                     &resources,
                 ),
             ),
+            ("sync_probe", encode_sync_probe("did:ad:d", "abc123")),
+            (
+                "sync_filtered",
+                encode_sync_filtered(
+                    "did:ad:d",
+                    "abc123",
+                    &["p1".to_string()],
+                    &resources,
+                    &["did:ad:x".to_string()],
+                ),
+            ),
+            ("sync_resend", encode_sync_resend("did:ad:d")),
             ("sync_ok", encode_sync_ok("did:ad:d")),
             (
                 "sync_diff",
@@ -1704,6 +1792,20 @@ mod wire_vectors {
         let s = decode_sync(&hex_of("sync")[1..]).unwrap();
         assert_eq!(s.drive_hash, "abc123");
         assert_eq!(s.peers, vec!["p1", "p2"]);
+        assert!(!s.probe);
+        assert!(s.subjects.is_none());
+        let probe = decode_sync(&hex_of("sync_probe")[1..]).unwrap();
+        assert!(probe.probe);
+        assert!(probe.resources.is_empty());
+        let filtered = decode_sync(&hex_of("sync_filtered")[1..]).unwrap();
+        assert_eq!(
+            filtered.subjects.as_deref(),
+            Some(&["did:ad:x".to_string()][..])
+        );
+        assert_eq!(
+            decode_sync_resend(&hex_of("sync_resend")[1..]),
+            Some("did:ad:d")
+        );
         let d = decode_sync_diff(&hex_of("sync_diff")[1..]).unwrap();
         assert_eq!(d.remove, vec!["did:ad:z"]);
         assert_eq!(d.pull_from["did:ad:y"]["p1"], 2);

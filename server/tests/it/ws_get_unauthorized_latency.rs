@@ -97,9 +97,9 @@ async fn anon_get_latency(ws_url: &str, subject: &str) -> AtomicResult<Duration>
     Ok(t.elapsed())
 }
 
-/// Like `anon_get_latency`, but first sends a SYNC_VV for the server
+/// Like `anon_get_latency`, but first sends a full `SYNC` for the server
 /// URL to mimic the browser's `handleOpen` path. On a populated store
-/// SYNC_VV walks every resource — if its spawned future stalls the
+/// `SYNC` walks every resource — if its spawned future stalls the
 /// actor event loop, the follow-up GET can't be processed in time.
 async fn anon_get_after_sync_vv_latency(
     server_url: &str,
@@ -109,23 +109,20 @@ async fn anon_get_after_sync_vv_latency(
     let ws = WsClient::connect(ws_url).await?;
     let mut rx = ws.subscribe();
 
-    // 1. Fire SYNC_VV with the SERVER URL as the drive (matches the
+    // 1. Fire a full SYNC with the SERVER URL as the drive (matches the
     //    browser default when no drive is set — see store.ts:
     //    `this.drive = storedDrive ?? opts.serverUrl`). This is the
-    //    full-store-scan path (`engine.rs:202` — non-DID branch of
-    //    `collect_drive_subjects`).
-    let peers: Vec<String> = Vec::new();
-    let resources: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
-    let sync_vv_json = serde_json::json!({
-        "drive": server_url,
-        "driveHash": "",
-        "peers": peers,
-        "resources": resources,
-    });
-    ws.send_raw(&format!("SYNC_VV {}", sync_vv_json)).await?;
+    //    full-store-scan path (non-DID branch of `collect_drive_subjects`).
+    ws.send_binary(atomic_lib::sync::protocol::encode_sync(
+        server_url,
+        "",
+        &[],
+        &std::collections::HashMap::new(),
+    ))
+    .await?;
 
     // 2. Immediately fire the GET. The browser's openSubject path
-    //    races SYNC_VV processing the same way.
+    //    races SYNC processing the same way.
     let t = Instant::now();
     ws.send_binary(encode_get(1, subject)).await?;
 
@@ -224,8 +221,8 @@ async fn anon_ws_get_on_private_drive_is_fast_under_load() -> AtomicResult<()> {
 }
 
 /// Reproduces the e2e share-menu flake: an anonymous WS connection
-/// fires SYNC_VV (per `handleOpen` in `browser/lib/src/websockets.ts`)
-/// and then immediately sends a GET. On a populated store SYNC_VV
+/// fires SYNC (per `handleOpen` in `browser/lib/src/websockets.ts`)
+/// and then immediately sends a GET. On a populated store SYNC
 /// walks the entire resource tree; if its spawned future blocks the
 /// actor's event loop the follow-up GET can wait seconds for its
 /// response.
@@ -242,7 +239,7 @@ async fn anon_ws_get_during_sync_vv_is_fast() -> AtomicResult<()> {
         .await?;
 
     // Single sequential measurement — this models a fresh anon page2
-    // (no concurrent connections). The SYNC_VV is the head-of-line
+    // (no concurrent connections). The SYNC is the head-of-line
     // blocker we're investigating.
     let n: usize = std::env::var("ATOMIC_BENCH_N")
         .ok()
@@ -260,18 +257,18 @@ async fn anon_ws_get_during_sync_vv_is_fast() -> AtomicResult<()> {
     let p95 = latencies[(n * 95) / 100];
     let max = *latencies.last().unwrap();
     eprintln!(
-        "anon-WS-GET-after-SYNC_VV  (n={n}, server={}): \
+        "anon-WS-GET-after-SYNC  (n={n}, server={}): \
          p50={:?}  p95={:?}  max={:?}",
         server, p50, p95, max
     );
 
-    // 500ms ceiling. If GETs are queueing behind SYNC_VV's heavy work
+    // 500ms ceiling. If GETs are queueing behind SYNC's heavy work
     // the assertion catches it. Healthy: p95 < 100ms.
     assert!(
         p95 < Duration::from_millis(500),
         "p95 latency {:?} exceeds 500 ms budget — the GET is being \
-         queued behind SYNC_VV's spawned future inside the actor. \
-         The fix is to move SYNC_VV's `collect_drive_subjects` + \
+         queued behind SYNC's spawned future inside the actor. \
+         The fix is to move SYNC's `collect_drive_subjects` + \
          `build_drive_vvs` work off the actor event loop, or to \
          yield between subjects so the actor can interleave GETs. \
          See `handle_sync_vv` in `lib/src/sync/engine.rs`.",
