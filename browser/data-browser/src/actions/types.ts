@@ -38,6 +38,12 @@ export interface ActionContext {
   addChild: () => void;
   /** Current drive subject, if any. */
   drive?: string;
+  /**
+   * The page title renders its own "Add icon" / "Add cover" buttons, so the
+   * menu can tuck the matching actions away. False on touch and narrow
+   * viewports, where the menu is the only way to reach them.
+   */
+  titleAffordancesInline: boolean;
   /** The subject lives on another server (e.g. shown via an AtomicLink). */
   external?: boolean;
   showCodeUsageDialog?: () => void;
@@ -75,9 +81,10 @@ export interface ActionDefinition {
   /**
    * Hidden from the default menu listing; only surfaces in searchable menus
    * while the filter query matches. For secondary actions that would clutter
-   * the list.
+   * the list. A function decides per context (e.g. only while the page
+   * offers the action elsewhere).
    */
-  searchOnly?: boolean;
+  searchOnly?: boolean | ((ctx: ActionContext) => boolean);
   /** Surfaces must confirm before running (unless explicitly bypassed). */
   danger?: boolean;
   /** Label shown while the confirmation bypass (shift) is held. */

@@ -4,6 +4,7 @@ import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { useQueryScopeHandler } from '../hooks/useQueryScope';
 import { useNewRoute } from '../helpers/useNewRoute';
 import { useFavorites } from '../hooks/useFavorites';
+import { useInlineTitleAffordances } from '../hooks/useInlineTitleAffordances';
 import {
   newContextItem,
   useAISidebar,
@@ -38,6 +39,7 @@ export function useActionContext(
   const [favorites, addFavorite, removeFavorite] = useFavorites();
   const { setContextItems, isOpen, setIsOpen } = useAISidebar();
   const [drive] = useDrive();
+  const titleAffordancesInline = useInlineTitleAffordances();
 
   const addToChat = () => {
     setContextItems(prev => [
@@ -70,6 +72,7 @@ export function useActionContext(
     enableScope,
     addChild,
     drive,
+    titleAffordancesInline,
     ...overrides,
   };
 }

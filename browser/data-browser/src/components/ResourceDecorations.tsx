@@ -419,7 +419,8 @@ export function TitleIcon({
 
 /**
  * Ghost "Add icon" / "Add cover" buttons, revealed when hovering the title
- * area. Rendered by EditableTitle when `withDecorations` is set.
+ * area. Rendered by EditableTitle when `withDecorations` is set and the
+ * viewport can hover and has the room (`useInlineTitleAffordances`).
  */
 export function TitleDecorationAffordances({
   resource,
@@ -687,6 +688,10 @@ const AffordanceTrigger = styled(RadixPopover.Trigger)`
  */
 export const AffordanceRow = styled(Row)`
   min-height: 2rem;
+  /* The title beside us wraps; these labels must not, or a long heading
+     squeezes "Add cover" into two lines and loses width to it. */
+  flex-shrink: 0;
+  white-space: nowrap;
   opacity: 0;
   transition: opacity 0.1s ease-in-out;
 

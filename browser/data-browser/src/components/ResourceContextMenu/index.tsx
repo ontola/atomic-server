@@ -239,7 +239,10 @@ export function ResourceContextMenu({
       shortcut: simple ? undefined : action.shortcut,
       disabled: action.disabled?.(ctx),
       keywords: action.keywords,
-      searchOnly: action.searchOnly,
+      searchOnly:
+        typeof action.searchOnly === 'function'
+          ? action.searchOnly(ctx)
+          : action.searchOnly,
       onClick: () => {
         // Shift skips the confirmation dialog for danger actions.
         if (action.danger && action.confirmation && !shiftHeld) {
