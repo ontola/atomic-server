@@ -22,7 +22,7 @@ import { createManagedSyncEnrollment, genesisCertOf } from './enrollment';
 import { getManagedEnrollments } from './enrollmentApi';
 import type { ManagedInfo } from '../managedServer';
 import { isRunningInTauri } from '../tauri';
-import { type Store, StoreEvents } from '@tomic/react';
+import type { Store } from '@tomic/react';
 
 /**
  * Where to send a user to create a hosted-sync account, or null when no portal
@@ -220,6 +220,7 @@ export async function enableCloudSyncForDrive(params: {
       if (!(await store.waitForServerConnected(20_000))) {
         throw new Error('Timed out connecting to the Cloud Server node.');
       }
+
       await promoteLocalOnly();
     }
   } else if (
