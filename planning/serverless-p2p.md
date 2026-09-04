@@ -230,7 +230,7 @@ now load-bearing rather than hygiene:
   the unconditional apply paths can't be reached from accept code.
 - [ ] Collapse the six `sync_drive_with_peer*` variants into one
   `SyncSession::run(transport, drive, opts)`.
-- [ ] Key `LIVE_CONNECTIONS` by peer + prune with `remove_live_peer` (leak).
+- [x] (2026-09-04) Key `LIVE_CONNECTIONS` by peer + prune with `remove_live_peer` (leak).
 - [ ] Delete the remaining dead client surface (`WsMessage::Resource`/
   `Commit` variants + parser arms, unused `WsClient` methods) so the
   transport trait starts from a minimal honest API.

@@ -223,8 +223,8 @@ impl AtomicNode {
     /// - `Hub` / `Peer`: `sync::engine::ingest_commit` with the matching
     ///   `CommitIngestOpts` — the path `server/src/handlers/commit.rs` and
     ///   the peer `COMMIT` frame handler already use.
-    /// - `Replica`: `sync::ws_apply::apply_commit_json` — the Flutter WS
-    ///   catch-up path.
+    /// - `Replica`: `sync::ws_apply::apply_trusted_hub_commit` — the Flutter
+    ///   WS catch-up path. Trusted-hub only: rights are not re-checked.
     /// - `LocalCache`: `Db::apply_commit` with every `validate_*` off — the
     ///   options the WASM `ClientDb.applyCommit` used to carry inline.
     pub async fn apply_commit(
@@ -265,7 +265,7 @@ impl AtomicNode {
                 .await
             }
             IngestPolicy::Replica => {
-                crate::sync::ws_apply::apply_commit_json(&self.db, commit_json).await
+                crate::sync::ws_apply::apply_trusted_hub_commit(&self.db, commit_json).await
             }
             IngestPolicy::LocalCache => {
                 // `DontSave`: the default would persist the parsed Commit

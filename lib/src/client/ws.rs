@@ -58,11 +58,19 @@ pub enum WsMessage {
     },
     /// A binary v2 `DESTROY` (0x12) frame: a subscribed resource was deleted.
     Destroy { subject: String },
-    /// Server confirmed a posted commit (binary COMMIT_OK).
+    /// Server confirmed a posted commit (binary COMMIT_OK). `commit_id` is
+    /// the server's id for it; `commit_json` is the full commit only when
+    /// the server sent the legacy full form (this client asks for the slim
+    /// one in its `HELLO`).
     CommitOk {
         request_id: u16,
-        commit_json: String,
+        commit_id: String,
+        commit_json: Option<String>,
     },
+    /// The server's `CHALLENGE` (0x42): the nonce this connection's AUTH
+    /// proof binds itself to. Recorded by the client; `authenticate` uses it
+    /// automatically.
+    Challenge { nonce: String },
     /// A `SYNC_OK` (0x31) frame: the drive matches ours, or a `SYNC_PUSH`
     /// chunk was accepted. Note the server sends this for an accepted *and* a
     /// rights-rejected import alike, so it is not proof the data landed.
@@ -84,8 +92,19 @@ pub enum WsMessage {
     /// A `BLOB_REQUEST` (0x34) frame: the server imported a resource that
     /// references a blob it doesn't have, and is asking us for the bytes.
     BlobRequest { hash: [u8; 32] },
-    /// Server sent an error.
-    Error(String),
+    /// An `ERROR` (0x03) frame. `request_id` is the id of the `GET` /
+    /// `COMMIT` it answers, or `0` for a connection-level refusal (a rejected
+    /// `AUTH`, `SUB`, `SYNC_PUSH`, ...). `code` is one of
+    /// [`protocol::error_code`].
+    Error {
+        request_id: u16,
+        code: u16,
+        message: String,
+    },
+    /// A text frame this client does not translate (an unknown prefix, or a
+    /// known one with an unparsable body). Informational; never an error the
+    /// server sent.
+    Unrecognized(String),
 }
 
 /// WebSocket client for AtomicServer.
@@ -121,7 +140,15 @@ pub struct WsClient {
     /// Capability names the server advertised in its `AUTH_OK` payload.
     /// Empty until authenticated, and for servers older than 2026-09.
     server_capabilities: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    /// The nonce from the server's `CHALLENGE`, once it arrived. `None` on a
+    /// server that predates the frame.
+    challenge: std::sync::Arc<std::sync::Mutex<Option<String>>>,
 }
+
+/// How long `authenticate` waits for the server's `CHALLENGE` when it has
+/// not arrived yet. The server sends it as its very first frame, so on a
+/// current server this never elapses; on an older one it costs this once.
+const CHALLENGE_WAIT: std::time::Duration = std::time::Duration::from_millis(300);
 
 /// `ws://host:port/ws` → `http://host:port`; `wss://` → `https://`. Falls
 /// back to the input when it does not parse, so a bad URL still fails at
@@ -154,6 +181,8 @@ impl WsClient {
         let origin = http_origin_of_ws_url(url);
         let server_capabilities = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let caps_for_reader = server_capabilities.clone();
+        let challenge = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let challenge_for_reader = challenge.clone();
 
         let (mut write, mut read) = ws_stream.split();
         let (tx, mut rx) = mpsc::channel::<Message>(64);
@@ -180,6 +209,14 @@ impl WsClient {
                                 *caps = protocol::decode_auth_ok(&bin[1..]);
                             }
                         }
+                        if bin.first() == Some(&protocol::tag::CHALLENGE) {
+                            if let (Some(nonce), Ok(mut slot)) = (
+                                protocol::decode_challenge(&bin[1..]),
+                                challenge_for_reader.lock(),
+                            ) {
+                                *slot = Some(nonce.to_string());
+                            }
+                        }
                         parse_binary_message(&bin)
                     }
                     _ => None,
@@ -190,12 +227,58 @@ impl WsClient {
             }
         });
 
-        Ok(Self {
+        let client = Self {
             tx,
             broadcast_tx,
             origin,
             server_capabilities,
+            challenge,
+        };
+        // Introduce ourselves: the capabilities we speak, so the server can
+        // answer COMMIT with a slim COMMIT_OK. A pre-2026-09 server drops the
+        // frame unread.
+        client
+            .send_binary(protocol::encode_hello_with_caps(
+                "atomic_lib WsClient",
+                protocol::CLIENT_CAPABILITIES,
+            ))
+            .await?;
+        Ok(client)
+    }
+
+    /// The nonce the server issued in its `CHALLENGE`, if it has arrived.
+    pub fn challenge_nonce(&self) -> Option<String> {
+        self.challenge.lock().ok().and_then(|c| c.clone())
+    }
+
+    /// Wait briefly for the server's `CHALLENGE` if it has not arrived yet.
+    async fn await_challenge(&self) -> Option<String> {
+        if let Some(nonce) = self.challenge_nonce() {
+            return Some(nonce);
+        }
+        let mut rx = self.subscribe();
+        tokio::time::timeout(CHALLENGE_WAIT, async {
+            while let Ok(msg) = rx.recv().await {
+                if let WsMessage::Challenge { nonce } = msg {
+                    return Some(nonce);
+                }
+            }
+            None
         })
+        .await
+        .ok()
+        .flatten()
+        .or_else(|| self.challenge_nonce())
+    }
+
+    /// The subject `authenticate` signs: this server's origin, with the
+    /// connection's challenge nonce in the fragment once the server issued
+    /// one (`{origin}#{nonce}`), so the proof is good on this socket only.
+    pub async fn auth_subject(&self) -> String {
+        match self.await_challenge().await {
+            Some(nonce) => format!("{}#{}", self.origin, nonce),
+            None => self.origin.clone(),
+        }
     }
 
     /// The `http(s)://host[:port]` this client signs AUTH proofs for.
@@ -222,9 +305,11 @@ impl WsClient {
     /// Authenticate with the server using an Agent's credentials.
     /// Sends a binary v2 AUTH (0x01) frame and waits for AUTH_OK (0x02).
     /// The proof names the server's origin (see [`WsClient::origin`]), which
-    /// is what the server binds it to.
+    /// is what the server binds it to, plus the connection's `CHALLENGE`
+    /// nonce when the server sent one (see [`WsClient::auth_subject`]).
     pub async fn authenticate(&self, agent: &Agent) -> AtomicResult<()> {
-        let frame = protocol::encode_auth(agent, &self.origin)?;
+        let subject = self.auth_subject().await;
+        let frame = protocol::encode_auth(agent, &subject)?;
         self.authenticate_with_frame(frame).await
     }
 
@@ -243,8 +328,13 @@ impl WsClient {
             while let Ok(msg) = rx.recv().await {
                 match msg {
                     WsMessage::Authenticated => return Ok(()),
-                    WsMessage::Error(e) => {
-                        return Err(AtomicError::from(format!("Auth failed: {}", e)));
+                    // A refused AUTH is answered with request_id 0.
+                    WsMessage::Error {
+                        request_id: 0,
+                        message,
+                        ..
+                    } => {
+                        return Err(AtomicError::from(format!("Auth failed: {}", message)));
                     }
                     _ => continue,
                 }
@@ -338,8 +428,8 @@ impl WsClient {
                         hash: rcv_hash,
                         bytes,
                     } if rcv_hash == *hash => return Ok(bytes),
-                    WsMessage::Error(e) => {
-                        return Err(AtomicError::from(format!("Blob fetch error: {}", e)));
+                    WsMessage::Error { message, .. } => {
+                        return Err(AtomicError::from(format!("Blob fetch error: {}", message)));
                     }
                     _ => continue,
                 }
@@ -401,7 +491,12 @@ impl WsClient {
         self.send_raw(&format!("SUBSCRIBE_QUERY {}", json)).await
     }
 
-    /// Post a commit over WebSocket; returns the server's commit JSON-AD on success.
+    /// Post a commit over WebSocket; returns the server's commit id on success.
+    ///
+    /// Only the `COMMIT_OK` / `ERROR` carrying this `request_id` settles the
+    /// call, so several `post_commit`s may be in flight on one connection and
+    /// an unrelated refusal (a rejected `SUB`, another commit's error) does
+    /// not fail this one.
     pub async fn post_commit(&self, request_id: u16, commit_json: &str) -> AtomicResult<String> {
         let mut rx = self.subscribe();
         self.send_binary(protocol::encode_commit(request_id, commit_json))
@@ -412,10 +507,17 @@ impl WsClient {
                 match msg {
                     WsMessage::CommitOk {
                         request_id: rid,
-                        commit_json,
-                    } if rid == request_id => return Ok(commit_json),
-                    WsMessage::Error(e) => {
-                        return Err(AtomicError::from(format!("COMMIT failed: {}", e)));
+                        commit_id,
+                        ..
+                    } if rid == request_id => return Ok(commit_id),
+                    WsMessage::Error {
+                        request_id: rid,
+                        code,
+                        message,
+                    } if rid == request_id => {
+                        return Err(AtomicError::from(format!(
+                            "COMMIT failed (code {code}): {message}"
+                        )));
                     }
                     _ => continue,
                 }
@@ -445,7 +547,7 @@ fn parse_server_message(text: &str) -> WsMessage {
                 let update = crate::agents::decode_base64(update_b64).unwrap_or_default();
                 WsMessage::LoroSyncUpdate { subject, update }
             }
-            Err(_) => WsMessage::Error(format!("Invalid LORO_SYNC_UPDATE: {}", text)),
+            Err(_) => WsMessage::Unrecognized(format!("Invalid LORO_SYNC_UPDATE: {}", text)),
         }
     } else if let Some(stripped) = text.strip_prefix("LORO_EPHEMERAL_UPDATE ") {
         match serde_json::from_str::<serde_json::Value>(stripped) {
@@ -455,7 +557,7 @@ fn parse_server_message(text: &str) -> WsMessage {
                 let update = crate::agents::decode_base64(update_b64).unwrap_or_default();
                 WsMessage::LoroEphemeralUpdate { subject, update }
             }
-            Err(_) => WsMessage::Error(format!("Invalid LORO_EPHEMERAL_UPDATE: {}", text)),
+            Err(_) => WsMessage::Unrecognized(format!("Invalid LORO_EPHEMERAL_UPDATE: {}", text)),
         }
     } else if let Some(stripped) = text.strip_prefix("PRESENCE_UPDATE ") {
         match serde_json::from_str::<serde_json::Value>(stripped) {
@@ -465,14 +567,22 @@ fn parse_server_message(text: &str) -> WsMessage {
                 let update = crate::agents::decode_base64(update_b64).unwrap_or_default();
                 WsMessage::PresenceUpdate { subject, update }
             }
-            Err(_) => WsMessage::Error(format!("Invalid PRESENCE_UPDATE: {}", text)),
+            Err(_) => WsMessage::Unrecognized(format!("Invalid PRESENCE_UPDATE: {}", text)),
         }
     } else if text.starts_with("AUTHENTICATED") {
         WsMessage::Authenticated
     } else if let Some(stripped) = text.strip_prefix("ERROR ") {
-        WsMessage::Error(stripped.to_string())
+        // Legacy text-frame error; no request id or code on the wire.
+        WsMessage::Error {
+            request_id: 0,
+            code: protocol::error_code::UNKNOWN,
+            message: stripped.to_string(),
+        }
     } else {
-        WsMessage::Error(format!("Unknown message: {}", text))
+        // Not an error: a text frame this client does not (yet) understand.
+        // Reporting it as `Error` used to fail whatever `authenticate` /
+        // `fetch_blob` / `post_commit` was waiting at that moment.
+        WsMessage::Unrecognized(text.to_string())
     }
 }
 
@@ -484,16 +594,18 @@ fn parse_binary_message(bin: &[u8]) -> Option<WsMessage> {
     match tag {
         tag::AUTH_OK => Some(WsMessage::Authenticated),
         tag::KEEPALIVE => Some(WsMessage::Keepalive),
-        tag::ERROR => {
-            // The `code` isn't surfaced via `WsMessage::Error` yet — no
-            // current consumer of this Rust client switches on it. Thread it
-            // through here (a `WsMessage::Error { code, message }` shape)
-            // when that lands.
-            Some(match protocol::decode_error(&bin[1..]) {
-                Some(e) => WsMessage::Error(e.message),
-                None => WsMessage::Error("Malformed ERROR frame".into()),
-            })
-        }
+        tag::ERROR => Some(match protocol::decode_error(&bin[1..]) {
+            Some(e) => WsMessage::Error {
+                request_id: e.request_id,
+                code: e.code,
+                message: e.message,
+            },
+            None => WsMessage::Error {
+                request_id: 0,
+                code: protocol::error_code::UNKNOWN,
+                message: "Malformed ERROR frame".into(),
+            },
+        }),
         tag::BLOB_RESPONSE => {
             let resp = protocol::decode_blob_response(&bin[1..])?;
             Some(WsMessage::BlobResponse {
@@ -511,12 +623,16 @@ fn parse_binary_message(bin: &[u8]) -> Option<WsMessage> {
             Some(WsMessage::Destroy { subject })
         }
         tag::COMMIT_OK => {
-            let decoded = protocol::decode_commit(&bin[1..])?;
+            let decoded = protocol::decode_commit_ok(&bin[1..])?;
             Some(WsMessage::CommitOk {
                 request_id: decoded.request_id,
-                commit_json: decoded.commit_json.to_string(),
+                commit_id: decoded.commit_id,
+                commit_json: decoded.commit_json,
             })
         }
+        tag::CHALLENGE => Some(WsMessage::Challenge {
+            nonce: protocol::decode_challenge(&bin[1..])?.to_string(),
+        }),
         tag::SYNC_OK => {
             // [tag] [drive_len: u16] [drive]
             let data = &bin[1..];

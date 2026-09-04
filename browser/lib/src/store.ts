@@ -1161,6 +1161,7 @@ export class Store {
     try {
       await this.outbox.drain({
         sort: this.sortOutboxEntries,
+        tierOf: this.outboxTierOf,
         drainSubject: this.drainOutboxSubject,
         isTerminalError: (_entry, e) => {
           const msg = e instanceof Error ? e.message : String(e);
@@ -1249,36 +1250,46 @@ export class Store {
   private sortOutboxEntries = (
     entries: readonly OutboxEntry[],
   ): OutboxEntry[] => {
-    const priority = (subject: string): number => {
-      if (subject.startsWith('did:ad:agent:')) return 0;
-      if (subject === this.drive) return 1;
-
-      return 2;
-    };
-
-    const depth = (subject: string): number => {
-      let d = 0;
-      let current = subject;
-
-      while (d < 20) {
-        const r = this.resources.get(current);
-        if (!r) break;
-        const parent = r.get(core.properties.parent) as string | undefined;
-        if (!parent || parent === current) break;
-        d++;
-        current = parent;
-      }
-
-      return d;
-    };
-
     return [...entries].sort((a, b) => {
-      const pa = priority(a.subject);
-      const pb = priority(b.subject);
+      const [pa, da] = this.outboxTier(a.subject);
+      const [pb, db] = this.outboxTier(b.subject);
       if (pa !== pb) return pa - pb;
 
-      return depth(a.subject) - depth(b.subject);
+      return da - db;
     });
+  };
+
+  /**
+   * The ordering tier of an outbox subject: `[priority, depth]`. Entries in
+   * one tier have no ordering dependency on each other, so the outbox drains
+   * them concurrently (pipelined COMMITs) and barriers between tiers; see
+   * `OutboxDrainContext.tierOf`. Subjects whose resource is not loaded
+   * report depth 0, as the sort always did.
+   */
+  private outboxTier(subject: string): [number, number] {
+    let priority = 2;
+    if (subject.startsWith('did:ad:agent:')) priority = 0;
+    else if (subject === this.drive) priority = 1;
+
+    let depth = 0;
+    let current = subject;
+
+    while (depth < 20) {
+      const r = this.resources.get(current);
+      if (!r) break;
+      const parent = r.get(core.properties.parent) as string | undefined;
+      if (!parent || parent === current) break;
+      depth++;
+      current = parent;
+    }
+
+    return [priority, depth];
+  }
+
+  private outboxTierOf = (entry: OutboxEntry): string => {
+    const [priority, depth] = this.outboxTier(entry.subject);
+
+    return `${priority}:${depth}`;
   };
 
   /**

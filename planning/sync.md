@@ -9,9 +9,9 @@
 **Persisted commits over WS** — implemented (protocol, server, browser). See
 [Rollout](#rollout) below.
 
-**Still open (2026-09-03):** `ws_errors.rs`, an `UNSUB` test at any layer, and
-dedicated browser `WSClient.postCommit()` COMMIT_OK / ERROR tests. See
-[Test coverage gaps](#test-coverage-gaps).
+**Closed 2026-09-04:** `ws_errors.rs`, the `UNSUB` test (`ws_unsub.rs`,
+2026-09-03) and the dedicated browser `WSClient.postCommit()` tests
+(`websockets.test.ts`) all landed. See [Test coverage gaps](#test-coverage-gaps).
 *Flutter on WS session* was listed here as open on 2026-05-28 but had already
 shipped (`flutter/rust/src/api/simple/ws_sync.rs`, first in `dd771c293`
 2026-05-21: authenticate, `SUB` the active drive, per-canvas subscribe); struck
@@ -286,10 +286,13 @@ Add or update tests at these levels:
   test for the canvas-genesis-save bug fix (shipped 2026-05-28).
 - [x] **`server/tests/it/ws_destroy.rs`** — standalone `DESTROY` frame delivery
   to subscribers (`ws_destroy_broadcasts_to_subscriber`).
-- [ ] **`server/tests/it/ws_errors.rs`** — assert `ERROR` frame format/`request_id`
-  for invalid `previousCommit`, wrong signer, unknown subject.
-- [ ] **`UNSUB`** — no test at any layer; add a unit/engine test that subscribes,
-  unsubs, and confirms no further `UPDATE` arrives.
+- [x] **`server/tests/it/ws_errors.rs`** (2026-09-04) — `ERROR` format,
+  `request_id` echo and codes for a malformed frame, an unauthorized signer, a
+  tampered signature (`INVALID_SIGNATURE (9)`), an unknown subject, and two
+  refusals in flight. An invalid `previousCommit` is not covered: the hub does
+  not validate it (`validate_previous_commit: false`, issue #412).
+- [x] **`UNSUB`** (2026-09-03) — `server/tests/it/ws_unsub.rs`: subscribe,
+  unsub, confirm no further `UPDATE` while a second subscriber keeps receiving.
 - [x] **`EPHEMERAL (0x40)` binary tag** — live, not reserved: codec in
   `lib/src/sync/protocol.rs` (`ephemeral_frame_tests`, 5 tests) and an Iroh e2e
   (`iroh_e2e.rs` `e2e_presence_crosses_the_link_without_being_stored`). Server
@@ -318,8 +321,8 @@ Add or update tests at these levels:
 - [x] Audit (this section) — 2026-05-28
 - [x] `ws_get.rs` + canvas-genesis-save fix
 - [x] `ws_destroy.rs`
-- [ ] `ws_errors.rs`
-- [ ] `UNSUB` test
+- [x] `ws_errors.rs` (2026-09-04)
+- [x] `UNSUB` test (2026-09-03)
 - [x] EPHEMERAL decision — it is live (codec + Iroh e2e), not reserved
 - [ ] Overlap trim (AUTH-handshake repetition, SYNC_PUSH chunking, HELLO codec tests)
 

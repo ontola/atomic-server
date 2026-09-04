@@ -1806,6 +1806,79 @@ mod peer_sync_tests {
         );
     }
 
+    /// The nonce in `AUTH.requestedSubject`'s fragment must answer the
+    /// challenge the responder issued on *this* connection; a proof without
+    /// one is still accepted unless the responder requires it.
+    #[tokio::test]
+    async fn auth_frame_answers_the_connection_challenge() {
+        use crate::sync::engine::{handle_auth_frame, AuthBinding, AuthChallenge};
+        use crate::sync::protocol::{decode_error, encode_auth, error_code, tag};
+
+        let db = Db::init_temp("engine_auth_challenge").await.unwrap();
+        let (alice, _drive) = db.setup("Alice").await.unwrap();
+        let origin = "http://localhost:9883";
+        let issued = "0badf00d";
+
+        let run = |subject: String, challenge: AuthChallenge<'static>| {
+            let db = &db;
+            let alice = &alice;
+            async move {
+                let frame = encode_auth(alice, &subject).unwrap();
+                let mut agent = ForAgent::Public;
+                let responses = handle_auth_frame(
+                    &frame[1..],
+                    db,
+                    &mut agent,
+                    AuthBinding::Origin(origin),
+                    challenge,
+                )
+                .await;
+                assert_eq!(responses.len(), 1);
+                (responses[0].clone(), agent)
+            }
+        };
+
+        // Answering the issued nonce: accepted, identity assigned.
+        let (frame, agent) = run(format!("{origin}#{issued}"), AuthChallenge::Issued(issued)).await;
+        assert_eq!(frame[0], tag::AUTH_OK);
+        assert_eq!(agent, ForAgent::AgentSubject(alice.subject.clone()));
+
+        // A nonce from some other connection: refused with AUTH_FAILED.
+        let (frame, agent) = run(format!("{origin}#deadbeef"), AuthChallenge::Issued(issued)).await;
+        assert_eq!(frame[0], tag::ERROR);
+        let err = decode_error(&frame[1..]).unwrap();
+        assert_eq!(err.code, error_code::AUTH_FAILED);
+        assert!(err.message.contains("CHALLENGE"), "{}", err.message);
+        assert_eq!(agent, ForAgent::Public);
+
+        // No nonce at all (a pre-2026-09 client): accepted while the
+        // challenge is merely issued ...
+        let (frame, _) = run(origin.to_string(), AuthChallenge::Issued(issued)).await;
+        assert_eq!(frame[0], tag::AUTH_OK);
+
+        // ... refused once it is required.
+        let (frame, agent) = run(origin.to_string(), AuthChallenge::Required(issued)).await;
+        assert_eq!(frame[0], tag::ERROR);
+        let err = decode_error(&frame[1..]).unwrap();
+        assert_eq!(err.code, error_code::AUTH_FAILED);
+        assert!(err.message.contains("requires"), "{}", err.message);
+        assert_eq!(agent, ForAgent::Public);
+
+        // Required and answered: accepted. The fragment does not disturb the
+        // origin binding.
+        let (frame, _) = run(
+            format!("{origin}#{issued}"),
+            AuthChallenge::Required(issued),
+        )
+        .await;
+        assert_eq!(frame[0], tag::AUTH_OK);
+
+        // No challenge on this transport (a peer stream): a fragment is not
+        // interpreted, the subject binds as before.
+        let (frame, _) = run(format!("{origin}#whatever"), AuthChallenge::None).await;
+        assert_eq!(frame[0], tag::AUTH_OK);
+    }
+
     /// A signed `COMMIT` frame applied through `engine::handle_frame` must
     /// create the resource and answer with `COMMIT_OK` — this is what makes a
     /// peer "a hub": it applies a commit exactly like the server's commit path,

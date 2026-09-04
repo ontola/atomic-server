@@ -73,11 +73,23 @@ The current list (`protocol::CAPABILITIES`):
 | `pull-from` | `SYNC_DIFF` carries a `pullFrom` map of per-subject version vectors. |
 | `signed-destroy` | On a peer stream, destroys travel as signed `COMMIT` frames; a naked `DESTROY` from a peer is ignored. |
 | `unsub` | `UNSUB (0x21)` actually cancels a drive subscription. |
+| `auth-nonce` | Sends `CHALLENGE (0x42)` as its first frame on a WebSocket and verifies an `AUTH.requestedSubject` of the form `{origin}#{nonce}` against it. |
+| `commit-ok-slim` | Answers `COMMIT` with the slim `COMMIT_OK` (`[request_id] [commit_id]`) for a client whose `HELLO` lists `commit-ok-slim`. |
+| `client-hello` | Reads a `HELLO (0x37)` from a WebSocket client and records the capabilities it lists. |
+| `rebind-on-auth` | Re-evaluates the connection's subscriptions against the new identity when an `AUTH` lands, dropping the ones it may no longer read. |
 
 The list is **additive only**: a name is never renamed or reused once
 shipped. Treat an absent name as "not supported" and fall back, never as an
 error. The browser stores the list per origin; the Rust client exposes it as
 `WsClient::server_capabilities()`.
+
+**Client capabilities.** Since 2026-09 a WebSocket client introduces itself
+too: the browser and `WsClient` send a `HELLO` on open, listing what they
+speak (`protocol::CLIENT_CAPABILITIES`, `CLIENT_CAPABILITIES` in `ws-v2.ts`).
+The server answers nothing (its own list rides on `AUTH_OK`); the list steers
+what that connection is sent from then on. The one name a responder acts on
+today is `commit-ok-slim`. A server that predates `client-hello` drops the
+frame unread, and the client gets the pre-2026-09 behaviour.
 
 
 ## Binary tag table
@@ -95,7 +107,7 @@ logged and dropped, not answered.
 | `0x11` | `UPDATE` | responder, and Iroh peers in live mode | client; Iroh live loop. **No WS server arm**: an `UPDATE` from a browser is dropped. |
 | `0x12` | `DESTROY` | responder | client. **No WS server arm.** The Iroh live loop explicitly ignores it (see [Deletes](#deletes)). |
 | `0x13` | `COMMIT` | client; Iroh live push loop, for destroys | WS handler (hub semantics), engine (peer semantics) |
-| `0x14` | `COMMIT_OK` | responder | client / initiator only |
+| `0x14` | `COMMIT_OK` | responder | client / initiator only. Payload is the full commit JSON-AD, or the bare commit id for a client whose `HELLO` listed `commit-ok-slim`. |
 | `0x20` | `SUB` | client | WS handler only. **No engine arm**, so an Iroh peer cannot subscribe. |
 | `0x21` | `UNSUB` | client | WS handler only. **No engine arm.** |
 | `0x30` | `SYNC` | Iroh initiator | engine (both transports). The browser uses the text `SYNC_VV` form instead. |
@@ -105,9 +117,10 @@ logged and dropped, not answered.
 | `0x34` | `BLOB_REQUEST` | either | engine (both transports); the browser also answers from its local blob store |
 | `0x35` | `BLOB_RESPONSE` | either | engine (both transports) |
 | `0x36` | *reserved* | nobody | nobody. Previously `QUERY_UPDATE`; retired, never reuse. |
-| `0x37` | `HELLO` | both peers on an Iroh stream | Iroh handshake and live loop. Never sent or handled over WebSocket. |
+| `0x37` | `HELLO` | both peers on an Iroh stream; a WebSocket client on open | Iroh handshake and live loop; the WS handler records the client's capabilities. The WS server never sends one (its capabilities ride on `AUTH_OK`). |
 | `0x40` | `EPHEMERAL` | Iroh peers | Iroh live loop only. **No WS arm**: the browser uses the `LORO_*` / `PRESENCE_*` text frames, and the server bridges between the two. |
 | `0x41` | `KEEPALIVE` | both sides, on their own schedule | WS server **echoes** it; Iroh **never** echoes it. |
+| `0x42` | `CHALLENGE` | WS server, as its first frame | client only. Never sent on an Iroh stream. |
 
 ## Frame layouts
 
@@ -123,14 +136,21 @@ the end of the frame.
 [0x10] [request_id: u16] [subject_utf8]                  // GET
 [0x12] [request_id: u16] [subject_utf8]                  // DESTROY
 [0x13] [request_id: u16] [signed_commit_json_ad_utf8]    // COMMIT
-[0x14] [request_id: u16] [created_commit_json_ad_utf8]   // COMMIT_OK
+[0x14] [request_id: u16] [created_commit_json_ad_utf8]   // COMMIT_OK, full form
+[0x14] [request_id: u16] [commit_id_utf8]                 // COMMIT_OK, slim form (client HELLO lists commit-ok-slim)
 [0x20] [drive_subject_utf8]                              // SUB
 [0x21] [drive_subject_utf8]                              // UNSUB
 [0x31] [drive_len: u16] [drive_utf8]                     // SYNC_OK
 [0x34] [hash: 32 bytes]                                  // BLOB_REQUEST
 [0x35] [hash: 32 bytes] [blob_bytes...]                  // BLOB_RESPONSE
 [0x41]                                                   // KEEPALIVE, no payload
+[0x42] [nonce_utf8]                                      // CHALLENGE, 64 hex chars today
 ```
+
+A `COMMIT_OK` decoder tells the two forms apart by the first payload byte: a
+`{` is the full JSON (its `@id` is the commit id), anything else is the id
+itself (`decode_commit_ok`, `decodeCommitOk`). A full form without an `@id`
+is malformed.
 
 An `ERROR`'s `request_id` is `0` for connection-level errors, meaning
 everything that does not answer a specific request; see
@@ -276,13 +296,31 @@ the future, or older than `AUTH_MAX_AGE_MS` (5 minutes,
 `lib/src/authentication.rs`). Clients sign immediately before sending, so
 this window is clock-skew slack, not a session lifetime.
 
+**Challenge nonce (WebSocket).** The server's first frame on every socket,
+before the client has said anything, is `CHALLENGE (0x42)` carrying a fresh
+nonce (32 random bytes, hex). A client that saw it signs
+`requestedSubject = "{origin}#{nonce}"`: the nonce rides in the URL fragment,
+so the signed string keeps its `"{requestedSubject} {timestamp}"` shape and
+the HTTP auth headers, which never carry a fragment, are untouched. The
+responder (`engine::AuthChallenge`) strips the fragment before the origin
+comparison below and compares the nonce with the one it issued on *this*
+connection; a mismatch is `AUTH_FAILED`. A proof that carries no fragment is
+still accepted on its timestamp, so a client that predates the frame keeps
+working; `AuthChallenge::Required` refuses those too, and is the strict mode
+a deployment can turn on once every client it serves speaks `auth-nonce`
+(not wired to a server option yet). The browser waits up to 300 ms for the
+challenge before signing a timestamp-only proof; `WsClient` does the same
+(`WsClient::auth_subject`). Peer (Iroh) streams have no challenge: the
+initiator speaks first, and the QUIC handshake already binds the link to a
+node key.
+
 **Binding.** `requestedSubject` is inside the signature, so it is what stops
 a proof signed for one place from opening another. Each transport binds it
 differently (`engine::AuthBinding`):
 
 | Responder | What the client signs | How the responder binds it |
 | --- | --- | --- |
-| WebSocket server | the server origin (`new URL(ws.url).origin` in the browser, `http(s)://host[:port]` in `WsClient`) | `AuthBinding::Origins([request_origin, server_url])`. The proof's `requestedSubject` must have the same `scheme://host[:port]` as either the origin the upgrade request arrived on (scheme and `Host`, forwarded headers honoured) or the responder's configured server URL, so a full resource URL under one of those is accepted too. Two names because a server is often dialled under a name other than its configured URL (a proxy, a container network) and the browser signs the one it used; the HTTP auth headers have the same tolerance. A responder that knows neither as an absolute http(s) URL cannot bind, and falls through to unbound. |
+| WebSocket server | the server origin (`new URL(ws.url).origin` in the browser, `http(s)://host[:port]` in `WsClient`), with the challenge nonce in the fragment | `AuthBinding::Origins([request_origin, server_url])`, after the fragment is stripped. The proof's `requestedSubject` must have the same `scheme://host[:port]` as either the origin the upgrade request arrived on (scheme and `Host`, forwarded headers honoured) or the responder's configured server URL, so a full resource URL under one of those is accepted too. Two names because a server is often dialled under a name other than its configured URL (a proxy, a container network) and the browser signs the one it used; the HTTP auth headers have the same tolerance. A responder that knows neither as an absolute http(s) URL cannot bind, and falls through to unbound. |
 | Iroh accept side | the drive the initiator is about to sync | `AuthBinding::Unbound` at verification time. The accepted `requestedSubject` is recorded as `bound_drive`, and every subsequent handshake `SYNC` / `SYNC_PUSH` must name that same drive, or the stream is closed with `AUTH_REQUIRED` and the message `AUTH was for <x>, not <y>`. |
 | Iroh initiator, receiving the accept side's auth-back | the initiator's node key | The initiator accepts the auth-back only when its `requestedSubject` normalises to the initiator's own node id (`normalize_node_id`); a proof signed for anything else is logged and ignored, and the remote stays `Public` for that connection. |
 
@@ -294,11 +332,13 @@ client may retry. On an Iroh stream the responder writes the error, finishes
 its half, and closes.
 
 **Late AUTH.** `AUTH` is not restricted to the start of a connection. The
-WebSocket handler writes the proven identity back onto the connection actor,
-and the Iroh live read loop holds a mutable agent that a mid-session `AUTH`
-upgrades, invalidating the per-connection drive-verdict cache so a `Public`
-verdict cached before the upgrade does not stick. Subscriptions already
-registered are **not** re-evaluated (see [Known gaps](#known-gaps)).
+WebSocket handler writes the proven identity back onto the connection actor
+and, when the identity changed, has the commit monitor re-evaluate every
+subscription the connection holds against it (see
+[Subscriptions](#subscriptions)). The Iroh live read loop holds a mutable
+agent that a mid-session `AUTH` upgrades, invalidating the per-connection
+drive-verdict cache so a `Public` verdict cached before the upgrade does not
+stick.
 
 **Iroh mutual auth.** After a successful `AUTH` the accept side writes, in
 order: `AUTH_OK`, its own `HELLO`, then an `AUTH` of its own back to the
@@ -363,8 +403,9 @@ Everything else is open to an anonymous socket and gated per subject by
 | `6` | `SYNC_REJECTED` | A `SYNC_PUSH` was refused as a whole and nothing from it landed. `request_id = 0`. Message: `SYNC_PUSH rejected for drive <drive>: <reason>`. |
 | `7` | `UNAUTHORIZED_READ` | A subscription or a read-side reconcile frame was refused. `request_id = 0`. Message: `<FRAME> refused for <subject>: <reason>`. |
 | `8` | `AUTH_FAILED` | An `AUTH` frame was refused. `request_id = 0`. |
+| `9` | `INVALID_SIGNATURE` | A `COMMIT` whose signature does not verify against its signer's key, or that has none. Terminal for that envelope: sign again. |
 
-Codes `1` to `4` come from `classify_commit_error`, which pattern-matches the
+Codes `1` to `4` and `9` come from `classify_commit_error`, which pattern-matches the
 underlying error text where the frame is built. Many other engine failures
 are **not** classified and go out as `UNKNOWN` with a descriptive message: an
 invalid frame of any kind, `No state`, a failed `GET` lookup,
@@ -393,9 +434,23 @@ genesis commit, which the responder rejects. A resource with no state answers
 
 ```
 -> COMMIT (0x13) [request_id] [signed_commit_json_ad]
-<- COMMIT_OK (0x14) [request_id] [created_commit_json_ad]
+<- COMMIT_OK (0x14) [request_id] [created_commit_json_ad]   # or [commit_id], see below
 <- UPDATE (0x11) ...        # to OTHER subscribers, not the origin connection
 ```
+
+**Pipelining.** The server applies each `COMMIT` on its own spawned future,
+so several may be in flight on one connection and their acks come back in
+completion order; every `COMMIT_OK` and every `ERROR` for a commit carries
+the `request_id` the client chose, and clients match on it (the browser's
+`pendingCommits` map, `WsClient::post_commit`). The browser's outbox drain
+uses this: subjects of one ordering tier (agents, then the drive, then
+children by depth) are drained up to eight at a time, with a barrier between
+tiers so a child's genesis never races ahead of its parent's.
+
+**Slim acknowledgement.** The full form returns the created commit's JSON-AD,
+which since 2026-09 no client in this tree reads beyond its `@id`. A client
+that lists `commit-ok-slim` in its `HELLO` is answered with the bare commit
+id instead, and resolves its caller with the commit it signed plus that id.
 
 The payload is the same signed JSON-AD body HTTP `POST /commit` accepts, so
 deterministic signing and commit parsing are unaffected by the transport.
@@ -472,9 +527,17 @@ is not something an agent without read rights gets to learn. One frame gets
 one answer, so the companion resource subscription a `SUB` registers does not
 emit a second. An accepted subscription is silent.
 
-**Identity is frozen at registration.** The agent string is captured when the
-subscription is registered and never re-read; a later `AUTH` on the same
-connection does not re-evaluate it.
+**Identity follows the connection.** Each registration remembers the agent
+it was admitted under. When an `AUTH` changes the connection's identity, the
+WebSocket handler sends the commit monitor a `RebindAgent` and every
+subscription the connection holds (per-resource, drive-wide and filter) is
+re-checked with `check_read` as the new agent: the ones it may read are
+re-bound to it, the rest are dropped silently. A client that switched agents
+re-subscribes on its own (the browser's `reSubscribeAll`), and is refused
+out loud then if it must be. The Loro sync and presence channels are not
+re-evaluated. Before 2026-09 the agent was checked once and forgotten, so a
+`SUB` accepted as the owner kept delivering after the socket
+re-authenticated as a stranger.
 
 **What a fan-out `UPDATE` carries.** This differs by trigger, and it matters:
 
@@ -768,8 +831,10 @@ unrecognized text frame is logged and ignored.
 
 ```
 -> upgrade, Sec-WebSocket-Protocol: atomicdata-ws.v2
--> AUTH (0x01) signed for the origin
-<- AUTH_OK (0x02) ["auth-max-age", "keepalive", ...]
+<- CHALLENGE (0x42) <nonce>                      (server's first frame)
+-> HELLO (0x37) name + ["commit-ok-slim"]        (client's first frame)
+-> AUTH (0x01) signed for "<origin>#<nonce>"
+<- AUTH_OK (0x02) ["auth-max-age", "keepalive", "auth-nonce", ...]
 -> SUB (0x20) <drive>
 -> SYNC_VV {drive, driveHash, probe:true}
 <- SYNC_RESEND <drive>
@@ -778,8 +843,10 @@ unrecognized text frame is logged and ignored.
 <- SYNC_DIFF (0x32)
 <- SYNC_PUSH (0x33) x n, last one flagged LAST
 -> SYNC_PUSH (0x33) x n, last one flagged LAST
--> COMMIT (0x13)
-<- COMMIT_OK (0x14)                              (no UPDATE echoed back)
+-> COMMIT (0x13) request_id 1
+-> COMMIT (0x13) request_id 2                    (pipelined, same tier)
+<- COMMIT_OK (0x14) 2 [commit_id]                (slim; acks in completion order)
+<- COMMIT_OK (0x14) 1 [commit_id]                (no UPDATE echoed back)
 <- UPDATE (0x11) delta | HAS_COMMIT_ID | PUSH    (someone else's commit)
 -> GET (0x10)
 <- UPDATE (0x11) SNAPSHOT | HAS_COMMIT_ID
@@ -814,10 +881,10 @@ unrecognized text frame is logged and ignored.
 
 `lib/src/sync/protocol_vectors.json` holds one golden frame as hex per named
 case, covering `AUTH_OK` with and without capabilities, `ERROR`, `GET`,
-`UPDATE` as delta and as snapshot, `DESTROY`, `COMMIT`, `COMMIT_OK`, `SUB`,
-`UNSUB`, `SYNC`, `SYNC_OK`, `SYNC_DIFF`, `SYNC_PUSH`, `BLOB_REQUEST`,
-`BLOB_RESPONSE`, `HELLO` with and without capabilities, `KEEPALIVE`, and
-`EPHEMERAL`.
+`UPDATE` as delta and as snapshot, `DESTROY`, `COMMIT`, `COMMIT_OK` in both
+forms, `SUB`, `UNSUB`, `SYNC`, `SYNC_OK`, `SYNC_DIFF`, `SYNC_PUSH`,
+`BLOB_REQUEST`, `BLOB_RESPONSE`, `HELLO` with and without capabilities,
+`KEEPALIVE`, `CHALLENGE`, and `EPHEMERAL`.
 
 The Rust test module `protocol::wire_vectors` asserts that every encoder
 produces the recorded bytes and that the recorded bytes decode to the
@@ -866,12 +933,15 @@ Tracked in [`planning/unified-sync.md`](https://github.com/atomicdata-dev/atomic
 - **No Layer-2 provenance on `SYNC_PUSH`.** Entries carry raw Loro bytes with
   no `lastCommit` and no signed envelope, so an import cannot verify or
   record who authored the state it merged.
-- **`AUTH` is a timestamp-bounded bearer proof, not a nonce exchange.** A
-  captured frame is replayable inside the freshness window against the
-  responder it was signed for. A challenge-response `AUTH` would close it.
-- **Subscription identity is never refreshed.** The agent is captured at
-  registration; an `AUTH` landing later on the same connection does not
-  re-evaluate what that connection is already subscribed to.
+- **The `CHALLENGE` nonce is optional, and WebSocket-only.** A proof without
+  a nonce is still accepted on its timestamp (so pre-2026-09 clients keep
+  working), which leaves a captured nonce-less frame replayable inside the
+  five-minute window until a deployment turns on `AuthChallenge::Required`
+  (no server option for it yet). Iroh streams have no challenge at all; the
+  initiator's proof for a drive is timestamp-bounded only.
+- **Loro sync and presence subscriptions are not re-bound on `AUTH`.** The
+  commit monitor's three maps are; the `LoroSyncBroadcaster` and the
+  presence broadcaster still check identity once, at registration.
 
 ## Changed in 2026-09
 
@@ -889,6 +959,24 @@ Wire-visible changes in this revision:
   entry.
 - **`KEEPALIVE (0x41)` over WebSocket.** The server echoes it, and the
   browser uses it as a liveness probe once the server advertises `keepalive`.
+- **`CHALLENGE (0x42)`.** The WebSocket server's first frame carries a
+  per-connection nonce; a client signs `{origin}#{nonce}` and the proof is
+  good on that socket only. Nonce-less proofs are still accepted
+  (`auth-nonce`).
+- **Client `HELLO` over WebSocket.** The browser and `WsClient` send one on
+  open, listing `commit-ok-slim`; the server records it (`client-hello`).
+- **Slim `COMMIT_OK`.** For such a client the ack is
+  `[request_id] [commit_id]` instead of the full commit JSON
+  (`commit-ok-slim`). The Rust and TypeScript decoders read both forms.
+- **Pipelined `COMMIT`.** Acks were always matched by `request_id` on the
+  server; the browser's outbox now drains an ordering tier concurrently, and
+  the Rust `WsClient::post_commit` no longer fails on an unrelated `ERROR`.
+  `WsMessage::Error` carries `request_id` and `code`.
+- **Subscriptions re-bound on `AUTH`.** When a connection's identity changes,
+  its subject, drive and filter subscriptions are re-checked as the new agent
+  and the unreadable ones dropped (`rebind-on-auth`).
+- **`INVALID_SIGNATURE (9)`.** A `COMMIT` whose signature does not verify is
+  classified instead of going out as `UNKNOWN`.
 - **The hash-first probe and the RBSR frames are read-gated.** `SYNC_VV` with
   `probe: true`, `RBSR_FP` and `RBSR_ITEMS` now answer only over the subjects
   the asking agent may `check_read`, and refuse an unreadable drive with

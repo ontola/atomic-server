@@ -229,12 +229,12 @@ None. The plan ships with the protocol unchanged.
 
 | Surface                                     | Status today                                           | After                                                                                                                                                                            |
 | ------------------------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `UPDATE (0x11)` `HAS_COMMIT_ID` flag (0x02) | Set on subscription pushes; absent on GET responses    | Always set — every server-known state was produced by a Commit, so the commit id is always known. Drops the conditional length-prefix branch in the parser.                      |
-| `UPDATE (0x11)` `PUSH` flag (0x04)          | Distinguishes subscription broadcast from GET response | Redundant with `request_id` matching (`request_id == 0` ⇒ unsolicited). Drop.                                                                                                    |
-| `SYNC_OK (0x31)`                            | "Drives match, nothing to do"                          | Collapse into `SYNC_DIFF (0x32)` with empty `pull/push/remove`. Already valid; just stop emitting `SYNC_OK`.                                                                     |
+| `UPDATE (0x11)` `HAS_COMMIT_ID` flag (0x02) | Set on commit fan-out; conditional on GET responses, external-change and membership pushes; never on the Iroh live `UPDATE` | **Blocked (2026-09-04 finding):** the premise "every server-known state was produced by a Commit" is false. `import_sync_push` never writes `lastCommit`, so state that arrived over `SYNC_PUSH` / peer sync has no commit id, and a GET for it legitimately omits the flag. Making it unconditional means synthesising a commit id for push-imported state, a data-model change. Both decoders are flag-driven and would accept it. |
+| `UPDATE (0x11)` `PUSH` flag (0x04)          | Distinguishes subscription broadcast from GET response | Redundant with `request_id` matching (`request_id == 0` ⇒ unsolicited). Drop. Safe today: the only readers are a `WsMessage::Update.is_push` field nobody consumes and a browser `source` label that is already inside the no-pending-request branch. Low value; not done. |
+| `SYNC_OK (0x31)`                            | Two roles, not one: "drives match" **and** the per-chunk `SYNC_PUSH` ack (`engine.rs` answers an admitted chunk with `SYNC_OK`) | **Do not fold yet (2026-09-04 finding):** the browser would be fine (an empty `SYNC_DIFF` reaches the same `finishDriveSync`), but `replicate.rs` sets `in_sync` only on `SYNC_OK`, the Iroh dial side sets `acked_in_sync` only on it, the Iroh accept side counts imported pushes by scanning for it, and the trailing `register_live_peer` has no `SYNC_DIFF` equivalent. Fold only together with those four call sites. |
 | `0x36` reserved slot                        | Held since QUERY_UPDATE retirement                     | Reclaim.                                                                                                                                                                         |
 | `SUBSCRIBE` / `SUBSCRIBE_QUERY` text frames | Two text-frame registrars + `SUB (0x20)` binary        | Fold into one binary `SUBSCRIBE (0x20)` with a `{scope: drive \| subject \| filter, target}` body, per [`unify-subscription-primitives.md`](./unify-subscription-primitives.md). |
-| `COMMIT_OK (0x14)` body                     | Full server commit JSON                                | Shrink to `[request_id] [commit_id_string]`. Caller only needs the id to populate `lastCommit`; the rest of the commit object is redundant with what the client signed.          |
+| `COMMIT_OK (0x14)` body                     | ✅ **Shipped 2026-09-04.** Slim form `[request_id] [commit_id]` for a client whose `HELLO` lists `commit-ok-slim` (browser and `WsClient` both do); the full JSON stays for older clients. Both decoders read both forms. | Done. |
 
 ### Frame-count math (honest)
 
@@ -252,6 +252,45 @@ After this plan + the cleanups above:
 | `UPDATE` flags | 3     | 1 (just `SNAPSHOT`)                                                                                                                        |
 
 Real cleanup, smaller than first glance suggested.
+
+## Commit-granularity contract (sign-at-drain)
+
+What the outbox promises about the commit *chain* a subject accumulates on
+the server, written down (2026-09-04) so the cadence and audit expectations
+stop being inferred from the drain code:
+
+1. **At most one incremental commit per subject per drain pass that reached
+   the server.** A pass exports every Loro op since the last acknowledged
+   save cursor into one delta, signs one commit over it, and advances the
+   cursor only on `COMMIT_OK`. Twenty-six keystrokes between two passes are
+   one commit; twenty-six passes with one keystroke each are twenty-six.
+2. **Plus at most one genesis commit**, for a subject created since the last
+   pass. It is signed synchronously at creation (the signature is the
+   subject) and posted verbatim *before* the subject's first incremental
+   commit, in the same pass, as its own round trip: the incremental commit
+   chains on the genesis id the server returns. The two cannot be pipelined
+   today because the server may mint a different id shape
+   (`https://host/commits/<sig>` on an HTTP-subject drive) than the client
+   would derive (`did:ad:commit:<sig>`), and `previousCommit` should name
+   the server's.
+3. **A failed pass merges into the next.** Nothing advances on failure, so
+   the next pass re-exports one bigger delta and signs one fresh commit. The
+   chain never records the failed attempt; the audit granularity is "one
+   commit per pass that reached the server", not "per attempt".
+4. **Ops typed during the round trip are the next pass's.** The drain checks
+   whether the doc moved past the save cursor while the `COMMIT` was in
+   flight and re-marks the subject dirty instead of folding those ops into
+   the acknowledged commit.
+5. **Across subjects, a pass is tiered, not serial (2026-09-04).** Subjects
+   of one ordering tier (agents, then the drive, then children by parent
+   depth) are drained concurrently, up to eight in flight, their `COMMIT`s
+   pipelined on the socket and matched by `request_id`; tiers are separated
+   by a barrier so a child's genesis never races ahead of its parent's. The
+   per-subject promises above are unchanged by this.
+
+Commits are the signed envelopes that authorise state transitions, not the
+unit of editing; anything that needs per-edit granularity (a keystroke-level
+history) belongs in the Loro op log, which every commit carries in full.
 
 ## Non-goals
 

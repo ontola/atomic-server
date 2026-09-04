@@ -338,7 +338,15 @@ static LIVE_PEERS: Mutex<Option<HashMap<String, (u64, tokio::sync::mpsc::Sender<
 static LIVE_PEER_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// Keep QUIC connections alive so live streams don't drop.
-static LIVE_CONNECTIONS: Mutex<Option<Vec<iroh::endpoint::Connection>>> = Mutex::new(None);
+///
+/// Keyed by normalized node id, one connection per peer: a re-dial replaces
+/// (and thereby closes) the connection it supersedes, and
+/// [`remove_live_peer_inner`] drops the entry together with the peer's
+/// `LIVE_PEERS` slot. Before 2026-09 this was an append-only `Vec` that
+/// pinned every connection ever dialed for the life of the process, forgotten
+/// peers and dead links included.
+static LIVE_CONNECTIONS: Mutex<Option<HashMap<String, iroh::endpoint::Connection>>> =
+    Mutex::new(None);
 
 /// What live peers call themselves, learnt over HELLO.
 ///
@@ -429,6 +437,14 @@ fn remove_live_peer_inner(peer_id: &str, generation: Option<u64>, notify: bool) 
         }
     }
     if removed {
+        // Release the pinned QUIC connection with the peer slot; the
+        // superseding-connection case is already excluded above, so this
+        // never closes a link a newer registration is using.
+        if let Ok(mut conns) = LIVE_CONNECTIONS.lock() {
+            if let Some(map) = conns.as_mut() {
+                map.remove(&key);
+            }
+        }
         tracing::info!("[live] removed peer {}", &key[..key.len().min(12)]);
         if notify {
             push_event(&key, 0, "disconnected");
@@ -582,7 +598,7 @@ fn start_live_sync(store: Db) {
     {
         let mut conns = LIVE_CONNECTIONS.lock().unwrap();
         if conns.is_none() {
-            *conns = Some(Vec::new());
+            *conns = Some(HashMap::new());
         }
     }
 
@@ -1921,10 +1937,12 @@ pub async fn sync_drive_with_peer_using_outcome(
         "[live] transitioning to live mode with {}",
         &remote_node_id[..remote_node_id.len().min(12)]
     );
+    // One pinned connection per peer: dropping the one this replaces closes
+    // it, so a re-dial cannot leak the link it supersedes.
     {
         let mut conns = LIVE_CONNECTIONS.lock().unwrap();
-        if let Some(v) = conns.as_mut() {
-            v.push(conn);
+        if let Some(map) = conns.as_mut() {
+            map.insert(remote_key.clone(), conn);
         }
     }
     // Dial side: we initiated, so trust this peer to relay drives we own.

@@ -141,9 +141,15 @@ async fn handle_ws_message(store: &atomic_lib::Db, msg: WsMessage) -> Result<(),
             ws_apply::apply_destroy(store, &subject).await.map_err(err)?;
         }
         WsMessage::Commit(json) => {
-            ws_apply::apply_commit_json(store, &json).await.map_err(err)?;
+            // The hub we are subscribed to already rights-checked this commit;
+            // this replica only re-verifies the signature.
+            ws_apply::apply_trusted_hub_commit(store, &json)
+                .await
+                .map_err(err)?;
         }
-        WsMessage::Error(e) => tracing::warn!("[ws_sync] server error: {e}"),
+        WsMessage::Error { code, message, .. } => {
+            tracing::warn!("[ws_sync] server error (code {code}): {message}")
+        }
         _ => {}
     }
     Ok(())
@@ -167,7 +173,11 @@ async fn fetch_resource_state(_store: &atomic_lib::Db, subject: &str) -> Result<
                 WsMessage::Update { subject: s, loro_bytes, .. } if s == subject => {
                     return Ok(loro_bytes);
                 }
-                WsMessage::Error(e) => return Err(e),
+                WsMessage::Error {
+                    request_id: rid,
+                    message,
+                    ..
+                } if rid == request_id => return Err(message),
                 _ => {}
             }
         }

@@ -34,9 +34,11 @@ export const Tag = {
    * arrive as plain `UPDATE` (0x11) / `DESTROY` (0x12) frames.
    */
   QUERY_UPDATE_RESERVED: 0x36,
-  /** Peer-stream (Iroh) only: device name + capability list after AUTH_OK.
-   *  A browser socket never sends or receives it; listed so debug output
-   *  can name it. */
+  /** Device name + capability list. Both peers send it on an Iroh stream
+   *  after AUTH_OK; since 2026-09 a WebSocket client sends one on open too
+   *  (`encodeHello`), listing the capabilities it speaks so the server can
+   *  e.g. answer COMMIT with a slim COMMIT_OK. The server never sends it over
+   *  WebSocket (its own list rides on AUTH_OK). */
   HELLO: 0x37,
   /** Peer-stream only: binary presence / cursor / live-doc frames. The
    *  browser equivalents are the `PRESENCE_UPDATE` / `LORO_*` text frames. */
@@ -44,6 +46,12 @@ export const Tag = {
   /** Liveness probe. The server echoes it over WebSocket; see
    *  `WSClient`'s liveness timer. */
   KEEPALIVE: 0x41,
+  /** Server → client, the first frame on a WebSocket, before the client has
+   *  said anything: `[0x42] [nonce_utf8]`. A client that saw it signs
+   *  `AUTH.requestedSubject` as `{origin}#{nonce}`, which makes the proof
+   *  good on this connection only; a client that ignores it still
+   *  authenticates on its timestamp. */
+  CHALLENGE: 0x42,
 } as const;
 
 // ---- UPDATE flags ----
@@ -98,6 +106,10 @@ export const ErrorCode = {
    *  name this server. Sign a fresh proof for the right origin; resending
    *  the same frame changes nothing. */
   AUTH_FAILED: 8,
+  /** A COMMIT whose signature does not verify against its signer's key (or
+   *  that carries none). Terminal for that envelope: the client must sign
+   *  again; re-sending the same bytes changes nothing. */
+  INVALID_SIGNATURE: 9,
 } as const;
 
 /** Capability names a server may advertise in its AUTH_OK payload (mirrors
@@ -109,7 +121,24 @@ export type ServerCapability =
   | 'rbsr'
   | 'pull-from'
   | 'signed-destroy'
-  | 'unsub';
+  | 'unsub'
+  /** Sends `CHALLENGE` on connect and verifies `{origin}#{nonce}` proofs. */
+  | 'auth-nonce'
+  /** Answers COMMIT with `[request_id][commit_id]` for a client whose HELLO
+   *  lists `commit-ok-slim`. */
+  | 'commit-ok-slim'
+  /** Reads a client `HELLO` over WebSocket. */
+  | 'client-hello'
+  /** Re-checks this connection's subscriptions when an AUTH changes its
+   *  identity, dropping the ones it may no longer read. */
+  | 'rebind-on-auth';
+
+/** Capability names this client lists in the `HELLO` it sends on open
+ *  (mirrors `protocol::CLIENT_CAPABILITIES`). */
+export const CLIENT_CAPABILITIES: readonly string[] = ['commit-ok-slim'];
+
+/** What this client calls itself in its `HELLO`. Display only. */
+export const CLIENT_HELLO_NAME = '@tomic/lib browser';
 
 // ---- Low-level read/write helpers ----
 
@@ -162,6 +191,116 @@ export function encodeAuth(jsonPayload: string): Uint8Array {
   buf.set(payload, 1);
 
   return buf;
+}
+
+/** HELLO: `[0x37] [name_len: u16] [name_utf8] [caps_json_utf8]`. The
+ *  capability list is a trailing JSON array a pre-2026-09 receiver skips. */
+export function encodeHello(name: string, caps: readonly string[]): Uint8Array {
+  const nameBytes = encoder.encode(name).subarray(0, 0xffff);
+  const capsBytes =
+    caps.length > 0 ? encoder.encode(JSON.stringify(caps)) : new Uint8Array(0);
+  const buf = new Uint8Array(3 + nameBytes.length + capsBytes.length);
+  buf[0] = Tag.HELLO;
+  writeU16(buf, 1, nameBytes.length);
+  buf.set(nameBytes, 3);
+  buf.set(capsBytes, 3 + nameBytes.length);
+
+  return buf;
+}
+
+/** The capability names after the display name in a HELLO payload (after
+ *  the tag byte). Empty for a malformed frame or a peer that sent none. */
+export function decodeHelloCaps(data: Uint8Array): string[] {
+  if (data.length < 2) return [];
+  const [len, off] = readU16(data, 0);
+  const rest = data.subarray(off + len);
+  if (rest.length === 0) return [];
+
+  try {
+    const parsed = JSON.parse(decoder.decode(rest));
+
+    return Array.isArray(parsed)
+      ? parsed.filter((c): c is string => typeof c === 'string')
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+// ---- Server-sent frames ----
+//
+// The browser never sends these; the encoders exist so the tests can play
+// the server against the client, and so the golden vectors pin them on this
+// side too.
+
+/** AUTH_OK: `[0x02] [caps_json_utf8]?` — the payload is omitted for an empty
+ *  list, as the pre-2026-09 server did. */
+export function encodeAuthOk(caps: readonly string[]): Uint8Array {
+  const payload =
+    caps.length > 0 ? encoder.encode(JSON.stringify(caps)) : new Uint8Array(0);
+  const buf = new Uint8Array(1 + payload.length);
+  buf[0] = Tag.AUTH_OK;
+  buf.set(payload, 1);
+
+  return buf;
+}
+
+/** ERROR: `[0x03] [request_id: u16] [code: u16] [message_utf8]`. */
+export function encodeError(
+  requestId: number,
+  code: number,
+  message: string,
+): Uint8Array {
+  const messageBytes = encoder.encode(message);
+  const buf = new Uint8Array(5 + messageBytes.length);
+  buf[0] = Tag.ERROR;
+  writeU16(buf, 1, requestId);
+  writeU16(buf, 3, code);
+  buf.set(messageBytes, 5);
+
+  return buf;
+}
+
+/** COMMIT_OK, legacy full form: `[0x14] [request_id: u16] [commit_json]`. */
+export function encodeCommitOk(
+  requestId: number,
+  commitJson: string,
+): Uint8Array {
+  const payload = encoder.encode(commitJson);
+  const buf = new Uint8Array(3 + payload.length);
+  buf[0] = Tag.COMMIT_OK;
+  writeU16(buf, 1, requestId);
+  buf.set(payload, 3);
+
+  return buf;
+}
+
+/** COMMIT_OK, slim form: `[0x14] [request_id: u16] [commit_id_utf8]`. What
+ *  a server sends a client whose HELLO listed `commit-ok-slim`. */
+export function encodeCommitOkSlim(
+  requestId: number,
+  commitId: string,
+): Uint8Array {
+  return encodeCommitOk(requestId, commitId);
+}
+
+/** CHALLENGE: `[0x42] [nonce_utf8]`. The server sends this; the encoder
+ *  exists for tests and symmetry with the Rust codec. */
+export function encodeChallenge(nonce: string): Uint8Array {
+  const payload = encoder.encode(nonce);
+  const buf = new Uint8Array(1 + payload.length);
+  buf[0] = Tag.CHALLENGE;
+  buf.set(payload, 1);
+
+  return buf;
+}
+
+/** The nonce in a CHALLENGE payload (after the tag byte); `undefined` when
+ *  empty. */
+export function decodeChallenge(data: Uint8Array): string | undefined {
+  if (data.length === 0) return undefined;
+
+  return decoder.decode(data);
 }
 
 export function encodeGet(requestId: number, subject: string): Uint8Array {
@@ -409,6 +548,44 @@ export function decodeCommit(data: Uint8Array): DecodedCommit | undefined {
   return { requestId, commitJson };
 }
 
+export interface DecodedCommitOk {
+  requestId: number;
+  /** The server's id for the applied commit. */
+  commitId: string;
+  /** The full commit JSON-AD; only present for the legacy full form, which
+   *  a server sends to a client whose HELLO did not list `commit-ok-slim`. */
+  commitJson?: string;
+}
+
+/** A COMMIT_OK payload (after the tag byte) in either form: the legacy full
+ *  commit JSON (its `@id` is the commit id) or, when this client asked for
+ *  it, the bare commit id. `undefined` for a truncated frame or JSON without
+ *  an `@id`. */
+export function decodeCommitOk(data: Uint8Array): DecodedCommitOk | undefined {
+  const raw = decodeCommit(data);
+  if (!raw) return undefined;
+  const body = raw.commitJson.trim();
+  if (body.length === 0) return undefined;
+
+  if (body.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(body) as { '@id'?: unknown };
+      const id = parsed['@id'];
+      if (typeof id !== 'string' || id.length === 0) return undefined;
+
+      return {
+        requestId: raw.requestId,
+        commitId: id,
+        commitJson: raw.commitJson,
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  return { requestId: raw.requestId, commitId: body };
+}
+
 export function decodeError(data: Uint8Array): DecodedError | undefined {
   if (data.length < 4) return undefined;
   const [requestId, off1] = readU16(data, 0);
@@ -556,6 +733,7 @@ const TAG_NAMES: Record<number, string> = {
   [Tag.HELLO]: 'HELLO',
   [Tag.EPHEMERAL]: 'EPHEMERAL',
   [Tag.KEEPALIVE]: 'KEEPALIVE',
+  [Tag.CHALLENGE]: 'CHALLENGE',
 };
 
 /**

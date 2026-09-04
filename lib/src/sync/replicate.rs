@@ -235,9 +235,9 @@ async fn drive_exchange(
             // We are a pusher: whatever the remote offers us, we don't import.
             // Dialing a remote never gave it the right to write into us.
             WsMessage::SyncPush { .. } => {}
-            WsMessage::Error(e) => {
+            WsMessage::Error { message, .. } => {
                 return Err(AtomicError::from(format!(
-                    "Remote refused to sync {drive}: {e}"
+                    "Remote refused to sync {drive}: {message}"
                 )));
             }
             _ => {}

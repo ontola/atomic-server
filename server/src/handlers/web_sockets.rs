@@ -74,6 +74,8 @@ pub async fn web_socket_handler(
         WebSocketConnection {
             hb: Instant::now(),
             request_origin,
+            auth_nonce: atomic_lib::sync::protocol::new_challenge_nonce(),
+            client_capabilities: Vec::new(),
             subscribed: std::collections::HashSet::new(),
             commit_monitor_addr: appstate.commit_monitor.clone(),
             loro_sync_broadcaster_addr: appstate.loro_sync_broadcaster.clone(),
@@ -112,6 +114,13 @@ pub struct WebSocketConnection {
     /// origins an `AUTH.requestedSubject` may name (the other is the
     /// configured server URL).
     request_origin: Option<String>,
+    /// The nonce this connection sent in its `CHALLENGE` (0x42). An `AUTH`
+    /// whose `requestedSubject` carries a fragment must carry this one, so a
+    /// proof captured here cannot open a session anywhere else.
+    auth_nonce: String,
+    /// Capability names the client listed in a `HELLO` (0x37), if it sent
+    /// one. Consulted before answering `COMMIT` with a slim `COMMIT_OK`.
+    client_capabilities: Vec<String>,
     subscribed: std::collections::HashSet<atomic_lib::Subject>,
     commit_monitor_addr: Addr<CommitMonitor>,
     loro_sync_broadcaster_addr: Addr<LoroSyncBroadcaster>,
@@ -182,6 +191,13 @@ impl Actor for WebSocketConnection {
     type Context = ws::WebsocketContext<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
+        // First frame on the wire, before the client has said anything: the
+        // nonce its AUTH proof can bind itself to. Clients that predate the
+        // frame ignore it (every decoder in the tree drops unknown tags) and
+        // authenticate on their timestamp as before.
+        ctx.binary(atomic_lib::sync::protocol::encode_challenge(
+            &self.auth_nonce,
+        ));
         ctx.run_interval(HEARTBEAT_INTERVAL, |act, ctx| {
             if Instant::now().duration_since(act.hb) > CLIENT_TIMEOUT {
                 tracing::info!("Websocket heartbeat failed, disconnecting");
@@ -299,6 +315,7 @@ impl WebSocketConnection {
                 let mut agent = self.agent.clone();
                 let bin_vec = bin.to_vec();
                 let request_origin = self.request_origin.clone();
+                let nonce = self.auth_nonce.clone();
                 ctx.spawn(
                     async move {
                         // The browser signs the server origin as
@@ -324,12 +341,24 @@ impl WebSocketConnection {
                             &store,
                             &mut agent,
                             atomic_lib::sync::engine::AuthBinding::Origins(&accepted),
+                            atomic_lib::sync::engine::AuthChallenge::Issued(&nonce),
                         )
                         .await;
                         (responses, agent)
                     }
                     .into_actor(self)
                     .map(|(responses, agent), actor, ctx| {
+                        // Subscriptions were admitted under the previous
+                        // identity; have the monitor re-check them against
+                        // this one (see `Handler<RebindAgent>`).
+                        if actor.agent != agent {
+                            actor
+                                .commit_monitor_addr
+                                .do_send(crate::actor_messages::RebindAgent {
+                                    addr: ctx.address(),
+                                    agent: agent.to_string(),
+                                });
+                        }
                         actor.agent = agent;
                         for response in responses {
                             ctx.binary(response);
@@ -377,6 +406,10 @@ impl WebSocketConnection {
                     .store
                     .get_base_domain()
                     .unwrap_or_else(|| "http://localhost".to_string());
+                let slim_ack = self
+                    .client_capabilities
+                    .iter()
+                    .any(|c| c == atomic_lib::sync::protocol::CAP_COMMIT_OK_SLIM);
                 ctx.spawn(
                     async move {
                         let result = crate::handlers::commit::apply_commit_json(
@@ -389,9 +422,25 @@ impl WebSocketConnection {
                         (request_id, result)
                     }
                     .into_actor(self)
-                    .map(|(rid, res), _actor, ctx| match res {
+                    .map(move |(rid, res), _actor, ctx| match res {
                         Ok(server_commit_json) => {
-                            ctx.binary(ws_v2::encode_commit_ok(rid, &server_commit_json));
+                            // A client that listed `commit-ok-slim` in its
+                            // HELLO only wants the id it must chain the next
+                            // commit on; it already holds the commit it just
+                            // signed.
+                            let slim_id = if slim_ack {
+                                serde_json::from_str::<serde_json::Value>(&server_commit_json)
+                                    .ok()
+                                    .and_then(|v| v.get("@id")?.as_str().map(str::to_owned))
+                            } else {
+                                None
+                            };
+                            match slim_id {
+                                Some(id) => ctx.binary(ws_v2::encode_commit_ok_slim(rid, &id)),
+                                None => {
+                                    ctx.binary(ws_v2::encode_commit_ok(rid, &server_commit_json))
+                                }
+                            }
                         }
                         Err(e) => {
                             // F5 (planning/unified-sync.md): classify so the
@@ -462,6 +511,22 @@ impl WebSocketConnection {
             // see `protocol::tag::KEEPALIVE`.
             ws_v2::tag::KEEPALIVE => {
                 ctx.binary(atomic_lib::sync::protocol::encode_keepalive());
+            }
+
+            // A browser or Rust client introducing itself: display name plus
+            // the capabilities it speaks. Nothing is answered (the server's
+            // own list rides on AUTH_OK); the list steers what this
+            // connection is sent from here on, e.g. a slim `COMMIT_OK`.
+            // Until 2026-09 this tag was Iroh-only and fell through to the
+            // debug log below.
+            ws_v2::tag::HELLO => {
+                let caps = atomic_lib::sync::protocol::decode_hello_caps(&bin[1..]);
+                tracing::debug!(
+                    connection = %self.connection_id,
+                    ?caps,
+                    "client HELLO"
+                );
+                self.client_capabilities = caps;
             }
 
             _ => {

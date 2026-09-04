@@ -26,7 +26,7 @@ What slice 1 did **not** do (deliberately — no behaviour change):
   (local opts: signature and rights not re-checked), not through
   `apply_commit(Hub)`. Routing it through `Hub` would add a JSON round-trip and
   ownership/causality checks that today's local save does not run.
-- `Replica` and `LocalCache` delegate to `ws_apply::apply_commit_json` and the
+- `Replica` and `LocalCache` delegate to `ws_apply::apply_trusted_hub_commit` and the
   former WASM `CommitOpts` respectively, because `CommitIngestOpts` on `develop`
   has no `validate_rights` / `validate_timestamp` knobs yet. Once #1274 lands,
   fold both into `ingest_commit` with `CommitIngestOpts::{replica, local_cache}`.

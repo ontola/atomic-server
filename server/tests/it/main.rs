@@ -22,6 +22,7 @@ mod ws_commit;
 mod ws_commit_isolation;
 mod ws_destroy;
 mod ws_drive_membership;
+mod ws_errors;
 mod ws_get;
 mod ws_get_unauthorized_latency;
 mod ws_subscribe_query;

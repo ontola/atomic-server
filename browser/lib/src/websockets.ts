@@ -26,12 +26,17 @@ import {
   encodeAuth,
   encodeCommit,
   encodeGet,
+  encodeHello,
   encodeSub,
   encodeUnsub,
   encodeKeepalive,
   decodeAuthOk,
+  decodeChallenge,
   decodeCommit,
+  decodeCommitOk,
   decodeUpdate,
+  CLIENT_CAPABILITIES,
+  CLIENT_HELLO_NAME,
   decodeError,
   decodeSyncOk,
   decodeSyncDiff,
@@ -52,6 +57,9 @@ import { perfMark, perfSpan } from './perf-trace.js';
 // (auth race + drive sub + several parallel GETs queue up). Above ~10s, the
 // failure mode is a real server hang or stuck WS, not transient slowness.
 const REQUEST_TIMEOUT = 10000;
+/** How long `authenticate` waits for the server's `CHALLENGE` before signing
+ *  a timestamp-only proof (a server that predates the frame never sends it). */
+const CHALLENGE_WAIT_MS = 300;
 const WS_PROTOCOL = 'atomicdata-ws.v2';
 
 /** After this long without any inbound frame, send a `KEEPALIVE` probe. */
@@ -256,12 +264,20 @@ export class WSClient {
   private pendingCommits = new Map<
     number,
     {
+      /** The commit as we signed and sent it. A slim `COMMIT_OK` carries
+       *  only the server's id for it, so this is what the caller gets back
+       *  (with that id filled in). */
+      commit: Commit;
       resolve: (c: Commit) => void;
       reject: (e: Error) => void;
       timer: ReturnType<typeof setTimeout>;
     }
   >();
   private nextRequestId = 1;
+  /** The nonce the server sent in its `CHALLENGE` (0x42) on this socket.
+   *  `authenticate` signs `{origin}#{nonce}` so the proof is good here
+   *  only. Reset with every new socket. */
+  private _challengeNonce: string | undefined;
 
   /** Take a pending GET out of the queue, cancel its timer. Caller
    *  invokes resolve/reject on the returned entry. */
@@ -382,6 +398,7 @@ export class WSClient {
         this.rejectAllPending('WebSocket closed before response arrived');
         this.stopLiveness();
         this._serverCaps = [];
+        this._challengeNonce = undefined;
 
         if (!this._closed) {
           this._retryTimer = setTimeout(() => {
@@ -542,7 +559,16 @@ export class WSClient {
     this.authPromise = (async () => {
       try {
         await this.openPromise;
-        const json = await createAuthentication(this.serverOrigin, agent);
+        // The server's CHALLENGE is its first frame; on a current server it
+        // has arrived by the time anyone calls `authenticate`. The short wait
+        // covers the race, and costs its full length only against a server
+        // that predates the frame — which then gets the timestamp-only proof
+        // it expects.
+        const nonce = await this.awaitChallenge();
+        const subject = nonce
+          ? `${this.serverOrigin}#${nonce}`
+          : this.serverOrigin;
+        const json = await createAuthentication(subject, agent);
 
         this.sendBinary(encodeAuth(JSON.stringify(json)));
 
@@ -575,6 +601,25 @@ export class WSClient {
     })();
 
     return this.authPromise;
+  }
+
+  /** The nonce from this socket's `CHALLENGE`, waiting briefly for it if
+   *  the server has not sent one yet. `undefined` on a server that never
+   *  will. */
+  private async awaitChallenge(): Promise<string | undefined> {
+    if (this._challengeNonce) return this._challengeNonce;
+
+    await this.waitForTag(Tag.CHALLENGE, CHALLENGE_WAIT_MS).catch(
+      () => undefined,
+    );
+
+    return this._challengeNonce;
+  }
+
+  /** The nonce this socket's AUTH proofs answer, once the server sent it.
+   *  Exposed for tests. */
+  public get challengeNonce(): string | undefined {
+    return this._challengeNonce;
   }
 
   // ---- Resource operations ----
@@ -762,6 +807,7 @@ export class WSClient {
       }, REQUEST_TIMEOUT);
 
       this.pendingCommits.set(requestId, {
+        commit,
         resolve: (c: Commit) => {
           close('ok');
           resolve(c);
@@ -950,13 +996,28 @@ export class WSClient {
       }
 
       case Tag.COMMIT_OK: {
-        const msg = decodeCommit(payload);
-        if (!msg) break;
+        // Either form: the full commit JSON a server sends a client that did
+        // not ask for slim acks, or the bare commit id this client asks for
+        // in its HELLO. In both cases the caller gets the commit it signed,
+        // carrying the server's id — the only thing it did not already have.
+        const msg = decodeCommitOk(payload);
+
+        if (!msg) {
+          const raw = decodeCommit(payload);
+          const pending = raw && this.takePendingCommit(raw.requestId);
+          pending?.reject(
+            new AtomicError('Malformed COMMIT_OK frame', ErrorType.Server),
+          );
+          break;
+        }
+
         const pending = this.takePendingCommit(msg.requestId);
         if (!pending) break;
 
         try {
-          const created = parseCommitJSON(msg.commitJson);
+          const created = msg.commitJson
+            ? parseCommitJSON(msg.commitJson)
+            : ({ ...pending.commit, id: msg.commitId } as Commit);
           pending.resolve(created);
         } catch (e) {
           pending.reject(
@@ -968,6 +1029,10 @@ export class WSClient {
 
         break;
       }
+
+      case Tag.CHALLENGE:
+        this._challengeNonce = decodeChallenge(payload);
+        break;
 
       case Tag.UPDATE: {
         const msg = decodeUpdate(payload);
@@ -1283,6 +1348,10 @@ export class WSClient {
 
   private handleOpen() {
     perfMark('ws.open');
+    // Introduce ourselves: the capabilities this client speaks (a slim
+    // COMMIT_OK, for one). A server that predates client HELLOs drops the
+    // frame unread.
+    this.sendBinary(encodeHello(CLIENT_HELLO_NAME, CLIENT_CAPABILITIES));
     this.startLiveness();
     const drive = this.store.getDrive();
 
@@ -1418,7 +1487,13 @@ export class WSClient {
       };
 
       const diff = await reconcile(local, remote);
-      const differing = [...diff.onlyLocal, ...diff.onlyRemote, ...diff.differ];
+      // Subjects the outbox still owns are not offered for reconcile (see
+      // `handleSyncDiff`): the drain delivers them signed.
+      const differing = [
+        ...diff.onlyLocal,
+        ...diff.onlyRemote,
+        ...diff.differ,
+      ].filter(subject => !this.store.outbox.hasPending(subject));
 
       // Version vectors for the differing subjects the client actually holds
       // (only-remote subjects it doesn't have — the server pushes those).
@@ -1536,6 +1611,15 @@ export class WSClient {
     const clientDb = this.store.getClientDb();
 
     for (const subject of diff.pull) {
+      // F1 interim (planning/unified-sync.md): a subject with a pending
+      // outbox entry is the drain's to deliver, as a signed commit. Pushing
+      // its raw bytes here — from memory or, worse, the clientDb fallback
+      // below — would race the drain with an unsigned write. The
+      // `computeDriveSyncState` side already hides these subjects from the
+      // version vector we send; this closes the other half, where the
+      // server names them in `pull`.
+      if (this.store.outbox.hasPending(subject)) continue;
+
       let loroBytes: Uint8Array | undefined;
       const serverVv = diff.pullFrom?.[subject];
       const memDoc = this.store.resources.get(subject)?.getLoroDoc?.();

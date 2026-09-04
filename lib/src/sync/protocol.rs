@@ -51,6 +51,16 @@ pub mod tag {
     /// it back: a browser cannot observe protocol-level pings, so this is the
     /// only way it can tell a silently dead socket from an idle one.
     pub const KEEPALIVE: u8 = 0x41;
+    /// Responder → client, first frame on a WebSocket, before the client has
+    /// said anything: `[0x42] [nonce_utf8]`. A client that saw it signs
+    /// `AUTH.requestedSubject` as `{origin}#{nonce}`, which ties the proof
+    /// to this one connection: captured, it is worthless anywhere else, and
+    /// the five-minute `AUTH_MAX_AGE_MS` window stops mattering. A client
+    /// that ignores the frame (pre-2026-09) still authenticates with the
+    /// timestamp-bounded form. Never sent on a peer (Iroh) stream, where the
+    /// initiator speaks first and the QUIC handshake already binds the link
+    /// to a node key.
+    pub const CHALLENGE: u8 = 0x42;
 }
 
 /// Feature names a responder advertises in the `AUTH_OK` payload and both
@@ -68,6 +78,16 @@ pub mod tag {
 /// - `signed-destroy`: on a peer stream, destroys travel as signed `COMMIT`
 ///   frames and a naked `DESTROY` from a peer is ignored.
 /// - `unsub`: `UNSUB` (0x21) actually cancels a drive subscription.
+/// - `auth-nonce`: sends `CHALLENGE` (0x42) on connect and verifies an
+///   `AUTH.requestedSubject` of the form `{origin}#{nonce}` against it.
+/// - `commit-ok-slim`: honours a client `HELLO` that lists `commit-ok-slim`
+///   by answering `COMMIT` with `[0x14] [request_id] [commit_id]` instead of
+///   the full commit JSON (see [`encode_commit_ok_slim`]).
+/// - `client-hello`: reads a `HELLO` (0x37) from a WebSocket client and
+///   records the capabilities it lists.
+/// - `rebind-on-auth`: re-evaluates this connection's subscriptions against
+///   the new identity when an `AUTH` lands, dropping the ones it may no
+///   longer read.
 pub const CAPABILITIES: &[&str] = &[
     "auth-max-age",
     "keepalive",
@@ -75,7 +95,24 @@ pub const CAPABILITIES: &[&str] = &[
     "pull-from",
     "signed-destroy",
     "unsub",
+    "auth-nonce",
+    "commit-ok-slim",
+    "client-hello",
+    "rebind-on-auth",
 ];
+
+/// Capability names a *client* may list in the `HELLO` it sends a responder
+/// (WebSocket clients since 2026-09; peers always sent one). The only one a
+/// responder acts on today:
+///
+/// - `commit-ok-slim`: the client decodes a `COMMIT_OK` whose payload is a
+///   bare commit id, so the responder need not ship the full commit JSON
+///   back to the agent that just signed it.
+pub const CLIENT_CAPABILITIES: &[&str] = &["commit-ok-slim"];
+
+/// The name of the client capability a responder consults before sending a
+/// slim `COMMIT_OK`.
+pub const CAP_COMMIT_OK_SLIM: &str = "commit-ok-slim";
 
 /// How often an otherwise-idle live connection sends a `KEEPALIVE`.
 pub const KEEPALIVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
@@ -190,6 +227,10 @@ pub mod error_code {
     /// `request_id = 0`. The client must sign a fresh proof for the right
     /// subject; resending the same frame changes nothing.
     pub const AUTH_FAILED: u16 = 8;
+    /// A `COMMIT` whose signature does not verify against its signer's key
+    /// (or that carries none). Terminal for that envelope: re-sending the
+    /// same bytes changes nothing; the client has to sign again.
+    pub const INVALID_SIGNATURE: u16 = 9;
 }
 
 /// Decode the payload of an `ERROR` frame (slice *after* the tag byte):
@@ -225,6 +266,12 @@ pub struct DecodedError {
 pub fn classify_commit_error(message: &str) -> u16 {
     if message.contains("is_genesis: true, but the resource already exists") {
         return error_code::GENESIS_COLLISION;
+    }
+
+    // `commit.rs` — the signature does not verify against the signer's key,
+    // or there is none: a tampered or mis-attributed envelope.
+    if message.contains("Incorrect signature for Commit") || message.contains("No signature set") {
+        return error_code::INVALID_SIGNATURE;
     }
 
     if message.contains("missing. Is required in class") {
@@ -395,14 +442,105 @@ pub fn encode_commit(request_id: u16, commit_json: &str) -> Vec<u8> {
 }
 
 /// Encode a COMMIT_OK message.
-///
 /// Format: `[0x14] [request_id: u16] [server_commit_json_utf8]`.
+///
+/// The full-JSON form, for clients that did not list `commit-ok-slim` in a
+/// `HELLO`. Since 2026-09 no client in this tree reads anything but the
+/// commit's `@id` out of it; see [`encode_commit_ok_slim`].
 pub fn encode_commit_ok(request_id: u16, commit_json: &str) -> Vec<u8> {
     let mut buf = Vec::with_capacity(3 + commit_json.len());
     buf.push(tag::COMMIT_OK);
     buf.extend_from_slice(&request_id.to_be_bytes());
     buf.extend_from_slice(commit_json.as_bytes());
     buf
+}
+
+/// Encode a slim COMMIT_OK: `[0x14] [request_id: u16] [commit_id_utf8]`.
+///
+/// Same tag and same first three bytes as [`encode_commit_ok`]; the payload
+/// after the request id is the server's commit id (`did:ad:commit:<sig>` or
+/// `https://host/commits/<sig>`) instead of the whole commit resource. A
+/// responder sends this only to a client that listed `commit-ok-slim` in
+/// its `HELLO`. [`decode_commit_ok`] reads both forms.
+pub fn encode_commit_ok_slim(request_id: u16, commit_id: &str) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(3 + commit_id.len());
+    buf.push(tag::COMMIT_OK);
+    buf.extend_from_slice(&request_id.to_be_bytes());
+    buf.extend_from_slice(commit_id.as_bytes());
+    buf
+}
+
+/// A decoded COMMIT_OK, whichever form it came in.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DecodedCommitOk {
+    pub request_id: u16,
+    /// The server's id for the applied commit.
+    pub commit_id: String,
+    /// The full commit JSON-AD, present only for the legacy full form.
+    pub commit_json: Option<String>,
+}
+
+/// Decode a COMMIT_OK payload (slice *after* the tag byte) in either form:
+/// a full commit JSON-AD object (its `@id` is the commit id) or a bare
+/// commit id. `None` for a truncated frame, an empty payload, JSON without
+/// an `@id`, or an id that is not valid UTF-8.
+pub fn decode_commit_ok(data: &[u8]) -> Option<DecodedCommitOk> {
+    let decoded = decode_commit(data)?;
+    let body = decoded.commit_json.trim();
+    if body.is_empty() {
+        return None;
+    }
+    if body.starts_with('{') {
+        let json: serde_json::Value = serde_json::from_str(body).ok()?;
+        let id = json.get("@id")?.as_str()?.to_string();
+        return Some(DecodedCommitOk {
+            request_id: decoded.request_id,
+            commit_id: id,
+            commit_json: Some(decoded.commit_json.to_string()),
+        });
+    }
+    Some(DecodedCommitOk {
+        request_id: decoded.request_id,
+        commit_id: body.to_string(),
+        commit_json: None,
+    })
+}
+
+/// Encode a CHALLENGE frame: `[0x42] [nonce_utf8]`. See [`tag::CHALLENGE`].
+pub fn encode_challenge(nonce: &str) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(1 + nonce.len());
+    buf.push(tag::CHALLENGE);
+    buf.extend_from_slice(nonce.as_bytes());
+    buf
+}
+
+/// Decode a CHALLENGE payload (slice *after* the tag byte). `None` for an
+/// empty or non-UTF-8 nonce.
+pub fn decode_challenge(data: &[u8]) -> Option<&str> {
+    let nonce = std::str::from_utf8(data).ok()?;
+    if nonce.is_empty() {
+        return None;
+    }
+    Some(nonce)
+}
+
+/// A fresh, unguessable nonce for a `CHALLENGE`: 32 random bytes, hex.
+/// Hex keeps it safe inside the URL fragment the client signs it in.
+pub fn new_challenge_nonce() -> String {
+    let mut bytes = [0u8; 32];
+    rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut bytes);
+    hex::encode(bytes)
+}
+
+/// Split an `AUTH.requestedSubject` into the subject proper and the
+/// challenge nonce riding in its fragment, `{subject}#{nonce}`. A subject
+/// with no fragment carries no nonce.
+pub fn split_challenge_fragment(requested_subject: &str) -> (&str, Option<&str>) {
+    match requested_subject.split_once('#') {
+        Some((subject, nonce)) if !nonce.is_empty() => (subject, Some(nonce)),
+        Some((subject, _)) => (subject, None),
+        None => (requested_subject, None),
+    }
 }
 
 /// Encode an ERROR message.
@@ -1289,6 +1427,12 @@ mod tests {
             error_code::UNAUTHORIZED_WRITE
         );
         assert_eq!(
+            classify_commit_error(
+                "Incorrect signature for Commit. This could be due to an error during signing"
+            ),
+            error_code::INVALID_SIGNATURE
+        );
+        assert_eq!(
             classify_commit_error("some other error"),
             error_code::UNKNOWN
         );
@@ -1460,6 +1604,11 @@ mod wire_vectors {
             ("destroy", encode_destroy(0, "did:ad:x")),
             ("commit", encode_commit(9, "{\"a\":1}")),
             ("commit_ok", encode_commit_ok(9, "{\"a\":1}")),
+            (
+                "commit_ok_slim",
+                encode_commit_ok_slim(9, "did:ad:commit:abc"),
+            ),
+            ("challenge", encode_challenge("0badf00d")),
             ("sub", encode_sub("did:ad:d")),
             ("unsub", encode_unsub("did:ad:d")),
             (
@@ -1569,6 +1718,14 @@ mod wire_vectors {
         assert!(decode_hello_caps(&hex_of("hello_bare")[1..]).is_empty());
         let eph = decode_ephemeral(&hex_of("ephemeral_presence")[1..]).unwrap();
         assert_eq!(eph.kind, ephemeral_kind::PRESENCE);
+        let slim = decode_commit_ok(&hex_of("commit_ok_slim")[1..]).unwrap();
+        assert_eq!(slim.request_id, 9);
+        assert_eq!(slim.commit_id, "did:ad:commit:abc");
+        assert!(slim.commit_json.is_none());
+        assert_eq!(
+            decode_challenge(&hex_of("challenge")[1..]),
+            Some("0badf00d")
+        );
     }
 
     /// The browser package keeps its own copy of the vectors

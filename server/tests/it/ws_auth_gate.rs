@@ -27,7 +27,7 @@ async fn next_error(rx: &mut Receiver<WsMessage>) -> String {
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             match rx.recv().await {
-                Ok(WsMessage::Error(e)) => return e,
+                Ok(WsMessage::Error { message, .. }) => return message,
                 Ok(_) => continue,
                 Err(e) => panic!("connection closed before an ERROR arrived: {e}"),
             }
@@ -43,7 +43,7 @@ async fn assert_quiet(rx: &mut Receiver<WsMessage>) {
         loop {
             match rx.recv().await {
                 Ok(WsMessage::SyncOk { .. }) => return "SYNC_OK",
-                Ok(WsMessage::Error(_)) => return "ERROR",
+                Ok(WsMessage::Error { .. }) => return "ERROR",
                 Ok(_) => continue,
                 Err(_) => return "closed",
             }
@@ -241,7 +241,7 @@ async fn rejected_sync_push_gets_error_not_sync_ok() {
     let answer = tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             match rx.recv().await {
-                Ok(WsMessage::Error(e)) => return Ok(e),
+                Ok(WsMessage::Error { message, .. }) => return Ok(message),
                 Ok(WsMessage::SyncOk { drive }) => return Err(drive),
                 Ok(_) => continue,
                 Err(e) => panic!("connection closed: {e}"),
@@ -306,8 +306,8 @@ async fn rbsr_and_probe_are_gated_by_check_read() {
     assert!(err.contains("SYNC_VV refused"), "{err}");
 
     // The owner gets the items. The Rust client has no RBSR_ITEMS parser, so
-    // the text reply surfaces as an "Unknown message" — which is enough to
-    // see that the answer came and names the private child.
+    // the text reply surfaces as `Unrecognized` — which is enough to see
+    // that the answer came and names the private child.
     let ws_owner = WsClient::connect(&ws_url).await.unwrap();
     ws_owner.authenticate(&alice).await.unwrap();
     let mut rx_owner = ws_owner.subscribe();
@@ -317,9 +317,20 @@ async fn rbsr_and_probe_are_gated_by_check_read() {
         ))
         .await
         .unwrap();
-    let reply = next_error(&mut rx_owner).await;
+    let reply = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            match rx_owner.recv().await {
+                Ok(WsMessage::Unrecognized(text)) => return text,
+                Ok(WsMessage::Error { message, .. }) => panic!("owner refused: {message}"),
+                Ok(_) => continue,
+                Err(e) => panic!("connection closed: {e}"),
+            }
+        }
+    })
+    .await
+    .expect("the owner's RBSR_ITEMS is answered within 5s");
     assert!(
-        reply.contains("Unknown message: RBSR_ITEMS") && reply.contains(&secret),
+        reply.starts_with("RBSR_ITEMS") && reply.contains(&secret),
         "{reply}"
     );
 }
@@ -426,6 +437,156 @@ async fn stale_auth_is_refused() {
         .await
         .expect_err("a stale proof is refused");
     assert!(err.to_string().contains("too old"), "{err}");
+}
+
+/// The server's first frame is a `CHALLENGE`. A proof that answers it is
+/// good on that socket only: captured and replayed on another connection it
+/// is refused, even though its timestamp is fresh. A proof without a nonce
+/// (a client that predates the frame) is still accepted.
+#[tokio::test]
+async fn auth_nonce_binds_the_proof_to_its_connection() {
+    let port = start_server("ws_gate_auth_nonce");
+    wait_for_server(port).await;
+    let server_url = format!("http://localhost:{port}");
+    let ws_url = format!("ws://localhost:{port}/ws");
+
+    let client = Client::new(&server_url).await.unwrap();
+    let alice = client.new_agent("Alice").await.unwrap();
+
+    let a = WsClient::connect(&ws_url).await.unwrap();
+    let b = WsClient::connect(&ws_url).await.unwrap();
+
+    let subject_a = a.auth_subject().await;
+    let subject_b = b.auth_subject().await;
+    let (origin_a, nonce_a) = subject_a
+        .split_once('#')
+        .expect("the client signs `{origin}#{nonce}` once the CHALLENGE arrived");
+    assert_eq!(origin_a, server_url);
+    assert_eq!(nonce_a.len(), 64, "32 random bytes, hex");
+    assert_ne!(subject_a, subject_b, "every connection gets its own nonce");
+
+    // A's proof replayed on B: refused, and B stays anonymous.
+    let proof_for_a = protocol::encode_auth(&alice, &subject_a).unwrap();
+    let err = b
+        .authenticate_with_frame(proof_for_a.clone())
+        .await
+        .expect_err("a proof answering another connection's challenge is refused");
+    assert!(
+        err.to_string()
+            .contains("does not answer this connection's CHALLENGE"),
+        "{err}"
+    );
+
+    // The same proof where it belongs: accepted.
+    a.authenticate_with_frame(proof_for_a)
+        .await
+        .expect("the proof authenticates on the connection whose challenge it answers");
+    assert!(
+        a.server_capabilities().iter().any(|c| c == "auth-nonce"),
+        "the server advertises auth-nonce: {:?}",
+        a.server_capabilities()
+    );
+
+    // A nonce-less proof for the origin (pre-2026-09 client) still works.
+    let legacy = protocol::encode_auth(&alice, &server_url).unwrap();
+    b.authenticate_with_frame(legacy)
+        .await
+        .expect("a timestamp-bounded proof without a nonce is still accepted");
+
+    // `authenticate` does all of this by itself.
+    let c = WsClient::connect(&ws_url).await.unwrap();
+    c.authenticate(&alice)
+        .await
+        .expect("authenticate answers the challenge");
+}
+
+/// A subscription is admitted under the identity the connection had at the
+/// time. When a later `AUTH` changes that identity, the server re-checks
+/// every subscription the connection holds against the new agent and drops
+/// the ones it cannot read; until 2026-09 a drive `SUB` accepted as the
+/// owner kept delivering after the socket re-authenticated as a stranger.
+#[tokio::test]
+async fn subscriptions_are_rebound_when_auth_changes_identity() {
+    let port = start_server("ws_gate_rebind");
+    wait_for_server(port).await;
+    let server_url = format!("http://localhost:{port}");
+    let ws_url = format!("ws://localhost:{port}/ws");
+
+    let client = Client::new(&server_url).await.unwrap();
+    // Mallory first: `new_agent` makes the newest agent the client's signing
+    // agent, and the HTTP edits below must be Alice's.
+    let mallory = client.new_agent("Mallory").await.unwrap();
+    let alice = client.new_agent("Alice").await.unwrap();
+    let (drive, secret) = private_drive_with_child(&client, &alice).await;
+
+    // Alice subscribes to her private drive and to the secret itself.
+    let ws = WsClient::connect(&ws_url).await.unwrap();
+    ws.authenticate(&alice).await.unwrap();
+    let mut rx = ws.subscribe();
+    ws.send_binary(protocol::encode_sub(&drive)).await.unwrap();
+    ws.subscribe_resource(&secret).await.unwrap();
+    assert_quiet(&mut rx).await;
+
+    let edit = |name: &'static str| {
+        let client = &client;
+        let secret = secret.clone();
+        async move {
+            let mut resource = client.get_resource(&secret).await.unwrap();
+            resource.set_name(name).unwrap();
+            resource.save_remote(client.store()).await.unwrap();
+        }
+    };
+    // Control: as Alice, the edit arrives.
+    edit("v2").await;
+    assert!(
+        update_within(&mut rx, &secret, 1500).await,
+        "the owner receives her own drive's updates"
+    );
+
+    // The same socket re-authenticates as Mallory, who may not read the drive.
+    ws.authenticate(&mallory).await.unwrap();
+    assert!(
+        ws.server_capabilities()
+            .iter()
+            .any(|c| c == "rebind-on-auth"),
+        "{:?}",
+        ws.server_capabilities()
+    );
+    // Give the monitor a moment to process the rebind.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    while rx.try_recv().is_ok() {}
+
+    edit("v3").await;
+    assert!(
+        !update_within(&mut rx, &secret, 1500).await,
+        "a subscription admitted as Alice must not deliver once the socket is Mallory's"
+    );
+
+    // Back to Alice: her fresh SUB is admitted again, and delivers.
+    ws.authenticate(&alice).await.unwrap();
+    ws.send_binary(protocol::encode_sub(&drive)).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    while rx.try_recv().is_ok() {}
+    edit("v4").await;
+    assert!(
+        update_within(&mut rx, &secret, 1500).await,
+        "re-subscribing as the owner delivers again"
+    );
+}
+
+/// Whether an `UPDATE` for `subject` arrives within `ms` milliseconds.
+async fn update_within(rx: &mut Receiver<WsMessage>, subject: &str, ms: u64) -> bool {
+    tokio::time::timeout(Duration::from_millis(ms), async {
+        loop {
+            match rx.recv().await {
+                Ok(WsMessage::Update { subject: s, .. }) if s == subject => return true,
+                Ok(_) => continue,
+                Err(_) => return false,
+            }
+        }
+    })
+    .await
+    .unwrap_or(false)
 }
 
 /// A browser cannot see protocol-level pings, so it probes with `KEEPALIVE`

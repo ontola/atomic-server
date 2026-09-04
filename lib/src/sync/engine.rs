@@ -48,6 +48,26 @@ pub enum AuthBinding<'a> {
     Origins(&'a [&'a str]),
 }
 
+/// The connection-bound challenge an `AUTH` proof may answer; see
+/// [`protocol::tag::CHALLENGE`]. The responder that issued a nonce passes it
+/// here so a proof carrying one in its `requestedSubject` fragment is held
+/// to it.
+#[derive(Debug, Clone, Copy)]
+pub enum AuthChallenge<'a> {
+    /// No challenge was issued on this connection (peer streams). A
+    /// fragment on the requested subject is left alone: nothing to compare
+    /// it with, and on a peer stream the subject is a drive, not an origin.
+    None,
+    /// A nonce was issued. A proof that carries one must carry this one; a
+    /// proof without one is still accepted on its timestamp (a client that
+    /// predates `CHALLENGE`).
+    Issued(&'a str),
+    /// A nonce was issued and every proof must answer it. Not wired to a
+    /// server option yet; the strict mode a deployment turns on once every
+    /// client it serves speaks `auth-nonce`.
+    Required(&'a str),
+}
+
 /// `scheme://host[:port]` of a URL, lower-cased, or `None` for anything that
 /// is not an absolute http(s) URL (a DID, `internal:/`, garbage).
 fn url_origin(url: &str) -> Option<String> {
@@ -72,6 +92,7 @@ pub async fn handle_auth_frame(
     store: &Db,
     agent: &mut crate::agents::ForAgent,
     binding: AuthBinding<'_>,
+    challenge: AuthChallenge<'_>,
 ) -> Vec<Vec<u8>> {
     let refuse = |msg: String| {
         vec![protocol::encode_error(
@@ -88,6 +109,29 @@ pub async fn handle_auth_frame(
         Ok(a) => a,
         Err(e) => return refuse(format!("Invalid auth JSON: {e}")),
     };
+
+    // A nonce rides in the fragment of the requested subject so the signed
+    // string (`"{requestedSubject} {timestamp}"`) did not have to change
+    // shape for HTTP, which never sees it. Fragments are stripped before the
+    // origin comparison below, so the binding check is unaffected.
+    let (_, carried_nonce) = protocol::split_challenge_fragment(&auth.requested_subject);
+    match (challenge, carried_nonce) {
+        (AuthChallenge::None, _) => {}
+        (AuthChallenge::Issued(_), None) => {}
+        (AuthChallenge::Required(_), None) => {
+            return refuse(
+                "Auth failed: this server requires the CHALLENGE nonce in requestedSubject".into(),
+            );
+        }
+        (AuthChallenge::Issued(issued) | AuthChallenge::Required(issued), Some(carried)) => {
+            if carried != issued {
+                return refuse(
+                    "Auth failed: requestedSubject nonce does not answer this connection's CHALLENGE"
+                        .into(),
+                );
+            }
+        }
+    }
 
     let expected: Vec<&str> = match binding {
         AuthBinding::Unbound => Vec::new(),
@@ -136,7 +180,16 @@ pub async fn handle_frame(
     let payload = &frame[1..];
 
     match tag {
-        protocol::tag::AUTH => handle_auth_frame(payload, store, agent, AuthBinding::Unbound).await,
+        protocol::tag::AUTH => {
+            handle_auth_frame(
+                payload,
+                store,
+                agent,
+                AuthBinding::Unbound,
+                AuthChallenge::None,
+            )
+            .await
+        }
 
         protocol::tag::GET => {
             if let Some(decoded) = protocol::decode_get(payload) {
@@ -533,7 +586,7 @@ pub async fn ingest_commit(
 
     if opts.suppress_live_echo {
         // Applying a remote peer's commit must not rebroadcast to live peers
-        // (the sender included) — mirrors `ws_apply::apply_commit_json`'s
+        // (the sender included) — mirrors `ws_apply::apply_trusted_hub_commit`'s
         // suppression of the same echo via the live push loop.
         super::ws_apply::set_importing(true);
         let result = store.apply_commit(incoming_commit, &commit_opts).await;

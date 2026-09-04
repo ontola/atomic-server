@@ -334,12 +334,20 @@ pub async fn apply_destroy_checked(store: &Db, subject: &str) -> AtomicResult<()
     result
 }
 
-/// Apply a JSON-AD commit received over WS (legacy text `COMMIT` or after fetch).
+/// Apply a JSON-AD commit that a **trusted hub** relayed to this replica
+/// (the `COMMIT` text frame a mobile client receives from the server it is
+/// subscribed to).
 ///
 /// Replica policy: the hub already accepted this commit, so only the
-/// signature is re-checked — rights and timestamp are not. This is
-/// `crate::runtime::IngestPolicy::Replica`.
-pub async fn apply_commit_json(store: &Db, body: &str) -> AtomicResult<CommitResponse> {
+/// signature is re-checked — rights, timestamp and the previous-commit link
+/// are not. This is `crate::runtime::IngestPolicy::Replica`, and it is the
+/// only caller this function is meant for. **Never** route a commit from an
+/// untrusted peer (an Iroh stream, an inbound WebSocket, an HTTP `POST`)
+/// through here: those go through `engine::ingest_commit` with rights
+/// validation on. Audit finding F6 (`planning/completed/unified-sync-audit-2026-07.md`)
+/// is what this name and note fence off; the server's `handlers::commit::apply_commit_json`
+/// is the rights-checked function that used to share this one's name.
+pub async fn apply_trusted_hub_commit(store: &Db, body: &str) -> AtomicResult<CommitResponse> {
     set_importing(true);
     let result = async {
         let resource = parse_json_ad_commit_resource(body, store).await?;
