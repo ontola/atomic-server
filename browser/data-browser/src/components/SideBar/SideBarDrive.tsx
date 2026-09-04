@@ -7,6 +7,7 @@ import {
   useResource,
   useStore,
   useString,
+  useSubject,
   useTitle,
 } from '@tomic/react';
 import { Fragment, useEffect, useMemo, useState, type JSX } from 'react';
@@ -21,7 +22,7 @@ import { DriveSwitcher } from './DriveSwitcher';
 import { Row } from '../Row';
 import { IconButton } from '../IconButton/IconButton';
 import { buildDefaultTrigger } from '../Dropdown/DefaultTrigger';
-import { FaSort } from 'react-icons/fa6';
+import { LuChevronsUpDown } from 'react-icons/lu';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { ScrollArea } from '../ScrollArea';
 import { useSidebarDnd } from './useSidebarDnd';
@@ -32,6 +33,8 @@ import { createPortal } from 'react-dom';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { LoaderInline } from '../Loader';
 import { QuickCreateRow } from '../NewInstanceButton';
+import { ResourceGlyph } from '../ResourceGlyph';
+import { useIsPrivateDrive } from '../../hooks/useIsPrivateDrive';
 
 interface SideBarDriveProps {
   onItemClick: () => unknown;
@@ -87,6 +90,12 @@ export function SideBarDrive({
     [allChildren, defaultOntology, commentsFolder, aiChatsFolder],
   );
   const [title] = useTitle(driveResource);
+  const isPrivateDrive = useIsPrivateDrive(drive);
+  // A drive with its own emoji or icon shows that; the private drive is
+  // "home" by default, any other drive falls back to the class icon.
+  const [driveEmoji] = useString(driveResource, dataBrowser.properties.emoji);
+  const [driveIcon] = useSubject(driveResource, dataBrowser.properties.icon);
+  const hasCustomGlyph = !!(driveEmoji || driveIcon);
   const navigate = useNavigateWithTransition();
   const agentCanWrite = useCanWrite(driveResource);
   const [currentSubject] = useCurrentSubject();
@@ -116,6 +125,13 @@ export function SideBarDrive({
             navigate(constructOpenURL(drive));
           }}
         >
+          <DriveGlyph aria-hidden>
+            {!hasCustomGlyph && isPrivateDrive ? (
+              '🏠'
+            ) : (
+              <ResourceGlyph resource={driveResource} />
+            )}
+          </DriveGlyph>
           <DriveTitle data-testid='current-drive-title'>{driveName}</DriveTitle>
         </TitleButton>
         <DriveSwitcher Trigger={DriveSwitcherTrigger} />
@@ -210,10 +226,22 @@ export function SideBarDrive({
   );
 }
 
+const DriveGlyph = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 1rem;
+  line-height: 1;
+  color: ${p => p.theme.colors.textLight};
+`;
+
 const DriveTitle = styled.h2`
   margin: 0;
   padding: 0;
-  font-size: 1.4rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.2;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -221,18 +249,22 @@ const DriveTitle = styled.h2`
 `;
 
 /**
- * The title and the drive-switcher caret form one segmented control: flush
- * edges, shared rounding, each half highlighting on its own hover.
+ * The title and the drive-switcher caret form one segmented control: a
+ * shared hairline border, flush inner edges, shared outer rounding, each
+ * half highlighting on its own hover.
  */
 const TitleButton = styled(Button)<{ current?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   text-align: left;
   /* Fill the header so the switcher caret is always pinned to the right;
      the name truncates when longer than the sidebar. */
   flex: 1;
   min-width: 0;
-  /* Lines the title text up with the tree rows below: SideBarHeader's
-     padding-inline plus SideBarItem's own padding. */
-  padding: 0.4rem 0.2rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-right: none;
   border-radius: ${props => props.theme.radius} 0 0
     ${props => props.theme.radius};
 
@@ -254,9 +286,11 @@ const SwitcherButton = styled(IconButton)`
   align-self: stretch;
   height: auto;
   width: auto;
-  padding-inline: 0.4rem;
+  padding-inline: 0.35rem;
+  border: 1px solid ${p => p.theme.colors.bg2};
   border-radius: 0 ${p => p.theme.radius} ${p => p.theme.radius} 0;
   color: ${p => p.theme.colors.textLight};
+  font-size: 0.85rem;
 
   &:hover,
   &:focus-visible {
@@ -269,7 +303,7 @@ const SwitcherButton = styled(IconButton)`
 `;
 
 const DriveSwitcherTrigger = buildDefaultTrigger(
-  <FaSort />,
+  <LuChevronsUpDown />,
   'Switch Drive',
   SwitcherButton,
 );
