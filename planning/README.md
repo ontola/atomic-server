@@ -89,7 +89,7 @@ Not top-level plans. Indexed so they do not go missing.
 | [`arc-actor-message-payloads.md`](./arc-actor-message-payloads.md) | Partial. WS encode-once shipped; `CommitMessage` Arc-wrap deferred. |
 | [`sync-onboarding-ux.md`](./sync-onboarding-ux.md) | Reference. Cross-client copy for what can reach what. Companion to [`device-pairing.md`](./device-pairing.md). |
 | [`main-drive-and-paths.md`](./main-drive-and-paths.md) | Strategy. DID-branch deployment: root drive, legacy URLs, human-readable paths. |
-| [`actions.md`](./actions.md) | **Step 1 shipped** (registry + ⌘M menu, 2026-07-08). Remaining: ⌘K section, hotkeys/shortcuts page derived from the registry, AI-tool derivation. |
+| [`actions.md`](./actions.md) | **Steps 1–4 shipped.** Registry drives ⌘M, ⌘K (capped prefix match), hotkeys, the shortcuts overlay/page, and simple AI tools. Remaining: MCP projection when a server exists. |
 | [`silent-failures.md`](./silent-failures.md) | Living log of error-handling failures that reported success (2026-08-21). Carries M8 from the pairing field test. |
 
 Closed decisions, as-built records, closed explorations and fixed notes live

@@ -1,33 +1,21 @@
 # Unified Actions
 
-**Status:** Rollout step 1 shipped (2026-07-08, `30574b93b`): the registry in
+**Status:** Steps 1–4 shipped. The registry in
 `browser/data-browser/src/actions/` (`ActionDefinition`, `resourceActions`,
-`useActionContext`) and the searchable ⌘M menu; `ResourceContextMenu` renders
-from it, and the fork verbs from
+`appActions`, `useActionContext`) is the source for the searchable ⌘M menu,
+`ResourceContextMenu`, the ⌘K actions section, hotkeys, the shortcuts overlay
+and `/app/shortcuts` page, and simple AI tools. Fork verbs from
 [`drafts-and-suggestions.md`](./drafts-and-suggestions.md) already land there.
-Remaining: steps 2–4 — the ⌘K actions section (`SearchOverlay` still only
-navigates), hotkeys and the shortcuts page derived from the registry (today
-`resourceActions` imports `shortcuts` from `HotKeyWrapper`, the reverse of the
-plan), and AI-tool / MCP derivation.
 
-Corrected 2026-09-01; the previous "Nothing built" line predated step 1.
+Remaining: a future MCP server can reuse `deriveActionTools`; specialized
+`destroy()` call sites (table rows, views, tags) stay local — they are not
+the resource-delete verb.
 
 ## Problem
 
 Resource actions (view, edit, delete, share, history, favorite, …) are invocable
 from many surfaces — context menus, keyboard shortcuts, the ⌘K overlay, AI tools,
-the JS API — but each surface enumerates and implements them independently:
-
-- Four parallel registries enumerate overlapping verbs: `ContextMenuOptions`
-  (ResourceContextMenu), the `shortcuts` object (HotKeyWrapper), `TOOL_NAMES`
-  (useAtomicTools), and the URL builders in `helpers/navigation.tsx`.
-- `resource.destroy()` is wired up independently in 5+ places, each
-  re-implementing confirmation + toast + cleanup.
-- The shortcuts help page (`ShortcutsRoute.tsx`) is hand-synced prose.
-- The ⌘K overlay exposes exactly one verb (navigate to search result).
-- Coverage is inconsistent: Delete has no hotkey and no AI tool; Share/History/
-  Favorite exist only in the context menu.
-- There is no MCP server yet; when one exists it would be a fifth enumeration.
+the JS API — but each surface used to enumerate and implement them independently.
 
 ## Design
 
@@ -38,57 +26,37 @@ surface is a *projection* of it.
 interface ActionDefinition {
   id: string;                  // stable; matches old ContextMenuOptions values
   scope: 'resource' | 'app';   // takes a target subject vs. app-level
-  section: 'view' | 'action' | 'danger'; // menus render dividers between sections
-  label: string | ((ctx) => string);      // menu label / palette title
-  helper: string;              // tooltip today; AI/MCP tool description later
-  icon?: (ctx) => ReactNode;
-  shortcut?: string;           // from the `shortcuts` registry; shown as chip
-  keywords?: string[];         // extra search terms for searchable surfaces
-  danger?: boolean;            // surface must confirm before running
-  confirmation?: { title; confirmLabel; body(ctx) }; // what the dialog shows
-  available?: (ctx) => boolean; // hidden when false (e.g. needs canWrite)
-  disabled?: (ctx) => boolean;  // shown greyed (e.g. already on that route)
-  run: (ctx) => void | Promise<void>; // THE one implementation
+  section: 'view' | 'action';  // menus render dividers between sections
+  label: string | ((ctx) => string);
+  helper: string;              // tooltip; AI/MCP tool description
+  shortcut?: string;           // from `actions/shortcuts.ts`
+  asTool?: boolean;            // derive an AI tool from helper + run
+  run: (ctx) => void | Promise<void>;
 }
 ```
 
-`ActionContext` is assembled once per target by the `useActionContext(subject,
-overrides)` hook: store, navigate, resource, canWrite, favorites, AI-sidebar
-add-to-chat, scope/new-child navigation, current subject/pathname, plus
-surface-provided capabilities (`showCodeUsageDialog`, `onAfterDelete`,
-`external`). **Capability gating**: an action that needs a capability declares
-it via `available`, so surfaces that can't provide it simply don't list it.
-
-Three kinds of actions, modeled by what `run` does:
-- **navigation** (view, data, edit, share, history, import, move-to-parent):
-  `run` = `navigate(xURL(subject))`; safe on every surface.
-- **mutation** (delete, favorite): the duplication hotspot; `danger` +
-  `confirmation` live on the definition so confirm-wiring is uniform.
-- **UI effects** (add to chat, use in code, search children): gated on
-  capabilities, only listed where they make sense.
+`ActionContext` is assembled by `useActionContext` (React) or
+`buildActionContext` (AI tools). Surfaces that cannot provide a capability
+simply do not list the action (`available`).
 
 ## Surfaces
 
 | Surface | How it projects the registry |
 |---|---|
-| Right-click / kebab menus | `ResourceContextMenu` builds `DropdownItem[]` from definitions; `showOnly` keeps filtering by id (17 call sites unchanged) |
-| ⌘M "more" menu | Same menu, `searchable`: filter input at top, type-to-filter over label+keywords, arrows+enter. Only the main menu is searchable; right-click stays a plain instant dropdown (mouse intent) |
-| ⌘K overlay | Actions appear as a section next to search results. **Placement policy, not unified ranking**: actions section capped at ~3, shown only on a strong prefix/synonym match against the action vocabulary, never interleaved with resource results |
+| Right-click / kebab menus | `ResourceContextMenu` builds `DropdownItem[]` from definitions |
+| ⌘M "more" menu | Same menu, `searchable` |
+| ⌘K overlay | Actions section, capped at 3, prefix/synonym match only, never interleaved with resource results |
 | Hotkeys | `HotKeyWrapper` registers definitions that carry `shortcut` |
-| Shortcuts help page | Rendered from the registry (kills the hand-synced prose) |
-| AI tools | Simple verbs derive `tool({ description: helper, execute: run })`; rich tools (query, create_table) stay bespoke |
+| Shortcuts help | `listShortcutHelp()` — overlay and `/app/shortcuts` |
+| AI tools | `deriveActionTools` for `asTool` verbs; rich tools stay bespoke |
 | MCP server (future) | Same derivation, different protocol |
 
 ## Rollout
 
-1. **Registry + searchable ⌘M menu** (this slice): `src/actions/` with all
-   current context-menu actions + move-to-parent (⌘↑, Finder convention);
-   `ResourceContextMenu` renders from the registry; `DropdownMenu` gains a
-   `searchable` mode used by the main menu.
-2. **⌘K**: actions section in `SearchOverlay` per the placement policy.
-3. **Hotkeys + shortcuts page** derived from the registry; collapse the
-   remaining scattered delete implementations onto the delete action.
-4. **AI tools / MCP** derivation for simple verbs.
+1. **Registry + searchable ⌘M menu** (2026-07-08): shipped.
+2. **⌘K**: actions section in `OverlayContainer` `SearchOverlay` per the placement policy.
+3. **Hotkeys + shortcuts page** derived from the registry. Shortcut strings live in `actions/shortcuts.ts`; `HotKeyWrapper` re-exports them.
+4. **AI tools**: `delete_resource`, `favorite_resource`, `open_share_settings`, `show_history` derive from the matching verbs.
 
 ## Non-goals
 
@@ -108,3 +76,6 @@ Three kinds of actions, modeled by what `run` does:
   call sites and `menu-item-<id>` test ids don't churn.
 - **Right-click menus are not searchable**; ⌘M and the navbar kebab are.
 - **Move to parent** gets ⌘↑, matching Finder's "go to enclosing folder".
+- **⌘K match is a prefix of id / label word / keyword**, never a mid-word
+  substring, and ignored below 2 characters — so a resource-name query does
+  not grow an Actions section.
