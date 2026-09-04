@@ -84,6 +84,11 @@ export function EditableTitle({
   const canEdit = canWrite && !lockedReason;
   const inlineAffordances = useInlineTitleAffordances();
 
+  // Where the caret goes once the editor mounts. A click lands it on the
+  // character under the pointer, like any text field; only a freshly
+  // created resource selects its placeholder title so typing replaces it.
+  const caretRef = useRef<number | 'all' | 'end'>('end');
+
   useEffect(() => {
     // Two ways to learn this resource was just manually created:
     //   1. The flag set synchronously by notifyResourceManuallyCreated, in
@@ -92,25 +97,48 @@ export function EditableTitle({
     //   2. The event itself, for the live case where creation happens while
     //      this component is already mounted.
     if (store.consumeRecentlyCreated(resource.subject)) {
+      caretRef.current = 'all';
       setIsEditing(true);
     }
 
     return store.on(StoreEvents.ResourceManuallyCreated, created => {
       if (created.subject === resource.subject) {
+        caretRef.current = 'all';
         setIsEditing(true);
       }
     });
   }, [store, resource.subject]);
 
-  function handleClick() {
+  function handleClick(e: React.MouseEvent<HTMLElement>) {
+    // The tooltip says why this title is locked; opening an editor anyway
+    // would contradict it.
+    if (lockedReason) {
+      return;
+    }
+
+    caretRef.current = caretOffsetAt(e.currentTarget, e.clientX, e.clientY);
     setIsEditing(true);
   }
 
   const placeholder = canEdit ? 'Set a title' : 'Untitled';
 
   useEffect(() => {
-    ref.current?.focus();
-    ref.current?.select();
+    const el = ref.current;
+
+    if (!isEditing || !el) {
+      return;
+    }
+
+    el.focus();
+
+    const caret = caretRef.current;
+
+    if (caret === 'all') {
+      el.select();
+    } else {
+      const at = caret === 'end' ? el.value.length : caret;
+      el.setSelectionRange(at, at);
+    }
   }, [isEditing]);
 
   // The editor is a textarea so a long title wraps like the rendered
@@ -163,7 +191,7 @@ export function EditableTitle({
         data-testid='editable-title'
         rows={1}
         {...props}
-        onFocus={handleClick}
+        onFocus={() => setIsEditing(true)}
         placeholder={placeholder}
         // Titles are one line of text; a pasted newline becomes a space.
         onChange={e => setText(e.target.value.replace(/\s*\n\s*/g, ' '))}
@@ -192,7 +220,7 @@ export function EditableTitle({
     >
       <>
         <TitleIcon resource={resource} />
-        <TitleText>
+        <TitleText data-title-text>
           {text || placeholder}
           <UnsavedIndicator resource={resource} />
         </TitleText>
@@ -240,7 +268,7 @@ const Title = styled.h1<TitleProps>`
   display: flex;
   align-items: center;
   gap: ${p => p.theme.size()};
-  cursor: ${props => (props.$canEdit ? 'pointer' : 'initial')};
+  cursor: ${props => (props.$canEdit ? 'text' : 'initial')};
   opacity: ${props => (props.$subtle ? 0.5 : 1)};
   /* Hug the text: this element is a view-transition morph target, and a
      full-width box makes small titles (grid items, cards) stretch across
@@ -359,3 +387,46 @@ const TitleWrapper = styled.div`
     opacity: 1;
   }
 `;
+
+/**
+ * Character index in the rendered title under a pointer position, so the
+ * editor can open with its caret there. Falls back to the end of the text
+ * when the point is not over the title text (the icon, the gap) or the
+ * browser has neither caret-from-point API.
+ */
+function caretOffsetAt(
+  title: HTMLElement,
+  x: number,
+  y: number,
+): number | 'end' {
+  const textEl = title.querySelector<HTMLElement>('[data-title-text]');
+
+  if (!textEl) {
+    return 'end';
+  }
+
+  let node: Node | null = null;
+  let offset = 0;
+
+  if ('caretPositionFromPoint' in document) {
+    const pos = document.caretPositionFromPoint(x, y);
+    node = pos?.offsetNode ?? null;
+    offset = pos?.offset ?? 0;
+  } else if ('caretRangeFromPoint' in document) {
+    const range = (
+      document as Document & {
+        caretRangeFromPoint(x: number, y: number): Range | null;
+      }
+    ).caretRangeFromPoint(x, y);
+    node = range?.startContainer ?? null;
+    offset = range?.startOffset ?? 0;
+  }
+
+  // Only the title's own text node counts: a hit on the unsaved indicator
+  // or outside the span has no meaningful character index.
+  if (node?.nodeType !== Node.TEXT_NODE || node.parentNode !== textEl) {
+    return 'end';
+  }
+
+  return offset;
+}
