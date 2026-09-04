@@ -334,6 +334,31 @@ impl ClientDb {
         serde_wasm_bindgen::to_value(&response).map_err(|e| JsError::new(&e.to_string()))
     }
 
+    /// Local KV full-text search. `parents` is a string, a string array, or null.
+    /// Returns an array of subject URLs, ranked.
+    pub fn search(
+        &self,
+        query: String,
+        limit: Option<u32>,
+        parents: JsValue,
+    ) -> Result<JsValue, JsError> {
+        let parents: Option<Vec<String>> = if parents.is_null() || parents.is_undefined() {
+            None
+        } else if let Some(s) = parents.as_string() {
+            Some(vec![s])
+        } else {
+            serde_wasm_bindgen::from_value(parents).ok()
+        };
+        let opts = atomic_lib::client::search::SearchOpts {
+            limit,
+            parents,
+            ..Default::default()
+        };
+        let hits = self.node.search(&query, &opts).map_err(to_js_err)?;
+        let subjects: Vec<String> = hits.into_iter().map(|h| h.subject.to_string()).collect();
+        serde_wasm_bindgen::to_value(&subjects).map_err(|e| JsError::new(&e.to_string()))
+    }
+
     /// The absolute origin this database's subjects are addressed by in the
     /// browser. `internal:` is a storage detail: everything handed back across
     /// the wasm boundary must be a URL (or a DID) the client can actually

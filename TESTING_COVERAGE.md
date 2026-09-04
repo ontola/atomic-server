@@ -123,6 +123,18 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Rotation does not treat a metrics-change pop as "back to gallery" | `flutter/test/canvas/rotation_pop_test.dart` | |
 | `AtomicNode`: `mutate` on one node, `apply_commit(IngestPolicy::Peer)` on another, query + `DbEvent` reflect it | `lib/src/runtime/node.rs` | in-process, no transport; `LocalCache` skips signature check, `Peer` does not |
 
+## Local full-text search
+
+| Flow | Layer | Where |
+|---|---|---|
+| Exact title, prefix typeahead, 1-edit typo (`avacado`→`avocado`) | protocol | `lib/src/search/tests.rs` |
+| Title ranks above description; parent/drive scope; Loro body text | protocol | `lib/src/search/tests.rs` |
+| Update replaces old title; delete drops postings; commits skipped | protocol | `lib/src/search/tests.rs` |
+| Tokenizer + prefix-Levenshtein | protocol | `lib/src/search/tokenize.rs`, `fuzzy.rs` |
+| Query latency vs N (1k / 10k / 50k) | protocol | `lib/benches/search_bench.rs` (`--features db-redb`) |
+
+Not covered: JSON `property:"value"` postings; table `contains`; Playwright search overlay on the KV path; Flutter bridge `search`. Hosted Tantivy `/search` stays in `server/src/search.rs`.
+
 ### Flow — the thin layer
 
 | Flow | Where |

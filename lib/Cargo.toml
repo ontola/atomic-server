@@ -148,6 +148,11 @@ harness = false
 required-features = ["db-redb"]
 
 [[bench]]
+name = "search_bench"
+harness = false
+required-features = ["db-redb"]
+
+[[bench]]
 name = "lifecycle_bench"
 harness = false
 required-features = ["db-redb"]

@@ -2703,15 +2703,24 @@ export class Store {
       searchDrive,
       driveIndexSize: this.localSearch.sizeForDrive(searchDrive),
       serverConnected: this._serverConnected,
+      clientDbReady: this.clientDb?.isReady ?? false,
     });
 
-    // Include live local matches while the server's batched Tantivy writer is
-    // still catching up. The local index can be partial after a reload, so an
-    // online search merges these with the server response below instead of
-    // returning early. Property-value filters still require Tantivy, but
-    // parent scoping can be applied locally using the indexed parent chain.
-    const localResults =
-      this.localSearch.sizeForDrive(searchDrive) > 0 && !hasFilters
+    // Prefer the durable KV index in ClientDb (title + description + Loro
+    // body, 1-edit prefix fuzzy) over MiniSearch when the WASM store is up.
+    // MiniSearch stays as a fallback for sessions without a local DB.
+    const kvResults =
+      this.clientDb?.isReady && !hasFilters
+        ? await this.clientDb.search(query, {
+            limit: opts.limit ?? 30,
+            parents: parentScope,
+          })
+        : [];
+
+    const miniResults =
+      kvResults.length === 0 &&
+      this.localSearch.sizeForDrive(searchDrive) > 0 &&
+      !hasFilters
         ? this.localSearch.search(
             query,
             searchDrive,
@@ -2720,8 +2729,14 @@ export class Store {
           ).subjects
         : [];
 
+    const localResults = kvResults.length > 0 ? kvResults : miniResults;
+
     if (localResults.length > 0) {
-      searchDebug('[search] local →', localResults.length);
+      searchDebug(
+        '[search] local →',
+        localResults.length,
+        kvResults.length > 0 ? '(kv)' : '(minisearch)',
+      );
     }
 
     // When offline, the server's filtered Tantivy search is unreachable.
@@ -2731,8 +2746,13 @@ export class Store {
     // search overlay always passes `parents: <drive>`, so without this
     // fallback offline search would never consult the local index at all.
     if (!this._serverConnected) {
-      // Build this drive's local index on demand (first offline search only).
-      // The index isn't maintained eagerly on load — see `ensureDriveIndexed`.
+      if (kvResults.length > 0) {
+        searchDebug('[search] OFFLINE kv →', kvResults.length, kvResults);
+        return kvResults;
+      }
+
+      // MiniSearch fallback when ClientDb is not available. Built on demand
+      // (first offline search only) — see `ensureDriveIndexed`.
       await this.ensureDriveIndexed(searchDrive);
 
       const offline = this.localSearch.search(
@@ -2742,7 +2762,7 @@ export class Store {
         parentScope,
       );
       searchDebug(
-        '[search] OFFLINE local fallback →',
+        '[search] OFFLINE minisearch fallback →',
         offline.subjects.length,
         offline.subjects,
       );

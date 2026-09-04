@@ -666,6 +666,20 @@ export class ClientDbWorker {
     return r as ClientDbQueryResult;
   }
 
+  async search(
+    query: string,
+    opts: { limit?: number; parents?: string | string[] } = {},
+  ): Promise<string[]> {
+    const r = await this.send({
+      type: 'search',
+      query,
+      limit: opts.limit,
+      parents: opts.parents,
+    });
+
+    return (r as string[]) ?? [];
+  }
+
   async allSubjects(): Promise<string[]> {
     const r = await this.send({ type: 'allSubjects' });
 
