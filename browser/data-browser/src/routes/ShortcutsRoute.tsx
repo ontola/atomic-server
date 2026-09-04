@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { styled } from 'styled-components';
 import { ContainerNarrow } from '../components/Containers';
-import { shortcuts } from '../components/HotKeyWrapper';
+import { listShortcutHelp } from '../actions/catalog';
 import { Shortcut } from '../components/Shortcut';
 import { Main } from '../components/Main';
 import { createRoute } from '@tanstack/react-router';
@@ -14,47 +14,20 @@ export const ShortcutsRoute = createRoute({
   getParentRoute: () => appRoute,
 });
 
-/** List of all the keyboard shorcuts */
+/** List of all the keyboard shortcuts, rendered from the action registry. */
 const Shortcuts: React.FunctionComponent = () => {
+  const entries = listShortcutHelp();
+
   return (
     <Main>
       <ContainerNarrow>
         <h1>Keyboard shortcuts</h1>
         <h3>Global</h3>
-        <p>
-          <Key shortcut={shortcuts.search} /> Search
-        </p>
-        <p>
-          <Key shortcut={shortcuts.sidebarToggle} /> Show or hide the sidebar
-        </p>
-        <p>
-          <Key shortcut={shortcuts.keyboardShortcuts} /> Show these keyboard
-          shortcuts
-        </p>
-        <p>
-          <Key shortcut={shortcuts.edit} /> <b>E</b>dit resource
-        </p>
-        <p>
-          <Key shortcut={shortcuts.data} /> Show <b>d</b>ata for resource
-        </p>
-        <p>
-          <Key shortcut={shortcuts.home} /> Show <b>h</b>ome page
-        </p>
-        <p>
-          <Key shortcut={shortcuts.parent} /> Go to parent resource
-        </p>
-        <p>
-          <Key shortcut={shortcuts.new} /> <b>N</b>ew resource
-        </p>
-        <p>
-          <Key shortcut={shortcuts.menu} /> Open <b>m</b>enu
-        </p>
-        <p>
-          <Key shortcut={shortcuts.userSettings} /> <b>U</b>ser settings
-        </p>
-        <p>
-          <Key shortcut={shortcuts.themeSettings} /> <b>T</b>heme settings
-        </p>
+        {entries.map(entry => (
+          <p key={entry.id}>
+            <Key shortcut={entry.shortcut} /> {entry.label}
+          </p>
+        ))}
       </ContainerNarrow>
     </Main>
   );

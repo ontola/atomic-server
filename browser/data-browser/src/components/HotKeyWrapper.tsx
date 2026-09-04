@@ -1,124 +1,40 @@
 // @wc-ignore-file
 import * as React from 'react';
-import { constructOpenURL, dataURL, editURL } from '../helpers/navigation';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { useCurrentSubject } from '../helpers/useCurrentSubject';
-import { Client, core, useStore } from '@tomic/react';
+import { Client } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
-import { paths } from '../routes/paths';
-import { openSearchOverlay, openShortcutsOverlay } from './OverlayContainer';
+import { useCurrentSubject } from '../helpers/useCurrentSubject';
+import { appActions } from '../actions/appActions';
+import { resourceActions } from '../actions/resourceActions';
+import { runAction } from '../actions/runAction';
+import { useActionContext } from '../actions/useActionContext';
+import { shortcuts } from '../actions/shortcuts';
+import { openSearchOverlay, openShortcutsOverlay } from './overlayState';
 
 import type { JSX } from 'react';
-import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
+
+export { shortcuts, displayShortcut } from '../actions/shortcuts';
 
 type Props = {
   children: React.ReactNode;
 };
 
-/** List of used keyboard shortcuts, mapped for OS */
-export const shortcuts = {
-  /** Edit current resource */
-  edit: osCtrl('e'),
-  /** Show data view for current resource */
-  data: osCtrl('d'),
-  /** Show home page */
-  home: osCtrl('h'),
-  /** Create a new resource */
-  new: osCtrl('n'),
-  /** Open user settings page */
-  userSettings: osCtrl('u'),
-  /** Open theme settings page */
-  themeSettings: osCtrl('t'),
-  // react-hotkeys-hook v5 matches on `event.code` (mapped through its key
-  // table), so punctuation must be written as code names: pressing `?` gives
-  // code "Slash", never "/". `shift+/` and `\` silently stopped matching in
-  // the v4 → v5 upgrade, like the `cmd+` alias below.
-  /** Open keyboard shortcuts page */
-  keyboardShortcuts: 'shift+slash',
-  /** Open command palette / search */
-  search: osCtrl('k'),
-  /** Open resource menu */
-  menu: osCtrl('m'),
-  /** Go to the parent of the current resource */
-  parent: osCtrl('up'),
-  /** Locks the sidebar menu */
-  sidebarToggle: 'backslash',
-  /** Move line up (documents) */
-  moveLineUp: osAlt('up'),
-  /** Move line down (documents) */
-  moveLineDown: osAlt('down'),
-  /** Delete line (documents) */
-  deleteLine: osAlt('backspace'),
-};
+const resourceHotkeys = resourceActions.filter(
+  (action): action is (typeof resourceActions)[number] & { shortcut: string } =>
+    Boolean(action.shortcut),
+);
 
-function osCtrl(key: string): string {
-  // react-hotkeys-hook v5 dropped the `cmd` modifier alias that v4 accepted —
-  // it only recognizes `meta`/`mod`/`ctrl`/`control`. Emitting `cmd+…` meant
-  // EVERY Cmd shortcut silently stopped matching on macOS (search, edit, new,
-  // menu, …). Use `meta` for the Mac Cmd key.
-  return navigator.platform.includes('Mac') ? `meta+${key}` : `ctrl+${key}`;
-}
-
-function osAlt(key: string): string {
-  return navigator.platform.includes('Mac') ? `option+${key}` : `alt+${key}`;
-}
-
-export function displayShortcut(shortcut: string): string {
-  // Code names → the character users see on their keyboard.
-  const readable = shortcut
-    .replace('shift+slash', '?')
-    .replace('backslash', '\\');
-
-  if (navigator.platform.includes('Mac')) {
-    return readable
-      .replace('meta+', '⌘')
-      .replace('option+', '⌥')
-      .replace('shift+', '⇧')
-      .replace('backspace', '⌫')
-      .replace('up', '↑')
-      .replace('down', '↓');
-  }
-
-  return readable;
-}
-
-/** App-wide keyboard events handler. */
-function HotKeysWrapper({ children }: Props): JSX.Element {
-  const navigate = useNavigateWithTransition();
-  const [subject] = useCurrentSubject();
-  const { sideBarLocked, setSideBarLocked } = useSettings();
-  const store = useStore();
-
+function ResourceActionHotkey({
+  action,
+  subject,
+  ctx,
+}: {
+  action: (typeof resourceHotkeys)[number];
+  subject: string | undefined;
+  ctx: ReturnType<typeof useActionContext>;
+}): null {
   useHotkeys(
-    shortcuts.edit,
-    e => {
-      e.preventDefault();
-
-      if (Client.isValidSubject(subject)) {
-        navigate(editURL(subject!));
-      }
-    },
-    {},
-    [subject],
-  );
-  useHotkeys(
-    shortcuts.data,
-    e => {
-      e.preventDefault();
-
-      if (Client.isValidSubject(subject)) {
-        navigate(dataURL(subject!));
-      }
-    },
-    {},
-    [subject],
-  );
-  useHotkeys(shortcuts.home, e => {
-    e.preventDefault();
-    navigate('/');
-  });
-  useHotkeys(
-    shortcuts.parent,
+    action.shortcut,
     e => {
       e.preventDefault();
 
@@ -126,30 +42,53 @@ function HotKeysWrapper({ children }: Props): JSX.Element {
         return;
       }
 
-      store.getResource(subject!).then(resource => {
-        const parent = resource.get(core.properties.parent) as
-          | string
-          | undefined;
+      if (!(action.available?.(ctx) ?? true)) {
+        return;
+      }
 
-        if (parent) {
-          navigate(constructOpenURL(parent));
-        }
-      });
+      if (action.disabled?.(ctx)) {
+        return;
+      }
+
+      runAction(action, ctx);
     },
     {},
-    [subject],
+    [subject, ctx, action],
   );
-  useHotkeys(shortcuts.new, e => {
-    e.preventDefault();
-    navigate(paths.new);
+
+  return null;
+}
+
+/** App-wide keyboard events handler. Resource verbs run the registry action. */
+function HotKeysWrapper({ children }: Props): JSX.Element {
+  const [subject] = useCurrentSubject();
+  const { sideBarLocked, setSideBarLocked } = useSettings();
+  const ctx = useActionContext(subject ?? '', {
+    toggleSidebar: () => setSideBarLocked(!sideBarLocked),
   });
-  useHotkeys(shortcuts.userSettings, e => {
+
+  const home = appActions.find(action => action.id === 'home')!;
+  const createNew = appActions.find(action => action.id === 'new')!;
+  const userSettings = appActions.find(action => action.id === 'userSettings')!;
+  const themeSettings = appActions.find(
+    action => action.id === 'themeSettings',
+  )!;
+
+  useHotkeys(home.shortcut!, e => {
     e.preventDefault();
-    navigate(paths.agentSettings);
+    runAction(home, ctx);
   });
-  useHotkeys(shortcuts.themeSettings, e => {
+  useHotkeys(createNew.shortcut!, e => {
     e.preventDefault();
-    navigate(paths.appSettings);
+    runAction(createNew, ctx);
+  });
+  useHotkeys(userSettings.shortcut!, e => {
+    e.preventDefault();
+    runAction(userSettings, ctx);
+  });
+  useHotkeys(themeSettings.shortcut!, e => {
+    e.preventDefault();
+    runAction(themeSettings, ctx);
   });
   useHotkeys(shortcuts.search, e => {
     e.preventDefault();
@@ -169,7 +108,19 @@ function HotKeysWrapper({ children }: Props): JSX.Element {
     [sideBarLocked],
   );
 
-  return <>{children}</>;
+  return (
+    <>
+      {resourceHotkeys.map(action => (
+        <ResourceActionHotkey
+          key={action.id}
+          action={action}
+          subject={subject}
+          ctx={ctx}
+        />
+      ))}
+      {children}
+    </>
+  );
 }
 
 export default HotKeysWrapper;

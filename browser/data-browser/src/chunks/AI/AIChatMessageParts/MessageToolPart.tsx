@@ -185,6 +185,22 @@ const ToolTitle = ({
     );
   }
 
+  if (toolName === TOOL_NAMES.DELETE_RESOURCE) {
+    return <span>Deleting resource</span>;
+  }
+
+  if (toolName === TOOL_NAMES.FAVORITE_RESOURCE) {
+    return <span>Toggling favorite</span>;
+  }
+
+  if (toolName === TOOL_NAMES.OPEN_SHARE_SETTINGS) {
+    return <span>Opening share settings</span>;
+  }
+
+  if (toolName === TOOL_NAMES.SHOW_HISTORY) {
+    return <span>Opening history</span>;
+  }
+
   return <span>{toolName}</span>;
 };
 

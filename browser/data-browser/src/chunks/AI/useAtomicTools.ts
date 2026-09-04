@@ -52,6 +52,11 @@ import {
   describeDashboard,
   resolveBlock,
 } from '../DashboardPage/dashboardOps';
+import { resourceActions } from '../../actions/resourceActions';
+import { deriveActionTools } from '../../actions/deriveTools';
+import { buildActionContext } from '../../actions/useActionContext';
+import { useFavorites } from '../../hooks/useFavorites';
+import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 
 export const TOOL_NAMES = {
   SEMANTIC_SEARCH: 'semantic_search',
@@ -77,6 +82,12 @@ export const TOOL_NAMES = {
   CREATE_DASHBOARD: 'create_dashboard',
   DESCRIBE_DASHBOARD: 'describe_dashboard',
   CONFIGURE_BLOCK: 'configure_block',
+  // Derived from `resourceActions` (`asTool`). Keep names in sync with
+  // `toolName` on those definitions.
+  DELETE_RESOURCE: 'delete_resource',
+  FAVORITE_RESOURCE: 'favorite_resource',
+  OPEN_SHARE_SETTINGS: 'open_share_settings',
+  SHOW_HISTORY: 'show_history',
 } as const;
 
 /** One column of a table, in the compact vocabulary `create_table` uses. */
@@ -409,6 +420,50 @@ export function useAtomicMCPTools({
   const addToOntology = useAddToOntology();
   const { drive } = useSettings();
   const runDocumentEdit = useDocumentEditAgent(editModel);
+  const [favorites, addFavorite, removeFavorite] = useFavorites();
+  const [currentSubject] = useCurrentSubject();
+  const derivedActionTools = deriveActionTools(resourceActions, {
+    expandSubject,
+    buildContext: subject =>
+      buildActionContext({
+        subject,
+        store,
+        navigate,
+        favorites,
+        addFavorite,
+        removeFavorite,
+        currentSubject,
+        drive,
+      }),
+  });
+  const derivedWriteTools = {
+    ...(derivedActionTools[TOOL_NAMES.DELETE_RESOURCE]
+      ? {
+          [TOOL_NAMES.DELETE_RESOURCE]:
+            derivedActionTools[TOOL_NAMES.DELETE_RESOURCE],
+        }
+      : {}),
+    ...(derivedActionTools[TOOL_NAMES.FAVORITE_RESOURCE]
+      ? {
+          [TOOL_NAMES.FAVORITE_RESOURCE]:
+            derivedActionTools[TOOL_NAMES.FAVORITE_RESOURCE],
+        }
+      : {}),
+  };
+  const derivedReadTools = {
+    ...(derivedActionTools[TOOL_NAMES.OPEN_SHARE_SETTINGS]
+      ? {
+          [TOOL_NAMES.OPEN_SHARE_SETTINGS]:
+            derivedActionTools[TOOL_NAMES.OPEN_SHARE_SETTINGS],
+        }
+      : {}),
+    ...(derivedActionTools[TOOL_NAMES.SHOW_HISTORY]
+      ? {
+          [TOOL_NAMES.SHOW_HISTORY]:
+            derivedActionTools[TOOL_NAMES.SHOW_HISTORY],
+        }
+      : {}),
+  };
 
   /** Resolves a `@class` shortname (or title) to a class subject on the
    *  current drive. Full URLs and `#refs` pass through/expand. */
@@ -475,6 +530,7 @@ export function useAtomicMCPTools({
 
   const tools = {
     read: {
+      ...derivedReadTools,
       [TOOL_NAMES.SEMANTIC_SEARCH]: tool({
         description:
           'Perform a hybrid semantic and/or text search for resources in the AtomicServer Database. This is more powerful than regular search as it understands the meaning of the query. The results only include the **first** relevant chunk of the resource that matches the query. To get a complete picture you might need to fetch the full resource. If your search requires more specific results use the optional text_query parameter to bias the results towards the text',
@@ -901,6 +957,7 @@ export function useAtomicMCPTools({
       }),
     },
     write: {
+      ...derivedWriteTools,
       [TOOL_NAMES.EDIT_ATOMIC_RESOURCE]: tool({
         description:
           'Change a property on a resource. The property accepts a compact shortname (resolved against the resource\'s class, e.g. "status") or a full property URL. Select/tag values accept tag names.',

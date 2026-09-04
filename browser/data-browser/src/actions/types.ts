@@ -52,6 +52,8 @@ export interface ActionContext {
   /** Opens the pick-or-upload dialog for this resource's cover image. */
   openCoverPicker?: () => void;
   onAfterDelete?: () => void;
+  /** App-level: lock or unlock the sidebar. */
+  toggleSidebar?: () => void;
 }
 
 /** What the confirmation dialog for a `danger` action shows. */
@@ -76,6 +78,18 @@ export interface ActionDefinition {
   icon?: (ctx: ActionContext) => ReactNode;
   /** From the `shortcuts` registry; rendered as a chip wherever listed. */
   shortcut?: string;
+  /**
+   * Help-page wording when the menu label is too terse (e.g. menu says
+   * "Edit", the shortcuts list says "Edit resource").
+   */
+  shortcutLabel?: (ctx: ActionContext) => string;
+  /**
+   * When true, the in-app AI tools (and a future MCP server) derive a tool
+   * from this definition: `description` is `helper`, `execute` is `run`.
+   */
+  asTool?: boolean;
+  /** Tool name when `asTool` is set. Defaults to the action id. */
+  toolName?: string;
   /** Extra search terms for searchable surfaces (⌘M filter, ⌘K palette). */
   keywords?: string[];
   /**
