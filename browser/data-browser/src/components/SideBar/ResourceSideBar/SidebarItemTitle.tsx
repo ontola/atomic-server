@@ -20,7 +20,6 @@ import {
 import { useSettings } from '../../../helpers/AppSettings';
 import { IconButton } from '../../IconButton/IconButton';
 import { FaCaretRight, FaGripVertical } from 'react-icons/fa6';
-import { UnsavedIndicator } from '../../UnsavedIndicator';
 import { SidebarPresence } from '../../Presence/SidebarPresence';
 
 interface SidebarItemTitleProps {
@@ -128,7 +127,6 @@ export const SidebarItemTitle = memo(
                     >
                       <TextWrapper>
                         <TreeRowTitle>{title}</TreeRowTitle>
-                        <UnsavedIndicator resource={resource} />
                         <SidebarPresence subject={subject} />
                       </TextWrapper>
                     </ResourceLinkSideBarItem>
@@ -153,7 +151,6 @@ export const SidebarItemTitle = memo(
                       <FaGripVertical />
                     </StyledIconButton>
                     <TreeRowTitle>{title}</TreeRowTitle>
-                    <UnsavedIndicator resource={resource} />
                     <SidebarPresence subject={subject} />
                   </TextWrapper>
                 </ResourceTreeRow>
@@ -189,7 +186,6 @@ export const SidebarItemTitle = memo(
                   >
                     <TextWrapper>
                       <TreeRowTitle>{title}</TreeRowTitle>
-                      <UnsavedIndicator resource={resource} />
                       <SidebarPresence subject={subject} />
                     </TextWrapper>
                   </ResourceLinkSideBarItem>
@@ -212,7 +208,6 @@ export const SidebarItemTitle = memo(
                 <TextWrapper>
                   <LeadingSlot>{glyph}</LeadingSlot>
                   <TreeRowTitle>{title}</TreeRowTitle>
-                  <UnsavedIndicator resource={resource} />
                   <SidebarPresence subject={subject} />
                 </TextWrapper>
               </ResourceTreeRow>
