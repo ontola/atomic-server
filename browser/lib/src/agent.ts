@@ -10,9 +10,11 @@ import {
 import { decodeB64 } from './base64.js';
 import { AtomicError, ErrorType } from './error.js';
 import {
+  AGENT_VAULT_PROOF_MESSAGE,
   encodeGenesisCert,
   privateDriveCert,
   privateDriveSubject as derivePrivateDriveSubject,
+  signBytesWithKey,
   subjectForSignature,
 } from './genesis.js';
 import { core } from './ontologies/core.js';
@@ -45,6 +47,15 @@ export class Agent implements AgentInterface {
    * session still knows which drive is its home.
    */
   public privateDrive?: string;
+  /**
+   * The agent's Cloud Vault proof: its signature over
+   * {@link AGENT_VAULT_PROOF_MESSAGE}, base64url. Same story as
+   * {@link privateDrive} — a key that wraps a vault key is derived from this
+   * signature, so it has to be the same bytes on every device and every day,
+   * and WebKit's WebCrypto produces a different signature each call. Computed
+   * once from the raw key at sign-in and carried with the agent.
+   */
+  public vaultProof?: string;
 
   #cryptoProvider: CryptoProvider;
 
@@ -96,6 +107,7 @@ export class Agent implements AgentInterface {
           // non-extractable, and this provider cannot reproduce the subject.
           agent.privateDrive =
             await Agent.privateDriveSubjectFromSecret(secretB64);
+          agent.vaultProof = await Agent.vaultProofFromSecret(secretB64);
 
           resolve(agent);
         })
@@ -222,6 +234,30 @@ export class Agent implements AgentInterface {
     const { privateKey } = decodeSecret(secretB64);
 
     return derivePrivateDriveSubject(new Uint8Array(decodeB64(privateKey)));
+  }
+
+  /**
+   * The vault proof implied by a raw private key: a deterministic (RFC 8032)
+   * signature over {@link AGENT_VAULT_PROOF_MESSAGE}. Like
+   * {@link privateDriveSubjectFromSecret}, only possible while the secret is in
+   * hand.
+   */
+  public static async vaultProofFromSecret(secretB64: string): Promise<string> {
+    const { privateKey } = decodeSecret(secretB64);
+
+    return signBytesWithKey(
+      AGENT_VAULT_PROOF_MESSAGE,
+      new Uint8Array(decodeB64(privateKey)),
+    );
+  }
+
+  /**
+   * Whether `signBytes` gives the same signature for the same bytes each time.
+   * False for WebCrypto providers (WebKit randomizes Ed25519 nonces); anything
+   * that derives a key or identity from a signature must not rely on one.
+   */
+  public get signsDeterministically(): boolean {
+    return this.#cryptoProvider.signsDeterministically;
   }
 
   public createSignature(subject: string, timestamp: number): Promise<string> {

@@ -223,10 +223,28 @@ export async function signGenesisCert(
   cert: GenesisCert,
   privateKey: Uint8Array,
 ): Promise<string> {
-  const signature = await sign(encodeGenesisCert(cert), privateKey);
-
-  return encodeB64Url(signature);
+  return signBytesWithKey(encodeGenesisCert(cert), privateKey);
 }
+
+/** Sign `data` with a raw 32-byte Ed25519 private key, RFC 8032 deterministic.
+ *  Returns the base64url signature. */
+export async function signBytesWithKey(
+  data: Uint8Array,
+  privateKey: Uint8Array,
+): Promise<string> {
+  return encodeB64Url(await sign(data, privateKey));
+}
+
+/**
+ * The bytes an agent signs to prove itself to Cloud Vault; the signature is
+ * what its key-encryption key is derived from. Mirrors
+ * `atomic_lib::vault::secret_envelope::AGENT_VAULT_PROOF_MESSAGE` and must
+ * never change: every stored vault-key envelope was wrapped under a signature
+ * over exactly these bytes.
+ */
+export const AGENT_VAULT_PROOF_MESSAGE: Uint8Array = new TextEncoder().encode(
+  'atomic-vault-key-derivation-v1',
+);
 
 /** Verify a base64 `signature` against the certificate's signer pubkey. The
  *  caller separately confirms `subjectForSignature(signature)` equals the

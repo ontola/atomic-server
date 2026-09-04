@@ -1,4 +1,4 @@
-import { decodeB64 } from '@tomic/lib';
+import { AGENT_VAULT_PROOF_MESSAGE, decodeB64 } from '@tomic/lib';
 import { managedFetch } from './api';
 
 /**
@@ -19,6 +19,10 @@ import { managedFetch } from './api';
 /** Signs the fixed derivation message. Satisfied by `@tomic/lib`'s `Agent`. */
 export type VaultProofSigner = {
   signBytes(data: Uint8Array): Promise<string>;
+  /** The proof computed from the raw key at sign-in, if the agent carries it. */
+  vaultProof?: string;
+  /** Whether `signBytes` is reproducible. Absent means unknown. */
+  signsDeterministically?: boolean;
 };
 
 /**
@@ -26,9 +30,19 @@ export type VaultProofSigner = {
  *
  * A signature over a fixed message, not the private key. The browser's
  * `CryptoProvider` exposes signing rather than key bytes — deliberately, so
- * hardware-backed and non-extractable keys stay possible — and Ed25519
- * signatures are deterministic, so any device holding the agent reproduces the
- * same proof and therefore the same key.
+ * hardware-backed and non-extractable keys stay possible. RFC 8032 Ed25519
+ * signatures are deterministic, which is what lets every device holding the
+ * agent reproduce the same proof and therefore the same key — but that is a
+ * property of the implementation, and WebKit's WebCrypto randomizes the nonce.
+ * A Safari session signing live got a fresh proof every call: enrolling there
+ * wrote a wrapper no device could open, and restoring there failed with "no
+ * wrapper in this envelope accepted that credential" against a backup made
+ * anywhere else.
+ *
+ * So the proof the agent computed from its raw key at sign-in wins when it has
+ * one. Without it, a live signature is only trusted once it has reproduced
+ * itself; a signer that cannot is refused rather than handed a key it will
+ * never derive again.
  *
  * It also has exactly one representation, unlike "the agent secret", which in
  * this codebase means the base64 blob, the `privateKey` inside it, or the
@@ -39,9 +53,32 @@ export async function agentVaultProof(
   signer: VaultProofSigner,
   proofMessage: Uint8Array,
 ): Promise<Uint8Array> {
-  const signature = new Uint8Array(
-    decodeB64(await signer.signBytes(proofMessage)),
-  );
+  if (
+    signer.vaultProof &&
+    bytesEqual(proofMessage, AGENT_VAULT_PROOF_MESSAGE)
+  ) {
+    return checkedSignature(signer.vaultProof);
+  }
+
+  const first = await signer.signBytes(proofMessage);
+
+  if (signer.signsDeterministically === false) {
+    const second = await signer.signBytes(proofMessage);
+
+    if (second !== first) {
+      throw new Error(
+        'This browser signs differently every time, so it cannot reproduce ' +
+          'the credential your backups are wrapped under. Sign in with your ' +
+          'recovery code or secret again on this browser to fix that.',
+      );
+    }
+  }
+
+  return checkedSignature(first);
+}
+
+function checkedSignature(signatureB64: string): Uint8Array {
+  const signature = new Uint8Array(decodeB64(signatureB64));
 
   if (signature.length !== 64) {
     throw new Error(
@@ -50,6 +87,10 @@ export async function agentVaultProof(
   }
 
   return signature;
+}
+
+function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+  return a.length === b.length && a.every((byte, i) => byte === b[i]);
 }
 
 /**
