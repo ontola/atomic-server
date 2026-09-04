@@ -11,7 +11,7 @@ mod migrations;
 #[cfg(all(feature = "db-redb", target_arch = "wasm32"))]
 pub mod opfs_backend;
 pub mod plugin_meta;
-mod prop_val_sub_index;
+pub(crate) mod prop_val_sub_index;
 mod query_index;
 #[cfg(feature = "db-redb")]
 pub mod redb_store;
@@ -3633,27 +3633,7 @@ impl Storelike for Db {
         query_str: &str,
         opts: crate::client::search::SearchOpts,
     ) -> AtomicResult<Vec<Resource>> {
-        let mut hits = crate::search::query(self, query_str, &opts)?;
-        if let Some(filters) = &opts.filters {
-            if !filters.is_empty() {
-                let mut filtered = Vec::new();
-                for hit in hits {
-                    let Ok(resource) = self.get_resource(&hit.subject).await else {
-                        continue;
-                    };
-                    let matches = filters.iter().all(|(prop, val)| {
-                        resource
-                            .get(prop)
-                            .map(|v| v.to_string() == *val)
-                            .unwrap_or(false)
-                    });
-                    if matches {
-                        filtered.push(hit);
-                    }
-                }
-                hits = filtered;
-            }
-        }
+        let hits = crate::search::query(self, query_str, &opts)?;
         let mut out = Vec::with_capacity(hits.len());
         for hit in hits {
             match self.get_resource(&hit.subject).await {

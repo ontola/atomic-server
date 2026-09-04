@@ -15,7 +15,11 @@ pub struct SearchOpts {
     pub include: Option<bool>,
     pub limit: Option<u32>,
     pub parents: Option<Vec<String>>,
+    /// Unique property → value pairs. Combined with [`Self::filter_pairs`].
     pub filters: Option<HashMap<String, String>>,
+    /// AND of exact property-value pairs. Use this when a property repeats
+    /// (`isA:"A" AND isA:"B"`), which a HashMap cannot represent.
+    pub filter_pairs: Option<Vec<(String, String)>>,
     /// The agent to use for authentication
     pub agent: Option<Agent>,
 }
@@ -32,16 +36,16 @@ fn base_url(server_url: &str) -> Url {
     url
 }
 
-// Special characters for Tantivy query escaping
-const SPECIAL_CHARS_TANTIVY: &[char] = &[
+// Characters the HTTP `filters=` string still escapes, so existing clients
+// (`escapeTantivyKey` in `@tomic/lib`) keep working against this server.
+const SPECIAL_CHARS_FILTER: &[char] = &[
     '+', '^', '`', ':', '{', '}', '"', '[', ']', '(', ')', '!', '\\', '*', ' ', '.',
 ];
 
-// Escape function for Tantivy syntax
-fn escape_tantivy_key(key: &str) -> String {
+fn escape_filter_key(key: &str) -> String {
     key.chars()
         .map(|c| {
-            if SPECIAL_CHARS_TANTIVY.contains(&c) {
+            if SPECIAL_CHARS_FILTER.contains(&c) {
                 format!("\\{}", c)
             } else {
                 c.to_string()
@@ -50,13 +54,12 @@ fn escape_tantivy_key(key: &str) -> String {
         .collect()
 }
 
-// Build the filter string for the URL
 fn build_filter_string(filters: &HashMap<String, String>) -> String {
     filters
         .iter()
         .filter_map(|(key, value)| {
             if !value.is_empty() {
-                Some(format!("{}:\"{}\"", escape_tantivy_key(key), value))
+                Some(format!("{}:\"{}\"", escape_filter_key(key), value))
             } else {
                 None
             }
@@ -104,10 +107,10 @@ mod tests {
     }
 
     #[test]
-    fn test_escape_tantivy_key() {
+    fn test_escape_filter_key() {
         let key = "+^`:{}\"[]()!\\* .";
         let expected_escaped_key = "\\+\\^\\`\\:\\{\\}\\\"\\[\\]\\(\\)\\!\\\\\\*\\ \\.";
-        assert_eq!(escape_tantivy_key(key), expected_escaped_key);
+        assert_eq!(escape_filter_key(key), expected_escaped_key);
     }
 
     #[test]
@@ -135,6 +138,7 @@ mod tests {
                 filters
             }),
             parents: Some(vec!["https://test.com/parent".to_string()]),
+            filter_pairs: None,
             agent: None,
         };
         let expected_search_url = "https://test.com/search?q=test&include=true&limit=30&filters=age%3A%2210%22&parents=https%3A%2F%2Ftest.com%2Fparent";

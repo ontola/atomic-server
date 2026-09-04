@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{client::search::SearchOpts, urls, Db, Resource, Storelike, Value};
 use ntest::timeout;
 
@@ -250,6 +252,157 @@ async fn empty_query_returns_nothing() {
     let _ = note(&store, &drive, "Something").await;
     let hits = query(&store, "   ", &opts_parents(&drive)).unwrap();
     assert!(hits.is_empty());
+}
+
+fn opts_filter(parent: &str, prop: &str, val: &str) -> SearchOpts {
+    let mut filters = HashMap::new();
+    filters.insert(prop.to_string(), val.to_string());
+    SearchOpts {
+        parents: Some(vec![parent.to_string()]),
+        filters: Some(filters),
+        limit: Some(30),
+        ..Default::default()
+    }
+}
+
+async fn add_classed(store: &Db, parent: &str, subject: &str, class: &str, name: &str) -> String {
+    let mut resource = Resource::new(subject.into());
+    resource
+        .set_unsafe(urls::IS_A.into(), Value::ResourceArray(vec![class.into()]))
+        .unwrap();
+    resource
+        .set_unsafe(urls::NAME.into(), Value::String(name.into()))
+        .unwrap();
+    resource
+        .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(parent.into()))
+        .unwrap();
+    resource
+        .set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(parent.into()))
+        .unwrap();
+    if class == urls::FILE {
+        resource
+            .set_unsafe(
+                urls::DOWNLOAD_URL.into(),
+                Value::AtomicUrl("https://example.com/fts-file".into()),
+            )
+            .unwrap();
+    }
+    store.add_resource(&resource).await.unwrap();
+    subject.to_string()
+}
+
+#[tokio::test]
+#[timeout(120000)]
+async fn empty_query_with_isa_filter() {
+    let (store, drive) = setup_store("empty_isa").await;
+    let folder = note(&store, &drive, "FilterOnlyFolder").await;
+    let hits = query(&store, "", &opts_filter(&drive, urls::IS_A, urls::FOLDER)).unwrap();
+    assert!(
+        subjects(&hits).contains(&folder),
+        "empty q + isA:Folder should find the folder, got {:?}",
+        subjects(&hits)
+    );
+}
+
+#[tokio::test]
+#[timeout(120000)]
+async fn text_and_isa_filter() {
+    let (store, drive) = setup_store("text_isa").await;
+    let folder = note(&store, &drive, "avocado").await;
+    let file = add_classed(
+        &store,
+        &drive,
+        "did:ad:fts-avocado-file",
+        urls::FILE,
+        "avocado",
+    )
+    .await;
+    let files = query(
+        &store,
+        "avocado",
+        &opts_filter(&drive, urls::IS_A, urls::FILE),
+    )
+    .unwrap();
+    let ids = subjects(&files);
+    assert!(ids.contains(&file), "isA:File missed the file: {ids:?}");
+    assert!(
+        !ids.contains(&folder),
+        "isA:File leaked the folder: {ids:?}"
+    );
+
+    let folders = query(
+        &store,
+        "avocado",
+        &opts_filter(&drive, urls::IS_A, urls::FOLDER),
+    )
+    .unwrap();
+    let folder_ids = subjects(&folders);
+    assert!(
+        folder_ids.contains(&folder),
+        "isA:Folder missed the folder: {folder_ids:?}"
+    );
+    assert!(
+        !folder_ids.contains(&file),
+        "isA:Folder leaked the file: {folder_ids:?}"
+    );
+}
+
+#[tokio::test]
+#[timeout(120000)]
+async fn filter_respects_parent_scope() {
+    let (store, drive) = setup_store("filter_scope").await;
+    let folder_a = note(&store, &drive, "FolderA").await;
+    let folder_b = note(&store, &drive, "FolderB").await;
+    let child_a = add_classed(
+        &store,
+        &folder_a,
+        "did:ad:fts-file-a",
+        urls::FILE,
+        "ScopedFileA",
+    )
+    .await;
+    let child_b = add_classed(
+        &store,
+        &folder_b,
+        "did:ad:fts-file-b",
+        urls::FILE,
+        "ScopedFileB",
+    )
+    .await;
+
+    let hits = query(&store, "", &opts_filter(&folder_a, urls::IS_A, urls::FILE)).unwrap();
+    let ids = subjects(&hits);
+    assert!(ids.contains(&child_a), "folder A file missing: {ids:?}");
+    assert!(
+        !ids.contains(&child_b),
+        "folder B file leaked into folder A: {ids:?}"
+    );
+}
+
+#[test]
+fn parse_search_filters_unescapes_client_keys() {
+    let isa = r#"https\://atomicdata.dev/properties/isA:"https://atomicdata.dev/classes/File""#;
+    let pairs = super::parse_search_filters(isa);
+    assert_eq!(
+        pairs,
+        vec![(
+            "https://atomicdata.dev/properties/isA".into(),
+            "https://atomicdata.dev/classes/File".into()
+        )]
+    );
+
+    let anded = r#"age:"10" AND name:"John""#;
+    let mut parsed = super::parse_search_filters(anded);
+    parsed.sort();
+    assert_eq!(
+        parsed,
+        vec![("age".into(), "10".into()), ("name".into(), "John".into())]
+    );
+
+    let qualified =
+        r#"propvals.https\://atomicdata.dev/properties/isA:"https://atomicdata.dev/classes/File""#;
+    let pairs = super::parse_search_filters(qualified);
+    assert_eq!(pairs[0].0, "https://atomicdata.dev/properties/isA");
 }
 
 /// Direct index of a resource that never went through apply_commit, so the

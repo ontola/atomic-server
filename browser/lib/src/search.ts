@@ -31,8 +31,9 @@ const baseURL = (serverURL: string) => {
   return url;
 };
 
-// https://github.com/quickwit-oss/tantivy/blob/064518156f570ee2aa03cf63be6d5605a96d6285/query-grammar/src/query_grammar.rs#L19
-const specialCharsTantivy = [
+// Historical escaping kept so existing `filters=` URLs keep working against
+// the KV `/search` adapter. The server unescapes these keys.
+const specialCharsFilter = [
   '+',
   '^',
   '`',
@@ -48,19 +49,18 @@ const specialCharsTantivy = [
   '\\',
   '*',
   ' ',
-  // The dot is escaped, even though it's not in Tantivy's list.
   '.',
 ];
 
-/** escape the key conform to Tantivy syntax, escaping all specialCharsTantivy */
+/** Escape a property URL for the HTTP `filters=` string. */
 export function escapeTantivyKey(key: string) {
   return key.replace(
-    new RegExp(`([${specialCharsTantivy.join('\\')}])`, 'g'),
+    new RegExp(`([${specialCharsFilter.join('\\')}])`, 'g'),
     '\\$1',
   );
 }
 
-/** Uses Tantivy query syntax */
+/** `property:"value" AND …` — exact pairs, consumed by `/search`. */
 function buildFilterString(
   filters: Record<string, string | number | string[]>,
 ): string {

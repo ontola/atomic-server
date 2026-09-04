@@ -302,7 +302,7 @@ pub struct Config {
     pub plugin_path: PathBuf,
     /// Path to where the uploaded files are stored.
     pub uploads_path: PathBuf,
-    /// Path to where the search index for tantivy full text search is located
+    /// Unused. Previously the Tantivy mmap directory; FTS now lives in the KV store.
     pub search_index_path: PathBuf,
     /// Path to where the vector search index for polarisdb is located
     pub vector_search_index_path: PathBuf,

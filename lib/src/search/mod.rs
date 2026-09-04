@@ -2,8 +2,10 @@
 //!
 //! Indexes title (name / shortname / filename), description, and Loro document
 //! body into the existing store trees so OPFS / redb / sled all get the same
-//! engine. Queries AND tokens together, rank with BM25, and match Tantivy's
-//! 1-edit prefix-fuzzy bar (`avacado` finds `avocado`, `avo` typeahead works).
+//! engine. Queries AND tokens together, rank with BM25, and match a 1-edit
+//! prefix-fuzzy bar (`avacado` finds `avocado`, `avo` typeahead works).
+//! Property filters reuse the PropValSub index (exact `property:"value"`, AND).
+//! Empty `q` + filters lists matching subjects (file picker, class selector).
 //!
 //! See `planning/local-search.md`.
 
@@ -12,6 +14,7 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     client::search::SearchOpts,
     db::{
+        prop_val_sub_index::find_in_prop_val_sub_index,
         trees::{Method, Operation, Transaction, Tree},
         Db,
     },
@@ -243,16 +246,18 @@ fn mark_search_ready(store: &Db) -> AtomicResult<()> {
 }
 
 /// Ranked full-text search over the KV index.
+///
+/// Empty `query_str` with no filters returns nothing. Empty `query_str` with
+/// filters lists PropValSub matches (then parent-scoped), which is what the
+/// file picker and class selector send.
 pub fn query(store: &Db, query_str: &str, opts: &SearchOpts) -> AtomicResult<Vec<SearchHit>> {
     let tokens: Vec<String> = tokenize(query_str);
-    if tokens.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let n_docs = store.kv.len(Tree::SearchDocs).unwrap_or(0) as f32;
-    if n_docs == 0.0 {
-        return Ok(Vec::new());
-    }
+    let filter_pairs = opts_filter_pairs(opts);
+    let filter_set = if filter_pairs.is_empty() {
+        None
+    } else {
+        Some(subjects_matching_filters(store, &filter_pairs)?)
+    };
 
     let limit = opts.limit.unwrap_or(DEFAULT_LIMIT) as usize;
     let parents: Vec<String> = opts
@@ -262,6 +267,18 @@ pub fn query(store: &Db, query_str: &str, opts: &SearchOpts) -> AtomicResult<Vec
         .into_iter()
         .map(|p| Subject::from(p).pure_id())
         .collect();
+
+    if tokens.is_empty() {
+        let Some(allowed) = filter_set else {
+            return Ok(Vec::new());
+        };
+        return filter_only_hits(store, allowed, &parents, limit);
+    }
+
+    let n_docs = store.kv.len(Tree::SearchDocs).unwrap_or(0) as f32;
+    if n_docs == 0.0 {
+        return Ok(Vec::new());
+    }
 
     // Per query token: subject → best score for that token.
     let mut per_token: Vec<HashMap<String, f32>> = Vec::with_capacity(tokens.len());
@@ -274,16 +291,16 @@ pub fn query(store: &Db, query_str: &str, opts: &SearchOpts) -> AtomicResult<Vec
     for map in per_token.iter().skip(1) {
         subjects.retain(|s| map.contains_key(s));
     }
+    if let Some(allowed) = &filter_set {
+        subjects.retain(|s| allowed.contains(s));
+    }
 
     let mut hits: Vec<SearchHit> = Vec::new();
     let mut doc_cache: HashMap<String, SearchDoc> = HashMap::new();
 
     for subject in subjects {
-        if !parents.is_empty() {
-            let doc = load_doc(store, &subject, &mut doc_cache)?;
-            if !in_scope(&subject, &doc, &parents, store, &mut doc_cache)? {
-                continue;
-            }
+        if !parents.is_empty() && !subject_in_parents(store, &subject, &parents, &mut doc_cache)? {
+            continue;
         }
         let mut score = 0.0;
         for map in &per_token {
@@ -304,6 +321,226 @@ pub fn query(store: &Db, query_str: &str, opts: &SearchOpts) -> AtomicResult<Vec
     hits.truncate(limit);
 
     Ok(hits)
+}
+
+fn opts_filter_pairs(opts: &SearchOpts) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    if let Some(map) = &opts.filters {
+        for (key, value) in map {
+            if !value.is_empty() {
+                out.push((key.clone(), value.clone()));
+            }
+        }
+    }
+    if let Some(pairs) = &opts.filter_pairs {
+        for (key, value) in pairs {
+            if !value.is_empty() {
+                out.push((key.clone(), value.clone()));
+            }
+        }
+    }
+    out
+}
+
+/// Parse the HTTP `filters=` string (`prop:"value" AND prop2:"value2"`).
+/// Keys may still use the historical backslash-escaping (`https\://…`).
+/// `OR` is treated as another AND separator — the client only emits AND.
+pub fn parse_search_filters(filters: &str) -> Vec<(String, String)> {
+    let mut pairs = Vec::new();
+    let mut rest = filters;
+    while !rest.is_empty() {
+        let (clause, next) = split_filter_clause(rest);
+        rest = next;
+        if let Some(pair) = parse_filter_clause(clause) {
+            pairs.push(pair);
+        }
+    }
+    pairs
+}
+
+fn split_filter_clause(input: &str) -> (&str, &str) {
+    let mut in_quotes = false;
+    let mut escaped = false;
+    let bytes = input.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i] as char;
+        if escaped {
+            escaped = false;
+            i += 1;
+            continue;
+        }
+        match c {
+            '\\' => escaped = true,
+            '"' => in_quotes = !in_quotes,
+            ' ' if !in_quotes => {
+                if input[i..].starts_with(" AND ") {
+                    return (&input[..i], &input[i + 5..]);
+                }
+                if input[i..].starts_with(" OR ") {
+                    return (&input[..i], &input[i + 4..]);
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    (input, "")
+}
+
+fn parse_filter_clause(clause: &str) -> Option<(String, String)> {
+    let clause = clause.trim();
+    if clause.is_empty() {
+        return None;
+    }
+    let colon = find_unescaped_colon(clause)?;
+    let key = unescape_filter_text(&clause[..colon]);
+    let key = key
+        .strip_prefix("propvals.")
+        .unwrap_or(key.as_str())
+        .to_string();
+    let value = parse_filter_value(&clause[colon + 1..]);
+    if key.is_empty() || value.is_empty() {
+        return None;
+    }
+    Some((key, value))
+}
+
+fn find_unescaped_colon(s: &str) -> Option<usize> {
+    let mut escaped = false;
+    for (i, c) in s.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        match c {
+            '\\' => escaped = true,
+            ':' => return Some(i),
+            _ => {}
+        }
+    }
+    None
+}
+
+fn unescape_filter_text(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut escaped = false;
+    for c in s.chars() {
+        if escaped {
+            out.push(c);
+            escaped = false;
+        } else if c == '\\' {
+            escaped = true;
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+fn parse_filter_value(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if let Some(inner) = trimmed.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
+        unescape_filter_text(inner)
+    } else {
+        unescape_filter_text(trimmed)
+    }
+}
+
+fn subjects_matching_filters(
+    store: &Db,
+    pairs: &[(String, String)],
+) -> AtomicResult<HashSet<String>> {
+    let mut result: Option<HashSet<String>> = None;
+    for (prop, val) in pairs {
+        let value = Value::String(val.clone());
+        let mut set = HashSet::new();
+        for atom in find_in_prop_val_sub_index(store, prop, Some(&value)) {
+            set.insert(atom?.subject.to_string());
+        }
+        result = Some(match result {
+            None => set,
+            Some(prev) => prev.intersection(&set).cloned().collect(),
+        });
+    }
+    Ok(result.unwrap_or_default())
+}
+
+fn filter_only_hits(
+    store: &Db,
+    allowed: HashSet<String>,
+    parents: &[String],
+    limit: usize,
+) -> AtomicResult<Vec<SearchHit>> {
+    let mut hits = Vec::new();
+    let mut doc_cache: HashMap<String, SearchDoc> = HashMap::new();
+    let mut subjects: Vec<String> = allowed.into_iter().collect();
+    subjects.sort();
+    for subject in subjects {
+        if !parents.is_empty() && !subject_in_parents(store, &subject, parents, &mut doc_cache)? {
+            continue;
+        }
+        hits.push(SearchHit {
+            subject: Subject::from(subject),
+            score: 1.0,
+        });
+        if hits.len() >= limit {
+            break;
+        }
+    }
+    Ok(hits)
+}
+
+fn subject_in_parents(
+    store: &Db,
+    subject: &str,
+    parents: &[String],
+    cache: &mut HashMap<String, SearchDoc>,
+) -> AtomicResult<bool> {
+    let doc = load_doc(store, subject, cache)?;
+    if in_scope(subject, &doc, parents, store, cache)? {
+        return Ok(true);
+    }
+    // Not in SearchDocs (no searchable text) — walk the resource itself.
+    resource_in_parents(store, subject, parents)
+}
+
+fn resource_in_parents(store: &Db, subject: &str, parents: &[String]) -> AtomicResult<bool> {
+    let mut current = subject.to_string();
+    let mut seen = HashSet::new();
+    for _ in 0..MAX_PARENT_WALK {
+        if !seen.insert(current.clone()) {
+            break;
+        }
+        if parents.iter().any(|p| p == &current) {
+            return Ok(true);
+        }
+        let Ok(resource) = store.get_resource_shallow(&current.as_str().into()) else {
+            break;
+        };
+        if let Some(drive) = resource.get_drive() {
+            let drive_id = drive.pure_id();
+            if parents
+                .iter()
+                .any(|p| p == &drive_id || p == drive.as_str())
+            {
+                return Ok(true);
+            }
+        }
+        let parent = resource
+            .get(urls::PARENT)
+            .ok()
+            .map(|v| Subject::from(v.to_string()).pure_id())
+            .unwrap_or_default();
+        if parent.is_empty() {
+            break;
+        }
+        if parents.contains(&parent) {
+            return Ok(true);
+        }
+        current = parent;
+    }
+    Ok(false)
 }
 
 fn score_token(store: &Db, q: &str, n_docs: f32) -> AtomicResult<HashMap<String, f32>> {

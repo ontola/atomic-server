@@ -335,12 +335,14 @@ impl ClientDb {
     }
 
     /// Local KV full-text search. `parents` is a string, a string array, or null.
+    /// `filters` is a `{ property: string | string[] }` object, or null.
     /// Returns an array of subject URLs, ranked.
     pub fn search(
         &self,
         query: String,
         limit: Option<u32>,
         parents: JsValue,
+        filters: JsValue,
     ) -> Result<JsValue, JsError> {
         let parents: Option<Vec<String>> = if parents.is_null() || parents.is_undefined() {
             None
@@ -352,6 +354,7 @@ impl ClientDb {
         let opts = atomic_lib::client::search::SearchOpts {
             limit,
             parents,
+            filter_pairs: Some(js_to_filter_pairs(filters)),
             ..Default::default()
         };
         let hits = self.node.search(&query, &opts).map_err(to_js_err)?;
@@ -632,6 +635,42 @@ fn resource_to_json_ad(resource: &Resource, origin: &str) -> Result<String, JsEr
 
 fn to_js_err(e: impl std::fmt::Display) -> JsError {
     JsError::new(&e.to_string())
+}
+
+fn js_to_filter_pairs(filters: JsValue) -> Vec<(String, String)> {
+    if filters.is_null() || filters.is_undefined() {
+        return Vec::new();
+    }
+    #[derive(serde::Deserialize)]
+    #[serde(untagged)]
+    enum FilterVal {
+        S(String),
+        N(serde_json::Number),
+        B(bool),
+        A(Vec<String>),
+    }
+    let Ok(map) =
+        serde_wasm_bindgen::from_value::<std::collections::HashMap<String, FilterVal>>(filters)
+    else {
+        return Vec::new();
+    };
+    let mut pairs = Vec::new();
+    for (key, val) in map {
+        match val {
+            FilterVal::S(s) if !s.is_empty() => pairs.push((key, s)),
+            FilterVal::N(n) => pairs.push((key, n.to_string())),
+            FilterVal::B(b) => pairs.push((key, b.to_string())),
+            FilterVal::A(vals) => {
+                for s in vals {
+                    if !s.is_empty() {
+                        pairs.push((key.clone(), s));
+                    }
+                }
+            }
+            FilterVal::S(_) => {}
+        }
+    }
+    pairs
 }
 
 const LEGACY_DB_NAME: &str = "atomic_data.redb";
