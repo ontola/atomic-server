@@ -7,6 +7,15 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- **Drive sync is one binary frame on both transports.** The browser's
+  hash-first probe and its reduced reconcile now arrive as `SYNC (0x30)`
+  with `"probe": true` or `"subjects": [...]` in the JSON tail
+  (`encode_sync_probe`, `encode_sync_filtered`), handled by the shared sync
+  engine; a stale probe is answered with the new `SYNC_RESEND (0x38)`.
+  The text `SYNC_VV` request, its text `SYNC_RESEND <drive>` answer and the
+  server handler's private copy of the reconcile are removed. Capability
+  `sync-probe`. `WsClient` reports `WsMessage::SyncResend`.
+
 - **One WebSocket subscription frame.** `SUB <subject>` registers a
   drive-wide subscription when the subject is a drive and a per-resource one
   otherwise; the per-resource text frame `SUBSCRIBE <subject>` (which also

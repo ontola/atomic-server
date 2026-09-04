@@ -300,25 +300,50 @@ pub async fn handle_frame(
             }
         }
 
-        protocol::tag::SYNC => {
-            if let Some(sync) = protocol::decode_sync(payload) {
-                handle_sync_vv(
+        protocol::tag::SYNC => match protocol::decode_sync(payload) {
+            // Hash-first probe: compare the drive hash over what this
+            // session may read, without either side exchanging the
+            // O(drive) version vector. In sync → SYNC_OK; otherwise
+            // SYNC_RESEND asks the client to reconcile. Hashed over the
+            // readable subjects both so it can match the client's and so an
+            // anonymous socket learns nothing about a drive it cannot read.
+            Some(sync) if sync.probe => {
+                match drive_sync_hash_for(store, &sync.drive, agent).await {
+                    Ok(server_hash) if server_hash == sync.drive_hash => {
+                        vec![protocol::encode_sync_ok(&sync.drive)]
+                    }
+                    Ok(_) => vec![protocol::encode_sync_resend(&sync.drive)],
+                    Err(reason) => vec![protocol::encode_error(
+                        0,
+                        protocol::error_code::UNAUTHORIZED_READ,
+                        &format!("SYNC refused for {}: {reason}", sync.drive),
+                    )],
+                }
+            }
+            Some(sync) => {
+                // `subjects`, when present, is the RBSR-reduced set: build
+                // version vectors for just those instead of walking the drive.
+                let filter = sync
+                    .subjects
+                    .as_ref()
+                    .map(|s| s.iter().cloned().collect::<std::collections::HashSet<_>>());
+                handle_sync_vv_filtered(
                     &sync.drive,
                     &sync.drive_hash,
                     &sync.peers,
                     &sync.resources,
+                    filter.as_ref(),
                     store,
                     agent,
                 )
                 .await
-            } else {
-                vec![protocol::encode_error(
-                    0,
-                    protocol::error_code::UNKNOWN,
-                    "Invalid SYNC frame",
-                )]
             }
-        }
+            None => vec![protocol::encode_error(
+                0,
+                protocol::error_code::UNKNOWN,
+                "Invalid SYNC frame",
+            )],
+        },
 
         protocol::tag::SYNC_PUSH => {
             if let Some(push) = protocol::decode_sync_push(payload) {
@@ -812,7 +837,7 @@ pub fn build_drive_vvs(
 /// The drive's RBSR items as `agent` may see them: the drive resource itself
 /// must be readable (else `Err`, the caller refuses with
 /// `UNAUTHORIZED_READ`), and every subject the agent cannot `check_read` is
-/// left out. This is the gate the full `SYNC_VV` path has always applied per
+/// left out. This is the gate the full `SYNC` path has always applied per
 /// subject; the hash-first probe and the `RBSR_FP` / `RBSR_ITEMS` frames
 /// used to skip it, which let an anonymous socket enumerate every subject
 /// and version vector of any drive it could name.
@@ -943,7 +968,7 @@ pub async fn handle_sync_vv_filtered(
         let server_hash = compute_drive_hash(&server_vvs);
 
         if server_hash == drive_hash {
-            tracing::info!("SYNC_VV: drive {} — hashes match, in sync", drive);
+            tracing::info!("SYNC: drive {} — hashes match, in sync", drive);
 
             return vec![protocol::encode_sync_ok(drive)];
         }
@@ -1072,7 +1097,7 @@ pub async fn handle_sync_vv_filtered(
     let push_subjects: Vec<String> = push_entries.iter().map(|(s, _)| s.clone()).collect();
 
     tracing::info!(
-        "SYNC_VV: drive {} — {} to push, {} to pull, {} to remove",
+        "SYNC: drive {} — {} to push, {} to pull, {} to remove",
         drive,
         push_subjects.len(),
         pull.len(),

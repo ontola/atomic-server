@@ -92,7 +92,7 @@ pub async fn web_socket_handler(
     // actix-web-actors defaults `max_size` to 65 536 bytes (64 KiB). Real
     // Loro snapshots — especially for documents with editing history or
     // canvases with many strokes — routinely exceed that, and JSON/base64
-    // wrapping (SYNC_VV's text frames) adds another ~40% on top of the raw
+    // wrapping (the RBSR text frames) adds another ~40% on top of the raw
     // bytes. A frame over the limit causes actix to drop the TCP socket
     // without sending a Close control frame, which the browser sees as a
     // CloseEvent `code=1006, wasClean=false`: an unexplained reconnect
@@ -242,7 +242,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WebSocketConnecti
                 self.handle_binary(&bin, ctx);
             }
             Ok(ws::Message::Text(text)) => {
-                // Remaining text messages: Loro sync, presence, SYNC_VV, RBSR
+                // Remaining text messages: Loro sync, presence, RBSR
                 self.handle_text(&text, ctx);
             }
             Ok(ws::Message::Close(reason)) => {
@@ -263,7 +263,7 @@ impl WebSocketConnection {
     }
 
     /// Gate for frames that need an identity. Reads (`GET`, `SUB <drive>`,
-    /// `SYNC`, `SYNC_VV`) stay open to anonymous sessions, gated per subject
+    /// `SYNC`) stay open to anonymous sessions, gated per subject
     /// on `check_read` exactly like an anonymous HTTP GET — that is what
     /// lets a public drive's share link show live updates without an
     /// account. Everything that writes (`SYNC_PUSH`, `BLOB_RESPONSE`,
@@ -512,7 +512,7 @@ impl WebSocketConnection {
         }
     }
 
-    /// Handle the remaining text messages (Loro sync, presence, SYNC_VV, RBSR).
+    /// Handle the remaining text messages (Loro sync, presence, RBSR).
     fn handle_text(&mut self, text: &str, ctx: &mut ws::WebsocketContext<Self>) {
         if let Some(json) = text.strip_prefix("SUBSCRIBE_INDEX_STATUS ") {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
@@ -618,54 +618,6 @@ impl WebSocketConnection {
                 update.addr = Some(ctx.address());
                 self.loro_sync_broadcaster_addr.do_send(update);
             }
-        } else if let Some(json) = text.strip_prefix("SYNC_VV ") {
-            if let Ok(request) = serde_json::from_str::<SyncVVRequest>(json) {
-                let store = self.store.clone();
-                let agent = self.agent.clone();
-                if request.probe {
-                    // Hash-first probe: the client sent only its hash. Compare
-                    // it to the drive's hash without it (or us) exchanging the
-                    // full O(drive) version vector. In sync → `SYNC_OK`;
-                    // otherwise ask for the full state via `SYNC_RESEND`.
-                    // Hashed over what this session's agent may read, both so
-                    // it can match the client's and so an anonymous socket
-                    // learns nothing about a drive it cannot read.
-                    let drive = request.drive.clone();
-                    let client_hash = request.drive_hash.clone();
-                    ctx.spawn(
-                        async move {
-                            let verdict = atomic_lib::sync::engine::drive_sync_hash_for(
-                                &store, &drive, &agent,
-                            )
-                            .await
-                            .map(|server_hash| server_hash == client_hash);
-                            (drive, verdict)
-                        }
-                        .into_actor(self)
-                        .map(|(drive, verdict), _actor, ctx| match verdict {
-                            Ok(true) => {
-                                ctx.binary(atomic_lib::sync::protocol::encode_sync_ok(&drive))
-                            }
-                            Ok(false) => ctx.text(format!("SYNC_RESEND {drive}")),
-                            Err(reason) => ctx.binary(ws_v2::encode_error(
-                                0,
-                                ws_v2::error_code::UNAUTHORIZED_READ,
-                                &format!("SYNC_VV refused for {drive}: {reason}"),
-                            )),
-                        }),
-                    );
-                } else {
-                    ctx.spawn(
-                        async move { handle_sync_vv(request, store, agent).await }
-                            .into_actor(self)
-                            .map(|frames, _actor, ctx| {
-                                for frame in frames {
-                                    ctx.binary(frame);
-                                }
-                            }),
-                    );
-                }
-            }
         } else if let Some(json) = text.strip_prefix("RBSR_FP ") {
             // RBSR: answer range fingerprints so the client can find the
             // differing subjects without transmitting the whole version vector.
@@ -673,7 +625,7 @@ impl WebSocketConnection {
             // fingerprint tree that makes this cheaper is Phase 2c.
             //
             // Gated on `check_read` per subject for this session's agent, like
-            // the full `SYNC_VV` exchange. Without that an anonymous socket
+            // the full `SYNC` exchange. Without that an anonymous socket
             // could enumerate every subject and version vector of any drive.
             if let Ok(req) = serde_json::from_str::<RbsrFpRequest>(json) {
                 let store = self.store.clone();
@@ -824,47 +776,6 @@ impl Handler<crate::actor_messages::PresenceUpdate> for WebSocketConnection {
             serde_json::to_string(&msg).unwrap()
         ));
     }
-}
-
-// ---- Sync protocol ----
-
-#[derive(serde::Deserialize)]
-struct SyncVVRequest {
-    drive: String,
-    #[serde(rename = "driveHash")]
-    drive_hash: String,
-    /// Hash-first probe: the client sent only its drive hash, not the full
-    /// version-vector state. `peers`/`resources` are absent. The server
-    /// answers `SYNC_OK` (in sync) or `SYNC_RESEND <drive>` (send full state).
-    #[serde(default)]
-    probe: bool,
-    #[serde(default)]
-    peers: Vec<String>,
-    #[serde(default)]
-    resources: std::collections::HashMap<String, Vec<i32>>,
-    /// RBSR reduced set: when present, only these subjects (the ones the client
-    /// found differing) are reconciled, and `resources` carries VVs for just
-    /// the ones the client has. Absent → full-drive reconcile.
-    #[serde(default)]
-    subjects: Option<Vec<String>>,
-}
-
-/// Delegate to atomic_lib sync engine.
-async fn handle_sync_vv(request: SyncVVRequest, store: Db, agent: ForAgent) -> Vec<Vec<u8>> {
-    let filter = request
-        .subjects
-        .as_ref()
-        .map(|s| s.iter().cloned().collect::<std::collections::HashSet<_>>());
-    atomic_lib::sync::engine::handle_sync_vv_filtered(
-        &request.drive,
-        &request.drive_hash,
-        &request.peers,
-        &request.resources,
-        filter.as_ref(),
-        &store,
-        &agent,
-    )
-    .await
 }
 
 impl Handler<IndexStatusPush> for WebSocketConnection {

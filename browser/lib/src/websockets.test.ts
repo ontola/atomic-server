@@ -9,6 +9,7 @@ import {
   decodeHelloCaps,
   encodeChallenge,
   encodeCommitOkSlim,
+  encodeSyncResend,
   encodeCommitOk,
   encodeError,
   encodeAuthOk,
@@ -173,6 +174,59 @@ describe('WSClient handshake', () => {
 
     socket.receive(encodeAuthOk([]));
     await auth;
+    client.close();
+  });
+});
+
+describe('WSClient drive sync probe', () => {
+  const original = globalThis.WebSocket;
+
+  afterEach(() => {
+    globalThis.WebSocket = original;
+    vi.restoreAllMocks();
+  });
+
+  it('probes with a binary SYNC and reconciles on SYNC_RESEND', async ({
+    expect,
+  }) => {
+    const { client, socket, store } = await connectedClient();
+    vi.spyOn(store, 'computeDriveSyncState').mockResolvedValue({
+      drive: 'did:ad:drive',
+      driveHash: 'abc123',
+      peers: [],
+      resources: {},
+    } as unknown as Awaited<ReturnType<typeof store.computeDriveSyncState>>);
+    const reduced = vi
+      .spyOn(
+        client as unknown as {
+          sendReducedSyncState: (d: string) => Promise<void>;
+        },
+        'sendReducedSyncState',
+      )
+      .mockResolvedValue(undefined);
+
+    await (
+      client as unknown as { startVVSync: (d: string) => Promise<void> }
+    ).startVVSync('did:ad:drive');
+
+    const syncs = framesWithTag(socket, Tag.SYNC);
+    expect(syncs).toHaveLength(1);
+    const frame = syncs[0];
+    const dl = (frame[1] << 8) | frame[2];
+    expect(new TextDecoder().decode(frame.subarray(3, 3 + dl))).toBe(
+      'did:ad:drive',
+    );
+    const ho = 3 + dl;
+    const hl = (frame[ho] << 8) | frame[ho + 1];
+    expect(new TextDecoder().decode(frame.subarray(ho + 2, ho + 2 + hl))).toBe(
+      'abc123',
+    );
+    expect(
+      JSON.parse(new TextDecoder().decode(frame.subarray(ho + 2 + hl))),
+    ).toEqual({ peers: [], resources: {}, probe: true });
+
+    socket.receive(encodeSyncResend('did:ad:drive'));
+    expect(reduced).toHaveBeenCalledWith('did:ad:drive');
     client.close();
   });
 });

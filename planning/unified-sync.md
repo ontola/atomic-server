@@ -52,7 +52,7 @@ protocol). Encoding lives in `lib/src/sync/protocol.rs`; semantics in
 | Outbox shape | **Dirty-bit + sign-at-drain** (`local-outbox.ts`) — one signed commit per subject per drain pass; genesis envelope + offline `baseVersion` are the only stored artifacts; identity-scoped localStorage | Partial (`try_push_commit` when session open); no durable dirty queue, no backoff/blocked states |
 | Persist commits | **WS `COMMIT` preferred**, HTTP `/commit` fallback (`Store.sendCommit`) ✅ | WS `COMMIT` when session open; else local only |
 | Live updates | WS `SUB` → `UPDATE`/`DESTROY` (QUERY_UPDATE retired) | WS session + `pollDbEvent` |
-| Bulk reconcile | `SYNC_VV` on reconnect, after outbox drain, narrowed by an RBSR range exchange (`RBSR_FP`/`RBSR_ITEMS`, full-VV fallback); `SYNC_DIFF.remove` applied ✅ | Iroh `SYNC`/`SYNC_PUSH` (peer.rs) |
+| Bulk reconcile | binary `SYNC` on reconnect (hash-first probe, then filtered to the differing subjects), after outbox drain, narrowed by an RBSR range exchange (`RBSR_FP`/`RBSR_ITEMS`, full-VV fallback); `SYNC_DIFF.remove` applied ✅ | Iroh `SYNC`/`SYNC_PUSH` (peer.rs) |
 | Multi-device | Same account on same server | WS-first; QR + Iroh bulk as fallback |
 
 Since the 2026-07-02 revision: `AUTH` is required before `SYNC`/`SYNC_PUSH` on

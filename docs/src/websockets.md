@@ -69,7 +69,7 @@ The current list (`protocol::CAPABILITIES`):
 | --- | --- |
 | `auth-max-age` | `AUTH` proofs older than `AUTH_MAX_AGE_MS` are refused, and a failed `AUTH` answers with `AUTH_FAILED (8)`. |
 | `keepalive` | Understands `KEEPALIVE (0x41)`, and echoes it over WebSocket. |
-| `rbsr` | Answers the `RBSR_FP` / `RBSR_ITEMS` text frames and the hash-first `SYNC_VV` probe. |
+| `rbsr` | Answers the `RBSR_FP` / `RBSR_ITEMS` text frames. |
 | `pull-from` | `SYNC_DIFF` carries a `pullFrom` map of per-subject version vectors. |
 | `signed-destroy` | On a peer stream, destroys travel as signed `COMMIT` frames; a naked `DESTROY` from a peer is ignored. |
 | `unsub` | `UNSUB (0x21)` actually cancels a drive subscription. |
@@ -77,6 +77,7 @@ The current list (`protocol::CAPABILITIES`):
 | `commit-ok-slim` | Answers `COMMIT` with the slim `COMMIT_OK` (`[request_id] [commit_id]`) for a client whose `HELLO` lists `commit-ok-slim`. |
 | `client-hello` | Reads a `HELLO (0x37)` from a WebSocket client and records the capabilities it lists. |
 | `rebind-on-auth` | Re-evaluates the connection's subscriptions against the new identity when an `AUTH` lands, dropping the ones it may no longer read. |
+| `sync-probe` | Reads the `probe` and `subjects` keys of a `SYNC (0x30)` JSON tail and answers a stale probe with `SYNC_RESEND (0x38)`. |
 
 The list is **additive only**: a name is never renamed or reused once
 shipped. Treat an absent name as "not supported" and fall back, never as an
@@ -110,7 +111,7 @@ logged and dropped, not answered.
 | `0x14` | `COMMIT_OK` | responder | client / initiator only. Payload is the full commit JSON-AD, or the bare commit id for a client whose `HELLO` listed `commit-ok-slim`. |
 | `0x20` | `SUB` | client | WS handler only. **No engine arm**, so an Iroh peer cannot subscribe. |
 | `0x21` | `UNSUB` | client | WS handler only. **No engine arm.** |
-| `0x30` | `SYNC` | Iroh initiator | engine (both transports). The browser uses the text `SYNC_VV` form instead. |
+| `0x30` | `SYNC` | Iroh initiator; the browser, as a hash-only probe and then filtered to the differing subjects | engine (both transports) |
 | `0x31` | `SYNC_OK` | responder | client / initiator only |
 | `0x32` | `SYNC_DIFF` | responder | client / initiator only |
 | `0x33` | `SYNC_PUSH` | either | engine (both transports) |
@@ -118,6 +119,7 @@ logged and dropped, not answered.
 | `0x35` | `BLOB_RESPONSE` | either | engine (both transports) |
 | `0x36` | *reserved* | nobody | nobody. Previously `QUERY_UPDATE`; retired, never reuse. |
 | `0x37` | `HELLO` | both peers on an Iroh stream; a WebSocket client on open | Iroh handshake and live loop; the WS handler records the client's capabilities. The WS server never sends one (its capabilities ride on `AUTH_OK`). |
+| `0x38` | `SYNC_RESEND` | responder, answering a `SYNC` probe whose hash is stale | client only. Tells the client to reconcile (RBSR descent, then a filtered `SYNC`). |
 | `0x40` | `EPHEMERAL` | Iroh peers | Iroh live loop only. **No WS arm**: the browser uses the `LORO_*` / `PRESENCE_*` text frames, and the server bridges between the two. |
 | `0x41` | `KEEPALIVE` | both sides, on their own schedule | WS server **echoes** it; Iroh **never** echoes it. |
 | `0x42` | `CHALLENGE` | WS server, as its first frame | client only. Never sent on an Iroh stream. |
@@ -141,6 +143,7 @@ the end of the frame.
 [0x20] [drive_subject_utf8]                              // SUB
 [0x21] [drive_subject_utf8]                              // UNSUB
 [0x31] [drive_len: u16] [drive_utf8]                     // SYNC_OK
+[0x38] [drive_len: u16] [drive_utf8]                     // SYNC_RESEND, hash-first probe missed
 [0x34] [hash: 32 bytes]                                  // BLOB_REQUEST
 [0x35] [hash: 32 bytes] [blob_bytes...]                  // BLOB_RESPONSE
 [0x41]                                                   // KEEPALIVE, no payload
@@ -190,7 +193,13 @@ bytes. `json_utf8` is:
 
 Each `resources` entry is a version vector compacted against the `peers`
 array: position *i* is that subject's counter for `peers[i]`. Zero counters
-are dropped on decode. The drive hash is SHA-256 over
+are dropped on decode. Two optional keys shape the exchange (`sync-probe`):
+`"probe": true` asks for a hash comparison only (the `peers` and `resources`
+are empty and ignored), answered with `SYNC_OK` or `SYNC_RESEND (0x38)`;
+`"subjects": [...]` restricts the reconcile to that set, so the responder
+builds version vectors for those subjects only and both comparison loops
+skip everything else. A decoder that predates the capability ignores both
+keys and runs the full reconcile. The drive hash is SHA-256 over
 `"{subject}:{c0},{c1}|{subject}:{c0},{c1}|…"` with subjects sorted and
 counters ordered by the sorted peer set (`engine::compute_drive_hash`; the
 browser builds the byte-identical string and hashes it with
@@ -371,8 +380,8 @@ link relies on for live updates. The `require_auth` gate covers exactly:
 Everything else is open to an anonymous socket and gated per subject by
 `check_read` instead:
 
-- `GET`, `SUB`, binary `SYNC`, text `SYNC_VV` (including the hash-first
-  probe), and `RBSR_FP` / `RBSR_ITEMS`. The probe and the RBSR frames answer
+- `GET`, `SUB`, `SYNC` (including the hash-first probe), and `RBSR_FP` /
+  `RBSR_ITEMS`. The probe and the RBSR frames answer
   over `drive_items_for`, which requires the drive resource itself to be
   readable and drops every subject the agent cannot read. Filtering also
   makes the fingerprints agree: a client only ever holds what it may read.
@@ -554,13 +563,13 @@ This is the sequence the browser runs on connect, after draining its outbox.
 the hash:
 
 ```
--> SYNC_VV {"drive":"<drive>","driveHash":"<hex>","probe":true}
+-> SYNC (0x30) <drive> <hash> {"peers":[],"resources":{},"probe":true}
 ```
 
 The server recomputes the hash over the subjects this session's agent may
-read and answers `SYNC_OK (0x31)` (binary, in sync, nothing more is
-exchanged) or `SYNC_RESEND <drive>` (text). A drive the agent cannot read
-answers `ERROR` `UNAUTHORIZED_READ`.
+read and answers `SYNC_OK (0x31)` (in sync, nothing more is exchanged) or
+`SYNC_RESEND (0x38)`. A drive the agent cannot read answers `ERROR`
+`UNAUTHORIZED_READ`.
 
 **2. Range-based set reconciliation.** On `SYNC_RESEND` the client descends
 over subject ranges with the server, comparing fingerprints, rather than
@@ -596,15 +605,14 @@ converges.
 differing subjects it actually holds:
 
 ```
--> SYNC_VV {"drive":"<drive>","driveHash":"<hex>",
-            "subjects":["<subject>", ...],
-            "peers":[...],"resources":{...}}
+-> SYNC (0x30) <drive> <hash> {"peers":[...],"resources":{...},
+                               "subjects":["<subject>", ...]}
 ```
 
 The server builds version vectors for just that set rather than walking the
 whole drive, and both of its comparison loops skip anything outside it. Any
 RBSR failure (timeout, parse error, closed socket) falls back to sending the
-full `SYNC_VV` state, so the drive always reconciles.
+full `SYNC` state, so the drive always reconciles.
 
 *Limitation of the reduced path:* the full path also pulls a subject whose
 version vector **matches** but whose blob the server lacks, the backstop for
@@ -794,7 +802,6 @@ Client to server:
 | `PRESENCE_UPDATE` | `{"subject","update"}` | yes |
 | `SUBSCRIBE_INDEX_STATUS` | `{"drive"}` | no |
 | `UNSUBSCRIBE_INDEX_STATUS` | `{"drive"}` | no |
-| `SYNC_VV` | `{"drive","driveHash","probe"?,"peers"?,"resources"?,"subjects"?}` | no |
 | `RBSR_FP` | `{"drive","ranges":[["<lo>","<hi>"\|null], ...]}` | no |
 | `RBSR_ITEMS` | `{"drive","lo","hi"\|null}` | no |
 
@@ -802,7 +809,6 @@ Server to client:
 
 | Frame | Payload |
 | --- | --- |
-| `SYNC_RESEND <drive>` | raw drive subject, not JSON |
 | `RBSR_FP` | `{"drive","fps":["<hex>", ...]}` |
 | `RBSR_ITEMS` | `{"drive","items":[["<subject>",[["<peer>",<counter>], ...]], ...]}` |
 | `INDEX_STATUS` | `{"drive","indexing"}` |
@@ -826,10 +832,10 @@ first; an unrecognized text frame is logged and ignored.
 -> AUTH (0x01) signed for "<origin>#<nonce>"
 <- AUTH_OK (0x02) ["auth-max-age", "keepalive", "auth-nonce", ...]
 -> SUB (0x20) <drive>
--> SYNC_VV {drive, driveHash, probe:true}
-<- SYNC_RESEND <drive>
+-> SYNC (0x30) drive + hash, probe:true
+<- SYNC_RESEND (0x38) drive
    ... RBSR_FP / RBSR_ITEMS range descent ...
--> SYNC_VV {drive, driveHash, subjects, peers, resources}
+-> SYNC (0x30) drive + hash + version vectors for `subjects` only
 <- SYNC_DIFF (0x32)
 <- SYNC_PUSH (0x33) x n, last one flagged LAST
 -> SYNC_PUSH (0x33) x n, last one flagged LAST
@@ -974,7 +980,13 @@ Wire-visible changes in this revision:
   client's `subscribe_resource` now sends `SUB`). The `MembershipNotification`
   fan-out and the commit monitor's filter map went with them; the lib's
   watched-query index stays for the Flutter event stream.
-- **The hash-first probe and the RBSR frames are read-gated.** `SYNC_VV` with
+- **Drive sync is one frame on both transports (2026-09-04).** The browser
+  sends binary `SYNC (0x30)` for its hash-first probe (`"probe": true`) and
+  its reduced reconcile (`"subjects": [...]`), and a stale probe is answered
+  with the new `SYNC_RESEND (0x38)`. The text `SYNC_VV` request and the text
+  `SYNC_RESEND <drive>` answer are removed; the RBSR descent stays text.
+  Capability `sync-probe`.
+- **The hash-first probe and the RBSR frames are read-gated.** `SYNC` with
   `probe: true`, `RBSR_FP` and `RBSR_ITEMS` now answer only over the subjects
   the asking agent may `check_read`, and refuse an unreadable drive with
   `UNAUTHORIZED_READ`. Previously an anonymous socket could enumerate every
@@ -984,8 +996,7 @@ Wire-visible changes in this revision:
   write verdict.
 - **TypeScript `encodeSync` layout fix.** It wrote a raw 32-byte hash with no
   length prefix, which the Rust decoder misparsed; it now writes
-  `[hash_len: u16] [hash_hex_utf8]`. Exported but never sent, since the
-  browser speaks the text `SYNC_VV` form.
+  `[hash_len: u16] [hash_hex_utf8]`.
 
 Corrections to what this page previously claimed:
 

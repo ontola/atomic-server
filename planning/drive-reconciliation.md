@@ -3,7 +3,7 @@
 > **Status:** Partial. Algorithm core lives in `lib/src/sync/rbsr.rs` (fingerprint
 > + recursive reconcile, pinned by unit tests) with a TS mirror in
 > `browser/lib/src/rbsr.ts`. **On the WS wire** as the stateless text frames
-> `RBSR_FP` / `RBSR_ITEMS` (verified 2026-09-03): the browser answers `SYNC_RESEND` by
+> `RBSR_FP` / `RBSR_ITEMS` (verified 2026-09-03): the browser answers `SYNC_RESEND (0x38)` by
 > reconciling ranges against the server and sending version vectors for only the
 > differing subjects, falling back to the full VV on any RBSR failure. Not on the
 > Iroh wire. Range fingerprints are still O(range), not an incrementally
@@ -17,7 +17,7 @@
 
 ## The problem
 
-The `SYNC_VV` reconcile compares a **flat, whole-drive hash** over every
+The `SYNC` reconcile compares a **flat, whole-drive hash** over every
 subject's Loro version vector. That hash is a degenerate 1-level Merkle tree:
 one root over all leaves. Consequences:
 
@@ -44,7 +44,8 @@ structure work; they are NOT the redesign:
 - **Drive-scoped VV read** (`afbf8d99`): the client reads VVs for only the
   target drive (parent-index walk via `collect_drive_subjects`), O(this drive)
   instead of O(entire local DB).
-- **Hash-first probe** (`236025e1`): reconnect sends only the drive hash; the
+- **Hash-first probe** (`236025e1`, binary `SYNC` with `"probe": true` since
+  2026-09-04): reconnect sends only the drive hash; the
   server answers `SYNC_OK` or `SYNC_RESEND`. The full VV crosses the wire only
   on a mismatch. This is the natural hook the structure plugs into: the probe
   becomes "compare root fingerprint," and a mismatch triggers a **range/subtree

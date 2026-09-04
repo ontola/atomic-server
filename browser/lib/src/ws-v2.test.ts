@@ -72,6 +72,8 @@ import {
   decodeSubject,
   decodeSyncDiff,
   decodeSyncOk,
+  decodeSyncResend,
+  encodeSyncResend,
   decodeSyncPush,
   decodeUpdate,
   decodeBlobRequest,
@@ -133,6 +135,9 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
       'keepalive',
       'commit_ok_slim',
       'challenge',
+      'sync_probe',
+      'sync_filtered',
+      'sync_resend',
       'hello_caps',
       'hello_bare',
     ]) {
@@ -151,6 +156,8 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
     );
     expect(toHex(encodeHello('Dev', []))).toBe(toHex(vectors.hello_bare));
     expect(toHex(encodeChallenge('0badf00d'))).toBe(toHex(vectors.challenge));
+    expect(toHex(encodeSyncResend('did:ad:d'))).toBe(toHex(vectors.sync_resend));
+    expect(decodeSyncResend(payload('sync_resend'))).toBe('did:ad:d');
     expect(toHex(encodeAuthOk(['keepalive', 'unsub']))).toBe(
       toHex(vectors.auth_ok_caps),
     );
@@ -213,6 +220,20 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
     expect(toHex(encodeSync('did:ad:d', 'abc123', vvJson))).toBe(
       toHex(syncFrame),
     );
+
+    // The probe and the filtered form are the same framing with a richer
+    // JSON tail; the browser builds that tail itself.
+    for (const name of ['sync_probe', 'sync_filtered']) {
+      const rich = vectors[name];
+      const dl = (rich[1] << 8) | rich[2];
+      const ho = 3 + dl;
+      const hl = (rich[ho] << 8) | rich[ho + 1];
+      const tail = new TextDecoder().decode(rich.subarray(ho + 2 + hl));
+      expect(toHex(encodeSync('did:ad:d', 'abc123', tail))).toBe(toHex(rich));
+      const json = JSON.parse(tail) as { probe?: boolean; subjects?: string[] };
+      if (name === 'sync_probe') expect(json.probe).toBe(true);
+      else expect(json.subjects).toEqual(['did:ad:x']);
+    }
   });
 
   it('decodes the recorded frames', ({ expect }) => {

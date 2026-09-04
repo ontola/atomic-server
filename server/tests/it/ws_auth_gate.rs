@@ -289,13 +289,11 @@ async fn rbsr_and_probe_are_gated_by_check_read() {
     let err = next_error(&mut rx).await;
     assert!(err.contains("RBSR_FP refused"), "{err}");
 
-    ws.send_raw(&format!(
-        r#"SYNC_VV {{"drive":"{drive}","driveHash":"deadbeef","probe":true}}"#
-    ))
-    .await
-    .unwrap();
+    ws.send_binary(protocol::encode_sync_probe(&drive, "deadbeef"))
+        .await
+        .unwrap();
     let err = next_error(&mut rx).await;
-    assert!(err.contains("SYNC_VV refused"), "{err}");
+    assert!(err.contains("SYNC refused"), "{err}");
 
     // The owner gets the items. The Rust client has no RBSR_ITEMS parser, so
     // the text reply surfaces as `Unrecognized` — which is enough to see
@@ -579,6 +577,42 @@ async fn update_within(rx: &mut Receiver<WsMessage>, subject: &str, ms: u64) -> 
     })
     .await
     .unwrap_or(false)
+}
+
+/// The hash-first probe is binary: a `SYNC` whose payload says `probe` is
+/// answered with `SYNC_OK` when the drive hashes match and `SYNC_RESEND`
+/// when they do not, both binary. Until 2026-09-04 the browser sent a text
+/// `SYNC_VV` and got a text `SYNC_RESEND` back.
+#[tokio::test]
+async fn sync_probe_miss_is_answered_with_sync_resend() {
+    let port = start_server("ws_gate_sync_probe");
+    wait_for_server(port).await;
+    let server_url = format!("http://localhost:{port}");
+    let ws_url = format!("ws://localhost:{port}/ws");
+
+    let client = Client::new(&server_url).await.unwrap();
+    let alice = client.new_agent("Alice").await.unwrap();
+    let drive = client.new_public_drive(&alice, "Probed").await.unwrap();
+
+    let ws = WsClient::connect(&ws_url).await.unwrap();
+    let mut rx = ws.subscribe();
+    ws.send_binary(protocol::encode_sync_probe(&drive, "not-the-hash"))
+        .await
+        .unwrap();
+    let answer = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            match rx.recv().await {
+                Ok(WsMessage::SyncResend { drive: d }) => return Ok(d),
+                Ok(WsMessage::SyncOk { drive: d }) => return Err(format!("SYNC_OK for {d}")),
+                Ok(WsMessage::Error { message, .. }) => return Err(message),
+                Ok(_) => continue,
+                Err(e) => panic!("connection closed: {e}"),
+            }
+        }
+    })
+    .await
+    .expect("the probe is answered within 5s");
+    assert_eq!(answer, Ok(drive));
 }
 
 /// A browser cannot see protocol-level pings, so it probes with `KEEPALIVE`
