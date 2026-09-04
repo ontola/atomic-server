@@ -215,8 +215,8 @@ pub mod error_code {
     /// The message names the drive. Blocking, not terminal: keep the local
     /// state, stop pushing, and surface it.
     pub const SYNC_REJECTED: u16 = 6;
-    /// A subscription (`SUB`, `SUBSCRIBE`, `SUBSCRIBE_QUERY`,
-    /// `LORO_SYNC_SUBSCRIBE`, `PRESENCE_SUBSCRIBE`) was refused because the
+    /// A subscription (`SUB`, `LORO_SYNC_SUBSCRIBE`, `PRESENCE_SUBSCRIBE`)
+    /// was refused because the
     /// session's agent may not read the subject or drive it named. Nothing
     /// was registered; no frames will follow for it. Same verdict a `GET`
     /// would get, delivered instead of the old silent drop.

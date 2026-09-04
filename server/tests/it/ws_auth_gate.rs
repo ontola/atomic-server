@@ -119,8 +119,6 @@ async fn anonymous_writes_and_identity_subscriptions_are_refused() {
 
     // The text frames that carry an identity or write.
     for frame in [
-        format!("SUBSCRIBE {drive}"),
-        format!(r#"SUBSCRIBE_QUERY {{"drive":"{drive}"}}"#),
         format!(r#"LORO_SYNC_SUBSCRIBE {{"subject":"{drive}"}}"#),
         format!(r#"LORO_SYNC_UPDATE {{"subject":"{drive}","update":""}}"#),
         format!(r#"PRESENCE_SUBSCRIBE {{"subject":"{drive}"}}"#),
@@ -180,19 +178,13 @@ async fn subscription_without_read_right_is_refused_out_loud() {
     ws.subscribe_resource(&secret).await.unwrap();
     let err = next_error(&mut rx).await;
     assert!(
-        err.contains("SUBSCRIBE refused") && err.contains(&secret),
+        err.contains("SUB refused") && err.contains(&secret),
         "{err}"
     );
 
     ws.send_binary(protocol::encode_sub(&drive)).await.unwrap();
     let err = next_error(&mut rx).await;
     assert!(err.contains("SUB refused") && err.contains(&drive), "{err}");
-
-    ws.send_raw(&format!(r#"SUBSCRIBE_QUERY {{"drive":"{drive}"}}"#))
-        .await
-        .unwrap();
-    let err = next_error(&mut rx).await;
-    assert!(err.contains("SUBSCRIBE_QUERY refused"), "{err}");
 
     ws.subscribe_loro_sync(&secret).await.unwrap();
     let err = next_error(&mut rx).await;

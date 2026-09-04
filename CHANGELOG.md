@@ -7,6 +7,18 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- **One WebSocket subscription frame.** `SUB <subject>` registers a
+  drive-wide subscription when the subject is a drive and a per-resource one
+  otherwise; the per-resource text frame `SUBSCRIBE <subject>` (which also
+  registered a spurious drive fan-out entry that delivered URL subjects'
+  commits twice) and the filter subscription `SUBSCRIBE_QUERY` (sent by
+  nothing outside the Rust integration tests) are removed, along with the
+  commit monitor's third subscription map, the `MembershipNotification`
+  fan-out and `WsClient::subscribe_query`. `WsClient::subscribe_resource`
+  sends `SUB`. The lib's watched-query index (`QueryFilter::watch`,
+  `DbEvent::QueryMembershipChanged`) is unchanged; the Flutter event stream
+  still consumes it.
+
 - **`atomic_lib::runtime::AtomicNode` is cut down to what binds to it.** The
   WASM `ClientDb` is the only adapter on the node and uses `from_db`, `db`,
   `query` and `apply_commit`; those, plus the agent accessors and

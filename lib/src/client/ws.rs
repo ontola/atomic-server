@@ -2,8 +2,7 @@
 //!
 //! Hybrid v2 protocol: auth and resource UPDATEs are binary frames
 //! (`sync::protocol`); legacy collaboration and query messages are still
-//! text frames (`LORO_SYNC_*`, `LORO_EPHEMERAL_UPDATE`, `SUBSCRIBE_QUERY`,
-//! `QUERY_UPDATE`, `SYNC_VV`). `SYNC_DELTAS` was removed (F8,
+//! text frames (`LORO_SYNC_*`, `LORO_EPHEMERAL_UPDATE`, `SYNC_VV`). `SYNC_DELTAS` was removed (F8,
 //! planning/unified-sync.md) — it imported peer-supplied Loro deltas with
 //! no rights check at all; `SYNC` → `SYNC_PUSH` (binary v2, admission- and
 //! rights-checked via `import_sync_push`) is the real replacement and
@@ -343,9 +342,12 @@ impl WsClient {
             .map_err(|_| AtomicError::from("Authentication timed out"))?
     }
 
-    /// Subscribe to commit notifications for a resource.
+    /// Subscribe to commit notifications for one resource (binary `SUB`,
+    /// the same frame as [`subscribe_drive`](Self::subscribe_drive); the
+    /// server registers drive-wide fan-out only when the subject is a
+    /// drive). Sent the text `SUBSCRIBE` frame until 2026-09-04.
     pub async fn subscribe_resource(&self, subject: &str) -> AtomicResult<()> {
-        self.send_raw(&format!("SUBSCRIBE {}", subject)).await
+        self.send_binary(protocol::encode_sub(subject)).await
     }
 
     /// Subscribe to Loro CRDT sync updates for a resource.
@@ -437,8 +439,8 @@ impl WsClient {
             .map_err(|_| AtomicError::from("Timeout fetching blob"))?
     }
 
-    /// Send a raw text frame over the WebSocket. Used for legacy text-protocol
-    /// commands (LORO_*, SUBSCRIBE_QUERY, SYNC_VV).
+    /// Send a raw text frame over the WebSocket (the `LORO_*` / `PRESENCE_*`
+    /// subscribe frames, RBSR).
     pub async fn send_raw(&self, msg: &str) -> AtomicResult<()> {
         self.tx
             .send(Message::Text(msg.to_string().into()))
@@ -454,7 +456,7 @@ impl WsClient {
             .map_err(|e| format!("Failed to send WebSocket binary: {}", e).into())
     }
 
-    /// Subscribe to drive-scoped updates (QUERY_UPDATE + UPDATE pushes).
+    /// Subscribe to every commit under a drive (binary `SUB` 0x20).
     pub async fn subscribe_drive(&self, drive_subject: &str) -> AtomicResult<()> {
         self.send_binary(protocol::encode_sub(drive_subject)).await
     }
@@ -470,21 +472,6 @@ impl WsClient {
     /// is dead.
     pub async fn send_keepalive(&self) -> AtomicResult<()> {
         self.send_binary(protocol::encode_keepalive()).await
-    }
-
-    /// Register a live query filter (text `SUBSCRIBE_QUERY` frame).
-    pub async fn subscribe_query(
-        &self,
-        property: &str,
-        value: &str,
-        drive: &str,
-    ) -> AtomicResult<()> {
-        let json = serde_json::json!({
-            "property": property,
-            "value": value,
-            "drive": drive,
-        });
-        self.send_raw(&format!("SUBSCRIBE_QUERY {}", json)).await
     }
 
     /// Post a commit over WebSocket; returns the server's commit id on success.

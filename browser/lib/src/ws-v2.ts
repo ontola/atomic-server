@@ -97,9 +97,9 @@ export const ErrorCode = {
    *  drive, quota, not enrolled). Nothing from the push landed, and no
    *  SYNC_OK follows for it. The message names the drive. */
   SYNC_REJECTED: 6,
-  /** A subscription (SUB, SUBSCRIBE, SUBSCRIBE_QUERY, LORO_SYNC_SUBSCRIBE,
-   *  PRESENCE_SUBSCRIBE) was refused because the agent cannot read the
-   *  subject or drive. Nothing was subscribed. */
+  /** A subscription (SUB, LORO_SYNC_SUBSCRIBE, PRESENCE_SUBSCRIBE) was
+   *  refused because the agent cannot read the subject or drive. Nothing was
+   *  subscribed. */
   UNAUTHORIZED_READ: 7,
   /** An AUTH frame was refused: bad signature, unknown agent, a timestamp
    *  outside the accepted window, or a `requestedSubject` that does not
