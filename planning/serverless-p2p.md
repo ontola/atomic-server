@@ -182,13 +182,17 @@ unblocked:
 - [x] **Bind `AUTH.requestedSubject` to the session's drive** so a proof for
   one drive can't be replayed against another. (2026-09-01, Iroh accept
   path; the browser signs the server origin so WS has nothing to bind.)
-- [ ] **Destroys become signed commits on the wire** (Principle 3): the live
-  loop and bulk `remove[]` stop accepting naked deletes from peers; a
-  destroy is a commit, validated like any other. Closes OQ4 and the F10
-  residual (known-subject tombstone injection) in one move. *(OQ4 is
-  closed as a decision — see the table below — but this item is still
-  open: as of 2026-09-01 `peer.rs` still accepts the live `DESTROY` frame,
-  gated by the cached drive-level write verdict.)*
+- [x] **Destroys become signed commits on the live link** (Principle 3,
+  2026-09-03): the Iroh push loop forwards the signed destroy `COMMIT`
+  (carried on `DbEvent::Destroyed::commit_json`) and the live read loop
+  ignores a naked `DESTROY` from any peer, owner included; the engine's
+  COMMIT arm validates signature and rights. Tests:
+  `sync::peer::accept_gate_tests::{naked_destroy_on_the_live_link_is_ignored,
+  signed_destroy_commit_on_the_live_link_is_applied,
+  signed_destroy_from_stranger_on_the_live_link_is_refused}`.
+- [ ] **Bulk `remove[]` is still unsigned**: `SYNC_DIFF.remove` comes from
+  local tombstones and is applied on the drive-level write verdict. Making
+  it signed needs retained destroy commits (commit retention floor).
 - [x] Pre-auth frame budget in the live read loop (the `matches!(agent,
   Public)` gate exists in `handle_stream`; mirror it in
   `register_live_peer`). (2026-09-01: the live loop now refuses every

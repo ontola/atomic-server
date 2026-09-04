@@ -1,6 +1,6 @@
 //! `SUBSCRIBE_QUERY` filter subscription → `UPDATE` / `DESTROY` integration test.
 //!
-//! After `planning/drop-query-update.md` retired the `QUERY_UPDATE (0x36)`
+//! After `planning/sync.md` ("QUERY_UPDATE removed") retired the `QUERY_UPDATE (0x36)`
 //! frame, the `SUBSCRIBE_QUERY` registration primitive lives on but routes
 //! its membership changes through the same `UPDATE` / `DESTROY` channel
 //! the rest of the protocol uses. This test pins the new wire shape: a

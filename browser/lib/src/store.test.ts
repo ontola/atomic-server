@@ -277,7 +277,7 @@ describe('Store', () => {
   it('cold-drains outbox entries for subjects no longer in memory', async ({
     expect,
   }) => {
-    // Reload-stranded entry (planning/outbox-drain-data-loss-race.md, root
+    // Reload-stranded entry (planning/completed/outbox-drain-data-loss-race.md, root
     // cause 3): an outbox entry restored from localStorage after a page load,
     // for a subject nothing on the current page renders. The drain must load
     // the resource itself and POST the pending delta — returning silently
@@ -324,7 +324,7 @@ describe('Store', () => {
   }) => {
     // UI layers (useValue's commitDebounce) park a save() in a timer; until
     // it fires the edit is only in memory. Sync status must not report
-    // "fully synced" during that window (planning/outbox-drain-data-loss-race.md).
+    // "fully synced" during that window (planning/completed/outbox-drain-data-loss-race.md).
     const store = new Store({ serverUrl: 'https://example.com' });
 
     expect(store.getSyncStatus().pendingDirtyCount).toBe(0);

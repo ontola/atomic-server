@@ -145,7 +145,7 @@ export function isTerminalCommitErrorMessage(message: string): boolean {
   // already exists. Happens when local state lost `lastCommit` and a
   // follow-up save built a genesis commit. The resource is fine on the
   // server; the only loss is the never-applied diff in this commit.
-  // See `planning/fix-canvas-genesis-save.md`.
+  // See `planning/sync.md (test coverage gaps, ws_get)`.
   if (message.includes('is_genesis: true, but the resource already exists')) {
     return true;
   }
@@ -535,7 +535,7 @@ export class LocalOutbox {
    * still dirty and un-POSTed: `Resource.save()` (markDirty → await drain)
    * would report `'persisted'` for a write the server never received —
    * silent data loss from the caller's perspective (see
-   * `planning/outbox-drain-data-loss-race.md`). Instead, chain ONE
+   * `planning/completed/outbox-drain-data-loss-race.md`). Instead, chain ONE
    * follow-up pass that takes a fresh snapshot after the current pass
    * ends; the promise returned to late callers resolves only after that
    * follow-up, guaranteeing their at-call-time dirty entries were

@@ -30,11 +30,20 @@ export const Tag = {
   BLOB_RESPONSE: 0x35,
   /**
    * Reserved (do not reuse). Previously `QUERY_UPDATE` — retired in
-   * `planning/drop-query-update.md`. Drive-wide membership signals now
+   * `planning/sync.md` ("QUERY_UPDATE removed"). Drive-wide membership signals now
    * arrive as plain `UPDATE` (0x11) / `DESTROY` (0x12) frames.
    */
   QUERY_UPDATE_RESERVED: 0x36,
+  /** Peer-stream (Iroh) only: device name + capability list after AUTH_OK.
+   *  A browser socket never sends or receives it; listed so debug output
+   *  can name it. */
+  HELLO: 0x37,
+  /** Peer-stream only: binary presence / cursor / live-doc frames. The
+   *  browser equivalents are the `PRESENCE_UPDATE` / `LORO_*` text frames. */
   EPHEMERAL: 0x40,
+  /** Liveness probe. The server echoes it over WebSocket; see
+   *  `WSClient`'s liveness timer. */
+  KEEPALIVE: 0x41,
 } as const;
 
 // ---- UPDATE flags ----
@@ -84,7 +93,23 @@ export const ErrorCode = {
    *  PRESENCE_SUBSCRIBE) was refused because the agent cannot read the
    *  subject or drive. Nothing was subscribed. */
   UNAUTHORIZED_READ: 7,
+  /** An AUTH frame was refused: bad signature, unknown agent, a timestamp
+   *  outside the accepted window, or a `requestedSubject` that does not
+   *  name this server. Sign a fresh proof for the right origin; resending
+   *  the same frame changes nothing. */
+  AUTH_FAILED: 8,
 } as const;
+
+/** Capability names a server may advertise in its AUTH_OK payload (mirrors
+ *  `protocol::CAPABILITIES` in `lib/src/sync/protocol.rs`). A server that
+ *  sends none is the pre-2026-09 baseline. */
+export type ServerCapability =
+  | 'auth-max-age'
+  | 'keepalive'
+  | 'rbsr'
+  | 'pull-from'
+  | 'signed-destroy'
+  | 'unsub';
 
 // ---- Low-level read/write helpers ----
 
@@ -171,24 +196,67 @@ export function encodeSub(driveSubject: string): Uint8Array {
   return buf;
 }
 
+/**
+ * Binary SYNC (0x30): `[drive_len: u16] [drive] [hash_len: u16] [hash_utf8]
+ * [json_vv]`. `hash` is the hex drive hash as a string (what
+ * `compute_drive_hash` / `computeDriveSyncState` produce), matching
+ * `protocol::decode_sync`. Until 2026-09 this wrote a raw 32-byte hash with
+ * no length prefix, which the Rust decoder misparsed; it was never sent
+ * because the browser speaks the text `SYNC_VV` form, but it is exported.
+ */
 export function encodeSync(
   driveSubject: string,
-  hash: Uint8Array,
+  hash: string,
   vvJson: string,
 ): Uint8Array {
   const driveBytes = encoder.encode(driveSubject);
+  const hashBytes = encoder.encode(hash);
   const vvBytes = encoder.encode(vvJson);
-  const buf = new Uint8Array(1 + 2 + driveBytes.length + 32 + vvBytes.length);
+  const buf = new Uint8Array(
+    1 + 2 + driveBytes.length + 2 + hashBytes.length + vvBytes.length,
+  );
   let off = 0;
   buf[off++] = Tag.SYNC;
   off = writeU16(buf, off, driveBytes.length);
   buf.set(driveBytes, off);
   off += driveBytes.length;
-  buf.set(hash, off);
-  off += 32;
+  off = writeU16(buf, off, hashBytes.length);
+  buf.set(hashBytes, off);
+  off += hashBytes.length;
   buf.set(vvBytes, off);
 
   return buf;
+}
+
+/** UNSUB (0x21): cancel a drive subscription made with `encodeSub`. */
+export function encodeUnsub(driveSubject: string): Uint8Array {
+  const driveBytes = encoder.encode(driveSubject);
+  const buf = new Uint8Array(1 + driveBytes.length);
+  buf[0] = Tag.UNSUB;
+  buf.set(driveBytes, 1);
+
+  return buf;
+}
+
+/** KEEPALIVE (0x41): payload-free liveness probe; the server echoes it. */
+export function encodeKeepalive(): Uint8Array {
+  return new Uint8Array([Tag.KEEPALIVE]);
+}
+
+/** The capability names in an AUTH_OK payload (bytes after the tag). Empty
+ *  for a bare `[0x02]` from an older server. */
+export function decodeAuthOk(data: Uint8Array): string[] {
+  if (data.length === 0) return [];
+
+  try {
+    const parsed = JSON.parse(decoder.decode(data));
+
+    return Array.isArray(parsed)
+      ? parsed.filter((c): c is string => typeof c === 'string')
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 export function encodeSyncPush(
@@ -380,6 +448,11 @@ export function decodeSyncDiff(data: Uint8Array): DecodedSyncDiff | undefined {
 }
 
 /** Chunking thresholds — keep each WS frame under legacy 64 KiB limits. */
+/** Chunking thresholds for `encodeSyncPushChunks`. The entry cap matches the
+ *  Rust sender (`protocol::SYNC_PUSH_MAX_ENTRIES`). The byte cap is a
+ *  sender-side choice: the Rust sender closes a chunk at 1 MiB, the browser
+ *  at 48 KiB so a slow uplink shows progress per chunk. Receivers accept
+ *  either; the protocol only requires that the final chunk carry `LAST`. */
 const SYNC_PUSH_MAX_ENTRIES = 100;
 const SYNC_PUSH_MAX_BYTES = 48 * 1024;
 
@@ -479,7 +552,10 @@ const TAG_NAMES: Record<number, string> = {
   [Tag.SYNC_PUSH]: 'SYNC_PUSH',
   [Tag.BLOB_REQUEST]: 'BLOB_REQUEST',
   [Tag.BLOB_RESPONSE]: 'BLOB_RESPONSE',
+  [Tag.QUERY_UPDATE_RESERVED]: 'QUERY_UPDATE_RESERVED',
+  [Tag.HELLO]: 'HELLO',
   [Tag.EPHEMERAL]: 'EPHEMERAL',
+  [Tag.KEEPALIVE]: 'KEEPALIVE',
 };
 
 /**

@@ -1,6 +1,6 @@
 //! Drive-wide membership signals over WebSocket.
 //!
-//! After `planning/drop-query-update.md` retired the QUERY_UPDATE /
+//! After `planning/sync.md` ("QUERY_UPDATE removed") retired the QUERY_UPDATE /
 //! SUBSCRIBE_QUERY channel, drive-wide subscribers receive resource
 //! creates as `UPDATE (0x11)` frames (with full snapshot + commit_id)
 //! and destroys as `DESTROY (0x12)` frames — same channel that was

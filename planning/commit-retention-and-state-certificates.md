@@ -1,6 +1,10 @@
 # Commits as State Certificates
 
 > **Status:** Proposal (2026-05; per-resource retention added 2026-05-29).
+>
+> **Decision (accepted 2026-09-01):** the retention floor is envelope-on-resource
+> ([`completed/commit-retention-floor-decision.md`](./completed/commit-retention-floor-decision.md));
+> #1313 waits for `Tree::Envelopes`, sequence #1274 → #1313 → #1254.
 > Reframes Atomic Commits around Loro as the resource history engine. It does
 > **not** propose removing signed writes — it separates the *required trust
 > boundary* (verify a signed write) from *optional audit retention* (keep the

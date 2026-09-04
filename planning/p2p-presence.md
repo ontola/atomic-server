@@ -1,6 +1,14 @@
 # P2P presence — ephemeral awareness over the Iroh live channel
 
-> **Status:** Proposal (2026-07-10). Extends the shipped browser presence
+> **Status:** Mostly built (2026-09-03). The `EPHEMERAL (0x40)` codec
+> (`lib/src/sync/protocol.rs`, `ephemeral_frame_tests`), the peer send/receive
+> path (`broadcast_ephemeral` + the `0x40` arm in `register_live_peer`) and the
+> server bridge (`server/src/loro_sync_broadcaster.rs`) are in, with an Iroh e2e
+> (`e2e_presence_crosses_the_link_without_being_stored`) proving presence crosses
+> the link and reaches no store. Open: the two-device verification below (M12 in
+> [`pairing-ux-field-test.md`](./pairing-ux-field-test.md)) and OQ1 bandwidth.
+> Originally written 2026-07-10 as a proposal; the rest of this doc is that
+> design. Extends the shipped browser presence
 > model ([`presence-views.md`](./presence-views.md)) to travel device-to-device
 > over the serverless Iroh transport ([`serverless-p2p.md`](./serverless-p2p.md)),
 > so a user's own devices show each other's cursors and "viewing / following /

@@ -1,6 +1,6 @@
 # Trust model: the node that owns the URL is trusted; anything that only stores is blind
 
-**Status:** Accepted 2026-09-01 — option C. For [`unified-sync.md`](./unified-sync.md) F1 the fix is the signed state root ([`drive-reconciliation.md`](./drive-reconciliation.md)), chosen over provenance-per-push envelopes on `SYNC_PUSH`.
+**Status:** Accepted 2026-09-01 — option C. For [`unified-sync.md`](../unified-sync.md) F1 the fix is the signed state root ([`drive-reconciliation.md`](../drive-reconciliation.md)), chosen over provenance-per-push envelopes on `SYNC_PUSH`.
 
 > **Decision needed by maintainer**
 >
@@ -11,7 +11,7 @@
 
 ## Context
 
-[`encryption.md`](./encryption.md) is marked "Exploration / undecided (2026-06)" and lists
+[`encryption.md`](../encryption.md) is marked "Exploration / undecided (2026-06)" and lists
 "blind replica" and "trusted verifier" as open roles. Two pieces have since shipped and
 fixed the shape of the answer:
 
@@ -19,11 +19,11 @@ fixed the shape of the answer:
   `RedbStore::new_opfs` (`lib/src/db/redb_store.rs:207`). The native server path
   `Db::init_redb_file` (`lib/src/db.rs:506`) takes no key: a self-hosted or managed
   `atomic-server` keeps `atomic.redb` **plaintext on disk** today. See
-  [`opfs-per-agent-encryption.md`](./opfs-per-agent-encryption.md).
+  [`opfs-per-agent-encryption.md`](../opfs-per-agent-encryption.md).
 - **Blind vault backup v1**: `lib/src/vault/` (envelope, pack, keys, store, sync). The store
   holding vault objects cannot read subjects, values, or counts
   (`a_restore_without_the_right_key_fails`, `sealed_packs_do_not_reveal_subjects`). See
-  [`encrypted-vault-format.md`](./encrypted-vault-format.md).
+  [`encrypted-vault-format.md`](../encrypted-vault-format.md).
 
 The SaaS side already sells these as two tiers on a "trust spectrum" (`atomic-saas`
 `OSS_STRATEGY.md`: Blind = recovery + Cloud Vault; Trusted = Cloud Sync managed node) and
@@ -90,7 +90,7 @@ are both trusted; a self-hosted MinIO bucket and the SaaS Vault are both blind.
 
 Consequences per area:
 
-- **[`encryption.md`](./encryption.md)** — close the E2EE / blind-replica question as
+- **[`encryption.md`](../encryption.md)** — close the E2EE / blind-replica question as
   **"at-rest + vault"**: local cache at rest (shipped), server at rest (to build, see
   step 2), blind vault (shipped). Mark "Blind replica" and "Optional trusted verifier"
   candidate models as *not planned*. Reopen only if a concrete design demonstrates, on
@@ -99,7 +99,7 @@ Consequences per area:
   drive-scoped `QueryFilter` and full-text search; (c) **fan-out** — decide which
   subscribers may receive a commit. Anything short of all three is a vault, and the vault
   exists.
-- **Zones plaintext ACLs** ([`zones.md`](./zones.md), #1254) — fine. Rights arrays stay
+- **Zones plaintext ACLs** ([`zones.md`](../zones.md), #1254) — fine. Rights arrays stay
   plaintext propvals read by `check_rights`; the zone index is a derived plaintext index on
   the trusted node. `zones.md`'s aside that "ACL properties stay plaintext containers even
   in an encrypted zone, so blind hubs can enforce admission" is compatible but not required
@@ -109,7 +109,7 @@ Consequences per area:
   wrapper kind `NodeKey` in `lib/src/vault/secret_envelope.rs`). Correct under C: the node
   spends the secret in unattended runs, so the node must be able to open it. Never a
   resource, never synced.
-- **S3 blobs** ([`s3-blob-storage.md`](./s3-blob-storage.md)) — the bucket is a blind
+- **S3 blobs** ([`s3-blob-storage.md`](../s3-blob-storage.md)) — the bucket is a blind
   store. Its v1 "rely on S3-side SSE" is not enough under the rule: encrypt blob bytes with
   a node-held key before `put`, so the bucket operator sees ciphertext keyed by a hash the
   node chooses (the vault already keys blobs by `blake3::keyed_hash`, reuse it). The node
@@ -135,7 +135,7 @@ Consequences per area:
   never gets AI over drive content.
 - **Sync peers** — a peer that receives a drive over `SYNC` is a node that owns the data
   for its own reads: trusted by construction (`collect_readable_snapshots` already filters
-  per agent). Same-agent P2P ([`serverless-p2p.md`](./serverless-p2p.md)) is unaffected.
+  per agent). Same-agent P2P ([`serverless-p2p.md`](../serverless-p2p.md)) is unaffected.
 
 Sequencing:
 

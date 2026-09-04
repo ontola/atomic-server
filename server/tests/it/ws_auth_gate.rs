@@ -258,3 +258,196 @@ async fn rejected_sync_push_gets_error_not_sync_ok() {
     assert!(err.contains("no write right"), "{err}");
     assert_quiet(&mut rx).await;
 }
+
+/// The hash-first probe and the RBSR range frames are reads, so they stay
+/// open to anonymous sessions — but gated by `check_read` like every other
+/// read. They used to walk the drive as Sudo, which let anyone enumerate
+/// every subject and version vector of a private drive by naming it.
+#[tokio::test]
+async fn rbsr_and_probe_are_gated_by_check_read() {
+    let port = start_server("ws_gate_rbsr");
+    wait_for_server(port).await;
+    let server_url = format!("http://localhost:{port}");
+    let ws_url = format!("ws://localhost:{port}/ws");
+
+    let client = Client::new(&server_url).await.unwrap();
+    let alice = client.new_agent("Alice").await.unwrap();
+    let (drive, secret) = private_drive_with_child(&client, &alice).await;
+
+    let ws = WsClient::connect(&ws_url).await.unwrap();
+    let mut rx = ws.subscribe();
+
+    ws.send_raw(&format!(
+        r#"RBSR_ITEMS {{"drive":"{drive}","lo":"","hi":null}}"#
+    ))
+    .await
+    .unwrap();
+    let err = next_error(&mut rx).await;
+    assert!(
+        err.contains("RBSR_ITEMS refused") && err.contains(&drive),
+        "{err}"
+    );
+    assert!(!err.contains(&secret), "the refusal must not leak subjects");
+
+    ws.send_raw(&format!(
+        r#"RBSR_FP {{"drive":"{drive}","ranges":[["",null]]}}"#
+    ))
+    .await
+    .unwrap();
+    let err = next_error(&mut rx).await;
+    assert!(err.contains("RBSR_FP refused"), "{err}");
+
+    ws.send_raw(&format!(
+        r#"SYNC_VV {{"drive":"{drive}","driveHash":"deadbeef","probe":true}}"#
+    ))
+    .await
+    .unwrap();
+    let err = next_error(&mut rx).await;
+    assert!(err.contains("SYNC_VV refused"), "{err}");
+
+    // The owner gets the items. The Rust client has no RBSR_ITEMS parser, so
+    // the text reply surfaces as an "Unknown message" — which is enough to
+    // see that the answer came and names the private child.
+    let ws_owner = WsClient::connect(&ws_url).await.unwrap();
+    ws_owner.authenticate(&alice).await.unwrap();
+    let mut rx_owner = ws_owner.subscribe();
+    ws_owner
+        .send_raw(&format!(
+            r#"RBSR_ITEMS {{"drive":"{drive}","lo":"","hi":null}}"#
+        ))
+        .await
+        .unwrap();
+    let reply = next_error(&mut rx_owner).await;
+    assert!(
+        reply.contains("Unknown message: RBSR_ITEMS") && reply.contains(&secret),
+        "{reply}"
+    );
+}
+
+/// An AUTH proof is bound to this server's origin: one signed for another
+/// server (or lifted from an HTTP auth header for some resource URL) does
+/// not open a session here.
+#[tokio::test]
+async fn auth_signed_for_another_origin_is_refused() {
+    let port = start_server("ws_gate_auth_origin");
+    wait_for_server(port).await;
+    let server_url = format!("http://localhost:{port}");
+    let ws_url = format!("ws://localhost:{port}/ws");
+
+    let client = Client::new(&server_url).await.unwrap();
+    let alice = client.new_agent("Alice").await.unwrap();
+
+    let ws = WsClient::connect(&ws_url).await.unwrap();
+    let foreign = protocol::encode_auth(&alice, "https://evil.example").unwrap();
+    let err = ws
+        .authenticate_with_frame(foreign)
+        .await
+        .expect_err("a proof for another origin is refused");
+    assert!(
+        err.to_string().contains("does not name this server"),
+        "{err}"
+    );
+
+    // The agent's own subject is not the server either (the pre-2026-09
+    // Rust client signed that).
+    let own_subject = protocol::encode_auth(&alice, &alice.subject.to_string()).unwrap();
+    assert!(ws.authenticate_with_frame(own_subject).await.is_err());
+
+    // A proof for this origin, signed now, is accepted on the same socket.
+    ws.authenticate(&alice)
+        .await
+        .expect("a fresh proof for this origin authenticates");
+}
+
+/// A server is often reachable under a name other than its configured URL
+/// (a proxy, a container network, this test dialling `127.0.0.1` while the
+/// server calls itself `localhost`). The browser signs the origin it used,
+/// so a proof for the *request's* host is accepted too, as the HTTP auth
+/// headers have always done.
+#[tokio::test]
+async fn auth_signed_for_the_request_host_is_accepted() {
+    let port = start_server("ws_gate_auth_request_host");
+    wait_for_server(port).await;
+    let server_url = format!("http://localhost:{port}");
+
+    let client = Client::new(&server_url).await.unwrap();
+    let alice = client.new_agent("Alice").await.unwrap();
+
+    // `WsClient` signs the origin of the URL it dialled: `http://127.0.0.1:{port}`,
+    // which is not the configured `http://localhost:{port}`.
+    let ws = WsClient::connect(&format!("ws://127.0.0.1:{port}/ws"))
+        .await
+        .unwrap();
+    assert_eq!(ws.origin(), format!("http://127.0.0.1:{port}"));
+    ws.authenticate(&alice)
+        .await
+        .expect("a proof for the host the socket was opened on authenticates");
+
+    // A third name, neither the request host nor the configured URL, still fails.
+    let ws2 = WsClient::connect(&format!("ws://127.0.0.1:{port}/ws"))
+        .await
+        .unwrap();
+    let foreign = protocol::encode_auth(&alice, &format!("http://atomic.example:{port}")).unwrap();
+    assert!(ws2.authenticate_with_frame(foreign).await.is_err());
+}
+
+/// An AUTH proof expires. A captured frame replayed later is refused
+/// instead of staying a permanent key.
+#[tokio::test]
+async fn stale_auth_is_refused() {
+    let port = start_server("ws_gate_auth_stale");
+    wait_for_server(port).await;
+    let server_url = format!("http://localhost:{port}");
+    let ws_url = format!("ws://localhost:{port}/ws");
+
+    let client = Client::new(&server_url).await.unwrap();
+    let alice = client.new_agent("Alice").await.unwrap();
+
+    // The same frame `encode_auth` builds, with a timestamp from well past
+    // the accepted window.
+    let stale_at = atomic_lib::utils::now() - atomic_lib::authentication::AUTH_MAX_AGE_MS - 60_000;
+    let message = format!("{server_url} {stale_at}");
+    let signature =
+        atomic_lib::agents::sign_message(message.as_bytes(), alice.private_key.as_ref().unwrap())
+            .unwrap();
+    let stale = serde_json::json!({
+        "https://atomicdata.dev/properties/auth/publicKey": alice.public_key,
+        "https://atomicdata.dev/properties/auth/timestamp": stale_at,
+        "https://atomicdata.dev/properties/auth/signature": signature,
+        "https://atomicdata.dev/properties/auth/requestedSubject": server_url,
+        "https://atomicdata.dev/properties/auth/agent": alice.subject.to_string(),
+    });
+    let mut frame = vec![protocol::tag::AUTH];
+    frame.extend_from_slice(stale.to_string().as_bytes());
+
+    let ws = WsClient::connect(&ws_url).await.unwrap();
+    let err = ws
+        .authenticate_with_frame(frame)
+        .await
+        .expect_err("a stale proof is refused");
+    assert!(err.to_string().contains("too old"), "{err}");
+}
+
+/// A browser cannot see protocol-level pings, so it probes with `KEEPALIVE`
+/// and the server echoes it. Anonymous is fine: it carries nothing.
+#[tokio::test]
+async fn keepalive_is_echoed() {
+    let port = start_server("ws_gate_keepalive");
+    wait_for_server(port).await;
+    let ws_url = format!("ws://localhost:{port}/ws");
+
+    let ws = WsClient::connect(&ws_url).await.unwrap();
+    let mut rx = ws.subscribe();
+    ws.send_keepalive().await.unwrap();
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            match rx.recv().await {
+                Ok(WsMessage::Keepalive) => return,
+                Ok(_) => continue,
+                Err(e) => panic!("connection closed: {e}"),
+            }
+        }
+    })
+    .await
+    .expect("the server echoes KEEPALIVE within 5s");
+}

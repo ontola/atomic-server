@@ -7,6 +7,39 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- **Sync protocol hardening** (WebSocket and Iroh; wire reference rewritten in
+  `docs/src/websockets.md`, see its "Changed in 2026-09" section):
+  - `AUTH` proofs expire: a signed authentication older than five minutes
+    (`atomic_lib::authentication::AUTH_MAX_AGE_MS`) is refused, on WebSocket,
+    Iroh and the HTTP auth headers alike. Until now only future-dated
+    timestamps were rejected, so a captured proof never expired.
+  - Over WebSocket, `AUTH.requestedSubject` must name the server: either the
+    origin the socket was opened on or the configured server URL
+    (`AuthBinding::Origins`, the same tolerance the HTTP auth headers have); a
+    proof signed for another server, or for the agent's own subject, no
+    longer opens a session. A refused `AUTH` answers
+    with the new error code `AUTH_FAILED (8)`. The Rust `WsClient` now signs
+    the server origin (it signed the agent subject before). The Iroh
+    initiator only accepts an auth-back signed for its own node id.
+  - The hash-first `SYNC_VV` probe and the `RBSR_FP` / `RBSR_ITEMS` frames
+    are gated by `check_read` per subject, like the full `SYNC_VV` exchange.
+    Previously any socket could enumerate every subject and version vector of
+    any drive it could name.
+  - On the Iroh live link, destroys travel as the signed destroy `COMMIT`
+    (`DbEvent::Destroyed` now carries `commit_json`); a naked `DESTROY` frame
+    from a peer is ignored instead of applied on the connection's drive-level
+    write verdict.
+  - Capability advertisement: `AUTH_OK` carries a JSON array of capability
+    names (`atomic_lib::sync::protocol::CAPABILITIES`), `HELLO` carries the
+    same list after the device name. Both are optional trailing bytes.
+  - `UNSUB (0x21)` now actually cancels a drive subscription (it previously
+    edited a set nothing read). `KEEPALIVE (0x41)` is echoed over WebSocket so
+    browsers can detect a dead socket.
+  - Shared golden wire vectors (`lib/src/sync/protocol_vectors.json`, mirrored
+    at `browser/lib/src/protocol_vectors.json`) pin the Rust and TypeScript
+    codecs byte-for-byte.
+  - Integration tests bind the test server to `127.0.0.1` and fall back to an
+    OS-assigned port when `portpicker` finds none (hosts without IPv6).
 - Tauri Android: ship `arm64-v8a` only. The sideloadable universal APK was ~369 MB because it bundled four copies of `libatomic_server_tauri.so` (armeabi-v7a / x86 / x86_64 as well). Phones and tablets we install on are arm64; override with `cargo tauri android build --target …` for an Intel emulator.
 
 ## [v0.41.0-beta.4] - 2026-09-03

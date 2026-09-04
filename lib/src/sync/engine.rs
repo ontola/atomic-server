@@ -17,6 +17,110 @@ use crate::{Db, Storelike};
 
 use super::protocol;
 
+/// What an `AUTH` frame's `requestedSubject` has to name for this session.
+///
+/// The signature covers `"{requestedSubject} {timestamp}"`, so the subject
+/// is what stops a proof signed for one place from opening another. Every
+/// transport binds it differently: the browser signs the server origin, the
+/// Iroh initiator signs the drive it is about to sync (bound after AUTH by
+/// the accept loop in `peer.rs`), the auth-back signs the remote node key.
+/// A transport that knows what the subject must be passes it here and a
+/// mismatch is refused with `AUTH_FAILED`; one that binds later (or has
+/// nothing to bind to) passes `Unbound`.
+#[derive(Debug, Clone, Copy)]
+pub enum AuthBinding<'a> {
+    /// Accept whatever subject the proof names. The caller binds it itself
+    /// (Iroh) or the subject carries no meaning for this session.
+    Unbound,
+    /// The proof must name this origin (`scheme://host[:port]`), or a
+    /// subject under it. What a WebSocket responder passes: the browser
+    /// signs `new URL(ws.url).origin`, so a proof captured from a request to
+    /// another server, or an HTTP auth header for some resource URL, is not
+    /// a WebSocket session here.
+    Origin(&'a str),
+    /// Like [`AuthBinding::Origin`], but any of several origins is accepted.
+    /// A server is commonly reachable under more than one name (its
+    /// configured URL, the host a proxy or a test harness dials it on), and
+    /// the client signs the one it used. The WebSocket responder passes the
+    /// origin the upgrade request arrived on together with its configured
+    /// server URL, which is the same tolerance the HTTP auth headers have
+    /// always had (they compare against the request URL).
+    Origins(&'a [&'a str]),
+}
+
+/// `scheme://host[:port]` of a URL, lower-cased, or `None` for anything that
+/// is not an absolute http(s) URL (a DID, `internal:/`, garbage).
+fn url_origin(url: &str) -> Option<String> {
+    let parsed = url::Url::parse(url).ok()?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return None;
+    }
+    let host = parsed.host_str()?.to_ascii_lowercase();
+    Some(match parsed.port() {
+        Some(p) => format!("{}://{}:{}", parsed.scheme(), host, p),
+        None => format!("{}://{}", parsed.scheme(), host),
+    })
+}
+
+/// Verify an `AUTH` frame payload (the JSON after the tag byte), and on
+/// success assign the proven identity to `agent`. Returns the frames to send
+/// back: `AUTH_OK` (carrying this build's capabilities) or one `ERROR` with
+/// `AUTH_FAILED`. One implementation for every transport; see
+/// [`AuthBinding`] for the one thing that differs between them.
+pub async fn handle_auth_frame(
+    payload: &[u8],
+    store: &Db,
+    agent: &mut crate::agents::ForAgent,
+    binding: AuthBinding<'_>,
+) -> Vec<Vec<u8>> {
+    let refuse = |msg: String| {
+        vec![protocol::encode_error(
+            0,
+            protocol::error_code::AUTH_FAILED,
+            &msg,
+        )]
+    };
+
+    let Ok(json) = std::str::from_utf8(payload) else {
+        return refuse("Invalid UTF-8 in auth".into());
+    };
+    let auth = match serde_json::from_str::<crate::authentication::AuthValues>(json) {
+        Ok(a) => a,
+        Err(e) => return refuse(format!("Invalid auth JSON: {e}")),
+    };
+
+    let expected: Vec<&str> = match binding {
+        AuthBinding::Unbound => Vec::new(),
+        AuthBinding::Origin(one) => vec![one],
+        AuthBinding::Origins(many) => many.to_vec(),
+    };
+    // Only absolute http(s) URLs can bind. A responder that knows none of
+    // its origins (no base domain configured) falls back to the unbound
+    // behaviour; that is the localhost / test default, not a public host.
+    let expected_origins: Vec<String> = expected.iter().filter_map(|o| url_origin(o)).collect();
+    if !expected_origins.is_empty() {
+        let signed_origin = url_origin(&auth.requested_subject);
+        let named_this_server = signed_origin
+            .as_deref()
+            .is_some_and(|signed| expected_origins.iter().any(|e| e == signed));
+        if !named_this_server {
+            return refuse(format!(
+                "Auth failed: requestedSubject {} does not name this server ({})",
+                auth.requested_subject,
+                expected_origins.join(" or ")
+            ));
+        }
+    }
+
+    match crate::authentication::get_agent_from_auth_values_and_check(Some(auth), store).await {
+        Ok(a) => {
+            *agent = a;
+            vec![protocol::encode_auth_ok()]
+        }
+        Err(e) => refuse(format!("Auth failed: {e}")),
+    }
+}
+
 /// Process a single v2 binary frame. Returns response frames to send back.
 /// This is the transport-agnostic entry point — used by WebSocket, Iroh, etc.
 pub async fn handle_frame(
@@ -32,41 +136,7 @@ pub async fn handle_frame(
     let payload = &frame[1..];
 
     match tag {
-        protocol::tag::AUTH => {
-            if let Ok(json) = std::str::from_utf8(payload) {
-                match serde_json::from_str::<crate::authentication::AuthValues>(json) {
-                    Ok(auth) => {
-                        match crate::authentication::get_agent_from_auth_values_and_check(
-                            Some(auth),
-                            store,
-                        )
-                        .await
-                        {
-                            Ok(a) => {
-                                *agent = a;
-                                vec![protocol::encode_auth_ok()]
-                            }
-                            Err(e) => vec![protocol::encode_error(
-                                0,
-                                protocol::error_code::UNKNOWN,
-                                &format!("Auth failed: {e}"),
-                            )],
-                        }
-                    }
-                    Err(e) => vec![protocol::encode_error(
-                        0,
-                        protocol::error_code::UNKNOWN,
-                        &format!("Invalid auth JSON: {e}"),
-                    )],
-                }
-            } else {
-                vec![protocol::encode_error(
-                    0,
-                    protocol::error_code::UNKNOWN,
-                    "Invalid UTF-8 in auth",
-                )]
-            }
-        }
+        protocol::tag::AUTH => handle_auth_frame(payload, store, agent, AuthBinding::Unbound).await,
 
         protocol::tag::GET => {
             if let Some(decoded) = protocol::decode_get(payload) {
@@ -102,7 +172,7 @@ pub async fn handle_frame(
                             let subject_resolved = resource.get_subject().resolve(&origin);
                             // Include `lastCommit` so the recipient can set
                             // `previousCommit` on its next save. See
-                            // `planning/fix-canvas-genesis-save.md`.
+                            // `planning/sync.md` (test coverage gaps, `ws_get`).
                             let last_commit = resource
                                 .get(crate::urls::LAST_COMMIT)
                                 .ok()
@@ -697,6 +767,70 @@ pub async fn drive_sync_hash(store: &Db, drive: &str) -> String {
     let drive_subjects = collect_drive_subjects(store, &drive_subject).await;
     let server_vvs = build_drive_vvs(store, &drive_subjects);
     compute_drive_hash(&server_vvs)
+}
+
+/// The drive's RBSR items as `agent` may see them: the drive resource itself
+/// must be readable (else `Err`, the caller refuses with
+/// `UNAUTHORIZED_READ`), and every subject the agent cannot `check_read` is
+/// left out. This is the gate the full `SYNC_VV` path has always applied per
+/// subject; the hash-first probe and the `RBSR_FP` / `RBSR_ITEMS` frames
+/// used to skip it, which let an anonymous socket enumerate every subject
+/// and version vector of any drive it could name.
+///
+/// Filtering per agent also makes the fingerprints *match*: a client only
+/// ever fingerprints what it holds, which is what it may read, so a server
+/// fingerprint over the unfiltered set would never agree with it for a
+/// drive with any private subject.
+pub async fn drive_items_for(
+    store: &Db,
+    drive: &str,
+    agent: &crate::agents::ForAgent,
+) -> Result<Vec<crate::sync::rbsr::Item>, String> {
+    let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
+    let drive_resource = store
+        .get_resource(&drive_subject)
+        .await
+        .map_err(|_| "not readable".to_string())?;
+    crate::hierarchy::check_read(store, &drive_resource, agent)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let drive_subjects = collect_drive_subjects(store, &drive_subject).await;
+    let vvs = build_drive_vvs(store, &drive_subjects);
+
+    let mut items: Vec<crate::sync::rbsr::Item> = Vec::with_capacity(vvs.len());
+    for (subject, vv) in vvs {
+        let readable = match store
+            .get_resource(&crate::Subject::from_raw(
+                &subject,
+                store.get_base_domain().as_deref(),
+            ))
+            .await
+        {
+            Ok(r) => crate::hierarchy::check_read(store, &r, agent).await.is_ok(),
+            Err(_) => false,
+        };
+        if readable {
+            items.push((subject, vv.into_iter().collect()));
+        }
+    }
+    items.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(items)
+}
+
+/// [`drive_sync_hash`] over the subjects `agent` may read — the hash the
+/// probe compares against, so it agrees with what that client can hold.
+pub async fn drive_sync_hash_for(
+    store: &Db,
+    drive: &str,
+    agent: &crate::agents::ForAgent,
+) -> Result<String, String> {
+    let items = drive_items_for(store, drive, agent).await?;
+    let vvs: std::collections::HashMap<String, std::collections::HashMap<String, i32>> = items
+        .into_iter()
+        .map(|(subject, vv)| (subject, vv.into_iter().collect()))
+        .collect();
+    Ok(compute_drive_hash(&vvs))
 }
 
 /// Compare client and server VVs, return binary SYNC_OK/SYNC_DIFF/SYNC_PUSH

@@ -1,6 +1,9 @@
 # Zones: ACL-bearing roots as the one boundary
 
 **Status: Proposal (2026-07-17).** Direction agreed in design discussion; nothing built.
+**Decision (accepted 2026-09-01):** the drive stays the unit of authority; the zone
+chain is hybrid/additive, not replace-and-replay
+([`completed/authority-unit-decision.md`](./completed/authority-unit-decision.md)).
 Successor-in-spirit to the drive-stamp mechanics in
 [`commit-fanout-drive-isolation.md`](./commit-fanout-drive-isolation.md) and the
 authority-replay ideas in [`authorization-sync.md`](./authorization-sync.md).

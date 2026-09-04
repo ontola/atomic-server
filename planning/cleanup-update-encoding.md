@@ -9,7 +9,7 @@ Clean up the confusing, duplicated, and potentially buggy UPDATE frame decoding 
 
 ### Sync Protocol Documentation
 
-#### [x] [websockets.md](file:///Users/joep/dev/atomic-server/docs/src/websockets.md)
+#### [x] [websockets.md](../docs/src/websockets.md)
 - Detail the exact layout and flag values of the `UPDATE (0x11)` message.
 
 ---

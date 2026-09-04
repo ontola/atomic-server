@@ -2,7 +2,7 @@
 //! (HTTP, WebSocket, Iroh, WASM, FFI, Flutter) bind to instead of wrapping
 //! [`crate::Db`] themselves.
 //!
-//! Slice 1 (`planning/atomic-lib-runtime.md`, `planning/runtime-boundary-decision.md`)
+//! Slice 1 (`planning/atomic-lib-runtime.md`, `planning/completed/runtime-boundary-decision.md`)
 //! is a thin wrapper: every method delegates to code that already existed, so
 //! there is no behaviour change — only a named place for it.
 

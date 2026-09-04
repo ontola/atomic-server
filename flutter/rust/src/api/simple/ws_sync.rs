@@ -69,7 +69,7 @@ pub async fn open_ws_sync(server_origin: &str) -> Result<(), String> {
         // Drive-wide SUB now covers everything that used to require a
         // separate `subscribe_query(parent, drive, drive)` — every commit
         // under the drive fans out as `UPDATE` / `DESTROY` on this
-        // subscription. See `planning/drop-query-update.md`.
+        // subscription. See `planning/sync.md` ("QUERY_UPDATE removed").
         client.subscribe_drive(&drive).await.map_err(err)?;
         tracing::info!("[ws_sync] subscribed to drive {}", &drive[..drive.len().min(24)]);
     }

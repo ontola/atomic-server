@@ -130,7 +130,7 @@ Shared, and authoritative over all of the above:
 | Level | Covers | Where |
 | --- | --- | --- |
 | Rust unit | pairing AUTH; a different agent syncs what it may read, is told why when it may read nothing, and pushing to an empty device is not a failure | `lib/src/sync/` |
-| Rust integration | replication, a fresh client reading a replicated workspace | `server/tests/replicate.rs` |
+| Rust integration | replication, a fresh client reading a replicated workspace | `server/tests/it/replicate.rs` |
 | Rust integration | `/server`, `/drive-usage` | `server/src/tests.rs` |
 | Dart unit | URL rules, pairing code parsing, signing parity with Rust | `flutter/test/atomic/` |
 | Browser e2e | two servers, sync between them | `browser/e2e/` |

@@ -4,7 +4,7 @@ use crate::{
     agents::{decode_base64, ForAgent},
     errors::AtomicResult,
     urls,
-    utils::check_timestamp_in_past,
+    utils::check_timestamp_fresh,
     Storelike,
 };
 
@@ -99,6 +99,17 @@ pub fn check_auth_signature(subject: &str, auth_header: &AuthValues) -> AtomicRe
 
 const ACCEPTABLE_TIME_DIFFERENCE: i64 = 10000;
 
+/// How old a signed authentication proof may be, in milliseconds.
+///
+/// An `AUTH` frame or signed auth header is a bearer proof: whoever holds
+/// the bytes is the agent, for as long as the responder accepts them. Until
+/// 2026-09 the only timestamp check was "not in the future", so a captured
+/// proof never expired. Clients sign immediately before sending (the
+/// browser per request and per socket, `WsClient` at `authenticate()`, the
+/// Iroh initiator at dial), so a few minutes leaves ample room for clock
+/// skew and slow links without turning a capture into a permanent key.
+pub const AUTH_MAX_AGE_MS: i64 = 5 * 60 * 1000;
+
 /// Get the Agent's subject from [AuthValues]
 /// Checks if the auth headers are correct, whether signature matches the public key, whether the timestamp is valid.
 /// by default, returns the public agent
@@ -111,8 +122,14 @@ pub async fn get_agent_from_auth_values_and_check(
         // If there are auth headers, check 'em, make sure they are valid.
         check_auth_signature(&auth_vals.requested_subject, &auth_vals)
             .map_err(|e| format!("Error checking authentication headers. {}", e))?;
-        // check if the timestamp is valid
-        check_timestamp_in_past(auth_vals.timestamp, ACCEPTABLE_TIME_DIFFERENCE)?;
+        // check if the timestamp is valid: not in the future, and not so old
+        // that a captured proof could be replayed indefinitely.
+        check_timestamp_fresh(
+            auth_vals.timestamp,
+            ACCEPTABLE_TIME_DIFFERENCE,
+            AUTH_MAX_AGE_MS,
+        )
+        .map_err(|e| format!("Authentication timestamp rejected. {}", e))?;
         // check if the public key belongs to the agent
         // For DID subjects, we need to fetch the agent resource locally
         // unless it's a DID based on the public key, in which case we can verify it directly.

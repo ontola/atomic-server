@@ -41,10 +41,10 @@ no `did:ad:frozen` anywhere in `lib/src`, `server/src`, `browser/lib/src` or `do
 `server/src/appstate.rs:156-178` runs `populate_base_models` + `populate_default_store` when
 set and the store is not being initialized. It is manual, server-only, and does not touch
 existing base-model definitions (add-only above). The gap as claimed in planning:
-[`drafts-and-suggestions.md`](./drafts-and-suggestions.md) §Known gap ("a store that was already
+[`drafts-and-suggestions.md`](../drafts-and-suggestions.md) §Known gap ("a store that was already
 populated never picks up a newly-added `lib/defaults/*.json`"; browser WASM needs a rebuilt
 bundle *and* a store that repopulates), inherited verbatim by
-[`content-i18n.md`](./content-i18n.md) (lines 88-91, 327). `--repopulate-defaults` is not
+[`content-i18n.md`](../content-i18n.md) (lines 88-91, 327). `--repopulate-defaults` is not
 wired into the WASM/OPFS path at all (`db.rs:714` `init_redb_opfs` only calls `bootstrap`).
 
 **How the write path validates.** The Loro commit path (`/commit`, WS, Iroh) builds
@@ -106,7 +106,7 @@ Sequencing:
    overwrite risk is the mutable `https://atomicdata.dev/...` set, which is exactly the set
    `populate_base_models` already refuses to overwrite (`populate.rs:231-234`). The
    fingerprint also removes the "rebuilt wasm bundle *and* a store that repopulates" dance in
-   [`drafts-and-suggestions.md`](./drafts-and-suggestions.md): a new bundle carries a new
+   [`drafts-and-suggestions.md`](../drafts-and-suggestions.md): a new bundle carries a new
    fingerprint, so the OPFS store repopulates itself on next open.
 2. **Merge the policy (#1316, #1245).** They make the Rust API and the data-browser match
    what the commit path already does.
@@ -132,8 +132,9 @@ migrations between schema versions (issue #1207 open question). Neither blocks s
 
 - **#1316** (Schema is recommended, not required on the write path): **merge-as-is**. One
   behaviour change (`Resource::set` falls back to `set_unsafe` on unknown Property,
-  `lib/src/resources.rs`) plus docs and `planning/optional-schema.md`. Ask the author to note
-  in `optional-schema.md` that this is the permissive half of this decision, not the on-ramp.
+  `lib/src/resources.rs`) plus docs and #1316's branch-only `optional-schema.md` (not in
+  `planning/`). Ask the author to note there that this is the permissive half of this
+  decision — recorded in this document — not the on-ramp.
 - **#1245** (Allow editing classless resources): **merge-as-is**. Removes the
   `ResourceForm.tsx:167` gate, adds `browser/e2e/tests/classless-edit.spec.ts`. UI dual of #1316.
 - **#1262** (`did:ad:frozen` schemas + code-first API): **rebase-after #1309 and step 1**, then

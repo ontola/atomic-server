@@ -43,7 +43,10 @@ pub enum ReplicateAuth {
     Agent(Box<Agent>),
     /// Relay an AUTH frame signed elsewhere — by the drive owner's browser —
     /// so this server can push as the owner without ever holding their key.
-    /// The frame is timestamp-bound, so it must be minted for this attempt.
+    /// The frame is timestamp-bound (`AUTH_MAX_AGE_MS`), so it must be minted
+    /// for this attempt, and its `requestedSubject` must be the *remote's*
+    /// origin (`https://host[:port]`): the remote binds the proof to itself
+    /// and refuses one signed for anything else with `AUTH_FAILED`.
     PreSigned(Vec<u8>),
     /// Connect anonymously. Only useful for *reading*: a WebSocket remote
     /// refuses `SYNC_PUSH` before `AUTH` (`ERROR` code `AUTH_REQUIRED`), so an

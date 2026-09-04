@@ -1,6 +1,6 @@
 //! WebSocket binary GET → UPDATE integration test.
 //!
-//! Regression test for `planning/fix-canvas-genesis-save.md`: the server
+//! Regression test for `planning/sync.md (test coverage gaps, ws_get)`: the server
 //! must include the `lastCommit` value (with the `HAS_COMMIT_ID` flag) on
 //! every WS `GET` response, otherwise a client that learned the resource
 //! purely over WS has no `previousCommit` to set on its next save and
@@ -109,7 +109,7 @@ async fn ws_get_carries_commit_id() -> AtomicResult<()> {
         commit_id.as_deref(),
         Some(expected_last_commit.as_str()),
         "UPDATE response to a binary GET must carry the resource's current lastCommit \
-         (HAS_COMMIT_ID flag) — see planning/fix-canvas-genesis-save.md",
+         (HAS_COMMIT_ID flag) — see planning/sync.md (test coverage gaps, ws_get)",
     );
 
     Ok(())

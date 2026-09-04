@@ -20,18 +20,14 @@ wire reference.
 ## Decisions
 
 Decision documents: one question each, written as an RFC with a recommendation.
-Each starts with a decision box and ends with the consequences for open PRs.
-All five below were **accepted on 2026-09-01**; the status line at the top of
-each document records the outcome. Fold each outcome into the owning plan, then
-move the document to `completed/`.
+All five were **accepted on 2026-09-01**, folded into their owning plans, and
+now live in [`completed/`](./completed/):
 
-| Document | Question | Outcome (accepted 2026-09-01) | Affects |
-| --- | --- | --- | --- |
-| [`runtime-boundary-decision.md`](./runtime-boundary-decision.md) | Rust-only runtime vs twinned-by-design between `atomic_lib` and `@tomic/lib`. | `AtomicNode` in `lib/src/runtime/` is the binding runtime; #1277/#1241 bind it, no parallel `simple.rs`/`ffi/`. First slice on `feat/atomic-node-slice`. | #1273, #1274, #1277, #1241, #1278 |
-| [`authority-unit-decision.md`](./authority-unit-decision.md) | Drive vs zone as the unit of authority; additive creator chain vs replace-and-replay. | Drive stays the authority unit; #1254 restores the drive fast path, drops `collect_zone_subjects`, keeps the zone chain hybrid/additive. | #1254, #1307, #1310 |
-| [`commit-retention-floor-decision.md`](./commit-retention-floor-decision.md) | What must be retained for authorization and audit before commits become envelopes. | Envelope-on-resource. #1313 on hold until `Tree::Envelopes` exists; sequence #1274 → #1313 → #1254. | #1313, #1274, #1254 |
-| [`trust-model-decision.md`](./trust-model-decision.md) | Blind vs trusted server. | The node that owns the URL is trusted with plaintext; anything that only stores is blind. `encryption.md` closed to at-rest + vault. Sync F1 closed by the signed state root, not provenance-per-push. | #1310, #1307, #1254 |
-| [`schema-routes-decision.md`](./schema-routes-decision.md) | Optional schema vs `did:ad:frozen` vs `lib/defaults/*.json`; the `--repopulate-defaults` gap. | Accepted as policy (#1316): `did:ad:frozen` is the on-ramp, optional schema is the write-path policy. #1251 to become a frozen ontology; bootstrap sentinel-gate fix on `fix/defaults-bootstrap-gate`. | #1316, #1245, #1262, #1209, #1251, #1309 |
+- [`runtime-boundary-decision.md`](./completed/runtime-boundary-decision.md) — `AtomicNode` in `lib/src/runtime/` is the binding runtime; no parallel `simple.rs` / `ffi/`.
+- [`authority-unit-decision.md`](./completed/authority-unit-decision.md) — the drive stays the unit of authority; the zone chain is hybrid/additive.
+- [`commit-retention-floor-decision.md`](./completed/commit-retention-floor-decision.md) — envelope-on-resource; #1313 waits for `Tree::Envelopes`.
+- [`trust-model-decision.md`](./completed/trust-model-decision.md) — the node that owns the URL is trusted with plaintext; anything that only stores is blind.
+- [`schema-routes-decision.md`](./completed/schema-routes-decision.md) — `did:ad:frozen` is the on-ramp, optional schema is the write-path policy.
 
 ## Active
 
@@ -39,8 +35,8 @@ Remaining work, not "this file exists."
 
 | Document | Status |
 | --- | --- |
-| [`unified-sync.md`](./unified-sync.md) | **Active.** One sync API over WS or Iroh. Remaining: AUTH-before-SYNC fail-closed, signed destroys on the wire, outbox port to `atomic_lib`, Layer 2 provenance. |
-| [`serverless-p2p.md`](./serverless-p2p.md) | **Planned.** Device sync without a hub (written same-agent-first; admission is rights-based since 2026-07-17). P0 remaining: AUTH-before-SYNC, bind `AUTH.requestedSubject` to the drive, OQ5 bootstrap admission. |
+| [`unified-sync.md`](./unified-sync.md) | **Active.** One sync API over WS or Iroh. Carries the single **Remaining work (2026-09-03)** checklist for every open sync item across these plans. The 2026-07 audit history is in [`completed/unified-sync-audit-2026-07.md`](./completed/unified-sync-audit-2026-07.md). |
+| [`serverless-p2p.md`](./serverless-p2p.md) | **Planned.** Device sync without a hub (written same-agent-first; admission is rights-based since 2026-07-17). AUTH-before-SYNC and the `AUTH.requestedSubject`↔drive binding landed 2026-09-01 (Iroh). Live-link destroys travel as signed `COMMIT` frames since 2026-09-03. P0 remaining: signed bulk `remove[]`, OQ5 bootstrap admission, then `SyncSession` / `AtomicTransport`. |
 | [`foss-public-host-mode.md`](./foss-public-host-mode.md) | **Proposal.** A FOSS node on a public address must not host strangers' workspaces. `HostMode { Open, Owner }`, owner claimed by agent DID. Closes unified-sync OQ5 for Owner. |
 | [`authorization-sync.md`](./authorization-sync.md) | **Draft.** Signed commit authorization, grant-chain evidence, peer-sync trust boundaries. |
 | [`encryption.md`](./encryption.md) | **Exploration.** Live E2EE / blind replicas undecided. Shipped since the draft: local cache at rest ([`opfs-per-agent-encryption.md`](./opfs-per-agent-encryption.md)) and the encrypted archive ([`encrypted-vault-format.md`](./encrypted-vault-format.md), candidate model 2). |
@@ -48,7 +44,7 @@ Remaining work, not "this file exists."
 | [`loro-source-of-truth.md`](./loro-source-of-truth.md) | **Partial.** Sparse `datatypes` map + Phase 2a–2c shipped (`Tree::Resources` is a derived cache). Remaining: drop the untagged heuristic, Phase 1.6 `Value` reshape, Flutter undo. |
 | [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) | Target: `atomic_lib` as the complete HTTP-optional local node runtime. |
 | [`genesis-self-verifying.md`](./genesis-self-verifying.md) | **Partial.** Server and browser mint and verify inline genesis certs. Remaining: DataRoute verify UI, `genesis` propval immutability. |
-| [`drive-reconciliation.md`](./drive-reconciliation.md) | **Partial.** Algorithm core in `lib/src/sync/rbsr.rs`. Not on the WS/Iroh wire yet; fingerprint tree still O(range). |
+| [`drive-reconciliation.md`](./drive-reconciliation.md) | **Partial.** Core in `lib/src/sync/rbsr.rs` + TS mirror; **on the WS wire** as the stateless text frames `RBSR_FP`/`RBSR_ITEMS` (full-VV fallback). Not on Iroh; fingerprints still O(range); canonical cross-impl hash unspecified. |
 | [`zones.md`](./zones.md) | **Proposal.** Nothing built. Structural fix for the permission-check half of [`index-performance.md`](./index-performance.md). |
 | [`partial-sync.md`](./partial-sync.md) | **Proposal.** Replicate part of a drive per device. |
 | [`drafts-and-suggestions.md`](./drafts-and-suggestions.md) | **Mechanism shipped** (`Fork` class, `diffFork`/`mergeFork`, document body CRDT merge). Review/diff UI, suggest-for-non-writers, Canvas fork still open. |
@@ -67,7 +63,7 @@ Remaining work, not "this file exists."
 | [`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md) | **Proposal.** Full-snapshot writes, no auto-compaction, O(file) open fsync. |
 | [`virtual-drive.md`](./virtual-drive.md) | **Shipped** as a local NFS mount in the Tauri desktop app (`desktop/src/vfs.rs`). Still proposal: headless-server mount, FUSE/WinFSP, native cloud-sync APIs, mobile providers. |
 | [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md) | **Proposal** (DID wording predates the genesis-cert model, see its *Current* note). Commits stay signed write certificates; retention is node policy. |
-| [`p2p-presence.md`](./p2p-presence.md) | **Proposal.** Ephemeral presence over Iroh (`EPHEMERAL 0x40`). Scoped to your own devices by product choice (the transport is no longer same-agent-gated). |
+| [`p2p-presence.md`](./p2p-presence.md) | **Mostly built.** `EPHEMERAL 0x40` codec, peer send/receive and the server bridge are in (`lib/src/sync/iroh_e2e.rs` `e2e_presence_crosses_the_link_without_being_stored`). Remaining: two-device verification (M12), bandwidth measurement (OQ1). Scoped to your own devices by product choice. |
 | [`reticulum-sync.md`](./reticulum-sync.md) | **Proposal.** Atomic sync protocol over Reticulum. |
 | [`json-schema-code-first.md`](./json-schema-code-first.md) | **Proposal**; `defineSchema` + frozen `did:ad:` schemas in flight in PR #1262 (not on `develop`). Code-first JSON Schema → local DID-backed Class/Property resources. |
 | [`SDK-API-design.md`](./SDK-API-design.md) | SDK / agent DX direction. |
@@ -100,7 +96,8 @@ Not top-level plans. Indexed so they do not go missing.
 | [`kanban-views-test-spec.md`](./kanban-views-test-spec.md) | Manual test spec for kanban + `create_table`. |
 | [`silent-failures.md`](./silent-failures.md) | Running list of error-handling failures that reported success (2026-08-21). Companion to [`pairing-ux-field-test.md`](./pairing-ux-field-test.md). |
 
-Fixed notes live in [`completed/`](./completed/).
+Closed decisions, as-built records and fixed notes live in
+[`completed/`](./completed/).
 
 ## Landed
 
@@ -114,7 +111,7 @@ the document itself.
 | [`commit-fanout-drive-isolation.md`](./commit-fanout-drive-isolation.md) | Drive-scoped WS commit fan-out + server-side drive safety net. |
 | [`cleanup-update-encoding.md`](./cleanup-update-encoding.md) | Unified `decode_update`; TS client exports compact Loro deltas. |
 | [`sign-at-drain.md`](./sign-at-drain.md) | One signed commit per dirty subject per drain pass. |
-| [`sync.md`](./sync.md) | WS `COMMIT`, echo suppression, unified `UPDATE`/`DESTROY`; Flutter WS session shipped. Remaining: test gaps. |
+| [`sync.md`](./sync.md) | WS `COMMIT`, echo suppression, unified `UPDATE`/`DESTROY`; Flutter WS session shipped. `ws_get`/`ws_destroy` and the `WsClient.close()` fix landed; remaining test gaps: `ws_errors.rs`, an `UNSUB` test, browser `postCommit` COMMIT_OK/ERROR tests. |
 | [`encrypted-vault-format.md`](./encrypted-vault-format.md) | Vault backup v1 in `lib/src/vault/` (2026-08-04). |
 | [`opfs-per-agent-encryption.md`](./opfs-per-agent-encryption.md) | One encrypted OPFS database per agent. Session isolation on sign-out. |
 | [`meetings.md`](./meetings.md) | Meeting resource, page, prepare-then-start flow. |

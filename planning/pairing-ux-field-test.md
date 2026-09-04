@@ -1207,6 +1207,12 @@ server, which is the case worth designing for before it exists.
 
 ### M12 — Presence does not cross a peer link, because it was never wired (open)
 
+> **Update 2026-09-03:** the wire is no longer missing. `EPHEMERAL (0x40)` has a
+> codec, a peer send/receive path and a server bridge, with an Iroh e2e
+> (`e2e_presence_crosses_the_link_without_being_stored`). What is still open is
+> the two-device check on real hardware. The finding below is the original
+> report and describes the pre-fix state.
+
 Two machines syncing the same drive over Iroh still cannot see each other's
 cursors. Not a regression: presence has no peer-to-peer path at all.
 

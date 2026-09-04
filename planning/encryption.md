@@ -1,7 +1,7 @@
 # Encryption and replica trust
 
 > **Status:** Closed: at-rest + vault (2026-09-01), per
-> [`trust-model-decision.md`](./trust-model-decision.md).
+> [`trust-model-decision.md`](./completed/trust-model-decision.md).
 >
 > The open question this document explored — whether an external hosted server
 > can be a **blind replica** of a live drive — is closed as *not planned*. The
@@ -192,7 +192,7 @@ describe the blind-replica design space. They are retained as a record and are
 **not planned**; see the reopen test in the status box. One later change is
 worth noting against them: with commits stored as signed envelopes on the
 resource rather than as a retained log
-([`commit-retention-floor-decision.md`](./commit-retention-floor-decision.md),
+([`commit-retention-floor-decision.md`](./completed/commit-retention-floor-decision.md),
 #1313), the "blind replica must retain every encrypted update" concern under
 [Compaction and retention](#compaction-and-retention) no longer applies to a
 verifier node; it would only return with a blind live replica.
@@ -455,7 +455,7 @@ authorization, synchronization, deduplication, and retention.
 
 ## Candidate product models
 
-Outcome per [`trust-model-decision.md`](./trust-model-decision.md):
+Outcome per [`trust-model-decision.md`](./completed/trust-model-decision.md):
 
 1. **Trusted-server Atomic only** — *chosen*, combined with 2.
    - Add local encryption at rest (shipped) and server encryption at rest (to

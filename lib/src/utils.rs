@@ -87,6 +87,26 @@ pub fn check_timestamp_in_past(timestamp: i64, difference: i64) -> AtomicResult<
     Ok(())
 }
 
+/// Like [`check_timestamp_in_past`], but also rejects a timestamp older than
+/// `max_age` milliseconds. Use it for anything that acts as a bearer proof
+/// (an `AUTH` frame, a signed auth header): without an age bound a captured
+/// proof stays valid forever, and "not in the future" is not a replay check.
+pub fn check_timestamp_fresh(timestamp: i64, max_future: i64, max_age: i64) -> AtomicResult<()> {
+    check_timestamp_in_past(timestamp, max_future)?;
+    let now = crate::utils::now();
+    if timestamp < now - max_age {
+        return Err(format!(
+            "Timestamp is too old ({} ms; max {} ms). Sign a fresh one. Timestamp now: {} signed at: {}",
+            now - timestamp,
+            max_age,
+            now,
+            timestamp
+        )
+        .into());
+    }
+    Ok(())
+}
+
 pub fn truncate_string(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
         return s.to_string();

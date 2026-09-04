@@ -632,13 +632,33 @@ fn start_live_sync(store: Db) {
                     .ok()
                     .flatten()
                     .filter(|b| !b.is_empty()),
-                crate::DbEvent::Destroyed { .. } => {
-                    let frame = super::protocol::encode_destroy(0, &subject_key);
+                // A destroy crosses the link as the signed commit that caused
+                // it (planning/serverless-p2p.md, principle 3): the peer
+                // validates signature and rights exactly as for any other
+                // `COMMIT`, so a naked `DESTROY` frame is neither sent nor
+                // accepted (see the read loop). A removal no commit authorises
+                // — a cascade-deleted child, a local eviction — is not
+                // propagated live; the peer's own apply of the parent commit
+                // cascades there too.
+                crate::DbEvent::Destroyed {
+                    commit_json: Some(commit_json),
+                    ..
+                } => {
+                    let frame = super::protocol::encode_commit(0, commit_json);
                     let len = frame.len() as u32;
                     let mut msg = Vec::with_capacity(4 + frame.len());
                     msg.extend_from_slice(&len.to_be_bytes());
                     msg.extend_from_slice(&frame);
                     send_live_update_wire_msg_except(msg, from_peer.as_deref());
+                    continue;
+                }
+                crate::DbEvent::Destroyed {
+                    commit_json: None, ..
+                } => {
+                    tracing::debug!(
+                        "[live] not propagating unsigned removal of {}",
+                        &subject_key[..subject_key.len().min(20)]
+                    );
                     continue;
                 }
                 _ => None,
@@ -1095,44 +1115,23 @@ fn register_live_peer(
                 continue;
             }
 
-            // Handle DESTROY frames. Gated: a live connection has no
-            // established rights beyond whatever `agent` proved during the
-            // handshake (Public if it proved nothing) — the same admission +
-            // ACL check every other write path in this codebase applies.
+            // A naked DESTROY frame carries no signature and no signer: the
+            // only thing it could be checked against is the connection's
+            // drive-level write verdict, which is not what authorises a
+            // delete (planning/serverless-p2p.md, principle 3; unified-sync
+            // OQ4). Peers send destroys as signed `COMMIT` frames, which the
+            // fallback dispatch below validates like any other commit. So
+            // this frame is ignored — logged, never applied, whoever sent it.
             if buf[0] == super::protocol::tag::DESTROY {
-                if buf.len() > 3 {
-                    let subject = std::str::from_utf8(&buf[3..])
-                        .unwrap_or_default()
-                        .to_string();
-                    match super::ws_apply::resolve_destroy_drive(&store, &subject).await {
-                        Some(drive_subject) => {
-                            if admitted_for_drive(
-                                &store,
-                                &agent,
-                                &drive_subject,
-                                initiated_by_us,
-                                &mut drive_cache,
-                            )
-                            .await
-                            {
-                                let _ =
-                                    super::ws_apply::apply_destroy_checked(&store, &subject).await;
-                            } else {
-                                tracing::warn!(
-                                    "[live] rejected DESTROY for {} from {}: not admitted for drive {}",
-                                    &subject[..subject.len().min(20)],
-                                    &read_peer_id[..read_peer_id.len().min(12)],
-                                    &drive_subject[..drive_subject.len().min(20)]
-                                );
-                            }
-                        }
-                        // Resource doesn't exist locally — nothing to check
-                        // rights against; the tombstone-write is a no-op.
-                        None => {
-                            let _ = super::ws_apply::apply_destroy_checked(&store, &subject).await;
-                        }
-                    }
-                }
+                let subject = buf
+                    .get(3..)
+                    .and_then(|b| std::str::from_utf8(b).ok())
+                    .unwrap_or_default();
+                tracing::warn!(
+                    "[live] ignoring naked DESTROY for {} from {}: destroys must arrive as signed COMMIT frames",
+                    &subject[..subject.len().min(20)],
+                    &read_peer_id[..read_peer_id.len().min(12)]
+                );
                 continue;
             }
 
@@ -1544,18 +1543,15 @@ pub async fn sync_drive_with_peer_using_outcome(
     let mut auth_buf = vec![0u8; auth_len];
     recv.read_exact(&mut auth_buf).await.map_err(io_err)?;
     if auth_buf.is_empty() || auth_buf[0] != super::protocol::tag::AUTH_OK {
-        // ERROR frame layout: [tag: u8] [request_id: u16] [code: u16]
-        // [message: utf8] (F5, planning/unified-sync.md) — skip 5 bytes,
-        // not the pre-F5 3. `code` isn't consumed here; this handshake
-        // path only needs the message for the error string.
-        let msg = if auth_buf.len() > 5 {
-            std::str::from_utf8(&auth_buf[5..]).unwrap_or("unknown error")
-        } else {
-            "auth rejected"
-        };
+        let msg = auth_buf
+            .get(1..)
+            .and_then(super::protocol::decode_error)
+            .map(|e| e.message)
+            .unwrap_or_else(|| "auth rejected".to_string());
         return Err(format!("Authentication failed: {msg}").into());
     }
-    tracing::info!("Authenticated with peer");
+    let peer_caps = super::protocol::decode_auth_ok(&auth_buf[1..]);
+    tracing::info!("Authenticated with peer (capabilities: {:?})", peer_caps);
 
     // Self-introduce. We send unprompted right after AUTH_OK; the accept
     // side does the same in `handle_stream`. Either side's HELLO can arrive
@@ -1660,9 +1656,10 @@ pub async fn sync_drive_with_peer_using_outcome(
                     peer_display_name = super::protocol::decode_hello(payload);
                     if let Some(name) = &peer_display_name {
                         tracing::info!(
-                            "[sync] peer {} introduced itself as \"{}\"",
+                            "[sync] peer {} introduced itself as \"{}\" (capabilities: {:?})",
                             &remote_key[..remote_key.len().min(12)],
-                            name
+                            name,
+                            super::protocol::decode_hello_caps(payload)
                         );
                         // Persist into the known-peers table so any UI that
                         // re-reads `get_known_peers` (flutter dialog, server
@@ -1815,9 +1812,21 @@ pub async fn sync_drive_with_peer_using_outcome(
             super::protocol::tag::AUTH => {
                 // The remote's best-effort auth-back (see handle_stream). Same
                 // verification as any other AUTH — pure signature/timestamp
-                // proof of identity, no rights check here.
+                // proof of identity, no rights check here. The proof must be
+                // signed for *our* node id (that is what `handle_stream` signs
+                // it for): a proof the remote captured elsewhere, signed for
+                // some other node or origin, does not identify it to us.
                 if let Ok(json) = std::str::from_utf8(payload) {
                     match serde_json::from_str::<crate::authentication::AuthValues>(json) {
+                        Ok(auth)
+                            if normalize_node_id(&auth.requested_subject)
+                                != normalize_node_id(&my_node_id.to_string()) =>
+                        {
+                            tracing::warn!(
+                                "[sync] peer's auth-back ignored: signed for {}, not for this node",
+                                auth.requested_subject
+                            );
+                        }
                         Ok(auth) => {
                             match crate::authentication::get_agent_from_auth_values_and_check(
                                 Some(auth),
@@ -2351,9 +2360,10 @@ async fn handle_stream(
                 peer_display_name = super::protocol::decode_hello(&buf[1..]);
                 if let Some(name) = &peer_display_name {
                     tracing::info!(
-                        "[accept] peer {} introduced itself as \"{}\"",
+                        "[accept] peer {} introduced itself as \"{}\" (capabilities: {:?})",
                         &remote_key[..remote_key.len().min(12)],
-                        name
+                        name,
+                        super::protocol::decode_hello_caps(&buf[1..])
                     );
                     // Display-only, and only while connected: a client of this
                     // node is not a node itself and cannot see who we are
@@ -2812,10 +2822,19 @@ mod initiator_trust_tests {
                 crate::urls::CLASS,
                 &drive_did,
                 "Secret Doc",
-                Some(vec![(
-                    crate::urls::DESCRIPTION,
-                    crate::Value::String("top secret".into()),
-                )]),
+                // A schema-valid Class instance (shortname + description), so
+                // a later commit against it, a destroy included, is judged on
+                // signature and rights rather than tripping validation.
+                Some(vec![
+                    (
+                        crate::urls::DESCRIPTION,
+                        crate::Value::String("top secret".into()),
+                    ),
+                    (
+                        crate::urls::SHORTNAME,
+                        crate::Value::Slug("secret-doc".into()),
+                    ),
+                ]),
             )
             .await
             .unwrap();
@@ -3246,6 +3265,161 @@ mod accept_gate_tests {
             ),
             "expected a sync answer, got 0x{:02x}",
             reply[0]
+        );
+    }
+
+    /// Complete the handshake on a raw stream as `owner` for `drive` and
+    /// drain the accept side's answer until it has transitioned to live mode
+    /// (the client sent an empty version vector, so the server pushes
+    /// everything and expects nothing back).
+    async fn handshake_to_live(
+        send: &mut iroh::endpoint::SendStream,
+        recv: &mut iroh::endpoint::RecvStream,
+        owner: &crate::agents::Agent,
+        drive: &str,
+    ) {
+        write_frame(send, &protocol::encode_auth(owner, drive).unwrap()).await;
+        let reply = read_frame(recv).await.expect("AUTH_OK");
+        assert_eq!(reply.first(), Some(&tag::AUTH_OK));
+        assert!(
+            protocol::decode_auth_ok(&reply[1..])
+                .iter()
+                .any(|c| c == "signed-destroy"),
+            "AUTH_OK advertises this build's capabilities"
+        );
+
+        let sync = protocol::encode_sync(drive, "", &[], &std::collections::HashMap::new());
+        write_frame(send, &sync).await;
+        loop {
+            let reply = read_frame(recv).await.expect("a handshake answer");
+            match reply.first() {
+                Some(&tag::SYNC_OK) => break,
+                Some(&tag::SYNC_PUSH) => {
+                    let push = protocol::decode_sync_push(&reply[1..]).unwrap();
+                    if push.last {
+                        break;
+                    }
+                }
+                Some(&tag::SYNC_DIFF) => continue,
+                other => panic!("unexpected handshake frame {other:?}"),
+            }
+        }
+        // Give the accept side a moment to register the live loop.
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+
+    /// A naked `DESTROY` frame carries no signature, so it authorises
+    /// nothing — not even from the drive's owner, on an authenticated live
+    /// link. The resource survives. (planning/serverless-p2p.md, principle 3.)
+    #[tokio::test]
+    async fn naked_destroy_on_the_live_link_is_ignored() {
+        let db = Db::init_temp("gate_iroh_naked_destroy").await.unwrap();
+        let alice = crate::agents::Agent::new(Some("Alice")).unwrap();
+        db.set_default_agent(alice.clone());
+        let (drive, child) = private_drive_with_child(&db, &alice).await;
+        let (node_id, router) = start(db.clone()).await.unwrap();
+
+        let (_ep, mut send, mut recv) = raw_stream(&router, &node_id).await;
+        handshake_to_live(&mut send, &mut recv, &alice, &drive).await;
+
+        write_frame(&mut send, &protocol::encode_destroy(0, &child)).await;
+        tokio::time::sleep(std::time::Duration::from_millis(700)).await;
+
+        let subject = crate::Subject::from_raw(&child, None);
+        assert!(
+            db.get_resource(&subject).await.is_ok(),
+            "a naked DESTROY must never remove a resource"
+        );
+        assert!(
+            !crate::sync::tombstones::is_tombstoned(&db, &child),
+            "and must not leave a tombstone that would poison later imports"
+        );
+    }
+
+    /// The same delete as a signed destroy `COMMIT` is applied: the live
+    /// loop routes it through the engine's COMMIT arm, which verifies the
+    /// signature and the signer's rights like any other write.
+    #[tokio::test]
+    async fn signed_destroy_commit_on_the_live_link_is_applied() {
+        let db = Db::init_temp("gate_iroh_signed_destroy").await.unwrap();
+        let alice = crate::agents::Agent::new(Some("Alice")).unwrap();
+        db.set_default_agent(alice.clone());
+        let (drive, child) = private_drive_with_child(&db, &alice).await;
+        let (node_id, router) = start(db.clone()).await.unwrap();
+
+        let (_ep, mut send, mut recv) = raw_stream(&router, &node_id).await;
+        handshake_to_live(&mut send, &mut recv, &alice, &drive).await;
+
+        let subject = crate::Subject::from_raw(&child, None);
+        let resource = db.get_resource(&subject).await.unwrap();
+        // A bare destroy: no property edits ride along, so the only thing
+        // the receiver validates is the signature and the signer's rights.
+        let mut builder = crate::commit::CommitBuilder::new(subject.clone());
+        builder.destroy(true);
+        let commit = builder.sign(&alice, &db, &resource).await.unwrap();
+        // The same serialisation the live push loop forwards.
+        let commit_json = commit
+            .into_resource(&db)
+            .await
+            .unwrap()
+            .to_json_ad(None)
+            .unwrap();
+        write_frame(&mut send, &protocol::encode_commit(0, &commit_json)).await;
+
+        // The engine answers the COMMIT: COMMIT_OK, or an ERROR that says
+        // why it was refused (which is the useful failure message here).
+        let reply = read_frame(&mut recv)
+            .await
+            .expect("an answer to the COMMIT");
+        if let Some((_, code, message)) = parse_error(&reply) {
+            panic!("signed destroy commit refused (code {code}): {message}");
+        }
+        assert_eq!(reply.first(), Some(&tag::COMMIT_OK), "expected COMMIT_OK");
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while db.get_resource(&subject).await.is_ok() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "COMMIT_OK was answered but the resource is still there after 5s"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+    }
+
+    /// A destroy commit signed by an agent without write rights is refused by
+    /// the same COMMIT arm — the connection's identity does not matter, the
+    /// signature does.
+    #[tokio::test]
+    async fn signed_destroy_from_stranger_on_the_live_link_is_refused() {
+        let db = Db::init_temp("gate_iroh_stranger_destroy").await.unwrap();
+        let alice = crate::agents::Agent::new(Some("Alice")).unwrap();
+        db.set_default_agent(alice.clone());
+        let (drive, child) = private_drive_with_child(&db, &alice).await;
+        let mallory = db.create_agent(Some("Mallory")).await.unwrap();
+        let (node_id, router) = start(db.clone()).await.unwrap();
+
+        let (_ep, mut send, mut recv) = raw_stream(&router, &node_id).await;
+        handshake_to_live(&mut send, &mut recv, &alice, &drive).await;
+
+        let subject = crate::Subject::from_raw(&child, None);
+        let resource = db.get_resource(&subject).await.unwrap();
+        let mut builder = crate::commit::CommitBuilder::new(subject.clone());
+        builder.destroy(true);
+        let commit = builder.sign(&mallory, &db, &resource).await.unwrap();
+        let commit_json = commit
+            .into_resource(&db)
+            .await
+            .unwrap()
+            .to_json_ad(None)
+            .unwrap();
+        write_frame(&mut send, &protocol::encode_commit(0, &commit_json)).await;
+
+        let reply = read_frame(&mut recv).await.expect("an ERROR frame");
+        let (_, code, message) = parse_error(&reply).expect("ERROR frame");
+        assert_eq!(code, error_code::UNAUTHORIZED_WRITE, "{message}");
+        assert!(
+            db.get_resource(&subject).await.is_ok(),
+            "Mallory's destroy must not be applied"
         );
     }
 }

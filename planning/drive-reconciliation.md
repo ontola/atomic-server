@@ -1,8 +1,13 @@
 # Scalable drive reconciliation & signed state roots
 
 > **Status:** Partial. Algorithm core lives in `lib/src/sync/rbsr.rs` (fingerprint
-> + recursive reconcile, pinned by unit tests). Not on the WS/Iroh wire yet;
-> range fingerprints are still O(range), not an incrementally-maintained tree.
+> + recursive reconcile, pinned by unit tests) with a TS mirror in
+> `browser/lib/src/rbsr.ts`. **On the WS wire** as the stateless text frames
+> `RBSR_FP` / `RBSR_ITEMS` (verified 2026-09-03): the browser answers `SYNC_RESEND` by
+> reconciling ranges against the server and sending version vectors for only the
+> differing subjects, falling back to the full VV on any RBSR failure. Not on the
+> Iroh wire. Range fingerprints are still O(range), not an incrementally
+> maintained tree, and the cross-impl canonical hash is still unspecified.
 > Builds on the drive-scoped VV read and the hash-first probe already landed
 > (see [Foundation](#foundation-already-landed)).
 > Ties the reconciliation redesign to the signed-state-certificate direction in

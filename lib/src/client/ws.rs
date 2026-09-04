@@ -38,8 +38,11 @@ pub enum WsMessage {
     /// A drive-scoped presence update. Contains `{ subject, update }` JSON
     /// where `subject` is the drive.
     PresenceUpdate { subject: String, update: Vec<u8> },
-    /// Server confirmed authentication.
+    /// Server confirmed authentication. Its advertised capabilities are
+    /// available via [`WsClient::server_capabilities`].
     Authenticated,
+    /// The server echoed a `KEEPALIVE` (0x41) we sent.
+    Keepalive,
     /// A `BLOB_RESPONSE` (0x35) frame: server returned the bytes for a
     /// previously-requested BLAKE3 hash.
     BlobResponse { hash: [u8; 32], bytes: Vec<u8> },
@@ -110,6 +113,34 @@ pub struct WsClient {
     tx: mpsc::Sender<Message>,
     /// Broadcast channel for incoming messages
     broadcast_tx: broadcast::Sender<WsMessage>,
+    /// `http(s)://host[:port]` of the server, derived from the `ws(s)://`
+    /// URL. This is what `authenticate` signs as `requestedSubject`: the
+    /// server binds an AUTH proof to its own origin, so a proof signed for
+    /// anything else (the agent's own subject, another server) is refused.
+    origin: String,
+    /// Capability names the server advertised in its `AUTH_OK` payload.
+    /// Empty until authenticated, and for servers older than 2026-09.
+    server_capabilities: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+}
+
+/// `ws://host:port/ws` → `http://host:port`; `wss://` → `https://`. Falls
+/// back to the input when it does not parse, so a bad URL still fails at
+/// connect time with a useful error rather than here.
+fn http_origin_of_ws_url(url: &str) -> String {
+    let Ok(parsed) = url::Url::parse(url) else {
+        return url.to_string();
+    };
+    let scheme = match parsed.scheme() {
+        "wss" | "https" => "https",
+        _ => "http",
+    };
+    let Some(host) = parsed.host_str() else {
+        return url.to_string();
+    };
+    match parsed.port() {
+        Some(port) => format!("{scheme}://{host}:{port}"),
+        None => format!("{scheme}://{host}"),
+    }
 }
 
 impl WsClient {
@@ -119,6 +150,10 @@ impl WsClient {
         let (ws_stream, _response) = connect_async(url)
             .await
             .map_err(|e| format!("WebSocket connection failed to {}: {}", url, e))?;
+
+        let origin = http_origin_of_ws_url(url);
+        let server_capabilities = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let caps_for_reader = server_capabilities.clone();
 
         let (mut write, mut read) = ws_stream.split();
         let (tx, mut rx) = mpsc::channel::<Message>(64);
@@ -139,7 +174,14 @@ impl WsClient {
             while let Some(Ok(msg)) = read.next().await {
                 let parsed = match msg {
                     Message::Text(text) => Some(parse_server_message(&text)),
-                    Message::Binary(bin) => parse_binary_message(&bin),
+                    Message::Binary(bin) => {
+                        if bin.first() == Some(&protocol::tag::AUTH_OK) {
+                            if let Ok(mut caps) = caps_for_reader.lock() {
+                                *caps = protocol::decode_auth_ok(&bin[1..]);
+                            }
+                        }
+                        parse_binary_message(&bin)
+                    }
                     _ => None,
                 };
                 if let Some(parsed) = parsed {
@@ -148,7 +190,27 @@ impl WsClient {
             }
         });
 
-        Ok(Self { tx, broadcast_tx })
+        Ok(Self {
+            tx,
+            broadcast_tx,
+            origin,
+            server_capabilities,
+        })
+    }
+
+    /// The `http(s)://host[:port]` this client signs AUTH proofs for.
+    pub fn origin(&self) -> &str {
+        &self.origin
+    }
+
+    /// Capability names the server advertised on `AUTH_OK` (see
+    /// `protocol::CAPABILITIES`). Empty before authentication and for servers
+    /// that predate the list.
+    pub fn server_capabilities(&self) -> Vec<String> {
+        self.server_capabilities
+            .lock()
+            .map(|c| c.clone())
+            .unwrap_or_default()
     }
 
     /// Subscribe to incoming messages. Returns a broadcast receiver.
@@ -159,8 +221,10 @@ impl WsClient {
 
     /// Authenticate with the server using an Agent's credentials.
     /// Sends a binary v2 AUTH (0x01) frame and waits for AUTH_OK (0x02).
+    /// The proof names the server's origin (see [`WsClient::origin`]), which
+    /// is what the server binds it to.
     pub async fn authenticate(&self, agent: &Agent) -> AtomicResult<()> {
-        let frame = protocol::encode_auth(agent, &agent.subject.to_string())?;
+        let frame = protocol::encode_auth(agent, &self.origin)?;
         self.authenticate_with_frame(frame).await
     }
 
@@ -309,6 +373,19 @@ impl WsClient {
         self.send_binary(protocol::encode_sub(drive_subject)).await
     }
 
+    /// Cancel a drive subscription (binary `UNSUB` 0x21). No answer frame.
+    pub async fn unsubscribe_drive(&self, drive_subject: &str) -> AtomicResult<()> {
+        self.send_binary(protocol::encode_unsub(drive_subject))
+            .await
+    }
+
+    /// Send a `KEEPALIVE` (0x41). The server echoes it as
+    /// [`WsMessage::Keepalive`]; no echo within a deadline means the socket
+    /// is dead.
+    pub async fn send_keepalive(&self) -> AtomicResult<()> {
+        self.send_binary(protocol::encode_keepalive()).await
+    }
+
     /// Register a live query filter (text `SUBSCRIBE_QUERY` frame).
     pub async fn subscribe_query(
         &self,
@@ -406,19 +483,16 @@ fn parse_binary_message(bin: &[u8]) -> Option<WsMessage> {
     let tag = *bin.first()?;
     match tag {
         tag::AUTH_OK => Some(WsMessage::Authenticated),
+        tag::KEEPALIVE => Some(WsMessage::Keepalive),
         tag::ERROR => {
-            // [tag: u8] [request_id: u16] [code: u16] [message: utf8]
-            // The `code` (F5, planning/unified-sync.md) isn't surfaced via
-            // `WsMessage::Error` yet — no current consumer of this Rust
-            // client switches on it. Thread it through here (a new
-            // `WsMessage::Error { code, message }` shape) when that lands.
-            if bin.len() < 5 {
-                return Some(WsMessage::Error("Malformed ERROR frame".into()));
-            }
-            let msg = std::str::from_utf8(&bin[5..])
-                .unwrap_or("(non-utf8 error message)")
-                .to_string();
-            Some(WsMessage::Error(msg))
+            // The `code` isn't surfaced via `WsMessage::Error` yet — no
+            // current consumer of this Rust client switches on it. Thread it
+            // through here (a `WsMessage::Error { code, message }` shape)
+            // when that lands.
+            Some(match protocol::decode_error(&bin[1..]) {
+                Some(e) => WsMessage::Error(e.message),
+                None => WsMessage::Error("Malformed ERROR frame".into()),
+            })
         }
         tag::BLOB_RESPONSE => {
             let resp = protocol::decode_blob_response(&bin[1..])?;

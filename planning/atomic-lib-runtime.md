@@ -2,6 +2,10 @@
 
 ## Status
 
+**Decision (accepted 2026-09-01):** `AtomicNode` in `lib/src/runtime/` is *the*
+binding runtime — #1277/#1241 bind it, no parallel `simple.rs` / `ffi/` node
+surface ([`completed/runtime-boundary-decision.md`](./completed/runtime-boundary-decision.md)).
+
 **Slice 1 shipped:** `lib/src/runtime/` exists. `AtomicNode` wraps `Db` with
 `open` / `from_db`, `get`, `query`, `apply_commit(json, IngestPolicy)`,
 `mutate(ResourceEdit)`, `subscribe`, and (behind `iroh`) `sync_with_peer`.
@@ -43,7 +47,7 @@ Next:
 3. `ffi/` (#1277) and `python/` bind `AtomicNode`; `flutter/rust/src/api/simple.rs`
    store group calls it (#1241 follow-up).
 4. Shared fixtures for the remaining pure twins
-   (`planning/runtime-boundary-decision.md`, sequencing step 3).
+   (`planning/completed/runtime-boundary-decision.md`, sequencing step 3).
 
 This document describes the target architecture for making
 `atomic_lib` able to run a complete Atomic node by itself. HTTP remains a
