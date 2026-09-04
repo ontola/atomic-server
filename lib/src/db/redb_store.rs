@@ -31,6 +31,13 @@ const TABLE_DRIVE_MAPPING: TableDefinition<&[u8], &[u8]> = TableDefinition::new(
 const TABLE_DID_MAPPING: TableDefinition<&[u8], &[u8]> = TableDefinition::new("did_mapping");
 const TABLE_LORO_SNAPSHOTS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("loro_snapshots");
 const TABLE_BLOBS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("blobs");
+const TABLE_SEARCH_POSTINGS: TableDefinition<&[u8], &[u8]> =
+    TableDefinition::new("search_postings_v1");
+const TABLE_SEARCH_DOCS: TableDefinition<&[u8], &[u8]> = TableDefinition::new("search_docs_v1");
+const TABLE_SEARCH_DOC_TOKENS: TableDefinition<&[u8], &[u8]> =
+    TableDefinition::new("search_doc_tokens_v1");
+const TABLE_SEARCH_TRIGRAMS: TableDefinition<&[u8], &[u8]> =
+    TableDefinition::new("search_trigrams_v1");
 
 fn table_def(tree: Tree) -> TableDefinition<'static, &'static [u8], &'static [u8]> {
     match tree {
@@ -44,6 +51,31 @@ fn table_def(tree: Tree) -> TableDefinition<'static, &'static [u8], &'static [u8
         Tree::DidMapping => TABLE_DID_MAPPING,
         Tree::LoroSnapshots => TABLE_LORO_SNAPSHOTS,
         Tree::Blobs => TABLE_BLOBS,
+        Tree::SearchPostings => TABLE_SEARCH_POSTINGS,
+        Tree::SearchDocs => TABLE_SEARCH_DOCS,
+        Tree::SearchDocTokens => TABLE_SEARCH_DOC_TOKENS,
+        Tree::SearchTrigrams => TABLE_SEARCH_TRIGRAMS,
+    }
+}
+
+fn create_all_tables(tx: &redb::WriteTransaction) {
+    for tree in [
+        Tree::Resources,
+        Tree::PropValSub,
+        Tree::ValPropSub,
+        Tree::QueryMembers,
+        Tree::WatchedQueries,
+        Tree::PluginMeta,
+        Tree::DriveMapping,
+        Tree::DidMapping,
+        Tree::LoroSnapshots,
+        Tree::Blobs,
+        Tree::SearchPostings,
+        Tree::SearchDocs,
+        Tree::SearchDocTokens,
+        Tree::SearchTrigrams,
+    ] {
+        let _ = tx.open_table(table_def(tree));
     }
 }
 
@@ -141,16 +173,7 @@ impl RedbStore {
             // fsync; on a server doing a handful of commits/sec that's
             // imperceptible, and the boot-time win is dramatic.
             tx.set_quick_repair(true);
-            let _ = tx.open_table(TABLE_RESOURCES);
-            let _ = tx.open_table(TABLE_PROP_VAL_SUB);
-            let _ = tx.open_table(TABLE_VAL_PROP_SUB);
-            let _ = tx.open_table(TABLE_QUERY_MEMBERS);
-            let _ = tx.open_table(TABLE_WATCHED_QUERIES);
-            let _ = tx.open_table(TABLE_PLUGIN_META);
-            let _ = tx.open_table(TABLE_DRIVE_MAPPING);
-            let _ = tx.open_table(TABLE_DID_MAPPING);
-            let _ = tx.open_table(TABLE_LORO_SNAPSHOTS);
-            let _ = tx.open_table(TABLE_BLOBS);
+            create_all_tables(&tx);
             tx.commit()
                 .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
         }
@@ -175,17 +198,7 @@ impl RedbStore {
                 .begin_write()
                 .map_err(|e| format!("Failed to begin write tx: {e}"))?;
             tx.set_quick_repair(true);
-            // Opening a table in a write transaction creates it if it doesn't exist
-            let _ = tx.open_table(TABLE_RESOURCES);
-            let _ = tx.open_table(TABLE_PROP_VAL_SUB);
-            let _ = tx.open_table(TABLE_VAL_PROP_SUB);
-            let _ = tx.open_table(TABLE_QUERY_MEMBERS);
-            let _ = tx.open_table(TABLE_WATCHED_QUERIES);
-            let _ = tx.open_table(TABLE_PLUGIN_META);
-            let _ = tx.open_table(TABLE_DRIVE_MAPPING);
-            let _ = tx.open_table(TABLE_DID_MAPPING);
-            let _ = tx.open_table(TABLE_LORO_SNAPSHOTS);
-            let _ = tx.open_table(TABLE_BLOBS);
+            create_all_tables(&tx);
             tx.commit()
                 .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
         }
@@ -228,16 +241,7 @@ impl RedbStore {
                 .begin_write()
                 .map_err(|e| format!("Failed to begin write tx: {e}"))?;
             tx.set_quick_repair(true);
-            let _ = tx.open_table(TABLE_RESOURCES);
-            let _ = tx.open_table(TABLE_PROP_VAL_SUB);
-            let _ = tx.open_table(TABLE_VAL_PROP_SUB);
-            let _ = tx.open_table(TABLE_QUERY_MEMBERS);
-            let _ = tx.open_table(TABLE_WATCHED_QUERIES);
-            let _ = tx.open_table(TABLE_PLUGIN_META);
-            let _ = tx.open_table(TABLE_DRIVE_MAPPING);
-            let _ = tx.open_table(TABLE_DID_MAPPING);
-            let _ = tx.open_table(TABLE_LORO_SNAPSHOTS);
-            let _ = tx.open_table(TABLE_BLOBS);
+            create_all_tables(&tx);
             tx.commit()
                 .map_err(|e| format!("Failed to commit initial tables: {e}"))?;
         }

@@ -99,6 +99,8 @@ pub mod resources;
 #[cfg(feature = "db")]
 pub mod runtime;
 pub mod schema;
+#[cfg(feature = "db")]
+pub mod search;
 pub mod serialize;
 pub mod store;
 pub mod storelike;

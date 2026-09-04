@@ -197,6 +197,19 @@ export class NodeClientDb {
     return r as ClientDbQueryResult;
   }
 
+  async search(
+    query: string,
+    opts: { limit?: number; parents?: string | string[] } = {},
+  ): Promise<string[]> {
+    const r = this.requireDb().search(
+      query,
+      opts.limit ?? null,
+      opts.parents ?? null,
+    );
+
+    return ((await r) as string[]) ?? [];
+  }
+
   async allSubjects(): Promise<string[]> {
     return this.requireDb().allSubjects() as string[];
   }

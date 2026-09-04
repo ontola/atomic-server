@@ -449,6 +449,7 @@ impl Db {
         crate::populate::bootstrap(&store)
             .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
+        crate::search::maybe_rebuild_search_index(&store)?;
         Ok(store)
     }
 
@@ -478,6 +479,7 @@ impl Db {
         crate::populate::bootstrap(&store)
             .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
+        crate::search::maybe_rebuild_search_index(&store)?;
         Ok(store)
     }
 
@@ -511,6 +513,7 @@ impl Db {
         crate::populate::bootstrap(&store)
             .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
+        crate::search::maybe_rebuild_search_index(&store)?;
         Ok(store)
     }
 
@@ -605,6 +608,7 @@ impl Db {
         crate::populate::bootstrap(&store)
             .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
+        crate::search::maybe_rebuild_search_index(&store)?;
         Ok(store)
     }
 
@@ -755,6 +759,7 @@ impl Db {
         crate::populate::bootstrap(&store)
             .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
+        crate::search::maybe_rebuild_search_index(&store)?;
         Ok(store)
     }
 
@@ -1816,6 +1821,7 @@ impl Db {
                 self.add_atom_to_index(&atom, &r, &mut transaction)
                     .map_err(|e| format!("Failed to add atom to index {}. {}", atom, e))?;
             }
+            crate::search::index_resource(self, &r, &mut transaction)?;
             self.apply_transaction(&mut transaction)
                 .map_err(|e| format!("Failed to commit transaction. {}", e))?;
 
@@ -1831,6 +1837,15 @@ impl Db {
 
         tracing::info!("Building index finished!");
         Ok(())
+    }
+
+    /// Ranked full-text search over the local KV index.
+    pub fn search_hits(
+        &self,
+        query: &str,
+        opts: &crate::client::search::SearchOpts,
+    ) -> AtomicResult<Vec<crate::search::SearchHit>> {
+        crate::search::query(self, query, opts)
     }
 
     /// Sets a function that is called whenever a [Commit::apply] is called.
@@ -2156,7 +2171,7 @@ impl Db {
     /// these to push live `QUERY_UPDATE` notifications without re-deriving
     /// membership from the raw atom stream.
     #[instrument(level = "trace", skip_all)]
-    fn apply_transaction(&self, transaction: &mut Transaction) -> AtomicResult<()> {
+    pub(crate) fn apply_transaction(&self, transaction: &mut Transaction) -> AtomicResult<()> {
         self.apply_transaction_with_source(transaction, None)
     }
 
@@ -2727,6 +2742,7 @@ impl Db {
                 let remove_atom = crate::Atom::new(subject.clone(), prop.clone(), val.clone());
                 self.remove_atom_from_index(&remove_atom, &resource, transaction)?;
             }
+            crate::search::unindex_subject(self, &subject_str, transaction)?;
         } else {
             return Err(format!(
                 "Resource {} could not be deleted, because it was not found in the store.",
@@ -2978,6 +2994,7 @@ impl Storelike for Db {
                 self.add_atom_to_index(&a, resource, &mut transaction)
                     .map_err(|e| format!("Failed to add atom to index {}. {}", a, e))?;
             }
+            crate::search::index_resource(self, resource, &mut transaction)?;
         }
         // The snapshot in `Tree::LoroSnapshots` is the authoritative CRDT
         // state. Derive and
@@ -3166,6 +3183,16 @@ impl Storelike for Db {
                     new,
                     &mut transaction,
                 )?;
+                crate::search::index_resource(store, new, &mut transaction)?;
+            }
+            if commit_response.resource_new.is_none() {
+                if let Some(old) = &commit_response.resource_old {
+                    crate::search::unindex_subject(
+                        store,
+                        &old.get_subject().pure_id(),
+                        &mut transaction,
+                    )?;
+                }
             }
         }
 
@@ -3599,6 +3626,42 @@ impl Storelike for Db {
         }
 
         Ok(result)
+    }
+
+    async fn search(
+        &self,
+        query_str: &str,
+        opts: crate::client::search::SearchOpts,
+    ) -> AtomicResult<Vec<Resource>> {
+        let mut hits = crate::search::query(self, query_str, &opts)?;
+        if let Some(filters) = &opts.filters {
+            if !filters.is_empty() {
+                let mut filtered = Vec::new();
+                for hit in hits {
+                    let Ok(resource) = self.get_resource(&hit.subject).await else {
+                        continue;
+                    };
+                    let matches = filters.iter().all(|(prop, val)| {
+                        resource
+                            .get(prop)
+                            .map(|v| v.to_string() == *val)
+                            .unwrap_or(false)
+                    });
+                    if matches {
+                        filtered.push(hit);
+                    }
+                }
+                hits = filtered;
+            }
+        }
+        let mut out = Vec::with_capacity(hits.len());
+        for hit in hits {
+            match self.get_resource(&hit.subject).await {
+                Ok(r) => out.push(r),
+                Err(_) => out.push(Resource::new(hit.subject.to_string())),
+            }
+        }
+        Ok(out)
     }
 
     #[instrument(skip_all)]

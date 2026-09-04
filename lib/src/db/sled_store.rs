@@ -24,6 +24,10 @@ pub struct SledStore {
     did_mapping: sled::Tree,
     loro_snapshots: sled::Tree,
     blobs: sled::Tree,
+    search_postings: sled::Tree,
+    search_docs: sled::Tree,
+    search_doc_tokens: sled::Tree,
+    search_trigrams: sled::Tree,
 }
 
 impl SledStore {
@@ -47,6 +51,10 @@ impl SledStore {
         let did_mapping = db.open_tree(Tree::DidMapping)?;
         let loro_snapshots = db.open_tree(Tree::LoroSnapshots)?;
         let blobs = db.open_tree(Tree::Blobs)?;
+        let search_postings = db.open_tree(Tree::SearchPostings)?;
+        let search_docs = db.open_tree(Tree::SearchDocs)?;
+        let search_doc_tokens = db.open_tree(Tree::SearchDocTokens)?;
+        let search_trigrams = db.open_tree(Tree::SearchTrigrams)?;
 
         Ok(SledStore {
             db,
@@ -60,6 +68,10 @@ impl SledStore {
             did_mapping,
             loro_snapshots,
             blobs,
+            search_postings,
+            search_docs,
+            search_doc_tokens,
+            search_trigrams,
         })
     }
 
@@ -80,6 +92,10 @@ impl SledStore {
             Tree::DidMapping => &self.did_mapping,
             Tree::LoroSnapshots => &self.loro_snapshots,
             Tree::Blobs => &self.blobs,
+            Tree::SearchPostings => &self.search_postings,
+            Tree::SearchDocs => &self.search_docs,
+            Tree::SearchDocTokens => &self.search_doc_tokens,
+            Tree::SearchTrigrams => &self.search_trigrams,
         }
     }
 }
@@ -159,6 +175,10 @@ impl KvStore for SledStore {
         let mut batch_did_mapping = sled::Batch::default();
         let mut batch_loro_snapshots = sled::Batch::default();
         let mut batch_blobs = sled::Batch::default();
+        let mut batch_search_postings = sled::Batch::default();
+        let mut batch_search_docs = sled::Batch::default();
+        let mut batch_search_doc_tokens = sled::Batch::default();
+        let mut batch_search_trigrams = sled::Batch::default();
 
         for op in operations {
             let batch = match op.tree {
@@ -172,6 +192,10 @@ impl KvStore for SledStore {
                 Tree::DidMapping => &mut batch_did_mapping,
                 Tree::LoroSnapshots => &mut batch_loro_snapshots,
                 Tree::Blobs => &mut batch_blobs,
+                Tree::SearchPostings => &mut batch_search_postings,
+                Tree::SearchDocs => &mut batch_search_docs,
+                Tree::SearchDocTokens => &mut batch_search_doc_tokens,
+                Tree::SearchTrigrams => &mut batch_search_trigrams,
             };
             match op.method {
                 Method::Insert => {
@@ -217,7 +241,8 @@ impl KvStore for SledStore {
             )
             .map_err(|e: TransactionError<_>| format!("Failed to apply transaction: {}", e))?;
 
-        // LoroSnapshots and Blobs are applied outside the main transaction (sled limits tuple size to 9).
+        // LoroSnapshots, Blobs, and search trees sit outside the main
+        // transaction (sled limits tuple size to 9).
         self.loro_snapshots
             .apply_batch(batch_loro_snapshots)
             .map_err(|e| format!("Failed to apply loro_snapshots batch: {}", e))?;
@@ -225,6 +250,19 @@ impl KvStore for SledStore {
         self.blobs
             .apply_batch(batch_blobs)
             .map_err(|e| format!("Failed to apply blobs batch: {}", e))?;
+
+        self.search_postings
+            .apply_batch(batch_search_postings)
+            .map_err(|e| format!("Failed to apply search_postings batch: {}", e))?;
+        self.search_docs
+            .apply_batch(batch_search_docs)
+            .map_err(|e| format!("Failed to apply search_docs batch: {}", e))?;
+        self.search_doc_tokens
+            .apply_batch(batch_search_doc_tokens)
+            .map_err(|e| format!("Failed to apply search_doc_tokens batch: {}", e))?;
+        self.search_trigrams
+            .apply_batch(batch_search_trigrams)
+            .map_err(|e| format!("Failed to apply search_trigrams batch: {}", e))?;
 
         Ok(())
     }

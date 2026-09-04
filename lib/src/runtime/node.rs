@@ -91,6 +91,15 @@ impl AtomicNode {
         self.db.query(q).await
     }
 
+    /// Local KV full-text search (`crate::search::query`).
+    pub fn search(
+        &self,
+        query: &str,
+        opts: &crate::client::search::SearchOpts,
+    ) -> AtomicResult<Vec<crate::search::SearchHit>> {
+        self.db.search_hits(query, opts)
+    }
+
     /// Ingest a signed JSON-AD commit under `policy`.
     ///
     /// - `Hub` / `Peer`: `sync::engine::ingest_commit` with the matching
