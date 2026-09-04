@@ -1016,6 +1016,67 @@ describe('agentVaultProof', () => {
       await agentVaultProof(signer, MESSAGE),
     );
   });
+
+  /**
+   * WebKit's WebCrypto randomizes Ed25519 nonces, so a live signature there is
+   * different every call — and a KEK derived from it never matches the one the
+   * envelope was wrapped under. The proof computed from the raw key at sign-in
+   * is the one that counts, and the live signer is not consulted at all.
+   */
+  it('prefers the proof stored at sign-in over a live signature', async () => {
+    const stored = new Uint8Array(64).fill(7);
+    const signBytes = vi.fn(async () => btoa(String.fromCharCode(...new Uint8Array(64).fill(1))));
+    const signer = {
+      signBytes,
+      vaultProof: btoa(String.fromCharCode(...stored)),
+      signsDeterministically: false,
+    };
+
+    expect(await agentVaultProof(signer, MESSAGE)).toEqual(stored);
+    expect(signBytes).not.toHaveBeenCalled();
+  });
+
+  /** The stored proof is only good for the message it was made over. */
+  it('ignores the stored proof for a different message', async () => {
+    const live = new Uint8Array(64).fill(2);
+    const signer = {
+      ...signerReturning(live),
+      vaultProof: btoa(String.fromCharCode(...new Uint8Array(64).fill(7))),
+    };
+
+    expect(
+      await agentVaultProof(signer, new TextEncoder().encode('other')),
+    ).toEqual(live);
+  });
+
+  /**
+   * No stored proof and a signer that admits it is non-deterministic: the only
+   * way to know whether its signature is usable is to ask twice. A signature
+   * that does not reproduce itself must not be turned into a wrapper.
+   */
+  it('refuses a live signature that does not reproduce itself', async () => {
+    let n = 0;
+    const signer = {
+      signBytes: async () =>
+        btoa(String.fromCharCode(...new Uint8Array(64).fill(++n))),
+      signsDeterministically: false,
+    };
+
+    await expect(agentVaultProof(signer, MESSAGE)).rejects.toThrow(
+      /signs differently every time/,
+    );
+  });
+
+  it('accepts a live signature that does reproduce itself', async () => {
+    const signer = {
+      ...signerReturning(new Uint8Array(64).fill(3)),
+      signsDeterministically: false,
+    };
+
+    expect(await agentVaultProof(signer, MESSAGE)).toEqual(
+      new Uint8Array(64).fill(3),
+    );
+  });
 });
 
 describe('vaultLaneId', () => {

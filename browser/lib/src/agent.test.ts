@@ -2,7 +2,7 @@ import { describe, it } from 'vitest';
 import { Agent } from './agent.js';
 import { decodeB64 } from './base64.js';
 import { JSCryptoProvider, legacySubjectFromSecret } from './CryptoProvider.js';
-import { privateDriveSubject } from './genesis.js';
+import { AGENT_VAULT_PROOF_MESSAGE, privateDriveSubject } from './genesis.js';
 
 describe('Agent', () => {
   const validPrivateKey = 'CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=';
@@ -56,6 +56,26 @@ describe('Agent', () => {
     expect(first).toBe(await privateDriveSubject(decodeB64(validPrivateKey)));
     expect(first.startsWith('did:ad:')).toBe(true);
     expect(first.startsWith('did:ad:agent:')).toBe(false);
+  });
+
+  /**
+   * The vault proof is key material: `agent_secret_kek` on the server derives
+   * the key that wraps a drive's vault key from it. So it must be the RFC 8032
+   * deterministic signature — the one a `js` agent produces — regardless of
+   * which provider the agent ends up with, and it must survive re-derivation.
+   */
+  it('derives the vault proof deterministically from the secret', async ({
+    expect,
+  }) => {
+    const secret = Agent.buildSecret(validPrivateKey, validSubject);
+    const jsAgent = Agent.fromSecret(secret, 'js');
+
+    const fromSecret = await Agent.vaultProofFromSecret(secret);
+    expect(fromSecret).toBe(await Agent.vaultProofFromSecret(secret));
+    expect(fromSecret).toBe(
+      await jsAgent.signBytes(AGENT_VAULT_PROOF_MESSAGE),
+    );
+    expect(decodeB64(fromSecret)).toHaveLength(64);
   });
 });
 

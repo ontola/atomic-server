@@ -31,6 +31,16 @@ interface StoredAgent {
    * still readable.
    */
   privateDrive?: string;
+  /**
+   * The agent's Cloud Vault proof (see `Agent.vaultProof`). Stored for the
+   * same reason as `privateDrive`: WebKit's WebCrypto signs the fixed proof
+   * message differently every call, so the keypair beside it cannot reproduce
+   * the signature the vault keys were wrapped under. Readable here, but it is
+   * one input of two — the wrapped drive keys live on the control plane, behind
+   * the account session — and any script on this origin could already ask the
+   * non-extractable key to sign.
+   */
+  vaultProof?: string;
 }
 
 /**
@@ -45,6 +55,8 @@ interface StoredAgentFallback {
   initialDrive?: string;
   /** See {@link StoredAgent}. */
   privateDrive?: string;
+  /** See {@link StoredAgent}. */
+  vaultProof?: string;
 }
 
 const AGENT_FALLBACK_KEY = 'atomic.agent.fallback';
@@ -79,6 +91,7 @@ export async function getAgentFromIDB(): Promise<Agent | undefined> {
         );
         agent.legacySubject = storedAgent.legacySubject;
         agent.privateDrive = storedAgent.privateDrive;
+        agent.vaultProof = storedAgent.vaultProof;
 
         // Heal installs written while the readable key was saved
         // unconditionally: a plaintext copy beside a non-extractable key hands
@@ -109,6 +122,7 @@ export async function getAgentFromIDB(): Promise<Agent | undefined> {
       );
       agent.legacySubject = fallback.legacySubject;
       agent.privateDrive = fallback.privateDrive;
+      agent.vaultProof = fallback.vaultProof;
 
       return agent;
     } catch (e) {
@@ -188,6 +202,7 @@ export async function saveAgentToIDB(
       previous?.subject === subject ? previous.initialDrive : undefined,
     privateDrive:
       previous?.subject === subject ? previous.privateDrive : undefined,
+    vaultProof: previous?.subject === subject ? previous.vaultProof : undefined,
   } satisfies StoredAgent);
 }
 
@@ -202,6 +217,7 @@ async function storeSecret(secret: string): Promise<void> {
   // Derived here, once, from the raw key — the stored keypair cannot
   // reproduce it. See `StoredAgent.privateDrive`.
   const privateDrive = await Agent.privateDriveSubjectFromSecret(secret);
+  const vaultProof = await Agent.vaultProofFromSecret(secret);
 
   {
     // Prefer the non-extractable keypair. Once stored this way the private key
@@ -217,6 +233,7 @@ async function storeSecret(secret: string): Promise<void> {
           legacySubject: legacySubjectFromSecret(secret),
           initialDrive: decoded.initialDrive,
           privateDrive,
+          vaultProof,
         } satisfies StoredAgent);
         await del(AGENT_FALLBACK_KEY);
 
@@ -238,6 +255,7 @@ async function storeSecret(secret: string): Promise<void> {
       legacySubject: legacySubjectFromSecret(secret),
       initialDrive: decoded.initialDrive,
       privateDrive,
+      vaultProof,
     } satisfies StoredAgentFallback);
     // Drop a keypair from a previous account, so it can't be loaded instead.
     await del(AGENT_IDB_KEY);
