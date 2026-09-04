@@ -4,6 +4,12 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- [#1232](https://github.com/ontola/atomic-server/issues/1232) Unified
+  actions: the ⌘K palette shows a capped Actions section for the current
+  resource, hotkeys and the shortcuts overlay/page render from the action
+  registry, and simple verbs (`delete`, `favorite`, `share`, `history`)
+  derive in-app AI tools.
+
 ## [v0.41.0-beta.5] - 2026-09-04
 
 - `@tomic/lib`: `Store.search` uses the durable WASM/OPFS inverted index
