@@ -70,6 +70,12 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   `ingest_commit_json` serializes; `sync::ws_apply::apply_commit_json` now
   returns the `CommitResponse` instead of `()`. See
   `planning/runtime-boundary-decision.md`.
+- Docs / planning: OIDC-only login is a root Agent as CA on the node plus
+  short-lived session Agents in the browser. Commits stay Ed25519; OIDC
+  tokens do not authorize writes. Verifiers check the session signature,
+  then the SessionCert, then rights for the **root** DID. Planning only,
+  nothing ships yet. See [`planning/oidc-oauth.md`](planning/oidc-oauth.md)
+  and [#277](https://github.com/ontola/atomic-server/issues/277).
 
 ## [v0.41.0-beta.2] - 2026-08-01
 
