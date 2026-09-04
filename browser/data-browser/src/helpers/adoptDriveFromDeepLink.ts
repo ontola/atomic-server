@@ -1,4 +1,4 @@
-import { enableLoro, server, StoreEvents, type Store } from '@tomic/react';
+import { enableLoro, server, type Store } from '@tomic/react';
 
 /** Server-managed property stamping every resource with its drive at genesis. */
 const DRIVE_PROP = 'https://atomicdata.dev/properties/drive';
