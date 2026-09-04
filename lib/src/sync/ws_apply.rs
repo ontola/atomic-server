@@ -5,13 +5,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::{
-    commit::{Commit, CommitOpts, CommitResponse},
-    db::Db,
-    errors::AtomicResult,
-    parse::parse_json_ad_commit_resource,
-    Storelike,
-};
+use crate::{db::Db, errors::AtomicResult, Storelike};
 
 static IMPORTING: AtomicBool = AtomicBool::new(false);
 
@@ -243,10 +237,13 @@ pub async fn persist_update(
     Ok(())
 }
 
-/// Remove a resource from the local store (DESTROY frame). Trusted callers
-/// only — no admission check. Live-sync transports that receive DESTROY from
-/// a peer whose write rights aren't already established must use
-/// [`resolve_destroy`] instead, so a check can run before deleting anything.
+/// Remove a resource from the local store (a `DESTROY` frame or a
+/// `SYNC_DIFF.remove[]` entry). No admission check runs here: the caller
+/// either trusts the source (a mobile replica applying what its hub relayed)
+/// or has already run one — the peer transport resolves the drive with
+/// [`resolve_destroy_drive`] and checks admission before calling this. Until
+/// 2026-09 those two callers went through two identically-bodied functions
+/// (`apply_destroy` and `apply_destroy_checked`) that differed in name only.
 pub async fn apply_destroy(store: &Db, subject: &str) -> AtomicResult<()> {
     if subject.is_empty() {
         return Ok(());
@@ -270,10 +267,9 @@ async fn apply_destroy_unchecked(store: &Db, subject: &str) -> AtomicResult<()> 
     // tombstone, leaving it able to resurrect on the next bulk sync.
     let existed = store.get_resource(&subj).await.is_ok();
 
-    // A bulk-sync `SYNC_DIFF.remove[]` entry is peer-supplied and, for
-    // `apply_destroy` (as opposed to `apply_destroy_checked`), unauthenticated
-    // — nothing upstream verified the sender had any relationship to this
-    // subject at all. Recording a tombstone for a subject this node has NEVER
+    // A bulk-sync `SYNC_DIFF.remove[]` entry is peer-supplied; the admission
+    // check upstream is per drive, so nothing verified the sender had any
+    // relationship to this particular subject. Recording a tombstone for a subject this node has NEVER
     // heard of (never stored, never already tombstoned) isn't a "harmless
     // no-op": it permanently poisons that subject name against future
     // legitimate creation/import (`import_sync_push` and friends skip
@@ -319,52 +315,6 @@ pub async fn resolve_destroy_drive(store: &Db, subject: &str) -> Option<String> 
             .map(|v| v.to_string())
             .unwrap_or_else(|_| resource.get_subject().to_string()),
     )
-}
-
-/// Apply a DESTROY after the caller has already run its own admission check
-/// (or determined via [`resolve_destroy_drive`] returning `None` that there's
-/// nothing to check).
-pub async fn apply_destroy_checked(store: &Db, subject: &str) -> AtomicResult<()> {
-    if subject.is_empty() {
-        return Ok(());
-    }
-    set_importing(true);
-    let result = apply_destroy_unchecked(store, subject).await;
-    set_importing(false);
-    result
-}
-
-/// Apply a JSON-AD commit that a **trusted hub** relayed to this replica
-/// (the `COMMIT` text frame a mobile client receives from the server it is
-/// subscribed to).
-///
-/// Replica policy: the hub already accepted this commit, so only the
-/// signature is re-checked — rights, timestamp and the previous-commit link
-/// are not. This is `crate::runtime::IngestPolicy::Replica`, and it is the
-/// only caller this function is meant for. **Never** route a commit from an
-/// untrusted peer (an Iroh stream, an inbound WebSocket, an HTTP `POST`)
-/// through here: those go through `engine::ingest_commit` with rights
-/// validation on. Audit finding F6 (`planning/completed/unified-sync-audit-2026-07.md`)
-/// is what this name and note fence off; the server's `handlers::commit::apply_commit_json`
-/// is the rights-checked function that used to share this one's name.
-pub async fn apply_trusted_hub_commit(store: &Db, body: &str) -> AtomicResult<CommitResponse> {
-    set_importing(true);
-    let result = async {
-        let resource = parse_json_ad_commit_resource(body, store).await?;
-        let commit = Commit::from_resource(resource)?;
-        let opts = CommitOpts {
-            validate_signature: true,
-            validate_timestamp: false,
-            validate_previous_commit: false,
-            validate_rights: false,
-            update_index: true,
-            ..CommitOpts::no_validations_no_index()
-        };
-        store.apply_commit(commit, &opts).await
-    }
-    .await;
-    set_importing(false);
-    result
 }
 
 #[cfg(test)]

@@ -72,9 +72,7 @@ describe('Agent', () => {
 
     const fromSecret = await Agent.vaultProofFromSecret(secret);
     expect(fromSecret).toBe(await Agent.vaultProofFromSecret(secret));
-    expect(fromSecret).toBe(
-      await jsAgent.signBytes(AGENT_VAULT_PROOF_MESSAGE),
-    );
+    expect(fromSecret).toBe(await jsAgent.signBytes(AGENT_VAULT_PROOF_MESSAGE));
     expect(decodeB64(fromSecret)).toHaveLength(64);
   });
 });

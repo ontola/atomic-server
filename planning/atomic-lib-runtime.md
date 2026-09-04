@@ -11,7 +11,7 @@ surface ([`completed/runtime-boundary-decision.md`](./completed/runtime-boundary
 `mutate(ResourceEdit)`, `subscribe`, and (behind `iroh`) `sync_with_peer`.
 Every method delegates to a function that already existed — see the doc
 comment on each one in `lib/src/runtime/node.rs`. `IngestPolicy::{Hub, Peer,
-Replica, LocalCache}` names the four commit-validation profiles that used to be
+LocalCache}` names the three commit-validation profiles that used to be
 inline `CommitOpts` / `CommitIngestOpts` literals in `server/src/handlers/commit.rs`,
 `sync/engine.rs`, `sync/ws_apply.rs`, and `wasm/src/lib.rs`. The WASM
 `ClientDb` is the first adapter on it: `applyCommit` is
@@ -26,7 +26,7 @@ What slice 1 did **not** do (deliberately — no behaviour change):
   (local opts: signature and rights not re-checked), not through
   `apply_commit(Hub)`. Routing it through `Hub` would add a JSON round-trip and
   ownership/causality checks that today's local save does not run.
-- `Replica` and `LocalCache` delegate to `ws_apply::apply_trusted_hub_commit` and the
+- `LocalCache` delegates to the
   former WASM `CommitOpts` respectively, because `CommitIngestOpts` on `develop`
   has no `validate_rights` / `validate_timestamp` knobs yet. Once #1274 lands,
   fold both into `ingest_commit` with `CommitIngestOpts::{replica, local_cache}`.
@@ -41,7 +41,8 @@ What slice 1 did **not** do (deliberately — no behaviour change):
 Next:
 
 1. #1274 merges → `IngestPolicy` maps 1:1 onto `CommitIngestOpts` constructors
-   and the `Replica` / `LocalCache` arms lose their separate code paths.
+   and the `LocalCache` arm loses its separate code path. (`Replica`, the
+   hub-relayed text `COMMIT` profile, was removed 2026-09-04 with the frame.)
 2. `server/src/handlers/commit.rs` → `node.apply_commit(_, Hub { source_id,
    response_origin })` (Phase 2 below); `AppState` holds an `AtomicNode`.
 3. `ffi/` (#1277) and `python/` bind `AtomicNode`; `flutter/rust/src/api/simple.rs`

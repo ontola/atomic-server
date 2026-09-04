@@ -85,7 +85,7 @@ async fn anon_get_latency(ws_url: &str, subject: &str) -> AtomicResult<Duration>
     let timeout = tokio::time::timeout(Duration::from_secs(10), async {
         while let Ok(msg) = rx.recv().await {
             match msg {
-                WsMessage::Resource(_) | WsMessage::Error { .. } => return Ok(()),
+                WsMessage::Update { .. } | WsMessage::Error { .. } => return Ok(()),
                 _ => continue,
             }
         }
@@ -132,7 +132,7 @@ async fn anon_get_after_sync_vv_latency(
     let timeout = tokio::time::timeout(Duration::from_secs(10), async {
         while let Ok(msg) = rx.recv().await {
             match msg {
-                WsMessage::Resource(_) | WsMessage::Error { .. } => return Ok(()),
+                WsMessage::Update { .. } | WsMessage::Error { .. } => return Ok(()),
                 _ => continue,
             }
         }

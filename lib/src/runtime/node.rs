@@ -88,7 +88,6 @@ impl NodeConfig {
 /// | --- | --- | --- | --- | --- | --- | --- |
 /// | `Hub` | yes | yes | yes | yes | yes | fan out |
 /// | `Peer` | yes | yes | yes | no | no | suppressed |
-/// | `Replica` | yes | no | no | no | no | suppressed |
 /// | `LocalCache` | no | no | no | no | no | fan out |
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum IngestPolicy {
@@ -105,9 +104,6 @@ pub enum IngestPolicy {
     /// concurrent writes are expected.
     #[default]
     Peer,
-    /// Catch-up from a hub that already validated the commit (Flutter WS
-    /// session): only the signature is re-checked.
-    Replica,
     /// A trusted local cache (browser WASM/OPFS) mirroring what its hub
     /// already accepted. Nothing is validated; only the index is updated.
     LocalCache,
@@ -223,8 +219,6 @@ impl AtomicNode {
     /// - `Hub` / `Peer`: `sync::engine::ingest_commit` with the matching
     ///   `CommitIngestOpts` — the path `server/src/handlers/commit.rs` and
     ///   the peer `COMMIT` frame handler already use.
-    /// - `Replica`: `sync::ws_apply::apply_trusted_hub_commit` — the Flutter
-    ///   WS catch-up path. Trusted-hub only: rights are not re-checked.
     /// - `LocalCache`: `Db::apply_commit` with every `validate_*` off — the
     ///   options the WASM `ClientDb.applyCommit` used to carry inline.
     pub async fn apply_commit(
@@ -240,32 +234,12 @@ impl AtomicNode {
                 ingest_commit(
                     &self.db,
                     commit_json,
-                    &CommitIngestOpts {
-                        source_id,
-                        validate_loro_causality: true,
-                        enforce_subject_ownership: true,
-                        suppress_live_echo: false,
-                        response_origin,
-                    },
+                    &CommitIngestOpts::hub(source_id, response_origin),
                 )
                 .await
             }
             IngestPolicy::Peer => {
-                ingest_commit(
-                    &self.db,
-                    commit_json,
-                    &CommitIngestOpts {
-                        source_id: None,
-                        validate_loro_causality: false,
-                        enforce_subject_ownership: false,
-                        suppress_live_echo: true,
-                        response_origin: None,
-                    },
-                )
-                .await
-            }
-            IngestPolicy::Replica => {
-                crate::sync::ws_apply::apply_trusted_hub_commit(&self.db, commit_json).await
+                ingest_commit(&self.db, commit_json, &CommitIngestOpts::peer()).await
             }
             IngestPolicy::LocalCache => {
                 // `DontSave`: the default would persist the parsed Commit

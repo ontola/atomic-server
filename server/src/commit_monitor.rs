@@ -20,6 +20,23 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+/// One connection's registration on a subject, drive or filter.
+#[derive(Debug, Clone)]
+pub struct Subscriber {
+    /// Connection id; a change this connection originated is not echoed back
+    /// to it (see [`skip_same_source`]).
+    source_id: String,
+    /// The identity the subscription was admitted under, as a subject
+    /// string. Kept so [`Handler<RebindAgent>`] can re-evaluate the
+    /// registration when the connection's `AUTH` changes it.
+    agent: String,
+    /// Filter subscriptions only: the drive the filter is scoped to, which
+    /// is what the read check runs against.
+    drive: Option<String>,
+}
+
+type Subscribers = HashMap<Addr<WebSocketConnection>, Subscriber>;
+
 /// The Commit Monitor is an Actor that manages subscriptions for subjects and sends Commits to listeners.
 /// It's also responsible for checking whether the rights are present.
 ///
@@ -47,23 +64,6 @@ use std::sync::Arc;
 ///   `planning/sync.md` ("QUERY_UPDATE removed"); the SUBSCRIBE_QUERY registration
 ///   primitive itself was kept because it lets a client say "watch this
 ///   set of resources" without binding to a whole drive.
-/// One connection's registration on a subject, drive or filter.
-#[derive(Debug, Clone)]
-pub struct Subscriber {
-    /// Connection id; a change this connection originated is not echoed back
-    /// to it (see [`skip_same_source`]).
-    source_id: String,
-    /// The identity the subscription was admitted under, as a subject
-    /// string. Kept so [`Handler<RebindAgent>`] can re-evaluate the
-    /// registration when the connection's `AUTH` changes it.
-    agent: String,
-    /// Filter subscriptions only: the drive the filter is scoped to, which
-    /// is what the read check runs against.
-    drive: Option<String>,
-}
-
-type Subscribers = HashMap<Addr<WebSocketConnection>, Subscriber>;
-
 #[allow(clippy::mutable_key_type)]
 pub struct CommitMonitor {
     /// Maintains a list of all the resources that are being subscribed to, and maps these to websocket connections.
@@ -716,36 +716,21 @@ impl Handler<ExternalChange> for CommitMonitor {
 
         let base_domain = self.store.get_base_domain();
         let subject = atomic_lib::Subject::from_raw(&msg.subject, base_domain.as_deref());
-        let resolved = subject.resolve(
-            &base_domain
-                .clone()
-                .unwrap_or_else(|| "http://localhost".to_string()),
-        );
 
-        let frame: Arc<[u8]> = if msg.destroyed {
-            Arc::from(ws_v2::encode_destroy(0, &resolved).into_boxed_slice())
+        // `external_change` reads the payload straight out of
+        // `Tree::LoroSnapshots`: full state, so a SNAPSHOT.
+        let change = if msg.destroyed {
+            ws_v2::Change::Destroyed
         } else {
             let Some(snapshot) = msg.loro_snapshot.as_ref() else {
                 return;
             };
-            // SNAPSHOT, because that is what this payload is: `external_change`
-            // reads it straight out of `Tree::LoroSnapshots`, unlike the commit
-            // path above which carries a commit's delta and correctly omits the
-            // flag. Sending full state labelled as a delta made the client merge
-            // it into a document it does not have, seeding the partial doc its
-            // own GET handler warns about — "can keep only the seed's props and
-            // render the resource class-less". Visible as a peer's new table row
-            // appearing with every cell empty until a reload.
-            let flags = if msg.commit_id.is_some() {
-                ws_v2::flags::SNAPSHOT | ws_v2::flags::HAS_COMMIT_ID | ws_v2::flags::PUSH
-            } else {
-                ws_v2::flags::SNAPSHOT | ws_v2::flags::PUSH
-            };
-            Arc::from(
-                ws_v2::encode_update(flags, 0, &resolved, msg.commit_id.as_deref(), snapshot)
-                    .into_boxed_slice(),
-            )
+            ws_v2::Change::Snapshot {
+                bytes: snapshot,
+                commit_id: msg.commit_id.as_deref(),
+            }
         };
+        let frame = ws_v2::encode_change_frame(&self.store, &subject, change);
 
         let source = msg.source_id.as_deref();
 
@@ -1188,10 +1173,6 @@ impl Handler<CommitMessage> for CommitMonitor {
 /// `internal:/…` subjects the same way, so encoding once is correct.
 fn encode_commit_frame(store: &Db, msg: &CommitMessage) -> Option<Arc<[u8]>> {
     let commit = &msg.commit_response.commit;
-    let origin = store
-        .get_base_domain()
-        .unwrap_or_else(|| "http://localhost".to_string());
-    let subject_resolved = commit.subject.resolve(&origin);
 
     if let Some(loro_update) = &commit.loro_update {
         // The wire `commit_id` becomes the client's `lastCommit`
@@ -1202,7 +1183,7 @@ fn encode_commit_frame(store: &Db, msg: &CommitMessage) -> Option<Arc<[u8]>> {
         // DID. (`commit.url` is never populated in practice, so the
         // previous `or(signature)` fallback was always taken —
         // silently dropping the prefix.)
-        let commit_id_owned = commit
+        let commit_id = commit
             .url
             .clone()
             .or_else(|| {
@@ -1212,17 +1193,20 @@ fn encode_commit_frame(store: &Db, msg: &CommitMessage) -> Option<Arc<[u8]>> {
                     .map(|s| format!("did:ad:commit:{}", s))
             })
             .unwrap_or_default();
-        let frame = ws_v2::encode_update(
-            ws_v2::flags::HAS_COMMIT_ID | ws_v2::flags::PUSH,
-            0,
-            &subject_resolved,
-            Some(commit_id_owned.as_str()),
-            loro_update,
-        );
-        Some(Arc::from(frame.into_boxed_slice()))
+        Some(ws_v2::encode_change_frame(
+            store,
+            &commit.subject,
+            ws_v2::Change::Delta {
+                bytes: loro_update,
+                commit_id: &commit_id,
+            },
+        ))
     } else if commit.destroy.unwrap_or(false) {
-        let frame = ws_v2::encode_destroy(0, &subject_resolved);
-        Some(Arc::from(frame.into_boxed_slice()))
+        Some(ws_v2::encode_change_frame(
+            store,
+            &commit.subject,
+            ws_v2::Change::Destroyed,
+        ))
     } else {
         None
     }

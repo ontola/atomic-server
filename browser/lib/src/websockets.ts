@@ -7,10 +7,7 @@
 
 import { createAuthentication } from './authentication.js';
 import { Resource } from './resource.js';
-import {
-  recordServerVersionFromWsProtocol,
-  recordServerWsCapabilities,
-} from './serverCapabilities.js';
+import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
 import { StoreEvents, type Store, type DriveSyncState } from './store.js';
 import { reconcile, type Item, type RemoteRange } from './rbsr.js';
 import { AtomicError, ErrorType } from './error.js';
@@ -51,6 +48,11 @@ import {
 } from './ws-v2.js';
 import { BLOB } from './urls.js';
 import { hexToBytes } from './value.js';
+import {
+  livenessAction,
+  LIVENESS_CHECK_MS,
+  LIVENESS_DEADLINE_MS,
+} from './liveness.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 
 // 5s is too tight for a shared atomic-server under suite-wide e2e load
@@ -61,33 +63,6 @@ const REQUEST_TIMEOUT = 10000;
  *  a timestamp-only proof (a server that predates the frame never sends it). */
 const CHALLENGE_WAIT_MS = 300;
 const WS_PROTOCOL = 'atomicdata-ws.v2';
-
-/** After this long without any inbound frame, send a `KEEPALIVE` probe. */
-export const LIVENESS_IDLE_MS = 20_000;
-/** After this long without any inbound frame, the socket is presumed dead
- *  and closed so the reconnect loop takes over. Comfortably more than the
- *  idle threshold plus a round trip, so one slow echo is not a disconnect. */
-export const LIVENESS_DEADLINE_MS = 45_000;
-/** How often the liveness timer looks. */
-export const LIVENESS_CHECK_MS = 5_000;
-
-export type LivenessAction = 'none' | 'probe' | 'close';
-
-/**
- * What the liveness timer should do given how long the socket has been
- * silent and whether a probe is already outstanding. Pure, so it is testable
- * without a socket: `probe` once past the idle threshold, `close` once past
- * the deadline, otherwise nothing.
- */
-export function livenessAction(
-  idleMs: number,
-  probeSent: boolean,
-): LivenessAction {
-  if (idleMs >= LIVENESS_DEADLINE_MS) return 'close';
-  if (idleMs >= LIVENESS_IDLE_MS && !probeSent) return 'probe';
-
-  return 'none';
-}
 
 const connectionFailedMessage = (url: URL): string =>
   `Could not connect to ${url.origin}. Check that the server is running and reachable.`;
@@ -278,6 +253,10 @@ export class WSClient {
    *  `authenticate` signs `{origin}#{nonce}` so the proof is good here
    *  only. Reset with every new socket. */
   private _challengeNonce: string | undefined;
+  /** The drive this socket currently holds a `SUB` for, so a drive switch
+   *  can `UNSUB` it. Reset with every new socket (the server forgets
+   *  subscriptions with the connection). */
+  private _subscribedDrive: string | undefined;
 
   /** Take a pending GET out of the queue, cancel its timer. Caller
    *  invokes resolve/reject on the returned entry. */
@@ -399,6 +378,7 @@ export class WSClient {
         this.stopLiveness();
         this._serverCaps = [];
         this._challengeNonce = undefined;
+        this._subscribedDrive = undefined;
 
         if (!this._closed) {
           this._retryTimer = setTimeout(() => {
@@ -934,7 +914,6 @@ export class WSClient {
         // Resolved by waitForTag. The payload is the server's capability
         // list; remember it so features negotiate instead of guessing.
         this._serverCaps = decodeAuthOk(payload);
-        recordServerWsCapabilities(this.serverOrigin, this._serverCaps);
         break;
 
       case Tag.KEEPALIVE:
@@ -1251,8 +1230,6 @@ export class WSClient {
       } catch (e) {
         console.warn('Invalid RBSR_ITEMS message:', e);
       }
-    } else if (text === 'AUTHENTICATED') {
-      // Legacy auth response — handled for backward compat
     }
   }
 
@@ -1268,10 +1245,19 @@ export class WSClient {
 
     const drive = this.store.getDrive();
 
+    // Switching drives: stop the old drive's fan-out first. Until 2026-09
+    // the old subscription stayed registered for the life of the socket, so
+    // every drive ever opened in a session kept pushing its commits here.
+    if (this._subscribedDrive && this._subscribedDrive !== drive) {
+      this.unsubscribeFromDrive(this._subscribedDrive);
+      this._subscribedDrive = undefined;
+    }
+
     // Local-only drives are unknown to the server — a SUB would only
     // produce an error frame (and leak the drive subject).
     if (drive && this.store.isLiveSyncedDrive(drive)) {
       this.sendBinary(encodeSub(drive));
+      this._subscribedDrive = drive;
     }
   }
 
@@ -1433,8 +1419,8 @@ export class WSClient {
       // Hash-first: compute our state (needed for the hash) but send only the
       // hash as a probe. In the common "nothing changed" case the server
       // answers SYNC_OK and we never transmit the O(drive-size) version vector.
-      // On a mismatch the server replies SYNC_RESEND and we send the full
-      // state we stashed here (see `sendFullSyncState`).
+      // On a mismatch the server replies SYNC_RESEND and `sendReducedSyncState`
+      // reconciles from the state stashed here.
       const syncState = await this.store.computeDriveSyncState(drive);
       close({ resourceCount: Object.keys(syncState.resources).length });
       this._pendingSyncState.set(drive, syncState);
@@ -1745,11 +1731,6 @@ export class WSClient {
       });
     });
   }
-}
-
-/** Check if a browser context supports WebSockets */
-export function supportsWebSockets(): boolean {
-  return typeof WebSocket !== 'undefined';
 }
 
 /** Convert a computed drive-sync state (compact peer-indexed counters) into the

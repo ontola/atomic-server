@@ -4,39 +4,6 @@ import { enableLoro, server, StoreEvents, type Store } from '@tomic/react';
 const DRIVE_PROP = 'https://atomicdata.dev/properties/drive';
 
 /**
- * `did:` subjects have no HTTP fallback — `store.getResource` can only
- * resolve them once the WS is connected, and throws immediately otherwise.
- * A page load always starts with the WS disconnected; it reconnects within
- * a few hundred ms (same handshake window `Store` itself waits out in
- * `fetchResourceFromClientDb`). Give it a moment before giving up, rather
- * than losing the adoption to a race every single time.
- */
-function waitForServerConnected(
-  store: Store,
-  timeoutMs: number,
-): Promise<boolean> {
-  if (store.serverConnected) {
-    return Promise.resolve(true);
-  }
-
-  return new Promise<boolean>(resolve => {
-    let unsub: (() => void) | undefined;
-    const timer = setTimeout(() => {
-      unsub?.();
-      resolve(false);
-    }, timeoutMs);
-
-    unsub = store.on(StoreEvents.ConnectionChanged, connected => {
-      if (connected) {
-        clearTimeout(timer);
-        unsub?.();
-        resolve(true);
-      }
-    });
-  });
-}
-
-/**
  * When the app is opened via a deep link to a resource (a `?subject=` on the
  * entry URL — share/show links) on a browser with NO established session
  * drive, the session should start in that resource's drive instead of the
@@ -89,7 +56,11 @@ export async function adoptDriveFromDeepLink(store: Store): Promise<void> {
     // Wait out both before fetching so the fetched resource is actually
     // readable.
     if (subject.startsWith('did:') && !store.serverConnected) {
-      await waitForServerConnected(store, 5000);
+      // `did:` subjects have no HTTP fallback: `store.getResource` can only
+      // resolve them once the WS is connected. A page load always starts
+      // disconnected and reconnects within a few hundred ms, so give it a
+      // moment rather than losing the adoption to that race every time.
+      await store.waitForServerConnected(5000);
     }
 
     await enableLoro();

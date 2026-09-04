@@ -177,6 +177,44 @@ describe('WSClient handshake', () => {
   });
 });
 
+describe('WSClient drive subscription', () => {
+  const original = globalThis.WebSocket;
+
+  afterEach(() => {
+    globalThis.WebSocket = original;
+    vi.restoreAllMocks();
+  });
+
+  it('UNSUBs the previous drive when the store switches drives', async ({
+    expect,
+  }) => {
+    const { client, socket, store } = await connectedClient();
+    vi.spyOn(store, 'isLiveSyncedDrive').mockReturnValue(true);
+    const subscribe = (
+      client as unknown as { subscribeToDrive: () => void }
+    ).subscribeToDrive.bind(client);
+
+    vi.spyOn(store, 'getDrive').mockReturnValue('did:ad:drive-a');
+    subscribe();
+    expect(framesWithTag(socket, Tag.SUB)).toHaveLength(1);
+    expect(framesWithTag(socket, Tag.UNSUB)).toHaveLength(0);
+
+    // Same drive again: idempotent, nothing is unsubscribed.
+    subscribe();
+    expect(framesWithTag(socket, Tag.UNSUB)).toHaveLength(0);
+
+    vi.spyOn(store, 'getDrive').mockReturnValue('did:ad:drive-b');
+    subscribe();
+    const unsubs = framesWithTag(socket, Tag.UNSUB);
+    expect(unsubs).toHaveLength(1);
+    expect(new TextDecoder().decode(unsubs[0].subarray(1))).toBe(
+      'did:ad:drive-a',
+    );
+    expect(framesWithTag(socket, Tag.SUB)).toHaveLength(3);
+    client.close();
+  });
+});
+
 describe('WSClient.postCommit', () => {
   const original = globalThis.WebSocket;
 

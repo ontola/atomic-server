@@ -43,13 +43,7 @@ pub async fn apply_commit_json(
     let message = ingest_commit_json(
         store,
         body,
-        &CommitIngestOpts {
-            source_id,
-            validate_loro_causality: true,
-            enforce_subject_ownership: true,
-            suppress_live_echo: false,
-            response_origin: Some(origin.to_string()),
-        },
+        &CommitIngestOpts::hub(source_id, Some(origin.to_string())),
     )
     .await?;
 

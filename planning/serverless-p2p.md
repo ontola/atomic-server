@@ -228,7 +228,8 @@ now load-bearing rather than hygiene:
   needed, and is now one implementation instead of two.
 - [ ] **`trusted_hub` / `untrusted_peer` module split** in `ws_apply.rs` so
   the unconditional apply paths can't be reached from accept code.
-- [ ] Collapse the six `sync_drive_with_peer*` variants into one
+- [ ] Collapse the remaining four `sync_drive_with_peer*` variants (two of
+  the six were dead or single-use indirections, removed 2026-09-04) into one
   `SyncSession::run(transport, drive, opts)`.
 - [x] (2026-09-04) Key `LIVE_CONNECTIONS` by peer + prune with `remove_live_peer` (leak).
 - [ ] Delete the remaining dead client surface (`WsMessage::Resource`/

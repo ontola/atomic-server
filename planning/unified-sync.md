@@ -107,10 +107,11 @@ that turned out to be already done, or blocked by a finding, say so inline.
   not re-evaluated yet (this doc).
 - [ ] Bootstrap admission (OQ5): what replaces `Err(_) => true` for a drive the
   node does not know yet. ([`foss-public-host-mode.md`](./foss-public-host-mode.md))
-- [x] (2026-09-04) — F6: the unchecked replica applier is now
-  `ws_apply::apply_trusted_hub_commit`, documented as trusted-hub-only, and
-  no longer shares a name with the server's rights-checked
-  `handlers::commit::apply_commit_json`.
+- [x] (2026-09-04) — F6: the unchecked replica applier (`ws_apply`'s old
+  `apply_commit_json`) turned out to be reachable only through the pre-v2
+  `COMMIT` text frame, which no server sends. It is deleted, along with the
+  frame's parser and `IngestPolicy::Replica`; the server's rights-checked
+  `handlers::commit::apply_commit_json` is the only function of that name.
   ([`completed/unified-sync-audit-2026-07.md`](./completed/unified-sync-audit-2026-07.md))
 - [ ] Retain authorization-critical commits and verify grant chains before
   cross-agent peer sync. ([`authorization-sync.md`](./authorization-sync.md))
@@ -199,11 +200,18 @@ that turned out to be already done, or blocked by a finding, say so inline.
   `open_sync_session`). ([`serverless-p2p.md`](./serverless-p2p.md))
 - [ ] `trusted_hub` / `untrusted_peer` split in `ws_apply.rs`.
   ([`serverless-p2p.md`](./serverless-p2p.md))
-- [x] (2026-09-04) — `LIVE_CONNECTIONS` is keyed by normalized node id and
-  pruned by `remove_live_peer_inner` (it was an append-only `Vec` that pinned
-  every QUIC connection ever dialed for the life of the process).
-- [ ] Collapse the six `sync_drive_with_peer*` variants and delete the
-  remaining dead client surface. ([`serverless-p2p.md`](./serverless-p2p.md))
+- [x] (2026-09-04) — the pinned QUIC connection lives in the live-peer
+  registry entry itself (`LivePeer.connection`), so it is released with the
+  peer; `LIVE_CONNECTIONS` (an append-only `Vec` that pinned every connection
+  ever dialed) is gone, and the registry is a `LazyLock` rather than a
+  `Mutex<Option<_>>` initialised as a side effect (a peer registered before
+  that ran used to be dropped silently).
+- [x] (2026-09-04, partial) — the dead `sync_drive_with_peer` and the private
+  `_forced` indirection are removed; `WsMessage::{Commit, Resource}` and the
+  pre-v2 text-frame parsers are gone. Four `sync_drive_with_peer*` entry
+  points remain (`_outcome`, `_if_needed`, `_using`, `_using_outcome`), two
+  of them test harness; the real collapse is the `SyncSession` item below.
+  ([`serverless-p2p.md`](./serverless-p2p.md))
 
 ### Tests
 

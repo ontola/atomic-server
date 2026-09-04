@@ -27,10 +27,6 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 /// A message received from the server over WebSocket.
 #[derive(Clone, Debug)]
 pub enum WsMessage {
-    /// A commit was applied to a subscribed resource. Contains JSON-AD of the commit.
-    Commit(String),
-    /// A resource response (from GET). Contains JSON-AD of the resource.
-    Resource(String),
     /// A Loro CRDT sync update. Contains `{ subject, update }` JSON.
     LoroSyncUpdate { subject: String, update: Vec<u8> },
     /// A Loro ephemeral update (cursors/presence). Contains `{ subject, update }` JSON.
@@ -533,13 +529,16 @@ impl WsClient {
     }
 }
 
-/// Parse a raw server message string into a typed `WsMessage`.
+/// Parse a text frame into a typed `WsMessage`.
+///
+/// The server sends eight text frames (`docs/src/websockets.md`, "Text
+/// frames"); this client translates the three that carry Loro or presence
+/// bytes and reports the rest as [`WsMessage::Unrecognized`]. The pre-v2
+/// `COMMIT `, `RESOURCE `, `AUTHENTICATED` and `ERROR ` text frames were
+/// parsed here until 2026-09; no server in this tree has sent them since the
+/// binary protocol, so their arms are gone.
 fn parse_server_message(text: &str) -> WsMessage {
-    if let Some(stripped) = text.strip_prefix("COMMIT ") {
-        WsMessage::Commit(stripped.to_string())
-    } else if let Some(stripped) = text.strip_prefix("RESOURCE ") {
-        WsMessage::Resource(stripped.to_string())
-    } else if let Some(stripped) = text.strip_prefix("LORO_SYNC_UPDATE ") {
+    if let Some(stripped) = text.strip_prefix("LORO_SYNC_UPDATE ") {
         match serde_json::from_str::<serde_json::Value>(stripped) {
             Ok(v) => {
                 let subject = v["subject"].as_str().unwrap_or("").to_string();
@@ -568,15 +567,6 @@ fn parse_server_message(text: &str) -> WsMessage {
                 WsMessage::PresenceUpdate { subject, update }
             }
             Err(_) => WsMessage::Unrecognized(format!("Invalid PRESENCE_UPDATE: {}", text)),
-        }
-    } else if text.starts_with("AUTHENTICATED") {
-        WsMessage::Authenticated
-    } else if let Some(stripped) = text.strip_prefix("ERROR ") {
-        // Legacy text-frame error; no request id or code on the wire.
-        WsMessage::Error {
-            request_id: 0,
-            code: protocol::error_code::UNKNOWN,
-            message: stripped.to_string(),
         }
     } else {
         // Not an error: a text frame this client does not (yet) understand.

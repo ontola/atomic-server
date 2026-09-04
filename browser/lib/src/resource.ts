@@ -2895,8 +2895,8 @@ export class Resource<C extends OptionalClass = any> {
 
     // Surface the queued commit in the Sync page's commit log immediately,
     // so users can see what's pending without waiting for the push. The same
-    // log entry transitions in place to `sent` / `failed` when pushCommits
-    // resolves.
+    // log entry transitions in place to `sent` / `failed` when the outbox
+    // drain posts it.
     this.store.logPendingCommit(commit);
 
     return commit;
@@ -2908,7 +2908,7 @@ export class Resource<C extends OptionalClass = any> {
    * explicitly, the default Agent of the Store is used.
    * When there are no changes no commit is made and the function returns Promise<undefined>.
    *
-   * This is equivalent to calling {@link signChanges} followed by {@link pushCommits}.
+   * The commit is signed at drain time by the outbox, not here.
    */
   /**
    * Persist this resource. Resolves once the change is durable:

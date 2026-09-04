@@ -898,35 +898,24 @@ impl Handler<crate::actor_messages::MembershipNotification> for WebSocketConnect
         msg: crate::actor_messages::MembershipNotification,
         ctx: &mut ws::WebsocketContext<Self>,
     ) {
-        let origin = self
-            .store
-            .get_base_domain()
-            .unwrap_or_else(|| "http://localhost".to_string());
-        let subject_resolved =
-            atomic_lib::Subject::from_raw(&msg.subject, self.store.get_base_domain().as_deref())
-                .resolve(&origin);
-
-        if msg.added {
-            let Some(snapshot) = msg.loro_snapshot.filter(|b| !b.is_empty()) else {
+        let subject =
+            atomic_lib::Subject::from_raw(&msg.subject, self.store.get_base_domain().as_deref());
+        let change = if msg.added {
+            let Some(snapshot) = msg.loro_snapshot.as_ref().filter(|b| !b.is_empty()) else {
                 // Pre-fetch missed (resource gone, permission lost
                 // between listener queue and dispatch, etc.). Skip
                 // the emission — the client can still GET on demand.
                 return;
             };
-            let mut flags = ws_v2::flags::SNAPSHOT | ws_v2::flags::PUSH;
-            if msg.commit_id.is_some() {
-                flags |= ws_v2::flags::HAS_COMMIT_ID;
+            ws_v2::Change::Snapshot {
+                bytes: snapshot,
+                commit_id: msg.commit_id.as_deref(),
             }
-            ctx.binary(ws_v2::encode_update(
-                flags,
-                0,
-                &subject_resolved,
-                msg.commit_id.as_deref(),
-                &snapshot,
-            ));
         } else {
-            ctx.binary(ws_v2::encode_destroy(0, &subject_resolved));
-        }
+            ws_v2::Change::Destroyed
+        };
+        let frame = ws_v2::encode_change_frame(&self.store, &subject, change);
+        ctx.binary(actix_web::web::Bytes::from_owner(frame));
     }
 }
 

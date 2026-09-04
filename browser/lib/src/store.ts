@@ -1149,9 +1149,8 @@ export class Store {
    * calls share the in-flight promise — the structural version of
    * the `5c168355` re-entrance fix).
    *
-   * For each entry the outbox calls back here via
-   * {@link postOutboxEntry} which uses the Resource's existing
-   * `pushCommits` / `save` flow.
+   * For each entry the outbox calls back into {@link drainOutboxSubject},
+   * which exports the subject's Loro delta, signs one commit and posts it.
    */
   public async syncDirtyResources(): Promise<void> {
     if (this.outbox.size === 0 || !this.getAgent()) return;
@@ -2169,8 +2168,8 @@ export class Store {
     // Atomic put queued BEFORE notify. The worker's serialised
     // queue means a follow-up `queryLocalDb` (e.g. from
     // Collection.refresh in a notify listener) sees the new
-    // resource. Skip for new/loading/incomplete/unsynced — those
-    // persist themselves via `applyPendingCommitsLocally` or are
+    // resource. Skip for new/loading/incomplete/unsynced — those are
+    // persisted by the save path once they are real, or are
     // placeholders.
     if (
       this.clientDb &&
@@ -2251,8 +2250,8 @@ export class Store {
    * server round-trip required.  An agent must be set on the store for DID
    * resources.
    *
-   * The resource is **not** pushed to the server yet; call `resource.save()` or
-   * `resource.pushCommits()` to persist it.
+   * The resource is **not** pushed to the server yet; call `resource.save()`
+   * to persist it.
    */
   public async newResource<C extends OptionalClass = UnknownClass>({
     subject,
@@ -5368,8 +5367,8 @@ export class Store {
    * No-op if there's no clientDb (HTTP `/upload` already wrote the bytes
    * server-side) or no local copy of the bytes.
    *
-   * Called from {@link Resource.pushCommits} on every successful commit push,
-   * so the bytes get sent both on initial save AND after `syncDirtyResources`
+   * Called from the outbox drain on every successful commit post, so the
+   * bytes get sent both on initial save AND after `syncDirtyResources`
    * flushes commits that were queued while offline.
    */
   public async maybePushBlobForResource(resource: Resource): Promise<void> {
@@ -5422,12 +5421,6 @@ export class Store {
       body: bytes as unknown as BodyInit,
       headers: { 'Content-Type': 'application/octet-stream' },
     });
-  }
-
-  public logIncomingCommit(commit: Commit): void {
-    this.pushCommitLog(
-      this.buildCommitLogEntry(commit, 'incoming', 'received'),
-    );
   }
 
   /**
@@ -5545,7 +5538,7 @@ export class Store {
       }
 
       await resource.save();
-      // The blob bytes are pushed to the server from `Resource.pushCommits`
+      // The blob bytes are pushed to the server from the outbox drain
       // (via `Store.maybePushBlobForResource`) — that path covers both the
       // online-save case here AND the offline → reconnect retry path, where
       // `syncDirtyResources` flushes the queued commits and the same hook
@@ -5575,8 +5568,7 @@ export class Store {
       // `useResource(commitSubject)` lookups (chatroom <CommitDetail>,
       // version views, etc.) hit the local cache instead of round-
       // tripping back to the server for data we already had in hand.
-      // The offline-save branch already does this via
-      // `applyPendingCommitsLocally` (resource.ts); the online happy
+      // The local-only save branch already does this; the online happy
       // path used to skip it, which produced the `GET did:ad:commit:*`
       // visible in the network log right after posting a chat message.
       this.materializeCommitLocally(created);
@@ -5635,7 +5627,7 @@ export class Store {
   /**
    * Cache a freshly-signed commit as a Resource in the local store.
    * Idempotent: bails if the commit's subject is already present
-   * (e.g. the offline path beat us to it via `applyPendingCommitsLocally`).
+   * (e.g. the local-only save path beat us to it).
    */
   public materializeCommitLocally(commit: Commit): void {
     const signature = commit.signature;
@@ -5893,7 +5885,13 @@ export class Store {
    * to avoid flashing an "offline" error during the brief disconnect→reconnect
    * window of a page reload.
    */
-  private waitForServerConnected(timeoutMs: number): Promise<boolean> {
+  /**
+   * Resolve `true` once the store reports a live server connection, or
+   * `false` after `timeoutMs`. The one implementation of a wait that used to
+   * exist four times over (here, in `Collection`, and in two data-browser
+   * helpers), each with its own timeout and return shape.
+   */
+  public waitForServerConnected(timeoutMs: number): Promise<boolean> {
     if (this._serverConnected) return Promise.resolve(true);
 
     return new Promise<boolean>(resolve => {

@@ -7,6 +7,22 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- **Sync stack cleanup.** No wire changes. `WsMessage` lost its `Commit` and
+  `Resource` variants and the client no longer parses the pre-v2 `COMMIT `,
+  `RESOURCE `, `AUTHENTICATED` and `ERROR ` text frames (nothing has sent
+  them since the binary protocol); `IngestPolicy::Replica` went with them.
+  `CommitIngestOpts::hub` / `::peer` are the two validation presets that were
+  copied in three places; `ws_apply::apply_destroy_checked` (a byte-identical
+  twin of `apply_destroy`) is merged into it; the server's three copies of
+  "encode an `UPDATE`/`DESTROY` for a change" are one `encode_change_frame`.
+  Iroh: the dead `sync_drive_with_peer` wrapper and the private `_forced`
+  indirection are gone, the live-peer registry is a `LazyLock<Mutex<HashMap>>`
+  holding the pinned QUIC connection alongside the stream (a peer registered
+  before the registry was initialised used to be dropped silently), and the
+  sync-event debounce map is pruned instead of growing for the life of the
+  process. Test-only helpers `engine::drive_items` / `drive_sync_hash` and
+  `OwnerPolicy::{owner_agent, hosted_drive_subjects}` are removed.
+
 - **Sync protocol follow-ups** (see `docs/src/websockets.md`, "Changed in
   2026-09"):
   - Challenge-bound `AUTH` over WebSocket: the server's first frame is
@@ -38,9 +54,9 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
     removed. It was an append-only list that pinned every QUIC connection
     ever dialed for the life of the process.
   - `ws_apply::apply_commit_json` (the replica applier that skips rights
-    checks) is renamed `apply_trusted_hub_commit` and documented as
-    trusted-hub-only (audit finding F6); it no longer shares a name with the
-    server's rights-checked `handlers::commit::apply_commit_json`.
+    checks, audit finding F6) is gone: its only route was the pre-v2 `COMMIT`
+    text frame, which no server sends. The server's rights-checked
+    `handlers::commit::apply_commit_json` is the only function of that name.
   - New integration tests: `ws_errors` (ERROR format, `request_id` echo and
     codes), the nonce, the identity re-bind, and the slim ack.
 

@@ -299,7 +299,7 @@ impl iroh::protocol::ProtocolHandler for AtomicHandler {
             let remote_id = remote_str.clone();
             match handle_stream(send, recv, store_clone, remote_id).await {
                 Ok(imported) => {
-                    push_sync_event(&remote_str, imported);
+                    push_event(&remote_str, imported, "sync");
                 }
                 Err(e) => {
                     tracing::warn!("[accept] stream error: {e}");
@@ -320,7 +320,7 @@ static ROUTER: OnceLock<Router> = OnceLock::new();
 // ── Live sync (persistent connections) ──────────────────────────────────
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 
 /// Active outgoing send streams keyed by peer NodeID.
 /// Used to push UPDATE frames to connected peers.
@@ -331,22 +331,23 @@ use std::sync::Mutex;
 /// sync went silent while both ends still displayed "Connected", and nothing
 /// recovered it until the next reconnect. Removal now only applies if the entry
 /// still belongs to the connection asking to remove it.
-static LIVE_PEERS: Mutex<Option<HashMap<String, (u64, tokio::sync::mpsc::Sender<Vec<u8>>)>>> =
-    Mutex::new(None);
+static LIVE_PEERS: LazyLock<Mutex<HashMap<String, LivePeer>>> = LazyLock::new(Default::default);
+
+/// One live peer: the write loop's channel, the generation that installed
+/// it, and (dial side only) the QUIC connection kept alive for it. Dropping
+/// the entry drops the connection, so a re-dial replaces the link it
+/// supersedes and a removed peer releases it; before 2026-09 connections
+/// were pinned in a separate append-only list for the life of the process.
+struct LivePeer {
+    generation: u64,
+    tx: tokio::sync::mpsc::Sender<Vec<u8>>,
+    /// Never read; held so the QUIC connection stays open exactly as long
+    /// as the registration does.
+    _connection: Option<iroh::endpoint::Connection>,
+}
 
 /// Monotonic id per live connection; see [`LIVE_PEERS`].
 static LIVE_PEER_GENERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-
-/// Keep QUIC connections alive so live streams don't drop.
-///
-/// Keyed by normalized node id, one connection per peer: a re-dial replaces
-/// (and thereby closes) the connection it supersedes, and
-/// [`remove_live_peer_inner`] drops the entry together with the peer's
-/// `LIVE_PEERS` slot. Before 2026-09 this was an append-only `Vec` that
-/// pinned every connection ever dialed for the life of the process, forgotten
-/// peers and dead links included.
-static LIVE_CONNECTIONS: Mutex<Option<HashMap<String, iroh::endpoint::Connection>>> =
-    Mutex::new(None);
 
 /// What live peers call themselves, learnt over HELLO.
 ///
@@ -354,7 +355,7 @@ static LIVE_CONNECTIONS: Mutex<Option<HashMap<String, iroh::endpoint::Connection
 /// as one to dial again forever, which an unsolicited inbound connection has
 /// not earned (F9, planning/unified-sync.md). Saying who is connected right
 /// now grants nothing — it ends when the connection does.
-static LIVE_PEER_NAMES: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
+static LIVE_PEER_NAMES: LazyLock<Mutex<HashMap<String, String>>> = LazyLock::new(Default::default);
 
 /// Remember what a connected peer calls itself, for as long as it is connected.
 pub fn set_live_peer_name(peer_id: &str, name: &str) {
@@ -363,9 +364,7 @@ pub fn set_live_peer_name(peer_id: &str, name: &str) {
     }
 
     if let Ok(mut guard) = LIVE_PEER_NAMES.lock() {
-        guard
-            .get_or_insert_with(HashMap::new)
-            .insert(normalize_node_id(peer_id), name.to_string());
+        guard.insert(normalize_node_id(peer_id), name.to_string());
     }
 }
 
@@ -374,24 +373,19 @@ pub fn live_peer_name(peer_id: &str) -> Option<String> {
     LIVE_PEER_NAMES
         .lock()
         .ok()
-        .and_then(|guard| guard.as_ref()?.get(&normalize_node_id(peer_id)).cloned())
+        .and_then(|guard| guard.get(&normalize_node_id(peer_id)).cloned())
 }
 
 /// Returns the number of currently connected live peers.
 pub fn live_peer_count() -> usize {
-    LIVE_PEERS
-        .lock()
-        .ok()
-        .and_then(|map| map.as_ref().map(|m| m.len()))
-        .unwrap_or(0)
+    LIVE_PEERS.lock().map(|m| m.len()).unwrap_or(0)
 }
 
 /// Returns the node IDs of currently connected live peers.
 pub fn live_peer_ids() -> Vec<String> {
     LIVE_PEERS
         .lock()
-        .ok()
-        .and_then(|map| map.as_ref().map(|m| m.keys().cloned().collect()))
+        .map(|m| m.keys().cloned().collect())
         .unwrap_or_default()
 }
 
@@ -419,32 +413,28 @@ pub fn remove_live_peer_any(peer_id: &str) {
 
 fn remove_live_peer_inner(peer_id: &str, generation: Option<u64>, notify: bool) {
     let key = normalize_node_id(peer_id);
-    let mut removed = false;
-    if let Ok(mut guard) = LIVE_PEERS.lock() {
-        if let Some(map) = guard.as_mut() {
-            let is_current = match generation {
-                Some(generation) => map.get(&key).is_some_and(|(gen, _)| *gen == generation),
-                None => true,
-            };
-            if is_current {
-                removed = map.remove(&key).is_some();
-            } else if map.contains_key(&key) {
+    // Take the entry out under the lock and drop it (connection included)
+    // after; the superseding-connection case is excluded, so this never
+    // closes a link a newer registration is using.
+    let removed = LIVE_PEERS.lock().ok().and_then(|mut map| {
+        let is_current = match generation {
+            Some(generation) => map.get(&key).is_some_and(|p| p.generation == generation),
+            None => true,
+        };
+        if is_current {
+            map.remove(&key)
+        } else {
+            if map.contains_key(&key) {
                 tracing::debug!(
                     "[live] stale connection for {} tried to deregister a newer one — ignored",
                     &key[..key.len().min(12)]
                 );
             }
+            None
         }
-    }
-    if removed {
-        // Release the pinned QUIC connection with the peer slot; the
-        // superseding-connection case is already excluded above, so this
-        // never closes a link a newer registration is using.
-        if let Ok(mut conns) = LIVE_CONNECTIONS.lock() {
-            if let Some(map) = conns.as_mut() {
-                map.remove(&key);
-            }
-        }
+    });
+    if let Some(peer) = removed {
+        drop(peer);
         tracing::info!("[live] removed peer {}", &key[..key.len().min(12)]);
         if notify {
             push_event(&key, 0, "disconnected");
@@ -509,8 +499,8 @@ fn own_agent_update_frame(store: &Db) -> Option<Vec<u8>> {
 fn send_live_update_wire_msg_except(msg: Vec<u8>, skip_peer: Option<&str>) {
     let mut dead_peers = Vec::new();
     let peers = LIVE_PEERS.lock().unwrap();
-    if let Some(map) = peers.as_ref() {
-        for (peer_id, (generation, tx)) in map {
+    {
+        for (peer_id, LivePeer { generation, tx, .. }) in peers.iter() {
             if skip_peer.is_some_and(|skip| normalize_node_id(skip) == *peer_id) {
                 continue;
             }
@@ -539,10 +529,6 @@ fn send_live_update_wire_msg_except(msg: Vec<u8>, skip_peer: Option<&str>) {
     for (peer_id, generation) in dead_peers {
         remove_live_peer(&peer_id, generation);
     }
-}
-
-fn send_live_update_wire_msg(msg: Vec<u8>) {
-    send_live_update_wire_msg_except(msg, None);
 }
 
 /// Push live-collaboration state — presence, cursors, or the ops of an edit in
@@ -583,25 +569,11 @@ pub fn broadcast_live_update(subject_key: &str, loro_bytes: &[u8]) {
         return;
     }
     let msg = encode_live_update_wire_msg(subject_key, loro_bytes);
-    send_live_update_wire_msg(msg);
+    send_live_update_wire_msg_except(msg, None);
 }
 
 /// Start the live sync system. Watches for local changes and pushes to all connected peers.
 fn start_live_sync(store: Db) {
-    // Initialize globals
-    {
-        let mut map = LIVE_PEERS.lock().unwrap();
-        if map.is_none() {
-            *map = Some(HashMap::new());
-        }
-    }
-    {
-        let mut conns = LIVE_CONNECTIONS.lock().unwrap();
-        if conns.is_none() {
-            *conns = Some(HashMap::new());
-        }
-    }
-
     // Spawn the push loop: watches db_events, pushes deltas/destroys to live peers
     tokio::spawn(async move {
         let mut rx = store.subscribe_events();
@@ -777,7 +749,7 @@ async fn apply_peer_remove(
     match super::ws_apply::resolve_destroy_drive(store, subject).await {
         Some(drive_subject) => {
             if admitted_for_drive(store, agent, &drive_subject, trust_owned, drive_cache).await {
-                let _ = super::ws_apply::apply_destroy_checked(store, subject).await;
+                let _ = super::ws_apply::apply_destroy(store, subject).await;
             } else {
                 tracing::warn!(
                     "[sync] rejected SYNC_DIFF remove for {} from peer: not admitted for drive {}",
@@ -787,7 +759,7 @@ async fn apply_peer_remove(
             }
         }
         None => {
-            let _ = super::ws_apply::apply_destroy_checked(store, subject).await;
+            let _ = super::ws_apply::apply_destroy(store, subject).await;
         }
     }
 }
@@ -820,6 +792,10 @@ fn register_live_peer(
     // drive) — see `may_accept_drive_write`. Never relaxed for peers that
     // dialed into us.
     initiated_by_us: bool,
+    // Dial side: the QUIC connection this stream lives on, kept alive with
+    // the registration so the live stream is not dropped under it. The
+    // accept side's connection is owned by the protocol handler.
+    connection: Option<iroh::endpoint::Connection>,
 ) {
     let key = normalize_node_id(&peer_id);
     // F9 minimal (planning/unified-sync.md): this function upgrades BOTH
@@ -843,19 +819,23 @@ fn register_live_peer(
     let generation = LIVE_PEER_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
     let is_new_peer = {
         let mut map = LIVE_PEERS.lock().unwrap();
-        if let Some(m) = map.as_mut() {
-            let replacing = m.contains_key(&key);
-            if replacing {
-                tracing::info!(
-                    "[live] replacing existing connection to {}",
-                    &key[..key.len().min(12)]
-                );
-            }
-            m.insert(key.clone(), (generation, tx));
-            !replacing
-        } else {
-            false
+        let replacing = map.contains_key(&key);
+        if replacing {
+            tracing::info!(
+                "[live] replacing existing connection to {}",
+                &key[..key.len().min(12)]
+            );
         }
+        // Dropping the replaced entry closes the connection it pinned.
+        let _replaced = map.insert(
+            key.clone(),
+            LivePeer {
+                generation,
+                tx,
+                _connection: connection,
+            },
+        );
+        !replacing
     };
 
     let peer_short = key[..key.len().min(12)].to_string();
@@ -1294,10 +1274,6 @@ fn get_event_tx() -> &'static tokio::sync::broadcast::Sender<SyncEvent> {
     SYNC_EVENT_TX.get_or_init(|| tokio::sync::broadcast::channel(32).0)
 }
 
-fn push_sync_event(remote_node_id: &str, resources_imported: usize) {
-    push_event(remote_node_id, resources_imported, "sync");
-}
-
 fn push_event(remote_node_id: &str, resources_imported: usize, kind: &str) {
     let now = crate::utils::now() as u64;
     let key = (remote_node_id.to_string(), kind.to_string());
@@ -1314,6 +1290,10 @@ fn push_event(remote_node_id: &str, resources_imported: usize, kind: &str) {
                 }
             }
             last.insert(key, now);
+            // Entries only matter inside the debounce window; without this
+            // the map grew by one row per (peer, kind) for the life of the
+            // process.
+            last.retain(|_, at| now.saturating_sub(*at) < EVENT_DEBOUNCE_MS);
         }
     }
 
@@ -1377,19 +1357,14 @@ pub async fn wait_for_peer_count_change(current: usize) -> usize {
     }
 }
 
-/// Sync a drive with a remote peer. Initiates the SYNC protocol over Iroh QUIC.
-/// Uses the global endpoint (set by `start()`). Returns the number of resources imported.
-/// Replaces an existing live connection when `force` is true (QR pair / manual sync).
-pub async fn sync_drive_with_peer(
-    remote_node_id: &str,
-    drive: &str,
-    store: &Db,
-) -> crate::errors::AtomicResult<usize> {
-    sync_drive_with_peer_forced(remote_node_id, drive, store, true).await
-}
-
-/// Same as [`sync_drive_with_peer`] but returns the rich [`PeerSyncOutcome`]
-/// (resource count + remote's self-reported display name).
+/// Sync a drive with a remote peer over the global endpoint (set by
+/// `start()`), replacing an existing live connection (QR pair / manual
+/// sync). Returns the rich [`PeerSyncOutcome`].
+///
+/// This and [`sync_drive_with_peer_if_needed`] are the two production entry
+/// points; [`sync_drive_with_peer_using`] takes an explicit endpoint for
+/// tests that run several in one process. All of them are
+/// [`sync_drive_with_peer_using_outcome`].
 pub async fn sync_drive_with_peer_outcome(
     remote_node_id: &str,
     drive: &str,
@@ -1401,25 +1376,17 @@ pub async fn sync_drive_with_peer_outcome(
     sync_drive_with_peer_using_outcome(endpoint, remote_node_id, drive, store, true).await
 }
 
-/// Bulk sync only when there is no healthy live stream to this peer (auto-connect / nudge).
+/// Bulk sync only when there is no healthy live stream to this peer
+/// (auto-connect / nudge). Returns the number of resources imported.
 pub async fn sync_drive_with_peer_if_needed(
     remote_node_id: &str,
     drive: &str,
     store: &Db,
 ) -> crate::errors::AtomicResult<usize> {
-    sync_drive_with_peer_forced(remote_node_id, drive, store, false).await
-}
-
-async fn sync_drive_with_peer_forced(
-    remote_node_id: &str,
-    drive: &str,
-    store: &Db,
-    force: bool,
-) -> crate::errors::AtomicResult<usize> {
     let endpoint = ENDPOINT
         .get()
         .ok_or("Iroh peer not started. Call start() first.")?;
-    sync_drive_with_peer_using(endpoint, remote_node_id, drive, store, force).await
+    sync_drive_with_peer_using(endpoint, remote_node_id, drive, store, false).await
 }
 
 /// Rich result for a peer sync round-trip. `peer_name` is whatever the
@@ -1937,15 +1904,9 @@ pub async fn sync_drive_with_peer_using_outcome(
         "[live] transitioning to live mode with {}",
         &remote_node_id[..remote_node_id.len().min(12)]
     );
-    // One pinned connection per peer: dropping the one this replaces closes
-    // it, so a re-dial cannot leak the link it supersedes.
-    {
-        let mut conns = LIVE_CONNECTIONS.lock().unwrap();
-        if let Some(map) = conns.as_mut() {
-            map.insert(remote_key.clone(), conn);
-        }
-    }
     // Dial side: we initiated, so trust this peer to relay drives we own.
+    // The connection goes into the registry with the stream, so a re-dial
+    // replaces (and closes) the link it supersedes instead of leaking it.
     register_live_peer(
         remote_key.clone(),
         send,
@@ -1953,6 +1914,7 @@ pub async fn sync_drive_with_peer_using_outcome(
         store.clone(),
         remote_agent,
         true,
+        Some(conn),
     );
 
     // Remember which drive this node syncs, so it can rebuild this link on its
@@ -2570,7 +2532,7 @@ async fn handle_stream(
             mark_known_peer_synced(&store, &remote_key, None, Some(total_imported as u32));
             // Accept side: the peer dialed us. No owned-drive relaxation — it
             // must hold real write rights to touch anything here.
-            register_live_peer(remote_key, send, recv, store, agent, false);
+            register_live_peer(remote_key, send, recv, store, agent, false, None);
             return Ok(total_imported);
         }
     }
@@ -2581,7 +2543,7 @@ async fn handle_stream(
             "[accept] SYNC_OK sent, entering live mode with {}",
             &remote_key[..remote_key.len().min(12)]
         );
-        register_live_peer(remote_key, send, recv, store, agent, false);
+        register_live_peer(remote_key, send, recv, store, agent, false, None);
     }
 
     Ok(total_imported)
@@ -3450,14 +3412,14 @@ mod live_peer_registry_tests {
         let generation =
             LIVE_PEER_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
         let (tx, _rx) = tokio::sync::mpsc::channel(4);
-        let mut guard = LIVE_PEERS.lock().unwrap();
-        if guard.is_none() {
-            *guard = Some(HashMap::new());
-        }
-        guard
-            .as_mut()
-            .unwrap()
-            .insert(normalize_node_id(key), (generation, tx));
+        LIVE_PEERS.lock().unwrap().insert(
+            normalize_node_id(key),
+            LivePeer {
+                generation,
+                tx,
+                _connection: None,
+            },
+        );
 
         generation
     }
@@ -3466,8 +3428,7 @@ mod live_peer_registry_tests {
         LIVE_PEERS
             .lock()
             .unwrap()
-            .as_ref()
-            .is_some_and(|m| m.contains_key(&normalize_node_id(key)))
+            .contains_key(&normalize_node_id(key))
     }
 
     /// A reconnect installs a new connection under the same node id, and the

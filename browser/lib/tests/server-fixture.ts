@@ -150,7 +150,9 @@ export async function startServer(): Promise<ServerHandle> {
     await waitForReady(serverUrl, 90_000);
   } catch (e) {
     const exit =
-      child.exitCode !== null ? ` (exited ${child.exitCode})` : ' (still running)';
+      child.exitCode !== null
+        ? ` (exited ${child.exitCode})`
+        : ' (still running)';
     child.kill('SIGTERM');
     throw new Error(
       `${(e as Error).message}${exit}\nServer stderr:\n${stderrChunks.join('')}`,

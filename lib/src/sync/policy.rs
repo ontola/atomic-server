@@ -347,14 +347,6 @@ impl OwnerPolicy {
             self.hosted.enroll(subject);
         }
     }
-
-    pub fn owner_agent(&self) -> &str {
-        &self.owner_agent
-    }
-
-    pub fn hosted_drive_subjects(&self) -> Vec<String> {
-        self.hosted.allowed_drive_subjects()
-    }
 }
 
 impl SyncPolicy for OwnerPolicy {

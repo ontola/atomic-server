@@ -161,9 +161,9 @@ async function startForIdentity(
     // Skip resources whose commits haven't reached the server. Two cases:
     //   1. Unsaved placeholders (e.g. `TableNewRow`'s pre-created empty
     //      row): `signChanges` was called — flipping `new=false` and
-    //      queueing a commit — but `pushCommits` never ran. Seeding these
+    //      queueing a commit — but the outbox never drained it. Seeding these
     //      turns them into phantom children that accumulate every reload.
-    //   2. Offline-applied resources: `applyPendingCommitsLocally` already
+    //   2. Offline-applied resources: the local-only save path already
     //      persists them directly via `clientDb.putResource`. Seeding
     //      again here is redundant.
     // Genuinely-saved resources have an empty pending queue by the time

@@ -762,9 +762,9 @@ export interface FrameDebugInfo {
 }
 
 /**
- * Like {@link debugFrame} but returns both a headline and a lazy `details`
+ * A human-readable headline for a binary frame plus a lazy `details`
  * function for inspecting the frame's payload contents (subject, decoded
- * fields, snapshot byte length, etc.). UPDATE frames also expose the raw
+ * fields, snapshot byte length, etc.), for the `ws-debug` console log. UPDATE frames also expose the raw
  * loro snapshot bytes so callers that want to materialize the resource
  * (e.g. to show the contained propvals) can do so without re-decoding.
  */
@@ -920,100 +920,5 @@ export function debugFrameInfo(
         headline: `${direction} ${name} (${formatBytes(payload.length)})`,
         details: () => ({ tag, rawBytes: payload.length }),
       };
-  }
-}
-
-/** Produce a human-readable summary of a binary frame for debugging. */
-export function debugFrame(data: Uint8Array, direction: '→' | '←'): string {
-  if (data.length === 0) return `${direction} (empty)`;
-
-  const tag = data[0];
-  const name = TAG_NAMES[tag] ?? `0x${tag.toString(16)}`;
-  const payload = data.subarray(1);
-
-  switch (tag) {
-    case Tag.AUTH:
-      return `${direction} AUTH (${formatBytes(payload.length)})`;
-
-    case Tag.AUTH_OK:
-      return `${direction} AUTH_OK`;
-
-    case Tag.ERROR: {
-      const msg = decodeError(payload);
-
-      return msg
-        ? `${direction} ERROR #${msg.requestId}: ${msg.message}`
-        : `${direction} ERROR (${formatBytes(payload.length)})`;
-    }
-
-    case Tag.GET: {
-      const msg = decodeGet(payload);
-
-      return msg
-        ? `${direction} GET #${msg.requestId} ${msg.subject}`
-        : `${direction} GET (${formatBytes(payload.length)})`;
-    }
-
-    case Tag.COMMIT:
-
-    case Tag.COMMIT_OK: {
-      const msg = decodeCommit(payload);
-
-      return msg
-        ? `${direction} ${name} #${msg.requestId} (${formatBytes(msg.commitJson.length)})`
-        : `${direction} ${name} (${formatBytes(payload.length)})`;
-    }
-
-    case Tag.UPDATE: {
-      const msg = decodeUpdate(payload);
-
-      if (!msg) return `${direction} UPDATE (${formatBytes(payload.length)})`;
-
-      const flags = [];
-
-      if (msg.flags & Flags.SNAPSHOT) flags.push('snapshot');
-      if (msg.flags & Flags.PUSH) flags.push('push');
-      if (msg.commitId) flags.push(`commit=${msg.commitId.slice(0, 20)}…`);
-
-      return `${direction} UPDATE ${msg.subject} [${flags.join(', ')}] (${formatBytes(msg.loroBytes.length)})`;
-    }
-
-    case Tag.DESTROY:
-      return `${direction} DESTROY ${decoder.decode(payload.subarray(2))}`;
-
-    case Tag.SUB:
-    case Tag.UNSUB:
-      return `${direction} ${name} ${decoder.decode(payload)}`;
-
-    case Tag.SYNC_OK: {
-      const msg = decodeSyncOk(payload);
-
-      return `${direction} SYNC_OK ${msg?.drive ?? ''}`;
-    }
-
-    case Tag.SYNC_DIFF: {
-      const msg = decodeSyncDiff(payload);
-
-      return msg
-        ? `${direction} SYNC_DIFF ${msg.drive} (pull=${msg.pull.length}, push=${msg.push.length})`
-        : `${direction} SYNC_DIFF (${formatBytes(payload.length)})`;
-    }
-
-    case Tag.SYNC_PUSH: {
-      const msg = decodeSyncPush(payload);
-
-      return msg
-        ? `${direction} SYNC_PUSH ${msg.drive} (${msg.entries.length} resources${msg.last ? ', last' : ''}, ${formatBytes(payload.length)})`
-        : `${direction} SYNC_PUSH (${formatBytes(payload.length)})`;
-    }
-
-    case Tag.BLOB_REQUEST:
-      return `${direction} BLOB_REQUEST (${formatBytes(payload.length)})`;
-
-    case Tag.BLOB_RESPONSE:
-      return `${direction} BLOB_RESPONSE (${formatBytes(payload.length)})`;
-
-    default:
-      return `${direction} ${name} (${formatBytes(payload.length)})`;
   }
 }

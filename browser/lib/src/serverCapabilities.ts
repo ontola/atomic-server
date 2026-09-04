@@ -6,33 +6,6 @@ const MIN_DID_AUTH_SERVER_MINOR = 40;
 const warnedDidAuthCompatibilityOrigins = new Set<string>();
 const supportsDidAuthByOrigin = new Map<string, boolean>();
 const serverVersionByOrigin = new Map<string, string>();
-/** Capability names each origin advertised in its WebSocket `AUTH_OK`
- *  payload (see `ServerCapability` in `ws-v2.ts`). Absent origin = the
- *  server never told us, which for a server older than 2026-09 means it
- *  supports none of the named features. */
-const wsCapabilitiesByOrigin = new Map<string, ReadonlySet<string>>();
-
-/** Record what a server said it speaks, from its `AUTH_OK` payload. */
-export function recordServerWsCapabilities(
-  origin: string,
-  capabilities: readonly string[],
-): void {
-  wsCapabilitiesByOrigin.set(origin, new Set(capabilities));
-}
-
-/** Whether `origin` advertised `capability`. False when unknown: callers
- *  fall back to the pre-capability behaviour, never the other way round. */
-export function serverHasCapability(
-  origin: string,
-  capability: string,
-): boolean {
-  return wsCapabilitiesByOrigin.get(origin)?.has(capability) ?? false;
-}
-
-/** The full advertised set for `origin`, or an empty array. */
-export function getServerWsCapabilities(origin: string): string[] {
-  return [...(wsCapabilitiesByOrigin.get(origin) ?? [])];
-}
 
 export function shouldSkipDidAuthForLegacyServer(
   url: string,
