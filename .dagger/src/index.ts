@@ -12,6 +12,26 @@ import {
   CacheSharingMode,
 } from '@dagger.io/dagger';
 
+/**
+ * Bumps the mtime of every mounted workspace source before cargo runs.
+ *
+ * The `rust-*-target` cache volumes are shared between pipelines, and cargo
+ * decides whether a path dependency such as `atomic_lib` is fresh by
+ * comparing source mtimes against the cached artifact. Sources arrive in the
+ * container with old timestamps, so once any branch with a different `lib`
+ * has written the artifact, every later run keeps it and fails to compile
+ * `server` with E0425 (see the `-v2` rename in #1329, and the `-v3` one).
+ * Touching the sources makes them newer than anything in the cache, so the
+ * workspace crates rebuild every run while registry dependencies stay cached.
+ */
+const TOUCH_WORKSPACE_SOURCES = [
+  'sh',
+  '-c',
+  'find /code/server /code/lib /code/cli /code/desktop /code/wasm ' +
+    '/code/plugin-examples /code/atomic-plugin /code/tools ' +
+    '-type f -exec touch {} +',
+];
+
 const NODE_IMAGE = 'node:22';
 const RUST_IMAGE = 'rust:bookworm';
 
@@ -560,7 +580,8 @@ export class AtomicServer {
           this.source.directory('atomic-plugin'),
         )
         .withDirectory('/code/tools', this.source.directory('tools'))
-        .withMountedCache('/code/target', dag.cacheVolume('rust-wasm-target-v2'))
+        .withMountedCache('/code/target', dag.cacheVolume('rust-wasm-target-v3'))
+        .withExec(TOUCH_WORKSPACE_SOURCES)
         .withWorkdir('/code/wasm')
         // Install + build in a single exec so the install is part of the
         // build step's own cache key. Splitting them lets dagger cache the
@@ -626,7 +647,8 @@ export class AtomicServer {
           this.source.directory('atomic-plugin'),
         )
         .withDirectory('/code/tools', this.source.directory('tools'))
-        .withMountedCache('/code/target', dag.cacheVolume('rust-slim-target-v2'))
+        .withMountedCache('/code/target', dag.cacheVolume('rust-slim-target-v3'))
+        .withExec(TOUCH_WORKSPACE_SOURCES)
         .withWorkdir('/code')
         .withEnvVariable('ATOMICSERVER_SKIP_JS_BUILD', 'true')
         // build.rs still wants to bundle the data-browser dist as embedded
@@ -1065,7 +1087,8 @@ export class AtomicServer {
       )
       .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
       .withDirectory('/code/tools', source.directory('tools'))
-      .withMountedCache('/code/target', dag.cacheVolume('rust-target-v2'))
+      .withMountedCache('/code/target', dag.cacheVolume('rust-target-v3'))
+      .withExec(TOUCH_WORKSPACE_SOURCES)
       .withWorkdir('/code')
       .withExec(['cargo', 'fetch']);
 
@@ -1227,7 +1250,8 @@ export class AtomicServer {
         )
         .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
         .withDirectory('/code/tools', source.directory('tools'))
-        .withMountedCache('/code/target', dag.cacheVolume('rust-checks-target-v2'))
+        .withMountedCache('/code/target', dag.cacheVolume('rust-checks-target-v3'))
+        .withExec(TOUCH_WORKSPACE_SOURCES)
         .withWorkdir('/code')
         // build.rs in atomic-server wants to bundle a JS dist. Skip it —
         // fmt/clippy/test don't need it and including the bundle would
