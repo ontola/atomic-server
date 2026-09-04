@@ -288,7 +288,8 @@ where
                             &event.drive,
                             store.get_base_domain().as_deref(),
                         );
-                        let update = String::from_utf8_lossy(&event.payload).to_string();
+                        let agent = event.agent;
+                        let update = event.payload;
 
                         // Each channel fans out to a different subscriber set,
                         // so a relayed frame has to re-enter through the same
@@ -297,12 +298,14 @@ where
                             atomic_lib::sync::protocol::ephemeral_kind::PRESENCE => {
                                 broadcaster.do_send(crate::actor_messages::RemotePresenceUpdate {
                                     subject,
+                                    agent,
                                     update,
                                 });
                             }
                             atomic_lib::sync::protocol::ephemeral_kind::DOC => {
                                 broadcaster.do_send(crate::actor_messages::LoroSyncUpdate {
                                     subject,
+                                    agent,
                                     update,
                                     addr: None,
                                 });
@@ -310,6 +313,7 @@ where
                             _ => {
                                 broadcaster.do_send(crate::actor_messages::LoroEphemeralUpdate {
                                     subject,
+                                    agent,
                                     update,
                                     addr: None,
                                 });

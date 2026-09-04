@@ -97,6 +97,9 @@ pub mod tag {
 ///   longer read.
 /// - `sync-probe`: the binary `SYNC` payload may carry `probe` and
 ///   `subjects`; a probe is answered with `SYNC_OK` or `SYNC_RESEND` (0x38).
+/// - `ephemeral`: reads and writes `EPHEMERAL` (0x40) over WebSocket for
+///   edits in progress, cursors and drive presence, in place of the text
+///   frames `LORO_SYNC_UPDATE` / `LORO_EPHEMERAL_UPDATE` / `PRESENCE_UPDATE`.
 pub const CAPABILITIES: &[&str] = &[
     "auth-max-age",
     "keepalive",
@@ -109,6 +112,7 @@ pub const CAPABILITIES: &[&str] = &[
     "client-hello",
     "rebind-on-auth",
     "sync-probe",
+    "ephemeral",
 ];
 
 /// Capability names a *client* may list in the `HELLO` it sends a responder
@@ -144,12 +148,13 @@ pub const LIVENESS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs
 /// the far side, so the frame has to say which. [`DOC`] additionally differs in
 /// what it is *allowed* to do — see its own note.
 pub mod ephemeral_kind {
-    /// `LORO_EPHEMERAL_UPDATE` — ephemeral state for one subject.
+    /// Cursors and selections: ephemeral state for one subject (the
+    /// browser's `subscribeLoroEphemeral` channel).
     pub const LORO: u8 = 0;
-    /// `PRESENCE_UPDATE` — drive-scoped presence.
+    /// Drive-scoped presence, who is where in a drive.
     pub const PRESENCE: u8 = 1;
-    /// `LORO_SYNC_UPDATE` — the ops of an edit in progress, before anyone has
-    /// saved.
+    /// The ops of an edit in progress, before anyone has saved (the
+    /// browser's `subscribeLoroSync` channel).
     ///
     /// The odd one out, and the reason this frame is no longer only about
     /// presence: this is content, not a cursor. Committed state crosses the

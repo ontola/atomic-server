@@ -1,8 +1,9 @@
 //! WebSocket client for real-time communication with an Atomic Server.
 //!
-//! Hybrid v2 protocol: auth and resource UPDATEs are binary frames
-//! (`sync::protocol`); legacy collaboration and query messages are still
-//! text frames (`LORO_SYNC_*`, `LORO_EPHEMERAL_UPDATE`). `SYNC_DELTAS` was removed (F8,
+//! Hybrid v2 protocol: auth, resource UPDATEs and live collaboration
+//! (`EPHEMERAL`) are binary frames (`sync::protocol`); the Loro and presence
+//! *subscriptions* and the RBSR descent are still text frames
+//! (`LORO_SYNC_SUBSCRIBE`, `PRESENCE_SUBSCRIBE`, ...). `SYNC_DELTAS` was removed (F8,
 //! planning/unified-sync.md) — it imported peer-supplied Loro deltas with
 //! no rights check at all; `SYNC` → `SYNC_PUSH` (binary v2, admission- and
 //! rights-checked via `import_sync_push`) is the real replacement and
@@ -26,12 +27,14 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 /// A message received from the server over WebSocket.
 #[derive(Clone, Debug)]
 pub enum WsMessage {
-    /// A Loro CRDT sync update. Contains `{ subject, update }` JSON.
+    /// An edit in progress on `subject`: `EPHEMERAL (0x40)` of kind `DOC`,
+    /// raw Loro update bytes.
     LoroSyncUpdate { subject: String, update: Vec<u8> },
-    /// A Loro ephemeral update (cursors/presence). Contains `{ subject, update }` JSON.
+    /// Cursors for `subject`: `EPHEMERAL` of kind `LORO`, raw
+    /// `EphemeralStore` bytes.
     LoroEphemeralUpdate { subject: String, update: Vec<u8> },
-    /// A drive-scoped presence update. Contains `{ subject, update }` JSON
-    /// where `subject` is the drive.
+    /// Drive-scoped presence: `EPHEMERAL` of kind `PRESENCE`, where
+    /// `subject` is the drive.
     PresenceUpdate { subject: String, update: Vec<u8> },
     /// Server confirmed authentication. Its advertised capabilities are
     /// available via [`WsClient::server_capabilities`].
@@ -362,28 +365,28 @@ impl WsClient {
         .await
     }
 
-    /// Send a Loro CRDT document update for a resource.
-    pub async fn send_loro_sync_update(&self, subject: &str, update: &[u8]) -> AtomicResult<()> {
-        let b64 = crate::agents::encode_base64(update);
-        self.send_raw(&format!(
-            "LORO_SYNC_UPDATE {}",
-            serde_json::json!({ "subject": subject, "update": b64 })
-        ))
-        .await
+    /// Send an `EPHEMERAL (0x40)` frame of `kind` for `subject`. The agent
+    /// field is left empty: the server attributes the frame to the identity
+    /// this connection proved with `AUTH` and stamps that on the way out.
+    async fn send_ephemeral(&self, kind: u8, subject: &str, update: &[u8]) -> AtomicResult<()> {
+        self.send_binary(protocol::encode_ephemeral(kind, subject, "", update))
+            .await
     }
 
-    /// Send a Loro ephemeral update (cursors, presence).
+    /// Send a Loro CRDT document update (an edit in progress) for a resource.
+    pub async fn send_loro_sync_update(&self, subject: &str, update: &[u8]) -> AtomicResult<()> {
+        self.send_ephemeral(protocol::ephemeral_kind::DOC, subject, update)
+            .await
+    }
+
+    /// Send a Loro ephemeral update (cursors) for a resource.
     pub async fn send_loro_ephemeral_update(
         &self,
         subject: &str,
         update: &[u8],
     ) -> AtomicResult<()> {
-        let b64 = crate::agents::encode_base64(update);
-        self.send_raw(&format!(
-            "LORO_EPHEMERAL_UPDATE {}",
-            serde_json::json!({ "subject": subject, "update": b64 })
-        ))
-        .await
+        self.send_ephemeral(protocol::ephemeral_kind::LORO, subject, update)
+            .await
     }
 
     /// Subscribe to the ephemeral presence channel of a drive.
@@ -407,12 +410,8 @@ impl WsClient {
     /// Broadcast a presence update (Loro EphemeralStore bytes) to a drive's
     /// presence subscribers.
     pub async fn send_presence_update(&self, drive: &str, update: &[u8]) -> AtomicResult<()> {
-        let b64 = crate::agents::encode_base64(update);
-        self.send_raw(&format!(
-            "PRESENCE_UPDATE {}",
-            serde_json::json!({ "subject": drive, "update": b64 })
-        ))
-        .await
+        self.send_ephemeral(protocol::ephemeral_kind::PRESENCE, drive, update)
+            .await
     }
 
     /// Fetch a content-addressed blob by its 32-byte BLAKE3 hash.
@@ -521,49 +520,16 @@ impl WsClient {
 
 /// Parse a text frame into a typed `WsMessage`.
 ///
-/// The server sends eight text frames (`docs/src/websockets.md`, "Text
-/// frames"); this client translates the three that carry Loro or presence
-/// bytes and reports the rest as [`WsMessage::Unrecognized`]. The pre-v2
-/// `COMMIT `, `RESOURCE `, `AUTHENTICATED` and `ERROR ` text frames were
-/// parsed here until 2026-09; no server in this tree has sent them since the
-/// binary protocol, so their arms are gone.
+/// The server's remaining text frames (`docs/src/websockets.md`, "Text
+/// frames") are the RBSR answers and `INDEX_STATUS`, none of which this
+/// client consumes, so every text frame is reported as
+/// [`WsMessage::Unrecognized`]. Reporting one as `Error` used to fail
+/// whatever `authenticate` / `fetch_blob` / `post_commit` was waiting at
+/// that moment. Loro and presence updates arrive as binary `EPHEMERAL`
+/// since 2026-09-04; the pre-v2 `COMMIT `, `RESOURCE `, `AUTHENTICATED`
+/// and `ERROR ` text frames went in 2026-09.
 fn parse_server_message(text: &str) -> WsMessage {
-    if let Some(stripped) = text.strip_prefix("LORO_SYNC_UPDATE ") {
-        match serde_json::from_str::<serde_json::Value>(stripped) {
-            Ok(v) => {
-                let subject = v["subject"].as_str().unwrap_or("").to_string();
-                let update_b64 = v["update"].as_str().unwrap_or("");
-                let update = crate::agents::decode_base64(update_b64).unwrap_or_default();
-                WsMessage::LoroSyncUpdate { subject, update }
-            }
-            Err(_) => WsMessage::Unrecognized(format!("Invalid LORO_SYNC_UPDATE: {}", text)),
-        }
-    } else if let Some(stripped) = text.strip_prefix("LORO_EPHEMERAL_UPDATE ") {
-        match serde_json::from_str::<serde_json::Value>(stripped) {
-            Ok(v) => {
-                let subject = v["subject"].as_str().unwrap_or("").to_string();
-                let update_b64 = v["update"].as_str().unwrap_or("");
-                let update = crate::agents::decode_base64(update_b64).unwrap_or_default();
-                WsMessage::LoroEphemeralUpdate { subject, update }
-            }
-            Err(_) => WsMessage::Unrecognized(format!("Invalid LORO_EPHEMERAL_UPDATE: {}", text)),
-        }
-    } else if let Some(stripped) = text.strip_prefix("PRESENCE_UPDATE ") {
-        match serde_json::from_str::<serde_json::Value>(stripped) {
-            Ok(v) => {
-                let subject = v["subject"].as_str().unwrap_or("").to_string();
-                let update_b64 = v["update"].as_str().unwrap_or("");
-                let update = crate::agents::decode_base64(update_b64).unwrap_or_default();
-                WsMessage::PresenceUpdate { subject, update }
-            }
-            Err(_) => WsMessage::Unrecognized(format!("Invalid PRESENCE_UPDATE: {}", text)),
-        }
-    } else {
-        // Not an error: a text frame this client does not (yet) understand.
-        // Reporting it as `Error` used to fail whatever `authenticate` /
-        // `fetch_blob` / `post_commit` was waiting at that moment.
-        WsMessage::Unrecognized(text.to_string())
-    }
+    WsMessage::Unrecognized(text.to_string())
 }
 
 /// Parse a binary v2 frame. Returns `None` for frames the client doesn't
@@ -616,6 +582,19 @@ fn parse_binary_message(bin: &[u8]) -> Option<WsMessage> {
         tag::SYNC_RESEND => Some(WsMessage::SyncResend {
             drive: protocol::decode_sync_resend(&bin[1..])?.to_string(),
         }),
+        tag::EPHEMERAL => {
+            let decoded = protocol::decode_ephemeral(&bin[1..])?;
+            let subject = decoded.drive;
+            let update = decoded.payload;
+            Some(match decoded.kind {
+                protocol::ephemeral_kind::DOC => WsMessage::LoroSyncUpdate { subject, update },
+                protocol::ephemeral_kind::LORO => {
+                    WsMessage::LoroEphemeralUpdate { subject, update }
+                }
+                protocol::ephemeral_kind::PRESENCE => WsMessage::PresenceUpdate { subject, update },
+                _ => return None,
+            })
+        }
         tag::SYNC_OK => {
             // [tag] [drive_len: u16] [drive]
             let data = &bin[1..];

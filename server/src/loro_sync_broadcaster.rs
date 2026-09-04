@@ -19,6 +19,13 @@ struct Subscription {
     can_write: bool,
 }
 
+/// One connection's latest presence, as replayed to a late joiner.
+#[derive(Clone)]
+struct CachedPresence {
+    agent: String,
+    update: Vec<u8>,
+}
+
 /// Loro CRDT sync broadcaster.
 /// Handles real-time document sync updates and ephemeral updates (cursors, presence).
 /// Persistent changes go through Commits with loroUpdate — this broadcaster handles
@@ -32,11 +39,12 @@ pub struct LoroSyncBroadcaster {
     /// Subscriptions keyed by resource subject (not per-property — Loro is per-document)
     subscriptions: HashMap<atomic_lib::Subject, HashSet<Subscription>>,
     /// Presence subscriptions keyed by drive subject. The value per
-    /// connection is its most recent `PRESENCE_UPDATE` payload (base64
-    /// `EphemeralStore.encodeAll()`), replayed to new subscribers. `None`
-    /// until the connection first broadcasts.
+    /// connection is its most recent presence payload (the agent it was
+    /// attributed to and its `EphemeralStore.encodeAll()` bytes), replayed
+    /// to new subscribers. `None` until the connection first broadcasts.
     #[allow(clippy::mutable_key_type)]
-    presence: HashMap<atomic_lib::Subject, HashMap<Addr<WebSocketConnection>, Option<String>>>,
+    presence:
+        HashMap<atomic_lib::Subject, HashMap<Addr<WebSocketConnection>, Option<CachedPresence>>>,
     store: Db,
 }
 
@@ -198,7 +206,7 @@ impl Handler<LoroSyncUpdate> for LoroSyncBroadcaster {
                 atomic_lib::sync::protocol::ephemeral_kind::DOC,
                 msg.subject.as_str(),
                 &agent.subject.to_string(),
-                msg.update.as_bytes(),
+                &msg.update,
                 None,
             );
         }
@@ -228,7 +236,7 @@ impl Handler<LoroEphemeralUpdate> for LoroSyncBroadcaster {
                     atomic_lib::sync::protocol::ephemeral_kind::LORO,
                     msg.subject.as_str(),
                     &agent.subject.to_string(),
-                    msg.update.as_bytes(),
+                    &msg.update,
                     None,
                 );
             }
@@ -321,7 +329,8 @@ impl Handler<SubscribePresence> for LoroSyncBroadcaster {
                     {
                         addr.do_send(PresenceUpdate {
                             subject: drive.clone(),
-                            update: cached,
+                            agent: cached.agent,
+                            update: cached.update,
                             addr: None,
                         });
                     }
@@ -367,7 +376,10 @@ impl Handler<PresenceUpdate> for LoroSyncBroadcaster {
             tracing::warn!("presence update from non-subscriber for {}", msg.subject);
             return;
         };
-        *cached = Some(msg.update.clone());
+        *cached = Some(CachedPresence {
+            agent: msg.agent.clone(),
+            update: msg.update.clone(),
+        });
 
         // Relay to peers. Only local presence reaches here (the handler above
         // requires a sender address), so there is no echo to guard against.
@@ -376,7 +388,7 @@ impl Handler<PresenceUpdate> for LoroSyncBroadcaster {
                 atomic_lib::sync::protocol::ephemeral_kind::PRESENCE,
                 msg.subject.as_str(),
                 &agent.subject.to_string(),
-                msg.update.as_bytes(),
+                &msg.update,
                 None,
             );
         }
@@ -410,6 +422,7 @@ impl Handler<crate::actor_messages::RemotePresenceUpdate> for LoroSyncBroadcaste
 
         let local = PresenceUpdate {
             subject: msg.subject.clone(),
+            agent: msg.agent,
             update: msg.update,
             addr: None,
         };

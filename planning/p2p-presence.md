@@ -60,11 +60,13 @@ Neither has any path to Iroh.
    writes one key (`sessionId`) holding a `PresenceEntry` (`agent`, `resource`
    viewed, `following`, `session`, `typing`, view `data`). 30 s TTL, 10 s
    heartbeat (`PRESENCE_TTL_MS` / `HEARTBEAT_MS`, `presence.ts:40-43`).
-   Transported as opaque bytes over `PRESENCE_SUBSCRIBE` / `PRESENCE_UPDATE`
-   **text** WS frames (`browser/lib/src/websockets.ts:576-590`).
+   Transported as opaque bytes: a `PRESENCE_SUBSCRIBE` text frame to
+   register, then binary `EPHEMERAL (0x40)` frames of kind `PRESENCE` both
+   ways (text `PRESENCE_UPDATE` until 2026-09-04).
 2. **Document cursors** — `browser/data-browser/src/chunks/RTE/useLoroSync.ts`.
    A *separate* per-document `CursorEphemeralStore` (loro-prosemirror), synced
-   over `LORO_EPHEMERAL_UPDATE` text frames. Deliberately not on the drive
+   over `EPHEMERAL` frames of kind `LORO` (text `LORO_EPHEMERAL_UPDATE`
+   until 2026-09-04). Deliberately not on the drive
    channel: cursor anchors are Loro `Cursor` objects tied to the document oplog
    and move per keystroke.
 
@@ -170,9 +172,8 @@ Additive; nothing here changes the persistent `UPDATE`/`COMMIT` paths.
    `send_live_update_wire_msg`, with source-tag echo suppression.
 
 4. **The server bridge** — connect `LoroSyncBroadcaster` ⇄ peer channel:
-   - Outbound: when the broadcaster relays a `PRESENCE_UPDATE` /
-     `LORO_EPHEMERAL_UPDATE`, also call `broadcast_ephemeral` for the peers
-     syncing that drive.
+   - Outbound: when the broadcaster relays a presence or cursor update,
+     also call `broadcast_ephemeral` for the peers syncing that drive.
    - Inbound: the peer read handler's bridge callback injects the blob into the
      broadcaster as if a local WS client had sent it, so the on-device browser
      renders it.
@@ -243,8 +244,9 @@ The tag exists and nothing uses it:
 - `lib/src/sync/peer.rs` — **zero** references. Never sent, never handled.
 
 Every working presence path is client-to-server WebSocket:
-`LORO_EPHEMERAL_UPDATE` in `lib/src/client/ws.rs` and
-`server/src/handlers/web_sockets.rs:434`, fanned out by `LoroSyncBroadcaster`
+the cursor frame (then text `LORO_EPHEMERAL_UPDATE`, now `EPHEMERAL` of
+kind `LORO`) in `lib/src/client/ws.rs` and
+`server/src/handlers/web_sockets.rs`, fanned out by `LoroSyncBroadcaster`
 to the *subscribers of that server* (`loro_sync_broadcaster.rs:190`,
 "broadcast to all subscribers except the sender").
 

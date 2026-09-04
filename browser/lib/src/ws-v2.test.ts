@@ -74,6 +74,9 @@ import {
   decodeSyncOk,
   decodeSyncResend,
   encodeSyncResend,
+  decodeEphemeral,
+  encodeEphemeral,
+  EphemeralKind,
   decodeSyncPush,
   decodeUpdate,
   decodeBlobRequest,
@@ -140,6 +143,7 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
       'sync_resend',
       'hello_caps',
       'hello_bare',
+      'ephemeral_presence',
     ]) {
       expect(vectors[name], name).toBeDefined();
     }
@@ -315,5 +319,38 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
     );
     const blob = decodeBlobResponse(payload('blob_response'));
     expect([...(blob?.bytes ?? [])]).toEqual([9, 9]);
+  });
+
+  it('EPHEMERAL round-trips and matches the recorded frame', ({ expect }) => {
+    const eph = decodeEphemeral(payload('ephemeral_presence'));
+    expect(eph?.kind).toBe(EphemeralKind.PRESENCE);
+    expect(eph?.subject).toBe('did:ad:d');
+    expect(eph?.agent).toBe('did:ad:agent:a');
+    expect([...(eph?.payload ?? [])]).toEqual([7]);
+    expect(
+      toHex(
+        encodeEphemeral(
+          EphemeralKind.PRESENCE,
+          'did:ad:d',
+          'did:ad:agent:a',
+          new Uint8Array([7]),
+        ),
+      ),
+    ).toBe(toHex(vectors.ephemeral_presence));
+
+    // A client frame leaves the agent empty; the server stamps it.
+    const mine = encodeEphemeral(
+      EphemeralKind.DOC,
+      'did:ad:doc',
+      '',
+      new Uint8Array([1, 2, 3]),
+    );
+    expect(decodeEphemeral(mine.subarray(1))).toEqual({
+      kind: EphemeralKind.DOC,
+      subject: 'did:ad:doc',
+      agent: '',
+      payload: new Uint8Array([1, 2, 3]),
+    });
+    expect(decodeEphemeral(mine.subarray(1, 6))).toBeUndefined();
   });
 });

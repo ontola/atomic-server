@@ -117,16 +117,31 @@ async fn anonymous_writes_and_identity_subscriptions_are_refused() {
     let err = next_error(&mut rx).await;
     assert!(err.contains("AUTH required"), "{err}");
 
-    // The text frames that carry an identity or write.
+    // The text frames that register an identity-bearing subscription.
     for frame in [
         format!(r#"LORO_SYNC_SUBSCRIBE {{"subject":"{drive}"}}"#),
-        format!(r#"LORO_SYNC_UPDATE {{"subject":"{drive}","update":""}}"#),
         format!(r#"PRESENCE_SUBSCRIBE {{"subject":"{drive}"}}"#),
-        format!(r#"PRESENCE_UPDATE {{"subject":"{drive}","update":""}}"#),
     ] {
         ws.send_raw(&frame).await.unwrap();
         let err = next_error(&mut rx).await;
         assert!(err.contains("AUTH required"), "{frame} -> {err}");
+    }
+
+    // And the binary EPHEMERAL frame, whatever its kind: an anonymous
+    // socket may not put cursors or text in front of anyone.
+    for kind in [
+        protocol::ephemeral_kind::DOC,
+        protocol::ephemeral_kind::LORO,
+        protocol::ephemeral_kind::PRESENCE,
+    ] {
+        ws.send_binary(protocol::encode_ephemeral(kind, &drive, "", b"x"))
+            .await
+            .unwrap();
+        let err = next_error(&mut rx).await;
+        assert!(
+            err.contains("AUTH required"),
+            "EPHEMERAL kind {kind} -> {err}"
+        );
     }
 
     // And the socket is still usable: AUTH now succeeds on the same

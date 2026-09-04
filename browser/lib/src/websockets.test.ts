@@ -10,6 +10,9 @@ import {
   encodeChallenge,
   encodeCommitOkSlim,
   encodeSyncResend,
+  encodeEphemeral,
+  decodeEphemeral,
+  EphemeralKind,
   encodeCommitOk,
   encodeError,
   encodeAuthOk,
@@ -227,6 +230,65 @@ describe('WSClient drive sync probe', () => {
 
     socket.receive(encodeSyncResend('did:ad:drive'));
     expect(reduced).toHaveBeenCalledWith('did:ad:drive');
+    client.close();
+  });
+});
+
+describe('WSClient live collaboration', () => {
+  const original = globalThis.WebSocket;
+
+  afterEach(() => {
+    globalThis.WebSocket = original;
+    vi.restoreAllMocks();
+  });
+
+  it('sends and receives cursors, edits and presence as EPHEMERAL frames', async ({
+    expect,
+  }) => {
+    const { client, socket, store } = await connectedClient();
+
+    // Outbound: one binary frame per channel, agent left for the server.
+    client.sendLoroEphemeralUpdate('did:ad:doc', new Uint8Array([1]));
+    client.sendLoroSyncUpdate('did:ad:doc', new Uint8Array([2]));
+    client.sendPresenceUpdate('did:ad:drive', new Uint8Array([3]));
+    const sent = framesWithTag(socket, Tag.EPHEMERAL).map(f =>
+      decodeEphemeral(f.subarray(1)),
+    );
+    expect(sent.map(f => [f?.kind, f?.subject, f?.agent])).toEqual([
+      [EphemeralKind.LORO, 'did:ad:doc', ''],
+      [EphemeralKind.DOC, 'did:ad:doc', ''],
+      [EphemeralKind.PRESENCE, 'did:ad:drive', ''],
+    ]);
+
+    // Inbound: each kind reaches its own subscriber map on the store.
+    const cursors: number[][] = [];
+    const edits: number[][] = [];
+    const presence: number[][] = [];
+    store.subscribeLoroEphemeral('did:ad:doc', u => cursors.push([...u]));
+    store.subscribeLoroSync('did:ad:doc', u => edits.push([...u]));
+    store.subscribePresenceUpdates('did:ad:drive', u => presence.push([...u]));
+    socket.receive(
+      encodeEphemeral(
+        EphemeralKind.LORO,
+        'did:ad:doc',
+        'did:ad:agent:bob',
+        new Uint8Array([4]),
+      ),
+    );
+    socket.receive(
+      encodeEphemeral(EphemeralKind.DOC, 'did:ad:doc', '', new Uint8Array([5])),
+    );
+    socket.receive(
+      encodeEphemeral(
+        EphemeralKind.PRESENCE,
+        'did:ad:drive',
+        '',
+        new Uint8Array([6]),
+      ),
+    );
+    expect(cursors).toEqual([[4]]);
+    expect(edits).toEqual([[5]]);
+    expect(presence).toEqual([[6]]);
     client.close();
   });
 });
