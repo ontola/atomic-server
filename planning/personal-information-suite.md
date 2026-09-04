@@ -137,7 +137,8 @@ as UI-only plugins.
 
 A connector needs:
 
-- OAuth / credential setup and refresh-token storage;
+- OAuth / credential setup and refresh-token storage
+  (connector tokens, not identity — [`oidc-oauth.md`](./oidc-oauth.md));
 - provider-specific sync cursor storage;
 - importer from provider payloads to Atomic resources;
 - exporter from Atomic changes to provider mutations;
