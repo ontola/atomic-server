@@ -1066,6 +1066,7 @@ export function GettingStartedFlow({
           <ConnectDeviceStep
             drive={missingDrive}
             vaultReason={missingDriveVaultReason}
+            portalUrl={knownPortalUrl}
             onConnected={target => {
               setDrive(target);
               navigate(constructOpenURL(target));

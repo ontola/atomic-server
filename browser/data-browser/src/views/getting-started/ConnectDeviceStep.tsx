@@ -4,6 +4,11 @@ import { FaMobileScreenButton, FaLock } from 'react-icons/fa6';
 import { useStore } from '@tomic/react';
 import { useDriveVault } from '../../helpers/managed/useDriveVault';
 import { listVaultDrives } from '../../helpers/managed/vault';
+import { getManagedAccount } from '../../helpers/managed/session';
+import { canHoldProviderCookie } from '../../helpers/managed/deviceLink';
+import { openExternal } from '../../helpers/openExternal';
+import { PRODUCT_NAME } from '../../helpers/managed/product';
+import { LinkProviderPanel } from '../../components/Vault/LinkProviderPanel';
 import { Button } from '../../components/Button';
 import { Column, Row } from '../../components/Row';
 import { PairingCode } from '../../components/PairingCode';
@@ -53,6 +58,12 @@ interface ConnectDeviceStepProps {
    * "no backup" situations this is instead of a generic shrug.
    */
   vaultReason?: string;
+  /**
+   * The control plane that keeps this account's backups, if the build or a
+   * server has named one. Without it there is no vault to ask and no account
+   * to sign in to, so the restore offer stays off the screen.
+   */
+  portalUrl: string | null;
   /** Enter the app anyway, without its data. */
   onSkip: () => void;
   /** The drive's data arrived — open it. */
@@ -78,6 +89,7 @@ interface ConnectDeviceStepProps {
 export function ConnectDeviceStep({
   drive,
   vaultReason,
+  portalUrl,
   onSkip,
   onConnected,
 }: ConnectDeviceStepProps): JSX.Element {
@@ -115,6 +127,23 @@ export function ConnectDeviceStep({
    */
   const [vaultDrive, setVaultDrive] = useState<string | undefined>(drive);
 
+  /**
+   * Whether this client holds a session with the control plane; `undefined`
+   * until asked. The vault is behind that session, so without one the screen
+   * below cannot see the backup this device most likely came here for — and
+   * the sign-in that just happened does not create one. A passkey or secret
+   * proves the agent; the account is a separate login, and a browser that has
+   * never visited the portal (or cleared its cookies) has none. That case used
+   * to render as "your data is on another device" with no way to fix it.
+   */
+  const [hasSession, setHasSession] = useState<boolean>();
+
+  /**
+   * Bumped once the user has signed in or linked, so the vault lookup below
+   * runs again without leaving the step.
+   */
+  const [sessionAttempt, setSessionAttempt] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -124,6 +153,15 @@ export function ConnectDeviceStep({
       if (cancelled) return;
 
       if (local) setVaultDrive(local);
+
+      const account = await getManagedAccount().catch(() => null);
+
+      if (cancelled) return;
+
+      setHasSession(account !== null);
+
+      // Nothing below can answer without a session; asking would only fail.
+      if (account === null) return;
 
       // The control plane knows which drives this account has backed up, and
       // asking it matters in two cases. With no drive name at all: a device
@@ -166,7 +204,7 @@ export function ConnectDeviceStep({
     return () => {
       cancelled = true;
     };
-  }, [drive, agent?.subject]);
+  }, [drive, agent?.subject, sessionAttempt]);
 
   const vault = useDriveVault(vaultDrive ?? null);
   // Only offer this when there is something to restore. Backup being on with
@@ -174,6 +212,22 @@ export function ConnectDeviceStep({
   // resources and leave the screen looking like it failed.
   const canRestoreFromVault =
     vault.status.state === 'on' && vault.status.details.confirmed_objects > 0;
+
+  /**
+   * The account session appeared (signed in on the portal in another tab, or
+   * linked this device). Ask the control plane again, from here: the vault
+   * lookup above and the hook's own status both answered "no session" and
+   * nothing they watch changes when a cookie or a token does.
+   */
+  function sessionArrived() {
+    setSessionAttempt(n => n + 1);
+    void vault.refresh();
+  }
+
+  // Offered when the vault cannot be consulted for want of a session, and only
+  // when there is somewhere to get one. Not shown once the session is there
+  // and the vault simply has nothing — that is what `vaultReason` is for.
+  const needsSession = hasSession === false && !!portalUrl;
 
   async function restoreFromVault() {
     const outcome = await vault.restore();
@@ -398,10 +452,52 @@ export function ConnectDeviceStep({
               situations answer "no backup" — no session, never enrolled,
               enrolled but never uploaded, … — and they want different fixes
               on the other device, so name it. */}
-          {!canRestoreFromVault && vaultReason && (
+          {!canRestoreFromVault && vaultReason && !needsSession && (
             <Explainer data-testid='vault-no-backup-reason'>
               Cloud Vault had nothing for this workspace: {vaultReason}.
             </Explainer>
+          )}
+
+          {/* The backup is behind the account, and signing in as the agent did
+              not sign in to the account. Say so, and offer the way in — before
+              the second-device routes, because for someone who has a backup
+              this is the only route that needs nothing else. Two ways to get
+              a session, one per client (see the restore step): a page on the
+              portal's site signs in there and keeps the cookie; the apps and
+              a self-hosted origin cannot, and link this device instead. */}
+          {!canRestoreFromVault && needsSession && (
+            <VaultOffer data-testid='vault-needs-session'>
+              <Explainer>
+                {`Your backup, if you made one, is kept by your ${PRODUCT_NAME} account — and this browser isn’t signed in to it.`}
+              </Explainer>
+              {canHoldProviderCookie(portalUrl) ? (
+                <Row gap='0.5rem' justify='center' wrapItems>
+                  <Button
+                    type='button'
+                    data-testid='vault-sign-in'
+                    onClick={() => {
+                      // A new tab, not a redirect: the sign-in is a magic
+                      // link that lands on the portal, and this screen is
+                      // where the restore happens. Leaving it means finding
+                      // the way back through Sync.
+                      void openExternal(
+                        new URL('/signin', portalUrl!).toString(),
+                      );
+                    }}
+                  >
+                    {`Sign in to ${PRODUCT_NAME}`}
+                  </Button>
+                  <Button type='button' subtle onClick={sessionArrived}>
+                    I’ve signed in
+                  </Button>
+                </Row>
+              ) : (
+                <LinkProviderPanel
+                  portalUrl={portalUrl}
+                  onLinked={sessionArrived}
+                />
+              )}
+            </VaultOffer>
           )}
 
           {/* First, because it is the only route that needs nothing but this

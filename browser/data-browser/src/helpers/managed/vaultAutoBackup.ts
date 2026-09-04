@@ -330,13 +330,18 @@ export async function restoreFromVault(
   if (!agent?.subject) return { status: 'no-backup', reason: 'not signed in' };
 
   try {
-    const db = await deps.db(store);
-
-    if (!db) return { status: 'no-backup', reason: 'no local database' };
-
+    // Session first: one quick request, against a database wait of up to
+    // `CLIENT_DB_WAIT_MS`. Sign-in calls this on every device that holds no
+    // data, and a browser that never signed in to the account — the common
+    // case for a fresh one — should not sit on "Restoring…" for twenty seconds
+    // to be told there was nothing to ask.
     if (!(await deps.hasAccount())) {
       return { status: 'no-backup', reason: 'no account session' };
     }
+
+    const db = await deps.db(store);
+
+    if (!db) return { status: 'no-backup', reason: 'no local database' };
 
     const enrollment = (await deps.listVaultDrives()).find(
       e => e.drive_subject === driveSubject && e.status === 'active',

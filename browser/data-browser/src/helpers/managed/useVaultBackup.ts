@@ -41,6 +41,12 @@ export type UseVaultBackup = {
   restore: () => Promise<RestoreOutcome | null>;
   /** 0–1 while a restore is downloading, otherwise null. */
   restoreProgress: number | null;
+  /**
+   * Re-read the enrollment and vault state. For a screen that knows something
+   * changed on the control-plane side that no store event reports — a session
+   * that did not exist when the first read said `unavailable`.
+   */
+  refresh: () => Promise<void>;
 };
 
 /**
@@ -319,5 +325,6 @@ export function useVaultBackup({
     backupNow,
     restore,
     restoreProgress,
+    refresh,
   };
 }

@@ -287,6 +287,9 @@ describe('restoreFromVault', () => {
       'no-backup',
     );
     expect(deps.listVaultDrives).not.toHaveBeenCalled();
+    // The database wait is the long one (up to 20s); a device with no session
+    // must not sit through it to hear "no".
+    expect(deps.db).not.toHaveBeenCalled();
   });
 
   it('is no-backup for a drive the account never enrolled', async () => {
