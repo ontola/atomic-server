@@ -309,6 +309,15 @@ is only kept in step by mirroring the tests, so do that deliberately.
 derivation (`personal_drive_subject` / `personalDriveSubject`). The cross-lang
 vector (`personal_drive_cross_lang_vector`) pins the nonce, signature, and DID.
 
+## View transitions
+
+| Flow | Layer | Where |
+|---|---|---|
+| Hashed `view-transition-name` plus `view-transition-class` per tag | glue | `browser/data-browser/src/helpers/viewTransition.test.ts` |
+| `startViewTransition` throw / hung `finished` / rejected `ready` still navigates and skips the overlay | glue | `browser/data-browser/src/helpers/viewTransition.test.ts` |
+
+Not covered: visual morph of a grid card into the resource page in Firefox (needs a headed Firefox run; Playwright's firefox project is locks-only and automation bypasses view transitions unless `forceViewTransitions` is set).
+
 ## Documents
 
 | Flow | Layer | Where |
