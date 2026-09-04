@@ -1,5 +1,7 @@
 # Silent failures
 
+> **Status:** Living log, not a plan. An append-only register of error-handling failures that reported success. It has no completion state; add entries as they are found.
+
 A running list of places where **error handling** let us down — kept separately
 from the bugs themselves.
 
@@ -205,3 +207,22 @@ Two writers (dev server + a build, or two dev servers) corrupt the catalogs.
 Shows up much later as `[i18n-404]` or a misleading "Invalid hook call".
 *Should have:* a lock, or a refusal to extract while another extractor holds the
 catalogs.
+
+## Carried over from the pairing field test (2026-09-04)
+
+The field notes moved to [`completed/pairing-ux-field-test.md`](./completed/pairing-ux-field-test.md); the item below is the one still open that belongs here.
+
+### M8 — "Your changes are saved locally" is false on desktop (open)
+
+Offline edits mark subjects dirty in the outbox, but the *content* lives in the
+Loro doc, which is persisted by the ClientDb: "On reload the Loro doc rehydrates
+from clientDb" (`local-outbox.ts`). The desktop app runs with the ClientDb off
+by design — the embedded server is meant to be the local store — so while
+offline, edits exist only in memory and a restart loses them, under a toast
+promising the opposite.
+
+Server-side durability is not the problem: `serve.rs` runs a 100ms durable-flush
+tick, and the desktop goes through that same path.
+
+Either the outbox must persist content without the ClientDb on this platform, or
+the app must not claim local safety it does not have.

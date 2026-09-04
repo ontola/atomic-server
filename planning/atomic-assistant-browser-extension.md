@@ -77,7 +77,7 @@ Use the current implementations rather than copying their behavior:
   reconciliation for replica catch-up.
 - `planning/device-pairing.md`: pairing codes are routing only and must never
   carry an agent secret.
-- `planning/encryption.md`: browser cache encryption and logout/session
+- `planning/completed/encryption.md`: browser cache encryption and logout/session
   isolation remain production blockers for sensitive local data.
 
 ## Current Gaps
@@ -429,7 +429,7 @@ not disable Assistant or remove the local source of truth.
       compromised providers, malicious extensions, message spoofing, stolen
       browser profiles, and revoked Atomic rights.
 - [ ] Encrypt private OPFS content or otherwise meet the session-isolation
-      requirements in `planning/encryption.md`.
+      requirements in `planning/completed/encryption.md`.
 - [ ] Add redaction tests proving raw profile values are not sent to the model
       for mapping-only flows.
 - [ ] Add CSP tests proving no remote executable code can load.

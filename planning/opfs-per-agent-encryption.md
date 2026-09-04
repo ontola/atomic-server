@@ -1,7 +1,7 @@
 # Per-agent OPFS databases with at-rest encryption
 
 > **Status:** Implemented (2026-07). This realizes the "Local cache and
-> session isolation" requirement from [`encryption.md`](./encryption.md):
+> session isolation" requirement from [`encryption.md`](./completed/encryption.md):
 > after sign-out or an agent switch, a session can no longer read the
 > previous agent's cached private data — without wiping the cache.
 

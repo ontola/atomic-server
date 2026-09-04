@@ -1,6 +1,6 @@
 # Unify resource representations (browser side)
 
-> Status: planned 2026-05-28. Correctness. Invasive.
+> Status: planned 2026-05-28. Correctness. Invasive.. **Mostly shipped as of 2026-09-04:** `Resource#cache` is derived from the Loro doc via `rebuildCacheFromLoro` (the single point where doc values become propvals) and rebuilt on demand. Remaining: the `_auxValues` overlay and the server-managed props preserved across rebuilds.
 >
 > **Parent plan:** [`loro-source-of-truth.md`](./loro-source-of-truth.md)
 > already specifies the Rust/`Db`/Flutter version of this shift — making

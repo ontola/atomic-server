@@ -1,5 +1,7 @@
 # WebSocket sync — commits and subscriptions
 
+> **Status:** Shipped, as-built. Persisted commits over WS (protocol, server, browser), unified `UPDATE` / `DESTROY` with `QUERY_UPDATE` and later `SUBSCRIBE_QUERY` removed, drive-scoped fan-out, the Flutter WS session. The last test gaps (`ws_errors.rs`, `ws_unsub.rs`, browser `WSClient.postCommit()`) closed 2026-09-04.
+
 > **Broader direction:** Multi-device and multi-transport sync is described in
 > [`unified-sync.md`](./unified-sync.md) (one API, WS or Iroh; mobile should match
 > browser live queries, not manual `peer_sync`).
@@ -20,8 +22,9 @@ shipped (`flutter/rust/src/api/simple/ws_sync.rs`, first in `dd771c293`
 **`QUERY_UPDATE` removed** — first narrowed in `dd771c29` (drive-wide only fired
 on membership), then deleted entirely. Drive-wide subscribers now receive
 creates/destroys via the same `UPDATE` / `DESTROY` channel that already
-carried edits. The `SUBSCRIBE_QUERY` registration primitive is kept (clients
-can still say "watch this filter") — only the response shape changed.
+carried edits. The `SUBSCRIBE_QUERY` registration primitive outlived it by
+three months and was removed 2026-09-04: no client outside the Rust
+integration tests ever sent it. The lib's watched-query index stays.
 
 **Drive-scoped fan-out** — the drive-wide fan-out now delivers a commit only to
 subscribers of the resource's *owning* drive (via `Subject::is_within_drive` +
@@ -210,7 +213,7 @@ Originally proposed narrowing `QUERY_UPDATE` to membership-only events. That
 narrowing shipped in `dd771c29`, then `QUERY_UPDATE` was retired entirely —
 drive-wide subscribers now get creates / edits / destroys through the same
 `UPDATE` / `DESTROY` channel as resource subscribers. `SUBSCRIBE_QUERY`
-registration is kept; only the response wire shape changed.
+registration was removed 2026-09-04 (unused outside tests).
 
 ### Documentation
 

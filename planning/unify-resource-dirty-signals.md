@@ -1,6 +1,6 @@
 # Unify resource "dirty" signals
 
-> Status: planned 2026-05-28. Correctness.
+> Status: planned 2026-05-28. Correctness.. **not started as of 2026-09-04 (`getSaveState` does not exist; `_loading` / `_dirty` / `_saveDepth` and the outbox are still four separate signals).**
 >
 > This is one slice of [`unified-data-layer.md`](./unified-data-layer.md)
 > (the "one outbox + saveState" part of the proposed redesign). It can

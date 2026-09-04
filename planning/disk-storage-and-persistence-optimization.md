@@ -6,7 +6,7 @@
 > (history retention is node policy) and
 > [`loro-source-of-truth.md`](./loro-source-of-truth.md) (Loro is the history
 > engine). Related: [`s3-blob-storage.md`](./s3-blob-storage.md) (blob backend),
-> [`encryption.md`](./encryption.md) (encrypted envelope/checkpoint size +
+> [`encryption.md`](./completed/encryption.md) (encrypted envelope/checkpoint size +
 > blind-replica compaction), and
 > [`plugins.md`](./plugins.md) (app Loro payloads and blob checkpoints inherit
 > the same growth + retention concerns).
@@ -111,7 +111,7 @@ what the `commit.rs:1088` docstring already intended.
   and that `from` (the prior version vector) is available at sign time.
 - **Downstream wins:** the per-commit `loroUpdate` is also the payload that gets
   wrapped as a `kind: delta` envelope in
-  [`encryption.md`](./encryption.md#possible-encrypted-replication-shape) and
+  [`encryption.md`](./completed/encryption.md#possible-encrypted-replication-shape) and
   synced for app Loro payloads in [`plugins.md`](./plugins.md) ("Application
   state profiles"). Making it a true delta
   shrinks encrypted envelope size and per-update sync, not just on-disk history.

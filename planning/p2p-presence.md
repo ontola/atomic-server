@@ -6,7 +6,7 @@
 > server bridge (`server/src/loro_sync_broadcaster.rs`) are in, with an Iroh e2e
 > (`e2e_presence_crosses_the_link_without_being_stored`) proving presence crosses
 > the link and reaches no store. Open: the two-device verification below (M12 in
-> [`pairing-ux-field-test.md`](./pairing-ux-field-test.md)) and OQ1 bandwidth.
+> [`pairing-ux-field-test.md`](./completed/pairing-ux-field-test.md)) and OQ1 bandwidth.
 > Originally written 2026-07-10 as a proposal; the rest of this doc is that
 > design. Extends the shipped browser presence
 > model ([`presence-views.md`](./presence-views.md)) to travel device-to-device
@@ -221,3 +221,106 @@ the two sessions on two *devices* over Iroh instead of two tabs on one hub.
 - **OQ4 — Reservation vs. reuse.** Confirm `0x40` was reserved for exactly this
   and not some abandoned design with incompatible framing expectations before
   building on it (`protocol.rs:45` is a bare `const`).
+
+## Carried over from the pairing field test (2026-09-04)
+
+The field notes moved to [`completed/pairing-ux-field-test.md`](./completed/pairing-ux-field-test.md); the item below is the one still open that belongs here.
+
+### M12 — Presence does not cross a peer link, because it was never wired (open)
+
+> **Update 2026-09-03:** the wire is no longer missing. `EPHEMERAL (0x40)` has a
+> codec, a peer send/receive path and a server bridge, with an Iroh e2e
+> (`e2e_presence_crosses_the_link_without_being_stored`). What is still open is
+> the two-device check on real hardware. The finding below is the original
+> report and describes the pre-fix state.
+
+Two machines syncing the same drive over Iroh still cannot see each other's
+cursors. Not a regression: presence has no peer-to-peer path at all.
+
+The tag exists and nothing uses it:
+
+- `lib/src/sync/protocol.rs:45` — `pub const EPHEMERAL: u8 = 0x40;`
+- `lib/src/sync/peer.rs` — **zero** references. Never sent, never handled.
+
+Every working presence path is client-to-server WebSocket:
+`LORO_EPHEMERAL_UPDATE` in `lib/src/client/ws.rs` and
+`server/src/handlers/web_sockets.rs:434`, fanned out by `LoroSyncBroadcaster`
+to the *subscribers of that server* (`loro_sync_broadcaster.rs:190`,
+"broadcast to all subscribers except the sender").
+
+So presence is per-server. A browser on `atomic.ontola.io` and a desktop app on
+`localhost:9883` are two islands: drive state flows between them over Iroh,
+presence does not. Both users are "alone" while editing the same document.
+
+**What wiring 0x40 involves.** Not much protocol — the shape already exists —
+but presence is unlike everything else the peer link carries, and the
+differences are the work:
+
+1. **It must never touch the store.** Every existing peer frame ends in a write
+   (`persist_update` / `add_resource_opts`). An `EPHEMERAL` frame must fan out
+   and be dropped. Routing it through the same path would persist cursor
+   positions into the CRDT and sync them forever.
+2. **It is high-frequency.** Cursor movement is orders of magnitude noisier
+   than commits. It needs its own budget and backpressure; the live channel is
+   currently shared, and M9 showed what happens when that channel is saturated
+   (the push loop lags and silently drops events, `RecvError::Lagged => continue`).
+3. **Scope is per drive, and identity is per agent — not per node.** The
+   WebSocket path fans out to subscribers of a subject. Across a peer link the
+   sender is a node that may be relaying several agents' presence, so frames
+   need to carry the originating agent and be filtered by drive readability on
+   arrival, or one peer leaks who is editing what to a node that cannot read it.
+4. **Echo suppression applies here too.** The same loop that produced M9's storm
+   would apply at cursor frequency. The `source_id` mechanism added for
+   M9 should carry over rather than be reinvented.
+5. **It should degrade silently.** Presence failing must never affect drive
+   sync — it is the least important thing on the link and should be the first
+   dropped under load.
+
+Worth doing: "why can't I see myself from my other machine" has no satisfying
+answer today, and the reserved tag says someone already intended this.
+
+## Fixed between 0.41.0-beta.2 (Jul 25) and 2026-08-15 — do not chase
+
+Recorded because the first draft of this note treated them as live, and
+someone reading the git history deserves to know they were resolved rather
+than dropped.
+
+- **The `unknown-drive` dead end.** On the July build, pairing from a node
+  with no drive stopped at "Your workspace didn't arrive". Current code gets
+  past that screen — but by provisioning a local drive rather than fetching
+  the peer's, so the underlying problem is C0, not fixed.
+- **"Paired with the device" reported as success while nothing synced.** The
+  `count === undefined` branch (`PairingFlowProvider.tsx:280`) still exists
+  and is still reachable. If shown, it should say plainly that no data
+  moved.
+- **The failure text sent people to a device that could not help** ("Open
+  the app on your other device, then pair again"). Same story.
+- **Second launch panicked** on an unwrapped redb open. Now handled — see C3
+  for what remains.
+
+## Unverified on a current build
+
+- **"Connecting…" never resolving for a cross-origin server.** On the July
+  build the desktop showed `atomic.ontola.io — Connecting…` indefinitely
+  while the server logged successful upgrades (`/ws`, `101`); same-origin in
+  a browser it showed `In sync`. Not re-tested after the rebuild.
+
+## What this cost, and why
+
+Roughly an afternoon went into diagnosing a deadlock that current code does
+not have. The reasoning was sound and the evidence was real — logs, `file:line`
+paths, a reproduction on a deliberately cleaned store — but it was
+**source from the working tree explaining behaviour from a three-week-old
+binary**, and the two had diverged. Every "confirmed" step made the wrong
+conclusion feel firmer.
+
+Two things would have caught it immediately:
+
+1. **Check the binary's provenance before diagnosing from it.** The app was
+   dated Jul 25; the tree had moved through PRs 1257 and 1260 and the vault
+   work. That should have been the first question, not the last.
+2. **Rebuild before writing findings up, not after.** The rebuild took ~15
+   minutes and refuted the headline finding on the first try.
+
+Worth keeping in mind for the Android app too, where the same "install an
+old bundle, reason from current source" trap is one `adb install` away.

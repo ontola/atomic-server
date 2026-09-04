@@ -1,5 +1,7 @@
 # Personal Information Suite: Contacts, Calendar, Email
 
+> **Status:** Exploration. Nothing built. Sketches contacts, calendar and email as first-class Atomic resources (sync, search, relations, rights, encrypted replication) rather than embedded third-party views.
+
 ## Status
 
 Exploration. This plan sketches what it would take to make Atomic a credible
@@ -326,7 +328,7 @@ Requirements before serious rollout:
 - careful handling of contact/email data in AI context;
 - no blind-replica promise until encrypted replication authorization is solved.
 
-The existing `planning/encryption.md` distinction between verifier and blind
+The existing `planning/completed/encryption.md` distinction between verifier and blind
 replica matters here. A hosted server with full email/contact/calendar indexes
 is a highly trusted verifier, not a neutral relay.
 

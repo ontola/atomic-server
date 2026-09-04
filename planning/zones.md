@@ -34,7 +34,7 @@ the model:
 - The zone is simultaneously the unit of: access control, sync/replication
   (fingerprint tree per zone, cf. [`drive-reconciliation.md`](./drive-reconciliation.md)),
   admission/quota (`lib/src/sync/policy.rs`), encryption keys
-  ([`encryption.md`](./encryption.md) per-drive keys become per-zone keys), and
+  ([`encryption.md`](./completed/encryption.md) per-drive keys become per-zone keys), and
   optional announcement.
 - `Drive` survives as a UX-only class ("top-level zone in your sidebar").
   Apps may call zones "spaces" or "folders"; the protocol word is zone (the DNS

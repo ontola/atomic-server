@@ -3,7 +3,7 @@
 > **Status:** Shipped (core, 2026-08). Both sides call `personalDriveSubject()`
 > / `fetchPersonalDriveSubject`; pairing no longer mints a random drive.
 > Remaining: eager vs lazy first write (M23 in
-> [`pairing-ux-field-test.md`](./pairing-ux-field-test.md)), and pre-0.40 DID
+> [`pairing-ux-field-test.md`](./completed/pairing-ux-field-test.md)), and pre-0.40 DID
 > auth (M4). Builds on
 > [`genesis-self-verifying.md`](./genesis-self-verifying.md).
 >

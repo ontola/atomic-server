@@ -1,5 +1,7 @@
 # Cloud Sync, Onboarding & Managed-Node Integration
 
+> **Status:** Mostly built, qualified. Onboarding, managed-node detection, signed enrollment proof, heartbeat / policy / usage, allowlist-scoped usage and the proactive Iroh replication pull are verified, but only against the SaaS `LocalProcessNodeProvider`. Open: browser de-branding, `IdentityReconcileGate` against a real session, parallelised pull with backoff, and the sync-path admission gate.
+
 Tracks the **relevant files** for the cloud-sync / onboarding / managed-node
 work, spanning `atomic-server` (this repo: data plane + browser) and
 `atomic-saas` (control plane + portal). Companion to

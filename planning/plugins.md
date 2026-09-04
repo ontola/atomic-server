@@ -1,5 +1,7 @@
 # Plugins: One Model for Views, Automations, and Importers
 
+> **Status:** Partial, off `develop`. Track A built 2026-08-21 (`run` end to end: sandbox, planner, applier, secrets, server placement, scheduled and query-triggered runs, auto-apply); Track B revised 2026-08-22 onto that substrate. The code lives on `feat/plugin-model` (PR #1307). Absorbed `llm-wasm-gui-plugins.md`, `importers.md` and `habits-app.md` on 2026-09-01.
+
 ## Status
 
 Track A built (2026-08-21): `run` works end to end — sandbox, planner, applier,
