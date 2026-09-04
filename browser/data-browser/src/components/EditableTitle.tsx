@@ -5,7 +5,7 @@ import {
   useStore,
   useTitle,
 } from '@tomic/react';
-import { useEffect, useRef, useState, type JSX } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type JSX } from 'react';
 import { FaPencil } from 'react-icons/fa6';
 import { styled, css } from 'styled-components';
 import {
@@ -26,7 +26,7 @@ import {
 export interface EditableTitleProps {
   resource: Resource;
   /** Uses `name` by default */
-  parentRef?: React.RefObject<HTMLInputElement | null>;
+  parentRef?: React.RefObject<HTMLTextAreaElement | null>;
   id?: string;
   className?: string;
   /** Called when the user commits the title (Enter or blur) */
@@ -77,7 +77,7 @@ export function EditableTitle({
 
   const [text, setText] = useTitle(resource, Infinity, opts);
   const [isEditing, setIsEditing] = useState(false);
-  const innerRef = useRef<HTMLInputElement>(null);
+  const innerRef = useRef<HTMLTextAreaElement>(null);
   const ref = parentRef || innerRef;
 
   const canWrite = useCanWrite(resource);
@@ -113,6 +113,21 @@ export function EditableTitle({
     ref.current?.select();
   }, [isEditing]);
 
+  // The editor is a textarea so a long title wraps like the rendered
+  // heading instead of scrolling inside a single line. Browsers with
+  // `field-sizing: content` grow it on their own; the rest get the height
+  // measured here, before paint, so the box never flashes at one row.
+  useLayoutEffect(() => {
+    const el = ref.current;
+
+    if (!isEditing || !el || CSS.supports('field-sizing', 'content')) {
+      return;
+    }
+
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [isEditing, text]);
+
   // The keystroke debounce in `useValue` (`commitDebounce: 100ms`)
   // means the commit for the last typed character is still parked in
   // a `setTimeout` when the user exits the editor. The next interaction
@@ -128,7 +143,7 @@ export function EditableTitle({
     void resource.__internalObject.save().catch(() => undefined);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       flushPending();
@@ -146,11 +161,12 @@ export function EditableTitle({
       <TitleInput
         ref={ref}
         data-testid='editable-title'
-        type='text'
+        rows={1}
         {...props}
         onFocus={handleClick}
         placeholder={placeholder}
-        onChange={e => setText(e.target.value)}
+        // Titles are one line of text; a pasted newline becomes a space.
+        onChange={e => setText(e.target.value.replace(/\s*\n\s*/g, ' '))}
         value={text || ''}
         onKeyDown={handleKeyDown}
         onBlur={() => {
@@ -252,7 +268,7 @@ const TitleText = styled.span`
   min-width: 0;
 `;
 
-const TitleInput = styled.input`
+const TitleInput = styled.textarea`
   ${TitleShared}
   margin-bottom: ${props => props.theme.margin}rem;
   font-size: ${p => p.theme.fontSizeH1}rem;
@@ -266,9 +282,13 @@ const TitleInput = styled.input`
   background-color: transparent;
   margin-bottom: ${p => p.theme.margin}rem;
   font-family: ${p => p.theme.fontFamilyHeader};
-  word-wrap: break-word;
-  word-break: break-all;
-  overflow: visible;
+  /* Wrap exactly like the rendered heading (see Title). */
+  overflow-wrap: break-word;
+  word-break: normal;
+  white-space: pre-wrap;
+  resize: none;
+  overflow: hidden;
+  width: 100%;
   ${narrowTitleFontSize}
 
   &:focus {
@@ -300,15 +320,20 @@ const EditingRow = styled.div`
   font-size: ${p => p.theme.fontSizeH1}rem;
   ${narrowTitleFontSize}
 
-  /* Hug the typed text like the rendered title does (progressive
-     enhancement; browsers without field-sizing keep the default width),
-     and drop the input's legacy standalone margin — the box must match
-     the rendered title exactly, whatever the surrounding view. */
-  & > input {
-    field-sizing: content;
+  /* Hug the typed text like the rendered title does and grow with it
+     (progressive enhancement; browsers without field-sizing keep the full
+     width and get their height from a layout effect), and drop the
+     textarea's legacy standalone margin — the box must match the rendered
+     title exactly, whatever the surrounding view. */
+  & > textarea {
+    margin: 0;
     min-width: 8ch;
     max-width: 100%;
-    margin: 0;
+
+    @supports (field-sizing: content) {
+      field-sizing: content;
+      width: auto;
+    }
   }
 `;
 

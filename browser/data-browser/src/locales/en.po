@@ -5381,10 +5381,8 @@ msgstr "An always-on device has an address — add it and your workspace appears
 msgid "Error: could not disconnect that device"
 msgstr "Error: could not disconnect that device"
 
-#. 0: title
-#: src/components/NavBar.tsx
-msgid "Go to {0}"
-msgstr "Go to {0}"
+#~ msgid "Go to {0}"
+#~ msgstr "Go to {0}"
 
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/forms/InputLocalizedText.tsx

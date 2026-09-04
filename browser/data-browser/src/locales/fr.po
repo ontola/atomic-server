@@ -5347,10 +5347,8 @@ msgstr ""
 msgid "Error: could not disconnect that device"
 msgstr ""
 
-#. 0: title
-#: src/components/NavBar.tsx
-msgid "Go to {0}"
-msgstr ""
+#~ msgid "Go to {0}"
+#~ msgstr ""
 
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/forms/InputLocalizedText.tsx
