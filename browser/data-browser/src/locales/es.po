@@ -311,6 +311,7 @@ msgstr "Conecta un modelo para usar Atomic Assistant"
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/components/AI/AISettings.tsx
+#: src/views/getting-started/GettingStartedFlow.tsx
 msgid "or"
 msgstr "o"
 
@@ -1524,7 +1525,6 @@ msgstr "Descripción Textual <0/>"
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/components/AvatarCropper.tsx
-#: src/components/Share/ShareDialog.tsx
 #: src/components/forms/ResourceForm.tsx
 #: src/views/Article/ArticleDescription.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
@@ -2125,6 +2125,7 @@ msgstr ""
 #: src/chunks/DashboardPage/blocks/ViewBlock.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/routes/SettingsAgent.tsx
+#: src/routes/SettingsAgent.tsx
 msgid "Open"
 msgstr "Abrir"
 
@@ -2506,6 +2507,7 @@ msgid "<0/> Note"
 msgstr "<0/> Nota"
 
 #: src/components/NewInstanceButton/QuickCreateRow.tsx
+#: src/routes/SettingsAgent.tsx
 msgid "New"
 msgstr "Nuevo"
 
@@ -2956,9 +2958,8 @@ msgstr "Crear nueva identidad"
 msgid "Generating your identity..."
 msgstr "Generando tu identidad..."
 
-#: src/components/NewIdentitySection.tsx
-msgid "Creating your personal drive…"
-msgstr "Creando tu unidad personal…"
+#~ msgid "Creating your personal drive…"
+#~ msgstr "Creando tu unidad personal…"
 
 #: src/components/NewIdentitySection.tsx
 msgid "Atomic Server — agent secret backup"
@@ -3110,10 +3111,8 @@ msgstr "Aún no hay etiquetas."
 msgid "Open tag page"
 msgstr "Abrir página de etiquetas"
 
-#. 0: showInherited ? <FaChevronDown /> \\: <FaChevronRight />
-#: src/components/Share/ShareDialog.tsx
-msgid "{0} Inherited permissions"
-msgstr "{0} Permisos heredados"
+#~ msgid "{0} Inherited permissions"
+#~ msgstr "{0} Permisos heredados"
 
 #: src/components/Share/ShareDialog.tsx
 msgid "<0><0/> Back</0> Create Invite"
@@ -3180,7 +3179,6 @@ msgid "Remove drive from list"
 msgstr "Eliminar unidad de la lista"
 
 #: src/chunks/TablePage/NewColumnButton.tsx
-#: src/components/Drives/DriveRow.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 msgid "Select"
 msgstr "Seleccionar"
@@ -4009,6 +4007,8 @@ msgid "Enter the recovery password you set for {0}."
 msgstr ""
 
 #: src/components/Vault/VaultPanel.tsx
+#: src/components/Vault/VaultRestoreAction.tsx
+#: src/views/getting-started/ConnectDeviceStep.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Restoring…"
@@ -4433,9 +4433,8 @@ msgstr ""
 msgid "as a classtype."
 msgstr ""
 
-#: src/components/Share/ShareDialog.tsx
-msgid "Create Invite"
-msgstr "Crear invitación"
+#~ msgid "Create Invite"
+#~ msgstr "Crear invitación"
 
 #. 0: status.blockedCount
 #: src/components/SideBar/SyncMenuItem.tsx
@@ -4819,7 +4818,6 @@ msgid "<0/> and{0} <1/> are typing"
 msgstr ""
 
 #: src/components/SideBar/DriveSwitcher.tsx
-#: src/routes/SettingsAgent.tsx
 msgid "Private drive"
 msgstr ""
 
@@ -4835,13 +4833,11 @@ msgstr ""
 msgid "View and organize all your drives."
 msgstr ""
 
-#: src/routes/SettingsAgent.tsx
-msgid "Your personal space — only visible to you."
-msgstr ""
+#~ msgid "Your personal space — only visible to you."
+#~ msgstr ""
 
-#: src/routes/SettingsAgent.tsx
-msgid "Unstar a drive to move it back to recently visited."
-msgstr ""
+#~ msgid "Unstar a drive to move it back to recently visited."
+#~ msgstr ""
 
 #: src/routes/SettingsAgent.tsx
 msgid "My drives"
@@ -5346,10 +5342,8 @@ msgstr ""
 msgid "Error: could not disconnect that device"
 msgstr ""
 
-#. 0: title
-#: src/components/NavBar.tsx
-msgid "Go to {0}"
-msgstr ""
+#~ msgid "Go to {0}"
+#~ msgstr ""
 
 #: src/components/EditLanguagesDialog.tsx
 #: src/components/forms/InputLocalizedText.tsx
@@ -5460,7 +5454,6 @@ msgid "Create drive"
 msgstr ""
 
 #: src/routes/NewDriveRoute.tsx
-#: src/routes/SettingsAgent.tsx
 msgid "New drive"
 msgstr ""
 
@@ -5670,7 +5663,6 @@ msgid "Are you sure you've stored this code somewhere safe? You cannot recover y
 msgstr ""
 
 #: src/components/NewIdentitySection.tsx
-#: src/components/NewIdentitySection.tsx
 msgid "Generating…"
 msgstr ""
 
@@ -5736,21 +5728,17 @@ msgid "Use your passkey instead"
 msgstr ""
 
 #: src/components/AccountRecoveryCard.tsx
-#: src/components/NewIdentitySection.tsx
 msgid "Could not add a recovery code."
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "This passkey only works on this device"
-msgstr ""
+#~ msgid "This passkey only works on this device"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Give me a recovery code"
-msgstr ""
+#~ msgid "Give me a recovery code"
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Continue without one"
-msgstr ""
+#~ msgid "Continue without one"
+#~ msgstr ""
 
 #: src/routes/SettingsAgent.tsx
 msgid "How you get back in on a new device — and where to find your agent secret."
@@ -5790,9 +5778,8 @@ msgstr ""
 msgid "Protect your account"
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Use your fingerprint, face, or screen lock — the same one that unlocks this device. Nothing to write down, and it works on your other devices too."
-msgstr ""
+#~ msgid "Use your fingerprint, face, or screen lock — the same one that unlocks this device. Nothing to write down, and it works on your other devices too."
+#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Use a passkey"
@@ -5815,13 +5802,11 @@ msgstr ""
 msgid "{0}{1} You'll also need to sign in to your email to use it, so it's safe to keep in a password manager or on paper."
 msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "It isn't synced to your other devices, so losing this one would lock you out. A recovery code is a spare key — you'll need your email to use it, so it's safe to keep on paper."
-msgstr ""
+#~ msgid "It isn't synced to your other devices, so losing this one would lock you out. A recovery code is a spare key — you'll need your email to use it, so it's safe to keep on paper."
+#~ msgstr ""
 
-#: src/components/NewIdentitySection.tsx
-msgid "Keep this somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
-msgstr ""
+#~ msgid "Keep this somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
+#~ msgstr ""
 
 #: src/components/NewIdentitySection.tsx
 msgid "Protect my account"
@@ -5907,9 +5892,8 @@ msgstr ""
 msgid "Manage {0} on {1}"
 msgstr ""
 
-#: src/routes/SettingsAgent.tsx
-msgid "Open by URL"
-msgstr ""
+#~ msgid "Open by URL"
+#~ msgstr ""
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "Continue as"
@@ -5923,9 +5907,8 @@ msgstr ""
 msgid "Paste your agent secret"
 msgstr ""
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Use my account instead"
-msgstr ""
+#~ msgid "Use my account instead"
+#~ msgstr ""
 
 #: src/views/getting-started/GettingStartedFlow.tsx
 msgid "That doesn’t look like a valid agent secret."
@@ -6569,9 +6552,8 @@ msgstr ""
 msgid "Cloud Server"
 msgstr ""
 
-#: src/helpers/managed/cloudSync.ts
-msgid "Timed out connecting to the Cloud Server node."
-msgstr ""
+#~ msgid "Timed out connecting to the Cloud Server node."
+#~ msgstr ""
 
 #. 0: PRODUCT_NAME
 #: src/components/Vault/VaultPanel.tsx
@@ -6667,9 +6649,8 @@ msgstr ""
 msgid "Safari"
 msgstr ""
 
-#: src/views/getting-started/GettingStartedFlow.tsx
-msgid "Use my own secret"
-msgstr ""
+#~ msgid "Use my own secret"
+#~ msgstr ""
 
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Restore this workspace"
@@ -7323,3 +7304,154 @@ msgstr ""
 
 #~ msgid "The app ran without throwing but drew nothing, so the user sees an empty panel. An app with no rows yet still needs to render its heading and a way to add the first one. Fix it with update_app."
 #~ msgstr ""
+
+#: src/handlers/errorHandler.ts
+msgid "Something failed, and reported no reason."
+msgstr ""
+
+#: src/hooks/usePrivateDriveList.ts
+msgid "Could not update your list: no private drive is set up for this account yet."
+msgstr ""
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Signing out…"
+msgstr ""
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Keep this one"
+msgstr ""
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "This email already has an identity"
+msgstr ""
+
+#. 0: conflict.managedAccountEmail
+#: src/components/IdentityReconcileGate.tsx
+msgid "{0} is backed up with an identity that is not the one this browser is using. An account has one identity — which one should this be?"
+msgstr ""
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Switch to my account's identity"
+msgstr ""
+
+#: src/components/IdentityReconcileGate.tsx
+msgid "Restores it here. The identity you made in this browser stays reachable only with its agent secret."
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/components/IdentityReconcileGate.tsx
+msgid "Signs this browser out of {0}. Nothing here is backed up until it has an account of its own."
+msgstr ""
+
+#: src/views/Drive/DrivePage.tsx
+msgid "Your private drive keeps its name. It is tied to your account, not to a project."
+msgstr ""
+
+#: src/components/Vault/VaultRestoreAction.tsx
+msgid "This workspace has an encrypted backup in Cloud Vault."
+msgstr ""
+
+#: src/components/Vault/VaultRestoreAction.tsx
+msgid "Restore from Cloud Vault"
+msgstr ""
+
+#: src/components/Drives/PrivateDriveBadge.tsx
+msgid "<0/> Private"
+msgstr ""
+
+#: src/components/Drives/PrivateDriveBadge.tsx
+msgid "This is your private drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Want a server of your own?"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "This server is run by one person for their own data. You can sign in, or open a drive you were invited to."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Get one hosted"
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "run it yourself"
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Forgot it? Restore from {0}"
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Your backup is kept by your {0} account. Connect this device to it to restore."
+msgstr ""
+
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "Only your passkey opens this account. If it isn't on this device, unlock on the one where you set it up and add a recovery code under Settings — that gets you in anywhere."
+msgstr ""
+
+#: src/components/Share/ShareDialog.tsx
+msgid "This is your <0>private drive</0>. Sharing it shares your drive list, favourites, notifications and AI chats along with it. To work with someone, make a drive for the work and share that instead."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Creating your private drive…"
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Your passkey opens this account on this device and wherever it syncs to. This code opens it on every other device — a phone, a different browser, a new computer."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Keep it somewhere safe. You'll need it — plus your email — to get back in. We can't show it again, but you can generate a new one from Settings whenever you like."
+msgstr ""
+
+#: src/components/NewIdentitySection.tsx
+msgid "Use your fingerprint, face, or screen lock — the same one that unlocks this device. You'll also get a recovery code for devices your passkey doesn't sync to."
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Your backup, if you made one, is kept by your {0} account — and this browser isn’t signed in to it."
+msgstr ""
+
+#. 0: PRODUCT_NAME
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Sign in to {0}"
+msgstr ""
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "Cloud Vault had nothing for this workspace:"
+msgstr ""
+
+#: src/views/getting-started/ConnectDeviceStep.tsx
+msgid "I’ve signed in"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Your private drive is always first. Unstar any other drive to move it back to recently visited."
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Open a drive by URL"
+msgstr ""
+
+#: src/routes/SettingsAgent.tsx
+msgid "Open a drive by URL or DID"
+msgstr ""
+
+#. 0: managedAccount.email
+#: src/routes/SyncRoute.tsx
+msgid "{0}. We hold your key sealed, but only your passkey opens it. A browser your passkey has not synced to cannot get you back in — a recovery code would."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Add a recovery code"
+msgstr ""
+
+#: src/components/Drives/DrivesCard.tsx
+msgid "Drives"
+msgstr ""
