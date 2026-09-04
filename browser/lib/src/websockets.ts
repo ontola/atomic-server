@@ -34,6 +34,9 @@ import {
   decodeSyncResend,
   decodeUpdate,
   encodeSync,
+  encodeEphemeral,
+  decodeEphemeral,
+  EphemeralKind,
   CLIENT_CAPABILITIES,
   CLIENT_HELLO_NAME,
   decodeError,
@@ -685,8 +688,17 @@ export class WSClient {
     this.ws.send('PRESENCE_UNSUBSCRIBE ' + JSON.stringify({ subject: drive }));
   }
 
-  public sendPresenceUpdate(message: string): void {
-    this.sendText('PRESENCE_UPDATE', message);
+  /** Broadcast presence bytes for `drive` as an `EPHEMERAL` frame. */
+  public sendPresenceUpdate(drive: string, update: Uint8Array): void {
+    this.sendEphemeral(EphemeralKind.PRESENCE, drive, update);
+  }
+
+  /** One `EPHEMERAL (0x40)` frame; `kind` says which channel. The agent
+   *  field is left empty: the server attributes the frame to this
+   *  connection's authenticated identity and stamps that on the way out. */
+  private sendEphemeral(kind: number, subject: string, update: Uint8Array) {
+    if (this.readyState !== WebSocket.OPEN) return;
+    this.sendBinary(encodeEphemeral(kind, subject, '', update));
   }
 
   /** Sends a GET message for some resource over websockets. */
@@ -829,12 +841,14 @@ export class WSClient {
     this.sendText('LORO_SYNC_UNSUBSCRIBE', JSON.stringify({ subject }));
   }
 
-  public sendLoroSyncUpdate(message: string): void {
-    this.sendText('LORO_SYNC_UPDATE', message);
+  /** An edit in progress on `subject` (raw Loro update bytes). */
+  public sendLoroSyncUpdate(subject: string, update: Uint8Array): void {
+    this.sendEphemeral(EphemeralKind.DOC, subject, update);
   }
 
-  public sendLoroEphemeralUpdate(message: string): void {
-    this.sendText('LORO_EPHEMERAL_UPDATE', message);
+  /** Cursors for `subject` (raw `EphemeralStore` bytes). */
+  public sendLoroEphemeralUpdate(subject: string, update: Uint8Array): void {
+    this.sendEphemeral(EphemeralKind.LORO, subject, update);
   }
 
   /** Send a binary frame, logging it in debug mode. */
@@ -1023,6 +1037,29 @@ export class WSClient {
         break;
       }
 
+      case Tag.EPHEMERAL: {
+        // Live collaboration, relayed by the server without inspection:
+        // each kind fans out to its own subscriber map on the store.
+        const msg = decodeEphemeral(payload);
+        if (!msg) break;
+
+        switch (msg.kind) {
+          case EphemeralKind.DOC:
+            this.store.__handleLoroSyncMessage(msg.subject, msg.payload);
+            break;
+          case EphemeralKind.LORO:
+            this.store.__handleLoroEphemeralMessage(msg.subject, msg.payload);
+            break;
+          case EphemeralKind.PRESENCE:
+            this.store.__handlePresenceMessage(msg.subject, msg.payload);
+            break;
+          default:
+            break;
+        }
+
+        break;
+      }
+
       case Tag.UPDATE: {
         const msg = decodeUpdate(payload);
 
@@ -1185,7 +1222,9 @@ export class WSClient {
     });
   }
 
-  /** Handle legacy text messages that haven't been migrated to binary yet. */
+  /** Handle the text frames that are still text: the RBSR answers and
+   *  `INDEX_STATUS`. Loro and presence updates arrive as binary
+   *  `EPHEMERAL` since 2026-09-04. */
   private handleText(text: string) {
     if (this.debug) {
       console.debug(`[WS] handleText: ${text.slice(0, 100)}...`);
@@ -1194,17 +1233,7 @@ export class WSClient {
     // Prefix lengths include the trailing space delimiter. Match the
     // exact length sent by `sendText(prefix, payload)` which writes
     // `${prefix} ${payload}`.
-    if (text.startsWith('LORO_SYNC_UPDATE ')) {
-      this.store.__handleLoroSyncMessage(
-        text.slice('LORO_SYNC_UPDATE '.length),
-      );
-    } else if (text.startsWith('LORO_EPHEMERAL_UPDATE ')) {
-      this.store.__handleLoroEphemeralMessage(
-        text.slice('LORO_EPHEMERAL_UPDATE '.length),
-      );
-    } else if (text.startsWith('PRESENCE_UPDATE ')) {
-      this.store.__handlePresenceMessage(text.slice('PRESENCE_UPDATE '.length));
-    } else if (text.startsWith('INDEX_STATUS ')) {
+    if (text.startsWith('INDEX_STATUS ')) {
       const json = text.slice('INDEX_STATUS '.length);
 
       try {

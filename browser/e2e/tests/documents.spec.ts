@@ -169,7 +169,7 @@ test.describe('documents', async () => {
   });
 
   // Ephemeral Loro cursor (presence): a collaborator's caret position is
-  // broadcast over the WS hub as a `LORO_EPHEMERAL_UPDATE` frame (not
+  // broadcast over the WS hub as an `EPHEMERAL` frame of kind `LORO` (not
   // persisted), and loro-prosemirror renders it in the other tab's editor as a
   // `.ProseMirror-loro-cursor` decoration carrying the peer's color + name.
   test('shows a collaborator’s ephemeral cursor position', async ({
@@ -212,7 +212,7 @@ test.describe('documents', async () => {
     // page2 places its caret inside the shared text. Type a character so
     // loro-prosemirror both updates the local ephemeral cursor AND
     // broadcasts it — a click + ArrowLeft alone sometimes never emitted a
-    // LORO_EPHEMERAL_UPDATE under suite load.
+    // cursor EPHEMERAL frame under suite load.
     const editor2 = page2.getByLabel('Rich Text Editor');
     await expect(editor2).toBeVisible({ timeout: 30_000 });
     await page2.getByText(sharedText).click();

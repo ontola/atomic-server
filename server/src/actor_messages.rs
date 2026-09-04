@@ -48,23 +48,28 @@ pub struct UnsubscribeLoroSync {
     pub subject: atomic_lib::Subject,
 }
 
-/// A Loro CRDT document update for real-time sync (not persisted).
-#[derive(Message, Clone, Debug, Serialize, Deserialize)]
+/// A Loro CRDT document update for real-time sync (not persisted): the
+/// `EPHEMERAL (0x40)` frame of kind `DOC`, on its way between a websocket
+/// and the broadcaster. `update` is the raw Loro bytes off the wire;
+/// `agent` is the identity the server verified for the sender (a peer's
+/// frame carries the agent the relaying node verified).
+#[derive(Message, Clone, Debug)]
 #[rtype(result = "()")]
 pub struct LoroSyncUpdate {
     pub subject: atomic_lib::Subject,
-    pub update: String,
-    #[serde(skip)]
+    pub agent: String,
+    pub update: Vec<u8>,
     pub addr: Option<Addr<crate::handlers::web_sockets::WebSocketConnection>>,
 }
 
-/// A Loro ephemeral update (cursors, presence) — not persisted.
-#[derive(Message, Clone, Debug, Serialize, Deserialize)]
+/// A Loro ephemeral update (cursors, presence) — not persisted. The
+/// `EPHEMERAL (0x40)` frame of kind `LORO`; fields as [`LoroSyncUpdate`].
+#[derive(Message, Clone, Debug)]
 #[rtype(result = "()")]
 pub struct LoroEphemeralUpdate {
     pub subject: atomic_lib::Subject,
-    pub update: String,
-    #[serde(skip)]
+    pub agent: String,
+    pub update: Vec<u8>,
     pub addr: Option<Addr<crate::handlers::web_sockets::WebSocketConnection>>,
 }
 
@@ -93,17 +98,17 @@ pub struct UnsubscribePresence {
     pub drive: atomic_lib::Subject,
 }
 
-/// A drive-scoped presence update — not persisted. `update` carries the
-/// sender's full `EphemeralStore.encodeAll()` (base64) so the broadcaster
-/// can cache it per connection and replay it to newcomers. The field is
-/// named `subject` (holding the drive) to keep the wire JSON shape
-/// identical to the `LORO_*` frames.
-#[derive(Message, Clone, Debug, Serialize, Deserialize)]
+/// A drive-scoped presence update — not persisted. The `EPHEMERAL (0x40)`
+/// frame of kind `PRESENCE`. `update` carries the sender's full
+/// `EphemeralStore.encodeAll()` bytes so the broadcaster can cache it per
+/// connection and replay it to newcomers. The field is named `subject`
+/// (holding the drive) like the two Loro messages above.
+#[derive(Message, Clone, Debug)]
 #[rtype(result = "()")]
 pub struct PresenceUpdate {
     pub subject: atomic_lib::Subject,
-    pub update: String,
-    #[serde(skip)]
+    pub agent: String,
+    pub update: Vec<u8>,
     pub addr: Option<Addr<crate::handlers::web_sockets::WebSocketConnection>>,
 }
 
@@ -115,11 +120,12 @@ pub struct PresenceUpdate {
 /// traffic. A peer's presence has already passed its own read check in the sync
 /// read loop, and there is no local connection to attribute it to, so it fans
 /// out to every subscriber with nobody to exclude.
-#[derive(Message, Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Message, Clone, Debug)]
 #[rtype(result = "()")]
 pub struct RemotePresenceUpdate {
     pub subject: atomic_lib::Subject,
-    pub update: String,
+    pub agent: String,
+    pub update: Vec<u8>,
 }
 
 /// The `SUB <subject>` frame: subscribe this connection to a subject. For a

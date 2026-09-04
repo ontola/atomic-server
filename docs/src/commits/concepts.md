@@ -121,8 +121,8 @@ Here's how:
 
 In addition to persistent commits, Atomic Server supports real-time sync via WebSocket:
 
-- `LORO_SYNC_UPDATE` - Broadcasts Loro binary updates for real-time document collaboration (not persisted; use commits for persistence).
-- `LORO_EPHEMERAL_UPDATE` - Broadcasts ephemeral data like cursor positions and user presence via Loro's `EphemeralStore` (never persisted, auto-expires).
+- `EPHEMERAL` frames of kind `DOC` broadcast Loro binary updates for real-time document collaboration (not persisted; use commits for persistence).
+- `EPHEMERAL` frames of kind `LORO` and `PRESENCE` broadcast ephemeral data like cursor positions and user presence via Loro's `EphemeralStore` (never persisted, auto-expires).
 
 ## Limitations
 

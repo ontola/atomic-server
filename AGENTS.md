@@ -154,15 +154,19 @@ Equality is by URL string only — `drive_hint` and `subdomain` don't affect ide
 
 ## WebSocket Protocol
 
-| Message                        | Direction | Purpose              |
-| ------------------------------ | --------- | -------------------- |
-| `AUTHENTICATE {json}`          | C→S       | Auth                 |
-| `AUTHENTICATED`                | S→C       | Confirmed            |
-| `SUBSCRIBE {subject}`          | C→S       | Commit notifications |
-| `COMMIT {json}`                | S→C       | Applied commit       |
-| `LORO_SYNC_SUBSCRIBE {json}`   | C→S       | Real-time Loro sync  |
-| `LORO_SYNC_UPDATE {json}`      | Both      | Loro binary (base64) |
-| `LORO_EPHEMERAL_UPDATE {json}` | Both      | Cursors/presence     |
+Binary frames `[tag][payload]` (`lib/src/sync/protocol.rs`, mirrored in
+`browser/lib/src/ws-v2.ts`; spec in `docs/src/websockets.md`):
+
+| Frame                        | Direction | Purpose                                   |
+| ---------------------------- | --------- | ----------------------------------------- |
+| `AUTH (0x01)`                | C→S       | Auth, answered by `AUTH_OK` / `ERROR`     |
+| `SUB (0x20)`                 | C→S       | Commit notifications for a drive/resource |
+| `UPDATE (0x11)`              | S→C       | Applied commit (Loro delta or snapshot)   |
+| `COMMIT (0x13)`              | C→S       | Persist a signed commit                   |
+| `SYNC (0x30)` family         | Both      | Drive reconcile                           |
+| `EPHEMERAL (0x40)`           | Both      | Edits in progress, cursors, presence      |
+| `LORO_SYNC_SUBSCRIBE {json}` | C→S       | Text: register for a resource's ephemera  |
+| `PRESENCE_SUBSCRIBE {json}`  | C→S       | Text: register for a drive's presence     |
 
 **Pattern:** Subscribe to broadcast BEFORE sending a message that expects a response.
 
@@ -188,7 +192,7 @@ pub struct Resource {
 ## Rich Text
 
 TipTap + `loro-prosemirror` (`LoroSyncPlugin`, `LoroUndoPlugin`, `LoroEphemeralCursorPlugin`).
-Real-time: `useLoroSync` hook → `LORO_SYNC_UPDATE` WebSocket.
+Real-time: `useLoroSync` hook → `EPHEMERAL` (kind `DOC`) over WebSocket.
 
 ## History Page
 

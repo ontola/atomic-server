@@ -41,7 +41,7 @@ import { WSClient } from './websockets.js';
 import { withDeadline } from './withDeadline.js';
 import { BLOB, endpoints, INTERNAL_ID } from './urls.js';
 import { initOntologies } from './ontologies/index.js';
-import { decodeB64, encodeB64, encodeB64Url } from './base64.js';
+import { decodeB64, encodeB64Url } from './base64.js';
 import {
   encodeGenesisCert,
   privateDriveCert,
@@ -4899,34 +4899,15 @@ export class Store {
     };
   }
 
+  /** Fan the payload of one `EPHEMERAL` frame out to the subscribers of
+   *  its subject on the given channel map. */
   private dispatchLoroMessage<T extends (update: Uint8Array) => void>(
     map: Map<string, T[]>,
-    message: string,
+    subject: string,
+    bytes: Uint8Array,
   ): void {
-    let subject: string;
-    let update: string;
-
-    try {
-      const parsed = JSON.parse(message) as {
-        subject: string;
-        update: string;
-      };
-      subject = parsed.subject;
-      update = parsed.update;
-    } catch (e) {
-      // Malformed text frame (off-by-one slice on the receive side
-      // used to produce \"E {...}\" — fixed in websockets.ts but
-      // keeping this catch so a future format drift can't break
-      // the WS message pump). Bytes are dropped; the CRDT keeps
-      // its own state and re-syncs on next exchange.
-      console.warn('[Loro] dispatch parse failed:', e);
-
-      return;
-    }
-
     const subs = map.get(subject);
     if (!subs) return;
-    const bytes = decodeB64(update);
     subs.forEach(cb => cb(bytes));
   }
 
@@ -4961,9 +4942,7 @@ export class Store {
   public broadcastLoroSyncUpdate(subject: string, update: Uint8Array): void {
     if (!this._serverConnected) return;
     if (this.isLocalOnlySubject(subject)) return;
-    this.getWebSocketForSubject(subject)?.sendLoroSyncUpdate(
-      JSON.stringify({ subject, update: encodeB64(update) }),
-    );
+    this.getWebSocketForSubject(subject)?.sendLoroSyncUpdate(subject, update);
   }
 
   /** Subscribe to Loro ephemeral updates (cursors, presence). */
@@ -4986,7 +4965,8 @@ export class Store {
     if (!this._serverConnected) return;
     if (this.isLocalOnlySubject(subject)) return;
     this.getWebSocketForSubject(subject)?.sendLoroEphemeralUpdate(
-      JSON.stringify({ subject, update: encodeB64(update) }),
+      subject,
+      update,
     );
   }
 
@@ -5039,9 +5019,7 @@ export class Store {
     // Local-only drives and foreign-origin HTTP drives have no live
     // peers on the home websocket.
     if (!this.isLiveSyncedDrive(drive)) return;
-    this.presenceWebSocket(drive)?.sendPresenceUpdate(
-      JSON.stringify({ subject: drive, update: encodeB64(update) }),
-    );
+    this.presenceWebSocket(drive)?.sendPresenceUpdate(drive, update);
   }
 
   private presenceWebSocket(drive: string): WSClient | undefined {
@@ -5052,9 +5030,9 @@ export class Store {
     return Array.from(this.presenceSubscribers.keys());
   }
 
-  /** @internal */
-  public __handlePresenceMessage(message: string): void {
-    this.dispatchLoroMessage(this.presenceSubscribers, message);
+  /** @internal An `EPHEMERAL` frame of kind `PRESENCE` for `drive`. */
+  public __handlePresenceMessage(drive: string, update: Uint8Array): void {
+    this.dispatchLoroMessage(this.presenceSubscribers, drive, update);
   }
 
   /** @internal Re-announce local presence after a websocket (re)connect:
@@ -5073,14 +5051,17 @@ export class Store {
     return Array.from(this.loroEphemeralSubscribers.keys());
   }
 
-  /** @internal */
-  public __handleLoroSyncMessage(message: string): void {
-    this.dispatchLoroMessage(this.loroSyncSubscribers, message);
+  /** @internal An `EPHEMERAL` frame of kind `DOC`: an edit in progress. */
+  public __handleLoroSyncMessage(subject: string, update: Uint8Array): void {
+    this.dispatchLoroMessage(this.loroSyncSubscribers, subject, update);
   }
 
-  /** @internal */
-  public __handleLoroEphemeralMessage(message: string): void {
-    this.dispatchLoroMessage(this.loroEphemeralSubscribers, message);
+  /** @internal An `EPHEMERAL` frame of kind `LORO`: cursors. */
+  public __handleLoroEphemeralMessage(
+    subject: string,
+    update: Uint8Array,
+  ): void {
+    this.dispatchLoroMessage(this.loroEphemeralSubscribers, subject, update);
   }
 
   /** Unregisters the callback (see `subscribe()`) */

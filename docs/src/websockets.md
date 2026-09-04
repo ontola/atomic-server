@@ -78,6 +78,7 @@ The current list (`protocol::CAPABILITIES`):
 | `client-hello` | Reads a `HELLO (0x37)` from a WebSocket client and records the capabilities it lists. |
 | `rebind-on-auth` | Re-evaluates the connection's subscriptions against the new identity when an `AUTH` lands, dropping the ones it may no longer read. |
 | `sync-probe` | Reads the `probe` and `subjects` keys of a `SYNC (0x30)` JSON tail and answers a stale probe with `SYNC_RESEND (0x38)`. |
+| `ephemeral` | Reads and writes `EPHEMERAL (0x40)` over WebSocket for edits in progress, cursors and drive presence, in place of the `LORO_SYNC_UPDATE` / `LORO_EPHEMERAL_UPDATE` / `PRESENCE_UPDATE` text frames. |
 
 The list is **additive only**: a name is never renamed or reused once
 shipped. Treat an absent name as "not supported" and fall back, never as an
@@ -120,7 +121,7 @@ logged and dropped, not answered.
 | `0x36` | *reserved* | nobody | nobody. Previously `QUERY_UPDATE`; retired, never reuse. |
 | `0x37` | `HELLO` | both peers on an Iroh stream; a WebSocket client on open | Iroh handshake and live loop; the WS handler records the client's capabilities. The WS server never sends one (its capabilities ride on `AUTH_OK`). |
 | `0x38` | `SYNC_RESEND` | responder, answering a `SYNC` probe whose hash is stale | client only. Tells the client to reconcile (RBSR descent, then a filtered `SYNC`). |
-| `0x40` | `EPHEMERAL` | Iroh peers | Iroh live loop only. **No WS arm**: the browser uses the `LORO_*` / `PRESENCE_*` text frames, and the server bridges between the two. |
+| `0x40` | `EPHEMERAL` | Iroh peers; WS client and server, both ways | Iroh live loop; WS handler (`require_auth`, then the broadcaster). The server relays between the two transports. |
 | `0x41` | `KEEPALIVE` | both sides, on their own schedule | WS server **echoes** it; Iroh **never** echoes it. |
 | `0x42` | `CHALLENGE` | WS server, as its first frame | client only. Never sent on an Iroh stream. |
 
@@ -265,18 +266,26 @@ decoder that predates capabilities ignores the trailing bytes.
 ```
 
 The agent travels with the frame because a peer link is node-to-node while
-presence is per-agent: one node may relay several agents' cursors.
+presence is per-agent: one node may relay several agents' cursors. The same
+frame is the WebSocket form since 2026-09-04: a client sends it with an
+empty `agent` (the server attributes it to the connection's authenticated
+identity and stamps that on every copy it fans out), and receives it with
+the agent filled in. `drive` holds the resource for `LORO` and `DOC` and the
+drive for `PRESENCE`.
 
-| `kind` | Name | Bridges to the WS text frame | Gate on receipt | Max payload |
+| `kind` | Name | Browser channel | Gate on receipt from a peer | Max payload |
 | --- | --- | --- | --- | --- |
-| `0` | `LORO` | `LORO_EPHEMERAL_UPDATE` | `check_read` on the scope subject | 64 KiB |
-| `1` | `PRESENCE` | `PRESENCE_UPDATE` | `check_read` on the scope subject | 64 KiB |
-| `2` | `DOC` | `LORO_SYNC_UPDATE` | drive-level **write** verdict | 1 MiB |
+| `0` | `LORO` | `subscribeLoroEphemeral` (cursors) | `check_read` on the scope subject | 64 KiB |
+| `1` | `PRESENCE` | `subscribePresenceUpdates` | `check_read` on the scope subject | 64 KiB |
+| `2` | `DOC` | `subscribeLoroSync` (an edit in progress) | drive-level **write** verdict | 1 MiB |
 
 `DOC` carries the ops of an edit in progress, so it is content rather than a
 cursor: it gets the stricter gate and the looser size cap. Nothing on this
 channel is ever persisted. A frame over its cap fails to decode and is
-dropped whole.
+dropped whole. Over WebSocket the gate is the subscription: `require_auth`
+first, then the broadcaster relays a frame only from a connection that
+subscribed to its subject (`LORO_SYNC_SUBSCRIBE` / `PRESENCE_SUBSCRIBE`,
+where `check_read` runs) and, for `DOC`, that may write it.
 
 ## Authentication
 
@@ -372,10 +381,10 @@ restates the same rule for connections dialled into us.
 **WebSocket: an anonymous session may read.** This is what a public share
 link relies on for live updates. The `require_auth` gate covers exactly:
 
-- binary `SYNC_PUSH (0x33)` and `BLOB_RESPONSE (0x35)`;
-- the identity-bearing text frames `LORO_SYNC_SUBSCRIBE`,
-  `LORO_SYNC_UPDATE`, `LORO_EPHEMERAL_UPDATE`, `PRESENCE_SUBSCRIBE`,
-  `PRESENCE_UPDATE`.
+- binary `SYNC_PUSH (0x33)`, `BLOB_RESPONSE (0x35)` and `EPHEMERAL (0x40)`,
+  whatever its kind;
+- the identity-bearing text frames `LORO_SYNC_SUBSCRIBE` and
+  `PRESENCE_SUBSCRIBE`.
 
 Everything else is open to an anonymous socket and gated per subject by
 `check_read` instead:
@@ -795,11 +804,8 @@ Client to server:
 | --- | --- | --- |
 | `LORO_SYNC_SUBSCRIBE` | `{"subject"}` | yes |
 | `LORO_SYNC_UNSUBSCRIBE` | `{"subject"}` | no |
-| `LORO_SYNC_UPDATE` | `{"subject","update"}` | yes |
-| `LORO_EPHEMERAL_UPDATE` | `{"subject","update"}` | yes |
 | `PRESENCE_SUBSCRIBE` | `{"subject":"<drive>"}` | yes |
 | `PRESENCE_UNSUBSCRIBE` | `{"subject":"<drive>"}` | no |
-| `PRESENCE_UPDATE` | `{"subject","update"}` | yes |
 | `SUBSCRIBE_INDEX_STATUS` | `{"drive"}` | no |
 | `UNSUBSCRIBE_INDEX_STATUS` | `{"drive"}` | no |
 | `RBSR_FP` | `{"drive","ranges":[["<lo>","<hi>"\|null], ...]}` | no |
@@ -812,14 +818,11 @@ Server to client:
 | `RBSR_FP` | `{"drive","fps":["<hex>", ...]}` |
 | `RBSR_ITEMS` | `{"drive","items":[["<subject>",[["<peer>",<counter>], ...]], ...]}` |
 | `INDEX_STATUS` | `{"drive","indexing"}` |
-| `LORO_SYNC_UPDATE` | `{"subject","update"}` |
-| `LORO_EPHEMERAL_UPDATE` | `{"subject","update"}` |
-| `PRESENCE_UPDATE` | `{"subject","update"}` |
 
-`update` is an opaque string carrying a Loro update or `EphemeralStore`
-payload, relayed without inspection. `SUBSCRIBE_INDEX_STATUS` is answered
-immediately with one `INDEX_STATUS`. Prefixes are matched longest-conflicting
-first; an unrecognized text frame is logged and ignored.
+The subscriptions register an interest; the updates themselves travel as
+`EPHEMERAL (0x40)`. `SUBSCRIBE_INDEX_STATUS` is answered immediately with
+one `INDEX_STATUS`. Prefixes are matched longest-conflicting first; an
+unrecognized text frame is logged and ignored.
 
 ## Session flows
 
@@ -846,6 +849,9 @@ first; an unrecognized text frame is logged and ignored.
 <- UPDATE (0x11) delta | HAS_COMMIT_ID | PUSH    (someone else's commit)
 -> GET (0x10)
 <- UPDATE (0x11) SNAPSHOT | HAS_COMMIT_ID
+-> PRESENCE_SUBSCRIBE {"subject": <drive>}       (text)
+-> EPHEMERAL (0x40) kind=PRESENCE, agent ""      (this tab's cursor)
+<- EPHEMERAL (0x40) kind=PRESENCE, agent <bob>   (a collaborator's)
 -> KEEPALIVE (0x41)                              (after 20 s idle)
 <- KEEPALIVE (0x41)                              (echo)
 ```
@@ -912,7 +918,7 @@ step when you touch any of them.
 | `server/src/handlers/web_sockets.rs` | The Actix WebSocket handler: binary arms, text frames, `require_auth`, heartbeat. |
 | `server/src/commit_monitor.rs` | Subscription registries and commit fan-out. |
 | `server/src/actor_messages.rs` | Subscription messages and the refusal frame. |
-| `server/src/loro_sync_broadcaster.rs`, `server/src/serve.rs` | Bridge between `EPHEMERAL` frames and the `LORO_*` / `PRESENCE_*` text frames. |
+| `server/src/loro_sync_broadcaster.rs`, `server/src/serve.rs` | `EPHEMERAL` fan-out to WebSocket subscribers and relay to and from Iroh peers. |
 | `browser/lib/src/ws-v2.ts` | Frame encode and decode. |
 | `browser/lib/src/websockets.ts` | The browser client: auth, pending requests, subscriptions, commit over WS, liveness, drive reconcile. |
 | `browser/lib/src/rbsr.ts` | The TypeScript reconcile, byte-identical to `rbsr.rs`. |
@@ -980,6 +986,16 @@ Wire-visible changes in this revision:
   client's `subscribe_resource` now sends `SUB`). The `MembershipNotification`
   fan-out and the commit monitor's filter map went with them; the lib's
   watched-query index stays for the Flutter event stream.
+- **Live collaboration is one frame on both transports (2026-09-04).** The
+  browser and the Rust client send and receive edits in progress, cursors
+  and drive presence as `EPHEMERAL (0x40)`, raw bytes, the same frame the
+  Iroh link already carried. The text frames `LORO_SYNC_UPDATE`,
+  `LORO_EPHEMERAL_UPDATE` and `PRESENCE_UPDATE` (base64 in JSON, both
+  directions) are removed; the four subscribe / unsubscribe text frames
+  stay. Between nodes the payload is now the raw bytes rather than their
+  base64 text, so a pre-2026-09-04 peer's cursors do not decode on this
+  build and vice versa; nothing persistent is affected. Capability
+  `ephemeral`.
 - **Drive sync is one frame on both transports (2026-09-04).** The browser
   sends binary `SYNC (0x30)` for its hash-first probe (`"probe": true`) and
   its reduced reconcile (`"subjects": [...]`), and a stale probe is answered

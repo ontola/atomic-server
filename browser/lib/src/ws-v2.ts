@@ -40,8 +40,8 @@ export const Tag = {
    *  e.g. answer COMMIT with a slim COMMIT_OK. The server never sends it over
    *  WebSocket (its own list rides on AUTH_OK). */
   HELLO: 0x37,
-  /** Peer-stream only: binary presence / cursor / live-doc frames. The
-   *  browser equivalents are the `PRESENCE_UPDATE` / `LORO_*` text frames. */
+  /** Presence / cursor / live-doc frames, both directions on both
+   *  transports (`encodeEphemeral`, `EphemeralKind`). */
   EPHEMERAL: 0x40,
   /** Liveness probe. The server echoes it over WebSocket; see
    *  `WSClient`'s liveness timer. */
@@ -93,8 +93,8 @@ export const ErrorCode = {
    *  Blocking rather than terminal: the write is well-formed and would apply
    *  once the class arrives, so it must not be discarded. */
   MISSING_CLASS: 4,
-  /** A frame that needs an identity (SYNC_PUSH, LORO_SYNC_UPDATE,
-   *  SUBSCRIBE, ...) arrived before AUTH. Connection-level (`requestId`
+  /** A frame that needs an identity (SYNC_PUSH, EPHEMERAL,
+   *  LORO_SYNC_SUBSCRIBE, ...) arrived before AUTH. Connection-level (`requestId`
    *  0); the socket stays open and the frame is simply not processed. */
   AUTH_REQUIRED: 5,
   /** The server refused a SYNC_PUSH as a whole (no write right on the
@@ -734,6 +734,75 @@ export function encodeSyncResend(drive: string): Uint8Array {
   buf.set(payload, 1);
 
   return buf;
+}
+
+/** The `kind` byte of an EPHEMERAL frame (`protocol::ephemeral_kind`): which
+ *  live-collaboration channel it belongs to. */
+export const EphemeralKind = {
+  /** Cursors and selections for one resource (`subscribeLoroEphemeral`). */
+  LORO: 0,
+  /** Drive-scoped presence, who is where (`subscribePresence`). */
+  PRESENCE: 1,
+  /** The ops of an edit in progress, before a save (`subscribeLoroSync`). */
+  DOC: 2,
+} as const;
+
+export interface DecodedEphemeral {
+  kind: number;
+  /** The resource, or the drive for `PRESENCE`. */
+  subject: string;
+  /** The agent the server attributed the frame to. */
+  agent: string;
+  payload: Uint8Array;
+}
+
+/**
+ * EPHEMERAL (0x40): `[kind: u8] [subject_len: u16] [subject] [agent_len: u16]
+ * [agent] [payload]`. Both directions over WebSocket since 2026-09-04, in
+ * place of the text frames `LORO_SYNC_UPDATE`, `LORO_EPHEMERAL_UPDATE` and
+ * `PRESENCE_UPDATE` (base64 JSON). Client-sent frames may leave `agent`
+ * empty: the server attributes them to the authenticated identity.
+ */
+export function encodeEphemeral(
+  kind: number,
+  subject: string,
+  agent: string,
+  payload: Uint8Array,
+): Uint8Array {
+  const subjectBytes = encoder.encode(subject);
+  const agentBytes = encoder.encode(agent);
+  const buf = new Uint8Array(
+    1 + 1 + 2 + subjectBytes.length + 2 + agentBytes.length + payload.length,
+  );
+  let off = 0;
+  buf[off++] = Tag.EPHEMERAL;
+  buf[off++] = kind & 0xff;
+  off = writeU16(buf, off, subjectBytes.length);
+  buf.set(subjectBytes, off);
+  off += subjectBytes.length;
+  off = writeU16(buf, off, agentBytes.length);
+  buf.set(agentBytes, off);
+  off += agentBytes.length;
+  buf.set(payload, off);
+
+  return buf;
+}
+
+/** Decode an EPHEMERAL payload (after the tag byte); `undefined` if
+ *  truncated. */
+export function decodeEphemeral(
+  data: Uint8Array,
+): DecodedEphemeral | undefined {
+  if (data.length < 3) return undefined;
+  const kind = data[0];
+  const [subjectLen, subjectOff] = readU16(data, 1);
+  if (data.length < subjectOff + subjectLen + 2) return undefined;
+  const [subject, agentLenOff] = readStr16(data, 1);
+  const [agentLen, agentOff] = readU16(data, agentLenOff);
+  if (data.length < agentOff + agentLen) return undefined;
+  const [agent, payloadOff] = readStr16(data, agentLenOff);
+
+  return { kind, subject, agent, payload: data.subarray(payloadOff) };
 }
 
 // ---- Debug logging ----

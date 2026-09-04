@@ -267,7 +267,7 @@ impl WebSocketConnection {
     /// on `check_read` exactly like an anonymous HTTP GET — that is what
     /// lets a public drive's share link show live updates without an
     /// account. Everything that writes (`SYNC_PUSH`, `BLOB_RESPONSE`,
-    /// `LORO_SYNC_UPDATE`, `PRESENCE_UPDATE`, …) or that registers an
+    /// `EPHEMERAL`, …) or that registers an
     /// identity-bearing subscription goes through here, and an anonymous
     /// session gets an `ERROR` (`AUTH_REQUIRED`, request_id 0) instead of
     /// being handled as `Public`. The socket stays open: the client can
@@ -506,13 +506,70 @@ impl WebSocketConnection {
                 self.client_capabilities = caps;
             }
 
+            // Live collaboration: an edit in progress (`DOC`), cursors
+            // (`LORO`) or drive presence (`PRESENCE`), relayed without
+            // inspection. The frame's own `agent` field is ignored on the
+            // way in: the broadcaster attributes it to the identity this
+            // connection proved, and stamps that on the way out. Until
+            // 2026-09-04 these were the text frames `LORO_SYNC_UPDATE`,
+            // `LORO_EPHEMERAL_UPDATE` and `PRESENCE_UPDATE` (base64 JSON).
+            ws_v2::tag::EPHEMERAL => {
+                if !self.require_auth("EPHEMERAL", ctx) {
+                    return;
+                }
+                let Some(decoded) = atomic_lib::sync::protocol::decode_ephemeral(&bin[1..]) else {
+                    tracing::debug!(connection = %self.connection_id, "malformed EPHEMERAL");
+                    return;
+                };
+                let subject = atomic_lib::Subject::from(decoded.drive);
+                let agent = self.agent.to_string();
+                let addr = Some(ctx.address());
+                use atomic_lib::sync::protocol::ephemeral_kind;
+                match decoded.kind {
+                    ephemeral_kind::DOC => {
+                        self.loro_sync_broadcaster_addr.do_send(
+                            crate::actor_messages::LoroSyncUpdate {
+                                subject,
+                                agent,
+                                update: decoded.payload,
+                                addr,
+                            },
+                        );
+                    }
+                    ephemeral_kind::LORO => {
+                        self.loro_sync_broadcaster_addr.do_send(
+                            crate::actor_messages::LoroEphemeralUpdate {
+                                subject,
+                                agent,
+                                update: decoded.payload,
+                                addr,
+                            },
+                        );
+                    }
+                    ephemeral_kind::PRESENCE => {
+                        self.loro_sync_broadcaster_addr.do_send(
+                            crate::actor_messages::PresenceUpdate {
+                                subject,
+                                agent,
+                                update: decoded.payload,
+                                addr,
+                            },
+                        );
+                    }
+                    other => {
+                        tracing::debug!("Unknown EPHEMERAL kind {other}");
+                    }
+                }
+            }
+
             _ => {
                 tracing::debug!("Unhandled binary tag: 0x{:02x}", bin[0]);
             }
         }
     }
 
-    /// Handle the remaining text messages (Loro sync, presence, RBSR).
+    /// Handle the remaining text messages (Loro and presence subscriptions,
+    /// RBSR, index status).
     fn handle_text(&mut self, text: &str, ctx: &mut ws::WebsocketContext<Self>) {
         if let Some(json) = text.strip_prefix("SUBSCRIBE_INDEX_STATUS ") {
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
@@ -561,26 +618,6 @@ impl WebSocketConnection {
                     },
                 );
             }
-        } else if let Some(json) = text.strip_prefix("LORO_SYNC_UPDATE ") {
-            if !self.require_auth("LORO_SYNC_UPDATE", ctx) {
-                return;
-            }
-            if let Ok(mut update) =
-                serde_json::from_str::<crate::actor_messages::LoroSyncUpdate>(json)
-            {
-                update.addr = Some(ctx.address());
-                self.loro_sync_broadcaster_addr.do_send(update);
-            }
-        } else if let Some(json) = text.strip_prefix("LORO_EPHEMERAL_UPDATE ") {
-            if !self.require_auth("LORO_EPHEMERAL_UPDATE", ctx) {
-                return;
-            }
-            if let Ok(mut update) =
-                serde_json::from_str::<crate::actor_messages::LoroEphemeralUpdate>(json)
-            {
-                update.addr = Some(ctx.address());
-                self.loro_sync_broadcaster_addr.do_send(update);
-            }
         } else if let Some(json) = text.strip_prefix("PRESENCE_SUBSCRIBE ") {
             // Drive-scoped ephemeral presence (issue #1229). Reuses the
             // Loro subscription JSON shape: `{"subject": "<drive>"}`.
@@ -607,16 +644,6 @@ impl WebSocketConnection {
                         drive: msg.subject,
                     },
                 );
-            }
-        } else if let Some(json) = text.strip_prefix("PRESENCE_UPDATE ") {
-            if !self.require_auth("PRESENCE_UPDATE", ctx) {
-                return;
-            }
-            if let Ok(mut update) =
-                serde_json::from_str::<crate::actor_messages::PresenceUpdate>(json)
-            {
-                update.addr = Some(ctx.address());
-                self.loro_sync_broadcaster_addr.do_send(update);
             }
         } else if let Some(json) = text.strip_prefix("RBSR_FP ") {
             // RBSR: answer range fingerprints so the client can find the
@@ -733,6 +760,23 @@ impl Handler<SendFrame> for WebSocketConnection {
     }
 }
 
+/// The three live-collaboration fan-outs leave as one `EPHEMERAL (0x40)`
+/// frame, the kind byte telling them apart.
+fn send_ephemeral(
+    kind: u8,
+    subject: &atomic_lib::Subject,
+    agent: &str,
+    update: &[u8],
+    ctx: &mut ws::WebsocketContext<WebSocketConnection>,
+) {
+    ctx.binary(atomic_lib::sync::protocol::encode_ephemeral(
+        kind,
+        subject.as_str(),
+        agent,
+        update,
+    ));
+}
+
 impl Handler<crate::actor_messages::LoroSyncUpdate> for WebSocketConnection {
     type Result = ();
 
@@ -741,10 +785,13 @@ impl Handler<crate::actor_messages::LoroSyncUpdate> for WebSocketConnection {
         msg: crate::actor_messages::LoroSyncUpdate,
         ctx: &mut ws::WebsocketContext<Self>,
     ) {
-        ctx.text(format!(
-            "LORO_SYNC_UPDATE {}",
-            serde_json::to_string(&msg).unwrap()
-        ));
+        send_ephemeral(
+            atomic_lib::sync::protocol::ephemeral_kind::DOC,
+            &msg.subject,
+            &msg.agent,
+            &msg.update,
+            ctx,
+        );
     }
 }
 
@@ -756,10 +803,13 @@ impl Handler<crate::actor_messages::LoroEphemeralUpdate> for WebSocketConnection
         msg: crate::actor_messages::LoroEphemeralUpdate,
         ctx: &mut ws::WebsocketContext<Self>,
     ) {
-        ctx.text(format!(
-            "LORO_EPHEMERAL_UPDATE {}",
-            serde_json::to_string(&msg).unwrap()
-        ));
+        send_ephemeral(
+            atomic_lib::sync::protocol::ephemeral_kind::LORO,
+            &msg.subject,
+            &msg.agent,
+            &msg.update,
+            ctx,
+        );
     }
 }
 
@@ -771,10 +821,13 @@ impl Handler<crate::actor_messages::PresenceUpdate> for WebSocketConnection {
         msg: crate::actor_messages::PresenceUpdate,
         ctx: &mut ws::WebsocketContext<Self>,
     ) {
-        ctx.text(format!(
-            "PRESENCE_UPDATE {}",
-            serde_json::to_string(&msg).unwrap()
-        ));
+        send_ephemeral(
+            atomic_lib::sync::protocol::ephemeral_kind::PRESENCE,
+            &msg.subject,
+            &msg.agent,
+            &msg.update,
+            ctx,
+        );
     }
 }
 

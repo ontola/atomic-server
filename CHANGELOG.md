@@ -7,6 +7,19 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- **Live collaboration is one binary frame on both transports.** Edits in
+  progress, cursors and drive presence cross the WebSocket as
+  `EPHEMERAL (0x40)`, the frame the Iroh link already used, in both
+  directions; the text frames `LORO_SYNC_UPDATE`, `LORO_EPHEMERAL_UPDATE`
+  and `PRESENCE_UPDATE` (base64 in JSON) are removed, the four subscribe /
+  unsubscribe text frames stay. The server ignores the agent a client puts
+  in the frame and stamps the connection's authenticated identity on every
+  copy it fans out. Between nodes the payload is now the raw bytes rather
+  than their base64 text, so cursors from a pre-2026-09-04 peer do not
+  decode on this build (and vice versa); nothing persistent is affected.
+  `WsClient::send_loro_sync_update` / `send_loro_ephemeral_update` /
+  `send_presence_update` send the binary frame. Capability `ephemeral`.
+
 - **Drive sync is one binary frame on both transports.** The browser's
   hash-first probe and its reduced reconcile now arrive as `SYNC (0x30)`
   with `"probe": true` or `"subjects": [...]` in the JSON tail

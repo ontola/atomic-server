@@ -37,16 +37,6 @@ function waitForEditorInitialized(editor: Editor): Promise<void> {
   });
 }
 
-function encodeBase64(bytes: Uint8Array): string {
-  let binary = '';
-
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-
-  return btoa(binary);
-}
-
 /**
  * Types into a documentV2 as a simulated remote peer: a headless Tiptap
  * editor bound (via LoroSyncPlugin) to a FORK of the document's Loro
@@ -287,10 +277,8 @@ export class SimulatedTypist {
     if (!this.pendingCursorBytes) return;
 
     this.store.__handleLoroEphemeralMessage(
-      JSON.stringify({
-        subject: this.resource.subject,
-        update: encodeBase64(this.pendingCursorBytes),
-      }),
+      this.resource.subject,
+      this.pendingCursorBytes,
     );
     this.pendingCursorBytes = undefined;
   }
