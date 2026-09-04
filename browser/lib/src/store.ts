@@ -53,7 +53,6 @@ import type {
   ClientDbQueryOpts,
   ClientDbQueryResult,
 } from './client-db.js';
-import { LocalSearch } from './local-search.js';
 import { DrivePresenceManager } from './presence.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 import {
@@ -393,20 +392,6 @@ const SERVER_MANAGED_SKELETON_PROPS: ReadonlySet<string> = new Set([
   core.properties.parent,
 ]);
 
-/** Yield control back to the event loop so pending render/input tasks can run.
- *  Uses a MessageChannel (macrotask without the ~4ms `setTimeout` clamp). */
-function yieldToEventLoop(): Promise<void> {
-  return new Promise<void>(resolve => {
-    if (typeof MessageChannel !== 'undefined') {
-      const { port1, port2 } = new MessageChannel();
-      port1.onmessage = () => resolve();
-      port2.postMessage(undefined);
-    } else {
-      setTimeout(resolve, 0);
-    }
-  });
-}
-
 /**
  * Cheap equality for commit-log property values. Strict `===` would always
  * report arrays/objects as different even when their contents match, so the
@@ -498,8 +483,6 @@ export class Store {
   private clientDbExpected = false;
   /** Callbacks parked in {@link waitForClientDb} until the attach happens. */
   private clientDbWaiters = new Set<() => void>();
-  /** Client-side full-text search index (MiniSearch). */
-  private localSearch = new LocalSearch();
   /**
    * Single durable queue replacing the old `dirtyForSync` Set +
    * `atomic.dirtyForSync` + `atomic.offline.<subject>` quartet.
@@ -768,10 +751,7 @@ export class Store {
     // `initClientDb` calls this three times per page load (eager,
     // post-init, post-init-error) to refresh sync status. Only the
     // first call introduces a new worker; the others just want
-    // `emitSyncStatus`. Rehydrate is expensive (walks the whole
-    // OPFS-backed corpus and indexes each entry into MiniSearch),
-    // so gate it on the worker actually changing.
-    const isNew = this.clientDb !== clientDb;
+    // `emitSyncStatus`.
     this.clientDb = clientDb;
 
     // Release fetches that started before the attach and would otherwise be
@@ -779,22 +759,11 @@ export class Store {
     for (const waiter of [...this.clientDbWaiters]) waiter();
 
     this.emitSyncStatus();
-
-    if (!isNew) return;
-
-    // NB: the in-memory `LocalSearch` (MiniSearch) index is NOT eagerly rebuilt
-    // here. The local index is only ever consulted OFFLINE — online searches go
-    // to the server's Tantivy index — so rebuilding it on every load was ~2s of
-    // wasted work (export all of OPFS + index every drive) for a path the
-    // common online session never uses. Instead the per-drive index is built
-    // lazily, scoped to the current drive, the first time an offline search
-    // needs it: see `ensureDriveIndexed`, called from `search()`.
   }
 
   /**
    * The drive a resource belongs to — the root of its `parent` chain,
-   * resolved against the in-memory store. Used to partition the local
-   * search index per drive.
+   * resolved against the in-memory store.
    */
   private driveOf(subject: string): string {
     let current = subject;
@@ -943,157 +912,6 @@ export class Store {
     }
 
     return this.localOnlyDrives.has(this.driveOf(normalized));
-  }
-
-  /** Drives whose full local search index has been built (or is being built)
-   *  from OPFS — keyed to dedupe concurrent/repeat builds. */
-  private driveIndexBuilds = new Map<string, Promise<void>>();
-
-  /**
-   * Lazily build the in-memory `LocalSearch` (MiniSearch) index for ONE drive
-   * from the persistent ClientDb.
-   *
-   * The local index is only ever consulted offline (online searches hit the
-   * server's Tantivy index), so rather than rebuilding every drive's index on
-   * every page load, we build a drive's index on demand — the first time an
-   * offline search needs it (see `search()`). Deduped per drive; safe to call
-   * repeatedly.
-   */
-  public ensureDriveIndexed(drive: string): Promise<void> {
-    if (!drive) {
-      return Promise.resolve();
-    }
-
-    const existing = this.driveIndexBuilds.get(drive);
-
-    if (existing) {
-      return existing;
-    }
-
-    const build = this.buildDriveIndex(drive);
-    this.driveIndexBuilds.set(drive, build);
-
-    return build;
-  }
-
-  private async buildDriveIndex(drive: string): Promise<void> {
-    const clientDb = this.clientDb;
-
-    if (!clientDb) {
-      this.driveIndexBuilds.delete(drive);
-
-      return;
-    }
-
-    try {
-      const ready = await clientDb.waitForReady();
-
-      if (!ready) {
-        // Let a later call retry.
-        this.driveIndexBuilds.delete(drive);
-
-        return;
-      }
-
-      // TODO: a drive-scoped worker query would avoid pulling other drives'
-      // bytes across the boundary. For now export all and filter by drive —
-      // this runs at most once per drive per session (on first offline search),
-      // not on every load.
-      const endExport = perfSpan('clientdb.exportAllResources', { drive });
-      const exported = await clientDb.exportAllResources();
-      endExport({ bytes: exported.length });
-      const parsed = JSON.parse(exported);
-
-      if (!Array.isArray(parsed)) {
-        return;
-      }
-
-      // subject→parent map over the whole export so `driveOf` resolves even
-      // for ancestors not in the in-memory store yet.
-      const parentOf = new Map<string, string>();
-
-      for (const obj of parsed) {
-        const subject = obj?.['@id'];
-        const parent = obj?.[core.properties.parent];
-
-        if (typeof subject === 'string' && typeof parent === 'string') {
-          parentOf.set(subject, parent);
-        }
-      }
-
-      const driveOf = (subject: string): string => {
-        let current = subject;
-        const seen = new Set<string>();
-
-        for (let i = 0; i < 64; i++) {
-          if (seen.has(current)) break;
-
-          seen.add(current);
-          const parent = parentOf.get(current);
-
-          if (!parent || parent === current) {
-            return current;
-          }
-
-          current = parent;
-        }
-
-        return current;
-      };
-
-      const endIndex = perfSpan('clientdb.buildDriveIndex', { drive });
-      let indexed = 0;
-      let sinceYield = 0;
-
-      for (const obj of parsed) {
-        const subject = obj?.['@id'];
-
-        if (typeof subject !== 'string') {
-          continue;
-        }
-
-        // Scope to the requested drive — don't index other cached drives.
-        if (driveOf(subject) !== drive) {
-          continue;
-        }
-
-        // Don't clobber a fresher entry already added via the live ingest
-        // path: the OPFS copy can lag a very recent edit (e.g. a rename whose
-        // commit hasn't persisted yet), and `addResource` replaces by id.
-        if (this.localSearch.hasResource(subject, drive)) {
-          continue;
-        }
-
-        const resource = new Resource(subject);
-        resource.applyHydratedValues(
-          Object.entries(obj).filter(([key]) => key !== '@id') as [
-            string,
-            JSONValue,
-          ][],
-        );
-        resource.loading = false;
-        // `addResource` is dedup-safe, so overlap with resources already
-        // indexed via the normal ingest path is harmless.
-        this.localSearch.addResource(resource, drive);
-        indexed++;
-
-        // Yield periodically so a large drive's index build doesn't freeze the
-        // main thread / block input.
-        if (++sinceYield >= 1000) {
-          sinceYield = 0;
-          await yieldToEventLoop();
-        }
-      }
-
-      endIndex({ indexed });
-      searchDebug(
-        `[search] drive index built — drive=${drive} indexed=${indexed}`,
-      );
-    } catch (e) {
-      console.warn('[search] drive index build FAILED:', e);
-      // Allow a retry on the next search.
-      this.driveIndexBuilds.delete(drive);
-    }
   }
 
   /** Returns the ClientDbWorker if one has been set (may still be initializing). */
@@ -2149,12 +1967,6 @@ export class Store {
 
     const emitResource = storeResource ?? resource.__internalObject;
 
-    // Update local full-text search index, partitioned by the resource's
-    // drive (root of its parent chain).
-    if (!resource.loading && !resource.new) {
-      this.localSearch.addResource(resource, this.driveOf(resource.subject));
-    }
-
     // Atomic put queued BEFORE notify. The worker's serialised
     // queue means a follow-up `queryLocalDb` (e.g. from
     // Collection.refresh in a notify listener) sees the new
@@ -2688,28 +2500,22 @@ export class Store {
   }
 
   public async search(query: string, opts: SearchOpts = {}): Promise<string[]> {
-    // The local search index is partitioned per drive. The `parents` scope
-    // the overlay passes is either the drive itself or a folder inside it;
-    // resolve it up to the drive so the right partition is searched.
     const parentScope = Array.isArray(opts.parents)
       ? opts.parents[0]
       : opts.parents;
-    const searchDrive = this.driveOf(parentScope ?? this.getDrive() ?? '');
     const hasFilters = Object.keys(opts.filters ?? {}).length > 0;
     searchDebug('[search] search()', {
       query,
       hasFilters,
       parents: opts.parents,
-      searchDrive,
-      driveIndexSize: this.localSearch.sizeForDrive(searchDrive),
       serverConnected: this._serverConnected,
       clientDbReady: this.clientDb?.isReady ?? false,
     });
 
-    // Prefer the durable KV index in ClientDb (title + description + Loro
-    // body, 1-edit prefix fuzzy) over MiniSearch when the WASM store is up.
-    // MiniSearch stays as a fallback for sessions without a local DB, and
-    // for test stubs that don't implement `search`.
+    // Local hits come from the durable KV index in ClientDb (title,
+    // description, Loro body, 1-edit prefix fuzzy). No in-memory JS
+    // index. `filters` (property-value constraints) are not in the KV
+    // query yet — skip local and let Tantivy honour them when online.
     const clientDb = this.clientDb;
     const kvResults =
       clientDb?.isReady && typeof clientDb.search === 'function' && !hasFilters
@@ -2719,61 +2525,19 @@ export class Store {
           })
         : [];
 
-    const miniResults =
-      kvResults.length === 0 &&
-      this.localSearch.sizeForDrive(searchDrive) > 0 &&
-      !hasFilters
-        ? this.localSearch.search(
-            query,
-            searchDrive,
-            opts.limit ?? 30,
-            parentScope,
-          ).subjects
-        : [];
-
-    const localResults = kvResults.length > 0 ? kvResults : miniResults;
-
-    if (localResults.length > 0) {
-      searchDebug(
-        '[search] local →',
-        localResults.length,
-        kvResults.length > 0 ? '(kv)' : '(minisearch)',
-      );
+    if (kvResults.length > 0) {
+      searchDebug('[search] local kv →', kvResults.length, kvResults);
     }
 
-    // When offline, the server's filtered Tantivy search is unreachable.
-    // Fall back to the drive's local index — `filters` (property-value
-    // constraints) can't be honoured client-side, but the per-drive
-    // partition still scopes results to the drive being browsed. The
-    // search overlay always passes `parents: <drive>`, so without this
-    // fallback offline search would never consult the local index at all.
+    // Offline: hosted Tantivy is unreachable. Return whatever the local
+    // index has (empty if ClientDb is down or filters were requested).
     if (!this._serverConnected) {
-      if (kvResults.length > 0) {
-        searchDebug('[search] OFFLINE kv →', kvResults.length, kvResults);
+      searchDebug('[search] OFFLINE kv →', kvResults.length, kvResults);
 
-        return kvResults;
-      }
-
-      // MiniSearch fallback when ClientDb is not available. Built on demand
-      // (first offline search only) — see `ensureDriveIndexed`.
-      await this.ensureDriveIndexed(searchDrive);
-
-      const offline = this.localSearch.search(
-        query,
-        searchDrive,
-        opts.limit ?? 30,
-        parentScope,
-      );
-      searchDebug(
-        '[search] OFFLINE minisearch fallback →',
-        offline.subjects.length,
-        offline.subjects,
-      );
-
-      return offline.subjects;
+      return kvResults;
     }
 
-    // Fall back to server search (Tantivy)
+    // Merge with hosted Tantivy `/search`.
     const searchSubject = buildSearchSubject(this.serverUrl, query, opts);
     searchDebug('[search] server search →', searchSubject);
     // Search URLs are dynamic query resources without commit identities. Keeping
@@ -2788,10 +2552,7 @@ export class Store {
     const results = searchResource.get(server.properties.results) ?? [];
     searchDebug('[search] server search returned', results.length);
 
-    return [...new Set([...localResults, ...results])].slice(
-      0,
-      opts.limit ?? 30,
-    );
+    return [...new Set([...kvResults, ...results])].slice(0, opts.limit ?? 30);
   }
 
   public async semanticSearch(
@@ -4246,8 +4007,6 @@ export class Store {
     this.lastPersistedStamp.delete(resolved);
 
     if (this.resources.delete(resolved)) {
-      this.localSearch.removeResource(resolved);
-
       if (shouldNotify) {
         this.eventManager.emit(StoreEvents.ResourceRemoved, subjectRaw);
       }

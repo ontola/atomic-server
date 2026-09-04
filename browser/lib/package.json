@@ -14,7 +14,6 @@
     "@noble/ed25519": "3.1.0",
     "@noble/hashes": "^2.2.0",
     "fast-json-stable-stringify": "^2.1.0",
-    "minisearch": "^7.2.0",
     "ulidx": "^2.4.1"
   },
   "description": "The Atomic Data library for typescript/javascript",
