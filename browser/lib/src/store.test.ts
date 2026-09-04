@@ -180,6 +180,9 @@ describe('Store', () => {
       initError: undefined,
       waitForReady: async () => true,
       exportAllResources: async () => exported,
+      // No KV index in this stub — MiniSearch rehydration is the path
+      // under test. Returning [] keeps Store.search on that fallback.
+      search: async () => [] as string[],
     };
 
     store.setClientDb(
