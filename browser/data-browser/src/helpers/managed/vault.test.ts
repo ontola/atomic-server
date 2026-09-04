@@ -1025,7 +1025,9 @@ describe('agentVaultProof', () => {
    */
   it('prefers the proof stored at sign-in over a live signature', async () => {
     const stored = new Uint8Array(64).fill(7);
-    const signBytes = vi.fn(async () => btoa(String.fromCharCode(...new Uint8Array(64).fill(1))));
+    const signBytes = vi.fn(async () =>
+      btoa(String.fromCharCode(...new Uint8Array(64).fill(1))),
+    );
     const signer = {
       signBytes,
       vaultProof: btoa(String.fromCharCode(...stored)),
