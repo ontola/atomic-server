@@ -39,7 +39,13 @@ describe('parseHistoryAttribution', () => {
           destroy: false,
           genesis: true,
         },
-        { signer: bob, created_at: 43, signature: 'b', verified: false, tokens: ['c-1'] },
+        {
+          signer: bob,
+          created_at: 43,
+          signature: 'b',
+          verified: false,
+          tokens: ['c-1'],
+        },
       ],
     };
     const fromObject = parseHistoryAttribution(wire);
@@ -92,7 +98,9 @@ describe('attributionForVersion', () => {
   });
 
   it('leaves untokened or unclaimed versions unattributed', () => {
-    expect(attributionForVersion({ message: undefined }, report)).toBeUndefined();
+    expect(
+      attributionForVersion({ message: undefined }, report),
+    ).toBeUndefined();
     expect(attributionForVersion({ message: 'c-9' }, report)).toBeUndefined();
     expect(attributionForVersion({ message: 'c-7' }, null)).toBeUndefined();
   });
