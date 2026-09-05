@@ -9,6 +9,7 @@ import {
   setUpVaultForDrive,
   vaultLaneId,
   type BackupOutcome,
+  type DriveKeyHandle,
   type RestoreOutcome,
   type VaultCapableDb,
   type VaultKeyOps,
@@ -146,10 +147,7 @@ const defaultDeps: VaultAutoBackupDeps = {
  * is designed never to hold. A reload recovers it by signing the proof message
  * again, which costs one round trip.
  */
-const enrolled = new Map<
-  string,
-  { drivePseudonym: string; driveKey: Uint8Array }
->();
+const enrolled = new Map<string, { drivePseudonym: string } & DriveKeyHandle>();
 
 /** Only in tests. */
 export function forgetEnrolledVaults(): void {
@@ -262,7 +260,7 @@ async function ensureVaultBackupOnce(
       }
 
       const keys = await deps.loadKeys();
-      const { enrollment, driveKey } = await deps.setUpVaultForDrive({
+      const { enrollment, driveKey, keyEpoch } = await deps.setUpVaultForDrive({
         keys,
         driveSubject,
         agentSubject: agent.subject,
@@ -270,16 +268,38 @@ async function ensureVaultBackupOnce(
         // keeps non-extractable and hardware-backed keys usable here.
         agentSecret: await agentVaultProof(agent, keys.proofMessage),
       });
-      known = { drivePseudonym: enrollment.drive_pseudonym, driveKey };
+      known = {
+        drivePseudonym: enrollment.drive_pseudonym,
+        driveKey,
+        keyEpoch,
+      };
       enrolled.set(driveSubject, known);
     }
 
+    const held = known;
     const outcome = await deps.runVaultBackup({
       db,
       driveSubject,
-      drivePseudonym: known.drivePseudonym,
+      drivePseudonym: held.drivePseudonym,
       devicePubkey: lane,
-      driveKey: known.driveKey,
+      driveKey: held.driveKey,
+      driveKeyEpoch: held.keyEpoch,
+      // The drive was re-keyed since this key was cached: fetch the current
+      // envelope, and remember it so the next tick does not refetch.
+      refreshDriveKey: async () => {
+        const keys = await deps.loadKeys();
+        const fresh = await deps.recoverDriveKey({
+          keys,
+          drivePseudonym: held.drivePseudonym,
+          agentSecret: await agentVaultProof(agent, keys.proofMessage),
+        });
+        enrolled.set(driveSubject, {
+          drivePseudonym: held.drivePseudonym,
+          ...fresh,
+        });
+
+        return fresh;
+      },
     });
     notifyVaultChanged(driveSubject);
 
@@ -370,7 +390,7 @@ export async function restoreFromVault(
     }
 
     const keys = await deps.loadKeys();
-    const driveKey = await deps.recoverDriveKey({
+    const { driveKey, keyEpoch } = await deps.recoverDriveKey({
       keys,
       drivePseudonym: enrollment.drive_pseudonym,
       agentSecret: await agentVaultProof(agent, keys.proofMessage),
@@ -387,6 +407,7 @@ export async function restoreFromVault(
     enrolled.set(driveSubject, {
       drivePseudonym: enrollment.drive_pseudonym,
       driveKey,
+      keyEpoch,
     });
     notifyVaultChanged(driveSubject);
 

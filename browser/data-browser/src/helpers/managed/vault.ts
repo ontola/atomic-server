@@ -333,6 +333,30 @@ export async function putVaultKeyEnvelope(
 export async function getVaultKeyEnvelope(
   drivePseudonym: string,
 ): Promise<string | null> {
+  const record = await getVaultKeyEnvelopeRecord(drivePseudonym);
+
+  return record?.envelope ?? null;
+}
+
+/** A drive key in hand, and the epoch its envelope wrapped it at. */
+export type DriveKeyHandle = {
+  driveKey: Uint8Array;
+  /**
+   * The drive's key epoch when this key was unwrapped. Compared with the
+   * epoch the drive reports before every upload: a mismatch means someone
+   * re-keyed, and this key must not seal anything new.
+   */
+  keyEpoch: number;
+};
+
+/**
+ * The stored envelope together with the epoch it wraps. `key_epoch` is
+ * optional on the wire only for a control plane predating epoch tracking; it
+ * reads as 1, the epoch every drive started at.
+ */
+export async function getVaultKeyEnvelopeRecord(
+  drivePseudonym: string,
+): Promise<{ envelope: string; keyEpoch: number } | null> {
   const response = await managedFetch(`/cloud-vault/${drivePseudonym}/key`, {
     credentials: 'include',
   });
@@ -346,7 +370,10 @@ export async function getVaultKeyEnvelope(
     );
   }
 
-  const record = (await response.json()) as { envelope?: unknown };
+  const record = (await response.json()) as {
+    envelope?: unknown;
+    key_epoch?: unknown;
+  };
 
   // A present-but-unusable envelope must not read as "no key yet": the caller
   // would mint a second key and overwrite the real one, making every existing
@@ -355,7 +382,10 @@ export async function getVaultKeyEnvelope(
     throw new Error('The stored vault key is malformed.');
   }
 
-  return record.envelope;
+  return {
+    envelope: record.envelope,
+    keyEpoch: typeof record.key_epoch === 'number' ? record.key_epoch : 1,
+  };
 }
 
 /** What `GET /api/cloud-vault/{drive}/state` reports. */
@@ -714,14 +744,15 @@ export async function setUpVaultForDrive({
   driveSubject: string;
   agentSubject: string;
   agentSecret: Uint8Array;
-}): Promise<{ enrollment: VaultEnrollment; driveKey: Uint8Array }> {
+}): Promise<{ enrollment: VaultEnrollment } & DriveKeyHandle> {
   const enrollment = await enrollVault(driveSubject, agentSubject);
-  const existing = await getVaultKeyEnvelope(enrollment.drive_pseudonym);
+  const existing = await getVaultKeyEnvelopeRecord(enrollment.drive_pseudonym);
 
   if (existing) {
     return {
       enrollment,
-      driveKey: keys.vaultUnwrapKey(existing, agentSecret),
+      driveKey: keys.vaultUnwrapKey(existing.envelope, agentSecret),
+      keyEpoch: existing.keyEpoch,
     };
   }
 
@@ -740,14 +771,18 @@ export async function setUpVaultForDrive({
     // own key between our read and our write. Theirs is authoritative: adopting
     // it is the only outcome where both clients can read each other's backups.
     // Ours has sealed nothing yet, so discarding it costs nothing.
-    const winner = await getVaultKeyEnvelope(enrollment.drive_pseudonym);
+    const winner = await getVaultKeyEnvelopeRecord(enrollment.drive_pseudonym);
 
     if (!winner) throw new Error('Could not store or recover a vault key.');
 
-    return { enrollment, driveKey: keys.vaultUnwrapKey(winner, agentSecret) };
+    return {
+      enrollment,
+      driveKey: keys.vaultUnwrapKey(winner.envelope, agentSecret),
+      keyEpoch: winner.keyEpoch,
+    };
   }
 
-  return { enrollment, driveKey };
+  return { enrollment, driveKey, keyEpoch: enrollment.key_epoch ?? 1 };
 }
 
 /**
@@ -765,16 +800,19 @@ export async function recoverDriveKey({
   keys: VaultKeyOps;
   drivePseudonym: string;
   agentSecret: Uint8Array;
-}): Promise<Uint8Array> {
-  const envelope = await getVaultKeyEnvelope(drivePseudonym);
+}): Promise<DriveKeyHandle> {
+  const record = await getVaultKeyEnvelopeRecord(drivePseudonym);
 
-  if (!envelope) {
+  if (!record) {
     throw new Error(
       'This drive has no stored vault key, so its backups cannot be decrypted.',
     );
   }
 
-  return keys.vaultUnwrapKey(envelope, agentSecret);
+  return {
+    driveKey: keys.vaultUnwrapKey(record.envelope, agentSecret),
+    keyEpoch: record.keyEpoch,
+  };
 }
 
 /**
@@ -803,7 +841,20 @@ export function runVaultBackup(args: {
   drivePseudonym: string;
   devicePubkey: string;
   driveKey: Uint8Array;
-  keyEpoch?: number;
+  /**
+   * The epoch `driveKey` was unwrapped at. Read as 1 when absent: a drive
+   * that was never re-keyed has only ever had epoch 1.
+   */
+  driveKeyEpoch?: number;
+  /**
+   * Fetch and unwrap the drive's current envelope. Called when the drive
+   * reports an epoch other than `driveKeyEpoch`, which means someone re-keyed
+   * since this key was obtained. Without it a re-keyed drive cannot be backed
+   * up from here: sealing with the old key while declaring the new epoch
+   * would pass the server's check and produce objects the new key cannot
+   * read, which is the exact hole the epoch exists to close.
+   */
+  refreshDriveKey?: () => Promise<DriveKeyHandle>;
 }): Promise<BackupOutcome> {
   const existing = inFlight.get(args.drivePseudonym);
 
@@ -818,13 +869,34 @@ export function runVaultBackup(args: {
       return { status: 'nothing-to-do' } as BackupOutcome;
     }
 
+    // The epoch comes from the state just read, never from the caller. The
+    // key has to match it: a long-lived caller holding the key it started
+    // with is exactly the client that would keep sealing under a key someone
+    // was just removed from.
+    const currentEpoch = state.enrollment.key_epoch ?? 1;
+    let { driveKey } = args;
+    let heldEpoch = args.driveKeyEpoch ?? 1;
+
+    if (heldEpoch !== currentEpoch) {
+      if (!args.refreshDriveKey) {
+        throw new Error(
+          `This drive was re-keyed (epoch ${currentEpoch}, key in hand is epoch ${heldEpoch}); fetch the current key envelope before backing up.`,
+        );
+      }
+
+      ({ driveKey, keyEpoch: heldEpoch } = await args.refreshDriveKey());
+
+      if (heldEpoch !== currentEpoch) {
+        throw new Error(
+          `The stored key envelope wraps epoch ${heldEpoch} but the drive is at epoch ${currentEpoch}; the re-key did not finish, so nothing can be sealed safely.`,
+        );
+      }
+    }
+
     return backupDrive({
       ...args,
-      // From the state just read, never the caller's value: after a re-key the
-      // server refuses anything sealed under the old epoch, and a long-lived
-      // caller holding the epoch it started with is exactly the client that
-      // would keep writing under a key someone was removed from.
-      keyEpoch: state.enrollment.key_epoch ?? 1,
+      driveKey,
+      keyEpoch: currentEpoch,
       segment: nextSegmentFor(state, args.devicePubkey),
       checkpointN: nextCheckpointFor(state),
       driveHasCheckpoint: state.checkpoints.length > 0,

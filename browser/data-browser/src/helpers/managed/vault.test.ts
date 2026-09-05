@@ -797,7 +797,10 @@ describe('key management', () => {
       agentSecret: AGENT_SECRET,
     });
 
-    expect(Array.from(recovered)).toEqual(Array.from(original));
+    expect(Array.from(recovered.driveKey)).toEqual(Array.from(original));
+    // A control plane predating epoch tracking sends no `key_epoch`; that is
+    // epoch 1, the only one any drive had.
+    expect(recovered.keyEpoch).toBe(1);
   });
 
   /**
@@ -1000,6 +1003,7 @@ describe('scheduling', () => {
   function state(
     lanes: Record<string, number>,
     status = 'active',
+    keyEpoch?: number,
   ): VaultDriveState {
     return {
       enrollment: {
@@ -1010,6 +1014,7 @@ describe('scheduling', () => {
         used_bytes: 0,
         quota_bytes: 100,
         last_backup_at: null,
+        ...(keyEpoch === undefined ? {} : { key_epoch: keyEpoch }),
       },
       lanes,
       checkpoints: [],
@@ -1127,6 +1132,114 @@ describe('scheduling', () => {
 
     expect(outcome).toEqual({ status: 'nothing-to-do' });
     expect(db.vaultExport).not.toHaveBeenCalled();
+  });
+
+  /**
+   * After a re-key elsewhere, the cached key is for an epoch the server no
+   * longer accepts. Declaring the new epoch while sealing with the old key
+   * would pass the server's check and leave objects the new key cannot read,
+   * so the key must be refreshed first and the export sealed with it.
+   */
+  it('refreshes the key when the drive reports a newer epoch', async () => {
+    const FRESH = new Uint8Array(32).fill(9);
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(async () => null),
+      vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
+    };
+    mockFetch(url =>
+      url.endsWith('/state')
+        ? { ok: true, status: 200, json: async () => state({}, 'active', 2) }
+        : undefined,
+    );
+    const refreshDriveKey = vi.fn(async () => ({
+      driveKey: FRESH,
+      keyEpoch: 2,
+    }));
+
+    await runVaultBackup({
+      db,
+      driveSubject: 'did:ad:drive',
+      drivePseudonym: PSEUDONYM,
+      devicePubkey: DEVICE,
+      driveKey: KEY,
+      driveKeyEpoch: 1,
+      refreshDriveKey,
+    });
+
+    expect(refreshDriveKey).toHaveBeenCalledTimes(1);
+    const [, keyUsed, epochUsed] = (db.vaultExport as ReturnType<typeof vi.fn>)
+      .mock.calls[0];
+    expect(keyUsed).toBe(FRESH);
+    expect(epochUsed).toBe(2);
+  });
+
+  it('does not seal anything when a re-keyed drive cannot be refreshed', async () => {
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(async () => null),
+      vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
+    };
+    mockFetch(url =>
+      url.endsWith('/state')
+        ? { ok: true, status: 200, json: async () => state({}, 'active', 2) }
+        : undefined,
+    );
+
+    await expect(
+      runVaultBackup({
+        db,
+        driveSubject: 'did:ad:drive',
+        drivePseudonym: PSEUDONYM,
+        devicePubkey: DEVICE,
+        driveKey: KEY,
+        driveKeyEpoch: 1,
+      }),
+    ).rejects.toThrow(/re-keyed/);
+    expect(db.vaultExport).not.toHaveBeenCalled();
+
+    // A refresh that still does not reach the drive's epoch is refused too:
+    // the envelope and the enrollment disagree, and neither is safe to trust.
+    await expect(
+      runVaultBackup({
+        db,
+        driveSubject: 'did:ad:drive',
+        drivePseudonym: PSEUDONYM,
+        devicePubkey: DEVICE,
+        driveKey: KEY,
+        driveKeyEpoch: 1,
+        refreshDriveKey: async () => ({ driveKey: KEY, keyEpoch: 1 }),
+      }),
+    ).rejects.toThrow(/epoch 1/);
+    expect(db.vaultExport).not.toHaveBeenCalled();
+  });
+
+  /** A drive that was never re-keyed is at epoch 1, which is what a caller
+   *  without an epoch is assumed to hold: no refresh, no error. */
+  it('accepts a caller without an epoch on a drive still at epoch 1', async () => {
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(async () => null),
+      vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
+    };
+    mockFetch(url =>
+      url.endsWith('/state')
+        ? { ok: true, status: 200, json: async () => state({}) }
+        : undefined,
+    );
+    const refreshDriveKey = vi.fn();
+
+    await runVaultBackup({
+      db,
+      driveSubject: 'did:ad:drive',
+      drivePseudonym: PSEUDONYM,
+      devicePubkey: DEVICE,
+      driveKey: KEY,
+      refreshDriveKey,
+    });
+
+    expect(refreshDriveKey).not.toHaveBeenCalled();
+    expect((db.vaultExport as ReturnType<typeof vi.fn>).mock.calls[0][2]).toBe(1);
   });
 });
 

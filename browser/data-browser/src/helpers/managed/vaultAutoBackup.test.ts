@@ -58,7 +58,11 @@ function fakeDeps(overrides: Partial<VaultAutoBackupDeps> = {}) {
     loadKeys: vi.fn(async () => keys),
     laneId: vi.fn(async () => LANE),
     db: vi.fn(async () => ({}) as never),
-    setUpVaultForDrive: vi.fn(async () => ({ enrollment, driveKey: KEY })),
+    setUpVaultForDrive: vi.fn(async () => ({
+      enrollment,
+      driveKey: KEY,
+      keyEpoch: 1,
+    })),
     runVaultBackup: vi.fn(async () => ({
       status: 'backed-up' as const,
       kind: 'pack' as const,
@@ -75,7 +79,7 @@ function fakeDeps(overrides: Partial<VaultAutoBackupDeps> = {}) {
       pending_uploads: 0,
       confirmed_objects: 1,
     })),
-    recoverDriveKey: vi.fn(async () => KEY),
+    recoverDriveKey: vi.fn(async () => ({ driveKey: KEY, keyEpoch: 1 })),
     restoreDrive: vi.fn(async () => ({
       packsRead: 1,
       objectsSkipped: 0,
