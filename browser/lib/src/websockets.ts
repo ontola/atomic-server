@@ -1637,6 +1637,7 @@ export class WSClient {
 
     for (const subject of diff.remove ?? []) {
       const envelope = diff.removeCommits?.[subject];
+
       if (envelope && clientDb) {
         try {
           await clientDb.applyCommit(envelope);

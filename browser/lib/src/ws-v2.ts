@@ -626,8 +626,13 @@ export function decodeSyncDiff(data: Uint8Array): DecodedSyncDiff | undefined {
   const json = decoder.decode(data.subarray(off));
 
   try {
-    const { pull, push, remove = [], pullFrom = {}, removeCommits = {} } =
-      JSON.parse(json);
+    const {
+      pull,
+      push,
+      remove = [],
+      pullFrom = {},
+      removeCommits = {},
+    } = JSON.parse(json);
 
     return { drive, pull, push, remove, pullFrom, removeCommits };
   } catch {
