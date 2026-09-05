@@ -23,13 +23,11 @@ import {
  */
 
 it('sends name and emoji as optional enrollment metadata', async () => {
-  const fetch = vi
-    .spyOn(globalThis, 'fetch')
-    .mockResolvedValue(
-      new Response(JSON.stringify({ enrollment: { id: '1' } }), {
-        status: 200,
-      }),
-    );
+  const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    new Response(JSON.stringify({ enrollment: { id: '1' } }), {
+      status: 200,
+    }),
+  );
   await enrollVault('did:ad:drive', 'did:ad:agent:test', {
     name: 'Design',
     emoji: '🎨',
