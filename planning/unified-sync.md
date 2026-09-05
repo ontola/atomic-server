@@ -105,8 +105,13 @@ that turned out to be already done, or blocked by a finding, say so inline.
   subject / drive / filter registration the connection holds and drops the
   unreadable ones (`RebindAgent`). Loro sync and presence registrations are
   not re-evaluated yet (this doc).
-- [ ] Bootstrap admission (OQ5): what replaces `Err(_) => true` for a drive the
-  node does not know yet. ([`foss-public-host-mode.md`](./foss-public-host-mode.md))
+- [x] (2026-09-05) — Bootstrap admission (OQ5): a drive this node has never
+  stored is admitted only through `admit_unknown_drive`. `Public` never
+  creates one (even on `OpenPolicy`); Owner enrolls only the owner;
+  Open still admits an authenticated first-sync; allowlist grace is
+  unchanged. The live-write `Err(_) => true` ACL skip is gone.
+  ([`foss-public-host-mode.md`](./foss-public-host-mode.md),
+  [`serverless-p2p.md`](./serverless-p2p.md))
 - [x] (2026-09-04) — F6: the unchecked replica applier (`ws_apply`'s old
   `apply_commit_json`) turned out to be reachable only through the pre-v2
   `COMMIT` text frame, which no server sends. It is deleted, along with the
@@ -190,8 +195,11 @@ that turned out to be already done, or blocked by a finding, say so inline.
   backoff, blocked) into `atomic_lib` as the `AtomicNode` outbox — one
   implementation for browser-wasm and Flutter (this doc,
   [`serverless-p2p.md`](./serverless-p2p.md)).
-- [ ] Engine owns `SUB` / `UNSUB` — the last hand-rolled tags in the server WS
-  handler, and a prerequisite for "every peer is a hub".
+- [x] (2026-09-05) — Engine owns `SUB` / `UNSUB`: parse + `check_read` live
+  in `handle_frame_full`; the WS handler registers the connection with
+  the commit monitor only when the engine admits the subscription.
+  Folding `LoroSyncBroadcaster` into `CommitMonitor` is still
+  [`unify-subscription-actors.md`](./unify-subscription-actors.md).
   ([`serverless-p2p.md`](./serverless-p2p.md))
 - [ ] The drain targets a transport / `SyncSession`, not an endpoint URL string
   (this doc).
@@ -416,16 +424,14 @@ Findings referenced by number (F1–F12) are written up in
    `DESTROY` frame and `remove[]` are accepted but gated by the drive-level
    write verdict (`lib/src/sync/peer.rs`). Original question: accept peer
    tombstones for same-agent reconcile, or only hub-signed destroys?
-5. **Bootstrap admission (F2)** — what replaces `Err(_) => true` for a drive that
-   doesn't exist locally yet: first-writer-wins with grace (as `AllowlistPolicy`
-   does), explicit enrollment, or reject-until-known? **FOSS Owner mode
-   (proposed in [`foss-public-host-mode.md`](./foss-public-host-mode.md)) is
-   reject-until-known:** a missing drive is admitted only if the signer is the
-   node owner, then enrolled; `OpenPolicy` (localhost) keeps the carve-out.
-   F2's fix (`989a8751`) closed the existing-resource spoof and deliberately
-   left this carve-out unchanged — Owner mode is what replaces it on a public
-   FOSS node. Managed nodes keep bootstrap grace because their allowlist is
-   eventually consistent with a control plane.
+5. **Bootstrap admission (F2)** — ✅ **Closed 2026-09-05** via
+   `admit_unknown_drive`: `Public` never creates a drive; Owner is
+   reject-until-known (signer is the node owner, then enrolled);
+   `OpenPolicy` still admits an authenticated first-sync (localhost
+   create-account / same-agent first-sync); `AllowlistPolicy` grace is
+   unchanged for managed nodes. F2's existing-resource spoof was already
+   closed (`989a8751`); the remaining missing-drive `Err(_) => true` ACL
+   skip in `admitted_for_drive` is gone.
 6. **What makes a peer "known"? (F9)** — ✅ **Resolved**: first with OQ2
    (2026-07-02, "same-agent AUTH *is* the pairing"), then reframed 2026-07-17
    (`683a25d4a`) — AUTH admits any agent, rights decide what crosses, and

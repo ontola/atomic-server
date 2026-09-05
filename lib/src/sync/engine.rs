@@ -165,21 +165,55 @@ pub async fn handle_auth_frame(
     }
 }
 
+/// Side effects a transport must honour after [`handle_frame_full`].
+///
+/// Reply frames always go back on the wire. `subscribe` / `unsubscribe` are
+/// how a hub registers the connection for commit fan-out — the engine owns
+/// the `SUB`/`UNSUB` tags (parse + `check_read`) but has no actor mailbox,
+/// so the server's WebSocket handler is the one that `do_send`s to the
+/// commit monitor. A peer stream that is not a hub ignores them; Iroh live
+/// mode does not speak `SUB`.
+#[derive(Debug, Default, Clone)]
+pub struct HandleOutput {
+    pub frames: Vec<Vec<u8>>,
+    pub subscribe: Option<String>,
+    pub unsubscribe: Option<String>,
+}
+
 /// Process a single v2 binary frame. Returns response frames to send back.
 /// This is the transport-agnostic entry point — used by WebSocket, Iroh, etc.
+///
+/// Transports that can register subscriptions should call
+/// [`handle_frame_full`] instead so a validated `SUB`/`UNSUB` is not dropped.
 pub async fn handle_frame(
     frame: &[u8],
     store: &Db,
     agent: &mut crate::agents::ForAgent,
 ) -> Vec<Vec<u8>> {
+    handle_frame_full(frame, store, agent).await.frames
+}
+
+/// Like [`handle_frame`], plus the `SUB`/`UNSUB` session commands a hub
+/// applies to its commit monitor.
+pub async fn handle_frame_full(
+    frame: &[u8],
+    store: &Db,
+    agent: &mut crate::agents::ForAgent,
+) -> HandleOutput {
     if frame.is_empty() {
-        return vec![];
+        return HandleOutput::default();
     }
 
     let tag = frame[0];
     let payload = &frame[1..];
 
     match tag {
+        protocol::tag::SUB => return handle_sub(payload, store, agent).await,
+        protocol::tag::UNSUB => return handle_unsub(payload),
+        _ => {}
+    }
+
+    let frames = match tag {
         protocol::tag::AUTH => {
             handle_auth_frame(
                 payload,
@@ -440,6 +474,72 @@ pub async fn handle_frame(
             tracing::debug!("Unhandled frame tag: 0x{:02x}", tag);
             vec![]
         }
+    };
+
+    HandleOutput {
+        frames,
+        subscribe: None,
+        unsubscribe: None,
+    }
+}
+
+/// `SUB <subject>`: parse, `check_read`, and tell the transport to register.
+/// The wire refusal matches `refuse_subscription` in the server so a client
+/// cannot tell the engine path from the monitor's defence-in-depth re-check.
+async fn handle_sub(payload: &[u8], store: &Db, agent: &crate::agents::ForAgent) -> HandleOutput {
+    let Ok(subject_str) = std::str::from_utf8(payload) else {
+        return HandleOutput {
+            frames: vec![protocol::encode_error(
+                0,
+                protocol::error_code::UNKNOWN,
+                "Invalid SUB frame",
+            )],
+            ..HandleOutput::default()
+        };
+    };
+
+    let subject = crate::Subject::from_raw(subject_str, store.get_base_domain().as_deref());
+
+    let refuse = |reason: &str| HandleOutput {
+        frames: vec![protocol::encode_error(
+            0,
+            protocol::error_code::UNAUTHORIZED_READ,
+            &format!("SUB refused for {subject}: {reason}"),
+        )],
+        ..HandleOutput::default()
+    };
+
+    if !subject.is_local() {
+        tracing::warn!("can't subscribe to external resource: {subject}");
+        return HandleOutput::default();
+    }
+
+    let resource = match store.get_resource(&subject).await {
+        Ok(r) => r,
+        Err(_) => return refuse("not readable"),
+    };
+
+    if let Err(e) = crate::hierarchy::check_read(store, &resource, agent).await {
+        return refuse(&e.to_string());
+    }
+
+    HandleOutput {
+        frames: vec![],
+        subscribe: Some(subject_str.to_string()),
+        unsubscribe: None,
+    }
+}
+
+/// `UNSUB <subject>`: no rights check — cancelling a subscription you never
+/// held is a no-op, and the monitor looks up by the raw key `SUB` registered.
+fn handle_unsub(payload: &[u8]) -> HandleOutput {
+    match std::str::from_utf8(payload) {
+        Ok(subject) => HandleOutput {
+            frames: vec![],
+            subscribe: None,
+            unsubscribe: Some(subject.to_string()),
+        },
+        Err(_) => HandleOutput::default(),
     }
 }
 
@@ -1198,6 +1298,35 @@ impl std::fmt::Display for SyncPushRejected {
     }
 }
 
+/// Whether a write to a drive this node has **never stored** may proceed.
+/// Enrolls the drive when the policy wants that.
+///
+/// Closes unified-sync OQ5: `ForAgent::Public` never creates a drive.
+/// An authenticated agent on [`super::policy::OpenPolicy`] still may
+/// (localhost first-sync). [`super::policy::OwnerPolicy`] admits only the
+/// owner and enrolls. An allowlist's bootstrap grace already shows up as
+/// `admit_drive_write == true` and is left alone.
+pub(crate) fn admit_unknown_drive(
+    store: &Db,
+    drive_subject: &str,
+    agent: &crate::agents::ForAgent,
+) -> bool {
+    if matches!(agent, crate::agents::ForAgent::Public) {
+        return false;
+    }
+    let policy = store.sync_policy();
+    if policy.admit_drive_write(drive_subject) {
+        return true;
+    }
+    if policy.may_enroll_drive(drive_subject, agent) {
+        tracing::info!("enrolling new drive {} for {:?}", drive_subject, agent);
+        policy.enroll_drive(drive_subject);
+        true
+    } else {
+        false
+    }
+}
+
 /// Import resources from a SYNC_PUSH message into the local store.
 ///
 /// `for_agent` is the identity the sending peer proved. `trust_owned` is true
@@ -1216,8 +1345,9 @@ pub async fn import_sync_push(
     for_agent: &crate::agents::ForAgent,
     trust_owned: bool,
 ) -> Result<(usize, Vec<Vec<u8>>), SyncPushRejected> {
-    // Check write access to the drive
     let drive_subject = crate::Subject::from_raw(&push.drive, store.get_base_domain().as_deref());
+    let policy = store.sync_policy();
+
     if let Ok(drive_resource) = store.get_resource(&drive_subject).await {
         if !may_accept_drive_write(store, &drive_resource, for_agent, trust_owned).await {
             tracing::warn!(
@@ -1231,30 +1361,10 @@ pub async fn import_sync_push(
                 reason: format!("agent {for_agent} has no write right on the drive"),
             });
         }
-    }
-    // Admission gate. A no-op under the default OpenPolicy (self-hosted / FOSS
-    // left open), so it bites only where a policy was installed: a managed node
-    // admits enrolled drives within quota, an owner-gated node admits the drives
-    // it hosts.
-    let policy = store.sync_policy();
-    let decision = policy.admit_decision(&push.drive);
-
-    if !decision.is_admitted() {
-        // The drive not existing here used to be reason enough to accept it —
-        // "bootstrap case, a new drive is arriving". That is also exactly what
-        // a stranger's first push looks like, so the bootstrap now has to say
-        // who it is for. An open node still admits anyone, which is what keeps
-        // ordinary first-sync working.
-        let is_new_here = store.get_resource(&drive_subject).await.is_err();
-
-        if is_new_here && policy.may_enroll_drive(&push.drive, for_agent) {
-            tracing::info!(
-                "import_sync_push: enrolling new drive {} for {:?}",
-                push.drive,
-                for_agent
-            );
-            policy.enroll_drive(&push.drive);
-        } else {
+        // Existing drive: allowlist/quota still apply. No bootstrap — that
+        // path is only for a drive we have never stored.
+        let decision = policy.admit_decision(&push.drive);
+        if !decision.is_admitted() {
             tracing::warn!(
                 "import_sync_push: drive {} not admitted by sync policy ({:?}, agent {:?})",
                 push.drive,
@@ -1275,6 +1385,21 @@ pub async fn import_sync_push(
                 reason,
             });
         }
+    } else if !admit_unknown_drive(store, &push.drive, for_agent) {
+        tracing::warn!(
+            "import_sync_push: refusing bootstrap of unknown drive {} for {:?}",
+            push.drive,
+            for_agent
+        );
+        let reason = if matches!(for_agent, crate::agents::ForAgent::Public) {
+            "unauthenticated agent cannot create a drive".to_string()
+        } else {
+            policy.not_enrolled_message(&push.drive)
+        };
+        return Err(SyncPushRejected {
+            drive: push.drive.clone(),
+            reason,
+        });
     }
 
     let mut count = 0;
@@ -1503,4 +1628,165 @@ pub async fn collect_readable_snapshots(
         }
     }
     entries
+}
+
+#[cfg(test)]
+mod bootstrap_and_sub_tests {
+    use super::*;
+    use crate::agents::ForAgent;
+    use crate::sync::policy::OwnerPolicy;
+    use crate::sync::protocol::{self, error_code, tag};
+    use std::sync::Arc;
+
+    fn empty_push(drive: &str) -> protocol::DecodedSyncPush {
+        let frame = protocol::encode_sync_push(drive, &[], true);
+        protocol::decode_sync_push(&frame[1..]).unwrap()
+    }
+
+    #[tokio::test]
+    async fn public_cannot_bootstrap_a_missing_drive_even_on_open() {
+        let db = Db::init_temp("oq5_public_open").await.unwrap();
+        let drive = "did:ad:newdrivepublic";
+        let push = empty_push(drive);
+
+        let err = import_sync_push(&push, &db, &ForAgent::Public, false)
+            .await
+            .expect_err("Public must not create a drive on an open node");
+        assert!(
+            err.reason.contains("unauthenticated"),
+            "reason names the cause: {}",
+            err.reason
+        );
+        assert!(
+            db.get_resource(&drive.into()).await.is_err(),
+            "the refused push must not have stored the drive"
+        );
+    }
+
+    #[tokio::test]
+    async fn authenticated_first_sync_on_open_still_admits_a_new_drive() {
+        let db = Db::init_temp("oq5_auth_open").await.unwrap();
+        let (alice, _) = db.setup("Alice").await.unwrap();
+        let drive = "did:ad:newdrivealice";
+        let push = empty_push(drive);
+
+        import_sync_push(
+            &push,
+            &db,
+            &ForAgent::AgentSubject(alice.subject.clone()),
+            false,
+        )
+        .await
+        .expect("an authenticated agent on Open may bootstrap a drive");
+    }
+
+    #[tokio::test]
+    async fn owner_mode_refuses_a_stranger_bootstrapping_a_new_drive() {
+        let db = Db::init_temp("oq5_owner_stranger").await.unwrap();
+        let (owner, _) = db.setup("Owner").await.unwrap();
+        let stranger = db.create_agent(Some("Stranger")).await.unwrap();
+        db.set_sync_policy(Arc::new(OwnerPolicy::new(owner.subject.to_string())));
+
+        let drive = "did:ad:strangerdrive";
+        let push = empty_push(drive);
+        let err = import_sync_push(
+            &push,
+            &db,
+            &ForAgent::AgentSubject(stranger.subject.clone()),
+            false,
+        )
+        .await
+        .expect_err("a stranger must not dump a drive onto an owner-gated node");
+        assert!(
+            err.reason.contains("does not host new Drives"),
+            "the refusal speaks to the visitor: {}",
+            err.reason
+        );
+        assert!(
+            !db.sync_policy().admit_drive_write(drive),
+            "the refused drive must not have been enrolled"
+        );
+    }
+
+    #[tokio::test]
+    async fn owner_mode_enrolls_the_owners_new_drive_from_sync_push() {
+        let db = Db::init_temp("oq5_owner_self").await.unwrap();
+        let (owner, _) = db.setup("Owner").await.unwrap();
+        db.set_sync_policy(Arc::new(OwnerPolicy::new(owner.subject.to_string())));
+
+        let drive = "did:ad:ownerssecond";
+        let push = empty_push(drive);
+        import_sync_push(
+            &push,
+            &db,
+            &ForAgent::AgentSubject(owner.subject.clone()),
+            false,
+        )
+        .await
+        .expect("the owner may bootstrap a second drive");
+        assert!(
+            db.sync_policy().admit_drive_write(drive),
+            "the owner's new drive must be enrolled so later writes land"
+        );
+    }
+
+    #[tokio::test]
+    async fn sub_on_a_public_drive_is_a_session_command_not_an_error() {
+        let db = Db::init_temp("sub_public").await.unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let mut resource = db.get_resource(&drive.as_str().into()).await.unwrap();
+        resource
+            .set_unsafe(
+                crate::urls::READ.into(),
+                crate::Value::ResourceArray(vec![crate::urls::PUBLIC_AGENT.into()]),
+            )
+            .unwrap();
+        db.add_resource_opts(&resource, false, true, true)
+            .await
+            .unwrap();
+
+        let frame = protocol::encode_sub(&drive);
+        let mut agent = ForAgent::Public;
+        let out = handle_frame_full(&frame, &db, &mut agent).await;
+        assert!(
+            out.frames.is_empty(),
+            "a granted SUB has no reply on the wire"
+        );
+        assert_eq!(out.subscribe.as_deref(), Some(drive.as_str()));
+        assert!(out.unsubscribe.is_none());
+    }
+
+    #[tokio::test]
+    async fn sub_without_read_right_is_refused_out_loud() {
+        let db = Db::init_temp("sub_denied").await.unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let mallory = db.create_agent(Some("Mallory")).await.unwrap();
+
+        let frame = protocol::encode_sub(&drive);
+        let mut agent = ForAgent::AgentSubject(mallory.subject.clone());
+        let out = handle_frame_full(&frame, &db, &mut agent).await;
+        assert!(out.subscribe.is_none(), "must not ask the hub to register");
+        let err = out
+            .frames
+            .iter()
+            .find(|f| f.first() == Some(&tag::ERROR))
+            .expect("an unauthorized SUB is answered with ERROR");
+        assert_eq!(
+            u16::from_be_bytes([err[3], err[4]]),
+            error_code::UNAUTHORIZED_READ
+        );
+        let msg = String::from_utf8_lossy(&err[5..]);
+        assert!(msg.contains("SUB refused"), "{msg}");
+        assert!(msg.contains(&drive), "{msg}");
+    }
+
+    #[tokio::test]
+    async fn unsub_is_a_session_command() {
+        let db = Db::init_temp("unsub_cmd").await.unwrap();
+        let frame = protocol::encode_unsub("did:ad:whatever");
+        let mut agent = ForAgent::Public;
+        let out = handle_frame_full(&frame, &db, &mut agent).await;
+        assert!(out.frames.is_empty());
+        assert_eq!(out.unsubscribe.as_deref(), Some("did:ad:whatever"));
+    }
 }

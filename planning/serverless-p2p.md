@@ -198,10 +198,11 @@ unblocked:
   `register_live_peer`). (2026-09-01: the live loop now refuses every
   non-AUTH frame from a still-`Public` peer we did not dial, which
   subsumes the budget.)
-- [ ] **OQ5 for serverless:** a drive is admitted on a device iff the
-  authenticated agent has write rights on it (same-agent: always true for
-  your own drives). The `Err(_) => true` carve-out is replaced by "the
-  pairing/first-sync flow explicitly enrolls the drive."
+- [x] (2026-09-05) **OQ5:** a drive this node has never stored is admitted
+  only through `admit_unknown_drive`. `Public` never creates one. Owner
+  enrolls only the owner. Open still admits an authenticated first-sync
+  (same-agent devices on `OpenPolicy` keep working). Pairing-as-explicit
+  enrollment of specific drives (`KnownPeer` capability records) remains P3.
 
 ### P1 — Consolidation (the "cleanly" part; build on one engine, not two)
 
@@ -222,10 +223,14 @@ now load-bearing rather than hygiene:
   not to need a `handle_frame` signature change — `source_id` is just a field
   on `CommitIngestOpts`, and the hub's per-source echo-suppression /
   domain-ownership / Loro-causality gates are opts booleans the peer path
-  leaves off. **`SUB`/`UNSUB` remain the only hand-rolled arms** (need the
-  commit-monitor actor handle). AUTH+GET were the pure request→response pair
-  that had actually drifted; COMMIT-apply was the additive capability peers
-  needed, and is now one implementation instead of two.
+  leaves off. **`SUB`/`UNSUB` parse + `check_read` live in
+  `handle_frame_full` (2026-09-05);** the WS handler still `do_send`s to the
+  commit monitor because the engine has no actor mailbox. Folding
+  `LoroSyncBroadcaster` into `CommitMonitor` is
+  [`unify-subscription-actors.md`](./unify-subscription-actors.md). AUTH+GET
+  were the pure request→response pair that had actually drifted; COMMIT-apply
+  was the additive capability peers needed, and is now one implementation
+  instead of two.
 - [ ] **`trusted_hub` / `untrusted_peer` module split** in `ws_apply.rs` so
   the unconditional apply paths can't be reached from accept code.
 - [ ] Collapse the remaining four `sync_drive_with_peer*` variants (two of

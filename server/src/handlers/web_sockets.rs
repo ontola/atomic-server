@@ -371,22 +371,49 @@ impl WebSocketConnection {
             // where only the server resolved it and an Iroh peer received raw
             // `internal:/` subjects. Delegated alongside the other read-only
             // frames below.
+            //
+            // SUB/UNSUB are engine-owned as of 2026-09: parse + `check_read`
+            // live in `handle_frame_full`. This handler only registers the
+            // connection with the commit monitor when the engine admits the
+            // subscription. The monitor still re-checks on `Subscribe` as
+            // defence in depth.
             ws_v2::tag::GET
             | ws_v2::tag::SYNC
             | ws_v2::tag::SYNC_PUSH
             | ws_v2::tag::BLOB_REQUEST
-            | ws_v2::tag::BLOB_RESPONSE => {
+            | ws_v2::tag::BLOB_RESPONSE
+            | ws_v2::tag::SUB
+            | ws_v2::tag::UNSUB => {
                 let store = self.store.clone();
                 let mut agent = self.agent.clone();
                 let bin_vec = bin.to_vec();
                 ctx.spawn(
                     async move {
-                        atomic_lib::sync::engine::handle_frame(&bin_vec, &store, &mut agent).await
+                        atomic_lib::sync::engine::handle_frame_full(&bin_vec, &store, &mut agent)
+                            .await
                     }
                     .into_actor(self)
-                    .map(|responses, _actor, ctx| {
-                        for response in responses {
+                    .map(|out, actor, ctx| {
+                        for response in out.frames {
                             ctx.binary(response);
+                        }
+                        if let Some(subject) = out.subscribe {
+                            actor
+                                .commit_monitor_addr
+                                .do_send(crate::actor_messages::Subscribe {
+                                    addr: ctx.address(),
+                                    subject,
+                                    agent: actor.agent.to_string(),
+                                    source_id: actor.connection_id.clone(),
+                                });
+                        }
+                        if let Some(subject) = out.unsubscribe {
+                            actor
+                                .commit_monitor_addr
+                                .do_send(crate::actor_messages::Unsubscribe {
+                                    addr: ctx.address(),
+                                    subject,
+                                });
                         }
                     }),
                 );
@@ -450,35 +477,6 @@ impl WebSocketConnection {
                         }
                     }),
                 );
-            }
-
-            // The one subscription frame. The monitor looks at the subject:
-            // a drive registers drive-wide fan-out plus the drive resource
-            // itself, anything else registers that one subject. Not
-            // AUTH-gated: an anonymous session of a public share link
-            // subscribes to what it may read; `check_read` decides.
-            ws_v2::tag::SUB => {
-                if let Ok(subject) = std::str::from_utf8(&bin[1..]) {
-                    self.commit_monitor_addr
-                        .do_send(crate::actor_messages::Subscribe {
-                            addr: ctx.address(),
-                            subject: subject.to_string(),
-                            agent: self.agent.to_string(),
-                            source_id: self.connection_id.clone(),
-                        });
-                }
-            }
-
-            ws_v2::tag::UNSUB => {
-                if let Ok(subject) = std::str::from_utf8(&bin[1..]) {
-                    // Same raw key `SUB` registered under, so the fan-out
-                    // entry is actually found and removed.
-                    self.commit_monitor_addr
-                        .do_send(crate::actor_messages::Unsubscribe {
-                            addr: ctx.address(),
-                            subject: subject.to_string(),
-                        });
-                }
             }
 
             // Liveness probe from the browser. A browser cannot see the

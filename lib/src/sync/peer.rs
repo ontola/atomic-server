@@ -692,40 +692,21 @@ async fn admitted_for_drive(
         return verdict;
     }
 
-    // Admission gate first (allowlist/quota/bootstrap grace) — cheap,
-    // in-memory. No-op under the default OpenPolicy (self-hosted / FOSS).
-    let policy = store.sync_policy();
-
-    if !policy.admit_drive_write(drive_subject) {
-        // Same bootstrap question as `import_sync_push`: a drive we do not have
-        // may be a live update for one arriving right now. Whether that is
-        // allowed depends on who is pushing it, which only the policy knows.
-        let drive_subj =
-            crate::Subject::from_raw(drive_subject, store.get_base_domain().as_deref());
-        let is_new_here = store.get_resource(&drive_subj).await.is_err();
-
-        if is_new_here && policy.may_enroll_drive(drive_subject, agent) {
-            policy.enroll_drive(drive_subject);
-        } else {
-            cache.insert(drive_subject.to_string(), false);
-            return false;
-        }
-    }
-
-    // ACL: may this write land? The sending peer's own write access, or —
-    // when we dialed this peer (`trust_owned`) — our own agent's, so a server
-    // relaying our drive back to us is accepted even though it authenticates
-    // as its own agent (see `may_accept_drive_write`). Checked once against the
-    // drive resource itself (rights are inherited by its children, so this
-    // answers "can this write touch anything in this drive"). Mirrors
-    // import_sync_push's bootstrap carve-out: a drive that doesn't exist
-    // locally yet has nothing to check against, so admission alone gates it.
+    // Same split as `import_sync_push`: an existing drive is gated by
+    // allowlist/quota then ACL; a drive we have never stored goes through
+    // `admit_unknown_drive` (OQ5 — Public never creates, Owner enrolls only
+    // the owner, Open still admits an authenticated first-sync).
     let drive_subj = crate::Subject::from_raw(drive_subject, store.get_base_domain().as_deref());
     let verdict = match store.get_resource(&drive_subj).await {
         Ok(drive_resource) => {
-            super::engine::may_accept_drive_write(store, &drive_resource, agent, trust_owned).await
+            if !store.sync_policy().admit_drive_write(drive_subject) {
+                false
+            } else {
+                super::engine::may_accept_drive_write(store, &drive_resource, agent, trust_owned)
+                    .await
+            }
         }
-        Err(_) => true,
+        Err(_) => super::engine::admit_unknown_drive(store, drive_subject, agent),
     };
 
     cache.insert(drive_subject.to_string(), verdict);
@@ -1719,8 +1700,9 @@ pub async fn sync_drive_with_peer_using_outcome(
                     // relaying it is a different agent (a server holding our
                     // drive authenticates as its own node agent, not ours).
                     // `import_sync_push` still runs the drive-level check + the
-                    // admission gate, with the bootstrap carve-out for a drive
-                    // that doesn't exist locally yet.
+                    // admission gate. A drive that does not exist locally is
+                    // enrolled only when the policy allows it (OQ5); Public
+                    // never creates one.
                     match super::engine::import_sync_push(&push, store, &remote_agent, true).await {
                         Ok((count, blob_requests)) => {
                             total_imported += count;
@@ -2625,6 +2607,59 @@ mod live_write_admission_tests {
             )
             .await,
             "an unrelated agent with no rights to the drive must be rejected"
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_drive_is_not_a_free_pass_for_public() {
+        let db = Db::init_temp("live_admission_missing_public")
+            .await
+            .unwrap();
+        let mut cache = HashMap::new();
+        assert!(
+            !admitted_for_drive(&db, &ForAgent::Public, "did:ad:brandnew", false, &mut cache).await,
+            "Public must not live-write a drive this node has never stored"
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_drive_on_owner_mode_admits_only_the_owner() {
+        let db = Db::init_temp("live_admission_missing_owner").await.unwrap();
+        let (owner, _) = db.setup("Owner").await.unwrap();
+        let stranger = db.create_agent(Some("Stranger")).await.unwrap();
+        db.set_sync_policy(std::sync::Arc::new(crate::sync::policy::OwnerPolicy::new(
+            owner.subject.to_string(),
+        )));
+
+        let missing = "did:ad:notonthisnode";
+        let mut cache = HashMap::new();
+        assert!(
+            !admitted_for_drive(
+                &db,
+                &ForAgent::AgentSubject(stranger.subject.clone()),
+                missing,
+                false,
+                &mut cache
+            )
+            .await,
+            "a stranger must not live-write a drive this node has never stored"
+        );
+
+        let mut cache = HashMap::new();
+        assert!(
+            admitted_for_drive(
+                &db,
+                &ForAgent::AgentSubject(owner.subject.clone()),
+                missing,
+                false,
+                &mut cache
+            )
+            .await,
+            "the owner may live-write a drive arriving for the first time"
+        );
+        assert!(
+            db.sync_policy().admit_drive_write(missing),
+            "admitting the owner must enroll the drive"
         );
     }
 
