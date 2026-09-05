@@ -1631,13 +1631,25 @@ export class WSClient {
     push: string[];
     remove?: string[];
     pullFrom?: Record<string, Record<string, number>>;
+    removeCommits?: Record<string, string>;
   }) {
+    const clientDb = this.store.getClientDb();
+
     for (const subject of diff.remove ?? []) {
+      const envelope = diff.removeCommits?.[subject];
+      if (envelope && clientDb) {
+        try {
+          await clientDb.applyCommit(envelope);
+        } catch (e) {
+          console.warn('[WS] signed SYNC_DIFF remove refused:', subject, e);
+          continue;
+        }
+      }
+
       this.store.removeResource(subject);
     }
 
     const entries: Array<{ subject: string; loroBytes: Uint8Array }> = [];
-    const clientDb = this.store.getClientDb();
 
     for (const subject of diff.pull) {
       // F1 interim (planning/unified-sync.md): a subject with a pending

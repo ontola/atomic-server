@@ -713,20 +713,38 @@ async fn admitted_for_drive(
     verdict
 }
 
-/// Apply one peer-supplied `SYNC_DIFF.remove[]` entry, gated exactly like a
-/// live `DESTROY` frame: the remove list arrives unauthenticated-by-default
-/// from whatever peer we dialed, so deleting a subject we actually hold
-/// requires the peer's proven identity to pass the same admission + ACL check
-/// as any other write. A subject we don't hold has nothing to check rights
-/// against — applied unconditionally, where the tombstone-write is a real
-/// no-op for a never-seen subject.
+/// Apply one peer-supplied `SYNC_DIFF.remove[]` entry. A signed destroy
+/// envelope (`removeCommits[subject]`) is applied as a peer `COMMIT` — the
+/// signature and the signer's rights are the authority, same as the live
+/// link. An unsigned entry (legacy tombstone, cascade child, sender without
+/// the envelope) still goes through the drive-level admission + ACL check.
 async fn apply_peer_remove(
     store: &Db,
     agent: &ForAgent,
     subject: &str,
     trust_owned: bool,
     drive_cache: &mut std::collections::HashMap<String, bool>,
+    destroy_commit: Option<&str>,
 ) {
+    if let Some(commit_json) = destroy_commit {
+        match super::engine::ingest_commit_json(
+            store,
+            commit_json,
+            &super::engine::CommitIngestOpts::peer(),
+        )
+        .await
+        {
+            Ok(_) => return,
+            Err(e) => {
+                tracing::warn!(
+                    "[sync] rejected signed SYNC_DIFF remove for {}: {e}",
+                    &subject[..subject.len().min(30)]
+                );
+                return;
+            }
+        }
+    }
+
     match super::ws_apply::resolve_destroy_drive(store, subject).await {
         Some(drive_subject) => {
             if admitted_for_drive(store, agent, &drive_subject, trust_owned, drive_cache).await {
@@ -1653,9 +1671,18 @@ pub async fn sync_drive_with_peer_using_outcome(
                     for subject in &diff.remove {
                         // Dial side: we chose this peer, so a remove targeting a
                         // drive we own is honored even when the peer relaying it
-                        // is a different agent (trust_owned=true).
-                        apply_peer_remove(store, &remote_agent, subject, true, &mut drive_cache)
-                            .await;
+                        // is a different agent (trust_owned=true). A signed
+                        // envelope, when present, is applied as a COMMIT instead.
+                        let envelope = diff.remove_commits.get(subject).map(String::as_str);
+                        apply_peer_remove(
+                            store,
+                            &remote_agent,
+                            subject,
+                            true,
+                            &mut drive_cache,
+                            envelope,
+                        )
+                        .await;
                     }
                     pull_subjects = diff.pull.clone();
 
@@ -2989,6 +3016,7 @@ mod initiator_trust_tests {
             &child,
             false,
             &mut cache,
+            None,
         )
         .await;
 
@@ -3018,6 +3046,7 @@ mod initiator_trust_tests {
             &child,
             false,
             &mut cache,
+            None,
         )
         .await;
 
@@ -3029,6 +3058,92 @@ mod initiator_trust_tests {
             crate::sync::tombstones::is_tombstoned(&db, &child),
             "the owner's remove[] entry must record a tombstone"
         );
+    }
+
+    /// A signed destroy envelope is applied as a COMMIT: the connection's
+    /// AUTH identity does not authorise the delete, the commit's signer does.
+    /// Mallory's session can relay Alice's destroy and it still lands.
+    #[tokio::test]
+    async fn signed_remove_envelope_applies_even_when_connection_agent_is_a_stranger() {
+        let db = Db::init_temp("initiator_remove_signed").await.unwrap();
+        let alice = crate::agents::Agent::new(Some("Alice")).unwrap();
+        db.set_default_agent(alice.clone());
+        let (_drive, child) = private_drive_with_child(&db, &alice).await;
+        let mallory = db.create_agent(Some("Mallory")).await.unwrap();
+
+        let subject = crate::Subject::from_raw(&child, None);
+        let resource = db.get_resource(&subject).await.unwrap();
+        let mut builder = crate::commit::CommitBuilder::new(subject.clone());
+        builder.destroy(true);
+        let commit = builder.sign(&alice, &db, &resource).await.unwrap();
+        let commit_json = commit
+            .into_resource(&db)
+            .await
+            .unwrap()
+            .to_json_ad(None)
+            .unwrap();
+
+        let mut cache = HashMap::new();
+        apply_peer_remove(
+            &db,
+            &ForAgent::AgentSubject(mallory.subject.clone()),
+            &child,
+            false,
+            &mut cache,
+            Some(&commit_json),
+        )
+        .await;
+
+        assert!(
+            db.get_resource(&subject).await.is_err(),
+            "a valid destroy envelope must apply regardless of the connection agent"
+        );
+        assert!(crate::sync::tombstones::is_tombstoned(&db, &child));
+        assert!(
+            crate::sync::tombstones::destroy_envelope(&db, &child).is_some(),
+            "the applied destroy must leave its envelope on the tombstone"
+        );
+    }
+
+    /// A tampered envelope must not fall back to the unsigned tombstone path.
+    #[tokio::test]
+    async fn tampered_remove_envelope_does_not_delete() {
+        let db = Db::init_temp("initiator_remove_tampered").await.unwrap();
+        let alice = crate::agents::Agent::new(Some("Alice")).unwrap();
+        db.set_default_agent(alice.clone());
+        let (_drive, child) = private_drive_with_child(&db, &alice).await;
+
+        let subject = crate::Subject::from_raw(&child, None);
+        let resource = db.get_resource(&subject).await.unwrap();
+        let mut builder = crate::commit::CommitBuilder::new(subject.clone());
+        builder.destroy(true);
+        let commit = builder.sign(&alice, &db, &resource).await.unwrap();
+        let commit_json = commit
+            .into_resource(&db)
+            .await
+            .unwrap()
+            .to_json_ad(None)
+            .unwrap();
+        let mut json: serde_json::Value = serde_json::from_str(&commit_json).unwrap();
+        json[crate::urls::SIGNATURE] = serde_json::Value::String("AAAA".into());
+        let tampered = json.to_string();
+
+        let mut cache = HashMap::new();
+        apply_peer_remove(
+            &db,
+            &ForAgent::AgentSubject(alice.subject.clone()),
+            &child,
+            false,
+            &mut cache,
+            Some(&tampered),
+        )
+        .await;
+
+        assert!(
+            db.get_resource(&subject).await.is_ok(),
+            "a tampered destroy envelope must not delete, even from the owner"
+        );
+        assert!(!crate::sync::tombstones::is_tombstoned(&db, &child));
     }
 }
 

@@ -1096,6 +1096,8 @@ pub async fn handle_sync_vv_filtered(
     let mut pull_from: std::collections::HashMap<String, std::collections::HashMap<String, i32>> =
         std::collections::HashMap::new();
     let mut remove: Vec<String> = Vec::new();
+    let mut remove_commits: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
     let mut push_entries: Vec<(String, Vec<u8>)> = Vec::new();
 
     for (subject, server_vv) in &server_vvs {
@@ -1185,6 +1187,9 @@ pub async fn handle_sync_vv_filtered(
         if !server_vvs.contains_key(subject) {
             if super::tombstones::is_tombstoned(store, subject) {
                 remove.push(subject.clone());
+                if let Some(json) = super::tombstones::destroy_envelope(store, subject) {
+                    remove_commits.insert(subject.clone(), json);
+                }
             } else {
                 pull.push(subject.clone());
                 pull_from
@@ -1211,6 +1216,7 @@ pub async fn handle_sync_vv_filtered(
         &push_subjects,
         &remove,
         &pull_from,
+        &remove_commits,
     ));
 
     if !push_entries.is_empty() {

@@ -3144,6 +3144,12 @@ impl Storelike for Db {
                     .expect("Resource was removed but `commit.destroy` was not set!"));
                 let subject: Subject = commit_response.commit.subject.clone();
                 self.remove_resource(&subject).await?;
+                // `remove_resource` records an unsigned tombstone. Overlay the
+                // signed destroy so bulk `SYNC_DIFF.removeCommits` can carry
+                // the same envelope the live `COMMIT` path forwards.
+                if let Ok(json) = commit_response.commit_resource.to_json_ad(None) {
+                    crate::sync::tombstones::record_destroy_envelope(self, subject.as_str(), &json);
+                }
             }
             _ => {}
         };
