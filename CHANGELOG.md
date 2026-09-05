@@ -7,6 +7,19 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- **Missing-drive bootstrap is no longer a free pass (OQ5).** A
+  `SYNC_PUSH` or live write for a drive this node has never stored goes
+  through `admit_unknown_drive`: `Public` never creates one (even on
+  `OpenPolicy`); Owner mode enrolls only the owner; an authenticated
+  first-sync on an open node still works. AUTH-before-`SYNC_PUSH` already
+  closed the unauthenticated wire; this closes the library path.
+- **`SUB` / `UNSUB` are engine-owned.** Parse and `check_read` live in
+  `handle_frame_full`; the WebSocket handler registers the connection
+  with the commit monitor only when the engine admits the subscription.
+  The `0x20` / `0x21` wire is unchanged (anonymous `SUB` on a public
+  share link still works).
+
+
 ## [v0.41.0-beta.5] - 2026-09-04
 
 - **Local full-text search** in `atomic_lib` (`lib/src/search/`): a KV inverted
