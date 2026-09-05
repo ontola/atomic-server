@@ -1638,12 +1638,20 @@ export class WSClient {
     for (const subject of diff.remove ?? []) {
       const envelope = diff.removeCommits?.[subject];
 
+      // The clientDb applies this as a local-cache write (no signature or
+      // rights check happens in the browser), so a failure here is a local
+      // error, not a refusal. The server already decided the subject is
+      // gone: fall through to the in-memory removal either way, otherwise
+      // the resource stays rendered and is re-listed on every reconcile.
       if (envelope && clientDb) {
         try {
           await clientDb.applyCommit(envelope);
         } catch (e) {
-          console.warn('[WS] signed SYNC_DIFF remove refused:', subject, e);
-          continue;
+          console.warn(
+            '[WS] SYNC_DIFF remove envelope not applied:',
+            subject,
+            e,
+          );
         }
       }
 

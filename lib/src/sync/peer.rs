@@ -738,7 +738,7 @@ async fn apply_peer_remove(
             Err(e) => {
                 tracing::warn!(
                     "[sync] rejected signed SYNC_DIFF remove for {}: {e}",
-                    &subject[..subject.len().min(30)]
+                    crate::utils::truncate_string(subject, 30)
                 );
                 return;
             }
@@ -752,8 +752,8 @@ async fn apply_peer_remove(
             } else {
                 tracing::warn!(
                     "[sync] rejected SYNC_DIFF remove for {} from peer: not admitted for drive {}",
-                    &subject[..subject.len().min(30)],
-                    &drive_subject[..drive_subject.len().min(30)]
+                    crate::utils::truncate_string(subject, 30),
+                    crate::utils::truncate_string(&drive_subject, 30)
                 );
             }
         }

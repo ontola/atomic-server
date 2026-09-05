@@ -82,7 +82,6 @@ Not top-level plans. Indexed so they do not go missing.
 | Document | Status |
 | --- | --- |
 | [`unify-subscription-primitives.md`](./unify-subscription-primitives.md) | **Done in reduced form (2026-09-04).** One `SUB <subject>` frame; `SUBSCRIBE` and `SUBSCRIBE_QUERY` removed. Design text kept as the record. |
-| [`unify-subscription-actors.md`](./unify-subscription-actors.md) | **Done 2026-09-05.** `LoroSyncBroadcaster` folded into `CommitMonitor`; actor not renamed. |
 | [`unify-resource-representations.md`](./unify-resource-representations.md) | **Mostly shipped.** `Resource#cache` is derived from the Loro doc. Remaining: the `_auxValues` overlay. |
 | [`unify-resource-dirty-signals.md`](./unify-resource-dirty-signals.md) | Planned, not started. Single `getSaveState(subject)` enum. |
 | [`subject-types-end-to-end.md`](./subject-types-end-to-end.md) | Partial. Rust `DidKind` shipped; the browser brand still has no consumer. |

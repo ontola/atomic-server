@@ -721,10 +721,11 @@ pub async fn ingest_commit(
     let commit_opts = crate::commit::CommitOpts {
         validate_schema: true,
         validate_signature: true,
-        // Timestamp validation bounds replay: without it, a captured signed
-        // destroy commit could be replayed unboundedly later (e.g. after the
-        // subject was legitimately recreated). Peers therefore need
-        // roughly-sane clocks — the same requirement AUTH already imposes.
+        // Rejects commits stamped in the future. This is NOT an age bound —
+        // a bulk reconcile legitimately re-sends old destroy envelopes to a
+        // replica that was offline. Replay of a destroy against a recreated
+        // subject is refused in `Commit::apply_opts` (a destroy commit that
+        // is already stored here, or one older than the current genesis).
         validate_timestamp: true,
         validate_rights: true,
         // https://github.com/atomicdata-dev/atomic-server/issues/412
@@ -1098,6 +1099,10 @@ pub async fn handle_sync_vv_filtered(
     let mut remove: Vec<String> = Vec::new();
     let mut remove_commits: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
+    // A destroyed subject has no resource left to `check_read` against, so
+    // the signed destroy envelope is gated on read access to the drive being
+    // synced. Computed once, lazily: most reconciles carry no tombstones.
+    let mut may_read_drive: Option<bool> = None;
     let mut push_entries: Vec<(String, Vec<u8>)> = Vec::new();
 
     for (subject, server_vv) in &server_vvs {
@@ -1188,7 +1193,17 @@ pub async fn handle_sync_vv_filtered(
             if super::tombstones::is_tombstoned(store, subject) {
                 remove.push(subject.clone());
                 if let Some(json) = super::tombstones::destroy_envelope(store, subject) {
-                    remove_commits.insert(subject.clone(), json);
+                    let allowed = match may_read_drive {
+                        Some(v) => v,
+                        None => {
+                            let v = agent_may_read_drive(store, drive, agent).await;
+                            may_read_drive = Some(v);
+                            v
+                        }
+                    };
+                    if allowed {
+                        remove_commits.insert(subject.clone(), json);
+                    }
                 }
             } else {
                 pull.push(subject.clone());
@@ -1301,6 +1316,20 @@ impl std::fmt::Display for SyncPushRejected {
             "SYNC_PUSH rejected for drive {}: {}",
             self.drive, self.reason
         )
+    }
+}
+
+/// Whether `agent` may read `drive`. `false` when the drive is not stored
+/// here. Used to gate what a bulk reconcile hands out about a drive's
+/// destroyed subjects (the signed destroy envelope names the signer and
+/// when they acted), since the destroyed resource itself is gone.
+async fn agent_may_read_drive(store: &Db, drive: &str, agent: &crate::agents::ForAgent) -> bool {
+    let drive_subject = crate::Subject::from_raw(drive, store.get_base_domain().as_deref());
+    match store.get_resource(&drive_subject).await {
+        Ok(resource) => crate::hierarchy::check_read(store, &resource, agent)
+            .await
+            .is_ok(),
+        Err(_) => false,
     }
 }
 
@@ -1784,6 +1813,166 @@ mod bootstrap_and_sub_tests {
         let msg = String::from_utf8_lossy(&err[5..]);
         assert!(msg.contains("SUB refused"), "{msg}");
         assert!(msg.contains(&drive), "{msg}");
+    }
+
+    async fn signed_destroy_json(
+        db: &Db,
+        agent: &crate::agents::Agent,
+        subject: &crate::Subject,
+    ) -> String {
+        let resource = db.get_resource(subject).await.unwrap();
+        let mut builder = crate::commit::CommitBuilder::new(subject.clone());
+        builder.destroy(true);
+        let commit = builder.sign(agent, db, &resource).await.unwrap();
+        commit
+            .into_resource(db)
+            .await
+            .unwrap()
+            .to_json_ad(None)
+            .unwrap()
+    }
+
+    async fn secret_child(db: &Db, drive: &str) -> String {
+        db.create_resource(
+            crate::urls::CLASS,
+            drive,
+            "Secret Doc",
+            Some(vec![
+                (
+                    crate::urls::DESCRIPTION,
+                    crate::Value::String("top secret".into()),
+                ),
+                (
+                    crate::urls::SHORTNAME,
+                    crate::Value::Slug("secret-doc".into()),
+                ),
+            ]),
+        )
+        .await
+        .unwrap()
+    }
+
+    fn decode_diff(frames: Vec<Vec<u8>>) -> protocol::DecodedSyncDiff {
+        frames
+            .into_iter()
+            .find(|f| f.first() == Some(&tag::SYNC_DIFF))
+            .and_then(|f| protocol::decode_sync_diff(&f[1..]))
+            .expect("reconcile answers with a SYNC_DIFF")
+    }
+
+    /// The destroyed resource is gone, so the only thing left to check the
+    /// envelope against is the drive: a session that may not read the
+    /// drive gets the subject-only `remove[]` entry and no envelope.
+    #[tokio::test]
+    async fn sync_diff_envelope_is_only_handed_to_drive_readers() {
+        let db = Db::init_temp("envelope_read_gate").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let child = secret_child(&db, &drive).await;
+        let subject = crate::Subject::from_raw(&child, None);
+        let json = signed_destroy_json(&db, &alice, &subject).await;
+        ingest_commit_json(&db, &json, &CommitIngestOpts::peer())
+            .await
+            .expect("the owner's destroy applies");
+        assert!(super::super::tombstones::destroy_envelope(&db, &child).is_some());
+
+        let mut client_resources = std::collections::HashMap::new();
+        client_resources.insert(child.clone(), Vec::<i32>::new());
+
+        let public = decode_diff(
+            handle_sync_vv_filtered(
+                &drive,
+                "",
+                &[],
+                &client_resources,
+                None,
+                &db,
+                &ForAgent::Public,
+            )
+            .await,
+        );
+        assert_eq!(public.remove, vec![child.clone()]);
+        assert!(
+            public.remove_commits.is_empty(),
+            "an anonymous session must not receive the signed destroy envelope"
+        );
+
+        let owner = decode_diff(
+            handle_sync_vv_filtered(
+                &drive,
+                "",
+                &[],
+                &client_resources,
+                None,
+                &db,
+                &ForAgent::AgentSubject(alice.subject.clone()),
+            )
+            .await,
+        );
+        assert!(
+            owner.remove_commits.contains_key(&child),
+            "a drive reader receives the envelope"
+        );
+    }
+
+    /// A destroy envelope is durable and re-sent by bulk sync, so a stale
+    /// replica can present it again after the subject was legitimately
+    /// recreated. The commit is already stored here: refuse it.
+    #[tokio::test]
+    async fn replayed_destroy_is_refused_after_the_subject_is_recreated() {
+        let db = Db::init_temp("destroy_replay_stored").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let subject = crate::Subject::from_raw(&drive, None);
+        let json = signed_destroy_json(&db, &alice, &subject).await;
+
+        ingest_commit_json(&db, &json, &CommitIngestOpts::peer())
+            .await
+            .expect("the first destroy applies");
+        assert!(db.get_resource(&subject).await.is_err());
+
+        // The private drive has a deterministic subject: a repeat genesis
+        // brings back the very same DID (and clears the tombstone).
+        let again = db.ensure_private_drive().await.unwrap();
+        assert_eq!(again, drive, "repeat genesis recreates the same subject");
+        assert!(db.get_resource(&subject).await.is_ok());
+
+        let err = ingest_commit_json(&db, &json, &CommitIngestOpts::peer())
+            .await
+            .expect_err("the same envelope must not destroy the recreated drive");
+        assert!(err.to_string().contains("already applied"), "{err}");
+        assert!(
+            db.get_resource(&subject).await.is_ok(),
+            "the recreated drive survives the replay"
+        );
+        assert!(!super::super::tombstones::is_tombstoned(&db, &drive));
+    }
+
+    /// A destroy older than the genesis of the resource it names cannot be
+    /// about this resource: refuse it even when the commit is unknown here.
+    #[tokio::test]
+    async fn destroy_predating_the_genesis_is_refused() {
+        let db = Db::init_temp("destroy_replay_genesis").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let child = secret_child(&db, &drive).await;
+        let subject = crate::Subject::from_raw(&child, None);
+
+        let mut resource = db.get_resource(&subject).await.unwrap();
+        resource
+            .set_unsafe(
+                crate::urls::CREATED_AT.into(),
+                crate::Value::Timestamp(crate::utils::now() + 60_000),
+            )
+            .unwrap();
+        db.add_resource_opts(&resource, false, true, true)
+            .await
+            .unwrap();
+
+        let json = signed_destroy_json(&db, &alice, &subject).await;
+        let err = ingest_commit_json(&db, &json, &CommitIngestOpts::peer())
+            .await
+            .expect_err("a destroy stamped before the genesis is a replay");
+        assert!(err.to_string().contains("predates"), "{err}");
+        assert!(db.get_resource(&subject).await.is_ok());
+        assert!(!super::super::tombstones::is_tombstoned(&db, &child));
     }
 
     #[tokio::test]

@@ -200,8 +200,7 @@ that turned out to be already done, or blocked by a finding, say so inline.
   the commit monitor only when the engine admits the subscription.
   `LoroSyncBroadcaster` is folded into `CommitMonitor` (Loro ephemera +
   drive presence maps, one `UnsubscribeAll`).
-  ([`serverless-p2p.md`](./serverless-p2p.md),
-  [`unify-subscription-actors.md`](./unify-subscription-actors.md))
+  ([`serverless-p2p.md`](./serverless-p2p.md))
 - [ ] The drain targets a transport / `SyncSession`, not an endpoint URL string
   (this doc).
 - [~] (2026-09-05) — `AtomicTransport` trait + in-process `ChannelTransport`

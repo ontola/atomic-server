@@ -26,8 +26,12 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   that subject to the JSON-AD envelope and the receiver applies it as a
   peer `COMMIT`. A bad signature does not fall back to the unsigned
   tombstone path. Senders without the envelope still send a subject-only
-  `remove[]` entry (admission-gated). Requiring an envelope on every
-  delete still waits on `Tree::Envelopes`.
+  `remove[]` entry (admission-gated). The envelope is only handed to a
+  session that may read the drive; a signed destroy that is already
+  stored here, or that predates the current resource's genesis, is
+  refused as a replay. The browser applies the envelope as a local-cache
+  write and removes the resource either way. Requiring an envelope on
+  every delete still waits on `Tree::Envelopes`.
 - **`AtomicTransport` / `SyncSession` first slice.** The engine loop is
   callable over any byte-pipe (`lib/src/sync/transport.rs`,
   `SyncSession::serve`). Iroh and WebSocket still have their own

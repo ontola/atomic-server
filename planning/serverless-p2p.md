@@ -231,8 +231,7 @@ now load-bearing rather than hygiene:
   leaves off. **`SUB`/`UNSUB` parse + `check_read` live in
   `handle_frame_full` (2026-09-05);** the WS handler still `do_send`s to the
   commit monitor because the engine has no actor mailbox.   Folding
-  `LoroSyncBroadcaster` into `CommitMonitor` landed 2026-09-05
-  ([`unify-subscription-actors.md`](./unify-subscription-actors.md)). AUTH+GET
+  `LoroSyncBroadcaster` into `CommitMonitor` landed 2026-09-05. AUTH+GET
   were the pure request→response pair that had actually drifted; COMMIT-apply
   was the additive capability peers needed, and is now one implementation
   instead of two.

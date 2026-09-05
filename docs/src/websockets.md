@@ -724,7 +724,10 @@ commit cascades there too.
 holds a tombstone for. When the sender still has the signed destroy
 commit on that tombstone, `removeCommits` is a `{ subject: commitJson }`
 map of those envelopes; the receiver applies each as a peer `COMMIT`
-(signature + the signer's rights). Entries without an envelope stay on
+(signature + the signer's rights). The sender attaches envelopes only
+when the session may read the drive, and a receiver refuses a destroy
+it already holds, or one older than the resource's genesis, as a
+replay. Entries without an envelope stay on
 the unsigned path: the receiver applies them only if the sending identity
 is admitted for that subject's drive, the same drive-level write verdict,
 with the dial-side "trust owned" relaxation. A subject whose drive cannot
