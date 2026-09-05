@@ -183,6 +183,10 @@ export function useCollection(
     }
 
     let cancelled = false;
+    // A query swap must not keep the previous collection's `ready`. The grid
+    // renders `aria-busy={!ready}`; leaving it true while the new fetch is
+    // in flight made tests (and AT) think a still-loading table had settled.
+    setReady(false);
 
     col.waitForReady().then(() => {
       if (cancelled) return;
