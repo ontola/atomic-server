@@ -155,6 +155,15 @@ export type VaultEnrollment = {
   used_bytes: number;
   quota_bytes: number;
   last_backup_at: number | null;
+  /**
+   * The key epoch this drive's uploads must be sealed under. Bumped by a
+   * re-key; the control plane refuses objects declaring any other epoch.
+   *
+   * Optional only for the deploy window in which a control plane predating
+   * epoch tracking is still answering — callers read it as `?? 1`, the epoch
+   * every drive started at.
+   */
+  key_epoch?: number;
 };
 
 export type BackupOutcome =
@@ -357,6 +366,12 @@ export type VaultDriveState = {
   checkpoints: VaultCheckpoint[];
   pending_uploads: number;
   confirmed_objects: number;
+  /**
+   * Confirmed objects still sealed under an epoch before the drive's current
+   * one. Non-zero after a re-key means that much history is still readable
+   * with the old key, until this client re-seals and drops it.
+   */
+  stale_epoch_objects?: number;
 };
 
 /**
@@ -805,6 +820,11 @@ export function runVaultBackup(args: {
 
     return backupDrive({
       ...args,
+      // From the state just read, never the caller's value: after a re-key the
+      // server refuses anything sealed under the old epoch, and a long-lived
+      // caller holding the epoch it started with is exactly the client that
+      // would keep writing under a key someone was removed from.
+      keyEpoch: state.enrollment.key_epoch ?? 1,
       segment: nextSegmentFor(state, args.devicePubkey),
       checkpointN: nextCheckpointFor(state),
       driveHasCheckpoint: state.checkpoints.length > 0,
