@@ -161,15 +161,41 @@ export type BackupOutcome =
   | { status: 'nothing-to-do' }
   | {
       status: 'backed-up';
+      /** `'pack'` for an incremental delta, `'checkpoint'` for a fresh anchor. */
+      kind: SegmentKind;
       resources: number;
+      /**
+       * Resources this pass skipped because they had not changed since the last
+       * one. On a healthy incremental pass this is nearly the whole drive.
+       */
+      unchanged: number;
       bytes: number;
       objectKey: string;
     };
+
+export type SegmentKind = 'pack' | 'checkpoint';
 
 export type RestoreOutcome = {
   packsRead: number;
   resourcesRestored: number;
   tombstonesApplied: number;
+  /** Objects the newest checkpoint subsumed, so they were never read. */
+  objectsSkipped: number;
+  /**
+   * Objects that would not open. Non-zero means part of the vault is corrupt or
+   * foreign — everything else still restored, and reporting a clean restore
+   * without mentioning this would be a lie.
+   */
+  objectsUnreadable: number;
+};
+
+/** What a `VaultCheckpointRecord` looks like on the wire. */
+export type VaultCheckpoint = {
+  checkpoint_n: number;
+  /** Device pubkey → last inclusive segment this checkpoint provably holds. */
+  coverage: Record<string, number>;
+  checkpoint_object_id: string;
+  created_at: number;
 };
 
 /**
@@ -187,16 +213,24 @@ export type VaultCapableDb = {
     drivePseudonym: string,
     devicePubkey: string,
     segment: number,
+    checkpointN: number,
+    driveHasCheckpoint: boolean,
+    observedLanes: Record<string, number>,
   ): Promise<{
     objectKey: string;
     sealed: Uint8Array;
+    kind: SegmentKind;
     resources: number;
+    unchanged: number;
     tombstones: number;
+    /** Checkpoints only; published verbatim to the control plane. */
+    coverage: Record<string, number>;
   } | null>;
   vaultImport(
     key: Uint8Array,
     keyEpoch: number,
     drivePseudonym: string,
+    devicePubkey: string,
     objects: { objectKey: string; sealed: Uint8Array }[],
   ): Promise<RestoreOutcome>;
   /** Marks a sealed segment as durably stored. See `backupDrive`. */
@@ -320,9 +354,24 @@ export type VaultDriveState = {
   enrollment: VaultEnrollment;
   /** Device pubkey → last segment number written to that lane. */
   lanes: Record<string, number>;
+  checkpoints: VaultCheckpoint[];
   pending_uploads: number;
   confirmed_objects: number;
 };
+
+/**
+ * The checkpoint number this device should claim next.
+ *
+ * Taken from the server so two devices do not both mint number 1 over an
+ * anchorless vault. They still can — the read and the publish are not atomic —
+ * and `publish_checkpoint` rejects the loser rather than letting two records
+ * claim different coverage over one set of stored bytes.
+ */
+export function nextCheckpointFor(state: VaultDriveState): number {
+  return (
+    state.checkpoints.reduce((max, c) => Math.max(max, c.checkpoint_n), 0) + 1
+  );
+}
 
 export async function getVaultState(
   drivePseudonym: string,
@@ -358,6 +407,13 @@ export async function listVaultObjects(
  * so a failed upload leaves a reservation that expires rather than usage the
  * user never consumed. Confirming first would make quota drift upward on every
  * dropped connection.
+ *
+ * The pass may produce either an incremental **pack** or a **checkpoint**, and
+ * `vaultExport` decides which — the cadence lives in Rust so every host makes
+ * the same call. A checkpoint takes one extra step: it is *published* after it
+ * is confirmed, which is what tells the control plane it may prune the chain
+ * the anchor now subsumes. Uploading one without publishing it stores bytes
+ * that free nothing.
  */
 export async function backupDrive({
   db,
@@ -367,6 +423,9 @@ export async function backupDrive({
   driveKey,
   keyEpoch = 1,
   segment,
+  checkpointN,
+  driveHasCheckpoint,
+  observedLanes,
 }: {
   db: VaultCapableDb;
   driveSubject: string;
@@ -375,6 +434,9 @@ export async function backupDrive({
   driveKey: Uint8Array;
   keyEpoch?: number;
   segment: number;
+  checkpointN: number;
+  driveHasCheckpoint: boolean;
+  observedLanes: Record<string, number>;
 }): Promise<BackupOutcome> {
   const sealedPack = await db.vaultExport(
     driveSubject,
@@ -383,11 +445,17 @@ export async function backupDrive({
     drivePseudonym,
     devicePubkey,
     segment,
+    checkpointN,
+    driveHasCheckpoint,
+    observedLanes,
   );
 
-  // An untouched drive produces nothing, so an idle device does not upload an
-  // object every tick.
+  // An untouched drive produces nothing. Since incremental cursors landed this
+  // is the ordinary outcome for an idle device rather than a rare one: a pass
+  // whose version vectors all match the lane cursor writes no object at all.
   if (!sealedPack) return { status: 'nothing-to-do' };
+
+  const isCheckpoint = sealedPack.kind === 'checkpoint';
 
   const { uploads } = await api<{ uploads: UploadUrl[] }>(
     `/cloud-vault/${drivePseudonym}/upload-urls`,
@@ -395,13 +463,20 @@ export async function backupDrive({
       method: 'POST',
       body: JSON.stringify({
         objects: [
-          {
-            kind: 'pack',
-            size_bytes: sealedPack.sealed.length,
-            key_epoch: keyEpoch,
-            lane_device_pubkey: devicePubkey,
-            segment,
-          },
+          isCheckpoint
+            ? {
+                kind: 'checkpoint',
+                size_bytes: sealedPack.sealed.length,
+                key_epoch: keyEpoch,
+                checkpoint_n: checkpointN,
+              }
+            : {
+                kind: 'pack',
+                size_bytes: sealedPack.sealed.length,
+                key_epoch: keyEpoch,
+                lane_device_pubkey: devicePubkey,
+                segment,
+              },
         ],
       }),
     },
@@ -459,14 +534,43 @@ export async function backupDrive({
     }),
   });
 
+  // Publishing is what makes a checkpoint an anchor. Until this lands the
+  // control plane has bytes it cannot prune against, so a checkpoint that
+  // uploaded and never published costs storage and frees none.
+  //
+  // A rejection here means another device published this number first. Its
+  // anchor is just as good as ours, so the pass still counts as backed up and
+  // the next one picks the next number.
+  if (isCheckpoint) {
+    try {
+      await api(`/cloud-vault/${drivePseudonym}/checkpoint`, {
+        method: 'POST',
+        body: JSON.stringify({
+          checkpoint_n: checkpointN,
+          coverage: sealedPack.coverage,
+          checkpoint_object_id: upload.object_id,
+        }),
+      });
+    } catch (error) {
+      console.warn(
+        `Vault checkpoint ${checkpointN} was not published; another device likely won the race.`,
+        error,
+      );
+    }
+  }
+
   // Only now is the lane's progress official. Sealing parked it; if the upload
   // above had failed, the next pass would retry against the same view of what
-  // has been backed up rather than one that assumed success.
+  // has been backed up rather than one that assumed success. That matters more
+  // than it did before cursors existed: an advanced cursor whose object never
+  // landed leaves ops no later delta would ever ship again.
   await db.vaultCommitSegment(drivePseudonym, devicePubkey, segment);
 
   return {
     status: 'backed-up',
+    kind: sealedPack.kind,
     resources: sealedPack.resources,
+    unchanged: sealedPack.unchanged,
     bytes: sealedPack.sealed.length,
     objectKey: sealedPack.objectKey,
   };
@@ -486,12 +590,14 @@ export async function backupDrive({
 export async function restoreDrive({
   db,
   drivePseudonym,
+  devicePubkey,
   driveKey,
   keyEpoch = 1,
   onProgress,
 }: {
   db: VaultCapableDb;
   drivePseudonym: string;
+  devicePubkey: string;
   driveKey: Uint8Array;
   keyEpoch?: number;
   onProgress?: (downloaded: number, total: number) => void;
@@ -499,7 +605,13 @@ export async function restoreDrive({
   const objects = await listVaultObjects(drivePseudonym);
 
   if (objects.length === 0) {
-    return { packsRead: 0, resourcesRestored: 0, tombstonesApplied: 0 };
+    return {
+      packsRead: 0,
+      resourcesRestored: 0,
+      tombstonesApplied: 0,
+      objectsSkipped: 0,
+      objectsUnreadable: 0,
+    };
   }
 
   const { downloads } = await api<{ downloads: DownloadUrl[] }>(
@@ -539,7 +651,19 @@ export async function restoreDrive({
 
   // Every lane, not just this device's: each device appends only to its own,
   // so importing one would silently drop the rest of the drive's history.
-  return db.vaultImport(driveKey, keyEpoch, drivePseudonym, fetched);
+  //
+  // The order this list arrives in is not the order it is applied in. The
+  // importer reads the newest checkpoint first, then uses its coverage and
+  // observed maps to decide what to replay and when — see `plan_restore` in
+  // `lib/src/vault/sync.rs`. Passing everything and letting it choose is what
+  // keeps that decision in one place rather than duplicated here in JS.
+  return db.vaultImport(
+    driveKey,
+    keyEpoch,
+    drivePseudonym,
+    devicePubkey,
+    fetched,
+  );
 }
 
 /**
@@ -682,6 +806,12 @@ export function runVaultBackup(args: {
     return backupDrive({
       ...args,
       segment: nextSegmentFor(state, args.devicePubkey),
+      checkpointN: nextCheckpointFor(state),
+      driveHasCheckpoint: state.checkpoints.length > 0,
+      // What the vault held when this pass started. A checkpoint records it so
+      // a restore can tell which segments predate the anchor and must be
+      // replayed before it.
+      observedLanes: state.lanes,
     });
   })().finally(() => {
     inFlight.delete(args.drivePseudonym);

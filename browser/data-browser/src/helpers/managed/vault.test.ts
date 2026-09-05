@@ -34,17 +34,49 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** A sealed pack, as the WASM binding would hand it over. */
+/** A sealed delta pack, as the WASM binding would hand it over. */
 function sealedPack(objectKey: string, bytes = 4) {
   return {
     objectKey,
     sealed: new Uint8Array(bytes).fill(1),
+    kind: 'pack' as const,
     resources: 3,
+    unchanged: 17,
     tombstones: 0,
+    coverage: {},
+  };
+}
+
+/** A sealed checkpoint — self-sufficient, and published after it is confirmed. */
+function sealedCheckpoint(
+  objectKey: string,
+  coverage: Record<string, number> = {},
+) {
+  return {
+    objectKey,
+    sealed: new Uint8Array(8).fill(2),
+    kind: 'checkpoint' as const,
+    resources: 20,
+    unchanged: 0,
+    tombstones: 0,
+    coverage,
   };
 }
 
 const PACK_KEY = `vault/${PSEUDONYM}/lanes/${DEVICE}/seg-000001.pack`;
+const CKPT_KEY = `vault/${PSEUDONYM}/checkpoints/ckpt-000001.loro`;
+
+/** The arguments every `backupDrive` call needs, minus what a test varies. */
+const PASS = {
+  driveSubject: 'did:ad:drive',
+  drivePseudonym: PSEUDONYM,
+  devicePubkey: DEVICE,
+  driveKey: KEY,
+  segment: 1,
+  checkpointN: 1,
+  driveHasCheckpoint: true,
+  observedLanes: {},
+};
 
 /** Records every request so a test can assert on order, not just on calls. */
 function mockFetch(handler: (url: string, init?: RequestInit) => unknown) {
@@ -75,14 +107,7 @@ describe('backupDrive', () => {
     };
     const calls = mockFetch(() => undefined);
 
-    const outcome = await backupDrive({
-      db,
-      driveSubject: 'did:ad:drive',
-      drivePseudonym: PSEUDONYM,
-      devicePubkey: DEVICE,
-      driveKey: KEY,
-      segment: 1,
-    });
+    const outcome = await backupDrive({ db, ...PASS });
 
     expect(outcome).toEqual({ status: 'nothing-to-do' });
     expect(calls).toHaveLength(0);
@@ -122,14 +147,7 @@ describe('backupDrive', () => {
       return undefined;
     });
 
-    const outcome = await backupDrive({
-      db,
-      driveSubject: 'did:ad:drive',
-      drivePseudonym: PSEUDONYM,
-      devicePubkey: DEVICE,
-      driveKey: KEY,
-      segment: 1,
-    });
+    const outcome = await backupDrive({ db, ...PASS });
 
     expect(outcome).toMatchObject({ status: 'backed-up', resources: 3 });
     const order = calls.map(c => c.url);
@@ -172,17 +190,175 @@ describe('backupDrive', () => {
     });
 
     await expect(
-      backupDrive({
-        db,
-        driveSubject: 'did:ad:drive',
-        drivePseudonym: PSEUDONYM,
-        devicePubkey: DEVICE,
-        driveKey: KEY,
-        segment: 1,
-      }),
+      backupDrive({ db, ...PASS }),
     ).rejects.toThrow(/upload failed/i);
 
     expect(calls.some(c => c.url.includes('/confirm-upload'))).toBe(false);
+  });
+
+  /**
+   * A checkpoint has one step a delta does not: publishing. Until that lands
+   * the control plane holds an anchor it does not know it may prune against, so
+   * the pass costs storage and frees none — the exact shape of "reported
+   * success without doing the work" this feature keeps producing.
+   */
+  it('publishes a checkpoint after confirming it, with its coverage', async () => {
+    const coverage = { [DEVICE]: 4 };
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(async () => sealedCheckpoint(CKPT_KEY, coverage)),
+      vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
+    };
+    const bodies: Record<string, unknown> = {};
+    const calls = mockFetch((url, init) => {
+      // Keyed by endpoint rather than full URL: the control-plane base comes
+      // from an env var, and pinning it here would make this test about
+      // configuration instead of about the checkpoint protocol.
+      //
+      // The PUT carries raw ciphertext, not JSON — only control-plane calls
+      // send a string body.
+      if (typeof init?.body === 'string') {
+        bodies[url.split('/').pop()!] = JSON.parse(init.body);
+      }
+
+      if (url.endsWith('/upload-urls')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            uploads: [
+              {
+                object_id: 'ckpt-obj',
+                object_key: CKPT_KEY,
+                url: 'https://s3.test/put',
+                method: 'PUT',
+                headers: [],
+                size_bytes: 8,
+              },
+            ],
+          }),
+        };
+      }
+
+      return undefined;
+    });
+
+    const outcome = await backupDrive({
+      db,
+      ...PASS,
+      driveHasCheckpoint: false,
+      checkpointN: 3,
+    });
+
+    expect(outcome).toMatchObject({ status: 'backed-up', kind: 'checkpoint' });
+
+    // Upload declares the checkpoint kind, not a lane pack — a checkpoint
+    // uploaded as a pack would land in a lane and never become an anchor.
+    const uploadBody = bodies['upload-urls'] as {
+      objects: { kind: string; checkpoint_n: number }[];
+    };
+    expect(uploadBody.objects[0].kind).toBe('checkpoint');
+    expect(uploadBody.objects[0].checkpoint_n).toBe(3);
+
+    const order = calls.map(c => c.url);
+    expect(order[0]).toContain('/upload-urls');
+    expect(order[1]).toBe('https://s3.test/put');
+    expect(order[2]).toContain('/confirm-upload');
+    expect(order[3]).toContain('/checkpoint');
+
+    expect(bodies['checkpoint']).toMatchObject({ checkpoint_n: 3, coverage });
+  });
+
+  /**
+   * Two devices over an anchorless vault both pick the same number, and the
+   * server rejects the loser. Its object is already stored and just as valid as
+   * the winner's, so the pass still counts — failing it would leave the lane
+   * cursor uncommitted and re-ship everything next tick.
+   */
+  it('still counts the pass when another device published that checkpoint first', async () => {
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(async () => sealedCheckpoint(CKPT_KEY)),
+      vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
+    };
+    mockFetch(url => {
+      if (url.endsWith('/upload-urls')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            uploads: [
+              {
+                object_id: 'ckpt-obj',
+                object_key: CKPT_KEY,
+                url: 'https://s3.test/put',
+                method: 'PUT',
+                headers: [],
+                size_bytes: 8,
+              },
+            ],
+          }),
+        };
+      }
+
+      if (url.endsWith('/checkpoint')) {
+        return {
+          ok: false,
+          status: 409,
+          json: async () => ({ error: 'checkpoint 1 is already published' }),
+        };
+      }
+
+      return undefined;
+    });
+
+    const outcome = await backupDrive({ db, ...PASS });
+
+    expect(outcome).toMatchObject({ status: 'backed-up' });
+    expect(db.vaultCommitSegment).toHaveBeenCalled();
+  });
+
+  /**
+   * The lane cursor is only advanced after the object is durably stored. That
+   * mattered before; it matters more now that a pass ships deltas, because a
+   * cursor advanced past an object that never landed leaves ops no later delta
+   * would ever ship again.
+   */
+  it('does not commit the lane when the upload never landed', async () => {
+    const db: VaultCapableDb = {
+      vaultExport: vi.fn(async () => sealedPack(PACK_KEY)),
+      vaultImport: vi.fn(),
+      vaultCommitSegment: vi.fn(),
+    };
+    mockFetch(url => {
+      if (url.endsWith('/upload-urls')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            uploads: [
+              {
+                object_id: 'obj-1',
+                object_key: PACK_KEY,
+                url: 'https://s3.test/put',
+                method: 'PUT',
+                headers: [],
+                size_bytes: 4,
+              },
+            ],
+          }),
+        };
+      }
+
+      if (url === 'https://s3.test/put') {
+        return { ok: false, status: 500, json: async () => ({}) };
+      }
+
+      return undefined;
+    });
+
+    await expect(backupDrive({ db, ...PASS })).rejects.toThrow();
+    expect(db.vaultCommitSegment).not.toHaveBeenCalled();
   });
 
   /**
@@ -220,14 +396,7 @@ describe('backupDrive', () => {
     });
 
     await expect(
-      backupDrive({
-        db,
-        driveSubject: 'did:ad:drive',
-        drivePseudonym: PSEUDONYM,
-        devicePubkey: DEVICE,
-        driveKey: KEY,
-        segment: 1,
-      }),
+      backupDrive({ db, ...PASS }),
     ).rejects.toThrow(/key mismatch/i);
   });
 
@@ -272,14 +441,7 @@ describe('backupDrive', () => {
       }),
     );
 
-    await backupDrive({
-      db,
-      driveSubject: 'did:ad:drive',
-      drivePseudonym: PSEUDONYM,
-      devicePubkey: DEVICE,
-      driveKey: KEY,
-      segment: 1,
-    });
+    await backupDrive({ db, ...PASS });
 
     expect(putHeaders).toEqual({ 'x-custom': 'kept' });
   });
@@ -302,14 +464,7 @@ describe('backupDrive', () => {
     );
 
     await expect(
-      backupDrive({
-        db,
-        driveSubject: 'did:ad:drive',
-        drivePseudonym: PSEUDONYM,
-        devicePubkey: DEVICE,
-        driveKey: KEY,
-        segment: 1,
-      }),
+      backupDrive({ db, ...PASS }),
     ).rejects.toThrow('Cloud Vault quota exceeded');
   });
 });
@@ -330,6 +485,7 @@ describe('restoreDrive', () => {
     const outcome = await restoreDrive({
       db,
       drivePseudonym: PSEUDONYM,
+      devicePubkey: DEVICE,
       driveKey: KEY,
     });
 
@@ -355,11 +511,18 @@ describe('restoreDrive', () => {
           _k: Uint8Array,
           _e: number,
           _p: string,
+          _d: string,
           objects: { objectKey: string; sealed: Uint8Array }[],
         ) => {
           imported.push(...objects.map(o => o.objectKey));
 
-          return { packsRead: 2, resourcesRestored: 5, tombstonesApplied: 1 };
+          return {
+            packsRead: 2,
+            resourcesRestored: 5,
+            tombstonesApplied: 1,
+            objectsSkipped: 0,
+            objectsUnreadable: 0,
+          };
         },
       ),
       vaultCommitSegment: vi.fn(),
@@ -401,6 +564,7 @@ describe('restoreDrive', () => {
     const outcome = await restoreDrive({
       db,
       drivePseudonym: PSEUDONYM,
+      devicePubkey: DEVICE,
       driveKey: KEY,
     });
 
@@ -415,6 +579,8 @@ describe('restoreDrive', () => {
         packsRead: 2,
         resourcesRestored: 1,
         tombstonesApplied: 0,
+        objectsSkipped: 0,
+        objectsUnreadable: 0,
       })),
       vaultCommitSegment: vi.fn(),
     };
@@ -454,6 +620,7 @@ describe('restoreDrive', () => {
     await restoreDrive({
       db,
       drivePseudonym: PSEUDONYM,
+      devicePubkey: DEVICE,
       driveKey: KEY,
       onProgress: (done, total) => seen.push([done, total]),
     });
@@ -490,6 +657,7 @@ describe('restoreDrive', () => {
       restoreDrive({
         db,
         drivePseudonym: PSEUDONYM,
+        devicePubkey: DEVICE,
         driveKey: KEY,
       }),
     ).rejects.toThrow(/No download URL/i);
@@ -764,14 +932,7 @@ describe('lane bookkeeping', () => {
       return undefined;
     });
 
-    await backupDrive({
-      db,
-      driveSubject: 'did:ad:drive',
-      drivePseudonym: PSEUDONYM,
-      devicePubkey: DEVICE,
-      driveKey: KEY,
-      segment: 3,
-    });
+    await backupDrive({ db, ...PASS, segment: 3 });
 
     expect(order).toEqual(['put', 'confirm', 'commit']);
     expect(db.vaultCommitSegment).toHaveBeenCalledWith(PSEUDONYM, DEVICE, 3);
@@ -811,14 +972,7 @@ describe('lane bookkeeping', () => {
     });
 
     await expect(
-      backupDrive({
-        db,
-        driveSubject: 'did:ad:drive',
-        drivePseudonym: PSEUDONYM,
-        devicePubkey: DEVICE,
-        driveKey: KEY,
-        segment: 3,
-      }),
+      backupDrive({ db, ...PASS, segment: 3 }),
     ).rejects.toThrow();
 
     expect(db.vaultCommitSegment).not.toHaveBeenCalled();
@@ -837,14 +991,7 @@ describe('lane bookkeeping', () => {
     );
 
     await expect(
-      backupDrive({
-        db,
-        driveSubject: 'did:ad:drive',
-        drivePseudonym: PSEUDONYM,
-        devicePubkey: DEVICE,
-        driveKey: KEY,
-        segment: 1,
-      }),
+      backupDrive({ db, ...PASS }),
     ).rejects.toThrow(/no upload URL/i);
   });
 });
@@ -865,6 +1012,7 @@ describe('scheduling', () => {
         last_backup_at: null,
       },
       lanes,
+      checkpoints: [],
       pending_uploads: 0,
       confirmed_objects: 0,
     };

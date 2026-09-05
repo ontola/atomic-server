@@ -359,6 +359,16 @@ export async function restoreFromVault(
       return { status: 'no-backup', reason: 'the vault is empty' };
     }
 
+    // This device's lane. A restore records which other lanes it imported, so a
+    // checkpoint published from here later can claim coverage for them — the
+    // only route by which a lane belonging to a device that is gone for good
+    // ever becomes prunable.
+    const lane = await deps.laneId();
+
+    if (!lane) {
+      return { status: 'no-backup', reason: 'this device has no identity yet' };
+    }
+
     const keys = await deps.loadKeys();
     const driveKey = await deps.recoverDriveKey({
       keys,
@@ -368,6 +378,7 @@ export async function restoreFromVault(
     const outcome = await deps.restoreDrive({
       db,
       drivePseudonym: enrollment.drive_pseudonym,
+      devicePubkey: lane,
       driveKey,
     });
 

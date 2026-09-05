@@ -92,6 +92,9 @@ export type WorkerRequest =
       drivePseudonym: string;
       devicePubkey: string;
       segment: number;
+      checkpointN: number;
+      driveHasCheckpoint: boolean;
+      observedLanes: Record<string, number>;
     }
   | {
       id: number;
@@ -99,6 +102,7 @@ export type WorkerRequest =
       key: Uint8Array;
       keyEpoch: number;
       drivePseudonym: string;
+      devicePubkey: string;
       objects: { objectKey: string; sealed: Uint8Array }[];
     }
   | {
@@ -339,6 +343,9 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
         msg.drivePseudonym,
         msg.devicePubkey,
         msg.segment,
+        msg.checkpointN,
+        msg.driveHasCheckpoint,
+        msg.observedLanes,
       );
     }
 
@@ -348,6 +355,7 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
         msg.key,
         msg.keyEpoch,
         msg.drivePseudonym,
+        msg.devicePubkey,
         msg.objects,
       );
       // A restore writes a whole drive behind `Durability::None`, so without
