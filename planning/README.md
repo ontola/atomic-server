@@ -60,7 +60,7 @@ Remaining work, not "this file exists."
 | [`index-performance.md`](./index-performance.md) | First tranche shipped. Structural permission-check fix is `zones.md`, not built. |
 | [`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md) | **Proposal.** Full-snapshot writes, no auto-compaction, O(file) open fsync. |
 | [`virtual-drive.md`](./virtual-drive.md) | **Shipped** as a local NFS mount in the Tauri desktop app (`desktop/src/vfs.rs`). Still proposal: headless-server mount, FUSE/WinFSP, native cloud-sync APIs, mobile providers. |
-| [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md) | **Proposal** (DID wording predates the genesis-cert model, see its *Current* note). Commits stay signed write certificates; retention is node policy. |
+| [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md) | **Proposal.** Commits stay signed write certificates; retention is node policy. Content-commit drop shipped; remaining is optional audit retention. |
 | [`p2p-presence.md`](./p2p-presence.md) | **Mostly built.** `EPHEMERAL 0x40` codec, peer send/receive and the server bridge are in (`lib/src/sync/iroh_e2e.rs` `e2e_presence_crosses_the_link_without_being_stored`). Remaining: two-device verification (M12), bandwidth measurement (OQ1). Scoped to your own devices by product choice. |
 | [`reticulum-sync.md`](./reticulum-sync.md) | **Proposal.** Atomic sync protocol over Reticulum. |
 | [`json-schema-code-first.md`](./json-schema-code-first.md) | **Proposal**; `defineSchema` + frozen `did:ad:` schemas in flight in PR #1262 (not on `develop`). Code-first JSON Schema → local DID-backed Class/Property resources. |
@@ -90,6 +90,7 @@ Not top-level plans. Indexed so they do not go missing.
 | [`main-drive-and-paths.md`](./main-drive-and-paths.md) | Strategy. DID-branch deployment: root drive, legacy URLs, human-readable paths. |
 | [`actions.md`](./actions.md) | **Steps 1–4 shipped.** Registry drives ⌘M, ⌘K (capped prefix match), hotkeys, the shortcuts overlay/page, and simple AI tools. Remaining: MCP projection when a server exists. |
 | [`silent-failures.md`](./silent-failures.md) | Living log of error-handling failures that reported success (2026-08-21). Carries M8 from the pairing field test. |
+| [`auditability-loro-history.md`](./auditability-loro-history.md) | Open. History = verifiable log for every replica, including new users (`git clone`). Envelopes live on the resource and catch-up must copy them; not a `/commits` class. |
 
 Closed decisions, as-built records, closed explorations and fixed notes live
 in [`completed/`](./completed/): the five decisions above, the 2026-07 sync
