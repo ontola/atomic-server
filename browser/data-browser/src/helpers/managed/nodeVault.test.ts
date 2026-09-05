@@ -128,7 +128,7 @@ describe('nodeVault', () => {
       resourcesRestored: 5,
       tombstonesApplied: 0,
       objectsSkipped: 1,
-            objectsUnreadable: 0,
+      objectsUnreadable: 0,
     });
 
     const objects = [

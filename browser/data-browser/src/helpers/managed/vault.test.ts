@@ -189,9 +189,9 @@ describe('backupDrive', () => {
       return undefined;
     });
 
-    await expect(
-      backupDrive({ db, ...PASS }),
-    ).rejects.toThrow(/upload failed/i);
+    await expect(backupDrive({ db, ...PASS })).rejects.toThrow(
+      /upload failed/i,
+    );
 
     expect(calls.some(c => c.url.includes('/confirm-upload'))).toBe(false);
   });
@@ -395,9 +395,7 @@ describe('backupDrive', () => {
       return undefined;
     });
 
-    await expect(
-      backupDrive({ db, ...PASS }),
-    ).rejects.toThrow(/key mismatch/i);
+    await expect(backupDrive({ db, ...PASS })).rejects.toThrow(/key mismatch/i);
   });
 
   /** Assigning Content-Length throws in the browser before the request goes out. */
@@ -463,9 +461,9 @@ describe('backupDrive', () => {
         : undefined,
     );
 
-    await expect(
-      backupDrive({ db, ...PASS }),
-    ).rejects.toThrow('Cloud Vault quota exceeded');
+    await expect(backupDrive({ db, ...PASS })).rejects.toThrow(
+      'Cloud Vault quota exceeded',
+    );
   });
 });
 
@@ -974,9 +972,7 @@ describe('lane bookkeeping', () => {
       return undefined;
     });
 
-    await expect(
-      backupDrive({ db, ...PASS, segment: 3 }),
-    ).rejects.toThrow();
+    await expect(backupDrive({ db, ...PASS, segment: 3 })).rejects.toThrow();
 
     expect(db.vaultCommitSegment).not.toHaveBeenCalled();
   });
@@ -993,9 +989,9 @@ describe('lane bookkeeping', () => {
         : undefined,
     );
 
-    await expect(
-      backupDrive({ db, ...PASS }),
-    ).rejects.toThrow(/no upload URL/i);
+    await expect(backupDrive({ db, ...PASS })).rejects.toThrow(
+      /no upload URL/i,
+    );
   });
 });
 
@@ -1239,7 +1235,9 @@ describe('scheduling', () => {
     });
 
     expect(refreshDriveKey).not.toHaveBeenCalled();
-    expect((db.vaultExport as ReturnType<typeof vi.fn>).mock.calls[0][2]).toBe(1);
+    expect((db.vaultExport as ReturnType<typeof vi.fn>).mock.calls[0][2]).toBe(
+      1,
+    );
   });
 });
 

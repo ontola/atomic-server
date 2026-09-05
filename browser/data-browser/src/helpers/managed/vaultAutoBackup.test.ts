@@ -83,7 +83,7 @@ function fakeDeps(overrides: Partial<VaultAutoBackupDeps> = {}) {
     restoreDrive: vi.fn(async () => ({
       packsRead: 1,
       objectsSkipped: 0,
-            objectsUnreadable: 0,
+      objectsUnreadable: 0,
       resourcesRestored: 3,
       tombstonesApplied: 0,
     })),
@@ -318,7 +318,7 @@ describe('restoreFromVault', () => {
       getVaultState: vi.fn(async () => ({
         enrollment,
         lanes: {},
-      checkpoints: [],
+        checkpoints: [],
         pending_uploads: 0,
         confirmed_objects: 0,
       })),
