@@ -1998,8 +1998,8 @@ msgid "Class"
 msgstr "Classe"
 
 #: src/views/FolderPage/ListView.tsx
-msgid "Last Modified"
-msgstr "Dernière modification"
+msgid "Created"
+msgstr "Créé"
 
 #: src/views/Article/ArticlePage.tsx
 msgid "Children"
@@ -2716,10 +2716,6 @@ msgstr "Historique de"
 #: src/routes/History/HistoryMobileView.tsx
 msgid "Restore this version"
 msgstr "Restaurer cette version"
-
-#: src/routes/History/HistoryDesktopView.tsx
-msgid "Show Commit"
-msgstr "Afficher le Commit"
 
 #. 0: resource.title
 #. 0: resource.title

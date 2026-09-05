@@ -7,8 +7,6 @@ import { Column, Row } from '../../components/Row';
 import { Title } from '../../components/Title';
 import { VersionTitle } from './VersionTitle';
 import { VersionScroller } from './VersionScroller';
-import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
-import { constructOpenURL } from '../../helpers/navigation';
 import {
   ResourceDiff,
   useResourceDiff,
@@ -29,7 +27,6 @@ export function HistoryDesktopView({
   onSelectVersion,
   onVersionAccept,
 }: HistoryViewProps) {
-  const navigate = useNavigateWithTransition();
   const store = useStore();
 
   const selectedVersionResource = useMemo(() => {
@@ -64,10 +61,6 @@ export function HistoryDesktopView({
     { label: 'Resource', value: 'resource' },
   ];
 
-  const lastCommit = selectedVersion.propvals.get(
-    'https://atomicdata.dev/properties/lastCommit',
-  ) as string | undefined;
-
   return (
     <>
       <CurrentItem>
@@ -90,16 +83,6 @@ export function HistoryDesktopView({
             <Row>
               <Button onClick={onVersionAccept} disabled={isCurrentVersion}>
                 Restore this version
-              </Button>
-              <Button
-                disabled={!lastCommit}
-                onClick={() => {
-                  if (lastCommit) {
-                    navigate(constructOpenURL(lastCommit));
-                  }
-                }}
-              >
-                Show Commit
               </Button>
             </Row>
           </>
