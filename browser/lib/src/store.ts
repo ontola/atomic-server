@@ -6,11 +6,7 @@ import {
   setCookieAuthentication,
 } from './authentication.js';
 import { Client, type FileOrFileLike } from './client.js';
-import {
-  CommitBuilder,
-  commitIdOf,
-  type Commit,
-} from './commit.js';
+import { CommitBuilder, commitIdOf, type Commit } from './commit.js';
 import { datatypeFromUrl, type Datatype } from './datatypes.js';
 import {
   AtomicError,
