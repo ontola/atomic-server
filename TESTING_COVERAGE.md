@@ -90,6 +90,9 @@ Two things worth knowing about the runners:
 | Engine-owned `SUB`/`UNSUB`: granted `SUB` is a session command, unreadable `SUB` answers `ERROR UNAUTHORIZED_READ` | `lib/src/sync/engine.rs` (`bootstrap_and_sub_tests`) |
 | Signed `SYNC_DIFF.removeCommits`: envelope applies regardless of connection agent, tampered envelope does not delete, envelope only handed to drive readers, replay after re-creation refused | `lib/src/sync/peer.rs` (`initiator_trust_tests`), `engine.rs` (`bootstrap_and_sub_tests`), `tombstones.rs`, `protocol.rs` |
 | `SyncSession` over an in-process `AtomicTransport` holds `AUTH` across frames | `lib/src/sync/session.rs` |
+| Signed envelopes per resource: `latest`/`all` retention, time order, not indexed, verified attribution per Loro token, tampered envelope unverified, two writers, destroy fold | `lib/src/envelopes.rs` |
+| `GET /history-attribution` names the verified signer and is read-gated | `server/tests/it/history_attribution.rs` |
+| Attribution parse / version lookup / server+local merge | `browser/lib/src/history-attribution.test.ts` |
 | Engine-level two-store sync, private drives, blobs, live push | `lib/src/sync/tests.rs` |
 | RBSR reconciliation, drive hashing | `lib/src/sync/rbsr.rs`, `tests.rs` |
 | RBSR finds a remote-only subject sorting below every local one | `lib/src/sync/rbsr.rs` **and** `browser/lib/src/rbsr.test.ts` (regression, see below) |
@@ -347,6 +350,14 @@ Not covered: derived AI tools invoked through a real model; MCP protocol project
 | Opening a writable v1 document migrates it silently into the Loro editor (no "Update Document" button) | flow | `browser/e2e/tests/documents.spec.ts` |
 
 Not covered: leftover Yjs-era DocumentV2 bodies end-to-end (needs a stored `{ type: 'ydoc' }` fixture); read-only v1 documents stay on the element list and have no e2e.
+
+## Commits as envelopes
+
+| Flow | Layer | Where |
+|---|---|---|
+| `LoroDoc` values are not KV-index keys | protocol | `lib/src/values.rs::loro_doc_is_not_indexed` |
+| Content commits are not stored; genesis/ACL/destroy are | protocol | `lib/src/db/test.rs::content_commits_are_not_stored` |
+| Sequential saves do not chain `previousCommit`; commit DIDs are not store resources | glue | `browser/lib/src/commit.test.ts` |
 
 ## Personal drive identity
 

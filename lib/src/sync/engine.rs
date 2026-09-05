@@ -257,9 +257,8 @@ pub async fn handle_frame_full(
                                 .get_base_domain()
                                 .unwrap_or_else(|| "http://localhost".to_string());
                             let subject_resolved = resource.get_subject().resolve(&origin);
-                            // Include `lastCommit` so the recipient can set
-                            // `previousCommit` on its next save. See
-                            // `planning/sync.md` (test coverage gaps, `ws_get`).
+                            // Include `lastCommit` so the recipient can stamp
+                            // `_lastCommit` and not mis-detect genesis on save.
                             let last_commit = resource
                                 .get(crate::urls::LAST_COMMIT)
                                 .ok()
@@ -729,7 +728,6 @@ pub async fn ingest_commit(
         validate_timestamp: true,
         validate_rights: true,
         // https://github.com/atomicdata-dev/atomic-server/issues/412
-        validate_previous_commit: false,
         // Reject commits whose Loro ops are concurrent with stored state
         // (i.e. the client's doc wasn't seeded from the server). Without this,
         // LWW silently drops the client's write. For P2P sync use a path that
@@ -760,10 +758,9 @@ pub async fn ingest_commit(
 /// application. It validates signature, schema, and the signer's rights — the
 /// commit is a self-authorizing certificate, so those checks (not the
 /// connection's AUTH identity) are the authority. `validate_loro_causality` is
-/// off (concurrent peer writes are expected) and `validate_previous_commit` is
-/// off (peers don't share a single linear commit chain), mirroring the Iroh
-/// sync paths. No `source_id`: peer transports don't fan out through the
-/// commit monitor, so there's no echo to suppress.
+/// off (concurrent peer writes are expected). No linear `previousCommit`
+/// chain: peers merge via Loro. No `source_id`: peer transports don't fan
+/// out through the commit monitor, so there's no echo to suppress.
 ///
 /// Deliberately skips the server's domain-ownership gate (`apply_commit_json`
 /// in `server/src/handlers/commit.rs` rejects a commit whose subject belongs
