@@ -3184,10 +3184,8 @@ msgstr "Next item"
 msgid "Could not save resource"
 msgstr "Could not save resource"
 
-#. 0: version.peer && <> by peer {version.peer.slice(0, 8)}...</>; 1: version.message && <> — {version.message}</>
-#: src/routes/History/VersionTitle.tsx
-msgid "Edited <0/> {0} {1}"
-msgstr "Edited <0/> {0} {1}"
+#~ msgid "Edited <0/> {0} {1}"
+#~ msgstr "Edited <0/> {0} {1}"
 
 #: src/views/OntologyPage/Property/PropertyLineRead.tsx
 msgid "Property does not exist anymore"
@@ -7292,3 +7290,38 @@ msgstr "This app cannot sign in on its own, so approve it from somewhere you alr
 #: src/components/Vault/LinkProviderPanel.tsx
 msgid "stores it without being able to read it."
 msgstr "stores it without being able to read it."
+
+#: src/routes/History/VersionTitle.tsx
+msgid "Verified"
+msgstr "Verified"
+
+#: src/routes/History/VersionTitle.tsx
+msgid "Unverified"
+msgstr "Unverified"
+
+#: src/routes/History/VersionTitle.tsx
+msgid "Signature checked against the signer's key"
+msgstr "Signature checked against the signer's key"
+
+#: src/routes/History/VersionTitle.tsx
+msgid "Envelope present, but its signature did not verify"
+msgstr "Envelope present, but its signature did not verify"
+
+#: src/routes/History/VersionTitle.tsx
+msgid "No signed envelope covers this change on this node"
+msgstr "No signed envelope covers this change on this node"
+
+#. 0: ' '; 1: signed ? ( <SignedBy attribution={signed} /> ) \\: ( <UnattributedBy peer={version.peer} /> ); 2: version.message && !signed && <> — {version.message}</>
+#: src/routes/History/VersionTitle.tsx
+msgid "Edited <0/>{0} {1} {2}"
+msgstr "Edited <0/>{0} {1} {2}"
+
+#. 0: ' '
+#: src/routes/History/VersionTitle.tsx
+msgid "by <0/>{0} <1/>"
+msgstr "by <0/>{0} <1/>"
+
+#. 0: shortPeer; 1: ' '
+#: src/routes/History/VersionTitle.tsx
+msgid "by peer {0}{1} <0>Unattributed</0>"
+msgstr "by peer {0}{1} <0>Unattributed</0>"

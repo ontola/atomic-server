@@ -91,18 +91,16 @@ describe('attributionForVersion', () => {
   };
 
   it('maps a version to the envelope carrying its token', () => {
+    expect(attributionForVersion({ token: 'c-7' }, report)?.signer).toBe(bob);
+    expect(attributionForVersion({ token: alice }, report)?.genesis).toBe(true);
+    // `message` is the display field; a legacy caller may still pass it.
     expect(attributionForVersion({ message: 'c-7' }, report)?.signer).toBe(bob);
-    expect(attributionForVersion({ message: alice }, report)?.genesis).toBe(
-      true,
-    );
   });
 
   it('leaves untokened or unclaimed versions unattributed', () => {
-    expect(
-      attributionForVersion({ message: undefined }, report),
-    ).toBeUndefined();
-    expect(attributionForVersion({ message: 'c-9' }, report)).toBeUndefined();
-    expect(attributionForVersion({ message: 'c-7' }, null)).toBeUndefined();
+    expect(attributionForVersion({ token: undefined }, report)).toBeUndefined();
+    expect(attributionForVersion({ token: 'c-9' }, report)).toBeUndefined();
+    expect(attributionForVersion({ token: 'c-7' }, null)).toBeUndefined();
   });
 });
 

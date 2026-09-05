@@ -237,6 +237,16 @@ pub struct HistoryAttribution {
 pub async fn attribute_history(store: &Db, subject: &str) -> AtomicResult<HistoryAttribution> {
     let retention = store.envelope_retention().as_str();
     let mut attributions: Vec<Attribution> = Vec::new();
+    let pure = crate::Subject::from_raw(subject, None).pure_id();
+    // The stored doc is where an update's changes can be read back with
+    // their messages: a delta carries only its own ops, and only a doc that
+    // already holds their dependencies can list them.
+    let stored_doc = store
+        .kv
+        .get(Tree::LoroSnapshots, pure.as_bytes())
+        .ok()
+        .flatten()
+        .and_then(|bytes| crate::loro::AtomicLoroDoc::from_snapshot(&bytes).ok());
 
     for envelope in envelopes(store, subject) {
         let resource = crate::parse::parse_json_ad_commit_resource(&envelope.json, store).await?;
@@ -253,18 +263,15 @@ pub async fn attribute_history(store: &Db, subject: &str) -> AtomicResult<Histor
         // it: only a genesis envelope may claim it.
         let is_genesis = commit.is_genesis == Some(true);
         let mut tokens = Vec::new();
-        if let Some(update) = commit.loro_update.as_deref() {
-            let probe = crate::loro::AtomicLoroDoc::new();
-            if probe.import_update(update).is_ok() {
-                for change in probe.get_history() {
-                    if let Some(message) = change.message {
-                        if is_genesis_carrier(&message) && !is_genesis {
-                            continue;
-                        }
-                        let claimed = attributions.iter().any(|a| a.tokens.contains(&message));
-                        if !claimed && !tokens.contains(&message) {
-                            tokens.push(message);
-                        }
+        if let (Some(update), Some(doc)) = (commit.loro_update.as_deref(), stored_doc.as_ref()) {
+            if let Ok((start, end)) = crate::loro::AtomicLoroDoc::update_range(update) {
+                for message in doc.change_messages_in(&start, &end) {
+                    if is_genesis_carrier(&message) && !is_genesis {
+                        continue;
+                    }
+                    let claimed = attributions.iter().any(|a| a.tokens.contains(&message));
+                    if !claimed && !tokens.contains(&message) {
+                        tokens.push(message);
                     }
                 }
             }
@@ -281,19 +288,12 @@ pub async fn attribute_history(store: &Db, subject: &str) -> AtomicResult<Histor
         });
     }
 
-    let pure = crate::Subject::from_raw(subject, None).pure_id();
-    let stored_tokens: Option<Vec<String>> = store
-        .kv
-        .get(Tree::LoroSnapshots, pure.as_bytes())
-        .ok()
-        .flatten()
-        .and_then(|bytes| crate::loro::AtomicLoroDoc::from_snapshot(&bytes).ok())
-        .map(|doc| {
-            doc.get_history()
-                .into_iter()
-                .filter_map(|change| change.message)
-                .collect()
-        });
+    let stored_tokens: Option<Vec<String>> = stored_doc.as_ref().map(|doc| {
+        doc.get_history()
+            .into_iter()
+            .filter_map(|change| change.message)
+            .collect()
+    });
     // The genesis change is covered by the resource's inline certificate
     // (F1), so it is not required here; every other tokened change must be.
     let complete = match stored_tokens {
@@ -578,6 +578,61 @@ mod tests {
                 .count();
             assert_eq!(owners, 1, "token {token} must map to exactly one signer");
         }
+    }
+
+    /// The browser signs a *delta* (ops since its last save) tagged with a
+    /// drain token, not a snapshot. Its tokens must still be read: a delta
+    /// imported into an empty doc is pending (missing deps) and lists no
+    /// changes, which is how attribution first shipped with empty tokens.
+    #[tokio::test]
+    async fn browser_style_delta_envelope_is_attributed_by_its_token() {
+        let db = Db::init_temp("envelopes_delta").await.unwrap();
+        db.set_envelope_retention(EnvelopeRetention::All);
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let subject = child(&db, &drive).await;
+
+        // A client that holds the current state edits it and exports only
+        // the new change, tagged the way the drain tags it.
+        let resource = db.get_resource(&subject).await.unwrap();
+        let snapshot = resource.materialized_state().expect("stored state");
+        let base_vv = crate::loro::AtomicLoroDoc::from_snapshot(&snapshot)
+            .unwrap()
+            .oplog_vv();
+        let client_doc = crate::loro::AtomicLoroDoc::from_snapshot(&snapshot).unwrap();
+        client_doc
+            .set_property(urls::NAME, &Value::String("delta edit".into()))
+            .unwrap();
+        client_doc.commit_with_message("c-01test-delta-token");
+        let delta = client_doc.export_updates_since(&base_vv);
+        assert!(!delta.is_empty());
+
+        let mut builder = crate::commit::CommitBuilder::new(subject.clone());
+        builder.set_loro_update(delta);
+        let commit = builder.sign(&alice, &db, &resource).await.unwrap();
+        let json = commit
+            .into_resource(&db)
+            .await
+            .unwrap()
+            .to_json_ad(None)
+            .unwrap();
+        ingest_commit_json(&db, &json, &CommitIngestOpts::peer())
+            .await
+            .expect("the delta applies");
+
+        let report = attribute_history(&db, subject.as_str()).await.unwrap();
+        let last = report.attributions.last().unwrap();
+        assert!(last.verified);
+        assert_eq!(
+            last.tokens,
+            vec!["c-01test-delta-token".to_string()],
+            "the delta's own change token is credited to its envelope"
+        );
+        assert!(report.complete, "{report:?}");
+        let stored = db.get_resource(&subject).await.unwrap();
+        assert!(crate::history::versions(&stored)
+            .unwrap()
+            .iter()
+            .any(|v| v.message.as_deref() == Some("c-01test-delta-token")));
     }
 
     #[tokio::test]

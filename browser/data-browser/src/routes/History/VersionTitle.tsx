@@ -1,5 +1,6 @@
 import {
   attributionForVersion,
+  type Attribution,
   type HistoryAttribution,
   type Version,
 } from '@tomic/react';
@@ -28,6 +29,11 @@ export interface VersionTitleProps {
  * Loro change token matches this version, and is labelled Verified when the
  * answering node checked the signature. A version no envelope claims falls
  * back to the Loro peer id: that is who typed, not a proof of who signed.
+ *
+ * Kept as small, flat pieces of JSX text: the i18n extractor (wuchale) turns
+ * each text run into a catalogue entry, and a ternary spanning elements
+ * extracts as one placeholder-heavy message that renders as `[i18n-404:…]`
+ * until translated.
  */
 export function VersionTitle({
   version,
@@ -39,40 +45,53 @@ export function VersionTitle({
 
   return (
     <span>
-      Edited <time dateTime={date.toISOString()}>{formattedDate}</time>
+      Edited <time dateTime={date.toISOString()}>{formattedDate}</time>{' '}
       {signed ? (
-        <>
-          {' by '}
-          <ResourceInline subject={signed.signer} />{' '}
-          <Badge
-            $verified={signed.verified}
-            title={
-              signed.verified
-                ? "Signature checked against the signer's key"
-                : 'Envelope present, but its signature did not verify'
-            }
-            data-testid='version-attribution'
-          >
-            {signed.verified ? 'Verified' : 'Unverified'}
-          </Badge>
-        </>
+        <SignedBy attribution={signed} />
       ) : (
-        version.peer && (
-          <>
-            {' by peer '}
-            {version.peer.slice(0, 8)}...{' '}
-            <Badge
-              $verified={false}
-              title='No signed envelope covers this change on this node'
-              data-testid='version-attribution'
-            >
-              Unattributed
-            </Badge>
-          </>
-        )
+        <UnattributedBy peer={version.peer} />
       )}
       {version.message && !signed && <> — {version.message}</>}
     </span>
+  );
+}
+
+function SignedBy({ attribution }: { attribution: Attribution }): JSX.Element {
+  const label = attribution.verified ? 'Verified' : 'Unverified';
+  const title = attribution.verified
+    ? "Signature checked against the signer's key"
+    : 'Envelope present, but its signature did not verify';
+
+  return (
+    <>
+      by <ResourceInline subject={attribution.signer} />{' '}
+      <Badge
+        $verified={attribution.verified}
+        title={title}
+        data-testid='version-attribution'
+      >
+        {label}
+      </Badge>
+    </>
+  );
+}
+
+function UnattributedBy({ peer }: { peer?: string }): JSX.Element | null {
+  if (!peer) return null;
+
+  const shortPeer = `${peer.slice(0, 8)}...`;
+
+  return (
+    <>
+      by peer {shortPeer}{' '}
+      <Badge
+        $verified={false}
+        title='No signed envelope covers this change on this node'
+        data-testid='version-attribution'
+      >
+        Unattributed
+      </Badge>
+    </>
   );
 }
 

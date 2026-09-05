@@ -100,11 +100,12 @@ export function parseHistoryAttribution(
  * carries is unattributed.
  */
 export function attributionForVersion(
-  version: Pick<Version, 'message'>,
+  version: Pick<Version, 'token' | 'message'>,
   report: HistoryAttribution | null | undefined,
 ): Attribution | undefined {
-  if (!report || !version.message) return undefined;
-  const token = version.message;
+  const token = version.token ?? version.message;
+
+  if (!report || !token) return undefined;
 
   return report.attributions.find(a => a.tokens.includes(token));
 }

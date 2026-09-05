@@ -2135,6 +2135,9 @@ export class Resource<C extends OptionalClass = any> {
       // (`c-<ulid>`), not a human-authored message — don't surface it in the
       // history UI. Left undefined until real commit messages exist.
       message: undefined,
+      // The raw token, for matching this version to the signed envelope
+      // that introduced it (`attributionForVersion`).
+      token: g.step.message,
       propvals: g.propvals,
       containers: g.containers,
     }));
@@ -3786,6 +3789,12 @@ export interface Version {
   frontiers: any[];
   /** Human-readable commit message, if set */
   message?: string;
+  /**
+   * The Loro change message this version was bucketed by: the drain's
+   * `c-<ulid>` commit token or, at genesis, the creator's agent subject.
+   * Not for display; it is what a signed envelope's `tokens` name.
+   */
+  token?: string;
   /** Materialized property values at this version */
   propvals: Map<string, JSONValue>;
   /** Top-level Loro containers besides `properties` at this version — most
