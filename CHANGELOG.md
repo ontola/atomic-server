@@ -5,7 +5,14 @@ By far most changes relate to `atomic-server`, so if not specified, assume the c
 **Changes to JS assets (including the front-end and JS libraries) are not shown here**, but in [`/browser/CHANGELOG`](/browser/CHANGELOG.md).
 See [STATUS.md](server/STATUS.md) to learn more about which features will remain stable.
 
-## UNRELEASED
+- Commits are signed envelopes, not a queryable event log. Ordinary content
+  commits are not stored as resources after apply (genesis and
+  rights/parent/destroy stay). Loro binaries are not KV-index keys. The
+  `/commits` collection is not created. UI reads author/dates from the
+  resource, not by fetching `did:ad:commit:` rows. A creation commit is
+  retained whether or not the client flagged `isGenesis`. Clients no longer chain
+  `previousCommit`; apply no longer has a previous-commit validation gate.
+  History no longer offers a "Show Commit" link at a discarded envelope.
 
 - **Missing-drive bootstrap is no longer a free pass (OQ5).** A
   `SYNC_PUSH` or live write for a drive this node has never stored goes

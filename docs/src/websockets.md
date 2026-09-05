@@ -447,6 +447,8 @@ socket cannot know which commit produced it, and marks its next save as a
 genesis commit, which the responder rejects. A resource with no state answers
 `ERROR` `UNKNOWN` `No state`; an unreadable or missing subject answers
 `ERROR` `UNKNOWN` with the lookup error, on the same `request_id`.
+That `lastCommit` id is a receipt for genesis detection, not a refetchable
+resource.
 
 ## Persisted commits
 
