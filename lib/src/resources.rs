@@ -1074,6 +1074,16 @@ impl Resource {
         let Some(doc) = self.loro.as_ref() else {
             return Ok(());
         };
+        // Tag the pending edits as one change with a unique token, exactly as
+        // the browser does before signing: history buckets versions by this
+        // message, and the signed envelope that carries the change is matched
+        // back to it by the same token (`crate::envelopes::attribute_history`).
+        // A no-op when nothing is pending.
+        doc.commit_with_message(&format!(
+            "c-{:x}-{}",
+            crate::utils::now(),
+            crate::utils::random_string(6)
+        ));
         let base = match self.get(urls::LORO_UPDATE) {
             Ok(Value::LoroDoc(snapshot)) => Some(snapshot.clone()),
             _ => None,

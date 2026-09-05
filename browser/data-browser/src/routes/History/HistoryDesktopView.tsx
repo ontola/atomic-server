@@ -26,6 +26,7 @@ export function HistoryDesktopView({
   onPreviousVersion,
   onSelectVersion,
   onVersionAccept,
+  attribution,
 }: HistoryViewProps) {
   const store = useStore();
 
@@ -67,7 +68,7 @@ export function HistoryDesktopView({
         <Column fullHeight>
           <Title resource={resource} prefix='History of' link />
           <>
-            <VersionTitle version={selectedVersion} />
+            <VersionTitle version={selectedVersion} attribution={attribution} />
             <StyledCard>
               <Tabs tabs={tabs} label='History'>
                 <Card.Content>

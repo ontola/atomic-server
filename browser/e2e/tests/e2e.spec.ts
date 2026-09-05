@@ -817,11 +817,25 @@ test.describe('data-browser', async () => {
       page.getByRole('heading', { name: 'History of Second Title', level: 1 }),
     ).toBeVisible();
 
+    // The current version is signed by this session's agent and the server
+    // kept its envelope (`Tree::Envelopes`, `latest` retention), so History
+    // attributes it as Verified once `/history-attribution` answers.
+    await expect(page.getByTestId('version-attribution')).toHaveText(
+      'Verified',
+      { timeout: 15_000 },
+    );
+
     await selectHistoryVersionShowing(page, 'First Title');
 
     await expect(
       page.getByText('First Title', { exact: true }).first(),
     ).toBeVisible();
+
+    // Under `latest` retention only the newest envelope is kept, so the
+    // older version has no proof and must say so rather than guess.
+    await expect(page.getByTestId('version-attribution')).toHaveText(
+      'Unattributed',
+    );
 
     // Enabled only once the selected version differs from the current one, so
     // wait for that rather than racing the selection above.

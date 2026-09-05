@@ -295,6 +295,11 @@ impl Commit {
             }
         }
         doc.set_property(urls::GENESIS, &crate::values::Value::String(cert_b64))?;
+        // The genesis change carries the creator's subject as its message,
+        // exactly as the browser writes it: `createdBy` reads it, and the
+        // signed genesis envelope is matched back to this change by it
+        // (`crate::envelopes::attribute_history`).
+        doc.commit_with_message(agent.subject.as_str());
         let loro_update = Some(doc.export_snapshot());
 
         let mut commit = Commit {
@@ -1404,6 +1409,13 @@ async fn sign_at(
         for prop in &commitbuilder.remove {
             doc.remove_property(prop)?;
         }
+        // One tokened change per commit, like the browser: history buckets
+        // versions by it and the envelope is attributed to it.
+        doc.commit_with_message(&format!(
+            "c-{:x}-{}",
+            crate::utils::now(),
+            crate::utils::random_string(6)
+        ));
         Some(doc.export_snapshot())
     } else {
         commitbuilder.loro_update

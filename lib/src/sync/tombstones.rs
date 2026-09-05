@@ -1,20 +1,17 @@
 //! Tombstones for resources destroyed locally. Used during Iroh/WS bulk sync so
 //! peers delete instead of re-uploading or resurrecting deleted subjects.
 //!
-//! The value is either a one-byte marker (`[1]`) for an unsigned tombstone
-//! (cascade delete, cache eviction, a peer that sent `remove[]` without an
-//! envelope) or the signed destroy commit's JSON-AD. The latter is what
-//! `SYNC_DIFF.removeCommits` carries so a replica can apply the destroy
-//! with the same signature + rights check as a live `COMMIT`. Full
-//! envelope-on-resource storage (`Tree::Envelopes`) is still the commit
-//! retention floor; this is destroy-only evidence on the existing
-//! `PluginMeta` tombstone key.
+//! A tombstone is a one-byte marker on the `PluginMeta` tree. The *signed*
+//! destroy commit, when there is one, is not stored here: it is the subject's
+//! latest row in [`crate::envelopes`] (`Tree::Envelopes`), which
+//! `apply_commit` writes for every signed commit. [`destroy_envelope`] reads
+//! it from there so `SYNC_DIFF.removeCommits` can carry the same envelope the
+//! live `COMMIT` path forwards.
 
 use crate::db::trees::Tree;
 use crate::Db;
 
 const PREFIX: &[u8] = b"tombstone:";
-const UNSIGNED_MARKER: &[u8] = &[1];
 
 fn tombstone_key(subject: &str) -> Vec<u8> {
     let pure = crate::Subject::from_raw(subject, None).pure_id();
@@ -25,39 +22,22 @@ fn tombstone_key(subject: &str) -> Vec<u8> {
 }
 
 /// Remember that this subject was intentionally destroyed on this device.
-/// Does not overwrite a stored destroy envelope — a later unsigned path
-/// (cascade, `apply_destroy`) must not drop the signed evidence.
 pub fn record_tombstone(store: &Db, subject: &str) {
-    if destroy_envelope(store, subject).is_some() {
-        return;
-    }
     let key = tombstone_key(subject);
-    let _ = store.kv.insert(Tree::PluginMeta, &key, UNSIGNED_MARKER);
+    let _ = store.kv.insert(Tree::PluginMeta, &key, &[1]);
 }
 
-/// Store (or replace) the signed destroy commit that authorises this
-/// tombstone. Overwrites an unsigned marker.
-pub fn record_destroy_envelope(store: &Db, subject: &str, commit_json: &str) {
-    if commit_json.is_empty() {
-        record_tombstone(store, subject);
-        return;
-    }
-    let key = tombstone_key(subject);
-    let _ = store
-        .kv
-        .insert(Tree::PluginMeta, &key, commit_json.as_bytes());
-}
-
-/// The signed destroy commit JSON stored with this tombstone, if any.
-/// `None` for an unsigned marker or a missing tombstone.
+/// The signed destroy commit JSON for this tombstone, if this node kept it:
+/// the subject's latest envelope, when that envelope is a destroy. `None`
+/// for an unsigned tombstone (cascade delete, cache eviction, a peer that
+/// sent `remove[]` without an envelope) or a missing one.
 pub fn destroy_envelope(store: &Db, subject: &str) -> Option<String> {
-    let key = tombstone_key(subject);
-    let bytes = store.kv.get(Tree::PluginMeta, &key).ok().flatten()?;
-    if bytes.is_empty() || bytes == UNSIGNED_MARKER {
+    if !is_tombstoned(store, subject) {
         return None;
     }
-    let json = String::from_utf8(bytes).ok()?;
-    json.starts_with('{').then_some(json)
+    crate::envelopes::latest_envelope(store, subject)
+        .filter(|envelope| envelope.is_destroy())
+        .map(|envelope| envelope.json)
 }
 
 /// True if we previously destroyed this subject here (do not re-import from peers).
@@ -73,11 +53,11 @@ pub fn is_tombstoned(store: &Db, subject: &str) -> bool {
 
 /// Clear a tombstone — the subject was legitimately re-created (F11,
 /// planning/unified-sync.md). A tombstone only means "don't resurrect this
-/// deleted subject"; once a rights-checked genesis commit re-creates it,
-/// that invariant is stale and must not keep suppressing it from future
-/// bulk-sync imports (`is_tombstoned` gates `import_sync_push` and the
-/// `SYNC_VV` remove-list) or the newly-recreated resource silently never
-/// reaches other replicas. No-op if there was no tombstone to clear.
+/// deleted subject"; once a genesis commit re-creates it, that invariant is
+/// stale and must not keep suppressing it from future bulk-sync imports
+/// (`is_tombstoned` gates `import_sync_push` and the `SYNC_VV` remove-list)
+/// or the newly-recreated resource silently never reaches other replicas.
+/// No-op if there was no tombstone to clear.
 pub fn clear_tombstone(store: &Db, subject: &str) {
     let key = tombstone_key(subject);
     let _ = store.kv.remove(Tree::PluginMeta, &key);
@@ -132,21 +112,5 @@ mod key_normalization_tests {
         record_tombstone(&db, subject);
         assert!(is_tombstoned(&db, subject));
         assert_eq!(destroy_envelope(&db, subject), None);
-    }
-
-    #[tokio::test]
-    async fn destroy_envelope_round_trips_and_survives_unsigned_rerecord() {
-        let db = Db::init_temp("tombstone_envelope_roundtrip").await.unwrap();
-        let subject = "did:ad:example";
-        let json = r#"{"https://atomicdata.dev/properties/destroy":true}"#;
-        record_destroy_envelope(&db, subject, json);
-        assert!(is_tombstoned(&db, subject));
-        assert_eq!(destroy_envelope(&db, subject).as_deref(), Some(json));
-        record_tombstone(&db, subject);
-        assert_eq!(
-            destroy_envelope(&db, subject).as_deref(),
-            Some(json),
-            "an unsigned rerecord must not drop a stored destroy envelope"
-        );
     }
 }

@@ -1,9 +1,15 @@
+import {
+  mergeHistoryAttributions,
+  parseHistoryAttribution,
+  type HistoryAttribution,
+} from './history-attribution.js';
 import { ulid } from 'ulidx';
 import type { Agent } from './agent.js';
 import { canonicalDriveHash } from './canonical-drive-hash.js';
 import {
   removeCookieAuthentication,
   setCookieAuthentication,
+  signRequest,
 } from './authentication.js';
 import { Client, type FileOrFileLike } from './client.js';
 import { CommitBuilder, commitIdOf, type Commit } from './commit.js';
@@ -3392,6 +3398,50 @@ export class Store {
   /** Returns the base URL of the companion server */
   public getServerUrl(): string {
     return this.serverUrl;
+  }
+
+  /**
+   * Who signed `subject`'s history: the verified signer per Loro change
+   * token, from the signed envelopes the connected server kept
+   * (`GET /history-attribution`, read-gated) merged with those this client
+   * applied itself (ClientDb). Null when neither has anything. Never
+   * guesses: a version whose token no envelope carries stays unattributed.
+   */
+  public async getHistoryAttribution(
+    subject: string,
+  ): Promise<HistoryAttribution | null> {
+    const [remote, local] = await Promise.all([
+      this.fetchHistoryAttributionFromServer(subject),
+      this.getClientDb()?.historyAttribution(subject) ?? Promise.resolve(null),
+    ]);
+
+    return mergeHistoryAttributions(remote, local);
+  }
+
+  private async fetchHistoryAttributionFromServer(
+    subject: string,
+  ): Promise<HistoryAttribution | null> {
+    if (!this.serverUrl) return null;
+
+    try {
+      const url = new URL('/history-attribution', this.serverUrl);
+      url.searchParams.set('subject', subject);
+      const agent = this.getAgent();
+      // Sign the URL being fetched: the server rebuilds the signed message
+      // from the request it received, query string included.
+      const headers = agent
+        ? await signRequest(url.toString(), agent, {
+            Accept: 'application/json',
+          })
+        : { Accept: 'application/json' };
+      const res = await fetch(url.toString(), { headers });
+
+      if (!res.ok) return null;
+
+      return parseHistoryAttribution(await res.json());
+    } catch {
+      return null;
+    }
   }
 
   /**

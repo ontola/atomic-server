@@ -13,6 +13,18 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   retained whether or not the client flagged `isGenesis`. Clients no longer chain
   `previousCommit`; apply no longer has a previous-commit validation gate.
   History no longer offers a "Show Commit" link at a discarded envelope.
+- **Signed envelopes live on the resource (`Tree::Envelopes`).** Every
+  signed commit's JSON-AD is kept per resource, keyed by createdAt and
+  signature, in the same transaction as the state it signs. Not a
+  resource, not indexed. `--envelope-retention` / `ATOMIC_ENVELOPE_RETENTION`
+  is `latest` (the envelope that produced the current state; default) or
+  `all` (every envelope: a signed audit log). `GET /history-attribution?subject=`
+  (read-gated) answers who signed which Loro change, verified with the
+  apply code, plus whether every change is covered. Rust builder commits
+  and `create_did` now tag their Loro change like the browser does, so
+  History maps versions to signers. The destroy envelope on the tombstone
+  (added for `SYNC_DIFF.removeCommits`) is now the subject's latest row
+  in this tree. Envelopes do not yet travel in bulk sync or the vault.
 
 - **Missing-drive bootstrap is no longer a free pass (OQ5).** A
   `SYNC_PUSH` or live write for a drive this node has never stored goes

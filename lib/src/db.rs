@@ -328,6 +328,10 @@ pub struct Db {
     /// self-hosted / local-first nodes are unrestricted; a managed node
     /// installs a concrete policy via [`Db::set_sync_policy`].
     sync_policy: Arc<RwLock<Arc<dyn crate::sync::policy::SyncPolicy>>>,
+    /// Which signed envelopes `apply_commit` keeps per resource
+    /// (`crate::envelopes`). `Latest` by default; a node that wants a signed
+    /// audit log runs `All`.
+    envelope_retention: Arc<RwLock<crate::envelopes::EnvelopeRetention>>,
     /// Short-lived hash → (drive-subject, requested-at) map for blob hashes
     /// the server has asked a peer for (via `BLOB_REQUEST`, emitted from
     /// `import_sync_push` for an already-admitted drive). Consulted when
@@ -366,6 +370,22 @@ impl Db {
     }
 
     /// The currently-installed sync policy.
+    /// Set how many signed envelopes are kept per resource. Takes effect on
+    /// the next `apply_commit`; existing rows are pruned when their resource
+    /// is next written.
+    pub fn set_envelope_retention(&self, retention: crate::envelopes::EnvelopeRetention) {
+        if let Ok(mut guard) = self.envelope_retention.write() {
+            *guard = retention;
+        }
+    }
+
+    pub fn envelope_retention(&self) -> crate::envelopes::EnvelopeRetention {
+        self.envelope_retention
+            .read()
+            .map(|g| *g)
+            .unwrap_or_default()
+    }
+
     pub fn sync_policy(&self) -> Arc<dyn crate::sync::policy::SyncPolicy> {
         self.sync_policy
             .read()
@@ -432,6 +452,7 @@ impl Db {
             subject_locks: Default::default(),
             base_domain,
             sync_policy: default_sync_policy(),
+            envelope_retention: Arc::new(RwLock::new(Default::default())),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
         };
 
@@ -470,6 +491,7 @@ impl Db {
             subject_locks: Default::default(),
             base_domain,
             sync_policy: default_sync_policy(),
+            envelope_retention: Arc::new(RwLock::new(Default::default())),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
         };
 
@@ -504,6 +526,7 @@ impl Db {
             subject_locks: Default::default(),
             base_domain,
             sync_policy: default_sync_policy(),
+            envelope_retention: Arc::new(RwLock::new(Default::default())),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
         };
 
@@ -599,6 +622,7 @@ impl Db {
             subject_locks: Default::default(),
             base_domain,
             sync_policy: default_sync_policy(),
+            envelope_retention: Arc::new(RwLock::new(Default::default())),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
         };
 
@@ -750,6 +774,7 @@ impl Db {
             subject_locks: Default::default(),
             base_domain,
             sync_policy: default_sync_policy(),
+            envelope_retention: Arc::new(RwLock::new(Default::default())),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
         };
 
@@ -3148,6 +3173,12 @@ impl Storelike for Db {
             }
         }
 
+        // The signed envelope itself lives in `Tree::Envelopes`, keyed by the
+        // resource it is about, in the same transaction as the state it
+        // signs. This is what lets any node that holds the resource say who
+        // signed it, independent of the commit rows above.
+        crate::envelopes::record_ops(store, &commit_response, &mut transaction)?;
+
         match (&commit_response.resource_old, &commit_response.resource_new) {
             (None, None) => {
                 if !commit_response.commit.destroy.unwrap_or(false) {
@@ -3166,13 +3197,10 @@ impl Storelike for Db {
                     .destroy
                     .expect("Resource was removed but `commit.destroy` was not set!"));
                 let subject: Subject = commit_response.commit.subject.clone();
+                // `remove_resource` records the tombstone; the signed destroy
+                // is the envelope row `record_ops` queued above, which is what
+                // `SYNC_DIFF.removeCommits` carries.
                 self.remove_resource(&subject).await?;
-                // `remove_resource` records an unsigned tombstone. Overlay the
-                // signed destroy so bulk `SYNC_DIFF.removeCommits` can carry
-                // the same envelope the live `COMMIT` path forwards.
-                if let Ok(json) = commit_response.commit_resource.to_json_ad(None) {
-                    crate::sync::tombstones::record_destroy_envelope(self, subject.as_str(), &json);
-                }
             }
             _ => {}
         };

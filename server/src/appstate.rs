@@ -165,6 +165,17 @@ impl AppState {
         // no request can slip in under the default open policy.
         crate::host_mode::install_policy(&store, &config.host_mode).await;
 
+        match atomic_lib::envelopes::EnvelopeRetention::parse(&config.opts.envelope_retention) {
+            Some(retention) => store.set_envelope_retention(retention),
+            None => {
+                return Err(format!(
+                    "ATOMIC_ENVELOPE_RETENTION must be `latest` or `all`, got `{}`",
+                    config.opts.envelope_retention
+                )
+                .into())
+            }
+        }
+
         let index_status_broadcast = Arc::new(IndexStatusBroadcast::new());
         let index_notifier: Arc<dyn Fn(&str, bool) + Send + Sync> = {
             let b = index_status_broadcast.clone();
