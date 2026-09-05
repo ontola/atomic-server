@@ -306,6 +306,11 @@ export function useVaultBackup({
         return await restoreDrive({
           db: db!,
           drivePseudonym: status.enrollment.drive_pseudonym,
+          // This device's lane, so the import can record which *other* lanes it
+          // now provably holds. That is what lets a checkpoint published from
+          // here later claim coverage for them — the only way a lane belonging
+          // to a device that is gone ever becomes prunable.
+          devicePubkey: devicePubkey!,
           driveKey: key,
           onProgress: (done, total) =>
             setRestoreProgress(total === 0 ? 1 : done / total),
@@ -314,7 +319,7 @@ export function useVaultBackup({
         setRestoreProgress(null);
       }
     });
-  }, [run, status, ensureKey, db]);
+  }, [run, status, ensureKey, db, devicePubkey]);
 
   return {
     status,
