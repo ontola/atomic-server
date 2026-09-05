@@ -1103,7 +1103,6 @@ impl Resource {
             validate_timestamp: false,
             validate_rights: false,
             validate_for_agent: Some(agent.subject.to_string()),
-            validate_previous_commit: false,
             validate_loro_causality: false,
             update_index: true,
             source_id: None,
@@ -1222,7 +1221,6 @@ impl Resource {
             validate_timestamp: false,
             validate_rights: false,
             validate_for_agent: Some(agent.subject.to_string()),
-            validate_previous_commit: false,
             validate_loro_causality: false,
             update_index: true,
             source_id: None,
@@ -1257,7 +1255,7 @@ impl Resource {
                 .map(|sig| format!("did:ad:commit:{}", sig));
             crate::client::post_commit(&commit, store).await?;
             self.subject = subject.clone();
-            // Store lastCommit so subsequent saves can chain
+            // Stamp lastCommit so subsequent saves do not mis-detect genesis.
             if let Some(id) = commit_id {
                 self.propvals
                     .insert(urls::LAST_COMMIT.into(), Value::AtomicUrl(id.into()));
@@ -1620,7 +1618,6 @@ mod test {
                 validate_signature: true,
                 validate_timestamp: false,
                 validate_rights: false,
-                validate_previous_commit: false,
                 validate_loro_causality: false,
                 update_index: true,
                 validate_for_agent: None,
@@ -1838,7 +1835,6 @@ mod test {
                     validate_signature: true,
                     validate_timestamp: true,
                     validate_rights: false,
-                    validate_previous_commit: true,
                     validate_loro_causality: false,
                     validate_for_agent: None,
                     update_index: true,

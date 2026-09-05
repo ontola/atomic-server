@@ -876,7 +876,6 @@ impl Db {
         let opts = crate::commit::CommitOpts {
             validate_signature: true,
             validate_timestamp: false,
-            validate_previous_commit: false,
             validate_rights: false,
             update_index: true,
             ..crate::commit::CommitOpts::no_validations_no_index()
@@ -956,7 +955,6 @@ impl Db {
         let opts = crate::commit::CommitOpts {
             validate_signature: true,
             validate_timestamp: false,
-            validate_previous_commit: false,
             validate_rights: false,
             update_index: true,
             ..crate::commit::CommitOpts::no_validations_no_index()
@@ -1010,7 +1008,6 @@ impl Db {
         let opts = crate::commit::CommitOpts {
             validate_signature: true,
             validate_timestamp: false,
-            validate_previous_commit: false,
             validate_rights: false,
             update_index: true,
             ..crate::commit::CommitOpts::no_validations_no_index()
@@ -3138,11 +3135,17 @@ impl Storelike for Db {
             }
         }
 
-        // Save the Commit to the Store. We can skip the required props checking, but we need to make sure the commit hasn't been applied before.
-        store.add_resource_tx(&commit_response.commit_resource, &mut transaction)?;
-        // We still need to index the Commit!
-        for atom in commit_response.commit_resource.to_atoms() {
-            store.add_atom_to_index(&atom, &commit_response.commit_resource, &mut transaction)?;
+        // Commits are signed envelopes, not a queryable class. Keep genesis
+        // and rights/parent/destroy; drop ordinary content certificates.
+        if commit_response.auth_impact().is_critical() {
+            store.add_resource_tx(&commit_response.commit_resource, &mut transaction)?;
+            for atom in commit_response.commit_resource.to_atoms() {
+                store.add_atom_to_index(
+                    &atom,
+                    &commit_response.commit_resource,
+                    &mut transaction,
+                )?;
+            }
         }
 
         match (&commit_response.resource_old, &commit_response.resource_new) {
