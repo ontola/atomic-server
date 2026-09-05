@@ -998,13 +998,12 @@ impl ClientDb {
         let subject = Subject::from_raw(drive_subject, self.db().get_base_domain().as_deref());
         let staging = MemoryVaultStore::new();
 
-        let observed: std::collections::BTreeMap<String, u32> = if observed_lanes.is_undefined()
-            || observed_lanes.is_null()
-        {
-            Default::default()
-        } else {
-            serde_wasm_bindgen::from_value(observed_lanes).map_err(to_js_err)?
-        };
+        let observed: std::collections::BTreeMap<String, u32> =
+            if observed_lanes.is_undefined() || observed_lanes.is_null() {
+                Default::default()
+            } else {
+                serde_wasm_bindgen::from_value(observed_lanes).map_err(to_js_err)?
+            };
 
         let summary = export_vault_segment(
             self.db(),
