@@ -1,4 +1,4 @@
-import { StoreEvents, type Store } from '@tomic/lib';
+import { core, dataBrowser, StoreEvents, type Store } from '@tomic/lib';
 import {
   agentVaultProof,
   getVaultState,
@@ -148,7 +148,7 @@ const defaultDeps: VaultAutoBackupDeps = {
  */
 const enrolled = new Map<
   string,
-  { drivePseudonym: string; driveKey: Uint8Array }
+  { drivePseudonym: string; driveKey: Uint8Array; metadata?: string }
 >();
 
 /** Only in tests. */
@@ -256,7 +256,22 @@ async function ensureVaultBackupOnce(
 
     let known = enrolled.get(driveSubject);
 
-    if (!known) {
+    // Display metadata is shared with SaaS; read it from the local drive.
+    const drive = store.resources.get(driveSubject);
+    const name = drive?.get(core.properties.name);
+    const emoji = drive?.get(dataBrowser.properties.emoji);
+    const metadata = {
+      name: typeof name === 'string' ? name : undefined,
+      emoji:
+        typeof emoji === 'string'
+          ? emoji
+          : typeof name === 'string'
+            ? ''
+            : undefined,
+    };
+    const metadataKey = JSON.stringify(metadata);
+
+    if (!known || (known.metadata ?? '{}') !== metadataKey) {
       if (!(await deps.hasAccount())) {
         return { status: 'skipped', reason: 'no account session' };
       }
@@ -265,12 +280,17 @@ async function ensureVaultBackupOnce(
       const { enrollment, driveKey } = await deps.setUpVaultForDrive({
         keys,
         driveSubject,
+        metadata,
         agentSubject: agent.subject,
         // The agent signs a fixed message; its key is never read. That is what
         // keeps non-extractable and hardware-backed keys usable here.
         agentSecret: await agentVaultProof(agent, keys.proofMessage),
       });
-      known = { drivePseudonym: enrollment.drive_pseudonym, driveKey };
+      known = {
+        drivePseudonym: enrollment.drive_pseudonym,
+        driveKey,
+        metadata: metadataKey,
+      };
       enrolled.set(driveSubject, known);
     }
 
