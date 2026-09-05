@@ -27,7 +27,7 @@ use std::time::{Duration, Instant};
 use crate::{
     actor_messages::SendFrame, appstate::AppState, commit_monitor::CommitMonitor,
     errors::AtomicServerResult, handlers::ws_v2, helpers::get_auth_headers,
-    loro_sync_broadcaster::LoroSyncBroadcaster, vector_search::VectorSearchState,
+    vector_search::VectorSearchState,
 };
 
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
@@ -77,7 +77,6 @@ pub async fn web_socket_handler(
             auth_nonce: atomic_lib::sync::protocol::new_challenge_nonce(),
             client_capabilities: Vec::new(),
             commit_monitor_addr: appstate.commit_monitor.clone(),
-            loro_sync_broadcaster_addr: appstate.loro_sync_broadcaster.clone(),
             agent: for_agent,
             store: appstate.store.clone(),
             connection_id: new_connection_id(),
@@ -121,7 +120,6 @@ pub struct WebSocketConnection {
     /// one. Consulted before answering `COMMIT` with a slim `COMMIT_OK`.
     client_capabilities: Vec<String>,
     commit_monitor_addr: Addr<CommitMonitor>,
-    loro_sync_broadcaster_addr: Addr<LoroSyncBroadcaster>,
     agent: ForAgent,
     store: Db,
     /// Unique-per-process identifier. Threaded through `CommitOpts` into
@@ -210,13 +208,11 @@ impl Actor for WebSocketConnection {
 
     fn stopped(&mut self, ctx: &mut Self::Context) {
         // Remove ourselves from every subscription map. Without this,
-        // closed connections leave stale `Addr`s in `CommitMonitor` and
-        // `LoroSyncBroadcaster`, which every subsequent fanout iterates
-        // over (do_send to a stopped actor silently no-ops).
+        // closed connections leave stale `Addr`s in `CommitMonitor`,
+        // which every subsequent fanout iterates over (do_send to a
+        // stopped actor silently no-ops).
         let addr = ctx.address();
         self.commit_monitor_addr
-            .do_send(crate::actor_messages::UnsubscribeAll { addr: addr.clone() });
-        self.loro_sync_broadcaster_addr
             .do_send(crate::actor_messages::UnsubscribeAll { addr });
     }
     fn stopping(&mut self, ctx: &mut Self::Context) -> Running {
@@ -525,17 +521,16 @@ impl WebSocketConnection {
                 use atomic_lib::sync::protocol::ephemeral_kind;
                 match decoded.kind {
                     ephemeral_kind::DOC => {
-                        self.loro_sync_broadcaster_addr.do_send(
-                            crate::actor_messages::LoroSyncUpdate {
+                        self.commit_monitor_addr
+                            .do_send(crate::actor_messages::LoroSyncUpdate {
                                 subject,
                                 agent,
                                 update: decoded.payload,
                                 addr,
-                            },
-                        );
+                            });
                     }
                     ephemeral_kind::LORO => {
-                        self.loro_sync_broadcaster_addr.do_send(
+                        self.commit_monitor_addr.do_send(
                             crate::actor_messages::LoroEphemeralUpdate {
                                 subject,
                                 agent,
@@ -545,14 +540,13 @@ impl WebSocketConnection {
                         );
                     }
                     ephemeral_kind::PRESENCE => {
-                        self.loro_sync_broadcaster_addr.do_send(
-                            crate::actor_messages::PresenceUpdate {
+                        self.commit_monitor_addr
+                            .do_send(crate::actor_messages::PresenceUpdate {
                                 subject,
                                 agent,
                                 update: decoded.payload,
                                 addr,
-                            },
-                        );
+                            });
                     }
                     other => {
                         tracing::debug!("Unknown EPHEMERAL kind {other}");
@@ -598,7 +592,7 @@ impl WebSocketConnection {
             if let Ok(msg) =
                 serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
             {
-                self.loro_sync_broadcaster_addr
+                self.commit_monitor_addr
                     .do_send(crate::actor_messages::SubscribeLoroSync {
                         addr: ctx.address(),
                         subject: msg.subject,
@@ -609,12 +603,11 @@ impl WebSocketConnection {
             if let Ok(msg) =
                 serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
             {
-                self.loro_sync_broadcaster_addr.do_send(
-                    crate::actor_messages::UnsubscribeLoroSync {
+                self.commit_monitor_addr
+                    .do_send(crate::actor_messages::UnsubscribeLoroSync {
                         addr: ctx.address(),
                         subject: msg.subject,
-                    },
-                );
+                    });
             }
         } else if let Some(json) = text.strip_prefix("PRESENCE_SUBSCRIBE ") {
             // Drive-scoped ephemeral presence (issue #1229). Reuses the
@@ -625,7 +618,7 @@ impl WebSocketConnection {
             if let Ok(msg) =
                 serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
             {
-                self.loro_sync_broadcaster_addr
+                self.commit_monitor_addr
                     .do_send(crate::actor_messages::SubscribePresence {
                         addr: ctx.address(),
                         drive: msg.subject,
@@ -636,12 +629,11 @@ impl WebSocketConnection {
             if let Ok(msg) =
                 serde_json::from_str::<crate::actor_messages::LoroSubscriptionJSON>(json)
             {
-                self.loro_sync_broadcaster_addr.do_send(
-                    crate::actor_messages::UnsubscribePresence {
+                self.commit_monitor_addr
+                    .do_send(crate::actor_messages::UnsubscribePresence {
                         addr: ctx.address(),
                         drive: msg.subject,
-                    },
-                );
+                    });
             }
         } else if let Some(json) = text.strip_prefix("RBSR_FP ") {
             // RBSR: answer range fingerprints so the client can find the
