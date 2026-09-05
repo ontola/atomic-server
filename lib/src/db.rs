@@ -3062,6 +3062,26 @@ impl Storelike for Db {
         // a lock rather than a merge, and for the no-reentrancy invariant.
         let subject_guard = store.subject_locks.lock(&commit.subject.pure_id()).await;
 
+        // A signed destroy is durable (tombstone envelope, re-sent by bulk
+        // sync). If this exact commit is already stored here and the subject
+        // exists again, the subject was recreated after the destroy and this
+        // is a replay, not a delete. Local presence only — a commit DID must
+        // never be resolved over the network.
+        if commit.destroy.unwrap_or(false) && opts.validate_rights {
+            if let Some(sig) = commit.signature.as_ref() {
+                let commit_id = format!("did:ad:commit:{sig}");
+                if store.has_resource_locally(&commit_id)
+                    && store.has_resource_locally(&commit.subject.pure_id())
+                {
+                    return Err(format!(
+                        "Destroy commit for {} was already applied here; refusing replay",
+                        commit.subject
+                    )
+                    .into());
+                }
+            }
+        }
+
         let commit_response = commit.validate_and_build_response(opts, store).await?;
 
         let mut transaction = Transaction::new();
@@ -3144,6 +3164,12 @@ impl Storelike for Db {
                     .expect("Resource was removed but `commit.destroy` was not set!"));
                 let subject: Subject = commit_response.commit.subject.clone();
                 self.remove_resource(&subject).await?;
+                // `remove_resource` records an unsigned tombstone. Overlay the
+                // signed destroy so bulk `SYNC_DIFF.removeCommits` can carry
+                // the same envelope the live `COMMIT` path forwards.
+                if let Ok(json) = commit_response.commit_resource.to_json_ad(None) {
+                    crate::sync::tombstones::record_destroy_envelope(self, subject.as_str(), &json);
+                }
             }
             _ => {}
         };

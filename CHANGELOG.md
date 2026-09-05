@@ -7,6 +7,38 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- **Missing-drive bootstrap is no longer a free pass (OQ5).** A
+  `SYNC_PUSH` or live write for a drive this node has never stored goes
+  through `admit_unknown_drive`: `Public` never creates one (even on
+  `OpenPolicy`); Owner mode enrolls only the owner; an authenticated
+  first-sync on an open node still works. AUTH-before-`SYNC_PUSH` already
+  closed the unauthenticated wire; this closes the library path.
+- **`SUB` / `UNSUB` are engine-owned.** Parse and `check_read` live in
+  `handle_frame_full`; the WebSocket handler registers the connection
+  with the commit monitor only when the engine admits the subscription.
+  The `0x20` / `0x21` wire is unchanged (anonymous `SUB` on a public
+  share link still works).
+- **One subscription actor.** `LoroSyncBroadcaster` is gone; Loro
+  ephemera and drive presence fan out from `CommitMonitor` (one mailbox,
+  one `UnsubscribeAll` on socket close). Wire and behaviour unchanged.
+- **Bulk `SYNC_DIFF.remove` can carry a signed destroy.** When the sender
+  still holds the destroy commit on the tombstone, `removeCommits` maps
+  that subject to the JSON-AD envelope and the receiver applies it as a
+  peer `COMMIT`. A bad signature does not fall back to the unsigned
+  tombstone path. Senders without the envelope still send a subject-only
+  `remove[]` entry (admission-gated). The envelope is only handed to a
+  session that may read the drive; a signed destroy that is already
+  stored here, or that predates the current resource's genesis, is
+  refused as a replay. The browser applies the envelope as a local-cache
+  write and removes the resource either way. Requiring an envelope on
+  every delete still waits on `Tree::Envelopes`.
+- **`AtomicTransport` / `SyncSession` first slice.** The engine loop is
+  callable over any byte-pipe (`lib/src/sync/transport.rs`,
+  `SyncSession::serve`). Iroh and WebSocket still have their own
+  lifecycles; the outbox port and FRB `open_sync_session` are not this
+  change.
+
+
 ## [v0.41.0-beta.5] - 2026-09-04
 
 - **Local full-text search** in `atomic_lib` (`lib/src/search/`): a KV inverted

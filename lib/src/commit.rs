@@ -815,22 +815,25 @@ impl Commit {
             }
         }
 
+        // F11 (planning/unified-sync.md): this subject is being (re)created —
+        // if it was previously destroyed (and thus tombstoned to stop
+        // bulk-sync from resurrecting it), that invariant is now stale. Clear
+        // it so a legitimate re-create isn't invisible to future
+        // `SYNC_PUSH`/`SYNC_VV` bulk-sync with other replicas (`is_tombstoned`
+        // would otherwise keep skipping it there forever). Not gated on
+        // `validate_rights`: a repeat genesis of a deterministic subject
+        // (the private drive) is applied locally without it. No-op if there
+        // was nothing to clear.
+        if is_new {
+            store.clear_tombstone(commit.subject.as_str());
+        }
+
         if opts.validate_rights {
             let signer_str = commit.signer.to_string();
             let validate_for = opts.validate_for_agent.as_ref().unwrap_or(&signer_str);
             if is_new {
                 crate::hierarchy::check_append(store, &applied.resource_new, &validate_for.into())
                     .await?;
-
-                // F11 (planning/unified-sync.md): this subject just passed a
-                // rights-checked genesis — if it was previously destroyed
-                // (and thus tombstoned to stop bulk-sync from resurrecting
-                // it), that invariant is now stale. Clear it so this
-                // legitimate re-create isn't invisible to future
-                // `SYNC_PUSH`/`SYNC_VV` bulk-sync with other replicas
-                // (`is_tombstoned` would otherwise keep skipping it there
-                // forever). No-op if there was nothing to clear.
-                store.clear_tombstone(commit.subject.as_str());
 
                 // For new DID resources, grant the signer explicit write access so future
                 // commits don't need drive-level rights. Agents are excluded because they
@@ -862,6 +865,10 @@ impl Commit {
             } else {
                 // This should use the _old_ resource, not the new one, as the new one might maliciously give itself write rights.
                 crate::hierarchy::check_write(store, &resource_old, &validate_for.into()).await?;
+            }
+
+            if commit.destroy.unwrap_or(false) && !is_new {
+                commit.reject_destroy_older_than_genesis(&resource_old)?;
             }
 
             // `drive` is a rights shortcut: `check_rights` consults it *before* it
@@ -1000,6 +1007,26 @@ impl Commit {
             changed_props: applied.changed_props,
             source_id: opts.source_id.clone(),
         })
+    }
+
+    /// A signed destroy is a durable artifact: it sits on the tombstone,
+    /// travels in `SYNC_DIFF.removeCommits`, and is re-sent to replicas that
+    /// were offline. That is what makes it replayable against a subject
+    /// that was legitimately recreated after the destroy. A destroy that
+    /// predates the genesis of the resource it names cannot be about this
+    /// resource. (`Db::apply_commit` separately refuses a destroy commit it
+    /// has already stored.)
+    fn reject_destroy_older_than_genesis(&self, resource_old: &Resource) -> AtomicResult<()> {
+        if let Ok(genesis_at) = resource_old.get(urls::CREATED_AT).and_then(|v| v.to_int()) {
+            if self.created_at + ACCEPTABLE_TIME_DIFFERENCE < genesis_at {
+                return Err(format!(
+                    "Destroy commit for {} (created {}) predates the resource's genesis ({}); refusing replay",
+                    self.subject, self.created_at, genesis_at
+                )
+                .into());
+            }
+        }
+        Ok(())
     }
 
     /// Checks if the Commit has been created in the future or if it is expired.

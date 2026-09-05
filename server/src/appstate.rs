@@ -2,12 +2,8 @@
 use std::sync::Arc;
 
 use crate::{
-    commit_monitor::CommitMonitor,
-    config::Config,
-    errors::AtomicServerResult,
-    handlers::web_sockets::IndexStatusBroadcast,
-    loro_sync_broadcaster::{self, LoroSyncBroadcaster},
-    plugins,
+    commit_monitor::CommitMonitor, config::Config, errors::AtomicServerResult,
+    handlers::web_sockets::IndexStatusBroadcast, plugins,
 };
 use atomic_lib::{agents::Agent, commit::CommitResponse, config::SharedConfig, Storelike};
 
@@ -27,8 +23,8 @@ pub struct AppState {
     /// App Configuration
     pub config: Config,
     /// The Actix Address of the CommitMonitor, which should receive updates when a commit is applied
+    /// (and also hosts Loro ephemera / drive presence fan-out).
     pub commit_monitor: actix::Addr<CommitMonitor>,
-    pub loro_sync_broadcaster: actix::Addr<LoroSyncBroadcaster>,
     pub vector_search_state: crate::vector_search::VectorSearchState,
     pub index_status_broadcast: Arc<IndexStatusBroadcast>,
     /// Whether this node is managed (reports to a control plane). Set at runtime
@@ -190,9 +186,6 @@ impl AppState {
 
         let commit_monitor_clone = commit_monitor.clone();
 
-        let loro_sync_broadcaster =
-            loro_sync_broadcaster::create_loro_sync_broadcaster(store.clone());
-
         // This closure is called every time a Commit is created
         let send_commit = move |commit_response: &CommitResponse| {
             commit_monitor_clone.do_send(crate::actor_messages::CommitMessage {
@@ -211,7 +204,6 @@ impl AppState {
             store,
             config,
             commit_monitor,
-            loro_sync_broadcaster,
             vector_search_state,
             index_status_broadcast,
             managed: server_info.managed,
