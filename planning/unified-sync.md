@@ -198,14 +198,17 @@ that turned out to be already done, or blocked by a finding, say so inline.
 - [x] (2026-09-05) — Engine owns `SUB` / `UNSUB`: parse + `check_read` live
   in `handle_frame_full`; the WS handler registers the connection with
   the commit monitor only when the engine admits the subscription.
-  Folding `LoroSyncBroadcaster` into `CommitMonitor` is still
-  [`unify-subscription-actors.md`](./unify-subscription-actors.md).
-  ([`serverless-p2p.md`](./serverless-p2p.md))
+  `LoroSyncBroadcaster` is folded into `CommitMonitor` (Loro ephemera +
+  drive presence maps, one `UnsubscribeAll`).
+  ([`serverless-p2p.md`](./serverless-p2p.md),
+  [`unify-subscription-actors.md`](./unify-subscription-actors.md))
 - [ ] The drain targets a transport / `SyncSession`, not an endpoint URL string
   (this doc).
-- [ ] `AtomicTransport` trait with `IrohTransport` / `WsTransport`, the
-  `SyncSession` state machine, and the FRB surface (`subscribe_events`,
-  `open_sync_session`). ([`serverless-p2p.md`](./serverless-p2p.md))
+- [~] (2026-09-05) — `AtomicTransport` trait + in-process `ChannelTransport`
+  and `SyncSession::{handle, serve}` (responder loop over the engine).
+  `IrohTransport` / `WsTransport` wrappers, outbox drain, and the FRB
+  `open_sync_session` surface remain.
+  ([`serverless-p2p.md`](./serverless-p2p.md))
 - [ ] `trusted_hub` / `untrusted_peer` split in `ws_apply.rs`.
   ([`serverless-p2p.md`](./serverless-p2p.md))
 - [x] (2026-09-04) — the pinned QUIC connection lives in the live-peer
@@ -349,7 +352,7 @@ Layer 2 — Bulk reconcile (same-agent catch-up / offline gap)
 | Layer | Proves identity | Proves rights | Deletes |
 | --- | --- | --- | --- |
 | **1 — Live / COMMIT** | WS `AUTH` or HTTP auth | Hub `apply_commit` + hierarchy | Signed destroy commit → `DESTROY` |
-| **2 — Bulk** | `AUTH` on stream before `SYNC` (enforced on Iroh accept 2026-09-01; WS gates writes + identity-bearing subs, anonymous reads stay `check_read`-gated) | `check_read` on push; `check_write` + admission on import | `remove[]` from peer tombstones — **not** signed on the wire |
+| **2 — Bulk** | `AUTH` on stream before `SYNC` (enforced on Iroh accept 2026-09-01; WS gates writes + identity-bearing subs, anonymous reads stay `check_read`-gated) | `check_read` on push; `check_write` + admission on import | `remove[]` plus `removeCommits` when the sender still holds the destroy envelope (applied as a peer `COMMIT`); unsigned entries stay admission-gated |
 
 **Policy:** authoritative delete = Layer 1 on the hub. Layer 2 `remove` only prevents
 resurrection between honest replicas of the same agent.

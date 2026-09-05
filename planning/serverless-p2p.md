@@ -190,9 +190,14 @@ unblocked:
   `sync::peer::accept_gate_tests::{naked_destroy_on_the_live_link_is_ignored,
   signed_destroy_commit_on_the_live_link_is_applied,
   signed_destroy_from_stranger_on_the_live_link_is_refused}`.
-- [ ] **Bulk `remove[]` is still unsigned**: `SYNC_DIFF.remove` comes from
-  local tombstones and is applied on the drive-level write verdict. Making
-  it signed needs retained destroy commits (commit retention floor).
+- [x] **Bulk `remove[]` carries a signed destroy when the sender still holds
+  it** (2026-09-05): the tombstone value is the commit JSON-AD (or a
+  one-byte unsigned marker). `SYNC_DIFF.removeCommits` attaches those
+  envelopes; the receiver applies them as a peer `COMMIT` and does not
+  fall back to the unsigned path on a bad signature. Unsigned entries
+  stay admission-gated for senders that never stored the envelope.
+  Requiring an envelope on every `remove[]` still waits on
+  `Tree::Envelopes` (commit-retention floor).
 - [x] Pre-auth frame budget in the live read loop (the `matches!(agent,
   Public)` gate exists in `handle_stream`; mirror it in
   `register_live_peer`). (2026-09-01: the live loop now refuses every
@@ -225,9 +230,9 @@ now load-bearing rather than hygiene:
   domain-ownership / Loro-causality gates are opts booleans the peer path
   leaves off. **`SUB`/`UNSUB` parse + `check_read` live in
   `handle_frame_full` (2026-09-05);** the WS handler still `do_send`s to the
-  commit monitor because the engine has no actor mailbox. Folding
-  `LoroSyncBroadcaster` into `CommitMonitor` is
-  [`unify-subscription-actors.md`](./unify-subscription-actors.md). AUTH+GET
+  commit monitor because the engine has no actor mailbox.   Folding
+  `LoroSyncBroadcaster` into `CommitMonitor` landed 2026-09-05
+  ([`unify-subscription-actors.md`](./unify-subscription-actors.md)). AUTH+GET
   were the pure request→response pair that had actually drifted; COMMIT-apply
   was the additive capability peers needed, and is now one implementation
   instead of two.
@@ -243,17 +248,20 @@ now load-bearing rather than hygiene:
 
 ### P2 — Port the outbox + unified session API to Rust
 
+- [~] **`AtomicTransport` trait + `SyncSession::serve`** (2026-09-05):
+  `lib/src/sync/transport.rs` (`AtomicTransport`, in-process
+  `ChannelTransport`) and `lib/src/sync/session.rs` (responder loop over
+  `handle_frame_full`). `IrohTransport` / `WsTransport` wrappers are not
+  wired; `handle_stream` / `register_live_peer` still own the Iroh
+  lifecycle.
 - [ ] **Port `LocalOutbox` semantics into `atomic_lib`** (`AtomicNode`
   outbox): dirty bit, genesis envelope, `baseVersion`, backoff, blocked
   states, structured-error classification. Android needs durable offline
   queuing exactly like the browser; Flutter's `try_push_commit` is not it.
-- [ ] **`AtomicTransport` trait + `IrohTransport`/`WsTransport` impls**
-  (frame send/recv + connection lifecycle only — all semantics stay in the
-  engine/session).
-- [ ] **`SyncSession` state machine**: connect → mutual AUTH (fail closed) →
-  VV reconcile → live → drain-on-dirty; reconnect with backoff; emits
-  `NodeEvent`s. Replaces `handle_stream` + `register_live_peer` +
-  the auto-connect loop's inline logic.
+- [ ] **`SyncSession` state machine** beyond the responder loop: connect →
+  mutual AUTH (fail closed) → VV reconcile → live → drain-on-dirty;
+  reconnect with backoff; emits `NodeEvent`s. Replaces `handle_stream` +
+  `register_live_peer` + the auto-connect loop's inline logic.
 - [ ] **FRB surface**: `subscribe_events`, `open_sync_session(target)`,
   `close_sync_session`, where `target` is a server URL *or* a paired
   NodeID. `pollDbEvent`, `peer_sync`, `watch_children` are deleted.

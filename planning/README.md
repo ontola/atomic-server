@@ -36,7 +36,7 @@ Remaining work, not "this file exists."
 | Document | Status |
 | --- | --- |
 | [`unified-sync.md`](./unified-sync.md) | **Active.** One sync API over WS or Iroh. Carries the single **Remaining work (2026-09-03)** checklist for every open sync item across these plans. The 2026-07 audit history is in [`completed/unified-sync-audit-2026-07.md`](./completed/unified-sync-audit-2026-07.md). |
-| [`serverless-p2p.md`](./serverless-p2p.md) | **Planned.** Device sync without a hub (written same-agent-first; admission is rights-based since 2026-07-17). AUTH-before-SYNC and the `AUTH.requestedSubject`↔drive binding landed 2026-09-01 (Iroh). Live-link destroys travel as signed `COMMIT` frames since 2026-09-03. P0 remaining: signed bulk `remove[]`, OQ5 bootstrap admission, then `SyncSession` / `AtomicTransport`. |
+| [`serverless-p2p.md`](./serverless-p2p.md) | **Planned.** Device sync without a hub (written same-agent-first; admission is rights-based since 2026-07-17). AUTH-before-SYNC and the `AUTH.requestedSubject`↔drive binding landed 2026-09-01 (Iroh). Live-link destroys travel as signed `COMMIT` frames since 2026-09-03. P0 remaining: require envelopes on every `remove[]` once `Tree::Envelopes` exists. `AtomicTransport` / `SyncSession::serve` first slice landed 2026-09-05; outbox port and the remaining `sync_drive_with_peer*` collapse are open. |
 | [`foss-public-host-mode.md`](./foss-public-host-mode.md) | **Partial.** Phase 1–2 built; OQ5 library path closed 2026-09-05 (`admit_unknown_drive`: Public never creates, Owner enrolls only the owner). Phase 3 (rate limits, Iroh stream refusal) is untouched. |
 | [`authorization-sync.md`](./authorization-sync.md) | **Draft.** Signed commit authorization, grant-chain evidence, peer-sync trust boundaries. |
 | [`unified-data-layer.md`](./unified-data-layer.md) | **Partial.** Browser/JS: one ingress, one outbox, one subscription model. Atomic writes and the single outbox shipped; the ingress/subscription half and `SaveState` are open. |
@@ -82,7 +82,7 @@ Not top-level plans. Indexed so they do not go missing.
 | Document | Status |
 | --- | --- |
 | [`unify-subscription-primitives.md`](./unify-subscription-primitives.md) | **Done in reduced form (2026-09-04).** One `SUB <subject>` frame; `SUBSCRIBE` and `SUBSCRIBE_QUERY` removed. Design text kept as the record. |
-| [`unify-subscription-actors.md`](./unify-subscription-actors.md) | Planned, not started. Fold LoroSyncBroadcaster into CommitMonitor. |
+| [`unify-subscription-actors.md`](./unify-subscription-actors.md) | **Done 2026-09-05.** `LoroSyncBroadcaster` folded into `CommitMonitor`; actor not renamed. |
 | [`unify-resource-representations.md`](./unify-resource-representations.md) | **Mostly shipped.** `Resource#cache` is derived from the Loro doc. Remaining: the `_auxValues` overlay. |
 | [`unify-resource-dirty-signals.md`](./unify-resource-dirty-signals.md) | Planned, not started. Single `getSaveState(subject)` enum. |
 | [`subject-types-end-to-end.md`](./subject-types-end-to-end.md) | Partial. Rust `DidKind` shipped; the browser brand still has no consumer. |

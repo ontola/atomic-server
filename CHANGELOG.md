@@ -18,6 +18,21 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   with the commit monitor only when the engine admits the subscription.
   The `0x20` / `0x21` wire is unchanged (anonymous `SUB` on a public
   share link still works).
+- **One subscription actor.** `LoroSyncBroadcaster` is gone; Loro
+  ephemera and drive presence fan out from `CommitMonitor` (one mailbox,
+  one `UnsubscribeAll` on socket close). Wire and behaviour unchanged.
+- **Bulk `SYNC_DIFF.remove` can carry a signed destroy.** When the sender
+  still holds the destroy commit on the tombstone, `removeCommits` maps
+  that subject to the JSON-AD envelope and the receiver applies it as a
+  peer `COMMIT`. A bad signature does not fall back to the unsigned
+  tombstone path. Senders without the envelope still send a subject-only
+  `remove[]` entry (admission-gated). Requiring an envelope on every
+  delete still waits on `Tree::Envelopes`.
+- **`AtomicTransport` / `SyncSession` first slice.** The engine loop is
+  callable over any byte-pipe (`lib/src/sync/transport.rs`,
+  `SyncSession::serve`). Iroh and WebSocket still have their own
+  lifecycles; the outbox port and FRB `open_sync_session` are not this
+  change.
 
 
 ## [v0.41.0-beta.5] - 2026-09-04
