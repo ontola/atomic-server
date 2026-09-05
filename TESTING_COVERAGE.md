@@ -380,3 +380,5 @@ Not covered: leftover Yjs-era DocumentV2 bodies end-to-end (needs a stored `{ ty
 Not covered: Flutter `create_drive` still mints a random DID (the Rust
 `ensure_personal_drive` helper exists for `setup()`). E2E sign-in on a second
 machine with the old machine offline.
+
+Cloud Vault display metadata: `vaultAutoBackup.test.ts` verifies name/emoji enrollment and refresh after edits; SaaS `enrollment_display_metadata_refreshes_and_survives_legacy_clients` verifies persistence and account ownership.
