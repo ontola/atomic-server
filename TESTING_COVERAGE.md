@@ -1035,3 +1035,11 @@ and upload hook, then delivers multiple files through the drop callback. It
 verifies the upload targets the displayed drive even when the current drive
 setting differs. Native drag events, overlay geometry and the refreshed child
 list are not covered by this component test.
+## Paged table hydration count (2026-09-08)
+
+`collection-page-assemble.test.ts` reproduces 90 rows becoming 150 when deferred
+hydration notifications re-add rows outside page zero. Covers full-query membership
+and reconciling optimistic additions already represented in that query. The other
+collection sorting, drive-scope and empty-result regressions are run alongside it.
+Verified in the user's Zen integration table: total is 90, final rows render, and
+the phantom loading rows are gone. No source issue records were edited.
