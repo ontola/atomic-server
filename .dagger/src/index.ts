@@ -192,9 +192,7 @@ function condenseErrorContext(body: string): string {
   const details = body.match(/# Error details\s*```\n([\s\S]{0,900}?)```/);
   const main = body.indexOf('- main:');
   const region =
-    main === -1
-      ? body.slice(-2500)
-      : body.slice(main, main + 2500);
+    main === -1 ? body.slice(-2500) : body.slice(main, main + 2500);
 
   return `${details ? details[1].trim() : ''}\n\n${region}`;
 }
@@ -424,7 +422,10 @@ export class AtomicServer {
         .from(FLUTTER_IMAGE)
         .withEnvVariable('CI', 'true')
         .withEnvVariable('PUB_CACHE', '/root/.pub-cache')
-        .withMountedCache('/root/.pub-cache', dag.cacheVolume('flutter-pub-cache'))
+        .withMountedCache(
+          '/root/.pub-cache',
+          dag.cacheVolume('flutter-pub-cache'),
+        )
         .withDirectory('/workspace/flutter', this.source.directory('flutter'))
         .withWorkdir('/workspace/flutter')
         .withExec([
@@ -532,10 +533,50 @@ export class AtomicServer {
   async jsTest(): Promise<string> {
     const depsContainer = this.jsBuild();
 
-    return depsContainer
-      .withWorkdir('/app')
-      .withExec(['pnpm', 'run', 'test'])
-      .stdout();
+    return (
+      depsContainer
+        .withWorkdir('/app')
+        .withExec(['pnpm', 'run', 'test'])
+        .withExec([
+          'node',
+          '--test',
+          'data-browser/scripts/integration-mcp.test.mjs',
+        ])
+        // Provider packages stay outside core/browser bundles, but their fixture
+        // tests run in the same JS gate. Mirror the repo layout for SDK imports.
+        .withDirectory('/integrations', this.source.directory('integrations'))
+        .withExec(['ln', '-s', '/app', '/browser'])
+        .withWorkdir('/')
+        .withExec(['node', '--test', '/integrations/tooling/certify.test.mjs'])
+        .withExec([
+          'node',
+          '/integrations/tooling/certify.mjs',
+          '--layer',
+          'js',
+          '--output',
+          '/integration-certification',
+        ])
+        .stdout()
+    );
+  }
+
+  /** Export offline provider evidence; live provider writes are never run here. */
+  @func()
+  integrationCertificationReport(): Directory {
+    return this.jsBuild()
+      .withDirectory('/integrations', this.source.directory('integrations'))
+      .withExec(['ln', '-s', '/app', '/browser'])
+      .withWorkdir('/')
+      .withExec(['node', '--test', '/integrations/tooling/certify.test.mjs'])
+      .withExec([
+        'node',
+        '/integrations/tooling/certify.mjs',
+        '--layer',
+        'js',
+        '--output',
+        '/integration-certification',
+      ])
+      .directory('/integration-certification');
   }
 
   /**
@@ -651,6 +692,10 @@ export class AtomicServer {
         // member, so all members must be present even though we only build
         // the wasm crate.
         .withDirectory('/code/lib', this.source.directory('lib'))
+        .withDirectory(
+          '/code/plugin-runtime',
+          this.source.directory('plugin-runtime'),
+        )
         .withDirectory('/code/wasm', this.source.directory('wasm'))
         .withDirectory('/code/server', this.source.directory('server'))
         .withDirectory('/code/cli', this.source.directory('cli'))
@@ -707,6 +752,10 @@ export class AtomicServer {
         .withFile('/code/Cargo.lock', this.source.file('Cargo.lock'))
         .withDirectory('/code/server', this.source.directory('server'))
         .withDirectory('/code/lib', this.source.directory('lib'))
+        .withDirectory(
+          '/code/plugin-runtime',
+          this.source.directory('plugin-runtime'),
+        )
         .withDirectory('/code/cli', this.source.directory('cli'))
         .withDirectory('/code/desktop', this.source.directory('desktop'))
         .withDirectory('/code/wasm', this.source.directory('wasm'))
@@ -834,7 +883,10 @@ export class AtomicServer {
       )
       // Same pnpm-store volume as jsBuild() — without this, every
       // integration-test run re-downloaded the registry graph.
-      .withMountedCache('/repo/browser/.pnpm-store', dag.cacheVolume('pnpm-store'))
+      .withMountedCache(
+        '/repo/browser/.pnpm-store',
+        dag.cacheVolume('pnpm-store'),
+      )
       .withExec([
         'pnpm',
         'config',
@@ -896,21 +948,19 @@ export class AtomicServer {
   ): Promise<string> {
     const target = prod ? '--prod' : '';
 
-    return (
-      this.netlifyCliContainer()
-        .withDirectory('/deploy', directory)
-        .withWorkdir('/deploy')
-        .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
-        .withExec([
-          'sh',
-          '-c',
-          // Skip silently when no auth token is configured (PR builds from
-          // forks, branches without secret access). Netlify CLI 23+ rejects
-          // empty `--auth ""` instead of treating it as missing.
-          `if [ -z "$NETLIFY_AUTH_TOKEN" ]; then echo 'NETLIFY_AUTH_TOKEN not set — skipping ${siteName} deploy'; exit 0; fi; for i in $(seq 1 5); do netlify link --name ${siteName} --auth "$NETLIFY_AUTH_TOKEN" && break || sleep 2; done && netlify deploy --dir . ${target} --auth "$NETLIFY_AUTH_TOKEN"`,
-        ])
-        .stdout()
-    );
+    return this.netlifyCliContainer()
+      .withDirectory('/deploy', directory)
+      .withWorkdir('/deploy')
+      .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
+      .withExec([
+        'sh',
+        '-c',
+        // Skip silently when no auth token is configured (PR builds from
+        // forks, branches without secret access). Netlify CLI 23+ rejects
+        // empty `--auth ""` instead of treating it as missing.
+        `if [ -z "$NETLIFY_AUTH_TOKEN" ]; then echo 'NETLIFY_AUTH_TOKEN not set — skipping ${siteName} deploy'; exit 0; fi; for i in $(seq 1 5); do netlify link --name ${siteName} --auth "$NETLIFY_AUTH_TOKEN" && break || sleep 2; done && netlify deploy --dir . ${target} --auth "$NETLIFY_AUTH_TOKEN"`,
+      ])
+      .stdout();
   }
 
   /**
@@ -1001,14 +1051,16 @@ export class AtomicServer {
   ): Promise<string> {
     const browserDir = this.jsBuild();
 
-    return browserDir
-      .withWorkdir('/app')
-      .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
-      // The `--prod` flag lives in the pnpm script, so it is steered by env
-      // rather than argv — see `typedoc-publish` in browser/package.json.
-      .withEnvVariable('NETLIFY_PROD', prod ? '1' : '')
-      .withExec(['pnpm', 'run', 'typedoc-publish'])
-      .stdout();
+    return (
+      browserDir
+        .withWorkdir('/app')
+        .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
+        // The `--prod` flag lives in the pnpm script, so it is steered by env
+        // rather than argv — see `typedoc-publish` in browser/package.json.
+        .withEnvVariable('NETLIFY_PROD', prod ? '1' : '')
+        .withExec(['pnpm', 'run', 'typedoc-publish'])
+        .stdout()
+    );
   }
 
   /** Installed workspace sources; deliberately has no build or WASM dependency. */
@@ -1151,6 +1203,7 @@ export class AtomicServer {
       // build.
       .withDirectory('/code/server', source.directory('server'))
       .withDirectory('/code/lib', source.directory('lib'))
+      .withDirectory('/code/plugin-runtime', source.directory('plugin-runtime'))
       .withDirectory('/code/cli', source.directory('cli'))
       .withDirectory('/code/desktop', source.directory('desktop'))
       .withDirectory('/code/wasm', source.directory('wasm'))
@@ -1313,7 +1366,13 @@ export class AtomicServer {
           source.file('testdata/pairing-request.json'),
         )
         .withDirectory('/code/server', source.directory('server'))
+        .withDirectory('/code/integrations', source.directory('integrations'))
+        .withDirectory('/code/testdata', source.directory('testdata'))
         .withDirectory('/code/lib', source.directory('lib'))
+        .withDirectory(
+          '/code/plugin-runtime',
+          source.directory('plugin-runtime'),
+        )
         .withDirectory('/code/cli', source.directory('cli'))
         .withDirectory('/code/desktop', source.directory('desktop'))
         .withDirectory('/code/wasm', source.directory('wasm'))
@@ -1344,6 +1403,7 @@ export class AtomicServer {
   rustTest(): Promise<string> {
     return (
       this.rustChecksContainer()
+        .withExec(['rustup', 'target', 'add', 'wasm32-wasip2'])
         // Persist nextest in the shared cargo-bin volume. Previously the
         // curl install sat *after* the source mount, so every Rust source
         // change re-downloaded it. The `linux-musl` URL is required: the
@@ -1384,7 +1444,7 @@ export class AtomicServer {
             'if [ ! -x "$BIN_DIR/cargo-nextest" ]; then ' +
             'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$BIN_DIR"; fi && ' +
             'cargo nextest run --workspace --exclude atomic-server-tauri ' +
-            '--no-default-features --features light ' +
+            '--no-default-features --features light,wasm-plugins ' +
             `--build-jobs ${this.hostKnobs.nextestBuildJobs} ` +
             `--test-threads ${this.hostKnobs.nextestTestThreads} ` +
             `--retries ${this.hostKnobs.nextestRetries}`,
@@ -1854,7 +1914,9 @@ export class AtomicServer {
             `===== SHARD ${r.shard}/${shardCount} (exit ${r.exitCode}) =====\n${r.testOutput.slice(-20000)}`,
         )
         .join('\n\n');
-      const contexts = (await Promise.all(failed.map(r => this.errorContexts(r))))
+      const contexts = (
+        await Promise.all(failed.map(r => this.errorContexts(r)))
+      )
         .filter(Boolean)
         .join('\n\n');
       throw new Error(
