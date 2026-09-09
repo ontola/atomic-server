@@ -18,6 +18,7 @@ export type ShowRouteSearch = {
    * browser history. Absent = the table's default view.
    */
   view?: string;
+  editColumn?: string;
 };
 
 export const ShowRoute = createRoute({
@@ -31,6 +32,7 @@ export const ShowRoute = createRoute({
         ? search.drive
         : undefined,
     view: (search.view as string) || undefined,
+    editColumn: (search.editColumn as string) || undefined,
   }),
 });
 
