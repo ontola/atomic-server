@@ -754,57 +754,68 @@ export async function restoreDrive({
     };
   }
 
-  const { downloads } = await api<{ downloads: DownloadUrl[] }>(
-    `/cloud-vault/${drivePseudonym}/download-urls`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ object_ids: objects.map(o => o.object_id) }),
-    },
-  );
-
-  // Preserve the server's ordering: `download-urls` answers per request and is
-  // not required to echo the order back.
-  const urlByKey = new Map(downloads.map(d => [d.object_key, d.url]));
+  // atomic-saas limits upload/download URL requests to 64 objects. Request
+  // each batch immediately before its downloads so later presigned URLs do
+  // not expire while an earlier batch is still transferring.
+  const batchSize = 64;
   const fetched = new Array<{ objectKey: string; sealed: Uint8Array }>(
     objects.length,
   );
-  let next = 0;
-  let completed = 0;
-  let failed = false;
+  let completedTotal = 0;
 
-  // Hide per-object network latency without opening unbounded requests on a
-  // phone. Write by listing index, never completion order.
-  await Promise.all(
-    Array.from({ length: Math.min(4, objects.length) }, async () => {
-      while (!failed && next < objects.length) {
-        const index = next++;
-        const object = objects[index];
+  for (let offset = 0; offset < objects.length; offset += batchSize) {
+    const batch = objects.slice(offset, offset + batchSize);
+    const { downloads } = await api<{ downloads: DownloadUrl[] }>(
+      `/cloud-vault/${drivePseudonym}/download-urls`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ object_ids: batch.map(o => o.object_id) }),
+      },
+    );
+    // Restore order is global listing order, not the broker's response order.
+    const urlByKey = new Map(downloads.map(d => [d.object_key, d.url]));
+    let next = 0;
+    let failed = false;
 
-        try {
-          const url = urlByKey.get(object.object_key);
-          if (!url)
-            throw new Error(`No download URL issued for ${object.object_key}`);
-          const response = await fetch(url);
+    // Hide per-object network latency without opening unbounded requests on a
+    // phone. Write by listing index, never completion order. Bounded within
+    // the batch: a batch's presigned URLs can expire before an unbounded
+    // fan-out of a large restore finishes.
+    await Promise.all(
+      Array.from({ length: Math.min(4, batch.length) }, async () => {
+        while (!failed && next < batch.length) {
+          const index = next++;
+          const object = batch[index];
 
-          if (!response.ok) {
-            throw new Error(
-              `Vault download failed for ${object.object_key} (${response.status})`,
-            );
+          try {
+            const url = urlByKey.get(object.object_key);
+            if (!url) {
+              throw new Error(
+                `No download URL issued for ${object.object_key}`,
+              );
+            }
+            const response = await fetch(url);
+
+            if (!response.ok) {
+              throw new Error(
+                `Vault download failed for ${object.object_key} (${response.status})`,
+              );
+            }
+
+            fetched[offset + index] = {
+              objectKey: object.object_key,
+              sealed: new Uint8Array(await response.arrayBuffer()),
+            };
+            completedTotal++;
+            if (!failed) onProgress?.(completedTotal, objects.length);
+          } catch (error) {
+            failed = true;
+            throw error;
           }
-
-          fetched[index] = {
-            objectKey: object.object_key,
-            sealed: new Uint8Array(await response.arrayBuffer()),
-          };
-          completed++;
-          if (!failed) onProgress?.(completed, objects.length);
-        } catch (error) {
-          failed = true;
-          throw error;
         }
-      }
-    }),
-  );
+      }),
+    );
+  }
 
   // Every lane, not just this device's: each device appends only to its own,
   // so importing one would silently drop the rest of the drive's history.
@@ -814,13 +825,23 @@ export async function restoreDrive({
   // observed maps to decide what to replay and when — see `plan_restore` in
   // `lib/src/vault/sync.rs`. Passing everything and letting it choose is what
   // keeps that decision in one place rather than duplicated here in JS.
-  return db.vaultImport(
+  const outcome = await db.vaultImport(
     driveKey,
     keyEpoch,
     drivePseudonym,
     devicePubkey,
     fetched,
   );
+
+  if (outcome.objectsUnreadable > 0) {
+    // The importer salvages readable objects. Keep them, but do not trigger
+    // success navigation or automatic re-enrollment for an incomplete copy.
+    throw new Error(
+      `Cloud Vault restore is incomplete: ${outcome.objectsUnreadable} backup objects could not be read. Recovered data is kept on this device.`,
+    );
+  }
+
+  return outcome;
 }
 
 /**
