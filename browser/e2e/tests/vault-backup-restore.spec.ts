@@ -303,9 +303,7 @@ test.describe('Cloud Vault backup and restore', () => {
     await page.evaluate(() => {
       const store = window.store;
       const drive = store.getDrive();
-
-      if (!drive) throw new Error('Vault test needs a selected drive');
-
+      if (!drive) throw new Error('Onboarding did not select a drive');
       store.registerLocalOnlyDrive(drive);
       store.getDefaultWebSocket()?.close();
     });

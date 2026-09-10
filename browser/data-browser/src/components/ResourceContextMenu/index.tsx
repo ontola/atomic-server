@@ -1,5 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
-import { Client, core, dataBrowser, useDrive } from '@tomic/react';
+import {
+  Client,
+  core,
+  dataBrowser,
+  useArray,
+  useDrive,
+  useString,
+} from '@tomic/react';
 import { DIVIDER, DropdownMenu, isItem, DropdownItem } from '../Dropdown';
 import { AutoOpenTrigger } from '../Dropdown/AutoOpenTrigger';
 import { DropdownTriggerComponent } from '../Dropdown/DropdownTrigger';
@@ -144,6 +151,8 @@ export function ResourceContextMenu({
     openPluginRun,
     pluginClass,
   });
+  const [dataClassSubject] = useString(ctx.resource, core.properties.classtype);
+  const [resourceClasses] = useArray(ctx.resource, core.properties.isA);
   const { items: customItems } = useCustomContextItemsContext();
   const CustomDeleteDialog = getDeleteDialog(ctx.resource.getClasses()[0]);
   const afterDelete = useAfterResourceDelete(subject, onAfterDelete);
@@ -249,13 +258,9 @@ export function ResourceContextMenu({
   while (pageItems[0] === DIVIDER) pageItems.shift();
   while (pageItems.at(-1) === DIVIDER) pageItems.pop();
 
-  const dataClassSubject = ctx.resource.get(core.properties.classtype) as
-    | string
-    | undefined;
-
   if (
     ctx.canWrite &&
-    ctx.resource.hasClasses(dataBrowser.classes.table) &&
+    resourceClasses.includes(dataBrowser.classes.table) &&
     dataClassSubject
   ) {
     items.push({

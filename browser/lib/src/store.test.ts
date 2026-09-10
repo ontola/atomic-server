@@ -256,6 +256,24 @@ describe('Store', () => {
     vi.clearAllMocks();
   });
 
+  it('waits for a loading resource to settle before resolving an async read', async ({
+    expect,
+  }) => {
+    const store = new Store({ serverUrl: 'https://example.com' });
+    const resource = new Resource('did:ad:loading-property');
+    resource.loading = true;
+    store.addResource(resource);
+    const resolved = vi.fn();
+    const pending = store.getResource(resource.subject).then(resolved);
+    store.notifyResourceUpdated(resource);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(resolved).not.toHaveBeenCalled();
+    resource.loading = false;
+    store.notifyResourceUpdated(resource);
+    await pending;
+    expect(resolved).toHaveBeenCalledWith(resource);
+  });
+
   it('preserves persisted Loro history when getResource loads a profile offline', async ({
     expect,
   }) => {

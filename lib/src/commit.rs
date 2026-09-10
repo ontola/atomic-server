@@ -3084,7 +3084,6 @@ mod test {
             validate_schema: true,
             validate_signature: true,
             validate_timestamp: false,
-            validate_previous_commit: false,
             validate_loro_causality: true,
             validate_rights: false,
             validate_for_agent: None,
