@@ -7,6 +7,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Separate embedded node startup from the optional HTTP adapter. Tauri keeps native services alive if HTTP stops; its frontend still requires HTTP/WS. This starts the HTTP-optional runtime migration ([#1196](https://github.com/ontola/atomic-server/issues/1196), [#749](https://github.com/ontola/atomic-server/issues/749)).
 - The outbox drains over a live Iroh link too (`sync::peer::LivePeerCommitTransport`):
   a device with no hub in reach delivers its queued writes to a paired peer as
   signed `COMMIT` frames, which the peer validates and applies like a hub
