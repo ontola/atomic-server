@@ -1738,3 +1738,11 @@ revision reuse, opaque source/setup text, and refusal of installation fields or
 unsupported declarations. This is library coverage: marketplace UI, real-server
 package persistence, schema/template graph import and sandbox activation remain
 unverified/unimplemented by this slice.
+
+Integration discovery preferences: `integrationVisibility.test.ts` covers absent
+or malformed values and all four independent boolean combinations.
+`integration-visibility.spec.ts` covers default-hidden discovery, settings links,
+Atomic persistence across reloads, independent toggles, visible existing connections
+and no community catalog fetch while disabled. Existing plugin/setup/MT940 browser tests explicitly opt in
+through Settings. Cross-device preference sync uses normal private-drive sync;
+a dedicated multi-device preference test is not yet present.

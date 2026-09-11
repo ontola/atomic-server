@@ -10498,3 +10498,23 @@ msgstr ""
 #~ "Saisissez votre code de récupération pour afficher votre secret ou "
 #~ "ajouter une clé d’accès sur cet appareil. Votre code de récupération "
 #~ "actuel restera valide."
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "<0/> Show API plugins"
+msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "<0/> Show experimental plugins"
+msgstr ""
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "These preferences are saved in your private Atomic drive. Existing connections remain available."
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "Consider enabling API plugins in Settings → Integration."
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "Consider enabling experimental plugins in Settings → Integration."
+msgstr ""
