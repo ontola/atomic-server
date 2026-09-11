@@ -1,6 +1,7 @@
 import { AppVerifierProvider } from '@chunks/AppPage/AppVerifierContext';
 import { DemoActionsBar, readDemoDrive } from './DemoExitButton';
 import { readTemplateDemo } from '../chunks/Templates/demoSession';
+import { AppSetupProvider } from './AppSetup/AppSetupProvider';
 import * as React from 'react';
 import { type JSX, useMemo } from 'react';
 import { styled } from 'styled-components';
@@ -91,6 +92,7 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
     >
       <AISidebarContextProvider>
 <AppVerifierProvider>
+<AppSetupProvider>
         {/* The single app-wide resource context menu (right-click). Mounted here
          * so its actions have the AI-sidebar, dialog, and router contexts. */}
         <ResourceContextMenuHost />
@@ -125,7 +127,8 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
         </SideBarWrapper>
         {hideGlobalChrome && <OnboardingFeedback />}
         <OverlayContainer />
-      </AppVerifierProvider>
+      </AppSetupProvider>
+</AppVerifierProvider>
 </AISidebarContextProvider>
     </RightPanelProvider>
   );
