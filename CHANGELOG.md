@@ -58,6 +58,8 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   switch. `Db::init_redb_file` now owns the 100ms durable-flush tick for every
   binding, and an idle tick no longer writes anything.
 - Fix remaining `clippy` warnings in `wasm/src/lib.rs` blocking `develop`'s pre-commit hook ([#1508](https://github.com/ontola/atomic-server/issues/1508)).
+- Instance checkpoint capture, verification and offline restore are available in
+  `atomic_lib` through the optional native `backup` feature, without server/Actix.
 - Add opt-in full-instance backups: `--backup-dir`, local authenticated backup
   control, `backup`/`restore` CLI commands, checksummed ZIP64 archives and an
   offline restore guard. Writes and incoming sync application pause during
