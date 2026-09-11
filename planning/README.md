@@ -70,6 +70,7 @@ browser flow; standalone recovery remains self-managed.
 | [`passkey-local-drive-unlock.md`](./passkey-local-drive-unlock.md) | **Fix shipped.** Remaining: original-tab NotFound after sign-out, physical passkey verification, deploy. |
 | [`desktop-pkarr-restore.md`](./desktop-pkarr-restore.md) | **Discovery shipped** (beta.6). Remaining: private-drive enrollment policy (product decision), signed-in private fetch, packaged-build missing text. |
 | [`e2e-concurrency.md`](./e2e-concurrency.md) | **Active.** Issue #1461: isolated template processes, retained load evidence and repeated full-suite worker/shard benchmarks; acceptance pending. |
+| [`google-calendar-import-gaps.md`](./google-calendar-import-gaps.md) | **Active audit.** All-day ranges implemented; remaining Google import fidelity work, formats and recurrence integration checklist. |
 | [`extension-architecture.md`](./extension-architecture.md) | **Migration in progress.** Shared view protocol, scope policy and installation identity resolution are implemented; package activation and legacy UI signing remain. Apps contain data/views, connections synchronize sources, automations act; one extension lifecycle and host API, with phased convergence of packaged views, source-as-data apps, JS integrations and Reflector, retaining a separate privileged server-extension boundary. |
 | [`sentry-feedback-readiness.md`](./sentry-feedback-readiness.md) | **Active.** Sidebar feedback and React error capture implemented and locally verified against Sentry. Staging rollout, email receipt and private source-map upload remain release gates. |
 | [`mt940.md`](./mt940.md) | **Pilot implemented.** Sandboxed MT940 import, exact amounts, balance checks, nested table and repeat detection; real bunq sample validation remains. |
@@ -122,6 +123,9 @@ Design intent, kept for direction. None has a line of code behind it.
 | [`reticulum-sync.md`](./reticulum-sync.md) | Atomic sync protocol over Reticulum. |
 | [`nextgraph-interop.md`](./nextgraph-interop.md) | `did:ng:` via a scheme-routed Store backend. PR #1360 (optional NextGraph mirror) is open. |
 | [`personal-information-suite.md`](./personal-information-suite.md) | Contacts, calendar, email. |
+| [`plugins.md`](./plugins.md) | **Partial, off `develop`** — one plugin model (`run` end to end, per-app agents, unattended runs). The code lives on `feat/plugin-model` (PR #1307), not `develop`. Absorbed `llm-wasm-gui-plugins.md`, `importers.md`, `habits-app.md` (2026-09-01); the habits RPC-`query` blocker is a line in it. |
+| [`api-plugins.md`](./api-plugins.md) | **Exploratory, off `develop`** — rebuilding PR #1383 (OpenAPI/OAuth imports) on the plugin model. LocalThought catalog/connect and Syncables typed imports are implemented on `codex/localthought-api-plugins`; live verification awaits proxy #25. |
+| [`personal-information-suite.md`](./personal-information-suite.md) | **Exploration.** Contacts, calendar, email. Nothing built. |
 | [`social-apps.md`](./social-apps.md) | Requirements for social-network-shaped apps. Companion to `zones.md`. |
 | [`atomic-assistant-browser-extension.md`](./atomic-assistant-browser-extension.md) | Local-first Chromium extension. |
 | [`tours.md`](./tours.md) | Recorded tours; `unified-templates.md` defers them. |
