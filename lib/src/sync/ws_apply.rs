@@ -186,33 +186,38 @@ pub async fn persist_update(
     subject: &str,
     resolved: ResolvedUpdate,
 ) -> AtomicResult<()> {
-    let snapshot_key =
-        crate::Subject::from_raw(subject, store.get_base_domain().as_deref()).pure_id();
+    store
+        .maintenance
+        .run(async {
+            let snapshot_key =
+                crate::Subject::from_raw(subject, store.get_base_domain().as_deref()).pure_id();
 
-    // Exclusive for the same reason `apply_commit` is: persistence replaces
-    // the stored snapshot, so a concurrent commit must not be clobbered.
-    let _subject_guard = store.subject_locks.lock(&snapshot_key).await;
+            // Exclusive for the same reason `apply_commit` is: persistence replaces
+            // the stored snapshot, so a concurrent commit must not be clobbered.
+            let _subject_guard = store.subject_locks.lock(&snapshot_key).await;
 
-    // `resolved` was built from a read taken before the lock, so re-merge it
-    // into whatever is stored *now*. Safe to do here — unlike a commit, a sync
-    // apply only ever adds a peer's operations, so union is the correct
-    // outcome. Re-importing already-known operations is a Loro no-op.
-    let doc = match store.kv.get(
-        crate::db::trees::Tree::LoroSnapshots,
-        snapshot_key.as_bytes(),
-    )? {
-        Some(current) => {
-            let doc = crate::loro::AtomicLoroDoc::from_snapshot(&current)?;
-            doc.import_update(&resolved.snapshot)?;
-            doc
-        }
-        None => crate::loro::AtomicLoroDoc::from_snapshot(&resolved.snapshot)?,
-    };
-    let mut resource = resolved.resource;
-    resource.apply_state_doc(doc)?;
-    // Projection, indexes and snapshot must commit together. Do not acknowledge
-    // a snapshot whose searchable resource failed to persist.
-    store.persist_replicated_resource(&resource).await
+            // `resolved` was built from a read taken before the lock, so re-merge it
+            // into whatever is stored *now*. Safe to do here — unlike a commit, a sync
+            // apply only ever adds a peer's operations, so union is the correct
+            // outcome. Re-importing already-known operations is a Loro no-op.
+            let doc = match store.kv.get(
+                crate::db::trees::Tree::LoroSnapshots,
+                snapshot_key.as_bytes(),
+            )? {
+                Some(current) => {
+                    let doc = crate::loro::AtomicLoroDoc::from_snapshot(&current)?;
+                    doc.import_update(&resolved.snapshot)?;
+                    doc
+                }
+                None => crate::loro::AtomicLoroDoc::from_snapshot(&resolved.snapshot)?,
+            };
+            let mut resource = resolved.resource;
+            resource.apply_state_doc(doc)?;
+            // Projection, indexes and snapshot must commit together. Do not acknowledge
+            // a snapshot whose searchable resource failed to persist.
+            store.persist_replicated_resource(&resource).await
+        })
+        .await
 }
 
 /// Remove a resource from the local store (a `DESTROY` frame or a
@@ -223,14 +228,19 @@ pub async fn persist_update(
 /// 2026-09 those two callers went through two identically-bodied functions
 /// (`apply_destroy` and `apply_destroy_checked`) that differed in name only.
 pub async fn apply_destroy(store: &Db, subject: &str) -> AtomicResult<()> {
-    if subject.is_empty() {
-        return Ok(());
-    }
+    store
+        .maintenance
+        .run(async {
+            if subject.is_empty() {
+                return Ok(());
+            }
 
-    set_importing(true);
-    let result = apply_destroy_unchecked(store, subject).await;
-    set_importing(false);
-    result
+            set_importing(true);
+            let result = apply_destroy_unchecked(store, subject).await;
+            set_importing(false);
+            result
+        })
+        .await
 }
 
 async fn apply_destroy_unchecked(store: &Db, subject: &str) -> AtomicResult<()> {

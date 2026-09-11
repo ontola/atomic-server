@@ -1266,6 +1266,7 @@ dependencies = [
  "portpicker",
  "rand 0.8.6",
  "rcgen 0.14.8",
+ "redb",
  "regex",
  "reqwest 0.13.3",
  "ring",
