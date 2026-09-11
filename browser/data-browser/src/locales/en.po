@@ -4649,10 +4649,12 @@ msgstr "{0}% of storage used"
 msgid "{0}% used"
 msgstr "{0}% used"
 
+#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Syncing…"
 msgstr "Syncing…"
 
+#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Sync now"
 msgstr "Sync now"
@@ -8639,6 +8641,7 @@ msgstr ""
 "An Atomic write or checkpoint needs inspection. Resume uses saved receipts "
 "and stops if a previous write is uncertain."
 
+#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
 #: src/chunks/PluginRuns/SyncRecovery.tsx
 msgid "Sync needs attention"
 msgstr "Sync needs attention"
@@ -10037,25 +10040,21 @@ msgstr "Reconnect account"
 msgid "Install and connect"
 msgstr "Install and connect"
 
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid "Fetching…"
-msgstr "Fetching…"
+#~ msgid "Fetching…"
+#~ msgstr "Fetching…"
 
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid "Fetch and preview"
-msgstr "Fetch and preview"
+#~ msgid "Fetch and preview"
+#~ msgstr "Fetch and preview"
 
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid ""
-"Connect your personal account through LocalThought, then return here to "
-"preview an import."
-msgstr ""
-"Connect your personal account through LocalThought, then return here to "
-"preview an import."
+#~ msgid ""
+#~ "Connect your personal account through LocalThought, then return here to "
+#~ "preview an import."
+#~ msgstr ""
+#~ "Connect your personal account through LocalThought, then return here to "
+#~ "preview an import."
 
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid "Open imported records"
-msgstr "Open imported records"
+#~ msgid "Open imported records"
+#~ msgstr "Open imported records"
 
 #: src/routes/DevonianDemoRoute.tsx
 msgid "LocalThought tenant secret"
@@ -10209,14 +10208,12 @@ msgstr ""
 "LocalThought will ask you to sign in and authorize this connection. "
 "Connection credentials stay in this browser."
 
-#. 0: writable ? ' After importing, preview supported edits to send changes back.' \\: ' No provider writes.'
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid ""
-"Imports the collections described by the platform, following pagination. "
-"Review changes before applying them. No background sync. {0}"
-msgstr ""
-"Imports the collections described by the platform, following pagination. "
-"Review changes before applying them. No background sync. {0}"
+#~ msgid ""
+#~ "Imports the collections described by the platform, following pagination. "
+#~ "Review changes before applying them. No background sync. {0}"
+#~ msgstr ""
+#~ "Imports the collections described by the platform, following pagination. "
+#~ "Review changes before applying them. No background sync. {0}"
 
 #: src/chunks/PluginRuns/CalendarSync.tsx
 msgid "Preview edits for Google"
@@ -11438,3 +11435,42 @@ msgstr "Publish to integration store"
 #~ msgstr ""
 #~ "Setup did not finish. Check your integrations for a partially created "
 #~ "connection before starting again."
+
+#. 0: new Date(installation.lastSuccess).toLocaleString()
+#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
+msgid "Last synced {0}"
+msgstr "Last synced {0}"
+
+#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
+msgid "Waiting to sync"
+msgstr "Waiting to sync"
+
+#: src/chunks/PluginRuns/ConnectLocalThought.tsx
+#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
+msgid "Open folder"
+msgstr "Open folder"
+
+#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
+msgid "Refreshes every five minutes while open in this browser."
+msgstr "Refreshes every five minutes while open in this browser."
+
+#: src/chunks/PluginRuns/ConnectLocalThought.tsx
+msgid "Connect your personal account through LocalThought, then return here to choose what to sync."
+msgstr "Connect your personal account through LocalThought, then return here to choose what to sync."
+
+#: src/chunks/PluginRuns/ConnectLocalThought.tsx
+msgid "Checking connection…"
+msgstr "Checking connection…"
+
+#: src/chunks/PluginRuns/ConnectLocalThought.tsx
+msgid "Complete installation"
+msgstr "Complete installation"
+
+#: src/chunks/PluginRuns/ConnectLocalThought.tsx
+msgid "Installed. Your records are syncing in the background."
+msgstr "Installed. Your records are syncing in the background."
+
+#. 0: writable ? ' After importing, preview supported edits to send changes back.' \\: ' No provider writes.'
+#: src/chunks/PluginRuns/ConnectLocalThought.tsx
+msgid "Imports the collections described by the platform, following pagination. Syncs automatically when you open the folder and every five minutes while it is open. Keep this browser open to finish importing. {0}"
+msgstr "Imports the collections described by the platform, following pagination. Syncs automatically when you open the folder and every five minutes while it is open. Keep this browser open to finish importing. {0}"

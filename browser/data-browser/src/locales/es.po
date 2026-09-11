@@ -4668,10 +4668,12 @@ msgstr ""
 msgid "{0}% used"
 msgstr ""
 
+#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Syncing…"
 msgstr ""
 
+#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Sync now"
 msgstr ""
@@ -8772,6 +8774,7 @@ msgid ""
 "and stops if a previous write is uncertain."
 msgstr ""
 
+#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
 #: src/chunks/PluginRuns/SyncRecovery.tsx
 msgid "Sync needs attention"
 msgstr ""
@@ -10072,23 +10075,19 @@ msgstr ""
 msgid "Install and connect"
 msgstr ""
 
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid "Fetching…"
-msgstr ""
+#~ msgid "Fetching…"
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid "Fetch and preview"
-msgstr ""
+#~ msgid "Fetch and preview"
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid ""
-"Connect your personal account through LocalThought, then return here to "
-"preview an import."
-msgstr ""
+#~ msgid ""
+#~ "Connect your personal account through LocalThought, then return here to "
+#~ "preview an import."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid "Open imported records"
-msgstr ""
+#~ msgid "Open imported records"
+#~ msgstr ""
 
 #: src/routes/DevonianDemoRoute.tsx
 msgid "LocalThought tenant secret"
@@ -10232,12 +10231,10 @@ msgid ""
 "Connection credentials stay in this browser."
 msgstr ""
 
-#. 0: writable ? ' After importing, preview supported edits to send changes back.' \\: ' No provider writes.'
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid ""
-"Imports the collections described by the platform, following pagination. "
-"Review changes before applying them. No background sync. {0}"
-msgstr ""
+#~ msgid ""
+#~ "Imports the collections described by the platform, following pagination. "
+#~ "Review changes before applying them. No background sync. {0}"
+#~ msgstr ""
 
 #: src/chunks/PluginRuns/CalendarSync.tsx
 msgid "Preview edits for Google"
@@ -10477,3 +10474,42 @@ msgstr ""
 #~ "Introduce tu código de recuperación para mostrar tu secreto o añadir una "
 #~ "clave de acceso en este dispositivo. Tu código de recuperación actual "
 #~ "seguirá funcionando."
+
+#. 0: new Date(installation.lastSuccess).toLocaleString()
+#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
+msgid "Last synced {0}"
+msgstr ""
+
+#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
+msgid "Waiting to sync"
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectLocalThought.tsx
+#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
+msgid "Open folder"
+msgstr ""
+
+#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
+msgid "Refreshes every five minutes while open in this browser."
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectLocalThought.tsx
+msgid "Connect your personal account through LocalThought, then return here to choose what to sync."
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectLocalThought.tsx
+msgid "Checking connection…"
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectLocalThought.tsx
+msgid "Complete installation"
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectLocalThought.tsx
+msgid "Installed. Your records are syncing in the background."
+msgstr ""
+
+#. 0: writable ? ' After importing, preview supported edits to send changes back.' \\: ' No provider writes.'
+#: src/chunks/PluginRuns/ConnectLocalThought.tsx
+msgid "Imports the collections described by the platform, following pagination. Syncs automatically when you open the folder and every five minutes while it is open. Keep this browser open to finish importing. {0}"
+msgstr ""
