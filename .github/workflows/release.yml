@@ -115,6 +115,23 @@ jobs:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: node scripts/bump-version.mjs --check "${RELEASE_TAG#v}"
 
+      # beta.7's immutable tag omitted an existing build-script module from
+      # the package allowlist. Correct packaging metadata only when recovering
+      # that tag; the Rust source itself remains exactly the tagged source.
+      - name: Repair beta.7 package allowlist during recovery
+        if: github.event_name == 'workflow_dispatch' && inputs.tag == 'v0.41.0-beta.7'
+        run: |
+          python3 - <<'PYTHON'
+          from pathlib import Path
+          manifest = Path("server/Cargo.toml")
+          source = manifest.read_text()
+          if '"build_assets.rs"' not in source:
+              old = '"build.rs", "wit/**/*"'
+              assert old in source, "Unexpected beta.7 package allowlist"
+              source = source.replace(old, '"build.rs", "build_assets.rs", "wit/**/*"', 1)
+              manifest.write_text(source)
+          PYTHON
+
       # Publish directly: katyo/publish-crates@v1 runs cargo update between
       # crates, replacing the dependency graph that passed CI. Retain the lock
       # and skip existing versions so a partial release can safely resume.
