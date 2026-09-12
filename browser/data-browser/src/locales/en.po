@@ -8843,3 +8843,15 @@ msgstr "Could not save the document yet."
 #: src/views/File/ConvertToDocumentButton.tsx
 msgid "Document converted locally, but could not be saved."
 msgstr "Document converted locally, but could not be saved."
+
+#: src/helpers/searchResultHint.ts
+msgid "In document"
+msgstr "In document"
+
+#: src/helpers/searchResultHint.ts
+msgid "In description"
+msgstr "In description"
+
+#: src/helpers/searchResultHint.ts
+msgid "Matched title"
+msgstr "Matched title"
