@@ -42,6 +42,7 @@ browser flow; standalone recovery remains self-managed.
 
 | Document | Status |
 | --- | --- |
+| [`e2e-concurrency.md`](./e2e-concurrency.md) | **Active.** Issue #1461: isolated template processes, retained load evidence and repeated full-suite worker/shard benchmarks; acceptance pending. |
 | [`sentry-feedback-readiness.md`](./sentry-feedback-readiness.md) | **Active.** Sidebar feedback and React error capture implemented and locally verified against Sentry. Staging rollout, email receipt and private source-map upload remain release gates. |
 | [`unified-sync.md`](./unified-sync.md) | **Active.** One sync API over WS or Iroh. Carries the single **Remaining work (2026-09-03)** checklist for every open sync item across these plans. The 2026-07 audit history is in [`completed/unified-sync-audit-2026-07.md`](./completed/unified-sync-audit-2026-07.md). |
 | [`serverless-p2p.md`](./serverless-p2p.md) | **Planned.** Device sync without a hub (written same-agent-first; admission is rights-based since 2026-07-17). AUTH-before-SYNC and the `AUTH.requestedSubject`↔drive binding landed 2026-09-01 (Iroh). Live-link destroys travel as signed `COMMIT` frames since 2026-09-03. P0 remaining: require envelopes on every `remove[]` once `Tree::Envelopes` exists. `AtomicTransport` / `SyncSession::serve` first slice landed 2026-09-05; outbox port and the remaining `sync_drive_with_peer*` collapse are open. |
@@ -58,6 +59,7 @@ browser flow; standalone recovery remains self-managed.
 | [`device-pairing.md`](./device-pairing.md) | **Proposal.** One-scan pairing; QR is routing only (no secret). C0 and M6 closed. Remaining: extra-workspace inventory, M4 (carried over from the field test). |
 | [`json-ad-compact.md`](./json-ad-compact.md) | **Phase 1–2 shipped** (resolver, tool I/O, context providers). Remaining: rebase `create_table.rows` on `fromCompact`; server `format=compact`. |
 | [`table-view-filters.md`](./table-view-filters.md) | **Views shipped** — Default View (filters, sort, columns, operators) and the multi-view switcher (`TableViewTabs`, `?view=`). Remaining: index-accelerated range scans. |
+| [`unified-templates.md`](./unified-templates.md) | **Proposal.** One resource-template model for tables, drive onboarding, real demos, AI and vertical marketing. |
 | [`table-templates-and-mini-apps.md`](./table-templates-and-mini-apps.md) | **Partial.** Steps 3–6 shipped (computed columns, aggregates, assistant tools, catalogue). Remaining: derived columns in filters/aggregates. |
 | [`dashboards.md`](./dashboards.md) | **First slice shipped.** Remaining: the sixth action verb, parameters, reaching a dashboard from its table. |
 | [`content-i18n.md`](./content-i18n.md) | **LocalizedText + template locales shipped.** Remaining: TranslationsBar, `useTranslation`, `/query` `lang`, search language filter. |

@@ -433,58 +433,50 @@ describe('Store', () => {
     expect(persisted.get(core.properties.name)).toBe('After');
   });
 
-  it.each(['snapshot', 'flush'])(
-    'an acknowledged edit waits for local %s before save resolves',
-    async stage => {
-      const { expect } = await import('vitest');
-      const { store } = await testStore();
-      const drive = await store.createDrive('Home');
-      store.setDrive(drive.subject);
-      const resource = await store.newResource({
-        isA: 'https://atomicdata.dev/classes/Folder',
-        parent: drive.subject,
-        propVals: { [core.properties.name]: 'Before' },
-      });
-      await resource.save();
-      let release!: () => void;
-      const pendingWrite = new Promise<void>(resolve => {
-        release = resolve;
-      });
-      const putResourceWithSnapshot = vi.fn(() =>
-        stage === 'snapshot' ? pendingWrite : Promise.resolve(),
-      );
-      const flush = vi.fn(() =>
-        stage === 'flush' ? pendingWrite : Promise.resolve(),
-      );
-      store.setClientDb({
-        isReady: true,
-        flush,
-        putResourceWithSnapshot,
-      } as unknown as Parameters<Store['setClientDb']>[0]);
-      await resource.set(core.properties.name, 'After', false);
-      let finished = false;
-      const saving = resource.save().then(() => {
-        finished = true;
-      });
+  it('an acknowledged edit waits for its durable snapshot before save resolves', async () => {
+    const { expect } = await import('vitest');
+    const { store } = await testStore();
+    const drive = await store.createDrive('Home');
+    store.setDrive(drive.subject);
+    const resource = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Folder',
+      parent: drive.subject,
+      propVals: { [core.properties.name]: 'Before' },
+    });
+    await resource.save();
+    let release!: () => void;
+    const pendingWrite = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const putResourceWithSnapshot = vi.fn(() => pendingWrite);
+    const flush = vi.fn(() => Promise.reject(new Error('worker destroyed')));
+    store.setClientDb({
+      isReady: true,
+      flush,
+      putResourceWithSnapshot,
+    } as unknown as Parameters<Store['setClientDb']>[0]);
+    await resource.set(core.properties.name, 'After', false);
+    let finished = false;
+    const saving = resource.save().then(() => {
+      finished = true;
+    });
 
-      try {
-        await vi.waitFor(() =>
-          expect(
-            stage === 'snapshot' ? putResourceWithSnapshot : flush,
-          ).toHaveBeenCalled(),
-        );
-        // The server is already mocked as acknowledged; only the local write
-        // remains blocked. Leaving now must not expose the pre-edit cache.
-        await new Promise(resolve => setTimeout(resolve, 20));
-        expect(finished).toBe(false);
-      } finally {
-        release();
-        await saving;
-      }
+    try {
+      await vi.waitFor(() =>
+        expect(putResourceWithSnapshot).toHaveBeenCalled(),
+      );
+      // The server is already mocked as acknowledged; only the local write
+      // remains blocked. Leaving now must not expose the pre-edit cache.
+      await new Promise(resolve => setTimeout(resolve, 20));
+      expect(finished).toBe(false);
+    } finally {
+      release();
+      await saving;
+    }
 
-      expect(finished).toBe(true);
-    },
-  );
+    expect(finished).toBe(true);
+    expect(flush).not.toHaveBeenCalled();
+  });
 
   it('does not write to a database in unsupported server-only mode', async ({
     expect,
@@ -709,6 +701,35 @@ describe('Store', () => {
     expect(gotByAlias.subject).toBe(did);
     expect(gotByDID.subject).toBe(did);
     expect(gotByAlias).toBe(gotByDID);
+  });
+
+  it('returns a DID resource fetched by its HTTP path alias', async ({
+    expect,
+  }) => {
+    const did = 'did:ad:ontology123';
+    const httpAlias = `https://example.com/${did}`;
+    const store = new Store({ serverUrl: 'https://example.com' });
+    store.setServerConnected(true);
+    store.injectFetch(
+      async () =>
+        new Response(
+          JSON.stringify({
+            '@id': did,
+            [core.properties.name]: 'My ontology',
+          }),
+          { status: 200 },
+        ),
+    );
+
+    const resource = await store.fetchResourceFromServer(httpAlias, {
+      noWebSocket: true,
+    });
+
+    expect(resource).toBeDefined();
+    expect(resource.error).toBeUndefined();
+    expect(resource.subject).toBe(did);
+    expect(resource.get(core.properties.name)).toBe('My ontology');
+    expect(store.getResourceLoading(httpAlias).subject).toBe(did);
   });
 
   it('normalizes relative subjects to full URLs', async ({ expect }) => {

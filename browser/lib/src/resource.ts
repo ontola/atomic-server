@@ -17,7 +17,7 @@ import { CollectionBuilder } from './collectionBuilder.js';
 import { CommitBuilder, Commit } from './commit.js';
 import { perfSpan } from './perf-trace.js';
 import { validateDatatype, datatypeTag, Datatype } from './datatypes.js';
-import { isUnauthorized } from './error.js';
+import { isUnauthorized, RequestCancelledError } from './error.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
@@ -3569,13 +3569,16 @@ export class Resource<C extends OptionalClass = any> {
         JSON.stringify(obj),
         snapshot,
       );
-      // Worker writes are batched without fsync; put completion alone is not
-      // the durability barrier promised by save().
-      await clientDb.flush();
+      // This RPC includes the durable flush. A second RPC could race the
+      // identity handoff closing this worker after the write has completed.
       closePersist();
     } catch (e) {
       closePersist({ err: e instanceof Error ? e.message : String(e) });
-      console.error('[persistToClientDb] failed:', e);
+
+      if (!(e instanceof RequestCancelledError)) {
+        console.error('[persistToClientDb] failed:', e);
+      }
+
       throw e;
     }
   }

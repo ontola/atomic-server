@@ -1,6 +1,10 @@
 import { Store } from './store.js';
 
 export interface SearchOpts {
+  /** Query HTTP directly, without waiting for the local index or WebSocket.
+   * Use after server-side writes whose local replication may still be pending.
+   */
+  serverOnly?: boolean;
   /** Fetch full resources instead of subjects */
   include?: boolean;
   /** Max of how many results to return */
@@ -131,6 +135,6 @@ export function removeCachedSearchResults(store: Store) {
   );
 
   for (const resource of searchResources) {
-    store.removeResource(resource.subject, false);
+    store.evictResource(resource.subject, false);
   }
 }
