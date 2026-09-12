@@ -8,3 +8,5 @@
 - [ ] Verify server crate and remaining release artifacts; remove completed release plans.
 
 atomic_lib and atomic-cli beta7 already published. Never move the tag or republish those versions. macOS and GNU Linux server assets are available; musl and Tauri jobs were still running at the last check.
+
+Recovery run 34714749065 resolved the validated dependencies successfully, then failed because the tagged package allowlist omits server/build_assets.rs. Add the existing module to the allowlist and apply this metadata-only correction when recovering beta.7, without moving the tag or changing Rust source.
