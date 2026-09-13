@@ -579,6 +579,12 @@ mounts without resetting or re-registering the global parser.
 
 ### Save durability and identity lifecycle regressions
 
+- `save-acknowledgement.test.ts` exercises `Resource.save()` through the real
+  outbox with a stubbed commit transport: server refusals (including terminal
+  drops), backoff, blocked entries and cancellation cannot report persistence.
+  It also covers offline transport failures, successful retries, unrelated
+  subjects and edits arriving during an acknowledged save (#1388).
+
 - `scripts/owned-process.node.mjs` exercises the template runner process lifecycle,
   including independent ephemeral ports and descendant cleanup. The superseded
   template-process helper and its standalone Playwright regression were removed.
