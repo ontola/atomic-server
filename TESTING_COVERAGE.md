@@ -962,3 +962,12 @@ Cloud Vault download concurrency: `helpers/managed/vault.test.ts` holds network
 responses open to verify concurrent downloads are bounded at four and that
 reverse completion preserves listing order at import. Existing progress and
 failure checks also pass. Actual staging phone restore latency remains unmeasured.
+
+## External cache access and authentication origins (#170)
+
+`db::test::cached_external_resources_keep_read_permissions` checks that a cached
+external resource remains private in public collection queries (nested and
+subject-only) and direct reads, while the authorized agent can still read it.
+`client::helpers` origin tests reject lookalike hosts, userinfo-host confusion,
+changed ports/schemes, malformed URLs and non-HTTP URLs; normalized same-origin
+and localhost requests remain eligible for DID-agent authentication.
