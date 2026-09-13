@@ -30,6 +30,7 @@ vi.mock('./webrtc-peer.js', () => ({
 }));
 class SignalSocket extends EventTarget {
   static OPEN = 1;
+  static CONNECTING = 0;
   static instances: SignalSocket[] = [];
   readyState = 1;
   sent: Array<{ type: string; to?: string }> = [];
@@ -125,4 +126,18 @@ it('does not allocate an eighth remote connection', () => {
   socket.message({ type: 'peer', peer: '8'.repeat(64) });
   expect(peers).toHaveLength(7);
   expect(socket.readyState).toBe(3);
+});
+
+it('stops a connecting socket without joining or reconnecting after it opens', async () => {
+  const socket = SignalSocket.instances[0];
+  socket.readyState = SignalSocket.CONNECTING;
+  const close = vi.spyOn(socket, 'close');
+  link.close();
+  expect(close).not.toHaveBeenCalled();
+  socket.readyState = SignalSocket.OPEN;
+  socket.dispatchEvent(new Event('open'));
+  expect(close).toHaveBeenCalledOnce();
+  expect(socket.sent).toEqual([]);
+  await vi.advanceTimersByTimeAsync(6000);
+  expect(SignalSocket.instances).toHaveLength(1);
 });
