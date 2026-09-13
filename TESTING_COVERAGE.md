@@ -109,7 +109,9 @@ unauthorized snapshot writes, forged commits and outgoing permission revocation.
 WebRTC and OPFS with HTTP data access disabled: initial sync, concurrent edits,
 presence, attachments, offline reconciliation, reload and signed deletion.
 `browser-peer-sync.test.ts` covers parallel negotiation, isolated retries,
-departure, membership checks and the per-browser connection bound.
+departure, membership checks and the per-browser connection bound. It also
+checks shutdown during a signaling handshake: the socket closes after opening
+without joining a room or scheduling a reconnect.
 `verify-peer-mesh.mjs` uses eight distinct Chromium agents: full mesh, ninth-member
 rejection, concurrent creations, group presence, attachment replication, creator
 departure, offline reconciliation and signed deletion. Rust regressions cover

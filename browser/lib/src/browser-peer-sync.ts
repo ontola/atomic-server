@@ -70,7 +70,9 @@ export class BrowserPeerSync {
     this.retries.clear();
     for (const connection of this.connections.values()) connection.close();
     this.connections.clear();
-    this.socket?.close();
+    // Closing during the handshake emits a browser network warning. The open
+    // handler closes a stopped socket before it can join the discovery room.
+    if (this.socket?.readyState !== WebSocket.CONNECTING) this.socket?.close();
     this.options.onStatus?.('Disconnected');
   }
 
@@ -108,9 +110,15 @@ export class BrowserPeerSync {
     this.status();
     const socket = new WebSocket(this.options.signalingUrl);
     this.socket = socket;
-    socket.addEventListener('open', () =>
-      this.send({ type: 'join', room: this.options.room, peer: this.peerId }),
-    );
+    socket.addEventListener('open', () => {
+      if (this.stopped || this.socket !== socket) {
+        socket.close();
+
+        return;
+      }
+
+      this.send({ type: 'join', room: this.options.room, peer: this.peerId });
+    });
     socket.addEventListener('message', event => {
       if (this.socket !== socket || this.stopped) return;
 
