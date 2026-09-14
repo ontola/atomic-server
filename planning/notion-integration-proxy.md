@@ -38,10 +38,10 @@ migration; no remote executable loading was introduced here.
 
 ## Publication work
 
-- Worktree: `/private/tmp/atomic-plugin-model-improvements`
+- Worktree: `/Users/michieldejong/gh/ontola/worktrees/atomic-server/plugin-model-improvements`
 - Branch: `feat/plugin-model-improvements`
-- Base: `feat/plugin-model` at `4f5f2804d` (unmerged dependency; PR targets it).
+- Base: `feat/plugin-model` at `d0e49b8b9` (unmerged dependency; PR targets it).
 - [x] Isolate task-owned changes, excluding concurrent Devonian discovery and table loading edits.
 - [x] Publish Atomic PR #1482 against feat/plugin-model.
 - [ ] Inspect exact-commit CI.
-- [ ] Merge companion proxy PR and verify Heroku deployment.
+- [x] Merge companion proxy PR #67 and verify Heroku v64 matches 516079e5.

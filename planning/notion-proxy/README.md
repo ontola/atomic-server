@@ -1,7 +1,7 @@
 # Notion activation dependencies
 
 The generic proxy implementation is merged in [integration-proxy PR #67](https://github.com/localthought/integration-proxy/pull/67), commit
-`516079e5a3ecd254c748995b50570998e486e4fc`. CI passed, including database and network tests. Heroku deployment verification is pending. It implements generic JSON OAuth operations and fixed OpenAPI header defaults with no provider-specific production branches. The proxy repository owns its regression fixture and code; no duplicate patch is kept here.
+`516079e5a3ecd254c748995b50570998e486e4fc`. CI passed, including database and network tests. Heroku release **v64** deployed this exact merge commit successfully; `/` and `/catalog` returned HTTP 200. It implements generic JSON OAuth operations and fixed OpenAPI header defaults with no provider-specific production branches. The proxy repository owns its regression fixture and code; no duplicate patch is kept here.
 
 The supported OAuth operation subset uses local POST operation references, JSON
 or form bodies and HTTP Basic client authentication. Unsupported profiles fail
