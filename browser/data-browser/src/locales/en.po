@@ -8815,3 +8815,7 @@ msgstr ""
 
 #~ msgid "☏ Team chat"
 #~ msgstr "☏ Team chat"
+
+#: src/routes/DataRoute.tsx
+msgid "Retry save"
+msgstr "Retry save"

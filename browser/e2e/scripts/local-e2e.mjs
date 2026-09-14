@@ -198,7 +198,15 @@ try {
 
   // A private copy cannot be replaced by another checkout's build or matched
   // by unrelated CI cleanup targeting target/debug/atomic-server.
-  const target = resolvePath(root, env.CARGO_TARGET_DIR ?? 'target');
+  // Cargo also accepts target-dir in config files. Guessing root/target can
+  // silently launch an old binary after successfully building into a shared cache.
+  const target = JSON.parse(
+    execFileSync('cargo', ['metadata', '--format-version=1', '--no-deps'], {
+      cwd: root,
+      env,
+      encoding: 'utf8',
+    }),
+  ).target_directory;
   const binary = join(output, 'bin', 'atomic-server');
   mkdirSync(dirname(binary), { recursive: true });
   copyFileSync(
@@ -208,10 +216,10 @@ try {
   );
   await run(
     'pnpm',
-    ['exec', 'playwright', 'install', 'chromium', '--no-remove'],
+    ['exec', 'playwright', 'install', 'chromium'],
     'install-chromium',
     join(browser, 'e2e'),
-    env,
+    { ...env, PLAYWRIGHT_SKIP_BROWSER_GC: '1' },
   );
   const startup = Date.now();
   const server = start(binary, [], 'server', root, env);

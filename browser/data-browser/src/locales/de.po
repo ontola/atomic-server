@@ -7838,3 +7838,7 @@ msgstr ""
 #~ "Gib deinen Wiederherstellungscode ein, um deinen geheimen Schlüssel "
 #~ "anzuzeigen oder diesem Gerät einen Passkey hinzuzufügen. Dein bisheriger "
 #~ "Wiederherstellungscode bleibt gültig."
+
+#: src/routes/DataRoute.tsx
+msgid "Retry save"
+msgstr "Speichern erneut versuchen"

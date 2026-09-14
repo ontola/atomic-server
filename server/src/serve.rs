@@ -321,9 +321,9 @@ where
     }
 
     // Durable-flush tick. Per-commit writes use Durability::None (no fsync)
-    // for throughput; this background flush makes them durable on a fixed
-    // cadence (100ms), bounding crash data-loss to the interval while
-    // amortizing a single fsync across every commit in the window. Runs on a
+    // for throughput; this background flush makes writes without an explicit
+    // durability barrier durable on a fixed cadence (100ms). HTTP/WS commits
+    // separately await a flush before acknowledging success. Runs on a
     // dedicated OS thread because the flush blocks on fsync, which would stall
     // a tokio worker.
     {

@@ -42,6 +42,7 @@ browser flow; standalone recovery remains self-managed.
 
 | Document | Status |
 | --- | --- |
+| [`stability-release.md`](./stability-release.md) | **Active.** First server acknowledgement data-loss regression reproduced and fixed; browser/native crash acceptance, privacy boundaries, restore drills, and release gates remain. |
 | [`e2e-concurrency.md`](./e2e-concurrency.md) | **Active.** Issue #1461: isolated template processes, retained load evidence and repeated full-suite worker/shard benchmarks; acceptance pending. |
 | [`sentry-feedback-readiness.md`](./sentry-feedback-readiness.md) | **Active.** Sidebar feedback and React error capture implemented and locally verified against Sentry. Staging rollout, email receipt and private source-map upload remain release gates. |
 | [`unified-sync.md`](./unified-sync.md) | **Active.** One sync API over WS or Iroh. Carries the single **Remaining work (2026-09-03)** checklist for every open sync item across these plans. The 2026-07 audit history is in [`completed/unified-sync-audit-2026-07.md`](./completed/unified-sync-audit-2026-07.md). |

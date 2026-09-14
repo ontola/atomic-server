@@ -8139,3 +8139,7 @@ msgstr ""
 #~ "Introduce tu código de recuperación para mostrar tu secreto o añadir una "
 #~ "clave de acceso en este dispositivo. Tu código de recuperación actual "
 #~ "seguirá funcionando."
+
+#: src/routes/DataRoute.tsx
+msgid "Retry save"
+msgstr "Reintentar guardar"

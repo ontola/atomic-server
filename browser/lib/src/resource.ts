@@ -96,13 +96,13 @@ export const unknownSubject = 'unknown-subject';
  *  - `'persisted'` — the server acknowledged the commit (or a local-only
  *                    resource was durably saved to the local database).
  *  - `'offline'`   — server unreachable; saved locally, drain retries
- *                    on reconnect (also returned for a child queued
- *                    behind an unsaved parent).
+ *                    on reconnect.
+ *  - `'queued'`    — waiting for an unsaved parent; not a durability claim.
  *  - `'noop'`      — nothing to save.
- * Server refusals and queued writes without acknowledgement reject; background
+ * Server refusals and unacknowledged remote drains reject; background
  * retries continue according to the outbox policy.
  */
-export type SaveResult = 'persisted' | 'offline' | 'noop';
+export type SaveResult = 'persisted' | 'offline' | 'queued' | 'noop';
 
 /**
  * Origin tag attached to Loro commits the runtime writes for housekeeping
@@ -219,6 +219,9 @@ export class Resource<C extends OptionalClass = any> {
    *  creates on mount — is never POSTed: it's just GC'd when discarded.
    *  `save()` moves it into the outbox to drain. See sign-at-drain. */
   private _pendingGenesis?: Commit;
+  /** Signed local-only commits awaiting a successful snapshot write. Retain
+   * them across storage failures so retry persists and publishes the same work. */
+  private _pendingLocalCommits: Commit[] = [];
 
   /** Loro CRDT document backing this resource. Lazily initialized. */
   private _loroDoc?: LoroDoc;
@@ -1905,7 +1908,11 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Returns true if the resource has unsaved local changes. */
   public hasUnsavedChanges(): boolean {
-    return this.#commitBuilder.hasUnsavedChanges() || this._dirty;
+    return (
+      this.#commitBuilder.hasUnsavedChanges() ||
+      this._dirty ||
+      this._pendingLocalCommits.length > 0
+    );
   }
 
   /** Clear the dirty flag after a successful drain has signed + POSTed
@@ -3117,12 +3124,14 @@ export class Resource<C extends OptionalClass = any> {
    * The commit is signed at drain time by the outbox, not here.
    */
   /**
-   * Persist this resource. Resolves once the change is durable:
+   * Save this resource. Inspect the result to distinguish durable completion
+   * from a child queued behind its unsaved parent:
    *
    *  - `'persisted'` — the server acknowledged the commit (or a local-only
    *                    resource was durably saved to the local database).
    *  - `'offline'`   — server unreachable; saved to clientDb, the drain
    *                    retries on reconnect.
+   *  - `'queued'`    — waiting for an unsaved parent; not yet persisted.
    *  - `'noop'`      — nothing to save (no unsaved changes, nothing
    *                    pending).
    *
@@ -3244,6 +3253,7 @@ export class Resource<C extends OptionalClass = any> {
     if (
       !hasChanges &&
       !this._pendingGenesis &&
+      this._pendingLocalCommits.length === 0 &&
       !this.store.outbox.hasPending(this.subject)
     ) {
       // Save called on a clean resource (typical on blur with no edits) — not
@@ -3257,6 +3267,13 @@ export class Resource<C extends OptionalClass = any> {
 
     try {
       return await this._saveInner(hasChanges);
+    } catch (error) {
+      // Includes local-only saves and a failed offline fallback. Neither may
+      // appear idle/merely queued after its persistence barrier rejected.
+      this.commitError =
+        error instanceof Error ? error : new Error(String(error));
+      this.applyToStore('local-pre-push');
+      throw error;
     } finally {
       closeSave();
       this._saveDepth--;
@@ -3279,7 +3296,7 @@ export class Resource<C extends OptionalClass = any> {
     if (this.isParentNew()) {
       this.store.batchResource(this.subject);
 
-      return 'offline';
+      return 'queued';
     }
 
     // Local-only drives: sign-at-save. Same signing pipeline as the
@@ -3404,8 +3421,6 @@ export class Resource<C extends OptionalClass = any> {
         return 'offline';
       }
 
-      this.commitError = e;
-      this.applyToStore('local-pre-push');
       throw e;
     }
   }
@@ -3423,7 +3438,7 @@ export class Resource<C extends OptionalClass = any> {
     agent: Agent,
     hasChanges: boolean,
   ): Promise<SaveResult> {
-    const settled: Commit[] = [];
+    const settled = this._pendingLocalCommits;
     const genesis = this._pendingGenesis;
     this._pendingGenesis = undefined;
 
@@ -3457,8 +3472,15 @@ export class Resource<C extends OptionalClass = any> {
       this.store.logLocalOnlyCommitSettled(commit);
     }
 
-    await this.persistToClientDb();
-    for (const commit of settled) this.store.publishPeerCommit(commit);
+    const persistedCommits = settled.slice();
+    await this.persistToClientDb({ required: true });
+
+    for (const commit of persistedCommits) {
+      const index = settled.indexOf(commit);
+      if (index < 0) continue; // Another overlapping save already published it.
+      settled.splice(index, 1);
+      this.store.publishPeerCommit(commit);
+    }
 
     this.commitError = undefined;
     this.loading = false;
@@ -3513,7 +3535,7 @@ export class Resource<C extends OptionalClass = any> {
       }
     }
 
-    await this.persistToClientDb();
+    await this.persistToClientDb({ required: true });
 
     this.commitError = undefined;
     this.loading = false;
@@ -3535,7 +3557,9 @@ export class Resource<C extends OptionalClass = any> {
    *
    * @internal store-level / offline-persistence only.
    */
-  public async persistToClientDb(): Promise<void> {
+  public async persistToClientDb(
+    options: { required?: boolean } = {},
+  ): Promise<void> {
     // The identity database can be between workers while its key is derived.
     // A save must not resolve in that gap without writing its snapshot.
     const identity = this.store.getAgent()?.subject;
@@ -3546,7 +3570,18 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     const clientDb = this.store.getClientDb();
-    if (!clientDb || clientDb.unsupportedEnvironment) return;
+
+    if (!clientDb || clientDb.unsupportedEnvironment) {
+      if (options.required) {
+        throw new Error(
+          'Changes could not be saved on this device. Keep this window open and retry when storage or the server is available.',
+        );
+      }
+
+      // Online clients without OPFS (including desktop) rely on the server's
+      // durable acknowledgement. This optional cache is not their save target.
+      return;
+    }
 
     const obj: Record<string, unknown> = { '@id': this.subject };
 
