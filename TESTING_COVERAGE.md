@@ -973,6 +973,11 @@ responses open to verify concurrent downloads are bounded at four and that
 reverse completion preserves listing order at import. Existing progress and
 failure checks also pass. Actual staging phone restore latency remains unmeasured.
 
+## Right-panel lifecycle
+
+`components/RightPanel/panelState.test.ts` covers session-local initial state, exclusive panels, cleared meeting selection, account/drive scoping, stale callbacks, and missing/unauthorized versus temporarily unavailable targets.
+
+`e2e/tests/right-panel-lifecycle.spec.ts` asserts visible panel state with legacy localStorage values for meeting/comments/AI, SPA navigation away from commentable resources, deletion of an explicitly opened meeting, and switching drives and back without resurrecting the panel. Existing `meetings.spec.ts` agenda/start/end coverage verifies that minutes and explicitly opened meeting chat still work.
 ## Replication completion and CI tool installation
 
 `lib/src/sync/replicate.rs` has five scripted WebSocket peer tests covering

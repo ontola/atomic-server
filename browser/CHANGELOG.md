@@ -4,6 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Stop restoring stale right-side panels across sessions, accounts and drives; close meeting/comments panels when their target disappears.
 - Following indicator: a tight blue ring on the followed avatar in the navbar and sidebar, expanding to a "Following" chip on hover ([#1486](https://github.com/ontola/atomic-server/issues/1486)).
 
 - Fix: file previews and avatars wait for the local blob lookup before requesting the server, avoiding transient 404s for offline uploads. `useFileObjectUrl` accepts an optional network fallback URL and returns `undefined` while the local lookup is pending.
