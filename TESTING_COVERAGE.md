@@ -30,6 +30,10 @@ not establish full Dagger E2E acceptance or a supported worker count.
 `loro-selection.test.ts` checks cursor preservation across a remote metadata
 update followed by keystrokes before and after queued timers. The scoped
 loro-prosemirror 0.4.3 patch restores document and selection atomically.
+`documentUndoSession.test.ts` covers document undo/redo across editor bindings,
+authentication-session isolation, system/remote changes and callback ownership.
+`browser/e2e/tests/document-undo.spec.ts` checks undo and redo through the
+Data View round trip, including persisted content after reload.
 `store-search-server.test.ts` checks that authoritative server lookups after
 imports do not wait on local indexing or WebSocket readiness.
 
@@ -109,7 +113,9 @@ unauthorized snapshot writes, forged commits and outgoing permission revocation.
 WebRTC and OPFS with HTTP data access disabled: initial sync, concurrent edits,
 presence, attachments, offline reconciliation, reload and signed deletion.
 `browser-peer-sync.test.ts` covers parallel negotiation, isolated retries,
-departure, membership checks and the per-browser connection bound.
+departure, membership checks and the per-browser connection bound. It also
+checks shutdown during a signaling handshake: the socket closes after opening
+without joining a room or scheduling a reconnect.
 `verify-peer-mesh.mjs` uses eight distinct Chromium agents: full mesh, ninth-member
 rejection, concurrent creations, group presence, attachment replication, creator
 departure, offline reconciliation and signed deletion. Rust regressions cover
@@ -454,6 +460,14 @@ vector (`personal_drive_cross_lang_vector`) pins the nonce, signature, and DID.
 | Parent action stays available on a non-drive stub and fetches parent at run | glue | `browser/data-browser/src/actions/resourceActions.parent.test.ts` |
 
 Not covered: derived AI tools invoked through a real model; MCP protocol projection (no Atomic MCP server yet); collapsing specialized `destroy()` call sites (table rows, views, tags) onto the resource delete action.
+## View transitions
+
+| Flow | Layer | Where |
+|---|---|---|
+| Hashed `view-transition-name` plus `view-transition-class` per tag | glue | `browser/data-browser/src/helpers/viewTransition.test.ts` |
+| `startViewTransition` throw / hung `finished` / rejected `ready` still navigates and skips the overlay | glue | `browser/data-browser/src/helpers/viewTransition.test.ts` |
+
+Not covered: visual morph of a grid card into the resource page in Firefox (needs a headed Firefox run; Playwright's firefox project is locks-only and automation bypasses view transitions unless `forceViewTransitions` is set).
 
 ## Documents
 
@@ -568,6 +582,23 @@ aliases. The editor Link lifecycle test preserves telephone links across multipl
 mounts without resetting or re-registering the global parser.
 
 ### Save durability and identity lifecycle regressions
+
+- `save-acknowledgement.test.ts` exercises `Resource.save()` through the real
+  outbox with a stubbed commit transport: server refusals (including terminal
+  drops), backoff, blocked entries and cancellation cannot report persistence.
+  It also covers offline transport failures, successful retries, unrelated
+  subjects and edits arriving during an acknowledged save (#1388).
+
+- `scripts/owned-process.node.mjs` exercises the template runner process lifecycle,
+  including independent ephemeral ports and descendant cleanup. The superseded
+  template-process helper and its standalone Playwright regression were removed.
+- `cancelled-lifecycle.test.ts` covers cold-fetch cancellation, optional tree
+  preload cancellation, pending worker destruction, and persistence rejection
+  without misreporting cancellation as a storage fault. Real storage failures
+  still reject and log errors.
+- `loroSelection.test.ts` drives real ProseMirror transactions and Loro imports
+  to verify that resource metadata arriving between keystrokes cannot reorder
+  text. It guards the synchronous-selection patch to `loro-prosemirror` 0.4.3.
 
 - `collection-page-assemble.test.ts` holds a local query in flight while a
   member is deleted, then releases the stale result. It checks membership,
@@ -779,6 +810,12 @@ check; real refresh/query timing remains a browser acceptance check.
 
 `websockets.test.ts` covers closing during authentication and range reconciliation, and index-status subscription cancellation. `file-upload-offline.spec.ts`, `offline-chatroom.spec.ts` and `offline-create-then-online.spec.ts` verify disconnect, local writes, reload and reconnect without unexpected browser diagnostics.
 
+`browser/data-browser/src/hooks/useFile.test.tsx` checks that the first preview
+render waits for a local blob lookup instead of issuing a premature server
+request, while files without a local database use the server immediately.
+The offline upload E2E also asserts that the preview issues no image download
+requests, even if a server request would have succeeded.
+
 ## Profile edit hydration
 
 `store.test.ts` loads an offline profile with nontrivial persisted Loro history, edits it and merges into the original document, verifying the rename survives. `username-live.spec.ts` edits immediately through the enabled profile field and verifies existing remote chat authors update before and after reload. Profile controls stay disabled while the resource is loading. Managed-account E2Es explicitly configure the hosted runtime and API responses; the mocked same-origin dashboard test blocks the app service worker navigation fallback.
@@ -905,6 +942,26 @@ Onboarding dialog feedback: the authorization/invite and chatroom cases in
 `onboarding-storage.spec.ts` checks feedback availability;
 `drive-template-onboarding.spec.ts` checks mobile creation and dismissal.
 
+## Signed-out local drive opened from the portal
+
+`browser/data-browser/src/helpers/isDriveSignInError.test.ts` covers a local-only missing-resource error with no app agent, including origins with a configured node. It also covers signed-out DID resources absent from the current node: their copy may be in the account vault, so they offer unlock. Signed-in users, ordinary HTTP 404s, and unrelated transport failures retain their error handling.
+
+Paired SaaS `portal/e2e/passkey-open-drive.spec.ts` covers account/profile creation, passkey enrollment, recovery-code acknowledgement, completed app sign-out, portal passkey sign-in, and the Open link reaching the app unlock screen. It then unlocks and verifies the original drive title. Chromium virtual PRF state is tied to the original CDP target, so the unlock portion runs there after verifying the real popup handoff. Unlocking within the popup itself remains a physical-browser acceptance check.
+## Ontology codegen (`@tomic/cli`) and DID fetch
+
+| Flow | Where |
+|---|---|
+| HTTP path `https://host/did:ad:…` and `/did?subject=` extract the same DID | `browser/lib/src/subject.test.ts` |
+| JSON-AD parse accepts `@id: did:ad:…` when the request used the HTTP path alias | `browser/lib/src/parse.test.ts` |
+| `Client.fetchResourceHTTP` resolves DIDs via `/did?subject=` and does not touch `window` in Node | `browser/lib/src/client.fetch.test.ts` |
+| Store fetch by HTTP path alias returns the resource stored under the DID | `browser/lib/src/store.test.ts` |
+
+Not covered: `ad-generate ontologies` end-to-end against a live server (no CLI test runner).
+
+`helpers/managed/vaultAutoBackup.test.ts` verifies successful vault restoration preserves known node absence as local-only routing, while transport failures and failed restores do not disable node sync. Paired SaaS second-browser coverage verifies the original profile and vault-only canary after restore, with bounded pre-restore refusal diagnostics.
+
+Paired SaaS `portal/e2e/identity-reconcile.spec.ts` exercises dev-drive creation while a managed account is active: reconciliation waits until the temporary identity has a drive, and creation must not enroll it in the account.
+
 Session restore routing: `helpers/managed/reconcile.test.ts` covers connecting the
 exact hosted drive before availability checks, clearing local-only routing,
 skipping Pending/Disabled placements and other drives, and ignoring discovery
@@ -921,3 +978,28 @@ failure checks also pass. Actual staging phone restore latency remains unmeasure
 `components/RightPanel/panelState.test.ts` covers session-local initial state, exclusive panels, cleared meeting selection, account/drive scoping, stale callbacks, and missing/unauthorized versus temporarily unavailable targets.
 
 `e2e/tests/right-panel-lifecycle.spec.ts` asserts visible panel state with legacy localStorage values for meeting/comments/AI, SPA navigation away from commentable resources, deletion of an explicitly opened meeting, and switching drives and back without resurrecting the panel. Existing `meetings.spec.ts` agenda/start/end coverage verifies that minutes and explicitly opened meeting chat still work.
+## Replication completion and CI tool installation
+
+`lib/src/sync/replicate.rs` has five scripted WebSocket peer tests covering
+resource-only completion without the idle timeout, acknowledgement of every
+chunk, unrelated-drive acknowledgements, an independently mismatching hash,
+trailing blob requests and asynchronous storage errors, and the fallback for
+peers without keepalive support. They exercise the real Rust WebSocket client
+and snapshot/chunk encoding with an isolated in-memory source; the peer scripts
+simulate replies and do not validate authentication or remote import policy.
+The real-server `server/tests/it/replicate.rs` tests retain destination-data,
+repeat-push, boot-reconcile and export-authorization assertions.
+
+The pinned wasm-pack installer was executed in Dagger's `rust:bookworm` image
+on Linux x86_64, including a cached install followed by changed downstream
+source input and execution of the retained binary. Its aarch64 archive digest
+is pinned to the upstream release; native aarch64 execution is not covered by
+that check. Full CI wall-time savings require a completed hosted run.
+## External cache access and authentication origins (#170)
+
+`db::test::cached_external_resources_keep_read_permissions` checks that a cached
+external resource remains private in public collection queries (nested and
+subject-only) and direct reads, while the authorized agent can still read it.
+`client::helpers` origin tests reject lookalike hosts, userinfo-host confusion,
+changed ports/schemes, malformed URLs and non-HTTP URLs; normalized same-origin
+and localhost requests remain eligible for DID-agent authentication.

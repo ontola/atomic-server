@@ -36,8 +36,7 @@ export function useFileInfo(resource: Resource): FileInfo {
   // blob URL. The server `downloadURL` returns 404 immediately after upload
   // until the BLOB_RESPONSE round-trip completes — without this, the preview
   // would flash a broken image on its way to "loaded".
-  const localUrl = useFileObjectUrl(resource);
-  const downloadUrl = localUrl ?? serverDownloadUrl;
+  const downloadUrl = useFileObjectUrl(resource, serverDownloadUrl);
 
   const downloadFile = useCallback(() => {
     // The URL is the resource's own claim; refuse anything that would run
@@ -49,12 +48,14 @@ export function useFileInfo(resource: Resource): FileInfo {
 
   if (
     !resource.loading &&
-    (downloadUrl === undefined || mimeType === undefined || bytes === undefined)
+    ((downloadUrl === undefined && serverDownloadUrl === undefined) ||
+      mimeType === undefined ||
+      bytes === undefined)
   ) {
     throw new Error('File resource is missing properties');
   }
 
-  if (resource.loading) {
+  if (resource.loading || downloadUrl === undefined) {
     return {
       loading: true,
       downloadUrl: undefined,
