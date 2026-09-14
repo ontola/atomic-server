@@ -38,6 +38,7 @@ import { useChildren } from '@tomic/react';
 import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
 import { VectorIndexingIndicator } from '@components/VectorIndexingIndicator';
 import { ValueFormAddButton } from '@components/forms/ValueForm/ValueFormAddButton';
+import { FileDropZone } from '@components/forms/FileDropzone/FileDropzone';
 
 const NewPluginButton = lazy(() => import('@chunks/Plugins/NewPluginButton'));
 
@@ -67,89 +68,91 @@ function DrivePage({ resource }: ResourcePageProps<Server.Drive>): JSX.Element {
   return (
     <>
       <ResourceCoverImage resource={resource} />
-      <ContainerNarrow>
-        <Column gap='2rem'>
-          <Row align='center' wrapItems gap='1rem'>
-            <EditableTitle
+      <FileDropZone parentResource={resource}>
+        <ContainerNarrow>
+          <Column gap='2rem'>
+            <Row align='center' wrapItems gap='1rem'>
+              <EditableTitle
+                resource={resource}
+                withDecorations
+                // Its subject is derived from your key: there is exactly one and
+                // it cannot be swapped. A name like "Q3 Launch" on it would be a
+                // name that lies about what the thing is.
+                lockedReason={
+                  isPrivateDrive
+                    ? 'Your private drive keeps its name. It is tied to your account, not to a project.'
+                    : undefined
+                }
+              />
+              {isPrivateDrive && <PrivateDriveBadge />}
+              {vectorIndexing && <VectorIndexingIndicator />}
+              {baseURL !== resource.subject && (
+                <Button onClick={() => setBaseURL(resource.subject)}>
+                  Set as current drive
+                </Button>
+              )}
+            </Row>
+
+            <ValueFormAddButton
               resource={resource}
-              withDecorations
-              // Its subject is derived from your key: there is exactly one and
-              // it cannot be swapped. A name like "Q3 Launch" on it would be a
-              // name that lies about what the thing is.
-              lockedReason={
-                isPrivateDrive
-                  ? 'Your private drive keeps its name. It is tied to your account, not to a project.'
-                  : undefined
-              }
+              propertyURL={core.properties.description}
+              datatype={Datatype.MARKDOWN}
+              buttonLabel='Add description'
             />
-            {isPrivateDrive && <PrivateDriveBadge />}
-            {vectorIndexing && <VectorIndexingIndicator />}
-            {baseURL !== resource.subject && (
-              <Button onClick={() => setBaseURL(resource.subject)}>
-                Set as current drive
-              </Button>
-            )}
-          </Row>
+            {canEdit && <QuickCreateRow parent={resource.subject} />}
 
-          <ValueFormAddButton
-            resource={resource}
-            propertyURL={core.properties.description}
-            datatype={Datatype.MARKDOWN}
-            buttonLabel='Add description'
-          />
-          {canEdit && <QuickCreateRow parent={resource.subject} />}
-
-          <SettingsGroup>
-            <SettingsSection label='Resources'>
-              <DriveSubResourcesSection>
-                <ScrollArea>
-                  {subResources.map(child => (
-                    <ResourceSideBar
-                      key={child}
-                      subject={child}
-                      renderedHierarchy={[resource.subject]}
-                      ancestry={ancestry}
-                    />
-                  ))}
-                </ScrollArea>
-              </DriveSubResourcesSection>
-            </SettingsSection>
-            <SettingsSection label='Tags'>
-              <DriveTagList resource={resource} />
-            </SettingsSection>
-            <SettingsSection label='LLM Instructions'>
-              <p>
-                A short description given to the AI Agent, use this to tell it
-                what this drive is about, link important resources etc.
-              </p>
-              <ValueFormAddButton
-                resource={resource}
-                propertyURL={server.properties.llmTxt}
-                datatype={Datatype.MARKDOWN}
-                buttonLabel='Add LLM instructions'
-              />
-            </SettingsSection>
-            <SettingsSection label='Default Ontology'>
-              <InputSwitcher
-                commit
-                resource={resource}
-                property={defaultOntologyProp}
-                disabled={!canEdit}
-              />
-            </SettingsSection>
-            <SettingsSection label='Plugins'>
-              <Column gap='1rem'>
-                <PluginList drive={resource} />
-                {canEdit && (
-                  <Suspense fallback={null}>
-                    <NewPluginButton drive={resource} />
-                  </Suspense>
-                )}
-              </Column>
-            </SettingsSection>
-          </SettingsGroup>
-        </Column>
-      </ContainerNarrow>
+            <SettingsGroup>
+              <SettingsSection label='Resources'>
+                <DriveSubResourcesSection>
+                  <ScrollArea>
+                    {subResources.map(child => (
+                      <ResourceSideBar
+                        key={child}
+                        subject={child}
+                        renderedHierarchy={[resource.subject]}
+                        ancestry={ancestry}
+                      />
+                    ))}
+                  </ScrollArea>
+                </DriveSubResourcesSection>
+              </SettingsSection>
+              <SettingsSection label='Tags'>
+                <DriveTagList resource={resource} />
+              </SettingsSection>
+              <SettingsSection label='LLM Instructions'>
+                <p>
+                  A short description given to the AI Agent, use this to tell it
+                  what this drive is about, link important resources etc.
+                </p>
+                <ValueFormAddButton
+                  resource={resource}
+                  propertyURL={server.properties.llmTxt}
+                  datatype={Datatype.MARKDOWN}
+                  buttonLabel='Add LLM instructions'
+                />
+              </SettingsSection>
+              <SettingsSection label='Default Ontology'>
+                <InputSwitcher
+                  commit
+                  resource={resource}
+                  property={defaultOntologyProp}
+                  disabled={!canEdit}
+                />
+              </SettingsSection>
+              <SettingsSection label='Plugins'>
+                <Column gap='1rem'>
+                  <PluginList drive={resource} />
+                  {canEdit && (
+                    <Suspense fallback={null}>
+                      <NewPluginButton drive={resource} />
+                    </Suspense>
+                  )}
+                </Column>
+              </SettingsSection>
+            </SettingsGroup>
+          </Column>
+        </ContainerNarrow>
+      </FileDropZone>
     </>
   );
 }
