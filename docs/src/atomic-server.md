@@ -31,3 +31,13 @@ It's free, open source (MIT license), and has a ton of features:
 - 🌐  **Embedded server** with support for HTTP / HTTPS / HTTP2.0 (TLS) and Built-in LetsEncrypt handshake.
 - 📱  **Runs on mobile**: `atomic_lib` compiles into Flutter apps through [flutter_rust_bridge](https://github.com/fzyzcjy/flutter_rust_bridge), so phones get the same local-first store, signing and peer sync as the browser — not a thin REST wrapper.
 - 📚  **Libraries**: [Javascript / Typescript](https://www.npmjs.com/package/@tomic/lib), [React](https://www.npmjs.com/package/@tomic/react), [Svelte](https://www.npmjs.com/package/@tomic/svelte), [Rust](https://crates.io/crates/atomic-lib), and a Dart / Flutter client
+
+## Document undo and redo
+
+While editing a document, use **Cmd-Z** on macOS or **Ctrl-Z** on Windows/Linux
+to undo your local edits. Use **Cmd-Shift-Z** or **Ctrl-Shift-Z** to redo.
+
+Undo and redo history survives switching to Data View and returning to the
+document within the same signed-in browser session. It is kept in memory;
+reloading the page, signing out, or switching accounts starts a new undo history.
+Collaborators' edits are not added to your local undo history.
