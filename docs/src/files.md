@@ -25,6 +25,18 @@ In `atomic-server`, a `/upload` endpoint exists for uploading a file.
 - The server will check your authentication headers, your permissions, and will persist your uploaded file(s). It will now create File resources.
 - The server will reply with an array of created Atomic Data Files
 
+## Editing an uploaded text file
+
+Open an uploaded Markdown (`.md` or `.markdown`) or plain text (`.txt`) file and
+select **Convert to document** to edit its contents in the document editor.
+This action is available when you can edit the file. Markdown formatting becomes
+editable document formatting; plain text keeps its literal characters and line
+breaks.
+
+Conversion keeps the resource's link, location, description, and permissions.
+The original uploaded bytes remain stored, but editing the document does not
+change those bytes. Other file formats continue to open as files.
+
 ## Downloading a file
 
 Simply send an HTTP GET request to the File's [`download-url`](https://atomicdata.dev/properties/downloadURL) (make sure to authenticate this request).
