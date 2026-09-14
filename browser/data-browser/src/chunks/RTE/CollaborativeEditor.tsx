@@ -20,7 +20,7 @@ import {
   ResourceNodeInline,
 } from './ResourceExtension/ResourceNode';
 import DragHandle from '@tiptap/extension-drag-handle-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { TiptapContextProvider } from './TiptapContext';
 import { SlashCommands, buildSuggestion } from './SlashMenu/CommandsExtension';
 import {
@@ -61,6 +61,12 @@ import { getDocumentCollaborationCoreExtensions } from './documentCollaborationE
 import { useAIChanges } from '@components/AIChangesContext';
 import { ComparePlugin } from './comparePlugin';
 import { registerCollaborativeDocumentEditor } from './collaborativeDocumentEditorRegistry';
+import {
+  createDocumentUndoViewManager,
+  getDocumentUndoSessionGeneration,
+  getDocumentUndoManager,
+  subscribeDocumentUndoSession,
+} from './documentUndoSession';
 
 export type CollaborativeEditorProps = {
   placeholder?: string;
@@ -83,6 +89,12 @@ export default function CollaborativeEditor({
   onBlur,
 }: CollaborativeEditorProps): React.JSX.Element {
   const store = useStore();
+  const undoSessionGeneration = useSyncExternalStore(
+    listener => subscribeDocumentUndoSession(store, listener),
+    () => getDocumentUndoSessionGeneration(store),
+    () => getDocumentUndoSessionGeneration(store),
+  );
+  const undoManager = getDocumentUndoManager(store, doc);
   const showNewResourceUI = useNewResourceUI();
   const [save] = useDebouncedSave(resource, 500);
   const { agent, drive } = useSettings();
@@ -196,7 +208,15 @@ export default function CollaborativeEditor({
           addProseMirrorPlugins() {
             return [
               LoroSyncPlugin({ doc: doc as unknown as LoroDocType }),
-              LoroUndoPlugin({ doc: doc as unknown as LoroDocType }),
+              LoroUndoPlugin({
+                doc: doc as unknown as LoroDocType,
+                undoManager: createDocumentUndoViewManager(
+                  undoManager,
+                  () =>
+                    getDocumentUndoSessionGeneration(store) ===
+                    undoSessionGeneration,
+                ),
+              }),
               LoroEphemeralCursorPlugin(ephemeralStore, {
                 user: agentResource
                   ? {
@@ -308,7 +328,7 @@ export default function CollaborativeEditor({
     // passed at editor construction time. If the Resource hydrates a newer doc
     // instance after mount, keeping the editor alive would make remote sync
     // import into one doc while ProseMirror renders another.
-    [drive, doc],
+    [store, drive, doc, undoSessionGeneration],
   );
 
   // Tiptap fires `create` from inside a `window.setTimeout(0)` in

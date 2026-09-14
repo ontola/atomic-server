@@ -4,6 +4,13 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Following indicator: a tight blue ring on the followed avatar in the navbar and sidebar, expanding to a "Following" chip on hover ([#1486](https://github.com/ontola/atomic-server/issues/1486)).
+
+- Fix: file previews and avatars wait for the local blob lookup before requesting the server, avoiding transient 404s for offline uploads. `useFileObjectUrl` accepts an optional network fallback URL and returns `undefined` while the local lookup is pending.
+
+- Fix: `@tomic/cli` `ad-generate ontologies` works with `did:ad:` ontology subjects. A DID is not an HTTP URL: the CLI needs `serverUrl` (the Atomic Server origin) and fetches `GET {serverUrl}/did?subject=…`. Pasting the address-bar form `https://host/did:ad:…` no longer fails with `Resource has wrong subject in @id` — that URL is an alias, and the resource's `@id` is the DID. `ad-generate init` writes `serverUrl`.
+- Fix: page transitions on Firefox no longer smear into a giant overlay or get skipped entirely. Snapshot sizing is scoped by `view-transition-class` (titles keep the height-based aspect-ratio rule; card→page morphs fill the group), title links that wrap a heading are `inline-block` so Firefox does not treat them as duplicate names (IB splits), and a failed or hung `startViewTransition` still navigates and skips the overlay instead of covering the page.
+
 ## [v0.41.0-beta.7] - 2026-09-12
 
 - Add template onboarding with editable previews and consistent mobile UI.

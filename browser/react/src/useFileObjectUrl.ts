@@ -8,33 +8,29 @@ const BLOB_DID_PREFIX = 'did:ad:blob:';
 /**
  * Returns a `blob:` object URL for the file's bytes when they are available
  * locally in the WASM clientDb (e.g. just-uploaded files, or anything cached
- * from a prior session). Returns `undefined` otherwise — callers should fall
- * back to the network `downloadURL`.
+ * from a prior session). Waits for the local lookup before returning the
+ * optional network fallback. Returns `undefined` while the lookup is pending.
  *
  * Lets the UI preview a freshly-uploaded image even before the bytes have
  * been pushed to the server, and lets it keep working while offline.
  */
-export function useFileObjectUrl(resource: Resource): string | undefined {
+export function useFileObjectUrl(
+  resource: Resource,
+  fallbackUrl?: string,
+): string | undefined {
   const store = useStore();
-  const [url, setUrl] = useState<string | undefined>(undefined);
+  const clientDb = store.getClientDb?.();
+  const [resolved, setResolved] = useState<{
+    blobDid: string;
+    clientDb: typeof clientDb;
+    url?: string;
+  }>();
 
   const blobValue = resource.get(BLOB);
   const blobDid = typeof blobValue === 'string' ? blobValue : undefined;
 
   useEffect(() => {
-    if (!blobDid?.startsWith(BLOB_DID_PREFIX)) {
-      setUrl(undefined);
-
-      return;
-    }
-
-    const clientDb = store.getClientDb?.();
-
-    if (!clientDb) {
-      setUrl(undefined);
-
-      return;
-    }
+    if (!blobDid?.startsWith(BLOB_DID_PREFIX) || !clientDb) return;
 
     let revoked: string | undefined;
     let cancelled = false;
@@ -43,12 +39,15 @@ export function useFileObjectUrl(resource: Resource): string | undefined {
       try {
         const hash = hexToBytes(blobDid.slice(BLOB_DID_PREFIX.length));
         const bytes = await clientDb.getBlob(hash);
-        if (cancelled || !bytes) return;
-        const u = URL.createObjectURL(new Blob([bytes as BlobPart]));
-        revoked = u;
-        setUrl(u);
+        if (cancelled) return;
+
+        if (bytes) {
+          revoked = URL.createObjectURL(new Blob([bytes as BlobPart]));
+        }
+
+        setResolved({ blobDid, clientDb, url: revoked });
       } catch {
-        // ignore: caller falls back to the network downloadURL
+        if (!cancelled) setResolved({ blobDid, clientDb });
       }
     })();
 
@@ -56,7 +55,14 @@ export function useFileObjectUrl(resource: Resource): string | undefined {
       cancelled = true;
       if (revoked) URL.revokeObjectURL(revoked);
     };
-  }, [blobDid, store]);
+  }, [blobDid, clientDb]);
 
-  return url;
+  if (!blobDid?.startsWith(BLOB_DID_PREFIX) || !clientDb) return fallbackUrl;
+
+  // A result for the previous resource/database must never leak into this render.
+  if (resolved?.blobDid !== blobDid || resolved.clientDb !== clientDb) {
+    return undefined;
+  }
+
+  return resolved.url ?? fallbackUrl;
 }
