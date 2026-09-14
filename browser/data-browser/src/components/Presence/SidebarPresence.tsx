@@ -44,6 +44,7 @@ const Strip = styled.span`
   align-items: center;
   flex-shrink: 0;
   margin-left: auto;
+  overflow: visible;
 
   & > *:not(:first-child) {
     margin-left: -0.3rem;

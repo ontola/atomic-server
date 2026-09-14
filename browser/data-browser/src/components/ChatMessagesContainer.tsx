@@ -166,10 +166,10 @@ const MessagesContainer = styled(ScrollArea)<{ $fullView?: boolean }>`
   padding: ${p => (p.$fullView ? '0.25rem 0' : p.theme.size())};
 
   /* The viewport is what scrolls and therefore what clips, so the room for an
-   * avatar's following/hover outline (2px + 1px offset) has to live here —
+   * avatar's keyboard focus ring (2px + 2px offset) has to live here —
    * padding on the ScrollArea root sits outside the clip and does nothing.
    * Start only: message chips still bleed into the panel's right padding. */
   ${ScrollViewPort} {
-    padding-inline-start: 3px;
+    padding-inline-start: 4px;
   }
 `;

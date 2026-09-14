@@ -1,4 +1,5 @@
 import { styled } from 'styled-components';
+import { transition } from '../../helpers/transition';
 import {
   useResource,
   useString,
@@ -30,6 +31,11 @@ interface AgentAvatarProps {
   size?: string;
   /** Show a green "online" dot (agent has a live presence entry). */
   online?: boolean;
+  /**
+   * Paint the circle's own 2px border in the theme main color so the
+   * follow ring sits flush with the image (no extra outline gap).
+   */
+  following?: boolean;
 }
 
 /**
@@ -46,6 +52,7 @@ export function AgentAvatar({
   agentSubject,
   size = '1.6rem',
   online = false,
+  following = false,
 }: AgentAvatarProps): React.JSX.Element {
   const agentResource = useResource(agentSubject);
   const [name] = useTitle(agentResource);
@@ -67,19 +74,34 @@ export function AgentAvatar({
 
   if (iconSrc) {
     circle = (
-      <ImageCircle $size={size} title={name}>
+      <ImageCircle
+        $size={size}
+        $following={following}
+        title={following ? undefined : name}
+        data-agent-avatar=''
+      >
         <img src={iconSrc} alt={name} />
       </ImageCircle>
     );
   } else if (imageFile) {
     circle = (
-      <ImageCircle $size={size} title={name}>
+      <ImageCircle
+        $size={size}
+        $following={following}
+        title={following ? undefined : name}
+        data-agent-avatar=''
+      >
         <Image subject={imageFile} alt={name} sizeIndication='2rem' />
       </ImageCircle>
     );
   } else if (imageUrl) {
     circle = (
-      <ImageCircle $size={size} title={name}>
+      <ImageCircle
+        $size={size}
+        $following={following}
+        title={following ? undefined : name}
+        data-agent-avatar=''
+      >
         <img src={imageUrl} alt={name} />
       </ImageCircle>
     );
@@ -87,8 +109,10 @@ export function AgentAvatar({
     circle = (
       <InitialCircle
         $size={size}
+        $following={following}
         $color={colorForAgent(agentSubject)}
-        title={name}
+        title={following ? undefined : name}
+        data-agent-avatar=''
       >
         {name.charAt(0).toUpperCase()}
       </InitialCircle>
@@ -127,7 +151,10 @@ const OnlineDot = styled.span<{ $size: string }>`
   box-sizing: border-box;
 `;
 
-const CircleBase = styled.div<{ $size: string }>`
+const CircleBase = styled.div<{
+  $size: string;
+  $following?: boolean;
+}>`
   box-sizing: border-box;
   display: flex;
   align-items: center;
@@ -136,9 +163,11 @@ const CircleBase = styled.div<{ $size: string }>`
   width: ${p => p.$size};
   height: ${p => p.$size};
   border-radius: 50%;
-  border: 2px solid ${p => p.theme.colors.bg};
+  border: 2px solid
+    ${p => (p.$following ? p.theme.colors.main : p.theme.colors.bg)};
   overflow: hidden;
   user-select: none;
+  ${transition('border-color')}
 `;
 
 const ImageCircle = styled(CircleBase)`

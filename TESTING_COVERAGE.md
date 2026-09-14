@@ -42,6 +42,11 @@ multi-step composition fallback. `editor-typing.spec.ts` runs against the built
 GUI, checks that real keystrokes avoid `toDelta`, and verifies text after reload;
 it records frame timings without a machine-dependent timing threshold.
 
+`documentUndoSession.test.ts` covers document undo/redo across editor bindings,
+authentication-session isolation, system/remote changes and callback ownership.
+`browser/e2e/tests/document-undo.spec.ts` checks undo and redo through the
+Data View round trip, including persisted content after reload.
+
 `store-search-server.test.ts` checks that authoritative server lookups after
 imports do not wait on local indexing or WebSocket readiness.
 
