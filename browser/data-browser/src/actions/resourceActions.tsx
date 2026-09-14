@@ -68,9 +68,9 @@ export const resourceActions: ActionDefinition[] = [
     id: 'view-source',
     scope: 'resource',
     section: 'view',
-    label: () => 'View source',
-    helper: () => 'Inspect a read-only JSON snapshot of this document.',
-    keywords: ['source', 'json', 'tiptap', 'document'],
+    label: () => 'View as HTML',
+    helper: () => 'Inspect a read-only HTML snapshot of this document.',
+    keywords: ['source', 'html', 'markup', 'document'],
     icon: () => <FaCode />,
     available: ctx =>
       ctx.resource.hasClasses(dataBrowser.classes.documentV2) &&

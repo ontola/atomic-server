@@ -1,8 +1,10 @@
 import type { Resource, Store } from '@tomic/react';
 import { readDocumentV2TiptapJson } from '@chunks/RTE/readDocumentV2TiptapJson';
+import { documentToHtml } from './documentToHtml';
 
 export type DocumentSourceSnapshot =
   | { kind: 'source'; content: string }
+  | { kind: 'empty' }
   | { kind: 'unavailable'; message: string }
   | { kind: 'error'; error: Error };
 
@@ -52,9 +54,15 @@ export function captureDocumentSourceSnapshot(
     });
 
     if (result.ok) {
+      const content = documentToHtml(result.docJson, store);
+
+      if (!content) {
+        return { kind: 'empty' };
+      }
+
       return {
         kind: 'source',
-        content: JSON.stringify(result.docJson, null, 2),
+        content,
       };
     }
 

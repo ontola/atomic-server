@@ -6,10 +6,13 @@ import { captureDocumentSourceSnapshot } from './documentSourceSnapshot';
 const { readDocumentV2TiptapJson } = vi.hoisted(() => ({
   readDocumentV2TiptapJson: vi.fn(),
 }));
+const { documentToHtml } = vi.hoisted(() => ({ documentToHtml: vi.fn() }));
 
 vi.mock('@chunks/RTE/readDocumentV2TiptapJson', () => ({
   readDocumentV2TiptapJson,
 }));
+
+vi.mock('./documentToHtml', () => ({ documentToHtml }));
 
 type TestResource = Resource & {
   hasLoroDoc: ReturnType<typeof vi.fn>;
@@ -38,7 +41,7 @@ describe('document source dialog capture', () => {
     expect(readDocumentV2TiptapJson).not.toHaveBeenCalled();
   });
 
-  it('renders read-only, pretty JSON source with rich document marks', () => {
+  it('renders read-only HTML source from the full document extension set', () => {
     readDocumentV2TiptapJson.mockReturnValue({
       ok: true,
       docJson: {
@@ -53,19 +56,36 @@ describe('document source dialog capture', () => {
         ],
       },
     });
+    documentToHtml.mockReturnValue('<p><strong>Bold</strong></p>');
     const document = resource();
 
     expect(
       captureDocumentSourceSnapshot(document, {} as Store, false, undefined),
     ).toEqual({
       kind: 'source',
-      content: expect.stringContaining('"marks": ['),
+      content: '<p><strong>Bold</strong></p>',
     });
     expect(readDocumentV2TiptapJson).toHaveBeenCalledWith(
       document,
       expect.anything(),
       { detached: true },
     );
+    expect(documentToHtml).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it('shows a clear empty state when document HTML has no content', () => {
+    readDocumentV2TiptapJson.mockReturnValue({
+      ok: true,
+      docJson: { type: 'doc', content: [] },
+    });
+    documentToHtml.mockReturnValue('');
+
+    expect(
+      captureDocumentSourceSnapshot(resource(), {} as Store, false, undefined),
+    ).toEqual({ kind: 'empty' });
   });
 
   it('shows an error from resource loading before trying to read source', () => {

@@ -20,7 +20,7 @@ interface DocumentSourceDialogProps {
   bindShow: (open: boolean) => void;
 }
 
-/** A read-only, point-in-time TipTap JSON inspector for Document V2. */
+/** A read-only, point-in-time HTML inspector for Document V2. */
 export function DocumentSourceDialog({
   subject,
   show: open,
@@ -71,17 +71,19 @@ export function DocumentSourceDialog({
       {isOpen && (
         <>
           <DialogTitle>
-            <h1>Document source</h1>
+            <h1>Document HTML</h1>
           </DialogTitle>
           <StyledDialogContent>
             <p>
-              This is a read-only JSON snapshot captured when you opened this
+              This is a read-only HTML snapshot captured when you opened this
               dialog. It does not update while the dialog is open.
             </p>
             {loading || snapshot === undefined ? (
               <p>Loading document source…</p>
             ) : snapshot.kind === 'source' ? (
               <CodeBlock content={snapshot.content} />
+            ) : snapshot.kind === 'empty' ? (
+              <p>This document is empty.</p>
             ) : snapshot.kind === 'unavailable' ? (
               <p>{snapshot.message}</p>
             ) : (

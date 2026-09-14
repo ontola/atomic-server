@@ -467,13 +467,16 @@ Not covered: visual morph of a grid card into the resource page in Firefox (need
 
 ## Documents
 
-Document source: `readDocumentV2TiptapJson.test.ts` checks real Loro rich-text
+Document HTML source: `readDocumentV2TiptapJson.test.ts` checks real Loro rich-text
 conversion, empty content, malformed content and unchanged live state.
 `resourceActions.parent.test.ts` checks source-menu eligibility and invocation,
 including readers without write access. The source dialog is read-only and
 uses a snapshot captured on opening. `documentSourceSnapshot.test.ts` covers
 loading/errors, absent Loro state, formatted output and pending edits without
-subscriber events. Live browser menu/dialog acceptance remains untested.
+subscriber events. Manual browser acceptance created a document, entered text,
+and verified the source dialog with copy/close controls.
+`document-html-source.spec.ts` covers creating a document, opening View as HTML,
+HTML text escaping, read-only controls, and returning to the unchanged editor.
 
 | Flow | Layer | Where |
 |---|---|---|

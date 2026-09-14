@@ -394,8 +394,8 @@ await resource.save();
 Collaborative rich-text documents store their ProseMirror tree under the `doc` root container.
 Use `loro-prosemirror` on the client for live editing and WebSocket sync.
 
-In the data browser, open a Document’s menu and choose **View source** to inspect
-a read-only snapshot of its body as formatted TipTap JSON. The viewer includes a
+In the data browser, open a Document’s menu and choose **View as HTML** to inspect
+a read-only HTML snapshot of its body. The viewer includes a
 copy button; close it to return to the document and edit with the rich-text editor.
 It reads the `doc` tree, so it works even when the legacy `document-content`
 property appears empty in Data View.

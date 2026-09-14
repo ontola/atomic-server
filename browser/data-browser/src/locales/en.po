@@ -8817,30 +8817,34 @@ msgstr ""
 #~ msgid "☏ Team chat"
 #~ msgstr "☏ Team chat"
 
-#: src/actions/resourceActions.tsx
-msgid "View source"
-msgstr "View source"
-
-#: src/actions/resourceActions.tsx
-msgid "Inspect a read-only JSON snapshot of this document."
-msgstr "Inspect a read-only JSON snapshot of this document."
-
 #: src/views/Document/documentSourceSnapshot.ts
 msgid "This document has no loaded Loro snapshot in this tab. Open the document and try again once it has finished loading."
 msgstr "This document has no loaded Loro snapshot in this tab. Open the document and try again once it has finished loading."
 
 #: src/views/Document/DocumentSourceDialog.tsx
-msgid "Document source"
-msgstr "Document source"
-
-#: src/views/Document/DocumentSourceDialog.tsx
 msgid "Loading document source…"
 msgstr "Loading document source…"
-
-#: src/views/Document/DocumentSourceDialog.tsx
-msgid "This is a read-only JSON snapshot captured when you opened this dialog. It does not update while the dialog is open."
-msgstr "This is a read-only JSON snapshot captured when you opened this dialog. It does not update while the dialog is open."
 
 #: src/views/Document/documentSourceSnapshot.ts
 msgid "The document has pending edits. Close this dialog and try again after the edits are saved."
 msgstr "The document has pending edits. Close this dialog and try again after the edits are saved."
+
+#: src/actions/resourceActions.tsx
+msgid "View as HTML"
+msgstr "View as HTML"
+
+#: src/actions/resourceActions.tsx
+msgid "Inspect a read-only HTML snapshot of this document."
+msgstr "Inspect a read-only HTML snapshot of this document."
+
+#: src/views/Document/DocumentSourceDialog.tsx
+msgid "Document HTML"
+msgstr "Document HTML"
+
+#: src/views/Document/DocumentSourceDialog.tsx
+msgid "This document is empty."
+msgstr "This document is empty."
+
+#: src/views/Document/DocumentSourceDialog.tsx
+msgid "This is a read-only HTML snapshot captured when you opened this dialog. It does not update while the dialog is open."
+msgstr "This is a read-only HTML snapshot captured when you opened this dialog. It does not update while the dialog is open."
