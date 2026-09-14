@@ -18,7 +18,7 @@ import { before, getDevDriveSecret, signIn, FRONTEND_URL } from './test-utils';
  */
 
 const followingBadge = (page: Page) =>
-  page.getByTitle('Following — press for actions');
+  page.getByRole('button', { name: 'Following', exact: true });
 const followingYouBadge = (page: Page) =>
   page.getByTitle('These users follow you — press for actions');
 const facepile = (page: Page) =>
