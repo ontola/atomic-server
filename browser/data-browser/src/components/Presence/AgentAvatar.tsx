@@ -77,7 +77,7 @@ export function AgentAvatar({
       <ImageCircle
         $size={size}
         $following={following}
-        title={name}
+        title={following ? undefined : name}
         data-agent-avatar=''
       >
         <img src={iconSrc} alt={name} />
@@ -88,7 +88,7 @@ export function AgentAvatar({
       <ImageCircle
         $size={size}
         $following={following}
-        title={name}
+        title={following ? undefined : name}
         data-agent-avatar=''
       >
         <Image subject={imageFile} alt={name} sizeIndication='2rem' />
@@ -99,7 +99,7 @@ export function AgentAvatar({
       <ImageCircle
         $size={size}
         $following={following}
-        title={name}
+        title={following ? undefined : name}
         data-agent-avatar=''
       >
         <img src={imageUrl} alt={name} />
@@ -111,7 +111,7 @@ export function AgentAvatar({
         $size={size}
         $following={following}
         $color={colorForAgent(agentSubject)}
-        title={name}
+        title={following ? undefined : name}
         data-agent-avatar=''
       >
         {name.charAt(0).toUpperCase()}

@@ -8,7 +8,7 @@ interface FollowingIndicatorProps extends DropdownTriggerProps {
   following: boolean;
   /** Hover/open chip. Only rendered while `following`. */
   label?: string;
-  title: string;
+  title?: string;
   ariaLabel?: string;
   /**
    * Native `<button>` for the navbar. Default is a focusable span so the
@@ -54,7 +54,7 @@ export function FollowingIndicator({
         aria-expanded={isActive}
         aria-haspopup='menu'
         aria-label={ariaLabel}
-        title={title}
+        title={following ? undefined : title}
         $following={following}
         $revealed={revealed}
         onClick={onClick}
@@ -75,7 +75,7 @@ export function FollowingIndicator({
       aria-expanded={isActive}
       aria-haspopup='menu'
       aria-label={ariaLabel}
-      title={title}
+      title={following ? undefined : title}
       $following={following}
       $revealed={revealed}
       ref={ref as unknown as React.Ref<HTMLSpanElement>}
