@@ -942,6 +942,7 @@ Onboarding dialog feedback: the authorization/invite and chatroom cases in
 `onboarding-storage.spec.ts` checks feedback availability;
 `drive-template-onboarding.spec.ts` checks mobile creation and dismissal.
 
+`prepareDriveSharing.test.ts` covers verified local transition before peer invitation, rejection on failed verification, preservation of an enrolled drive connection, and isolation from another drive enrollment. `local-drive-copy.test.ts` covers missing history, incomplete inventory, and missing or corrupt attachments. Full sharing UI acceptance remains pending.
 ## Signed-out local drive opened from the portal
 
 `browser/data-browser/src/helpers/isDriveSignInError.test.ts` covers a local-only missing-resource error with no app agent, including origins with a configured node. It also covers signed-out DID resources absent from the current node: their copy may be in the account vault, so they offer unlock. Signed-in users, ordinary HTTP 404s, and unrelated transport failures retain their error handling.
