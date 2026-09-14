@@ -13,6 +13,13 @@ caught it, and if the answer is "none", that is the row to add.
 
 ---
 
+## WASM database opening
+
+`browser/lib/src/client-db-open.test.ts` covers `ClientDb.open()` success,
+wrong-key cache recovery, and propagation of blocked/corrupt-storage errors.
+The save-state and crash-durability browser tests exercise the generated WASM
+factory through the real worker and OPFS; the async constructor is no longer used.
+
 ## E2E isolation and performance harness (#1461)
 
 `search.test.ts` verifies search-cache invalidation only evicts memory entries,

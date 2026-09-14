@@ -276,6 +276,8 @@ impl DriveFilters {
     }
 }
 
+type PendingBlobRequests = HashMap<[u8; 32], (String, web_time::Instant)>;
+
 /// The Db is a persistent on-disk Atomic Data store.
 /// It's an implementation of [Storelike].
 /// It uses a [KvStore] backend for key-value storage (sled, BTreeMap, etc.).
@@ -348,7 +350,7 @@ pub struct Db {
     /// peer that never responds would otherwise leak one entry per missing
     /// blob forever, so `note_pending_blob_request` also lazily prunes
     /// anything older than `PENDING_BLOB_REQUEST_TTL`.
-    pending_blob_requests: Arc<RwLock<HashMap<[u8; 32], (String, web_time::Instant)>>>,
+    pending_blob_requests: Arc<RwLock<PendingBlobRequests>>,
 }
 
 /// How long an unanswered `BLOB_REQUEST` stays in `pending_blob_requests`
@@ -732,9 +734,9 @@ impl Db {
 
         // Migrate other metadata trees
         for tree in [Tree::PluginMeta, Tree::DriveMapping, Tree::DidMapping] {
-            for item in sled_store.iter_tree(tree.clone()) {
+            for item in sled_store.iter_tree(tree) {
                 let (key, val) = item?;
-                redb_store.insert(tree.clone(), &key, &val)?;
+                redb_store.insert(tree, &key, &val)?;
             }
         }
 

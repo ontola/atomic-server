@@ -361,3 +361,25 @@ ATOMICSERVER_SKIP_JS_BUILD=true cargo test -p atomic-server --lib compare_acknow
   on latency/throughput targets.
 - [ ] If needed, prototype one shared flush barrier that acknowledges a batch only
   after its durable commit point; preserve crash and flush-failure guarantees.
+
+### Commit gate repair — 2026-09-14
+
+The first stability commit bypassed a failing pre-commit hook. That was not an
+acceptable release signal. Follow-up work keeps the existing strict hook and
+fixes its failures, including those outside the original save changes.
+
+- [x] Remove redundant clones and deprecated test macros, simplify optional
+  values, name shared callback/map types, and gate image helpers with `img`.
+- [x] Replace the deprecated async WASM constructor with `ClientDb.open()` and
+  update the worker opener and its recovery tests together.
+- [x] Pass the complete workspace Clippy command with `-D warnings`.
+- [x] Pass 498 client library tests, frontend typecheck, and three rebuilt-WASM
+  save/crash browser tests (`2026-09-14T14-52-22.823Z-phgG97`).
+- [x] Pass 76 server unit tests (three intentionally ignored).
+- [x] Verify core sync tests in their documented serial mode: 183 passed, one
+  intentionally ignored. Both Iroh failures from the broad parallel run passed
+  serially; that earlier run passed 603 core tests and ignored eight. Keep the
+  shared-global Iroh suite serial as documented in `lib/src/sync/iroh_e2e.rs`.
+- [x] Commit with the unmodified pre-commit hook enabled: staged browser lint
+  and formatting, complete workspace Clippy with `-D warnings`, and its nested
+  JS/WASM asset build all passed. No hook or lint suppressions were added.
