@@ -10,6 +10,7 @@ import {
 import { DropdownMenu, type DropdownItem } from '../Dropdown';
 import type { DropdownTriggerProps } from '../Dropdown/DropdownTrigger';
 import { AgentAvatar } from './AgentAvatar';
+import { FollowingIndicator } from './FollowingIndicator';
 import { useFollow } from './FollowContext';
 import { useRightPanel } from '../RightPanel/RightPanelContext';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
@@ -17,9 +18,10 @@ import { constructOpenURL } from '../../helpers/navigation';
 
 /**
  * Compact follow-mode status for the navbar: the followed agent's avatar
- * with a small "Following" badge overlapping it, and the follower facepile
- * with a "Following you" badge when others follow the signed-in agent.
- * Pressing either opens its actions. Renders nothing when neither applies.
+ * with the shared tight blue ring (hover expands a "Following" chip), and
+ * the follower facepile with a "Following you" badge when others follow
+ * the signed-in agent. Pressing either opens its actions. Renders nothing
+ * when neither applies.
  */
 export function FollowStatus(): React.JSX.Element | null {
   const {
@@ -109,14 +111,7 @@ export function FollowStatus(): React.JSX.Element | null {
   }, [setAllowFollow, activeMeeting, togglePanel]);
 
   const FollowingTrigger = useMemo(
-    () =>
-      followedAgent
-        ? buildBadgedTrigger(
-            <AgentAvatar agentSubject={followedAgent} size='1.6rem' />,
-            'Following',
-            'Following — press for actions',
-          )
-        : undefined,
+    () => (followedAgent ? buildFollowingTrigger(followedAgent) : undefined),
     [followedAgent],
   );
 
@@ -170,6 +165,27 @@ export function FollowStatus(): React.JSX.Element | null {
     </Row>
   );
 }
+
+/** Followed-agent trigger: tight blue ring, "Following" chip on hover. */
+const buildFollowingTrigger = (
+  followedAgent: string,
+): React.FC<DropdownTriggerProps> => {
+  const Comp = (props: DropdownTriggerProps) => (
+    <FollowingIndicator
+      {...props}
+      following
+      nativeButton
+      title='Following — press for actions'
+      ariaLabel='Following'
+    >
+      <AgentAvatar agentSubject={followedAgent} size='1.6rem' following />
+    </FollowingIndicator>
+  );
+
+  Comp.displayName = 'FollowingTrigger';
+
+  return Comp;
+};
 
 /** Avatar (or facepile) trigger with a tiny badge overlapping its bottom. */
 const buildBadgedTrigger = (

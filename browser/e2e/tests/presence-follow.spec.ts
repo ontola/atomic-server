@@ -6,7 +6,7 @@ import { before, getDevDriveSecret, signIn, FRONTEND_URL } from './test-utils';
  * contexts) of the same agent in one drive:
  *
  * 1. Presence: each session sees the other's avatar in the navbar facepile.
- * 2. Follow: B follows via the avatar menu → compact "Following" badge,
+ * 2. Follow: B follows via the avatar menu → compact following indicator,
  *    and the followed avatar leaves the facepile (deduped into the badge).
  * 3. The leader (A) sees the "Following you" badge.
  * 4. Live following: A navigates to a folder → B auto-navigates along.
