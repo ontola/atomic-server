@@ -47,7 +47,9 @@ pub async fn handle_drive_usage(
     let drive = store.get_resource(&Subject::from(subject.as_str())).await?;
     atomic_lib::hierarchy::check_read(store, &drive, &for_agent).await?;
 
-    let usage = store.per_drive_usage(&[subject.clone()]).await?;
+    let usage = store
+        .per_drive_usage(std::slice::from_ref(&subject))
+        .await?;
     let row = usage
         .into_iter()
         .next()

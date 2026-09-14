@@ -11,14 +11,14 @@ import {
 const DB_NAME = 'atomic_data.a1b2c3d4e5f60718.redb';
 const DB_KEY = new Uint8Array(32).fill(7);
 
-/** The message `ClientDb::new` produces for an undecryptable OPFS file. */
+/** The message `ClientDb::open` produces for an undecryptable OPFS file. */
 const wrongKeyMessage =
   `OPFS unavailable [${WRONG_KEY_MARKER}]: Failed to open encrypted OPFS ` +
   'backend: wrong encryption key for local database';
 
 /**
  * A stand-in for the generated WASM module. `openFailures` are thrown by the
- * first N constructor calls; later calls succeed with a marker object.
+ * first N factory calls; later calls succeed with a marker object.
  */
 function fakeWasm(openFailures: Error[]) {
   const opened: Array<{ dbName?: string; dbKey?: Uint8Array }> = [];
@@ -26,19 +26,16 @@ function fakeWasm(openFailures: Error[]) {
   let call = 0;
 
   const wasm = {
-    ClientDb: function (
-      this: unknown,
-      _baseUrl?: string,
-      dbName?: string,
-      dbKey?: Uint8Array,
-    ) {
-      opened.push({ dbName, dbKey });
-      const failure = openFailures[call++];
+    ClientDb: {
+      open: function (_baseUrl?: string, dbName?: string, dbKey?: Uint8Array) {
+        opened.push({ dbName, dbKey });
+        const failure = openFailures[call++];
 
-      return failure
-        ? Promise.reject(failure)
-        : Promise.resolve({ handle: `db:${dbName}` });
-    } as unknown as ClientDbCtor,
+        return failure
+          ? Promise.reject(failure)
+          : Promise.resolve({ handle: `db:${dbName}` });
+      },
+    },
     deleteClientDb: vi.fn(async (dbName: string) => {
       deleted.push(dbName);
 
@@ -48,12 +45,6 @@ function fakeWasm(openFailures: Error[]) {
 
   return { wasm, opened, deleted };
 }
-
-type ClientDbCtor = new (
-  baseUrl?: string,
-  dbName?: string,
-  dbKey?: Uint8Array,
-) => Promise<unknown>;
 
 describe('isWrongKeyDbError', () => {
   it('matches only the marked undecryptable failure', () => {
@@ -174,7 +165,7 @@ describe('openClientDb', () => {
 });
 
 describe('isStorageBlockedDbError', () => {
-  /** What `ClientDb::new` produces when the browser withholds storage. */
+  /** What `ClientDb::open` produces when the browser withholds storage. */
   const blocked = new Error(
     `OPFS unavailable [${STORAGE_BLOCKED_MARKER}]: Failed to open OPFS ` +
       'backend: JsValue(SecurityError: Security error when calling ' +
