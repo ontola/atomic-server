@@ -1,3 +1,4 @@
+import { useMessageSpeaker } from '../../chunks/Demo/messageSpeaker';
 import {
   commits,
   core,
@@ -8,8 +9,8 @@ import {
   useCanWrite,
   useCollection,
   useCreatedAt,
-  useCreatedBy,
   useResource,
+  useResourceSnapshot,
   useStore,
   useString,
   useSubject,
@@ -315,7 +316,7 @@ const Message = memo(function Message({ subject, setReplyTo }: MessageProps) {
   // Loro oplog (materialized into propvals) — no commit fetch, so they survive
   // a refresh. The commit subject is intentionally NOT passed.
   const createdAt = useCreatedAt(resource);
-  const createdBy = useCreatedBy(resource);
+  const createdBy = useMessageSpeaker(resource);
   const [replyTo] = useSubject(resource, dataBrowser.properties.replyTo);
   const navigate = useNavigateWithTransition();
   const canWrite = useCanWrite(resource);
@@ -517,13 +518,13 @@ const MESSAGE_LINE_MAX_LEN = 50;
 
 /** Small single line preview of a message, useful in replies */
 function MessageLine({ subject }: MessageLineProps) {
-  const resource = useResource(subject);
+  const { resource, ready } = useResourceSnapshot(subject);
   const [description] = useString(resource, core.properties.description);
   // Author from the resource's own genesis metadata (createdBy) — not a commit
   // fetch, so it survives a refresh.
-  const author = useCreatedBy(resource);
+  const author = useMessageSpeaker(resource);
 
-  if (!resource.isReady()) {
+  if (!ready) {
     return <MessageLineStyled>loading...</MessageLineStyled>;
   }
 

@@ -1,88 +1,35 @@
-# Unify resource "dirty" signals
+# Resource save state
 
-> Status: planned 2026-05-28. Correctness.. **not started as of 2026-09-04 (`getSaveState` does not exist; `_loading` / `_dirty` / `_saveDepth` and the outbox are still four separate signals).**
->
-> This is one slice of [`unified-data-layer.md`](./unified-data-layer.md)
-> (the "one outbox + saveState" part of the proposed redesign). It can
-> ship in isolation as a self-contained step toward that bigger plan —
-> the resulting `SaveState` API is the public surface the broader plan
-> assumes.
+> **Status: partial, 2026-09-11.** Public API, scheduler, internal coordinator and initial consumers shipped;
+> additional consumer migration remains.
 
-## Problem
+The browser exposes `Store.getSaveState(resource)` and `useSaveState(resource)` as
+immutable persistence snapshots. Read readiness stays in `useResourceSnapshot`;
+a queued offline edit can remain readable. Save kinds are idle, dirty, scheduled,
+saving, queued, and error.
 
-A resource on the client can be in one of several "in-flight" states
-that are tracked in **three different places**:
+`Store.createSaveScheduler` owns a debounce slot and counts each started save
+until it settles. React value/debounced-save hooks and virtual table rows use it.
+Rescheduling coalesces queued work, cancellation cannot uncount an in-flight save,
+and unmount flushes edits that would otherwise only exist in memory.
 
-1. **Outbox** (`local-outbox.ts`) — has an entry for this subject if a
-   commit is queued / retrying / stuck.
-2. **`Resource._loading`** — true while a network GET is in flight.
-3. **`Resource._error`** — last GET / commit error message.
+Remaining migration: other screens with bespoke saving UI can adopt the hook
+incrementally. Legacy global start/finish methods remain for compatibility and
+non-save pending writes such as deletion. The outbox remains the durable queue;
+this API derives state rather than keeping a second persistence engine.
 
-Plus implicit state in:
-4. **Loro snapshot present** vs **absent** in `LoroLoader.docs.get(s)`.
-5. **`store._fetching`** map — subjects currently being fetched.
+The data inspector and legacy WASM PluginPage subscribe to this state. Their
+production regressions cover offline edits, save completion and reconnect;
+PluginPage also permits a later draft after an earlier save is queued. New-model
+plugin UI lives on `feat/plugin-model` and needs its own consumer audit.
 
-UI components want to display "saving…", "save failed", "loading…",
-"offline (queued)" — they have to look in different places, miss
-states, and fall over when two states overlap (e.g., loading *and*
-queued commit).
+`SaveStatusCoordinator` now owns scheduler integration, per-resource counts,
+immutable snapshot caching and subscription cleanup. Store retains its public
+methods as delegates. The coordinator receives narrow callbacks for outbox entry
+lookup, connection status, pending-count changes, sync notifications and errors.
+It does not fetch, sign or drain, and has no Store import. `ScheduledSave` remains
+the single scheduler implementation.
 
-## Symptom
-
-- The "saving" indicator on the document toolbar lags behind the
-  outbox by ~1 render because it watches `_loading` not the outbox.
-- The error toast for a stuck genesis commit fires from the outbox
-  drain loop, separately from `Resource._error`, and the resource
-  body still renders as if nothing is wrong.
-- `useResource` consumers don't know to re-render when the outbox
-  drops a stuck commit.
-
-## Proposal
-
-Single source of truth, derived:
-
-```ts
-type SaveState =
-  | { kind: 'idle' }
-  | { kind: 'loading' }
-  | { kind: 'saving'; attempts: number }
-  | { kind: 'queued'; reason: 'offline' | 'retry' }
-  | { kind: 'error'; message: string; recoverable: boolean };
-
-store.getSaveState(subject: string): SaveState;
-store.subscribeSaveState(subject, cb): Unsubscribe;
-```
-
-Implementation: a small reducer fed by outbox events + Resource
-mutations + store fetch start/end. The hook layer exposes
-`useSaveState(subject)`, components stop reading `_loading` / `_error`
-directly.
-
-## Why this is hard
-
-- Touches every screen that shows a saving indicator (Document
-  toolbar, Sidebar items, Resource page).
-- Requires deciding which existing fields become *derived* vs.
-  retained. Recommended: keep `_loading` (network in-flight) as a
-  raw input, derive `SaveState` from it; deprecate ad-hoc reads.
-
-## Risk
-
-- Medium. Wrong derivation could make the indicator stick on
-  "saving…" forever. Mitigate with property-based tests that drive a
-  resource through every transition.
-
-## Effort
-
-- 1 day for the reducer + hook.
-- 1 day to migrate consumers.
-
-## Concrete steps
-
-1. Inventory current consumers: `rg 'resource.loading\|resource.error'
-   browser/data-browser/src`.
-2. Design the state machine (transitions table).
-3. Implement `getSaveState`/`subscribeSaveState` alongside the
-   existing fields (no breakage).
-4. Migrate one screen (Document toolbar) as a canary.
-5. Migrate the rest, delete direct reads.
+Unit coverage verifies overlapping owners, observer disposal without cancelling
+another owner's save, temporary-to-DID renaming, immutable snapshots and failure
+accounting. Shared production E2E covers inspector/table/offline behavior.

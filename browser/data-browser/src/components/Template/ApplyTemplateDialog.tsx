@@ -51,6 +51,8 @@ export function ApplyTemplateDialog({
 
     if (!rootLocalId) return undefined;
 
+    // Resolve against the server while imported resources are still indexing
+    // locally, and honor any recorded resolution of duplicate local IDs.
     const resource = await store.findByLocalId(drive, destination, rootLocalId);
 
     return resource?.subject;

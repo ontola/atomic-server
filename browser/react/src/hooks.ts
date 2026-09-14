@@ -26,6 +26,7 @@ import {
   JSONArray,
   OptionalClass,
   type Core,
+  type ResourceSnapshot,
   ResourceEvents,
   LoroLoader,
   core,
@@ -39,17 +40,23 @@ const asError = (error: unknown): Error =>
 
 export type UseResourceOptions = FetchOpts;
 
-/**
- * Hook for getting a Resource in a React component. Wraps the
- * Store's per-subject snapshot via `useSyncExternalStore`: each
- * notify replaces the snapshot tuple, the Resource itself is
- * mutated in place, and reads like `resource.props.x` see the
- * latest values without us having to invalidate them.
+/** Stable live handle for mutation and property hooks. For render-time
+ * readiness/error checks use `useResourceSnapshot`'s captured scalar fields.
  */
 export function useResource<C extends OptionalClass = never>(
   subject: string = unknownSubject,
   opts: UseResourceOptions = {},
 ): Resource<C> {
+  return useResourceSnapshot<C>(subject, opts).resource;
+}
+
+/** Immutable status changes identity on store notifications. The contained
+ * Resource stays stable; read properties with useString/useArray/etc.
+ */
+export function useResourceSnapshot<C extends OptionalClass = never>(
+  subject: string = unknownSubject,
+  opts: UseResourceOptions = {},
+): ResourceSnapshot<C> {
   const store = useStore();
   const memoizedOpts = useMemoizedOpts(opts);
 
@@ -62,8 +69,11 @@ export function useResource<C extends OptionalClass = never>(
     [store, subject, memoizedOpts],
   );
 
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
-    .resource as Resource<C>;
+  return useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getSnapshot,
+  ) as ResourceSnapshot<C>;
 }
 
 const stableEmptyArray: string[] = [];
@@ -233,7 +243,6 @@ export function useValue(
   propertyURL: string,
   opts: useValueOptions = {},
 ): [JSONValue | undefined, SetValue] {
-  const timeoutId = useRef<ReturnType<typeof setTimeout>>(undefined);
   const {
     commit = false,
     validate = true,
@@ -265,33 +274,19 @@ export function useValue(
   const getSnapshot = () => resource.get(propertyURL);
   const val = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
+  const scheduler = useMemo(
+    () => store.createSaveScheduler(stable),
+    [store, stable],
+  );
+  useEffect(
+    () => () => {
+      void scheduler.flush();
+    },
+    [scheduler],
+  );
   const saveResource = useCallback(() => {
-    if (!commit) {
-      return;
-    }
-
-    // While the debounce timer is armed, the edit exists only in memory —
-    // report it to the store so `getSyncStatus().pendingDirtyCount` stays
-    // > 0 until the save settles (otherwise "synced" is a lie during the
-    // debounce window and a reload drops the write).
-    if (timeoutId.current !== undefined) {
-      clearTimeout(timeoutId.current);
-    } else {
-      store.startScheduledSave();
-    }
-
-    timeoutId.current = setTimeout(async () => {
-      timeoutId.current = undefined;
-
-      try {
-        await resource.__internalObject.save();
-      } catch (e) {
-        store.notifyError(asError(e));
-      } finally {
-        store.finishScheduledSave();
-      }
-    }, commitDebounce);
-  }, [resource.__internalObject, store, commitDebounce, commit]);
+    if (commit) scheduler.schedule(commitDebounce);
+  }, [scheduler, commitDebounce, commit]);
 
   /**
    * Validates the value. If it fails, it calls the function in the second
@@ -502,19 +497,13 @@ export function useNumber(
   return [valToNumber(value), set];
 }
 
-/** Returns false if there is no value for this propertyURL. See {@link useValue} */
+/** Reads an absent Boolean as false without writing a default. See {@link useValue} */
 export function useBoolean(
   resource: Resource,
   propertyURL: string,
   opts?: useValueOptions,
 ): [boolean, SetValue<boolean>] {
   const [value, set] = useValue(resource, propertyURL, opts);
-
-  useEffect(() => {
-    if (value === undefined) {
-      set(false);
-    }
-  }, [value, set]);
 
   if (value === undefined) {
     return [false, set];
@@ -773,4 +762,20 @@ function useMemoizedOpts(
     }),
     [opts.allowIncomplete, opts.noWebSocket, opts.newResource],
   );
+}
+
+/** Immutable persistence status, independent from resource read readiness. */
+export function useSaveState(resource: Resource) {
+  const store = useStore();
+  const stable = resource.__internalObject;
+  const subscribe = useCallback(
+    (callback: () => void) => store.subscribeSaveState(stable, callback),
+    [store, stable],
+  );
+  const snapshot = useCallback(
+    () => store.getSaveState(stable),
+    [store, stable],
+  );
+
+  return useSyncExternalStore(subscribe, snapshot, snapshot);
 }

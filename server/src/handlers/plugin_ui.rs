@@ -205,7 +205,15 @@ if (window.parent) window.parent.postMessage({{ type: '__atomic_plugin_ready' }}
     )
 }
 
-fn render_plugin_ui_html_with(
+fn render_drive_plugin_ui_html(query_string: &str, css_exists: bool, nonce: &str) -> String {
+    render_drive_plugin_ui_html_with(query_string, css_exists, nonce, false)
+}
+
+/// `calls_view`: a plugin whose source is in the drive exports `view` and is
+/// called, rather than executing on import. That is what makes it writable by
+/// someone who has never seen this codebase — there is no bootstrap to
+/// reproduce, just a function that receives what it needs.
+fn render_drive_plugin_ui_html_with(
     query_string: &str,
     css_exists: bool,
     nonce: &str,
@@ -364,6 +372,11 @@ pub async fn handle_plugin_ui(
         Err(e) => return Ok(HttpResponse::BadRequest().body(e.message)),
     };
 
+    let (namespace, name) = match split_plugin_name(plugin_name) {
+        Ok(parts) => parts,
+        Err(e) => return Ok(HttpResponse::BadRequest().body(e.message)),
+    };
+
     // `html` is generated (not a file on disk): serve the iframe host document
     // with its own CSP so the plugin script isn't blocked by the parent CSP.
     if format == "html" {
@@ -439,7 +452,7 @@ async fn serve_drive_plugin(
         let nonce = plugin_nonce();
         // No stylesheet: a plugin in the drive is one module. Its styles belong
         // in it, next to the markup they describe.
-        let body = render_plugin_ui_html_with(query_string, false, &nonce, true);
+        let body = render_drive_plugin_ui_html_with(query_string, false, &nonce, true);
         let csp = format!(
             "default-src 'none'; script-src 'nonce-{nonce}'; style-src 'unsafe-inline' 'self'; \
              img-src * data:; connect-src *; font-src *; base-uri 'none'; object-src 'none';"
@@ -594,7 +607,7 @@ mod tests {
     /// host, and these are the three ways out.
     #[test]
     fn every_route_out_of_a_broken_app_reaches_the_host() {
-        let html = render_plugin_ui_html_with("format=html", false, "n0nce", true);
+        let html = render_drive_plugin_ui_html_with("format=html", false, "n0nce", true);
 
         // Threw while opening.
         assert!(html.contains("window.__atomicReportError(e, 'load')"));
@@ -612,7 +625,7 @@ mod tests {
     /// is still loading — or one that rendered nothing at all.
     #[test]
     fn an_app_that_worked_says_so_and_says_how_much_it_drew() {
-        let html = render_plugin_ui_html_with("format=html", false, "n0nce", true);
+        let html = render_drive_plugin_ui_html_with("format=html", false, "n0nce", true);
 
         assert!(html.contains("'__atomic_plugin_rendered'"));
         assert!(html.contains("root.childElementCount"));
@@ -624,7 +637,7 @@ mod tests {
     /// every load-time error.
     #[test]
     fn the_reporter_is_defined_by_the_time_a_load_error_looks_for_it() {
-        let html = render_plugin_ui_html_with("format=html", false, "n0nce", true);
+        let html = render_drive_plugin_ui_html_with("format=html", false, "n0nce", true);
 
         let reporter = html
             .find("window.__atomicReportError = function")

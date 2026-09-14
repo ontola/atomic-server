@@ -42,6 +42,7 @@ browser flow; standalone recovery remains self-managed.
 
 | Document | Status |
 | --- | --- |
+| [`e2e-concurrency.md`](./e2e-concurrency.md) | **Active.** Issue #1461: isolated template processes, retained load evidence and repeated full-suite worker/shard benchmarks; acceptance pending. |
 | [`google-calendar-import-gaps.md`](./google-calendar-import-gaps.md) | **Active audit.** All-day ranges implemented; remaining Google import fidelity work, formats and recurrence integration checklist. |
 | [`extension-architecture.md`](./extension-architecture.md) | **Migration in progress.** Shared view protocol, scope policy and installation identity resolution are implemented; package activation and legacy UI signing remain. Apps contain data/views, connections synchronize sources, automations act; one extension lifecycle and host API, with phased convergence of packaged views, source-as-data apps, JS integrations and Reflector, retaining a separate privileged server-extension boundary. |
 | [`sentry-feedback-readiness.md`](./sentry-feedback-readiness.md) | **Active.** Sidebar feedback and React error capture implemented and locally verified against Sentry. Staging rollout, email receipt and private source-map upload remain release gates. |
@@ -56,7 +57,7 @@ browser flow; standalone recovery remains self-managed.
 | [`serverless-p2p.md`](./serverless-p2p.md) | **Planned.** Device sync without a hub (written same-agent-first; admission is rights-based since 2026-07-17). AUTH-before-SYNC and the `AUTH.requestedSubject`↔drive binding landed 2026-09-01 (Iroh). Live-link destroys travel as signed `COMMIT` frames since 2026-09-03. P0 remaining: require envelopes on every `remove[]` once `Tree::Envelopes` exists. `AtomicTransport` / `SyncSession::serve` first slice landed 2026-09-05; outbox port and the remaining `sync_drive_with_peer*` collapse are open. |
 | [`foss-public-host-mode.md`](./foss-public-host-mode.md) | **Partial.** Phase 1–2 built; OQ5 library path closed 2026-09-05 (`admit_unknown_drive`: Public never creates, Owner enrolls only the owner). Phase 3 (rate limits, Iroh stream refusal) is untouched. |
 | [`authorization-sync.md`](./authorization-sync.md) | **Draft.** Signed commit authorization, grant-chain evidence, peer-sync trust boundaries. |
-| [`unified-data-layer.md`](./unified-data-layer.md) | **Partial.** Browser/JS: one ingress, one outbox, one subscription model. Atomic writes and the single outbox shipped; the ingress/subscription half and `SaveState` are open. |
+| [`unified-data-layer.md`](./unified-data-layer.md) | **Partial.** Browser/JS: one ingress, one outbox, one subscription model. Atomic writes, outbox, ingress entry points and immutable read/save subscriptions shipped. Remaining: consumer migration and boundary extraction. |
 | [`loro-source-of-truth.md`](./loro-source-of-truth.md) | **Partial.** Sparse `datatypes` map + Phase 2a–2c shipped (`Tree::Resources` is a derived cache). Remaining: drop the untagged heuristic, Phase 1.6 `Value` reshape, Flutter undo. |
 | [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) | **Partial.** `AtomicNode` is the binding runtime; the WASM `ClientDb` is its only adapter and the unused surface was cut back 2026-09-04. Open: the other bindings. Local KV FTS landed in [`local-search.md`](./local-search.md). |
 | [`genesis-self-verifying.md`](./genesis-self-verifying.md) | **Partial.** Server and browser mint and verify inline genesis certs. Remaining: DataRoute verify UI, `genesis` propval immutability. |
@@ -67,12 +68,13 @@ browser flow; standalone recovery remains self-managed.
 | [`device-pairing.md`](./device-pairing.md) | **Proposal.** One-scan pairing; QR is routing only (no secret). C0 and M6 closed. Remaining: extra-workspace inventory, M4 (carried over from the field test). |
 | [`json-ad-compact.md`](./json-ad-compact.md) | **Phase 1–2 shipped** (resolver, tool I/O, context providers). Remaining: rebase `create_table.rows` on `fromCompact`; server `format=compact`. |
 | [`table-view-filters.md`](./table-view-filters.md) | **Views shipped** — Default View (filters, sort, columns, operators) and the multi-view switcher (`TableViewTabs`, `?view=`). Remaining: index-accelerated range scans. |
+| [`unified-templates.md`](./unified-templates.md) | **Proposal.** One resource-template model for tables, drive onboarding, real demos, AI and vertical marketing. |
 | [`table-templates-and-mini-apps.md`](./table-templates-and-mini-apps.md) | **Partial.** Steps 3–6 shipped (computed columns, aggregates, assistant tools, catalogue). Remaining: derived columns in filters/aggregates. |
 | [`dashboards.md`](./dashboards.md) | **First slice shipped.** Remaining: the sixth action verb, parameters, reaching a dashboard from its table. |
 | [`content-i18n.md`](./content-i18n.md) | **LocalizedText + template locales shipped.** Remaining: TranslationsBar, `useTranslation`, `/query` `lang`, search language filter. |
 | [`website-templates.md`](./website-templates.md) | Template repair complete (DID). Remaining CMS product: drafts-from-site, i18n tooling, canonical paths. |
-| [`structural-problems-index.md`](./structural-problems-index.md) | **Live index.** Highest remaining: React Compiler / Resource proxy (#1), audit not started while the compiler is on. #6 mostly shipped; #2/#3 server side done 2026-09-04. |
-| [`react-compiler-resource-proxy.md`](./react-compiler-resource-proxy.md) | **Planned, audit not started.** Stale UI from Compiler memoizing Resource proxy reads; compiler on since 2026-08-19, field instance M15a. |
+| [`structural-problems-index.md`](./structural-problems-index.md) | **Live index.** React subscription audit is partial; save-state APIs shipped. Browser metadata cleanup and subject-brand consumers remain; server subscription work is complete. |
+| [`react-compiler-resource-proxy.md`](./react-compiler-resource-proxy.md) | **Partial.** Immutable read/save status hooks and the data-inspector subscription shipped; remaining render-time property getters need incremental regression-driven migration. |
 | [`canvas-undo-consolidation.md`](./canvas-undo-consolidation.md) | Phase A + C landed (browser). Phase B (Flutter action-stack removal) open. |
 | [`index-performance.md`](./index-performance.md) | First tranche shipped. Structural permission-check fix is `zones.md`, not built. |
 | [`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md) | **Proposal.** Full-snapshot writes, no auto-compaction, O(file) open fsync. |
@@ -88,7 +90,7 @@ browser flow; standalone recovery remains self-managed.
 | [`social-apps.md`](./social-apps.md) | Requirements for social-network-shaped apps. Companion to `zones.md`. |
 | [`android-data-reuse.md`](./android-data-reuse.md) | **Draft.** One store/agent/Iroh node per Android device. Supersedes `on-device-atomic-daemon.md` (deleted 2026-09-01; desktop remainder is a note in `virtual-drive.md`). |
 | [`nextgraph-interop.md`](./nextgraph-interop.md) | **Proposal.** `did:ng:` via a scheme-routed Store backend. |
-| [`s3-blob-storage.md`](./s3-blob-storage.md) | Pluggable blob backend (redb/S3/hybrid). |
+| [`s3-blob-storage.md`](./s3-blob-storage.md) | **Partial.** Server-wide S3, verified migration and SaaS enforcement implemented. Streaming, GC, per-tenant configuration and encrypted Vault attachments remain. |
 | [`atomic-assistant-browser-extension.md`](./atomic-assistant-browser-extension.md) | **Proposal.** Local-first Chromium extension. |
 | [`tours.md`](./tours.md) | Design, not built. |
 | [`local-search.md`](./local-search.md) | **Landed.** KV inverted index in `atomic_lib` (redb/OPFS/sled): BM25 + prefix + 1-edit prefix-fuzzy + PropValSub filters. Hosted `/search` is the same engine; Tantivy is gone. |
@@ -101,7 +103,7 @@ Not top-level plans. Indexed so they do not go missing.
 | --- | --- |
 | [`unify-subscription-primitives.md`](./unify-subscription-primitives.md) | **Done in reduced form (2026-09-04).** One `SUB <subject>` frame; `SUBSCRIBE` and `SUBSCRIBE_QUERY` removed. Design text kept as the record. |
 | [`unify-resource-representations.md`](./unify-resource-representations.md) | **Mostly shipped.** `Resource#cache` is derived from the Loro doc. Remaining: the `_auxValues` overlay. |
-| [`unify-resource-dirty-signals.md`](./unify-resource-dirty-signals.md) | Planned, not started. Single `getSaveState(subject)` enum. |
+| [`unify-resource-dirty-signals.md`](./unify-resource-dirty-signals.md) | **Partial.** `getSaveState(resource)`, the React hook and scheduled-save ownership shipped; other save UIs and internal coordinator extraction remain. |
 | [`subject-types-end-to-end.md`](./subject-types-end-to-end.md) | Partial. Rust `DidKind` shipped; the browser brand still has no consumer. |
 | [`arc-actor-message-payloads.md`](./arc-actor-message-payloads.md) | Partial. WS encode-once shipped; `CommitMessage` Arc-wrap deferred. |
 | [`sync-onboarding-ux.md`](./sync-onboarding-ux.md) | Reference. Cross-client copy for what can reach what. Companion to [`device-pairing.md`](./device-pairing.md). |

@@ -1,3 +1,4 @@
+import { requireInstallationServer } from '../../browser/lib/src/plugin-installation.js';
 // @wc-ignore-file
 /** Shared installer for browser/CLI. Only the host contacts Notion. */
 import {
@@ -51,6 +52,8 @@ export async function install(
     throw new Error('A Notion connection token is required');
   if (typeof source !== 'string' || !source.trim())
     throw new Error('Notion provider bundle did not load');
+  if (typeof token === 'string')
+    await requireInstallationServer(store, drive);
   const schema = await ensureSchema(
     typeof token === 'string' ? store : token.schemaStore,
     drive,
@@ -66,7 +69,10 @@ export async function install(
         `${source}\nexport const manifest=${JSON.stringify(manifest(id))};`,
     },
   });
-  await plugin.save();
+  if ((await plugin.save()) === 'offline' && typeof token === 'string')
+    throw new Error(
+      'The app has not synced to AtomicServer yet. Check workspace sync before continuing.',
+    );
   if (typeof token === 'string') {
     const secretUrl = `${store.getServerUrl()}/plugin-secret`;
     const response = await fetch(secretUrl, {

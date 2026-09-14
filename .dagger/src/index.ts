@@ -11,6 +11,7 @@ import {
   Service,
   CacheSharingMode,
 } from '@dagger.io/dagger';
+import { overrideE2eBudget } from './e2e-budget';
 
 /**
  * Bumps the mtime of every mounted workspace source before cargo runs.
@@ -54,7 +55,7 @@ const INSTALL_DOCS_TOOLS =
 // test-only commits stay cached). A cache volume cannot rescue it either: the
 // image sets `PLAYWRIGHT_BROWSERS_PATH=/ms-playwright`, so the download lands
 // there rather than in `~/.cache`.
-const PLAYWRIGHT_PACKAGE_VERSION = '1.60.0';
+const PLAYWRIGHT_PACKAGE_VERSION = '1.63.0';
 const PLAYWRIGHT_VERSION = `v${PLAYWRIGHT_PACKAGE_VERSION}-noble`;
 // Keep in sync with `flutter/.mise.toml` (`[tools].flutter`).
 const FLUTTER_IMAGE = 'ghcr.io/cirruslabs/flutter:3.44.0';
@@ -270,6 +271,8 @@ export class AtomicServer {
         '**/.swc',
         '**/.netlify',
         // e2e
+        '**/.e2e-runs',
+        '**/.e2e-store',
         '**/test-results',
         '**/template-tests',
         '**/playwright-report',
@@ -431,7 +434,9 @@ export class AtomicServer {
      */
     @argument() publishDocs = false,
     /**
-     * `mancave` = hot parallelism for the 12c/64GB self-hosted runner.
+     * `mancave` = explicit aggregate budget for the self-hosted runner.
+     * Measure the WSL allocation, not installed RAM (24 logical CPUs / 31 GiB
+     * observed on 2026-09-12); see planning/e2e-concurrency.md.
      * `hosted` (default) = conservative knobs for ubuntu-latest fallback.
      * Passed from `.github/workflows/main.yml` per job.
      */
@@ -457,6 +462,12 @@ export class AtomicServer {
   ): Promise<string> {
     this.hostProfile = resolveHostProfile(hostProfile);
     this.hostKnobs = HOST_PROFILES[this.hostProfile];
+    overrideE2eBudget(
+      e2eRunKnobs(this.hostProfile, resolveE2eMode(playwrightMode)),
+      playwrightWorkers,
+      playwrightShards,
+      playwrightRetries,
+    );
 
     // Fail fast on cheap static checks. A store.ts oxfmt miss used to burn
     // ~20+ minutes of rust/e2e compile before jsLint surfaced it.
@@ -1069,8 +1080,8 @@ export class AtomicServer {
     );
   }
 
-  @func()
-  private jsBuild(e2e: boolean = false): Container {
+  /** Installed workspace sources; deliberately has no build or WASM dependency. */
+  private jsSource(): Container {
     const browser = this.source.directory('browser');
     // Create a container with PNPM installed
     const pnpmContainer = dag
@@ -1130,11 +1141,6 @@ export class AtomicServer {
       // to the /app mount so those relative paths resolve.
       .withExec(['ln', '-s', '/app', '/browser'])
       .withDirectory('/app/lib-defaults', this.source.directory('lib/defaults'))
-      // Provide the prebuilt WASM artifacts so data-browser's `build` can skip
-      // wasm-pack when `SKIP_WASM_BUILD=1` (`wasm-pack` isn't available in this
-      // Node-only container, and mounting the Rust toolchain just for this would
-      // bloat the JS image significantly).
-      .withDirectory('/app/data-browser/public/wasm', this.wasmBuild())
       // data-browser imports the repo-root logo from `../../../../logo.svg`
       // and `../../../../../logo.svg`. Browser mount sits at /app, so those
       // resolve to /logo.svg. Place the asset there.
@@ -1158,11 +1164,15 @@ export class AtomicServer {
         this.source.file('lib/defaults/tasks.json'),
       );
 
-    // Build all packages since they may depend on each other's built artifacts
-    let buildContainer = sourceContainer.withEnvVariable(
-      'SKIP_WASM_BUILD',
-      '1',
-    );
+    return sourceContainer;
+  }
+
+  @func()
+  private jsBuild(e2e: boolean = false): Container {
+    // Only builds depend on WASM. Static lint must not wait for Rust compilation.
+    let buildContainer = this.jsSource()
+      .withDirectory('/app/data-browser/public/wasm', this.wasmBuild())
+      .withEnvVariable('SKIP_WASM_BUILD', '1');
 
     if (e2e) {
       // Surfaces /app/dev-drive and /app/prunetests in the production
@@ -1928,6 +1938,12 @@ export class AtomicServer {
      * guess the git ref. See `ci()` for why this is not named `e2eMode`.
      */
     @argument() playwrightMode: string = 'full',
+    /** Per-shard worker override; 0 keeps the host profile. */
+    @argument() playwrightWorkers: number = 0,
+    /** Number of isolated servers; 0 keeps the host profile. */
+    @argument() playwrightShards: number = 0,
+    /** -1 keeps the host profile; 0 exposes failures without retrying. */
+    @argument() playwrightRetries: number = -1,
     /**
      * Optional Playwright regular expression for one focused browser journey.
      * A focused run stays on one server/shard, so an exact test does not run

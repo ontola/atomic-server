@@ -1,4 +1,6 @@
 // @wc-ignore-file
+import { parseSetupDeclaration } from '../../../../../browser/lib/src/plugin-setup';
+import { requireInstallationServer } from '../../../../../browser/lib/src/plugin-installation';
 import {
   setup,
   setupDeclaration,
@@ -14,7 +16,8 @@ import {
 const github: SetupAdapter = {
   id: 'github-issues',
   icon: '🐙',
-  declaration: setupDeclaration,
+  declaration: parseSetupDeclaration(setupDeclaration),
+  preflight: ({ store, drive }) => requireInstallationServer(store, drive),
   defaults: workspace => ({ destination: workspace ?? '' }),
   choices: async (lookup, { store, drive }) => {
     if (lookup !== 'destinations') throw new Error('Unknown setup lookup');
@@ -36,15 +39,12 @@ const github: SetupAdapter = {
   prepare: setup,
   connect: async (raw, token, { store, drive }) => {
     const args = setup(raw);
-    const [{ install }, { default: source }] = await Promise.all([
-      import('../../../../../integrations/github-issues/atomic'),
-      import('../../../../../integrations/github-issues/plugin.js?raw'),
-    ]);
-    const result = await install(
+    const { installGitHub } =
+      await import('../../chunks/PluginRuns/githubInstaller');
+    const result = await installGitHub(
       store,
       drive,
       args.repository,
-      source,
       token,
       args.destination || undefined,
     );
@@ -55,7 +55,8 @@ const github: SetupAdapter = {
 const notion: SetupAdapter = {
   id: 'notion',
   icon: '📓',
-  declaration: notionDeclaration,
+  declaration: parseSetupDeclaration(notionDeclaration),
+  preflight: ({ store, drive }) => requireInstallationServer(store, drive),
   choices: async () => {
     throw new Error('Unknown setup lookup');
   },

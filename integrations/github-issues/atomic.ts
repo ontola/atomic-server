@@ -1,3 +1,4 @@
+import { requireInstallationServer } from '../../browser/lib/src/plugin-installation.js';
 /** Installs schema, kanban, sandbox source and a private connection. */
 import {
   Store,
@@ -35,6 +36,8 @@ export async function install(
   token?: string,
   targetTable?: string,
 ): Promise<Connection> {
+  if (typeof source !== 'string' || !source.trim())
+    throw new Error('GitHub provider bundle did not load');
   const declaration = manifest(repository);
   const target = targetTable
     ? (await compatibleTables(store, drive)).find(
@@ -43,6 +46,7 @@ export async function install(
     : undefined;
   if (targetTable && !target)
     throw new Error('Choose a compatible task table on this drive');
+  await requireInstallationServer(store, drive);
   const schema = await ensureSchema(store, drive, pluginSchema());
   const plugin = await store.newResource({
     parent: drive,
@@ -54,7 +58,10 @@ export async function install(
         `${source}\nexport const manifest = ${JSON.stringify(declaration)};`,
     },
   });
-  await plugin.save();
+  if ((await plugin.save()) === 'offline')
+    throw new Error(
+      'The app has not synced to AtomicServer yet. Check workspace sync before continuing.',
+    );
   const create = async (
     parent: string,
     isA: string[],

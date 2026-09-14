@@ -1,3 +1,31 @@
+App runner production regression (2026-09-12): `plugins.spec.ts` exercises
+manual preview/apply, missing-target refusal, manifest credential discovery,
+publishing, and integration sync against the embedded production frontend.
+The runner must use Vite's worker bundling: copying only its entry with `?url`
+left shared library imports missing in production. MT940 validation uses the
+same bundled worker. The publish-button assertion also catches an obsolete
+English catalog entry rendering an empty label.
+
+The integration case seeds an automation draft through the public resource API,
+then tests editing, sample review/apply, execution permissions and persistence.
+It does not claim assistant-generated automation creation coverage; the separate
+GitHub case verifies the current New automation chat handoff. Notion fixtures
+use the configured test origin and assert native required-field validation,
+UUID refusal, token clearing and duplicate-prevention after partial setup failure.
+
+Save acknowledgement: `browser/lib/src/save-acknowledgement.test.ts` reproduces
+an online genesis POST failure reported as persisted. It verifies pending/backoff
+saves return offline and a later acknowledged retry preserves the subject.
+
+Installation prerequisites: `browser/lib/src/plugin-installation.test.ts` checks
+local-only rejection without a server call, missing server resources, network
+failure and successful server visibility. `app-setup.spec.ts` verifies the local-only
+error clears the credential, stays retryable and does not submit it to the server.
+The missing-app failure was traced to a failed database write and mismatched
+server executable. Both GitHub installation browser flows pass after recovery: existing-table views
+are preserved, and the new-board flow covers action review, permissions, history
+cleanup and the current assistant handoff. External approval transport is stubbed.
+
 # Testing coverage map
 
 Devonian discovery: `PluginRuns/localThoughtCatalogEntries.test.ts` covers Calendar
@@ -10,7 +38,9 @@ form. The latter uses the browser-safe Devonian bundle, avoiding node:events
 from the package root.
 
 Typed app setup: `browser/lib/src/plugin-setup.test.ts` covers shared input validation,
-partial model drafts, forbidden arguments and size limits. `AppSetup/setup.test.ts`
+partial model drafts, forbidden arguments and size limits. It also validates resource JSON
+setup declarations: detached round-trips, supported constraints, malformed schemas,
+choice hints and rejection of unknown keywords before form/model use. `AppSetup/setup.test.ts`
 checks schema parity, repository and Notion UUID validation, and credential-link constraints.
 `browser/e2e/tests/app-setup.spec.ts` exercises the generic GitHub form and an
 assistant tool handoff with a scripted model, plus Notion manual validation before credential storage. Live authentication, installation
@@ -71,11 +101,6 @@ duplicate issues/comments. Live proxy OAuth,
 GitHub writes and a guided uncertain-write recovery UI remain unverified/unbuilt;
 proxy v40 CORS and browser OAuth are verified, but its GitHub credential returns 404 for the private sandbox.
 
-`integrations/tooling/certify.test.mjs` rebuilds every certified provider through
-a symlinked repository layout and compares the shipped bytes, covering CI mount
-paths and package-manager symlinks. Provider Vitest configurations use explicit
-package roots so certification also works when invoked from `/`.
-
 What is tested, at which layer, and — the part that matters — **what is not**.
 
 This exists because the protocol is far better tested than the glue around it,
@@ -123,6 +148,15 @@ Playwright provides accounting, reports and step timings. Custom build caches,
 host sampling and matrix-acceptance scripts were removed to simplify maintenance.
 `node --experimental-strip-types --test scripts/e2e-budget.test.mjs` validates
 CI overrides without mutating the profile or coverage selection.
+`pnpm --dir .dagger test` also exercises the actual Dagger module against a
+recording SDK double: lint must not construct a WASM build, CI validates and
+forwards budget arguments, and E2E applies them to shard and clone settings.
+These checks run before Dagger in CI and reproduce the incomplete merge in
+`2ccff0976`; they do not substitute for container or browser execution.
+The existing full-snapshot duplicate-import test also covers parent-only resources
+through initial sync, replay and later offline edits.
+`parent_only_existing_resource_cannot_be_pushed_through_another_drive` verifies
+that resolving their stored parent does not permit a cross-drive overwrite.
 `initClientDb.handoff.test.ts` checks the deferred anonymous startup and identity
 handoff guard.
 The ontology E2E test gates an earlier instance save's completion while the next
@@ -811,19 +845,7 @@ verify subsequent shared access. The chatroom journey also checks the named
 personal drive. Browser warnings/errors fail these tests, including localization
 render warnings. The authorization journey also covers cropped avatar upload, metadata and image
 download from the recipient account, and existing-agent acceptance. SaaS
-`portal/e2e/invite-signup.spec.ts` covers a real invitation through email signup,
-recovery-code backup, automatic acceptance, and workspace reload. It also restores
-the existing identity in a second browser before accepting the invitation again.
-The test injects the standalone node's managed/portal metadata and declines
-automatic workspace-vault enrollment (no S3 service). Invitation, email login,
-encrypted identity recovery, and workspace operations use real local services.
-The invite journey also rejects transient duplicate acceptance buttons, opens the
-avatar file picker from the person button, and checks Feedback in the secret
-backup dialog. `onboarding-storage.spec.ts` injects a failed ClientDb initialization
-and verifies that signup controls stay hidden while recovery advice and Feedback
-remain available. `onboardingStorage.test.ts` covers initialization readiness,
-failure, missing attachment, and timeout. Actual private-window storage policies
-across browsers remain outside the injected-failure test.
+email-to-drive acceptance still needs dedicated flow coverage.
 `ollama-feedback.spec.ts` checks sidebar feedback hover, local Ollama discovery
 only after expanding AI settings, one-click URL acceptance and persistence after
 reload. Its default run stubs the model-list endpoint; `TEST_REAL_OLLAMA=1` ran
@@ -845,21 +867,14 @@ the reader's active drive to receive live updates.
 
 `driveSyncStatus.test.ts` rejects another drive's sync timestamp and scopes
 asynchronous hosting/usage results to the selected drive and server. It covers
-unenrolled/local drives, unknown enrollment, and the requirement for both enrollment and remote data before claiming hosted service. Node synchronization remains a separate status.
-`sync-devices.spec.ts` renders a managed connection with data but no enrollment,
-injects another drive's completed sync, and verifies that Cloud Server does not
-claim hosting. It checks unknown recovery wording, account refresh on window focus,
-and missing translation markers. `saved-drives.spec.ts` checks that a portal Open
-link selects the requested drive, consumes the drive parameter, and preserves
-current-drive behavior for ordinary resource links.
+unenrolled/local drives and shared drives confirmed directly by their node.
+`sync-devices.spec.ts` renders a managed connection with zero data for the selected
+drive, injects another drive's completed sync, and verifies that Cloud Server
+stays off with its setup action visible.
 
 - Managed Vault display metadata: `vaultAutoBackup.test.ts` now covers a drive
   present only in local storage, as well as rename/emoji refresh. Manual enable
   and automatic backup share `driveDisplayMetadata`; only name and emoji are sent.
-- Standalone account probes: `helpers/managed/session.test.ts` verifies that
-  no `/api/me` request is made without a configured control plane.
-  `helpers/managed/api.test.ts` covers localhost/127.0.0.1 without implicit SaaS
-  routing, explicit local API configuration, and discovered/build portal routing.
 - FOSS logout: `helpers/managed/session.test.ts` verifies that an installation
   with no configured control plane makes no SaaS logout request (the CI smoke
   test exposed a 405 at `/api/logout`).
@@ -1789,51 +1804,47 @@ with an explicit incomplete-import error rather than silently truncating.
 discoverable without contacting an integration proxy. Clockify upgrade tests
 remain alongside the Notion proxy tests.
 
-Drive changes and reauthentication on an already-open WebSocket: `browser/lib/src/websockets.test.ts` verifies a fresh SYNC is sent without reconnecting, including local-only drive exclusion. This covers the Sync page remaining at Connecting after sign-in or drive switching; live staging acceptance remains separate.
 
-### Pending fork banner
+Portable app definitions: `browser/lib/src/app-package.test.ts` loads a standalone
+JSON fixture through the shared importer, planner and apply engine with in-memory
+storage. It verifies nested placement, native localId, repeat import, conflicting
+revision reuse, opaque source/setup text, and refusal of installation fields or
+unsupported declarations. This is library coverage: marketplace UI, real-server
+package persistence, schema/template graph import and sandbox activation remain
+unverified/unimplemented by this slice.
 
-`PendingForks.test.tsx` rejects ordinary resources, proposals for another subject,
-and loading candidates even if a query page lists them. `forks.spec.ts` checks
-ordinary resources after reload and real proposals on their original resource.
-The reported Safari query contamination is not reproduced locally: WebKit test
-setup currently fails opening OPFS before it can create its dev drive.
+## Signed-out local drive opened from the portal
 
-### Managed admission retries and content-addressed image downloads
+`browser/data-browser/src/helpers/isDriveSignInError.test.ts` covers a local-only missing-resource error with no app agent, including origins with a configured node. It also covers signed-out DID resources absent from the current node: their copy may be in the account vault, so they offer unlock. Signed-in users, ordinary HTTP 404s, and unrelated transport failures retain their error handling.
 
-- `local-outbox.test.ts`: enrollment/quota refusals stop after bounded retries,
-  retain dirty edits, and can be re-armed by a new edit; legacy messages and
-  structured `SYNC_REJECTED` classification are covered.
-- `store-commit-fallback.test.ts`: a WebSocket enrollment refusal is not
-  duplicated over HTTP; a transport failure still falls back.
-- Server `errors::admission_error_tests`: enrollment/quota refusals carry a
-  blocking code and HTTP 403 rather than an internal-error response.
-- Server `tests::content_addressed_image_download`: raw, WebP and AVIF downloads
-  work for a blob with no File resource at its hash URL; missing hashes return
-  404, and attachment/nosniff headers are retained for renditions.
+Paired SaaS `portal/e2e/passkey-open-drive.spec.ts` covers account/profile creation, passkey enrollment, recovery-code acknowledgement, completed app sign-out, portal passkey sign-in, and the Open link reaching the app unlock screen. It then unlocks and verifies the original drive title. Chromium virtual PRF state is tied to the original CDP target, so the unlock portion runs there after verifying the real popup handoff. Unlocking within the popup itself remains a physical-browser acceptance check.
+## Ontology codegen (`@tomic/cli`) and DID fetch
 
-Staging triage verified that the two reported hashes still returned HTTP 200
-without resize parameters. Deployment acceptance must recheck their resized
-URLs and confirm the rejected-write rate falls after clients update.
+| Flow | Where |
+|---|---|
+| HTTP path `https://host/did:ad:…` and `/did?subject=` extract the same DID | `browser/lib/src/subject.test.ts` |
+| JSON-AD parse accepts `@id: did:ad:…` when the request used the HTTP path alias | `browser/lib/src/parse.test.ts` |
+| `Client.fetchResourceHTTP` resolves DIDs via `/did?subject=` and does not touch `window` in Node | `browser/lib/src/client.fetch.test.ts` |
+| Store fetch by HTTP path alias returns the resource stored under the DID | `browser/lib/src/store.test.ts` |
 
-Automatic browser discovery: `browser/data-browser/src/helpers/browserPeerSync.test.ts` verifies deterministic per-drive rooms, automatic startup for locally snapshotted drives, duplicate prevention, and skipping unknown snapshots. `ATOMIC_PEER_AUTOMATIC=1` with `verify-peer-mesh.mjs` verifies eight browsers rediscover trusted local drives without saved invitations, then sync creations, presence, attachments, reconnects and deletion. Full app UI acceptance remains separate.
+Not covered: `ad-generate ontologies` end-to-end against a live server (no CLI test runner).
 
-The WebSocket unit suite also covers a socket closing while an asynchronous version-vector probe is computed: no SYNC is sent on the closed connection. General UI tests stub public discovery with an empty room; the separate peer mesh acceptance script still exercises real signaling and authenticated sync.
+`helpers/managed/vaultAutoBackup.test.ts` verifies successful vault restoration preserves known node absence as local-only routing, while transport failures and failed restores do not disable node sync. Paired SaaS second-browser coverage verifies the original profile and vault-only canary after restore, with bounded pre-restore refusal diagnostics.
 
-## Account drive catalog
+Paired SaaS `portal/e2e/identity-reconcile.spec.ts` exercises dev-drive creation while a managed account is active: reconciliation waits until the temporary identity has a drive, and creation must not enroll it in the account.
 
-`helpers/managed/driveCatalog.test.ts` covers union/deduplication, removal precedence,
-offline retry/cache isolation, and stale results after logout or account switching.
-`e2e/tests/drive-catalog.spec.ts` renders an account-only drive without a local
-saved pointer, publishes the local drive, and applies a removal after reconnect
-(real app/node, mocked account API). Existing saved-drive tests remain separate.
-SaaS handler tests cover authenticated additive registration, account isolation,
-service-backed discovery and removal versus stale upload. Catalog entries confer
-no access to resource content. A live cross-app deployment acceptance is separate.
+Session restore routing: `helpers/managed/reconcile.test.ts` covers connecting the
+exact hosted drive before availability checks, clearing local-only routing,
+skipping Pending/Disabled placements and other drives, and ignoring discovery
+that completes after its deadline. Staging phone restore latency and end-to-end
+WebSocket query delivery remain unverified.
 
-## Unified account passkey
+Cloud Vault download concurrency: `helpers/managed/vault.test.ts` holds network
+responses open to verify concurrent downloads are bounded at four and that
+reverse completion preserves listing order at import. Existing progress and
+failure checks also pass. Actual staging phone restore latency remains unmeasured.
 
-`helpers/managed/accountPasskey.test.ts` checks account-credential reuse, server-challenge registration, PRF-output exclusion from API payloads, cancellation and standalone fallback. `recovery-enrollment.test.ts` covers additive migration, old recovery-code preservation, failed upgrades, unsupported login credentials and duplicate-credential PRF-salt selection. These use simulated authenticators and real WebCrypto/Argon2id.
+## External cache access and authentication origins (#170)
 
 Paired SaaS `portal/e2e/recovery-passkey.spec.ts` uses Chromium virtual PRF authenticators with the real control plane to verify app enrollment followed by portal login using one credential, reuse of a portal-created credential, and account-settings migration without replacing ciphertext or old wrappers. Physical Safari/iCloud, Android/password-manager and native-shell behavior remain device acceptance checks.
 

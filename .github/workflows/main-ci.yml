@@ -68,6 +68,19 @@ jobs:
           # shell command instead.
           sep-tags: ","
           github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+          run_install: false
+      - name: Install Dagger regression test dependencies
+        run: pnpm --dir .dagger install --frozen-lockfile
+      - name: Dagger regression tests
+        run: pnpm --dir .dagger test
       - name: Dagger CI (test, lint, build, e2e ${{ inputs.e2e-mode }})
         uses: dagger/dagger-for-github@8.0.0
         with:
