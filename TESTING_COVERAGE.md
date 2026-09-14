@@ -935,11 +935,40 @@ mounts without resetting or re-registering the global parser.
 
 ### Save durability and identity lifecycle regressions
 
+- `server/src/handlers/commit/durability_tests.rs` runs the shared HTTP/WS
+  commit handler against real redb in a child process, records acknowledgement
+  outside the database, exits without destructors, and reopens the store. Before
+  the handler awaited a flush, the acknowledged name edit reverted to the old
+  value. The test omits the periodic flush thread to deterministically exercise
+  the interval before its next tick. The child has a timeout and cleanup guard.
+  This covers the handler's persistence boundary, not socket delivery, browser
+  document/table UI, attachments, injected fsync failure, or power-loss behavior.
+
 - `save-acknowledgement.test.ts` exercises `Resource.save()` through the real
   outbox with a stubbed commit transport: server refusals (including terminal
   drops), backoff, blocked entries and cancellation cannot report persistence.
   It also covers offline transport failures, successful retries, unrelated
   subjects and edits arriving during an acknowledged save (#1388).
+  It also rejects missing/unsupported local storage, exposes storage failures
+  as errors, and retries a failed local-only snapshot without losing signed
+  genesis or edits. Children waiting on an unsaved parent return `queued`, not
+  the locally durable `offline` result. Offline protocol fixtures now explicitly
+  attach an in-memory storage double; those tests alone do not prove durability.
+
+- `crash-durability.spec.ts` edits a real document and table cell through the
+  compiled UI, awaits resource save completion without a test-only flush, sends
+  SIGKILL to its dedicated Chromium process, and reopens the same persistent
+  profile. HTTP data and WebSocket sync are blocked during recovery. Both edits
+  must remain readable. It runs in the full suite on POSIX, not smoke; this is
+  process-crash coverage, not power loss, storage eviction, or native acceptance.
+- `data-save-state.spec.ts` also disables local persistence, clicks save, checks
+  the visible error and Retry save button, re-enables storage, retries, and reloads
+  to verify the original edit. The error is handled rather than left as an
+  unhandled rejection. Connection-loss messages make no local-save promise.
+- `handlers::commit::benchmark::compare_acknowledgement_throughput` is an ignored,
+  manually run synthetic probe comparing periodic-flush and durable acknowledgements
+  for 1/4/16 concurrent writers. It is not a performance pass/fail release gate.
+
 - `destroy-via-outbox.test.ts` exercises `Resource.destroy()` through the same
   outbox: an online delete POSTs one destroy commit and removes the resource; a
   delete while disconnected queues the pre-signed envelope, survives a simulated
