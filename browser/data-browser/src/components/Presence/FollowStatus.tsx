@@ -182,7 +182,7 @@ const buildFollowingTrigger = (
     </FollowingIndicator>
   );
 
-  Comp.displayName = 'FollowingTrigger';
+  Comp.displayName = /* @wc-ignore */ 'FollowingTrigger';
 
   return Comp;
 };
@@ -215,7 +215,7 @@ const buildBadgedTrigger = (
     </BadgedButton>
   );
 
-  Comp.displayName = 'BadgedFollowTrigger';
+  Comp.displayName = /* @wc-ignore */ 'BadgedFollowTrigger';
 
   return Comp;
 };
