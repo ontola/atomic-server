@@ -57,6 +57,10 @@ not establish full Dagger E2E acceptance or a supported worker count.
 `loro-selection.test.ts` checks cursor preservation across a remote metadata
 update followed by keystrokes before and after queued timers. The scoped
 loro-prosemirror 0.4.3 patch restores document and selection atomically.
+`documentUndoSession.test.ts` covers document undo/redo across editor bindings,
+authentication-session isolation, system/remote changes and callback ownership.
+`browser/e2e/tests/document-undo.spec.ts` checks undo and redo through the
+Data View round trip, including persisted content after reload.
 `store-search-server.test.ts` checks that authoritative server lookups after
 imports do not wait on local indexing or WebSocket readiness.
 
@@ -498,8 +502,9 @@ Not covered: visual morph of a grid card into the resource page in Firefox (need
 |---|---|---|
 | V1 element list + paragraph markdown (+ resource embed) → TipTap JSON; leftover Yjs `XmlFragment` walker; `{ type: 'ydoc' }` detection without loading `yjs` | glue | `browser/data-browser/src/views/Document/documentMigrationUtils.test.ts` |
 | Opening a writable v1 document migrates it silently into the Loro editor (no "Update Document" button) | flow | `browser/e2e/tests/documents.spec.ts` |
+| Uploaded text-file conversion: supported MIME/extensions, literal text and line breaks, Markdown parsing, permission/download failure, and class replacement | glue | `browser/data-browser/src/views/File/convertFileToDocument.test.ts` |
 
-Not covered: leftover Yjs-era DocumentV2 bodies end-to-end (needs a stored `{ type: 'ydoc' }` fixture); read-only v1 documents stay on the element list and have no e2e.
+No automated end-to-end coverage: uploaded-file conversion through the full UI and a server-backed save/reload (manually verified in Chromium). Also not covered: leftover Yjs-era DocumentV2 bodies end-to-end (needs a stored `{ type: 'ydoc' }` fixture); read-only v1 documents stay on the element list and have no e2e.
 
 ## Commits as envelopes
 
@@ -965,6 +970,7 @@ Onboarding dialog feedback: the authorization/invite and chatroom cases in
 `onboarding-storage.spec.ts` checks feedback availability;
 `drive-template-onboarding.spec.ts` checks mobile creation and dismissal.
 
+`prepareDriveSharing.test.ts` covers verified local transition before peer invitation, rejection on failed verification, preservation of an enrolled drive connection, and isolation from another drive enrollment. `local-drive-copy.test.ts` covers missing history, incomplete inventory, and missing or corrupt attachments. Full sharing UI acceptance remains pending.
 ## Signed-out local drive opened from the portal
 
 `browser/data-browser/src/helpers/isDriveSignInError.test.ts` covers a local-only missing-resource error with no app agent, including origins with a configured node. It also covers signed-out DID resources absent from the current node: their copy may be in the account vault, so they offer unlock. Signed-in users, ordinary HTTP 404s, and unrelated transport failures retain their error handling.
@@ -996,6 +1002,28 @@ responses open to verify concurrent downloads are bounded at four and that
 reverse completion preserves listing order at import. Existing progress and
 failure checks also pass. Actual staging phone restore latency remains unmeasured.
 
+## Right-panel lifecycle
+
+`components/RightPanel/panelState.test.ts` covers session-local initial state, exclusive panels, cleared meeting selection, account/drive scoping, stale callbacks, and missing/unauthorized versus temporarily unavailable targets.
+
+`e2e/tests/right-panel-lifecycle.spec.ts` asserts visible panel state with legacy localStorage values for meeting/comments/AI, SPA navigation away from commentable resources, deletion of an explicitly opened meeting, and switching drives and back without resurrecting the panel. Existing `meetings.spec.ts` agenda/start/end coverage verifies that minutes and explicitly opened meeting chat still work.
+## Replication completion and CI tool installation
+
+`lib/src/sync/replicate.rs` has five scripted WebSocket peer tests covering
+resource-only completion without the idle timeout, acknowledgement of every
+chunk, unrelated-drive acknowledgements, an independently mismatching hash,
+trailing blob requests and asynchronous storage errors, and the fallback for
+peers without keepalive support. They exercise the real Rust WebSocket client
+and snapshot/chunk encoding with an isolated in-memory source; the peer scripts
+simulate replies and do not validate authentication or remote import policy.
+The real-server `server/tests/it/replicate.rs` tests retain destination-data,
+repeat-push, boot-reconcile and export-authorization assertions.
+
+The pinned wasm-pack installer was executed in Dagger's `rust:bookworm` image
+on Linux x86_64, including a cached install followed by changed downstream
+source input and execution of the retained binary. Its aarch64 archive digest
+is pinned to the upstream release; native aarch64 execution is not covered by
+that check. Full CI wall-time savings require a completed hosted run.
 ## External cache access and authentication origins (#170)
 
 `db::test::cached_external_resources_keep_read_permissions` checks that a cached
@@ -1004,3 +1032,11 @@ subject-only) and direct reads, while the authorized agent can still read it.
 `client::helpers` origin tests reject lookalike hosts, userinfo-host confusion,
 changed ports/schemes, malformed URLs and non-HTTP URLs; normalized same-origin
 and localhost requests remain eligible for DID-agent authentication.
+
+## Drive root file drops
+
+`views/Drive/DrivePage.test.tsx` renders the drive page with its real dropzone
+and upload hook, then delivers multiple files through the drop callback. It
+verifies the upload targets the displayed drive even when the current drive
+setting differs. Native drag events, overlay geometry and the refreshed child
+list are not covered by this component test.

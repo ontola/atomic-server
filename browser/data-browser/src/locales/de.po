@@ -7838,3 +7838,31 @@ msgstr ""
 #~ "Gib deinen Wiederherstellungscode ein, um deinen geheimen Schlüssel "
 #~ "anzuzeigen oder diesem Gerät einen Passkey hinzuzufügen. Dein bisheriger "
 #~ "Wiederherstellungscode bleibt gültig."
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "Converted to document"
+msgstr ""
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "Could not convert the file."
+msgstr ""
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "<0/> Convert to document"
+msgstr ""
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "Converting"
+msgstr ""
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "Document saved"
+msgstr ""
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "Could not save the document yet."
+msgstr ""
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "Document converted locally, but could not be saved."
+msgstr ""

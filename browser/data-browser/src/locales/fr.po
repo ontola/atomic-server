@@ -8160,3 +8160,31 @@ msgstr ""
 #~ "Saisissez votre code de récupération pour afficher votre secret ou "
 #~ "ajouter une clé d’accès sur cet appareil. Votre code de récupération "
 #~ "actuel restera valide."
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "Converted to document"
+msgstr ""
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "Could not convert the file."
+msgstr ""
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "<0/> Convert to document"
+msgstr ""
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "Converting"
+msgstr ""
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "Document saved"
+msgstr ""
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "Could not save the document yet."
+msgstr ""
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "Document converted locally, but could not be saved."
+msgstr ""
