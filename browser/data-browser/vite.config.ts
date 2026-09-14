@@ -143,6 +143,19 @@ export default defineConfig({
       // the two WASM memories diverge. Exact-match regex so the
       // `loro-crdt/web` subpath import in `LoroLoader` is left alone.
       { find: /^loro-crdt$/, replacement: 'loro-crdt/web' },
+      // The NextGraph mirror's hosted-wallet mode talks to a wallet page whose
+      // address is baked into `@ng-org/web` at its build. The published build
+      // points at nextgraph.net; NextGraph's own dev mode builds the same
+      // package against a wallet app on localhost:1421 (`pnpm buildfrontdev`
+      // in its monorepo). `NG_WEB_DEV=<path to that dist>` uses that build.
+      ...(process.env.NG_WEB_DEV
+        ? [
+            {
+              find: /^@ng-org\/web$/,
+              replacement: path.resolve(process.env.NG_WEB_DEV, 'ngweb.js'),
+            },
+          ]
+        : []),
       {
         find: '@components',
         replacement: path.resolve(__dirname, 'src/components'),
