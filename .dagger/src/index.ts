@@ -176,9 +176,7 @@ function condenseErrorContext(body: string): string {
   const details = body.match(/# Error details\s*```\n([\s\S]{0,900}?)```/);
   const main = body.indexOf('- main:');
   const region =
-    main === -1
-      ? body.slice(-2500)
-      : body.slice(main, main + 2500);
+    main === -1 ? body.slice(-2500) : body.slice(main, main + 2500);
 
   return `${details ? details[1].trim() : ''}\n\n${region}`;
 }
@@ -404,7 +402,10 @@ export class AtomicServer {
         .from(FLUTTER_IMAGE)
         .withEnvVariable('CI', 'true')
         .withEnvVariable('PUB_CACHE', '/root/.pub-cache')
-        .withMountedCache('/root/.pub-cache', dag.cacheVolume('flutter-pub-cache'))
+        .withMountedCache(
+          '/root/.pub-cache',
+          dag.cacheVolume('flutter-pub-cache'),
+        )
         .withDirectory('/workspace/flutter', this.source.directory('flutter'))
         .withWorkdir('/workspace/flutter')
         .withExec([
@@ -484,6 +485,7 @@ export class AtomicServer {
         playwrightWorkers,
         playwrightShards,
         playwrightRetries,
+        '',
         playwrightCloneSessions,
       ),
       this.jsTest(),
@@ -512,10 +514,56 @@ export class AtomicServer {
   async jsTest(): Promise<string> {
     const depsContainer = this.jsBuild();
 
-    return depsContainer
-      .withWorkdir('/app')
-      .withExec(['pnpm', 'run', 'test'])
-      .stdout();
+    return (
+      depsContainer
+        .withWorkdir('/app')
+        .withExec(['pnpm', 'run', 'test'])
+        // jsBuild mounts external integration tests at /integrations and
+        // exposes the installed browser workspace at /browser.
+        .withExec([
+          '/app/node_modules/.bin/vitest',
+          'run',
+          '--config',
+          '/integrations/localthought/vitest.config.ts',
+        ])
+        .withWorkdir('/app')
+        .withExec([
+          'node',
+          '--test',
+          'data-browser/scripts/integration-mcp.test.mjs',
+        ])
+        // Provider certification shares the integration and browser mounts.
+        .withWorkdir('/')
+        .withExec(['node', '--test', '/integrations/tooling/certify.test.mjs'])
+        .withExec([
+          'node',
+          '/integrations/tooling/certify.mjs',
+          '--layer',
+          'js',
+          '--output',
+          '/integration-certification',
+        ])
+        .stdout()
+    );
+  }
+
+  /** Export offline provider evidence; live provider writes are never run here. */
+  @func()
+  integrationCertificationReport(): Directory {
+    return this.jsBuild()
+      .withDirectory('/integrations', this.source.directory('integrations'))
+      .withExec(['ln', '-s', '/app', '/browser'])
+      .withWorkdir('/')
+      .withExec(['node', '--test', '/integrations/tooling/certify.test.mjs'])
+      .withExec([
+        'node',
+        '/integrations/tooling/certify.mjs',
+        '--layer',
+        'js',
+        '--output',
+        '/integration-certification',
+      ])
+      .directory('/integration-certification');
   }
 
   /**
@@ -639,7 +687,15 @@ export class AtomicServer {
         // member, so all members must be present even though we only build
         // the wasm crate.
         .withDirectory('/code/lib', this.source.directory('lib'))
+        .withDirectory(
+          '/code/plugin-runtime',
+          this.source.directory('plugin-runtime'),
+        )
         .withDirectory('/code/wasm', this.source.directory('wasm'))
+        .withDirectory(
+          '/code/integrations/localthought/syncables',
+          this.source.directory('integrations/localthought/syncables'),
+        )
         .withDirectory('/code/server', this.source.directory('server'))
         .withDirectory('/code/cli', this.source.directory('cli'))
         .withDirectory('/code/desktop', this.source.directory('desktop'))
@@ -652,7 +708,10 @@ export class AtomicServer {
           this.source.directory('atomic-plugin'),
         )
         .withDirectory('/code/tools', this.source.directory('tools'))
-        .withMountedCache('/code/target', dag.cacheVolume('rust-wasm-target-v3'))
+        .withMountedCache(
+          '/code/target',
+          dag.cacheVolume('rust-wasm-target-v3'),
+        )
         .withExec(TOUCH_WORKSPACE_SOURCES)
         .withWorkdir('/code/wasm')
         // Install + build in a single exec so the install is part of the
@@ -707,9 +766,17 @@ export class AtomicServer {
         .withFile('/code/Cargo.lock', this.source.file('Cargo.lock'))
         .withDirectory('/code/server', this.source.directory('server'))
         .withDirectory('/code/lib', this.source.directory('lib'))
+        .withDirectory(
+          '/code/plugin-runtime',
+          this.source.directory('plugin-runtime'),
+        )
         .withDirectory('/code/cli', this.source.directory('cli'))
         .withDirectory('/code/desktop', this.source.directory('desktop'))
         .withDirectory('/code/wasm', this.source.directory('wasm'))
+        .withDirectory(
+          '/code/integrations/localthought/syncables',
+          this.source.directory('integrations/localthought/syncables'),
+        )
         .withDirectory(
           '/code/plugin-examples',
           this.source.directory('plugin-examples'),
@@ -719,7 +786,10 @@ export class AtomicServer {
           this.source.directory('atomic-plugin'),
         )
         .withDirectory('/code/tools', this.source.directory('tools'))
-        .withMountedCache('/code/target', dag.cacheVolume('rust-slim-target-v3'))
+        .withMountedCache(
+          '/code/target',
+          dag.cacheVolume('rust-slim-target-v3'),
+        )
         .withExec(TOUCH_WORKSPACE_SOURCES)
         .withWorkdir('/code')
         .withEnvVariable('ATOMICSERVER_SKIP_JS_BUILD', 'true')
@@ -750,7 +820,7 @@ export class AtomicServer {
           'atomic-server',
           '--no-default-features',
           '--features',
-          'light',
+          'light,wasm-plugins',
         ])
         .withExec([
           'cp',
@@ -834,7 +904,10 @@ export class AtomicServer {
       )
       // Same pnpm-store volume as jsBuild() — without this, every
       // integration-test run re-downloaded the registry graph.
-      .withMountedCache('/repo/browser/.pnpm-store', dag.cacheVolume('pnpm-store'))
+      .withMountedCache(
+        '/repo/browser/.pnpm-store',
+        dag.cacheVolume('pnpm-store'),
+      )
       .withExec([
         'pnpm',
         'config',
@@ -896,21 +969,19 @@ export class AtomicServer {
   ): Promise<string> {
     const target = prod ? '--prod' : '';
 
-    return (
-      this.netlifyCliContainer()
-        .withDirectory('/deploy', directory)
-        .withWorkdir('/deploy')
-        .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
-        .withExec([
-          'sh',
-          '-c',
-          // Skip silently when no auth token is configured (PR builds from
-          // forks, branches without secret access). Netlify CLI 23+ rejects
-          // empty `--auth ""` instead of treating it as missing.
-          `if [ -z "$NETLIFY_AUTH_TOKEN" ]; then echo 'NETLIFY_AUTH_TOKEN not set — skipping ${siteName} deploy'; exit 0; fi; for i in $(seq 1 5); do netlify link --name ${siteName} --auth "$NETLIFY_AUTH_TOKEN" && break || sleep 2; done && netlify deploy --dir . ${target} --auth "$NETLIFY_AUTH_TOKEN"`,
-        ])
-        .stdout()
-    );
+    return this.netlifyCliContainer()
+      .withDirectory('/deploy', directory)
+      .withWorkdir('/deploy')
+      .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
+      .withExec([
+        'sh',
+        '-c',
+        // Skip silently when no auth token is configured (PR builds from
+        // forks, branches without secret access). Netlify CLI 23+ rejects
+        // empty `--auth ""` instead of treating it as missing.
+        `if [ -z "$NETLIFY_AUTH_TOKEN" ]; then echo 'NETLIFY_AUTH_TOKEN not set — skipping ${siteName} deploy'; exit 0; fi; for i in $(seq 1 5); do netlify link --name ${siteName} --auth "$NETLIFY_AUTH_TOKEN" && break || sleep 2; done && netlify deploy --dir . ${target} --auth "$NETLIFY_AUTH_TOKEN"`,
+      ])
+      .stdout();
   }
 
   /**
@@ -984,11 +1055,7 @@ export class AtomicServer {
         // a restart with `Locked` sharing), leaving mdbook missing from
         // PATH on replay. Bundling makes any cache hit imply the binaries
         // are present too; `cargo install` no-ops when they are current.
-        .withExec([
-          'sh',
-          '-c',
-          INSTALL_DOCS_TOOLS + ' && mdbook build',
-        ])
+        .withExec(['sh', '-c', INSTALL_DOCS_TOOLS + ' && mdbook build'])
         .directory('/docs/build')
     );
   }
@@ -1001,14 +1068,16 @@ export class AtomicServer {
   ): Promise<string> {
     const browserDir = this.jsBuild();
 
-    return browserDir
-      .withWorkdir('/app')
-      .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
-      // The `--prod` flag lives in the pnpm script, so it is steered by env
-      // rather than argv — see `typedoc-publish` in browser/package.json.
-      .withEnvVariable('NETLIFY_PROD', prod ? '1' : '')
-      .withExec(['pnpm', 'run', 'typedoc-publish'])
-      .stdout();
+    return (
+      browserDir
+        .withWorkdir('/app')
+        .withSecretVariable('NETLIFY_AUTH_TOKEN', netlifyAuthToken)
+        // The `--prod` flag lives in the pnpm script, so it is steered by env
+        // rather than argv — see `typedoc-publish` in browser/package.json.
+        .withEnvVariable('NETLIFY_PROD', prod ? '1' : '')
+        .withExec(['pnpm', 'run', 'typedoc-publish'])
+        .stdout()
+    );
   }
 
   /** Installed workspace sources; deliberately has no build or WASM dependency. */
@@ -1063,6 +1132,14 @@ export class AtomicServer {
     // (it overwrites OS /lib). Mount alongside browser and resolve via alias in vite.config.
     const sourceContainer = workspaceContainer
       .withDirectory('/app', browser)
+      // Integration sources live at the repository root. The browser mounts at
+      // /app, and its raw imports resolve these paths from /integrations.
+      .withDirectory('/integrations', this.source.directory('integrations'))
+      // Each integrations/*/tsconfig.json extends the repo-root-relative
+      // `../../browser/tsconfig.build.json`. Same fix jsTest()/
+      // integrationCertificationReport() already use for this: alias /browser
+      // to the /app mount so those relative paths resolve.
+      .withExec(['ln', '-s', '/app', '/browser'])
       .withDirectory('/app/lib-defaults', this.source.directory('lib/defaults'))
       // data-browser imports the repo-root logo from `../../../../logo.svg`
       // and `../../../../../logo.svg`. Browser mount sits at /app, so those
@@ -1078,12 +1155,13 @@ export class AtomicServer {
         '/lib/src/genesis_test_vectors.json',
         this.source.file('lib/src/genesis_test_vectors.json'),
       )
-      // data-browser/src/helpers/pairing.test.ts reads a repo-root testdata
-      // fixture the same way (`../../../../testdata/pairing-request.json`
-      // from /app/data-browser/src/helpers) — mount just this one file.
+      // Tests read shared fixtures directly from the repository-root paths.
+      // Include the manifest and planner corpus as well as pairing fixtures.
+      .withDirectory('/testdata', this.source.directory('testdata'))
+      // Mount only the required file under /lib to preserve OS libraries.
       .withFile(
-        '/testdata/pairing-request.json',
-        this.source.file('testdata/pairing-request.json'),
+        '/lib/defaults/tasks.json',
+        this.source.file('lib/defaults/tasks.json'),
       );
 
     return sourceContainer;
@@ -1100,7 +1178,12 @@ export class AtomicServer {
       // Surfaces /app/dev-drive and /app/prunetests in the production
       // build the e2e tests run against. See `devRoutesEnabled()` in
       // data-browser/src/config.ts.
-      buildContainer = buildContainer.withEnvVariable('VITE_E2E', 'true');
+      buildContainer = buildContainer
+        .withEnvVariable('VITE_E2E', 'true')
+        .withEnvVariable(
+          'VITE_INTEGRATION_PROXY_URL',
+          'http://127.0.0.1:19090',
+        );
     }
 
     return buildContainer.withExec(['pnpm', 'run', 'build']);
@@ -1151,16 +1234,31 @@ export class AtomicServer {
       // build.
       .withDirectory('/code/server', source.directory('server'))
       .withDirectory('/code/lib', source.directory('lib'))
+      .withDirectory('/code/plugin-runtime', source.directory('plugin-runtime'))
       .withDirectory('/code/cli', source.directory('cli'))
       .withDirectory('/code/desktop', source.directory('desktop'))
       .withDirectory('/code/wasm', source.directory('wasm'))
+      .withDirectory(
+        '/code/integrations/localthought/syncables',
+        source.directory('integrations/localthought/syncables'),
+      )
       .withDirectory(
         '/code/plugin-examples',
         source.directory('plugin-examples'),
       )
       .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
       .withDirectory('/code/tools', source.directory('tools'))
-      .withMountedCache('/code/target', dag.cacheVolume('rust-target-v3'))
+      // v3 -> v4: `atomic-server`'s build.rs only declares
+      // `rerun-if-changed` on `plugin-runtime/{src,wit}` and
+      // `ATOMICSERVER_SKIP_PLUGIN_RUNTIME` — it has no way to know "the
+      // wasm32-wasip2 target just became installed". Adding the `rustup
+      // target add` step above changed the container, but every prior CI
+      // run had already fingerprinted build.rs's output (an empty embedded
+      // runtime, from before that target existed) into this cache volume,
+      // so cargo kept trusting the stale fingerprint and never re-ran
+      // build_plugin_runtime() to notice the target was now there. Bumping
+      // the volume forces one full rebuild that actually re-evaluates it.
+      .withMountedCache('/code/target', dag.cacheVolume('rust-target-v4'))
       .withExec(TOUCH_WORKSPACE_SOURCES)
       .withWorkdir('/code')
       .withExec(['cargo', 'fetch']);
@@ -1216,11 +1314,10 @@ export class AtomicServer {
     // `rustBuildSlim`'s glibc path (different symptom there — ABI mismatch,
     // not a missing binary — same root cause).
     //
-    // E2E exception: `plugin.spec.ts` needs `wasm-plugins` so the test
-    // plugin's `after_commit` can rename folders. `light` is https-only and
-    // silently makes that assertion hang until timeout. Defaults minus
-    // `vector-search` (the ort/musl gap above) is enough — wasmtime builds
-    // fine on this musl-cross image.
+    // All server builds include `wasm-plugins`: plugin handlers are compiled
+    // unconditionally, and the E2E suite also executes server-side plugins.
+    // `vector-search` remains excluded because of the ort/musl gap above.
+    let wasmPluginsEnabled = false;
     if (target.includes('musl')) {
       if (e2e) {
         buildArgs.push(
@@ -1228,8 +1325,14 @@ export class AtomicServer {
           '--features',
           'https,wasm-plugins',
         );
+        wasmPluginsEnabled = true;
       } else {
-        buildArgs.push('--no-default-features', '--features', 'light');
+        buildArgs.push(
+          '--no-default-features',
+          '--features',
+          'light,wasm-plugins',
+        );
+        wasmPluginsEnabled = true;
       }
     }
     // A named profile lands in `target/<triple>/<profile>/`, not `release/`.
@@ -1239,8 +1342,25 @@ export class AtomicServer {
         ? `/code/target/${target}/release/atomic-server`
         : `/code/target/${target}/debug/atomic-server`;
 
+    // `wasm-plugins`'s build.rs compiles `atomic-plugin-runtime` for
+    // `wasm32-wasip2` as a nested `cargo build`, separate from the rustc
+    // that's already on this image. Without the target's std lib installed,
+    // that nested build fails and build.rs treats it as "plugins are an
+    // optional degradation" — it swallows the failure and ships a server
+    // with an empty embedded runtime instead of erroring the build. Every
+    // e2e test that actually exercises server-side plugin execution
+    // (this one and `plugin.spec.ts`) then hangs until timeout on a 500
+    // from `/plugin-run`, with nothing in the build log to point at why.
+    // `rustTest()` already installs this target for the same reason —
+    // same fix, applied where the e2e server binary is actually built.
+    const containerReadyToBuild = wasmPluginsEnabled
+      ? containerWithAssets
+          .withExec(['rustup', 'target', 'add', 'wasm32-wasip2'])
+          .withEnvVariable('ATOMICSERVER_REQUIRE_PLUGIN_RUNTIME', 'true')
+      : containerWithAssets;
+
     return (
-      containerWithAssets
+      containerReadyToBuild
         .withExec(buildArgs)
         // .withExec([targetPath, "--version"])
         .withExec(['cp', targetPath, '/atomic-server-binary'])
@@ -1313,17 +1433,30 @@ export class AtomicServer {
           source.file('testdata/pairing-request.json'),
         )
         .withDirectory('/code/server', source.directory('server'))
+        .withDirectory('/code/integrations', source.directory('integrations'))
+        .withDirectory('/code/testdata', source.directory('testdata'))
         .withDirectory('/code/lib', source.directory('lib'))
+        .withDirectory(
+          '/code/plugin-runtime',
+          source.directory('plugin-runtime'),
+        )
         .withDirectory('/code/cli', source.directory('cli'))
         .withDirectory('/code/desktop', source.directory('desktop'))
         .withDirectory('/code/wasm', source.directory('wasm'))
+        .withDirectory(
+          '/code/integrations/localthought/syncables',
+          source.directory('integrations/localthought/syncables'),
+        )
         .withDirectory(
           '/code/plugin-examples',
           source.directory('plugin-examples'),
         )
         .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
         .withDirectory('/code/tools', source.directory('tools'))
-        .withMountedCache('/code/target', dag.cacheVolume('rust-checks-target-v3'))
+        .withMountedCache(
+          '/code/target',
+          dag.cacheVolume('rust-checks-target-v3'),
+        )
         .withExec(TOUCH_WORKSPACE_SOURCES)
         .withWorkdir('/code')
         // build.rs in atomic-server wants to bundle a JS dist. Skip it —
@@ -1344,6 +1477,8 @@ export class AtomicServer {
   rustTest(): Promise<string> {
     return (
       this.rustChecksContainer()
+        .withExec(['rustup', 'target', 'add', 'wasm32-wasip2'])
+        .withEnvVariable('ATOMICSERVER_REQUIRE_PLUGIN_RUNTIME', 'true')
         // Persist nextest in the shared cargo-bin volume. Previously the
         // curl install sat *after* the source mount, so every Rust source
         // change re-downloaded it. The `linux-musl` URL is required: the
@@ -1384,7 +1519,7 @@ export class AtomicServer {
             'if [ ! -x "$BIN_DIR/cargo-nextest" ]; then ' +
             'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$BIN_DIR"; fi && ' +
             'cargo nextest run --workspace --exclude atomic-server-tauri ' +
-            '--no-default-features --features light ' +
+            '--no-default-features --features light,wasm-plugins ' +
             `--build-jobs ${this.hostKnobs.nextestBuildJobs} ` +
             `--test-threads ${this.hostKnobs.nextestTestThreads} ` +
             `--retries ${this.hostKnobs.nextestRetries}`,
@@ -1406,12 +1541,11 @@ export class AtomicServer {
     // system OpenSSL we don't ship. Default features are what the release
     // binary already builds with.
     //
-    // `--no-default-features --features light`: same ort/musl/cuda gap as
-    // `rustTest` above — `vector-search`'s `ort` dep has no prebuilt binary
-    // for this target, so even a lint-only pass can't compile it. Means
-    // vector-search-gated code isn't clippy-checked on this path; the
-    // tradeoff was a deliberate call, not an oversight — see rustTest's
-    // comment for the full reasoning.
+    // `--no-default-features --features light,wasm-plugins`: same
+    // ort/musl/cuda gap as `rustTest` above — `vector-search`'s `ort` dep has
+    // no prebuilt binary for this target, so even a lint-only pass can't
+    // compile it. Vector-search-gated code isn't clippy-checked on this path;
+    // plugin code is included because rustTest uses the same feature set.
     return this.rustChecksContainer()
       .withExec([
         'cargo',
@@ -1423,7 +1557,7 @@ export class AtomicServer {
         '--all-targets',
         '--no-default-features',
         '--features',
-        'light',
+        'light,wasm-plugins',
       ])
       .stdout();
   }
@@ -1610,7 +1744,7 @@ export class AtomicServer {
 
     let runtime = dag
       .container()
-      .from('alpine:latest')
+      .from(e2e ? 'node:22-alpine' : 'alpine:latest')
       .withFile('/atomic-server-bin', atomicServerBinary, {
         permissions: 0o755,
       })
@@ -1618,6 +1752,30 @@ export class AtomicServer {
       .withEnvVariable('ATOMIC_INITIALIZE', 'true')
       .withExposedPort(9883)
       .withEntrypoint(['/atomic-server-bin']);
+
+    if (e2e)
+      runtime = runtime
+        .withDirectory(
+          '/mock-proxy',
+          this.source.directory('integrations/localthought'),
+        )
+        .withEnvVariable(
+          'ATOMIC_INTEGRATION_PROXY_URL',
+          'http://127.0.0.1:19090',
+        )
+        .withEnvVariable('TENANT_SECRET', 'bW9jay10ZW5hbnQ.mock-signature')
+        .withEnvVariable(
+          'ATOMIC_INTEGRATION_FRONTEND_ORIGIN',
+          'http://atomic.localhost:9883',
+        )
+        .withEnvVariable('MOCK_FRONTEND_ORIGIN', 'http://atomic.localhost:9883')
+        .withEnvVariable('MOCK_PROXY_HOST', '0.0.0.0')
+        .withExposedPort(19090)
+        .withEntrypoint([
+          'sh',
+          '-c',
+          'node /mock-proxy/mock-proxy.mjs & exec /atomic-server-bin',
+        ]);
 
     // Dagger deduplicates identical services, including their writable state.
     // Vary only the runtime graph: every shard still shares the binary build.
@@ -1663,77 +1821,76 @@ export class AtomicServer {
 
     // Bug fix (2026-07-02): mount the full pnpm workspace before
     // `pnpm install` — see git history for ERR_PNPM_WORKSPACE_PKG_NOT_FOUND.
-    return playwrightContainer
-      .withEnvVariable('CI', 'true')
-      .withEnvVariable(
-        'ATOMIC_E2E_CLONE_SESSION',
-        this.e2eCloneSessions ? '1' : '0',
-      )
-      // Playwright-run knobs — see `e2eRunKnobs` / `--playwright-mode`. Isolated
-      // from `hostKnobs` so a light suite does not change nextest width.
-      .withEnvVariable(
-        'PLAYWRIGHT_WORKERS',
-        this.e2eRun.workers,
-      )
-      .withEnvVariable(
-        'PLAYWRIGHT_RETRIES',
-        this.e2eRun.retries,
-      )
-      .withFile('/app/package.json', browserContainer.file('/app/package.json'))
-      .withFile(
-        '/app/pnpm-lock.yaml',
-        browserContainer.file('/app/pnpm-lock.yaml'),
-      )
-      .withFile(
-        '/app/pnpm-workspace.yaml',
-        browserContainer.file('/app/pnpm-workspace.yaml'),
-      )
-      .withDirectory('/app/patches', browserContainer.directory('/app/patches'))
-      .withDirectory(
-        '/app/e2e',
-        this.source
-          .directory('browser/e2e')
-          .withoutDirectory('tests')
-          .withoutDirectory('playwright-report')
-          .withoutDirectory('node_modules')
-          .withoutDirectory('test-results'),
-      )
-      .withDirectory('/app/cli', browserContainer.directory('/app/cli'))
-      .withDirectory('/app/react', browserContainer.directory('/app/react'))
-      .withDirectory('/app/svelte', browserContainer.directory('/app/svelte'))
-      .withDirectory(
-        '/app/create-template',
-        browserContainer.directory('/app/create-template'),
-      )
-      .withDirectory('/app/lib', browserContainer.directory('/app/lib'))
-      .withDirectory(
-        '/app/node_modules',
-        browserContainer.directory('/app/node_modules'),
-      )
-      .withWorkdir('/app/e2e')
-      .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
-      .withExec(['pnpm', 'config', 'set', 'store-dir', '/app/.pnpm-store'])
-      .withExec(['pnpm', 'install'])
-      // No browser cache volume: the image already carries the builds this
-      // Playwright wants (see PLAYWRIGHT_VERSION), so this verifies them and
-      // exits. Mounting a volume over `~/.cache/ms-playwright` did nothing —
-      // the image points `PLAYWRIGHT_BROWSERS_PATH` at `/ms-playwright`.
-      .withExec(['pnpm', 'exec', 'playwright', 'install'])
-      .withEnvVariable('LANGUAGE', 'en_GB')
-      .withEnvVariable('FRONTEND_URL', `http://atomic.localhost:9883`)
-      .withEnvVariable('SERVER_URL', `http://atomic.localhost:9883`)
-      .withEnvVariable(
-        'ATOMIC_SERVICE_URL',
-        `http://${ATOMIC_DOMAIN}:9883`,
-      )
-      .withEnvVariable(
-        'ATOMIC_TEST_HOST_MAP',
-        `MAP atomic.localhost ${ATOMIC_DOMAIN}`,
-      )
-      .withDirectory(
-        '/app/e2e/tests',
-        this.source.directory('browser/e2e/tests'),
-      );
+    return (
+      playwrightContainer
+        .withEnvVariable('CI', 'true')
+        .withEnvVariable(
+          'ATOMIC_E2E_CLONE_SESSION',
+          this.e2eCloneSessions ? '1' : '0',
+        )
+        // Playwright-run knobs — see `e2eRunKnobs` / `--playwright-mode`. Isolated
+        // from `hostKnobs` so a light suite does not change nextest width.
+        .withEnvVariable('PLAYWRIGHT_WORKERS', this.e2eRun.workers)
+        .withEnvVariable('PLAYWRIGHT_RETRIES', this.e2eRun.retries)
+        .withFile(
+          '/app/package.json',
+          browserContainer.file('/app/package.json'),
+        )
+        .withFile(
+          '/app/pnpm-lock.yaml',
+          browserContainer.file('/app/pnpm-lock.yaml'),
+        )
+        .withFile(
+          '/app/pnpm-workspace.yaml',
+          browserContainer.file('/app/pnpm-workspace.yaml'),
+        )
+        .withDirectory(
+          '/app/patches',
+          browserContainer.directory('/app/patches'),
+        )
+        .withDirectory(
+          '/app/e2e',
+          this.source
+            .directory('browser/e2e')
+            .withoutDirectory('tests')
+            .withoutDirectory('playwright-report')
+            .withoutDirectory('node_modules')
+            .withoutDirectory('test-results'),
+        )
+        .withDirectory('/app/cli', browserContainer.directory('/app/cli'))
+        .withDirectory('/app/react', browserContainer.directory('/app/react'))
+        .withDirectory('/app/svelte', browserContainer.directory('/app/svelte'))
+        .withDirectory(
+          '/app/create-template',
+          browserContainer.directory('/app/create-template'),
+        )
+        .withDirectory('/app/lib', browserContainer.directory('/app/lib'))
+        .withDirectory(
+          '/app/node_modules',
+          browserContainer.directory('/app/node_modules'),
+        )
+        .withWorkdir('/app/e2e')
+        .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
+        .withExec(['pnpm', 'config', 'set', 'store-dir', '/app/.pnpm-store'])
+        .withExec(['pnpm', 'install'])
+        // No browser cache volume: the image already carries the builds this
+        // Playwright wants (see PLAYWRIGHT_VERSION), so this verifies them and
+        // exits. Mounting a volume over `~/.cache/ms-playwright` did nothing —
+        // the image points `PLAYWRIGHT_BROWSERS_PATH` at `/ms-playwright`.
+        .withExec(['pnpm', 'exec', 'playwright', 'install'])
+        .withEnvVariable('LANGUAGE', 'en_GB')
+        .withEnvVariable('FRONTEND_URL', `http://atomic.localhost:9883`)
+        .withEnvVariable('SERVER_URL', `http://atomic.localhost:9883`)
+        .withEnvVariable('ATOMIC_SERVICE_URL', `http://${ATOMIC_DOMAIN}:9883`)
+        .withEnvVariable(
+          'ATOMIC_TEST_HOST_MAP',
+          `MAP atomic.localhost ${ATOMIC_DOMAIN}`,
+        )
+        .withDirectory(
+          '/app/e2e/tests',
+          this.source.directory('browser/e2e/tests'),
+        )
+    );
   }
 
   /** Unique per `dagger call`; see `e2eShardContainer`. */
@@ -1743,30 +1900,33 @@ export class AtomicServer {
   private e2eShardContainer(base: Container, shardIndex: number): Container {
     const shardCount = this.e2eRun.shardCount;
 
-    return base
-      .withServiceBinding(
-        'atomic',
-        this.atomicService(true, `${this.e2eRunNonce}-${shardIndex}`),
-      )
-      .withExec([
-        'sh',
-        '-c',
-        `for i in $(seq 1 30); do curl -fsS http://${ATOMIC_DOMAIN}:9883/setup && exit 0 || sleep 1; done; exit 1`,
-      ])
-      // Dagger caches an exec by its inputs, and the shard script always
-      // exits 0 (the real exit code goes to a file), so a run whose sources
-      // matched an earlier one replayed that run's output verbatim: a
-      // workflow-only change, an empty commit or `gh run rerun` all "passed"
-      // or "failed" with the previous run's exact log and shard timings. A
-      // per-invocation nonce on this step makes the browsers run every time.
-      // It sits after the service binding and the setup probe, so the build
-      // layers above stay cached; only the Playwright exec is unique.
-      .withEnvVariable('E2E_RUN_NONCE', this.e2eRunNonce)
-      .withExec([
-        '/bin/bash',
-        '-c',
-        e2eShardRunScript(this.e2eRun.grep, shardIndex, shardCount),
-      ]);
+    return (
+      base
+        .withServiceBinding(
+          'atomic',
+          this.atomicService(true, `${this.e2eRunNonce}-${shardIndex}`),
+        )
+        .withExec([
+          'sh',
+          '-c',
+          `for i in $(seq 1 30); do curl -fsS http://${ATOMIC_DOMAIN}:9883/setup && exit 0 || sleep 1; done; exit 1`,
+        ])
+        // Dagger caches an exec by its inputs, and the shard script always
+        // exits 0 (the real exit code goes to a file), so a run whose sources
+        // matched an earlier one replayed that run's output verbatim: a
+        // workflow-only change, an empty commit or `gh run rerun` all "passed"
+        // or "failed" with the previous run's exact log and shard timings. A
+        // per-invocation nonce on this step makes the browsers run every time.
+        // It sits after the service binding and the setup probe, so the build
+        // layers above stay cached; only the Playwright exec is unique.
+        .withEnvVariable('E2E_RUN_NONCE', this.e2eRunNonce)
+        .withEnvVariable('ATOMIC_MOCK_INTEGRATION_PROXY', '1')
+        .withExec([
+          '/bin/bash',
+          '-c',
+          e2eShardRunScript(this.e2eRun.grep, shardIndex, shardCount),
+        ])
+    );
   }
 
   @func()
@@ -1784,6 +1944,12 @@ export class AtomicServer {
     @argument() playwrightShards: number = 0,
     /** -1 keeps the host profile; 0 exposes failures without retrying. */
     @argument() playwrightRetries: number = -1,
+    /**
+     * Optional Playwright regular expression for one focused browser journey.
+     * A focused run stays on one server/shard, so an exact test does not run
+     * alongside unrelated E2E failures.
+     */
+    @argument() playwrightGrep: string = '',
     /** Reuse closed worker profiles for eligible drive-scoped specs. */
     @argument() playwrightCloneSessions: boolean = false,
   ): Promise<string> {
@@ -1798,6 +1964,12 @@ export class AtomicServer {
       playwrightShards,
       playwrightRetries,
     );
+    if (playwrightGrep)
+      this.e2eRun = {
+        ...this.e2eRun,
+        shardCount: 1,
+        grep: playwrightGrep,
+      };
     console.info(
       `E2E budget: ${this.e2eRun.shardCount} shards x ${this.e2eRun.workers} workers = ${this.e2eRun.shardCount * Number(this.e2eRun.workers)} browser workers; retries=${this.e2eRun.retries}; cloned profiles=${this.e2eCloneSessions}; concurrent CI cargo jobs=${this.hostKnobs.cargoBuildJobs}, nextest threads=${this.hostKnobs.nextestTestThreads}. JS/Flutter jobs also share this host.`,
     );
@@ -1854,7 +2026,9 @@ export class AtomicServer {
             `===== SHARD ${r.shard}/${shardCount} (exit ${r.exitCode}) =====\n${r.testOutput.slice(-20000)}`,
         )
         .join('\n\n');
-      const contexts = (await Promise.all(failed.map(r => this.errorContexts(r))))
+      const contexts = (
+        await Promise.all(failed.map(r => this.errorContexts(r)))
+      )
         .filter(Boolean)
         .join('\n\n');
       throw new Error(
