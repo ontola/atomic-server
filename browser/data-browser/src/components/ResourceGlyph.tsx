@@ -84,8 +84,7 @@ function GlyphImage({
 }: GlyphImageProps): JSX.Element | null {
   const file = useResource(subject);
   const [downloadUrl] = useString(file, server.properties.downloadUrl);
-  const localUrl = useFileObjectUrl(file);
-  const src = localUrl ?? downloadUrl;
+  const src = useFileObjectUrl(file, downloadUrl);
 
   if (!src) {
     return null;

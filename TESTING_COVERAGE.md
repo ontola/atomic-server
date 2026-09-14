@@ -806,6 +806,12 @@ check; real refresh/query timing remains a browser acceptance check.
 
 `websockets.test.ts` covers closing during authentication and range reconciliation, and index-status subscription cancellation. `file-upload-offline.spec.ts`, `offline-chatroom.spec.ts` and `offline-create-then-online.spec.ts` verify disconnect, local writes, reload and reconnect without unexpected browser diagnostics.
 
+`browser/data-browser/src/hooks/useFile.test.tsx` checks that the first preview
+render waits for a local blob lookup instead of issuing a premature server
+request, while files without a local database use the server immediately.
+The offline upload E2E also asserts that the preview issues no image download
+requests, even if a server request would have succeeded.
+
 ## Profile edit hydration
 
 `store.test.ts` loads an offline profile with nontrivial persisted Loro history, edits it and merges into the original document, verifying the rename survives. `username-live.spec.ts` edits immediately through the enabled profile field and verifies existing remote chat authors update before and after reload. Profile controls stay disabled while the resource is loading. Managed-account E2Es explicitly configure the hosted runtime and API responses; the mocked same-origin dashboard test blocks the app service worker navigation fallback.

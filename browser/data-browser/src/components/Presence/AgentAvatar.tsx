@@ -60,8 +60,8 @@ export function AgentAvatar({
     iconResource,
     server.properties.downloadUrl,
   );
-  const localIconUrl = useFileObjectUrl(iconResource);
-  const iconSrc = iconFile ? (localIconUrl ?? iconDownloadUrl) : undefined;
+  const localIconUrl = useFileObjectUrl(iconResource, iconDownloadUrl);
+  const iconSrc = iconFile ? localIconUrl : undefined;
 
   let circle: React.JSX.Element;
 
