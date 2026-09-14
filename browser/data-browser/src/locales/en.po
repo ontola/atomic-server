@@ -9862,9 +9862,8 @@ msgstr "Open imported records"
 #~ msgid "Events before (UTC)"
 #~ msgstr "Events before (UTC)"
 
-#: src/routes/DevonianDemoRoute.tsx
-msgid "LocalThought tenant secret"
-msgstr "LocalThought tenant secret"
+#~ msgid "LocalThought tenant secret"
+#~ msgstr "LocalThought tenant secret"
 
 #~ msgid "The tenant secret is used in this tab. Connection credentials stay in this browser."
 #~ msgstr "The tenant secret is used in this tab. Connection credentials stay in this browser."
@@ -9892,13 +9891,11 @@ msgstr "GitHub repository (owner/repo)"
 #~ msgid "Open live tracker"
 #~ msgstr "Open live tracker"
 
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Connect a real GitHub repository"
-msgstr "Connect a real GitHub repository"
+#~ msgid "Connect a real GitHub repository"
+#~ msgstr "Connect a real GitHub repository"
 
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Devonian issue tracker demo"
-msgstr "Devonian issue tracker demo"
+#~ msgid "Devonian issue tracker demo"
+#~ msgstr "Devonian issue tracker demo"
 
 #: src/routes/DevonianDemoRoute.tsx
 msgid "Sync issues and comments in both directions. Devonian runs in this browser; the Atomic tracker is stored on this device."
@@ -9975,9 +9972,8 @@ msgstr "Sample GitHub tracker"
 msgid "Sample GitHub issues"
 msgstr "Sample GitHub issues"
 
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Connect through LocalThought. The tenant secret is used in this tab to start the connection and is never saved."
-msgstr "Connect through LocalThought. The tenant secret is used in this tab to start the connection and is never saved."
+#~ msgid "Connect through LocalThought. The tenant secret is used in this tab to start the connection and is never saved."
+#~ msgstr "Connect through LocalThought. The tenant secret is used in this tab to start the connection and is never saved."
 
 #: src/routes/DevonianDemoRoute.tsx
 msgid "Connect GitHub tracker"
@@ -10405,3 +10401,46 @@ msgstr "Consider enabling API plugins in Settings → Integration."
 #: src/routes/IntegrationStore.tsx
 msgid "Consider enabling experimental plugins in Settings → Integration."
 msgstr "Consider enabling experimental plugins in Settings → Integration."
+
+#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
+#: src/routes/DevonianDemoRoute.tsx
+msgid "GitHub issues and comments (Devonian)"
+msgstr "GitHub issues and comments (Devonian)"
+
+#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
+msgid "Connect a GitHub repository to a local issue tracker."
+msgstr "Connect a GitHub repository to a local issue tracker."
+
+#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
+msgid "Sync issues and comments in both directions, including closing and reopening issues."
+msgstr "Sync issues and comments in both directions, including closing and reopening issues."
+
+#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
+msgid "Connect through LocalThought, then use Sync now to exchange changes."
+msgstr "Connect through LocalThought, then use Sync now to exchange changes."
+
+#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
+msgid "Creates a separate local drive. Keep the browser open to sync. Sync writes changes to your GitHub repository."
+msgstr "Creates a separate local drive. Keep the browser open to sync. Sync writes changes to your GitHub repository."
+
+#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
+#: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
+msgid "Install plugin"
+msgstr "Install plugin"
+
+#: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
+#: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
+msgid "Google Calendar (Devonian)"
+msgstr "Google Calendar (Devonian)"
+
+#: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
+msgid "Import events into calendar views, preserve recurring series and preview supported edits to send back to Google."
+msgstr "Import events into calendar views, preserve recurring series and preview supported edits to send back to Google."
+
+#: src/routes/DevonianDemoRoute.tsx
+msgid "LocalThought will ask you to sign in and authorize the GitHub connection."
+msgstr "LocalThought will ask you to sign in and authorize the GitHub connection."
+
+#: src/routes/DevonianDemoRoute.tsx
+msgid "Connect a GitHub repository"
+msgstr "Connect a GitHub repository"

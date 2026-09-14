@@ -3,7 +3,8 @@ import { BrowserIntegrations } from '../../../../../integrations/localthought/br
 import { endpoint } from 'devonian/platform-lenses/github-issues/adapter';
 import { get, set } from 'idb-keyval';
 import { core, server, dataBrowser, Datatype, enableLoro } from '@tomic/lib';
-import * as devonian from 'devonian';
+// The package root also exports the Node client (node:events). Use the browser API.
+import * as devonian from './devonian.js';
 import { ensureAgentForDemo } from '../Demo/guestAgent';
 import { buildTableFromSpec } from '../TablePage/createTableFromSpec';
 import { Bridge } from 'devonian/platform-lenses/github-issues';

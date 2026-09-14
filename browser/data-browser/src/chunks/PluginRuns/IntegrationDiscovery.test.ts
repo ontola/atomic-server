@@ -7,6 +7,7 @@ it('keeps every bundled integration discoverable without a proxy catalog', () =>
   vi.stubGlobal('fetch', fetch);
   const entries = bundledIntegrations();
   expect(entries.map(entry => entry.id)).toEqual([
+    'devonian-github-issues',
     'mt940',
     'clockify',
     'github-issues',
@@ -15,5 +16,8 @@ it('keeps every bundled integration discoverable without a proxy catalog', () =>
   expect(
     entries.find(entry => entry.id === 'github-issues')?.capabilities,
   ).toContain('both directions');
+  expect(
+    entries.find(entry => entry.id === 'devonian-github-issues')?.capabilities,
+  ).toContain('comments');
   expect(fetch).not.toHaveBeenCalled();
 });
