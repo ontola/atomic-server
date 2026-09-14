@@ -263,6 +263,10 @@ Devices sync via [Iroh](https://iroh.computer) QUIC connections. The transport i
 
 ## Testing
 
+Cargo defaults libtest to one thread via `.cargo/config.toml`: Iroh tests share
+process-global state. Do not override this for runs that include sync tests.
+Use nextest for process-isolated parallel execution.
+
 [`TESTING_COVERAGE.md`](./TESTING_COVERAGE.md) maps which flows are tested at
 which layer, and — more usefully — which are not. Read it before deciding where
 a new test belongs, and update it when you add one or discover a gap.

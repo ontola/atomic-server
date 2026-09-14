@@ -193,6 +193,28 @@ caught it, and if the answer is "none", that is the row to add.
 
 ---
 
+## Save failure boundaries and recovery
+
+- `server/src/handlers/commit/durability_tests.rs` injects a real redb flush failure,
+  verifies no acknowledgement, retries the identical signed commit, and checks
+  duplicate delivery adds no history.
+- `browser/lib/tests/lost-ack.integration.test.ts` loses an HTTP response after a
+  real server accepts genesis, adds a client edit before retry, and independently
+  reads the final value from the server. Local persistence is a test double here.
+- `client-db-durable-put.test.ts` checks snapshot and blob acknowledgements only
+  follow successful flushes, with a periodic retry after failure.
+- `crash-durability.spec.ts` includes file bytes in its independent ledger and
+  checks SHA-256 after Chromium SIGKILL/reopen with remote data access blocked.
+- `toolchain.node.mjs` verifies nested pnpm selection despite an older PATH binary
+  and rejects mismatched Playwright versions. The runner uses a frozen CI install.
+- `lib/examples/vault_restore_drill.rs` is a standalone release acceptance probe:
+  metadata restores into an empty store, but attachment bytes are currently absent.
+  It reports incomplete recovery and exits 1; this is an open release blocker,
+  not a passing restore test. Encrypted blob backup is still unimplemented.
+
+Cargo libtest defaults to serial execution because Iroh tests share process-global
+state. CI nextest isolates each test in its own process and keeps bounded parallelism.
+
 ## WASM database opening
 
 `browser/lib/src/client-db-open.test.ts` covers `ClientDb.open()` success,

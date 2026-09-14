@@ -382,6 +382,11 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
     case 'putBlob': {
       await ensureInit();
       db!.putBlob(msg.hash, msg.data);
+      // Upload callers may discard their File once this RPC succeeds.
+      // Persist bytes before acknowledging, and re-arm retry if fsync fails.
+      dirty = true;
+      db!.flush();
+      dirty = false;
 
       return;
     }
@@ -581,7 +586,6 @@ const WRITE_OPS: ReadonlySet<WorkerRequest['type']> = new Set([
   'putResources',
   'applyCommit',
   'removeResource',
-  'putBlob',
   'importAllResources',
   'populate',
 ]);
