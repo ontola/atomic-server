@@ -1,10 +1,7 @@
-# Notion companion changes — not deployed
+# Notion activation dependencies
 
-`integration-proxy.patch` applies to `localthought/integration-proxy` commit
-`a1eb305ccfa2f3fc8ddede4875765cf1b099bd2b`. It implements generic JSON OAuth
-operations and fixed OpenAPI header defaults, with no provider-specific
-production branches. Local validation: **67 passed, 9 ignored** with `cargo test`.
-The patch includes the composed Notion document as a regression fixture.
+The generic proxy implementation is merged in [integration-proxy PR #67](https://github.com/localthought/integration-proxy/pull/67), commit
+`516079e5a3ecd254c748995b50570998e486e4fc`. CI passed, including database and network tests. Heroku deployment verification is pending. It implements generic JSON OAuth operations and fixed OpenAPI header defaults with no provider-specific production branches. The proxy repository owns its regression fixture and code; no duplicate patch is kept here.
 
 The supported OAuth operation subset uses local POST operation references, JSON
 or form bodies and HTTP Basic client authentication. Unsupported profiles fail
@@ -24,7 +21,7 @@ Before enabling real connections:
    the overlay in `localthought/overlays`.
 2. Add a `notion` entry to the existing root `overlays/catalog.json`, using
    immutable public commit URLs and preserving all other entries.
-3. Apply, review and deploy the generic proxy patch; point its catalog at the
+3. Verify the merged proxy release is deployed and point its catalog at the
    reviewed catalog revision.
 4. Register/configure the Notion OAuth app for
    `https://localthought.io/oauth/notion/callback`, using the proxy's
@@ -33,5 +30,5 @@ Before enabling real connections:
 5. Verify real consent, discovery and two-way synchronization on a disposable
    database. The local tests use authored responses and do not certify live OAuth.
 
-No publication, deployment, client registration or live provider mutation was
-performed as part of preparing these artifacts.
+The proxy implementation is published and merged. Metadata publication, client
+registration and live provider verification remain pending.

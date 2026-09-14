@@ -20,7 +20,7 @@ The deployed proxy catalog currently does not include Notion. Companion generic
 proxy changes and Notion OpenAPI/OAuth metadata are staged under
 `planning/notion-proxy/`. They need publication with immutable OAD/overlay pins,
 proxy deployment and a configured Notion OAuth app before real consent works.
-No production settings or live provider data have been changed.
+The generic proxy implementation is merged in integration-proxy PR #67. No OAuth settings or live provider data have been changed.
 
 Verified locally: both full default and `--no-default-features --features light`
 AtomicServer binaries pass `cargo check`; Notion Vitest tests and a browser
@@ -42,5 +42,6 @@ migration; no remote executable loading was introduced here.
 - Branch: `feat/plugin-model-improvements`
 - Base: `feat/plugin-model` at `4f5f2804d` (unmerged dependency; PR targets it).
 - [x] Isolate task-owned changes, excluding concurrent Devonian discovery and table loading edits.
-- [ ] Publish Atomic PR and inspect exact-commit CI.
+- [x] Publish Atomic PR #1482 against feat/plugin-model.
+- [ ] Inspect exact-commit CI.
 - [ ] Merge companion proxy PR and verify Heroku deployment.

@@ -14,34 +14,49 @@ export interface BrowserPlugin {
   config: unknown;
   source: string;
   /** Shipped code only, not editable resource source. */
-  run(input: any): unknown;
+  run(input: BrowserPluginInput): unknown;
   read(intent: ExternalIntent): Promise<ExternalReceipt>;
   write(intent: ExternalIntent): Promise<ExternalReceipt>;
 }
+
+export interface BrowserPluginInput {
+  config: unknown;
+  read(subject: string): Record<string, unknown>;
+  query(property: string, value: string): string[];
+  http(intent: ExternalIntent): ExternalReceipt;
+}
+
 async function binding(plugin: BrowserPlugin) {
   const digest = await crypto.subtle.digest(
     'SHA-256',
     new TextEncoder().encode(JSON.stringify([plugin.source, plugin.config])),
   );
+
   return Array.from(new Uint8Array(digest), byte =>
     byte.toString(16).padStart(2, '0'),
   ).join('');
 }
+
 function key(store: Store, plugin: BrowserPlugin) {
   const actor = store.getAgent()?.subject;
   if (!actor) throw new Error('Sign in before syncing');
+
   return `browser-plugin-sync-v1:${JSON.stringify([actor, plugin.drive, plugin.plugin])}`;
 }
+
 export function savedBrowserSync(
   store: Store,
   plugin: BrowserPlugin,
 ): SyncSession | undefined {
   const raw = localStorage.getItem(key(store, plugin));
+
   return raw ? JSON.parse(raw) : undefined;
 }
+
 async function invoke(store: Store, plugin: BrowserPlugin, input: object) {
   const rows = new Map<string, Record<string, unknown>>();
   let offset = 0;
+
   for (;;) {
     const result = await store.queryLocalDb({
       drive: plugin.drive,
@@ -57,6 +72,7 @@ async function invoke(store: Store, plugin: BrowserPlugin, input: object) {
     if (!result.subjects.length || offset > 50000)
       throw new Error('Local sync snapshot is incomplete or too large');
   }
+
   return runWithAsyncReads(
     plugin.run,
     {
@@ -65,6 +81,7 @@ async function invoke(store: Store, plugin: BrowserPlugin, input: object) {
       read: (subject: string) => {
         const row = rows.get(subject);
         if (!row) throw new Error('Local sync resource is missing');
+
         return structuredClone(row);
       },
       query: (property: string, value: string) =>
@@ -75,12 +92,14 @@ async function invoke(store: Store, plugin: BrowserPlugin, input: object) {
     plugin.read,
   );
 }
+
 export async function previewBrowserPlugin(
   store: Store,
   plugin: BrowserPlugin,
 ) {
   if (!navigator.locks)
     throw new Error('This browser needs Web Locks for sync');
+
   return navigator.locks.request(key(store, plugin), async () => {
     const previous = savedBrowserSync(store, plugin);
     if (previous && !previous.complete)
@@ -102,6 +121,7 @@ export async function previewBrowserPlugin(
       throw new Error('Plugin did not return a preview');
     if (preview.problems.some(p => p.severity === 'error'))
       throw new Error(preview.problems.map(p => p.message).join('\n'));
+
     return {
       proposal: preview.proposal,
       connection,
@@ -116,6 +136,7 @@ export async function applyBrowserPlugin(
 ) {
   if (!navigator.locks)
     throw new Error('This browser needs Web Locks for sync');
+
   return navigator.locks.request(key(store, plugin), async () => {
     if (approved.binding !== (await binding(plugin)))
       throw new Error(
@@ -136,6 +157,7 @@ export async function applyBrowserPlugin(
     )
       throw new Error('Sync changed after preview; make a new preview');
     save(approved);
+
     return continueBrowserSync(approved, {
       save,
       step: session =>
@@ -150,6 +172,7 @@ export async function applyBrowserPlugin(
         const { report } = await applyRun(store, prepared, plugin);
         if (report.failed || report.stoppedEarly)
           throw new Error('Local sync did not complete; inspect the saved run');
+
         return report;
       },
     });

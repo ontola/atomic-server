@@ -30,6 +30,7 @@ export function ConnectLocalThought({
 }) {
   if (platform === 'notion')
     return <ConnectNotion drive={drive} origin={origin} />;
+
   return (
     <GenericConnection drive={drive} platform={platform} origin={origin} />
   );

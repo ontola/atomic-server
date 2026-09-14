@@ -40,6 +40,7 @@ export function ConnectNotion({
   const origin = suppliedOrigin ?? selectedOrigin;
   const store = useStore();
   const actor = store.getAgent()?.subject ?? '';
+
   // Remount when identity/proxy changes so a previous account cannot remain selected.
   return (
     <NotionConnection
@@ -50,6 +51,7 @@ export function ConnectNotion({
     />
   );
 }
+
 function NotionConnection({
   drive,
   actor,
@@ -84,6 +86,7 @@ function NotionConnection({
       actor,
       'notion',
     );
+
     return raw ? JSON.parse(raw) : undefined;
   });
   const installationKey = JSON.stringify([
@@ -109,8 +112,10 @@ function NotionConnection({
   const [active, setActive] = useState<Connection>();
   const [completed, setCompleted] = useState(false);
   const [labels, setLabels] = useState<Record<string, string>>({});
+
   const request = (path: string, init?: { method?: string; body?: string }) => {
     if (!connection) throw new Error('Connect Notion before continuing');
+
     return browserIntegrations(origin).request(
       drive,
       actor,
@@ -120,6 +125,7 @@ function NotionConnection({
       init,
     );
   };
+
   const plugin = (config: Connection): BrowserPlugin => ({
     drive,
     plugin: config.plugin,
@@ -129,9 +135,11 @@ function NotionConnection({
     read: proxyOperation(config.dataSource, request, 'read'),
     write: proxyOperation(config.dataSource, request, 'write'),
   });
+
   const attempt = async (action: () => Promise<void>) => {
     setBusy(true);
     setError('');
+
     try {
       await action();
     } catch (reason) {
@@ -140,6 +148,7 @@ function NotionConnection({
       setBusy(false);
     }
   };
+
   const connect = () =>
     attempt(async () => {
       const result = await proxyRequest<{ url: string; state: string }>(
@@ -187,6 +196,7 @@ function NotionConnection({
     attempt(async () => {
       if (!connection) throw new Error('Connect Notion before continuing');
       let config = existing ?? installed[database];
+
       if (!config) {
         const { installNotion } = await import('./notionInstaller');
         config = await installNotion(store, drive, database, {
@@ -198,6 +208,7 @@ function NotionConnection({
         localStorage.setItem(installationKey, JSON.stringify(next));
         setInstalled(next);
       }
+
       setActive(config);
       setCompleted(false);
       setLabels(
@@ -224,6 +235,7 @@ function NotionConnection({
   const apply = () =>
     attempt(async () => {
       if (!active || !preview) return;
+
       try {
         const result = await applyBrowserPlugin(store, plugin(active), preview);
         setPreview(undefined);
@@ -233,6 +245,7 @@ function NotionConnection({
         throw reason;
       }
     });
+
   return (
     <Column gap='1rem'>
       <p>
@@ -366,13 +379,16 @@ function NotionChanges({
       }[];
     }
   ).changes;
+
   const value = (field: string, raw: unknown) => {
     if (raw === undefined || raw === null) return '—';
     const options = config?.fields.find(f => f.id === field)?.optionNames;
+
     return Array.isArray(raw)
       ? raw.map(item => options?.[String(item)] ?? String(item)).join(', ')
       : String(raw);
   };
+
   return (
     <Column>
       {!changes.length && <p>Both sides are already up to date.</p>}
