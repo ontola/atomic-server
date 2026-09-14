@@ -1,13 +1,18 @@
 # Testing coverage map
 
-Devonian discovery: `PluginRuns/localThoughtCatalogEntries.test.ts` covers Calendar
-availability without a remote catalog and deduplication of discovered entries.
-`PluginRuns/IntegrationDiscovery.test.ts` covers the permanent GitHub issue/comment
-entry. Both reuse existing lens setup flows; live provider consent is not tested
-by these discovery checks. The rebuilt localhost:9883 app was manually checked
-for both searchable cards, the Calendar install dialog and the GitHub repository
-form. The latter uses the browser-safe Devonian bundle, avoiding node:events
-from the package root.
+Devonian discovery: `PluginRuns/localThoughtCatalogEntries.test.ts` checks that
+generated API entries follow the remote catalog without injecting Calendar.
+`PluginRuns/IntegrationDiscovery.test.ts` covers separate bundled Devonian
+Calendar and GitHub issue/comment entries and removal of the older GitHub-to-kanban
+listing. The Devonian GitHub route uses the browser-safe bundle, avoiding
+node:events from the package root. Discovery unit checks do not exercise live
+provider consent.
+
+Calendar category isolation: `PluginRuns/localThoughtExtension.test.ts` and
+`PluginRuns/localThoughtSync.test.ts` cover explicit generated/Devonian mode,
+separate schema namespaces, and legacy Calendar refresh behavior.
+`PluginRuns/localThoughtCallback.test.ts` checks originating-entry selection
+and callback redemption; real provider consent remains outside these unit tests.
 
 Typed app setup: `browser/lib/src/plugin-setup.test.ts` covers shared input validation,
 partial model drafts, forbidden arguments and size limits. `AppSetup/setup.test.ts`

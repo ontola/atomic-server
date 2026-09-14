@@ -1,9 +1,10 @@
 import { usePluginClass } from '../chunks/PluginRuns/runScript';
 import { LocalThoughtCatalog } from '../chunks/PluginRuns/LocalThoughtCatalog';
+import { LocalThoughtCallback } from '../chunks/PluginRuns/localThoughtCallback';
 import { NewAutomation } from '../chunks/PluginRuns/NewAutomation';
 import {
   IntegrationDiscovery,
-  bundledIntegrations,
+  visibleBundledIntegrations,
 } from '../chunks/PluginRuns/IntegrationDiscovery';
 import { ConnectedIntegration } from '../chunks/PluginRuns/ConnectedIntegration';
 import { useIntegrationVisibility } from '@hooks/useIntegrationVisibility';
@@ -178,11 +179,13 @@ function IntegrationStore(): React.JSX.Element {
   };
 
   const query = search.trim().toLocaleLowerCase();
-  const bundled = (showExperimentalPlugins ? bundledIntegrations() : []).filter(
-    entry =>
-      `${entry.name} ${entry.description} ${entry.capabilities} ${entry.events} ${entry.keywords}`
-        .toLocaleLowerCase()
-        .includes(query),
+  const bundled = visibleBundledIntegrations(
+    showExperimentalPlugins,
+    showApiPlugins,
+  ).filter(entry =>
+    `${entry.name} ${entry.description} ${entry.capabilities} ${entry.events} ${entry.keywords}`
+      .toLocaleLowerCase()
+      .includes(query),
   );
   const visible = (showExperimentalPlugins ? listings : [])?.filter(
     ({ metadata: entry }) =>
@@ -237,6 +240,7 @@ function IntegrationStore(): React.JSX.Element {
             </section>
           )}
           <h2>Discover integrations</h2>
+          <LocalThoughtCallback drive={drive} />
           <Input
             aria-label='Search integrations'
             placeholder='Search integrations, domains or standards'

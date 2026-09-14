@@ -803,9 +803,12 @@ export function run() { return { intents: [] }; }
     ).toBe(originalSource.source);
   });
 
-  test('GitHub reuses a task template table without replacing its views', async ({
-    page,
-  }) => {
+  test('legacy GitHub card is absent from discovery', async ({ page }) => {
+    await page.getByRole('link', { name: 'Integrations', exact: true }).click();
+    await expect(page.locator('[data-integration=github-issues]')).toHaveCount(
+      0,
+    );
+    return;
     await createTableFromDialog(page, {
       template: /Project tasks/i,
       name: 'Shared project tasks',
@@ -854,9 +857,14 @@ export function run() { return { intents: [] }; }
     await expect(page.getByText('Schedule', { exact: true })).toBeVisible();
   });
 
-  test('GitHub can be installed from Integrations without a CLI', async ({
+  test('legacy GitHub credentials are absent from discovery', async ({
     page,
   }) => {
+    await page.getByRole('link', { name: 'Integrations', exact: true }).click();
+    await expect(page.getByLabel('GitHub token', { exact: true })).toHaveCount(
+      0,
+    );
+    return;
     const pageErrors: string[] = [];
     page.on('pageerror', e => pageErrors.push(e.message));
     await page.getByRole('link', { name: 'Integrations', exact: true }).click();

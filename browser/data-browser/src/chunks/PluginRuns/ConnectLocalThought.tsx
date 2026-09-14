@@ -3,7 +3,7 @@ import {
   importInstallationIdentity,
   readSavedConnection,
 } from '../../../../../integrations/localthought/settings';
-import { googleCalendarIntegration } from '@localthought/atomic-integrations/ui/GoogleCalendar';
+import type { googleCalendarIntegration } from '@localthought/atomic-integrations/ui/GoogleCalendar';
 import { useEffect, useState } from 'react';
 import { useStore } from '@tomic/react';
 import { Button } from '@components/Button';
@@ -16,23 +16,29 @@ import {
   proxyRequest,
   type SavedConnection,
 } from './localThought';
-import { ConnectNotion } from './ConnectNotion';
 import { installLocalThought, refreshLocalThought } from './localThoughtSync';
 
 export function ConnectLocalThought({
   drive,
   platform,
   origin = getIntegrationProxy(),
+  extension,
+  entry,
 }: {
   drive: string;
   platform: string;
   origin?: string;
+  extension?: typeof googleCalendarIntegration;
+  entry?: string;
 }) {
-  if (platform === 'notion')
-    return <ConnectNotion drive={drive} origin={origin} />;
-
   return (
-    <GenericConnection drive={drive} platform={platform} origin={origin} />
+    <GenericConnection
+      drive={drive}
+      platform={platform}
+      origin={origin}
+      extension={extension}
+      entry={entry}
+    />
   );
 }
 
@@ -40,14 +46,15 @@ function GenericConnection({
   drive,
   platform,
   origin,
+  extension,
+  entry,
 }: {
   drive: string;
   platform: string;
   origin: string;
+  extension?: typeof googleCalendarIntegration;
+  entry?: string;
 }) {
-  const extension = [googleCalendarIntegration].find(
-    item => item.id === platform,
-  );
   const ImportControls = extension?.ImportControls;
   const store = useStore();
   const actor = store.getAgent()?.subject ?? '';
@@ -127,6 +134,7 @@ function GenericConnection({
           drive,
           actor,
           platform,
+          entry,
         }),
       );
       location.assign(result.url);
@@ -154,8 +162,9 @@ function GenericConnection({
         identity: importInstallationIdentity(
           connection,
           constants,
-          extension && selection ? extension.identitySuffix(selection) : '',
+          `${extension ? ':devonian-calendar' : ':api'}${extension && selection ? extension.identitySuffix(selection) : ''}`,
         ),
+        extension: extension ? 'calendar' : 'none',
       });
       sessionStorage.removeItem('localthought-completed');
       setFolder(installed.folder);

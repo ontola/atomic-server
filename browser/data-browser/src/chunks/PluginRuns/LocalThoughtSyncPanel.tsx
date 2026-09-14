@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { core, useStore, type Resource, type JSONValue } from '@tomic/react';
-import { googleCalendarIntegration } from '@localthought/atomic-integrations/ui/GoogleCalendar';
 import { Column, Row } from '@components/Row';
 import { Button } from '@components/Button';
 import { ErrMessage } from '@components/forms/InputStyles';
@@ -14,6 +13,7 @@ import {
   SYNC_CHANGED,
   type LocalThoughtInstallation,
 } from './localThoughtSync';
+import { localThoughtExtension } from './localThoughtExtension';
 
 /** Visiting the installed folder or its tables resumes this browser's import. */
 export function LocalThoughtSync({ resource }: { resource: Resource }) {
@@ -61,8 +61,9 @@ export function LocalThoughtSync({ resource }: { resource: Resource }) {
   )
     return null;
   const { config } = installation;
-  const Sync = [googleCalendarIntegration].find(
-    item => item.id === installation.platform,
+  const Sync = localThoughtExtension(
+    installation.platform,
+    installation.extension,
   )?.Sync;
 
   return (

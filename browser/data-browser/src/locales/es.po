@@ -8157,25 +8157,20 @@ msgstr ""
 msgid "The next screen opens an editable JavaScript starter. Automatic execution stays off until you enable it."
 msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "GitHub issues"
-msgstr ""
+#~ msgid "GitHub issues"
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Keep GitHub issues and your kanban board in sync."
-msgstr ""
+#~ msgid "Keep GitHub issues and your kanban board in sync."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Sync titles, descriptions and status in both directions. Create issues from either app."
-msgstr ""
+#~ msgid "Sync titles, descriptions and status in both directions. Create issues from either app."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Start automations when a new issue is discovered."
-msgstr ""
+#~ msgid "Start automations when a new issue is discovered."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Issues only. Comments and pull requests are not synced."
-msgstr ""
+#~ msgid "Issues only. Comments and pull requests are not synced."
+#~ msgstr ""
 
 #: src/chunks/PluginRuns/ConnectNotion.tsx
 #: src/chunks/PluginRuns/IntegrationDiscovery.tsx
@@ -10374,6 +10369,7 @@ msgid "Sync issues and comments in both directions, including closing and reopen
 msgstr ""
 
 #: src/chunks/PluginRuns/IntegrationDiscovery.tsx
+#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 msgid "Connect through LocalThought, then use Sync now to exchange changes."
 msgstr ""
 
@@ -10382,18 +10378,15 @@ msgid "Creates a separate local drive. Keep the browser open to sync. Sync write
 msgstr ""
 
 #: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-#: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
 msgid "Install plugin"
 msgstr ""
 
-#: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
-#: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
+#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 msgid "Google Calendar (Devonian)"
 msgstr ""
 
-#: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
-msgid "Import events into calendar views, preserve recurring series and preview supported edits to send back to Google."
-msgstr ""
+#~ msgid "Import events into calendar views, preserve recurring series and preview supported edits to send back to Google."
+#~ msgstr ""
 
 #: src/routes/DevonianDemoRoute.tsx
 msgid "LocalThought will ask you to sign in and authorize the GitHub connection."
@@ -10440,4 +10433,16 @@ msgstr ""
 #. 0: writable ? ' After importing, preview supported edits to send changes back.' \\: ' No provider writes.'
 #: src/chunks/PluginRuns/ConnectLocalThought.tsx
 msgid "Imports the collections described by the platform, following pagination. Syncs automatically when you open the folder and every five minutes while it is open. Keep this browser open to finish importing. {0}"
+msgstr ""
+
+#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
+msgid "Import Google Calendar events into calendar views."
+msgstr ""
+
+#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
+msgid "Preserves recurring series and previews supported edits to send back to Google."
+msgstr ""
+
+#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
+msgid "Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google."
 msgstr ""

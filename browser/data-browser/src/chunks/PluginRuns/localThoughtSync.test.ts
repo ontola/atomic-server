@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   apply: vi.fn(),
   ensure: vi.fn(),
   prepare: vi.fn(),
+  project: vi.fn((value: unknown) => value),
 }));
 vi.mock('@tomic/react', () => ({
   core: { properties: { name: 'name' } },
@@ -14,7 +15,7 @@ vi.mock('@tomic/react', () => ({
   applyHostFromStore: () => ({}),
 }));
 vi.mock('@localthought/atomic-integrations/ui/GoogleCalendar', () => ({
-  googleCalendarIntegration: { id: 'google-calendar' },
+  googleCalendarIntegration: { id: 'google-calendar', project: mocks.project },
 }));
 vi.mock('./localThought', () => ({
   browserIntegrations: () => ({
@@ -167,4 +168,53 @@ it('does not apply a blocked import or data fetched for a previous signed-in acc
   await refreshLocalThought(store as never, entry);
   expect(mocks.apply).not.toHaveBeenCalled();
   expect(findInstallation(store as never, 'folder')).toBeUndefined();
+});
+
+it('keeps generated Calendar plain and schema-isolated while Devonian and legacy installs project it', async () => {
+  mocks.fetch.mockResolvedValue({
+    platform: 'google-calendar',
+    records: [],
+    ontology: { terms: [] },
+  });
+  const calendar = { ...entry, platform: 'google-calendar' };
+
+  const plain = { ...calendar, extension: 'none' as const };
+  saveInstallation(plain);
+  await refreshLocalThought(store as never, plain);
+  expect(mocks.project).not.toHaveBeenCalled();
+  expect(mocks.tables).toHaveBeenLastCalledWith(
+    store,
+    'drive',
+    expect.anything(),
+    'identity:folder',
+    expect.anything(),
+    'none',
+    'api-google-calendar',
+  );
+
+  const devonian = { ...calendar, extension: 'calendar' as const };
+  saveInstallation(devonian);
+  await refreshLocalThought(store as never, devonian);
+  expect(mocks.project).toHaveBeenCalled();
+  expect(mocks.tables).toHaveBeenLastCalledWith(
+    store,
+    'drive',
+    expect.anything(),
+    'identity:folder',
+    expect.anything(),
+    'calendar',
+    'google-calendar',
+  );
+
+  saveInstallation(calendar);
+  await refreshLocalThought(store as never, calendar);
+  expect(mocks.tables).toHaveBeenLastCalledWith(
+    store,
+    'drive',
+    expect.anything(),
+    'identity:folder',
+    expect.anything(),
+    undefined,
+    'google-calendar',
+  );
 });

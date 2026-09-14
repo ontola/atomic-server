@@ -1,13 +1,13 @@
 import { expect, it } from 'vitest';
 import { localThoughtCatalogEntries } from './localThoughtCatalogEntries';
 
-it('keeps the Calendar lens installable before discovery and after a catalog failure', () => {
-  expect(localThoughtCatalogEntries()).toEqual(['google-calendar']);
-  expect(localThoughtCatalogEntries([])).toEqual(['google-calendar']);
+it('reflects the generated catalog without injecting bundled integrations', () => {
+  expect(localThoughtCatalogEntries()).toEqual([]);
+  expect(localThoughtCatalogEntries([])).toEqual([]);
 });
 
-it('deduplicates Calendar while preserving other discovered platforms', () => {
+it('deduplicates generated platforms while preserving their catalog order', () => {
   expect(
     localThoughtCatalogEntries(['github-issues', 'google-calendar', 'pets']),
-  ).toEqual(['google-calendar', 'github-issues', 'pets']);
+  ).toEqual(['github-issues', 'google-calendar', 'pets']);
 });

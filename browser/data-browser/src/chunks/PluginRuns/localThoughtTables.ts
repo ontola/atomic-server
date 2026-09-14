@@ -6,7 +6,6 @@ import {
   type Store,
   type Resource,
 } from '@tomic/react';
-import { googleCalendarIntegration } from '@localthought/atomic-integrations/ui/GoogleCalendar';
 import {
   platformSchema,
   termKey,
@@ -18,6 +17,10 @@ import {
   ensureLocalInstallationResource as ensureInstallationResource,
 } from './installationResources';
 import { platformName } from './localThought';
+import {
+  localThoughtExtension,
+  schemaNamespace,
+} from './localThoughtExtension';
 
 export async function ensureImportTables(
   store: Store,
@@ -25,26 +28,27 @@ export async function ensureImportTables(
   resource: Resource,
   identity: string,
   fetched: FetchedPlatform,
+  extensionId?: 'calendar' | 'none',
+  schemaPlatform?: string,
 ): Promise<Config> {
   const { platform } = fetched;
-  const extension = [googleCalendarIntegration].find(
-    item => item.id === platform,
-  );
+  const namespace = schemaPlatform ?? schemaNamespace(platform, extensionId);
+  const extension = localThoughtExtension(platform, extensionId);
   const schemaStore = localSchemaStore(store);
   const name = platformName(platform);
   const schema = await ensureSchema(
     schemaStore,
     drive,
-    platformSchema(platform, fetched.ontology.terms),
+    platformSchema(namespace, fetched.ontology.terms),
   );
   const destinations: Config['destinations'] = {};
   const properties: Record<string, string> = {};
   for (const term of fetched.ontology.terms.filter(t => t.kind === 'property'))
-    properties[term.shortname] = schema.properties[termKey(platform, term)];
+    properties[term.shortname] = schema.properties[termKey(namespace, term)];
   const classes = fetched.ontology.terms.filter(t => t.kind === 'class');
 
   for (const term of classes) {
-    const rowClass = schema.classes[termKey(platform, term)];
+    const rowClass = schema.classes[termKey(namespace, term)];
     const tableName =
       classes.length === 1 ? name : `${name}: ${term.shortname}`;
     const destination = await ensureInstallationResource(store, drive, {

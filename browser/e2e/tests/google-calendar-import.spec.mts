@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { mockProxy } from '../../../integrations/localthought/mock-proxy.mjs';
+import { enableIntegrationDiscovery } from './integration-settings-utils';
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:6747';
 const SERVER_URL = process.env.SERVER_URL ?? 'http://localhost:9883';
 test.use({ serviceWorkers: 'block' });
@@ -106,13 +107,14 @@ for (const keepSeries of [false, true]) {
     try {
       await page.goto(`${FRONTEND_URL}/app/dev-drive`);
       await page.waitForURL(/app\/show\?subject=/, { timeout: 60000 });
+      await enableIntegrationDiscovery(page, true);
 
       const setup = async () => {
         await page
           .getByRole('link', { name: 'Integrations', exact: true })
           .click();
         await page
-          .locator('[data-integration="proxy:google-calendar"]')
+          .locator('[data-integration="devonian-google-calendar"]')
           .getByRole('button', { name: 'Set up connection' })
           .click();
       };
