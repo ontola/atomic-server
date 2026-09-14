@@ -17,7 +17,7 @@ import { CollectionBuilder } from './collectionBuilder.js';
 import { CommitBuilder, isCommitSubject, Commit } from './commit.js';
 import { perfSpan } from './perf-trace.js';
 import { validateDatatype, datatypeTag, Datatype } from './datatypes.js';
-import { isUnauthorized } from './error.js';
+import { isUnauthorized, RequestCancelledError } from './error.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
@@ -92,11 +92,14 @@ export const unknownSubject = 'unknown-subject';
 
 /**
  * Outcome of {@link Resource.save}:
- *  - `'persisted'` — the server acknowledged the commit.
+ *  - `'persisted'` — the server acknowledged the commit (or a local-only
+ *                    resource was durably saved to the local database).
  *  - `'offline'`   — server unreachable; saved locally, drain retries
  *                    on reconnect (also returned for a child queued
  *                    behind an unsaved parent).
  *  - `'noop'`      — nothing to save.
+ * Server refusals and queued writes without acknowledgement reject; background
+ * retries continue according to the outbox policy.
  */
 export type SaveResult = 'persisted' | 'offline' | 'noop';
 
@@ -3070,7 +3073,8 @@ export class Resource<C extends OptionalClass = any> {
   /**
    * Persist this resource. Resolves once the change is durable:
    *
-   *  - `'persisted'` — the server acknowledged the commit.
+   *  - `'persisted'` — the server acknowledged the commit (or a local-only
+   *                    resource was durably saved to the local database).
    *  - `'offline'`   — server unreachable; saved to clientDb, the drain
    *                    retries on reconnect.
    *  - `'noop'`      — nothing to save (no unsaved changes, nothing
@@ -3309,12 +3313,39 @@ export class Resource<C extends OptionalClass = any> {
       // 100 ms before calling `save()`, and the drain coalesces; the
       // await matters for explicit saves (blur, Enter, programmatic)
       // that need "is it safe to leave?" before proceeding.
+      // Retain the entry itself: a terminal refusal removes it from the queue,
+      // which must never be mistaken for acknowledgement. Capture this save's
+      // version too; edits made during the POST may legitimately remain queued.
+      const entry = this.store.outbox.getEntry(this.subject);
+      const savingVersion = this._loroDoc?.oplogVersion().toJSON();
       await this.store.syncDirtyResources();
+
+      if (entry?.lastAttemptFailure) {
+        throw entry.lastAttemptFailure.cause;
+      }
+
+      if (this.store.outbox.hasPending(this.subject)) {
+        const savedVersion = this._loroVersionAtLastSave?.toJSON();
+        const acknowledged =
+          !entry?.signedGenesis &&
+          savingVersion &&
+          savedVersion &&
+          [...savingVersion].every(
+            ([peer, counter]) => (savedVersion.get(peer) ?? 0) >= counter,
+          );
+
+        if (!acknowledged) {
+          throw new Error(
+            'Save is still queued; the server has not acknowledged it.',
+          );
+        }
+      }
 
       // The server acknowledgement does not make the OPFS cache durable.
       // Explicit saves must survive an immediate reload for existing resources
       // too (for example a dashboard block renamed in its config dialog).
       await this.persistToClientDb();
+      this.commitError = undefined;
 
       return 'persisted';
     } catch (e) {
@@ -3496,7 +3527,11 @@ export class Resource<C extends OptionalClass = any> {
       closePersist();
     } catch (e) {
       closePersist({ err: e instanceof Error ? e.message : String(e) });
-      console.error('[persistToClientDb] failed:', e);
+
+      if (!(e instanceof RequestCancelledError)) {
+        console.error('[persistToClientDb] failed:', e);
+      }
+
       throw e;
     }
   }
