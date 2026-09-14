@@ -17,6 +17,10 @@ If the file is an image they will also get an `imageWidth` and `imageHeight` pro
 
 ## Uploading a file
 
+In the web app, drop one or more files onto a folder page or the content of a
+drive page to upload them there. Files dropped onto a drive page are added to
+that drive’s root. You need write access to the destination.
+
 In `atomic-server`, a `/upload` endpoint exists for uploading a file.
 
 - Decide where you want to add the file in the [hierarchy](hierarchy.md) of your server. You can add a file to any resource - your file will refer to this resource as its [`parent`](https://atomicdata.dev/properties/parent). Make sure you have `write` rights on this parent.

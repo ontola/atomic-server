@@ -977,3 +977,11 @@ subject-only) and direct reads, while the authorized agent can still read it.
 `client::helpers` origin tests reject lookalike hosts, userinfo-host confusion,
 changed ports/schemes, malformed URLs and non-HTTP URLs; normalized same-origin
 and localhost requests remain eligible for DID-agent authentication.
+
+## Drive root file drops
+
+`views/Drive/DrivePage.test.tsx` renders the drive page with its real dropzone
+and upload hook, then delivers multiple files through the drop callback. It
+verifies the upload targets the displayed drive even when the current drive
+setting differs. Native drag events, overlay geometry and the refreshed child
+list are not covered by this component test.
