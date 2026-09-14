@@ -22,7 +22,14 @@ struct Dirs {
 fn main() -> std::io::Result<()> {
     let start_total = Instant::now();
 
-    build_plugin_runtime();
+    // The embedded component is only needed when the server-side WASM plugin
+    // feature is enabled. Keep `--no-default-features` useful for lightweight
+    // builds: build scripts run even when the feature that owns their output
+    // is disabled, so this must be gated explicitly rather than relying on
+    // module-level `cfg` attributes in the library.
+    if std::env::var_os("CARGO_FEATURE_WASM_PLUGINS").is_some() {
+        build_plugin_runtime();
+    }
     // Uncomment this line if you want faster builds during development
     // return Ok(());
 

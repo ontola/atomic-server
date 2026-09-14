@@ -3559,6 +3559,7 @@ msgid "Drag column"
 msgstr "Faire glisser la colonne"
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
+#: src/chunks/PluginRuns/ConnectNotion.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx src/chunks/TablePage/useTableView.ts
@@ -3995,6 +3996,7 @@ msgstr ""
 msgid "New item…"
 msgstr ""
 
+#: src/chunks/PluginRuns/ConnectNotion.tsx
 #: src/chunks/TablePage/Kanban/KanbanView.tsx
 #: src/chunks/TablePage/createTableFromSpec.ts
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
@@ -6285,6 +6287,7 @@ msgstr ""
 #~ msgid "Keep an encrypted copy of this workspace in {0}. It is sealed on this device, so we store it without being able to read it."
 #~ msgstr ""
 
+#: src/chunks/PluginRuns/ConnectNotion.tsx
 #: src/components/Vault/VaultPanel.tsx
 #: src/routes/DevonianDemoRoute.tsx
 msgid "Working…"
@@ -7940,10 +7943,12 @@ msgstr ""
 msgid "Approve sync"
 msgstr ""
 
+#: src/chunks/PluginRuns/ConnectNotion.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 msgid "Preview sync"
 msgstr ""
 
+#: src/chunks/PluginRuns/ConnectNotion.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 msgid "Sync complete."
 msgstr ""
@@ -8169,6 +8174,7 @@ msgstr ""
 msgid "Issues only. Comments and pull requests are not synced."
 msgstr ""
 
+#: src/chunks/PluginRuns/ConnectNotion.tsx
 #: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 msgid "Notion"
 msgstr ""
@@ -8503,17 +8509,14 @@ msgstr ""
 #~ msgid "Enter a repository and token to continue."
 #~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Allow pop-ups for Atomic, then try connecting again."
-msgstr ""
+#~ msgid "Allow pop-ups for Atomic, then try connecting again."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Notion workspace"
-msgstr ""
+#~ msgid "Notion workspace"
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Search by name"
-msgstr ""
+#~ msgid "Search by name"
+#~ msgstr ""
 
 #: src/chunks/PluginRuns/ConnectNotion.tsx
 msgid "Find a database"
@@ -8535,49 +8538,41 @@ msgstr ""
 msgid "Database"
 msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Can’t find your database?"
-msgstr ""
+#~ msgid "Can’t find your database?"
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Only databases shared with this connection appear. Reconnect to select more pages in Notion, then search again. A database with multiple data sources can appear more than once."
-msgstr ""
+#~ msgid "Only databases shared with this connection appear. Reconnect to select more pages in Notion, then search again. A database with multiple data sources can appear more than once."
+#~ msgstr ""
 
 #: src/chunks/PluginRuns/ConnectNotion.tsx
 msgid "Load more databases"
 msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "No databases found. Try another name, or reconnect and grant access to the database in Notion."
-msgstr ""
+#~ msgid "No databases found. Try another name, or reconnect and grant access to the database in Notion."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Connect another workspace"
-msgstr ""
+#~ msgid "Connect another workspace"
+#~ msgstr ""
 
 #: src/chunks/PluginRuns/ConnectNotion.tsx
 msgid "Advanced setup with a token"
 msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Choose what to sync from Notion. You’ll review the first sync before any changes are applied."
-msgstr ""
+#~ msgid "Choose what to sync from Notion. You’ll review the first sync before any changes are applied."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Loading connections…"
-msgstr ""
+#~ msgid "Loading connections…"
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Notion sign-in needs to be configured by your server administrator. Existing connections can still be used."
-msgstr ""
+#~ msgid "Notion sign-in needs to be configured by your server administrator. Existing connections can still be used."
+#~ msgstr ""
 
 #: src/chunks/PluginRuns/ConnectNotion.tsx
 msgid "Reconnect Notion"
 msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Connecting to Notion…"
-msgstr ""
+#~ msgid "Connecting to Notion…"
+#~ msgstr ""
 
 #: src/routes/IntegrationStore.tsx
 msgid "Community plugins"
@@ -8587,17 +8582,14 @@ msgstr ""
 msgid "Published code you can adapt. Creating a draft does not connect an app or enable sync."
 msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Finding databases…"
-msgstr ""
+#~ msgid "Finding databases…"
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Setting up your database…"
-msgstr ""
+#~ msgid "Setting up your database…"
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Continue to sync setup"
-msgstr ""
+#~ msgid "Continue to sync setup"
+#~ msgstr ""
 
 #~ msgid "New issue board"
 #~ msgstr ""
@@ -10297,4 +10289,60 @@ msgstr ""
 
 #: src/components/AppSetup/setupError.ts
 msgid "Unknown setup error"
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectNotion.tsx
+msgid "Connect Notion through the integration proxy, select a database, then review changes before syncing."
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectNotion.tsx
+msgid "Sync runs in this browser while it is open. Connection credentials stay in this browser. Existing server connections require reconnecting."
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectNotion.tsx
+msgid "Property name"
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectNotion.tsx
+msgid "Both sides are already up to date."
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectNotion.tsx
+msgid "Field"
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectNotion.tsx
+msgid "Atomic"
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectNotion.tsx
+msgid "Proposed"
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectNotion.tsx
+msgid "No databases found. Reconnect and grant access to the database in Notion."
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectNotion.tsx
+msgid "Open Notion table"
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectNotion.tsx
+msgid "Sync this table"
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectNotion.tsx
+msgid "Review these proposed changes to Atomic and Notion. Approving will apply supported edits in both directions."
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectNotion.tsx
+msgid "A previous write has an uncertain result. Check the provider and saved run before continuing. It will not be sent again automatically."
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectNotion.tsx
+msgid "Approve and sync"
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectNotion.tsx
+msgid "Close preview"
 msgstr ""

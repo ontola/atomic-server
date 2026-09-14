@@ -1,0 +1,37 @@
+# Notion companion changes — not deployed
+
+`integration-proxy.patch` applies to `localthought/integration-proxy` commit
+`a1eb305ccfa2f3fc8ddede4875765cf1b099bd2b`. It implements generic JSON OAuth
+operations and fixed OpenAPI header defaults, with no provider-specific
+production branches. Local validation: **67 passed, 9 ignored** with `cargo test`.
+The patch includes the composed Notion document as a regression fixture.
+
+The supported OAuth operation subset uses local POST operation references, JSON
+or form bodies and HTTP Basic client authentication. Unsupported profiles fail
+closed. Header defaults come from `schema.default` or a singleton enum, never an
+example. Notion calls retain the `/v1` base path through `/proxy/notion/v1/...`.
+
+`notion.openapi.yaml` is an authored OpenAPI 3.0.3 subset of the API used by this
+plugin, including search, data sources, pages, views and the token operation.
+`auth-overlay.yaml` adds OAuth authorization-code metadata, owner=user, disabled
+PKCE at the provider (the browser/proxy handoff still uses PKCE), Basic auth and
+JSON token/refresh operation references. These are staging files, not public
+catalog URLs or a production catalog entry.
+
+Before enabling real connections:
+
+1. Review and publish the API document in `localthought/openapi-directory` and
+   the overlay in `localthought/overlays`.
+2. Add a `notion` entry to the existing root `overlays/catalog.json`, using
+   immutable public commit URLs and preserving all other entries.
+3. Apply, review and deploy the generic proxy patch; point its catalog at the
+   reviewed catalog revision.
+4. Register/configure the Notion OAuth app for
+   `https://localthought.io/oauth/notion/callback`, using the proxy's
+   `OAUTH_NOTION_CLIENT_ID` and `OAUTH_NOTION_CLIENT_SECRET` settings and Basic
+   `OAUTH_NOTION_CLIENT_AUTH_METHOD=client_secret_basic` setting. Do not put credentials in this repository.
+5. Verify real consent, discovery and two-way synchronization on a disposable
+   database. The local tests use authored responses and do not certify live OAuth.
+
+No publication, deployment, client registration or live provider mutation was
+performed as part of preparing these artifacts.

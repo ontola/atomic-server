@@ -30,19 +30,32 @@ export interface Connection extends Config {
   plugin: string;
   release: string;
 }
+export interface ProxyConnection {
+  connection: string;
+  origin: string;
+  schemaStore: Parameters<typeof ensureSchema>[0];
+  request(
+    path: string,
+    init?: { method?: string; body?: string },
+  ): Promise<{ status: number; body: string }>;
+}
 export async function install(
   store: Store,
   drive: string,
   dataSource: string,
   source: string,
-  token: string | { connection: string },
+  token: string | ProxyConnection,
 ): Promise<Connection> {
   const id = uuid(dataSource);
   if (typeof token === 'string' && !token.trim())
     throw new Error('A Notion connection token is required');
   if (typeof source !== 'string' || !source.trim())
     throw new Error('Notion provider bundle did not load');
-  const schema = await ensureSchema(store, drive, pluginSchema());
+  const schema = await ensureSchema(
+    typeof token === 'string' ? store : token.schemaStore,
+    drive,
+    pluginSchema(),
+  );
   const plugin = await store.newResource({
     parent: drive,
     isA: [schema.classes['plugin-script']],
@@ -54,39 +67,42 @@ export async function install(
     },
   });
   await plugin.save();
-  const secretUrl = `${store.getServerUrl()}/${typeof token === 'string' ? 'plugin-secret' : 'integration-oauth/notion/bind'}`;
-  const response = await fetch(secretUrl, {
-    method: 'POST',
-    headers: {
-      ...(await signRequest(secretUrl, store.getAgent()!, {})),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(
-      typeof token === 'string'
-        ? {
-            drive,
-            plugin: plugin.subject,
-            name: 'notion',
-            value: `Bearer ${token}`,
-            origins: ['https://api.notion.com'],
-          }
-        : { drive, plugin: plugin.subject, connection: token.connection },
-    ),
-  });
-  if (!response.ok) throw new Error('Could not store Notion credential');
-  const pinned = await pinPluginRelease(store, {
-    drive,
-    plugin: plugin.subject,
-  });
-  const read = async (operation: string, path: string) =>
-    parse(
-      await readExternalOperation(store, {
+  if (typeof token === 'string') {
+    const secretUrl = `${store.getServerUrl()}/plugin-secret`;
+    const response = await fetch(secretUrl, {
+      method: 'POST',
+      headers: {
+        ...(await signRequest(secretUrl, store.getAgent()!, {})),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         drive,
         plugin: plugin.subject,
-        release: pinned.id,
-        run: 'setup',
-        intent: request(operation, 'GET', path),
+        name: 'notion',
+        value: `Bearer ${token}`,
+        origins: ['https://api.notion.com'],
       }),
+    });
+    if (!response.ok) throw new Error('Could not store Notion credential');
+  }
+  const pinned =
+    typeof token === 'string'
+      ? await pinPluginRelease(store, {
+          drive,
+          plugin: plugin.subject,
+        })
+      : { id: 'browser-proxy-v1' };
+  const read = async (operation: string, path: string) =>
+    parse(
+      typeof token !== 'string'
+        ? await token.request(`/v1${path}`)
+        : await readExternalOperation(store, {
+            drive,
+            plugin: plugin.subject,
+            release: pinned.id,
+            run: 'setup',
+            intent: request(operation, 'GET', path),
+          }),
     );
   const sourceSchema = await read('schema', `/data_sources/${id}`);
   if (uuid(sourceSchema.id) !== id) throw new Error('Unexpected data source');
@@ -104,7 +120,7 @@ export async function install(
         ...values,
       },
     });
-    if ((await r.save()) === 'offline')
+    if ((await r.save()) === 'offline' && typeof token === 'string')
       throw new Error('AtomicServer disconnected during installation');
     return r;
   };
@@ -269,7 +285,7 @@ export async function install(
   await table.set(dataBrowser.properties.tableDefaultView, views[0]);
   await table.save();
   await plugin.set(schema.properties['plugin-workspace'], table.subject);
-  await plugin.set(schema.properties['plugin-connection'], {
+  const details = {
     release: pinned.id,
     config: c as unknown as JSONValue,
     warnings,
@@ -291,7 +307,20 @@ export async function install(
         ],
       },
     ],
-  });
+  };
+  if (typeof token === 'string') {
+    await plugin.set(schema.properties['plugin-connection'], details);
+  } else {
+    // This identifies browser-owned authorization, never the rotating credential.
+    await plugin.set(schema.properties['plugin-schemas'], {
+      'proxy-sync': {
+        platform: 'notion',
+        origin: token.origin,
+        connection: token.connection,
+        ...details,
+      },
+    });
+  }
   await plugin.save();
   return c;
 }

@@ -39,6 +39,7 @@ import type { Config } from '../../../../../integrations/localthought/plugin';
 import { localImportVerdict } from './localImportVerdict';
 import { localImportRows } from './localImportVerdict';
 import source from '../../../../../integrations/localthought/plugin.js?raw';
+import { ConnectNotion } from './ConnectNotion';
 
 export function ConnectLocalThought({
   drive,
@@ -48,6 +49,22 @@ export function ConnectLocalThought({
   drive: string;
   platform: string;
   origin?: string;
+}) {
+  if (platform === 'notion')
+    return <ConnectNotion drive={drive} origin={origin} />;
+  return (
+    <GenericConnection drive={drive} platform={platform} origin={origin} />
+  );
+}
+
+function GenericConnection({
+  drive,
+  platform,
+  origin,
+}: {
+  drive: string;
+  platform: string;
+  origin: string;
 }) {
   const extension = [googleCalendarIntegration].find(
     item => item.id === platform,

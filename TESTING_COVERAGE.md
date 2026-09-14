@@ -947,33 +947,29 @@ silently disabled), invalid identifiers before credential storage, Enter submiss
 and a mocked credential-storage rejection with a visible error and retry enabled.
 OAuth and named database discovery now have coverage described below; live provider verification remains open.
 
-Notion OAuth: `handlers::integration_oauth::tests` covers state ownership,
-expiry and consumption plus connection ownership and sanitized database choices.
-`notionAuth.test.ts` checks popup origin/source/state and cancellation cleanup.
-`db::plugin_secret::store_tests` covers shared reference rotation/revocation,
-origin/drive restrictions and legacy positional MessagePack decoding. Browser
-`Notion OAuth selects a database by name and reports revoked access` uses mocked
-provider authorization/discovery (not live Notion). Live OAuth and automatic
-refresh remain unverified/unimplemented respectively.
+Notion proxy migration: `integrations/notion/proxy.test.ts` checks named search
+and POST pagination, endpoint/read-vs-write constraints, parity with the shipped
+provider preview, import/checkpoint and an Atomic-to-Notion update.
+`integrations/localthought/async-plugin.test.ts` checks bounded receipt replay
+without duplicate HTTP requests. `browser-sync.test.ts` checks durable uncertainty
+and refusal to replay a lost write, plus converged checkpoints. Browser
+`Notion discovers databases through the proxy and reports revoked access without
+server OAuth` uses synthetic browser-owned credentials and proxy replies, imports
+and checkpoints with AtomicServer unavailable, and rejects server OAuth/secret
+requests. The shared browser transport tests cover PKCE and code rotation.
+The former Notion-specific server OAuth and popup tests were removed with that
+implementation. Live proxy deployment and Notion consent are not certified by
+these fixtures. Browser sync is manual; server schedules and discovery
+notifications remain only on legacy token installations.
 
-Shared OAuth handoff: `oauth::handoff::tests` tests ownership across server,
-agent, drive, provider and attempt, wrong retrieval proof, pending polling,
-single-use delivery, concurrent redemption, duplicate completion, expiry,
-credential removal and cleanup pagination past active entries. Service HTTP transport/authentication now has the tests described below.
-Production TLS deployment and live provider exchanges remain unverified.
-
-OAuth HTTP transport: `oauth::service::tests` covers missing credentials,
-body-forged server identity, cross-server redemption, callback cancellation and
-replay, bounded per-host admission, URL validation and a real loopback HTTP
-client/service round trip. `notionAuth.test.ts` covers managed local polling and
-abort. Playwright runs the same Notion setup fixture in direct and managed modes,
-through native mapping creation, plus the manual fallback. These are authored
-provider responses; production TLS/proxy configuration, real Notion consent,
-refresh, immediate remote cancellation and SaaS deployment remain unverified.
+Runtime feature coverage: `cargo check -p atomic-server` and
+`cargo check -p atomic-server --no-default-features --features light` validate
+both default runtime-on and runtime-off binaries. The `wasm-plugins` feature
+controls the nested WASM build, runtime modules and runtime HTTP registrations.
 
 Integration UX walkthrough (2026-09-07): desktop browser checked discovery and
 connection dialogs. Four focused `plugins.spec.ts` cases pass, including the
-Notion “Continue to sync setup” transition and GitHub automation creation.
+Notion proxy preview/approval transition and GitHub automation creation.
 Provider calls are fixtures; this does not verify live account authorization.
 
 `discoverIntegrations.test.ts` checks assistant capability search, exclusion of
@@ -1347,8 +1343,8 @@ coverage.
 
 `integrations/localthought/browser.test.ts` covers consumer-owned request budgets,
 Retry-After handling with rotating credentials, deadline rejection, and separate
-catalog selections with explicit caller precedence. Existing Notion OAuth
-coverage and its wire protocol remain unchanged.
+catalog selections with explicit caller precedence. Notion now uses this shared
+browser authorization flow; its proxy migration coverage is described above.
 
 The Local Thought Vitest suite imports Calendar code from the pinned Devonian
 package. Existing GitHub, Notion and Clockify implementations, fixture suites,
@@ -1365,8 +1361,8 @@ traversal uses `operationId`. The browser preview rejects more than 5,000 record
 with an explicit incomplete-import error rather than silently truncating.
 
 `IntegrationDiscovery.test.ts` verifies that all four bundled plugins remain
-discoverable without contacting an integration proxy. The original Notion auth
-and Clockify upgrade tests remain alongside it.
+discoverable without contacting an integration proxy. Clockify upgrade tests
+remain alongside the Notion proxy tests.
 
 Drive changes and reauthentication on an already-open WebSocket: `browser/lib/src/websockets.test.ts` verifies a fresh SYNC is sent without reconnecting, including local-only drive exclusion. This covers the Sync page remaining at Connecting after sign-in or drive switching; live staging acceptance remains separate.
 

@@ -169,158 +169,211 @@ export function run() { return { intents: [] }; }
     ).toBeVisible();
   });
 
-  for (const managed of [false, true]) {
-    test(`Notion ${managed ? 'managed' : 'direct'} OAuth selects a database by name and reports revoked access`, async ({
-      page,
-    }) => {
-      const connection = {
-        id: 'fixture-connection',
-        name: 'Design team',
-        workspace: 'fixture-workspace',
-      };
-      await page.route('**/integration-oauth/notion/list', route =>
-        route.fulfill({ json: { configured: true, connections: [] } }),
-      );
-      await page.route('**/integration-oauth/notion/start', route =>
-        route.fulfill({
-          json: {
-            state: 'fixture-state',
-            ...(managed ? { mode: 'managed' } : {}),
-            url: 'http://localhost:9898/integration-oauth/notion/callback?state=fixture-state&code=fixture',
-          },
-        }),
-      );
-      await page
-        .context()
-        .route('**/integration-oauth/notion/callback?**', route =>
-          route.fulfill({
-            contentType: 'text/html',
-            body: managed
-              ? 'Authorization finished. Return to Atomic.'
-              : `<script>opener.postMessage({type:'atomic-notion-oauth',state:'fixture-state',code:'fixture',error:null},'http://localhost:6747')</script>`,
+  test('Notion discovers databases through the proxy and reports revoked access without server OAuth', async ({
+    page,
+  }) => {
+    const actor = Agent.fromSecret(await getDevDriveSecret(page), 'js').subject;
+    const drive = new URL(page.url()).searchParams.get('subject')!;
+    const origin = 'https://notion-proxy.test';
+    const connection = 'notion-fixture';
+    const dataSource = '11111111-1111-4111-8111-111111111111';
+    const notionPage = {
+      object: 'page',
+      id: '22222222-2222-4222-8222-222222222222',
+      parent: { data_source_id: dataSource },
+      properties: {
+        Name: {
+          id: 'title',
+          type: 'title',
+          title: [{ type: 'text', text: { content: 'Proxy task' } }],
+        },
+      },
+    };
+    await page.evaluate(
+      ({ actor, drive, origin, connection }) => {
+        localStorage.setItem('integration-proxy-url', origin);
+        window.dispatchEvent(new Event('integration-proxy-change'));
+        localStorage.setItem(
+          `localthought-browser:${JSON.stringify([origin, drive, actor, 'notion'])}`,
+          JSON.stringify({ actor, drive, platform: 'notion', connection }),
+        );
+        localStorage.setItem(
+          `localthought-browser-v1:${connection}`,
+          JSON.stringify({
+            actor,
+            drive,
+            origin,
+            platform: 'notion',
+            ready: true,
+            expires: Date.now() + 600000,
+            code: 'fixture-code',
           }),
         );
-      let finishCalls = 0;
-      await page.route('**/integration-oauth/notion/finish', async route => {
-        expect(route.request().postDataJSON()).toMatchObject({
-          state: 'fixture-state',
-          ...(managed ? {} : { code: 'fixture' }),
-        });
-        if (managed)
-          expect(route.request().postDataJSON()).not.toHaveProperty('code');
-        finishCalls++;
-        await route.fulfill({
-          json: managed && finishCalls === 1 ? { pending: true } : connection,
-        });
-      });
-      let credentialBindings = 0;
-      await page.route('**/integration-oauth/notion/bind', async route => {
-        expect(route.request().postDataJSON()).toMatchObject({
-          connection: connection.id,
-        });
-        expect(route.request().postDataJSON()).not.toHaveProperty('value');
-        credentialBindings++;
-        await route.fulfill({ json: true });
-      });
-      await page.route('**/plugin-external-read', async route => {
-        const operation = route.request().postDataJSON().intent.operation;
-        const data =
-          operation === 'schema'
-            ? {
-                id: '11111111-1111-4111-8111-111111111111',
-                properties: {
-                  Name: { id: 'title', name: 'Name', type: 'title' },
+      },
+      { actor, drive, origin, connection },
+    );
+    const forbidden: string[] = [];
+    page.on('request', req => {
+      if (
+        req.url().includes('/integration-oauth/') ||
+        req.url().includes('/plugin-secret')
+      )
+        forbidden.push(req.url());
+    });
+    await page.route(`${origin}/catalog`, route =>
+      route.fulfill({
+        json: ['notion'],
+        headers: { 'Access-Control-Allow-Origin': '*' },
+      }),
+    );
+    await page.route(`${origin}/proxy/notion/**`, async route => {
+      const path = new URL(route.request().url()).pathname;
+      if (route.request().method() === 'PATCH')
+        notionPage.properties.Name.title = route
+          .request()
+          .postDataJSON().properties.title.title;
+      await route.fulfill({
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Expose-Headers': 'X-Connection-Code',
+          'X-Connection-Code': 'next-code',
+        },
+        json: path.endsWith('/query')
+          ? { results: [notionPage], has_more: false, next_cursor: null }
+          : path.includes('/pages/')
+            ? notionPage
+            : path.endsWith('/views')
+              ? { results: [], has_more: false, next_cursor: null }
+              : {
+                  id: dataSource,
+                  properties: {
+                    Name: { id: 'title', name: 'Name', type: 'title' },
+                  },
                 },
-              }
-            : { results: [], has_more: false, next_cursor: null };
-        await route.fulfill({
-          json: { status: 200, body: JSON.stringify(data) },
-        });
       });
-      let revoked = false;
-      await page.route('**/integration-oauth/notion/discover', async route => {
-        expect(route.request().postDataJSON().connection).toBe(connection.id);
-        if (revoked)
-          await route.fulfill({
-            status: 401,
-            body: 'Notion access was revoked. Reconnect Notion to continue.',
-          });
-        else
-          await route.fulfill({
-            json: {
+    });
+    let revoked = false;
+    await page.route(`${origin}/proxy/notion/v1/search`, async route => {
+      expect(route.request().postDataJSON().query).toBe('Project');
+      await route.fulfill({
+        status: revoked ? 401 : 200,
+        headers: {
+          'X-Connection-Code': 'rotated-fixture-code',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Expose-Headers': 'X-Connection-Code',
+        },
+        json: revoked
+          ? { message: 'Unauthorized' }
+          : {
               results: [
                 {
+                  object: 'data_source',
                   id: '11111111-1111-4111-8111-111111111111',
-                  name: 'Project tasks',
-                  icon: '✅',
+                  title: [{ plain_text: 'Project tasks' }],
+                  icon: { emoji: '✅' },
                 },
               ],
-              cursor: null,
+              has_more: false,
+              next_cursor: null,
             },
-          });
       });
-      await page
-        .getByRole('link', { name: 'Integrations', exact: true })
-        .click();
-      await page
-        .locator('[data-integration=notion]')
-        .getByRole('button', { name: 'Set up connection' })
-        .click();
-      await page
-        .getByRole('button', { name: 'Connect Notion', exact: true })
-        .click();
-      await expect(
-        page.getByLabel('Notion workspace', { exact: true }),
-      ).toHaveValue(connection.id);
-      await page.getByLabel('Find a database', { exact: true }).fill('Project');
-      await page
-        .getByRole('button', { name: 'Find databases', exact: true })
-        .click();
-      await page
-        .getByLabel('Database', { exact: true })
-        .selectOption({ label: '✅ Project tasks' });
-      await expect(
-        page.getByRole('button', {
-          name: 'Continue to sync setup',
-          exact: true,
-        }),
-      ).toBeEnabled();
-      await expect(
-        page.getByLabel('Data source ID', { exact: true }),
-      ).not.toBeVisible();
-      revoked = true;
-      await page
-        .getByRole('button', { name: 'Find databases', exact: true })
-        .click();
-      await expect(page.getByRole('alert')).toContainText('Reconnect Notion');
-      await expect(
-        page.getByRole('button', { name: 'Reconnect Notion', exact: true }),
-      ).toBeEnabled();
-      revoked = false;
-      await page
-        .getByRole('button', { name: 'Find databases', exact: true })
-        .click();
-      await page
-        .getByLabel('Database', { exact: true })
-        .selectOption({ label: '✅ Project tasks' });
-      await page
-        .getByRole('button', { name: 'Continue to sync setup', exact: true })
-        .click();
-      await expect(
-        page
-          .getByRole('main')
-          .getByRole('heading', { name: /Notion rows/, level: 1 }),
-      ).toBeVisible();
-      expect(credentialBindings).toBe(1);
     });
-  }
+    await page.getByRole('link', { name: 'Integrations', exact: true }).click();
+    await page
+      .locator('[data-integration=notion]')
+      .getByRole('button', { name: 'Set up connection' })
+      .click();
+    await page.getByLabel('Find a database', { exact: true }).fill('Project');
+    await page
+      .getByRole('button', { name: 'Find databases', exact: true })
+      .click();
+    await page
+      .getByLabel('Database', { exact: true })
+      .selectOption({ label: '✅ Project tasks' });
+    await expect(
+      page.getByRole('button', { name: 'Preview sync', exact: true }),
+    ).toBeEnabled();
+    revoked = true;
+    await page
+      .getByRole('button', { name: 'Find databases', exact: true })
+      .click();
+    await expect(page.locator('dialog[open]').getByRole('alert')).toContainText(
+      'Notion',
+    );
+    revoked = false;
+    await page
+      .getByRole('button', { name: 'Preview sync', exact: true })
+      .click();
+    await expect(
+      page.getByRole('button', { name: 'Approve and sync', exact: true }),
+    ).toBeEnabled({ timeout: 45000 });
+    await expect(
+      page
+        .locator('dialog[open]')
+        .getByText('Proxy task', { exact: true })
+        .first(),
+    ).toBeVisible();
+    await page
+      .getByRole('button', { name: 'Approve and sync', exact: true })
+      .click();
+    await expect(page.getByText('Sync complete.', { exact: true })).toBeVisible(
+      { timeout: 45000 },
+    );
+    const rowSubject = await page.evaluate(
+      async ({ dataSource, drive }) => {
+        const key = Object.keys(localStorage).find(k =>
+          k.includes('notion-proxy-installations-v1'),
+        )!;
+        const config = JSON.parse(localStorage.getItem(key)!)[dataSource];
+        const result = await window.store!.queryLocalDb({
+          drive,
+          property: 'https://atomicdata.dev/properties/parent',
+          value: config.table,
+        });
+        const row = await window.store!.getLocalResource(result!.subjects[0]);
+        await row.set(
+          'https://atomicdata.dev/properties/name',
+          'Edited locally',
+        );
+        await row.save();
+        return row.subject;
+      },
+      { dataSource, drive },
+    );
+    await page
+      .getByRole('button', { name: 'Sync this table', exact: true })
+      .click();
+    await page
+      .getByRole('button', { name: 'Approve and sync', exact: true })
+      .click();
+    await expect(
+      page.getByText('Sync complete.', { exact: true }),
+    ).toBeVisible();
+    expect(notionPage.properties.Name.title[0].text.content).toBe(
+      'Edited locally',
+    );
+    notionPage.properties.Name.title[0].text.content = 'Edited in Notion';
+    await page
+      .getByRole('button', { name: 'Sync this table', exact: true })
+      .click();
+    await page
+      .getByRole('button', { name: 'Approve and sync', exact: true })
+      .click();
+    await expect(
+      page.getByText('Sync complete.', { exact: true }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        async subject => (await window.store!.getLocalResource(subject)).title,
+        rowSubject,
+      ),
+    ).toBe('Edited in Notion');
+    expect(forbidden).toEqual([]);
+  });
 
   test('Notion setup validates identifiers before storing credentials', async ({
     page,
   }) => {
-    await page.route('**/integration-oauth/notion/list', route =>
-      route.fulfill({ json: { configured: false, connections: [] } }),
-    );
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
     const secretWrites: string[] = [];
