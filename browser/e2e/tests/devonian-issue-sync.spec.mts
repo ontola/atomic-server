@@ -53,9 +53,6 @@ test('Devonian syncs issue creation, state and comments both ways through the br
     await page.goto(`${FRONTEND_URL}/app/dev-drive`);
     await page.waitForURL(/app\/show\?subject=/, { timeout: 60000 });
     await page.goto(`${FRONTEND_URL}/app/devonian-demo`);
-    await page
-      .getByText('Connect a real GitHub repository', { exact: true })
-      .click();
     await page.getByLabel('Integration proxy URL').fill(proxyOrigin);
     await page.getByLabel('GitHub repository (owner/repo)').fill(repository);
     await page
