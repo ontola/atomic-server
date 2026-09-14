@@ -1,11 +1,13 @@
 import { test, expect } from './fixtures';
-import { before, newResource, setTitle } from './test-utils';
+import { before, newDrive, newResource, setTitle } from './test-utils';
 
 test.describe('tags', () => {
   test.beforeEach(before);
 
   test('a tagged resource appears in the tag collection', async ({ page }) => {
-    // before() supplies a fresh drive and its own local OPFS index.
+    // Fresh drive so we don't pollute the shared dev drive, and so the tag
+    // lookup has to be answered from this drive's own (local OPFS) index.
+    await newDrive(page);
 
     // Create a resource and give it a recognizable title.
     await newResource('folder', page);

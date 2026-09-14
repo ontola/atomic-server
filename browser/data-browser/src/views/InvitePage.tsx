@@ -4,7 +4,7 @@ import { TeamProfileStep } from '../components/TeamProfileStep';
 import {
   useBoolean,
   useNumber,
-  useResourceSnapshot,
+  useResource,
   useTitle,
   useString,
   Agent,
@@ -67,9 +67,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
   const baseNavigate = useNavigate();
   const navigate = (to: string) => baseNavigate({ to });
   const { agent, setAgent, setDrive } = useSettings();
-  const { resource: agentResource, ready: agentReady } = useResourceSnapshot(
-    agent?.subject,
-  );
+  const agentResource = useResource(agent?.subject);
   const [agentTitle] = useTitle(agentResource, 15);
   const [redirectURL, setRedirectURL] = useState<string | undefined>(undefined);
   const [agentSecret, setAgentSecret] = useState<string | undefined>();
@@ -429,6 +427,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
     new URLSearchParams(window.location.search).get('accept') === 'true';
   const resumed = useRef(false);
   const [resumeError, setResumeError] = useState(false);
+  const agentReady = agentResource.isReady();
   const acceptAfterSignup = useEffectEvent(() => {
     void handleAccept().catch(error => {
       setResumeError(true);
@@ -481,7 +480,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
               {agentSubject ? (
                 <CtaButton
                   data-test='accept-existing'
-                  disabled={!agentReady}
+                  disabled={!agentResource.isReady()}
                   onClick={() => {
                     if (agentResource.get(dataBrowser.properties.icon)) {
                       void handleAccept().catch(error =>

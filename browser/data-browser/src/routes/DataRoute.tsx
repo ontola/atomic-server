@@ -1,7 +1,6 @@
 import { useState, type JSX } from 'react';
 import {
   useResource,
-  useSaveState,
   useCreatedAt,
   useCreatedBy,
   signRequest,
@@ -42,7 +41,6 @@ export const DataRoute = createRoute({
 function Data(): JSX.Element {
   const [subject] = useCurrentSubject();
   const resource = useResource(subject);
-  const saveState = useSaveState(resource);
   // Creation metadata derived from the signed genesis commit (the resource
   // identity), materialized into propvals — not a refetched commit.
   const createdAt = useCreatedAt(resource);
@@ -135,19 +133,16 @@ function Data(): JSX.Element {
             </PropValRow>
           )}
           <AllProps resource={resource} editable columns />
-          {saveState.kind !== 'idle' ? (
+          {resource.hasUnsavedChanges() ? (
             <>
               <h2>⚠️ contains uncommitted changes</h2>
               <p>
                 This means that (some) of your local changes are not yet saved.
               </p>
-              {saveState.error && <ErrMessage>{saveState.error}</ErrMessage>}
-              <Button
-                disabled={saveState.kind === 'saving'}
-                onClick={() => resource.save()}
-              >
-                save
-              </Button>
+              {resource.commitError && (
+                <ErrMessage>{resource.commitError.message}</ErrMessage>
+              )}
+              <Button onClick={() => resource.save()}>save</Button>
             </>
           ) : null}
           <h2>Code</h2>

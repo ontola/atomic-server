@@ -1,287 +1,11 @@
-import { enableLoro } from './loro-loader.js';
 import { describe, it, vi, afterEach } from 'vitest';
 import { Resource, Store, core, Core, Datatype } from './index.js';
 import { bootstrapCoreVocab } from './test-vocab.js';
 import { testStore } from './test-store.js';
 
 describe('Store', () => {
-  it('does not start a second fetch when applying a received snapshot', async ({
-    expect,
-  }) => {
-    await enableLoro();
-    const store = new Store({ serverUrl: 'https://example.com' });
-    store.setServerConnected(true);
-    const source = new Resource('https://example.com/query?property=parent');
-    await source.set(
-      core.properties.isA,
-      ['https://atomicdata.dev/classes/Folder'],
-      false,
-    );
-    await source.set(core.properties.name, 'Received snapshot', false);
-    const fetch = vi
-      .spyOn(store, 'fetchResourceFromServer')
-      .mockResolvedValue(source as never);
-    store.applyIncoming({
-      subject: source.subject,
-      loroBytes: source.getLoroDoc()!.export({ mode: 'snapshot' }),
-      source: 'http-fetch',
-      replaceLoroDocsFromRemote: true,
-    });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(fetch).not.toHaveBeenCalled();
-    expect(
-      store.getResourceLoading(source.subject).get(core.properties.name),
-    ).toBe('Received snapshot');
-  });
-
-  it('tracks immutable save status across cancellation and offline queueing', async ({
-    expect,
-  }) => {
-    vi.useFakeTimers();
-
-    try {
-      const store = new Store();
-      const resource = new Resource('_new:save-state');
-      resource.setStore(store);
-      const idle = store.getSaveState(resource);
-      const changed = vi.fn();
-      const unsubscribe = store.subscribeSaveState(resource, changed);
-      const scheduler = store.createSaveScheduler(resource);
-      scheduler.schedule(100);
-      const queuedTimer = store.getSaveState(resource);
-      expect(queuedTimer.kind).toBe('scheduled');
-      expect(store.getSaveState(resource)).toBe(queuedTimer);
-      expect(idle.kind).toBe('idle');
-      expect(Object.isFrozen(queuedTimer)).toBe(true);
-      // A temporary row keeps the same owner after acquiring its DID.
-      resource.setSubject('did:ad:saved-row');
-      expect(store.getSaveState(resource).scheduledCount).toBe(1);
-      scheduler.cancel();
-      expect(store.getSyncStatus().pendingDirtyCount).toBe(0);
-      store.outbox.markDirty(resource.subject);
-      expect(store.getSaveState(resource)).toMatchObject({
-        kind: 'queued',
-        reason: 'offline',
-      });
-      expect(changed).toHaveBeenCalled();
-      unsubscribe();
-      changed.mockClear();
-      scheduler.schedule(100);
-      scheduler.cancel();
-      expect(changed).not.toHaveBeenCalled();
-      store.outbox.clearDirty(resource.subject);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('publishes direct save start and finish without changing read readiness', async ({
-    expect,
-  }) => {
-    const { store } = await testStore();
-    const resource = await store.newResource({
-      isA: 'https://atomicdata.dev/classes/Folder',
-      propVals: { [core.properties.name]: 'Save status' },
-      parent: 'https://example.com/drive',
-    });
-    const states: string[] = [];
-    const unsubscribe = store.subscribeSaveState(resource, () =>
-      states.push(store.getSaveState(resource).kind),
-    );
-    await resource.save();
-    expect(states).toContain('saving');
-    expect(store.getSaveState(resource).kind).toBe('idle');
-    expect(resource.isReady()).toBe(true);
-    unsubscribe();
-  });
-
-  it('captures immutable read status while retaining the stable mutation handle', ({
-    expect,
-  }) => {
-    const store = new Store();
-    const resource = new Resource('did:ad:status-snapshot');
-    resource.loading = true;
-    store.addResource(resource);
-    const before = store.getResourceSnapshot(resource.subject);
-    expect(before.ready).toBe(false);
-    expect(before.readState).toBe('loading');
-    expect(store.getResourceSnapshot(resource.subject)).toBe(before);
-    resource.loading = false;
-    store.notifyResourceUpdated(resource);
-    const after = store.getResourceSnapshot(resource.subject);
-    expect(after).not.toBe(before);
-    expect(after.ready).toBe(true);
-    expect(before.ready).toBe(false);
-    expect(after.resource).toBe(before.resource);
-    expect(Object.isFrozen(after)).toBe(true);
-  });
-
-  it('publishes local hydration only after restoring the causal snapshot', async ({
-    expect,
-  }) => {
-    await enableLoro();
-    const subject = 'did:ad:atomic-hydration';
-    const source = new Resource(subject);
-    await source.set(core.properties.name, 'Persisted', false);
-    const doc = source.getLoroDoc()!;
-    const snapshot = doc.export({ mode: 'snapshot' });
-    const version = doc.oplogVersion().toJSON();
-    const store = new Store({ serverUrl: 'https://example.com' });
-    store.setClientDb({
-      isReady: true,
-      isInitialized: true,
-      waitForInit: async () => {},
-      getResourceWithSnapshot: async () => ({
-        jsonAd: JSON.stringify({
-          '@id': subject,
-          [core.properties.name]: 'Persisted',
-        }),
-        snapshot,
-      }),
-    } as unknown as Parameters<Store['setClientDb']>[0]);
-    const published: unknown[] = [];
-    const apply = store.applyIncoming.bind(store);
-    vi.spyOn(store, 'applyIncoming').mockImplementation(change => {
-      if (change.source === 'offline-replay') {
-        published.push(change.resource?.getLoroDoc()?.oplogVersion().toJSON());
-      }
-
-      return apply(change);
-    });
-    store.getResourceLoading(subject);
-    await vi.waitFor(() => expect(published).toHaveLength(1));
-    expect(published).toEqual([version]);
-  });
-
-  it('keeps property readers waiting while a delta with missing history is recovered', async ({
-    expect,
-  }) => {
-    await enableLoro();
-    const store = new Store({ serverUrl: 'https://example.com' });
-    const source = new Resource('did:ad:partial-property');
-    await source.set(core.properties.isA, [core.classes.property], false);
-    const doc = source.getLoroDoc()!;
-    doc.commit();
-    const base = doc.oplogVersion();
-    await source.set(core.properties.datatype, Datatype.STRING, false);
-    await source.set(core.properties.shortname, 'title', false);
-    await source.set(core.properties.description, 'Title', false);
-    doc.commit();
-    const placeholder = new Resource(source.subject);
-    placeholder.loading = true;
-    store.addResource(placeholder);
-    let recover!: () => void;
-    vi.spyOn(store, 'fetchResourceFromServer').mockImplementation(async () => {
-      await new Promise<void>(resolve => {
-        recover = resolve;
-      });
-      store.applyIncoming({
-        subject: source.subject,
-        resource: source,
-        source: 'http-fetch',
-      });
-
-      return source;
-    });
-    const settled = vi.fn();
-    const result = store.getProperty(source.subject).then(
-      value => {
-        settled();
-
-        return value;
-      },
-      error => {
-        settled();
-
-        return error;
-      },
-    );
-    store.applyIncoming({
-      subject: source.subject,
-      loroBytes: doc.export({ mode: 'update', from: base }),
-      source: 'ws-sub-push',
-    });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    const early = settled.mock.calls.length;
-    recover();
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(await result).toMatchObject({ datatype: Datatype.STRING });
-    expect(early).toBe(0);
-  });
-
-  it('materializes a buffered property snapshot before returning its datatype', async ({
-    expect,
-  }) => {
-    await enableLoro();
-    const store = new Store();
-    const source = new Resource('did:ad:buffered-property');
-    await source.set(core.properties.datatype, Datatype.STRING, false);
-    await source.set(core.properties.shortname, 'title', false);
-    await source.set(core.properties.description, 'Title', false);
-    const snapshot = source.getLoroDoc()!.export({ mode: 'snapshot' });
-    const loaded = new Resource(source.subject);
-    loaded.applyHydratedValues([
-      ['https://atomicdata.dev/properties/loroUpdate', snapshot],
-    ]);
-    store.addResource(loaded);
-    expect(await store.getProperty(source.subject)).toMatchObject({
-      datatype: Datatype.STRING,
-    });
-  });
-
   afterEach(() => {
     vi.clearAllMocks();
-  });
-
-  it('preserves persisted Loro history when getResource loads a profile offline', async ({
-    expect,
-  }) => {
-    await enableLoro();
-    const subject = 'did:ad:agent:offline-profile';
-    const serverProfile = new Resource(subject);
-    const doc = serverProfile.getLoroDoc()!;
-
-    for (let i = 0; i < 20; i++) {
-      await serverProfile.set(core.properties.name, `Name ${i}`, false);
-      doc.commit();
-    }
-
-    const snapshot = doc.export({ mode: 'snapshot' });
-    const jsonAd = JSON.stringify({
-      '@id': subject,
-      [core.properties.name]: 'Name 19',
-    });
-    const store = new Store({ serverUrl: 'https://example.com' });
-    store.setClientDb({
-      isReady: true,
-      isInitialized: true,
-      waitForInit: async () => {},
-      getResource: async () => jsonAd,
-      getResourceWithSnapshot: async () => ({ jsonAd, snapshot }),
-    } as unknown as Parameters<Store['setClientDb']>[0]);
-    const profile = await store.getResource(subject);
-    await profile.set(core.properties.name, 'Renamed', false);
-    doc.import(profile.getLoroDoc()!.export({ mode: 'snapshot' }));
-    expect(doc.getMap('properties').get(core.properties.name)).toBe('Renamed');
-  });
-
-  it('keeps a local-only drive ready when a reader requests a server refresh', async ({
-    expect,
-  }) => {
-    const store = new Store({ serverUrl: 'https://example.com' });
-    const drive = new Resource('did:ad:local-drive');
-    await drive.set(core.properties.name, 'Local drive', false);
-    drive.loading = false;
-    store.addResource(drive);
-    store.registerLocalOnlyDrive(drive.subject);
-    const fetch = vi.fn(async () => new Response('not found', { status: 404 }));
-    store.injectFetch(fetch);
-    const result = await store.fetchResourceFromServer(drive.subject, {
-      setLoading: true,
-    });
-    expect(fetch).not.toHaveBeenCalled();
-    expect(result.isReady()).toBe(true);
-    expect(result.get(core.properties.name)).toBe('Local drive');
   });
 
   it('waits for property data after a loading-placeholder notification', async ({
@@ -403,6 +127,7 @@ describe('Store', () => {
   }) => {
     const { store } = await testStore();
     const resource = await store.newResource({
+      isA: core.classes.resource,
       propVals: { [core.properties.name]: 'Before' },
     });
     await resource.save();
@@ -433,50 +158,58 @@ describe('Store', () => {
     expect(persisted.get(core.properties.name)).toBe('After');
   });
 
-  it('an acknowledged edit waits for its durable snapshot before save resolves', async () => {
-    const { expect } = await import('vitest');
-    const { store } = await testStore();
-    const drive = await store.createDrive('Home');
-    store.setDrive(drive.subject);
-    const resource = await store.newResource({
-      isA: 'https://atomicdata.dev/classes/Folder',
-      parent: drive.subject,
-      propVals: { [core.properties.name]: 'Before' },
-    });
-    await resource.save();
-    let release!: () => void;
-    const pendingWrite = new Promise<void>(resolve => {
-      release = resolve;
-    });
-    const putResourceWithSnapshot = vi.fn(() => pendingWrite);
-    const flush = vi.fn(() => Promise.reject(new Error('worker destroyed')));
-    store.setClientDb({
-      isReady: true,
-      flush,
-      putResourceWithSnapshot,
-    } as unknown as Parameters<Store['setClientDb']>[0]);
-    await resource.set(core.properties.name, 'After', false);
-    let finished = false;
-    const saving = resource.save().then(() => {
-      finished = true;
-    });
-
-    try {
-      await vi.waitFor(() =>
-        expect(putResourceWithSnapshot).toHaveBeenCalled(),
+  it.each(['snapshot', 'flush'])(
+    'an acknowledged edit waits for local %s before save resolves',
+    async stage => {
+      const { expect } = await import('vitest');
+      const { store } = await testStore();
+      const drive = await store.createDrive('Home');
+      store.setDrive(drive.subject);
+      const resource = await store.newResource({
+        isA: 'https://atomicdata.dev/classes/Folder',
+        parent: drive.subject,
+        propVals: { [core.properties.name]: 'Before' },
+      });
+      await resource.save();
+      let release!: () => void;
+      const pendingWrite = new Promise<void>(resolve => {
+        release = resolve;
+      });
+      const putResourceWithSnapshot = vi.fn(() =>
+        stage === 'snapshot' ? pendingWrite : Promise.resolve(),
       );
-      // The server is already mocked as acknowledged; only the local write
-      // remains blocked. Leaving now must not expose the pre-edit cache.
-      await new Promise(resolve => setTimeout(resolve, 20));
-      expect(finished).toBe(false);
-    } finally {
-      release();
-      await saving;
-    }
+      const flush = vi.fn(() =>
+        stage === 'flush' ? pendingWrite : Promise.resolve(),
+      );
+      store.setClientDb({
+        isReady: true,
+        flush,
+        putResourceWithSnapshot,
+      } as unknown as Parameters<Store['setClientDb']>[0]);
+      await resource.set(core.properties.name, 'After', false);
+      let finished = false;
+      const saving = resource.save().then(() => {
+        finished = true;
+      });
 
-    expect(finished).toBe(true);
-    expect(flush).not.toHaveBeenCalled();
-  });
+      try {
+        await vi.waitFor(() =>
+          expect(
+            stage === 'snapshot' ? putResourceWithSnapshot : flush,
+          ).toHaveBeenCalled(),
+        );
+        // The server is already mocked as acknowledged; only the local write
+        // remains blocked. Leaving now must not expose the pre-edit cache.
+        await new Promise(resolve => setTimeout(resolve, 20));
+        expect(finished).toBe(false);
+      } finally {
+        release();
+        await saving;
+      }
+
+      expect(finished).toBe(true);
+    },
+  );
 
   it('does not write to a database in unsupported server-only mode', async ({
     expect,

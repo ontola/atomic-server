@@ -294,8 +294,9 @@ const AISidebar: React.FC = () => {
     // only changes with the subject, and the effect below can depend on it.
   }, [currentSubject, setContextItems]);
 
-  // A request handed off from another screen. Always a NEW chat: auto-submit only fires on
-  // an empty one, and a new request does not belong in the middle of whatever
+  // A question asked from elsewhere in the app — the error bar over a broken
+  // app being the first caller. Always a NEW chat: auto-submit only fires on
+  // an empty one, and a bug report does not belong in the middle of whatever
   // conversation happened to be open.
   //
   // An effect rather than an event handler because the ask can be made while
@@ -312,7 +313,9 @@ const AISidebar: React.FC = () => {
     }
 
     setAutoSubmitMessage(pendingAsk.prompt);
-    // Consume the handoff once, including when the panel was initially closed.
+    // Clearing it is what stops this repeating: `startNewChat` is redefined
+    // every render, so this effect runs after every render and the guard above
+    // is what makes all but the first a no-op.
     clearPendingAsk();
   }, [pendingAsk, startNewChat, setContextItems, clearPendingAsk]);
 

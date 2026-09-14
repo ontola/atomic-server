@@ -64,18 +64,12 @@ test.describe('table create perf', () => {
   for (const template of ['Project tasks', 'Issue Tracker', 'Expenses']) {
     test(`create from "${template}"`, async ({ page }) => {
       await newResource('table', page);
-      await page
-        .locator('dialog[open]')
-        .getByRole('button', { name: new RegExp(template) })
-        .click();
+      await page.getByRole('button', { name: new RegExp(template) }).click();
       await page.getByPlaceholder('New Table').fill(`Perf ${template}`);
 
       await resetPerfTrace(page);
       const started = Date.now();
-      await page
-        .locator('dialog[open]')
-        .getByRole('button', { name: 'Create', exact: true })
-        .click();
+      await page.getByRole('button', { name: 'Create' }).click();
       // The table page, whichever view the template defaults to — a kanban
       // template opens on its board, not on a grid.
       await expect(

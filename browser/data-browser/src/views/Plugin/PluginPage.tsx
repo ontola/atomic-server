@@ -13,7 +13,6 @@ import {
   server,
   useCanWrite,
   useString,
-  useSaveState,
   useValue,
   type Server,
 } from '@tomic/react';
@@ -46,14 +45,8 @@ export const PluginPage: React.FC<ResourcePageProps<Server.Plugin>> = ({
   const [config, setConfig] = useValue(resource, server.properties.config);
   const [permissions] = useValue(resource, server.properties.pluginPermissions);
   const [configValid, setConfigValid] = useState(true);
-  const [configSyntaxValid, setConfigSyntaxValid] = useState(true);
-  const [configEdited, setConfigEdited] = useState(false);
   const title = `${namespace ? `${namespace}/` : ''}${name}`;
-  const [version] = useString(resource, server.properties.version);
-  const [author] = useString(resource, server.properties.pluginAuthor);
-  const [description] = useString(resource, core.properties.description);
-  const [schema] = useValue(resource, server.properties.jsonSchema);
-  const saveState = useSaveState(resource);
+  const parent = resource.props.parent;
 
   const { uninstallPlugin } = useCreatePlugin();
 
@@ -65,9 +58,9 @@ export const PluginPage: React.FC<ResourcePageProps<Server.Plugin>> = ({
         <div>
           <Row justify='space-between'>
             <PluginName>{title}</PluginName>
-            <span>v{version}</span>
+            <span>v{resource.props.version}</span>
           </Row>
-          <PluginAuthor>by {author}</PluginAuthor>
+          <PluginAuthor>by {resource.props.pluginAuthor}</PluginAuthor>
         </div>
         <Column>
           {canWrite && (
@@ -79,9 +72,9 @@ export const PluginPage: React.FC<ResourcePageProps<Server.Plugin>> = ({
               </Button>
             </Row>
           )}
-          {description && (
+          {resource.props.description && (
             <DescriptionWrapper aria-label='Plugin Description'>
-              <Markdown text={description} />
+              <Markdown text={resource.props.description!} />
             </DescriptionWrapper>
           )}
         </Column>
@@ -100,18 +93,8 @@ export const PluginPage: React.FC<ResourcePageProps<Server.Plugin>> = ({
               </Row>
             </h3>
             <Button
-              disabled={
-                !configValid ||
-                !configSyntaxValid ||
-                saveState.kind === 'saving' ||
-                saveState.kind === 'scheduled' ||
-                (!configEdited && saveState.kind !== 'dirty')
-              }
-              onClick={() => {
-                setConfigEdited(false);
-
-                return resource.save();
-              }}
+              disabled={!configValid || !resource.hasUnsavedChanges()}
+              onClick={() => resource.save()}
             >
               <FaFloppyDisk />
               <span>Save</span>
@@ -123,18 +106,18 @@ export const PluginPage: React.FC<ResourcePageProps<Server.Plugin>> = ({
             onChange={v => {
               try {
                 setConfig(JSON.parse(v));
-                setConfigEdited(true);
-                setConfigSyntaxValid(true);
               } catch (e) {
-                setConfigSyntaxValid(false);
+                // Do nothing
               }
             }}
-            schema={schema as JSONSchema7}
+            schema={resource.props.jsonSchema as JSONSchema7}
             showErrorStyling={!configValid}
             onValidationChange={setConfigValid}
           />
         </Column>
-        {schema && <ConfigReference schema={schema as JSONSchema7} />}
+        {resource.props.jsonSchema && (
+          <ConfigReference schema={resource.props.jsonSchema as JSONSchema7} />
+        )}
         {isPluginPermissions(permissions) && (
           <PluginPermissions permissions={permissions} />
         )}
@@ -146,7 +129,6 @@ export const PluginPage: React.FC<ResourcePageProps<Server.Plugin>> = ({
         confirmLabel='Uninstall'
         bindShow={setShowUninstallDialog}
         onConfirm={async () => {
-          const parent = resource.props.parent;
           await uninstallPlugin(resource);
           navigate(constructOpenURL(parent));
           toast.success('Plugin uninstalled');

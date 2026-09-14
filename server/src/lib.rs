@@ -5,7 +5,6 @@ See https://github.com/atomicdata-dev/atomic-server/tree/master/src-tauri
 */
 mod actor_messages;
 pub mod appstate;
-pub mod blob_storage;
 mod commit_monitor;
 pub mod config;
 mod content_types;
@@ -30,5 +29,3 @@ pub mod iroh_transport;
 mod tests;
 mod trace;
 // Force rebuild for blake3
-
-pub mod oauth;

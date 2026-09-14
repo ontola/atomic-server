@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import { before } from './test-utils';
+import { before, devDrive, newDrive, signIn } from './test-utils';
 import {
   AFTER_COMPACT_USER,
   AFTER_UNCOMPACT_USER,
@@ -19,6 +19,8 @@ test.describe('AI Chat', () => {
     await setupAIRouteMocks(page, { chatResponse: MOCK_RESPONSE });
     await enableAIForTesting(page);
     await before({ page });
+    await signIn(page);
+    await newDrive(page);
   });
 
   test('sends a message and displays AI response', async ({ page }) => {
@@ -68,12 +70,14 @@ test.describe('AI Tools', () => {
     toolState = await setupAIToolCallMocks(page);
     await enableAIForTesting(page);
     await before({ page });
+    await signIn(page);
   });
 
   test('tool calls create/edit/read a resource and show the review UI', async ({
     page,
   }) => {
-    toolState.driveUrl = await page.evaluate(() => window.store.getDrive()!);
+    const { driveURL } = await newDrive(page);
+    toolState.driveUrl = driveURL;
 
     await sendChatMessage(
       page,
@@ -130,6 +134,8 @@ test.describe('AI Compacting', () => {
       );
     });
     await before({ page });
+    await signIn(page);
+    await devDrive(page);
   });
 
   test('manual /compact trims context sent to the model', async ({ page }) => {

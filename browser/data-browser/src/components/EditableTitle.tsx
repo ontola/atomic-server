@@ -28,7 +28,7 @@ export interface EditableTitleProps {
   parentRef?: React.RefObject<HTMLTextAreaElement | null>;
   id?: string;
   className?: string;
-  /** Called when Enter commits the title; can move focus to page content. */
+  /** Called when the user commits the title (Enter or blur) */
   onCommit?: () => void;
   /**
    * View-transition tag for this title. Defaults to PAGE_TITLE_TRANSITION_TAG.
@@ -128,20 +128,6 @@ export function EditableTitle({
       return;
     }
 
-    // A creation notification can arrive after the user has opened an
-    // overlay. Automatic title editing must not steal its keyboard focus.
-    // Explicit title clicks still focus the editor normally.
-    if (
-      caretRef.current === 'all' &&
-      document.activeElement?.closest(
-        '[role="menu"], [role="dialog"], dialog[open]',
-      )
-    ) {
-      setIsEditing(false);
-
-      return;
-    }
-
     el.focus();
 
     const caret = caretRef.current;
@@ -210,8 +196,7 @@ export function EditableTitle({
         onBlur={() => {
           flushPending();
           setIsEditing(false);
-          // Blur already has a destination (for example a menu input). Calling
-          // onCommit here would steal that focus while the browser transfers it.
+          onCommit?.();
         }}
         className={className}
       />

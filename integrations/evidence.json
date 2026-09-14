@@ -182,7 +182,7 @@
         "schema.property-name:two-way",
         "views.table-board-subset:two-way"
       ],
-      "bundleSha256": "3dc0895e812441bc6736a44706103efb1e48792cdcaadfcb0d00b4c746a266b5",
+      "bundleSha256": "081e544193f65cb5843e876ad6f1a696da29791e2b69ac811dd0a193eed896b4",
       "checks": [
         {
           "name": "reproducible-bundle",
@@ -203,7 +203,7 @@
       ],
       "status": "passed",
       "fixtureCounts": {
-        "passed": 16,
+        "passed": 20,
         "skipped": 1,
         "failed": 0
       }

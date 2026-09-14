@@ -1,10 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import {
-  before,
-  FRONTEND_URL,
-  SERVER_URL,
-  nodeReachableServerUrl,
-} from './test-utils';
+import { before, FRONTEND_URL, SERVER_URL } from './test-utils';
 
 /**
  * The Sync page's device-facing surface: the pairing code a user scans, and
@@ -38,9 +33,7 @@ test.describe('sync page devices', () => {
     let managedInfoRequests = 0;
     let accountConnected = false;
     await page.route('**/server', async route => {
-      const response = await route.fetch({
-        url: nodeReachableServerUrl(route.request().url()),
-      });
+      const response = await route.fetch();
       const body = await response.json();
       managedInfoRequests += 1;
       await route.fulfill({
@@ -80,12 +73,12 @@ test.describe('sync page devices', () => {
     await expect(recovery).toContainText('Sign in to your');
     await expect(recovery).not.toContainText('Not set up');
     await expect(page.locator('body')).not.toContainText('[i18n-404:');
-    accountConnected = true;
-    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-    await expect(recovery).toContainText('sync-account@example.com');
     await expect(
       cloud.getByRole('button', { name: 'Set up Cloud Server', exact: true }),
     ).toBeVisible();
+    accountConnected = true;
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(recovery).toContainText('sync-account@example.com');
     await expect(page.getByTestId('link-provider-panel')).not.toBeVisible();
   });
 

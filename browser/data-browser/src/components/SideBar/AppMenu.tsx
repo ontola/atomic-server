@@ -14,6 +14,7 @@ import {
 import { FeedbackMenuItem } from './FeedbackMenuItem';
 import { SyncMenuItem } from './SyncMenuItem';
 import { ResourceGlyph } from '../ResourceGlyph';
+import { DemoExitMenuItem } from '../DemoExitButton';
 
 // Non standard event type so we have to type it ourselfs for now.
 type BeforeInstallPromptEvent = {
@@ -111,6 +112,7 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
           onClick={install}
         />
       )}
+      <DemoExitMenuItem onItemClick={onItemClick} />
     </AppMenuSection>
   );
 }

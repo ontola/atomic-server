@@ -63,7 +63,6 @@ impl AppState {
         )
         .await?;
 
-        crate::blob_storage::configure(&mut store).await?;
         // Before anything reads or writes a secret, so nothing is stored in
         // the clear during startup and then silently left that way.
         store.set_node_key(crate::node_key::load_or_create(&config.config_dir)?);

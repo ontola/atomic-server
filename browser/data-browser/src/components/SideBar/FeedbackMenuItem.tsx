@@ -56,14 +56,12 @@ export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
     <>
       {floating ? (
         <Button
-          subtle
           ref={triggerRef}
           onClick={() => {
             setSent(false);
             showDialog();
           }}
         >
-          <FaComment aria-hidden />
           Feedback
         </Button>
       ) : (

@@ -237,11 +237,14 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       // back on. Without an immediate flush here, a reload landing before
       // the next tick reads the pre-edit (or entirely absent) state and
       // silently drops the offline edit.
-      // Leave a periodic retry armed on failure, and reject the RPC so a
-      // caller never mistakes an in-memory write for a durable snapshot.
-      dirty = true;
-      db!.flush();
-      dirty = false;
+      try {
+        db!.flush();
+      } catch (e) {
+        console.error(
+          '[ClientDb] OPFS flush failed after putResourceWithSnapshot:',
+          e,
+        );
+      }
 
       return;
     }
@@ -425,13 +428,10 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
     case 'vaultCommitSegment': {
       await ensureInit();
       db!.vaultCommitSegment(msg.drivePseudonym, msg.devicePubkey, msg.segment);
-      // Backup completion must survive an immediate reload. Waiting for the
-      // periodic tick loses the cursor and uploads the same data again.
-      // Keep the retry armed if flush fails, but propagate that failure so
-      // the caller cannot report a durably completed backup.
+      // Lane bookkeeping is a normal write behind `Durability::None`; without
+      // this the next tick's flush is what persists it, and a reload in between
+      // would re-report an already-committed segment as pending.
       dirty = true;
-      db!.flush();
-      dirty = false;
 
       return undefined;
     }
@@ -545,6 +545,7 @@ let workQueue: Promise<void> = Promise.resolve();
 const WRITE_OPS: ReadonlySet<WorkerRequest['type']> = new Set([
   'putResource',
   'putResources',
+  'putResourceWithSnapshot',
   'applyCommit',
   'removeResource',
   'putBlob',

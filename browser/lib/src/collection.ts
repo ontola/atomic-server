@@ -830,10 +830,7 @@ export class Collection {
       return;
     }
 
-    // The worker may still be attaching after agent-key initialization.
-    // An expected database is different from an app that opted out of OPFS;
-    // share the resource loader's bounded attachment wait before going remote.
-    const hasClientDb = await this.store.waitForClientDb();
+    const hasClientDb = !!this.store.getClientDb();
 
     // OPFS-first: try the local WASM DB before reaching for the
     // network. After the initial drive-sync, the WASM DB is the

@@ -21,7 +21,6 @@ export interface SetupAdapter {
     link?: (args: SetupArguments) => string;
     linkLabel?: string;
   };
-  preflight?: (context: SetupContext) => Promise<void>;
   prepare?: (args: SetupArguments) => SetupArguments;
   connect: (
     args: SetupArguments,

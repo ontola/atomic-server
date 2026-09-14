@@ -9,7 +9,7 @@ import {
   core,
   ResourceEvents,
   useCanWrite,
-  useResourceSnapshot,
+  useResource,
   useStore,
 } from '@tomic/react';
 
@@ -46,14 +46,14 @@ export function ShareDialog({
   trigger,
 }: ShareDialogProps): JSX.Element {
   const [dialogProps, show, , isOpen] = useDialog();
-  const { resource, ready } = useResourceSnapshot(subject);
+  const resource = useResource(subject);
   const canWrite = useCanWrite(resource);
   const isPrivateDrive = useIsPrivateDrive(subject);
   const [err, setErr] = useState<Error | undefined>(undefined);
   const inheritedRights = useInheritedRights(resource);
   const [resourceRights, updateResourceRights] = useRights(resource, setErr);
 
-  // Track `hasUnsavedChanges` locally. `useResourceSnapshot`'s `track` option also
+  // Track `hasUnsavedChanges` locally. `useResource`'s `track` option also
   // triggers re-renders on LocalChange, but every render creates a fresh
   // proxy that tears down the listener and the subscriber-store can trample
   // the dirty state. Keeping a dedicated flag here is simpler and resilient.
@@ -140,7 +140,9 @@ export function ShareDialog({
                         key={JSON.stringify(right)}
                         {...right}
                         handleSetRight={
-                          canWrite && ready ? updateResourceRights : undefined
+                          canWrite && resource.isReady()
+                            ? updateResourceRights
+                            : undefined
                         }
                       />
                     ))}

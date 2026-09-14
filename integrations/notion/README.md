@@ -1,16 +1,30 @@
 # Notion data source ↔ Atomic (pilot)
 
-Connect from **Integrations → Notion** using a data source UUID and a Notion
-connection token. Share the database containing that data source with the Notion
-connection. Setup reads metadata through AtomicServer, creates native Atomic
-properties/table/views and records compatibility notes. Preview and approve the
-first sync before enabling background polling. Notion credentials stay on the
-host; the browser does not call Notion directly.
+Connect from **Integrations → Notion** through the configured integration-proxy.
+Authorization uses the shared browser PKCE handoff and rotating connection-code
+transport. Database discovery, schema installation, preview and two-way sync run
+in the browser, including when AtomicServer is unavailable. Credentials stay in
+browser storage; no Notion-specific OAuth or discovery endpoint remains in
+AtomicServer.
 
-The shipped `plugin.js` executes inside the existing QuickJS/WASM sandbox. It
-uses the same durable preview/effect/continuation/checkpoint protocol as GitHub.
-No Notion-specific scheduler, Rust provider code or second runtime was added.
-The UI loads the installer and bundle on demand when connecting.
+Each sync requires review. The shipped provider produces the same field/view
+reconciliation and effects as before. A generic browser host supplies asynchronous
+reads, applies reviewed effects, and checkpoints converged records. It persists
+an in-flight effect before dispatch and refuses to replay an uncertain response.
+Saved runs are bound to the bundle and mapping hash. Keep the browser open; this
+path does not run server schedules or emit server-side discovery automations.
+
+Existing token installations remain supported under **Advanced setup with a
+token** through the generic server runtime. Reconnect through the proxy to create
+a browser installation; existing tables/baselines are not automatically migrated.
+Browser connections, installation lookup and sync journals are local to this
+browser/profile. Clearing site data requires reconnecting and does not restore
+old sync baselines. Do not reinstall onto existing imported data as a recovery
+shortcut.
+
+The proxy deployment must include the Notion catalog and generic JSON OAuth
+operation/header support before real connections work. See
+[the migration plan](../../planning/notion-integration-proxy.md).
 
 ## Supported subset
 
@@ -22,7 +36,7 @@ The UI loads the installer and bundle on demand when connecting.
   baseline. Conflicting local edits to both are reported, not silently chosen.
 - Existing compatible table/board views: name, visible columns/order and mapped
   option grouping. View renames and column edits have independent baselines.
-- Discovery event after the first checkpoint for independent JS automations;
+- Legacy server-token installations: discovery event after the first checkpoint for independent JS automations;
   initial backfill and locally-created pages are excluded.
 
 Patch requests contain only changed mapped properties. Null removes an optional
@@ -53,7 +67,7 @@ be blindly retried.
   yet; rate limits pause the run. Concurrent writes between a re-read and remote
   mutation remain a cross-system race, not an exactly-once guarantee.
 - Setup failures can leave a partial local draft; no resumable setup flow yet.
-  The user supplies a data source UUID rather than a friendly database picker.
+  The manual token path requires a data-source UUID; proxy setup discovers names.
 
 ## Tests
 
@@ -84,44 +98,13 @@ Sources: [page values](https://developers.notion.com/reference/page-property-val
 [data source queries](https://developers.notion.com/reference/query-a-data-source),
 [view configuration](https://developers.notion.com/guides/data-apis/working-with-views).
 
-## OAuth connection setup
+## Proxy configuration
 
-Server administrators register a public Notion connection with read, insert and
-update capabilities, then configure these environment variables on AtomicServer:
+Choose the proxy under **Settings → Integration**. The proxy owns the Notion
+OAuth application and callback, API version headers and token refresh. Its
+catalog selects Notion's OpenAPI document and OAuth overlay. AtomicServer no
+longer reads `ATOMIC_NOTION_*` or runs the former shared authorization service.
+The API version remains `2026-03-11`.
 
-```
-ATOMIC_NOTION_CLIENT_ID=<Notion client ID>
-ATOMIC_NOTION_CLIENT_SECRET=<server-only secret>
-ATOMIC_NOTION_REDIRECT_URI=http://localhost:9898/integration-oauth/notion/callback
-ATOMIC_NOTION_FRONTEND_ORIGIN=http://localhost:6747
-```
-
-Register the exact redirect URI with Notion. Use HTTPS for deployed servers and
-frontends; HTTP is accepted only on localhost/127.0.0.1. The frontend origin has
-no trailing slash or path. Restart the server after configuring it. Do not put
-client secrets in frontend environment variables or source control.
-
-Users open Integrations → Notion → Connect Notion. Notion handles page access;
-Atomic then searches accessible data sources by name. Preview creates the native
-mapping and opens the existing sync review screen; it does not enable background
-sync or approve external writes. Multi-source databases appear as individual
-named data sources. Reuse the authorized workspace for further database syncs.
-Manual token/ID installation remains under Advanced setup for developers.
-
-Authorization belongs to the initiating Atomic agent and drive. Signed completion
-requires the single-use state issued to that actor; the popup reply must match
-origin, window and state. The host exchanges the code. Credentials use the node's
-wrapped secret store, not graph resources. Plugins hold one-hop, same-drive secret
-references with exact-origin checks. Reauthorization updates all references;
-reconnecting to a different Notion workspace is refused.
-
-Current limits: access-token failures prompt explicit reconnect. Refresh tokens
-are retained privately, but automatic refresh is not implemented. Popup/opener
-behavior on real Notion and a real two-way edit still require configured OAuth
-credentials and a disposable database. Mocked OAuth tests do not certify live
-provider behavior. Self-hosted operators currently bring their own OAuth app;
-there is no Atomic-hosted authorization broker.
-
-For an optional separately hosted authorization service, see
-[shared authorization deployment](../AUTHORIZATION.md). It uses the same Notion
-adapter; user servers need no public callback or Notion app secret in this mode.
+Automated proxy tests use authored responses. Successful local tests do not
+certify live Notion authorization or production deployment.

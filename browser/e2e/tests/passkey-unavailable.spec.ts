@@ -1,9 +1,10 @@
-import { managedDriveTest as test, expect } from './deployment-fixtures';
-import { FRONTEND_URL } from './test-utils';
+import { test, expect } from '@playwright/test';
+import { devDrive, FRONTEND_URL } from './test-utils';
 
 test('explains missing passkey support without offering a broken setup action', async ({
   page,
 }) => {
+  await devDrive(page);
   const agent = await page.evaluate(
     () =>
       (

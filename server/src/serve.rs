@@ -396,11 +396,6 @@ where
     // server passes a no-op (see `serve`), so it never phones home.
     on_ready(&appstate);
 
-    let oauth_service =
-        crate::oauth::service::AuthorizationService::from_env(appstate.store.clone())?;
-    if let Some(service) = &oauth_service {
-        service.spawn_cleanup();
-    }
     let server = HttpServer::new(move || {
         let cors = Cors::permissive().expose_headers([SERVER_VERSION_HEADER]);
 
@@ -416,12 +411,6 @@ where
             .wrap(tracing_actix_web::TracingLogger::<AtomicRootSpanBuilder>::new())
             .wrap(middleware::Compress::default())
             // Here are the actual handlers / endpoints
-            .configure(|cfg| {
-                if let Some(service) = &oauth_service {
-                    cfg.app_data(web::Data::from(service.clone()));
-                    crate::oauth::service::routes(cfg);
-                }
-            })
             .configure(crate::routes::config_routes)
             // Anything no route claims: a wrong method on a known path, a
             // typo, a scanner. Normal traffic, so no `error!`.

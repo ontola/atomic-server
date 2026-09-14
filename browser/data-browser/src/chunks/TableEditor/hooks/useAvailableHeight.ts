@@ -86,23 +86,10 @@ export function useAvailableHeight(
 
     measure();
 
-    // Observing an ancestor and resizing its descendant in the same delivery
-    // can leave notifications undelivered. Measure once in the next frame so
-    // filter/title changes settle outside ResizeObserver's delivery loop.
-    let frame: number | undefined;
-
-    const scheduleMeasure = () => {
-      if (frame !== undefined) return;
-      frame = requestAnimationFrame(() => {
-        frame = undefined;
-        measure();
-      });
-    };
-
     // The scroll parent itself covers window resizes and sidebar toggles; its
     // children cover anything that pushes the grid further down the page — a
     // cover image loading, the filter bar appearing, a title wrapping.
-    const resizeObserver = new ResizeObserver(scheduleMeasure);
+    const resizeObserver = new ResizeObserver(measure);
 
     const observeContent = () => {
       resizeObserver.disconnect();
@@ -124,14 +111,13 @@ export function useAvailableHeight(
     // which no ResizeObserver sees. Re-measure, and pick the new element up.
     const mutationObserver = new MutationObserver(() => {
       observeContent();
-      scheduleMeasure();
+      measure();
     });
     mutationObserver.observe(scrollParent, { childList: true });
 
     return () => {
       resizeObserver.disconnect();
       mutationObserver.disconnect();
-      if (frame !== undefined) cancelAnimationFrame(frame);
     };
   }, [tableRef, headerRef]);
 }

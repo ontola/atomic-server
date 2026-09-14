@@ -4,7 +4,6 @@ use std::{fs::File, io::Write};
 
 mod actor_messages;
 mod appstate;
-mod blob_storage;
 mod commit_monitor;
 pub mod config;
 mod content_types;
@@ -19,7 +18,6 @@ mod invite_token;
 mod jsonerrors;
 mod metrics;
 mod node_key;
-pub mod oauth;
 pub mod plugins;
 mod routes;
 pub mod serve;

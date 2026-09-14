@@ -165,7 +165,7 @@ impl BrowserPeerSession {
                                 .and_then(|hex| hex::decode(hex).ok())
                                 .and_then(|bytes| <[u8; 32]>::try_from(bytes).ok())
                             {
-                                if !db.has_blob(&hash).await? {
+                                if db.kv.get(Tree::Blobs, &hash)?.is_none() {
                                     self.pending_blobs.insert(hash);
                                     out.frames.push(protocol::encode_blob_request(&hash));
                                     requested += 1;
@@ -291,7 +291,7 @@ impl BrowserPeerSession {
                 }
                 // A partial replica may not have the bytes yet. The requester
                 // retries other edges without tearing down healthy connections.
-                if let Some(bytes) = db.get_blob(&hash).await? {
+                if let Some(bytes) = db.kv.get(Tree::Blobs, &hash)? {
                     out.frames
                         .push(protocol::encode_blob_response(&hash, &bytes));
                 }
@@ -304,7 +304,7 @@ impl BrowserPeerSession {
                 }
                 let requested = self.pending_blobs.remove(&response.hash);
                 // Concurrent edges can answer the same content-addressed request.
-                if db.has_blob(&response.hash).await? {
+                if db.kv.get(Tree::Blobs, &response.hash)?.is_some() {
                     return Ok(out);
                 }
                 if !requested {
@@ -314,7 +314,7 @@ impl BrowserPeerSession {
                     return Err("Drive not admitted for sync".into());
                 }
                 db.take_pending_blob_request(&response.hash);
-                db.put_blob(&response.hash, &response.bytes).await?;
+                db.kv.insert(Tree::Blobs, &response.hash, &response.bytes)?;
             }
             protocol::tag::EPHEMERAL => {
                 let message = protocol::decode_ephemeral(payload).ok_or("Invalid EPHEMERAL")?;
@@ -608,6 +608,6 @@ mod tests {
         let frame = protocol::encode_blob_response(&hash, bytes);
         assert!(first.handle(&db, &frame).await.unwrap().frames.is_empty());
         assert!(second.handle(&db, &frame).await.unwrap().frames.is_empty());
-        assert_eq!(db.get_blob(&hash).await.unwrap().unwrap(), bytes);
+        assert_eq!(db.kv.get(Tree::Blobs, &hash).unwrap().unwrap(), bytes);
     }
 }

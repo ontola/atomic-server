@@ -1,11 +1,4 @@
-import {
-  Page,
-  expect,
-  Browser,
-  Locator,
-  TestInfo,
-  test,
-} from '@playwright/test';
+import { Page, expect, Browser, Locator, TestInfo } from '@playwright/test';
 import {
   applyCpuThrottle,
   envCpuThrottle,
@@ -22,6 +15,9 @@ export const PROPERTIES = {
   push: 'https://atomicdata.dev/properties/push',
   loroUpdate: 'https://atomicdata.dev/properties/loroUpdate',
 } as const;
+
+export const SECRET =
+  'eyJwcml2YXRlS2V5IjoiVUZDV2xoMGM0b05XVm4ySnNXbndWRVp0VXVEZXBpQmRQelFRMWVVcjdLbz0iLCJzdWJqZWN0IjoiZGlkOmFkOmFnZW50OmdKUlpWVEdQbmdhRzNtU1BBL2U2TEVld0tpeFlwWnR1VVlRaE5nK3Q3WTQ9IiwiaW5pdGlhbERyaXZlIjoiZGlkOmFkOmJiWlRJd2hBbFdhQjl0enpuUVpVSlB0QlhldGhvSFcxYmpMc3VhMXQ5RUtYU3ZNU0k3TWdaKzg0bzJsRGZKR0lhbk8zai8zb2xYNTNwam9GWGVwT0RnPT0ifQ==';
 
 export const SERVER_URL = process.env.SERVER_URL || 'http://localhost:9883';
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:6747';
@@ -192,14 +188,7 @@ export async function searchAndOpen(
   // window. Retry the click (re-resolving the locator each attempt) until it
   // lands on a stable node, rather than racing a single re-render.
   await expect(async () => {
-    // A click can close the overlay before Playwright finishes its action.
-    // On a retry, that closed overlay is success, not a missing result to
-    // click again. Otherwise the helper times out after successful navigation.
-    if (await searchInput(page).isVisible()) {
-      await result.click({ timeout: 2000 });
-    }
-
-    await expect(searchInput(page)).toBeHidden();
+    await result.click({ timeout: 2000 });
   }).toPass({ timeout: 15000 });
 }
 
@@ -256,7 +245,7 @@ export const before = async (
   if (testInfo) registerPerfPage(testInfo, page);
 
   await installCommitWatcher(page);
-  await test.step('Initialize fresh agent and drive', () => devDrive(page));
+  await devDrive(page);
 };
 
 /**
@@ -470,7 +459,7 @@ function waitForCommitForSubject(page: Page, subject: string, since: number) {
 }
 
 /**
- * Signs in with the explicit or current test agent secret if not already signed in.
+ * Signs in with the shared test secret if not already signed in.
  *
  * Handles three entry states:
  *   1. Already signed in (e.g. post-`before()`/`devDrive()`): no-op.
@@ -503,7 +492,7 @@ async function enterSecret(page: Page, secret: string) {
   await page.getByLabel('Agent secret').fill(secret);
 }
 
-export async function signIn(page: Page, secret?: string) {
+export async function signIn(page: Page, secret: string = SECRET) {
   const input = page.getByLabel('Agent secret');
   const signInButton = page.getByRole('button', {
     name: 'Sign in',
@@ -526,7 +515,7 @@ export async function signIn(page: Page, secret?: string) {
     await signInButton.click();
   }
 
-  await enterSecret(page, secret ?? (await getDevDriveSecret(page)));
+  await enterSecret(page, secret);
   await expect(settings).toBeVisible({ timeout: 20000 });
 }
 
@@ -568,10 +557,7 @@ export async function newDrive(page: Page) {
   await waitForCurrentDialog(page);
 
   const dialog = currentDialog(page);
-  await dialog
-    .getByRole('button', { name: 'Create a blank drive', exact: true })
-    .click();
-  await dialog.getByLabel('Drive name').fill(driveTitle);
+  await dialog.getByLabel('Name').fill(driveTitle);
 
   const createButton = dialog.locator('button', { hasText: 'Create' });
   await createButton.waitFor({ state: 'attached' });
@@ -1076,7 +1062,7 @@ export async function newResource(klass: string, page: Page) {
         } as Record<string, string>
       )[klass] ?? klass;
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const classButton = page.getByRole('main').getByRole('button', {
+    const classButton = page.getByRole('button', {
       name: new RegExp(`^${escaped}$`, 'i'),
     });
     await classButton.waitFor({ state: 'visible', timeout: 30000 });
@@ -1149,14 +1135,18 @@ export async function createTableFromDialog(
   await newResource('table', page);
 
   if (template) {
-    await currentDialog(page).getByRole('button', { name: template }).click();
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: template })
+      .click();
   }
 
   if (name !== undefined) {
     await page.getByPlaceholder('New Table').fill(name);
   }
 
-  await currentDialog(page)
+  await page
+    .getByRole('dialog')
     .getByRole('button', { name: 'Create', exact: true })
     .click();
   await waitForTableBuild(page);
@@ -1584,22 +1574,19 @@ export async function reloadGrid(page: Page) {
  * present and empty, and the failure surfaces later as a total with nothing
  * to add or a row missing after a reload.
  *
- * Wait for this cell to own focus. Focus elsewhere in the grid is insufficient
- * and a forced click can hit its old position while layout is still moving.
+ * There is no "grid is ready" flag to await, but focus landing inside the
+ * grid is observable and is the precondition that actually matters.
  */
 export async function focusCell(page: Page, cell: Locator) {
-  await cell.click();
-  await expect
-    .poll(
-      () =>
-        cell.evaluate(element => {
-          const target = element.closest('[aria-colindex]');
+  await expect(async () => {
+    await cell.click({ force: true });
 
-          return !!target && target.contains(document.activeElement);
-        }),
-      { message: 'click did not focus the requested cell', timeout: 15_000 },
-    )
-    .toBe(true);
+    const inGrid = await page.evaluate(
+      () => !!document.activeElement?.closest('[role="grid"]'),
+    );
+
+    expect(inGrid, 'click did not give the grid focus').toBe(true);
+  }).toPass({ timeout: 15_000 });
 }
 
 /**
@@ -1992,11 +1979,37 @@ export async function inDialog(
         ? currentDialog(page).getByRole('button', { name: 'Close' })
         : currentDialog(page).locator('footer button', { hasText: buttonText });
 
-    // Locator.click already waits for actionability and resolves replacement
-    // nodes before dispatch. Submit once, then observe the dialog closing;
-    // replaying a save after a short timeout can create duplicate mutations.
+    // The dialog footer re-renders while an async commit settles — the
+    // Save/Create button is detached and replaced under Playwright's
+    // click ("element is not stable" / "element was detached from the
+    // DOM"). A single click then races that churn and times out.
+    //
+    // Retry the click while the dialog is still open: every
+    // `closeDialogWith` call is meant to dismiss the dialog, so a click
+    // that took effect closes it (and further clicks hit nothing), while
+    // a click that lost the detach race leaves it open for another try.
+    // Bounded, so a genuinely stuck dialog still fails loudly.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (await currentDialog(page).isHidden()) {
+        return;
+      }
+
+      await expect(button).toBeEnabled();
+      await button.click({ timeout: 10000 }).catch(() => undefined);
+
+      const closed = await currentDialog(page)
+        .waitFor({ state: 'hidden', timeout: 4000 })
+        .then(() => true)
+        .catch(() => false);
+
+      if (closed) {
+        return;
+      }
+    }
+
+    // Final attempt — no catch, so a still-stuck dialog surfaces the error.
+    await expect(button).toBeEnabled();
     await button.click();
-    await expect(currentDialog(page)).toBeHidden({ timeout: timeoutMs });
   };
 
   await fn(currentDialog(page), closeDialogWith);

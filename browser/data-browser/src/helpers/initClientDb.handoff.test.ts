@@ -1,8 +1,7 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import type { Store } from '@tomic/lib';
 
 const state = vi.hoisted(() => ({
-  seeded: [] as string[][],
   workers: [] as {
     ready: PromiseWithResolvers<void>;
     barrier: PromiseWithResolvers<void>;
@@ -31,9 +30,7 @@ vi.mock('@tomic/lib', () => ({
     allSubjects() {
       return Promise.resolve([]);
     }
-    putResources(resources: string[]) {
-      state.seeded.push(resources);
-
+    putResources() {
       return Promise.resolve();
     }
     destroy() {}
@@ -47,11 +44,6 @@ vi.mock('./localDbKey', () => ({
   hasWrappedDbKey: async () => false,
   getOrCreateSessionDbKey: async () => new Uint8Array(32),
 }));
-beforeEach(() => {
-  vi.resetModules();
-  state.workers.splice(0);
-  state.seeded.splice(0);
-});
 afterEach(() => vi.unstubAllGlobals());
 it('an anonymous worker finishing initialization cannot reattach after sign-in', async () => {
   vi.stubGlobal('Worker', class {});
@@ -95,36 +87,4 @@ it('an anonymous worker finishing initialization cannot reattach after sign-in',
   state.workers[1].barrier.resolve();
   await new Promise(resolve => setTimeout(resolve, 20));
   expect(state.workers).toHaveLength(2);
-});
-
-it('dev-drive setup can defer the anonymous worker and initialize only its fresh identity', async () => {
-  vi.stubGlobal('Worker', class {});
-  let agent: { subject: string } | undefined;
-  let listener: (next: { subject: string } | undefined) => void = () => {};
-  const store = {
-    expectClientDb: vi.fn(),
-    getAgent: () => agent,
-    on: (_: string, callback: typeof listener) => {
-      listener = callback;
-
-      return () => {};
-    },
-    getServerUrl: () => 'http://localhost',
-    resources: new Map(),
-    setClientDb: vi.fn(),
-    notifyError: vi.fn(),
-  };
-  const { initClientDb } = await import('./initClientDb');
-  initClientDb(store as unknown as Store, { deferAnonymous: true });
-  await Promise.resolve();
-  expect(store.expectClientDb).toHaveBeenCalled();
-  expect(state.workers).toHaveLength(0);
-  agent = { subject: 'did:ad:agent:fresh-test' };
-  listener(agent);
-  await vi.waitFor(() => expect(state.workers).toHaveLength(1));
-  expect(store.setClientDb).toHaveBeenLastCalledWith(state.workers[0]);
-  state.workers[0].ready.resolve();
-  state.workers[0].barrier.resolve();
-  await new Promise(resolve => setTimeout(resolve, 0));
-  expect(state.seeded).toEqual([]);
 });

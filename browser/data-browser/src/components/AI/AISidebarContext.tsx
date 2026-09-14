@@ -4,7 +4,8 @@ import type { AIMessageContext } from '../../chunks/AI/types';
 import { useRightPanel } from '../RightPanel/RightPanelContext';
 
 /**
- * A request handed to the assistant from another screen, with resource context.
+ * A question to put to the assistant on someone else's behalf, from anywhere
+ * in the app — "this app just threw, fix it" being the case it was built for.
  */
 export interface AIAsk {
   /** Sent as the first message of a new chat. */

@@ -56,6 +56,7 @@ pub mod invite;
 pub mod journal;
 #[cfg(feature = "wasm-plugins")]
 pub mod js_runtime;
+#[cfg(feature = "wasm-plugins")]
 pub mod manifest;
 pub mod path;
 #[cfg(feature = "wasm-plugins")]

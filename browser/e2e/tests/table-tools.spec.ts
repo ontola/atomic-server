@@ -1,6 +1,5 @@
-import { before } from './session-fixtures';
-import { test, expect, type Page } from './session-fixtures';
-import { FRONTEND_URL } from './test-utils';
+import { test, expect, type Page } from './fixtures';
+import { before, FRONTEND_URL, newDrive, signIn } from './test-utils';
 import {
   enableAIForTesting,
   setupScriptedToolCallMocks,
@@ -90,6 +89,8 @@ test.describe('assistant table tools', () => {
 
     await enableAIForTesting(page);
     await before({ page });
+    await signIn(page);
+    await newDrive(page);
 
     await sendChatMessage(page, 'Make me a timesheet and add a rate column');
 

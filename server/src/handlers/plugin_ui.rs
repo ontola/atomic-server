@@ -1,11 +1,15 @@
 use std::path::PathBuf;
 
 use actix_web::{http::header, web, HttpResponse};
-use atomic_lib::{db::plugin_meta::PluginMetaKey, hierarchy::check_read, urls, Storelike, Subject, Value};
+use atomic_lib::{
+    db::plugin_meta::PluginMetaKey, hierarchy::check_read, urls, Storelike, Subject, Value,
+};
 use base64::{engine::general_purpose, Engine as _};
 
 use crate::{
-    appstate::AppState, context::RequestContext, errors::{AtomicServerError, AtomicServerResult},
+    appstate::AppState,
+    context::RequestContext,
+    errors::{AtomicServerError, AtomicServerResult},
     helpers::get_client_agent,
 };
 
@@ -201,15 +205,7 @@ if (window.parent) window.parent.postMessage({{ type: '__atomic_plugin_ready' }}
     )
 }
 
-fn render_drive_plugin_ui_html(query_string: &str, css_exists: bool, nonce: &str) -> String {
-    render_drive_plugin_ui_html_with(query_string, css_exists, nonce, false)
-}
-
-/// `calls_view`: a plugin whose source is in the drive exports `view` and is
-/// called, rather than executing on import. That is what makes it writable by
-/// someone who has never seen this codebase — there is no bootstrap to
-/// reproduce, just a function that receives what it needs.
-fn render_drive_plugin_ui_html_with(
+fn render_plugin_ui_html_with(
     query_string: &str,
     css_exists: bool,
     nonce: &str,
@@ -368,11 +364,6 @@ pub async fn handle_plugin_ui(
         Err(e) => return Ok(HttpResponse::BadRequest().body(e.message)),
     };
 
-    let (namespace, name) = match split_plugin_name(plugin_name) {
-        Ok(parts) => parts,
-        Err(e) => return Ok(HttpResponse::BadRequest().body(e.message)),
-    };
-
     // `html` is generated (not a file on disk): serve the iframe host document
     // with its own CSP so the plugin script isn't blocked by the parent CSP.
     if format == "html" {
@@ -448,7 +439,7 @@ async fn serve_drive_plugin(
         let nonce = plugin_nonce();
         // No stylesheet: a plugin in the drive is one module. Its styles belong
         // in it, next to the markup they describe.
-        let body = render_drive_plugin_ui_html_with(query_string, false, &nonce, true);
+        let body = render_plugin_ui_html_with(query_string, false, &nonce, true);
         let csp = format!(
             "default-src 'none'; script-src 'nonce-{nonce}'; style-src 'unsafe-inline' 'self'; \
              img-src * data:; connect-src *; font-src *; base-uri 'none'; object-src 'none';"

@@ -10,12 +10,12 @@ import {
   commits,
   server,
   classes,
+  properties,
   type JSONValue,
   type Resource,
   type Store,
 } from '@tomic/react';
 import { buildTableFromSpec } from '../TablePage/createTableFromSpec';
-import { DEMO_SPEAKER } from './messageSpeaker';
 import { MOODBOARD_BAKED_STROKES } from './moodboardStrokes';
 
 /**
@@ -154,7 +154,12 @@ const TEAM_CHAT_SEED: Array<{ author: PersonaKey; text: string }> = [
   },
 ];
 
-/** Create local scripted speech while preserving the real genesis creator. */
+/**
+ * Create a persona-authored chat Message. Authorship is the `createdBy`
+ * propval — exactly what the ChatRoom view's `useCreatedBy` reads first
+ * — which only works because the demo drive never reaches a server (the
+ * server derives `createdBy` from the verified genesis instead).
+ */
 export async function createDemoMessage(
   store: Store,
   opts: {
@@ -169,7 +174,7 @@ export async function createDemoMessage(
     isA: [dataBrowser.classes.message, ...(opts.extraClasses ?? [])],
     propVals: {
       [core.properties.description]: opts.text,
-      [DEMO_SPEAKER]: opts.author,
+      [properties.createdBy]: opts.author,
     },
   });
   await message.save();
@@ -180,7 +185,7 @@ export async function createDemoMessage(
 /** Mirrors `useAddToOntology` for imperative (non-hook) callers: parent
  *  the class/property under the drive's default ontology and link it in
  *  the matching ontology list. */
-export async function addToOntology(
+async function addToOntology(
   store: Store,
   driveSubject: string,
   resource: Resource,

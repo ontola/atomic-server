@@ -1,4 +1,4 @@
-import PluginWorker from '@tomic/lib/plugin-run.worker.js?worker';
+import pluginWorkerUrl from '@tomic/lib/plugin-run.worker.js?url';
 import { useEffect, useState } from 'react';
 import {
   runPlugin,
@@ -115,7 +115,8 @@ export function ImportMT940({
           },
         },
         {
-          createWorker: () => new PluginWorker() as never,
+          createWorker: () =>
+            new Worker(pluginWorkerUrl, { type: 'module' }) as never,
         },
       );
       const invalid = validation.verdict.problems.find(

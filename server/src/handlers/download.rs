@@ -43,7 +43,7 @@ pub async fn handle_download(
     // uploads have DID resources, and peers can hold the blob without metadata.
     if let Some(hash_hex) = subject_path.strip_prefix("/files/") {
         if hash_hex.len() == 64 && hex::decode(hash_hex).is_ok() {
-            let bytes = match blob_by_hash_hex(hash_hex, &appstate).await? {
+            let bytes = match blob_by_hash_hex(hash_hex, &appstate)? {
                 Some(bytes) => Some(bytes),
                 None => chunked_file_by_internal_id(hash_hex, &appstate).await?,
             };
@@ -54,7 +54,7 @@ pub async fn handle_download(
                 return Ok(user_blob_response("application/octet-stream", bytes));
             }
             let hash_bytes = hex::decode(hash_hex).expect("validated hash");
-            return serve_processed_image(&bytes, &hash_bytes, &params, &appstate).await;
+            return serve_processed_image(&bytes, &hash_bytes, &params, &appstate);
         }
     }
 
@@ -63,7 +63,7 @@ pub async fn handle_download(
     // Support did:ad:blob: subjects directly in /download
     if subject.is_blob_did() {
         if let Some(hash_hex) = subject.blob_hash_hex() {
-            if let Some(bytes) = blob_by_hash_hex(hash_hex, &appstate).await? {
+            if let Some(bytes) = blob_by_hash_hex(hash_hex, &appstate)? {
                 return Ok(user_blob_response("application/octet-stream", bytes));
             }
         }
@@ -79,7 +79,7 @@ pub async fn handle_download(
         .await?
         .to_single();
 
-    download_file_handler_partial(&resource, &req, &params, &appstate).await
+    download_file_handler_partial(&resource, &req, &params, &appstate)
 }
 
 /// Serves user-uploaded blob bytes as a forced download rather than rendering
@@ -110,26 +110,23 @@ fn user_blob_response(content_type: impl AsRef<str>, bytes: Vec<u8>) -> HttpResp
 
 /// Look up a blob by its hex-encoded BLAKE3 hash. Returns `None` if the input
 /// is not a 64-char hex string or no blob is stored under that hash.
-async fn blob_by_hash_hex(
-    hash_hex: &str,
-    appstate: &AppState,
-) -> AtomicServerResult<Option<Vec<u8>>> {
+fn blob_by_hash_hex(hash_hex: &str, appstate: &AppState) -> AtomicServerResult<Option<Vec<u8>>> {
     if hash_hex.len() != 64 {
         return Ok(None);
     }
     let Ok(hash_bytes) = hex::decode(hash_hex) else {
         return Ok(None);
     };
-    Ok(appstate.store.get_blob(&hash_bytes).await?)
+    Ok(appstate
+        .store
+        .kv
+        .get(atomic_lib::db::trees::Tree::Blobs, &hash_bytes)?)
 }
 
 /// The bytes of a File: concatenated chunk blobs when it is chunked (its `chunks`
 /// property is a non-empty ordered list of `did:ad:blob:` refs), otherwise the
 /// single blob referenced by `internalId`.
-async fn reconstruct_file_bytes(
-    resource: &Resource,
-    appstate: &AppState,
-) -> AtomicServerResult<Vec<u8>> {
+fn reconstruct_file_bytes(resource: &Resource, appstate: &AppState) -> AtomicServerResult<Vec<u8>> {
     if let Ok(Value::ResourceArray(chunks)) = resource.get(urls::CHUNKS) {
         if !chunks.is_empty() {
             let mut out = Vec::new();
@@ -140,8 +137,7 @@ async fn reconstruct_file_bytes(
                 let hash_hex = subject
                     .blob_hash_hex()
                     .ok_or_else(|| format!("Invalid chunk reference: {did}"))?;
-                let bytes = blob_by_hash_hex(hash_hex, appstate)
-                    .await?
+                let bytes = blob_by_hash_hex(hash_hex, appstate)?
                     .ok_or_else(|| format!("Chunk blob not found: {hash_hex}"))?;
                 out.extend_from_slice(&bytes);
             }
@@ -166,8 +162,8 @@ async fn reconstruct_file_bytes(
 
     appstate
         .store
-        .get_blob(&hash_bytes)
-        .await?
+        .kv
+        .get(atomic_lib::db::trees::Tree::Blobs, &hash_bytes)?
         .ok_or_else(|| format!("Blob not found: {}", internal_id).into())
 }
 
@@ -185,20 +181,20 @@ async fn chunked_file_by_internal_id(
 
     for resource in result.resources {
         if matches!(resource.get(urls::CHUNKS), Ok(Value::ResourceArray(c)) if !c.is_empty()) {
-            return Ok(Some(reconstruct_file_bytes(&resource, appstate).await?));
+            return Ok(Some(reconstruct_file_bytes(&resource, appstate)?));
         }
     }
 
     Ok(None)
 }
 
-pub async fn download_file_handler_partial(
+pub fn download_file_handler_partial(
     resource: &Resource,
     _req: &HttpRequest,
     params: &web::Query<DownloadParams>,
     appstate: &AppState,
 ) -> AtomicServerResult<HttpResponse> {
-    let bytes = reconstruct_file_bytes(resource, appstate).await?;
+    let bytes = reconstruct_file_bytes(resource, appstate)?;
 
     // The source hash for the image-rendition cache key is the whole-file hash.
     let internal_id = resource
@@ -217,15 +213,15 @@ pub async fn download_file_handler_partial(
         return Ok(user_blob_response(mimetype, bytes));
     }
 
-    // With image params: serve a processed rendition. Cache it in the blob backend
+    // With image params: serve a processed rendition. Cache it in Tree::Blobs
     // under a deterministic synthetic hash so future requests with the same
     // params hit the cache and any peer that has produced the same rendition
     // can serve it content-addressably.
-    serve_processed_image(&bytes, &hash_bytes, params, appstate).await
+    serve_processed_image(&bytes, &hash_bytes, params, appstate)
 }
 
 #[cfg(feature = "img")]
-async fn serve_processed_image(
+fn serve_processed_image(
     source_bytes: &[u8],
     source_hash: &[u8],
     params: &web::Query<DownloadParams>,
@@ -238,7 +234,11 @@ async fn serve_processed_image(
     let format = get_format(params)?;
     let cache_key = processed_cache_key(source_hash, &format, params);
 
-    if let Some(cached) = appstate.store.get_blob(&cache_key).await? {
+    if let Some(cached) = appstate
+        .store
+        .kv
+        .get(atomic_lib::db::trees::Tree::Blobs, &cache_key)?
+    {
         return Ok(user_blob_response(mimetype_for(&format), cached));
     }
 
@@ -247,13 +247,16 @@ async fn serve_processed_image(
     }
 
     let encoded = process_image_bytes(source_bytes, params, &format)?;
-    appstate.store.put_blob(&cache_key, &encoded).await?;
+    appstate
+        .store
+        .kv
+        .insert(atomic_lib::db::trees::Tree::Blobs, &cache_key, &encoded)?;
 
     Ok(user_blob_response(mimetype_for(&format), encoded))
 }
 
 #[cfg(not(feature = "img"))]
-async fn serve_processed_image(
+fn serve_processed_image(
     _source_bytes: &[u8],
     _source_hash: &[u8],
     _params: &web::Query<DownloadParams>,

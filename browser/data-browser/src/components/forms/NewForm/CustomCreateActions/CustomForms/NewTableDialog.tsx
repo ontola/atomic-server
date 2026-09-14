@@ -1,4 +1,3 @@
-import { instantiateTableTemplate } from '../../../../../chunks/Templates/instantiateTable';
 import { dataBrowser, core, useStore } from '@tomic/react';
 import React, {
   useState,
@@ -38,6 +37,7 @@ import {
   type TableTemplate,
 } from '../../../../../chunks/TablePage/tableTemplates';
 import {
+  buildTableFromSpec,
   createRowClass,
   resolveOntologyParent,
 } from '../../../../../chunks/TablePage/createTableFromSpec';
@@ -113,11 +113,9 @@ export const NewTableDialog: FC<NewTableDialogProps> = ({
     const template = TABLE_TEMPLATES.find(t => t.id === templateId);
 
     if (template?.spec) {
-      const { tableSubject } = await instantiateTableTemplate(
+      const { tableSubject } = await buildTableFromSpec(
         store,
-        template.id,
-        name,
-        rowName,
+        { ...template.spec, name, rowName },
         { parent, driveSubject, addToOntology },
       );
 

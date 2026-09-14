@@ -1,16 +1,14 @@
-import { AppVerifierProvider } from '@chunks/AppPage/AppVerifierContext';
-import { DemoActionsBar, readDemoDrive } from './DemoExitButton';
-import { readTemplateDemo } from '../chunks/Templates/demoSession';
 import { AppSetupProvider } from './AppSetup/AppSetupProvider';
 import * as React from 'react';
 import { type JSX, useMemo } from 'react';
 import { styled } from 'styled-components';
 
-import { OnboardingFeedback } from './OnboardingFeedback';
+import { FeedbackMenuItem } from './SideBar/FeedbackMenuItem';
 import { SideBar } from './SideBar';
 import { OverlayContainer } from './OverlayContainer';
 import { CalculatedPageHeight } from '../globalCssVars';
 import { AISidebarContextProvider } from './AI/AISidebarContext';
+import { AppVerifierProvider } from '@chunks/AppPage/AppVerifierContext';
 import { AISidebarContainer } from './AI/AISidebarContainer';
 import { RightPanelProvider } from './RightPanel/RightPanelContext';
 import { CommentsPanelContainer } from './CommentsPanel/CommentsPanelContainer';
@@ -39,7 +37,7 @@ const FollowSessionPanelMemo = React.memo(FollowSessionPanelContainer);
 
 /** Wraps the entire app and adds a navbar at the top or bottom */
 export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
-  const { navbarTop, agent, drive } = useSettings();
+  const { navbarTop, agent } = useSettings();
   const { rootWelcomeChromeHidden } = useRootWelcomeLayout();
   const [subject] = useCurrentSubject();
   const { pathname, searchStr } = useLocation();
@@ -65,14 +63,8 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
     onboardingOrChild ||
     welcomeOrChild ||
     demoSplash ||
-    pathname === paths.newDrive ||
     pathname === `${pathNames.app}${pathNames.invite}` ||
     signedOutHosted;
-
-  const previewBar =
-    !hideGlobalChrome &&
-    (readTemplateDemo()?.drive ?? readDemoDrive()) === drive;
-  const previewHeight = previewBar ? '3.5rem' : '0px';
 
   const search = useMemo(() => new URLSearchParams(searchStr), [searchStr]);
 
@@ -89,6 +81,8 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
   return (
     <RightPanelProvider>
       <AISidebarContextProvider>
+        {/* Owns the off-screen frame an app is checked in. Inside the AI
+         * providers, because the tools that ask for a check live there. */}
         <AppVerifierProvider>
           <AppSetupProvider>
             {/* The single app-wide resource context menu (right-click). Mounted here
@@ -96,20 +90,10 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
             <ResourceContextMenuHost />
             {/* Toasts new meeting messages when the meeting panel isn't open. */}
             {!hideGlobalChrome && <MeetingMessageToaster />}
-            {previewBar && (
-              <PreviewHeader>
-                <DemoActionsBar />
-              </PreviewHeader>
-            )}
             {!hideGlobalChrome && (
-              <TopBar
-                previewHeight={previewHeight}
-                subject={contextualSubject}
-                top={navbarTop}
-              />
+              <TopBar subject={contextualSubject} top={navbarTop} />
             )}
             <SideBarWrapper
-              previewHeight={previewHeight}
               top={navbarTop}
               fullViewportContent={hideGlobalChrome}
             >
@@ -123,7 +107,11 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
                 </HideInPrint>
               )}
             </SideBarWrapper>
-            {hideGlobalChrome && <OnboardingFeedback />}
+            {hideGlobalChrome && (
+              <OnboardingFeedback>
+                <FeedbackMenuItem floating />
+              </OnboardingFeedback>
+            )}
             <OverlayContainer />
           </AppSetupProvider>
         </AppVerifierProvider>
@@ -135,9 +123,6 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
 interface ContentProps {}
 
 const Content = styled.div<ContentProps>`
-  /* Keep page-local drag overlays below sibling sidebars, including docked
-     panels which do not need their own elevated z-index. */
-  isolation: isolate;
   display: block;
   flex: 1;
   container: ${MAIN_CONTAINER} / inline-size;
@@ -147,30 +132,24 @@ const Content = styled.div<ContentProps>`
 const TopBar = React.memo(function TopBar({
   subject,
   top,
-  previewHeight,
 }: {
   subject: string | undefined;
   top: boolean;
-  previewHeight: string;
 }): JSX.Element {
   const resource = useResource(subject);
 
   return (
     <ChromeTheme>
-      <NavBarStyled
-        aria-label='navigation'
-        top={top}
-        previewHeight={previewHeight}
-      >
+      <NavBarStyled aria-label='navigation' top={top}>
         <NavBarContent resource={resource} />
       </NavBarStyled>
     </ChromeTheme>
   );
 });
 
-const NavBarStyled = styled.div<{ top: boolean; previewHeight: string }>`
+const NavBarStyled = styled.div<{ top: boolean }>`
   position: fixed;
-  ${p => (p.top ? `top: ${p.previewHeight};` : 'bottom: 0;')}
+  ${p => (p.top ? 'top: 0;' : 'bottom: 0;')}
   left: 0;
   right: 0;
   z-index: ${p => p.theme.zIndex.sidebar};
@@ -189,7 +168,6 @@ const NavBarStyled = styled.div<{ top: boolean; previewHeight: string }>`
 const SideBarWrapper = styled.div<{
   top: boolean;
   fullViewportContent?: boolean;
-  previewHeight: string;
 }>`
   /* Subtract the on-screen keyboard (see useKeyboardInset). On Android the
      webview is covered by the keyboard rather than resized for it, so 100dvh
@@ -201,7 +179,7 @@ const SideBarWrapper = styled.div<{
     p.fullViewportContent
       ? CalculatedPageHeight.define(`calc(100dvh - var(--keyboard-inset, 0px))`)
       : CalculatedPageHeight.define(
-          `calc(100dvh - ${p.theme.heights.breadCrumbBar} - ${p.previewHeight} - var(--keyboard-inset, 0px))`,
+          `calc(100dvh - ${p.theme.heights.breadCrumbBar} - var(--keyboard-inset, 0px))`,
         )}
   display: flex;
   height: ${CalculatedPageHeight.var()};
@@ -211,7 +189,7 @@ const SideBarWrapper = styled.div<{
       return 'top: 0;';
     }
 
-    return `top: calc(${p.previewHeight} + ${p.top ? p.theme.heights.breadCrumbBar : '0px'});`;
+    return p.top ? `top: ${p.theme.heights.breadCrumbBar};` : 'top: 0;';
   }}
   left: 0;
   right: 0;
@@ -230,9 +208,9 @@ const SideBarWrapper = styled.div<{
   }
 `;
 
-const PreviewHeader = styled.div`
+const OnboardingFeedback = styled.div`
   position: fixed;
-  inset: 0 0 auto;
-  height: 3.5rem;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
   z-index: ${p => p.theme.zIndex.sidebar};
 `;

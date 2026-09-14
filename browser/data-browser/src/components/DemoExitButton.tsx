@@ -1,63 +1,52 @@
-import { Button } from './Button';
 import { useState } from 'react';
 import { styled } from 'styled-components';
+import { FaRightFromBracket } from 'react-icons/fa6';
 import { useStore } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
+import { constructOpenURL } from '../helpers/navigation';
 import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
-import { readTemplateDemo } from '../chunks/Templates/demoSession';
 import { paths } from '../routes/paths';
+import {
+  SideBarMenuRow,
+  SideBarMenuRowIcon,
+  SideBarMenuRowLabel,
+} from './SideBar/SideBarMenuItem';
 
 /**
- * The shared action bar above navigation, shown whenever
- * the demo drive is active. Returns to the template gallery and stops
- * the scripted scenario.
+ * The way out of the demo workspace: a sidebar menu row shown whenever
+ * the demo drive is active. Guests go to sign-up; signed-in users go
+ * back to their own drive. Stops the scripted scenario either way.
  * Reads the demo manifest straight from localStorage — cheap, and it
  * keeps the heavy demo chunk out of the main bundle (only the click
  * loads it, to stop the director).
  */
-export function DemoActionsBar(): React.JSX.Element | null {
+export function DemoExitMenuItem({
+  onItemClick,
+}: {
+  onItemClick?: () => void;
+}): React.JSX.Element | null {
   const store = useStore();
   const { drive } = useSettings();
   const navigate = useNavigateWithTransition();
   const [leaving, setLeaving] = useState(false);
 
-  const templateDemo = readTemplateDemo();
-  const demoDrive = templateDemo?.drive ?? readDemoDrive();
+  const demoDrive = readDemoDrive();
 
-  if (!demoDrive || drive !== demoDrive) return null;
+  if (!demoDrive || drive !== demoDrive) {
+    return null;
+  }
 
-  async function handleExit(adopt = false) {
+  async function handleExit() {
     if (leaving) return;
     setLeaving(true);
+    onItemClick?.();
 
     // Nothing in here may leave the user stranded in the demo with a stuck
     // "Leaving…" button: `finally` always resets, a `catch` always navigates
     // out, and the personal-drive lookup is time-boxed (a guest's DID isn't
     // on the server, so that fetch can stall indefinitely).
     try {
-      if (templateDemo) {
-        if (adopt) {
-          navigate(
-            `/app/new-drive?template=${encodeURIComponent(templateDemo.template)}&keep_preview=1`,
-          );
-
-          return;
-        }
-
-        store.setDrive(templateDemo.previousDrive);
-        const { cleanupDemoDrive } = await import('../chunks/Demo/startDemo');
-        await cleanupDemoDrive(store, templateDemo.drive);
-        localStorage.removeItem('atomic.templateDemo');
-        navigate(
-          adopt
-            ? `/app/new-drive?template=${encodeURIComponent(templateDemo.template)}`
-            : '/app/new-drive',
-        );
-
-        return;
-      }
-
       try {
         const { stopDemoDirector } = await import('../chunks/Demo/startDemo');
         stopDemoDirector();
@@ -73,32 +62,37 @@ export function DemoActionsBar(): React.JSX.Element | null {
           )
         : undefined;
 
-      store.setDrive(home && home !== demoDrive ? home : '');
-      const { cleanupDemoDrive } = await import('../chunks/Demo/startDemo');
-      await cleanupDemoDrive(store, demoDrive!);
-      localStorage.removeItem('atomic.demoWorkspace');
-      navigate(paths.newDrive);
+      // `home === demoDrive` would navigate straight back into the demo
+      // ("nothing happened"): a guest whose initialDrive is the demo itself.
+      // Treat that as "no home" and send them to sign-up.
+      if (home && home !== demoDrive) {
+        store.setDrive(home);
+        navigate(constructOpenURL(home));
+      } else {
+        navigate(paths.onboarding);
+      }
     } catch {
-      // Last resort — return to the gallery, never a deleted demo drive.
-      store.setDrive('');
-      navigate(paths.newDrive);
+      // Last resort — never strand the user in the demo.
+      navigate(paths.onboarding);
     } finally {
       setLeaving(false);
     }
   }
 
   return (
-    <PreviewBar role='region' aria-label='Template preview'>
-      <Button subtle disabled={leaving} onClick={() => void handleExit()}>
-        <BackLabel>Back to template selection</BackLabel>
-        <ShortBackLabel>Back</ShortBackLabel>
-      </Button>
-      {templateDemo && (
-        <Button disabled={leaving} onClick={() => void handleExit(true)}>
-          Use this template
-        </Button>
-      )}
-    </PreviewBar>
+    <ExitRow
+      as='button'
+      type='button'
+      title='Leave the demo workspace'
+      onClick={handleExit}
+    >
+      <SideBarMenuRowIcon>
+        <FaRightFromBracket />
+      </SideBarMenuRowIcon>
+      <SideBarMenuRowLabel>
+        {leaving ? 'Leaving…' : 'Exit demo'}
+      </SideBarMenuRowLabel>
+    </ExitRow>
   );
 }
 
@@ -111,7 +105,7 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | undefined> {
   ]);
 }
 
-export function readDemoDrive(): string | undefined {
+function readDemoDrive(): string | undefined {
   try {
     const raw = localStorage.getItem('atomic.demoWorkspace');
 
@@ -121,35 +115,18 @@ export function readDemoDrive(): string | undefined {
   }
 }
 
-const PreviewBar = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  height: 100%;
-  box-sizing: border-box;
-  padding: 0.5rem 1rem;
-  button {
-    white-space: nowrap;
-  }
-  @media (max-width: 600px) {
-    padding: 0.5rem;
-    button {
-      font-size: 0.875rem;
-    }
-  }
-  background: ${p => p.theme.colors.bg1};
-  border-bottom: 1px solid ${p => p.theme.colors.bg2};
-`;
+const ExitRow = styled(SideBarMenuRow)`
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  color: white;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  background: ${p => p.theme.colors.main};
 
-const BackLabel = styled.span`
-  @media (max-width: 600px) {
-    display: none;
-  }
-`;
-const ShortBackLabel = styled.span`
-  display: none;
-  @media (max-width: 600px) {
-    display: inline;
+  &:hover,
+  &:focus-visible {
+    background: ${p => p.theme.colors.mainDark ?? p.theme.colors.main};
+    color: white;
   }
 `;

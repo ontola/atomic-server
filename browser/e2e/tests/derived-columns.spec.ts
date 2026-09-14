@@ -1,6 +1,6 @@
-import { before } from './session-fixtures';
-import { test, expect, type Page } from './session-fixtures';
+import { test, expect, type Page } from './fixtures';
 import {
+  before,
   createTableFromDialog,
   inDialog,
   setGridCell,

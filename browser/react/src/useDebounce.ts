@@ -1,7 +1,7 @@
 import { Resource } from '@tomic/lib';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { useSaveState, useStore } from './hooks.js';
+import { useStore } from './hooks.js';
 
 // T is a generic type for value parameter, our case this will be string
 export function useDebounce<T>(value: T, delay: number): T {
@@ -33,26 +33,38 @@ export function useDebouncedSave(
   timeout: number,
   onError?: (error: Error) => void,
 ): [save: () => void, savePending: boolean] {
+  const timeoutId = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [savePending, setSavePending] = useState(false);
   const store = useStore();
-  const stable = resource.__internalObject;
-  const scheduler = useMemo(
-    () => store.createSaveScheduler(stable),
-    [store, stable],
-  );
-  useEffect(() => {
-    scheduler.setErrorHandler(onError ?? (error => store.notifyError(error)));
-  }, [scheduler, onError, store]);
-  useEffect(
-    () => () => {
-      void scheduler.flush();
-    },
-    [scheduler],
-  );
-  const save = useCallback(
-    () => scheduler.schedule(timeout),
-    [scheduler, timeout],
-  );
-  const state = useSaveState(stable);
 
-  return [save, state.kind === 'scheduled' || state.kind === 'saving'];
+  const save = useCallback(() => {
+    // Report the debounce window to the store so sync status counts the
+    // not-yet-executed save (see Store.startScheduledSave).
+    if (timeoutId.current !== undefined) {
+      clearTimeout(timeoutId.current);
+    } else {
+      store.startScheduledSave();
+    }
+
+    timeoutId.current = setTimeout(async () => {
+      timeoutId.current = undefined;
+
+      try {
+        await resource.__internalObject.save();
+        setSavePending(false);
+      } catch (e) {
+        if (onError) {
+          onError(e instanceof Error ? e : new Error(String(e)));
+        } else {
+          throw e;
+        }
+      } finally {
+        store.finishScheduledSave();
+      }
+    }, timeout);
+
+    setSavePending(true);
+  }, [resource.__internalObject, timeout, onError, store]);
+
+  return [save, savePending];
 }

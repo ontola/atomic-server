@@ -2,6 +2,7 @@ import { test } from './fixtures';
 import { FRONTEND_URL, currentDriveTitle } from './test-utils';
 import { applyCpuThrottle, envCpuThrottle } from './perf-attach';
 import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * Records a Chrome DevTools `Performance` trace (Tracing.start/stop) for
@@ -69,9 +70,10 @@ test('dev-drive CDP trace', async ({ page }) => {
   await client.send('Tracing.end');
   const trace = await traceCompleted;
 
-  const outPath = test
-    .info()
-    .outputPath(`dev-drive-trace-throttle-${throttle ?? 1}x.json`);
+  const outPath = path.join(
+    process.cwd(),
+    `dev-drive-trace-throttle-${throttle ?? 1}x.json`,
+  );
   fs.writeFileSync(outPath, trace);
   // eslint-disable-next-line no-console
   console.log(

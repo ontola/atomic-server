@@ -38,7 +38,17 @@ export function NetworkIndicator() {
       (connected: boolean) => {
         if (connected) {
           wasEverConnected.current = true;
-          toast.dismiss('connection-status');
+          const host = (() => {
+            try {
+              return new URL(store.getServerUrl()).hostname;
+            } catch {
+              return 'server';
+            }
+          })();
+          toast.success(`Connected to ${host}`, {
+            duration: 2000,
+            id: 'connection-status',
+          });
         } else if (wasEverConnected.current && !userDisconnected) {
           toast('Working offline — your changes are saved locally', {
             icon: OFFLINE_ICON,

@@ -57,10 +57,6 @@ export function TableFilterChip({
 
   return (
     <Popover
-      // Editing an operator/value changes the anchor width while this is open.
-      // Track that rectangle on frames instead of resizing/repositioning the
-      // popover inside the anchor's ResizeObserver delivery.
-      updatePositionStrategy='always'
       open={open}
       onOpenChange={setOpen}
       Trigger={

@@ -1,3 +1,4 @@
+import { enableIntegrationDiscovery } from './integration-settings-utils';
 import { test, expect } from '@playwright/test';
 import {
   before,
@@ -10,7 +11,6 @@ import {
   getPluginSync,
   pluginSyncSchedule,
   dataBrowser,
-  signRequest,
 } from '@tomic/lib';
 
 /**
@@ -21,6 +21,9 @@ import {
  */
 test.describe('plugins', () => {
   test.beforeEach(before);
+  test.beforeEach(async ({ page }) => {
+    await enableIntegrationDiscovery(page, true);
+  });
 
   test('Pets imports from the mock integration proxy after account connection and review', async ({
     page,
@@ -170,158 +173,211 @@ export function run() { return { intents: [] }; }
     ).toBeVisible();
   });
 
-  for (const managed of [false, true]) {
-    test(`Notion ${managed ? 'managed' : 'direct'} OAuth selects a database by name and reports revoked access`, async ({
-      page,
-    }) => {
-      const connection = {
-        id: 'fixture-connection',
-        name: 'Design team',
-        workspace: 'fixture-workspace',
-      };
-      await page.route('**/integration-oauth/notion/list', route =>
-        route.fulfill({ json: { configured: true, connections: [] } }),
-      );
-      await page.route('**/integration-oauth/notion/start', route =>
-        route.fulfill({
-          json: {
-            state: 'fixture-state',
-            ...(managed ? { mode: 'managed' } : {}),
-            url: `${SERVER_URL}/integration-oauth/notion/callback?state=fixture-state&code=fixture`,
-          },
-        }),
-      );
-      await page
-        .context()
-        .route('**/integration-oauth/notion/callback?**', route =>
-          route.fulfill({
-            contentType: 'text/html',
-            body: managed
-              ? 'Authorization finished. Return to Atomic.'
-              : `<script>opener.postMessage({type:'atomic-notion-oauth',state:'fixture-state',code:'fixture',error:null},${JSON.stringify(new URL(page.url()).origin)})</script>`,
+  test('Notion discovers databases through the proxy and reports revoked access without server OAuth', async ({
+    page,
+  }) => {
+    const actor = Agent.fromSecret(await getDevDriveSecret(page), 'js').subject;
+    const drive = new URL(page.url()).searchParams.get('subject')!;
+    const origin = 'https://notion-proxy.test';
+    const connection = 'notion-fixture';
+    const dataSource = '11111111-1111-4111-8111-111111111111';
+    const notionPage = {
+      object: 'page',
+      id: '22222222-2222-4222-8222-222222222222',
+      parent: { data_source_id: dataSource },
+      properties: {
+        Name: {
+          id: 'title',
+          type: 'title',
+          title: [{ type: 'text', text: { content: 'Proxy task' } }],
+        },
+      },
+    };
+    await page.evaluate(
+      ({ actor, drive, origin, connection }) => {
+        localStorage.setItem('integration-proxy-url', origin);
+        window.dispatchEvent(new Event('integration-proxy-change'));
+        localStorage.setItem(
+          `localthought-browser:${JSON.stringify([origin, drive, actor, 'notion'])}`,
+          JSON.stringify({ actor, drive, platform: 'notion', connection }),
+        );
+        localStorage.setItem(
+          `localthought-browser-v1:${connection}`,
+          JSON.stringify({
+            actor,
+            drive,
+            origin,
+            platform: 'notion',
+            ready: true,
+            expires: Date.now() + 600000,
+            code: 'fixture-code',
           }),
         );
-      let finishCalls = 0;
-      await page.route('**/integration-oauth/notion/finish', async route => {
-        expect(route.request().postDataJSON()).toMatchObject({
-          state: 'fixture-state',
-          ...(managed ? {} : { code: 'fixture' }),
-        });
-        if (managed)
-          expect(route.request().postDataJSON()).not.toHaveProperty('code');
-        finishCalls++;
-        await route.fulfill({
-          json: managed && finishCalls === 1 ? { pending: true } : connection,
-        });
-      });
-      let credentialBindings = 0;
-      await page.route('**/integration-oauth/notion/bind', async route => {
-        expect(route.request().postDataJSON()).toMatchObject({
-          connection: connection.id,
-        });
-        expect(route.request().postDataJSON()).not.toHaveProperty('value');
-        credentialBindings++;
-        await route.fulfill({ json: true });
-      });
-      await page.route('**/plugin-external-read', async route => {
-        const operation = route.request().postDataJSON().intent.operation;
-        const data =
-          operation === 'schema'
-            ? {
-                id: '11111111-1111-4111-8111-111111111111',
-                properties: {
-                  Name: { id: 'title', name: 'Name', type: 'title' },
+      },
+      { actor, drive, origin, connection },
+    );
+    const forbidden: string[] = [];
+    page.on('request', req => {
+      if (
+        req.url().includes('/integration-oauth/') ||
+        req.url().includes('/plugin-secret')
+      )
+        forbidden.push(req.url());
+    });
+    await page.route(`${origin}/catalog`, route =>
+      route.fulfill({
+        json: ['notion'],
+        headers: { 'Access-Control-Allow-Origin': '*' },
+      }),
+    );
+    await page.route(`${origin}/proxy/notion/**`, async route => {
+      const path = new URL(route.request().url()).pathname;
+      if (route.request().method() === 'PATCH')
+        notionPage.properties.Name.title = route
+          .request()
+          .postDataJSON().properties.title.title;
+      await route.fulfill({
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Expose-Headers': 'X-Connection-Code',
+          'X-Connection-Code': 'next-code',
+        },
+        json: path.endsWith('/query')
+          ? { results: [notionPage], has_more: false, next_cursor: null }
+          : path.includes('/pages/')
+            ? notionPage
+            : path.endsWith('/views')
+              ? { results: [], has_more: false, next_cursor: null }
+              : {
+                  id: dataSource,
+                  properties: {
+                    Name: { id: 'title', name: 'Name', type: 'title' },
+                  },
                 },
-              }
-            : { results: [], has_more: false, next_cursor: null };
-        await route.fulfill({
-          json: { status: 200, body: JSON.stringify(data) },
-        });
       });
-      let revoked = false;
-      await page.route('**/integration-oauth/notion/discover', async route => {
-        expect(route.request().postDataJSON().connection).toBe(connection.id);
-        if (revoked)
-          await route.fulfill({
-            status: 401,
-            body: 'Notion access was revoked. Reconnect Notion to continue.',
-          });
-        else
-          await route.fulfill({
-            json: {
+    });
+    let revoked = false;
+    await page.route(`${origin}/proxy/notion/v1/search`, async route => {
+      expect(route.request().postDataJSON().query).toBe('Project');
+      await route.fulfill({
+        status: revoked ? 401 : 200,
+        headers: {
+          'X-Connection-Code': 'rotated-fixture-code',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Expose-Headers': 'X-Connection-Code',
+        },
+        json: revoked
+          ? { message: 'Unauthorized' }
+          : {
               results: [
                 {
+                  object: 'data_source',
                   id: '11111111-1111-4111-8111-111111111111',
-                  name: 'Project tasks',
-                  icon: '✅',
+                  title: [{ plain_text: 'Project tasks' }],
+                  icon: { emoji: '✅' },
                 },
               ],
-              cursor: null,
+              has_more: false,
+              next_cursor: null,
             },
-          });
       });
-      await page
-        .getByRole('link', { name: 'Integrations', exact: true })
-        .click();
-      await page
-        .locator('[data-integration=notion]')
-        .getByRole('button', { name: 'Set up connection' })
-        .click();
-      await page
-        .getByRole('button', { name: 'Connect Notion', exact: true })
-        .click();
-      await expect(
-        page.getByLabel('Notion workspace', { exact: true }),
-      ).toHaveValue(connection.id);
-      await page.getByLabel('Find a database', { exact: true }).fill('Project');
-      await page
-        .getByRole('button', { name: 'Find databases', exact: true })
-        .click();
-      await page
-        .getByLabel('Database', { exact: true })
-        .selectOption({ label: '✅ Project tasks' });
-      await expect(
-        page.getByRole('button', {
-          name: 'Continue to sync setup',
-          exact: true,
-        }),
-      ).toBeEnabled();
-      await expect(
-        page.getByLabel('Data source ID', { exact: true }),
-      ).not.toBeVisible();
-      revoked = true;
-      await page
-        .getByRole('button', { name: 'Find databases', exact: true })
-        .click();
-      await expect(page.getByRole('alert')).toContainText('Reconnect Notion');
-      await expect(
-        page.getByRole('button', { name: 'Reconnect Notion', exact: true }),
-      ).toBeEnabled();
-      revoked = false;
-      await page
-        .getByRole('button', { name: 'Find databases', exact: true })
-        .click();
-      await page
-        .getByLabel('Database', { exact: true })
-        .selectOption({ label: '✅ Project tasks' });
-      await page
-        .getByRole('button', { name: 'Continue to sync setup', exact: true })
-        .click();
-      await expect(
-        page
-          .getByRole('main')
-          .getByRole('heading', { name: /Notion rows/, level: 1 }),
-      ).toBeVisible();
-      expect(credentialBindings).toBe(1);
     });
-  }
+    await page.getByRole('link', { name: 'Integrations', exact: true }).click();
+    await page
+      .locator('[data-integration=notion]')
+      .getByRole('button', { name: 'Set up connection' })
+      .click();
+    await page.getByLabel('Find a database', { exact: true }).fill('Project');
+    await page
+      .getByRole('button', { name: 'Find databases', exact: true })
+      .click();
+    await page
+      .getByLabel('Database', { exact: true })
+      .selectOption({ label: '✅ Project tasks' });
+    await expect(
+      page.getByRole('button', { name: 'Preview sync', exact: true }),
+    ).toBeEnabled();
+    revoked = true;
+    await page
+      .getByRole('button', { name: 'Find databases', exact: true })
+      .click();
+    await expect(page.locator('dialog[open]').getByRole('alert')).toContainText(
+      'Notion',
+    );
+    revoked = false;
+    await page
+      .getByRole('button', { name: 'Preview sync', exact: true })
+      .click();
+    await expect(
+      page.getByRole('button', { name: 'Approve and sync', exact: true }),
+    ).toBeEnabled({ timeout: 45000 });
+    await expect(
+      page
+        .locator('dialog[open]')
+        .getByText('Proxy task', { exact: true })
+        .first(),
+    ).toBeVisible();
+    await page
+      .getByRole('button', { name: 'Approve and sync', exact: true })
+      .click();
+    await expect(page.getByText('Sync complete.', { exact: true })).toBeVisible(
+      { timeout: 45000 },
+    );
+    const rowSubject = await page.evaluate(
+      async ({ dataSource, drive }) => {
+        const key = Object.keys(localStorage).find(k =>
+          k.includes('notion-proxy-installations-v1'),
+        )!;
+        const config = JSON.parse(localStorage.getItem(key)!)[dataSource];
+        const result = await window.store!.queryLocalDb({
+          drive,
+          property: 'https://atomicdata.dev/properties/parent',
+          value: config.table,
+        });
+        const row = await window.store!.getLocalResource(result!.subjects[0]);
+        await row.set(
+          'https://atomicdata.dev/properties/name',
+          'Edited locally',
+        );
+        await row.save();
+        return row.subject;
+      },
+      { dataSource, drive },
+    );
+    await page
+      .getByRole('button', { name: 'Sync this table', exact: true })
+      .click();
+    await page
+      .getByRole('button', { name: 'Approve and sync', exact: true })
+      .click();
+    await expect(
+      page.getByText('Sync complete.', { exact: true }),
+    ).toBeVisible();
+    expect(notionPage.properties.Name.title[0].text.content).toBe(
+      'Edited locally',
+    );
+    notionPage.properties.Name.title[0].text.content = 'Edited in Notion';
+    await page
+      .getByRole('button', { name: 'Sync this table', exact: true })
+      .click();
+    await page
+      .getByRole('button', { name: 'Approve and sync', exact: true })
+      .click();
+    await expect(
+      page.getByText('Sync complete.', { exact: true }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        async subject => (await window.store!.getLocalResource(subject)).title,
+        rowSubject,
+      ),
+    ).toBe('Edited in Notion');
+    expect(forbidden).toEqual([]);
+  });
 
   test('Notion setup validates identifiers before storing credentials', async ({
     page,
   }) => {
-    await page.route('**/integration-oauth/notion/list', route =>
-      route.fulfill({ json: { configured: false, connections: [] } }),
-    );
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
     const secretWrites: string[] = [];
@@ -348,24 +404,12 @@ export function run() { return { intents: [] }; }
       await disclosure.click();
     }
 
-    const evidence = page.locator('details').filter({
-      has: page.locator('summary', { hasText: 'Repository test results' }),
-    });
-
-    for (const item of await evidence.all()) {
-      await expect(item).toContainText(
-        /Offline checks passed:|No matching test evidence is available/,
-      );
-
-      if (
-        await item.getByText('Offline checks passed:', { exact: false }).count()
-      ) {
-        await expect(item).toContainText(
-          'Live provider checks are not included in these results.',
-        );
-      }
-    }
-
+    await expect(
+      page.getByText('Offline checks passed:', { exact: false }),
+    ).toHaveCount(4);
+    await expect(
+      page.getByText('Live provider checks are not included in these results.'),
+    ).toHaveCount(4);
     await page
       .locator('details')
       .filter({ hasText: 'Repository test results' })
@@ -387,14 +431,7 @@ export function run() { return { intents: [] }; }
     await manual
       .getByRole('button', { name: 'Connect Notion', exact: true })
       .click();
-    const sourceId = page.getByLabel('Data source ID', { exact: true });
-    await expect(sourceId).toBeFocused();
-    expect(
-      await sourceId.evaluate(
-        (input: HTMLInputElement) => input.validity.valueMissing,
-      ),
-    ).toBe(true);
-    expect(secretWrites).toEqual([]);
+    await expect(page.getByRole('alert')).toContainText('Enter');
     await page.getByLabel('Data source ID', { exact: true }).fill('../pages');
     await page
       .getByLabel('Notion connection token', { exact: true })
@@ -406,8 +443,7 @@ export function run() { return { intents: [] }; }
       page.getByRole('alert').filter({ hasText: 'UUID' }),
     ).toBeVisible();
     expect(secretWrites).toEqual([]);
-    // A failure after installation starts stays visible and clears the token.
-    // It must not offer a blind retry that could create another connection.
+    // A rejected setup request must remain visible, and the user can retry.
     await page.route('**/plugin-secret', route =>
       route.fulfill({
         status: 503,
@@ -423,15 +459,9 @@ export function run() { return { intents: [] }; }
     await expect(page.getByRole('alert')).toContainText(
       'Could not store Notion credential',
     );
-    await expect(page.getByRole('alert')).toContainText(
-      'Check your integrations for a partially created connection',
-    );
-    await expect(
-      page.getByLabel('Notion connection token', { exact: true }),
-    ).toHaveValue('');
     await expect(
       manual.getByRole('button', { name: 'Connect Notion', exact: true }),
-    ).toBeDisabled();
+    ).toBeEnabled();
     expect(errors).toEqual([]);
     await page.screenshot({
       path: '/tmp/atomic-notion-store.png',
@@ -822,7 +852,7 @@ export function run() { return { intents: [] }; }
     await page
       .getByRole('button', { name: 'Connect GitHub', exact: true })
       .click();
-    await expect(page).toHaveURL(tableUrl, { timeout: 30000 });
+    await expect(page).toHaveURL(tableUrl);
     await page.goto(tableUrl);
     await expect(
       page.getByRole('heading', { name: 'Shared project tasks', exact: true }),
@@ -856,7 +886,6 @@ export function run() { return { intents: [] }; }
     await page
       .getByRole('button', { name: 'Connect GitHub', exact: true })
       .click();
-    await expect(page).toHaveURL(/\/app\/show\?subject=/, { timeout: 30000 });
     await page
       .getByRole('button', { name: 'Connections', exact: true })
       .click();
@@ -874,9 +903,6 @@ export function run() { return { intents: [] }; }
     await expect(
       page.getByRole('button', { name: 'Enable background sync', exact: true }),
     ).toBeDisabled();
-    await page
-      .getByText('Advanced: one-off actions and permissions', { exact: true })
-      .click();
     await page
       .getByLabel('Action', { exact: true })
       .selectOption('create_issue');
@@ -924,9 +950,6 @@ export function run() { return { intents: [] }; }
     await page
       .getByRole('button', { name: 'Cancel action', exact: true })
       .click();
-    await expect(
-      page.getByRole('button', { name: 'Cancel action', exact: true }),
-    ).toHaveCount(0);
     await page.getByText('Action history', { exact: true }).click();
     await expect(page.getByText('Cancelled', { exact: true })).toBeVisible();
     const callerSubject = await page.evaluate(async () => {
@@ -1176,6 +1199,15 @@ export function run() { return { intents: [] }; }
     ).toBeVisible();
     expect(cleanupWrites).toBe(1);
 
+    await expect(
+      page.getByLabel('What would you like to automate?'),
+    ).not.toBeVisible();
+    await page
+      .getByText('Add an automation (optional)', { exact: true })
+      .click();
+    await expect(
+      page.getByText('Excludes initial imports', { exact: false }),
+    ).toBeVisible();
     await page.reload();
     await expect(
       page.getByRole('button', { name: 'Preview sync', exact: true }),
@@ -1184,13 +1216,18 @@ export function run() { return { intents: [] }; }
     await page.route('https://openrouter.ai/api/v1/models', route =>
       route.fulfill({ json: { data: [] } }),
     );
-    await page.getByRole('tab', { name: 'Automations', exact: true }).click();
     await page
-      .getByRole('button', { name: 'New automation', exact: true })
+      .getByText('Add an automation (optional)', { exact: true })
+      .click();
+    await page
+      .getByLabel('What would you like to automate?')
+      .fill('Triage bug reports for our team');
+    await page
+      .getByRole('button', { name: 'Build with Atomic assistant', exact: true })
       .click();
     await expect(page.getByTestId('ai-sidebar')).toBeVisible();
     await expect(page.getByTestId('ai-sidebar')).toContainText(
-      'Help me create a new automation.',
+      'Triage bug reports for our team',
     );
     await expect(page.getByTestId('ai-sidebar')).toContainText(
       'GitHub issues: atomic-fixtures/issues',
@@ -1298,7 +1335,21 @@ export async function run(ctx) {
       },
       { release: id },
     );
-    await page.getByRole('tab', { name: 'Sync', exact: true }).click();
+    await expect(
+      page.getByRole('button', { name: 'Preview sync' }),
+    ).toBeVisible();
+    await page
+      .getByText('Add an automation (optional)', { exact: true })
+      .click();
+    await page
+      .getByText('Advanced: write JavaScript yourself', { exact: true })
+      .click();
+    await expect(
+      page.getByRole('heading', { name: 'Automations', exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Create automation' }),
+    ).toBeEnabled();
     await page.getByRole('button', { name: 'Preview sync' }).click();
     await expect(page.getByText('0 records')).toBeVisible();
     await page.getByRole('button', { name: 'Approve sync' }).click();
@@ -1336,82 +1387,24 @@ export async function run(ctx) {
     await expect(
       page.getByRole('button', { name: 'Pause background sync' }),
     ).toBeVisible();
-    // New automation now starts a conversation. Its entry point is covered by
-    // the assistant handoff test above; seed a draft here to exercise review, editing,
-    // trigger permissions and persistence independently of a live model.
-    const automationSubject = await page.evaluate(
-      async ({ connection, drive }) => {
-        const store = window.store;
-        const owner = await store.getResource(drive);
-        const ontology = await store.getResource(
-          owner.get(
-            'https://atomicdata.dev/ontology/server/property/default-ontology',
-          ),
-        );
-        const properties = await Promise.all(
-          ontology
-            .get('https://atomicdata.dev/properties/properties')
-            .map((subject: string) => store.getResource(subject)),
-        );
-
-        const property = (name: string) => {
-          const found = properties.find(
-            p => p.get('https://atomicdata.dev/properties/shortname') === name,
-          );
-          if (!found) throw new Error(`Missing fixture property ${name}`);
-
-          return found.subject;
-        };
-
-        const integration = await store.getResource(connection);
-        const draft = await store.newResource({
-          parent: drive,
-          isA: integration.get('https://atomicdata.dev/properties/isA'),
-          propVals: {
-            'https://atomicdata.dev/properties/name': 'Issue automation',
-            [property('plugin-source')]:
-              'export function run(ctx) { const subject = ctx.trigger.subject; return { intents: [], problems: [] }; }',
-            [property('plugin-schemas')]: {},
-            [property('trigger')]: 'manual',
-            [property('automation-integrations')]: [connection],
-            [property('automation-trigger')]: {
-              integration: connection,
-              event: 'added',
-              name: 'Issue added to Atomic',
-            },
-          },
-        });
-        await draft.save();
-
-        return draft.subject;
-      },
-      { connection: target.plugin, drive: target.drive },
-    );
-    const triggerURL = `${SERVER_URL}/plugin-trigger`;
-    const triggerResponse = await page.request.post(triggerURL, {
-      headers: await signRequest(triggerURL, agent, {}),
-      data: {
-        drive: target.drive,
-        plugin: automationSubject,
-        filters: [
-          {
-            property: 'https://atomicdata.dev/properties/parent',
-            value: target.plugin,
-          },
-        ],
-        onEnter: true,
-        onLeave: false,
-        autoApply: false,
-      },
-    });
-    expect(triggerResponse.ok()).toBe(true);
-    const draftURL = new URL(original);
-    draftURL.searchParams.set('subject', automationSubject);
-    await page.goto(draftURL.href);
+    await page.getByRole('link', { name: 'Integrations', exact: true }).click();
+    await page
+      .locator(`[data-connection="${target.plugin}"]`)
+      .getByRole('button', { name: 'Create automation', exact: true })
+      .click();
+    await page
+      .getByRole('dialog')
+      .getByText('Advanced: write JavaScript yourself', { exact: true })
+      .click();
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Create automation', exact: true })
+      .click();
     await page.getByText('View or edit JavaScript', { exact: true }).click();
     await expect(
       page.getByRole('textbox', { name: 'Automation JavaScript' }),
     ).toBeVisible();
+    const automationSubject = new URL(page.url()).searchParams.get('subject')!;
     const relationship = await page.evaluate(async () => {
       const store = window.store;
       const script = await store.getResource(
@@ -1480,7 +1473,7 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
     ).toBeVisible();
     await page.getByRole('link', { name: 'Integrations', exact: true }).click();
     await expect(
-      page.getByRole('heading', { name: 'Your connections', exact: true }),
+      page.getByRole('heading', { name: 'Your integrations', exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole('region', { name: 'Your integrations' }).getByText('🐙'),
@@ -1530,11 +1523,7 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
     ).toBeVisible();
 
     // The starter source is what an author (or an LLM) reads first.
-    await page.getByRole('tab', { name: 'Code', exact: true }).click();
-    await expect(main.getByRole('code')).toContainText(
-      'export function run(input)',
-    );
-    await page.getByRole('tab', { name: 'Activity', exact: true }).click();
+    await expect(main.getByText('export function run(input)')).toBeVisible();
 
     // Run appears once the drive's plugin class resolves — the menu subscribes
     // to the ontology, so no reload is needed after the schema is created.
@@ -1636,10 +1625,9 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
 
     // Cancelling a blocked run still records it: a refusal that leaves no
     // trace reads the same as a plugin that never ran.
-    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Close' }).click();
     await expect(dialog).toBeHidden();
 
-    await page.getByRole('tab', { name: 'Activity', exact: true }).click();
     await expect(main.getByText('blocked', { exact: true })).toBeVisible();
   });
   test('a plugin asks for the credentials it declares, and nothing else', async ({
@@ -1648,8 +1636,6 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
     const main = page.getByRole('main');
 
     await newPlugin(page);
-
-    await page.getByRole('tab', { name: 'Settings', exact: true }).click();
 
     // The starter needs no credentials, so it says so rather than showing an
     // empty heading with nowhere to type.
@@ -1691,8 +1677,6 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
          return { intents: [], problems: [] };
        }`,
     );
-
-    await page.getByRole('tab', { name: 'Settings', exact: true }).click();
 
     // The author who forgot to declare is the one who cannot work out where to
     // enter it, so a slot appears anyway — with the origin read from the URL

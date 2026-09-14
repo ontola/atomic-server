@@ -51,8 +51,6 @@ const uniqueEmail = () => `vault-${randomUUID()}@example.com`;
  * the stack was never started.
  */
 async function portalIsUp(): Promise<boolean> {
-  if (!PORTAL_URL) return false;
-
   try {
     const res = await fetch(`${PORTAL_URL}/api/me`);
 
