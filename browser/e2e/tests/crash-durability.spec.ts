@@ -1,4 +1,5 @@
 import { mkdir } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import {
   test,
   expect,
@@ -16,7 +17,7 @@ import { DiagnosticCollector } from './diagnostic-collector';
 
 // Full suite only: use a dedicated persistent profile, never the test runner's
 // shared browser or a user's browser. SIGKILL bypasses unload/close flushes.
-test('acknowledged document and table edits survive a browser process kill', async ({
+test('acknowledged document, table and attachment survive a browser process kill', async ({
   playwright,
   launchOptions,
 }, testInfo) => {
@@ -30,11 +31,18 @@ test('acknowledged document and table edits survive a browser process kill', asy
   let context: BrowserContext | undefined;
   let browserPid: number;
   const diagnostics = new DiagnosticCollector();
+  diagnostics.expect(
+    'warning',
+    /^Service Worker registration blocked by Playwright$/,
+    'The test blocks service workers on each of its four app navigations so network routes cannot be bypassed',
+    4,
+  );
 
   async function launch() {
     context = await playwright.chromium.launchPersistentContext(profile, {
       ...launchOptions,
       headless: true,
+      serviceWorkers: 'block',
       viewport: { width: 1200, height: 800 },
     });
     diagnostics.start(context);
@@ -71,7 +79,7 @@ test('acknowledged document and table edits survive a browser process kill', asy
       const path = new URL(route.request().url()).pathname;
 
       if (
-        /^\/(?:did(?::|\/|$)|commit(?:\/|$)|query(?:\/|$)|search(?:\/|$)|download(?:\/|$))/.test(
+        /^\/(?:did(?::|\/|$)|commit(?:\/|$)|query(?:\/|$)|search(?:\/|$)|download(?:\/|$)|blob(?:\/|$))/.test(
           path,
         )
       ) {
@@ -133,9 +141,48 @@ test('acknowledged document and table edits survive a browser process kill', asy
       );
       if (!resource) throw new Error('Edited row not found');
 
-      return { subject: resource.subject, result: await resource.save() };
+      const result = await resource.save();
+
+      // Signing can replace an _new: subject. Record the acknowledged identity,
+      // not the temporary identity evaluated before the save promise settles.
+      return { subject: resource.subject, result };
     }, tableSubject);
     expect(['offline', 'noop']).toContain(row.result);
+    expect(row.subject).toMatch(/^did:ad:/);
+    const attachmentBytes = Array.from({ length: 65537 }, (_, i) => i % 251);
+    const expectedAttachmentHash = createHash('sha256')
+      .update(Buffer.from(attachmentBytes))
+      .digest('hex');
+    const attachment = await page.evaluate(
+      async ({ parent, bytes }) => {
+        const [subject] = await window.store.uploadFiles(
+          [
+            new File([new Uint8Array(bytes)], 'crash-attachment.bin', {
+              type: 'application/octet-stream',
+            }),
+          ],
+          parent,
+        );
+        const file = await window.store.getResource(subject);
+
+        return {
+          subject,
+          blob: file.get('https://atomicdata.dev/properties/blob') as string,
+        };
+      },
+      { parent: tableSubject, bytes: attachmentBytes },
+    );
+    await testInfo.attach('acknowledgement-ledger', {
+      body: JSON.stringify({
+        documentSubject,
+        documentText: 'Document survives SIGKILL',
+        rowSubject: row.subject,
+        rowText: 'Row survives SIGKILL',
+        attachmentSubject: attachment.subject,
+        attachmentSha256: expectedAttachmentHash,
+      }),
+      contentType: 'application/json',
+    });
     await kill();
 
     page = await launch();
@@ -153,6 +200,25 @@ test('acknowledged document and table edits survive a browser process kill', asy
         row.subject,
       ),
     ).toBe('Row survives SIGKILL');
+    const restoredAttachment = await page.evaluate(
+      async ({ subject, blob }) => {
+        const file = await window.store.getResource(subject);
+        if (file.get('https://atomicdata.dev/properties/blob') !== blob)
+          throw new Error('Attachment metadata missing');
+        const hex = blob.slice('did:ad:blob:'.length);
+        const hash = Uint8Array.from(hex.match(/../g)!, b => parseInt(b, 16));
+        const bytes = await window.store.getClientDb()!.getBlob(hash);
+        if (!bytes) throw new Error('Attachment bytes missing after crash');
+
+        return Array.from(bytes);
+      },
+      attachment,
+    );
+    expect(
+      createHash('sha256')
+        .update(Buffer.from(restoredAttachment))
+        .digest('hex'),
+    ).toBe(expectedAttachmentHash);
     await page.goto(documentUrl);
     await expect(page.getByLabel('Rich Text Editor')).toContainText(
       'Document survives SIGKILL',

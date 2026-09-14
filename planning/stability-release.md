@@ -1,7 +1,8 @@
 # Stability release and data safety
 
-> **Status: active, 2026-09-14.** First save-acknowledgement audit and server crash
-> regression completed. Broader implementation and release acceptance remain open.
+> **Status: active, 2026-09-14.** Save acknowledgement, failure injection, and Chromium crash
+> checks landed. Empty-environment restore exposes missing attachment backup;
+> broader implementation and release acceptance remain open.
 
 ## Objective
 
@@ -234,7 +235,7 @@ does not establish complete document/table UI or native-platform acceptance.
 | Path | Inspected boundary | Finding |
 | --- | --- | --- |
 | Browser explicit online save | `Resource.save()` drains the outbox, checks acknowledgement/version, then awaits `persistToClientDb()` | Local snapshot RPC is awaited before returning `persisted`; remote durability depends on server acknowledgement semantics. |
-| Browser local snapshot | `persistToClientDb()` awaits `putResourceWithSnapshot` | Existing worker durability tests cover the flush barrier and errors. No new real-browser crash evidence yet. |
+| Browser local snapshot | `persistToClientDb()` awaits `putResourceWithSnapshot` | Worker durability tests cover the flush barrier and errors. Chromium crash checks exercise real OPFS with remote recovery blocked. |
 | Browser offline/local-only | `saveOffline()` / `saveLocalOnly()` require local persistence | Missing/unsupported storage now rejects. Failed local-only saves retain signed work for retry and remain unsaved. Children waiting on a new parent return `queued` rather than claiming local durability. |
 | HTTP and WebSocket commits | Both use `handlers::commit::apply_commit_json` | Reproduced loss: acknowledged name reverted after unclean exit before the periodic flush. Handler now awaits a blocking-pool durable flush before returning success; crash regression and server checks pass. |
 | Desktop | Embedded server; no browser ClientDb (`desktop/src/lib.rs`) | Server acknowledgement is the local durability boundary when connected. Disconnected saves without ClientDb now reject; actual native acceptance remains open. |
@@ -311,7 +312,7 @@ The retry button needed its new message in the locale catalogs; the compiled UI
 test caught the missing label. Its click handler now handles the save rejection
 while the subscribed resource state keeps the failure visible and retryable.
 
-**Toolchain limitation:** the installed environment uses pnpm 8.15.0 and
+**Historical toolchain limitation (resolved in the failure-boundary slice):** the earlier installed environment used pnpm 8.15.0 and
 Playwright 1.60.0, while the repository pins pnpm 10.15.1 and Playwright 1.63.0.
 The runner's install subprocess printed replacement prompts and exited without
 bringing them into alignment. Corepack resolves the pinned pnpm, but nested bare
@@ -319,9 +320,10 @@ bringing them into alignment. Corepack resolves the pinned pnpm, but nested bare
 local source-level checks under the installed toolchain, not frozen-lockfile
 release acceptance. Do not count the reported install phase as verification.
 
-- [ ] Make runner installation noninteractive and use the pinned package manager
-  for nested commands; verify resolved dependency versions and rerun release
-  acceptance with the lockfile toolchain before shipping.
+- [x] Make runner installation noninteractive and pin nested package-manager
+  calls; verify installed Playwright and record both versions in `toolchain.json`.
+  Rebuilt browser checks now use pnpm 10.15.1 and Playwright 1.63.0. Full release
+  acceptance across the supported platform matrix remains open.
 
 Public API note: `SaveResult` now includes `queued` for an unsaved parent. It
 explicitly carries no durability promise; consumers that exhaustively switch on
@@ -383,3 +385,66 @@ fixes its failures, including those outside the original save changes.
 - [x] Commit with the unmodified pre-commit hook enabled: staged browser lint
   and formatting, complete workspace Clippy with `-D warnings`, and its nested
   JS/WASM asset build all passed. No hook or lint suppressions were added.
+
+### Failure boundaries and recovery — 2026-09-14
+
+- [x] Pin nested runner commands to Corepack pnpm and fail on a mismatched
+  Playwright installation; frozen noninteractive install resolves pnpm 10.15.1
+  and Playwright 1.63.0. Regression checks exercise an older pnpm on PATH.
+- [x] Default Cargo libtest to serial execution; nextest remains process-isolated.
+- [x] Inject server flush failure and retry the exact signed commit, then replay
+  a lost acknowledgement. No successful acknowledgement on failure and no
+  duplicate history after retries.
+- [x] Reproduce missing worker blob flush with a failing test, then require
+  durability before acknowledging `putBlob`; flush errors remain retryable.
+- [x] Verify the client outbox against a real server that loses an acknowledgement
+  after accepting a genesis, with a second edit made before retry. The same signed
+  genesis is replayed and an independent server read sees the final edit.
+- [x] Extend the Chromium crash ledger with attachment bytes and SHA-256 checks.
+  Corrected-harness run `2026-09-14T15-23-42.129Z-LXAlAO` passed using the freshly
+  rebuilt pinned-toolchain artifacts from `2026-09-14T15-19-32.375Z-PbLWDT`.
+- [x] Run the empty-environment vault restore drill with document/table/file data.
+  All four resources and parent links restored and a restored document was editable.
+  The 65,537 attachment bytes did not restore; the drill exits 1 and reports
+  `complete: false`, despite zero unreadable vault objects.
+
+**Release blocker found:** the vault format reserves blob objects but the exporter
+currently writes only resource history. Restored File metadata is not evidence
+that its bytes were backed up. Blob backup/restore requires the encrypted,
+keyed-hash object layout in `encrypted-vault-format.md`; it must not be replaced
+by uploading plaintext or exposing unkeyed content hashes in object names.
+
+Reproduce the independent restore check with:
+
+```sh
+cargo run -p atomic_lib --features db-redb --example vault_restore_drill
+```
+
+This is a standalone acceptance probe, not an ignored test or a successful backup
+claim. It uses only synthetic data, drops the source store before restoring into
+an empty one, compares against an independent ledger, and retains its encrypted
+filesystem vault for inspection. It deliberately exits nonzero while attachment
+backup is incomplete. Full rich-text history and schema/column fidelity still
+need a richer fixture; this first drill checks resource fields and parent links.
+
+First pinned Chromium attempt (`2026-09-14T15-19-32.375Z-PbLWDT`) passed both save
+UI tests but exposed a harness race: the row ledger captured its `_new:` ID before
+awaiting save, although the row itself restored and was visible. The ledger now
+captures the final DID after save and asserts it is stable. First-failure artifacts
+are retained; that failed run is not counted as complete crash acceptance.
+
+Validation for this slice: 500 client-library unit tests, the real-server lost-ack
+integration test, both runner toolchain tests, and E2E typecheck pass. Both save UI
+cases passed in the fresh pinned build; the corrected attachment crash case passed
+against those same artifacts. Strict workspace Clippy passes. The vault restore
+probe remains a **failed acceptance result**: four resource/parent checks and a
+post-restore edit succeed, but the expected BLAKE3 attachment hash
+`7c99f9840a73dfcb6e5bfe4ff6d1558acab7e015640790c26411818bdbe17eca` has no bytes.
+No real user data or telemetry was involved.
+
+Final isolated crash acceptance: `2026-09-14T15-28-42.714Z-QSVPbU` passed after
+also blocking `/blob` requests and service workers. The preceding isolation run
+recovered every value/byte but failed diagnostics on Playwright's own deliberate
+service-worker-blocking warnings; those now have an exact-message, four-navigation
+allowance. Product warnings/errors remain failures. Both server durability tests
+pass together (one subprocess entry point is intentionally ignored by the parent).
