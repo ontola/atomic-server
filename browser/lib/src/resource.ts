@@ -143,9 +143,21 @@ function nextEditToken(): string {
 export enum ResourceEvents {
   LocalChange = 'local-change',
   LoadingChange = 'loading-change',
+  SaveStateChange = 'save-state-change',
 }
 
+/** Read lifecycle, independent of saving and the durable outbox.
+ * `recovering` can retain readable content; use `isReady()` before reads.
+ */
+export type ResourceReadState =
+  | 'loading'
+  | 'buffered'
+  | 'recovering'
+  | 'ready'
+  | 'error';
+
 type ResourceEventHandlers = {
+  [ResourceEvents.SaveStateChange]: () => void;
   [ResourceEvents.LocalChange]: (prop: string, value: JSONValue) => void;
   [ResourceEvents.LoadingChange]: (loading: boolean) => void;
 };
@@ -186,6 +198,7 @@ export class Resource<C extends OptionalClass = any> {
   public appliedCommitSignatures: Set<string> = new Set();
 
   private _loading = false;
+  private _recovering = false;
   private _dirty = false;
 
   #commitBuilder: CommitBuilder;
@@ -739,6 +752,8 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Returns all property entries (cache + binary aux values) as a flat array. */
   public getEntries(): [string, AtomicValue][] {
+    this.materializeBufferedSnapshot();
+
     if (this.#cacheDirty && this._loroDoc) {
       this.rebuildCacheFromLoro();
       this.#cacheDirty = false;
@@ -1747,6 +1762,28 @@ export class Resource<C extends OptionalClass = any> {
     return !this.loading && this.error === undefined;
   }
 
+  public get readState(): ResourceReadState {
+    if (this.error !== undefined) return 'error';
+    if (this._recovering) return 'recovering';
+
+    if (
+      !this._loroDoc &&
+      this._loroSnapshotBytes?.length &&
+      !LoroLoader.isLoaded()
+    ) {
+      return 'buffered';
+    }
+
+    return this.loading ? 'loading' : 'ready';
+  }
+
+  /** @internal The Store owns missing-history recovery. */
+  public setRecovering(recovering: boolean): void {
+    if (this._recovering === recovering) return;
+    this._recovering = recovering;
+    this.eventManager.emit(ResourceEvents.LoadingChange, this.loading);
+  }
+
   /** Get a Value by its property
    * @param propUrl The subject of the property
    * @example
@@ -1757,6 +1794,8 @@ export class Resource<C extends OptionalClass = any> {
   public get<Prop extends string, Returns = InferTypeOfValueInTriple<C, Prop>>(
     propUrl: Prop,
   ): Returns {
+    this.materializeBufferedSnapshot();
+
     if (this.#cacheDirty && this._loroDoc) {
       this.rebuildCacheFromLoro();
       this.#cacheDirty = false;
@@ -1771,6 +1810,8 @@ export class Resource<C extends OptionalClass = any> {
    * The returned object is a copy; mutating it does not change the resource.
    */
   public getPropVals(): Record<string, AtomicValue> {
+    this.materializeBufferedSnapshot();
+
     if (this.#cacheDirty && this._loroDoc) {
       this.rebuildCacheFromLoro();
       this.#cacheDirty = false;
@@ -1780,6 +1821,14 @@ export class Resource<C extends OptionalClass = any> {
       ...this.#cache,
       ...Object.fromEntries(this._auxValues.entries()),
     };
+  }
+
+  private materializeBufferedSnapshot(): void {
+    // Hydration can supply bytes before a document exists. Once WASM is
+    // ready, reads must materialize them rather than expose the empty cache.
+    if (!this._loroDoc && this._loroSnapshotBytes && LoroLoader.isLoaded()) {
+      this.getLoroDoc();
+    }
   }
 
   /**
@@ -3206,6 +3255,7 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     this._saveDepth++;
+    this.eventManager.emit(ResourceEvents.SaveStateChange);
     const closeSave = perfSpan('resource.save');
 
     try {
@@ -3213,6 +3263,7 @@ export class Resource<C extends OptionalClass = any> {
     } finally {
       closeSave();
       this._saveDepth--;
+      this.eventManager.emit(ResourceEvents.SaveStateChange);
     }
   }
 
@@ -3521,9 +3572,8 @@ export class Resource<C extends OptionalClass = any> {
         JSON.stringify(obj),
         snapshot,
       );
-      // Worker writes are batched without fsync; put completion alone is not
-      // the durability barrier promised by save().
-      await clientDb.flush();
+      // This RPC includes the durable flush. A second RPC could race the
+      // identity handoff closing this worker after the write has completed.
       closePersist();
     } catch (e) {
       closePersist({ err: e instanceof Error ? e.message : String(e) });

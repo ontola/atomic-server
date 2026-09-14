@@ -35,7 +35,7 @@ describe('file preview first render', () => {
     const store = new Store({ serverUrl: 'https://example.com' });
     vi.spyOn(store, 'getClientDb').mockReturnValue({
       getBlob: () => new Promise(() => {}),
-    } as NonNullable<ReturnType<Store['getClientDb']>>);
+    } as unknown as NonNullable<ReturnType<Store['getClientDb']>>);
     const resource = await fileResource();
     // Effects have not completed on the first render, just as on mount in
     // the browser. A remote src here can trigger a 404 before the blob loads.

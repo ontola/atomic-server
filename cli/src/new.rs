@@ -114,7 +114,7 @@ async fn prompt_instance(
 
     new_resource.save(&context.store).await?;
 
-    println!("{} created with URL: {}", &class.shortname, &subject);
+    println!("{} created with URL: {}", class.shortname, subject);
 
     let map = prompt_bookmark(&mut context.mapping.lock().unwrap(), &subject);
 
@@ -338,24 +338,19 @@ fn prompt_bookmark(mapping: &mut mapping::Mapping, subject: &str) -> Option<Stri
     let re = Regex::new(atomic_lib::values::SLUG_REGEX).unwrap();
     let mut shortname: Option<String> = prompt_opt("Local Bookmark (optional)").unwrap();
     loop {
-        match shortname.as_ref() {
-            Some(sn) => {
-                if mapping.contains_key(sn) {
-                    let msg = format!(
-                        "You're already using that shortname for {:?}, try something else",
-                        mapping.get(sn).unwrap()
-                    );
-                    shortname = prompt_opt(msg).unwrap();
-                } else if re.is_match(sn.as_str()) {
-                    mapping.insert(sn.into(), subject.into());
-                    return Some(String::from(sn));
-                } else {
-                    shortname =
-                        prompt_opt("Not a valid bookmark, only use letters, numbers, and '-'")
-                            .unwrap();
-                }
-            }
-            None => return None,
+        let sn = shortname.as_ref()?;
+        if mapping.contains_key(sn) {
+            let msg = format!(
+                "You're already using that shortname for {:?}, try something else",
+                mapping.get(sn).unwrap()
+            );
+            shortname = prompt_opt(msg).unwrap();
+        } else if re.is_match(sn.as_str()) {
+            mapping.insert(sn.into(), subject.into());
+            return Some(String::from(sn));
+        } else {
+            shortname =
+                prompt_opt("Not a valid bookmark, only use letters, numbers, and '-'").unwrap();
         }
     }
 }

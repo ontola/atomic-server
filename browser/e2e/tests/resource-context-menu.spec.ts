@@ -1,5 +1,10 @@
 import { test, expect, type Locator, type Page } from './fixtures';
-import { before, focusCell, newResource } from './test-utils';
+import {
+  before,
+  focusCell,
+  newResource,
+  waitForTableBuild,
+} from './test-utils';
 
 /**
  * Right-clicks `target` until its context menu is open AND shows `items`.
@@ -58,9 +63,16 @@ test.describe('resource context menu', () => {
   }) => {
     // A plain table with one row.
     await newResource('table', page);
-    await page.getByRole('button', { name: /Blank/ }).click();
+    await page
+      .locator('dialog[open]')
+      .getByRole('button', { name: /Blank/ })
+      .click();
     await page.getByPlaceholder('New Table').fill('Widgets');
-    await page.getByRole('button', { name: 'Create' }).click();
+    await page
+      .locator('dialog[open]')
+      .getByRole('button', { name: 'Create', exact: true })
+      .click();
+    await waitForTableBuild(page);
 
     // --- Sidebar link (AtomicLink seam) ---
     const sidebarLink = page
@@ -77,6 +89,18 @@ test.describe('resource context menu', () => {
     await filter.fill('histo');
     await expect(page.getByTestId('menu-item-history')).toBeVisible();
     await expect(page.getByTestId('menu-item-edit')).toHaveCount(0);
+    // Reproduce a late creation notification after the user has already
+    // chosen to type in the menu. Automatic title editing must not steal it.
+    await page.evaluate(async () => {
+      const subject = document
+        .querySelector('main[about]')
+        ?.getAttribute('about');
+      if (!subject) throw new Error('Table subject missing');
+      await window.store.notifyResourceManuallyCreated(
+        await window.store.getResource(subject),
+      );
+    });
+    await expect(filter).toBeFocused();
     await filter.fill('');
     // Close it.
     await page.keyboard.press('Escape');
@@ -86,13 +110,8 @@ test.describe('resource context menu', () => {
     // Type into the first cell, then Enter to advance off the row so it
     // materializes into a real (persisted) resource, and reload so it renders
     // as a collection member with a real subject.
-    // Drive the cell the way `tables.spec` does for a blank table's virtual
-    // row — a forced click, then Enter to open the editor. The cell element
-    // itself never takes focus here, so no focus assertion is possible; what
-    // makes this honest is checking the row exists before going on. The CI
-    // snapshot for this failure showed both gridcells empty and a row count of
-    // 0: the keystrokes went nowhere, and no amount of waiting for saves
-    // afterwards can recover a row that was never created.
+    // Focus the virtual row's cell before Enter opens its editor, then prove
+    // that the typed row exists before waiting for persistence.
     // Focus must be IN the grid before typing: after a table is created it is
     // on the title input, and keystrokes follow focus.
     await focusCell(page, page.getByRole('gridcell').first());
@@ -159,9 +178,15 @@ test.describe('resource context menu', () => {
     expect(driveDid).toBeTruthy();
 
     await newResource('table', page);
-    await page.getByRole('button', { name: /Blank/ }).click();
+    await page
+      .locator('dialog[open]')
+      .getByRole('button', { name: /Blank/ })
+      .click();
     await page.getByPlaceholder('New Table').fill('Widgets');
-    await page.getByRole('button', { name: 'Create' }).click();
+    await page
+      .locator('dialog[open]')
+      .getByRole('button', { name: 'Create', exact: true })
+      .click();
     await expect(page.getByRole('columnheader').nth(1)).toBeVisible();
     // Leave the table's cell editor — hotkeys are ignored while an input has
     // focus (`pressShortcut` also blurs whatever is left).

@@ -824,7 +824,7 @@ impl Resource {
     pub async fn new_instance(class_url: &str, store: &impl Storelike) -> AtomicResult<Resource> {
         let propvals: PropVals = HashMap::new();
         let class = store.get_class(class_url).await?;
-        let subject = format!("/{}/{}", &class.shortname, random_string(10));
+        let subject = format!("/{}/{}", class.shortname, random_string(10));
         let subj: Subject = subject.into();
         let mut resource = Resource {
             propvals,
@@ -1063,7 +1063,7 @@ impl Resource {
             return store.get_property(shortname).await;
         }
         // First, iterate over all existing properties, see if any of these work.
-        for (url, _val) in self.propvals.iter() {
+        for url in self.propvals.keys() {
             if let Ok(prop) = store.get_property(url).await {
                 if prop.shortname == shortname {
                     return Ok(prop);

@@ -10,6 +10,8 @@ use atomic_lib::{agents::Agent, commit::CommitResponse, config::SharedConfig, St
 #[cfg(feature = "wasm-plugins")]
 use crate::plugins::wasm;
 
+type IndexNotifier = Arc<dyn Fn(&str, bool) + Send + Sync>;
+
 /// The AppState contains all the relevant Context for the server.
 /// This data object is available to all handlers and actors.
 /// Contains the store, configuration and addresses for Actix Actors, such as for the [CommitMonitor].
@@ -63,6 +65,7 @@ impl AppState {
         )
         .await?;
 
+        crate::blob_storage::configure(&mut store).await?;
         // Before anything reads or writes a secret, so nothing is stored in
         // the clear during startup and then silently left that way.
         store.set_node_key(crate::node_key::load_or_create(&config.config_dir)?);
@@ -192,7 +195,7 @@ impl AppState {
         }
 
         let index_status_broadcast = Arc::new(IndexStatusBroadcast::new());
-        let index_notifier: Arc<dyn Fn(&str, bool) + Send + Sync> = {
+        let index_notifier: IndexNotifier = {
             let b = index_status_broadcast.clone();
             Arc::new(move |drive: &str, indexing: bool| {
                 b.notify(drive, indexing);

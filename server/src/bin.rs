@@ -4,6 +4,7 @@ use std::{fs::File, io::Write};
 
 mod actor_messages;
 mod appstate;
+mod blob_storage;
 mod commit_monitor;
 pub mod config;
 mod content_types;
@@ -138,7 +139,7 @@ async fn main_wrapped() -> errors::AtomicServerResult<()> {
         Some(config::Command::Reset) => {
             if dialoguer::Confirm::with_theme(&dialoguer::theme::ColorfulTheme::default())
             .with_prompt(
-                format!("Warning!! Do you really want to remove all data from your atomic-server? This will delete {:?}", &config.store_path),
+                format!("Warning!! Do you really want to remove all data from your atomic-server? This will delete {:?}", config.store_path),
             )
             .interact()
             .unwrap()

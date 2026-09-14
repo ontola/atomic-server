@@ -97,6 +97,19 @@ export {
   type PerfSnapshot,
 } from './perf-trace.js';
 export * from './child-order.js';
+
+export { WebRtcPeer } from './webrtc-peer.js';
+export { WebRtcTransport } from './webrtc-transport.js';
+
+export {
+  BrowserPeerSync,
+  randomPeerToken,
+  type BrowserPeerOptions,
+} from './browser-peer-sync.js';
+
+export { decodeBrowserInvite } from './browser-peer-invite.js';
+
+export * from './scheduled-save.js';
 export {
   hasBlockingProblems,
   LOCAL_REF_PREFIX,
@@ -261,19 +274,20 @@ export {
 
 export * from './calendar-recurrence.js';
 
-export { WebRtcPeer } from './webrtc-peer.js';
-export { WebRtcTransport } from './webrtc-transport.js';
-
 export {
-  BrowserPeerSync,
-  randomPeerToken,
-  type BrowserPeerOptions,
-} from './browser-peer-sync.js';
-
-export { decodeBrowserInvite } from './browser-peer-invite.js';
-export { validateSetupArguments } from './plugin-setup.js';
+  parseSetupDeclaration,
+  validateSetupArguments,
+} from './plugin-setup.js';
 export type {
   SetupDeclaration,
   SetupField,
   SetupArguments,
 } from './plugin-setup.js';
+
+export {
+  appPackageSchema,
+  parseAppPackage,
+  readAppPackage,
+  prepareAppPackageImport,
+} from './app-package.js';
+export type { AppPackage } from './app-package.js';

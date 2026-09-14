@@ -56,7 +56,7 @@ fn set_certs_created_at_file(config: &crate::config::Config) {
     let now_string = chrono::Utc::now();
     let path = certs_created_at_path(config);
     fs::write(&path, now_string.to_string())
-        .unwrap_or_else(|_| panic!("Unable to write {:?}", &path));
+        .unwrap_or_else(|_| panic!("Unable to write {:?}", path));
 }
 
 /// Checks if the certificates need to be renewed.
@@ -72,9 +72,9 @@ pub fn should_renew_certs_check(config: &crate::config::Config) -> AtomicServerR
     let path = certs_created_at_path(config);
 
     let created_at = std::fs::read_to_string(&path)
-        .map_err(|_| format!("Unable to read {:?}", &path))?
+        .map_err(|_| format!("Unable to read {:?}", path))?
         .parse::<chrono::DateTime<chrono::Utc>>()
-        .map_err(|_| format!("failed to parse {:?}", &path))?;
+        .map_err(|_| format!("failed to parse {:?}", path))?;
     let certs_age: chrono::Duration = chrono::Utc::now() - created_at;
     // Let's Encrypt certificates are valid for three months, but I think renewing earlier provides a better UX
     let expired = certs_age > chrono::Duration::weeks(4);
@@ -143,7 +143,7 @@ async fn cert_init_server(
 
     let well_known_url = format!(
         "http://{}/.well-known/acme-challenge/{}",
-        &config.opts.domain, &challenge.token
+        config.opts.domain, challenge.token
     );
 
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;

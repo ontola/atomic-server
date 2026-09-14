@@ -15,7 +15,7 @@ export function extensionMode(
 export function localThoughtExtension(
   platform: string,
   mode: LocalThoughtExtensionMode | undefined,
-) {
+): typeof googleCalendarIntegration | undefined {
   return extensionMode(platform, mode) === 'calendar' &&
     platform === googleCalendarIntegration.id
     ? googleCalendarIntegration

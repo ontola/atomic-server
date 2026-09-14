@@ -407,7 +407,7 @@ pub async fn handle_frame_full(
 
         protocol::tag::BLOB_REQUEST => {
             if let Some(hash) = protocol::decode_blob_request(payload) {
-                match store.kv.get(Tree::Blobs, &hash) {
+                match store.get_blob(&hash).await {
                     Ok(Some(bytes)) => vec![protocol::encode_blob_response(&hash, &bytes)],
                     _ => vec![protocol::encode_error(
                         0,
@@ -446,8 +446,17 @@ pub async fn handle_frame_full(
                         vec![]
                     }
                     Some(drive) if store.sync_policy().admit_drive_write(&drive) => {
-                        let _ = store.kv.insert(Tree::Blobs, &resp.hash, &resp.bytes);
-                        vec![]
+                        match store.put_blob(&resp.hash, &resp.bytes).await {
+                            Ok(()) => vec![],
+                            Err(error) => {
+                                tracing::warn!("BLOB_RESPONSE: storage failed: {error}");
+                                vec![protocol::encode_error(
+                                    0,
+                                    protocol::error_code::UNKNOWN,
+                                    "Blob storage failed",
+                                )]
+                            }
+                        }
                     }
                     Some(drive) => {
                         tracing::warn!(
@@ -1173,7 +1182,7 @@ pub async fn handle_sync_vv_filtered(
                         if hash_bytes.len() == 32 {
                             let mut hash = [0u8; 32];
                             hash.copy_from_slice(&hash_bytes);
-                            if !store.kv.contains_key(Tree::Blobs, &hash).unwrap_or(false) {
+                            if !store.has_blob(&hash).await.unwrap_or(false) {
                                 // If we don't have the blob, add to pull so the server requests it
                                 if !pull.contains(subject) {
                                     pull.push(subject.clone());
@@ -1217,9 +1226,7 @@ pub async fn handle_sync_vv_filtered(
                 }
             } else {
                 pull.push(subject.clone());
-                pull_from
-                    .entry(subject.clone())
-                    .or_insert_with(std::collections::HashMap::new);
+                pull_from.entry(subject.clone()).or_default();
             }
         }
     }
@@ -1487,10 +1494,21 @@ pub async fn import_sync_push(
             .await
             .ok();
         if let Some(existing) = &existing_resource {
-            let stored_drive = existing
-                .get(crate::urls::DRIVE_PROP)
-                .map(|v| v.to_string())
-                .unwrap_or_else(|_| existing.get_subject().to_string());
+            let stored_drive = if let Ok(drive) = existing.get(crate::urls::DRIVE_PROP) {
+                drive.to_string()
+            } else if let Ok(parent) = existing.get(crate::urls::PARENT) {
+                let parent_subject = crate::Subject::from(parent.to_string());
+                if let Ok(parent_resource) = store.get_resource(&parent_subject).await {
+                    parent_resource
+                        .get(crate::urls::DRIVE_PROP)
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|_| parent_subject.to_string())
+                } else {
+                    existing.get_subject().to_string()
+                }
+            } else {
+                existing.get_subject().to_string()
+            };
             if normalize(&stored_drive) != admitted_drive {
                 tracing::warn!(
                     "import_sync_push: {} belongs to drive {}, not to {} this push was admitted for; skipped",
@@ -1508,7 +1526,8 @@ pub async fn import_sync_push(
         {
             match AtomicLoroDoc::from_snapshot(&existing) {
                 Ok(d) => {
-                    // Import as delta
+                    // A SYNC_PUSH may carry either an incremental update or a
+                    // complete snapshot; Loro accepts both and merges them.
                     if d.import_update(&entry.loro_bytes).is_err() {
                         tracing::warn!(
                             "import_sync_push: delta import failed for {}",
@@ -1613,7 +1632,7 @@ pub async fn import_sync_push(
                     if hash_bytes.len() == 32 {
                         let mut hash = [0u8; 32];
                         hash.copy_from_slice(&hash_bytes);
-                        if !store.kv.contains_key(Tree::Blobs, &hash).unwrap_or(false) {
+                        if !store.has_blob(&hash).await.unwrap_or(false) {
                             // Record which (already-admitted, see the top of
                             // this fn) drive this hash belongs to so the
                             // BLOB_RESPONSE handler can gate the write
@@ -1807,6 +1826,61 @@ mod bootstrap_and_sub_tests {
             .get(Tree::LoroSnapshots, subject.as_bytes())
             .unwrap()
             .is_some());
+    }
+
+    #[tokio::test]
+    async fn parent_only_existing_resource_cannot_be_pushed_through_another_drive() {
+        let db = Db::init_temp("parent_only_existing_cross_drive")
+            .await
+            .unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let other_drive = "https://localhost/other-drive";
+        db.add_resource_opts(&crate::Resource::new(other_drive.into()), false, true, true)
+            .await
+            .unwrap();
+
+        let subject = "https://localhost/parent-only-child";
+        let mut child = crate::Resource::new(subject.into());
+        child
+            .set_unsafe(
+                crate::urls::PARENT.into(),
+                crate::Value::AtomicUrl(drive.clone().into()),
+            )
+            .unwrap();
+        child
+            .set_unsafe(
+                crate::urls::NAME.into(),
+                crate::Value::String("Original".into()),
+            )
+            .unwrap();
+        db.add_resource_opts(&child, false, true, true)
+            .await
+            .unwrap();
+
+        let mut incoming = db.get_resource(&subject.into()).await.unwrap();
+        incoming
+            .set_unsafe(
+                crate::urls::NAME.into(),
+                crate::Value::String("Must not land".into()),
+            )
+            .unwrap();
+        let bytes = incoming.build_state_doc().unwrap().export_snapshot();
+        let frame = protocol::encode_sync_push(other_drive, &[(subject, bytes.as_slice())], true);
+        let push = protocol::decode_sync_push(&frame[1..]).unwrap();
+
+        let (count, _) = import_sync_push(&push, &db, &ForAgent::Sudo, false)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+        assert_eq!(
+            db.get_resource(&subject.into())
+                .await
+                .unwrap()
+                .get(crate::urls::NAME)
+                .unwrap()
+                .to_string(),
+            "Original"
+        );
     }
 
     #[tokio::test]

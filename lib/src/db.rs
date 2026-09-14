@@ -2,6 +2,7 @@
 //! Powered by Sled - an embedded database.
 
 pub mod app_agent;
+pub mod blob_backend;
 pub mod btreemap_store;
 mod encoding;
 #[cfg(feature = "db-redb")]
@@ -299,6 +300,8 @@ pub struct Db {
     /// The key-value store backend. Abstracted behind a trait so different
     /// backends (sled, BTreeMap, etc.) can be used interchangeably.
     pub kv: Arc<dyn KvStore>,
+    /// Optional remote file storage. Configure before sharing this Db.
+    pub blob_backend: Option<Arc<dyn blob_backend::BlobBackend>>,
     default_agent: Arc<Mutex<Option<crate::agents::Agent>>>,
     /// The key this node wraps stored secrets with, set once at startup.
     ///
@@ -364,7 +367,7 @@ pub struct Db {
     /// peer that never responds would otherwise leak one entry per missing
     /// blob forever, so `note_pending_blob_request` also lazily prunes
     /// anything older than `PENDING_BLOB_REQUEST_TTL`.
-    pending_blob_requests: Arc<RwLock<HashMap<[u8; 32], (String, web_time::Instant)>>>,
+    pending_blob_requests: PendingBlobRequests,
 }
 
 /// How long an unanswered `BLOB_REQUEST` stays in `pending_blob_requests`
@@ -372,6 +375,7 @@ pub struct Db {
 /// round trip (seconds) — this bounds a slow leak from peers that vanish
 /// mid-sync, not a normal-latency budget.
 const PENDING_BLOB_REQUEST_TTL: std::time::Duration = std::time::Duration::from_secs(300);
+type PendingBlobRequests = Arc<RwLock<HashMap<[u8; 32], (String, web_time::Instant)>>>;
 
 /// The default (permissive) sync policy reference used by every `Db` until a
 /// managed node installs one.
@@ -596,6 +600,7 @@ impl Db {
 
         let store = Db {
             path: path.into(),
+            blob_backend: None,
             kv: Arc::new(sled_store),
             default_agent: Arc::new(Mutex::new(None)),
             node_key: Arc::new(std::sync::OnceLock::new()),
@@ -637,6 +642,7 @@ impl Db {
     pub async fn init_memory(base_domain: Option<String>) -> AtomicResult<Db> {
         let store = Db {
             path: std::path::PathBuf::new(),
+            blob_backend: None,
             kv: Arc::new(btreemap_store::BTreeMapStore::new()),
             default_agent: Arc::new(Mutex::new(None)),
             node_key: Arc::new(std::sync::OnceLock::new()),
@@ -674,6 +680,7 @@ impl Db {
 
         let store = Db {
             path: std::path::PathBuf::new(),
+            blob_backend: None,
             kv: Arc::new(redb_store),
             default_agent: Arc::new(Mutex::new(None)),
             node_key: Arc::new(std::sync::OnceLock::new()),
@@ -772,6 +779,7 @@ impl Db {
 
         let store = Db {
             path: path.to_path_buf(),
+            blob_backend: None,
             kv: Arc::new(redb_store),
             default_agent: Arc::new(Mutex::new(None)),
             node_key: Arc::new(std::sync::OnceLock::new()),
@@ -889,9 +897,9 @@ impl Db {
 
         // Migrate other metadata trees
         for tree in [Tree::PluginMeta, Tree::DriveMapping, Tree::DidMapping] {
-            for item in sled_store.iter_tree(tree.clone()) {
+            for item in sled_store.iter_tree(tree) {
                 let (key, val) = item?;
-                redb_store.insert(tree.clone(), &key, &val)?;
+                redb_store.insert(tree, &key, &val)?;
             }
         }
 
@@ -926,6 +934,7 @@ impl Db {
 
         let store = Db {
             path: std::path::PathBuf::new(),
+            blob_backend: None,
             kv: Arc::new(redb_store),
             default_agent: Arc::new(Mutex::new(None)),
             node_key: Arc::new(std::sync::OnceLock::new()),
@@ -1328,8 +1337,9 @@ impl Db {
     ///
     /// Cost is O(the drives' resources), not O(store): it resolves each drive's
     /// subjects and point-looks-up their propvals/snapshots. Blobs are
-    /// content-addressed and counted once — a blob shared across drives is
-    /// attributed to whichever drive's resource is visited first.
+    /// content-addressed and counted once per drive. Each drive pays its own
+    /// logical quota usage even when another owner's drive shares the same
+    /// physical object. These counters must not be used as bucket-size totals.
     pub async fn per_drive_usage(
         &self,
         drive_subjects: &[String],
@@ -1373,7 +1383,9 @@ impl Db {
         // drive makes this O(store) rather than O(drive) — measured at ~4s for a
         // 43-resource drive on a multi-GB store, and it is paid on every Sync
         // page load.
-        let mut seen_blobs: HashSet<[u8; 32]> = HashSet::new();
+        let mut seen_blobs: HashSet<(&str, [u8; 32])> = HashSet::new();
+        // Share metadata lookups, not quota attribution, across drives.
+        let mut blob_sizes: HashMap<[u8; 32], Option<u64>> = HashMap::new();
 
         for (subject, drive) in &subject_to_drive {
             let Some(row) = usage.get_mut(drive) else {
@@ -1408,11 +1420,19 @@ impl Db {
             }
             let mut hash = [0u8; 32];
             hash.copy_from_slice(&hash_bytes);
-            if !seen_blobs.insert(hash) {
+            if !seen_blobs.insert((drive.as_str(), hash)) {
                 continue;
             }
-            if let Ok(Some(bytes)) = self.kv.get(Tree::Blobs, &hash) {
-                row.blob_bytes += bytes.len() as u64;
+            let size = match blob_sizes.get(&hash) {
+                Some(size) => *size,
+                None => {
+                    let size = self.blob_size(&hash).await?;
+                    blob_sizes.insert(hash, size);
+                    size
+                }
+            };
+            if let Some(size) = size {
+                row.blob_bytes += size;
             }
         }
 
@@ -3529,7 +3549,7 @@ impl Storelike for Db {
                 }
             }
         }
-        for (_subject, resource) in map.iter() {
+        for resource in map.values() {
             self.add_resource(resource).await?
         }
         self.kv.flush()?;
@@ -4032,7 +4052,23 @@ impl Storelike for Db {
                     };
                     if let Some(pubkey) = lookup.strip_prefix("did:ad:agent:") {
                         if let Ok(agent) = crate::agents::Agent::new_from_public_key(pubkey) {
-                            if let Ok(resource) = agent.to_resource() {
+                            if let Ok(mut resource) = agent.to_resource() {
+                                // A lookup is not creation of an agent. There is
+                                // no known creation date or signed history yet.
+                                // Seed the same fallback ops on every read and
+                                // device, otherwise a refresh replaces the cached
+                                // profile with new ops and grows its vault backup.
+                                resource.remove_propval(crate::urls::CREATED_AT)?;
+                                let doc = crate::loro::AtomicLoroDoc::new();
+                                doc.set_peer_id(0)?;
+                                let ordered: std::collections::BTreeMap<_, _> =
+                                    resource.get_propvals().iter().collect();
+                                for (property, value) in ordered {
+                                    doc.set_property(property, value)?;
+                                }
+                                doc.doc()
+                                    .commit_with(loro::CommitOptions::new().timestamp(0));
+                                resource.apply_state_doc(doc)?;
                                 return Ok(resource);
                             }
                         }

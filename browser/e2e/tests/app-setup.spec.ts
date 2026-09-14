@@ -75,3 +75,34 @@ test('Notion manual setup validates before creating a connection', async ({
       .getByRole('button', { name: 'Connect Notion', exact: true }),
   ).toBeEnabled();
 });
+
+test('server setup refuses a local workspace before credential storage and stays retryable', async ({
+  page,
+}) => {
+  const { dialog } = await openLegacyGithubSetup(page, {
+    repository: 'atomic-fixtures/issues',
+  });
+  await expect(dialog.getByLabel('Sync into')).toBeEnabled();
+  await dialog
+    .getByLabel('GitHub token', { exact: true })
+    .fill('synthetic-token');
+  await page.evaluate(() =>
+    window.store!.registerLocalOnlyDrive(window.store!.getDrive()!),
+  );
+  const writes: string[] = [];
+  page.on('request', request => {
+    if (request.method() === 'POST')
+      writes.push(new URL(request.url()).pathname);
+  });
+  const connect = dialog.getByRole('button', {
+    name: 'Connect GitHub',
+    exact: true,
+  });
+  await connect.click();
+  await expect(dialog.getByRole('alert')).toContainText('Sync this workspace');
+  await expect(connect).toBeEnabled();
+  await expect(dialog.getByLabel('GitHub token', { exact: true })).toHaveValue(
+    '',
+  );
+  expect(writes).not.toContain('/plugin-secret');
+});

@@ -2842,7 +2842,7 @@ mod live_write_admission_tests {
         let (alice, drive) = db.setup("Alice").await.unwrap();
 
         let mut cache = HashMap::new();
-        assert!(cache.get(&drive).is_none());
+        assert!(!cache.contains_key(&drive));
         admitted_for_drive(
             &db,
             &ForAgent::AgentSubject(alice.subject.clone()),
@@ -2880,7 +2880,7 @@ mod live_write_admission_tests {
         let upgraded = ForAgent::AgentSubject(alice.subject.clone());
         invalidate_drive_cache_on_identity_change(&upgraded, &previous, &mut cache);
         assert!(
-            cache.get(&drive).is_none(),
+            !cache.contains_key(&drive),
             "the stale Public verdict must be gone after the identity change"
         );
 
@@ -3014,7 +3014,7 @@ mod initiator_trust_tests {
         let served = crate::sync::engine::collect_readable_snapshots(
             &db,
             &ForAgent::Public,
-            &[child.clone()],
+            std::slice::from_ref(&child),
             None,
         )
         .await;
@@ -3028,7 +3028,7 @@ mod initiator_trust_tests {
         let served_owner = crate::sync::engine::collect_readable_snapshots(
             &db,
             &ForAgent::AgentSubject(alice.subject.clone()),
-            &[child.clone()],
+            std::slice::from_ref(&child),
             None,
         )
         .await;
@@ -3088,7 +3088,7 @@ mod initiator_trust_tests {
         let unpaired = crate::sync::engine::collect_readable_snapshots(
             &db,
             &as_replica,
-            &[child.clone()],
+            std::slice::from_ref(&child),
             Some(replica_node),
         )
         .await;

@@ -1,4 +1,5 @@
-import { taskSchema } from './task-schema.js';
+import type { ScheduledSave, ResourceSaveState } from './scheduled-save.js';
+import { SaveStatusCoordinator } from './save-status-coordinator.js';
 import { verifyLocalDriveCopy } from './local-drive-copy.js';
 import {
   encodeCommit as encodePeerCommit,
@@ -7,6 +8,7 @@ import {
   EphemeralKind as PeerEphemeralKind,
 } from './ws-v2.js';
 import { serializeDeterministically as serializePeerCommit } from './commit.js';
+import { taskSchema } from './task-schema.js';
 import {
   mergeHistoryAttributions,
   parseHistoryAttribution,
@@ -44,7 +46,11 @@ import { core } from './ontologies/core.js';
 import { server, type Server } from './ontologies/server.js';
 import type { OptionalClass, UnknownClass } from './ontology.js';
 import { JSONADParser } from './parse.js';
-import { Resource, unknownSubject } from './resource.js';
+import {
+  Resource,
+  unknownSubject,
+  type ResourceReadState,
+} from './resource.js';
 import {
   type SearchOpts,
   type SemanticSearchOpts,
@@ -388,12 +394,12 @@ export interface IncomingChange {
 const supportsWebSockets = () => typeof WebSocket !== 'undefined';
 
 /**
- * How long a fetch that is about to fail a resource will wait for the app's
- * local database to attach. It is a boot-time event — `initClientDb` derives a
+ * How long resource fallback and collection reads wait for the app's
+ * expected local database to attach. It is a boot-time event — `initClientDb` derives a
  * database name and unwraps a key first — so it either happens within seconds
- * of the page loading or not at all. Only ever waited on paths that would
- * otherwise fail the resource permanently, and only when a database was
- * actually announced (see `Store.expectClientDb`).
+ * of the page loading or not at all. Waiting avoids premature resource
+ * failures and redundant server queries, and happens only when a database
+ * was actually announced (see `Store.expectClientDb`).
  */
 const CLIENT_DB_ATTACH_GRACE = 5000;
 
@@ -748,7 +754,9 @@ export class Store {
    * database right after sign-in (a vault restore, a first backup) would
    * otherwise read `getClientDb()` as "this app has no database".
    */
-  public waitForClientDb(timeoutMs: number): Promise<boolean> {
+  public waitForClientDb(
+    timeoutMs: number = CLIENT_DB_ATTACH_GRACE,
+  ): Promise<boolean> {
     if (this.clientDb) return Promise.resolve(true);
     if (!this.clientDbExpected) return Promise.resolve(false);
 
@@ -1675,10 +1683,15 @@ export class Store {
     }
 
     try {
-      const jsonAd = await this.clientDb.getResource(subject);
+      const { jsonAd, snapshot } =
+        await this.clientDb.getResourceWithSnapshot(subject);
       if (!jsonAd) return null;
 
-      return this.hydrateOfflineReplay(subject, JSON.parse(jsonAd));
+      return this.hydrateOfflineReplay(
+        subject,
+        JSON.parse(jsonAd),
+        snapshot ?? undefined,
+      );
     } catch {
       return null;
     }
@@ -1691,6 +1704,7 @@ export class Store {
   private hydrateOfflineReplay(
     subject: string,
     parsed: Record<string, unknown>,
+    snapshot?: Uint8Array,
   ): Resource {
     const resource = new Resource(subject);
     resource.applyHydratedValues(
@@ -1699,7 +1713,11 @@ export class Store {
         JSONValue,
       ][],
     );
-    resource.getLoroDoc();
+    // JSON is a read cache, not a replacement for the document's causal
+    // history. Reconstructing it as fresh ops makes later edits lose LWW
+    // against the existing server document (notably agent profile renames).
+    if (snapshot?.length) resource.importLoroUpdate(snapshot, true);
+    else resource.getLoroDoc();
     resource.loading = false;
     this.applyIncoming({
       subject: resource.subject,
@@ -1859,6 +1877,7 @@ export class Store {
     if (this._gapRecoveries.has(subject)) return;
 
     this._gapRecoveries.add(subject);
+    this.getResolved(subject)?.setRecovering(true);
     console.info(
       `[Store] incomplete Loro import for ${subject.slice(0, 60)} ` +
         `(source: ${source ?? 'unknown'}) — missing base state, fetching a full ` +
@@ -1881,6 +1900,12 @@ export class Store {
       })
       .finally(() => {
         this._gapRecoveries.delete(subject);
+        const resource = this.getResolved(subject);
+
+        if (resource) {
+          resource.setRecovering(false);
+          this.notify(resource);
+        }
       });
   }
 
@@ -1958,8 +1983,16 @@ export class Store {
       return 'deduped';
     }
 
+    // Receiving state must not initiate another read of that same state.
+    // getResourceLoading starts an OPFS/server lookup whose delayed fallback
+    // can refetch a snapshot we have already applied. Only pending offline
+    // edits need that local hydration to merge their durable copy back in.
     const resource =
-      existing ?? this.getResourceLoading(subject, { newResource: false });
+      existing ??
+      (this.outbox.hasPending(subject)
+        ? this.getResourceLoading(subject, { newResource: false })
+        : new Resource(subject));
+    resource.setStore(this);
     // A GET response carrying the SNAPSHOT flag is authoritative full state
     // (`replaceLoroDocsFromRemote`). REPLACE rather than merge it — merging a
     // full snapshot into a doc the client already seeded with partial state (a
@@ -2020,9 +2053,9 @@ export class Store {
       // Deliberately NOT stamping `lastCommit` here. We did not apply that
       // commit, and claiming it would make the echo-dedup at the top of this
       // method drop the very fetch being issued to repair the gap.
-      this.recoverFromIncompleteImport(subject, change.source);
-      resource.loading = false;
+      resource.loading = !this.hasRenderableContent(resource);
       this.addResource(resource, { skipCommitCompare: true });
+      this.recoverFromIncompleteImport(subject, change.source);
 
       return 'invalid';
     }
@@ -2716,7 +2749,9 @@ export class Store {
     // description, Loro body, 1-edit prefix fuzzy, PropValSub filters).
     const clientDb = this.clientDb;
     const kvResults =
-      clientDb?.isReady && typeof clientDb.search === 'function'
+      !opts.serverOnly &&
+      clientDb?.isReady &&
+      typeof clientDb.search === 'function'
         ? await clientDb.search(query, {
             limit: opts.limit ?? 30,
             parents: parentScope,
@@ -2730,7 +2765,7 @@ export class Store {
 
     // Offline: hosted `/search` is unreachable. Return whatever the local
     // index has (empty if ClientDb is down).
-    if (!this._serverConnected) {
+    if (!this._serverConnected && !opts.serverOnly) {
       searchDebug('[search] OFFLINE kv →', kvResults.length, kvResults);
 
       return kvResults;
@@ -3054,68 +3089,23 @@ export class Store {
       try {
         const { jsonAd, snapshot } =
           await this.clientDb.getResourceWithSnapshot(subject);
-        const hasSnapshot = !!(snapshot && snapshot.length > 0);
 
         if (jsonAd) {
           hasLocalData = this.hydrateResourceFromJson(
             subject,
             JSON.parse(jsonAd),
+            snapshot ?? undefined,
           );
         }
 
-        let importComplete = true;
-
-        if (hasLocalData && hasSnapshot) {
-          const resource = this.resources.get(subject);
-
-          if (resource && !resource.hasUnsavedChanges()) {
-            // Capture `complete`: the snapshot may be an unapplyable delta
-            // (missing base ops, buffered by Loro as pending → nothing
-            // materialises). The WS path (`applyIncoming`) already acts on this
-            // signal; the OPFS path used to drop it on the floor.
-            // OPFS snapshots are authoritative full state — replace, don't
-            // merge into the JSON-AD-seeded doc. Merging minted a second
-            // LoroList per array and flashed table/sidebar order on open.
-            ({ complete: importComplete } = resource.importLoroUpdate(
-              snapshot,
-              true,
-            ));
-          }
-        }
-
-        // An OPFS hit is only authoritative if it actually hydrated to
-        // something RENDERABLE. Otherwise we'd render a contentless resource
-        // (bare subject as title, no body) with NO error that never recovers —
-        // the "deeply broken folder" bug. There are several routes into that
-        // contentless state, so we guard on the OUTCOME (is the resource
-        // renderable?) rather than on any single cause:
-        //   - nothing hydrated at all (`getEntries().length === 0`);
-        //   - a skeleton JSON-AD with no snapshot (only the server-managed
-        //     props survive, and no import ran to add a class);
-        //   - an unapplyable-delta snapshot (`!importComplete`) that buffers as
-        //     pending and materialises nothing, leaving only the skeleton.
-        // In all of these the resource carries at most the server-managed
-        // skeleton props that `rebuildCacheFromLoro` preserves
-        // (drive/parent/lastCommit/createdAt) — `length` is > 0, so the old
-        // `length === 0` guard missed it.
-        //
-        // Renderable ⇔ it has a class (`isA`) — covers commit-detail
-        // (`isA: Commit`, whose delta `loroUpdate` legitimately leaves
-        // `!importComplete`, mirroring the `applyIncoming` guard) — OR it has
-        // real content beyond the skeleton AND that content actually applied
-        // (a clean import). Anything else is treated as a miss: keep `loading`
-        // so the UI shows a spinner, drop `hasLocalData` so the server GET
-        // below repopulates it — or, offline, fails it with a real error
-        // instead of leaving it silently broken. The slow (cache-cold) reload
-        // dodges this naturally (ClientDb not initialized yet ⇒ OPFS skipped);
-        // the fast service-worker reload is what hits it.
+        // Hydration publishes JSON and causal state together. A skeleton-only
+        // record still needs a server fetch; commit-detail resources may carry
+        // a partial delta but remain renderable from their class metadata.
         if (hasLocalData) {
           const resource = this.resources.get(subject);
           const hasClass = !!resource?.get(core.properties.isA);
           const renderable =
-            !!resource &&
-            (hasClass ||
-              (importComplete && this.hasRenderableContent(resource)));
+            !!resource && (hasClass || this.hasRenderableContent(resource));
 
           if (!renderable) {
             hasLocalData = false;
@@ -3311,6 +3301,7 @@ export class Store {
   private hydrateResourceFromJson(
     subject: string,
     parsed: Record<string, unknown>,
+    snapshot?: Uint8Array,
   ): boolean {
     const existing = this.getResolved(subject);
 
@@ -3318,7 +3309,8 @@ export class Store {
     if (
       existing &&
       existing.get(commits.properties.loroUpdate) &&
-      !parsed[commits.properties.loroUpdate]
+      !parsed[commits.properties.loroUpdate] &&
+      !snapshot?.length
     ) {
       return true;
     }
@@ -3343,7 +3335,7 @@ export class Store {
       return true;
     }
 
-    this.hydrateOfflineReplay(subject, parsed);
+    this.hydrateOfflineReplay(subject, parsed, snapshot);
 
     // If the outbox holds a dirty bit for this subject (offline edit
     // restored from localStorage), kick a drain now that the resource
@@ -3415,6 +3407,16 @@ export class Store {
     }
 
     const normalizedSubject = this.normalizeSubject(subject);
+
+    // A server cannot refresh a browser-only resource. In particular, explicit
+    // refresh callers must not turn a valid local drive into a server 404.
+    if (this.isLocalOnlySubject(normalizedSubject)) {
+      const local = this.resources.get(normalizedSubject);
+      if (local?.isReady()) return local as Resource<C>;
+      const stored = await this.fetchResourceFromClientDb(normalizedSubject);
+      if (stored) return stored as Resource<C>;
+      throw new AtomicError(LOCAL_ONLY_NOT_FOUND_MESSAGE, ErrorType.Transport);
+    }
 
     // In-flight dedup. SideBarDrive and DrivePage both call
     // `useResource(drive)` on the same render → two parallel
@@ -3872,6 +3874,10 @@ export class Store {
 
     const result = await this.fetchResourceFromServer(resolved);
 
+    // A delta response may have started recovery of missing base history.
+    // Do not return its empty placeholder while the full snapshot is pending.
+    if (result.loading && !result.error) return this.getResource(resolved);
+
     // If the resource was not in the store yet, subscribe to changes so we don't return stale results when the resource is updated.
     // Commits are immutable — no need to subscribe for push updates.
     if (!result.hasClasses(commits.classes.commit)) {
@@ -4074,6 +4080,40 @@ export class Store {
         }
       });
     }
+  }
+
+  private saveStatus = new SaveStatusCoordinator({
+    getOutboxEntry: subject => this.outbox.getEntry(subject),
+    isConnected: () => this._serverConnected,
+    changePending: delta => {
+      this._scheduledSaves += delta;
+      this.emitSyncStatus();
+    },
+    subscribeSync: callback => this.on(StoreEvents.SyncStatusChanged, callback),
+    onError: error => this.notifyError(error),
+  });
+
+  /** One owner per debounce slot. Resource identity survives genesis renaming. */
+  public createSaveScheduler(
+    resource: Resource,
+    options: {
+      shouldSave?: () => boolean;
+      onError?: (error: Error) => void;
+    } = {},
+  ): ScheduledSave {
+    return this.saveStatus.createScheduler(resource, options);
+  }
+
+  /** Read status is separate: a queued offline edit can still be fully readable. */
+  public getSaveState(resource: Resource): ResourceSaveState {
+    return this.saveStatus.getState(resource);
+  }
+
+  public subscribeSaveState(
+    resource: Resource,
+    callback: () => void,
+  ): () => void {
+    return this.saveStatus.subscribe(resource, callback);
   }
 
   public startDriveSync(): void {
@@ -6011,13 +6051,8 @@ export class Store {
     return url;
   }
 
-  /** Per-subject snapshot wrappers for `useSyncExternalStore`. Each
-   * snapshot's `resource` field is a fresh Proxy of the cached
-   * Resource, so `R.foo` reads stay reactive (Resource is mutated
-   * in place, but the Proxy identity changes per notify). The
-   * snapshot tuple identity changes too, which is what
-   * `useSyncExternalStore` checks. */
-  private snapshots = new Map<string, { resource: Resource }>();
+  /** Immutable read status and a stable mutation handle, replaced on notify. */
+  private snapshots = new Map<string, ResourceSnapshot>();
 
   /** Subject → content stamp of the last state written to the local DB, so
    *  `addResource` can skip re-writing state that is already there. Entries are
@@ -6029,7 +6064,7 @@ export class Store {
   public getResourceSnapshot(
     subject: string,
     opts: FetchOpts = {},
-  ): { resource: Resource } {
+  ): ResourceSnapshot {
     let r: Resource;
     this.snapshotReadDepth++;
 
@@ -6043,7 +6078,7 @@ export class Store {
     let snap = this.snapshots.get(key);
 
     if (!snap || snap.resource !== r.__internalObject) {
-      snap = { resource: r.__internalObject };
+      snap = captureResourceSnapshot(r);
       this.snapshots.set(key, snap);
     }
 
@@ -6109,7 +6144,7 @@ export class Store {
     // outer `{resource}` object is `!== ` the previous one, which is
     // all `Object.is` needs.
     const key = this.normalizeSubject(resource.subject);
-    this.snapshots.set(key, { resource: resource.__internalObject });
+    this.snapshots.set(key, captureResourceSnapshot(resource));
 
     this.eventManager.emit(StoreEvents.ResourceUpdated, resource);
 
@@ -6217,4 +6252,23 @@ function hashPersistedState(jsonAd: string, snapshot?: Uint8Array): number {
     Math.imul(h1 ^ (h1 >>> 13), 3266489909);
 
   return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+}
+
+/** Captured scalar read state; `resource` remains the live mutation handle. */
+export interface ResourceSnapshot<C extends OptionalClass = UnknownClass> {
+  readonly resource: Resource<C>;
+  readonly readState: ResourceReadState;
+  readonly ready: boolean;
+  readonly loading: boolean;
+  readonly error: Error | undefined;
+}
+
+function captureResourceSnapshot(resource: Resource): ResourceSnapshot {
+  return Object.freeze({
+    resource: resource.__internalObject,
+    readState: resource.readState,
+    ready: resource.isReady(),
+    loading: resource.loading,
+    error: resource.error,
+  });
 }

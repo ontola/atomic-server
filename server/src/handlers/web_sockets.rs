@@ -172,7 +172,7 @@ impl IndexStatusBroadcast {
             g.get(drive).cloned().unwrap_or_default()
         };
         for addr in addrs {
-            let _ = addr.do_send(IndexStatusPush {
+            addr.do_send(IndexStatusPush {
                 drive: drive.to_string(),
                 indexing,
             });

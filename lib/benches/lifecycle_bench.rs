@@ -10,7 +10,7 @@
 //!   - edit:    ~3.72ms/op
 //!   - history: ~1.43ms/op (100 resources, >=6 commits each)
 //!   - query:   ~159ms total for ONE collection fetch of all 1000 members
-//!              (roughly 40x a single create/edit round trip)
+//!     (roughly 40x a single create/edit round trip)
 //!
 //! The `query_collection_1000` benchmark below is the one to scrutinize
 //! hardest: it isolates whether that 40x asymmetry is inherent to the
