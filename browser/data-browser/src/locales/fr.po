@@ -10111,9 +10111,8 @@ msgstr ""
 msgid "Open imported records"
 msgstr ""
 
-#: src/routes/DevonianDemoRoute.tsx
-msgid "LocalThought tenant secret"
-msgstr ""
+#~ msgid "LocalThought tenant secret"
+#~ msgstr ""
 
 #. 0: count
 #: src/routes/DevonianDemoRoute.tsx
@@ -10129,13 +10128,11 @@ msgstr ""
 msgid "GitHub repository (owner/repo)"
 msgstr ""
 
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Connect a real GitHub repository"
-msgstr ""
+#~ msgid "Connect a real GitHub repository"
+#~ msgstr ""
 
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Devonian issue tracker demo"
-msgstr ""
+#~ msgid "Devonian issue tracker demo"
+#~ msgstr ""
 
 #: src/routes/DevonianDemoRoute.tsx
 msgid ""
@@ -10215,11 +10212,8 @@ msgstr ""
 msgid "Sample GitHub issues"
 msgstr ""
 
-#: src/routes/DevonianDemoRoute.tsx
-msgid ""
-"Connect through LocalThought. The tenant secret is used in this tab to start "
-"the connection and is never saved."
-msgstr ""
+#~ msgid "Connect through LocalThought. The tenant secret is used in this tab to start the connection and is never saved."
+#~ msgstr ""
 
 #: src/routes/DevonianDemoRoute.tsx
 msgid "Connect GitHub tracker"
@@ -10498,3 +10492,46 @@ msgstr ""
 #~ "Saisissez votre code de récupération pour afficher votre secret ou "
 #~ "ajouter une clé d’accès sur cet appareil. Votre code de récupération "
 #~ "actuel restera valide."
+
+#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
+#: src/routes/DevonianDemoRoute.tsx
+msgid "GitHub issues and comments (Devonian)"
+msgstr ""
+
+#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
+msgid "Connect a GitHub repository to a local issue tracker."
+msgstr ""
+
+#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
+msgid "Sync issues and comments in both directions, including closing and reopening issues."
+msgstr ""
+
+#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
+msgid "Connect through LocalThought, then use Sync now to exchange changes."
+msgstr ""
+
+#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
+msgid "Creates a separate local drive. Keep the browser open to sync. Sync writes changes to your GitHub repository."
+msgstr ""
+
+#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
+#: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
+msgid "Install plugin"
+msgstr ""
+
+#: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
+#: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
+msgid "Google Calendar (Devonian)"
+msgstr ""
+
+#: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
+msgid "Import events into calendar views, preserve recurring series and preview supported edits to send back to Google."
+msgstr ""
+
+#: src/routes/DevonianDemoRoute.tsx
+msgid "LocalThought will ask you to sign in and authorize the GitHub connection."
+msgstr ""
+
+#: src/routes/DevonianDemoRoute.tsx
+msgid "Connect a GitHub repository"
+msgstr ""

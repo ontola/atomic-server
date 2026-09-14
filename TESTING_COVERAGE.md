@@ -28,6 +28,15 @@ cleanup and the current assistant handoff. External approval transport is stubbe
 
 # Testing coverage map
 
+Devonian discovery: `PluginRuns/localThoughtCatalogEntries.test.ts` covers Calendar
+availability without a remote catalog and deduplication of discovered entries.
+`PluginRuns/IntegrationDiscovery.test.ts` covers the permanent GitHub issue/comment
+entry. Both reuse existing lens setup flows; live provider consent is not tested
+by these discovery checks. The rebuilt localhost:9883 app was manually checked
+for both searchable cards, the Calendar install dialog and the GitHub repository
+form. The latter uses the browser-safe Devonian bundle, avoiding node:events
+from the package root.
+
 Typed app setup: `browser/lib/src/plugin-setup.test.ts` covers shared input validation,
 partial model drafts, forbidden arguments and size limits. It also validates resource JSON
 setup declarations: detached round-trips, supported constraints, malformed schemas,

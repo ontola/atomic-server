@@ -1,3 +1,4 @@
+import { localThoughtCatalogEntries } from './localThoughtCatalogEntries';
 import { useIntegrationProxy } from '@helpers/integrationProxy';
 import { useEffect, useState, useRef, Suspense } from 'react';
 import { useStore } from '@tomic/react';
@@ -111,8 +112,10 @@ export function LocalThoughtCatalog({
 
     void finish().catch(reason => setError(String(reason)));
   }, [drive, store]);
-  const visible = platforms?.filter(id =>
-    `${id} ${platformName(id)}`.toLowerCase().includes(search.toLowerCase()),
+  const visible = localThoughtCatalogEntries(platforms).filter(id =>
+    `${id} ${platformName(id)} ${id === 'google-calendar' ? 'devonian' : ''}`
+      .toLowerCase()
+      .includes(search.toLowerCase()),
   );
 
   return (
@@ -155,19 +158,36 @@ function PlatformCard({
       data-integration-source='proxy'
     >
       <Column gap='0.75rem'>
-        <h2>{platformName(platform)}</h2>
+        <h2>
+          {platform === 'google-calendar'
+            ? 'Google Calendar (Devonian)'
+            : platformName(platform)}
+        </h2>
         <small>Via integration proxy</small>
-        <p>
-          Connect your account through LocalThought and import records into your
-          drive.
-        </p>
+        {platform === 'google-calendar' ? (
+          <p>
+            Import events into calendar views, preserve recurring series and
+            preview supported edits to send back to Google.
+          </p>
+        ) : (
+          <p>
+            Connect your account through LocalThought and import records into
+            your drive.
+          </p>
+        )}
         <Button disabled={!drive} onClick={show}>
-          Set up connection
+          {platform === 'google-calendar'
+            ? 'Install plugin'
+            : 'Set up connection'}
         </Button>
       </Column>
       <Dialog {...dialog} width='38rem'>
         <Dialog.Title>
-          <h2>{platformName(platform)}</h2>
+          <h2>
+            {platform === 'google-calendar'
+              ? 'Google Calendar (Devonian)'
+              : platformName(platform)}
+          </h2>
         </Dialog.Title>
         <Dialog.Content>
           {isOpen && drive && (

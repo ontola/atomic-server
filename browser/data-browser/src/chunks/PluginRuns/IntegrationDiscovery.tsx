@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import { ButtonLink } from '@components/ButtonLink';
 import { Card } from '@components/Card';
 import { Column } from '@components/Row';
 import { Button } from '@components/Button';
@@ -22,6 +23,19 @@ const MT940Setup = lazy(() =>
 
 export function bundledIntegrations() {
   return [
+    {
+      id: 'devonian-github-issues' as const,
+      name: 'GitHub issues and comments (Devonian)',
+      icon: '🐙',
+      description: 'Connect a GitHub repository to a local issue tracker.',
+      capabilities:
+        'Sync issues and comments in both directions, including closing and reopening issues.',
+      events:
+        'Connect through LocalThought, then use Sync now to exchange changes.',
+      limitation:
+        'Creates a separate local drive. Keep the browser open to sync. Sync writes changes to your GitHub repository.',
+      keywords: 'devonian github issues comments lens local tracker',
+    },
     {
       id: 'mt940' as const,
       name: 'Bank statements',
@@ -106,10 +120,16 @@ export function IntegrationDiscovery({
         {workspace && (entry.id === 'notion' || entry.id === 'mt940') && (
           <p>This integration creates a new workspace for its imported data.</p>
         )}
-        <IntegrationEvidence id={entry.id} />
-        <Button disabled={!drive} onClick={show}>
-          Set up connection
-        </Button>
+        {entry.id === 'devonian-github-issues' ? (
+          <ButtonLink href='/app/devonian-demo'>Install plugin</ButtonLink>
+        ) : (
+          <>
+            <IntegrationEvidence id={entry.id} />
+            <Button disabled={!drive} onClick={show}>
+              Set up connection
+            </Button>
+          </>
+        )}
       </Column>
       <Dialog {...dialog} width='38rem'>
         <Dialog.Title>
