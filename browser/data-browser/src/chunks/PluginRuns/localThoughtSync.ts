@@ -8,12 +8,15 @@ import {
 } from '@tomic/react';
 import type { Config } from '../../../../../integrations/localthought/plugin';
 import type { FetchedPlatform } from '../../../../../integrations/localthought/schema';
-import { googleCalendarIntegration } from '@localthought/atomic-integrations/ui/GoogleCalendar';
 import { browserIntegrations, platformName } from './localThought';
 import { ensureLocalInstallationResource } from './installationResources';
 import { ensureImportTables } from './localThoughtTables';
 import { localImportVerdict } from './localImportVerdict';
 import { prepareFromVerdict } from './runScript';
+import {
+  localThoughtExtension,
+  schemaNamespace,
+} from './localThoughtExtension';
 
 export const REFRESH_INTERVAL = 5 * 60 * 1000;
 const prefix = 'localthought-sync-v1:';
@@ -31,6 +34,8 @@ export interface LocalThoughtInstallation {
   selection?: {
     query_overrides: { path: string; values: Record<string, unknown> }[];
   };
+  /** Explicit setup mode. Missing is the pre-category Calendar installation. */
+  extension?: 'calendar' | 'none';
   config?: Config;
   syncing?: boolean;
   lastSuccess?: number;
@@ -141,8 +146,9 @@ export async function refreshLocalThought(
           );
           if (response.platform !== entry.platform)
             throw new Error('Imported platform did not match this connection');
-          const extension = [googleCalendarIntegration].find(
-            item => item.id === entry.platform,
+          const extension = localThoughtExtension(
+            entry.platform,
+            entry.extension,
           );
           const fetched = extension ? extension.project(response) : response;
           assertOwner(store, entry);
@@ -155,6 +161,8 @@ export async function refreshLocalThought(
             folder,
             entry.identity + ':folder',
             fetched,
+            entry.extension,
+            schemaNamespace(entry.platform, entry.extension),
           );
           entry = { ...entry, config };
           saveInstallation(entry);

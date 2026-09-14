@@ -169,6 +169,7 @@ function NotionConnection({
           drive,
           actor,
           platform: 'notion',
+          entry: 'notion',
         }),
       );
       location.assign(result.url);
@@ -207,6 +208,7 @@ function NotionConnection({
         const next = { ...installed, [database]: config };
         localStorage.setItem(installationKey, JSON.stringify(next));
         setInstalled(next);
+        sessionStorage.removeItem('localthought-completed');
       }
 
       setActive(config);

@@ -1,4 +1,5 @@
 import { enableIntegrationDiscovery } from './integration-settings-utils';
+import { openLegacyGithubSetup } from './legacy-github-setup';
 import { test, expect } from '@playwright/test';
 import {
   before,
@@ -843,7 +844,7 @@ export function run() { return { intents: [] }; }
     ).toBe(originalSource.source);
   });
 
-  test('GitHub reuses a task template table without replacing its views', async ({
+  test('GitHub setup through assistant reuses a task template table without replacing its views', async ({
     page,
   }) => {
     await createTableFromDialog(page, {
@@ -866,24 +867,19 @@ export function run() { return { intents: [] }; }
         'https://atomicdata.dev/task/v1/body',
       ]),
     );
-    await page.getByRole('link', { name: 'Integrations', exact: true }).click();
-    await page
-      .locator('[data-integration=github-issues]')
-      .getByRole('button', { name: 'Set up connection' })
-      .click();
-    await expect(page.getByLabel('Sync into')).toContainText(
+    const { dialog } = await openLegacyGithubSetup(page, {
+      repository: 'atomic-fixtures/shared-tasks',
+    });
+    await expect(dialog.getByLabel('Sync into')).toContainText(
       'Shared project tasks',
     );
-    await page
+    await dialog
       .getByLabel('Sync into')
       .selectOption({ label: 'Shared project tasks' });
-    await page
-      .getByLabel('Repository', { exact: true })
-      .fill('atomic-fixtures/shared-tasks');
-    await page
+    await dialog
       .getByLabel('GitHub token', { exact: true })
       .fill('local-install-test-token');
-    await page
+    await dialog
       .getByRole('button', { name: 'Connect GitHub', exact: true })
       .click();
     await expect(page).toHaveURL(tableUrl, { timeout: 30000 });
@@ -894,30 +890,18 @@ export function run() { return { intents: [] }; }
     await expect(page.getByText('Schedule', { exact: true })).toBeVisible();
   });
 
-  test('GitHub can be installed from Integrations without a CLI', async ({
+  test('GitHub can be installed through the assistant without a CLI', async ({
     page,
   }) => {
     const pageErrors: string[] = [];
     page.on('pageerror', e => pageErrors.push(e.message));
-    await page.getByRole('link', { name: 'Integrations', exact: true }).click();
-    await expect(page.getByLabel('GitHub token', { exact: true })).toHaveCount(
-      0,
-    );
-    await page
-      .getByRole('textbox', { name: 'Search integrations' })
-      .fill('kanban');
-    await expect(page.locator('[data-integration=notion]')).toHaveCount(0);
-    await page
-      .locator('[data-integration=github-issues]')
-      .getByRole('button', { name: 'Set up connection' })
-      .click();
-    await page
-      .getByLabel('Repository', { exact: true })
-      .fill('atomic-fixtures/issues');
-    await page
+    const { dialog } = await openLegacyGithubSetup(page, {
+      repository: 'atomic-fixtures/issues',
+    });
+    await dialog
       .getByLabel('GitHub token', { exact: true })
       .fill('local-install-test-token');
-    await page
+    await dialog
       .getByRole('button', { name: 'Connect GitHub', exact: true })
       .click();
     await expect(page).toHaveURL(/\/app\/show\?subject=/, { timeout: 30000 });

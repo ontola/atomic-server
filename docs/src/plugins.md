@@ -61,11 +61,20 @@ See `wasm-plugins/examples/random-folder-extender` for a minimal Rust project th
 Open **Settings → Integration** to choose which plugins appear on the
 **Integrations** page:
 
-- **Show API plugins** displays the LocalThought API catalog.
+- **Show API plugins** displays generated Syncables integrations from the
+  LocalThought API catalog, including Google Calendar and GitHub issues.
 - **Show experimental plugins** displays bundled experimental integrations and
   unverified community plugins.
 
-Both options are unchecked by default and work independently. When a category
+The Devonian versions of Google Calendar and GitHub issues and comments are
+bundled experimental plugins. They add native mappings and synchronization
+behavior beyond the generated API integrations. Both kinds can connect through
+the integration proxy; using the proxy does not determine the category.
+Proxy-backed experimental plugins—the two Devonian plugins and Notion—require
+both options to be enabled. Other bundled experimental plugins only require
+**Show experimental plugins**.
+
+Both options are unchecked by default. When a category
 is hidden, the Integrations page links to Settings so you can consider enabling
 it. Hidden catalogs are not fetched.
 

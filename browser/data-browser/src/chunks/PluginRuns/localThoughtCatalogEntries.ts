@@ -1,4 +1,4 @@
-/** Bundled lens setup stays discoverable even when the remote catalog is unavailable. */
+/** Generated catalogs contain only provider-published integrations. */
 export function localThoughtCatalogEntries(platforms: string[] = []): string[] {
-  return [...new Set(['google-calendar', ...platforms])];
+  return [...new Set(platforms)];
 }
