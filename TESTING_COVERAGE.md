@@ -475,8 +475,9 @@ Not covered: visual morph of a grid card into the resource page in Firefox (need
 |---|---|---|
 | V1 element list + paragraph markdown (+ resource embed) → TipTap JSON; leftover Yjs `XmlFragment` walker; `{ type: 'ydoc' }` detection without loading `yjs` | glue | `browser/data-browser/src/views/Document/documentMigrationUtils.test.ts` |
 | Opening a writable v1 document migrates it silently into the Loro editor (no "Update Document" button) | flow | `browser/e2e/tests/documents.spec.ts` |
+| Uploaded text-file conversion: supported MIME/extensions, literal text and line breaks, Markdown parsing, permission/download failure, and class replacement | glue | `browser/data-browser/src/views/File/convertFileToDocument.test.ts` |
 
-Not covered: leftover Yjs-era DocumentV2 bodies end-to-end (needs a stored `{ type: 'ydoc' }` fixture); read-only v1 documents stay on the element list and have no e2e.
+No automated end-to-end coverage: uploaded-file conversion through the full UI and a server-backed save/reload (manually verified in Chromium). Also not covered: leftover Yjs-era DocumentV2 bodies end-to-end (needs a stored `{ type: 'ydoc' }` fixture); read-only v1 documents stay on the element list and have no e2e.
 
 ## Commits as envelopes
 
