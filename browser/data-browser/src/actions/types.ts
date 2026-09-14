@@ -47,6 +47,8 @@ export interface ActionContext {
   /** The subject lives on another server (e.g. shown via an AtomicLink). */
   external?: boolean;
   showCodeUsageDialog?: () => void;
+  /** Opens the read-only TipTap JSON source for a Document V2 resource. */
+  showDocumentSourceDialog?: () => void;
   /** Opens the emoji picker dialog for this resource's icon. */
   openEmojiPicker?: () => void;
   /** Opens the pick-or-upload dialog for this resource's cover image. */

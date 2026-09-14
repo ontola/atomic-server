@@ -635,6 +635,7 @@ msgid "Loro not loaded"
 msgstr ""
 
 #: src/chunks/RTE/readDocumentV2TiptapJson.ts
+#: src/views/Document/documentSourceSnapshot.ts
 msgid "Failed to read document content"
 msgstr ""
 
@@ -7838,3 +7839,31 @@ msgstr ""
 #~ "Gib deinen Wiederherstellungscode ein, um deinen geheimen Schlüssel "
 #~ "anzuzeigen oder diesem Gerät einen Passkey hinzuzufügen. Dein bisheriger "
 #~ "Wiederherstellungscode bleibt gültig."
+
+#: src/actions/resourceActions.tsx
+msgid "View source"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Inspect a read-only JSON snapshot of this document."
+msgstr ""
+
+#: src/views/Document/documentSourceSnapshot.ts
+msgid "This document has no loaded Loro snapshot in this tab. Open the document and try again once it has finished loading."
+msgstr ""
+
+#: src/views/Document/DocumentSourceDialog.tsx
+msgid "Document source"
+msgstr ""
+
+#: src/views/Document/DocumentSourceDialog.tsx
+msgid "Loading document source…"
+msgstr ""
+
+#: src/views/Document/DocumentSourceDialog.tsx
+msgid "This is a read-only JSON snapshot captured when you opened this dialog. It does not update while the dialog is open."
+msgstr ""
+
+#: src/views/Document/documentSourceSnapshot.ts
+msgid "The document has pending edits. Close this dialog and try again after the edits are saved."
+msgstr ""

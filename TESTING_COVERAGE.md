@@ -467,6 +467,14 @@ Not covered: visual morph of a grid card into the resource page in Firefox (need
 
 ## Documents
 
+Document source: `readDocumentV2TiptapJson.test.ts` checks real Loro rich-text
+conversion, empty content, malformed content and unchanged live state.
+`resourceActions.parent.test.ts` checks source-menu eligibility and invocation,
+including readers without write access. The source dialog is read-only and
+uses a snapshot captured on opening. `documentSourceSnapshot.test.ts` covers
+loading/errors, absent Loro state, formatted output and pending edits without
+subscriber events. Live browser menu/dialog acceptance remains untested.
+
 | Flow | Layer | Where |
 |---|---|---|
 | V1 element list + paragraph markdown (+ resource embed) → TipTap JSON; leftover Yjs `XmlFragment` walker; `{ type: 'ydoc' }` detection without loading `yjs` | glue | `browser/data-browser/src/views/Document/documentMigrationUtils.test.ts` |

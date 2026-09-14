@@ -1,15 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
-import { core, server } from '@tomic/react';
+import { core, dataBrowser, server } from '@tomic/react';
 import { resourceActions } from './resourceActions';
 import type { ActionContext } from './types';
 
 const parent = resourceActions.find(action => action.id === 'parent')!;
+const viewSource = resourceActions.find(action => action.id === 'view-source')!;
 
 function ctx(
   resource: {
     loading?: boolean;
     get: (prop: string) => unknown;
     getClasses: () => string[];
+    hasClasses?: (classSubject: string) => boolean;
   },
   extra: Partial<ActionContext> = {},
 ): ActionContext {
@@ -83,5 +85,57 @@ describe('parent action', () => {
     expect(navigate).toHaveBeenCalledWith(
       expect.stringContaining(encodeURIComponent('did:ad:parent')),
     );
+  });
+});
+
+describe('view source action', () => {
+  it('is available for a Document V2 without write permission when the menu provides a dialog', () => {
+    const showDocumentSourceDialog = vi.fn();
+
+    expect(
+      viewSource.available?.(
+        ctx(
+          {
+            get: () => undefined,
+            getClasses: () => [],
+            hasClasses: (classSubject: string) =>
+              classSubject === dataBrowser.classes.documentV2,
+          },
+          { canWrite: false, showDocumentSourceDialog },
+        ),
+      ),
+    ).toBe(true);
+
+    viewSource.run(
+      ctx(
+        {
+          get: () => undefined,
+          getClasses: () => [],
+          hasClasses: () => true,
+        },
+        { canWrite: false, showDocumentSourceDialog },
+      ),
+    );
+
+    expect(showDocumentSourceDialog).toHaveBeenCalledOnce();
+  });
+
+  it('stays hidden for non-documents and surfaces without a dialog callback', () => {
+    const nonDocument = ctx({
+      get: () => undefined,
+      getClasses: () => [],
+      hasClasses: () => false,
+    });
+    const noDialog = ctx(
+      {
+        get: () => undefined,
+        getClasses: () => [],
+        hasClasses: () => true,
+      },
+      { canWrite: false },
+    );
+
+    expect(viewSource.available?.(nonDocument)).toBe(false);
+    expect(viewSource.available?.(noDialog)).toBe(false);
   });
 });

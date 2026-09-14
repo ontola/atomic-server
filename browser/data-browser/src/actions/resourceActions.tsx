@@ -65,6 +65,19 @@ export const resourceActions: ActionDefinition[] = [
     run: ctx => ctx.navigate(dataURL(ctx.subject)),
   },
   {
+    id: 'view-source',
+    scope: 'resource',
+    section: 'view',
+    label: () => 'View source',
+    helper: () => 'Inspect a read-only JSON snapshot of this document.',
+    keywords: ['source', 'json', 'tiptap', 'document'],
+    icon: () => <FaCode />,
+    available: ctx =>
+      ctx.resource.hasClasses(dataBrowser.classes.documentV2) &&
+      ctx.showDocumentSourceDialog !== undefined,
+    run: ctx => ctx.showDocumentSourceDialog?.(),
+  },
+  {
     id: 'favorite',
     scope: 'resource',
     section: 'action',

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Client } from '@tomic/react';
 import { DIVIDER, DropdownMenu, isItem, DropdownItem } from '../Dropdown';
 import { AutoOpenTrigger } from '../Dropdown/AutoOpenTrigger';
@@ -19,6 +19,12 @@ import { useCustomContextItemsContext } from './CustomContextItemsContext';
 import { CoverPickerDialog, EmojiPickerDialog } from '../ResourceDecorations';
 import { ResourceInline } from '../../views/ResourceInline';
 import { ResourceUsage } from '../ResourceUsage';
+
+const DocumentSourceDialog = lazy(() =>
+  import('../../views/Document/DocumentSourceDialog').then(module => ({
+    default: module.DocumentSourceDialog,
+  })),
+);
 
 export {
   CustomContextItemsProvider,
@@ -51,6 +57,7 @@ export const ContextMenuOptions = {
   EditAsFork: 'editAsFork',
   MergeFork: 'mergeFork',
   OpenOriginal: 'openOriginal',
+  ViewSource: 'view-source',
   SetEmoji: 'setEmoji',
   SetCover: 'setCover',
 } as const;
@@ -107,10 +114,16 @@ export function ResourceContextMenu({
 }: ResourceContextMenuProps) {
   const [confirmingAction, setConfirmingAction] = useState<ActionDefinition>();
   const [showCodeUsageDialog, setShowCodeUsageDialog] = useState(false);
+  // undefined keeps the dialog out of the tree until the action is used.
+  const [documentSourceOpen, setDocumentSourceOpen] = useState<boolean>();
   const [menuOpen, setMenuOpen] = useState(false);
   const [shiftHeld, setShiftHeld] = useState(false);
   const openCodeUsageDialog = useCallback(
     () => setShowCodeUsageDialog(true),
+    [],
+  );
+  const openDocumentSourceDialog = useCallback(
+    () => setDocumentSourceOpen(true),
     [],
   );
   // undefined = never opened (dialog not mounted), boolean = mounted.
@@ -122,6 +135,7 @@ export function ResourceContextMenu({
     external,
     onAfterDelete,
     showCodeUsageDialog: openCodeUsageDialog,
+    showDocumentSourceDialog: openDocumentSourceDialog,
     openEmojiPicker,
     openCoverPicker,
   });
@@ -279,6 +293,16 @@ export function ResourceContextMenu({
         show={showCodeUsageDialog}
         bindShow={setShowCodeUsageDialog}
       />
+      {documentSourceOpen !== undefined && (
+        <Suspense fallback={null}>
+          <DocumentSourceDialog
+            key={subject}
+            subject={subject}
+            show={documentSourceOpen}
+            bindShow={setDocumentSourceOpen}
+          />
+        </Suspense>
+      )}
       {/* Mounted lazily on first use — most menus never open these. */}
       {emojiPickerOpen !== undefined && (
         <EmojiPickerDialog
