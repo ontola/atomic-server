@@ -1,3 +1,4 @@
+import { ResourceSaveStateKind } from '@tomic/lib';
 import { Button } from '@components/Button';
 import {
   ConfirmationDialog,
@@ -103,9 +104,10 @@ export const PluginPage: React.FC<ResourcePageProps<Server.Plugin>> = ({
               disabled={
                 !configValid ||
                 !configSyntaxValid ||
-                saveState.kind === 'saving' ||
-                saveState.kind === 'scheduled' ||
-                (!configEdited && saveState.kind !== 'dirty')
+                saveState.kind === ResourceSaveStateKind.Saving ||
+                saveState.kind === ResourceSaveStateKind.Scheduled ||
+                (!configEdited &&
+                  saveState.kind !== ResourceSaveStateKind.Dirty)
               }
               onClick={() => {
                 setConfigEdited(false);
