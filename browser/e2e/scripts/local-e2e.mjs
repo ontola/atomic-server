@@ -16,6 +16,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { workerBudget } from './concurrency.mjs';
 import { acquireRunLock } from './run-lock.mjs';
 import { OwnedProcess } from './owned-process.mjs';
+import { pinnedEnvironment, verifyPlaywright } from './toolchain.mjs';
 
 const root = resolvePath(dirname(fileURLToPath(import.meta.url)), '../../..');
 const browser = join(root, 'browser');
@@ -145,7 +146,7 @@ try {
   if (!['dev', 'e2e', 'release'].includes(profile))
     throw new Error('ATOMIC_E2E_CARGO_PROFILE must be dev, e2e or release');
   const env = {
-    ...process.env,
+    ...pinnedEnvironment(browser, output),
     VITE_E2E: 'true',
     CARGO_BUILD_JOBS:
       process.env.CARGO_BUILD_JOBS ??
@@ -186,6 +187,7 @@ try {
       browser,
       env,
     );
+    verifyPlaywright(browser);
     await run('pnpm', ['run', 'build'], 'build-browser', browser, env);
     await run(
       'cargo',
@@ -195,6 +197,23 @@ try {
       env,
     );
   }
+
+  const playwrightVersion = verifyPlaywright(browser);
+  writeFileSync(
+    join(output, 'toolchain.json'),
+    JSON.stringify(
+      {
+        pnpm: execFileSync('pnpm', ['--version'], {
+          cwd: browser,
+          env,
+          encoding: 'utf8',
+        }).trim(),
+        playwright: playwrightVersion,
+      },
+      null,
+      2,
+    ),
+  );
 
   // A private copy cannot be replaced by another checkout's build or matched
   // by unrelated CI cleanup targeting target/debug/atomic-server.
