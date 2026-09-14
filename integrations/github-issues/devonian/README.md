@@ -15,12 +15,17 @@ the browser database if it has been disabled.
 
 ## Live GitHub
 
-Expand **Connect a real GitHub repository**, enter the integration-proxy origin,
-`owner/repo`, and your **LocalThought tenant secret**, then choose **Connect GitHub
-tracker**. The demo uses #1401's shared `BrowserIntegrations` client to sign the
-tenant challenge in the browser, navigate to proxy consent, and bind the return
-to this agent and local drive. The secret is cleared from the form and never
-persisted. The callback code is removed from the address bar immediately.
+Expand **Connect a GitHub repository**, enter the integration-proxy origin and
+`owner/repo`, then choose **Connect GitHub tracker**. LocalThought asks you to
+sign in and authorize the connection. The browser uses a short-lived S256 PKCE
+handoff bound to the agent, local drive and selected platform; no tenant secret
+is entered in the demo. The callback code is removed from the address bar
+immediately. Callback completion is serialized so remounting the page cannot
+redeem the same one-time code twice.
+
+To reconnect, choose **Connect another tracker** and enter the same repository
+and proxy while signed in as the same Atomic agent. This reuses the local tracker.
+The **Show API plugins** setting only affects discovery and is not required here.
 
 After consent, **Sync now** authorizes two-way writes. The shared transport
 serializes requests with Web Locks, consumes each code before dispatch, and

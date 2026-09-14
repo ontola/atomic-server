@@ -47,6 +47,12 @@ consent/replay, optional credential grants, callback binding and redemption expi
 CORS was verified with the earlier live browser flow; the new secret-free flow
 still requires matching proxy/frontend deployments and live verification.
 
+`browser/data-browser/src/chunks/DevonianDemo/demo.test.ts` covers overlapping
+OAuth callback resumes: one redemption completes and both callers recover the
+same tracker. It also checks callback ownership and refusal to retry an uncertain
+redemption. This covers callback orchestration separately from the browser
+transport tests; live OAuth acceptance still requires a matching app build.
+
 `browser/e2e/tests/devonian-issue-sync.spec.mts` exercises the no-paste redirect,
 selected-platform consent and PKCE redemption, direct HTTP writes and local OPFS storage for two-way issue
 creation, comments, close/reopen and reload without duplicate resources. Its
