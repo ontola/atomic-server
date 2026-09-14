@@ -186,6 +186,13 @@ A Loro snapshot already carries history, so "persist the doc" = persist
 history (the History page reads it). The `PropVals` cache is never authored
 directly — it is materialized from the doc and may be dropped/rebuilt.
 
+The rich-text binding follows the same rule: ordinary inline replacements edit
+the existing `LoroText` and retain its container identity and operation history.
+ProseMirror nodes are a projection used to locate and validate an edit, not a
+reason to recreate the CRDT. The scoped `loro-prosemirror` patch avoids whole-text
+materialization on this path and avoids rewriting unchanged formatting during
+reconciliation. Unsupported structural edits use the normal reconciliation path.
+
 ```text
 write:  set*(prop, val) → Loro doc  (fallible: doc writes can fail)
                               │
