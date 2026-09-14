@@ -1,8 +1,9 @@
 import { before } from './session-fixtures';
-import { test, expect, type Page } from './session-fixtures';
+import { test, expect } from './session-fixtures';
 import { FRONTEND_URL } from './test-utils';
 import {
   enableAIForTesting,
+  sendChatMessage,
   setupScriptedToolCallMocks,
   type ScriptedToolCall,
 } from './ai-mock';
@@ -13,24 +14,6 @@ import {
  * test the plan asks for — could an assistant build and then *adapt* a mini-app
  * with only these tools?
  */
-
-async function sendChatMessage(page: Page, text: string) {
-  const sidebar = page.locator('[data-open]');
-  const chatInput = sidebar.locator('[contenteditable="true"]');
-  await expect(chatInput).toBeVisible({ timeout: 15_000 });
-
-  // Vector indexing after drive creation disables Send.
-  await sidebar
-    .getByText('Indexing', { exact: true })
-    .waitFor({ state: 'hidden', timeout: 30_000 })
-    .catch(() => undefined);
-
-  await chatInput.click();
-  await page.keyboard.type(text);
-  const sendButton = sidebar.getByTitle('Send');
-  await expect(sendButton).toBeEnabled({ timeout: 30_000 });
-  await sendButton.click();
-}
 
 /** The table subject out of a `create_table…` tool result. */
 function tableFromResults(results: string[]): string {

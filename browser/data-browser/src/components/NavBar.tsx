@@ -376,6 +376,8 @@ export function NavBar({ resource: resourceProp }: NavBarProps): JSX.Element {
               <LabelButton
                 $active={aiOpen}
                 onClick={() => setIsOpen(prev => !prev)}
+                data-testid='navbar-ai-button'
+                title='AI'
               >
                 <AIIcon />
                 <span>AI</span>
