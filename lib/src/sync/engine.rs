@@ -1226,9 +1226,7 @@ pub async fn handle_sync_vv_filtered(
                 }
             } else {
                 pull.push(subject.clone());
-                pull_from
-                    .entry(subject.clone())
-                    .or_insert_with(std::collections::HashMap::new);
+                pull_from.entry(subject.clone()).or_default();
             }
         }
     }
@@ -1832,17 +1830,14 @@ mod bootstrap_and_sub_tests {
 
     #[tokio::test]
     async fn parent_only_existing_resource_cannot_be_pushed_through_another_drive() {
-        let db = Db::init_temp("parent_only_existing_cross_drive").await.unwrap();
+        let db = Db::init_temp("parent_only_existing_cross_drive")
+            .await
+            .unwrap();
         let (_alice, drive) = db.setup("Alice").await.unwrap();
         let other_drive = "https://localhost/other-drive";
-        db.add_resource_opts(
-            &crate::Resource::new(other_drive.into()),
-            false,
-            true,
-            true,
-        )
-        .await
-        .unwrap();
+        db.add_resource_opts(&crate::Resource::new(other_drive.into()), false, true, true)
+            .await
+            .unwrap();
 
         let subject = "https://localhost/parent-only-child";
         let mut child = crate::Resource::new(subject.into());

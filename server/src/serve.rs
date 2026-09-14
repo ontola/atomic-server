@@ -497,7 +497,7 @@ where
                 println!("{}", message);
                 server
                     .bind_rustls_0_23(&endpoint, https_config)
-                    .map_err(|e| format!("Cannot bind to endpoint {}: {}", &endpoint, e))?
+                    .map_err(|e| format!("Cannot bind to endpoint {}: {}", endpoint, e))?
                     .shutdown_timeout(TIMEOUT)
                     .run()
                     .await?;
@@ -510,8 +510,8 @@ where
         tracing::info!("Binding HTTP server to endpoint {}", endpoint);
         println!("{}", message);
         server
-            .bind(&format!("{}:{}", config.opts.ip, config.opts.port))
-            .map_err(|e| format!("Cannot bind to endpoint {}: {}", &endpoint, e))?
+            .bind(&endpoint)
+            .map_err(|e| format!("Cannot bind to endpoint {}: {}", endpoint, e))?
             .shutdown_timeout(TIMEOUT)
             .run()
             .await?;

@@ -181,7 +181,7 @@ fn set_agent_config() -> CLIResult<Config> {
         Err(_e) => {
             println!(
                 "No config found at {:?}. Let's create one!",
-                &agent_config_path
+                agent_config_path
             );
             let server = promptly::prompt("What's the base url of your Atomic Server?")?;
             let agent_secret = promptly::prompt("Enter your agent secret")?;
@@ -272,6 +272,7 @@ async fn exec_command(context: &mut Context) -> AtomicResult<()> {
             }
             #[cfg(not(feature = "native"))]
             {
+                let _ = (subject, property);
                 return Err("Feature not available. Compile with `native` feature.".into());
             }
         }
