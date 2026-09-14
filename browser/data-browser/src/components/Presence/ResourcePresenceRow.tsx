@@ -20,7 +20,7 @@ export function ResourcePresenceRow({
   const { followedAgent, followers } = useFollow();
 
   // One avatar per agent, even when they have multiple tabs open. Agents
-  // already shown in the follow badges next to this row — the one we
+  // already shown in the follow indicators next to this row — the one we
   // follow, and the ones following us — are skipped: no duplicates.
   const agents = useMemo(() => {
     const inBadges = new Set(followers.map(item => item.agent));
