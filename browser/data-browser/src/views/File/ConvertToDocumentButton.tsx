@@ -84,7 +84,7 @@ export function ConvertToDocumentButton({
       loading={converting ? 'Converting' : undefined}
       onClick={handleConvert}
     >
-      <FaFileLines />
+      <FaFileLines key='convert-document-icon' />
       Convert to document
     </Button>
   );
