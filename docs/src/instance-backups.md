@@ -44,6 +44,9 @@ before it receives its final name. Partial work uses private temporary paths.
 
 This is a checkpoint of **this instance**, not proof that it received every
 change from every peer. Replication freshness is explicitly reported as unknown.
+Only blobs stored locally in this instance's database are captured. When S3 or
+another external blob backend is configured, those objects remain in that service
+and require its own backup and restore process with the necessary credentials.
 It cannot recover Loro history or envelopes that were previously deleted or
 never replicated. Cached vector indexes are outside the data/config roots and
 are rebuilt when needed. External services, environment variables, separately

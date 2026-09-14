@@ -190,6 +190,13 @@ fn untrusted_http_client_builder() -> reqwest::ClientBuilder {
         .dns_resolver(std::sync::Arc::new(ssrf_guard::PublicOnlyResolver))
 }
 
+fn is_authentication_origin(target: &str, server: &str) -> bool {
+    let (Ok(target), Ok(server)) = (url::Url::parse(target), url::Url::parse(server)) else {
+        return false;
+    };
+    matches!(target.scheme(), "http" | "https") && target.origin() == server.origin()
+}
+
 /// Fetches a resource, makes sure its subject matches.
 /// Checks the datatypes for the Values.
 /// Ignores all atoms where the subject is different.
@@ -216,7 +223,7 @@ pub async fn fetch_resource(
     let effective_agent = match client_agent {
         Some(agent) if agent.subject.is_did() => {
             let server = store.get_server_url();
-            if url.starts_with(server.trim_end_matches('/')) {
+            if is_authentication_origin(&url, &server) {
                 client_agent
             } else {
                 None
@@ -574,6 +581,55 @@ async fn post_commit_custom_endpoint(
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn authentication_origin_rejects_lookalikes() {
+        let server = "https://example.com";
+        assert!(is_authentication_origin(
+            "https://example.com/resource",
+            server
+        ));
+        assert!(!is_authentication_origin(
+            "https://example.com.evil.test/resource",
+            server
+        ));
+        assert!(!is_authentication_origin(
+            "https://example.com@evil.test/resource",
+            server
+        ));
+        assert!(!is_authentication_origin(
+            "https://example.com:8443/resource",
+            server
+        ));
+        assert!(!is_authentication_origin(
+            "http://example.com/resource",
+            server
+        ));
+    }
+
+    #[test]
+    fn authentication_origin_accepts_normalized_origins_and_rejects_invalid_urls() {
+        assert!(is_authentication_origin(
+            "https://EXAMPLE.com:443/resource",
+            "https://example.com/"
+        ));
+        assert!(is_authentication_origin(
+            "http://localhost:9883/resource",
+            "http://localhost:9883"
+        ));
+        assert!(!is_authentication_origin(
+            "/resource",
+            "https://example.com"
+        ));
+        assert!(!is_authentication_origin(
+            "https://example.com/resource",
+            ""
+        ));
+        assert!(!is_authentication_origin(
+            "file:///resource",
+            "file:///server"
+        ));
+    }
 
     #[tokio::test]
     #[ignore]

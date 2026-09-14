@@ -25,6 +25,7 @@
  * ```
  */
 
+import { RequestCancelledError } from './error.js';
 import { versionVectorRecords } from './version-vector-records.js';
 import {
   parseHistoryAttribution,
@@ -641,10 +642,10 @@ export class ClientDbWorker {
   }
 
   /**
-   * Atomic put: JSON-AD index entry + optional Loro snapshot in one
-   * worker postMessage. Either both forms land or neither does —
-   * the previous shape (separate `putResource` + `putLoroSnapshot`
-   * calls) was the source of OPFS half-states under load.
+   * Write the JSON-AD index entry and optional Loro snapshot in one worker
+   * message, then flush before acknowledging. Rejects if durability fails;
+   * callers must not follow this with a separate flush RPC, which could race
+   * an identity handoff closing the worker.
    */
   async putResourceWithSnapshot(
     subject: string,
@@ -1024,7 +1025,7 @@ export class ClientDbWorker {
     this.seedPromise = null;
 
     for (const [, pending] of this.pending) {
-      pending.reject(new Error('ClientDb worker destroyed'));
+      pending.reject(new RequestCancelledError('ClientDb worker destroyed'));
     }
 
     this.pending.clear();
@@ -1040,6 +1041,10 @@ export class ClientDbWorker {
     // need to let it finish.
     if (this.role === 'initializing' && this.initPromise) {
       await this.initPromise;
+    }
+
+    if (this.destroyed) {
+      throw new RequestCancelledError('ClientDb worker destroyed');
     }
 
     if (this.role === 'leader') {

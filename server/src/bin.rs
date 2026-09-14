@@ -5,6 +5,7 @@ use std::{fs::File, io::Write};
 mod actor_messages;
 mod appstate;
 pub mod backup;
+mod blob_storage;
 mod commit_monitor;
 pub mod config;
 mod content_types;

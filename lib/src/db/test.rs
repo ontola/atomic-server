@@ -15,6 +15,24 @@ use tokio::sync::OnceCell;
 
 static DB: OnceCell<Mutex<Db>> = OnceCell::const_new();
 
+#[tokio::test]
+async fn synthetic_agent_reads_have_stable_history_without_persisting() {
+    let db = Db::init_temp("synthetic_agent_read").await.unwrap();
+    let agent = crate::agents::Agent::new(None).unwrap();
+    let first = db.get_resource(&agent.subject).await.unwrap();
+    let second = db.get_resource(&agent.subject).await.unwrap();
+    assert!(first.get(urls::CREATED_AT).is_err());
+    assert_eq!(
+        serde_json::to_value(first.get_propvals()).unwrap(),
+        serde_json::to_value(second.get_propvals()).unwrap()
+    );
+    assert_eq!(
+        first.build_state_doc().unwrap().doc().oplog_vv(),
+        second.build_state_doc().unwrap().doc().oplog_vv()
+    );
+    assert!(!db.has_stored_resource(&agent.subject));
+}
+
 /// Share the Db instance between tests. Otherwise, all tests try to init the same location on disk and throw errors.
 /// Note that not all behavior can be properly tested with a shared database.
 /// If you need a clean one, juts call init("someId").
@@ -2497,4 +2515,59 @@ async fn content_commits_are_not_stored() {
             .is_ok(),
         "an unflagged creation commit is retained like a genesis"
     );
+}
+
+/// Cached external rows must keep their read grants in both query shapes.
+#[tokio::test]
+async fn cached_external_resources_keep_read_permissions() {
+    let store = Db::init_temp("external_cache_permissions").await.unwrap();
+    let (agent, drive) = store.setup("Cache owner").await.unwrap();
+    let subject = Subject::from("https://private.example/cached-resource");
+    let mut resource = Resource::new(subject.to_string());
+    resource
+        .set(
+            urls::PARENT.into(),
+            Value::AtomicUrl(drive.clone().into()),
+            &store,
+        )
+        .await
+        .unwrap();
+    resource
+        .set(
+            urls::DESCRIPTION.into(),
+            Value::Markdown("private cached content".into()),
+            &store,
+        )
+        .await
+        .unwrap();
+    // Same persistence entry point used for a fetched external resource.
+    store
+        .add_resource_opts(&resource, true, true, true)
+        .await
+        .unwrap();
+    for include_nested in [false, true] {
+        let mut query = Query {
+            property: Some(urls::DESCRIPTION.into()),
+            value: Some(Value::Markdown("private cached content".into())),
+            include_external: true,
+            include_nested,
+            for_agent: ForAgent::Public,
+            ..Query::default()
+        };
+        let public = store.query(&query).await.unwrap();
+        assert!(public.subjects.is_empty());
+        assert!(public.resources.is_empty());
+        query.for_agent = ForAgent::AgentSubject(agent.subject.clone());
+        let authorized = store.query(&query).await.unwrap();
+        assert_eq!(authorized.subjects, vec![subject.clone()]);
+        assert_eq!(authorized.resources.len(), usize::from(include_nested));
+    }
+    assert!(store
+        .get_resource_extended(&subject, true, &ForAgent::Public)
+        .await
+        .is_err());
+    assert!(store
+        .get_resource_extended(&subject, true, &ForAgent::AgentSubject(agent.subject))
+        .await
+        .is_ok());
 }

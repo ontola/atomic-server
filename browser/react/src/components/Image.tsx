@@ -142,13 +142,13 @@ const ImageInner: React.FC<ImageInnerProps> = ({
   // be asked for transformed renditions when the user is offline (or the
   // blob hasn't been pushed yet), and a `blob:` URL has no query params for
   // the image-processing endpoint anyway.
-  const localUrl = useFileObjectUrl(resource);
+  const src = useFileObjectUrl(resource, downloadUrl);
 
-  if (localUrl) {
+  if (!src || src.startsWith('blob:')) {
     return (
       // eslint-disable-next-line jsx-a11y/alt-text
       <img
-        src={localUrl}
+        src={src}
         {...props}
         height={resource.props.imageHeight}
         width={resource.props.imageWidth}
@@ -156,7 +156,7 @@ const ImageInner: React.FC<ImageInnerProps> = ({
     );
   }
 
-  const toSrcSet = buildSrcSet(downloadUrl ?? '');
+  const toSrcSet = buildSrcSet(src);
 
   return (
     <picture>
@@ -176,7 +176,7 @@ const ImageInner: React.FC<ImageInnerProps> = ({
       />
       {/* eslint-disable-next-line jsx-a11y/alt-text */}
       <img
-        src={downloadUrl}
+        src={src}
         {...props}
         height={resource.props.imageHeight}
         width={resource.props.imageWidth}
@@ -192,10 +192,10 @@ const BasicImage: React.FC<ImageInnerProps> = ({
   ...props // html image atrributes only
 }) => {
   const [downloadUrl] = useString(resource, server.properties.downloadUrl);
-  const localUrl = useFileObjectUrl(resource);
+  const src = useFileObjectUrl(resource, downloadUrl);
 
   // eslint-disable-next-line jsx-a11y/alt-text
-  return <img src={localUrl ?? downloadUrl} {...props} />;
+  return <img src={src} {...props} />;
 };
 
 const indicationToSizes = (indication: SizeIndication | undefined): string => {

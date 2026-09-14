@@ -91,10 +91,15 @@ const SkillMention = Mention.extend({
 });
 
 interface AsyncAIChatInputProps {
+  /** A one-time handoff draft; later typing and clearing remain user-owned. */
+  prefill?: string;
   hasFiles: boolean;
+  autoFocus?: boolean;
   disabled?: boolean;
   disableSubmit?: boolean;
   large?: boolean;
+  /** Keep text until the caller confirms a successful response. */
+  clearOnSubmit?: boolean;
   onMentionUpdate: (mentions: MentionItem[]) => void;
   onChange: (markdown: string) => void;
   onSubmit: () => void;
@@ -112,9 +117,11 @@ const AsyncAIChatInput: React.FC<
 > = ({
   children,
   hasFiles,
+  autoFocus = true,
   disabled = false,
   disableSubmit = false,
   large = false,
+  clearOnSubmit = true,
   onMentionUpdate,
   onChange,
   onSubmit,
@@ -124,13 +131,17 @@ const AsyncAIChatInput: React.FC<
   onFileAdded,
   rightAlignedChildren,
   focusSignal,
+  prefill,
 }) => {
   const store = useStore();
   const { drive } = useSettings();
   const { mcpServers } = useAISettings();
   const [markdown, setMarkdown] = useState('');
+  const prefilled = useRef<string | undefined>(undefined);
   const markdownRef = useRef(markdown);
   const onSubmitRef = useRef(onSubmit);
+  const clearOnSubmitRef = useRef(clearOnSubmit);
+  clearOnSubmitRef.current = clearOnSubmit;
   const onCompactRef = useRef(onCompact);
   const disableSubmitRef = useRef(disableSubmit);
   const onEditModelRef = useRef(onEditModel);
@@ -168,8 +179,11 @@ const AsyncAIChatInput: React.FC<
 
                 // The content has to be read from a ref because this callback is not updated often leading to stale content.
                 onSubmitRef.current();
-                setMarkdown('');
-                this.editor.commands.clearContent();
+
+                if (clearOnSubmitRef.current) {
+                  setMarkdown('');
+                  this.editor.commands.clearContent();
+                }
 
                 return true;
               },
@@ -235,7 +249,8 @@ const AsyncAIChatInput: React.FC<
           }),
         ),
       ],
-      autofocus: true,
+      autofocus: autoFocus,
+      content: markdownRef.current,
       contentType: 'markdown',
       editable: !disabled,
       editorProps: {
@@ -258,6 +273,18 @@ const AsyncAIChatInput: React.FC<
     },
     [serversWithResources, searchResourcesOfServer, disabled],
   );
+
+  useEffect(() => {
+    if (!prefill || !editor || prefilled.current === prefill) return;
+    prefilled.current = prefill;
+
+    if (editor.isEmpty) {
+      editor.commands.setContent(prefill, { contentType: 'markdown' });
+      markdownRef.current = prefill;
+      setMarkdown(prefill);
+      onChange(prefill);
+    }
+  }, [prefill, editor, onChange]);
 
   // Lets the parent move focus into the editor on demand (e.g. right after the
   // user picks a model) by bumping `focusSignal`.
@@ -299,8 +326,11 @@ const AsyncAIChatInput: React.FC<
             }
             onClick={() => {
               onSubmit();
-              setMarkdown('');
-              editor?.commands.clearContent();
+
+              if (clearOnSubmit) {
+                setMarkdown('');
+                editor?.commands.clearContent();
+              }
             }}
             title='Send'
             variant={IconButtonVariant.Fill}

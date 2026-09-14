@@ -17,7 +17,7 @@ import { CollectionBuilder } from './collectionBuilder.js';
 import { CommitBuilder, Commit } from './commit.js';
 import { perfSpan } from './perf-trace.js';
 import { validateDatatype, datatypeTag, Datatype } from './datatypes.js';
-import { isUnauthorized } from './error.js';
+import { isUnauthorized, RequestCancelledError } from './error.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
@@ -93,11 +93,14 @@ export const unknownSubject = 'unknown-subject';
 
 /**
  * Outcome of {@link Resource.save}:
- *  - `'persisted'` — the server acknowledged the commit.
+ *  - `'persisted'` — the server acknowledged the commit (or a local-only
+ *                    resource was durably saved to the local database).
  *  - `'offline'`   — server unreachable; saved locally, drain retries
  *                    on reconnect (also returned for a child queued
  *                    behind an unsaved parent).
  *  - `'noop'`      — nothing to save.
+ * Server refusals and queued writes without acknowledgement reject; background
+ * retries continue according to the outbox policy.
  */
 export type SaveResult = 'persisted' | 'offline' | 'noop';
 
@@ -141,9 +144,21 @@ function nextEditToken(): string {
 export enum ResourceEvents {
   LocalChange = 'local-change',
   LoadingChange = 'loading-change',
+  SaveStateChange = 'save-state-change',
 }
 
+/** Read lifecycle, independent of saving and the durable outbox.
+ * `recovering` can retain readable content; use `isReady()` before reads.
+ */
+export type ResourceReadState =
+  | 'loading'
+  | 'buffered'
+  | 'recovering'
+  | 'ready'
+  | 'error';
+
 type ResourceEventHandlers = {
+  [ResourceEvents.SaveStateChange]: () => void;
   [ResourceEvents.LocalChange]: (prop: string, value: JSONValue) => void;
   [ResourceEvents.LoadingChange]: (loading: boolean) => void;
 };
@@ -184,6 +199,7 @@ export class Resource<C extends OptionalClass = any> {
   public appliedCommitSignatures: Set<string> = new Set();
 
   private _loading = false;
+  private _recovering = false;
   private _dirty = false;
 
   #commitBuilder: CommitBuilder;
@@ -736,6 +752,8 @@ export class Resource<C extends OptionalClass = any> {
 
   /** Returns all property entries (cache + binary aux values) as a flat array. */
   public getEntries(): [string, AtomicValue][] {
+    this.materializeBufferedSnapshot();
+
     if (this.#cacheDirty && this._loroDoc) {
       this.rebuildCacheFromLoro();
       this.#cacheDirty = false;
@@ -1741,6 +1759,28 @@ export class Resource<C extends OptionalClass = any> {
     return !this.loading && this.error === undefined;
   }
 
+  public get readState(): ResourceReadState {
+    if (this.error !== undefined) return 'error';
+    if (this._recovering) return 'recovering';
+
+    if (
+      !this._loroDoc &&
+      this._loroSnapshotBytes?.length &&
+      !LoroLoader.isLoaded()
+    ) {
+      return 'buffered';
+    }
+
+    return this.loading ? 'loading' : 'ready';
+  }
+
+  /** @internal The Store owns missing-history recovery. */
+  public setRecovering(recovering: boolean): void {
+    if (this._recovering === recovering) return;
+    this._recovering = recovering;
+    this.eventManager.emit(ResourceEvents.LoadingChange, this.loading);
+  }
+
   /** Get a Value by its property
    * @param propUrl The subject of the property
    * @example
@@ -1751,6 +1791,8 @@ export class Resource<C extends OptionalClass = any> {
   public get<Prop extends string, Returns = InferTypeOfValueInTriple<C, Prop>>(
     propUrl: Prop,
   ): Returns {
+    this.materializeBufferedSnapshot();
+
     if (this.#cacheDirty && this._loroDoc) {
       this.rebuildCacheFromLoro();
       this.#cacheDirty = false;
@@ -1765,6 +1807,8 @@ export class Resource<C extends OptionalClass = any> {
    * The returned object is a copy; mutating it does not change the resource.
    */
   public getPropVals(): Record<string, AtomicValue> {
+    this.materializeBufferedSnapshot();
+
     if (this.#cacheDirty && this._loroDoc) {
       this.rebuildCacheFromLoro();
       this.#cacheDirty = false;
@@ -1774,6 +1818,14 @@ export class Resource<C extends OptionalClass = any> {
       ...this.#cache,
       ...Object.fromEntries(this._auxValues.entries()),
     };
+  }
+
+  private materializeBufferedSnapshot(): void {
+    // Hydration can supply bytes before a document exists. Once WASM is
+    // ready, reads must materialize them rather than expose the empty cache.
+    if (!this._loroDoc && this._loroSnapshotBytes && LoroLoader.isLoaded()) {
+      this.getLoroDoc();
+    }
   }
 
   /**
@@ -3067,7 +3119,8 @@ export class Resource<C extends OptionalClass = any> {
   /**
    * Persist this resource. Resolves once the change is durable:
    *
-   *  - `'persisted'` — the server acknowledged the commit.
+   *  - `'persisted'` — the server acknowledged the commit (or a local-only
+   *                    resource was durably saved to the local database).
    *  - `'offline'`   — server unreachable; saved to clientDb, the drain
    *                    retries on reconnect.
    *  - `'noop'`      — nothing to save (no unsaved changes, nothing
@@ -3199,6 +3252,7 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     this._saveDepth++;
+    this.eventManager.emit(ResourceEvents.SaveStateChange);
     const closeSave = perfSpan('resource.save');
 
     try {
@@ -3206,6 +3260,7 @@ export class Resource<C extends OptionalClass = any> {
     } finally {
       closeSave();
       this._saveDepth--;
+      this.eventManager.emit(ResourceEvents.SaveStateChange);
     }
   }
 
@@ -3306,12 +3361,39 @@ export class Resource<C extends OptionalClass = any> {
       // 100 ms before calling `save()`, and the drain coalesces; the
       // await matters for explicit saves (blur, Enter, programmatic)
       // that need "is it safe to leave?" before proceeding.
+      // Retain the entry itself: a terminal refusal removes it from the queue,
+      // which must never be mistaken for acknowledgement. Capture this save's
+      // version too; edits made during the POST may legitimately remain queued.
+      const entry = this.store.outbox.getEntry(this.subject);
+      const savingVersion = this._loroDoc?.oplogVersion().toJSON();
       await this.store.syncDirtyResources();
+
+      if (entry?.lastAttemptFailure) {
+        throw entry.lastAttemptFailure.cause;
+      }
+
+      if (this.store.outbox.hasPending(this.subject)) {
+        const savedVersion = this._loroVersionAtLastSave?.toJSON();
+        const acknowledged =
+          !entry?.signedGenesis &&
+          savingVersion &&
+          savedVersion &&
+          [...savingVersion].every(
+            ([peer, counter]) => (savedVersion.get(peer) ?? 0) >= counter,
+          );
+
+        if (!acknowledged) {
+          throw new Error(
+            'Save is still queued; the server has not acknowledged it.',
+          );
+        }
+      }
 
       // The server acknowledgement does not make the OPFS cache durable.
       // Explicit saves must survive an immediate reload for existing resources
       // too (for example a dashboard block renamed in its config dialog).
       await this.persistToClientDb();
+      this.commitError = undefined;
 
       return 'persisted';
     } catch (e) {
@@ -3487,13 +3569,16 @@ export class Resource<C extends OptionalClass = any> {
         JSON.stringify(obj),
         snapshot,
       );
-      // Worker writes are batched without fsync; put completion alone is not
-      // the durability barrier promised by save().
-      await clientDb.flush();
+      // This RPC includes the durable flush. A second RPC could race the
+      // identity handoff closing this worker after the write has completed.
       closePersist();
     } catch (e) {
       closePersist({ err: e instanceof Error ? e.message : String(e) });
-      console.error('[persistToClientDb] failed:', e);
+
+      if (!(e instanceof RequestCancelledError)) {
+        console.error('[persistToClientDb] failed:', e);
+      }
+
       throw e;
     }
   }

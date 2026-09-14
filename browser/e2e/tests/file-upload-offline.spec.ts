@@ -82,8 +82,18 @@ test.describe('file upload + offline survival', () => {
 
     const subject = await uploadGeneratedPng(page, 'pure-offline.png');
 
-    // Navigate to the file page; the preview must render *without* any
-    // /download/files/ request succeeding.
+    const imageRequests: string[] = [];
+    page.on('request', request => {
+      if (
+        request.resourceType() === 'image' &&
+        request.url().includes('/download/files/')
+      ) {
+        imageRequests.push(request.url());
+      }
+    });
+
+    // The preview must wait for local bytes instead of briefly assigning a
+    // remote src. Even a successful request would hide this ordering bug.
     await page.goto(
       `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(subject)}`,
     );
@@ -96,6 +106,8 @@ test.describe('file upload + offline survival', () => {
 
       return !!img && img.src.startsWith('blob:') && img.naturalWidth > 0;
     });
+
+    expect(imageRequests).toEqual([]);
 
     // Reconnect for cleanup so the next test starts clean.
     await page.evaluate(() => window.store.reconnect());
