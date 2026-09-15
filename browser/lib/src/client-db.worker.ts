@@ -483,7 +483,7 @@ async function doInit(
   const t2 = performance.now();
 
   // One-time migration of the legacy shared DB file into the per-agent
-  // `dbName`. Must run BEFORE `new ClientDb` takes the OPFS handle. A failed
+  // `dbName`. Must run BEFORE `ClientDb.create` takes the OPFS handle. A failed
   // migration must not block opening the new DB — the legacy file is left in
   // place for a later attempt.
   if (migrateLegacy && dbName && dbName !== 'atomic_data.redb') {
@@ -500,7 +500,7 @@ async function doInit(
     }
   }
 
-  // `new ClientDb` opens the OPFS-backed database (acquire OPFS handle, open
+  // `ClientDb.create` opens the OPFS-backed database (acquire OPFS handle, open
   // redb, run migrations). `openClientDb` adds one recovery step: an existing
   // file this agent's key can no longer decrypt is deleted and recreated,
   // because it is a cache whose contents are unreadable either way. Every
