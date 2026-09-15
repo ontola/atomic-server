@@ -9,14 +9,18 @@ export function useWebsitePreviewHtml(html: string, artifact: WebsiteArtifact) {
   const [resolved, setResolved] = useState<{ html: string; result: string }>();
   const [failure, setFailure] = useState<{ html: string; message: string }>();
   const [attempt, setAttempt] = useState(0);
+  const project = artifact.project;
+  const assetsKey = JSON.stringify(artifact.assets ?? {});
   useEffect(() => {
     let cancelled = false;
     const urls: string[] = [];
     void (async () => {
       let result = html;
 
-      for (const [path, asset] of Object.entries(artifact.assets ?? {})) {
-        const blob = await readWebsiteAsset(store, artifact.project, asset);
+      for (const [path, asset] of Object.entries(
+        JSON.parse(assetsKey) as NonNullable<WebsiteArtifact['assets']>,
+      )) {
+        const blob = await readWebsiteAsset(store, project, asset);
         if (cancelled) return;
         const url = URL.createObjectURL(blob);
         urls.push(url);
@@ -42,7 +46,7 @@ export function useWebsitePreviewHtml(html: string, artifact: WebsiteArtifact) {
       cancelled = true;
       urls.forEach(url => URL.revokeObjectURL(url));
     };
-  }, [store, html, artifact, attempt]);
+  }, [store, html, project, assetsKey, attempt]);
 
   return {
     html: resolved?.html === html ? resolved.result : '',

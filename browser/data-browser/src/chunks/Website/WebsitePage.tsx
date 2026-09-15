@@ -44,52 +44,88 @@ export function WebsitePage({ resource }: { resource: Resource }) {
   const reportedProblem = useRef('');
   const [busy, setBusy] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  const [refreshing, setRefreshing] = useState(true);
   const [document, setDocument] = useState<string>();
   const [addingContent, setAddingContent] = useState(false);
 
-  useEffect(
-    () => store.subscribe(resource.subject, () => setRefresh(n => n + 1)),
-    [store, resource.subject],
-  );
   useEffect(() => {
     let active = true;
-    setDraft(undefined);
+    void readWebsiteRelease(store, drive, resource)
+      .then(saved => {
+        if (active) setRelease(saved);
+      })
+      .catch(cause => {
+        if (active && reportedReleaseError.current !== String(cause)) {
+          reportedReleaseError.current = String(cause);
+          store.notifyError(
+            new Error(
+              'Could not load saved website version: ' + String(cause),
+              { cause },
+            ),
+          );
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [store, drive, resource]);
+
+  useEffect(() => {
+    let previous: string | undefined;
+    let active = true;
+    let unsubscribe = () => {};
+    void readWebsite(store, drive, resource)
+      .then(({ property }) => {
+        if (!active) return;
+        previous = String(resource.get(property));
+        unsubscribe = store.subscribe(resource.subject, () => {
+          const next = String(resource.get(property));
+
+          if (next !== previous) {
+            previous = next;
+            setRefresh(n => n + 1);
+          }
+        });
+      })
+      .catch(() => {
+        /* The preview effect reports schema errors. */
+      });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [store, drive, resource]);
+
+  useEffect(() => {
+    let active = true;
+    setRefreshing(true);
     setProblem('');
     readWebsite(store, drive, resource)
       .then(async result => {
         if (!active) return;
         setConfig(result.config);
-        const [next, saved] = await Promise.all([
-          buildWebsiteArtifact(store, resource.subject, result.config),
-          readWebsiteRelease(store, drive, resource)
-            .then(value => {
-              reportedReleaseError.current = '';
-
-              return value;
-            })
-            .catch(cause => {
-              if (active && reportedReleaseError.current !== String(cause)) {
-                reportedReleaseError.current = String(cause);
-                store.notifyError(
-                  new Error(
-                    'Could not load saved website version: ' + String(cause),
-                    { cause },
-                  ),
-                );
-              }
-
-              return undefined;
-            }),
-        ]);
+        const next = await buildWebsiteArtifact(
+          store,
+          resource.subject,
+          result.config,
+        );
 
         if (active) {
           reportedProblem.current = '';
-          setDraft(next);
-          setRelease(saved);
+          setDraft(previous =>
+            previous?.digest === next.digest &&
+            JSON.stringify(previous.config) === JSON.stringify(next.config)
+              ? previous
+              : next,
+          );
+          setRefreshing(false);
         }
       })
       .catch(error => {
         if (!active) return;
+        setRefreshing(false);
         const failure = new Error(
           `Website preview failed: ${error instanceof Error ? error.message : String(error)}`,
           { cause: error },
@@ -176,7 +212,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
           <WebsiteHosting
             key={resource.subject}
             project={resource.subject}
-            draft={draft}
+            draft={refreshing ? undefined : draft}
             draftError={problem}
             savedDigest={release?.digest}
             canWrite={!!canWrite}
@@ -371,12 +407,14 @@ export function WebsitePage({ resource }: { resource: Resource }) {
                 ? 'Release review'
                 : showRelease
                   ? 'Frozen release'
-                  : 'Live draft preview'}
+                  : refreshing && draft
+                    ? 'Updating preview…'
+                    : 'Live draft preview'}
             </p>
             {!review && !showRelease && (
               <Button
                 subtle
-                disabled={!draft || busy}
+                disabled={!draft || busy || refreshing || !!problem}
                 onClick={() =>
                   setInlineArtifact(inlineArtifact ? undefined : draft)
                 }

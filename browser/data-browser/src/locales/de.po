@@ -10885,3 +10885,7 @@ msgstr ""
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Could not load saved website version: "
 msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Updating preview…"
+msgstr ""
