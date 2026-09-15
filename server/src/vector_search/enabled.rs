@@ -201,7 +201,7 @@ pub struct VectorSearchState {
     /// Chunk rows queued or being embedded for incremental indexing, keyed by drive root subject.
     indexing_rows_by_drive: Arc<Mutex<HashMap<String, u32>>>,
     /// Optional: notify websocket subscribers when per-drive indexing state changes.
-    index_notifier: Option<Arc<dyn Fn(&str, bool) + Send + Sync>>,
+    index_notifier: Option<crate::vector_search::IndexNotifier>,
 }
 
 fn init_rerank_model(config: &Config) -> AtomicServerResult<TextRerank> {
@@ -283,7 +283,7 @@ impl VectorSearchState {
 
     pub async fn new(
         config: &Config,
-        index_notifier: Option<Arc<dyn Fn(&str, bool) + Send + Sync>>,
+        index_notifier: Option<crate::vector_search::IndexNotifier>,
     ) -> AtomicServerResult<Self> {
         let enabled = !config.skip_vector_index;
         if enabled {

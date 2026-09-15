@@ -23,8 +23,8 @@
  */
 
 /**
- * Token spliced into the error message by `ClientDb::create`. Keep in sync
- * with `WRONG_KEY_MARKER` in `wasm/src/lib.rs`.
+ * Token spliced into the error message by `ClientDb::open`. Keep in sync with
+ * `WRONG_KEY_MARKER` in `wasm/src/lib.rs`.
  */
 export const WRONG_KEY_MARKER = 'ATOMIC_DB_WRONG_KEY';
 
@@ -35,7 +35,7 @@ export interface ClientDbWasm {
      * wasm-bindgen renders this async factory as a static method rather than
      * a `new`-able constructor — async constructors produce invalid TS.
      */
-    create(
+    open(
       baseUrl?: string,
       dbName?: string,
       dbKey?: Uint8Array,
@@ -68,8 +68,8 @@ export function isWrongKeyDbError(error: unknown): boolean {
 }
 
 /**
- * Token spliced into the error message by `ClientDb::create` when the
- * browser refuses this origin storage outright. Keep in sync with
+ * Token spliced into the error message by `ClientDb::open` when the browser
+ * refuses this origin storage outright. Keep in sync with
  * `STORAGE_BLOCKED_MARKER` in `wasm/src/lib.rs`.
  */
 export const STORAGE_BLOCKED_MARKER = 'ATOMIC_DB_STORAGE_BLOCKED';
@@ -101,7 +101,7 @@ export async function openClientDb(
 ): Promise<OpenClientDbResult> {
   try {
     return {
-      db: await wasm.ClientDb.create(baseUrl, dbName, dbKey),
+      db: await wasm.ClientDb.open(baseUrl, dbName, dbKey),
       recreated: false,
     };
   } catch (e) {
@@ -126,7 +126,7 @@ export async function openClientDb(
     // No second recovery attempt: a fresh file opens or something else is
     // wrong, and a delete loop would be worse than a clear error.
     return {
-      db: await wasm.ClientDb.create(baseUrl, dbName, dbKey),
+      db: await wasm.ClientDb.open(baseUrl, dbName, dbKey),
       recreated: true,
     };
   }

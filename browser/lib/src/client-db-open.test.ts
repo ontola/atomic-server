@@ -11,14 +11,14 @@ import {
 const DB_NAME = 'atomic_data.a1b2c3d4e5f60718.redb';
 const DB_KEY = new Uint8Array(32).fill(7);
 
-/** The message `ClientDb::create` produces for an undecryptable OPFS file. */
+/** The message `ClientDb::open` produces for an undecryptable OPFS file. */
 const wrongKeyMessage =
   `OPFS unavailable [${WRONG_KEY_MARKER}]: Failed to open encrypted OPFS ` +
   'backend: wrong encryption key for local database';
 
 /**
  * A stand-in for the generated WASM module. `openFailures` are thrown by the
- * first N `create` calls; later calls succeed with a marker object.
+ * first N `open` calls; later calls succeed with a marker object.
  */
 function fakeWasm(openFailures: Error[]) {
   const opened: Array<{ dbName?: string; dbKey?: Uint8Array }> = [];
@@ -27,7 +27,7 @@ function fakeWasm(openFailures: Error[]) {
 
   const wasm = {
     ClientDb: {
-      create(_baseUrl?: string, dbName?: string, dbKey?: Uint8Array) {
+      open(_baseUrl?: string, dbName?: string, dbKey?: Uint8Array) {
         opened.push({ dbName, dbKey });
         const failure = openFailures[call++];
 
@@ -165,7 +165,7 @@ describe('openClientDb', () => {
 });
 
 describe('isStorageBlockedDbError', () => {
-  /** What `ClientDb::create` produces when the browser withholds storage. */
+  /** What `ClientDb::open` produces when the browser withholds storage. */
   const blocked = new Error(
     `OPFS unavailable [${STORAGE_BLOCKED_MARKER}]: Failed to open OPFS ` +
       'backend: JsValue(SecurityError: Security error when calling ' +

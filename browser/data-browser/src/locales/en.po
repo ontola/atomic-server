@@ -10636,3 +10636,30 @@ msgstr "Creates a local calendar folder. Keep the browser open to sync. Calendar
 #: src/chunks/AI/RealAIChat.tsx
 msgid "The response was interrupted."
 msgstr "The response was interrupted."
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "Converted to document"
+msgstr "Converted to document"
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "Could not convert the file."
+msgstr "Could not convert the file."
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "<0/> Convert to document"
+msgstr "<0/> Convert to document"
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "Converting"
+msgstr "Converting"
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "Document saved"
+msgstr "Document saved"
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "Could not save the document yet."
+msgstr "Could not save the document yet."
+
+#: src/views/File/ConvertToDocumentButton.tsx
+msgid "Document converted locally, but could not be saved."
+msgstr "Document converted locally, but could not be saved."
