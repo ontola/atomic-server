@@ -411,14 +411,18 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
   // Save streamed progress even when a tool or provider keeps the run open.
   // The persistence layer updates one message and serializes partial/final saves.
-  const checkpointRef = useRef({ messages, onNewMessage });
+  const checkpointRef = useRef({ messages, onNewMessage, status });
   useEffect(() => {
-    checkpointRef.current = { messages, onNewMessage };
-  }, [messages, onNewMessage]);
+    checkpointRef.current = { messages, onNewMessage, status };
+  }, [messages, onNewMessage, status]);
   useEffect(() => {
     if (!prepareToLeave) return;
 
     prepareToLeave.current = async () => {
+      // An idle chat already persisted its last message in onFinish; only a
+      // run still in flight has unsaved progress. Saving again anyway made
+      // every switch to another chat wait on a needless write.
+      if (['ready', 'error'].includes(checkpointRef.current.status)) return;
       const latest = checkpointRef.current.messages.at(-1);
       await stop();
       if (latest)
