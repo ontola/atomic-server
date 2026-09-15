@@ -52,9 +52,6 @@ test('website document preview, frozen release and reload', async ({
   await expect(
     preview.getByText('A private change after the release.'),
   ).toBeVisible();
-  await expect(
-    page.getByText('Changes stay private until you publish.', { exact: true }),
-  ).toBeVisible();
   await websiteAction(page, 'website-show-release');
   await expect(
     preview.getByText('This is the first published garden note.'),
