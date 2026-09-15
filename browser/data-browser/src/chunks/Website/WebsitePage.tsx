@@ -11,7 +11,7 @@ import { Button } from '@components/Button';
 import { Row, Column } from '@components/Row';
 import { AtomicLink } from '@components/AtomicLink';
 import Field from '@components/forms/Field';
-import { FaRegFileLines, FaTable, FaPlus } from 'react-icons/fa6';
+import { FaRegFileLines, FaTable, FaPlus, FaImage } from 'react-icons/fa6';
 import { ResourceSelector } from '@components/forms/ResourceSelector';
 import { useAISidebar, newContextItem } from '@components/AI/AISidebarContext';
 import type { AIAtomicResourceMessageContext } from '@chunks/AI/types';
@@ -252,6 +252,13 @@ export function WebsitePage({ resource }: { resource: Resource }) {
               kind='table'
             />
           ))}
+          {currentPage?.media?.map(media => (
+            <ContentSource
+              key={media.subject}
+              subject={media.subject}
+              kind='image'
+            />
+          ))}
           {canWrite && (
             <>
               <Button
@@ -356,20 +363,24 @@ function ContentSource({
   kind,
 }: {
   subject: string;
-  kind: 'document' | 'table';
+  kind: 'document' | 'table' | 'image';
 }) {
   const source = useResource(subject);
 
   return (
     <SourceLink subject={subject} clean>
-      {kind === 'table' ? (
+      {kind === 'image' ? (
+        <FaImage aria-hidden />
+      ) : kind === 'table' ? (
         <FaTable aria-hidden />
       ) : (
         <FaRegFileLines aria-hidden />
       )}
       <span>
         <strong>{source.title}</strong>
-        <small>{kind === 'table' ? 'Table' : 'Document'}</small>
+        <small>
+          {kind === 'table' ? 'Table' : kind === 'image' ? 'Image' : 'Document'}
+        </small>
       </span>
     </SourceLink>
   );

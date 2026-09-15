@@ -1,7 +1,15 @@
+import { snapshotWebsiteImage } from './websiteMedia';
 import searchViewHtml from './runtime/search-view.html?raw';
 import websiteRuntime from './runtime/website-runtime.min.js?raw';
 // @wc-ignore-file
-import { core, dataBrowser, type Resource, type Store } from '@tomic/lib';
+import {
+  core,
+  dataBrowser,
+  server,
+  Datatype,
+  type Resource,
+  type Store,
+} from '@tomic/lib';
 import {
   assertPrivateWebsiteParent,
   saveWebsiteResource,
@@ -23,6 +31,7 @@ export function selectedSubjects(config: WebsiteConfig): string[] {
     ...new Set(
       config.pages.flatMap(page => [
         ...page.documents,
+        ...(page.media ?? []).map(image => image.subject),
         ...page.tables.flatMap(table => [table.table, ...table.rows]),
       ]),
     ),
@@ -64,53 +73,94 @@ export async function buildWebsiteArtifact(
     resources.map(resource => [resource.subject, resource]),
   );
   // Load the editor adapter before synchronously capturing the whole selection.
-  const { readDocumentV2TiptapJson } =
-    await import('../RTE/readDocumentV2TiptapJson');
+  const documentReader = config.pages.some(page => page.documents.length)
+    ? await import('../RTE/readDocumentV2TiptapJson')
+    : undefined;
   const files: Record<string, string> = {};
 
+  const imageCache = new Map<string, Promise<string>>();
+
+  const image = (subject: string) => {
+    if (!imageCache.has(subject))
+      imageCache.set(subject, snapshotWebsiteImage(store, subject));
+
+    return imageCache.get(subject)!;
+  };
+
   for (const page of config.pages) {
+    const gallery = `<section class="gallery"><div class="cards">${(
+      await Promise.all(
+        (page.media ?? []).map(
+          async media =>
+            `<figure>${renderDocument({ type: 'image', attrs: { src: await image(media.subject), alt: media.alt } })}${media.caption ? `<figcaption>${escapeHtml(media.caption)}</figcaption>` : ''}</figure>`,
+        ),
+      )
+    ).join('')}</div></section>`;
     const documents = page.documents.map(subject => {
       const resource = bySubject.get(subject)!;
-      const result = readDocumentV2TiptapJson(resource, store);
+      const result = documentReader!.readDocumentV2TiptapJson(resource, store);
       if (!result.ok) throw new Error(`${resource.title}: ${result.error}`);
 
       return `<article>${renderDocument(result.docJson as Parameters<typeof renderDocument>[0])}</article>`;
     });
-    const tables = page.tables.map((table, tableIndex) => {
-      const source = bySubject.get(table.table)!;
-      if (!source.hasClasses(dataBrowser.classes.table))
-        throw new Error('Selected table is not an Atomic table.');
-      const rows = table.rows.map(subject => {
-        const resource = bySubject.get(subject)!;
-        if (resource.get(core.properties.parent) !== table.table)
-          throw new Error('A selected row does not belong to its table.');
+    const tables = await Promise.all(
+      page.tables.map(async (table, tableIndex) => {
+        const source = bySubject.get(table.table)!;
+        if (!source.hasClasses(dataBrowser.classes.table))
+          throw new Error('Selected table is not an Atomic table.');
+        const imageColumns = await Promise.all(
+          table.columns.map(async column => {
+            const property = await store.getResource(column.property);
 
-        return table.columns.map(column => {
-          const value = resource.get(column.property);
-          if (value === undefined || value === null) return '';
-          if (!['string', 'number', 'boolean'].includes(typeof value))
-            throw new Error(
-              `Choose a scalar field for ${column.label}; relationships need an explicit export mapping.`,
+            return (
+              property.get(core.properties.datatype) === Datatype.ATOMIC_URL &&
+              property.get(core.properties.classtype) === server.classes.file
             );
+          }),
+        );
+        const rows = await Promise.all(
+          table.rows.map(async subject => {
+            const resource = bySubject.get(subject)!;
+            if (resource.get(core.properties.parent) !== table.table)
+              throw new Error('A selected row does not belong to its table.');
 
-          return String(value);
-        });
-      });
+            return Promise.all(
+              table.columns.map(async (column, columnIndex) => {
+                const value = resource.get(column.property);
+                if (value === undefined || value === null) return '';
+                if (imageColumns[columnIndex] && typeof value === 'string')
+                  return {
+                    src: await image(value),
+                    alt: column.label,
+                  };
+                if (!['string', 'number', 'boolean'].includes(typeof value))
+                  throw new Error(
+                    `Choose a scalar field for ${column.label}; relationships need an explicit export mapping.`,
+                  );
 
-      const rendered = renderRows(table, rows, tableIndex);
-      if (!table.search) return rendered;
-      const id = `snapshot-${tableIndex}`;
-      const snapshot = JSON.stringify({
-        title: table.title,
-        columns: table.columns.map(c => c.label),
-        rows,
-      }).replace(/</g, '\\u003c');
+                return String(value);
+              }),
+            );
+          }),
+        );
 
-      return (
-        rendered +
-        `<iframe class="snapshot-view" title="Search ${escapeHtml(table.title)}" sandbox="allow-scripts" data-snapshot="${id}" data-src="search-view.html"></iframe><script id="${id}" type="application/json">${snapshot}</script>`
-      );
-    });
+        const rendered = renderRows(table, rows, tableIndex);
+        if (!table.search) return rendered;
+        const id = `snapshot-${tableIndex}`;
+        const snapshot = JSON.stringify({
+          title: table.title,
+          columns: table.columns.map(c => c.label),
+          rows: rows.map(row =>
+            row.map(cell => (typeof cell === 'string' ? cell : cell.alt)),
+          ),
+        }).replace(/</g, '\\u003c');
+
+        return (
+          rendered +
+          `<iframe class="snapshot-view" title="Search ${escapeHtml(table.title)}" sandbox="allow-scripts" data-snapshot="${id}" data-src="search-view.html"></iframe><script id="${id}" type="application/json">${snapshot}</script>`
+        );
+      }),
+    );
     const filename = `${page.path.slice(1)}index.html`;
     const body = page.sections
       ? `<div class="page-layout">${page.sections
@@ -120,12 +170,16 @@ export async function buildWebsiteArtifact(
                 ? renderIntro(config, page)
                 : section.kind === 'document'
                   ? documents[section.index]
-                  : tables[section.index];
+                  : section.kind === 'gallery'
+                    ? gallery
+                    : tables[section.index];
 
             return `<div class="span-${section.span} ${section.className}">${content}</div>`;
           })
           .join('')}</div>`
-      : documents.join('') + tables.join('');
+      : documents.join('') +
+        tables.join('') +
+        (page.media?.length ? gallery : '');
     let html = renderWebsitePage(config, page, body);
 
     if (page.tables.some(table => table.search)) {

@@ -3729,6 +3729,7 @@ msgid "Quote"
 msgstr ""
 
 #: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+#: src/chunks/Website/WebsitePage.tsx
 msgid "Image"
 msgstr ""
 

@@ -153,13 +153,17 @@ ${config.css}
 }
 export function renderRows(
   table: WebsiteConfig['pages'][number]['tables'][number],
-  rows: string[][],
+  rows: (string | { src: string; alt: string })[][],
   tableIndex = 0,
 ) {
+  const cell = (value: string | { src: string; alt: string }) =>
+    typeof value === 'string'
+      ? escapeHtml(value)
+      : renderDocument({ type: 'image', attrs: value });
   const content =
     table.layout === 'grid'
-      ? `<div class="cards">${rows.map(row => `<dl class="card">${table.columns.map((c, i) => `<dt>${escapeHtml(c.label)}</dt><dd>${escapeHtml(row[i])}</dd>`).join('')}</dl>`).join('')}</div>`
-      : `<div class="table-wrap"><table><thead><tr>${table.columns.map(c => `<th>${escapeHtml(c.label)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      ? `<div class="cards">${rows.map(row => `<dl class="card">${table.columns.map((c, i) => `<dt>${escapeHtml(c.label)}</dt><dd>${cell(row[i])}</dd>`).join('')}</dl>`).join('')}</div>`
+      : `<div class="table-wrap"><table><thead><tr>${table.columns.map(c => `<th>${escapeHtml(c.label)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(value => `<td>${cell(value)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 
   return `<section data-website-table="${tableIndex}"><h2>${escapeHtml(table.title)}</h2>${content}</section>`;
 }
