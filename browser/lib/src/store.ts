@@ -1,3 +1,4 @@
+import { DiagnosticRecorder } from './diagnostics.js';
 import type { ScheduledSave, ResourceSaveState } from './scheduled-save.js';
 import { SaveStatusCoordinator } from './save-status-coordinator.js';
 import { verifyLocalDriveCopy } from './local-drive-copy.js';
@@ -504,6 +505,9 @@ export class Store {
   private clientDbExpected = false;
   /** Callbacks parked in {@link waitForClientDb} until the attach happens. */
   private clientDbWaiters = new Set<() => void>();
+  /** Opt-in local diagnostics, independent of durable application storage. */
+  public readonly diagnostics = new DiagnosticRecorder();
+
   /**
    * Single durable queue replacing the old `dirtyForSync` Set +
    * `atomic.dirtyForSync` + `atomic.offline.<subject>` quartet.
@@ -1043,7 +1047,17 @@ export class Store {
       await this.outbox.drain({
         sort: this.sortOutboxEntries,
         tierOf: this.outboxTierOf,
-        drainSubject: this.drainOutboxSubject,
+        drainSubject: async subject => {
+          const finish = this.diagnostics.beginDrain();
+
+          try {
+            await this.drainOutboxSubject(subject);
+            finish(false);
+          } catch (error) {
+            finish(true);
+            throw error;
+          }
+        },
         isTerminalError: (_entry, e) => {
           const msg = e instanceof Error ? e.message : String(e);
           const code = e instanceof AtomicError ? e.code : undefined;
@@ -3886,6 +3900,7 @@ export class Store {
       return;
     }
 
+    this.diagnostics.connection(connected);
     this._serverConnected = connected;
     this._serverConnectionError = nextError;
 
@@ -4305,6 +4320,7 @@ export class Store {
    * might have security implications for your application.
    */
   public setAgent(agent: Agent | undefined): void {
+    if (this.agent?.subject !== agent?.subject) this.diagnostics.clear();
     // The current drive is an account context, not a server preference. Clear
     // it before reauthenticating, so the next identity never subscribes or
     // reconciles the previous identity's private workspace.
@@ -5184,7 +5200,13 @@ export class Store {
   }
 
   private emitSyncStatus(): void {
-    this.eventManager.emit(StoreEvents.SyncStatusChanged, this.getSyncStatus());
+    const status = this.getSyncStatus();
+    this.diagnostics.queue(
+      status.pendingDirtyCount,
+      status.blockedCount,
+      status.serverConnected,
+    );
+    this.eventManager.emit(StoreEvents.SyncStatusChanged, status);
   }
 
   private pushCommitLog(entry: Omit<CommitLogEntry, 'id'>): void {

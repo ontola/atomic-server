@@ -8819,3 +8819,39 @@ msgstr ""
 #: src/routes/DataRoute.tsx
 msgid "Retry save"
 msgstr "Retry save"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Stop and clear recording"
+msgstr "Stop and clear recording"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Start local recording"
+msgstr "Start local recording"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Diagnostic report preview"
+msgstr "Diagnostic report preview"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Preview diagnostics"
+msgstr "Preview diagnostics"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Local diagnostics"
+msgstr "Local diagnostics"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Record save and connection events for troubleshooting. No document text, filenames, URLs, or error messages are collected. Recording stays in memory: up to 500 events from the last 10 minutes. It stops and clears after 30 minutes, on reload, or when switching accounts. Nothing is uploaded automatically."
+msgstr "Record save and connection events for troubleshooting. No document text, filenames, URLs, or error messages are collected. Recording stays in memory: up to 500 events from the last 10 minutes. It stops and clears after 30 minutes, on reload, or when switching accounts. Nothing is uploaded automatically."
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Events show timing and activity counts, which can still be sensitive. Review before sharing."
+msgstr "Events show timing and activity counts, which can still be sensitive. Review before sharing."
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "<0/> Include this preview with my feedback"
+msgstr "<0/> Include this preview with my feedback"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Download diagnostics"
+msgstr "Download diagnostics"

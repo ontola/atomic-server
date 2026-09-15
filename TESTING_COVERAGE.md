@@ -13,6 +13,21 @@ caught it, and if the answer is "none", that is the row to add.
 
 ---
 
+## Opt-in local diagnostic recorder
+
+`browser/lib/src/diagnostics.test.ts` covers disabled defaults, content-free events,
+500-event bounds, rolling retention/expiry, slow saves and unchanged online queues,
+late results after clear, actual save rejection, account reset and failing UI
+listeners. `diagnostic-report.test.ts`, `feedback.test.ts`, and
+`feedback-privacy.test.ts` cover frozen previews, expired-session refusal, explicit
+inclusion, build identity and stripping inherited private Sentry context.
+`feedback.spec.ts` checks preview/checkbox controls, intercepted report delivery,
+private text/URL exclusion and recording disabled after reload.
+
+Not covered: crash-persistent recording (not implemented), cross-process correlation,
+production Sentry retention/access policies, and platform-specific background timer
+behavior. Slow/stalled events are heuristic warnings, not data-loss assertions.
+
 ## Save failure boundaries and recovery
 
 - `server/src/handlers/commit/durability_tests.rs` injects a real redb flush failure,

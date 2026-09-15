@@ -110,3 +110,9 @@ export {
 export { decodeBrowserInvite } from './browser-peer-invite.js';
 
 export * from './scheduled-save.js';
+
+export {
+  DiagnosticRecorder,
+  DiagnosticCode,
+  type DiagnosticEvent,
+} from './diagnostics.js';
