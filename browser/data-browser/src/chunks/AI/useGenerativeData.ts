@@ -26,6 +26,8 @@ export interface ChatTitle {
 // sequences) followed by whitespace and the title.
 const emojiTitlePattern =
   /^((?:\p{Extended_Pictographic}|\p{Emoji_Presentation})(?:\uFE0F|\p{Emoji_Modifier}|\u200D(?:\p{Extended_Pictographic}|\p{Emoji_Presentation}))*)\s+(.+)$/u;
+const trailingEmojiPattern =
+  /(?:\s*(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})(?:\uFE0F|\p{Emoji_Modifier}|\u200D(?:\p{Extended_Pictographic}|\p{Emoji_Presentation}))*)+$/u;
 
 /** Splits "🥐 Bakery website" into emoji and title; a bare title keeps no emoji. */
 export function parseChatTitle(
@@ -37,7 +39,13 @@ export function parseChatTitle(
 
   const match = text.match(emojiTitlePattern);
 
-  return match ? { emoji: match[1], title: match[2].trim() } : { title: text };
+  // Some models decorate both ends; the title itself should carry no emoji.
+  const strip = (title: string) =>
+    title.replace(trailingEmojiPattern, '').trim();
+
+  return match
+    ? { emoji: match[1], title: strip(match[2]) }
+    : { title: strip(text) };
 }
 
 const generateFollowUpQuestionsSystemPrompt = (
