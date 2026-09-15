@@ -16,9 +16,9 @@ interface UseResizeResult {
   isDragging: boolean;
 }
 
-const dragRule = `
+const dragRule = (cursor: string) => `
  * {
-  cursor: col-resize;
+  cursor: ;
   user-select: none;
   pointer-events: none;
  }
@@ -47,11 +47,11 @@ function cleanup(id: string) {
   }
 }
 
-function setDragStyling(id: string, enable: boolean) {
+function setDragStyling(id: string, enable: boolean, cursor = 'col-resize') {
   const node = createStyleElement(id);
 
   if (enable) {
-    node.innerHTML = dragRule;
+    node.innerHTML = dragRule(cursor);
   } else {
     node.innerHTML = '';
   }
@@ -77,7 +77,9 @@ export function responsiveWidth(opts: {
   return opts.laptop;
 }
 
-export type ResizeEdge = 'left' | 'right';
+export type ResizeEdge = 'left' | 'right' | 'top' | 'bottom';
+
+const isVertical = (edge: ResizeEdge) => edge === 'top' || edge === 'bottom';
 
 export type UseResizableProps<E extends HTMLElement> = {
   initialSize: number;
@@ -85,7 +87,8 @@ export type UseResizableProps<E extends HTMLElement> = {
   minSize?: number;
   maxSize?: number;
   targetRef: React.RefObject<E | null>;
-  /** Which edge of the target element width is measured from. Default `left`. */
+  /** Which edge of the target element the size is measured from. `top` /
+   * `bottom` resize the height instead of the width. Default `left`. */
   edge?: ResizeEdge;
 };
 
@@ -122,7 +125,11 @@ export function useResizable<E extends HTMLElement>({
     const relativePosition =
       edgeRef.current === 'right'
         ? targetRect.right - e.clientX
-        : e.clientX - targetRect.x;
+        : edgeRef.current === 'bottom'
+          ? targetRect.bottom - e.clientY
+          : edgeRef.current === 'top'
+            ? e.clientY - targetRect.y
+            : e.clientX - targetRect.x;
     const newSize = Math.min(maxSize, Math.max(minSize, relativePosition));
 
     requestAnimationFrame(() => {
@@ -161,7 +168,11 @@ export function useResizable<E extends HTMLElement>({
   useEffect(() => {
     if (dragging) {
       window.addEventListener('mousemove', mouseMove.current);
-      setDragStyling(styleId, true);
+      setDragStyling(
+        styleId,
+        true,
+        isVertical(edgeRef.current) ? 'row-resize' : 'col-resize',
+      );
     } else {
       window.removeEventListener('mousemove', mouseMove.current);
       setDragStyling(styleId, false);
