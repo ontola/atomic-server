@@ -2149,3 +2149,12 @@ and upload hook, then delivers multiple files through the drop callback. It
 verifies the upload targets the displayed drive even when the current drive
 setting differs. Native drag events, overlay geometry and the refreshed child
 list are not covered by this component test.
+
+## Rust build alignment
+
+`scripts/test_rust_alignment.py` tests matching pairs, compiler/workflow pin drift,
+development profile drift, transitive Loro versions, missing shared crates, extra
+cryptography prereleases, and allowed unrelated dependency differences. Run
+`python3 -m unittest discover -s scripts -p test_rust_alignment.py -v`.
+The Rust build policy workflow runs these checks; downstream CI checks both
+repositories and rejects dependency lockfile drift before builds.

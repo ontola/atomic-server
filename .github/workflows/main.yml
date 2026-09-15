@@ -206,7 +206,7 @@ jobs:
         id: saas
         env:
           GH_TOKEN: ${{ secrets.ATOMIC_SAAS_DISPATCH_TOKEN }}
-          BRANCH: ${{ github.ref_name }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
           set -euo pipefail
           if [ -z "${GH_TOKEN:-}" ]; then
@@ -238,6 +238,13 @@ jobs:
           # (where `clean: false` keeps the checkout around between runs).
           persist-credentials: false
 
+      - name: Set up Python for Rust alignment checks
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify paired Rust toolchains and dependencies
+        run: python3 atomic-server/scripts/check-rust-alignment.py --server atomic-server --saas atomic-saas
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.98.1
         with:
@@ -267,26 +274,20 @@ jobs:
           npm ci
           npm run build
 
-      # Not `--locked`: this commit may have changed atomic_lib's own
-      # dependencies, which legitimately moves atomic-saas's lockfile. What is
-      # being checked is that the code still builds and passes; a lock update
-      # is reported so the saas side commits it on its next touch.
+      # Both lockfiles must describe the tested pair; update them in paired PRs.
       - name: cargo check, clippy and test atomic-saas against this commit
         working-directory: atomic-saas
         run: |
           set -euo pipefail
-          cargo check --all-targets
-          cargo clippy --all-targets -- -D warnings
-          cargo test --all-targets
+          cargo check --locked --all-targets
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked --all-targets
           # The managed node embeds this repo's server crate and is not a
           # default workspace member, so the root build does not touch it.
           # Its own CI runs check, clippy and test; the same here.
-          cargo clippy -p atomic-managed-node --all-targets -- -D warnings
-          cargo test -p atomic-managed-node
-          if ! git diff --quiet -- Cargo.lock; then
-            git diff --stat -- Cargo.lock
-            echo "::warning::atomic-saas's Cargo.lock drifted against this commit; run cargo check there and commit Cargo.lock."
-          fi
+          cargo clippy --locked -p atomic-managed-node --all-targets -- -D warnings
+          cargo test --locked -p atomic-managed-node
+          git diff --exit-code -- Cargo.lock
 
   # Hosted only when pick said Mancave is unavailable (or escape/PR).
   # Deliberately does NOT run when Mancave finished with test failures.

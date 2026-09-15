@@ -477,3 +477,40 @@ journalctl -u atomic.service --since "1 hour ago" -f
 1. `cd cli`
 1. run `cargo wasi build --release --no-default-features` (note: this fails, as ring does not compile to WASI [at this moment](https://github.com/briansmith/ring/issues/1043))
 1. `wapm publish`
+
+## Coordinated Rust updates
+
+Server and SaaS use the same exact Rust release, selected by each repository's
+`rust-toolchain.toml`. CI pins and Dagger's `RUST_VERSION` must match it. The
+Server-owned checker validates those copies; do not switch a workflow or Docker
+image back to floating `stable`/`rust:bookworm`.
+
+For an update, create branches with the same name in both repositories. Existing
+paired-branch CI resolves both heads to commit SHAs and tests that exact pair.
+Update both toolchain files, the workflow pins, and Dagger's version together.
+Keep separate committed `Cargo.lock` files. Update selected shared versions with
+`cargo update -p NAME@OLD --precise VERSION`, then run from the Server checkout:
+
+```sh
+python3 scripts/check-rust-alignment.py --saas ../atomic-saas
+cargo metadata --locked --format-version 1 > /dev/null
+(cd ../atomic-saas && cargo metadata --locked --format-version 1 > /dev/null)
+```
+
+The check compares Loro (including common transitive Loro crates), Iroh, Serde,
+JSON, Ed25519/Curve25519, Tokio, Reqwest, and Object Store. It fails on different
+resolved version sets, including additional prereleases. Other dependencies may
+differ: SaaS's own redb database intentionally still uses major 2 while Server
+uses major 4. Add a crate to the policy when its alignment matters; do not copy
+whole lockfiles or force unrelated dependencies to match.
+
+Development profiles also match (`line-tables-only` for local crates, no debug
+info for dependencies). Features, targets, native toolchains, and intentionally
+different CI profiles can still produce separate cached artifacts. A shared
+build cache does not synchronize dependencies.
+
+Paired Rust checks and SaaS build/release commands use `--locked` so source changes cannot silently
+rewrite the tested dependency graph. Commit any needed lockfile updates in the
+paired PR, run the affected Rust suites, and merge the pair together after CI.
+The SaaS alignment gate requires the Server checker, so land the Server PR
+before the SaaS PR when first introducing this policy.
