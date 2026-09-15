@@ -40,7 +40,11 @@ test('website document preview, frozen release and reload', async ({
   ]);
   expect(download.suggestedFilename()).toBe('website.zip');
   await download.saveAs(test.info().outputPath('website.zip'));
-  await page.getByRole('link', { name: 'Edit document', exact: true }).click();
+  await page
+    .locator('a')
+    .filter({ has: page.getByText('Document', { exact: true }) })
+    .filter({ has: page.locator('small') })
+    .click();
   await page
     .locator('#document-editor')
     .fill('A private change after the release.');

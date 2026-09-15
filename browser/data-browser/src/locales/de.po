@@ -138,6 +138,7 @@ msgstr ""
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx src/components/AvatarCropper.tsx
 #: src/chunks/Website/WebsitePage.tsx
+#: src/chunks/Website/WebsitePage.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
@@ -1444,6 +1445,7 @@ msgstr ""
 msgid "ChatRoom"
 msgstr ""
 
+#: src/chunks/Website/WebsitePage.tsx
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 msgid "Document"
@@ -2314,6 +2316,7 @@ msgid "Ok"
 msgstr ""
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
+#: src/chunks/Website/WebsitePage.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/views/OntologyPage/Class/NewClassInstanceButton.tsx
 msgid "Table"
@@ -10751,13 +10754,11 @@ msgstr ""
 msgid "Add a document"
 msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Accent color"
-msgstr ""
+#~ msgid "Accent color"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Typography"
-msgstr ""
+#~ msgid "Typography"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Show draft"
@@ -11014,26 +11015,25 @@ msgstr ""
 msgid "Design with AI"
 msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Edit document"
-msgstr ""
+#~ msgid "Edit document"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Add content"
-msgstr ""
+#~ msgid "Add content"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Add to page"
 msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Design"
-msgstr ""
+#~ msgid "Design"
+#~ msgstr ""
+
+#~ msgid "Editorial"
+#~ msgstr ""
+
+#~ msgid "Modern"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
-msgid "Editorial"
-msgstr ""
-
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Modern"
+msgid "<0/> Add content"
 msgstr ""

@@ -63,7 +63,11 @@ test('one-click website publishing, draft isolation and version recovery', async
     publicPage.getByText('Bakery bread costs five euros.'),
   ).toBeVisible();
   await visitor.close();
-  await page.getByRole('link', { name: 'Edit document', exact: true }).click();
+  await page
+    .locator('a')
+    .filter({ has: page.getByText('Document', { exact: true }) })
+    .filter({ has: page.locator('small') })
+    .click();
   await page.locator('#document-editor').fill('Bakery bread costs six euros.');
   await page.getByRole('button', { name: 'More', exact: true }).click();
   await page.keyboard.press('Escape');

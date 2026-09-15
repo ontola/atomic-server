@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import {
   dataBrowser,
   useCanWrite,
+  useResource,
   useStore,
   type Resource,
 } from '@tomic/react';
@@ -10,7 +11,7 @@ import { Button } from '@components/Button';
 import { Row, Column } from '@components/Row';
 import { AtomicLink } from '@components/AtomicLink';
 import Field from '@components/forms/Field';
-import { InputStyled } from '@components/forms/InputStyles';
+import { FaRegFileLines, FaTable, FaPlus } from 'react-icons/fa6';
 import { ResourceSelector } from '@components/forms/ResourceSelector';
 import { useAISidebar, newContextItem } from '@components/AI/AISidebarContext';
 import type { AIAtomicResourceMessageContext } from '@chunks/AI/types';
@@ -43,6 +44,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
   const [busy, setBusy] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [document, setDocument] = useState<string>();
+  const [addingContent, setAddingContent] = useState(false);
 
   useEffect(
     () => store.subscribe(resource.subject, () => setRefresh(n => n + 1)),
@@ -241,86 +243,64 @@ export function WebsitePage({ resource }: { resource: Resource }) {
             </Field>
           )}
           {currentPage?.documents.map(subject => (
-            <AtomicLink key={subject} subject={subject}>
-              Edit document
-            </AtomicLink>
+            <ContentSource key={subject} subject={subject} kind='document' />
           ))}
           {currentPage?.tables.map(table => (
-            <AtomicLink key={table.table} subject={table.table}>
-              {table.title}
-            </AtomicLink>
+            <ContentSource
+              key={table.table}
+              subject={table.table}
+              kind='table'
+            />
           ))}
           {canWrite && (
             <>
-              <details>
-                <summary>Add content</summary>
-                <Field label='Add a document' fieldId='website-document'>
-                  <ResourceSelector
-                    id='website-document'
-                    isA={dataBrowser.classes.documentV2}
-                    value={document}
-                    setSubject={setDocument}
-                    hideCreateOption
-                  />
-                </Field>
-                <Button
-                  subtle
-                  disabled={!document || !config || busy}
-                  onClick={() => {
-                    if (!document || !config || !currentPage) return;
-                    void change({
-                      ...config,
-                      pages: config.pages.map(page =>
-                        page.path === currentPage.path
-                          ? {
-                              ...page,
-                              documents: [
-                                ...new Set([...page.documents, document]),
-                              ],
-                            }
-                          : page,
-                      ),
-                    });
-                    setDocument(undefined);
-                  }}
-                >
-                  Add to page
-                </Button>
-              </details>
-            </>
-          )}
-          {config && (
-            <>
-              <details>
-                <summary>Design</summary>
-                <Field label='Accent color' fieldId='website-accent'>
-                  <InputStyled
-                    id='website-accent'
-                    type='color'
-                    value={config.accent}
-                    disabled={!canWrite || busy}
-                    onChange={event =>
-                      void change({ ...config, accent: event.target.value })
-                    }
-                  />
-                </Field>
-                <Field label='Typography' fieldId='website-font'>
-                  <select
-                    id='website-font'
-                    value={config.font}
-                    disabled={!canWrite || busy}
-                    onChange={event =>
+              <Button
+                subtle
+                onClick={() => setAddingContent(true)}
+                disabled={addingContent}
+              >
+                <FaPlus aria-hidden /> Add content
+              </Button>
+              {addingContent && (
+                <Column>
+                  <Field label='Add a document' fieldId='website-document'>
+                    <ResourceSelector
+                      id='website-document'
+                      isA={dataBrowser.classes.documentV2}
+                      value={document}
+                      setSubject={setDocument}
+                      hideCreateOption
+                    />
+                  </Field>
+                  <Button
+                    subtle
+                    disabled={!document || !config || busy}
+                    onClick={() => {
+                      if (!document || !config || !currentPage) return;
                       void change({
                         ...config,
-                        font: event.target.value as WebsiteConfig['font'],
-                      })
-                    }
+                        pages: config.pages.map(page =>
+                          page.path === currentPage.path
+                            ? {
+                                ...page,
+                                documents: [
+                                  ...new Set([...page.documents, document]),
+                                ],
+                              }
+                            : page,
+                        ),
+                      });
+                      setDocument(undefined);
+                      setAddingContent(false);
+                    }}
                   >
-                    <option value='serif'>Editorial</option>
-                    <option value='sans'>Modern</option>
-                  </select>
-                </Field>
-              </details>
+                    Add to page
+                  </Button>
+                  <Button subtle onClick={() => setAddingContent(false)}>
+                    Cancel
+                  </Button>
+                </Column>
+              )}
             </>
           )}
         </Controls>
@@ -370,6 +350,59 @@ export function WebsitePage({ resource }: { resource: Resource }) {
     </Workspace>
   );
 }
+
+function ContentSource({
+  subject,
+  kind,
+}: {
+  subject: string;
+  kind: 'document' | 'table';
+}) {
+  const source = useResource(subject);
+
+  return (
+    <SourceLink subject={subject} clean>
+      {kind === 'table' ? (
+        <FaTable aria-hidden />
+      ) : (
+        <FaRegFileLines aria-hidden />
+      )}
+      <span>
+        <strong>{source.title}</strong>
+        <small>{kind === 'table' ? 'Table' : 'Document'}</small>
+      </span>
+    </SourceLink>
+  );
+}
+
+const SourceLink = styled(AtomicLink)`
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.6rem;
+  border-radius: ${p => p.theme.radius};
+  color: inherit;
+  text-decoration: none;
+  &:hover {
+    background: ${p => p.theme.colors.bg1};
+  }
+  > svg {
+    flex-shrink: 0;
+    color: ${p => p.theme.colors.textLight};
+  }
+  span {
+    min-width: 0;
+  }
+  strong {
+    display: block;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+  small {
+    display: block;
+    color: ${p => p.theme.colors.textLight};
+  }
+`;
 
 const Workspace = styled.div`
   padding: ${p => p.theme.size(3)};
