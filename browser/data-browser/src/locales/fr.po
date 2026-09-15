@@ -432,7 +432,6 @@ msgstr "Écrivez la documentation markdown de la compétence ici..."
 
 #: src/chunks/AI/SkillsConfigTab.tsx
 #: src/chunks/AI/SkillsConfigTab.tsx
-#: src/chunks/Website/WebsitePage.tsx
 msgid "Content"
 msgstr "Contenu"
 
@@ -9330,7 +9329,6 @@ msgstr ""
 #~ msgstr ""
 
 #: src/chunks/PluginRuns/PluginPage.tsx
-#: src/chunks/Website/WebsitePage.tsx
 msgid "Edit with AI"
 msgstr ""
 
@@ -10558,9 +10556,8 @@ msgstr ""
 msgid "Frozen release"
 msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Live draft preview"
-msgstr ""
+#~ msgid "Live draft preview"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsiteInlinePreview.tsx
 #: src/chunks/Website/WebsitePage.tsx
@@ -10580,9 +10577,8 @@ msgstr ""
 msgid "Done editing"
 msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Edit on page"
-msgstr ""
+#~ msgid "Edit on page"
+#~ msgstr ""
 
 #~ msgid "Click an outlined text field to edit its Atomic record. Leave the field to save. Document formatting stays in the document editor."
 #~ msgstr ""
@@ -10897,4 +10893,16 @@ msgstr ""
 #. 0: targets.length; 1: documents.length
 #: src/chunks/Website/WebsiteInlinePreview.tsx
 msgid "{0} editable fields and {1} documents"
+msgstr ""
+
+#: src/chunks/RTE/BubbleMenu.tsx
+msgid "Set link"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Page edit"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "<0/> AI edit"
 msgstr ""

@@ -288,6 +288,32 @@ checks and unit/Rust tests. They were not all rerun after the final commit.
 No claim of green full CI, Firefox parity, production deployment, load testing or
 live S3 verification. Read current PR checks before merge.
 
+#### Session of 15 September 2026 (after f63987493)
+
+- `website-inline-rte.spec.ts` (new, fixture in `website-inline-fixture.ts`)
+  exercises bold, node select, the link popover, undo/redo, `@` mention
+  navigation/escape/reopen, slash escape/reopen, image picker, drag handle and
+  reload persistence inside the preview iframe. It passed in Firefox (2/2, via a
+  scratch config adding a Firefox project) and in Chromium, but see the flake below.
+- Fixed: the link popover rendered in the app document, unstyled and at
+  iframe-relative coordinates (the "frozen" symptom). It now portals into the
+  bubble menu, which stays shown while the form is open (`BubbleMenu.tsx`,
+  `PopoverContainer` in `WebsiteInlinePreview.tsx`). The `Set link` button has a
+  title. Draft rebuilds are paused while inline editing (`WebsitePage.tsx`).
+- Not fixed, pre-existing: characters intermittently vanish or land in a new
+  paragraph while typing in the iframe editor at human speed (40ms per key).
+  Reproduced with all session changes stashed (`website-inline-content.spec.ts`
+  failed 2/3). The main document editor also commits roughly once per keystroke
+  at that speed (measured 35 commits for 43 characters), so the save scheduler
+  is a suspect; `loro-prosemirror` logs "Cannot find the loroNode" around the
+  failures. Treat both inline specs as flaky in Chromium until this is found.
+- Firefox at 0ms synthetic key delay mis-sequences keys (not a product bug);
+  adding `white-space: pre-wrap` to the editor made Chromium worse and was reverted.
+- Website page: AI edit / Page edit buttons moved into the header row with
+  icons, "Content" and "Live draft preview" labels removed, preview fills the page.
+- AI chats: titles are generated on the first user message (fallback on the
+  reply) and include an emoji shown in the sidebar and the chat panel heading.
+
 ## Suggested next session
 
 1. Confirm branch/status, read applicable repo instructions, and inspect PR checks.
