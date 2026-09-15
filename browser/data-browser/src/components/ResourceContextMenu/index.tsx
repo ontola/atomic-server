@@ -219,10 +219,15 @@ export function ResourceContextMenu({
     });
   }
 
-  // Add custom items from context (if any) before filtering
+  // Page-specific actions lead; the menu owns their boundary with generic actions.
+  // Older callers include a leading/trailing divider, which must not leak here.
+  const pageItems = subject === ctx.currentSubject ? [...customItems] : [];
+  while (pageItems[0] === DIVIDER) pageItems.shift();
+  while (pageItems.at(-1) === DIVIDER) pageItems.pop();
   const allItems = [
+    ...pageItems,
+    ...addIf(pageItems.length > 0 && items.length > 0, DIVIDER),
     ...items,
-    ...addIf(subject === ctx.currentSubject, ...customItems),
   ];
 
   const filteredItems = showOnly

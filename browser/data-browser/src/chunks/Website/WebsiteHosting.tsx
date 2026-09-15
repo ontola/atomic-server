@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCustomContextItems } from '@components/ResourceContextMenu';
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  useDialog,
+} from '@components/Dialog';
+import { useCallback, useMemo, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import { useStore } from '@tomic/react';
 import { Button, ButtonSubtle } from '@components/Button';
@@ -19,7 +26,6 @@ export function WebsiteHosting({
   savedDigest,
   saveRelease,
   secondary = false,
-  children,
 }: {
   project: string;
   draft?: WebsiteArtifact;
@@ -28,9 +34,9 @@ export function WebsiteHosting({
   savedDigest?: string;
   saveRelease: (artifact: WebsiteArtifact) => Promise<HostingStatus>;
   secondary?: boolean;
-  children?: ReactNode;
 }) {
   const store = useStore();
+  const [dialogProps, showVersions] = useDialog();
   const [status, setStatus] = useState<HostingStatus>();
   const [published, setPublished] = useState<{
     id: string;
@@ -98,36 +104,70 @@ export function WebsiteHosting({
     };
   }, [store, project, busy, savedDigest]);
 
-  const run = async (action: () => Promise<void>) => {
-    setBusy(true);
+  const run = useCallback(
+    async (action: () => Promise<void>) => {
+      setBusy(true);
 
-    try {
-      await action();
-    } catch (error) {
-      store.notifyError(
-        error instanceof Error ? error : new Error(String(error)),
+      try {
+        await action();
+      } catch (error) {
+        store.notifyError(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
+
+      setBusy(false);
+    },
+    [store],
+  );
+
+  const activate = useCallback(
+    async (deployment: string | null, current: HostingStatus) => {
+      if (!current.state) throw new Error('No website version is available.');
+      const next = await hostingRequest<HostingStatus>(
+        store,
+        project,
+        '/activate',
+        {
+          expectedRevision: current.state.revision,
+          deployment,
+        },
       );
-    }
+      setStatus(next);
+    },
+    [store, project],
+  );
 
-    setBusy(false);
-  };
-
-  const activate = async (
-    deployment: string | null,
-    current: HostingStatus,
-  ) => {
-    if (!current.state) throw new Error('No website version is available.');
-    const next = await hostingRequest<HostingStatus>(
-      store,
-      project,
-      '/activate',
+  const menuItems = useMemo(
+    () => [
       {
-        expectedRevision: current.state.revision,
-        deployment,
+        id: 'website-view',
+        label: 'View site',
+        disabled: !status?.state?.active,
+        onClick: () => {
+          if (status?.state?.active)
+            window.open(status.url, '_blank', 'noopener,noreferrer');
+        },
       },
-    );
-    setStatus(next);
-  };
+      {
+        id: 'website-versions',
+        label: 'Website versions',
+        helper: 'Preview, restore and inspect publication history',
+        disabled: !status?.state?.deployments.length,
+        onClick: showVersions,
+      },
+      {
+        id: 'website-unpublish',
+        label: 'Unpublish website',
+        disabled: busy || !canWrite || !status?.state?.active,
+        onClick: () => {
+          if (status) void run(() => activate(null, status));
+        },
+      },
+    ],
+    [status, showVersions, busy, canWrite, run, activate],
+  );
+  useCustomContextItems(menuItems);
 
   const publish = () =>
     run(async () => {
@@ -175,11 +215,6 @@ export function WebsiteHosting({
   return (
     <Actions>
       <ActionRow>
-        {status?.state?.active && (
-          <SiteLink as='a' href={status.url} target='_blank' rel='noreferrer'>
-            View site
-          </SiteLink>
-        )}
         <Button
           subtle={secondary || upToDate || checking || unavailable}
           data-website-primary={
@@ -198,10 +233,9 @@ export function WebsiteHosting({
                 ? 'Update site'
                 : 'Publish site'}
         </Button>
-        <details>
-          <summary aria-label='Publishing options'>•••</summary>
-          <Settings>
-            <h3>Publishing</h3>
+        <Dialog {...dialogProps}>
+          <DialogTitle>Website versions</DialogTitle>
+          <DialogContent>
             <p>
               Hosted on your Atomic Server. Updates publish the current draft.
             </p>
@@ -241,15 +275,6 @@ export function WebsiteHosting({
             >
               Restore version
             </Button>
-            {status?.state?.active && (
-              <Button
-                subtle
-                disabled={busy || !canWrite}
-                onClick={() => run(() => activate(null, status))}
-              >
-                Unpublish website
-              </Button>
-            )}
             {!!status?.state?.history.length && (
               <details>
                 <summary>Publication history</summary>
@@ -268,9 +293,8 @@ export function WebsiteHosting({
                 </ol>
               </details>
             )}
-            {children}
-          </Settings>
-        </details>
+          </DialogContent>
+        </Dialog>
       </ActionRow>
       <p role='status'>
         {busy
@@ -308,38 +332,5 @@ const ActionRow = styled.div`
   gap: 0.8rem;
   > a {
     white-space: nowrap;
-  }
-  > details > summary {
-    cursor: pointer;
-    list-style: none;
-    padding: 0.5rem;
-  }
-`;
-const Settings = styled.div`
-  position: absolute;
-  z-index: 20;
-  right: 0;
-  top: 3rem;
-  width: min(330px, 85vw);
-  max-height: 75vh;
-  overflow-y: auto;
-  padding: 1.25rem;
-  border-radius: 12px;
-  background: ${p => p.theme.colors.bg};
-  border: 1px solid ${p => p.theme.colors.bg2};
-  box-shadow: 0 8px 30px #0002;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  h3,
-  p {
-    margin: 0;
-  }
-  p {
-    font-size: 0.85rem;
-    line-height: 1.5;
-  }
-  select {
-    max-width: 100%;
   }
 `;

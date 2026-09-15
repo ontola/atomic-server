@@ -34,24 +34,19 @@ test('one-click website publishing, draft isolation and version recovery', async
     fullPage: true,
   });
   await publish.click();
-  const link = page.getByRole('link', { name: 'View site', exact: true });
-  await expect(link).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Up to date', exact: true }),
   ).toBeDisabled();
-  const headerActions = [
+  await expect(
     page.getByRole('button', { name: 'Design with AI', exact: true }),
-    link,
-    page.getByRole('button', { name: 'Up to date', exact: true }),
-  ];
-  const heights = await Promise.all(
-    headerActions.map(action =>
-      action.evaluate(element => element.getBoundingClientRect().height),
-    ),
-  );
-  expect(Math.max(...heights) - Math.min(...heights)).toBeLessThan(1);
-  await page.screenshot({ path: '/private/tmp/website-published-header.png' });
-  const target = new URL((await link.getAttribute('href'))!);
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  const popupPromise = page.waitForEvent('popup');
+  await page.getByTestId('menu-item-website-view').click();
+  const popup = await popupPromise;
+  await popup.waitForLoadState();
+  const target = new URL(popup.url());
+  await popup.close();
   const getPublic = () =>
     request.get(`http://127.0.0.1:${target.port}/`, {
       headers: { Host: target.host },
@@ -95,7 +90,8 @@ test('one-click website publishing, draft isolation and version recovery', async
   await expect(
     page.getByRole('button', { name: 'Up to date', exact: true }),
   ).toBeDisabled();
-  await page.getByLabel('Publishing options').click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByTestId('menu-item-website-versions').click();
   await page
     .getByLabel('Previous version', { exact: true })
     .selectOption({ label: 'Version 1' });
@@ -108,12 +104,13 @@ test('one-click website publishing, draft isolation and version recovery', async
   await expect(
     page.getByText('Unpublished changes', { exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole('button', { name: 'Unpublish website', exact: true })
-    .click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByTestId('menu-item-website-unpublish').click();
   await expect.poll(async () => (await getPublic()).status()).toBe(404);
   await expect(publish).toBeEnabled();
-  await page.getByLabel('Publishing options').click();
+  await expect(page.getByLabel('Publishing options')).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: /Show \/ hide sidebar/ }).click();
   await expect(page.locator('[data-website-primary]')).toHaveCount(1);

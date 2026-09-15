@@ -10585,9 +10585,8 @@ msgstr "Show draft"
 msgid "Show release"
 msgstr "Show release"
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "No release yet."
-msgstr "No release yet."
+#~ msgid "No release yet."
+#~ msgstr "No release yet."
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Release review"
@@ -10699,9 +10698,8 @@ msgstr "The response was interrupted."
 msgid "Unpublished"
 msgstr "Unpublished"
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Publication history"
-msgstr "Publication history"
+#~ msgid "Publication history"
+#~ msgstr "Publication history"
 
 #~ msgid "Website hosting"
 #~ msgstr "Website hosting"
@@ -10747,9 +10745,8 @@ msgstr "Update site"
 msgid "Publish site"
 msgstr "Publish site"
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Publishing options"
-msgstr "Publishing options"
+#~ msgid "Publishing options"
+#~ msgstr "Publishing options"
 
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Previous version"
@@ -10764,9 +10761,8 @@ msgstr "Version {0}"
 msgid "View site"
 msgstr "View site"
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Publishing"
-msgstr "Publishing"
+#~ msgid "Publishing"
+#~ msgstr "Publishing"
 
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Hosted on your Atomic Server. Updates publish the current draft."
@@ -10779,9 +10775,8 @@ msgstr "Hosted on your Atomic Server. Updates publish the current draft."
 msgid "Choose a version"
 msgstr "Choose a version"
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Restore version"
-msgstr "Restore version"
+#~ msgid "Restore version"
+#~ msgstr "Restore version"
 
 #~ msgid "Your site is up to date."
 #~ msgstr "Your site is up to date."
@@ -10789,9 +10784,8 @@ msgstr "Restore version"
 #~ msgid "Website published."
 #~ msgstr "Website published."
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Export"
-msgstr "Export"
+#~ msgid "Export"
+#~ msgstr "Export"
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Design with AI"
@@ -10917,9 +10911,8 @@ msgstr "Website content"
 #~ msgid "Show all versions ({0})"
 #~ msgstr "Show all versions ({0})"
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Preview version"
-msgstr "Preview version"
+#~ msgid "Preview version"
+#~ msgstr "Preview version"
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Could not load saved website version: "
@@ -10928,3 +10921,12 @@ msgstr "Could not load saved website version: "
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Updating preview…"
 msgstr "Updating preview…"
+
+#: src/chunks/Website/WebsiteHosting.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Website versions"
+msgstr "Website versions"
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Preview, restore and inspect publication history"
+msgstr "Preview, restore and inspect publication history"
