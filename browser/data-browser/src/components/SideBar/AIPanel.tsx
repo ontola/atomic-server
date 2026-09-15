@@ -14,7 +14,7 @@ import { useEffect, useState, type JSX } from 'react';
 import { FaPlus, FaRegComment } from 'react-icons/fa6';
 import { IconButton } from '@components/IconButton/IconButton';
 import { useAISidebar } from '@components/AI/AISidebarContext';
-import { useTitle } from '@tomic/react';
+import { dataBrowser, useTitle } from '@tomic/react';
 import { usePrivateDrive } from '@hooks/usePrivateDrive';
 import {
   SideBarMenuRow,
@@ -139,6 +139,9 @@ export function NewSidebarChatButton() {
 function ChatLink({ subject }: { subject: string }) {
   const resource = useResource(subject);
   const [title] = useTitle(resource);
+  const emoji = resource.get(dataBrowser.properties.emoji) as
+    | string
+    | undefined;
   const { openChat } = useAISidebar();
 
   return (
@@ -154,7 +157,7 @@ function ChatLink({ subject }: { subject: string }) {
     >
       <SideBarMenuRow>
         <SideBarMenuRowIcon>
-          <FaRegComment />
+          {emoji ? <span aria-hidden>{emoji}</span> : <FaRegComment />}
         </SideBarMenuRowIcon>
         <SideBarMenuRowLabel>{title || 'Untitled Chat'}</SideBarMenuRowLabel>
       </SideBarMenuRow>

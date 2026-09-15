@@ -1,5 +1,12 @@
-import { core, type Resource, type Store, type Ai } from '@tomic/react';
+import {
+  core,
+  dataBrowser,
+  type Resource,
+  type Store,
+  type Ai,
+} from '@tomic/react';
 import type { AtomicUIMessage } from './types';
+import type { ChatTitle } from './useGenerativeData';
 import {
   addMessageToChatResource,
   persistMessageResourceToServer,
@@ -7,7 +14,7 @@ import {
 import { DEFAULT_AICHAT_NAME } from '@components/AI/aiContstants';
 
 export type DraftChatResource = Resource<Ai.AiChat>;
-export type TitlePromise = Promise<string | undefined>;
+export type TitlePromise = Promise<ChatTitle | undefined>;
 
 export type PersistSidebarMessageArgs = {
   message: AtomicUIMessage;
@@ -109,29 +116,47 @@ export const persistSidebarMessage = async ({
     setIsChatSaved(true);
   }
 
-  // Naming happens on the reply, because a title wants both halves of the
-  // exchange to describe. Decided here, where the resource is already in hand,
-  // rather than in the component — the caller cannot know whether the chat has
-  // been created yet, and a title generated against a chat that does not exist
-  // is dropped without a word.
-  if (message.role === 'assistant' && newMessages.length >= 2) {
-    if (
-      !titlePromiseRef.current &&
-      shouldGenerateTitles &&
-      needsTitle(resource)
-    ) {
-      titlePromiseRef.current = generateTitle(newMessages);
-    }
+  // Naming starts on the question. Waiting for the reply left every chat whose
+  // answer never landed (a reload, a failed request, a closed tab) as
+  // "Untitled Chat" for ever. Decided here, where the resource is already in
+  // hand, rather than in the component. The reply path still awaits a pending
+  // title, and retries from both halves when the question alone produced none.
+  if (
+    !titlePromiseRef.current &&
+    shouldGenerateTitles &&
+    needsTitle(resource) &&
+    (message.role === 'user' || newMessages.length >= 2)
+  ) {
+    titlePromiseRef.current = generateTitle(newMessages);
+  }
 
-    if (titlePromiseRef.current) {
-      const name = await titlePromiseRef.current;
+  if (titlePromiseRef.current) {
+    const pending = applyChatTitle(resource, titlePromiseRef);
 
-      titlePromiseRef.current = undefined;
-
-      if (name) {
-        await resource.set(core.properties.name, name);
-        await resource.save();
-      }
-    }
+    if (message.role === 'assistant') await pending;
   }
 };
+
+/** Names the chat (and gives it an emoji) once the pending title resolves. */
+async function applyChatTitle(
+  resource: DraftChatResource,
+  titlePromiseRef: PersistSidebarMessageArgs['titlePromiseRef'],
+) {
+  const promise = titlePromiseRef.current;
+
+  if (!promise) return;
+
+  const generated = await promise;
+
+  if (titlePromiseRef.current === promise) titlePromiseRef.current = undefined;
+
+  if (!generated || !needsTitle(resource)) return;
+
+  await resource.set(core.properties.name, generated.title);
+
+  if (generated.emoji) {
+    await resource.set(dataBrowser.properties.emoji, generated.emoji);
+  }
+
+  await resource.save();
+}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Ai,
   ai,
+  dataBrowser,
   useArray,
   useCanWrite,
   useStore,
@@ -55,15 +56,21 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
 
     const newMessages = [...messages, message];
 
-    // When there are only two messages and the title is still the default name, generate a title from the conversation.
+    // Name the chat from the first question so it never stays "Untitled Chat"
+    // when the reply fails to land. The reply retries if that produced nothing.
     if (
-      newMessages.length === 2 &&
+      newMessages.length <= 2 &&
       title === DEFAULT_AICHAT_NAME &&
       shouldGenerateTitles
     ) {
-      generateTitleFromConversation(newMessages).then(generatedTitle => {
-        if (generatedTitle) {
-          setTitle(generatedTitle);
+      generateTitleFromConversation(newMessages).then(generated => {
+        if (!generated) return;
+        setTitle(generated.title);
+
+        if (generated.emoji) {
+          void resource
+            .set(dataBrowser.properties.emoji, generated.emoji)
+            .then(() => resource.save());
         }
       });
     }

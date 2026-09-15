@@ -73,6 +73,9 @@ const AISidebar: React.FC = () => {
   const messagesRef = useRef<AtomicUIMessage[]>([]);
   const [chatResource, setChatResource] = useState<Resource<Ai.AiChat>>();
   const chatResourceRef = useRef<Resource<Ai.AiChat> | undefined>(undefined);
+  const chatEmoji = chatResource?.get(dataBrowser.properties.emoji) as
+    | string
+    | undefined;
   const [isChatSaved, setIsChatSaved] = useState(false);
   const isChatSavedRef = useRef(false);
   // Draft creation starts on the first message; store the in-flight promise so
@@ -518,7 +521,10 @@ const AISidebar: React.FC = () => {
             >
               <FaPlus />
             </IconButton>
-            <Heading>{chatResource?.title || 'Atomic Assistant'}</Heading>
+            <Heading>
+              {chatEmoji && <span aria-hidden>{chatEmoji} </span>}
+              {chatResource?.title || 'Atomic Assistant'}
+            </Heading>
           </Row>
           <Row center gap='0.5ch'>
             <IconButton
