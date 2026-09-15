@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import { before } from './test-utils';
+import { before, waitForSynced, reloadReconnected } from './test-utils';
 import {
   AFTER_COMPACT_USER,
   AFTER_UNCOMPACT_USER,
@@ -42,6 +42,310 @@ test.describe('AI Chat', () => {
     await expect(
       page.getByTestId('sidebar').getByRole('link', { name: 'Test Chat' }),
     ).toBeVisible({ timeout: 15_000 });
+  });
+
+  test('persists a partial assistant reply before the stream finishes and restores it after refresh', async ({
+    page,
+    browserName,
+    browserDiagnostics,
+  }) => {
+    const partial =
+      'Your bakery website will use the existing products table. Prices stay in Atomic.';
+    await page.evaluate(text => {
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async (input, init) => {
+        if (
+          String(input).includes('/chat/completions') &&
+          JSON.parse(String(init?.body ?? '{}')).stream
+        ) {
+          const chunk = {
+            id: 'checkpoint-test',
+            object: 'chat.completion.chunk',
+            model: 'test',
+            choices: [
+              {
+                index: 0,
+                delta: {
+                  role: 'assistant',
+                  content: text.replace(' Prices stay in Atomic.', ''),
+                },
+                finish_reason: null,
+              },
+            ],
+          };
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(
+                  new TextEncoder().encode(
+                    `data: ${JSON.stringify(chunk)}\n\n`,
+                  ),
+                );
+                setTimeout(() => {
+                  chunk.choices[0].delta.content = ' Prices stay in Atomic.';
+                  controller.enqueue(
+                    new TextEncoder().encode(
+                      `data: ${JSON.stringify(chunk)}\n\n`,
+                    ),
+                  );
+                }, 2000);
+                // Deliberately keep the response open: onFinish must never run.
+              },
+            }),
+            { headers: { 'Content-Type': 'text/event-stream' } },
+          );
+        }
+        return originalFetch(input, init);
+      };
+    }, partial);
+    await sendChatMessage(page, 'Make my bakery a website');
+    await expect(page.getByText(partial)).toBeVisible({ timeout: 15000 });
+    const chatLink = page
+      .getByTestId('sidebar')
+      .getByRole('link', { name: 'Test Chat' });
+    await expect(chatLink).toBeVisible({ timeout: 15000 });
+    const href = await chatLink.getAttribute('href');
+    const subject = href!.startsWith('did:')
+      ? href!
+      : new URL(href!, page.url()).searchParams.get('subject')!;
+    const chatUrl = new URL(
+      '/app/show?subject=' + encodeURIComponent(subject),
+      page.url(),
+    ).href;
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            async ({ subject, partial }) => {
+              const store = window.store;
+              const chat = await store.getResource(subject);
+              const messages =
+                (chat.get(
+                  'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/messages',
+                ) as string[]) ?? [];
+              if (messages.length !== 2) return false;
+              for (const id of messages) {
+                const message = await store.getResource(id);
+                const parts =
+                  (message.get(
+                    'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/content',
+                  ) as string[]) ?? [];
+                for (const partId of parts) {
+                  const part = await store.getResource(partId);
+                  if (
+                    part.get(
+                      'https://atomicdata.dev/properties/description',
+                    ) === partial
+                  )
+                    return true;
+                }
+              }
+              return false;
+            },
+            { subject, partial },
+          ),
+        { timeout: 15000 },
+      )
+      .toBe(true);
+    await waitForSynced(page);
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(
+            async ({ subject, partial }) => {
+              const store = window.store;
+              const read = async (id: string) => {
+                const result = await store.client.fetchResourceHTTP(id, {
+                  signInfo: {
+                    agent: store.getAgent()!,
+                    serverURL: store.getServerUrl(),
+                  },
+                  serverURL: store.getServerUrl(),
+                });
+                if (result.resource.error) {
+                  const local = await store.getResource(id);
+                  throw new Error(
+                    JSON.stringify({
+                      missing: id,
+                      classes: local.getClasses(),
+                      saveState: store.getSaveState(local),
+                      isNew: local.new,
+                      pendingGenesis: !!local['_pendingGenesis'],
+                      parent: local.get(
+                        'https://atomicdata.dev/properties/parent',
+                      ),
+                    }),
+                  );
+                }
+                return result.resource;
+              };
+              const chat = await read(subject);
+              const messages =
+                (chat.get(
+                  'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/messages',
+                ) as string[]) ?? [];
+              if (messages.length !== 2) return false;
+              for (const id of messages) {
+                const message = await read(id);
+                const parts =
+                  (message.get(
+                    'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/content',
+                  ) as string[]) ?? [];
+                for (const partId of parts) {
+                  const part = await read(partId);
+                  if (
+                    part.get(
+                      'https://atomicdata.dev/properties/description',
+                    ) === partial
+                  )
+                    return true;
+                }
+              }
+              return false;
+            },
+            { subject, partial },
+          ),
+        { timeout: 15000 },
+      )
+      .toBe(true);
+    if (browserName === 'firefox') {
+      browserDiagnostics.expect(
+        'warning',
+        /^\[WS\] close code=1001 reason="" wasClean=true opened=true$/,
+        'Firefox closes the active WebSocket when this test deliberately navigates away from a streaming chat.',
+        1,
+      );
+    }
+    await page.goto(chatUrl);
+    await reloadReconnected(page);
+    await expect(page.getByText(partial, { exact: true }).first()).toBeVisible({
+      timeout: 15000,
+    });
+  });
+
+  test('keeps received reasoning when the provider rate-limits the response', async ({
+    page,
+    browserDiagnostics,
+    browserName,
+  }) => {
+    if (browserName !== 'firefox')
+      browserDiagnostics.expect(
+        'error',
+        /429.*Rate limit test/,
+        'The mock deliberately emits a provider rate-limit error.',
+        1,
+      );
+    browserDiagnostics.expect(
+      'error',
+      /^AI request failed:/,
+      'The interrupted request is reported to the user.',
+      1,
+    );
+    const loggedProviderErrors: unknown[] = [];
+    if (browserName === 'firefox') {
+      browserDiagnostics.expect(
+        'error',
+        /^JSHandle@object$/,
+        'Firefox also logs the mock 429 as an object; its code and message are asserted below.',
+        1,
+      );
+      page.on('console', async msg => {
+        if (msg.text() === 'JSHandle@object') {
+          for (const arg of msg.args())
+            loggedProviderErrors.push(
+              await arg.evaluate(value => ({
+                code: value?.code,
+                message: value?.message,
+              })),
+            );
+        }
+      });
+    }
+    const reasoning =
+      'I will reuse the existing product prices for the bakery website.';
+    await page.evaluate(text => {
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = async (input, init) => {
+        if (
+          String(input).includes('/chat/completions') &&
+          JSON.parse(String(init?.body ?? '{}')).stream
+        ) {
+          return new Response(
+            new ReadableStream({
+              start(controller) {
+                const chunk = {
+                  id: 'rate-limit-test',
+                  object: 'chat.completion.chunk',
+                  model: 'test',
+                  choices: [
+                    {
+                      index: 0,
+                      delta: { role: 'assistant', reasoning: text },
+                      finish_reason: null,
+                    },
+                  ],
+                };
+                controller.enqueue(
+                  new TextEncoder().encode(
+                    `data: ${JSON.stringify(chunk)}\n\n`,
+                  ),
+                );
+                setTimeout(() => {
+                  controller.enqueue(
+                    new TextEncoder().encode(
+                      `data: ${JSON.stringify({ error: { code: 429, message: 'Rate limit test' } })}\n\ndata: [DONE]\n\n`,
+                    ),
+                  );
+                  controller.close();
+                }, 1500);
+              },
+            }),
+            { headers: { 'Content-Type': 'text/event-stream' } },
+          );
+        }
+        return originalFetch(input, init);
+      };
+    }, reasoning);
+    await sendChatMessage(page, 'Make my bakery a website');
+    await expect(page.getByText(reasoning, { exact: true })).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(page.getByText(/No answer from OpenRouter/)).toBeVisible({
+      timeout: 15000,
+    });
+    if (browserName === 'firefox')
+      await expect
+        .poll(() => loggedProviderErrors)
+        .toEqual([{ code: 429, message: 'Rate limit test' }]);
+    // Error handling must leave the already received reasoning available.
+    await expect(page.getByText(reasoning, { exact: true })).toBeVisible();
+    const chatLink = page
+      .getByTestId('sidebar')
+      .getByRole('link', { name: 'Test Chat' });
+    await expect(chatLink).toBeVisible();
+    const href = await chatLink.getAttribute('href');
+    const subject = href!.startsWith('did:')
+      ? href!
+      : new URL(href!, page.url()).searchParams.get('subject')!;
+    await waitForSynced(page);
+    if (browserName === 'firefox')
+      browserDiagnostics.expect(
+        'warning',
+        /^\[WS\] close code=1001 reason="" wasClean=true opened=true$/,
+        'Firefox closes the WebSocket when this test navigates away from the interrupted chat.',
+        1,
+      );
+    await page.goto(
+      new URL('/app/show?subject=' + encodeURIComponent(subject), page.url())
+        .href,
+    );
+    await reloadReconnected(page);
+    await expect(
+      page.getByText(reasoning, { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('alert').filter({ hasText: 'Rate limit test' }).first(),
+    ).toBeVisible();
   });
 
   test('new chat button clears the conversation', async ({ page }) => {

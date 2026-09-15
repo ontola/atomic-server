@@ -302,6 +302,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   // trace at all: `useChat` had no `onError`, so the only evidence was a line in
   // the browser console. "I asked for something and nothing happened" is the
   // worst possible failure mode for a chat.
+  const lastRequestErrorRef = useRef<string | undefined>(undefined);
   const [requestError, setRequestError] = useState<string | undefined>(
     undefined,
   );
@@ -368,19 +369,28 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         // The provider's own words: "NetworkError when attempting to fetch
         // resource", "401 Unauthorized", "model not found". Rendered next to the
         // input, where the reason belongs.
-        setRequestError(error.message || 'Unknown error');
+        lastRequestErrorRef.current = error.message || 'Unknown error';
+        setRequestError(lastRequestErrorRef.current);
       },
       onFinish: ({ message, isError, messages: _messages }) => {
         if (isError) {
           message.metadata = {
             ...(message.metadata || {}),
-            error: 'Something went wrong',
+            error:
+              lastRequestErrorRef.current ?? 'The response was interrupted.',
           };
         } else {
+          message.metadata = { ...message.metadata, error: undefined };
           setRequestError(undefined);
         }
 
+        setMessages(previous =>
+          previous.map(m => (m.id === message.id ? { ...message } : m)),
+        );
         onNewMessage(message);
+
+        // A failed request must not spend more quota on follow-ups or compaction.
+        if (isError) return;
 
         if (showFollowUpPromptsRef.current && message.role === 'assistant') {
           generateFollowUpQuestions(_messages).then(setFollowUpQuestions);
@@ -394,6 +404,28 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         }
       },
     });
+
+  // Save streamed progress even when a tool or provider keeps the run open.
+  // The persistence layer updates one message and serializes partial/final saves.
+  const checkpointRef = useRef({ messages, onNewMessage });
+  useEffect(() => {
+    checkpointRef.current = { messages, onNewMessage };
+  }, [messages, onNewMessage]);
+  useEffect(() => {
+    if (status !== 'streaming') return;
+    let lastSaved = '';
+    const timer = setInterval(() => {
+      const latest = checkpointRef.current.messages.at(-1);
+      if (!latest || latest.role !== 'assistant' || latest.parts.length === 0)
+        return;
+      const fingerprint = JSON.stringify(latest);
+      if (fingerprint === lastSaved) return;
+      lastSaved = fingerprint;
+      checkpointRef.current.onNewMessage(structuredClone(latest));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [status]);
 
   const [isCompacting, setIsCompacting] = useState(false);
   const [scrollToCompactTrigger, setScrollToCompactTrigger] = useState(0);
@@ -565,6 +597,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     }
 
     onNewMessage(message);
+    lastRequestErrorRef.current = undefined;
     sendMessage(message);
     setAttachedFiles([]);
     setFollowUpQuestions([]);
