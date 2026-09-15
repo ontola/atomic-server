@@ -1,3 +1,7 @@
+Website exports open in a dedicated frozen preview. Browser coverage verifies the
+export resource shows original content after source edits and reload, with scripts
+disabled and no publication action.
+
 Website publication state: browser coverage verifies unchanged output after publishing
 and reload, pending document edits, and pending changes after rollback. Unit tests
 compare page bytes and image hashes, including removed files and entry ordering.

@@ -10693,6 +10693,7 @@ msgstr ""
 #~ msgid "Export & versions"
 #~ msgstr ""
 
+#: src/chunks/Website/WebsiteExportPage.tsx
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Download website"
 msgstr ""
@@ -10804,6 +10805,7 @@ msgstr ""
 msgid "Publishing is unavailable until the draft preview can be built. Check access to the selected content, then retry."
 msgstr ""
 
+#: src/chunks/Website/WebsiteExportPage.tsx
 #: src/chunks/Website/WebsiteInlinePreview.tsx
 #: src/chunks/Website/WebsitePage.tsx
 #: src/chunks/Website/WebsitePreview.tsx
@@ -10846,4 +10848,25 @@ msgstr ""
 
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Not published yet"
+msgstr ""
+
+#. 0: new Date(artifact.createdAt).toLocaleString()
+#: src/chunks/Website/WebsiteExportPage.tsx
+msgid "Saved version · {0}"
+msgstr ""
+
+#: src/chunks/Website/WebsiteExportPage.tsx
+msgid "Preview page"
+msgstr ""
+
+#: src/chunks/Website/WebsiteExportPage.tsx
+msgid "Back to website"
+msgstr ""
+
+#: src/chunks/Website/WebsiteExportPage.tsx
+msgid "Export actions"
+msgstr ""
+
+#: src/chunks/Website/WebsiteExportPage.tsx
+msgid "Loading saved preview…"
 msgstr ""
