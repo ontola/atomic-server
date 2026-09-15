@@ -1,6 +1,6 @@
-//! Standalone acceptance drill. Exit 1 means the backup is incomplete, even
-//! when resource metadata restored correctly. Uses synthetic data and no peers.
-//! Run: cargo run -p atomic_lib --features db-redb --example vault_restore_drill
+//! Restore graph metadata from Vault while retaining independent file storage.
+//! Requires scratch S3 configuration; writes synthetic data in a unique prefix.
+//! Run: cargo run -p atomic-server --no-default-features --features light --example vault_restore_drill
 use atomic_lib::{
     db::trees::Tree,
     errors::AtomicResult,
@@ -16,14 +16,33 @@ use std::collections::BTreeMap;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> AtomicResult<()> {
-    let vault_dir =
-        std::env::temp_dir().join(format!("atomic-vault-restore-drill-{}", ulid::Ulid::new()));
-    std::fs::create_dir(&vault_dir)?;
+    let vault_dir = tempfile::Builder::new()
+        .prefix("atomic-vault-restore-drill-")
+        .tempdir()?
+        .keep();
+    let prefix = format!(
+        "restore-drills/{}",
+        vault_dir.file_name().unwrap().to_string_lossy()
+    );
+    let backend =
+        || -> AtomicResult<std::sync::Arc<dyn atomic_lib::db::blob_backend::BlobBackend>> {
+            atomic_server_lib::blob_storage::from_config(|name| {
+                if name == "ATOMIC_S3_PREFIX" {
+                    Some(prefix.clone())
+                } else {
+                    std::env::var(name).ok()
+                }
+            })?
+            .ok_or_else(|| {
+                "Restore drill requires ATOMIC_BLOB_BACKEND=s3 and a scratch bucket".into()
+            })
+        };
     let vault = FilesystemVaultStore::new(&vault_dir);
     let key = DriveVaultKey::from_bytes([7; 32], 1);
     let bytes: Vec<u8> = (0..65537).map(|i| (i % 251) as u8).collect();
     let hash = blake3::hash(&bytes);
-    let source = Db::init_temp("restore_drill_source").await?;
+    let mut source = Db::init_temp("restore_drill_source").await?;
+    source.blob_backend = Some(backend()?);
     let (agent, drive) = source.setup("Restore drill").await?;
     let recovery_secret = agent.build_secret()?;
     let doc = source
@@ -40,7 +59,8 @@ async fn main() -> AtomicResult<()> {
             None,
         )
         .await?;
-    source.kv.insert(Tree::Blobs, hash.as_bytes(), &bytes)?;
+    source.put_blob(hash.as_bytes(), &bytes).await?;
+    assert!(!source.kv.contains_key(Tree::Blobs, hash.as_bytes())?);
     let file = source
         .create_resource(
             urls::FILE,
@@ -60,7 +80,7 @@ async fn main() -> AtomicResult<()> {
         (doc.clone(), "Document before backup", drive.clone()),
         (table.clone(), "Table before backup", drive.clone()),
         (row, "Row before backup", table),
-        (file, "Attachment before backup", doc.clone()),
+        (file.clone(), "Attachment before backup", doc.clone()),
     ];
     export_vault_segment(
         &source,
@@ -79,7 +99,8 @@ async fn main() -> AtomicResult<()> {
     .ok_or("Populated fixture produced no backup")?;
     drop(source);
 
-    let restored = Db::init_temp("restore_drill_empty_target").await?;
+    let mut restored = Db::init_temp("restore_drill_empty_target").await?;
+    restored.blob_backend = Some(backend()?);
     for (subject, _, _) in &ledger {
         assert!(!restored
             .kv
@@ -99,7 +120,32 @@ async fn main() -> AtomicResult<()> {
     editable.set_name("Edited after restore")?;
     editable.save_locally(&restored).await?;
     restored.flush()?;
-    let recovered_bytes = restored.kv.get(Tree::Blobs, hash.as_bytes())?;
+    let restored_file = restored.get_resource(&Subject::from(file)).await?;
+    assert_eq!(
+        restored_file.get(urls::BLOB)?.to_string(),
+        format!("did:ad:blob:{}", hash.to_hex())
+    );
+    // Negative controls exercise the same verification without touching existing objects.
+    match std::env::var("ATOMIC_RESTORE_DRILL_FAULT").as_deref() {
+        Ok("corrupt") => {
+            restored
+                .put_blob(hash.as_bytes(), b"corrupt fixture")
+                .await?
+        }
+        Ok("missing") => {
+            restored.blob_backend = atomic_server_lib::blob_storage::from_config(|name| {
+                if name == "ATOMIC_S3_PREFIX" {
+                    Some(format!("{prefix}/missing"))
+                } else {
+                    std::env::var(name).ok()
+                }
+            })?;
+        }
+        Ok(_) => return Err("Unknown ATOMIC_RESTORE_DRILL_FAULT".into()),
+        Err(_) => {}
+    }
+    let recovered_bytes = restored.get_blob(hash.as_bytes()).await?;
+    assert!(!restored.kv.contains_key(Tree::Blobs, hash.as_bytes())?);
     let attachment_matches = recovered_bytes
         .as_deref()
         .is_some_and(|b| blake3::hash(b) == hash);
@@ -108,7 +154,10 @@ async fn main() -> AtomicResult<()> {
         "{}",
         serde_json::json!({
             "vault_directory": vault_dir,
-        "resources_checked": ledger.len(), "restored_resource_editable": true,
+            "blob_backend": "s3",
+            "fixture_prefix": prefix,
+            "recovery_scope": "metadata_restore_with_retained_external_files",
+            "resources_checked": ledger.len(), "restored_resource_editable": true,
             "attachment_expected_blake3": hash.to_hex().to_string(),
             "attachment_bytes": bytes.len(), "attachment_matches": attachment_matches,
             "objects_unreadable": result.objects_unreadable, "complete": complete,

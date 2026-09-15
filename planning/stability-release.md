@@ -1,7 +1,7 @@
 # Stability release and data safety
 
 > **Status: active, 2026-09-14.** Save acknowledgement, failure injection, and Chromium crash
-> checks landed. Empty-environment restore exposes missing attachment backup;
+> checks landed. Restore checks use Vault metadata plus retained external files;
 > broader implementation and release acceptance remain open.
 
 ## Objective
@@ -403,28 +403,35 @@ fixes its failures, including those outside the original save changes.
 - [x] Extend the Chromium crash ledger with attachment bytes and SHA-256 checks.
   Corrected-harness run `2026-09-14T15-23-42.129Z-LXAlAO` passed using the freshly
   rebuilt pinned-toolchain artifacts from `2026-09-14T15-19-32.375Z-PbLWDT`.
-- [x] Run the empty-environment vault restore drill with document/table/file data.
-  All four resources and parent links restored and a restored document was editable.
-  The 65,537 attachment bytes did not restore; the drill exits 1 and reports
-  `complete: false`, despite zero unreadable vault objects.
+- [x] Correct the restore drill to match hosted storage: Vault restores resource
+  metadata; file bytes remain in the independently configured S3 backend.
+  The drill replaces the graph database and reconnects the configured S3 backend, checks four resources and parent links, edits a restored document, and
+  verifies the restored file reference and 65,537 bytes by BLAKE3.
 
-**Release blocker found:** the vault format reserves blob objects but the exporter
-currently writes only resource history. Restored File metadata is not evidence
-that its bytes were backed up. Blob backup/restore requires the encrypted,
-keyed-hash object layout in `encrypted-vault-format.md`; it must not be replaced
-by uploading plaintext or exposing unkeyed content hashes in object names.
+**Correction:** the initial drill incorrectly required file bytes inside the
+restored local database. Its failure did not demonstrate missing hosted backups.
+Vault does not store files. Hosted recovery requires both Vault metadata and access
+to the existing S3 bucket/prefix. Losing that bucket is a separate recovery
+scenario; an independent S3 protection/recovery policy must cover it.
+
+- [x] Verify metadata restore, attachment retrieval through the production S3
+  adapter, and a subsequent edit against scratch MinIO (2026-09-15).
+  SaaS Vault API and HTTP download authorization remain separate checks.
+- [ ] Document and exercise recovery for deleted/corrupt S3 objects and bucket loss,
+  with retention aligned to the supported Vault restore window.
 
 Reproduce the independent restore check with:
 
 ```sh
-cargo run -p atomic_lib --features db-redb --example vault_restore_drill
+cargo run -p atomic-server --no-default-features --features light --example vault_restore_drill
 ```
 
 This is a standalone acceptance probe, not an ignored test or a successful backup
 claim. It uses only synthetic data, drops the source store before restoring into
 an empty one, compares against an independent ledger, and retains its encrypted
-filesystem vault for inspection. It deliberately exits nonzero while attachment
-backup is incomplete. Full rich-text history and schema/column fidelity still
+filesystem vault and separate file fixture for inspection. It fails on missing or
+corrupt externally stored bytes. See the September 15 acceptance below for S3
+validation. Full rich-text history and schema/column fidelity still
 need a richer fixture; this first drill checks resource fields and parent links.
 
 First pinned Chromium attempt (`2026-09-14T15-19-32.375Z-PbLWDT`) passed both save
@@ -436,10 +443,12 @@ are retained; that failed run is not counted as complete crash acceptance.
 Validation for this slice: 500 client-library unit tests, the real-server lost-ack
 integration test, both runner toolchain tests, and E2E typecheck pass. Both save UI
 cases passed in the fresh pinned build; the corrected attachment crash case passed
-against those same artifacts. Strict workspace Clippy passes. The vault restore
-probe remains a **failed acceptance result**: four resource/parent checks and a
-post-restore edit succeed, but the expected BLAKE3 attachment hash
-`7c99f9840a73dfcb6e5bfe4ff6d1558acab7e015640790c26411818bdbe17eca` has no bytes.
+against those same artifacts. Strict workspace Clippy passes. The original vault
+probe failed because of an incorrect local-blob expectation; the corrected probe
+checks retained external storage through the BlobBackend API instead. The corrected
+run passed: four resources, a subsequent edit, and all 65,537 attachment bytes
+matched (`complete: true`, zero unreadable objects). The backend was a filesystem
+test double; live S3 recovery remains a separate acceptance check.
 No real user data or telemetry was involved.
 
 Final isolated crash acceptance: `2026-09-14T15-28-42.714Z-QSVPbU` passed after
@@ -448,3 +457,73 @@ recovered every value/byte but failed diagnostics on Playwright's own deliberate
 service-worker-blocking warnings; those now have an exact-message, four-navigation
 allowance. Product warnings/errors remain failures. Both server durability tests
 pass together (one subprocess entry point is intentionally ignored by the parent).
+
+## Hosted restore acceptance and retention — 2026-09-15
+
+The executable now lives in `server/examples/vault_restore_drill.rs` so it can use
+`atomic_server_lib::blob_storage::from_config`, the production S3 adapter. It
+requires a scratch bucket and overrides the object prefix with a unique
+`restore-drills/atomic-vault-restore-drill-*` namespace. It never deletes existing
+objects. Vault metadata remains a local encrypted fixture; this checks graph
+restore plus S3 file retrieval, not the SaaS Vault API or browser download route.
+
+Run with the documented `ATOMIC_BLOB_BACKEND=s3` and `ATOMIC_S3_*` configuration:
+
+```sh
+python3 scripts/verify-vault-s3-restore.py
+```
+
+The runner retains JSON evidence and stderr in a temporary evidence directory.
+Healthy recovery must pass. Missing-object and corrupt-object controls must fail
+recovery while still restoring all four resources and allowing a subsequent edit.
+The missing control reconnects an empty prefix; the corruption control overwrites
+only its newly created synthetic object. Remove only the reported fixture prefixes
+from the scratch bucket after inspection. Never point this drill at production.
+
+### File retention contract
+
+- Vault metadata recovery requires the same S3 bucket/prefix (or a restored copy)
+  and working credentials. Credentials are recovery configuration, not Vault data.
+- Every attachment referenced by any supported Vault restore point must remain
+  recoverable. Current-state references alone are insufficient for file GC.
+- Until a historical-reference-aware GC exists, do not expire hosted file objects
+  by age. Keep the hosted file namespace outside Vault object cleanup.
+- Protect deletion/overwrite using provider-supported object versioning or an
+  independent recoverable copy. Retain those versions/copies for at least the
+  advertised Vault recovery window plus the incident detection/recovery margin.
+- A separate copy must cover bucket/account loss if that failure is promised;
+  keeping versions only in the same bucket does not establish that guarantee.
+
+Repository inspection found no deployed hosted-file lifecycle/versioning policy
+in the available configuration. This is an **unverified operational guarantee**,
+not evidence that the provider currently has no protection. Do not advertise a
+specific recovery window until the deployment policy and a recovery drill agree.
+
+- [ ] Record the actual hosted bucket/prefix, policy owner, supported recovery
+  window, version/copy retention, credential recovery procedure and last drill.
+- [ ] In a disposable bucket configured like production, write a file, capture
+  its hash/version, then delete and overwrite it. Restore the earlier bytes using
+  the configured provider mechanism and verify the original hash and Vault link.
+- [ ] Restore an independent copy into a new bucket, reconnect restored metadata,
+  verify downloads and edits, and record elapsed time and latest recoverable point.
+- [ ] Confirm lifecycle/GC preserves files referenced by the oldest supported
+  Vault restore point, including files deleted from the current graph.
+
+These operational checks remain open; this task does not change deployed bucket
+policies or assert production recovery coverage from a local MinIO result.
+
+### Recorded acceptance
+
+2026-09-15: all three cases passed against local MinIO
+`RELEASE.2025-09-07T16-13-09Z` (Quay image digest
+`sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e`).
+Healthy recovery returned `complete: true`; missing and corrupt controls returned
+`complete: false` and nonzero exit codes. Each restored four resources, preserved
+parent links, accepted an edit, and reported zero unreadable Vault objects. The
+healthy file was 65,537 bytes with the expected BLAKE3 hash. Neither database held
+local blob bytes. Strict Clippy for the example passed.
+
+Evidence directory from this run:
+`/var/folders/n1/1f33j70s5vs1ytzpshgpk11h0000gn/T/atomic-s3-restore-evidence-1_2zyl4u`.
+Only a disposable local bucket and synthetic data were used. The test container
+was removed after validation; the JSON reports and local Vault fixtures remain.

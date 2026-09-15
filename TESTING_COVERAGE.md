@@ -27,10 +27,13 @@ caught it, and if the answer is "none", that is the row to add.
   checks SHA-256 after Chromium SIGKILL/reopen with remote data access blocked.
 - `toolchain.node.mjs` verifies nested pnpm selection despite an older PATH binary
   and rejects mismatched Playwright versions. The runner uses a frozen CI install.
-- `lib/examples/vault_restore_drill.rs` is a standalone release acceptance probe:
-  metadata restores into an empty store, but attachment bytes are currently absent.
-  It reports incomplete recovery and exits 1; this is an open release blocker,
-  not a passing restore test. Encrypted blob backup is still unimplemented.
+- `server/examples/vault_restore_drill.rs` is a standalone release acceptance probe:
+  metadata restores into an empty store, then restored file references and bytes
+  are checked through the production S3 adapter and a retained scratch bucket.
+  `scripts/verify-vault-s3-restore.py` requires healthy recovery to succeed and
+  missing/corrupt object controls to report incomplete recovery. Vault contains
+  metadata, not files. This does not cover the SaaS Vault API, HTTP download
+  authorization, deployed retention policies, or recovery after bucket loss.
 
 Cargo libtest defaults to serial execution because Iroh tests share process-global
 state. CI nextest isolates each test in its own process and keeps bounded parallelism.
