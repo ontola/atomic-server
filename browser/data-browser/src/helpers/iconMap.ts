@@ -13,6 +13,7 @@ import {
   FaTag,
   FaAtom,
   FaBook,
+  FaGlobe,
   FaClock,
   FaComment,
   FaCube,
@@ -68,11 +69,24 @@ const iconMap = new Map<string, IconType>([
   [canvas.classes.canvas, FaPaintbrush],
 ]);
 
+/**
+ * Classes created per drive from a schema (no fixed subject) are matched by
+ * their shortname instead.
+ */
+const classShortnameIconMap = new Map<string, IconType>([
+  ['website-project', FaGlobe],
+]);
+
 export function getIconForClass(
-  classSubject: string,
+  classSubject: string | undefined,
   fallback: IconType = FaAtom,
+  classShortname?: string,
 ): IconType {
-  return iconMap.get(classSubject) ?? fallback;
+  return (
+    (classSubject ? iconMap.get(classSubject) : undefined) ??
+    (classShortname ? classShortnameIconMap.get(classShortname) : undefined) ??
+    fallback
+  );
 }
 
 export const dataTypeIconMap = new Map<string, IconType>([
