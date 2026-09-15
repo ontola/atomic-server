@@ -1,4 +1,9 @@
-import { websiteVersionName } from './websiteVersionName';
+import {
+  hostingRequest,
+  type HostingStatus,
+  type WebsitePackage,
+} from './hostingClient';
+import { uploadWebsiteAssets } from './websiteAssets';
 import { optimizeWebsiteImage } from './optimizeWebsiteImage';
 import {
   storeWebsiteAsset,
@@ -19,7 +24,6 @@ import {
 } from '@tomic/lib';
 import {
   assertPrivateWebsiteParent,
-  saveWebsiteResource,
   readWebsite,
   findWebsiteSchema,
   websiteConfigSchema,
@@ -317,34 +321,92 @@ export async function saveWebsiteRelease(
     (await artifactDigest(artifact.files, artifact.assets)) !== artifact.digest
   )
     throw new Error('Release does not match the reviewed website artifact.');
-  const { schema } = await readWebsite(store, drive, resource);
-  const release = await store.newResource({
-    parent: resource.subject,
-    isA: [schema.classes!['website-export']],
-    propVals: {
-      [core.properties.name]: websiteVersionName(
-        `Website release ${artifact.createdAt}`,
-      ),
-      [schema.properties!['website-artifact']]: JSON.stringify(artifact),
-    },
-  });
-  await saveWebsiteResource(release);
-  await resource.set(schema.properties!['website-release'], release.subject);
-  await saveWebsiteResource(resource);
+  await readWebsite(store, drive, resource);
+  await uploadWebsiteAssets(store, resource.subject, artifact.assets);
 
-  return release;
+  return hostingRequest<HostingStatus>(
+    store,
+    resource.subject,
+    '/deployments',
+    {
+      version: 1,
+      files: artifact.files,
+      assets: Object.fromEntries(
+        Object.entries(artifact.assets ?? {}).map(([path, asset]) => [
+          path,
+          asset.hash,
+        ]),
+      ),
+      metadata: {
+        renderer: artifact.renderer,
+        project: artifact.project,
+        config: artifact.config,
+      },
+    },
+  );
 }
 export async function readWebsiteRelease(
   store: Store,
   drive: string,
   resource: Resource,
 ): Promise<WebsiteArtifact | undefined> {
+  const status = await hostingRequest<HostingStatus>(store, resource.subject);
+  const latest = status.state?.deployments.at(-1);
+
+  if (latest) {
+    const pkg = await hostingRequest<WebsitePackage>(
+      store,
+      resource.subject,
+      `/preview/${latest}`,
+    );
+    if (pkg.metadata)
+      return readWebsiteVersion(store, resource.subject, latest);
+  }
+
   const { schema } = await readWebsite(store, drive, resource);
   const subject = resource.get(schema.properties!['website-release']);
   if (typeof subject !== 'string') return undefined;
   const release = await store.getResource(subject);
 
   return readWebsiteExport(store, drive, release, resource.subject);
+}
+
+export async function readWebsiteVersion(
+  store: Store,
+  project: string,
+  deployment: string,
+): Promise<WebsiteArtifact> {
+  const [pkg, status] = await Promise.all([
+    hostingRequest<WebsitePackage>(store, project, `/preview/${deployment}`),
+    hostingRequest<HostingStatus>(store, project),
+  ]);
+  if (
+    pkg.metadata?.project !== project ||
+    pkg.metadata.renderer !== 'atomic-static-v1'
+  )
+    throw new Error('This version has no compatible preview metadata.');
+  const config = websiteConfigSchema.parse(pkg.metadata.config);
+  const assets = Object.fromEntries(
+    Object.entries(pkg.assets ?? {}).map(([path, hash]) => [
+      path,
+      { hash, mimeType: `image/${path.split('.').at(-1)}` },
+    ]),
+  ) as Record<string, WebsiteAsset>;
+
+  return {
+    version: 1,
+    renderer: 'atomic-static-v1',
+    project,
+    config,
+    files: pkg.files,
+    assets,
+    digest: await artifactDigest(pkg.files, assets),
+    createdAt: new Date(
+      status.state?.versions?.[deployment] ??
+        status.state?.history.find(h => h.deployment === deployment)?.at ??
+        0,
+    ).toISOString(),
+  };
 }
 
 export async function readWebsiteExport(

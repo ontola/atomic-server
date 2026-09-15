@@ -1,10 +1,10 @@
-//! Local self-hosting adapter. Packages/files and activation state are separate KV entries.
+//! Blob-backed immutable manifests/files with lightweight activation state in KV.
 //! Single-process mutations are serialized; redb exclusively owns the database file.
 //! SaaS can reuse WebsitePackage with object storage and a transactional control-plane DB.
 use super::trees::{Method, Operation, Tree};
 use crate::{
     errors::AtomicResult,
-    website::{project_id, WebsitePackage},
+    website::{project_id, WebsiteManifest, WebsitePackage},
     Db,
 };
 use serde::{Deserialize, Serialize};
@@ -20,6 +20,8 @@ pub struct WebsiteState {
     pub active: Option<String>,
     pub deployments: Vec<String>,
     pub history: Vec<Activation>,
+    #[serde(default)]
+    pub versions: std::collections::BTreeMap<String, i64>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -93,8 +95,16 @@ impl Db {
         {
             return Ok(None);
         }
-        let package = self.website_package(id, version)?;
-        let Some(hash) = package.assets.get(path) else {
+        let assets = if self
+            .kv
+            .get(Tree::PluginMeta, &key(id, &format!("manifests/{version}")))?
+            .is_some()
+        {
+            self.website_manifest(id, version).await?.assets
+        } else {
+            self.website_package(id, version).await?.assets
+        };
+        let Some(hash) = assets.get(path) else {
             return Ok(None);
         };
         Ok(self
@@ -108,7 +118,7 @@ impl Db {
             .map(|v| serde_json::from_slice(&v).map_err(Into::into))
             .transpose()
     }
-    pub fn website_upload(
+    pub async fn website_upload(
         &self,
         project: &str,
         drive: &str,
@@ -127,6 +137,15 @@ impl Db {
                 return Err("Upload this project's image blobs before its deployment".into());
             }
         }
+        // Complete immutable writes before committing membership and the revision.
+        // Failed writes leave the active pointer and history unchanged.
+        let manifest = serde_json::to_vec(&package.manifest())?;
+        for content in package.files.values() {
+            let hash = blake3::hash(content.as_bytes());
+            self.put_blob(hash.as_bytes(), content.as_bytes()).await?;
+        }
+        self.put_blob(blake3::hash(&manifest).as_bytes(), &manifest)
+            .await?;
         let id = project_id(project);
         let _lock = WRITES
             .lock()
@@ -146,16 +165,13 @@ impl Db {
             return Err("Pilot limit: 20 deployments per website".into());
         }
         let mut ops = Vec::new();
-        for (path, content) in &package.files {
-            ops.push(insert(
-                key(&id, &format!("files/{deployment}/{path}")),
-                content.as_bytes().to_vec(),
-            ));
-        }
         ops.push(insert(
-            key(&id, &format!("packages/{deployment}")),
-            serde_json::to_vec(package)?,
+            key(&id, &format!("manifests/{deployment}")),
+            vec![1],
         ));
+        state
+            .versions
+            .insert(deployment.clone(), crate::utils::now());
         state.deployments.push(deployment);
         state.revision += 1;
         ops.push(insert(key(&id, "state"), serde_json::to_vec(&state)?));
@@ -203,7 +219,35 @@ impl Db {
         self.kv.flush()?;
         Ok(Some(state))
     }
-    pub fn website_package(&self, id: &str, deployment: &str) -> AtomicResult<WebsitePackage> {
+    pub async fn website_package(
+        &self,
+        id: &str,
+        deployment: &str,
+    ) -> AtomicResult<WebsitePackage> {
+        if self
+            .kv
+            .get(
+                Tree::PluginMeta,
+                &key(id, &format!("manifests/{deployment}")),
+            )?
+            .is_some()
+        {
+            let manifest = self.website_manifest(id, deployment).await?;
+            let mut files = std::collections::BTreeMap::new();
+            for (path, hash) in manifest.files {
+                files.insert(
+                    path,
+                    String::from_utf8(self.website_verified_blob(&hash).await?)
+                        .map_err(|e| e.to_string())?,
+                );
+            }
+            return Ok(WebsitePackage {
+                version: 1,
+                files,
+                assets: manifest.assets,
+                metadata: manifest.metadata,
+            });
+        }
         let bytes = self
             .kv
             .get(
@@ -212,14 +256,74 @@ impl Db {
             )?
             .ok_or("Website deployment is missing")?;
         let package: WebsitePackage = serde_json::from_slice(&bytes)?;
-        if package.id()? != deployment {
+        if blake3::hash(&serde_json::to_vec(&package)?)
+            .to_hex()
+            .as_str()
+            != deployment
+        {
             return Err("Website package integrity check failed".into());
         }
         Ok(package)
     }
+    async fn website_verified_blob(&self, hash: &str) -> AtomicResult<Vec<u8>> {
+        let bytes = self
+            .get_blob(&hex::decode(hash).map_err(|e| e.to_string())?)
+            .await?
+            .ok_or("Website blob is missing")?;
+        if blake3::hash(&bytes).to_hex().as_str() != hash {
+            return Err("Website blob integrity check failed".into());
+        }
+        Ok(bytes)
+    }
+    async fn website_manifest(&self, id: &str, deployment: &str) -> AtomicResult<WebsiteManifest> {
+        if self
+            .kv
+            .get(
+                Tree::PluginMeta,
+                &key(id, &format!("manifests/{deployment}")),
+            )?
+            .is_none()
+        {
+            return Err("Website deployment does not belong to project".into());
+        }
+        Ok(serde_json::from_slice(
+            &self.website_verified_blob(deployment).await?,
+        )?)
+    }
+    async fn website_file(
+        &self,
+        id: &str,
+        deployment: &str,
+        path: &str,
+    ) -> AtomicResult<Option<(String, Vec<u8>)>> {
+        if self
+            .kv
+            .get(
+                Tree::PluginMeta,
+                &key(id, &format!("manifests/{deployment}")),
+            )?
+            .is_some()
+        {
+            let manifest = self.website_manifest(id, deployment).await?;
+            return match manifest.files.get(path) {
+                Some(hash) => Ok(Some((
+                    deployment.into(),
+                    self.website_verified_blob(hash).await?,
+                ))),
+                None => Ok(None),
+            };
+        }
+        Ok(self
+            .kv
+            .get(
+                Tree::PluginMeta,
+                &key(id, &format!("files/{deployment}/{path}")),
+            )?
+            .map(|bytes| (deployment.into(), bytes)))
+    }
     /// Versioned assets keep a page on one release during concurrent activation.
     /// Merely uploading an ID never makes that version public; unpublish hides all versions.
-    pub fn website_public_version_file(
+    pub async fn website_public_version_file(
         &self,
         id: &str,
         deployment: &str,
@@ -240,16 +344,10 @@ impl Db {
         {
             return Ok(None);
         }
-        Ok(self
-            .kv
-            .get(
-                Tree::PluginMeta,
-                &key(id, &format!("files/{deployment}/{path}")),
-            )?
-            .map(|bytes| (deployment.into(), bytes)))
+        self.website_file(id, deployment, path).await
     }
     /// Only an active project can expose files. Private uploaded releases have no public path.
-    pub fn website_public_file(
+    pub async fn website_public_file(
         &self,
         id: &str,
         path: &str,
@@ -260,31 +358,106 @@ impl Db {
         let Some(active) = self.website_state(id)?.and_then(|s| s.active) else {
             return Ok(None);
         };
-        Ok(self
-            .kv
-            .get(
-                Tree::PluginMeta,
-                &key(id, &format!("files/{active}/{path}")),
-            )?
-            .map(|bytes| (active, bytes)))
+        self.website_file(id, &active, path).await
     }
 }
 #[cfg(test)]
 mod tests {
     use super::*;
     #[tokio::test]
+    async fn manifests_are_blobs_and_legacy_packages_remain_readable() {
+        let db = Db::init_temp("website_manifest").await.unwrap();
+        let package = WebsitePackage {
+            version: 1,
+            files: [("index.html".into(), "Hello".into())].into(),
+            assets: Default::default(),
+            metadata: Some(serde_json::json!({"private": "authoring"})),
+        };
+        let id = project_id("project");
+        let uploaded = db
+            .website_upload("project", "drive", &package)
+            .await
+            .unwrap();
+        let deployment = package.id().unwrap();
+        assert_eq!(uploaded.versions.len(), 1);
+        assert!(db
+            .kv
+            .get(
+                Tree::PluginMeta,
+                &key(&id, &format!("packages/{deployment}"))
+            )
+            .unwrap()
+            .is_none());
+        assert!(db
+            .kv
+            .get(
+                Tree::PluginMeta,
+                &key(&id, &format!("files/{deployment}/index.html"))
+            )
+            .unwrap()
+            .is_none());
+        let manifest = db.website_verified_blob(&deployment).await.unwrap();
+        assert_eq!(manifest, serde_json::to_vec(&package.manifest()).unwrap());
+        assert_eq!(
+            db.website_verified_blob(&blake3::hash(b"Hello").to_hex().to_string())
+                .await
+                .unwrap(),
+            b"Hello"
+        );
+        assert!(db
+            .website_package(&project_id("other"), &deployment)
+            .await
+            .is_err());
+        let duplicate = db
+            .website_upload("project", "drive", &package)
+            .await
+            .unwrap();
+        assert_eq!(duplicate.revision, uploaded.revision);
+        assert_eq!(duplicate.versions, uploaded.versions);
+        assert_eq!(
+            db.website_package(&id, &deployment).await.unwrap().metadata,
+            package.metadata
+        );
+        let legacy = WebsitePackage {
+            metadata: None,
+            ..package
+        };
+        let bytes = serde_json::to_vec(&legacy).unwrap();
+        let legacy_id = blake3::hash(&bytes).to_hex().to_string();
+        db.kv
+            .insert(
+                Tree::PluginMeta,
+                &key(&id, &format!("packages/{legacy_id}")),
+                &bytes,
+            )
+            .unwrap();
+        assert_eq!(
+            db.website_package(&id, &legacy_id).await.unwrap().files,
+            legacy.files
+        );
+    }
+    #[tokio::test]
     async fn upload_activate_rollback_unpublish_and_stale_writers() {
         let db = Db::init_temp("website_deployment").await.unwrap();
         let mut package = WebsitePackage {
             version: 1,
             assets: Default::default(),
+            metadata: None,
             files: std::collections::BTreeMap::from([("index.html".into(), "First".into())]),
         };
         let id = project_id("project");
-        let uploaded = db.website_upload("project", "drive", &package).unwrap();
-        assert!(db.website_public_file(&id, "index.html").unwrap().is_none());
+        let uploaded = db
+            .website_upload("project", "drive", &package)
+            .await
+            .unwrap();
+        assert!(db
+            .website_public_file(&id, "index.html")
+            .await
+            .unwrap()
+            .is_none());
         assert!(db
             .website_public_version_file(&id, &uploaded.deployments[0], "index.html")
+            .await
             .unwrap()
             .is_none());
         let first = uploaded.deployments[0].clone();
@@ -297,9 +470,13 @@ mod tests {
             .unwrap()
             .is_none());
         package.files.insert("index.html".into(), "Second".into());
-        let next = db.website_upload("project", "drive", &package).unwrap();
+        let next = db
+            .website_upload("project", "drive", &package)
+            .await
+            .unwrap();
         assert_eq!(
             db.website_public_file(&id, "index.html")
+                .await
                 .unwrap()
                 .unwrap()
                 .1,
@@ -307,6 +484,7 @@ mod tests {
         );
         assert!(db
             .website_public_version_file(&id, &next.deployments[1], "index.html")
+            .await
             .unwrap()
             .is_none());
         let second = db
@@ -320,6 +498,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             db.website_public_file(&id, "index.html")
+                .await
                 .unwrap()
                 .unwrap()
                 .1,
@@ -331,6 +510,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             db.website_public_file(&id, "index.html")
+                .await
                 .unwrap()
                 .unwrap()
                 .1,
@@ -338,9 +518,13 @@ mod tests {
         );
         assert!(db
             .website_upload("project", "different drive", &package)
+            .await
             .is_err());
         package.files.insert("../escape.js".into(), "Bad".into());
-        assert!(db.website_upload("project", "drive", &package).is_err());
+        assert!(db
+            .website_upload("project", "drive", &package)
+            .await
+            .is_err());
         assert_eq!(
             db.website_state(&id).unwrap().unwrap().revision,
             rollback.revision
@@ -348,7 +532,11 @@ mod tests {
         db.website_activate(&id, rollback.revision, None, "owner")
             .unwrap()
             .unwrap();
-        assert!(db.website_public_file(&id, "index.html").unwrap().is_none());
+        assert!(db
+            .website_public_file(&id, "index.html")
+            .await
+            .unwrap()
+            .is_none());
         assert_eq!(published.history.len(), 1);
     }
 }

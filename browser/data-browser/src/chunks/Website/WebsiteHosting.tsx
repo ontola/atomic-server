@@ -1,4 +1,3 @@
-import { uploadWebsiteAssets } from './websiteAssets';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { useStore } from '@tomic/react';
@@ -17,6 +16,7 @@ export function WebsiteHosting({
   draft,
   canWrite,
   draftError,
+  savedDigest,
   saveRelease,
   secondary = false,
   children,
@@ -25,7 +25,8 @@ export function WebsiteHosting({
   draft?: WebsiteArtifact;
   canWrite: boolean;
   draftError?: string;
-  saveRelease: (artifact: WebsiteArtifact) => Promise<void>;
+  savedDigest?: string;
+  saveRelease: (artifact: WebsiteArtifact) => Promise<HostingStatus>;
   secondary?: boolean;
   children?: ReactNode;
 }) {
@@ -95,7 +96,7 @@ export function WebsiteHosting({
       active = false;
       window.removeEventListener('focus', refresh);
     };
-  }, [store, project, busy]);
+  }, [store, project, busy, savedDigest]);
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -134,23 +135,7 @@ export function WebsiteHosting({
       const snapshot = draft;
       const before =
         status ?? (await hostingRequest<HostingStatus>(store, project));
-      await saveRelease(snapshot);
-      await uploadWebsiteAssets(store, project, snapshot.assets);
-      const uploaded = await hostingRequest<HostingStatus>(
-        store,
-        project,
-        '/deployments',
-        {
-          version: 1,
-          files: snapshot.files,
-          assets: Object.fromEntries(
-            Object.entries(snapshot.assets ?? {}).map(([path, asset]) => [
-              path,
-              asset.hash,
-            ]),
-          ),
-        },
-      );
+      const uploaded = await saveRelease(snapshot);
       setStatus(uploaded);
       const alreadyUploaded = before.state?.deployments.includes(
         uploaded.deployment!,
@@ -236,6 +221,14 @@ export function WebsiteHosting({
                   ))}
                 </select>
               </Field>
+            )}
+            {previous && status?.state?.versions?.[previous] && (
+              <SiteLink
+                as='a'
+                href={`/app/show?subject=${encodeURIComponent(project)}&view=website-version:${previous}`}
+              >
+                Preview version
+              </SiteLink>
             )}
             <Button
               subtle

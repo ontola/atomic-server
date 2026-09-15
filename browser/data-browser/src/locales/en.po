@@ -10911,11 +10911,16 @@ msgstr "Loading saved preview…"
 msgid "Website content"
 msgstr "Website content"
 
-#: src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
-msgid "Show fewer versions"
-msgstr "Show fewer versions"
+#~ msgid "Show fewer versions"
+#~ msgstr "Show fewer versions"
 
-#. 0: orderedChildren.length
-#: src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
-msgid "Show all versions ({0})"
-msgstr "Show all versions ({0})"
+#~ msgid "Show all versions ({0})"
+#~ msgstr "Show all versions ({0})"
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Preview version"
+msgstr "Preview version"
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Could not load saved website version: "
+msgstr "Could not load saved website version: "

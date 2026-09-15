@@ -5,6 +5,7 @@ export interface WebsitePackage {
   version: 1;
   files: Record<string, string>;
   assets?: Record<string, string>;
+  metadata?: { renderer: string; project: string; config: unknown };
 }
 export interface HostingStatus {
   url: string;
@@ -15,6 +16,7 @@ export interface HostingStatus {
     revision: number;
     active: string | null;
     deployments: string[];
+    versions?: Record<string, number>;
     history: { deployment: string | null; actor: string; at: number }[];
   };
 }

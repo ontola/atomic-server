@@ -4,7 +4,7 @@ Status: first FOSS implementation, built on the Assistant website prototype.
 
 ## Contract and boundaries
 
-The browser produces a version-1 package `{ version: 1, files: { path: text } }`.
+The browser uploads a version-1 package containing code files, image hash references and optional private preview metadata.
 `atomic_lib::website::WebsitePackage` validates paths, file types, a root page,
 100-file/5 MB limits and a deterministic content-addressed deployment identity.
 No source resource IDs, design configuration, credentials or relationship graph
@@ -28,12 +28,22 @@ drive root, whereas source editing can be delegated more narrowly.
 - [ ] Managed SaaS adapter, account/drive ownership proof, object storage and serving.
 - [ ] Production capacity measurements, garbage collection and richer assets.
 
-The initial local adapter uses the server's existing redb/KV database: file bytes
-have independent keys, separate from private manifests and project state. This
-avoids a new daemon, container, database or runtime per site. No graph queries or
-whole-package deserialization are needed to serve a file. It is a capped pilot:
-20 distinct deployments per project, 100 activation-history entries, no garbage
-collection or per-account billing. Include this database in server backups.
+The adapter stores code files and a version-2 manifest as immutable BLAKE3 blobs
+through the configured blob backend (local storage or internal S3). The manifest
+maps paths to hashes and contains private preview metadata. Only project membership,
+upload timestamps, deployment IDs and activation history remain in redb/KV.
+Images remain separate HTTP-served blobs; they are never embedded in HTML.
+Public serving reads the manifest and the requested file, without querying the
+authoring drive or loading every code file.
+
+New exports do not create Atomic resources or modify a website-release pointer.
+Identical exports reuse a manifest hash, regardless of when the editor saved them.
+Website versions are accessed through publishing history and a frozen preview;
+the sidebar has no version children or version-specific expand/collapse controls.
+Legacy export resources and KV packages remain readable and are not deleted.
+This is a capped pilot: 20 distinct deployments, 100 activation-history entries,
+no garbage collection or automatic paid overages. Failed uploads can leave
+unreferenced blobs. Back up both the metadata database and the blob backend.
 
 Serving reads the active deployment, returns the file with revalidation headers,
 and never reads the source drive. Generated search/runtime URLs are pinned to

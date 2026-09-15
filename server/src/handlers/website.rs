@@ -177,7 +177,8 @@ pub async fn upload(
         .map_err(|e| AtomicServerError::bad_request(e.to_string()))?;
     let value = state
         .store
-        .website_upload(&query.project, &query.drive, &body)?;
+        .website_upload(&query.project, &query.drive, &body)
+        .await?;
     Ok(HttpResponse::Ok().insert_header((header::CACHE_CONTROL, "no-store")).json(serde_json::json!({"url":public_url(&state, &query.project)?, "state":value, "deployment":body.id()?})))
 }
 pub async fn asset_upload(
@@ -246,7 +247,8 @@ pub async fn preview(
     authorize(&state, &req, &ctx, &query).await?;
     let package = state
         .store
-        .website_package(&project_id(&query.project), &id)?;
+        .website_package(&project_id(&query.project), &id)
+        .await?;
     Ok(HttpResponse::Ok()
         .insert_header((header::CACHE_CONTROL, "no-store"))
         .json(package))
@@ -320,13 +322,16 @@ async fn serve(state: web::Data<AppState>, req: HttpRequest) -> AtomicServerResu
     };
     let mut file = if let Some(versioned) = path.strip_prefix("_releases/") {
         match versioned.split_once('/') {
-            Some((version, file)) => state
-                .store
-                .website_public_version_file(&id, version, file)?,
+            Some((version, file)) => {
+                state
+                    .store
+                    .website_public_version_file(&id, version, file)
+                    .await?
+            }
             None => None,
         }
     } else {
-        state.store.website_public_file(&id, &path)?
+        state.store.website_public_file(&id, &path).await?
     };
     if file.is_none() {
         let (version, asset) = if let Some(rest) = path.strip_prefix("_releases/") {

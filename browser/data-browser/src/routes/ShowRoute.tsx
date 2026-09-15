@@ -81,7 +81,15 @@ export const ShowComponent: React.FunctionComponent = () => {
   }
 
   if (Client.isValidSubject(subject)) {
-    return <ResourcePage key={subject} subject={subject} />;
+    return (
+      <ResourcePage
+        key={subject}
+        subject={subject}
+        websiteVersion={
+          view?.startsWith('website-version:') ? view.slice(16) : undefined
+        }
+      />
+    );
   } else {
     return <Search />;
   }
