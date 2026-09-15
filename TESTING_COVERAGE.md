@@ -1,3 +1,32 @@
+Website composition and snapshot views: the focused website/FrameBridge set has
+16 passing tests, including invalid layout references and a host that refuses
+non-snapshot operations and foreign frames. `website.spec.ts` exercises a two-page
+Assistant-authored document/table site, real FrameBridge search, no-results state,
+navigation, source inline edits and frozen release persistence (2 passed, 19.2s).
+`website-export.spec.ts` takes WEBSITE_EXPORT_URL pointing at the actual extracted
+archive; navigation, search and mobile width pass with non-site requests blocked
+and Atomic stopped (1 passed, 807ms). It skips without that explicit fixture.
+The model is scripted. Third-party plugin loading, production build and public
+SaaS activation are not covered. Runtime assets regenerate via build/dev/start.
+
+Inline website editing (2026-09-13): `websiteInlineEditing.test.ts` adds four
+passing boundary tests (12 website unit tests total): current selection, source
+rights/private ancestry, text type, changed source value and pending-save failure.
+The website Assistant E2E now uses the real shared `@tomic/edit-mode` controls,
+checks original-record writes, field clearing, reload and frozen release output.
+The model is scripted; rich-text inline editing and arbitrary plugin HTML are
+outside this coverage. Source stale-value detection is optimistic client-side.
+
+Website prototype (2026-09-12): `chunks/Website/renderWebsite.test.ts` has eight
+focused passing tests for rich-text escaping, rejected media/active links,
+path/CSS validation, portable HTML, grid output, deterministic hashes, inherited
+private permissions and pending-save refusal. `e2e/tests/website.spec.ts` has two
+passing Chromium cases (1 worker, 16.6s): document-to-website preview, release
+review/download, independent drafts and reload; actual Assistant tools with a
+scripted model, existing table binding, design updates and omitted private data.
+This is private authoring/static export coverage, not public SaaS publication or
+live-model quality. See `planning/assistant-websites.md` for limits.
+
 App runner production regression (2026-09-12): `plugins.spec.ts` exercises
 manual preview/apply, missing-target refusal, manifest credential discovery,
 publishing, and integration sync against the embedded production frontend.

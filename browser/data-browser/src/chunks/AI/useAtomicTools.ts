@@ -1,4 +1,5 @@
 // @wc-ignore-file
+import { websiteTools } from '@chunks/Website/websiteTools';
 import { useAppSetup } from '../../components/AppSetup/AppSetupProvider';
 import { listAppSetups } from '../../components/AppSetup/registry';
 import { previewEventSchema, previewTrigger } from './previewTrigger';
@@ -113,6 +114,9 @@ export const TOOL_NAMES = {
   CALL_INTEGRATION_ACTION: 'call_integration_action',
   RUN_PLUGIN: 'run_plugin',
   SCHEDULE_PLUGIN: 'schedule_plugin',
+  CREATE_WEBSITE: 'create_website',
+  DESCRIBE_WEBSITE: 'describe_website',
+  UPDATE_WEBSITE: 'update_website',
   CREATE_APP: 'create_app',
   DESCRIBE_APP: 'describe_app',
   UPDATE_APP: 'update_app',
@@ -567,9 +571,11 @@ export function useAtomicMCPTools({
     return { table, tableClass: await store.getResource(classtype) };
   };
 
+  const { describe_website, ...websiteWriteTools } = websiteTools(store, drive);
   const tools = {
     read: {
       ...derivedReadTools,
+      describe_website,
       [TOOL_NAMES.SEMANTIC_SEARCH]: tool({
         description:
           'Perform a hybrid semantic and/or text search for resources in the AtomicServer Database. This is more powerful than regular search as it understands the meaning of the query. The results only include the **first** relevant chunk of the resource that matches the query. To get a complete picture you might need to fetch the full resource. If your search requires more specific results use the optional text_query parameter to bias the results towards the text',
@@ -1412,6 +1418,7 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
         },
         strict: true,
       }),
+      ...websiteWriteTools,
       [TOOL_NAMES.CREATE_APP]: tool({
         description: CREATE_APP_DESCRIPTION,
         inputSchema: z.object({

@@ -31,6 +31,8 @@ now live in [`completed/`](./completed/):
 
 ## Active
 
+- [Assistant-authored websites](./assistant-websites.md) — first local prototype validated; plugin abstraction audit and remaining SaaS deployment work.
+
 Remaining work, not "this file exists."
 
 Cross-repository account recovery: the canonical active plan is

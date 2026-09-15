@@ -172,10 +172,13 @@ export function EditModeProvider<TContent>({
 export function Editable({
   target,
   multiline = false,
+  allowEmpty = false,
   children,
 }: {
   target: string;
   multiline?: boolean;
+  /** Opt in when the source schema permits clearing a field. */
+  allowEmpty?: boolean;
   children: string;
 }) {
   const { active, commit } = useContext(EditContext);
@@ -190,7 +193,7 @@ export function Editable({
       spellCheck={false}
       onBlur={e => {
         const next = (e.currentTarget.textContent ?? '').trim();
-        if (next && next !== children) commit(target, next);
+        if ((next || allowEmpty) && next !== children) commit(target, next);
       }}
       onKeyDown={e => {
         if (e.key === 'Enter' && !multiline && !e.shiftKey) {
