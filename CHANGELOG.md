@@ -7,6 +7,19 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Desktop: the app window now runs under a Content Security Policy
+  (`desktop/tauri.conf.json`; security audit B7). Scripts only from the
+  bundle plus WebAssembly, connections to the embedded and remote servers
+  over HTTP and WebSocket, Google Fonts, no plugins or objects. Tauri hashes
+  the bundle's inline scripts itself, so `dangerousDisableAssetCspModification`
+  is off. A script injected through synced content can no longer reach the
+  IPC surface.
+- CI: a `v*` tag now publishes `@tomic/*` to npm through Trusted Publishing
+  (`release.yml` `npm` job). Tags only published crates.io and GitHub assets
+  before, which is why npm `latest` stayed on 0.40.0 and `beta` on
+  0.41.0-beta.0 through v0.41.0-beta.7. Pre-releases get the `beta` (or
+  `rc`, …) dist-tag, not `latest`; `@tomic/plugin` and `@tomic/edit-mode`
+  are marked public for their first publication.
 - Signed history now replicates. `SYNC_PUSH` carries the retained envelopes
   of the subjects it pushes (flag `0x02 ENVELOPES`, a trailer old decoders
   never read) over WebSocket, Iroh and browser peer links, and Cloud Vault

@@ -10,6 +10,9 @@ Talk with other devs on our [Discord][discord-url]!
 
 ## Publishing
 
+CI publishes `@tomic/*` to npm when a `v*` tag is pushed (`release.yml`
+`npm` job). The steps below are for a release CI could not finish.
+
 - `pnpm lint-fix`
 - commit any changes (if they are there)
 - `pnpm build` to build typescript files (don't skip this!)
@@ -22,10 +25,8 @@ Talk with other devs on our [Discord][discord-url]!
 - Check the [changelog](changelog.md), make sure the headers are correct
 - Now do the rust libraries
 - Commit any changes, name it `vX.XX.XX`
-- `pnpm publish -r`
-  - Choose a new version. Versions should match `atomic-data-rs`.
-  - This updates the `package.json` files, creates a commit, tags it, pushes it to github, and publishes the builds to npm.
-  - If this fails, try `pnpm version patch` and `pnpm publish`
+- `pnpm publish -r --no-git-checks --access public --tag <latest|beta>`
+  - A pre-release must use `--tag beta` (or `rc`, …); the default `latest` would replace the stable install.
   - DONT run `pnpm npm publish`, as it will not resolve workspace dependencies correctly.
 
 ## Understanding vite and pnpm workspaces

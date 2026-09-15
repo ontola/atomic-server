@@ -40,9 +40,9 @@ Ranked by impact. Each links to the plan that owns the work.
 3. ~~**Signed envelopes do not replicate**~~ Fixed 2026-09-15: envelopes ride in `SYNC_PUSH` and vault packs, verified on receipt. [`auditability-loro-history.md`](./auditability-loro-history.md).
 4. **Flutter and desktop bypass the runtime boundary**: both hold a raw `Db` instead of `AtomicNode`, which is how gap 1 happened. [`atomic-lib-runtime.md`](./atomic-lib-runtime.md).
 5. **`SYNC_PUSH` is an unsigned cross-trust import** gated by one drive-level ACL verdict; no grant-chain proof exists. [`authorization-sync.md`](./authorization-sync.md).
-6. **npm is seven betas behind**: `@tomic/*` still serves `0.41.0-beta.0`; `release.yml` has no npm job (PR #1355). [`production-readiness.md`](./production-readiness.md).
+6. **npm is seven betas behind**: `@tomic/*` still serves `0.41.0-beta.0`. The `npm` release job exists since 2026-09-15; the next tag publishes once `plugin` and `edit-mode` have trusted-publisher entries. [`production-readiness.md`](./production-readiness.md).
 7. **No Rust outbox**, so Flutter has no durable dirty queue and serverless Android sync cannot drain. [`unified-sync.md`](./unified-sync.md), [`serverless-p2p.md`](./serverless-p2p.md).
-8. **Desktop CSP is disabled** (audit B7). [`security-audit-2026-09.md`](./security-audit-2026-09.md).
+8. ~~**Desktop CSP is disabled**~~ Set 2026-09-15, pending a packaged-build smoke test. [`security-audit-2026-09.md`](./security-audit-2026-09.md).
 9. **Plugins and code-first schemas live only in unmergeable PRs** (#1307 at 532 files with conflicts, #1262 a stale draft). [`plugins.md`](./plugins.md), [`json-schema-code-first.md`](./json-schema-code-first.md).
 10. **Dashboards have no entry point and fork review shows only a count.** [`dashboards.md`](./dashboards.md), [`drafts-and-suggestions.md`](./drafts-and-suggestions.md).
 
@@ -60,7 +60,7 @@ browser flow; standalone recovery remains self-managed.
 | Document | Status |
 | --- | --- |
 | [`production-readiness.md`](./production-readiness.md) | **Gate list.** What stands between `develop` and production: npm publishing, rate limiting, library-owned durability, desktop CSP, managed-node abuse gate, source maps, SaaS billing checks. |
-| [`security-audit-2026-09.md`](./security-audit-2026-09.md) | **Mostly fixed** (beta.6). Open: B7 desktop CSP, C16 process-global import flags, C17 DID watched-query leak, C18 (Flutter only), C20, C24 loopback NFS, section D (rate limits, permissive CORS, client errors as 500), section F, transitive advisories via actix-http and iroh 0.35. |
+| [`security-audit-2026-09.md`](./security-audit-2026-09.md) | **Mostly fixed** (beta.6, plus B7 CSP, C18 and rate limits on 2026-09-15). Open: C16 process-global import flags, C17 DID watched-query leak, C20, C24 loopback NFS, permissive CORS, client errors as 500, section F, transitive advisories via actix-http and iroh 0.35. |
 | [`drive-sharing-state.md`](./drive-sharing-state.md) | **In progress.** Verified transition for unenrolled drives shipped (#1466). Remaining: authoritative per-drive editor usage from the backend, root cause of the retained remote routing, staging acceptance. |
 | [`cloud-subscription-panel.md`](./cloud-subscription-panel.md) | **Partial.** Profile and link-invite steps shipped. Remaining: SaaS email invitation to drive authorization in one journey, invitation usage limits, paid-seat approval, real seat counts, 50 GB pool. |
 | [`e2e-concurrency.md`](./e2e-concurrency.md) | **Active.** Issue #1461. Shard isolation and harness simplification landed (#1463, #1465, #1472); worker matrix, repeated zero-retry acceptance and budgets remain. |
