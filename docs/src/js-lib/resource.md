@@ -393,3 +393,10 @@ await resource.save();
 
 Collaborative rich-text documents store their ProseMirror tree under the `doc` root container.
 Use `loro-prosemirror` on the client for live editing and WebSocket sync.
+
+The browser applies ordinary inline text edits to the existing Loro text container.
+This preserves collaborative history and undo state while avoiding repeated
+materialization of a paragraph's accumulated formatting history on each keystroke.
+Structural edits still reconcile the ProseMirror tree with the same Loro document.
+Do not replace an existing document with a freshly generated snapshot to improve
+editing performance: peers and history depend on its existing CRDT identities.

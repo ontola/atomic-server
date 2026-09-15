@@ -30,10 +30,23 @@ not establish full Dagger E2E acceptance or a supported worker count.
 `loro-selection.test.ts` checks cursor preservation across a remote metadata
 update followed by keystrokes before and after queued timers. The scoped
 loro-prosemirror 0.4.3 patch restores document and selection atomically.
+
+`loro-typing-history.test.ts` exercises ordinary typing and fallback formatting
+with real ProseMirror transactions and Loro documents. Its synthetic imported
+history reproduces redundant inclusive-mark operations without private document
+data. Assertions cover materialization counts, formatting-history growth, text
+container identity, UTF-16 edits and persisted marks.
+`loro-typing-collaboration.test.ts` covers undo/redo followed by typing, concurrent
+text/format convergence without import echoes, duplicate paragraph mappings and
+multi-step composition fallback. `editor-typing.spec.ts` runs against the built
+GUI, checks that real keystrokes avoid `toDelta`, and verifies text after reload;
+it records frame timings without a machine-dependent timing threshold.
+
 `documentUndoSession.test.ts` covers document undo/redo across editor bindings,
 authentication-session isolation, system/remote changes and callback ownership.
 `browser/e2e/tests/document-undo.spec.ts` checks undo and redo through the
 Data View round trip, including persisted content after reload.
+
 `store-search-server.test.ts` checks that authoritative server lookups after
 imports do not wait on local indexing or WebSocket readiness.
 
