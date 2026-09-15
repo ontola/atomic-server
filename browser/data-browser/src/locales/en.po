@@ -138,6 +138,7 @@ msgstr "<0/> Create New Agent"
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx src/components/AvatarCropper.tsx
 #: src/chunks/Website/WebsitePage.tsx
+#: src/chunks/Website/WebsitePage.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
@@ -1444,6 +1445,7 @@ msgstr "Folder"
 msgid "ChatRoom"
 msgstr "ChatRoom"
 
+#: src/chunks/Website/WebsitePage.tsx
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 msgid "Document"
@@ -2314,6 +2316,7 @@ msgid "Ok"
 msgstr "Ok"
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
+#: src/chunks/Website/WebsitePage.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/views/OntologyPage/Class/NewClassInstanceButton.tsx
 msgid "Table"
@@ -10569,13 +10572,11 @@ msgstr "Page"
 msgid "Add a document"
 msgstr "Add a document"
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Accent color"
-msgstr "Accent color"
+#~ msgid "Accent color"
+#~ msgstr "Accent color"
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Typography"
-msgstr "Typography"
+#~ msgid "Typography"
+#~ msgstr "Typography"
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Show draft"
@@ -10797,26 +10798,25 @@ msgstr "Export"
 msgid "Design with AI"
 msgstr "Design with AI"
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Edit document"
-msgstr "Edit document"
+#~ msgid "Edit document"
+#~ msgstr "Edit document"
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Add content"
-msgstr "Add content"
+#~ msgid "Add content"
+#~ msgstr "Add content"
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Add to page"
 msgstr "Add to page"
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Design"
-msgstr "Design"
+#~ msgid "Design"
+#~ msgstr "Design"
+
+#~ msgid "Editorial"
+#~ msgstr "Editorial"
+
+#~ msgid "Modern"
+#~ msgstr "Modern"
 
 #: src/chunks/Website/WebsitePage.tsx
-msgid "Editorial"
-msgstr "Editorial"
-
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Modern"
-msgstr "Modern"
+msgid "<0/> Add content"
+msgstr "<0/> Add content"
