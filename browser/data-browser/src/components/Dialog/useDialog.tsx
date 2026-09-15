@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { InternalDialogProps } from './index';
 
 export type UseDialogReturnType = [
@@ -59,6 +59,24 @@ export function useDialog<E extends HTMLElement>(
 
     triggerRef?.current?.focus();
   }, [wasSuccess, onSuccess, onCancel, bindShow, triggerRef]);
+
+  // If the component using this dialog gets unmounted while the dialog is still
+  // open (e.g. navigating away without closing it first), `handleClosed` never
+  // runs and `inert` is left on `<body>` forever, making the whole app
+  // unclickable. Clear it on unmount as a fallback.
+  const visibleRef = useRef(visible);
+
+  useEffect(() => {
+    visibleRef.current = visible;
+  }, [visible]);
+
+  useEffect(() => {
+    return () => {
+      if (visibleRef.current) {
+        document.body.removeAttribute('inert');
+      }
+    };
+  }, []);
 
   /** Props that should be passed to a {@link Dialog} component. */
   const dialogProps = useMemo<InternalDialogProps>(
