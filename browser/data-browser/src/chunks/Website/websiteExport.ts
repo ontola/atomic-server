@@ -20,6 +20,7 @@ import {
   assertPrivateWebsiteParent,
   saveWebsiteResource,
   readWebsite,
+  findWebsiteSchema,
   websiteConfigSchema,
   type WebsiteConfig,
 } from './websiteModel';
@@ -339,13 +340,29 @@ export async function readWebsiteRelease(
   const subject = resource.get(schema.properties!['website-release']);
   if (typeof subject !== 'string') return undefined;
   const release = await store.getResource(subject);
+
+  return readWebsiteExport(store, drive, release, resource.subject);
+}
+
+export async function readWebsiteExport(
+  store: Store,
+  drive: string,
+  release: Resource,
+  project = String(release.get(core.properties.parent)),
+): Promise<WebsiteArtifact> {
+  const schema = await findWebsiteSchema(store, drive);
+  if (
+    !schema.classes?.['website-export'] ||
+    !release.hasClasses(schema.classes['website-export'])
+  )
+    throw new Error('This resource is not a website export.');
   const artifact = JSON.parse(
     String(release.get(schema.properties!['website-artifact'])),
   ) as WebsiteArtifact;
   if (
     artifact.version !== 1 ||
     artifact.renderer !== 'atomic-static-v1' ||
-    artifact.project !== resource.subject ||
+    artifact.project !== project ||
     !artifact.files ||
     (await artifactDigest(artifact.files, artifact.assets)) !== artifact.digest
   )

@@ -57,6 +57,11 @@ const DashboardPage = lazy(() =>
   import('../chunks/DashboardPage').then(m => ({ default: m.DashboardPage })),
 );
 
+const WebsiteExportPage = lazy(() =>
+  import('@chunks/Website/WebsiteExportPage').then(m => ({
+    default: m.WebsiteExportPage,
+  })),
+);
 const WebsitePage = lazy(() =>
   import('@chunks/Website/WebsitePage').then(m => ({ default: m.WebsitePage })),
 );
@@ -89,6 +94,10 @@ const ResourcePage: React.FC<Props> = ({ subject }) => {
   const drive = store.getDrive();
   const appClass = useAppClass(drive);
   const websiteClass = useWebsiteClass(isAList.join('|'));
+  const websiteExportClass = useWebsiteClass(
+    isAList.join('|'),
+    'website-export',
+  );
 
   // The body can have an inert attribute when the user navigated from an open dialog.
   // we remove it to make the page interactive again.
@@ -174,12 +183,19 @@ const ResourcePage: React.FC<Props> = ({ subject }) => {
   if (ReturnComponent === ResourcePageDefault) {
     if (loading) return null;
 
-    if (websiteClass && resource.hasClasses(websiteClass)) {
+    if (
+      (websiteClass && resource.hasClasses(websiteClass)) ||
+      (websiteExportClass && resource.hasClasses(websiteExportClass))
+    ) {
       return (
         <Main subject={subject}>
           <ErrorBoundary>
             <Suspense fallback={<Spinner />}>
-              <WebsitePage resource={resource} />
+              {websiteExportClass ? (
+                <WebsiteExportPage resource={resource} />
+              ) : (
+                <WebsitePage resource={resource} />
+              )}
             </Suspense>
           </ErrorBoundary>
         </Main>

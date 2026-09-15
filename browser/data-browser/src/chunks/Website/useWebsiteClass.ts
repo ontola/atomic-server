@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import { core, useStore } from '@tomic/react';
 
 /** Inspect the resource's declared classes, not every term in the drive ontology. */
-export function useWebsiteClass(classKey: string) {
+export function useWebsiteClass(
+  classKey: string,
+  shortname = 'website-project',
+) {
   const store = useStore();
   const [resolved, setResolved] = useState<{ key: string; subject?: string }>();
   useEffect(() => {
@@ -14,7 +17,7 @@ export function useWebsiteClass(classKey: string) {
         const resource = await store.getResource(id);
         if (!active) return;
 
-        if (resource.get(core.properties.shortname) === 'website-project') {
+        if (resource.get(core.properties.shortname) === shortname) {
           setResolved({ key: classKey, subject: id });
 
           return;
@@ -35,7 +38,7 @@ export function useWebsiteClass(classKey: string) {
       active = false;
       unsubscribes.forEach(unsubscribe => unsubscribe());
     };
-  }, [store, classKey]);
+  }, [store, classKey, shortname]);
 
   return resolved?.key === classKey ? resolved.subject : undefined;
 }

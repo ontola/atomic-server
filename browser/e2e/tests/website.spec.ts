@@ -76,6 +76,41 @@ test('website document preview, frozen release and reload', async ({
     path: test.info().outputPath('website-workspace.png'),
     fullPage: true,
   });
+  const releaseSubject = await page.evaluate(async () => {
+    const { readWebsite } = await import('/src/chunks/Website/websiteModel.ts');
+    const store = window.store;
+    const subject = new URL(location.href).searchParams.get('subject')!;
+    const resource = await store.getResource(subject);
+    const { schema } = await readWebsite(store, store.getDrive()!, resource);
+    return resource.get(schema.properties!['website-release']) as string;
+  });
+  await page.goto(
+    `${new URL(websiteURL).origin}/app/show?subject=${encodeURIComponent(releaseSubject)}`,
+  );
+  await expect(
+    page.getByRole('link', { name: 'Back to website', exact: true }),
+  ).toBeVisible();
+  await expect(
+    preview.getByText('This is the first published garden note.'),
+  ).toBeVisible();
+  await expect(
+    preview.getByText('A private change after the release.'),
+  ).toHaveCount(0);
+  await expect(page.locator('iframe[title="Website preview"]')).toHaveAttribute(
+    'sandbox',
+    'allow-same-origin',
+  );
+  await expect(
+    page.getByRole('button', { name: 'Update site', exact: true }),
+  ).toHaveCount(0);
+  await page.screenshot({
+    path: '/private/tmp/website-export-preview.png',
+    fullPage: true,
+  });
+  await page.reload();
+  await expect(
+    preview.getByText('This is the first published garden note.'),
+  ).toBeVisible();
 });
 
 // The model is scripted, but these are the real Assistant tools and Atomic writes.

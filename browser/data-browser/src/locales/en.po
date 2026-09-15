@@ -10984,6 +10984,7 @@ msgstr "Changes stay private until you publish."
 #~ msgid "Export & versions"
 #~ msgstr "Export & versions"
 
+#: src/chunks/Website/WebsiteExportPage.tsx
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Download website"
 msgstr "Download website"
@@ -11095,6 +11096,7 @@ msgstr "Website preview failed: {0}"
 msgid "Publishing is unavailable until the draft preview can be built. Check access to the selected content, then retry."
 msgstr "Publishing is unavailable until the draft preview can be built. Check access to the selected content, then retry."
 
+#: src/chunks/Website/WebsiteExportPage.tsx
 #: src/chunks/Website/WebsiteInlinePreview.tsx
 #: src/chunks/Website/WebsitePage.tsx
 #: src/chunks/Website/WebsitePreview.tsx
@@ -11138,3 +11140,24 @@ msgstr "Unpublished changes"
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Not published yet"
 msgstr "Not published yet"
+
+#. 0: new Date(artifact.createdAt).toLocaleString()
+#: src/chunks/Website/WebsiteExportPage.tsx
+msgid "Saved version · {0}"
+msgstr "Saved version · {0}"
+
+#: src/chunks/Website/WebsiteExportPage.tsx
+msgid "Preview page"
+msgstr "Preview page"
+
+#: src/chunks/Website/WebsiteExportPage.tsx
+msgid "Back to website"
+msgstr "Back to website"
+
+#: src/chunks/Website/WebsiteExportPage.tsx
+msgid "Export actions"
+msgstr "Export actions"
+
+#: src/chunks/Website/WebsiteExportPage.tsx
+msgid "Loading saved preview…"
+msgstr "Loading saved preview…"
