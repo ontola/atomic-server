@@ -11477,3 +11477,7 @@ msgstr "Publish to integration store"
 #~ msgstr ""
 #~ "Setup did not finish. Check your integrations for a partially created "
 #~ "connection before starting again."
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "The response was interrupted."
+msgstr "The response was interrupted."

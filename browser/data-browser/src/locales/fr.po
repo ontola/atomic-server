@@ -10525,6 +10525,8 @@ msgstr ""
 
 #: src/views/File/ConvertToDocumentButton.tsx
 msgid "Document converted locally, but could not be saved."
+#: src/chunks/AI/RealAIChat.tsx
+msgid "The response was interrupted."
 msgstr ""
 
 #: src/helpers/searchResultHint.ts

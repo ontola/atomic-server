@@ -1888,3 +1888,75 @@ revision reuse, opaque source/setup text, and refusal of installation fields or
 unsupported declarations. This is library coverage: marketplace UI, real-server
 package persistence, schema/template graph import and sandbox activation remain
 unverified/unimplemented by this slice.
+
+### Assistant context failure recovery
+
+`useCurrentSubject.test.ts` covers `/app` and nested app routes remaining UI
+routes rather than becoming backend resource subjects.
+`processAtomicResources.test.ts` verifies an unavailable attachment does not
+discard a readable product attachment or abort context preparation.
+`store.test.ts` covers a failed WebSocket GET settling concurrent readers and
+subsequent reads of its error placeholder. Existing gap-recovery and ingress
+tests cover missing-history and snapshot recovery; these are not proof that
+every resource in a user's live session has recovered.
+
+`toolHistory.test.ts` checks interrupted tool calls remain explicitly unknown
+in outgoing model history, completed calls retain results, and persisted tool
+errors and falsy outputs survive round trips. Recovery does not replay tools
+or mutate the user's stored chat. Live provider recovery is not covered by
+the scripted website E2E.
+
+### Streamed Assistant message persistence
+
+The AI chat partial-response E2E holds the model stream open, emits two text
+updates, checks that a single Assistant message reached the backend through an
+independent authenticated HTTP read, and reopens it after refresh.
+`persistSidebarMessage.test.ts` requires the current message to persist even
+when React does not run the state updater immediately. Streaming checkpoints
+run once per second and serialize updates to the same message and parts;
+refresh before the first completed checkpoint can still lose the newest text.
+
+The AI rate-limit E2E emits received reasoning followed by a provider 429. It
+checks the reasoning remains visible and that reopening the chat restores both
+the reasoning and the provider error. Error replies do not launch follow-up
+question generation or automatic compaction.
+
+## Signed-out local drive opened from the portal
+
+`browser/data-browser/src/helpers/isDriveSignInError.test.ts` covers a local-only missing-resource error with no app agent, including origins with a configured node. It also covers signed-out DID resources absent from the current node: their copy may be in the account vault, so they offer unlock. Signed-in users, ordinary HTTP 404s, and unrelated transport failures retain their error handling.
+
+Paired SaaS `portal/e2e/passkey-open-drive.spec.ts` covers account/profile creation, passkey enrollment, recovery-code acknowledgement, completed app sign-out, portal passkey sign-in, and the Open link reaching the app unlock screen. It then unlocks and verifies the original drive title. Chromium virtual PRF state is tied to the original CDP target, so the unlock portion runs there after verifying the real popup handoff. Unlocking within the popup itself remains a physical-browser acceptance check.
+## Ontology codegen (`@tomic/cli`) and DID fetch
+
+| Flow | Where |
+|---|---|
+| HTTP path `https://host/did:ad:…` and `/did?subject=` extract the same DID | `browser/lib/src/subject.test.ts` |
+| JSON-AD parse accepts `@id: did:ad:…` when the request used the HTTP path alias | `browser/lib/src/parse.test.ts` |
+| `Client.fetchResourceHTTP` resolves DIDs via `/did?subject=` and does not touch `window` in Node | `browser/lib/src/client.fetch.test.ts` |
+| Store fetch by HTTP path alias returns the resource stored under the DID | `browser/lib/src/store.test.ts` |
+
+Not covered: `ad-generate ontologies` end-to-end against a live server (no CLI test runner).
+
+`helpers/managed/vaultAutoBackup.test.ts` verifies successful vault restoration preserves known node absence as local-only routing, while transport failures and failed restores do not disable node sync. Paired SaaS second-browser coverage verifies the original profile and vault-only canary after restore, with bounded pre-restore refusal diagnostics.
+
+Paired SaaS `portal/e2e/identity-reconcile.spec.ts` exercises dev-drive creation while a managed account is active: reconciliation waits until the temporary identity has a drive, and creation must not enroll it in the account.
+
+Session restore routing: `helpers/managed/reconcile.test.ts` covers connecting the
+exact hosted drive before availability checks, clearing local-only routing,
+skipping Pending/Disabled placements and other drives, and ignoring discovery
+that completes after its deadline. Staging phone restore latency and end-to-end
+WebSocket query delivery remain unverified.
+
+Cloud Vault download concurrency: `helpers/managed/vault.test.ts` holds network
+responses open to verify concurrent downloads are bounded at four and that
+reverse completion preserves listing order at import. Existing progress and
+failure checks also pass. Actual staging phone restore latency remains unmeasured.
+
+## External cache access and authentication origins (#170)
+
+`db::test::cached_external_resources_keep_read_permissions` checks that a cached
+external resource remains private in public collection queries (nested and
+subject-only) and direct reads, while the authorized agent can still read it.
+`client::helpers` origin tests reject lookalike hosts, userinfo-host confusion,
+changed ports/schemes, malformed URLs and non-HTTP URLs; normalized same-origin
+and localhost requests remain eligible for DID-agent authentication.

@@ -47,7 +47,11 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   const { generateTitleFromConversation } = useGenerativeData();
 
   const addNewMessage = async (message: AtomicUIMessage) => {
-    setMessages(prev => [...prev, message]);
+    setMessages(prev =>
+      prev.some(m => m.id === message.id)
+        ? prev.map(m => (m.id === message.id ? message : m))
+        : [...prev, message],
+    );
 
     const newMessages = [...messages, message];
 
@@ -73,6 +77,11 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
 
       setMessageToResourceMap(prev => {
         const next = new Map(prev);
+
+        for (const key of next.keys()) {
+          if (key.id === message.id) next.delete(key);
+        }
+
         next.set(message, messageResource);
 
         return next;
