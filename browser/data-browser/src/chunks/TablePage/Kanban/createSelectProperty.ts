@@ -27,7 +27,7 @@ export interface CreatedSelectProperty {
 async function resolvePropertyParent(
   store: Store,
   tableClass: Resource,
-): Promise<{ subject: string; isOntology: boolean }> {
+): Promise<{ subject: string; isOntology: boolean; resource: Resource }> {
   const classParentSubject = tableClass.get(core.properties.parent) as string;
   const classParent = await store.getResource(classParentSubject);
   const isOntology = classParent.hasClasses(core.classes.ontology);
@@ -35,7 +35,74 @@ async function resolvePropertyParent(
   return {
     subject: isOntology ? classParent.subject : tableClass.subject,
     isOntology,
+    resource: classParent,
   };
+}
+
+/**
+ * Every property already registered on `ontology`, keyed by shortname. Used to
+ * detect a shortname a new column would collide with before minting a
+ * duplicate property that shares it — see `createPropertyOnClass` and
+ * `createSelectPropertyOnClass`.
+ */
+async function loadOntologyPropertiesByShortname(
+  store: Store,
+  ontology: Resource,
+): Promise<Map<string, Resource>> {
+  const subjects = (ontology.get(core.properties.properties) ?? []) as string[];
+  const resources = await Promise.all(
+    subjects.map(subject => store.getResource(subject)),
+  );
+  const taken = new Map<string, Resource>();
+
+  for (const resource of resources) {
+    const shortname = resource.get(core.properties.shortname);
+
+    if (typeof shortname === 'string' && shortname) {
+      taken.set(shortname, resource);
+    }
+  }
+
+  return taken;
+}
+
+/** The next shortname after `base` not already in `taken` — `status-2`,
+ *  `status-3`, etc. */
+function disambiguateShortname(
+  taken: Map<string, Resource>,
+  base: string,
+): string {
+  let n = 2;
+
+  while (taken.has(`${base}-${n}`)) {
+    n += 1;
+  }
+
+  return `${base}-${n}`;
+}
+
+/** A plain (non-select) property can be reused for a new column with the same
+ *  shortname only if it stores the same kind of value. */
+function isCompatiblePlainProperty(
+  existing: Resource,
+  datatype: Datatype,
+): boolean {
+  return (
+    existing.hasClasses(core.classes.property) &&
+    !existing.hasClasses(dataBrowser.classes.selectProperty) &&
+    existing.get(core.properties.datatype) === datatype
+  );
+}
+
+/** A select property can be reused for a new column with the same shortname
+ *  only if it's actually a select (tag-backed enum), not some other property
+ *  that happens to share the slug. */
+function isCompatibleSelectProperty(existing: Resource): boolean {
+  return (
+    existing.hasClasses(core.classes.property) &&
+    existing.hasClasses(dataBrowser.classes.selectProperty) &&
+    existing.get(core.properties.datatype) === Datatype.RESOURCEARRAY
+  );
 }
 
 /**
@@ -65,13 +132,20 @@ export async function attachPropertiesToClass(
   const classParent = await store.getResource(classParentSubject);
 
   if (classParent.hasClasses(core.classes.ontology)) {
-    const ontologyProps = classParent.get(core.properties.properties) ?? [];
+    const ontologyProps = (classParent.get(core.properties.properties) ??
+      []) as string[];
+    // A reused property (see `createPropertyOnClass` / `createSelectPropertyOnClass`'s
+    // shortname dedupe, or an explicit `column.propertySubject`) may already be
+    // registered here — don't duplicate its entry.
+    const newProps = propertySubjects.filter(
+      subject => !ontologyProps.includes(subject),
+    );
     const closeSort = perfSpan('table.sortSubjectList', {
-      n: (ontologyProps as string[]).length + propertySubjects.length,
+      n: ontologyProps.length + newProps.length,
     });
     const sorted = await sortSubjectList(store, [
       ...ontologyProps,
-      ...propertySubjects,
+      ...newProps,
     ]);
     closeSort();
     await classParent.set(core.properties.properties, sorted);
@@ -115,9 +189,33 @@ export async function createPropertyOnClass(
   },
 ): Promise<string> {
   const parent = await resolvePropertyParent(store, tableClass);
+  let shortname = stringToSlug(opts.name);
+
+  if (parent.isOntology) {
+    const taken = await loadOntologyPropertiesByShortname(
+      store,
+      parent.resource,
+    );
+    const existing = taken.get(shortname);
+
+    if (existing) {
+      if (isCompatiblePlainProperty(existing, opts.datatype)) {
+        if (!opts.deferAttach) {
+          await attachPropertiesToClass(store, tableClass, [existing.subject]);
+        }
+
+        return existing.subject;
+      }
+
+      // A different, incompatible property already owns this shortname
+      // (e.g. a "Status" text column elsewhere vs. this select column) —
+      // mint under a disambiguated one instead of silently colliding.
+      shortname = disambiguateShortname(taken, shortname);
+    }
+  }
 
   const propVals: Record<string, JSONValue> = {
-    [core.properties.shortname]: stringToSlug(opts.name),
+    [core.properties.shortname]: shortname,
     [core.properties.name]: opts.name,
     [core.properties.description]: opts.description ?? '',
     [core.properties.datatype]: opts.datatype,
@@ -143,6 +241,55 @@ export async function createPropertyOnClass(
 }
 
 /**
+ * Attaches an already-existing select property to a new table instead of
+ * minting a duplicate that would share its shortname. The caller's requested
+ * options must already exist among the property's tags — silently adding new
+ * options to a property shared by other tables/columns would surprise them.
+ */
+async function reuseSelectProperty(
+  store: Store,
+  tableClass: Resource,
+  existing: Resource,
+  opts: { name: string; tags: TagSeed[]; deferAttach?: boolean },
+): Promise<CreatedSelectProperty> {
+  const optionSubjects = (existing.get(core.properties.allowsOnly) ??
+    []) as string[];
+  // Tags are created with only a shortname (see below) — no `core:name` — so
+  // match the caller's option names against that, the same slug they were
+  // minted with.
+  const subjectByShortname: Record<string, string> = {};
+
+  for (const subject of optionSubjects) {
+    const tag = await store.getResource(subject);
+    const shortname = tag.get(core.properties.shortname);
+
+    if (typeof shortname === 'string') {
+      subjectByShortname[shortname] = subject;
+    }
+  }
+
+  const tagsByName: Record<string, string> = {};
+
+  for (const seed of opts.tags) {
+    const subject = subjectByShortname[stringToSlug(seed.name)];
+
+    if (!subject) {
+      throw new Error(
+        `Shared property "${opts.name}" has no option "${seed.name}"`,
+      );
+    }
+
+    tagsByName[seed.name] = subject;
+  }
+
+  if (!opts.deferAttach) {
+    await attachPropertiesToClass(store, tableClass, [existing.subject]);
+  }
+
+  return { subject: existing.subject, tags: tagsByName };
+}
+
+/**
  * Creates a SelectProperty (enum) with the given Tags and attaches it to a
  * table's row Class — mirroring `NewPropertyDialog`'s "select" genesis path so
  * the property is indistinguishable from one a user made by hand. Returns the
@@ -164,12 +311,31 @@ export async function createSelectPropertyOnClass(
   },
 ): Promise<CreatedSelectProperty> {
   const parent = await resolvePropertyParent(store, tableClass);
+  let shortname = stringToSlug(opts.name);
+
+  if (parent.isOntology) {
+    const taken = await loadOntologyPropertiesByShortname(
+      store,
+      parent.resource,
+    );
+    const existing = taken.get(shortname);
+
+    if (existing) {
+      if (isCompatibleSelectProperty(existing)) {
+        return reuseSelectProperty(store, tableClass, existing, opts);
+      }
+
+      // A different, incompatible property already owns this shortname —
+      // mint under a disambiguated one instead of silently colliding.
+      shortname = disambiguateShortname(taken, shortname);
+    }
+  }
 
   const property = await store.newResource({
     parent: parent.subject,
     isA: [core.classes.property, dataBrowser.classes.selectProperty],
     propVals: {
-      [core.properties.shortname]: stringToSlug(opts.name),
+      [core.properties.shortname]: shortname,
       [core.properties.name]: opts.name,
       [core.properties.description]: '',
       [core.properties.datatype]: Datatype.RESOURCEARRAY,

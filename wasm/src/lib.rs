@@ -81,8 +81,8 @@ impl ClientDb {
     /// OPFS is genuinely broken (corrupt, quota, unsupported browser) — the
     /// error surfaces verbatim, except that an undecryptable file is tagged
     /// with `WRONG_KEY_MARKER` so the caller can drop and recreate the cache.
-    #[wasm_bindgen(constructor)]
-    pub async fn new(
+    #[wasm_bindgen(js_name = "create")]
+    pub async fn create(
         base_url: Option<String>,
         db_name: Option<String>,
         db_key: Option<Vec<u8>>,
@@ -546,7 +546,7 @@ impl ClientDb {
                 }
                 Err(e) => {
                     web_sys::console::warn_1(
-                        &format!("[ClientDb] Failed to read VV for {}: {e}", &subject).into(),
+                        &format!("[ClientDb] Failed to read VV for {}: {e}", subject).into(),
                     );
                 }
             }
@@ -585,7 +585,7 @@ impl ClientDb {
                         }
                         Err(e) => {
                             web_sys::console::warn_1(
-                                &format!("[ClientDb] Failed to read VV for {}: {e}", &subject)
+                                &format!("[ClientDb] Failed to read VV for {}: {e}", subject)
                                     .into(),
                             );
                         }
@@ -596,7 +596,7 @@ impl ClientDb {
                 Ok(None) => {}
                 Err(e) => {
                     web_sys::console::warn_1(
-                        &format!("[ClientDb] VV read error for {}: {e}", &subject).into(),
+                        &format!("[ClientDb] VV read error for {}: {e}", subject).into(),
                     );
                 }
             }

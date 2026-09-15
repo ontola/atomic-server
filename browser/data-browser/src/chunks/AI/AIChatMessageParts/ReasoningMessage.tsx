@@ -23,11 +23,13 @@ const ReasoningSummary = ({ streaming }: { streaming?: boolean }) => (
 export const ReasoningMessage = ({
   text,
   state,
+  interrupted = false,
 }: {
   text: string;
   state?: 'streaming' | 'done';
+  interrupted?: boolean;
 }) => {
-  if (state === 'streaming') {
+  if (state === 'streaming' && !interrupted) {
     return (
       <>
         <Shimmer>
@@ -42,14 +44,24 @@ export const ReasoningMessage = ({
 
   if (text === '[REDACTED]') {
     return (
-      <Details noIndent titleButton={<ReasoningSummary />}>
+      <Details
+        noIndent
+        open={interrupted}
+        initialState={interrupted}
+        titleButton={<ReasoningSummary />}
+      >
         <ReasoningMessageWrapper>{text}</ReasoningMessageWrapper>
       </Details>
     );
   }
 
   return (
-    <Details noIndent titleButton={<ReasoningSummary />}>
+    <Details
+      noIndent
+      open={interrupted}
+      initialState={interrupted}
+      titleButton={<ReasoningSummary />}
+    >
       <ReasoningMessageWrapper>
         <Markdown text={text} maxLength={Infinity} />
       </ReasoningMessageWrapper>

@@ -82,13 +82,16 @@ export const persistSidebarMessage = async ({
     },
   );
 
-  setMessageToResourceMap(prev => {
-    const next = new Map(prev);
-    next.set(message, messageResource);
-    messageToResourceMapRef.current = next;
+  // Persistence must not depend on React executing a deferred state updater.
+  const next = new Map(messageToResourceMapRef.current);
 
-    return next;
-  });
+  for (const key of next.keys()) {
+    if (key.id === message.id) next.delete(key);
+  }
+
+  next.set(message, messageResource);
+  messageToResourceMapRef.current = next;
+  setMessageToResourceMap(next);
 
   if (!isChatSavedRef.current && shouldFinalizeDraftChat(message)) {
     // Persist child messages (and their parts) before the chat resource

@@ -10632,3 +10632,7 @@ msgstr "Preserves recurring series and previews supported edits to send back to 
 #: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 msgid "Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google."
 msgstr "Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google."
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "The response was interrupted."
+msgstr "The response was interrupted."
