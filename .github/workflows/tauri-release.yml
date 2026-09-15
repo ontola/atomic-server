@@ -187,7 +187,7 @@ jobs:
           version: 10
           run_install: false
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.98.1
         with:
           targets: ${{ matrix.rust-targets }}
 
@@ -400,7 +400,7 @@ jobs:
           sdkmanager --install "ndk;27.2.12479018" >/dev/null
           echo "NDK_HOME=${ANDROID_SDK_ROOT}/ndk/27.2.12479018" >> "$GITHUB_ENV"
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.98.1
         with:
           # arm64 only: phones/tablets we ship to. The other three Android
           # targets were Tauri's generated default and made the universal APK
@@ -547,7 +547,7 @@ jobs:
           version: 10
           run_install: false
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.98.1
         with:
           targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,wasm32-unknown-unknown
 
