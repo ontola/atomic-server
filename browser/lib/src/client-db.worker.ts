@@ -5,8 +5,8 @@
  * The WASM module URL is passed as the first message after creation.
  */
 
-import { openClientDb, isStorageBlockedDbError } from "./client-db-open.js";
-import { wasmBinaryUrl } from "./wasm-url.js";
+import { openClientDb, isStorageBlockedDbError } from './client-db-open.js';
+import { wasmBinaryUrl } from './wasm-url.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type WasmModule = any;
@@ -16,19 +16,19 @@ let initPromise: Promise<ClientDbInitTimings> | null = null;
 
 /** Message types sent from main thread to worker */
 export type WorkerRequest =
-  | { id: number; type: "canSendPeerFrame"; session: number; subject: string }
+  | { id: number; type: 'canSendPeerFrame'; session: number; subject: string }
   | {
       id: number;
-      type: "createPeerSession";
+      type: 'createPeerSession';
       drive: string;
       expectedPeer?: string;
       challenge: string;
     }
-  | { id: number; type: "handlePeerFrame"; session: number; frame: Uint8Array }
-  | { id: number; type: "closePeerSession"; session: number }
+  | { id: number; type: 'handlePeerFrame'; session: number; frame: Uint8Array }
+  | { id: number; type: 'closePeerSession'; session: number }
   | {
       id: number;
-      type: "init";
+      type: 'init';
       wasmUrl: string;
       baseUrl?: string;
       /** OPFS file name of the database; the WASM side defaults to the
@@ -39,23 +39,23 @@ export type WorkerRequest =
       /** Migrate the legacy shared DB into `dbName` before opening. */
       migrateLegacy?: boolean;
     }
-  | { id: number; type: "getResource"; subject: string }
-  | { id: number; type: "getResourceWithSnapshot"; subject: string }
-  | { id: number; type: "putResource"; jsonAd: string }
-  | { id: number; type: "putResources"; jsonAds: string[] }
+  | { id: number; type: 'getResource'; subject: string }
+  | { id: number; type: 'getResourceWithSnapshot'; subject: string }
+  | { id: number; type: 'putResource'; jsonAd: string }
+  | { id: number; type: 'putResources'; jsonAds: string[] }
   | {
       id: number;
-      type: "putResourceWithSnapshot";
+      type: 'putResourceWithSnapshot';
       subject: string;
       jsonAd: string;
       snapshot?: Uint8Array;
     }
-  | { id: number; type: "applyCommit"; commitJsonAd: string }
-  | { id: number; type: "applyPeerCommit"; commitJsonAd: string }
-  | { id: number; type: "removeResource"; subject: string }
+  | { id: number; type: 'applyCommit'; commitJsonAd: string }
+  | { id: number; type: 'applyPeerCommit'; commitJsonAd: string }
+  | { id: number; type: 'removeResource'; subject: string }
   | {
       id: number;
-      type: "query";
+      type: 'query';
       property?: string;
       value?: string;
       filters?: Array<{ property?: string; value?: string; operator?: string }>;
@@ -74,32 +74,32 @@ export type WorkerRequest =
     }
   | {
       id: number;
-      type: "search";
+      type: 'search';
       query: string;
       limit?: number;
       parents?: string | string[];
       filters?: Record<string, string | number | string[]>;
     }
-  | { id: number; type: "allSubjects" }
-  | { id: number; type: "populate" }
-  | { id: number; type: "flush" }
-  | { id: number; type: "exportAllResources" }
-  | { id: number; type: "importAllResources"; jsonArray: string }
-  | { id: number; type: "getLoroSnapshot"; subject: string }
-  | { id: number; type: "historyAttribution"; subject: string }
-  | { id: number; type: "envelopesFor"; subjects: string[] }
-  | { id: number; type: "importEnvelopes"; envelopes: string }
-  | { id: number; type: "putBlob"; hash: Uint8Array; data: Uint8Array }
-  | { id: number; type: "getBlob"; hash: Uint8Array }
-  | { id: number; type: "blake3Hash"; data: Uint8Array }
-  | { id: number; type: "getAllVersionVectors" }
-  | { id: number; type: "getVersionVectorsForDrive"; drive: string }
+  | { id: number; type: 'allSubjects' }
+  | { id: number; type: 'populate' }
+  | { id: number; type: 'flush' }
+  | { id: number; type: 'exportAllResources' }
+  | { id: number; type: 'importAllResources'; jsonArray: string }
+  | { id: number; type: 'getLoroSnapshot'; subject: string }
+  | { id: number; type: 'historyAttribution'; subject: string }
+  | { id: number; type: 'envelopesFor'; subjects: string[] }
+  | { id: number; type: 'importEnvelopes'; envelopes: string }
+  | { id: number; type: 'putBlob'; hash: Uint8Array; data: Uint8Array }
+  | { id: number; type: 'getBlob'; hash: Uint8Array }
+  | { id: number; type: 'blake3Hash'; data: Uint8Array }
+  | { id: number; type: 'getAllVersionVectors' }
+  | { id: number; type: 'getVersionVectorsForDrive'; drive: string }
   // Cloud Vault. These live in the worker because it holds the only Db handle;
   // the network half stays on the main thread, where the control-plane session
   // and CORS setup already work. What crosses this boundary is ciphertext.
   | {
       id: number;
-      type: "vaultExport";
+      type: 'vaultExport';
       driveSubject: string;
       key: Uint8Array;
       keyEpoch: number;
@@ -112,7 +112,7 @@ export type WorkerRequest =
     }
   | {
       id: number;
-      type: "vaultImport";
+      type: 'vaultImport';
       key: Uint8Array;
       keyEpoch: number;
       drivePseudonym: string;
@@ -121,7 +121,7 @@ export type WorkerRequest =
     }
   | {
       id: number;
-      type: "vaultCommitSegment";
+      type: 'vaultCommitSegment';
       drivePseudonym: string;
       devicePubkey: string;
       segment: number;
@@ -129,29 +129,29 @@ export type WorkerRequest =
 
 /** Message types sent from worker back to main thread */
 export type WorkerResponse =
-  | { id: number; type: "ok"; data?: unknown }
-  | { id: number; type: "error"; message: string };
+  | { id: number; type: 'ok'; data?: unknown }
+  | { id: number; type: 'error'; message: string };
 
 async function handleMessage(msg: WorkerRequest): Promise<unknown> {
   switch (msg.type) {
-    case "canSendPeerFrame":
+    case 'canSendPeerFrame':
       await ensureInit();
 
       return db!.canSendPeerFrame(msg.session, msg.subject);
-    case "createPeerSession":
+    case 'createPeerSession':
       await ensureInit();
 
       return db!.createPeerSession(msg.drive, msg.expectedPeer, msg.challenge);
-    case "handlePeerFrame":
+    case 'handlePeerFrame':
       await ensureInit();
 
       return db!.handlePeerFrame(msg.session, msg.frame);
-    case "closePeerSession":
+    case 'closePeerSession':
       await ensureInit();
 
       return db!.closePeerSession(msg.session);
 
-    case "init": {
+    case 'init': {
       // Return the per-phase init timings so the main thread can fold the
       // worker-side WASM/OPFS boot into its perf trace.
       if (initPromise) {
@@ -169,13 +169,13 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       return await initPromise;
     }
 
-    case "getResource": {
+    case 'getResource': {
       await ensureInit();
 
       return db!.getResource(msg.subject);
     }
 
-    case "getResourceWithSnapshot": {
+    case 'getResourceWithSnapshot': {
       // Combined getter for the cold-load fast path: every
       // `fetchResourceWithLocalFallback` used to do two sequential
       // worker round-trips (one for the JSON-AD, one for the Loro
@@ -198,14 +198,14 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       return { jsonAd: jsonAd ?? null, snapshot: snapshot ?? null };
     }
 
-    case "putResource": {
+    case 'putResource': {
       await ensureInit();
       await db!.putResource(msg.jsonAd);
 
       return;
     }
 
-    case "putResources": {
+    case 'putResources': {
       // Batch put: each individual `putResource` call costs one
       // postMessage round-trip. The startup seed loop in the data-
       // browser writes ~200 resources right after the WASM init —
@@ -222,7 +222,7 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       return;
     }
 
-    case "putResourceWithSnapshot": {
+    case 'putResourceWithSnapshot': {
       // Atomic write: JSON-AD index entry + (optional) Loro snapshot
       // in one postMessage. Snapshot omitted for resources without
       // a Loro doc (e.g. Commit resources).
@@ -248,26 +248,26 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       return;
     }
 
-    case "applyPeerCommit":
+    case 'applyPeerCommit':
       await ensureInit();
 
       return db!.applyPeerCommit(msg.commitJsonAd);
 
-    case "applyCommit": {
+    case 'applyCommit': {
       await ensureInit();
       await db!.applyCommit(msg.commitJsonAd);
 
       return;
     }
 
-    case "removeResource": {
+    case 'removeResource': {
       await ensureInit();
       await db!.removeResource(msg.subject);
 
       return;
     }
 
-    case "query": {
+    case 'query': {
       await ensureInit();
 
       return db!.query(
@@ -285,7 +285,7 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       );
     }
 
-    case "search": {
+    case 'search': {
       await ensureInit();
 
       return db!.search(
@@ -296,20 +296,20 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       );
     }
 
-    case "allSubjects": {
+    case 'allSubjects': {
       await ensureInit();
 
       return db!.allSubjects();
     }
 
-    case "populate": {
+    case 'populate': {
       await ensureInit();
       await db!.populate();
 
       return;
     }
 
-    case "flush": {
+    case 'flush': {
       await ensureInit();
       // Durability on demand. Writes commit with `Durability::None` and are
       // only persisted by a later Immediate commit, which otherwise happens
@@ -323,68 +323,68 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       return;
     }
 
-    case "exportAllResources": {
+    case 'exportAllResources': {
       await ensureInit();
 
       return db!.exportAllResources();
     }
 
-    case "importAllResources": {
+    case 'importAllResources': {
       await ensureInit();
 
       return db!.importAllResources(msg.jsonArray);
     }
 
-    case "getLoroSnapshot": {
+    case 'getLoroSnapshot': {
       await ensureInit();
 
       return db!.getLoroSnapshot(msg.subject);
     }
 
-    case "historyAttribution": {
+    case 'historyAttribution': {
       await ensureInit();
 
       return (await db!.historyAttribution(msg.subject)) as string;
     }
 
-    case "envelopesFor": {
+    case 'envelopesFor': {
       await ensureInit();
 
       return db!.envelopesFor(JSON.stringify(msg.subjects)) as string;
     }
 
-    case "importEnvelopes": {
+    case 'importEnvelopes': {
       await ensureInit();
 
       return (await db!.importEnvelopes(msg.envelopes)) as number;
     }
 
-    case "putBlob": {
+    case 'putBlob': {
       await ensureInit();
       db!.putBlob(msg.hash, msg.data);
 
       return;
     }
 
-    case "getBlob": {
+    case 'getBlob': {
       await ensureInit();
 
       return db!.getBlob(msg.hash);
     }
 
-    case "blake3Hash": {
+    case 'blake3Hash': {
       await ensureInit();
 
       return db!.blake3Hash(msg.data);
     }
 
-    case "getAllVersionVectors": {
+    case 'getAllVersionVectors': {
       await ensureInit();
 
       return db!.getAllVersionVectors();
     }
 
-    case "vaultExport": {
+    case 'vaultExport': {
       await ensureInit();
 
       return db!.vaultExport(
@@ -403,7 +403,7 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       );
     }
 
-    case "vaultImport": {
+    case 'vaultImport': {
       await ensureInit();
       const summary = await db!.vaultImport(
         msg.key,
@@ -430,13 +430,13 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       } catch (e) {
         // Fall back to the tick rather than failing a restore that did land.
         dirty = true;
-        console.error("[ClientDb] flush after vault import failed:", e);
+        console.error('[ClientDb] flush after vault import failed:', e);
       }
 
       return summary;
     }
 
-    case "vaultCommitSegment": {
+    case 'vaultCommitSegment': {
       await ensureInit();
       db!.vaultCommitSegment(msg.drivePseudonym, msg.devicePubkey, msg.segment);
       // Backup completion must survive an immediate reload. Waiting for the
@@ -450,7 +450,7 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       return undefined;
     }
 
-    case "getVersionVectorsForDrive": {
+    case 'getVersionVectorsForDrive': {
       await ensureInit();
 
       return db!.getVersionVectorsForDrive(msg.drive);
@@ -500,7 +500,7 @@ async function doInit(
   // `dbName`. Must run BEFORE `new ClientDb` takes the OPFS handle. A failed
   // migration must not block opening the new DB — the legacy file is left in
   // place for a later attempt.
-  if (migrateLegacy && dbName && dbName !== "atomic_data.redb") {
+  if (migrateLegacy && dbName && dbName !== 'atomic_data.redb') {
     try {
       await wasm.migrateLegacyClientDb(dbName, dbKey ?? undefined);
     } catch (e) {
@@ -509,7 +509,7 @@ async function doInit(
       // nothing the open below won't say better. Staying quiet here avoids
       // reporting the same condition twice, with a stack trace, per load.
       if (!isStorageBlockedDbError(e)) {
-        console.warn("[ClientDb] legacy DB migration failed:", e);
+        console.warn('[ClientDb] legacy DB migration failed:', e);
       }
     }
   }
@@ -556,14 +556,14 @@ let workQueue: Promise<void> = Promise.resolve();
 
 // Message types that mutate the DB. After any of these we owe the OPFS a
 // durable `flush()` (see below).
-const WRITE_OPS: ReadonlySet<WorkerRequest["type"]> = new Set([
-  "putResource",
-  "putResources",
-  "applyCommit",
-  "removeResource",
-  "putBlob",
-  "importAllResources",
-  "populate",
+const WRITE_OPS: ReadonlySet<WorkerRequest['type']> = new Set([
+  'putResource',
+  'putResources',
+  'applyCommit',
+  'removeResource',
+  'putBlob',
+  'importAllResources',
+  'populate',
 ]);
 
 // Per-write redb commits use `Durability::None` (no fsync) for throughput;
@@ -590,7 +590,7 @@ setInterval(() => {
       // Re-arm so the next tick retries; a transient flush failure shouldn't
       // permanently strand un-persisted writes.
       dirty = true;
-      console.error("[ClientDb] OPFS flush failed:", e);
+      console.error('[ClientDb] OPFS flush failed:', e);
     }
   });
 }, FLUSH_INTERVAL_MS);
@@ -603,12 +603,12 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
 
       if (WRITE_OPS.has(msg.type)) dirty = true;
 
-      const response: WorkerResponse = { id: msg.id, type: "ok", data };
+      const response: WorkerResponse = { id: msg.id, type: 'ok', data };
       self.postMessage(response);
     } catch (e) {
       const response: WorkerResponse = {
         id: msg.id,
-        type: "error",
+        type: 'error',
         message: e instanceof Error ? e.message : String(e),
       };
       self.postMessage(response);

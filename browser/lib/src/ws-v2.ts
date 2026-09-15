@@ -132,32 +132,32 @@ export const ErrorCode = {
  *  `protocol::CAPABILITIES` in `lib/src/sync/protocol.rs`). A server that
  *  sends none is the pre-2026-09 baseline. */
 export type ServerCapability =
-  | "auth-max-age"
-  | "keepalive"
-  | "rbsr"
-  | "pull-from"
-  | "signed-destroy"
-  | "unsub"
+  | 'auth-max-age'
+  | 'keepalive'
+  | 'rbsr'
+  | 'pull-from'
+  | 'signed-destroy'
+  | 'unsub'
   /** Sends `CHALLENGE` on connect and verifies `{origin}#{nonce}` proofs. */
-  | "auth-nonce"
+  | 'auth-nonce'
   /** Answers COMMIT with `[request_id][commit_id]` for a client whose HELLO
    *  lists `commit-ok-slim`. */
-  | "commit-ok-slim"
+  | 'commit-ok-slim'
   /** Reads a client `HELLO` over WebSocket. */
-  | "client-hello"
+  | 'client-hello'
   /** Re-checks this connection's subscriptions when an AUTH changes its
    *  identity, dropping the ones it may no longer read. */
-  | "rebind-on-auth"
+  | 'rebind-on-auth'
   /** The binary `SYNC` payload may carry `probe` and `subjects`; a probe is
    *  answered with `SYNC_OK` or `SYNC_RESEND`. */
-  | "sync-probe";
+  | 'sync-probe';
 
 /** Capability names this client lists in the `HELLO` it sends on open
  *  (mirrors `protocol::CLIENT_CAPABILITIES`). */
-export const CLIENT_CAPABILITIES: readonly string[] = ["commit-ok-slim"];
+export const CLIENT_CAPABILITIES: readonly string[] = ['commit-ok-slim'];
 
 /** What this client calls itself in its `HELLO`. Display only. */
-export const CLIENT_HELLO_NAME = "@tomic/lib browser";
+export const CLIENT_HELLO_NAME = '@tomic/lib browser';
 
 // ---- Low-level read/write helpers ----
 
@@ -239,7 +239,7 @@ export function decodeHelloCaps(data: Uint8Array): string[] {
     const parsed = JSON.parse(decoder.decode(rest));
 
     return Array.isArray(parsed)
-      ? parsed.filter((c): c is string => typeof c === "string")
+      ? parsed.filter((c): c is string => typeof c === 'string')
       : [];
   } catch {
     return [];
@@ -411,7 +411,7 @@ export function decodeAuthOk(data: Uint8Array): string[] {
     const parsed = JSON.parse(decoder.decode(data));
 
     return Array.isArray(parsed)
-      ? parsed.filter((c): c is string => typeof c === "string")
+      ? parsed.filter((c): c is string => typeof c === 'string')
       : [];
   } catch {
     return [];
@@ -425,7 +425,7 @@ export function encodeSyncPush(
   envelopes: SyncPushEnvelope[] = [],
 ): Uint8Array {
   const driveBytes = encoder.encode(driveSubject);
-  const encodedEntries = entries.map((e) => ({
+  const encodedEntries = entries.map(e => ({
     subjectBytes: encoder.encode(e.subject),
     loroBytes: e.loroBytes,
   }));
@@ -433,7 +433,7 @@ export function encodeSyncPush(
     (sum, e) => sum + 2 + e.subjectBytes.length + 4 + e.loroBytes.length,
     0,
   );
-  const encodedEnvelopes = envelopes.map((e) => ({
+  const encodedEnvelopes = envelopes.map(e => ({
     subjectBytes: encoder.encode(e.subject),
     jsonBytes: encoder.encode(e.json),
   }));
@@ -621,11 +621,11 @@ export function decodeCommitOk(data: Uint8Array): DecodedCommitOk | undefined {
   const body = raw.commitJson.trim();
   if (body.length === 0) return undefined;
 
-  if (body.startsWith("{")) {
+  if (body.startsWith('{')) {
     try {
-      const parsed = JSON.parse(body) as { "@id"?: unknown };
-      const id = parsed["@id"];
-      if (typeof id !== "string" || id.length === 0) return undefined;
+      const parsed = JSON.parse(body) as { '@id'?: unknown };
+      const id = parsed['@id'];
+      if (typeof id !== 'string' || id.length === 0) return undefined;
 
       return {
         requestId: raw.requestId,
@@ -743,8 +743,8 @@ export function encodeSyncPushChunks(
 
     const last = end >= entries.length;
     const slice = entries.slice(start, end);
-    const chunkEnvelopes: SyncPushEnvelope[] = slice.flatMap((e) =>
-      (envelopes[e.subject] ?? []).map((json) => ({
+    const chunkEnvelopes: SyncPushEnvelope[] = slice.flatMap(e =>
+      (envelopes[e.subject] ?? []).map(json => ({
         subject: e.subject,
         json,
       })),
@@ -903,28 +903,28 @@ export function decodeEphemeral(
 // ---- Debug logging ----
 
 const TAG_NAMES: Record<number, string> = {
-  [Tag.AUTH]: "AUTH",
-  [Tag.AUTH_OK]: "AUTH_OK",
-  [Tag.ERROR]: "ERROR",
-  [Tag.GET]: "GET",
-  [Tag.UPDATE]: "UPDATE",
-  [Tag.DESTROY]: "DESTROY",
-  [Tag.COMMIT]: "COMMIT",
-  [Tag.COMMIT_OK]: "COMMIT_OK",
-  [Tag.SUB]: "SUB",
-  [Tag.UNSUB]: "UNSUB",
-  [Tag.SYNC]: "SYNC",
-  [Tag.SYNC_OK]: "SYNC_OK",
-  [Tag.SYNC_DIFF]: "SYNC_DIFF",
-  [Tag.SYNC_PUSH]: "SYNC_PUSH",
-  [Tag.BLOB_REQUEST]: "BLOB_REQUEST",
-  [Tag.BLOB_RESPONSE]: "BLOB_RESPONSE",
-  [Tag.QUERY_UPDATE_RESERVED]: "QUERY_UPDATE_RESERVED",
-  [Tag.HELLO]: "HELLO",
-  [Tag.EPHEMERAL]: "EPHEMERAL",
-  [Tag.KEEPALIVE]: "KEEPALIVE",
-  [Tag.CHALLENGE]: "CHALLENGE",
-  [Tag.SYNC_RESEND]: "SYNC_RESEND",
+  [Tag.AUTH]: 'AUTH',
+  [Tag.AUTH_OK]: 'AUTH_OK',
+  [Tag.ERROR]: 'ERROR',
+  [Tag.GET]: 'GET',
+  [Tag.UPDATE]: 'UPDATE',
+  [Tag.DESTROY]: 'DESTROY',
+  [Tag.COMMIT]: 'COMMIT',
+  [Tag.COMMIT_OK]: 'COMMIT_OK',
+  [Tag.SUB]: 'SUB',
+  [Tag.UNSUB]: 'UNSUB',
+  [Tag.SYNC]: 'SYNC',
+  [Tag.SYNC_OK]: 'SYNC_OK',
+  [Tag.SYNC_DIFF]: 'SYNC_DIFF',
+  [Tag.SYNC_PUSH]: 'SYNC_PUSH',
+  [Tag.BLOB_REQUEST]: 'BLOB_REQUEST',
+  [Tag.BLOB_RESPONSE]: 'BLOB_RESPONSE',
+  [Tag.QUERY_UPDATE_RESERVED]: 'QUERY_UPDATE_RESERVED',
+  [Tag.HELLO]: 'HELLO',
+  [Tag.EPHEMERAL]: 'EPHEMERAL',
+  [Tag.KEEPALIVE]: 'KEEPALIVE',
+  [Tag.CHALLENGE]: 'CHALLENGE',
+  [Tag.SYNC_RESEND]: 'SYNC_RESEND',
 };
 
 /**
@@ -932,11 +932,11 @@ const TAG_NAMES: Record<number, string> = {
  */
 function formatBytes(n: number): string {
   const kb = n / 1024;
-  if (kb === 0) return "0kb";
+  if (kb === 0) return '0kb';
   const formatted =
     kb < 0.1 ? kb.toFixed(3) : kb < 10 ? kb.toFixed(2) : kb.toFixed(1);
 
-  return `${formatted.replace(/\.?0+$/, "")}kb`;
+  return `${formatted.replace(/\.?0+$/, '')}kb`;
 }
 
 /**
@@ -961,7 +961,7 @@ export interface FrameDebugInfo {
  */
 export function debugFrameInfo(
   data: Uint8Array,
-  direction: "→" | "←",
+  direction: '→' | '←',
 ): FrameDebugInfo {
   if (data.length === 0) return { headline: `${direction} (empty)` };
 
@@ -1026,12 +1026,12 @@ export function debugFrameInfo(
 
       const flags: string[] = [];
 
-      if (msg.flags & Flags.SNAPSHOT) flags.push("snapshot");
-      if (msg.flags & Flags.PUSH) flags.push("push");
+      if (msg.flags & Flags.SNAPSHOT) flags.push('snapshot');
+      if (msg.flags & Flags.PUSH) flags.push('push');
       if (msg.commitId) flags.push(`commit=${msg.commitId.slice(0, 20)}…`);
 
       return {
-        headline: `${direction} UPDATE ${msg.subject} [${flags.join(", ")}] (${formatBytes(msg.loroBytes.length)})`,
+        headline: `${direction} UPDATE ${msg.subject} [${flags.join(', ')}] (${formatBytes(msg.loroBytes.length)})`,
         details: () => ({
           subject: msg.subject,
           flags: msg.flags,
@@ -1067,7 +1067,7 @@ export function debugFrameInfo(
       const msg = decodeSyncOk(payload);
 
       return {
-        headline: `${direction} SYNC_OK ${msg?.drive ?? ""}`,
+        headline: `${direction} SYNC_OK ${msg?.drive ?? ''}`,
         details: () => msg ?? { rawBytes: payload.length },
       };
     }
@@ -1088,7 +1088,7 @@ export function debugFrameInfo(
 
       return {
         headline: msg
-          ? `${direction} SYNC_PUSH ${msg.drive} (${msg.entries.length} resources${msg.last ? ", last" : ""}, ${formatBytes(payload.length)})`
+          ? `${direction} SYNC_PUSH ${msg.drive} (${msg.entries.length} resources${msg.last ? ', last' : ''}, ${formatBytes(payload.length)})`
           : `${direction} SYNC_PUSH (${formatBytes(payload.length)})`,
         details: () => msg ?? { rawBytes: payload.length },
       };
