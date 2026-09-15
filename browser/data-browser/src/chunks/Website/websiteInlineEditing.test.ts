@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { core, Datatype, type Store } from '@tomic/lib';
-import { commitWebsiteField } from './websiteInlineEditing';
+import {
+  commitWebsiteField,
+  parseWebsiteFieldValue,
+} from './websiteInlineEditing';
 import { starterWebsite } from './websiteModel';
 
 const mocks = vi.hoisted(() => ({
@@ -18,7 +21,7 @@ vi.mock('./websiteModel', async importOriginal => ({
 describe('inline website write boundary', () => {
   const set = vi.fn();
   const canWrite = vi.fn();
-  let value: string;
+  let value: string | number;
   let datatype: string;
   let config: ReturnType<typeof starterWebsite>;
   const field = {
@@ -86,7 +89,7 @@ describe('inline website write boundary', () => {
     await expect(
       commitWebsiteField(store, 'site', field, 'Updated'),
     ).rejects.toThrow('Public source');
-    datatype = Datatype.INTEGER;
+    datatype = Datatype.BOOLEAN;
     await expect(
       commitWebsiteField(store, 'site', field, 'Updated'),
     ).rejects.toThrow('field type');
@@ -103,5 +106,18 @@ describe('inline website write boundary', () => {
     await expect(
       commitWebsiteField(store, 'site', field, 'Updated'),
     ).rejects.toThrow('pending locally');
+  });
+});
+
+describe('inline numbers', () => {
+  it('keeps numeric values typed and rejects invalid input', () => {
+    expect(parseWebsiteFieldValue(Datatype.FLOAT, '4.25')).toBe(4.25);
+    expect(parseWebsiteFieldValue(Datatype.INTEGER, '12')).toBe(12);
+    expect(parseWebsiteFieldValue(Datatype.FLOAT, '0')).toBe(0);
+    for (const bad of ['', 'NaN', 'Infinity', '4 euros', '0x10'])
+      expect(() => parseWebsiteFieldValue(Datatype.FLOAT, bad)).toThrow();
+    expect(() => parseWebsiteFieldValue(Datatype.INTEGER, '1.5')).toThrow(
+      'whole number',
+    );
   });
 });

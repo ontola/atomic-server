@@ -180,14 +180,14 @@ export async function buildWebsiteArtifact(
     ).join('')}</div></section>`;
     const documents: string[] = [];
 
-    for (const subject of page.documents) {
+    for (const [documentIndex, subject] of page.documents.entries()) {
       const resource = bySubject.get(subject)!;
       const result = documentReader!.readDocumentV2TiptapJson(resource, store);
       if (!result.ok) throw new Error(`${resource.title}: ${result.error}`);
 
       try {
         documents.push(
-          `<article>${renderDocument(await packageDocument(result.docJson as RichNode))}</article>`,
+          `<article data-website-document="${documentIndex}">${renderDocument(await packageDocument(result.docJson as RichNode))}</article>`,
         );
       } catch (error) {
         throw new Error(
