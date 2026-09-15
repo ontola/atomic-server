@@ -10795,9 +10795,8 @@ msgstr ""
 msgid "Show release"
 msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "No release yet."
-msgstr ""
+#~ msgid "No release yet."
+#~ msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Release review"
@@ -10944,9 +10943,8 @@ msgstr ""
 msgid "Unpublished"
 msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Publication history"
-msgstr ""
+#~ msgid "Publication history"
+#~ msgstr ""
 
 #~ msgid "Website hosting"
 #~ msgstr ""
@@ -10992,9 +10990,8 @@ msgstr ""
 msgid "Publish site"
 msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Publishing options"
-msgstr ""
+#~ msgid "Publishing options"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Previous version"
@@ -11009,9 +11006,8 @@ msgstr ""
 msgid "View site"
 msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Publishing"
-msgstr ""
+#~ msgid "Publishing"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Hosted on your Atomic Server. Updates publish the current draft."
@@ -11024,9 +11020,8 @@ msgstr ""
 msgid "Choose a version"
 msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Restore version"
-msgstr ""
+#~ msgid "Restore version"
+#~ msgstr ""
 
 #~ msgid "Your site is up to date."
 #~ msgstr ""
@@ -11034,9 +11029,8 @@ msgstr ""
 #~ msgid "Website published."
 #~ msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Export"
-msgstr ""
+#~ msgid "Export"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Design with AI"
@@ -11162,9 +11156,8 @@ msgstr ""
 #~ msgid "Show all versions ({0})"
 #~ msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Preview version"
-msgstr ""
+#~ msgid "Preview version"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Could not load saved website version: "
@@ -11172,4 +11165,13 @@ msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Updating preview…"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Website versions"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Preview, restore and inspect publication history"
 msgstr ""

@@ -23,8 +23,11 @@ drive root, whereas source editing can be delegated more narrowly.
 - [x] Authenticated status/upload/preview/activate API.
 - [x] Separate customer-host routing, public files only, no fallback to Atomic APIs.
 - [x] Website UI: one-click Publish site / Update site; saving, uploading and
-  activation happen inside that action. Secondary options contain rollback,
-  unpublish and publication history. Hosting status refreshes automatically.
+  activation happen inside that action. Secondary actions register with the standard
+  resource More menu through useCustomContextItems. Versions open a shared dialog
+  for preview, rollback and publication history; export and unpublish are menu
+  actions, alongside Design with AI and View site. Publish / Update site is the
+  only persistent main action. Hosting status refreshes automatically.
 - [ ] Managed SaaS adapter, account/drive ownership proof, object storage and serving.
 - [ ] Production capacity measurements, garbage collection and richer assets.
 

@@ -52,23 +52,29 @@ export const resourceActions: ActionDefinition[] = [
   {
     id: 'view',
     scope: 'resource',
-    section: 'view',
+    section: 'action',
     label: () => 'Normal View',
     helper: () => 'Open the regular, default View.',
     keywords: ['show', 'open'],
-    disabled: ctx => ctx.pathname.startsWith(paths.show),
+    icon: () => <FaWindowMaximize />,
+    available: ctx =>
+      ctx.subject !== ctx.currentSubject ||
+      !ctx.pathname.startsWith(paths.show),
     run: ctx => ctx.navigate(constructOpenURL(ctx.subject)),
   },
   {
     id: 'data',
     scope: 'resource',
-    section: 'view',
+    section: 'action',
     label: () => 'Data View',
     helper: () => 'View the resource and its properties in the Data View.',
     keywords: ['json', 'raw', 'properties'],
     shortcut: shortcuts.data,
     shortcutLabel: () => 'Show data view',
-    disabled: ctx => ctx.pathname.startsWith(paths.data),
+    icon: () => <FaCode />,
+    available: ctx =>
+      ctx.subject !== ctx.currentSubject ||
+      !ctx.pathname.startsWith(paths.data),
     run: ctx => ctx.navigate(dataURL(ctx.subject)),
   },
   {

@@ -18,11 +18,8 @@ test('website document preview, frozen release and reload', async ({
   await page.getByRole('button', { name: 'More', exact: true }).click();
   await page.getByPlaceholder(/filter actions/i).fill('website');
   await page.getByTestId('menu-item-new-website').click();
-  await page.getByLabel('Publishing options', { exact: true }).click();
-  const prepare = page.getByRole('button', {
-    name: 'Prepare release',
-    exact: true,
-  });
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  const prepare = page.getByTestId('menu-item-website-prepare');
   await expect(prepare).toBeEnabled({ timeout: 30000 });
   const websiteURL = page.url();
   const preview = page.frameLocator('iframe[title="Website preview"]');
@@ -36,7 +33,7 @@ test('website document preview, frozen release and reload', async ({
   await expect(page.getByText('Frozen release', { exact: true })).toBeVisible();
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Download website', exact: true }).click(),
+    websiteAction(page, 'website-download'),
   ]);
   expect(download.suggestedFilename()).toBe('website.zip');
   await download.saveAs(test.info().outputPath('website.zip'));
@@ -50,7 +47,7 @@ test('website document preview, frozen release and reload', async ({
   await page.getByRole('button', { name: 'More', exact: true }).click();
   await page.keyboard.press('Escape');
   await page.goto(websiteURL);
-  await page.getByLabel('Publishing options', { exact: true }).click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   await expect(prepare).toBeEnabled({ timeout: 30000 });
   await expect(
     preview.getByText('A private change after the release.'),
@@ -58,7 +55,7 @@ test('website document preview, frozen release and reload', async ({
   await expect(
     page.getByText('Changes stay private until you publish.', { exact: true }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Show release', exact: true }).click();
+  await websiteAction(page, 'website-show-release');
   await expect(
     preview.getByText('This is the first published garden note.'),
   ).toBeVisible();
@@ -66,7 +63,7 @@ test('website document preview, frozen release and reload', async ({
     preview.getByText('A private change after the release.'),
   ).toHaveCount(0);
   await page.reload();
-  await page.getByLabel('Publishing options', { exact: true }).click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   await expect(prepare).toBeEnabled({ timeout: 30000 });
   await expect(
     preview.getByText('A private change after the release.'),
@@ -276,11 +273,17 @@ test('Assistant creates and redesigns a website using existing table content', a
   await page.goto(
     `${new URL(page.url()).origin}/app/show?subject=${encodeURIComponent(subject)}`,
   );
-  await page.getByLabel('Publishing options', { exact: true }).click();
+  // The authoring assistant is still open after navigation; close it before
+  // exercising the menu so its delayed input autofocus cannot take menu focus.
+  await page.getByRole('button', { name: 'AI', exact: true }).click();
   await expect(
-    page.getByRole('button', { name: 'Prepare release' }),
+    page.getByRole('button', { name: 'Publish site', exact: true }),
   ).toBeEnabled({ timeout: 30000 });
-  await page.getByLabel('Publishing options', { exact: true }).click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await expect(page.getByTestId('menu-item-website-prepare')).toBeEnabled({
+    timeout: 30000,
+  });
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   const preview = page.frameLocator('iframe[title="Website preview"]');
   await expect(
     preview.getByRole('heading', { name: 'The garden notebook', exact: true }),
@@ -314,20 +317,17 @@ test('Assistant creates and redesigns a website using existing table content', a
   ).toBeVisible();
   await preview.getByRole('link', { name: 'Home', exact: true }).click();
   await expect(search.getByRole('searchbox')).toBeVisible();
-  await page.getByLabel('Publishing options', { exact: true }).click();
-  await page
-    .getByRole('button', { name: 'Prepare release', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByTestId('menu-item-website-prepare').click();
   await page
     .getByRole('button', { name: 'Create release', exact: true })
     .click();
   const [siteDownload] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Download website', exact: true }).click(),
+    websiteAction(page, 'website-download'),
   ]);
   await siteDownload.saveAs(test.info().outputPath('garden-site.zip'));
-  await page.getByRole('button', { name: 'Show draft', exact: true }).click();
-  await page.getByLabel('Publishing options', { exact: true }).click();
+  await websiteAction(page, 'website-show-release');
   await page.getByRole('button', { name: 'Edit on page', exact: true }).click();
   await expect(preview.locator('[contenteditable="true"]')).toHaveCount(2);
   const field = preview.locator('[contenteditable="true"]').first();
@@ -373,12 +373,11 @@ test('Assistant creates and redesigns a website using existing table content', a
   await expect(
     search.getByText('Plant winter lettuce in October'),
   ).toBeVisible();
-  await page.getByLabel('Publishing options', { exact: true }).click();
-  await page.getByRole('button', { name: 'Show release', exact: true }).click();
+  await websiteAction(page, 'website-show-release');
   await expect(preview.getByText('Sow spinach in September')).toBeVisible();
   await expect(preview.locator('[contenteditable]')).toHaveCount(0);
   await page.reload();
-  await page.getByLabel('Publishing options', { exact: true }).click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   await expect(search.getByText('Plant winter lettuce in October')).toBeVisible(
     { timeout: 30000 },
   );
@@ -387,3 +386,13 @@ test('Assistant creates and redesigns a website using existing table content', a
     fullPage: true,
   });
 });
+
+async function websiteAction(
+  page: import('@playwright/test').Page,
+  id: string,
+) {
+  const item = page.getByTestId('menu-item-' + id);
+  if (!(await item.isVisible()))
+    await page.getByRole('button', { name: 'More', exact: true }).click();
+  await item.click();
+}

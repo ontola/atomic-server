@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCustomContextItems } from '@components/ResourceContextMenu';
+import { useCallback, useMemo, useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import {
   dataBrowser,
@@ -158,19 +159,77 @@ export function WebsitePage({ resource }: { resource: Resource }) {
     };
   }, [store, subjects]);
 
-  const perform = async (action: () => Promise<unknown>) => {
-    setBusy(true);
+  const perform = useCallback(
+    async (action: () => Promise<unknown>) => {
+      setBusy(true);
 
-    try {
-      await action();
-    } catch (error) {
-      store.notifyError(
-        error instanceof Error ? error : new Error(String(error)),
-      );
-    }
+      try {
+        await action();
+      } catch (error) {
+        store.notifyError(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
 
-    setBusy(false);
-  };
+      setBusy(false);
+    },
+    [store],
+  );
+
+  const exportActions = useMemo(
+    () => [
+      {
+        id: 'website-design',
+        label: 'Design with AI',
+        disabled: !canWrite,
+        onClick: () =>
+          askAI({
+            prompt:
+              /* @wc-ignore */ 'Help me design this website. Read it with describe_website, ask what I want to change, then use update_website. Keep content in its existing Atomic documents and tables.',
+            context: [
+              newContextItem<AIAtomicResourceMessageContext>({
+                type: 'atomic-resource',
+                subject: resource.subject,
+              }),
+            ],
+          }),
+      },
+      {
+        id: 'website-prepare',
+        label: 'Prepare release',
+        disabled: !draft || !canWrite || busy || refreshing || !!problem,
+        onClick: () => setReview(draft),
+      },
+      {
+        id: 'website-show-release',
+        label: showRelease ? 'Show draft' : 'Show release',
+        disabled: !release,
+        onClick: () => setShowRelease(value => !value),
+      },
+      {
+        id: 'website-download',
+        label: 'Download website',
+        disabled: !release || busy,
+        onClick: () => {
+          if (release) void perform(() => downloadWebsite(release, store));
+        },
+      },
+    ],
+    [
+      askAI,
+      resource.subject,
+      draft,
+      canWrite,
+      busy,
+      refreshing,
+      problem,
+      release,
+      showRelease,
+      perform,
+      store,
+    ],
+  );
+  useCustomContextItems(exportActions);
 
   const change = (next: WebsiteConfig) =>
     perform(async () => {
@@ -191,24 +250,6 @@ export function WebsitePage({ resource }: { resource: Resource }) {
           <p>Changes stay private until you publish.</p>
         </Title>
         <Row>
-          <Button
-            subtle
-            disabled={!canWrite}
-            onClick={() =>
-              askAI({
-                prompt:
-                  /* @wc-ignore */ 'Help me design this website. Read it with describe_website, ask what I want to change, then use update_website. Keep content in its existing Atomic documents and tables.',
-                context: [
-                  newContextItem<AIAtomicResourceMessageContext>({
-                    type: 'atomic-resource',
-                    subject: resource.subject,
-                  }),
-                ],
-              })
-            }
-          >
-            Design with AI
-          </Button>
           <WebsiteHosting
             key={resource.subject}
             project={resource.subject}
@@ -228,38 +269,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
 
               return saved;
             }}
-          >
-            <>
-              <h3>Export</h3>
-              <Button
-                subtle
-                disabled={!draft || !canWrite || busy}
-                onClick={() => {
-                  setReview(draft);
-                }}
-              >
-                Prepare release
-              </Button>
-              {release ? (
-                <>
-                  <Button subtle onClick={() => setShowRelease(!showRelease)}>
-                    {showRelease ? 'Show draft' : 'Show release'}
-                  </Button>
-                  <Button
-                    subtle
-                    disabled={busy}
-                    onClick={() =>
-                      perform(() => downloadWebsite(release, store))
-                    }
-                  >
-                    Download website
-                  </Button>
-                </>
-              ) : (
-                <p>No release yet.</p>
-              )}
-            </>
-          </WebsiteHosting>
+          />
         </Row>
       </Header>
       {problem && (

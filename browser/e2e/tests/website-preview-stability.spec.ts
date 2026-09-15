@@ -28,9 +28,19 @@ test('opening Design with AI preserves the preview document', async ({
     .evaluate((frame: HTMLIFrameElement) => {
       frame.contentDocument!.body.setAttribute('data-preserved-preview', 'yes');
     });
-  await page
-    .getByRole('button', { name: 'Design with AI', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  const actionIds = await page
+    .getByRole('menuitem')
+    .evaluateAll(items => items.map(item => item.getAttribute('data-testid')));
+  expect(
+    actionIds.slice(0, 7).every(id => id?.startsWith('menu-item-website-')),
+  ).toBe(true);
+  expect(actionIds.slice(7).some(id => id === 'menu-item-delete')).toBe(true);
+  await expect(page.getByTestId('menu-item-view')).toHaveCount(0);
+  await expect(page.getByTestId('menu-item-data').locator('svg')).toHaveCount(
+    1,
+  );
+  await page.getByTestId('menu-item-website-design').click();
   // Allow the panel's mount, context reads and resource notifications to settle.
   await page.waitForTimeout(2000);
   await expect(preview.locator('body')).toHaveAttribute(
