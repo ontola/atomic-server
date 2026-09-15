@@ -6,10 +6,15 @@
 > server bridge (`CommitMonitor` presence maps; was `LoroSyncBroadcaster`) are in, with an Iroh e2e
 > (`e2e_presence_crosses_the_link_without_being_stored`) proving presence crosses
 > the link and reaches no store. Open: the two-device verification below (M12 in
-> [`pairing-ux-field-test.md`](./completed/pairing-ux-field-test.md)) and OQ1 bandwidth.
+> [`pairing-ux-field-test.md`](./completed/pairing-ux-field-test.md)), OQ1 bandwidth,
+> and OQ3: the hub bridge relays every local subscriber's presence onto the peer
+> link stamped with the node's default agent (`server/src/commit_monitor.rs`
+> `get_default_agent()` → `broadcast_ephemeral`) with no
+> `PresenceEntry.agent == our agent` filter, so a collaborator's presence can
+> reach a device that is only same-agent-paired. Open 2026-09-15.
 > Originally written 2026-07-10 as a proposal; the rest of this doc is that
 > design. Extends the shipped browser presence
-> model ([`presence-views.md`](./presence-views.md)) to travel device-to-device
+> model ([`presence-views.md`](./completed/presence-views.md)) to travel device-to-device
 > over the serverless Iroh transport ([`serverless-p2p.md`](./serverless-p2p.md)),
 > so a user's own devices show each other's cursors and "viewing / following /
 > typing" state with no hub in the path.

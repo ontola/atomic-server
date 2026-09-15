@@ -94,7 +94,7 @@ Fix: for `/agents/{key}` subjects, require the key in the path to equal the auth
 - **C15. TLS certificates only checked at startup; ACME code panics (`todo!()`, `unwrap`).** Confirmed. `serve.rs:474-479`, `https.rs:64-86,249,269`.
 - **C16. Process-global import flags race across connections.** Confirmed. `ws_apply.rs:10,30`, `peer.rs:1186-1195`.
 - **C17. DID resources leak into other drives' watched queries.** Likely. `query_index.rs:479-482,382-445`. Read rights still apply at query time.
-- **C18. Every commit is written with `Durability::None`.** Confirmed. `redb_store.rs:477,567` (`// EXPERIMENT`). Acknowledged writes are lost on crash until the next flush.
+- **C18. Every commit is written with `Durability::None`.** Confirmed. `redb_store.rs:477,567` (`// EXPERIMENT`). Acknowledged writes are lost on crash until the next flush. **Amended 2026-09-15:** the server and desktop run a 100ms durable-flush tick (`serve.rs`) and the WASM worker flushes on a tick, so the loss window there is 100ms. The Flutter binding opens the same redb store directly and never flushes except in `set_active_drive`, so on Android every edit since the last drive switch is lost on app kill. Tracked in [`atomic-lib-runtime.md`](./atomic-lib-runtime.md).
 - **C19. Unbounded response body on the bookmark fetch.** Confirmed. `client/helpers.rs:355-366`, `bookmark.rs:47`; SSRF guard is present, size cap is not.
 - **C20. Client-stamped `drive` trusted when the parent is not materialized.** Needs-verification. `commit.rs:242-256,876-893`; with B2 this may allow cross-drive fan-out injection.
 - **C21. Agent private key written with default file mode.** Confirmed. `lib/src/config.rs:62-74` (`config.toml` with `agent_secret` lands 0644).

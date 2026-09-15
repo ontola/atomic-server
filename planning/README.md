@@ -5,9 +5,11 @@ not public-facing product/spec documentation; that belongs in `docs/`.
 
 Use this folder to stay aligned on active architectural plans before making
 broad changes. Prefer updating an existing plan over adding a new root-level
-scratch document. When a plan becomes obsolete, delete it. Fully-shipped
-checklists that are still useful as as-built notes stay here, listed under
-**Landed**.
+scratch document. When a plan becomes obsolete, delete it. Session logs,
+release checklists and validation transcripts do not belong here: once the
+work has merged, delete the file and carry any open question into the owning
+plan. Fully-shipped checklists that are still useful as as-built notes move to
+[`completed/`](./completed/) and stay listed under **Landed**.
 
 The status in this index should match the document's own status line. The
 document wins if they disagree.
@@ -25,13 +27,26 @@ now live in [`completed/`](./completed/):
 
 - [`runtime-boundary-decision.md`](./completed/runtime-boundary-decision.md) — `AtomicNode` in `lib/src/runtime/` is the binding runtime; no parallel `simple.rs` / `ffi/`.
 - [`authority-unit-decision.md`](./completed/authority-unit-decision.md) — the drive stays the unit of authority; the zone chain is hybrid/additive.
-- [`commit-retention-floor-decision.md`](./completed/commit-retention-floor-decision.md) — envelope-on-resource; amended 2026-09-05, `Tree::Envelopes` ships in #1313.
+- [`commit-retention-floor-decision.md`](./completed/commit-retention-floor-decision.md) — envelope-on-resource; amended 2026-09-05, `Tree::Envelopes` shipped in #1313.
 - [`trust-model-decision.md`](./completed/trust-model-decision.md) — the node that owns the URL is trusted with plaintext; anything that only stores is blind.
 - [`schema-routes-decision.md`](./completed/schema-routes-decision.md) — `did:ad:frozen` is the on-ramp, optional schema is the write-path policy.
 
-## Active
+## Biggest gaps (reconciled against code 2026-09-15)
 
-- [Drive sharing and hosting state](drive-sharing-state.md) — verified transition for unenrolled drives; authoritative seat counts and staging acceptance remain.
+Ranked by impact. Each links to the plan that owns the work.
+
+1. **Flutter writes are not durable.** Every redb write uses `Durability::None`; only the server, desktop and WASM hosts run the flush tick. The Flutter binding never flushes, so an app kill rolls back every edit since the last drive switch. [`atomic-lib-runtime.md`](./atomic-lib-runtime.md).
+2. **No rate limiting on any write endpoint**, and the managed-node bootstrap grace has no reaper. [`foss-public-host-mode.md`](./foss-public-host-mode.md) Phase 3, [`security-audit-2026-09.md`](./security-audit-2026-09.md) D, [`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md).
+3. **Signed envelopes do not replicate** over bulk sync or the vault, so restored or invited devices see history as unattributed. [`auditability-loro-history.md`](./auditability-loro-history.md).
+4. **Flutter and desktop bypass the runtime boundary**: both hold a raw `Db` instead of `AtomicNode`, which is how gap 1 happened. [`atomic-lib-runtime.md`](./atomic-lib-runtime.md).
+5. **`SYNC_PUSH` is an unsigned cross-trust import** gated by one drive-level ACL verdict; no grant-chain proof exists. [`authorization-sync.md`](./authorization-sync.md).
+6. **npm is seven betas behind**: `@tomic/*` still serves `0.41.0-beta.0`; `release.yml` has no npm job (PR #1355). [`production-readiness.md`](./production-readiness.md).
+7. **No Rust outbox**, so Flutter has no durable dirty queue and serverless Android sync cannot drain. [`unified-sync.md`](./unified-sync.md), [`serverless-p2p.md`](./serverless-p2p.md).
+8. **Desktop CSP is disabled** (audit B7). [`security-audit-2026-09.md`](./security-audit-2026-09.md).
+9. **Plugins and code-first schemas live only in unmergeable PRs** (#1307 at 532 files with conflicts, #1262 a stale draft). [`plugins.md`](./plugins.md), [`json-schema-code-first.md`](./json-schema-code-first.md).
+10. **Dashboards have no entry point and fork review shows only a count.** [`dashboards.md`](./dashboards.md), [`drafts-and-suggestions.md`](./drafts-and-suggestions.md).
+
+## Active
 
 Remaining work, not "this file exists."
 
@@ -44,48 +59,62 @@ browser flow; standalone recovery remains self-managed.
 
 | Document | Status |
 | --- | --- |
-| [`e2e-concurrency.md`](./e2e-concurrency.md) | **Active.** Issue #1461: isolated template processes, retained load evidence and repeated full-suite worker/shard benchmarks; acceptance pending. |
-| [`sentry-feedback-readiness.md`](./sentry-feedback-readiness.md) | **Active.** Sidebar feedback and React error capture implemented and locally verified against Sentry. Staging rollout, email receipt and private source-map upload remain release gates. |
+| [`production-readiness.md`](./production-readiness.md) | **Gate list.** What stands between `develop` and production: npm publishing, rate limiting, library-owned durability, desktop CSP, managed-node abuse gate, source maps, SaaS billing checks. |
+| [`security-audit-2026-09.md`](./security-audit-2026-09.md) | **Mostly fixed** (beta.6). Open: B7 desktop CSP, C16 process-global import flags, C17 DID watched-query leak, C18 (Flutter only), C20, C24 loopback NFS, section D (rate limits, permissive CORS, client errors as 500), section F, transitive advisories via actix-http and iroh 0.35. |
+| [`drive-sharing-state.md`](./drive-sharing-state.md) | **In progress.** Verified transition for unenrolled drives shipped (#1466). Remaining: authoritative per-drive editor usage from the backend, root cause of the retained remote routing, staging acceptance. |
+| [`cloud-subscription-panel.md`](./cloud-subscription-panel.md) | **Partial.** Profile and link-invite steps shipped. Remaining: SaaS email invitation to drive authorization in one journey, invitation usage limits, paid-seat approval, real seat counts, 50 GB pool. |
+| [`e2e-concurrency.md`](./e2e-concurrency.md) | **Active.** Issue #1461. Shard isolation and harness simplification landed (#1463, #1465, #1472); worker matrix, repeated zero-retry acceptance and budgets remain. |
+| [`e2e-light-heavy.md`](./e2e-light-heavy.md) | **Partial.** `@smoke` tag, `test-e2e:light` and the Dagger mode exist; the light suite is about 15 tests against a 25 to 35 target. |
+| [`e2e-diagnostic-hygiene.md`](./e2e-diagnostic-hygiene.md) | **Mostly done.** Collector lifecycles shipped. Remaining: pre-release noise pass, pending-upload placeholder, full strict rerun, catalog flows. |
+| [`sentry-feedback-readiness.md`](./sentry-feedback-readiness.md) | **Active.** Feedback and React error capture verified on staging. Remaining: independent email receipt check, private source-map upload, backend synthetic reporting. |
+| [`passkey-local-drive-unlock.md`](./passkey-local-drive-unlock.md) | **Fix shipped.** Remaining: original-tab NotFound after sign-out, physical passkey verification, deploy. |
+| [`desktop-pkarr-restore.md`](./desktop-pkarr-restore.md) | **Discovery shipped** (beta.6). Remaining: private-drive enrollment policy (product decision), signed-in private fetch, packaged-build missing text. |
 | [`unified-sync.md`](./unified-sync.md) | **Active.** One sync API over WS or Iroh. Carries the single **Remaining work (2026-09-03)** checklist for every open sync item across these plans. The 2026-07 audit history is in [`completed/unified-sync-audit-2026-07.md`](./completed/unified-sync-audit-2026-07.md). |
-| [`serverless-p2p.md`](./serverless-p2p.md) | **Planned.** Device sync without a hub (written same-agent-first; admission is rights-based since 2026-07-17). AUTH-before-SYNC and the `AUTH.requestedSubject`↔drive binding landed 2026-09-01 (Iroh). Live-link destroys travel as signed `COMMIT` frames since 2026-09-03. P0 remaining: require envelopes on every `remove[]` once `Tree::Envelopes` exists. `AtomicTransport` / `SyncSession::serve` first slice landed 2026-09-05; outbox port and the remaining `sync_drive_with_peer*` collapse are open. |
+| [`serverless-p2p.md`](./serverless-p2p.md) | **Planned.** Device sync without a hub (written same-agent-first; admission is rights-based since 2026-07-17). AUTH-before-SYNC and the `AUTH.requestedSubject`↔drive binding landed 2026-09-01 (Iroh). Live-link destroys travel as signed `COMMIT` frames since 2026-09-03. P0 remaining: require envelopes on every `remove[]` (`Tree::Envelopes` exists; nothing blocks it). `AtomicTransport` / `SyncSession::serve` first slice landed 2026-09-05 with only `ChannelTransport`; outbox port and the four `sync_drive_with_peer*` variants are open. |
 | [`foss-public-host-mode.md`](./foss-public-host-mode.md) | **Partial.** Phase 1–2 built; OQ5 library path closed 2026-09-05 (`admit_unknown_drive`: Public never creates, Owner enrolls only the owner). Phase 3 (rate limits, Iroh stream refusal) is untouched. |
-| [`authorization-sync.md`](./authorization-sync.md) | **Draft.** Signed commit authorization, grant-chain evidence, peer-sync trust boundaries. |
-| [`unified-data-layer.md`](./unified-data-layer.md) | **Partial.** Browser/JS: one ingress, one outbox, one subscription model. Atomic writes, outbox, ingress entry points and immutable read/save subscriptions shipped. Remaining: consumer migration and boundary extraction. |
-| [`loro-source-of-truth.md`](./loro-source-of-truth.md) | **Partial.** Sparse `datatypes` map + Phase 2a–2c shipped (`Tree::Resources` is a derived cache). Remaining: drop the untagged heuristic, Phase 1.6 `Value` reshape, Flutter undo. |
-| [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) | **Partial.** `AtomicNode` is the binding runtime; the WASM `ClientDb` is its only adapter and the unused surface was cut back 2026-09-04. Open: the other bindings. Local KV FTS landed in [`local-search.md`](./local-search.md). |
-| [`genesis-self-verifying.md`](./genesis-self-verifying.md) | **Partial.** Server and browser mint and verify inline genesis certs. Remaining: DataRoute verify UI, `genesis` propval immutability. |
-| [`drive-reconciliation.md`](./drive-reconciliation.md) | **Partial.** Core in `lib/src/sync/rbsr.rs` + TS mirror; **on the WS wire** as the stateless text frames `RBSR_FP`/`RBSR_ITEMS` (full-VV fallback). Not on Iroh; fingerprints still O(range); canonical cross-impl hash unspecified. |
-| [`zones.md`](./zones.md) | **Proposal.** Nothing built. Structural fix for the permission-check half of [`index-performance.md`](./index-performance.md). |
-| [`partial-sync.md`](./partial-sync.md) | **Proposal.** Replicate part of a drive per device. |
-| [`drafts-and-suggestions.md`](./drafts-and-suggestions.md) | **Mechanism shipped** (`Fork` class, `diffFork`/`mergeFork`, document body CRDT merge). Review/diff UI, suggest-for-non-writers, Canvas fork still open. |
-| [`device-pairing.md`](./device-pairing.md) | **Proposal.** One-scan pairing; QR is routing only (no secret). C0 and M6 closed. Remaining: extra-workspace inventory, M4 (carried over from the field test). |
+| [`authorization-sync.md`](./authorization-sync.md) | **Draft.** P1 done, P2 partial (`classify_auth_impact` exists). P3 open: no `AuthorizationProof`, signer still auto-inserted into `write`, `genesis_signer()` has no non-test caller. P4 open: `SYNC_PUSH` imports raw Loro on a drive-level verdict. |
+| [`unified-data-layer.md`](./unified-data-layer.md) | **Partial.** Browser/JS: one ingress, one outbox, one subscription model. Atomic writes, outbox, ingress entry points and immutable read/save subscriptions shipped. Remaining: consumer migration (38 `addResource` call sites, 42 `CommitBuilder` refs) and boundary extraction. |
+| [`loro-source-of-truth.md`](./loro-source-of-truth.md) | **Partial.** Sparse `datatypes` map + Phase 2a–2c shipped (`Tree::Resources` is a derived cache). Remaining: drop the untagged heuristic and the 3-way `build_state_doc` fallback, snapshot backfill (Phase 4), Phase 1.6 `Value` reshape (~966 sites), Flutter undo. |
+| [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) | **Partial.** `AtomicNode` is the binding runtime; the WASM `ClientDb` is its only adapter. Flutter and desktop still hold a raw `Db`; the node has no blob API; `NodeConfig` was cut. Library-owned durable flush is the first slice. Local KV FTS landed in [`local-search.md`](./local-search.md). |
+| [`genesis-self-verifying.md`](./genesis-self-verifying.md) | **Partial.** Server and browser mint and verify inline genesis certs. Remaining: DataRoute verify UI, `genesis` propval immutability, cert-signed `drive` in `check_rights`. |
+| [`drive-reconciliation.md`](./drive-reconciliation.md) | **Partial.** Core in `lib/src/sync/rbsr.rs` + TS mirror; **on the WS wire** as the stateless text frames `RBSR_FP`/`RBSR_ITEMS` (full-VV fallback). Not on Iroh; fingerprints still O(range); canonical cross-impl hash unspecified, so the hash-first probe rarely matches. |
+| [`auditability-loro-history.md`](./auditability-loro-history.md) | **Building.** `Tree::Envelopes` + `attribute_history` + `/history-attribution` + History Verified badge shipped 2026-09-05. Next: envelopes travel in bulk sync (`SYNC_PUSH`, `SYNC_DIFF.pull`) and the vault pack. |
+| [`p2p-presence.md`](./p2p-presence.md) | **Mostly built.** `EPHEMERAL 0x40` codec, peer send/receive and the server bridge are in. Remaining: two-device verification (M12), bandwidth (OQ1), and the OQ3 outbound agent filter, which is a cross-agent presence leak on a multi-agent hub. |
+| [`zones.md`](./zones.md) | **Proposal.** Nothing built. Structural fix for the permission-check half of [`index-performance.md`](./index-performance.md). Partly overtaken by the authority-unit decision. |
+| [`partial-sync.md`](./partial-sync.md) | **Proposal.** Replicate part of a drive per device. Nothing built. |
+| [`drafts-and-suggestions.md`](./drafts-and-suggestions.md) | **Mechanism shipped** (`Fork` class, `diffFork`/`mergeFork`, document body CRDT merge). `ForkBar` renders a count only; review/diff UI, suggest-for-non-writers, reject-with-reason, Canvas fork still open. |
+| [`device-pairing.md`](./device-pairing.md) | **Proposal.** One-scan pairing; QR is routing only (no secret). P0/P1/P2.5 shipped. Remaining: P2 (`pair` kind, mDNS list, pkarr redial), P3, M4, extra-workspace inventory. |
 | [`json-ad-compact.md`](./json-ad-compact.md) | **Phase 1–2 shipped** (resolver, tool I/O, context providers). Remaining: rebase `create_table.rows` on `fromCompact`; server `format=compact`. |
 | [`table-view-filters.md`](./table-view-filters.md) | **Views shipped** — Default View (filters, sort, columns, operators) and the multi-view switcher (`TableViewTabs`, `?view=`). Remaining: index-accelerated range scans. |
-| [`unified-templates.md`](./unified-templates.md) | **Proposal.** One resource-template model for tables, drive onboarding, real demos, AI and vertical marketing. |
-| [`table-templates-and-mini-apps.md`](./table-templates-and-mini-apps.md) | **Partial.** Steps 3–6 shipped (computed columns, aggregates, assistant tools, catalogue). Remaining: derived columns in filters/aggregates. |
-| [`dashboards.md`](./dashboards.md) | **First slice shipped.** Remaining: the sixth action verb, parameters, reaching a dashboard from its table. |
-| [`content-i18n.md`](./content-i18n.md) | **LocalizedText + template locales shipped.** Remaining: TranslationsBar, `useTranslation`, `/query` `lang`, search language filter. |
-| [`website-templates.md`](./website-templates.md) | Template repair complete (DID). Remaining CMS product: drafts-from-site, i18n tooling, canonical paths. |
-| [`structural-problems-index.md`](./structural-problems-index.md) | **Live index.** React subscription audit is partial; save-state APIs shipped. Browser metadata cleanup and subject-brand consumers remain; server subscription work is complete. |
-| [`react-compiler-resource-proxy.md`](./react-compiler-resource-proxy.md) | **Partial.** Immutable read/save status hooks and the data-inspector subscription shipped; remaining render-time property getters need incremental regression-driven migration. |
-| [`canvas-undo-consolidation.md`](./canvas-undo-consolidation.md) | Phase A + C landed (browser). Phase B (Flutter action-stack removal) open. |
-| [`index-performance.md`](./index-performance.md) | First tranche shipped. Structural permission-check fix is `zones.md`, not built. |
-| [`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md) | **Proposal.** Full-snapshot writes, no auto-compaction, O(file) open fsync. |
-| [`virtual-drive.md`](./virtual-drive.md) | **Shipped** as a local NFS mount in the Tauri desktop app (`desktop/src/vfs.rs`). Still proposal: headless-server mount, FUSE/WinFSP, native cloud-sync APIs, mobile providers. |
-| [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md) | **Mostly shipped.** Commits are signed envelopes; content rows dropped; `Tree::Envelopes` keeps the latest (or all) per resource. Remaining: envelope carriage in bulk sync and the vault. |
-| [`p2p-presence.md`](./p2p-presence.md) | **Mostly built.** `EPHEMERAL 0x40` codec, peer send/receive and the server bridge are in (`lib/src/sync/iroh_e2e.rs` `e2e_presence_crosses_the_link_without_being_stored`). Remaining: two-device verification (M12), bandwidth measurement (OQ1). Scoped to your own devices by product choice. |
-| [`reticulum-sync.md`](./reticulum-sync.md) | **Proposal.** Atomic sync protocol over Reticulum. |
-| [`json-schema-code-first.md`](./json-schema-code-first.md) | **Proposal**; `defineSchema` + frozen `did:ad:` schemas in flight in PR #1262 (not on `develop`). Code-first JSON Schema → local DID-backed Class/Property resources. |
+| [`unified-templates.md`](./unified-templates.md) | **Initial slice shipped** (#1428: catalogue, editable previews, template chat). Remaining: portable format, website adapter, demo-lifecycle extraction, provenance and resume, live-AI acceptance. |
+| [`dashboards.md`](./dashboards.md) | **First slice shipped.** No `dashboard` view kind or `table-dashboard` property yet, so dashboards are unreachable from a table. Also open: the set-level action verb, parameters, templates shipping a dashboard. |
+| [`content-i18n.md`](./content-i18n.md) | **LocalizedText + template locales shipped.** Nothing in the app resolves translation siblings. Remaining: TranslationsBar, `useTranslation`, `/query` `lang`, search language filter. |
+| [`website-templates.md`](./website-templates.md) | Template repair complete (DID), two-locale E2E exists. Its CMS list is the website view of `drafts-and-suggestions.md` and `content-i18n.md`. Open: publication visibility, CMS origin, in-page edit affordance, canonical paths. PRs #1498 and #1500 (assistant-designed and self-hosted sites) are in flight. |
+| [`structural-problems-index.md`](./structural-problems-index.md) | **Live index.** React subscription audit is partial; save-state APIs shipped with two consumers. Browser metadata cleanup and subject-brand consumers remain; server subscription work is complete. |
+| [`react-compiler-resource-proxy.md`](./react-compiler-resource-proxy.md) | **Partial.** Immutable read/save status hooks and the data-inspector subscription shipped; about 13% of property reads are still render-time getters, migrating one regression at a time. |
+| [`canvas-undo-consolidation.md`](./canvas-undo-consolidation.md) | Phase A + C landed (browser). Phase B (Flutter action-stack removal, `replace_list_items`) open and unstarted. |
+| [`index-performance.md`](./index-performance.md) | First tranche shipped. Remaining: exact counts, typed sort keys, batched reads, watched-filter LRU, re-profiling. Structural permission-check fix is `zones.md`, not built. |
+| [`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md) | **Proposal.** Full-snapshot writes per commit, no auto-compaction, O(file) open fsync, SIGTERM path. Fresh e2e data dirs are done. |
+| [`virtual-drive.md`](./virtual-drive.md) | **Shipped** as a local NFS mount in the Tauri desktop app (`desktop/src/vfs.rs`, unauthenticated loopback, audit C24). Still proposal: headless-server mount, FUSE/WinFSP, native cloud-sync APIs, mobile providers. |
+| [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md) | **Superseded.** Envelope-on-resource replaced the retention design; Phase 1 and 2.5 shipped. Only the `stateHash` certificate and per-resource `retention` propval remain from this document. |
+| [`s3-blob-storage.md`](./s3-blob-storage.md) | **Partial.** Server-wide S3, verified migration and SaaS enforcement implemented. The backend trait is `get/put/size` only: streaming, delete/GC, per-tenant configuration and encrypted Vault attachments remain. |
+| [`plugins.md`](./plugins.md) | **Partial, off `develop`** — one plugin model (`run` end to end, per-app agents, unattended runs). The code lives on `feat/plugin-model` (PR #1307, 532 files, conflicts with `develop`) and #1482. On `develop` the plugin RPC still answers "not implemented". |
+| [`json-schema-code-first.md`](./json-schema-code-first.md) | **Proposal**; nothing on `develop`. `defineSchema` + frozen `did:ad:` schemas are in PR #1262, a draft last touched 2026-09-01. |
+| [`android-data-reuse.md`](./android-data-reuse.md) | **Draft.** One store/agent/Iroh node per Android device. Nothing built. Supersedes `on-device-atomic-daemon.md`. |
 | [`SDK-API-design.md`](./SDK-API-design.md) | SDK / agent DX direction. |
-| [`plugins.md`](./plugins.md) | **Partial, off `develop`** — one plugin model (`run` end to end, per-app agents, unattended runs). The code lives on `feat/plugin-model` (PR #1307), not `develop`. Absorbed `llm-wasm-gui-plugins.md`, `importers.md`, `habits-app.md` (2026-09-01); the habits RPC-`query` blocker is a line in it. |
-| [`personal-information-suite.md`](./personal-information-suite.md) | **Exploration.** Contacts, calendar, email. Nothing built. |
+
+### Explorations with no code
+
+Design intent, kept for direction. None has a line of code behind it.
+
+| Document | Scope |
+| --- | --- |
+| [`reticulum-sync.md`](./reticulum-sync.md) | Atomic sync protocol over Reticulum. |
+| [`nextgraph-interop.md`](./nextgraph-interop.md) | `did:ng:` via a scheme-routed Store backend. PR #1360 (optional NextGraph mirror) is open. |
+| [`personal-information-suite.md`](./personal-information-suite.md) | Contacts, calendar, email. |
 | [`social-apps.md`](./social-apps.md) | Requirements for social-network-shaped apps. Companion to `zones.md`. |
-| [`android-data-reuse.md`](./android-data-reuse.md) | **Draft.** One store/agent/Iroh node per Android device. Supersedes `on-device-atomic-daemon.md` (deleted 2026-09-01; desktop remainder is a note in `virtual-drive.md`). |
-| [`nextgraph-interop.md`](./nextgraph-interop.md) | **Proposal.** `did:ng:` via a scheme-routed Store backend. |
-| [`s3-blob-storage.md`](./s3-blob-storage.md) | **Partial.** Server-wide S3, verified migration and SaaS enforcement implemented. Streaming, GC, per-tenant configuration and encrypted Vault attachments remain. |
-| [`atomic-assistant-browser-extension.md`](./atomic-assistant-browser-extension.md) | **Proposal.** Local-first Chromium extension. |
-| [`tours.md`](./tours.md) | Design, not built. |
-| [`local-search.md`](./local-search.md) | **Landed.** KV inverted index in `atomic_lib` (redb/OPFS/sled): BM25 + prefix + 1-edit prefix-fuzzy + PropValSub filters. Hosted `/search` is the same engine; Tantivy is gone. |
+| [`atomic-assistant-browser-extension.md`](./atomic-assistant-browser-extension.md) | Local-first Chromium extension. |
+| [`tours.md`](./tours.md) | Recorded tours; `unified-templates.md` defers them. |
 
 ## Slices and companions
 
@@ -94,22 +123,22 @@ Not top-level plans. Indexed so they do not go missing.
 | Document | Status |
 | --- | --- |
 | [`unify-subscription-primitives.md`](./unify-subscription-primitives.md) | **Done in reduced form (2026-09-04).** One `SUB <subject>` frame; `SUBSCRIBE` and `SUBSCRIBE_QUERY` removed. Design text kept as the record. |
-| [`unify-resource-representations.md`](./unify-resource-representations.md) | **Mostly shipped.** `Resource#cache` is derived from the Loro doc. Remaining: the `_auxValues` overlay. |
-| [`unify-resource-dirty-signals.md`](./unify-resource-dirty-signals.md) | **Partial.** `getSaveState(resource)`, the React hook and scheduled-save ownership shipped; other save UIs and internal coordinator extraction remain. |
-| [`subject-types-end-to-end.md`](./subject-types-end-to-end.md) | Partial. Rust `DidKind` shipped; the browser brand still has no consumer. |
-| [`arc-actor-message-payloads.md`](./arc-actor-message-payloads.md) | Partial. WS encode-once shipped; `CommitMessage` Arc-wrap deferred. |
+| [`unify-resource-representations.md`](./unify-resource-representations.md) | **Mostly shipped.** `Resource#cache` is derived from the Loro doc. The `_auxValues` overlay stays for binary values Loro cannot hold; the proposal body predates that. |
+| [`unify-resource-dirty-signals.md`](./unify-resource-dirty-signals.md) | **Partial.** `getSaveState(resource)`, the React hook and scheduled-save ownership shipped; two consumers so far. Other save UIs remain. |
+| [`subject-types-end-to-end.md`](./subject-types-end-to-end.md) | Partial. Rust `DidKind` shipped; the browser brand has zero consumers, the app still calls unbranded `Client.isValidSubject`. |
+| [`arc-actor-message-payloads.md`](./arc-actor-message-payloads.md) | **Stretch shipped.** `SendFrame { Arc<[u8]> }` encode-once is in; only the `atomic_lib` `loro_update: Vec<u8>` question remains and is low value now. |
 | [`sync-onboarding-ux.md`](./sync-onboarding-ux.md) | Reference. Cross-client copy for what can reach what. Companion to [`device-pairing.md`](./device-pairing.md). |
-| [`main-drive-and-paths.md`](./main-drive-and-paths.md) | Strategy. DID-branch deployment: root drive, legacy URLs, human-readable paths. |
-| [`actions.md`](./actions.md) | **Steps 1–4 shipped.** Registry drives ⌘M, ⌘K (capped prefix match), hotkeys, the shortcuts overlay/page, and simple AI tools. Remaining: MCP projection when a server exists. |
-| [`silent-failures.md`](./silent-failures.md) | Living log of error-handling failures that reported success (2026-08-21). Carries M8 from the pairing field test. |
-| [`auditability-loro-history.md`](./auditability-loro-history.md) | **Building.** `Tree::Envelopes` + `attribute_history` + `/history-attribution` + History Verified badge shipped 2026-09-05. Next: envelopes travel in bulk sync and the vault. |
+| [`main-drive-and-paths.md`](./main-drive-and-paths.md) | Strategy. DID-branch deployment: root drive, legacy URLs, human-readable paths. Phases 1–3 unstarted. |
+| [`actions.md`](./actions.md) | **Steps 1–4 shipped.** Registry drives ⌘M, ⌘K (capped prefix match), hotkeys, the shortcuts overlay/page, and simple AI tools. Remaining: MCP projection when a server exists (PR #1347 is the plan). |
+| [`silent-failures.md`](./silent-failures.md) | Living log of error-handling failures that reported success (2026-08-21). Carries M8 from the pairing field test and the unreproduced Safari fork query. |
 
 Closed decisions, as-built records, closed explorations and fixed notes live
 in [`completed/`](./completed/): the five decisions above, the 2026-07 sync
 audit, the outbox data-loss race, `encryption.md` (closed 2026-09-01: at-rest
 plus vault), the pairing field test (2026-08, open items carried into
 `device-pairing.md`, `silent-failures.md` and `p2p-presence.md`), the
-table-creation observation log and the kanban test spec.
+table-creation observation log, the kanban test spec, and the as-built notes
+below that have no follow-ups.
 
 ## Landed
 
@@ -120,19 +149,21 @@ the document itself.
 | --- | --- |
 | [`deterministic-personal-drive.md`](./deterministic-personal-drive.md) | Personal-drive DID derived from the Agent key. Repeat genesis merges. Pointer is not identity. `Db::create_drive` lists on the personal drive. |
 | [`multi-property-filter.md`](./multi-property-filter.md) | AND filters, full-stack (Rust → server → lib → WASM → React → e2e). UI lives in `table-view-filters.md`. |
-| [`commit-fanout-drive-isolation.md`](./commit-fanout-drive-isolation.md) | Drive-scoped WS commit fan-out + server-side drive safety net. |
-| [`cleanup-update-encoding.md`](./cleanup-update-encoding.md) | Unified `decode_update`; TS client exports compact Loro deltas. |
-| [`sign-at-drain.md`](./sign-at-drain.md) | One signed commit per dirty subject per drain pass. |
-| [`sync.md`](./sync.md) | WS `COMMIT`, echo suppression, unified `UPDATE`/`DESTROY`; Flutter WS session shipped. The last test gaps (`ws_errors.rs`, `ws_unsub.rs`, browser `postCommit`) closed 2026-09-04. |
-| [`encrypted-vault-format.md`](./encrypted-vault-format.md) | Vault backup v1 in `lib/src/vault/` (2026-08-04). |
-| [`opfs-per-agent-encryption.md`](./opfs-per-agent-encryption.md) | One encrypted OPFS database per agent. Session isolation on sign-out. |
-| [`meetings.md`](./meetings.md) | Meeting resource, page, prepare-then-start flow. |
-| [`node-did-canonicalization.md`](./node-did-canonicalization.md) | `did:ad:node:<hex>` is the only user-facing node ID form. |
-| [`migrate-jsonarray-to-json.md`](./migrate-jsonarray-to-json.md) | Canvas `strokeData` datatype is `json`. |
-| [`emoji-cover-images.md`](./emoji-cover-images.md) | Emoji + cover images on resources. |
-| [`presence-views.md`](./presence-views.md) | Presence on canvas, tables, navbar, sidebar. |
-| [`demo-experience.md`](./demo-experience.md) | v1 demo workspace. |
-| [`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md) | Onboarding, managed-node detection, enrollment, heartbeat and replication pull. Verified against the SaaS `LocalProcessNodeProvider` only; the sync-path admission gate is not built. |
+| [`table-templates-and-mini-apps.md`](./table-templates-and-mini-apps.md) | Computed and derived columns, aggregates, assistant tools, thirteen table templates, derived columns in filters and aggregates. |
+| [`sync.md`](./sync.md) | WS `COMMIT`, echo suppression, unified `UPDATE`/`DESTROY`; Flutter WS session shipped. One open line: overlap trim (AUTH repetition, `SYNC_PUSH` chunking, HELLO codec tests). |
+| [`encrypted-vault-format.md`](./encrypted-vault-format.md) | Vault backup v1 in `lib/src/vault/` (2026-08-04). Open spec: compression, blob chunking, per-object signatures. |
+| [`meetings.md`](./meetings.md) | Meeting resource, page, prepare-then-start flow. Open: stale-meeting reaping, attendance events. |
+| [`demo-experience.md`](./demo-experience.md) | v1 and v2 demo workspace. |
+| [`local-search.md`](./local-search.md) | KV inverted index in `atomic_lib` (redb/OPFS/sled): BM25 + prefix + 1-edit prefix-fuzzy + PropValSub filters. Hosted `/search` is the same engine; Tantivy is gone. |
+| [`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md) | Onboarding, managed-node detection, enrollment, heartbeat and replication pull. Verified against the SaaS `LocalProcessNodeProvider` only; the sync-path admission gate and reaper are not built. |
+| [`completed/commit-fanout-drive-isolation.md`](./completed/commit-fanout-drive-isolation.md) | Drive-scoped WS commit fan-out + server-side drive safety net. |
+| [`completed/cleanup-update-encoding.md`](./completed/cleanup-update-encoding.md) | Unified `decode_update`; TS client exports compact Loro deltas. |
+| [`completed/sign-at-drain.md`](./completed/sign-at-drain.md) | One signed commit per dirty subject per drain pass. |
+| [`completed/opfs-per-agent-encryption.md`](./completed/opfs-per-agent-encryption.md) | One encrypted OPFS database per agent. Session isolation on sign-out. |
+| [`completed/node-did-canonicalization.md`](./completed/node-did-canonicalization.md) | `did:ad:node:<hex>` is the only user-facing node ID form. |
+| [`completed/migrate-jsonarray-to-json.md`](./completed/migrate-jsonarray-to-json.md) | Canvas `strokeData` datatype is `json`. |
+| [`completed/emoji-cover-images.md`](./completed/emoji-cover-images.md) | Emoji + cover images on resources. |
+| [`completed/presence-views.md`](./completed/presence-views.md) | Presence on canvas, tables, navbar, sidebar. |
 
 ## Agent Workflow
 

@@ -19,7 +19,7 @@ fixed the shape of the answer:
   `RedbStore::new_opfs` (`lib/src/db/redb_store.rs:207`). The native server path
   `Db::init_redb_file` (`lib/src/db.rs:506`) takes no key: a self-hosted or managed
   `atomic-server` keeps `atomic.redb` **plaintext on disk** today. See
-  [`opfs-per-agent-encryption.md`](../opfs-per-agent-encryption.md).
+  [`opfs-per-agent-encryption.md`](./opfs-per-agent-encryption.md).
 - **Blind vault backup v1**: `lib/src/vault/` (envelope, pack, keys, store, sync). The store
   holding vault objects cannot read subjects, values, or counts
   (`a_restore_without_the_right_key_fails`, `sealed_packs_do_not_reveal_subjects`). See

@@ -5,7 +5,7 @@
 > vectors). Remaining: DataRoute "Verify signature" UI, `genesis` propval
 > immutability, reading the cert's signed `drive` in `check_rights`. Builds on
 > [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md),
-> [`sign-at-drain.md`](./sign-at-drain.md), and
+> [`sign-at-drain.md`](./completed/sign-at-drain.md), and
 > [`loro-source-of-truth.md`](./loro-source-of-truth.md).
 >
 > Reframes a DID resource's identity as a small, **inline, binary,
@@ -159,7 +159,7 @@ var     var   drive          u16 length-prefix + UTF-8 subject
   of every watched query — an O(all-queries) cost per commit atom). It also
   scopes the WS commit fan-out to a resource's owning drive — already shipped
   (server-side) ahead of the full cert, closing a cross-tenant leak; see
-  [`commit-fanout-drive-isolation.md`](./commit-fanout-drive-isolation.md).
+  [`commit-fanout-drive-isolation.md`](./completed/commit-fanout-drive-isolation.md).
 
 ### Why binary, not JSON
 

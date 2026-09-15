@@ -2,7 +2,7 @@
 
 > **Status:** Phase A landed (browser scrub gesture, `replaceListItems`,
 > `strokeData` datatype = `json` — `jsonArray` was retired; see
-> [`migrate-jsonarray-to-json.md`](./migrate-jsonarray-to-json.md), legacy
+> [`migrate-jsonarray-to-json.md`](./completed/migrate-jsonarray-to-json.md), legacy
 > string parser dropped in the **browser** — `lib/src/loro.rs` still
 > tolerates a JSON-string value from older writers; see the *Current* note in
 > the migration doc, 2026-09-01).

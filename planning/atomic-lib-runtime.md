@@ -629,11 +629,24 @@ needing an HTTP server in front of it.
 ### Phase 1: Introduce `AtomicNode` Without Behavior Change
 
 - [x] Add `lib/src/runtime/`.
-- [x] Add `AtomicNode`, `NodeConfig`, and simple constructors around existing `Db`
-  initialization.
+- [x] Add `AtomicNode` and simple constructors around existing `Db`
+  initialization. (`NodeConfig` / `open(NodeConfig)` shipped and was cut on
+  2026-09-04 with the rest of the unused surface; it does not exist today, so
+  the plugin-optionality text below describes a type still to be reintroduced.)
 - [x] Add `get`, `query`, `apply_commit` by delegating to existing code.
 - [ ] Add `put_blob` and `get_blob`.
 - [ ] Keep server using `AppState`, but allow `AppState` to hold an `AtomicNode`.
+- [ ] **Bind Flutter and desktop to the node (2026-09-15).** Both still hold a
+      raw `Db` and re-implement save/ingest policy: `flutter/rust/src/api/simple.rs`
+      (`OnceLock<Arc<Db>>`, `save_locally` direct) and `desktop/src/lib.rs` /
+      `desktop/src/vfs.rs`. This is the parallel `simple.rs` surface the
+      accepted runtime-boundary decision says must not exist.
+- [ ] **Durability belongs to the library, not the host.** Every redb write
+      uses `Durability::None`; only `serve.rs` (server, desktop) and the WASM
+      worker run the 100ms durable-flush tick. The Flutter binding never
+      flushes except in `set_active_drive`, so an app kill rolls back every
+      edit since the last drive switch. Fix: own the flush cadence in
+      `atomic_lib` (`Db` or `AtomicNode`) so no binding can forget it.
 
 Tests:
 
