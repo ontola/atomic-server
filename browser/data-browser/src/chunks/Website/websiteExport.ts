@@ -1,3 +1,9 @@
+import { optimizeWebsiteImage } from './optimizeWebsiteImage';
+import {
+  storeWebsiteAsset,
+  readWebsiteAsset,
+  type WebsiteAsset,
+} from './websiteAssets';
 import { snapshotWebsiteImage } from './websiteMedia';
 import searchViewHtml from './runtime/search-view.html?raw';
 import websiteRuntime from './runtime/website-runtime.min.js?raw';
@@ -24,6 +30,7 @@ import {
   renderRows,
   renderWebsitePage,
   type WebsiteArtifact,
+  type RichNode,
 } from './renderWebsite';
 
 export function selectedSubjects(config: WebsiteConfig): string[] {
@@ -39,9 +46,15 @@ export function selectedSubjects(config: WebsiteConfig): string[] {
 }
 export async function artifactDigest(
   files: Record<string, string>,
+  assets?: Record<string, WebsiteAsset>,
 ): Promise<string> {
   const canonical = JSON.stringify(
-    Object.entries(files).sort(([a], [b]) => a.localeCompare(b)),
+    assets && Object.keys(assets).length
+      ? {
+          files: Object.entries(files).sort(([a], [b]) => a.localeCompare(b)),
+          assets: Object.entries(assets).sort(([a], [b]) => a.localeCompare(b)),
+        }
+      : Object.entries(files).sort(([a], [b]) => a.localeCompare(b)),
   );
   const bytes = new TextEncoder().encode(canonical);
   if (bytes.byteLength > 5_000_000)
@@ -78,31 +91,102 @@ export async function buildWebsiteArtifact(
     : undefined;
   const files: Record<string, string> = {};
 
+  const assets: Record<string, WebsiteAsset> = {};
   const imageCache = new Map<string, Promise<string>>();
 
-  const image = (subject: string) => {
-    if (!imageCache.has(subject))
-      imageCache.set(subject, snapshotWebsiteImage(store, subject));
+  const packageImage = async (blob: Blob) => {
+    const asset = await storeWebsiteAsset(store, blob);
+    const path = `assets/${asset.hash}.${asset.mimeType.slice('image/'.length)}`;
+    assets[path] = asset;
 
-    return imageCache.get(subject)!;
+    return `/${path}`;
   };
 
-  for (const page of config.pages) {
+  const packageDocument = async (
+    node: RichNode,
+    depth = 0,
+  ): Promise<RichNode> => {
+    if (depth > 80)
+      throw new Error('Document nesting exceeds the export limit.');
+
+    if (node.type === 'image') {
+      const src = String(node.attrs?.src ?? '');
+      const match =
+        /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/.exec(
+          src,
+        );
+      if (!match || match[2].length > 67_000_000)
+        throw new Error(
+          'Document image must be a supported image under 50 MB.',
+        );
+      const bytes = Uint8Array.from(atob(match[2]), c => c.charCodeAt(0));
+      const path = await packageImage(
+        await optimizeWebsiteImage(new Blob([bytes], { type: match[1] })),
+      );
+
+      return { ...node, attrs: { ...node.attrs, src: path } };
+    }
+
+    const content: RichNode[] = [];
+    for (const child of node.content ?? [])
+      content.push(await packageDocument(child, depth + 1));
+
+    return { ...node, content };
+  };
+
+  let imageQueue = Promise.resolve();
+
+  const image = async (subject: string, location: string) => {
+    if (!imageCache.has(subject)) {
+      const pending = imageQueue.then(async () => {
+        const blob = await snapshotWebsiteImage(store, subject);
+
+        return packageImage(blob);
+      });
+      imageCache.set(subject, pending);
+      imageQueue = pending.then(
+        () => undefined,
+        () => undefined,
+      );
+    }
+
+    try {
+      return await imageCache.get(subject)!;
+    } catch (error) {
+      throw new Error(
+        `${location}: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
+      );
+    }
+  };
+
+  for (const [pageIndex, page] of config.pages.entries()) {
     const gallery = `<section class="gallery"><div class="cards">${(
       await Promise.all(
         (page.media ?? []).map(
-          async media =>
-            `<figure>${renderDocument({ type: 'image', attrs: { src: await image(media.subject), alt: media.alt } })}${media.caption ? `<figcaption>${escapeHtml(media.caption)}</figcaption>` : ''}</figure>`,
+          async (media, mediaIndex) =>
+            `<figure>${renderDocument({ type: 'image', attrs: { src: await image(media.subject, `page[${pageIndex}] (${page.path}).media[${mediaIndex}]`), alt: media.alt } })}${media.caption ? `<figcaption>${escapeHtml(media.caption)}</figcaption>` : ''}</figure>`,
         ),
       )
     ).join('')}</div></section>`;
-    const documents = page.documents.map(subject => {
+    const documents: string[] = [];
+
+    for (const subject of page.documents) {
       const resource = bySubject.get(subject)!;
       const result = documentReader!.readDocumentV2TiptapJson(resource, store);
       if (!result.ok) throw new Error(`${resource.title}: ${result.error}`);
 
-      return `<article>${renderDocument(result.docJson as Parameters<typeof renderDocument>[0])}</article>`;
-    });
+      try {
+        documents.push(
+          `<article>${renderDocument(await packageDocument(result.docJson as RichNode))}</article>`,
+        );
+      } catch (error) {
+        throw new Error(
+          `page[${pageIndex}] (${page.path}).document "${resource.title}" (${subject}): ${String(error)}`,
+        );
+      }
+    }
+
     const tables = await Promise.all(
       page.tables.map(async (table, tableIndex) => {
         const source = bySubject.get(table.table)!;
@@ -119,7 +203,7 @@ export async function buildWebsiteArtifact(
           }),
         );
         const rows = await Promise.all(
-          table.rows.map(async subject => {
+          table.rows.map(async (subject, rowIndex) => {
             const resource = bySubject.get(subject)!;
             if (resource.get(core.properties.parent) !== table.table)
               throw new Error('A selected row does not belong to its table.');
@@ -130,7 +214,10 @@ export async function buildWebsiteArtifact(
                 if (value === undefined || value === null) return '';
                 if (imageColumns[columnIndex] && typeof value === 'string')
                   return {
-                    src: await image(value),
+                    src: await image(
+                      value,
+                      `page[${pageIndex}] (${page.path}).tables[${tableIndex}].rows[${rowIndex}].${column.label}`,
+                    ),
                     alt: column.label,
                   };
                 if (!['string', 'number', 'boolean'].includes(typeof value))
@@ -195,7 +282,7 @@ export async function buildWebsiteArtifact(
   }
 
   // No further source reads after this point: later edits cannot alter this artifact.
-  const digest = await artifactDigest(files);
+  const digest = await artifactDigest(files, assets);
 
   return {
     version: 1,
@@ -203,6 +290,7 @@ export async function buildWebsiteArtifact(
     project,
     config,
     files,
+    assets,
     digest,
     createdAt: new Date().toISOString(),
   };
@@ -221,7 +309,7 @@ export async function saveWebsiteRelease(
     throw new Error('You cannot create a release for this website.');
   if (
     artifact.project !== resource.subject ||
-    (await artifactDigest(artifact.files)) !== artifact.digest
+    (await artifactDigest(artifact.files, artifact.assets)) !== artifact.digest
   )
     throw new Error('Release does not match the reviewed website artifact.');
   const { schema } = await readWebsite(store, drive, resource);
@@ -256,7 +344,7 @@ export async function readWebsiteRelease(
     artifact.renderer !== 'atomic-static-v1' ||
     artifact.project !== resource.subject ||
     !artifact.files ||
-    (await artifactDigest(artifact.files)) !== artifact.digest
+    (await artifactDigest(artifact.files, artifact.assets)) !== artifact.digest
   )
     throw new Error('Stored website release failed integrity validation.');
   websiteConfigSchema.parse(artifact.config);
@@ -271,13 +359,19 @@ export async function readWebsiteRelease(
 
   return artifact;
 }
-export async function downloadWebsite(artifact: WebsiteArtifact) {
-  const { ZipWriter, BlobWriter, TextReader } = await import('@zip.js/zip.js');
+export async function downloadWebsite(artifact: WebsiteArtifact, store: Store) {
+  const { ZipWriter, BlobWriter, TextReader, BlobReader } =
+    await import('@zip.js/zip.js');
   const zip = new ZipWriter(new BlobWriter('application/zip'), {
     useWebWorkers: false,
   });
   for (const [path, html] of Object.entries(artifact.files))
     await zip.add(path, new TextReader(html));
+  for (const [path, asset] of Object.entries(artifact.assets ?? {}))
+    await zip.add(
+      path,
+      new BlobReader(await readWebsiteAsset(store, artifact.project, asset)),
+    );
   // Only public files and content hashes go into the archive; no private resource IDs/config.
   await zip.add(
     'atomic-hosting.json',

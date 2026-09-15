@@ -9,6 +9,8 @@ pub const MAX_BYTES: usize = 5_000_000;
 pub struct WebsitePackage {
     pub version: u32,
     pub files: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub assets: BTreeMap<String, String>,
 }
 impl WebsitePackage {
     pub fn validate(&self) -> AtomicResult<()> {
@@ -19,6 +21,13 @@ impl WebsitePackage {
         }
         if self.files.iter().any(|(path, _)| !valid_path(path)) {
             return Err("Invalid website file path or unsupported file type".into());
+        }
+        if self.assets.len() + self.files.len() > 100
+            || self.assets.iter().any(|(path, hash)| {
+                !valid_asset(path) || !path.starts_with(&format!("assets/{hash}."))
+            })
+        {
+            return Err("Invalid website image asset manifest".into());
         }
         if serde_json::to_vec(self)?.len() > MAX_BYTES {
             return Err("Website package exceeds the 5 MB pilot limit".into());
@@ -46,6 +55,19 @@ pub fn valid_path(path: &str) -> bool {
             .iter()
             .any(|ext| path.ends_with(ext))
 }
+pub fn valid_asset(path: &str) -> bool {
+    let Some(name) = path.strip_prefix("assets/") else {
+        return false;
+    };
+    let Some((hash, ext)) = name.split_once('.') else {
+        return false;
+    };
+    hash.len() == 64
+        && hash
+            .bytes()
+            .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+        && matches!(ext, "png" | "jpeg" | "webp" | "gif")
+}
 pub fn project_id(subject: &str) -> String {
     // 160 bits fits in a DNS label. The bound full subject is checked on writes.
     blake3::hash(subject.as_bytes()).to_hex()[..40].to_string()
@@ -58,6 +80,7 @@ mod tests {
     fn packages_are_bounded_and_content_addressed() {
         let mut p = WebsitePackage {
             version: 1,
+            assets: BTreeMap::new(),
             files: BTreeMap::from([("index.html".into(), "Hello".into())]),
         };
         let id = p.id().unwrap();

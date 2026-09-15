@@ -180,6 +180,42 @@ pub async fn upload(
         .website_upload(&query.project, &query.drive, &body)?;
     Ok(HttpResponse::Ok().insert_header((header::CACHE_CONTROL, "no-store")).json(serde_json::json!({"url":public_url(&state, &query.project)?, "state":value, "deployment":body.id()?})))
 }
+pub async fn asset_upload(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    ctx: RequestContext,
+    query: web::Query<ProjectQuery>,
+    hash: web::Path<String>,
+    body: web::Bytes,
+) -> AtomicServerResult<HttpResponse> {
+    authorize(&state, &req, &ctx, &query).await?;
+    state
+        .store
+        .website_put_asset(&query.project, &hash, &body)
+        .await
+        .map_err(|e| AtomicServerError::bad_request(e.to_string()))?;
+    Ok(HttpResponse::NoContent().finish())
+}
+pub async fn asset_read(
+    state: web::Data<AppState>,
+    req: HttpRequest,
+    ctx: RequestContext,
+    query: web::Query<ProjectQuery>,
+    hash: web::Path<String>,
+) -> AtomicServerResult<HttpResponse> {
+    authorize(&state, &req, &ctx, &query).await?;
+    let bytes = state
+        .store
+        .website_asset(&project_id(&query.project), &hash)
+        .await?;
+    Ok(match bytes {
+        Some(bytes) => HttpResponse::Ok()
+            .insert_header((header::CONTENT_TYPE, "application/octet-stream"))
+            .insert_header((header::CACHE_CONTROL, "no-store"))
+            .body(bytes),
+        None => HttpResponse::NotFound().finish(),
+    })
+}
 pub async fn activate(
     state: web::Data<AppState>,
     req: HttpRequest,
@@ -220,6 +256,9 @@ pub fn control_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/website-hosting")
             .app_data(web::JsonConfig::default().limit(MAX_BYTES))
+            .app_data(web::PayloadConfig::new(2_000_000))
+            .route("/assets/{hash}", web::post().to(asset_upload))
+            .route("/assets/{hash}", web::get().to(asset_read))
             .route("", web::get().to(status))
             .route("/deployments", web::post().to(upload))
             .route("/activate", web::post().to(activate))
@@ -279,7 +318,7 @@ async fn serve(state: web::Data<AppState>, req: HttpRequest) -> AtomicServerResu
     } else {
         path.to_string()
     };
-    let file = if let Some(versioned) = path.strip_prefix("_releases/") {
+    let mut file = if let Some(versioned) = path.strip_prefix("_releases/") {
         match versioned.split_once('/') {
             Some((version, file)) => state
                 .store
@@ -289,6 +328,19 @@ async fn serve(state: web::Data<AppState>, req: HttpRequest) -> AtomicServerResu
     } else {
         state.store.website_public_file(&id, &path)?
     };
+    if file.is_none() {
+        let (version, asset) = if let Some(rest) = path.strip_prefix("_releases/") {
+            rest.split_once('/')
+                .map(|(v, p)| (Some(v), p))
+                .unwrap_or((None, ""))
+        } else {
+            (None, path.as_str())
+        };
+        file = state
+            .store
+            .website_public_asset(&id, version, asset)
+            .await?;
+    }
     let Some((deployment, mut bytes)) = file else {
         return Ok(HttpResponse::NotFound()
             .insert_header((header::CACHE_CONTROL, "no-store"))
@@ -300,6 +352,10 @@ async fn serve(state: web::Data<AppState>, req: HttpRequest) -> AtomicServerResu
         let html = String::from_utf8(bytes)
             .map_err(|_| AtomicServerError::bad_request("Invalid HTML encoding"))?;
         bytes = html
+            .replace(
+                "src=\"/assets/",
+                &format!("src=\"/_releases/{deployment}/assets/"),
+            )
             .replace(
                 "src=\"website-runtime.js\"",
                 &format!("src=\"/_releases/{deployment}/website-runtime.js\""),
@@ -314,6 +370,14 @@ async fn serve(state: web::Data<AppState>, req: HttpRequest) -> AtomicServerResu
         "text/html; charset=utf-8"
     } else if path.ends_with(".css") {
         "text/css; charset=utf-8"
+    } else if path.ends_with(".webp") {
+        "image/webp"
+    } else if path.ends_with(".png") {
+        "image/png"
+    } else if path.ends_with(".jpeg") {
+        "image/jpeg"
+    } else if path.ends_with(".gif") {
+        "image/gif"
     } else {
         "text/javascript; charset=utf-8"
     };

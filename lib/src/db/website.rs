@@ -40,6 +40,68 @@ fn insert(key: Vec<u8>, val: Vec<u8>) -> Operation {
     }
 }
 impl Db {
+    pub async fn website_put_asset(
+        &self,
+        project: &str,
+        hash: &str,
+        bytes: &[u8],
+    ) -> AtomicResult<()> {
+        if bytes.len() > 2_000_000 || blake3::hash(bytes).to_hex().as_str() != hash {
+            return Err("Invalid image hash or image exceeds the 2 MB derivative limit".into());
+        }
+        let key_bytes = hex::decode(hash).map_err(|e| e.to_string())?;
+        self.put_blob(&key_bytes, bytes).await?;
+        self.kv.apply_batch(&[insert(
+            key(&project_id(project), &format!("assets/{hash}")),
+            vec![1],
+        )])?;
+        self.kv.flush()?;
+        Ok(())
+    }
+    pub async fn website_asset(&self, id: &str, hash: &str) -> AtomicResult<Option<Vec<u8>>> {
+        if self
+            .kv
+            .get(Tree::PluginMeta, &key(id, &format!("assets/{hash}")))?
+            .is_none()
+        {
+            return Ok(None);
+        }
+        self.get_blob(&hex::decode(hash).map_err(|e| e.to_string())?)
+            .await
+    }
+    pub async fn website_public_asset(
+        &self,
+        id: &str,
+        deployment: Option<&str>,
+        path: &str,
+    ) -> AtomicResult<Option<(String, Vec<u8>)>> {
+        if !crate::website::valid_asset(path) {
+            return Ok(None);
+        }
+        let Some(state) = self.website_state(id)? else {
+            return Ok(None);
+        };
+        let Some(active) = state.active else {
+            return Ok(None);
+        };
+        let version = deployment.unwrap_or(&active);
+        if version != active
+            && !state
+                .history
+                .iter()
+                .any(|h| h.deployment.as_deref() == Some(version))
+        {
+            return Ok(None);
+        }
+        let package = self.website_package(id, version)?;
+        let Some(hash) = package.assets.get(path) else {
+            return Ok(None);
+        };
+        Ok(self
+            .website_asset(id, hash)
+            .await?
+            .map(|bytes| (version.to_owned(), bytes)))
+    }
     pub fn website_state(&self, id: &str) -> AtomicResult<Option<WebsiteState>> {
         self.kv
             .get(Tree::PluginMeta, &key(id, "state"))?
@@ -53,6 +115,18 @@ impl Db {
         package: &WebsitePackage,
     ) -> AtomicResult<WebsiteState> {
         let deployment = package.id()?;
+        for hash in package.assets.values() {
+            if self
+                .kv
+                .get(
+                    Tree::PluginMeta,
+                    &key(&project_id(project), &format!("assets/{hash}")),
+                )?
+                .is_none()
+            {
+                return Err("Upload this project's image blobs before its deployment".into());
+            }
+        }
         let id = project_id(project);
         let _lock = WRITES
             .lock()
@@ -203,6 +277,7 @@ mod tests {
         let db = Db::init_temp("website_deployment").await.unwrap();
         let mut package = WebsitePackage {
             version: 1,
+            assets: Default::default(),
             files: std::collections::BTreeMap::from([("index.html".into(), "First".into())]),
         };
         let id = project_id("project");

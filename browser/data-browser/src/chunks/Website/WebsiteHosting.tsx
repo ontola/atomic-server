@@ -1,3 +1,4 @@
+import { uploadWebsiteAssets } from './websiteAssets';
 import { useEffect, useState, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { useStore } from '@tomic/react';
@@ -89,11 +90,21 @@ export function WebsiteHosting({
       const before =
         status ?? (await hostingRequest<HostingStatus>(store, project));
       await saveRelease(snapshot);
+      await uploadWebsiteAssets(store, project, snapshot.assets);
       const uploaded = await hostingRequest<HostingStatus>(
         store,
         project,
         '/deployments',
-        { version: 1, files: snapshot.files },
+        {
+          version: 1,
+          files: snapshot.files,
+          assets: Object.fromEntries(
+            Object.entries(snapshot.assets ?? {}).map(([path, asset]) => [
+              path,
+              asset.hash,
+            ]),
+          ),
+        },
       );
       setStatus(uploaded);
       const alreadyUploaded = before.state?.deployments.includes(

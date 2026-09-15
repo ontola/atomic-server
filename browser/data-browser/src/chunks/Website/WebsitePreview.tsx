@@ -1,3 +1,4 @@
+import { useWebsitePreviewHtml } from './useWebsitePreviewHtml';
 import { useEffect, useRef } from 'react';
 import searchViewUrl from './runtime/search-view.html?url';
 import { hostSnapshot } from './runtime/snapshotHost';
@@ -20,11 +21,13 @@ export function WebsitePreview({
     artifact.files['index.html']
   ).replace('<script src="website-runtime.js" defer></script>', '');
 
+  const previewHtml = useWebsitePreviewHtml(html, artifact);
+
   return (
     <iframe
       title='Website preview'
       sandbox='allow-same-origin allow-scripts'
-      srcDoc={html}
+      srcDoc={previewHtml}
       onLoad={event => {
         cleanups.current.forEach(close => close());
         cleanups.current = [];

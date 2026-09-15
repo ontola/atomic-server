@@ -1,3 +1,4 @@
+import { useWebsitePreviewHtml } from './useWebsitePreviewHtml';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Editable, EditModeProvider } from '@tomic/edit-mode/react';
@@ -113,6 +114,8 @@ export function WebsiteInlinePreview({
       .finally(() => setSaving(false));
   };
 
+  const previewHtml = useWebsitePreviewHtml(html, artifact);
+
   return (
     <>
       <p>
@@ -130,7 +133,7 @@ export function WebsiteInlinePreview({
       <iframe
         title='Website preview'
         sandbox='allow-same-origin'
-        srcDoc={html}
+        srcDoc={previewHtml}
         onLoad={event => {
           void setup(event.currentTarget).catch(cause =>
             setError(String(cause)),

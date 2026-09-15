@@ -4,7 +4,10 @@ changing the main URL. Switching chats checkpoints the current message first.
 Successful reply persistence clears error descriptions using Resource.remove.
 
 Website media: a real browser test uploads a private PNG, renders it in the draft,
-publishes it, and checks decoded image dimensions as an anonymous visitor.
+publishes it, and checks decoded image dimensions and a separate HTTP asset as an
+anonymous visitor. A browser test optimizes a 6.55 MB JPEG without changing its
+source. The object-store adapter test checks blob storage, project isolation and
+publication gating; this is not a live S3 bucket test.
 Unit tests cover gallery/File-cell image packaging, unselected relationship
 exclusion, media limits, reference reload persistence and batch row save failures.
 
