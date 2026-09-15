@@ -26,7 +26,11 @@ import {
   useArray,
   useResource,
   useResources,
+  useString,
+  useTitle,
   type Ai,
+  type DataBrowser,
+  type Resource,
   type Server,
   type Store,
 } from '@tomic/react';
@@ -51,6 +55,8 @@ import {
   subscribeOverlay,
   type OverlayType,
 } from './overlayState';
+import { useDocumentText } from '../hooks/useDocumentText';
+import { getSearchResultHint } from '../helpers/searchResultHint';
 
 export { closeOverlay, openSearchOverlay, openShortcutsOverlay };
 
@@ -574,6 +580,7 @@ function SearchOverlay(): JSX.Element {
                     return (
                       <ResultCard
                         key={subject}
+                        query={searchQuery}
                         subject={subject}
                         index={index}
                         selected={index === selectedIndex}
@@ -673,6 +680,7 @@ function SearchOverlay(): JSX.Element {
 
 interface ResultCardProps {
   subject: string;
+  query: string;
   index: number;
   selected: boolean;
   onSelect: () => void;
@@ -706,14 +714,69 @@ const ResultRowWrapper = styled.div<{ $selected?: boolean }>`
   transition: background 80ms;
 `;
 
+const ResultHintLine = styled.div`
+  margin-top: 0.35rem;
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.75rem;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  strong {
+    color: ${p => p.theme.colors.text};
+    font-weight: 600;
+  }
+
+  mark {
+    border-radius: 0.15rem;
+    background: ${p => p.theme.colors.main}22;
+    color: inherit;
+    font-weight: 600;
+  }
+`;
+
+function SearchResultHint({
+  subject,
+  query,
+}: {
+  subject: string;
+  query: string;
+}): JSX.Element | null {
+  const resource = useResource(subject) as Resource<
+    DataBrowser.DocumentV2 | DataBrowser.Meeting
+  >;
+  const [title] = useTitle(resource);
+  const [description] = useString(resource, core.properties.description);
+  const document = useDocumentText(resource);
+  const hint = useMemo(
+    () => getSearchResultHint(query, { title, description, document }),
+    [query, title, description, document],
+  );
+
+  if (!hint) {
+    return null;
+  }
+
+  return (
+    <ResultHintLine data-testid='search-result-hint'>
+      <strong>{hint.label}:</strong> {hint.before}
+      <mark>{hint.match}</mark>
+      {hint.after}
+    </ResultHintLine>
+  );
+}
+
 const ResultCard: React.FC<ResultCardProps> = ({
   subject,
+  query,
   index,
   selected,
   onSelect,
 }) => (
   <ResultRowWrapper data-index={index} onClick={onSelect} $selected={selected}>
     <ResourceRow subject={subject} clickable />
+    <SearchResultHint subject={subject} query={query} />
   </ResultRowWrapper>
 );
 
