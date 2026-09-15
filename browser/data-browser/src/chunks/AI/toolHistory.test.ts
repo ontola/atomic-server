@@ -10,6 +10,7 @@ import type { AtomicUIMessage } from './types';
 
 const roundTrip = (part: ToolUIPart) => {
   const values = toolPartValues(part);
+
   return restoreToolPart({
     toolName: values[ai.properties.toolName],
     toolId: values[ai.properties.toolId],
@@ -18,6 +19,7 @@ const roundTrip = (part: ToolUIPart) => {
     toolResultIsError: values[ai.properties.toolResultIsError],
   });
 };
+
 describe('tool history recovery', () => {
   it.each(['input-streaming', 'input-available'] as const)(
     'continues after %s without inventing a result or replaying a call',
