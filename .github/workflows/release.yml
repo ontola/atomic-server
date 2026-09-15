@@ -33,11 +33,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref }}
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@1.98.1
         with:
-          toolchain: stable
-          override: true
-          target: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown
 
       # `version: 8` used to be pinned here while browser/package.json declares
       # `packageManager: pnpm@10.15.1`, and there was no Node at all — so this
@@ -161,7 +159,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v2.0.1
         name: Install pnpm
         id: pnpm-install
@@ -272,12 +270,9 @@ jobs:
           version: 10
           run_install: false
 
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@1.98.1
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          target: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
           # (required)
