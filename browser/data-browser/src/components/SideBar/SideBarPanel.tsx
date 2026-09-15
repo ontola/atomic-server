@@ -4,6 +4,7 @@ import { useState, type JSX } from 'react';
 
 export interface SideBarPanelProps {
   title: string;
+  actions?: React.ReactNode;
   /** When false, section starts collapsed */
   defaultOpen?: boolean;
   /** Tighter padding when nested inside the drive tree (e.g. Shared with me) */
@@ -14,6 +15,7 @@ export interface SideBarPanelProps {
 export function SideBarPanel({
   children,
   title,
+  actions,
   defaultOpen = true,
   embedded = false,
   'data-testid': dataTestId,
@@ -22,20 +24,29 @@ export function SideBarPanel({
 
   return (
     <Wrapper $embedded={embedded} data-testid={dataTestId}>
-      <HeaderButton
-        type='button'
-        onClick={() => setOpen(prev => !prev)}
-        aria-expanded={open}
-        aria-label={`${open ? 'Collapse' : 'Expand'} ${title}`}
-      >
-        <PanelTitle>{title}</PanelTitle>
-      </HeaderButton>
+      <HeaderRow>
+        <HeaderButton
+          type='button'
+          onClick={() => setOpen(prev => !prev)}
+          aria-expanded={open}
+          aria-label={`${open ? 'Collapse' : 'Expand'} ${title}`}
+        >
+          <PanelTitle>{title}</PanelTitle>
+        </HeaderButton>
+        {actions}
+      </HeaderRow>
       <StyledCollapse open={open} $embedded={embedded}>
         {children}
       </StyledCollapse>
     </Wrapper>
   );
 }
+
+const HeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+`;
 
 const PanelTitle = styled.span`
   font-size: 0.75rem;

@@ -81,7 +81,8 @@ interface RealAIChatProps {
    * as the chat's title.
    */
   autoSubmitMessage?: string;
-  onNewMessage: (message: AtomicUIMessage) => void;
+  onNewMessage: (message: AtomicUIMessage) => void | Promise<void>;
+  prepareToLeave?: { current: (() => Promise<void>) | undefined };
   /**
    * Called after compaction. All prior messages move to historical UI state;
    * only the summary is kept for LLM context.
@@ -122,6 +123,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   chatSubject,
   setExternalContextItems,
   onNewMessage,
+  prepareToLeave,
   onCompacted,
   onSummaryDeleted,
   onDeleteMessage,
@@ -413,6 +415,17 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   useEffect(() => {
     checkpointRef.current = { messages, onNewMessage };
   }, [messages, onNewMessage]);
+  useEffect(() => {
+    if (!prepareToLeave) return;
+
+    prepareToLeave.current = async () => {
+      const latest = checkpointRef.current.messages.at(-1);
+      await stop();
+      if (latest)
+        await checkpointRef.current.onNewMessage(structuredClone(latest));
+    };
+  }, [prepareToLeave, stop]);
+
   useEffect(() => {
     if (status !== 'streaming') return;
     let lastSaved = '';

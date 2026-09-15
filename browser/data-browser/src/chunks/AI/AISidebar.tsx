@@ -52,9 +52,15 @@ const AISidebar: React.FC = () => {
     contextItems,
     setContextItems,
     setIsOpen,
+    openChat,
+    pendingChat,
+    clearPendingChat,
     pendingAsk,
     clearPendingAsk,
   } = useAISidebar();
+  const prepareToLeaveRef = useRef<(() => Promise<void>) | undefined>(
+    undefined,
+  );
   const [autoSubmitMessage, setAutoSubmitMessage] = useState<string>();
   const { privateDrive } = usePrivateDrive();
 
@@ -222,7 +228,7 @@ const AISidebar: React.FC = () => {
     messagesRef.current = newMessages;
     setMessages(newMessages);
 
-    persistSidebarMessage({
+    return persistSidebarMessage({
       message,
       newMessages,
       store,
@@ -317,6 +323,27 @@ const AISidebar: React.FC = () => {
     // Consume the handoff once, including when the panel was initially closed.
     clearPendingAsk();
   }, [pendingAsk, startNewChat, setContextItems, clearPendingAsk]);
+
+  useEffect(() => {
+    if (!pendingChat) return;
+    let cancelled = false;
+    void (async () => {
+      await prepareToLeaveRef.current?.();
+      if (cancelled) return;
+      startNewChat();
+      if (pendingChat.subject) await loadExistingChat(pendingChat.subject);
+      if (!cancelled) clearPendingChat();
+    })().catch(error => {
+      if (!cancelled) {
+        clearPendingChat();
+        store.notifyError(error);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingChat, clearPendingChat, startNewChat, loadExistingChat, store]);
 
   const onRegenerateMessage = async (message: AtomicUIMessage) => {
     const isHistorical = compactedMessages.some(m => m.id === message.id);
@@ -472,6 +499,7 @@ const AISidebar: React.FC = () => {
         initialMessages={messages}
         historicalMessages={compactedMessages}
         onNewMessage={addNewMessage}
+        prepareToLeave={prepareToLeaveRef}
         onCompacted={handleCompacted}
         onSummaryDeleted={handleSummaryDeleted}
         externalContextItems={contextItems}
@@ -484,13 +512,13 @@ const AISidebar: React.FC = () => {
           <Row center gap='0.5ch'>
             <IconButton
               title='New Chat'
-              onClick={startNewChat}
+              onClick={() => openChat()}
               color='textLight'
               style={{ alignSelf: 'flex-end' }}
             >
               <FaPlus />
             </IconButton>
-            <Heading>Atomic Assistant</Heading>
+            <Heading>{chatResource?.title || 'Atomic Assistant'}</Heading>
           </Row>
           <Row center gap='0.5ch'>
             <IconButton

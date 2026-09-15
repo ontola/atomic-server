@@ -101,10 +101,14 @@ export const uiMessageToResource = async (
     message.metadata &&
     'error' in message.metadata
   ) {
-    await messageResource.set(
-      core.properties.description,
-      message.metadata?.error,
-    );
+    if (message.metadata?.error === undefined) {
+      messageResource.remove(core.properties.description);
+    } else {
+      await messageResource.set(
+        core.properties.description,
+        message.metadata.error,
+      );
+    }
   }
 
   const context = message.metadata?.userContext;
