@@ -8,7 +8,7 @@ import {
 } from '../chunks/PluginRuns/IntegrationDiscovery';
 import { ConnectedIntegration } from '../chunks/PluginRuns/ConnectedIntegration';
 import { useIntegrationVisibility } from '@hooks/useIntegrationVisibility';
-import { createRoute, Link } from '@tanstack/react-router';
+import { createRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import { FaPlug } from 'react-icons/fa6';
@@ -30,9 +30,11 @@ import { Card } from '@components/Card';
 import { Column, Row } from '@components/Row';
 import { Button } from '@components/Button';
 import { Input } from '@components/forms/InputStyles';
+import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { useSettings } from '@helpers/AppSettings';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
+import type { IntegrationVisibilityKey } from '@helpers/integrationVisibility';
 
 interface Listing {
   metadata: {
@@ -61,8 +63,13 @@ function IntegrationStore(): React.JSX.Element {
   const { workspace } = IntegrationStoreRoute.useSearch();
   const store = useStore();
   const { drive } = useSettings();
-  const { showApiPlugins, showExperimentalPlugins } =
-    useIntegrationVisibility();
+  const {
+    showApiPlugins,
+    showExperimentalPlugins,
+    ready: visibilityReady,
+    saving: visibilitySaving,
+    setVisibility,
+  } = useIntegrationVisibility();
   // The ontology can hydrate after this page mounts on a full navigation.
   const pluginClass = usePluginClass(drive);
   const navigate = useNavigateWithTransition();
@@ -254,8 +261,24 @@ function IntegrationStore(): React.JSX.Element {
           {showExperimentalPlugins && !listings && !catalogError && (
             <p>Loading integrations…</p>
           )}
-          {!showApiPlugins && <ApiPluginsPrompt />}
-          {!showExperimentalPlugins && <ExperimentalPluginsPrompt />}
+          {!showApiPlugins && (
+            <PluginVisibilityToggle
+              pluginKey='show-api-plugins'
+              label='Show API plugins'
+              ready={visibilityReady}
+              saving={visibilitySaving}
+              setVisibility={setVisibility}
+            />
+          )}
+          {!showExperimentalPlugins && (
+            <PluginVisibilityToggle
+              pluginKey='show-experimental-plugins'
+              label='Show experimental plugins'
+              ready={visibilityReady}
+              saving={visibilitySaving}
+              setVisibility={setVisibility}
+            />
+          )}
           <Grid>
             {showApiPlugins && (
               <LocalThoughtCatalog drive={drive} search={search} />
@@ -405,22 +428,32 @@ function AutomationEmptyState() {
   );
 }
 
-function ApiPluginsPrompt() {
-  return (
-    <p>
-      <Link to='/app/settings'>
-        Consider enabling API plugins in Settings → Integration.
-      </Link>
-    </p>
-  );
+interface PluginVisibilityToggleProps {
+  pluginKey: IntegrationVisibilityKey;
+  label: string;
+  ready: boolean;
+  saving: boolean;
+  setVisibility: (
+    key: IntegrationVisibilityKey,
+    value: boolean,
+  ) => Promise<void>;
 }
 
-function ExperimentalPluginsPrompt() {
+function PluginVisibilityToggle({
+  pluginKey,
+  label,
+  ready,
+  saving,
+  setVisibility,
+}: PluginVisibilityToggleProps) {
   return (
-    <p>
-      <Link to='/app/settings'>
-        Consider enabling experimental plugins in Settings → Integration.
-      </Link>
-    </p>
+    <CheckboxLabel>
+      <Checkbox
+        checked={false}
+        disabled={!ready || saving}
+        onChange={value => void setVisibility(pluginKey, value)}
+      />
+      {label}
+    </CheckboxLabel>
   );
 }
