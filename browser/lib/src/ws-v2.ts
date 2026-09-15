@@ -470,6 +470,7 @@ export function encodeSyncPush(
 
   if (encodedEnvelopes.length > 0) {
     off = writeU16(buf, off, encodedEnvelopes.length);
+
     for (const e of encodedEnvelopes) {
       off = writeU16(buf, off, e.subjectBytes.length);
       buf.set(e.subjectBytes, off);
