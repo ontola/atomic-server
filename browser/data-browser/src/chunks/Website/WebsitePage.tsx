@@ -272,7 +272,6 @@ export function WebsitePage({ resource }: { resource: Resource }) {
       <Header>
         <Title>
           <h1>{config?.title ?? resource.title}</h1>
-          <p>Changes stay private until you publish.</p>
         </Title>
         <Row>
           {!review && !showRelease && (
@@ -591,11 +590,6 @@ const Title = styled.div`
     font-size: clamp(1.25rem, 2.3vw, 1.8rem);
     overflow-wrap: anywhere;
     line-height: 1.2;
-  }
-  p {
-    font-size: 0.85rem;
-    opacity: 0.65;
-    margin: 0.4rem 0 0;
   }
 `;
 const PreviewToolbar = styled.div`
