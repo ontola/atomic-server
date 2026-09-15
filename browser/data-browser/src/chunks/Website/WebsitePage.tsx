@@ -296,7 +296,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
                 onClick={() => setAddingContent(true)}
                 disabled={addingContent}
               >
-                <FaPlus aria-hidden /> Add content
+                <FaPlus aria-hidden /> <span>Add content</span>
               </Button>
               {addingContent && (
                 <Column>

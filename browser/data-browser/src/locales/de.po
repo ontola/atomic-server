@@ -3389,6 +3389,7 @@ msgid "Type '/' for options or '@' for resources"
 msgstr ""
 
 #: src/chunks/RTE/AsyncMarkdownEditor.tsx
+#: src/chunks/RTE/AsyncMarkdownEditor.tsx
 msgid "Start typing..."
 msgstr ""
 
@@ -10763,8 +10764,9 @@ msgstr ""
 #~ msgid "Edit document"
 #~ msgstr ""
 
-#~ msgid "Add content"
-#~ msgstr ""
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Add content"
+msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Add to page"
@@ -10779,9 +10781,8 @@ msgstr ""
 #~ msgid "Modern"
 #~ msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "<0/> Add content"
-msgstr ""
+#~ msgid "<0/> Add content"
+#~ msgstr ""
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Drop files to attach"
