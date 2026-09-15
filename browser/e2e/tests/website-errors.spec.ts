@@ -20,6 +20,7 @@ test('unreadable website content reports an error, stops loading and recovers', 
         alt: 'Missing photo',
       },
     ];
+
     return (await createWebsite(store, store.getDrive()!, config)).subject;
   });
   await page.goto(
@@ -49,11 +50,11 @@ test('unreadable website content reports an error, stops loading and recovers', 
   await expect(
     page.getByRole('button', { name: 'Retry preview', exact: true }),
   ).toBeVisible();
-  await page.evaluate(async subject => {
+  await page.evaluate(async site => {
     const { readWebsite, updateWebsite } =
       await import('/src/chunks/Website/websiteModel.ts');
     const store = window.store;
-    const resource = await store.getResource(subject);
+    const resource = await store.getResource(site);
     const { config } = await readWebsite(store, store.getDrive()!, resource);
     config.pages[0].media = [];
     await updateWebsite(store, store.getDrive()!, resource, config);
@@ -88,6 +89,7 @@ test('hosting status failures are logged and clear after reconnecting', async ({
     const { createWebsite, starterWebsite } =
       await import('/src/chunks/Website/websiteModel.ts');
     const store = window.store;
+
     return (
       await createWebsite(
         store,

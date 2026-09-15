@@ -277,7 +277,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
           {!review && !showRelease && (
             <>
               <Button subtle disabled={!canWrite} onClick={designWithAI}>
-                <AIIcon /> AI edit
+                <AIIcon aria-hidden /> <span>AI edit</span>
               </Button>
               <Button
                 subtle
@@ -286,7 +286,8 @@ export function WebsitePage({ resource }: { resource: Resource }) {
                   setInlineArtifact(inlineArtifact ? undefined : draft)
                 }
               >
-                <FaPencil /> {inlineArtifact ? 'Done editing' : 'Page edit'}
+                <FaPencil aria-hidden />{' '}
+                <span>{inlineArtifact ? 'Done editing' : 'Page edit'}</span>
               </Button>
             </>
           )}
