@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page, type Locator } from '@playwright/test';
 import { mockProxy } from '../../../integrations/localthought/mock-proxy.mjs';
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:6747';
 const SERVER_URL = process.env.SERVER_URL ?? 'http://localhost:9883';
@@ -176,4 +176,136 @@ test('Devonian syncs issue creation, state and comments both ways through the br
       proxy.close(error => (error ? reject(error) : resolve())),
     );
   }
+});
+
+const column = (page: Page, name: string) =>
+  page.getByTestId('kanban-column').filter({ hasText: name });
+
+const cardIn = (col: Locator, title: string) =>
+  col.getByTestId('kanban-card').filter({ hasText: title });
+
+/**
+ * Drag `source` onto `target` in a way that satisfies @dnd-kit's MouseSensor,
+ * which only starts a drag after the pointer moves past a 10px activation
+ * distance (see kanban.spec.ts for the same helper).
+ */
+async function dndDrag(page: Page, source: Locator, target: Locator) {
+  const s = await source.boundingBox();
+  const t = await target.boundingBox();
+  if (!s || !t) throw new Error('drag source/target has no bounding box');
+  const sx = s.x + s.width / 2;
+  const sy = s.y + s.height / 2;
+  const tx = t.x + t.width / 2;
+  const ty = t.y + t.height / 2;
+  await page.mouse.move(sx, sy);
+  await page.mouse.down();
+  await page.mouse.move(sx + 15, sy, { steps: 5 });
+  await page.mouse.move(tx, ty, { steps: 10 });
+  await page.mouse.move(tx, ty + 1, { steps: 2 });
+  await page.mouse.up();
+}
+
+/**
+ * Kanban drag keeps a visual preview until `set()` writes the status tag to
+ * the resource. Navigating away (to sync) before that write lands would sync
+ * the pre-drag status, so wait for the resource to actually hold it first.
+ */
+async function waitForCardStatus(page: Page, title: string, col: Locator) {
+  const tagSubject = await col
+    .getByTestId('kanban-column-body')
+    .getAttribute('data-kanban-column-id');
+  if (!tagSubject)
+    throw new Error('kanban column body has no data-kanban-column-id');
+  const nameProp = 'https://atomicdata.dev/properties/name';
+  await page.waitForFunction(
+    ({ cardTitle, expectedTag, nameProp: prop }) => {
+      const store = window.store;
+      if (!store) return false;
+      for (const resource of store.resources.values()) {
+        if (resource.get?.(prop) !== cardTitle) continue;
+        for (const [, value] of resource.getEntries?.() ?? []) {
+          const subjects = Array.isArray(value) ? value : [];
+          if (subjects.includes(expectedTag)) return true;
+        }
+      }
+      return false;
+    },
+    { cardTitle: title, expectedTag: tagSubject, nameProp },
+    { timeout: 30_000 },
+  );
+}
+
+// Regression test for #1505: the demo's own "Close/Reopen Atomic issue"
+// buttons (covered above) write the same status property a real kanban drag
+// does, but only a drag through the actual native Kanban view (reached via
+// "Open Atomic kanban", as a user would) proves the UI component itself
+// wires status changes correctly. Sample mode needs no proxy: the GitHub side
+// is an in-browser fixture (see `fixtureTransport` in proxy.mjs).
+test('Dragging a card in the real Atomic kanban board closes and reopens the linked GitHub issue', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const title = 'Welcome from GitHub';
+  const tryAgain = () =>
+    page.getByRole('button', { name: 'Try sample data', exact: true }).click();
+
+  await page.goto(`${FRONTEND_URL}/app/dev-drive`);
+  await page.waitForURL(/app\/show\?subject=/, { timeout: 60000 });
+  await page.goto(`${FRONTEND_URL}/app/devonian-demo`);
+  await tryAgain();
+
+  const openKanban = page.getByRole('link', {
+    name: 'Open Atomic kanban',
+    exact: true,
+  });
+  await expect(openKanban).toBeVisible();
+  const demoIssue = page
+    .getByTestId('atomic-issue')
+    .filter({ hasText: title });
+  await expect(demoIssue).toContainText('Todo');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+
+  // Drag the card from Todo to Done in the real, native kanban board.
+  await openKanban.click();
+  await expect(page.getByTestId('kanban-board')).toBeVisible();
+  const todo = column(page, 'todo');
+  const doneColumn = column(page, 'done');
+  await expect(cardIn(todo, title)).toBeVisible();
+  await dndDrag(
+    page,
+    cardIn(todo, title),
+    doneColumn.getByTestId('kanban-column-body'),
+  );
+  await expect(cardIn(doneColumn, title)).toBeVisible();
+  await expect(cardIn(todo, title)).toHaveCount(0);
+  await waitForCardStatus(page, title, doneColumn);
+
+  // Back on the demo page, syncing must have picked up the drag as a genuine
+  // local status change and closed the GitHub-side (fixture) issue.
+  await page.goto(`${FRONTEND_URL}/app/devonian-demo`);
+  await tryAgain();
+  await expect(page.getByRole('button', { name: 'Sync now', exact: true })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(demoIssue).toContainText('Done');
+  await expect(
+    page.getByText('closed', { exact: true }).first(),
+  ).toBeVisible();
+
+  // Drag it back to Todo — the fixture issue must reopen.
+  await openKanban.click();
+  await expect(page.getByTestId('kanban-board')).toBeVisible();
+  await dndDrag(
+    page,
+    cardIn(doneColumn, title),
+    todo.getByTestId('kanban-column-body'),
+  );
+  await expect(cardIn(todo, title)).toBeVisible();
+  await waitForCardStatus(page, title, todo);
+
+  await page.goto(`${FRONTEND_URL}/app/devonian-demo`);
+  await tryAgain();
+  await expect(page.getByRole('button', { name: 'Sync now', exact: true })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(demoIssue).toContainText('Todo');
+  await expect(page.getByText('open', { exact: true }).first()).toBeVisible();
 });
