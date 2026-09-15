@@ -70,6 +70,7 @@ test('unreadable website content reports an error, stops loading and recovers', 
       .getByRole('heading', { name: 'Preview error recovery' })
       .first(),
   ).toBeVisible();
+  expect(errors.filter(error => error.includes('unique "key"'))).toEqual([]);
 });
 
 test('hosting status failures are logged and clear after reconnecting', async ({
