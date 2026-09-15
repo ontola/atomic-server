@@ -165,6 +165,57 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn website_images_use_object_storage_and_publication_allowlist() {
+        use atomic_lib::website::{project_id, WebsitePackage};
+        let mut db = Db::init_redb(None).await.unwrap();
+        db.blob_backend = Some(remote());
+        let bytes = b"optimized image bytes";
+        let hash = blake3::hash(bytes).to_hex().to_string();
+        let path = format!("assets/{hash}.webp");
+        db.website_put_asset("site", &hash, bytes).await.unwrap();
+        assert_eq!(db.kv.len(Tree::Blobs).unwrap(), 0);
+        assert!(db
+            .website_asset(&project_id("other"), &hash)
+            .await
+            .unwrap()
+            .is_none());
+        let package = WebsitePackage {
+            version: 1,
+            files: [("index.html".into(), format!("<img src=\"/{path}\">"))].into(),
+            assets: [(path.clone(), hash)].into(),
+        };
+        assert!(db.website_upload("other", "drive", &package).is_err());
+        let state = db.website_upload("site", "drive", &package).unwrap();
+        let id = project_id("site");
+        assert!(db
+            .website_public_asset(&id, None, &path)
+            .await
+            .unwrap()
+            .is_none());
+        db.website_activate(&id, state.revision, Some(package.id().unwrap()), "owner")
+            .unwrap();
+        assert_eq!(
+            db.website_public_asset(&id, None, &path)
+                .await
+                .unwrap()
+                .unwrap()
+                .1,
+            bytes
+        );
+        let manifest =
+            serde_json::to_string(&db.website_package(&id, &package.id().unwrap()).unwrap())
+                .unwrap();
+        assert!(!manifest.contains("optimized image bytes"));
+        let revision = db.website_state(&id).unwrap().unwrap().revision;
+        db.website_activate(&id, revision, None, "owner").unwrap();
+        assert!(db
+            .website_public_asset(&id, None, &path)
+            .await
+            .unwrap()
+            .is_none());
+    }
+
+    #[tokio::test]
     async fn files_survive_node_replacement_without_local_copies() {
         exercise_remote_storage(remote()).await;
     }

@@ -1,3 +1,4 @@
+import { standardClassAlias } from './standardClassAlias';
 import { updateTableRows } from './updateTableRows';
 // @wc-ignore-file
 import { websiteTools } from '@chunks/Website/websiteTools';
@@ -517,6 +518,9 @@ export function useAtomicMCPTools({
     if (Client.isValidSubject(nameOrSubject)) {
       return nameOrSubject;
     }
+
+    const standard = standardClassAlias(nameOrSubject);
+    if (standard) return standard;
 
     const classSubjects = await getClassesOnDrive(drive, store);
     const wanted = nameOrSubject.toLowerCase();

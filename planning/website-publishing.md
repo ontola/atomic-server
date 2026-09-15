@@ -96,13 +96,24 @@ until both adapters and the cross-repository compatibility checks are ready.
 
 ### Media and Assistant authoring
 
-Selected atomicURL columns with File classtype export supported raster images
-as embedded data URLs. Pages can also declare `media` (File subject, alt text,
-optional caption), with an ordered `gallery` section at index 0. Exports retain
-the restrictive image CSP and need no live private image URL. The pilot allows
-2 MB per image within the existing 5 MB package limit. Search widgets show image
-alt labels; the static table/cards render the images. Document File embeds and
-a folder-to-gallery picker remain future work; select individual files explicitly.
+Selected File columns, page galleries and inline document raster images become
+separate content-addressed blobs. HTML contains HTTP asset URLs, never image bytes
+or base64. Publishing uploads blobs through the existing BlobBackend (internal S3
+when `ATOMIC_BLOB_BACKEND=s3`, local storage for FOSS), then activates the manifest.
+Only assets of published deployments are public; uploads require project/drive
+write authority. HTTP paths pin the deployment so rollback also selects its images.
+The S3 bucket stays private behind the serving API.
+
+Browser-native optimization preserves originals, limits the longest edge to 1920px,
+and targets 600 KB WebP derivatives. Small images and GIF animation are preserved;
+GIFs above 2 MB are rejected explicitly. Source limits are 50 MB and 80 megapixels.
+Errors identify the page, field and File. Export ZIPs contain separate image files.
+Private exports cache blobs locally until publication uploads them; moving an
+unpublished export to another device requires its asset files as well.
+Document File embeds and a folder-to-gallery picker remain future work.
+
+The query tool resolves standard File, Folder, Document, Class, Property and Table
+aliases from generated ontology constants before consulting user classes.
 
 `update_table_rows` batches existing row edits using schema shortnames and refs,
 prechecks table membership and write permissions, and reports partial completion.

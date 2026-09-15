@@ -3,6 +3,9 @@ import { core, dataBrowser, Datatype, server, type Store } from '@tomic/lib';
 import { snapshotWebsiteImage } from './websiteMedia';
 import { buildWebsiteArtifact } from './websiteExport';
 import { starterWebsite } from './websiteModel';
+vi.mock('./optimizeWebsiteImage', () => ({
+  optimizeWebsiteImage: async (blob: Blob) => blob,
+}));
 
 function fixture() {
   const resources: Record<
@@ -45,7 +48,11 @@ function fixture() {
   }));
   const store = {
     getResource,
-    getClientDb: () => ({ getBlob: async () => new Uint8Array([1, 2, 3]) }),
+    getClientDb: () => ({
+      getBlob: async () => new Uint8Array([1, 2, 3]),
+      blake3Hash: async () => new Uint8Array(32).fill(170),
+      putBlob: vi.fn(),
+    }),
   } as unknown as Store;
 
   return { store, getResource, resources };
@@ -75,8 +82,10 @@ describe('website media snapshots', () => {
     };
     const artifact = await buildWebsiteArtifact(store, 'website', config);
     expect(artifact.files['index.html']).toContain(
-      'data:image/png;base64,AQID',
+      `/assets/${'aa'.repeat(32)}.png`,
     );
+    expect(artifact.files['index.html']).not.toContain('data:image');
+    expect(JSON.stringify(artifact)).not.toContain('AQID');
     expect(artifact.files['index.html'].match(/<img /g)).toHaveLength(2);
     expect(artifact.files['index.html']).toContain('Bread &lt;fresh&gt;');
     expect(getResource).not.toHaveBeenCalledWith('private');
@@ -89,10 +98,10 @@ describe('website media snapshots', () => {
     const second = fixture();
     second.store.getClientDb = () =>
       ({
-        getBlob: async () => new Uint8Array(2_000_001),
+        getBlob: async () => new Uint8Array(50_000_001),
       }) as unknown as ReturnType<Store['getClientDb']>;
     await expect(snapshotWebsiteImage(second.store, 'photo')).rejects.toThrow(
-      '2 MB',
+      '50 MB',
     );
   });
 });

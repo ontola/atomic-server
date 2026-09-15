@@ -174,7 +174,9 @@ export function WebsitePage({ resource }: { resource: Resource }) {
                   <Button
                     subtle
                     disabled={busy}
-                    onClick={() => perform(() => downloadWebsite(release))}
+                    onClick={() =>
+                      perform(() => downloadWebsite(release, store))
+                    }
                   >
                     Download website
                   </Button>
