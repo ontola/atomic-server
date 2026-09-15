@@ -196,9 +196,10 @@ unblocked:
   envelopes; the receiver applies them as a peer `COMMIT` and does not
   fall back to the unsigned path on a bad signature. Unsigned entries
   stay admission-gated for senders that never stored the envelope.
-  `Tree::Envelopes` shipped (`lib/src/envelopes.rs`, #1313), so requiring an
-  envelope on every `remove[]` no longer waits on anything; it is unfinished
-  work, not a blocked item.
+  `Tree::Envelopes` shipped (`lib/src/envelopes.rs`, #1313) and envelopes
+  now travel with `SYNC_PUSH` (2026-09-15), so requiring an envelope on
+  every `remove[]` no longer waits on anything; it is unfinished work, not a
+  blocked item.
 - [x] Pre-auth frame budget in the live read loop (the `matches!(agent,
   Public)` gate exists in `handle_stream`; mirror it in
   `register_live_peer`). (2026-09-01: the live loop now refuses every

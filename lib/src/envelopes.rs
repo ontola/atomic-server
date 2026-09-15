@@ -176,6 +176,77 @@ pub fn latest_envelope(store: &Db, subject: &str) -> Option<StoredEnvelope> {
     envelopes(store, subject).into_iter().last()
 }
 
+/// The retained envelopes of each subject as commit JSON-AD, for a bulk
+/// push or a vault pack. Subjects with none are absent.
+pub fn for_subjects<'a>(
+    store: &Db,
+    subjects: impl IntoIterator<Item = &'a str>,
+) -> std::collections::HashMap<String, Vec<String>> {
+    let mut out = std::collections::HashMap::new();
+    for subject in subjects {
+        let rows: Vec<String> = envelopes(store, subject)
+            .into_iter()
+            .map(|e| e.json)
+            .collect();
+        if !rows.is_empty() {
+            out.insert(subject.to_string(), rows);
+        }
+    }
+    out
+}
+
+/// Keep an envelope that arrived with a bulk push or a vault pack.
+///
+/// It is verified the way apply verifies a commit (the signature, by the
+/// signer the commit names) and must be about `expected_subject`, the entry
+/// it travelled with; otherwise nothing is written. Retention applies as for
+/// a local commit: on `latest` only the newest envelope by `createdAt`
+/// survives, which may be one already here. Idempotent for a row already
+/// stored.
+pub async fn import_envelope(store: &Db, expected_subject: &str, json: &str) -> AtomicResult<()> {
+    let resource = crate::parse::parse_json_ad_commit_resource(json, store).await?;
+    let commit = crate::commit::Commit::from_resource(resource)?;
+    let expected = crate::Subject::from_raw(expected_subject, None).pure_id();
+    let actual = commit.subject.pure_id();
+    if actual != expected {
+        return Err(format!("envelope is about {actual}, not {expected}").into());
+    }
+    commit.validate_signature(store).await?;
+    let signature = commit
+        .signature
+        .as_deref()
+        .ok_or("envelope has no signature")?;
+    let new_key = key(commit.subject.as_str(), commit.created_at, signature);
+    if store.kv.contains_key(Tree::Envelopes, &new_key)? {
+        return Ok(());
+    }
+
+    let mut ops = Vec::new();
+    if store.envelope_retention() == EnvelopeRetention::Latest {
+        let existing = envelopes(store, commit.subject.as_str());
+        if existing.iter().any(|e| e.created_at > commit.created_at) {
+            // A newer envelope is already the latest; the incoming one is
+            // history this node chose not to keep.
+            return Ok(());
+        }
+        for old in existing {
+            ops.push(Operation {
+                tree: Tree::Envelopes,
+                method: Method::Delete,
+                key: key(&old.subject, old.created_at, &old.signature),
+                val: None,
+            });
+        }
+    }
+    ops.push(Operation {
+        tree: Tree::Envelopes,
+        method: Method::Insert,
+        key: new_key,
+        val: Some(json.as_bytes().to_vec()),
+    });
+    store.kv.apply_batch(&ops)
+}
+
 /// Drop every retained envelope of a resource. Not called on destroy: the
 /// destroy envelope is the proof a peer needs (`SYNC_DIFF.removeCommits`).
 pub fn clear_envelopes(store: &Db, subject: &str) {
@@ -403,6 +474,82 @@ mod tests {
             .unwrap()
             .to_string();
         assert_eq!(kept.last().unwrap().commit_id(), stamp);
+    }
+
+    /// A receiver keeps a pushed envelope only after verifying it: a
+    /// tampered signature or a mismatched subject writes nothing.
+    #[tokio::test]
+    async fn import_envelope_verifies_before_storing() {
+        let source = Db::init_temp("envelopes_import_source").await.unwrap();
+        let (_alice, drive) = source.setup("Alice").await.unwrap();
+        let subject = child(&source, &drive).await;
+        signed_edit(&source, &subject, "edited").await;
+        let envelope = latest_envelope(&source, subject.as_str()).unwrap();
+
+        let sink = Db::init_temp("envelopes_import_sink").await.unwrap();
+        assert!(envelopes(&sink, subject.as_str()).is_empty());
+
+        assert!(
+            import_envelope(&sink, "did:ad:someone-else", &envelope.json)
+                .await
+                .is_err(),
+            "an envelope about another subject is refused"
+        );
+        let tampered = envelope.json.replace(&envelope.signature[..8], "AAAAAAAA");
+        assert!(
+            import_envelope(&sink, subject.as_str(), &tampered)
+                .await
+                .is_err(),
+            "a bad signature is refused"
+        );
+        assert!(envelopes(&sink, subject.as_str()).is_empty());
+
+        import_envelope(&sink, subject.as_str(), &envelope.json)
+            .await
+            .unwrap();
+        // Idempotent.
+        import_envelope(&sink, subject.as_str(), &envelope.json)
+            .await
+            .unwrap();
+        let kept = envelopes(&sink, subject.as_str());
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].signature, envelope.signature);
+        assert_eq!(kept[0].json, envelope.json);
+    }
+
+    /// `latest` retention on the receiver keeps the newest envelope whatever
+    /// order they arrive in; `all` keeps every one.
+    #[tokio::test]
+    async fn import_envelope_honours_the_receivers_retention() {
+        let source = Db::init_temp("envelopes_import_ret_source").await.unwrap();
+        source.set_envelope_retention(EnvelopeRetention::All);
+        let (_alice, drive) = source.setup("Alice").await.unwrap();
+        let subject = child(&source, &drive).await;
+        signed_edit(&source, &subject, "one").await;
+        signed_edit(&source, &subject, "two").await;
+        let all = envelopes(&source, subject.as_str());
+        assert_eq!(all.len(), 3);
+        let newest = all.last().unwrap().clone();
+
+        let latest_sink = Db::init_temp("envelopes_import_ret_latest").await.unwrap();
+        // Newest first, then older ones: the older must not displace it.
+        for e in all.iter().rev() {
+            import_envelope(&latest_sink, subject.as_str(), &e.json)
+                .await
+                .unwrap();
+        }
+        let kept = envelopes(&latest_sink, subject.as_str());
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].signature, newest.signature);
+
+        let all_sink = Db::init_temp("envelopes_import_ret_all").await.unwrap();
+        all_sink.set_envelope_retention(EnvelopeRetention::All);
+        for e in &all {
+            import_envelope(&all_sink, subject.as_str(), &e.json)
+                .await
+                .unwrap();
+        }
+        assert_eq!(envelopes(&all_sink, subject.as_str()).len(), 3);
     }
 
     #[tokio::test]

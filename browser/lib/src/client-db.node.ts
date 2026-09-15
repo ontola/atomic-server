@@ -7,14 +7,14 @@
  * use, keep `ClientDbWorker`.
  */
 
-import { versionVectorRecords } from './version-vector-records.js';
+import { versionVectorRecords } from "./version-vector-records.js";
 import {
   parseHistoryAttribution,
   type HistoryAttribution,
-} from './history-attribution.js';
-import { readFile } from 'node:fs/promises';
+} from "./history-attribution.js";
+import { readFile } from "node:fs/promises";
 
-import type { ClientDbQueryOpts, ClientDbQueryResult } from './client-db.js';
+import type { ClientDbQueryOpts, ClientDbQueryResult } from "./client-db.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type WasmModule = any;
@@ -61,7 +61,7 @@ export class NodeClientDb {
     try {
       const jsUrl =
         this.opts.wasmJsUrl ??
-        new URL(`file://${this.opts.wasmPath.replace(/_bg\.wasm$/, '.js')}`)
+        new URL(`file://${this.opts.wasmPath.replace(/_bg\.wasm$/, ".js")}`)
           .href;
       // Dynamic import keeps bundlers from trying to resolve the WASM glue.
       this.wasm = await import(/* @vite-ignore */ jsUrl);
@@ -247,12 +247,37 @@ export class NodeClientDb {
     return (r as Uint8Array | null) ?? null;
   }
 
+  async envelopesFor(subjects: string[]): Promise<Record<string, string[]>> {
+    const db = this.requireDb();
+
+    if (subjects.length === 0 || typeof db.envelopesFor !== "function") {
+      return {};
+    }
+
+    return JSON.parse(db.envelopesFor(JSON.stringify(subjects))) as Record<
+      string,
+      string[]
+    >;
+  }
+
+  async importEnvelopes(
+    envelopes: Array<{ subject: string; json: string }>,
+  ): Promise<number> {
+    const db = this.requireDb();
+
+    if (envelopes.length === 0 || typeof db.importEnvelopes !== "function") {
+      return 0;
+    }
+
+    return (await db.importEnvelopes(JSON.stringify(envelopes))) as number;
+  }
+
   async historyAttribution(
     subject: string,
   ): Promise<HistoryAttribution | null> {
     const db = this.requireDb();
 
-    if (typeof db.historyAttribution !== 'function') return null;
+    if (typeof db.historyAttribution !== "function") return null;
 
     return parseHistoryAttribution(await db.historyAttribution(subject));
   }
@@ -292,7 +317,7 @@ export class NodeClientDb {
 
   private requireDb(): WasmModule {
     if (!this.db) {
-      throw new Error('NodeClientDb not initialized — call init() first');
+      throw new Error("NodeClientDb not initialized — call init() first");
     }
 
     return this.db;
@@ -300,7 +325,7 @@ export class NodeClientDb {
 
   private requireWasm(): WasmModule {
     if (!this.wasm) {
-      throw new Error('NodeClientDb not initialized — call init() first');
+      throw new Error("NodeClientDb not initialized — call init() first");
     }
 
     return this.wasm;

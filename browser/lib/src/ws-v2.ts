@@ -74,7 +74,18 @@ export const Flags = {
  *  frames until they see this bit. */
 export const SyncPushFlags = {
   LAST: 0b0001,
+  /** The frame carries a trailing envelope section after its entries: the
+   *  retained signed commits (JSON-AD) of the pushed subjects. A decoder that
+   *  predates the section stops after `count` entries and never reads it. */
+  ENVELOPES: 0b0010,
 } as const;
+
+/** A signed envelope travelling with a SYNC_PUSH: the commit JSON-AD of
+ *  `subject`. Verified by the receiver before it is kept. */
+export interface SyncPushEnvelope {
+  subject: string;
+  json: string;
+}
 
 /**
  * Structured error codes on `ERROR` frames (mirrors `lib/src/sync/protocol.rs`
@@ -121,32 +132,32 @@ export const ErrorCode = {
  *  `protocol::CAPABILITIES` in `lib/src/sync/protocol.rs`). A server that
  *  sends none is the pre-2026-09 baseline. */
 export type ServerCapability =
-  | 'auth-max-age'
-  | 'keepalive'
-  | 'rbsr'
-  | 'pull-from'
-  | 'signed-destroy'
-  | 'unsub'
+  | "auth-max-age"
+  | "keepalive"
+  | "rbsr"
+  | "pull-from"
+  | "signed-destroy"
+  | "unsub"
   /** Sends `CHALLENGE` on connect and verifies `{origin}#{nonce}` proofs. */
-  | 'auth-nonce'
+  | "auth-nonce"
   /** Answers COMMIT with `[request_id][commit_id]` for a client whose HELLO
    *  lists `commit-ok-slim`. */
-  | 'commit-ok-slim'
+  | "commit-ok-slim"
   /** Reads a client `HELLO` over WebSocket. */
-  | 'client-hello'
+  | "client-hello"
   /** Re-checks this connection's subscriptions when an AUTH changes its
    *  identity, dropping the ones it may no longer read. */
-  | 'rebind-on-auth'
+  | "rebind-on-auth"
   /** The binary `SYNC` payload may carry `probe` and `subjects`; a probe is
    *  answered with `SYNC_OK` or `SYNC_RESEND`. */
-  | 'sync-probe';
+  | "sync-probe";
 
 /** Capability names this client lists in the `HELLO` it sends on open
  *  (mirrors `protocol::CLIENT_CAPABILITIES`). */
-export const CLIENT_CAPABILITIES: readonly string[] = ['commit-ok-slim'];
+export const CLIENT_CAPABILITIES: readonly string[] = ["commit-ok-slim"];
 
 /** What this client calls itself in its `HELLO`. Display only. */
-export const CLIENT_HELLO_NAME = '@tomic/lib browser';
+export const CLIENT_HELLO_NAME = "@tomic/lib browser";
 
 // ---- Low-level read/write helpers ----
 
@@ -228,7 +239,7 @@ export function decodeHelloCaps(data: Uint8Array): string[] {
     const parsed = JSON.parse(decoder.decode(rest));
 
     return Array.isArray(parsed)
-      ? parsed.filter((c): c is string => typeof c === 'string')
+      ? parsed.filter((c): c is string => typeof c === "string")
       : [];
   } catch {
     return [];
@@ -400,7 +411,7 @@ export function decodeAuthOk(data: Uint8Array): string[] {
     const parsed = JSON.parse(decoder.decode(data));
 
     return Array.isArray(parsed)
-      ? parsed.filter((c): c is string => typeof c === 'string')
+      ? parsed.filter((c): c is string => typeof c === "string")
       : [];
   } catch {
     return [];
@@ -411,9 +422,10 @@ export function encodeSyncPush(
   driveSubject: string,
   entries: Array<{ subject: string; loroBytes: Uint8Array }>,
   last = true,
+  envelopes: SyncPushEnvelope[] = [],
 ): Uint8Array {
   const driveBytes = encoder.encode(driveSubject);
-  const encodedEntries = entries.map(e => ({
+  const encodedEntries = entries.map((e) => ({
     subjectBytes: encoder.encode(e.subject),
     loroBytes: e.loroBytes,
   }));
@@ -421,14 +433,30 @@ export function encodeSyncPush(
     (sum, e) => sum + 2 + e.subjectBytes.length + 4 + e.loroBytes.length,
     0,
   );
+  const encodedEnvelopes = envelopes.map((e) => ({
+    subjectBytes: encoder.encode(e.subject),
+    jsonBytes: encoder.encode(e.json),
+  }));
+  const envelopeSize =
+    encodedEnvelopes.length === 0
+      ? 0
+      : 2 +
+        encodedEnvelopes.reduce(
+          (sum, e) => sum + 2 + e.subjectBytes.length + 4 + e.jsonBytes.length,
+          0,
+        );
 
-  const buf = new Uint8Array(1 + 2 + driveBytes.length + 1 + 2 + entrySize);
+  const buf = new Uint8Array(
+    1 + 2 + driveBytes.length + 1 + 2 + entrySize + envelopeSize,
+  );
   let off = 0;
   buf[off++] = Tag.SYNC_PUSH;
   off = writeU16(buf, off, driveBytes.length);
   buf.set(driveBytes, off);
   off += driveBytes.length;
-  buf[off++] = last ? SyncPushFlags.LAST : 0;
+  let flags = last ? SyncPushFlags.LAST : 0;
+  if (encodedEnvelopes.length > 0) flags |= SyncPushFlags.ENVELOPES;
+  buf[off++] = flags;
   off = writeU16(buf, off, entries.length);
 
   for (const e of encodedEntries) {
@@ -438,6 +466,18 @@ export function encodeSyncPush(
     off = writeU32(buf, off, e.loroBytes.length);
     buf.set(e.loroBytes, off);
     off += e.loroBytes.length;
+  }
+
+  if (encodedEnvelopes.length > 0) {
+    off = writeU16(buf, off, encodedEnvelopes.length);
+    for (const e of encodedEnvelopes) {
+      off = writeU16(buf, off, e.subjectBytes.length);
+      buf.set(e.subjectBytes, off);
+      off += e.subjectBytes.length;
+      off = writeU32(buf, off, e.jsonBytes.length);
+      buf.set(e.jsonBytes, off);
+      off += e.jsonBytes.length;
+    }
   }
 
   return buf;
@@ -517,6 +557,8 @@ export interface DecodedSyncPush {
   /** True iff this is the final chunk of a SYNC_PUSH run. Receivers
    *  loop reading SYNC_PUSH frames until they see `last === true`. */
   last: boolean;
+  /** The `SyncPushFlags.ENVELOPES` section; empty when absent. */
+  envelopes: SyncPushEnvelope[];
 }
 
 export interface DecodedBlobResponse {
@@ -578,11 +620,11 @@ export function decodeCommitOk(data: Uint8Array): DecodedCommitOk | undefined {
   const body = raw.commitJson.trim();
   if (body.length === 0) return undefined;
 
-  if (body.startsWith('{')) {
+  if (body.startsWith("{")) {
     try {
-      const parsed = JSON.parse(body) as { '@id'?: unknown };
-      const id = parsed['@id'];
-      if (typeof id !== 'string' || id.length === 0) return undefined;
+      const parsed = JSON.parse(body) as { "@id"?: unknown };
+      const id = parsed["@id"];
+      if (typeof id !== "string" || id.length === 0) return undefined;
 
       return {
         requestId: raw.requestId,
@@ -650,14 +692,29 @@ export function decodeSyncDiff(data: Uint8Array): DecodedSyncDiff | undefined {
 const SYNC_PUSH_MAX_ENTRIES = 100;
 const SYNC_PUSH_MAX_BYTES = 48 * 1024;
 
-/** Split entries into multiple SYNC_PUSH frames (last chunk flagged). */
+/** Split entries into multiple SYNC_PUSH frames (last chunk flagged).
+ *  `envelopes` maps a subject to its retained signed commits (JSON-AD); each
+ *  chunk carries the envelopes of the subjects in it, counted against the
+ *  same byte budget. */
 export function encodeSyncPushChunks(
   driveSubject: string,
   entries: Array<{ subject: string; loroBytes: Uint8Array }>,
+  envelopes: Record<string, string[]> = {},
 ): Uint8Array[] {
   if (entries.length === 0) {
     return [encodeSyncPush(driveSubject, [], true)];
   }
+
+  const envelopeBytes = (subject: string): number =>
+    (envelopes[subject] ?? []).reduce(
+      (sum, json) =>
+        sum +
+        2 +
+        encoder.encode(subject).length +
+        4 +
+        encoder.encode(json).length,
+      0,
+    );
 
   const chunks: Uint8Array[] = [];
   let start = 0;
@@ -669,7 +726,11 @@ export function encodeSyncPushChunks(
     while (end < entries.length && end - start < SYNC_PUSH_MAX_ENTRIES) {
       const e = entries[end];
       const entryBytes =
-        2 + encoder.encode(e.subject).length + 4 + e.loroBytes.length;
+        2 +
+        encoder.encode(e.subject).length +
+        4 +
+        e.loroBytes.length +
+        envelopeBytes(e.subject);
 
       if (end > start && bytesAcc + entryBytes > SYNC_PUSH_MAX_BYTES) {
         break;
@@ -680,7 +741,14 @@ export function encodeSyncPushChunks(
     }
 
     const last = end >= entries.length;
-    chunks.push(encodeSyncPush(driveSubject, entries.slice(start, end), last));
+    const slice = entries.slice(start, end);
+    const chunkEnvelopes: SyncPushEnvelope[] = slice.flatMap((e) =>
+      (envelopes[e.subject] ?? []).map((json) => ({
+        subject: e.subject,
+        json,
+      })),
+    );
+    chunks.push(encodeSyncPush(driveSubject, slice, last, chunkEnvelopes));
     start = end;
   }
 
@@ -704,7 +772,24 @@ export function decodeSyncPush(data: Uint8Array): DecodedSyncPush | undefined {
     off = bOff + bytesLen;
   }
 
-  return { drive, entries, last };
+  const envelopes: SyncPushEnvelope[] = [];
+
+  if ((flags & SyncPushFlags.ENVELOPES) !== 0 && off + 2 <= data.length) {
+    const [envCount, eOff] = readU16(data, off);
+    off = eOff;
+
+    for (let i = 0; i < envCount; i++) {
+      if (off + 2 > data.length) break;
+      const [subject, sOff] = readStr16(data, off);
+      if (sOff + 4 > data.length) break;
+      const [jsonLen, jOff] = readU32(data, sOff);
+      const json = decoder.decode(data.subarray(jOff, jOff + jsonLen));
+      envelopes.push({ subject, json });
+      off = jOff + jsonLen;
+    }
+  }
+
+  return { drive, entries, last, envelopes };
 }
 
 export function decodeBlobRequest(data: Uint8Array): Uint8Array | undefined {
@@ -817,28 +902,28 @@ export function decodeEphemeral(
 // ---- Debug logging ----
 
 const TAG_NAMES: Record<number, string> = {
-  [Tag.AUTH]: 'AUTH',
-  [Tag.AUTH_OK]: 'AUTH_OK',
-  [Tag.ERROR]: 'ERROR',
-  [Tag.GET]: 'GET',
-  [Tag.UPDATE]: 'UPDATE',
-  [Tag.DESTROY]: 'DESTROY',
-  [Tag.COMMIT]: 'COMMIT',
-  [Tag.COMMIT_OK]: 'COMMIT_OK',
-  [Tag.SUB]: 'SUB',
-  [Tag.UNSUB]: 'UNSUB',
-  [Tag.SYNC]: 'SYNC',
-  [Tag.SYNC_OK]: 'SYNC_OK',
-  [Tag.SYNC_DIFF]: 'SYNC_DIFF',
-  [Tag.SYNC_PUSH]: 'SYNC_PUSH',
-  [Tag.BLOB_REQUEST]: 'BLOB_REQUEST',
-  [Tag.BLOB_RESPONSE]: 'BLOB_RESPONSE',
-  [Tag.QUERY_UPDATE_RESERVED]: 'QUERY_UPDATE_RESERVED',
-  [Tag.HELLO]: 'HELLO',
-  [Tag.EPHEMERAL]: 'EPHEMERAL',
-  [Tag.KEEPALIVE]: 'KEEPALIVE',
-  [Tag.CHALLENGE]: 'CHALLENGE',
-  [Tag.SYNC_RESEND]: 'SYNC_RESEND',
+  [Tag.AUTH]: "AUTH",
+  [Tag.AUTH_OK]: "AUTH_OK",
+  [Tag.ERROR]: "ERROR",
+  [Tag.GET]: "GET",
+  [Tag.UPDATE]: "UPDATE",
+  [Tag.DESTROY]: "DESTROY",
+  [Tag.COMMIT]: "COMMIT",
+  [Tag.COMMIT_OK]: "COMMIT_OK",
+  [Tag.SUB]: "SUB",
+  [Tag.UNSUB]: "UNSUB",
+  [Tag.SYNC]: "SYNC",
+  [Tag.SYNC_OK]: "SYNC_OK",
+  [Tag.SYNC_DIFF]: "SYNC_DIFF",
+  [Tag.SYNC_PUSH]: "SYNC_PUSH",
+  [Tag.BLOB_REQUEST]: "BLOB_REQUEST",
+  [Tag.BLOB_RESPONSE]: "BLOB_RESPONSE",
+  [Tag.QUERY_UPDATE_RESERVED]: "QUERY_UPDATE_RESERVED",
+  [Tag.HELLO]: "HELLO",
+  [Tag.EPHEMERAL]: "EPHEMERAL",
+  [Tag.KEEPALIVE]: "KEEPALIVE",
+  [Tag.CHALLENGE]: "CHALLENGE",
+  [Tag.SYNC_RESEND]: "SYNC_RESEND",
 };
 
 /**
@@ -846,11 +931,11 @@ const TAG_NAMES: Record<number, string> = {
  */
 function formatBytes(n: number): string {
   const kb = n / 1024;
-  if (kb === 0) return '0kb';
+  if (kb === 0) return "0kb";
   const formatted =
     kb < 0.1 ? kb.toFixed(3) : kb < 10 ? kb.toFixed(2) : kb.toFixed(1);
 
-  return `${formatted.replace(/\.?0+$/, '')}kb`;
+  return `${formatted.replace(/\.?0+$/, "")}kb`;
 }
 
 /**
@@ -875,7 +960,7 @@ export interface FrameDebugInfo {
  */
 export function debugFrameInfo(
   data: Uint8Array,
-  direction: '→' | '←',
+  direction: "→" | "←",
 ): FrameDebugInfo {
   if (data.length === 0) return { headline: `${direction} (empty)` };
 
@@ -940,12 +1025,12 @@ export function debugFrameInfo(
 
       const flags: string[] = [];
 
-      if (msg.flags & Flags.SNAPSHOT) flags.push('snapshot');
-      if (msg.flags & Flags.PUSH) flags.push('push');
+      if (msg.flags & Flags.SNAPSHOT) flags.push("snapshot");
+      if (msg.flags & Flags.PUSH) flags.push("push");
       if (msg.commitId) flags.push(`commit=${msg.commitId.slice(0, 20)}…`);
 
       return {
-        headline: `${direction} UPDATE ${msg.subject} [${flags.join(', ')}] (${formatBytes(msg.loroBytes.length)})`,
+        headline: `${direction} UPDATE ${msg.subject} [${flags.join(", ")}] (${formatBytes(msg.loroBytes.length)})`,
         details: () => ({
           subject: msg.subject,
           flags: msg.flags,
@@ -981,7 +1066,7 @@ export function debugFrameInfo(
       const msg = decodeSyncOk(payload);
 
       return {
-        headline: `${direction} SYNC_OK ${msg?.drive ?? ''}`,
+        headline: `${direction} SYNC_OK ${msg?.drive ?? ""}`,
         details: () => msg ?? { rawBytes: payload.length },
       };
     }
@@ -1002,7 +1087,7 @@ export function debugFrameInfo(
 
       return {
         headline: msg
-          ? `${direction} SYNC_PUSH ${msg.drive} (${msg.entries.length} resources${msg.last ? ', last' : ''}, ${formatBytes(payload.length)})`
+          ? `${direction} SYNC_PUSH ${msg.drive} (${msg.entries.length} resources${msg.last ? ", last" : ""}, ${formatBytes(payload.length)})`
           : `${direction} SYNC_PUSH (${formatBytes(payload.length)})`,
         details: () => msg ?? { rawBytes: payload.length },
       };

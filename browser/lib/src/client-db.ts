@@ -25,23 +25,23 @@
  * ```
  */
 
-import { RequestCancelledError } from './error.js';
-import { versionVectorRecords } from './version-vector-records.js';
+import { RequestCancelledError } from "./error.js";
+import { versionVectorRecords } from "./version-vector-records.js";
 import {
   parseHistoryAttribution,
   type HistoryAttribution,
-} from './history-attribution.js';
+} from "./history-attribution.js";
 import type {
   Aggregation,
   AggregateOutcome,
   ExpressionFilter,
-} from './collection.js';
+} from "./collection.js";
 import type {
   WorkerRequest,
   WorkerResponse,
   ClientDbInitTimings,
-} from './client-db.worker.js';
-import { perfMark, perfSpan } from './perf-trace.js';
+} from "./client-db.worker.js";
+import { perfMark, perfSpan } from "./perf-trace.js";
 
 /**
  * Duplicated from `client-db-open.ts` on purpose — do NOT import it here.
@@ -56,7 +56,7 @@ import { perfMark, perfSpan } from './perf-trace.js';
  * `client-db-open.test.ts` asserts this literal still matches the exported
  * constant, so the two cannot drift apart silently.
  */
-const STORAGE_BLOCKED_MARKER = 'ATOMIC_DB_STORAGE_BLOCKED';
+const STORAGE_BLOCKED_MARKER = "ATOMIC_DB_STORAGE_BLOCKED";
 
 function isStorageBlockedDbError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
@@ -77,13 +77,13 @@ function isStorageBlockedDbError(error: unknown): boolean {
 function asInitError(e: unknown): Error {
   if (isStorageBlockedDbError(e)) {
     return new Error(
-      'Local caching and offline support are disabled: this browser is not ' +
-        'giving this site access to local storage right now. That is usually ' +
-        'private browsing, or a setting that blocks site data or cross-site ' +
-        'tracking — but it can also be another tab of this site still ' +
-        'holding the local database, in which case a reload clears it. The ' +
-        'app still works, reading directly from the server; nothing is kept ' +
-        'locally between reloads.',
+      "Local caching and offline support are disabled: this browser is not " +
+        "giving this site access to local storage right now. That is usually " +
+        "private browsing, or a setting that blocks site data or cross-site " +
+        "tracking — but it can also be another tab of this site still " +
+        "holding the local database, in which case a reload clears it. The " +
+        "app still works, reading directly from the server; nothing is kept " +
+        "locally between reloads.",
     );
   }
 
@@ -136,13 +136,13 @@ type PendingRequest = {
 };
 
 /** Legacy shared database file name, used when no `dbName` is given. */
-const DEFAULT_DB_NAME = 'atomic_data.redb';
+const DEFAULT_DB_NAME = "atomic_data.redb";
 
 // Lock/channel name prefixes. The instance-level names are suffixed with the
 // database name so two different-agent DBs never share a leader — a leader
 // only owns *its* OPFS file, and cross-tab RPC must stay within one DB.
-const LEADER_LOCK_PREFIX = 'atomic-db-leader';
-const RPC_CHANNEL_PREFIX = 'atomic-db-rpc';
+const LEADER_LOCK_PREFIX = "atomic-db-leader";
+const RPC_CHANNEL_PREFIX = "atomic-db-rpc";
 
 /**
  * `'failed'` means leader election timed out: the lock is held by a stale tab
@@ -152,7 +152,7 @@ const RPC_CHANNEL_PREFIX = 'atomic-db-rpc';
  * `'leader'`) or another tab's `leader-announce` reaches us (handler flips us
  * to `'follower'`).
  */
-type Role = 'initializing' | 'leader' | 'follower' | 'failed';
+type Role = "initializing" | "leader" | "follower" | "failed";
 
 // How long we wait for either our own `navigator.locks.request` callback
 // to fire OR a `leader-announce` to arrive from another tab. If neither
@@ -187,23 +187,23 @@ const STEAL_SETTLE_WAIT_MS = 15_000;
 // `LEADER_ELECTION_WAIT_MS` later.
 
 type BroadcastMessage =
-  | { type: 'leader-ping' }
-  | { type: 'leader-announce' }
+  | { type: "leader-ping" }
+  | { type: "leader-announce" }
   | {
-      type: 'rpc-req';
+      type: "rpc-req";
       fromTab: string;
       id: string;
       payload: Record<string, unknown>;
     }
   | {
-      type: 'rpc-res';
+      type: "rpc-res";
       toTab: string;
       id: string;
       ok: true;
       data: unknown;
     }
   | {
-      type: 'rpc-res';
+      type: "rpc-res";
       toTab: string;
       id: string;
       ok: false;
@@ -213,7 +213,7 @@ type BroadcastMessage =
 export class ClientDbWorker {
   private worker: Worker | null = null;
   private bc: BroadcastChannel | null = null;
-  private role: Role = 'initializing';
+  private role: Role = "initializing";
   private tabId = (crypto as Crypto & { randomUUID?: () => string }).randomUUID
     ? crypto.randomUUID()
     : Math.random().toString(36).slice(2);
@@ -261,15 +261,15 @@ export class ClientDbWorker {
 
   constructor(wasmUrl: string, workerUrl?: string, opts?: ClientDbOptions) {
     this.wasmUrl = wasmUrl;
-    this.workerUrl = workerUrl ?? '';
+    this.workerUrl = workerUrl ?? "";
     this.opts = opts ?? {};
     const dbName = this.opts.dbName ?? DEFAULT_DB_NAME;
     this.leaderLockName = `${LEADER_LOCK_PREFIX}:${dbName}`;
     this.rpcChannelName = `${RPC_CHANNEL_PREFIX}:${dbName}`;
-    this.leadershipGained = new Promise<void>(r => {
+    this.leadershipGained = new Promise<void>((r) => {
       this.onBecameLeader = r;
     });
-    this.leaderObserved = new Promise<void>(r => {
+    this.leaderObserved = new Promise<void>((r) => {
       this.onObservedLeader = r;
     });
   }
@@ -284,7 +284,7 @@ export class ClientDbWorker {
   private async doInit(baseUrl?: string): Promise<void> {
     if (!this.workerUrl) {
       throw new Error(
-        'ClientDbWorker requires a workerUrl. Pass the URL to client-db-worker.js.',
+        "ClientDbWorker requires a workerUrl. Pass the URL to client-db-worker.js.",
       );
     }
 
@@ -296,18 +296,18 @@ export class ClientDbWorker {
     // half-initialized — the app then renders empty, unpersisted resources with
     // no explanation. Park cleanly in server-only mode instead, with an
     // actionable message, exactly like the ghost-leader degraded path below.
-    if (typeof navigator === 'undefined' || !navigator.locks) {
-      this.role = 'failed';
+    if (typeof navigator === "undefined" || !navigator.locks) {
+      this.role = "failed";
       this._unsupportedEnvironment = true;
       this._initError = new Error(
-        'Local caching and offline support are disabled: this site is served ' +
-          'over an insecure connection (plain HTTP on a non-localhost origin), ' +
-          'where the browser withholds the Web Locks and OPFS APIs the local ' +
-          'database needs. The app still works, reading directly from the ' +
-          'server. To enable local caching and offline support, serve the app ' +
-          'over HTTPS (or open it via localhost).',
+        "Local caching and offline support are disabled: this site is served " +
+          "over an insecure connection (plain HTTP on a non-localhost origin), " +
+          "where the browser withholds the Web Locks and OPFS APIs the local " +
+          "database needs. The app still works, reading directly from the " +
+          "server. To enable local caching and offline support, serve the app " +
+          "over HTTPS (or open it via localhost).",
       );
-      console.info('[ClientDb]', this._initError.message);
+      console.info("[ClientDb]", this._initError.message);
 
       return;
     }
@@ -323,24 +323,24 @@ export class ClientDbWorker {
     // Ping any existing leader so it can announce itself. The announce also
     // fires unprompted when a tab first becomes leader, so this is mainly for
     // the case where we open AFTER the leader announced.
-    this.bc.postMessage({ type: 'leader-ping' } satisfies BroadcastMessage);
+    this.bc.postMessage({ type: "leader-ping" } satisfies BroadcastMessage);
 
     // Wait briefly for: us-as-leader, an announce from a healthy leader, or
     // timeout. A timeout here means a ghost leader holds the
     // `navigator.locks` lease but isn't responding on the BC — its bundle
     // crashed, was HMR-killed, or its tab is background-throttled into
     // ignoring BC messages.
-    const endElection = perfSpan('clientdb.election');
+    const endElection = perfSpan("clientdb.election");
     const winner = await Promise.race([
-      this.leadershipGained.then(() => 'leader' as const),
-      this.leaderObserved.then(() => 'follower' as const),
-      new Promise<'timeout'>(resolve =>
-        setTimeout(() => resolve('timeout'), LEADER_ELECTION_WAIT_MS),
+      this.leadershipGained.then(() => "leader" as const),
+      this.leaderObserved.then(() => "follower" as const),
+      new Promise<"timeout">((resolve) =>
+        setTimeout(() => resolve("timeout"), LEADER_ELECTION_WAIT_MS),
       ),
     ]);
     endElection({ winner });
 
-    if (winner === 'timeout') {
+    if (winner === "timeout") {
       // This instance may have been superseded while the election timer ran
       // (agent switch / HMR teardown). A destroyed instance must not park
       // itself in 'failed' or surface an error the replacement already
@@ -370,49 +370,49 @@ export class ClientDbWorker {
       // live throttled tab whose worker still holds the OPFS file handle —
       // a stolen Web Lock can't take that).
       const stolen = await Promise.race([
-        this.leadershipGained.then(() => 'stolen' as const),
-        this.leaderObserved.then(() => 'follower' as const),
+        this.leadershipGained.then(() => "stolen" as const),
+        this.leaderObserved.then(() => "follower" as const),
         (async () => {
           const deadline = Date.now() + STEAL_SETTLE_WAIT_MS;
 
           while (Date.now() < deadline) {
-            await new Promise(resolve => setTimeout(resolve, 250));
+            await new Promise((resolve) => setTimeout(resolve, 250));
             if (this._initError || this.destroyed)
-              return 'open-failed' as const;
+              return "open-failed" as const;
           }
 
-          return 'still-stuck' as const;
+          return "still-stuck" as const;
         })(),
       ]);
 
       if (this.destroyed) return;
 
-      if (stolen === 'open-failed') {
+      if (stolen === "open-failed") {
         // The steal took the lock but leader init failed — `_initError`
         // carries the real cause (usually the OPFS handle still held by a
         // live background tab). Surface that instead of a generic message.
-        this.role = 'failed';
-        console.warn('[ClientDb]', this._initError?.message);
+        this.role = "failed";
+        console.warn("[ClientDb]", this._initError?.message);
 
         return;
       }
 
-      if (stolen === 'still-stuck') {
+      if (stolen === "still-stuck") {
         // Either the engine ignored `steal` (the request queued behind the
         // ghost) or the steal callback hasn't run. We stay recoverable: the
         // queued request fires `becomeLeader` the moment the holding
         // tab/worker closes, and a late `leader-announce` flips us to
         // follower.
-        this.role = 'failed';
+        this.role = "failed";
         this._initError = new Error(
-          'ClientDb is running without its local cache: another tab — or a ' +
-            'leftover worker — on this site holds the local database, and ' +
-            'reclaiming the lock did not succeed. The app works normally ' +
-            'meanwhile (reading from the server directly), and recovers on ' +
-            'its own when that tab closes. To recover now, close other tabs ' +
-            'of this site and reload.',
+          "ClientDb is running without its local cache: another tab — or a " +
+            "leftover worker — on this site holds the local database, and " +
+            "reclaiming the lock did not succeed. The app works normally " +
+            "meanwhile (reading from the server directly), and recovers on " +
+            "its own when that tab closes. To recover now, close other tabs " +
+            "of this site and reload.",
         );
-        console.warn('[ClientDb]', this._initError.message);
+        console.warn("[ClientDb]", this._initError.message);
 
         return;
       }
@@ -441,10 +441,10 @@ export class ClientDbWorker {
     let opts: LockOptions;
 
     if (steal) {
-      opts = { mode: 'exclusive', steal: true };
+      opts = { mode: "exclusive", steal: true };
     } else {
       this.leaderLockAbort = new AbortController();
-      opts = { mode: 'exclusive', signal: this.leaderLockAbort.signal };
+      opts = { mode: "exclusive", signal: this.leaderLockAbort.signal };
     }
 
     void navigator.locks
@@ -457,7 +457,7 @@ export class ClientDbWorker {
           throw e;
         }
 
-        return new Promise<void>(resolve => {
+        return new Promise<void>((resolve) => {
           // Hold the lock until the tab unloads OR `destroy()` releases it
           // (HMR / explicit teardown). Resolving here frees the lock so the
           // next instance — or a queued follower — can take over immediately,
@@ -465,10 +465,10 @@ export class ClientDbWorker {
           this.releaseLeaderHold = resolve;
         });
       })
-      .catch(e => {
+      .catch((e) => {
         // A deliberate abort from `destroy()` (the request was still queued)
         // is teardown, not a failure — ignore it.
-        if (e instanceof DOMException && e.name === 'AbortError') return;
+        if (e instanceof DOMException && e.name === "AbortError") return;
 
         // Rejects if the callback throws OR if our hold was aborted by
         // another tab stealing the lock. The latter is fine if we're
@@ -490,8 +490,8 @@ export class ClientDbWorker {
    */
   private async becomeLeader(baseUrl?: string): Promise<void> {
     if (this.worker) return;
-    const endSpawn = perfSpan('clientdb.workerSpawn');
-    this.worker = new Worker(this.workerUrl, { type: 'module' });
+    const endSpawn = perfSpan("clientdb.workerSpawn");
+    this.worker = new Worker(this.workerUrl, { type: "module" });
     endSpawn();
 
     this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
@@ -500,7 +500,7 @@ export class ClientDbWorker {
       if (!pending) return;
       this.pending.delete(String(id));
 
-      if (type === 'error') {
+      if (type === "error") {
         pending.reject(new Error((rest as { message: string }).message));
       } else {
         pending.resolve((rest as { data?: unknown }).data);
@@ -508,12 +508,12 @@ export class ClientDbWorker {
     };
 
     this.worker.onerror = (event: ErrorEvent) => {
-      console.error('[ClientDb Worker Error]', event.message);
+      console.error("[ClientDb Worker Error]", event.message);
     };
 
-    const endWorkerInit = perfSpan('clientdb.workerInit');
+    const endWorkerInit = perfSpan("clientdb.workerInit");
     const timings = (await this.sendToWorker({
-      type: 'init',
+      type: "init",
       wasmUrl: this.wasmUrl,
       baseUrl,
       dbName: this.opts.dbName,
@@ -525,12 +525,12 @@ export class ClientDbWorker {
     // Fold the worker-side WASM/OPFS boot (otherwise invisible to the
     // main-thread trace) into `__atomicPerf` as discrete marks.
     if (timings) {
-      perfMark('clientdb.wasm.import', { ms: timings.wasmImportMs });
-      perfMark('clientdb.wasm.instantiate', { ms: timings.wasmInstantiateMs });
-      perfMark('clientdb.opfs.dbOpen', { ms: timings.dbOpenMs });
+      perfMark("clientdb.wasm.import", { ms: timings.wasmImportMs });
+      perfMark("clientdb.wasm.instantiate", { ms: timings.wasmInstantiateMs });
+      perfMark("clientdb.opfs.dbOpen", { ms: timings.dbOpenMs });
     }
 
-    this.role = 'leader';
+    this.role = "leader";
     // Recover from a prior `'failed'` (leadership-timeout) state if the lock
     // finally became acquirable: clear the init error, mark ready, and let
     // `waitForReady` resolve true on subsequent calls.
@@ -538,55 +538,55 @@ export class ClientDbWorker {
     this.ready = true;
     this.onBecameLeader();
     this.bc?.postMessage({
-      type: 'leader-announce',
+      type: "leader-announce",
     } satisfies BroadcastMessage);
   }
 
   private handleBroadcast(msg: BroadcastMessage): void {
     switch (msg.type) {
-      case 'leader-ping':
-        if (this.role === 'leader') {
+      case "leader-ping":
+        if (this.role === "leader") {
           this.bc?.postMessage({
-            type: 'leader-announce',
+            type: "leader-announce",
           } satisfies BroadcastMessage);
         }
 
         break;
 
-      case 'leader-announce':
-        if (this.role !== 'leader') {
+      case "leader-announce":
+        if (this.role !== "leader") {
           // Recover from a prior `'failed'` state if a leader finally
           // announces itself (the stale tab woke up, or a fresh tab took
           // leadership). Clearing initError + ready=true lets cached
           // `waitForReady` callers proceed.
-          if (this.role === 'failed') {
+          if (this.role === "failed") {
             this._initError = undefined;
             this.ready = true;
           }
 
-          this.role = 'follower';
+          this.role = "follower";
           this.onObservedLeader();
         }
 
         break;
 
-      case 'rpc-req':
-        if (this.role !== 'leader') return;
+      case "rpc-req":
+        if (this.role !== "leader") return;
         // A follower sent us a DB call. Forward to our worker and broadcast
         // the result back keyed by the requester's tab id.
         this.sendToWorker(msg.payload as Record<string, unknown>).then(
-          data => {
+          (data) => {
             this.bc?.postMessage({
-              type: 'rpc-res',
+              type: "rpc-res",
               toTab: msg.fromTab,
               id: msg.id,
               ok: true,
               data,
             } satisfies BroadcastMessage);
           },
-          err => {
+          (err) => {
             this.bc?.postMessage({
-              type: 'rpc-res',
+              type: "rpc-res",
               toTab: msg.fromTab,
               id: msg.id,
               ok: false,
@@ -596,7 +596,7 @@ export class ClientDbWorker {
         );
         break;
 
-      case 'rpc-res':
+      case "rpc-res":
         if (msg.toTab !== this.tabId) return;
 
         {
@@ -614,7 +614,7 @@ export class ClientDbWorker {
   /* ------------------------------- Public API ------------------------------ */
 
   async getResource(subject: string): Promise<string | null> {
-    const r = await this.send({ type: 'getResource', subject });
+    const r = await this.send({ type: "getResource", subject });
 
     return (r as string | null) ?? null;
   }
@@ -630,7 +630,7 @@ export class ClientDbWorker {
     subject: string,
   ): Promise<{ jsonAd: string | null; snapshot: Uint8Array | null }> {
     const r = (await this.send({
-      type: 'getResourceWithSnapshot',
+      type: "getResourceWithSnapshot",
       subject,
     })) as { jsonAd: string | null; snapshot: Uint8Array | null } | null;
 
@@ -638,7 +638,7 @@ export class ClientDbWorker {
   }
 
   async putResource(jsonAd: string): Promise<void> {
-    await this.send({ type: 'putResource', jsonAd });
+    await this.send({ type: "putResource", jsonAd });
   }
 
   /**
@@ -653,7 +653,7 @@ export class ClientDbWorker {
     snapshot?: Uint8Array,
   ): Promise<void> {
     await this.send({
-      type: 'putResourceWithSnapshot',
+      type: "putResourceWithSnapshot",
       subject,
       jsonAd,
       snapshot,
@@ -667,7 +667,7 @@ export class ClientDbWorker {
    *  used to mean 70 sequential round-trips). */
   async putResources(jsonAds: string[]): Promise<void> {
     if (jsonAds.length === 0) return;
-    await this.send({ type: 'putResources', jsonAds });
+    await this.send({ type: "putResources", jsonAds });
   }
 
   async createPeerSession(
@@ -676,7 +676,7 @@ export class ClientDbWorker {
     challenge: string,
   ): Promise<number> {
     return this.send({
-      type: 'createPeerSession',
+      type: "createPeerSession",
       drive,
       expectedPeer,
       challenge,
@@ -687,7 +687,7 @@ export class ClientDbWorker {
     session: number,
     frame: Uint8Array,
   ): Promise<{ frames: number[][]; changed: string[]; ephemeral?: number[] }> {
-    return this.send({ type: 'handlePeerFrame', session, frame }) as Promise<{
+    return this.send({ type: "handlePeerFrame", session, frame }) as Promise<{
       frames: number[][];
       changed: string[];
       ephemeral?: number[];
@@ -696,30 +696,30 @@ export class ClientDbWorker {
 
   async canSendPeerFrame(session: number, subject: string): Promise<boolean> {
     return this.send({
-      type: 'canSendPeerFrame',
+      type: "canSendPeerFrame",
       session,
       subject,
     }) as Promise<boolean>;
   }
 
   async closePeerSession(session: number): Promise<void> {
-    await this.send({ type: 'closePeerSession', session });
+    await this.send({ type: "closePeerSession", session });
   }
 
   async applyPeerCommit(commitJsonAd: string): Promise<void> {
-    await this.send({ type: 'applyPeerCommit', commitJsonAd });
+    await this.send({ type: "applyPeerCommit", commitJsonAd });
   }
 
   async applyCommit(commitJsonAd: string): Promise<void> {
-    await this.send({ type: 'applyCommit', commitJsonAd });
+    await this.send({ type: "applyCommit", commitJsonAd });
   }
 
   async removeResource(subject: string): Promise<void> {
-    await this.send({ type: 'removeResource', subject });
+    await this.send({ type: "removeResource", subject });
   }
 
   async query(opts: ClientDbQueryOpts = {}): Promise<ClientDbQueryResult> {
-    const r = await this.send({ type: 'query', ...opts });
+    const r = await this.send({ type: "query", ...opts });
 
     return r as ClientDbQueryResult;
   }
@@ -733,7 +733,7 @@ export class ClientDbWorker {
     } = {},
   ): Promise<string[]> {
     const r = await this.send({
-      type: 'search',
+      type: "search",
       query,
       limit: opts.limit,
       parents: opts.parents,
@@ -744,13 +744,13 @@ export class ClientDbWorker {
   }
 
   async allSubjects(): Promise<string[]> {
-    const r = await this.send({ type: 'allSubjects' });
+    const r = await this.send({ type: "allSubjects" });
 
     return r as string[];
   }
 
   async populate(): Promise<void> {
-    await this.send({ type: 'populate' });
+    await this.send({ type: "populate" });
   }
 
   /**
@@ -763,25 +763,58 @@ export class ClientDbWorker {
    * signal.
    */
   async flush(): Promise<void> {
-    await this.send({ type: 'flush' });
+    await this.send({ type: "flush" });
   }
 
   async exportAllResources(): Promise<string> {
-    const r = await this.send({ type: 'exportAllResources' });
+    const r = await this.send({ type: "exportAllResources" });
 
     return r as string;
   }
 
   async importAllResources(jsonArray: string): Promise<number> {
-    const r = await this.send({ type: 'importAllResources', jsonArray });
+    const r = await this.send({ type: "importAllResources", jsonArray });
 
     return r as number;
   }
 
   async getLoroSnapshot(subject: string): Promise<Uint8Array | null> {
-    const r = await this.send({ type: 'getLoroSnapshot', subject });
+    const r = await this.send({ type: "getLoroSnapshot", subject });
 
     return (r as Uint8Array | null) ?? null;
+  }
+
+  /** The retained signed envelopes (commit JSON-AD) per subject, to ride
+   *  along a `SYNC_PUSH`. Empty when the WASM build predates the accessor. */
+  async envelopesFor(subjects: string[]): Promise<Record<string, string[]>> {
+    if (subjects.length === 0) return {};
+
+    try {
+      const r = await this.send({ type: "envelopesFor", subjects });
+
+      return JSON.parse(r as string) as Record<string, string[]>;
+    } catch {
+      return {};
+    }
+  }
+
+  /** Keep envelopes that arrived with a `SYNC_PUSH`; each is verified in
+   *  WASM before it is stored. Resolves to how many were kept. */
+  async importEnvelopes(
+    envelopes: Array<{ subject: string; json: string }>,
+  ): Promise<number> {
+    if (envelopes.length === 0) return 0;
+
+    try {
+      const r = await this.send({
+        type: "importEnvelopes",
+        envelopes: JSON.stringify(envelopes),
+      });
+
+      return typeof r === "number" ? r : 0;
+    } catch {
+      return 0;
+    }
   }
 
   /** Who signed `subject`'s history, from the envelopes this client applied
@@ -791,7 +824,7 @@ export class ClientDbWorker {
     subject: string,
   ): Promise<HistoryAttribution | null> {
     try {
-      const r = await this.send({ type: 'historyAttribution', subject });
+      const r = await this.send({ type: "historyAttribution", subject });
 
       return parseHistoryAttribution(r);
     } catch {
@@ -800,17 +833,17 @@ export class ClientDbWorker {
   }
 
   async putBlob(hash: Uint8Array, data: Uint8Array): Promise<void> {
-    await this.send({ type: 'putBlob', hash, data });
+    await this.send({ type: "putBlob", hash, data });
   }
 
   async getBlob(hash: Uint8Array): Promise<Uint8Array | null> {
-    const r = await this.send({ type: 'getBlob', hash });
+    const r = await this.send({ type: "getBlob", hash });
 
     return (r as Uint8Array | null) ?? null;
   }
 
   async blake3Hash(data: Uint8Array): Promise<Uint8Array> {
-    const r = await this.send({ type: 'blake3Hash', data });
+    const r = await this.send({ type: "blake3Hash", data });
 
     return r as Uint8Array;
   }
@@ -818,7 +851,7 @@ export class ClientDbWorker {
   async getAllVersionVectors(): Promise<
     Record<string, Record<string, number>>
   > {
-    const r = await this.send({ type: 'getAllVersionVectors' });
+    const r = await this.send({ type: "getAllVersionVectors" });
 
     return versionVectorRecords(r);
   }
@@ -828,7 +861,7 @@ export class ClientDbWorker {
   async getVersionVectorsForDrive(
     drive: string,
   ): Promise<Record<string, Record<string, number>>> {
-    const r = await this.send({ type: 'getVersionVectorsForDrive', drive });
+    const r = await this.send({ type: "getVersionVectorsForDrive", drive });
 
     return versionVectorRecords(r);
   }
@@ -863,14 +896,14 @@ export class ClientDbWorker {
   ): Promise<{
     objectKey: string;
     sealed: Uint8Array;
-    kind: 'pack' | 'checkpoint';
+    kind: "pack" | "checkpoint";
     resources: number;
     unchanged: number;
     tombstones: number;
     coverage: Record<string, number>;
   } | null> {
     const r = await this.send({
-      type: 'vaultExport',
+      type: "vaultExport",
       driveSubject,
       key,
       keyEpoch,
@@ -885,7 +918,7 @@ export class ClientDbWorker {
     return (r ?? null) as {
       objectKey: string;
       sealed: Uint8Array;
-      kind: 'pack' | 'checkpoint';
+      kind: "pack" | "checkpoint";
       resources: number;
       unchanged: number;
       tombstones: number;
@@ -917,7 +950,7 @@ export class ClientDbWorker {
     objectsUnreadable: number;
   }> {
     const r = await this.send({
-      type: 'vaultImport',
+      type: "vaultImport",
       key,
       keyEpoch,
       drivePseudonym,
@@ -948,7 +981,7 @@ export class ClientDbWorker {
     segment: number,
   ): Promise<void> {
     await this.send({
-      type: 'vaultCommitSegment',
+      type: "vaultCommitSegment",
       drivePseudonym,
       devicePubkey,
       segment,
@@ -1025,7 +1058,7 @@ export class ClientDbWorker {
     this.seedPromise = null;
 
     for (const [, pending] of this.pending) {
-      pending.reject(new RequestCancelledError('ClientDb worker destroyed'));
+      pending.reject(new RequestCancelledError("ClientDb worker destroyed"));
     }
 
     this.pending.clear();
@@ -1039,38 +1072,38 @@ export class ClientDbWorker {
     // (leadership election + leader announce takes a few ticks). Wait for
     // init rather than rejecting — the caller already started init, we just
     // need to let it finish.
-    if (this.role === 'initializing' && this.initPromise) {
+    if (this.role === "initializing" && this.initPromise) {
       await this.initPromise;
     }
 
     if (this.destroyed) {
-      throw new RequestCancelledError('ClientDb worker destroyed');
+      throw new RequestCancelledError("ClientDb worker destroyed");
     }
 
-    if (this.role === 'leader') {
+    if (this.role === "leader") {
       return this.sendToWorker(msg);
     }
 
-    if (this.role === 'follower') {
+    if (this.role === "follower") {
       return this.sendToLeader(msg);
     }
 
-    if (this.role === 'failed') {
+    if (this.role === "failed") {
       // Leadership election timed out and we're parked. Fail fast so callers
       // like `computeDriveSyncState` and `useChildren` proceed in degraded
       // mode (in-memory only) instead of awaiting forever.
       throw new Error(
-        `ClientDb unavailable: ${this._initError?.message ?? 'init failed'}`,
+        `ClientDb unavailable: ${this._initError?.message ?? "init failed"}`,
       );
     }
 
-    throw new Error('ClientDbWorker send() called before init() completed');
+    throw new Error("ClientDbWorker send() called before init() completed");
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private sendToWorker(msg: Record<string, any>): Promise<unknown> {
     if (!this.worker) {
-      return Promise.reject(new Error('ClientDb worker not initialized'));
+      return Promise.reject(new Error("ClientDb worker not initialized"));
     }
 
     const id = String(this.nextId++);
@@ -1085,7 +1118,7 @@ export class ClientDbWorker {
   private sendToLeader(msg: Record<string, any>): Promise<unknown> {
     if (!this.bc) {
       return Promise.reject(
-        new Error('ClientDb BroadcastChannel not initialized'),
+        new Error("ClientDb BroadcastChannel not initialized"),
       );
     }
 
@@ -1119,7 +1152,7 @@ export class ClientDbWorker {
         },
       });
       this.bc!.postMessage({
-        type: 'rpc-req',
+        type: "rpc-req",
         fromTab: this.tabId,
         id,
         payload: msg,

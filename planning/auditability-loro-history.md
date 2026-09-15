@@ -96,15 +96,25 @@ attribution, tampering, two writers under both retentions, destroy fold),
 
 ## Next
 
-1. **Replicate the rows.** Live `COMMIT` already delivers the envelope;
-   receivers persist it (they go through `apply_commit`). Bulk: a
-   capability-gated side map in `SYNC_PUSH` / `SYNC_DIFF`, the shape
-   `removeCommits` already uses, carrying the retained envelopes of each
-   pushed subject; the receiver verifies before storing. Vault pack v2
-   with an optional per-entry envelope list. A node on `latest` sends one,
-   a node on `all` sends all. Until this lands a fresh device attributes
-   only what it applied itself, and the hub answers the rest over
-   `/history-attribution`.
+1. ~~**Replicate the rows.**~~ Shipped 2026-09-15. `SYNC_PUSH` carries a
+   trailing envelope section flagged `ENVELOPES` (`protocol.rs`
+   `encode_sync_push_with_envelopes`, `encode_sync_push_chunks_with_envelopes`;
+   TS `encodeSyncPush(..., envelopes)`), sent by the server diff builder,
+   both Iroh push paths, the browser peer session and the browser's own
+   `handleSyncDiff` (envelopes read from the ClientDb via
+   `ClientDb.envelopesFor`). Not capability-gated: a decoder that predates
+   the flag stops after the entries and never sees the section. Receivers
+   keep an envelope only for a subject imported from the same push, after
+   `envelopes::import_envelope` verifies the signature and subject, under
+   their own retention (`import_sync_push`, WASM `ClientDb.importEnvelopes`).
+   `PackEntry.envelopes` (serde default, not written when empty) carries
+   them through the vault; restore imports them the same way. Tests:
+   `protocol::tests::sync_push_envelopes_*`, `envelopes::tests::import_envelope_*`,
+   `engine::bootstrap_and_sub_tests::push_envelopes_are_kept_only_for_imported_subjects`,
+   `vault::sync::tests::restored_history_is_attributed_to_its_signer`,
+   `ws-v2.test.ts`. Still open: the Flutter app reads attribution from the
+   server only (no local History UI), and a hub answers `/history-attribution`
+   for anything a device did not import.
 2. **Secondary indexes** for "everything agent X signed" / "changes in
    drive D since T", as a second tree written in the same transaction,
    rights-filtered per resource on read. Not before a screen asks.

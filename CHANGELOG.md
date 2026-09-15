@@ -7,6 +7,13 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Signed history now replicates. `SYNC_PUSH` carries the retained envelopes
+  of the subjects it pushes (flag `0x02 ENVELOPES`, a trailer old decoders
+  never read) over WebSocket, Iroh and browser peer links, and Cloud Vault
+  packs carry them per entry. Receivers verify each envelope's signature and
+  subject before keeping it, honouring their own `--envelope-retention`. A
+  restored or newly invited device therefore shows who signed each change
+  instead of "Unattributed" (`planning/auditability-loro-history.md`).
 - Rate-limit the write endpoints. `POST /commit` (HTTP and the WebSocket
   `COMMIT` frame), `/upload`, `PUT /blob`, `/iroh-sync`, `/forget-peer` and
   resource posts spend a per-agent token (`--write-rate-limit`, default 6000

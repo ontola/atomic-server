@@ -5,23 +5,23 @@
  * Server counterpart: `server/src/handlers/web_sockets.rs`.
  */
 
-import { createAuthentication } from './authentication.js';
-import { Resource } from './resource.js';
-import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
-import { StoreEvents, type Store, type DriveSyncState } from './store.js';
-import { reconcile, type Item, type RemoteRange } from './rbsr.js';
+import { createAuthentication } from "./authentication.js";
+import { Resource } from "./resource.js";
+import { recordServerVersionFromWsProtocol } from "./serverCapabilities.js";
+import { StoreEvents, type Store, type DriveSyncState } from "./store.js";
+import { reconcile, type Item, type RemoteRange } from "./rbsr.js";
 import {
   AtomicError,
   ErrorType,
   RequestCancelledError,
   isNotFound,
   isUnauthorized,
-} from './error.js';
+} from "./error.js";
 import {
   type Commit,
   parseCommitJSON,
   serializeDeterministically,
-} from './commit.js';
+} from "./commit.js";
 import {
   Tag,
   Flags,
@@ -56,15 +56,15 @@ import {
   encodeBlobRequest,
   encodeSyncPushChunks,
   debugFrameInfo,
-} from './ws-v2.js';
-import { BLOB } from './urls.js';
-import { hexToBytes } from './value.js';
+} from "./ws-v2.js";
+import { BLOB } from "./urls.js";
+import { hexToBytes } from "./value.js";
 import {
   livenessAction,
   LIVENESS_CHECK_MS,
   LIVENESS_DEADLINE_MS,
-} from './liveness.js';
-import { perfMark, perfSpan } from './perf-trace.js';
+} from "./liveness.js";
+import { perfMark, perfSpan } from "./perf-trace.js";
 
 // 5s is too tight for a shared atomic-server under suite-wide e2e load
 // (auth race + drive sub + several parallel GETs queue up). Above ~10s, the
@@ -73,7 +73,7 @@ const REQUEST_TIMEOUT = 10000;
 /** How long `authenticate` waits for the server's `CHALLENGE` before signing
  *  a timestamp-only proof (a server that predates the frame never sends it). */
 const CHALLENGE_WAIT_MS = 300;
-const WS_PROTOCOL = 'atomicdata-ws.v2';
+const WS_PROTOCOL = "atomicdata-ws.v2";
 
 const connectionFailedMessage = (url: URL): string =>
   `Could not connect to ${url.origin}. Check that the server is running and reachable.`;
@@ -118,7 +118,7 @@ function profilerTick(name: string, payload?: unknown): void {
  * snapshot blobs unless they ask for it. The group itself collapses by
  * default so multiple frames stay one line each.
  */
-function logFrame(data: Uint8Array, direction: '→' | '←', color: string): void {
+function logFrame(data: Uint8Array, direction: "→" | "←", color: string): void {
   const info = debugFrameInfo(data, direction);
 
   if (info.details === undefined) {
@@ -138,7 +138,7 @@ function logFrame(data: Uint8Array, direction: '→' | '←', color: string): vo
     const enriched = decodeUpdateProperties(details);
     console.debug(enriched);
   } catch (e) {
-    console.debug('(failed to decode frame details)', e);
+    console.debug("(failed to decode frame details)", e);
   }
 
   console.groupEnd();
@@ -156,7 +156,7 @@ function decodeUpdateProperties(
   const snapshot = details.loroSnapshot;
   const subject = details.subject;
 
-  if (!(snapshot instanceof Uint8Array) || typeof subject !== 'string') {
+  if (!(snapshot instanceof Uint8Array) || typeof subject !== "string") {
     return details;
   }
 
@@ -167,7 +167,7 @@ function decodeUpdateProperties(
 
     for (const [prop, value] of tmp.getEntries()) {
       // Skip the loro snapshot field itself — it's the bytes we just decoded.
-      if (prop === 'https://atomicdata.dev/properties/loroUpdate') continue;
+      if (prop === "https://atomicdata.dev/properties/loroUpdate") continue;
       properties[shortPropName(prop)] = value;
     }
 
@@ -185,7 +185,7 @@ function shortPropName(url: string): string {
   // `https://atomicdata.dev/properties/name` → `name`. For non-atomicdata.dev
   // properties (custom ontologies) the fragment after the last `/` is still
   // the most readable thing without a property cache.
-  const lastSlash = url.lastIndexOf('/');
+  const lastSlash = url.lastIndexOf("/");
 
   return lastSlash >= 0 ? url.slice(lastSlash + 1) : url;
 }
@@ -213,7 +213,7 @@ export class WSClient {
    *  either accepts it (`SYNC_OK`) or asks for a reconcile (`SYNC_RESEND`). */
   private _pendingSyncState = new Map<
     string,
-    Awaited<ReturnType<Store['computeDriveSyncState']>>
+    Awaited<ReturnType<Store["computeDriveSyncState"]>>
   >();
   /** Pending RBSR range-query responses. The reconcile issues these one at a
    *  time, so at most one of each is in flight; FIFO queues stay correct even
@@ -233,8 +233,8 @@ export class WSClient {
 
   /** When true, all WS frames are logged to the console in human-readable form. */
   public debug =
-    typeof localStorage !== 'undefined' &&
-    localStorage.getItem('ws-debug') === '1';
+    typeof localStorage !== "undefined" &&
+    localStorage.getItem("ws-debug") === "1";
 
   /** Pending GET requests awaiting a response, keyed by request_id. */
   private pendingGets = new Map<
@@ -346,42 +346,42 @@ export class WSClient {
     });
 
     const wsURL = new URL(url);
-    wsURL.protocol = wsURL.protocol === 'http:' ? 'ws' : 'wss';
-    wsURL.pathname = '/ws';
+    wsURL.protocol = wsURL.protocol === "http:" ? "ws" : "wss";
+    wsURL.pathname = "/ws";
 
     this.authPromise = Promise.resolve();
 
     const createSocket = () => {
-      this.connection.abort(new RequestCancelledError('WebSocket replaced'));
-      this.rejectAllPending('WebSocket replaced', true);
+      this.connection.abort(new RequestCancelledError("WebSocket replaced"));
+      this.rejectAllPending("WebSocket replaced", true);
       this.connection = new AbortController();
       const { signal } = this.connection;
       const ws = new WebSocket(wsURL.toString(), [WS_PROTOCOL]);
-      ws.binaryType = 'arraybuffer';
+      ws.binaryType = "arraybuffer";
       let opened = false;
 
-      ws.addEventListener('message', event => {
+      ws.addEventListener("message", (event) => {
         if (!signal.aborted) this.handleMessage(event);
       });
-      ws.addEventListener('error', () => {
+      ws.addEventListener("error", () => {
         if (this._closed || ws !== this.ws) return;
-        this.connection.abort(new RequestCancelledError('WebSocket error'));
+        this.connection.abort(new RequestCancelledError("WebSocket error"));
 
         if (!opened) {
-          console.warn('[WS] Connection failed');
+          console.warn("[WS] Connection failed");
         }
 
         this.reportConnected(false, connectionFailedMessage(wsURL));
         // Some environments fire error without an immediately-following
         // close. Reject anyway — if close does fire later, the second
         // rejectAllPending sees an empty Map and is a no-op.
-        this.rejectAllPending('WebSocket error before response arrived');
+        this.rejectAllPending("WebSocket error before response arrived");
       });
-      ws.addEventListener('close', (ev: CloseEvent) => {
+      ws.addEventListener("close", (ev: CloseEvent) => {
         // Explicit close already tears down this client synchronously. Its
         // later event must not overwrite a replacement socket's live state.
         if (this._closed || ws !== this.ws) return;
-        this.connection.abort(new RequestCancelledError('WebSocket closed'));
+        this.connection.abort(new RequestCancelledError("WebSocket closed"));
 
         // Surface CloseEvent metadata so an unexplained reconnect loop
         // names its own cause: code 1000=normal, 1001=going away,
@@ -400,11 +400,11 @@ export class WSClient {
         const error = this._closed
           ? undefined
           : opened
-            ? `Connection to ${wsURL.origin} closed (code=${ev.code}${ev.reason ? `, reason=${ev.reason}` : ''}).`
+            ? `Connection to ${wsURL.origin} closed (code=${ev.code}${ev.reason ? `, reason=${ev.reason}` : ""}).`
             : connectionFailedMessage(wsURL);
 
         this.reportConnected(false, error);
-        this.rejectAllPending('WebSocket closed before response arrived');
+        this.rejectAllPending("WebSocket closed before response arrived");
         this.stopLiveness();
         this._serverCaps = [];
         this._challengeNonce = undefined;
@@ -434,7 +434,7 @@ export class WSClient {
         // Reproduced on a cold start where the webview is ready before the
         // embedded server binds: one `close code=1006 opened=false`, and no
         // recovery until a reload builds a fresh client.
-        ws.addEventListener('close', () => {
+        ws.addEventListener("close", () => {
           if (!opened) {
             reject(
               new AtomicError(
@@ -444,7 +444,7 @@ export class WSClient {
             );
           }
         });
-        ws.addEventListener('open', () => {
+        ws.addEventListener("open", () => {
           opened = true;
           this._retryDelay = 1000;
           resolve();
@@ -477,8 +477,8 @@ export class WSClient {
     // even trying. Matches the dagger-flake pattern where `setOffline(false)`
     // doesn't reconnect within the test timeout. No-op outside the browser.
     if (
-      typeof window !== 'undefined' &&
-      typeof window.addEventListener === 'function'
+      typeof window !== "undefined" &&
+      typeof window.addEventListener === "function"
     ) {
       this._onlineListener = () => {
         // Skip if the WS is already trying or up. Without the CONNECTING
@@ -499,7 +499,7 @@ export class WSClient {
         createSocket();
       };
 
-      window.addEventListener('online', this._onlineListener);
+      window.addEventListener("online", this._onlineListener);
     }
   }
 
@@ -510,7 +510,7 @@ export class WSClient {
   public close(): void {
     this._closed = true;
     this.connection.abort(
-      new RequestCancelledError('WebSocket closed by client'),
+      new RequestCancelledError("WebSocket closed by client"),
     );
 
     if (this._retryTimer) {
@@ -522,10 +522,10 @@ export class WSClient {
 
     if (
       this._onlineListener &&
-      typeof window !== 'undefined' &&
-      typeof window.removeEventListener === 'function'
+      typeof window !== "undefined" &&
+      typeof window.removeEventListener === "function"
     ) {
-      window.removeEventListener('online', this._onlineListener);
+      window.removeEventListener("online", this._onlineListener);
       this._onlineListener = undefined;
     }
 
@@ -538,7 +538,7 @@ export class WSClient {
     // until their own timeouts. The event handler still runs if it fires,
     // but both calls are idempotent (flag re-set to false, empty maps).
     this.reportConnected(false);
-    this.rejectAllPending('WebSocket closed by client', true);
+    this.rejectAllPending("WebSocket closed by client", true);
     this.stopLiveness();
 
     this.ws.close();
@@ -548,7 +548,7 @@ export class WSClient {
 
   public async authenticate(fetchAll?: boolean): Promise<void> {
     if (this._closed)
-      throw new RequestCancelledError('WebSocket closed by client');
+      throw new RequestCancelledError("WebSocket closed by client");
     const agent = this.store.getAgent();
 
     if (!agent?.subject) return;
@@ -596,7 +596,7 @@ export class WSClient {
         // on that socket or install a new AUTH_OK waiter after close drained it.
         if (this._closed || this.readyState !== WebSocket.OPEN)
           throw new RequestCancelledError(
-            'WebSocket closed during authentication',
+            "WebSocket closed during authentication",
           );
 
         const authenticated = this.waitForTag(Tag.AUTH_OK);
@@ -684,7 +684,7 @@ export class WSClient {
     void this.authenticate()
       .then(() => {
         if (this._closed || this.readyState !== WebSocket.OPEN) return;
-        this.ws.send('SUBSCRIBE_INDEX_STATUS ' + JSON.stringify({ drive }));
+        this.ws.send("SUBSCRIBE_INDEX_STATUS " + JSON.stringify({ drive }));
       })
       .catch(() => {
         // The handshake reports failures; disconnect is a normal cancellation.
@@ -696,7 +696,7 @@ export class WSClient {
       return;
     }
 
-    this.ws.send('UNSUBSCRIBE_INDEX_STATUS ' + JSON.stringify({ drive }));
+    this.ws.send("UNSUBSCRIBE_INDEX_STATUS " + JSON.stringify({ drive }));
   }
 
   /** Subscribe to the ephemeral presence channel of a drive (issue #1229).
@@ -715,7 +715,7 @@ export class WSClient {
         )
           return;
         this.ws.send(
-          'PRESENCE_SUBSCRIBE ' + JSON.stringify({ subject: drive }),
+          "PRESENCE_SUBSCRIBE " + JSON.stringify({ subject: drive }),
         );
       })
       .catch(() => {
@@ -728,7 +728,7 @@ export class WSClient {
       return;
     }
 
-    this.ws.send('PRESENCE_UNSUBSCRIBE ' + JSON.stringify({ subject: drive }));
+    this.ws.send("PRESENCE_UNSUBSCRIBE " + JSON.stringify({ subject: drive }));
   }
 
   /** Broadcast presence bytes for `drive` as an `EPHEMERAL` frame. */
@@ -749,7 +749,7 @@ export class WSClient {
       this.authenticatedWith !== this.store.getAgent()?.subject
     )
       return;
-    this.sendBinary(encodeEphemeral(kind, subject, '', update));
+    this.sendBinary(encodeEphemeral(kind, subject, "", update));
   }
 
   /** Sends a GET message for some resource over websockets. */
@@ -781,10 +781,10 @@ export class WSClient {
     }
 
     return new Promise((resolve, reject) => {
-      const close = perfSpan('ws.GET', { subject: subject.slice(0, 200) });
+      const close = perfSpan("ws.GET", { subject: subject.slice(0, 200) });
       const timer = setTimeout(() => {
         this.pendingGets.delete(requestId);
-        close({ err: 'timeout' });
+        close({ err: "timeout" });
         reject(
           new Error(`GET "${subject}" timed out after ${REQUEST_TIMEOUT}ms.`),
         );
@@ -793,7 +793,7 @@ export class WSClient {
       this.pendingGets.set(requestId, {
         subject,
         resolve: (r: Resource) => {
-          close('ok');
+          close("ok");
           resolve(r);
         },
         reject: (e: unknown) => {
@@ -824,7 +824,7 @@ export class WSClient {
 
     if (this.readyState !== WebSocket.OPEN) {
       throw new AtomicError(
-        'WebSocket not open, cannot post commit',
+        "WebSocket not open, cannot post commit",
         ErrorType.Server,
       );
     }
@@ -839,10 +839,10 @@ export class WSClient {
     }
 
     return new Promise((resolve, reject) => {
-      const close = perfSpan('ws.COMMIT');
+      const close = perfSpan("ws.COMMIT");
       const timer = setTimeout(() => {
         this.pendingCommits.delete(requestId);
-        close({ err: 'timeout' });
+        close({ err: "timeout" });
         reject(
           new AtomicError(
             `COMMIT timed out after ${REQUEST_TIMEOUT}ms.`,
@@ -854,7 +854,7 @@ export class WSClient {
       this.pendingCommits.set(requestId, {
         commit,
         resolve: (c: Commit) => {
-          close('ok');
+          close("ok");
           resolve(c);
         },
         reject: (e: Error) => {
@@ -885,11 +885,11 @@ export class WSClient {
   }
 
   public subscribeLoroSync(subject: string): void {
-    this.sendText('LORO_SYNC_SUBSCRIBE', JSON.stringify({ subject }));
+    this.sendText("LORO_SYNC_SUBSCRIBE", JSON.stringify({ subject }));
   }
 
   public unsubscribeLoroSync(subject: string): void {
-    this.sendText('LORO_SYNC_UNSUBSCRIBE', JSON.stringify({ subject }));
+    this.sendText("LORO_SYNC_UNSUBSCRIBE", JSON.stringify({ subject }));
   }
 
   /** An edit in progress on `subject` (raw Loro update bytes). */
@@ -905,7 +905,7 @@ export class WSClient {
   /** Send a binary frame, logging it in debug mode. */
   private sendBinary(frame: Uint8Array) {
     if (this.debug) {
-      logFrame(frame, '→', '#9bf');
+      logFrame(frame, "→", "#9bf");
     }
 
     if (frame.length > 0)
@@ -918,7 +918,7 @@ export class WSClient {
 
   private get serverOrigin(): string {
     const url = new URL(this.ws.url);
-    url.protocol = url.protocol === 'ws:' ? 'http:' : 'https:';
+    url.protocol = url.protocol === "ws:" ? "http:" : "https:";
 
     return url.origin;
   }
@@ -958,7 +958,7 @@ export class WSClient {
 
     if (ev.data instanceof ArrayBuffer) {
       this.handleBinary(new Uint8Array(ev.data));
-    } else if (typeof ev.data === 'string') {
+    } else if (typeof ev.data === "string") {
       // Legacy text messages (Loro sync, query updates) — handle minimally
       this.handleText(ev.data);
     }
@@ -968,7 +968,7 @@ export class WSClient {
     if (data.length === 0) return;
 
     if (this.debug) {
-      logFrame(data, '←', '#6b9');
+      logFrame(data, "←", "#6b9");
     }
 
     const tag = data[0];
@@ -1008,9 +1008,9 @@ export class WSClient {
             // Legacy GET errors carry UNKNOWN plus the typed Rust error prefix.
             // Preserve the read result so callers can distinguish missing data
             // from a server failure (and avoid subscribing to an absent drive).
-            const type = msg.message.startsWith('Resource not found.')
+            const type = msg.message.startsWith("Resource not found.")
               ? ErrorType.NotFound
-              : msg.message.startsWith('Unauthorized.')
+              : msg.message.startsWith("Unauthorized.")
                 ? ErrorType.Unauthorized
                 : ErrorType.Server;
             pendingGet.reject(new AtomicError(msg.message, type, msg.code));
@@ -1025,7 +1025,7 @@ export class WSClient {
           // server has nothing left to push), so correct that: the drive
           // is NOT in sync and the local edits stay where they are, to be
           // offered again on the next handshake.
-          console.error('[WS] SYNC_PUSH rejected:', msg.message);
+          console.error("[WS] SYNC_PUSH rejected:", msg.message);
           this.store.failDriveSync(
             this.driveFromRejection(msg.message),
             msg.message,
@@ -1040,7 +1040,7 @@ export class WSClient {
           // neither `rejectAllPending` nor a toast is right — an
           // anonymous viewer of a shared page would see one on every
           // navigation. Logged so it is diagnosable.
-          console.warn('[WS] refused:', msg.message);
+          console.warn("[WS] refused:", msg.message);
         } else {
           this.rejectAllPending(msg.message);
           this.store.notifyError(msg.message);
@@ -1060,7 +1060,7 @@ export class WSClient {
           const raw = decodeCommit(payload);
           const pending = raw && this.takePendingCommit(raw.requestId);
           pending?.reject(
-            new AtomicError('Malformed COMMIT_OK frame', ErrorType.Server),
+            new AtomicError("Malformed COMMIT_OK frame", ErrorType.Server),
           );
           break;
         }
@@ -1138,7 +1138,7 @@ export class WSClient {
             subject: msg.subject,
             loroBytes: msg.loroBytes,
             commitId: msg.commitId,
-            source: 'ws-pending-get',
+            source: "ws-pending-get",
             // A GET response with the SNAPSHOT flag is authoritative full
             // state — replace any partial doc the client seeded from an
             // earlier SUB push, rather than merging (which can keep only the
@@ -1164,7 +1164,7 @@ export class WSClient {
           subject: msg.subject,
           loroBytes: msg.loroBytes,
           commitId: msg.commitId,
-          source: msg.flags & Flags.PUSH ? 'ws-sub-push' : 'ws-pending-get',
+          source: msg.flags & Flags.PUSH ? "ws-sub-push" : "ws-pending-get",
         });
 
         const resource = this.store.resources.get(msg.subject);
@@ -1199,8 +1199,8 @@ export class WSClient {
         if (msg) {
           // handleSyncDiff is async but unawaited here — catch any
           // unhandled rejection so it can't propagate to the WS pump.
-          this.handleSyncDiff(msg).catch(e =>
-            console.warn('[WS] handleSyncDiff failed:', e),
+          this.handleSyncDiff(msg).catch((e) =>
+            console.warn("[WS] handleSyncDiff failed:", e),
           );
         }
 
@@ -1219,10 +1219,20 @@ export class WSClient {
             this.store.applyIncoming({
               subject,
               loroBytes,
-              source: 'ws-sync-push',
+              source: "ws-sync-push",
             });
             const resource = this.store.resources.get(subject);
             if (resource) this.checkForMissingBlobs(resource);
+          }
+
+          // The signed envelopes of what was just applied, so History can
+          // attribute it locally. Verified in WASM before being kept; a
+          // client without a database simply asks the server later.
+          if (msg.envelopes.length > 0) {
+            this.store
+              .getClientDb()
+              ?.importEnvelopes(msg.envelopes)
+              .catch((e) => console.warn("[WS] envelope import failed:", e));
           }
 
           // Only mark the drive sync as finished on the final chunk —
@@ -1248,7 +1258,7 @@ export class WSClient {
 
           if (clientDb) {
             const current = this.connectionGuard();
-            clientDb.getBlob(hash).then(bytes => {
+            clientDb.getBlob(hash).then((bytes) => {
               if (current() && bytes) {
                 this.sendBinary(encodeBlobResponse(hash, bytes));
               }
@@ -1293,27 +1303,27 @@ export class WSClient {
     // Prefix lengths include the trailing space delimiter. Match the
     // exact length sent by `sendText(prefix, payload)` which writes
     // `${prefix} ${payload}`.
-    if (text.startsWith('INDEX_STATUS ')) {
-      const json = text.slice('INDEX_STATUS '.length);
+    if (text.startsWith("INDEX_STATUS ")) {
+      const json = text.slice("INDEX_STATUS ".length);
 
       try {
         const parsed = JSON.parse(json) as { drive: string; indexing: boolean };
         this.store.__notifyIndexingStatus(parsed.drive, parsed.indexing);
       } catch {
-        console.warn('Invalid INDEX_STATUS message:', json);
+        console.warn("Invalid INDEX_STATUS message:", json);
       }
-    } else if (text.startsWith('RBSR_FP ')) {
+    } else if (text.startsWith("RBSR_FP ")) {
       try {
-        const { fps } = JSON.parse(text.slice('RBSR_FP '.length)) as {
+        const { fps } = JSON.parse(text.slice("RBSR_FP ".length)) as {
           fps: string[];
         };
         this._rbsrFpQueue.shift()?.(fps);
       } catch (e) {
-        console.warn('Invalid RBSR_FP message:', e);
+        console.warn("Invalid RBSR_FP message:", e);
       }
-    } else if (text.startsWith('RBSR_ITEMS ')) {
+    } else if (text.startsWith("RBSR_ITEMS ")) {
       try {
-        const { items } = JSON.parse(text.slice('RBSR_ITEMS '.length)) as {
+        const { items } = JSON.parse(text.slice("RBSR_ITEMS ".length)) as {
           items: Array<[string, Array<[string, number]>]>;
         };
         const parsed: Item[] = items.map(([subject, pairs]) => ({
@@ -1322,7 +1332,7 @@ export class WSClient {
         }));
         this._rbsrItemsQueue.shift()?.(parsed);
       } catch (e) {
-        console.warn('Invalid RBSR_ITEMS message:', e);
+        console.warn("Invalid RBSR_ITEMS message:", e);
       }
     }
   }
@@ -1390,7 +1400,7 @@ export class WSClient {
   /** Agent profiles are public resources outside the reader's active drive. */
   public subscribeAgentProfile(subject: string): void {
     if (
-      !subject.startsWith('did:ad:agent:') ||
+      !subject.startsWith("did:ad:agent:") ||
       this.readyState !== WebSocket.OPEN
     )
       return;
@@ -1412,7 +1422,7 @@ export class WSClient {
 
   public unsubscribeAgentProfile(subject: string): void {
     if (
-      !subject.startsWith('did:ad:agent:') ||
+      !subject.startsWith("did:ad:agent:") ||
       this.readyState !== WebSocket.OPEN
     )
       return;
@@ -1467,17 +1477,17 @@ export class WSClient {
     this._probeSent = false;
     this._livenessTimer = setInterval(() => {
       if (this.readyState !== WebSocket.OPEN) return;
-      if (!this._serverCaps.includes('keepalive')) return;
+      if (!this._serverCaps.includes("keepalive")) return;
 
       const action = livenessAction(
         Date.now() - this._lastFrameAt,
         this._probeSent,
       );
 
-      if (action === 'probe') {
+      if (action === "probe") {
         this._probeSent = true;
         this.sendBinary(encodeKeepalive());
-      } else if (action === 'close') {
+      } else if (action === "close") {
         console.warn(
           `[WS] no frame from the server for ${LIVENESS_DEADLINE_MS}ms (probe unanswered); closing so the reconnect loop takes over`,
         );
@@ -1497,7 +1507,7 @@ export class WSClient {
   }
 
   private handleOpen() {
-    perfMark('ws.open');
+    perfMark("ws.open");
     // Introduce ourselves: the capabilities this client speaks (a slim
     // COMMIT_OK, for one). A server that predates client HELLOs drops the
     // frame unread.
@@ -1505,7 +1515,7 @@ export class WSClient {
     this.startLiveness();
 
     const doSync = async () => {
-      const dirtyClose = perfSpan('ws.syncDirtyResources');
+      const dirtyClose = perfSpan("ws.syncDirtyResources");
       // Drain the outbox; failures are recorded per-entry inside
       // the outbox itself, so a thrown drain doesn't prevent VV
       // sync from running.
@@ -1542,10 +1552,10 @@ export class WSClient {
     };
 
     if (this.store.getAgent()?.subject) {
-      const authClose = perfSpan('ws.authenticate');
+      const authClose = perfSpan("ws.authenticate");
       this.authenticate()
         .then(() => {
-          authClose('ok');
+          authClose("ok");
           if (this._closed) return;
           // Only flip `_serverConnected` AFTER AUTH_OK arrives. See the
           // comment in the `open` handler above for the race this closes.
@@ -1560,10 +1570,10 @@ export class WSClient {
           this.reSubscribeAll();
         })
         .then(doSync)
-        .catch(e => {
+        .catch((e) => {
           authClose({ err: String(e) });
           if (this._closed || e instanceof RequestCancelledError) return;
-          console.error('Auth error:', e);
+          console.error("Auth error:", e);
           // Auth failed (timeout, server rejection, socket closed mid-
           // handshake). The socket itself may still be open — surface
           // the connected state anyway so the UI can present a real
@@ -1586,7 +1596,7 @@ export class WSClient {
     if (this.readyState !== WebSocket.OPEN) return;
 
     const current = this.connectionGuard();
-    const close = perfSpan('ws.computeDriveSyncState');
+    const close = perfSpan("ws.computeDriveSyncState");
 
     try {
       // Hash-first: compute our state (needed for the hash) but send only the
@@ -1606,10 +1616,10 @@ export class WSClient {
           JSON.stringify({ peers: [], resources: {}, probe: true }),
         ),
       );
-      perfMark('ws.SYNC.probe.sent');
+      perfMark("ws.SYNC.probe.sent");
     } catch (e) {
       close({ err: String(e) });
-      if (current()) console.warn('[WS] VV sync failed:', e);
+      if (current()) console.warn("[WS] VV sync failed:", e);
     }
   }
 
@@ -1640,7 +1650,7 @@ export class WSClient {
     if (!syncState || !current()) return;
 
     const requireCurrent = () => {
-      if (!current()) throw new Error('Sync identity or drive changed');
+      if (!current()) throw new Error("Sync identity or drive changed");
     };
 
     try {
@@ -1666,7 +1676,7 @@ export class WSClient {
         ...diff.onlyLocal,
         ...diff.onlyRemote,
         ...diff.differ,
-      ].filter(subject => !this.store.outbox.hasPending(subject));
+      ].filter((subject) => !this.store.outbox.hasPending(subject));
 
       // Version vectors for the differing subjects the client actually holds
       // (only-remote subjects it doesn't have — the server pushes those).
@@ -1695,7 +1705,7 @@ export class WSClient {
       // Safety net: any RBSR failure (query timeout, socket close, parse) falls
       // back to the full reconcile, which always converges. Never leave the
       // drive un-reconciled because the optimization stumbled.
-      console.warn('[WS] RBSR reconcile failed, sending full VV:', e);
+      console.warn("[WS] RBSR reconcile failed, sending full VV:", e);
 
       if (this.readyState === WebSocket.OPEN) {
         this.sendBinary(
@@ -1719,7 +1729,7 @@ export class WSClient {
   ): Promise<string[]> {
     return new Promise<string[]>((resolve, reject) => {
       if (this.readyState !== WebSocket.OPEN) {
-        reject(new Error('WebSocket is not open'));
+        reject(new Error("WebSocket is not open"));
 
         return;
       }
@@ -1728,7 +1738,7 @@ export class WSClient {
         const i = this._rbsrFpQueue.indexOf(settle);
 
         if (i >= 0) this._rbsrFpQueue.splice(i, 1);
-        reject(new Error('RBSR_FP timed out'));
+        reject(new Error("RBSR_FP timed out"));
       }, 10000);
 
       const settle = (fps: string[]) => {
@@ -1737,7 +1747,7 @@ export class WSClient {
       };
 
       this._rbsrFpQueue.push(settle);
-      this.ws.send('RBSR_FP ' + JSON.stringify({ drive, ranges }));
+      this.ws.send("RBSR_FP " + JSON.stringify({ drive, ranges }));
     });
   }
 
@@ -1745,7 +1755,7 @@ export class WSClient {
   public rbsrItems(drive: string, lo: string, hi?: string): Promise<Item[]> {
     return new Promise<Item[]>((resolve, reject) => {
       if (this.readyState !== WebSocket.OPEN) {
-        reject(new Error('WebSocket is not open'));
+        reject(new Error("WebSocket is not open"));
 
         return;
       }
@@ -1754,7 +1764,7 @@ export class WSClient {
         const i = this._rbsrItemsQueue.indexOf(settle);
 
         if (i >= 0) this._rbsrItemsQueue.splice(i, 1);
-        reject(new Error('RBSR_ITEMS timed out'));
+        reject(new Error("RBSR_ITEMS timed out"));
       }, 10000);
 
       const settle = (items: Item[]) => {
@@ -1764,7 +1774,7 @@ export class WSClient {
 
       this._rbsrItemsQueue.push(settle);
       this.ws.send(
-        'RBSR_ITEMS ' + JSON.stringify({ drive, lo, hi: hi ?? null }),
+        "RBSR_ITEMS " + JSON.stringify({ drive, lo, hi: hi ?? null }),
       );
     });
   }
@@ -1806,7 +1816,7 @@ export class WSClient {
           await clientDb.applyCommit(envelope);
         } catch (e) {
           console.warn(
-            '[WS] SYNC_DIFF remove envelope not applied:',
+            "[WS] SYNC_DIFF remove envelope not applied:",
             subject,
             e,
           );
@@ -1858,16 +1868,27 @@ export class WSClient {
     if (!current()) return;
 
     if (entries.length > 0) {
+      // Our retained envelopes ride with the snapshots, so the server can
+      // attribute history it never saw applied live.
+      const envelopes = clientDb
+        ? await clientDb.envelopesFor(entries.map((e) => e.subject))
+        : {};
+      if (!current()) return;
+
       if (this.readyState !== WebSocket.OPEN) {
         return;
       }
 
       try {
-        for (const frame of encodeSyncPushChunks(diff.drive, entries)) {
+        for (const frame of encodeSyncPushChunks(
+          diff.drive,
+          entries,
+          envelopes,
+        )) {
           this.sendBinary(frame);
         }
       } catch (e) {
-        console.warn('[WS] SYNC_PUSH send failed:', e);
+        console.warn("[WS] SYNC_PUSH send failed:", e);
 
         return;
       }
@@ -1904,7 +1925,7 @@ export class WSClient {
   private driveFromRejection(message: string): string {
     const match = /rejected for drive (\S+?):/.exec(message);
 
-    return match?.[1] ?? this.store.getDrive() ?? '';
+    return match?.[1] ?? this.store.getDrive() ?? "";
   }
 
   private async checkForMissingBlobs(resource: Resource) {
@@ -1913,7 +1934,7 @@ export class WSClient {
     if (!blobDid) return;
 
     // Extract the hash from did:ad:blob:{hash}
-    const hashStr = blobDid.startsWith('did:ad:blob:')
+    const hashStr = blobDid.startsWith("did:ad:blob:")
       ? blobDid.substring(12)
       : blobDid;
 
@@ -2010,14 +2031,14 @@ function waitForConnection<T>(
   return new Promise((resolve, reject) => {
     const abort = () => reject(signal.reason);
     if (signal.aborted) abort();
-    else signal.addEventListener('abort', abort, { once: true });
+    else signal.addEventListener("abort", abort, { once: true });
     work.then(
-      value => {
-        signal.removeEventListener('abort', abort);
+      (value) => {
+        signal.removeEventListener("abort", abort);
         resolve(value);
       },
-      error => {
-        signal.removeEventListener('abort', abort);
+      (error) => {
+        signal.removeEventListener("abort", abort);
         reject(error);
       },
     );
