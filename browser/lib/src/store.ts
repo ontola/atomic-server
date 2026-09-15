@@ -3159,9 +3159,14 @@ export class Store {
     // Try the server if connected. Skip if we have local data and are offline
     // to avoid overwriting good data with error responses.
     try {
-      // Only DID subjects depend on the socket; an https subject can still be
-      // fetched over HTTP while the WebSocket is down.
-      if (!this._serverConnected && subject.startsWith('did:')) {
+      // Disconnected. Wait for the socket only where one is coming: a DID
+      // subject needs it, and a browser opening its socket at boot should not
+      // fall back to an HTTP 404 in the meantime. A store that never opened a
+      // socket (a Node client, a unit test) fetches over HTTP right away.
+      if (
+        !this._serverConnected &&
+        (subject.startsWith('did:') || this.getWebSocketForSubject(subject))
+      ) {
         // Offline — use whatever local data we found. If there IS no local
         // data, surface the offline state to the caller rather than leaving
         // the resource stuck in `loading`.
