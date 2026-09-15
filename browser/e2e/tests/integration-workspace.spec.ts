@@ -149,7 +149,7 @@ test('workspace owns its views and links to separate connection settings', async
     });
   }
 
-  await page.getByRole('button', { name: 'Edit with AI', exact: true }).click();
+  await page.getByRole('button', { name: 'AI edit', exact: true }).click();
   await expect(
     page.getByText('Help me edit this integration.', { exact: false }).first(),
   ).toBeVisible();
