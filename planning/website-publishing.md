@@ -134,3 +134,13 @@ Creating columns remains a separate existing tool call. Subject refs persist in
 this tab's sessionStorage across reloads; unknown older refs still require
 rediscovery. This addresses lost in-memory mappings without claiming a reproduced
 cause for every reported same-turn reference failure.
+
+### Inline source editing
+
+Edit on page supports selected string, integer and float table fields, with
+typed numeric validation and concurrent-edit checks. Document sections mount
+the existing collaborative document editor in the authorized preview, preserving
+structured rich text and its normal autosave path. Source permissions and private
+authoring checks apply before enabling either editor. The iframe has no scripts
+or credentials; React and writes are owned by the Atomic host. Changes update
+the draft; publication still requires Update site.

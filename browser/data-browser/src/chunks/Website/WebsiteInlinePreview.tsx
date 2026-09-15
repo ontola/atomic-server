@@ -1,9 +1,16 @@
 import { Button } from '@components/Button';
 import { useWebsitePreviewHtml } from './useWebsitePreviewHtml';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
+import { StyleSheetManager } from 'styled-components';
 import { createPortal } from 'react-dom';
 import { Editable, EditModeProvider } from '@tomic/edit-mode/react';
-import { core, Datatype, useStore } from '@tomic/react';
+import {
+  core,
+  dataBrowser,
+  Datatype,
+  useStore,
+  type Resource,
+} from '@tomic/react';
 import type { WebsiteArtifact } from './renderWebsite';
 import {
   commitWebsiteField,
@@ -11,6 +18,12 @@ import {
   type WebsiteField,
 } from './websiteInlineEditing';
 import { assertPrivateWebsiteParent } from './websiteModel';
+
+const CollaborativeEditor = lazy(() => import('../RTE/CollaborativeEditor'));
+interface DocumentTarget {
+  element: Element;
+  resource: Resource;
+}
 
 interface Target {
   element: Element;
@@ -27,6 +40,7 @@ export function WebsiteInlinePreview({
 }) {
   const store = useStore();
   const [targets, setTargets] = useState<Target[]>([]);
+  const [documents, setDocuments] = useState<DocumentTarget[]>([]);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -66,7 +80,9 @@ export function WebsiteInlinePreview({
       if (
         !agent ||
         !(await resource.canWrite(agent.subject)) ||
-        property.get(core.properties.datatype) !== Datatype.STRING
+        ![Datatype.STRING, Datatype.INTEGER, Datatype.FLOAT].includes(
+          property.get(core.properties.datatype) as Datatype,
+        )
       )
         continue;
 
@@ -78,15 +94,50 @@ export function WebsiteInlinePreview({
       }
 
       const original = resource.get(binding.property) ?? '';
-      if (typeof original !== 'string' || element.textContent !== original)
+      if (
+        !['string', 'number'].includes(typeof original) ||
+        element.textContent !== String(original)
+      )
         continue;
-      next.push({ element, field: { ...binding, original } });
+      next.push({
+        element,
+        field: { ...binding, original: original as string | number },
+      });
+    }
+
+    const documentTargets: DocumentTarget[] = [];
+
+    for (const [index, subject] of page.documents.entries()) {
+      const element =
+        doc.querySelector(`[data-website-document="${index}"]`) ??
+        doc.querySelectorAll('article')[index];
+      if (!element) continue;
+      const resource = await store.getResource(subject);
+      const agent = store.getAgent();
+      if (
+        !agent ||
+        !(await resource.canWrite(agent.subject)) ||
+        !resource.getLoroDoc()
+      )
+        continue;
+
+      try {
+        await assertPrivateWebsiteParent(store, subject);
+      } catch {
+        continue;
+      }
+
+      documentTargets.push({ element, resource });
     }
 
     if (!frame.isConnected || frame.contentDocument !== doc) return;
     next.forEach(target => {
       target.element.textContent = '';
     });
+    documentTargets.forEach(target => {
+      target.element.textContent = '';
+    });
+    setDocuments(documentTargets);
     setTargets(next);
   };
 
@@ -97,11 +148,11 @@ export function WebsiteInlinePreview({
     setError('');
     setSaved(false);
     commitWebsiteField(store, artifact.project, binding.field, value)
-      .then(() => {
+      .then(parsed => {
         setTargets(current =>
           current.map(item =>
             item === binding
-              ? { ...item, field: { ...item.field, original: value } }
+              ? { ...item, field: { ...item.field, original: parsed } }
               : item,
           ),
         );
@@ -130,8 +181,8 @@ export function WebsiteInlinePreview({
   return (
     <>
       <p>
-        Click an outlined text field to edit its Atomic record. Leave the field
-        to save. Document formatting stays in the document editor.
+        Click an outlined field to edit its Atomic record. Leave the field to
+        save. Documents save automatically as you type.
       </p>
       {error && <p role='alert'>{error}</p>}
       <p role='status'>
@@ -139,7 +190,7 @@ export function WebsiteInlinePreview({
           ? 'Saving content…'
           : saved
             ? 'Content saved. The existing release is unchanged.'
-            : `${targets.length} editable text fields`}
+            : `${targets.length} editable fields and ${documents.length} documents`}
       </p>
       <iframe
         title='Website preview'
@@ -154,11 +205,30 @@ export function WebsiteInlinePreview({
           });
         }}
       />
+      {documents.map(({ element, resource }) =>
+        createPortal(
+          <StyleSheetManager target={element.ownerDocument.head}>
+            <Suspense fallback={<p>Loading document editor…</p>}>
+              <CollaborativeEditor
+                resource={resource}
+                doc={resource.getLoroDoc()!}
+                property={dataBrowser.properties.documentContent}
+              />
+            </Suspense>
+          </StyleSheetManager>,
+          element,
+          resource.subject,
+        ),
+      )}
       <EditModeProvider active={!saving} commit={commit}>
         {targets.map((target, index) =>
           createPortal(
-            <Editable target={String(index)} multiline allowEmpty>
-              {target.field.original}
+            <Editable
+              target={String(index)}
+              multiline={typeof target.field.original === 'string'}
+              allowEmpty
+            >
+              {String(target.field.original)}
             </Editable>,
             target.element,
             String(index),

@@ -10804,9 +10804,8 @@ msgstr ""
 msgid "Edit on page"
 msgstr ""
 
-#: src/chunks/Website/WebsiteInlinePreview.tsx
-msgid "Click an outlined text field to edit its Atomic record. Leave the field to save. Document formatting stays in the document editor."
-msgstr ""
+#~ msgid "Click an outlined text field to edit its Atomic record. Leave the field to save. Document formatting stays in the document editor."
+#~ msgstr ""
 
 #: src/chunks/Website/WebsiteInlinePreview.tsx
 msgid "Saving content…"
@@ -10816,10 +10815,8 @@ msgstr ""
 msgid "Content saved. The existing release is unchanged."
 msgstr ""
 
-#. 0: targets.length
-#: src/chunks/Website/WebsiteInlinePreview.tsx
-msgid "{0} editable text fields"
-msgstr ""
+#~ msgid "{0} editable text fields"
+#~ msgstr ""
 
 #: src/views/File/ConvertToDocumentButton.tsx
 msgid "Converted to document"
@@ -11146,4 +11143,13 @@ msgstr ""
 
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Preview, restore and inspect publication history"
+msgstr ""
+
+#: src/chunks/Website/WebsiteInlinePreview.tsx
+msgid "Click an outlined field to edit its Atomic record. Leave the field to save. Documents save automatically as you type."
+msgstr ""
+
+#. 0: targets.length; 1: documents.length
+#: src/chunks/Website/WebsiteInlinePreview.tsx
+msgid "{0} editable fields and {1} documents"
 msgstr ""
