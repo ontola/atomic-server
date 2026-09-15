@@ -20,6 +20,11 @@ export const Tag = {
   DESTROY: 0x12,
   COMMIT: 0x13,
   COMMIT_OK: 0x14,
+  /** One request for a list of subjects; answered by GET_MANY_RESULT.
+   *  Only sent to a server whose AUTH_OK lists `get-many`. */
+  GET_MANY: 0x15,
+  /** One complete UPDATE or ERROR frame per requested subject, in order. */
+  GET_MANY_RESULT: 0x16,
   SUB: 0x20,
   UNSUB: 0x21,
   SYNC: 0x30,
@@ -319,6 +324,89 @@ export function encodeGet(requestId: number, subject: string): Uint8Array {
   buf.set(subjectBytes, 3);
 
   return buf;
+}
+
+/** The AUTH_OK capability that says the server answers GET_MANY. */
+export const CAP_GET_MANY = 'get-many';
+
+/**
+ * GET_MANY: `[0x15] [request_id: u16] [count: u16] ([subject_len: u16]
+ * [subject_utf8])*`. Mirrors `protocol::encode_get_many`.
+ */
+export function encodeGetMany(
+  requestId: number,
+  subjects: readonly string[],
+): Uint8Array {
+  const encoded = subjects.map(s => encoder.encode(s));
+  const buf = new Uint8Array(
+    5 + encoded.reduce((sum, bytes) => sum + 2 + bytes.length, 0),
+  );
+  buf[0] = Tag.GET_MANY;
+  let off = writeU16(buf, 1, requestId);
+  off = writeU16(buf, off, subjects.length);
+
+  for (const bytes of encoded) {
+    off = writeU16(buf, off, bytes.length);
+    buf.set(bytes, off);
+    off += bytes.length;
+  }
+
+  return buf;
+}
+
+export interface DecodedGetMany {
+  requestId: number;
+  subjects: string[];
+}
+
+export interface DecodedGetManyResult {
+  requestId: number;
+  /** Complete UPDATE / ERROR frames (tag byte included), request order. */
+  frames: Uint8Array[];
+}
+
+export function decodeGetMany(data: Uint8Array): DecodedGetMany | undefined {
+  if (data.length < 4) return undefined;
+  const [requestId, off1] = readU16(data, 0);
+  const [count, off2] = readU16(data, off1);
+  const subjects: string[] = [];
+  let off = off2;
+
+  for (let i = 0; i < count; i++) {
+    if (data.length < off + 2) return undefined;
+    const [len] = readU16(data, off);
+    if (data.length < off + 2 + len) return undefined;
+    let subject: string;
+    [subject, off] = readStr16(data, off);
+    subjects.push(subject);
+  }
+
+  return { requestId, subjects };
+}
+
+/**
+ * GET_MANY_RESULT: `[0x16] [request_id: u16] [count: u16] ([frame_len: u32]
+ * [frame])*`. Each inner frame is decoded with `decodeUpdate` /
+ * `decodeError` after its own tag byte.
+ */
+export function decodeGetManyResult(
+  data: Uint8Array,
+): DecodedGetManyResult | undefined {
+  if (data.length < 4) return undefined;
+  const [requestId, off1] = readU16(data, 0);
+  const [count, off2] = readU16(data, off1);
+  const frames: Uint8Array[] = [];
+  let off = off2;
+
+  for (let i = 0; i < count; i++) {
+    if (data.length < off + 4) return undefined;
+    const [len, dataOff] = readU32(data, off);
+    if (data.length < dataOff + len) return undefined;
+    frames.push(data.subarray(dataOff, dataOff + len));
+    off = dataOff + len;
+  }
+
+  return { requestId, frames };
 }
 
 export function encodeCommit(
@@ -825,6 +913,8 @@ const TAG_NAMES: Record<number, string> = {
   [Tag.DESTROY]: 'DESTROY',
   [Tag.COMMIT]: 'COMMIT',
   [Tag.COMMIT_OK]: 'COMMIT_OK',
+  [Tag.GET_MANY]: 'GET_MANY',
+  [Tag.GET_MANY_RESULT]: 'GET_MANY_RESULT',
   [Tag.SUB]: 'SUB',
   [Tag.UNSUB]: 'UNSUB',
   [Tag.SYNC]: 'SYNC',
@@ -912,6 +1002,34 @@ export function debugFrameInfo(
           ? `${direction} GET #${msg.requestId} ${msg.subject}`
           : `${direction} GET (${formatBytes(payload.length)})`,
         details: () => msg ?? { rawBytes: payload.length },
+      };
+    }
+
+    case Tag.GET_MANY: {
+      const msg = decodeGetMany(payload);
+
+      return {
+        headline: msg
+          ? `${direction} GET_MANY #${msg.requestId} (${msg.subjects.length} subjects)`
+          : `${direction} GET_MANY (${formatBytes(payload.length)})`,
+        details: () => msg ?? { rawBytes: payload.length },
+      };
+    }
+
+    case Tag.GET_MANY_RESULT: {
+      const msg = decodeGetManyResult(payload);
+
+      return {
+        headline: msg
+          ? `${direction} GET_MANY_RESULT #${msg.requestId} (${msg.frames.length} entries, ${formatBytes(payload.length)})`
+          : `${direction} GET_MANY_RESULT (${formatBytes(payload.length)})`,
+        details: () =>
+          msg
+            ? {
+                requestId: msg.requestId,
+                entries: msg.frames.map(f => TAG_NAMES[f[0]] ?? f[0]),
+              }
+            : { rawBytes: payload.length },
       };
     }
 
