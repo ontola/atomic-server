@@ -18,6 +18,13 @@ describe('parseChatTitle', () => {
     });
   });
 
+  it('drops an emoji the model appended to the title', () => {
+    expect(parseChatTitle('\u{1F3A8} Website design \u{1F680}')).toEqual({
+      emoji: '\u{1F3A8}',
+      title: 'Website design',
+    });
+  });
+
   it('accepts a bare title from models that ignore the emoji instruction', () => {
     expect(parseChatTitle('Plain title')).toEqual({ title: 'Plain title' });
   });
