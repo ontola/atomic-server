@@ -11,7 +11,9 @@ import { Button } from '@components/Button';
 import { Row, Column } from '@components/Row';
 import { ResourceRow } from '@views/ResourceRow';
 import Field from '@components/forms/Field';
-import { FaPlus } from 'react-icons/fa6';
+import { FaPencil, FaPlus } from 'react-icons/fa6';
+import { AIIcon } from '@components/AI/AIIcon';
+import { CalculatedPageHeight } from '../../globalCssVars';
 import { ResourceSelector } from '@components/forms/ResourceSelector';
 import { useAISidebar, newContextItem } from '@components/AI/AISidebarContext';
 import type { AIAtomicResourceMessageContext } from '@chunks/AI/types';
@@ -144,10 +146,29 @@ export function WebsitePage({ resource }: { resource: Resource }) {
     };
   }, [store, drive, resource, refresh]);
   const subjects = config ? JSON.stringify(selectedSubjects(config)) : '[]';
+  // Inline editing shows a frozen snapshot, and every keystroke commits. Rebuilding
+  // the whole draft on each one starves the editor, so defer until editing ends.
+  const inlineEditing = !!inlineArtifact;
+  const inlineEditingRef = useRef(inlineEditing);
+  const pendingRefresh = useRef(false);
+  useEffect(() => {
+    inlineEditingRef.current = inlineEditing;
+
+    if (!inlineEditing && pendingRefresh.current) {
+      pendingRefresh.current = false;
+      setRefresh(n => n + 1);
+    }
+  }, [inlineEditing]);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
     const unsubs = (JSON.parse(subjects) as string[]).map(subject =>
       store.subscribe(subject, () => {
+        if (inlineEditingRef.current) {
+          pendingRefresh.current = true;
+
+          return;
+        }
+
         clearTimeout(timer);
         timer = setTimeout(() => setRefresh(n => n + 1), 150);
       }),
@@ -254,6 +275,22 @@ export function WebsitePage({ resource }: { resource: Resource }) {
           <p>Changes stay private until you publish.</p>
         </Title>
         <Row>
+          {!review && !showRelease && (
+            <>
+              <Button subtle disabled={!canWrite} onClick={designWithAI}>
+                <AIIcon /> AI edit
+              </Button>
+              <Button
+                subtle
+                disabled={!draft || busy || refreshing || !!problem}
+                onClick={() =>
+                  setInlineArtifact(inlineArtifact ? undefined : draft)
+                }
+              >
+                <FaPencil /> {inlineArtifact ? 'Done editing' : 'Page edit'}
+              </Button>
+            </>
+          )}
           <WebsiteHosting
             key={resource.subject}
             project={resource.subject}
@@ -333,7 +370,6 @@ export function WebsitePage({ resource }: { resource: Resource }) {
       )}
       <Layout>
         <Controls role='region' aria-label='Website content'>
-          <h2>Content</h2>
           {config && (
             <Field label='Page' fieldId='website-page'>
               <select
@@ -415,33 +451,17 @@ export function WebsitePage({ resource }: { resource: Resource }) {
           )}
         </Controls>
         <Preview>
-          <PreviewToolbar>
-            <p>
-              {review
-                ? 'Release review'
-                : showRelease
-                  ? 'Frozen release'
-                  : refreshing && draft
-                    ? 'Updating preview…'
-                    : 'Live draft preview'}
-            </p>
-            {!review && !showRelease && (
-              <Row>
-                <Button subtle disabled={!canWrite} onClick={designWithAI}>
-                  Edit with AI
-                </Button>
-                <Button
-                  subtle
-                  disabled={!draft || busy || refreshing || !!problem}
-                  onClick={() =>
-                    setInlineArtifact(inlineArtifact ? undefined : draft)
-                  }
-                >
-                  {inlineArtifact ? 'Done editing' : 'Edit on page'}
-                </Button>
-              </Row>
-            )}
-          </PreviewToolbar>
+          {(review || showRelease || (refreshing && draft)) && (
+            <PreviewToolbar>
+              <p>
+                {review
+                  ? 'Release review'
+                  : showRelease
+                    ? 'Frozen release'
+                    : 'Updating preview…'}
+              </p>
+            </PreviewToolbar>
+          )}
           {!review &&
           !showRelease &&
           inlineArtifact?.project === resource.subject ? (
@@ -473,7 +493,12 @@ export function WebsitePage({ resource }: { resource: Resource }) {
 }
 
 const Workspace = styled.div`
-  padding: ${p => p.theme.size(3)};
+  /* Fill the page so the preview can take every spare pixel. */
+  min-height: ${CalculatedPageHeight.var()};
+  display: flex;
+  flex-direction: column;
+  padding: ${p => p.theme.size(3)} ${p => p.theme.size(3)}
+    ${p => p.theme.size(2)};
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
@@ -488,6 +513,8 @@ const Layout = styled.div`
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   gap: 1.5rem;
+  flex: 1;
+  min-height: 0;
   @media (max-width: 800px) {
     grid-template-columns: 1fr;
   }
@@ -522,9 +549,12 @@ const Controls = styled(Column)`
 `;
 const Preview = styled.div`
   min-width: 0;
+  display: flex;
+  flex-direction: column;
   iframe {
     width: 100%;
-    height: 76vh;
+    flex: 1;
+    min-height: 60vh;
     display: block;
     border: 1px solid ${p => p.theme.colors.bg2};
     border-radius: 12px;

@@ -328,21 +328,17 @@ test('Assistant creates and redesigns a website using existing table content', a
   ]);
   await siteDownload.saveAs(test.info().outputPath('garden-site.zip'));
   await websiteAction(page, 'website-show-release');
-  await page.getByRole('button', { name: 'Edit on page', exact: true }).click();
+  await page.getByRole('button', { name: 'Page edit', exact: true }).click();
   await expect(preview.locator('[contenteditable="true"]')).toHaveCount(2);
   const field = preview.locator('[contenteditable="true"]').first();
   await field.fill('Plant winter lettuce in October');
-  await page
-    .getByText('Click an outlined field', { exact: false })
-    .click();
+  await page.getByText('Click an outlined field', { exact: false }).click();
   await expect(
     page.getByText('Content saved. The existing release is unchanged.'),
   ).toBeVisible();
   // Clearing a text field is an explicit write, not a silently ignored blur.
   await field.fill('');
-  await page
-    .getByText('Click an outlined field', { exact: false })
-    .click();
+  await page.getByText('Click an outlined field', { exact: false }).click();
   await expect
     .poll(async () =>
       page.evaluate(
@@ -355,9 +351,7 @@ test('Assistant creates and redesigns a website using existing table content', a
     )
     .toBe('');
   await field.fill('Plant winter lettuce in October');
-  await page
-    .getByText('Click an outlined field', { exact: false })
-    .click();
+  await page.getByText('Click an outlined field', { exact: false }).click();
   await expect(
     page.getByText('Content saved. The existing release is unchanged.'),
   ).toBeVisible();

@@ -44,13 +44,13 @@ test('opening Edit with AI preserves the preview document', async ({
   await expect(page.getByTestId('menu-item-website-design')).toBeVisible();
   await page.keyboard.press('Escape');
   const editWithAI = page.getByRole('button', {
-    name: 'Edit with AI',
+    name: 'AI edit',
     exact: true,
   });
   await expect(
     editWithAI
       .locator('..')
-      .getByRole('button', { name: 'Edit on page', exact: true }),
+      .getByRole('button', { name: 'Page edit', exact: true }),
   ).toBeVisible();
   await editWithAI.click();
   // Allow the panel's mount, context reads and resource notifications to settle.
