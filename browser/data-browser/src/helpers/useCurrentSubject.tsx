@@ -41,7 +41,7 @@ export function useCurrentSubject(
     if (pathname === '/' && !getHomeDrive())
       return [undefined, handleSetSubject];
 
-    if (pathname.startsWith('/app/')) {
+    if (pathname === '/app' || pathname.startsWith('/app/')) {
       return [undefined, handleSetSubject];
     }
 

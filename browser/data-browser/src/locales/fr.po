@@ -10498,3 +10498,7 @@ msgstr ""
 #~ "Saisissez votre code de récupération pour afficher votre secret ou "
 #~ "ajouter une clé d’accès sur cet appareil. Votre code de récupération "
 #~ "actuel restera valide."
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "The response was interrupted."
+msgstr ""

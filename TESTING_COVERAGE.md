@@ -1738,3 +1738,35 @@ revision reuse, opaque source/setup text, and refusal of installation fields or
 unsupported declarations. This is library coverage: marketplace UI, real-server
 package persistence, schema/template graph import and sandbox activation remain
 unverified/unimplemented by this slice.
+
+### Assistant context failure recovery
+
+`useCurrentSubject.test.ts` covers `/app` and nested app routes remaining UI
+routes rather than becoming backend resource subjects.
+`processAtomicResources.test.ts` verifies an unavailable attachment does not
+discard a readable product attachment or abort context preparation.
+`store.test.ts` covers a failed WebSocket GET settling concurrent readers and
+subsequent reads of its error placeholder. Existing gap-recovery and ingress
+tests cover missing-history and snapshot recovery; these are not proof that
+every resource in a user's live session has recovered.
+
+`toolHistory.test.ts` checks interrupted tool calls remain explicitly unknown
+in outgoing model history, completed calls retain results, and persisted tool
+errors and falsy outputs survive round trips. Recovery does not replay tools
+or mutate the user's stored chat. Live provider recovery is not covered by
+the scripted website E2E.
+
+### Streamed Assistant message persistence
+
+The AI chat partial-response E2E holds the model stream open, emits two text
+updates, checks that a single Assistant message reached the backend through an
+independent authenticated HTTP read, and reopens it after refresh.
+`persistSidebarMessage.test.ts` requires the current message to persist even
+when React does not run the state updater immediately. Streaming checkpoints
+run once per second and serialize updates to the same message and parts;
+refresh before the first completed checkpoint can still lose the newest text.
+
+The AI rate-limit E2E emits received reasoning followed by a provider 429. It
+checks the reasoning remains visible and that reopening the chat restores both
+the reasoning and the provider error. Error replies do not launch follow-up
+question generation or automatic compaction.

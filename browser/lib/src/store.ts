@@ -3512,7 +3512,24 @@ export class Store {
       supportsWebSockets() &&
       ws?.readyState === WebSocket.OPEN
     ) {
-      await ws.fetch(fetchSubject);
+      try {
+        await ws.fetch(fetchSubject);
+      } catch (error) {
+        // A hook may already have installed a loading placeholder. Settle it
+        // so concurrent getResource callers receive the failure, not a timeout.
+        const pending = this.getResolved(subject);
+
+        if (pending && !this.hasRenderableContent(pending)) {
+          this.failResource(
+            subject,
+            error instanceof Error ? error : new Error(String(error)),
+          );
+
+          return pending as Resource<C>;
+        }
+
+        throw error;
+      }
     } else {
       const signInfo = this.agent
         ? { agent: this.agent, serverURL: this.getServerUrl() }
@@ -3790,7 +3807,7 @@ export class Store {
     const resolved = this.resolveSubject(subjectRaw);
     const found = this.resources.get(resolved);
 
-    if (found && found.isReady()) {
+    if (found && (found.isReady() || found.error)) {
       return found;
     }
 
