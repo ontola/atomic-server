@@ -11,6 +11,8 @@ pub struct WebsitePackage {
     pub files: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub assets: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
 }
 impl WebsitePackage {
     pub fn validate(&self) -> AtomicResult<()> {
@@ -36,11 +38,39 @@ impl WebsitePackage {
     }
     pub fn id(&self) -> AtomicResult<String> {
         self.validate()?;
-        Ok(blake3::hash(&serde_json::to_vec(self)?)
+        Ok(blake3::hash(&serde_json::to_vec(&self.manifest())?)
             .to_hex()
             .to_string())
     }
 }
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WebsiteManifest {
+    pub version: u32,
+    pub files: BTreeMap<String, String>,
+    pub assets: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
+}
+impl WebsitePackage {
+    pub fn manifest(&self) -> WebsiteManifest {
+        WebsiteManifest {
+            version: 2,
+            files: self
+                .files
+                .iter()
+                .map(|(path, bytes)| {
+                    (
+                        path.clone(),
+                        blake3::hash(bytes.as_bytes()).to_hex().to_string(),
+                    )
+                })
+                .collect(),
+            assets: self.assets.clone(),
+            metadata: self.metadata.clone(),
+        }
+    }
+}
+
 pub fn valid_path(path: &str) -> bool {
     !path.is_empty()
         && path.len() <= 240
@@ -81,6 +111,7 @@ mod tests {
         let mut p = WebsitePackage {
             version: 1,
             assets: BTreeMap::new(),
+            metadata: None,
             files: BTreeMap::from([("index.html".into(), "Hello".into())]),
         };
         let id = p.id().unwrap();

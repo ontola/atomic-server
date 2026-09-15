@@ -183,9 +183,10 @@ mod tests {
             version: 1,
             files: [("index.html".into(), format!("<img src=\"/{path}\">"))].into(),
             assets: [(path.clone(), hash)].into(),
+            metadata: None,
         };
-        assert!(db.website_upload("other", "drive", &package).is_err());
-        let state = db.website_upload("site", "drive", &package).unwrap();
+        assert!(db.website_upload("other", "drive", &package).await.is_err());
+        let state = db.website_upload("site", "drive", &package).await.unwrap();
         let id = project_id("site");
         assert!(db
             .website_public_asset(&id, None, &path)
@@ -202,9 +203,12 @@ mod tests {
                 .1,
             bytes
         );
-        let manifest =
-            serde_json::to_string(&db.website_package(&id, &package.id().unwrap()).unwrap())
-                .unwrap();
+        let manifest = serde_json::to_string(
+            &db.website_package(&id, &package.id().unwrap())
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         assert!(!manifest.contains("optimized image bytes"));
         let revision = db.website_state(&id).unwrap().unwrap().revision;
         db.website_activate(&id, revision, None, "owner").unwrap();

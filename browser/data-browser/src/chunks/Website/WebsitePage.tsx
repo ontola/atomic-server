@@ -35,6 +35,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
   const [config, setConfig] = useState<WebsiteConfig>();
   const [draft, setDraft] = useState<WebsiteArtifact>();
   const [release, setRelease] = useState<WebsiteArtifact>();
+  const reportedReleaseError = useRef('');
   const [inlineArtifact, setInlineArtifact] = useState<WebsiteArtifact>();
   const [review, setReview] = useState<WebsiteArtifact>();
   const [pagePath, setPagePath] = useState('/');
@@ -60,7 +61,25 @@ export function WebsitePage({ resource }: { resource: Resource }) {
         setConfig(result.config);
         const [next, saved] = await Promise.all([
           buildWebsiteArtifact(store, resource.subject, result.config),
-          readWebsiteRelease(store, drive, resource),
+          readWebsiteRelease(store, drive, resource)
+            .then(value => {
+              reportedReleaseError.current = '';
+
+              return value;
+            })
+            .catch(cause => {
+              if (active && reportedReleaseError.current !== String(cause)) {
+                reportedReleaseError.current = String(cause);
+                store.notifyError(
+                  new Error(
+                    'Could not load saved website version: ' + String(cause),
+                    { cause },
+                  ),
+                );
+              }
+
+              return undefined;
+            }),
         ]);
 
         if (active) {
@@ -159,11 +178,19 @@ export function WebsitePage({ resource }: { resource: Resource }) {
             project={resource.subject}
             draft={draft}
             draftError={problem}
+            savedDigest={release?.digest}
             canWrite={!!canWrite}
             secondary={!!review}
             saveRelease={async artifact => {
-              await saveWebsiteRelease(store, drive, resource, artifact);
+              const saved = await saveWebsiteRelease(
+                store,
+                drive,
+                resource,
+                artifact,
+              );
               setRelease(artifact);
+
+              return saved;
             }}
           >
             <>

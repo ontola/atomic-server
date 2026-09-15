@@ -1,5 +1,4 @@
 import { useWebsiteClass } from '@chunks/Website/useWebsiteClass';
-import { Button } from '../../Button';
 import {
   Fragment,
   memo,
@@ -13,7 +12,6 @@ import {
   core,
   dataBrowser,
   useResource,
-  useStore,
   useCanWrite,
   unknownSubject,
 } from '@tomic/react';
@@ -78,10 +76,9 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
     // into the tree, then hides them when the class arrives — the sidebar
     // flash on open.
     const classes = resource.getClasses();
-    const store = useStore();
     const websiteClass = useWebsiteClass(classes.join('|'));
-    const [showAllVersions, setShowAllVersions] = useState(false);
     const hideChildren =
+      !!websiteClass ||
       classes.length === 0 ||
       classes.includes(dataBrowser.classes.table) ||
       classes.includes(dataBrowser.classes.chatroom) ||
@@ -92,18 +89,6 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
     const { subjects: subResources } = useChildren(
       hideChildren ? undefined : subject,
     );
-
-    const orderedChildren = websiteClass
-      ? [...subResources].sort(
-          (a, b) =>
-            (store.getResourceLoading(b).getCreatedAt() ?? 0) -
-            (store.getResourceLoading(a).getCreatedAt() ?? 0),
-        )
-      : subResources;
-    const visibleChildren =
-      websiteClass && orderedChildren.length > 6 && !showAllVersions
-        ? orderedChildren.slice(0, 5)
-        : orderedChildren;
 
     const dragData: SideBarDragData = {
       renderedUnder: renderedHierarchy.at(-1)!,
@@ -261,7 +246,7 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
                   nextSubject={subResources[0]}
                 />
               )}
-              {visibleChildren.map((child, idx) => (
+              {subResources.map((child, idx) => (
                 <Fragment key={child}>
                   <ResourceSideBar
                     subject={child}
@@ -279,16 +264,6 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
                   )}
                 </Fragment>
               ))}
-              {websiteClass && orderedChildren.length > 6 && (
-                <Button
-                  ghost
-                  onClick={() => setShowAllVersions(value => !value)}
-                >
-                  {showAllVersions
-                    ? 'Show fewer versions'
-                    : `Show all versions (${orderedChildren.length})`}
-                </Button>
-              )}
             </>
           )}
         </Details>

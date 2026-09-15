@@ -3,11 +3,21 @@ import styled from 'styled-components';
 import { useStore, type Resource } from '@tomic/react';
 import { AtomicLink } from '@components/AtomicLink';
 import { Button } from '@components/Button';
-import { readWebsiteExport, downloadWebsite } from './websiteExport';
+import {
+  readWebsiteExport,
+  readWebsiteVersion,
+  downloadWebsite,
+} from './websiteExport';
 import type { WebsiteArtifact } from './renderWebsite';
 import { WebsitePreview } from './WebsitePreview';
 
-export function WebsiteExportPage({ resource }: { resource: Resource }) {
+export function WebsiteExportPage({
+  resource,
+  deployment,
+}: {
+  resource: Resource;
+  deployment?: string;
+}) {
   const store = useStore();
   const [artifact, setArtifact] = useState<WebsiteArtifact>();
   const [error, setError] = useState('');
@@ -17,7 +27,10 @@ export function WebsiteExportPage({ resource }: { resource: Resource }) {
     let active = true;
     setArtifact(undefined);
     setError('');
-    readWebsiteExport(store, store.getDrive()!, resource)
+    (deployment
+      ? readWebsiteVersion(store, resource.subject, deployment)
+      : readWebsiteExport(store, store.getDrive()!, resource)
+    )
       .then(result => {
         if (active) setArtifact(result);
       })
@@ -32,7 +45,7 @@ export function WebsiteExportPage({ resource }: { resource: Resource }) {
     return () => {
       active = false;
     };
-  }, [store, resource, attempt]);
+  }, [store, resource, deployment, attempt]);
 
   return (
     <Page>

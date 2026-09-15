@@ -75,17 +75,14 @@ test('website document preview, frozen release and reload', async ({
     path: test.info().outputPath('website-workspace.png'),
     fullPage: true,
   });
-  const releaseSubject = await page.evaluate(async () => {
-    const { readWebsite } = await import('/src/chunks/Website/websiteModel.ts');
-    const store = window.store;
+  const versionURL = await page.evaluate(async () => {
+    const { hostingRequest } =
+      await import('/src/chunks/Website/hostingClient.ts');
     const subject = new URL(location.href).searchParams.get('subject')!;
-    const resource = await store.getResource(subject);
-    const { schema } = await readWebsite(store, store.getDrive()!, resource);
-    return resource.get(schema.properties!['website-release']) as string;
+    const status = await hostingRequest(window.store, subject);
+    return `/app/show?subject=${encodeURIComponent(subject)}&view=website-version:${status.state.deployments.at(-1)}`;
   });
-  await page.goto(
-    `${new URL(websiteURL).origin}/app/show?subject=${encodeURIComponent(releaseSubject)}`,
-  );
+  await page.goto(`${new URL(websiteURL).origin}${versionURL}`);
   await expect(
     page.getByRole('link', { name: 'Back to website', exact: true }),
   ).toBeVisible();

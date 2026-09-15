@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { before } from './test-utils';
 
-test('website sidebar shows five recent versions and can expand the rest', async ({
+test('website versions deduplicate without creating sidebar resources', async ({
   page,
 }) => {
   await before({ page });
-  const subject = await page.evaluate(async () => {
-    const { createWebsite, starterWebsite } =
+  const saved = await page.evaluate(async () => {
+    const { createWebsite, starterWebsite, readWebsite } =
       await import('/src/chunks/Website/websiteModel.ts');
     const { buildWebsiteArtifact, saveWebsiteRelease } =
       await import('/src/chunks/Website/websiteExport.ts');
@@ -15,21 +15,38 @@ test('website sidebar shows five recent versions and can expand the rest', async
     const config = starterWebsite('Version navigation');
     const site = await createWebsite(store, drive, config);
     const artifact = await buildWebsiteArtifact(store, site.subject, config);
-    for (let i = 0; i < 7; i++) {
-      await saveWebsiteRelease(store, drive, site, {
-        ...artifact,
-        createdAt: new Date(Date.UTC(2026, 8, 15, 12, i)).toISOString(),
-      });
-    }
-    return site.subject;
+    const first = await saveWebsiteRelease(store, drive, site, artifact);
+    const again = await saveWebsiteRelease(store, drive, site, {
+      ...artifact,
+      createdAt: new Date().toISOString(),
+    });
+    const { schema } = await readWebsite(store, drive, site);
+    return {
+      subject: site.subject,
+      first,
+      again,
+      release: site.get(schema.properties!['website-release']),
+    };
   });
+  expect(saved.again.state.deployments).toHaveLength(1);
+  expect(saved.again.state.revision).toBe(saved.first.state.revision);
+  expect(saved.release).toBeFalsy();
   await page.goto(
-    `${new URL(page.url()).origin}/app/show?subject=${encodeURIComponent(subject)}`,
+    `${new URL(page.url()).origin}/app/show?subject=${encodeURIComponent(saved.subject)}`,
   );
-  const versions = page.getByText(/^Version · /).locator('visible=true');
-  await expect(versions).toHaveCount(5);
-  await page.getByRole('button', { name: 'Show all versions (7)' }).click();
-  await expect(versions).toHaveCount(7);
-  await page.getByRole('button', { name: 'Show fewer versions' }).click();
-  await expect(versions).toHaveCount(5);
+  await expect(
+    page.getByRole('button', { name: /Show (all|fewer) versions/ }),
+  ).toHaveCount(0);
+  await page.goto(
+    `${new URL(page.url()).origin}/app/show?subject=${encodeURIComponent(saved.subject)}&view=website-version:${saved.first.deployment}`,
+  );
+  await expect(
+    page.getByRole('link', { name: 'Back to website' }),
+  ).toBeVisible();
+  await expect(
+    page
+      .frameLocator('iframe[title="Website preview"]')
+      .getByRole('heading', { name: 'Version navigation' })
+      .first(),
+  ).toBeVisible();
 });

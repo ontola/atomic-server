@@ -77,6 +77,7 @@ export type ResourcePageProps<Subject extends OptionalClass = never> = {
 
 type Props = {
   subject: string;
+  websiteVersion?: string;
 };
 
 /**
@@ -84,7 +85,7 @@ type Props = {
  * is rendered prominently at the top. If the Resource has a
  * particular Class, it will render a different Component.
  */
-const ResourcePage: React.FC<Props> = ({ subject }) => {
+const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
   const resource = useResource(subject);
   const { getPluginForClass, loading } = useCustomViews();
   const [isAList] = useArray(resource, core.properties.isA);
@@ -194,7 +195,16 @@ const ResourcePage: React.FC<Props> = ({ subject }) => {
               {websiteExportClass ? (
                 <WebsiteExportPage resource={resource} />
               ) : (
-                <WebsitePage resource={resource} />
+                <>
+                  {websiteVersion ? (
+                    <WebsiteExportPage
+                      resource={resource}
+                      deployment={websiteVersion}
+                    />
+                  ) : (
+                    <WebsitePage resource={resource} />
+                  )}
+                </>
               )}
             </Suspense>
           </ErrorBoundary>
