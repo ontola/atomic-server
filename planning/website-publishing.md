@@ -2,6 +2,9 @@
 
 Status: first FOSS implementation, built on the Assistant website prototype.
 
+For current implementation status, verification limits and prioritized follow-up
+work, read [the implementation handoff](WEBSITE_HANDOFF.md).
+
 ## Contract and boundaries
 
 The browser uploads a version-1 package containing code files, image hash references and optional private preview metadata.
