@@ -77,7 +77,10 @@ export async function buildWebsiteArtifact(
     selectedSubjects(config).map(async subject => {
       const resource = await store.getResource(subject);
       if (resource.error || resource.loading)
-        throw new Error(`Cannot read selected content: ${subject}`);
+        throw new Error(
+          `Cannot read selected content: ${resource.title === subject ? subject : `${resource.title} (${subject})`}. ${resource.error ? String(resource.error) : 'The resource is still loading.'}`,
+          { cause: resource.error },
+        );
 
       return resource;
     }),

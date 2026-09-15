@@ -7,6 +7,8 @@ import { readWebsiteAsset } from './websiteAssets';
 export function useWebsitePreviewHtml(html: string, artifact: WebsiteArtifact) {
   const store = useStore();
   const [resolved, setResolved] = useState<{ html: string; result: string }>();
+  const [failure, setFailure] = useState<{ html: string; message: string }>();
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let cancelled = false;
     const urls: string[] = [];
@@ -21,16 +23,30 @@ export function useWebsitePreviewHtml(html: string, artifact: WebsiteArtifact) {
         result = result.replaceAll(`src="/${path}"`, `src="${url}"`);
       }
 
-      if (!cancelled) setResolved({ html, result });
+      if (!cancelled) {
+        setResolved({ html, result });
+        setFailure(undefined);
+      }
     })().catch(error => {
-      if (!cancelled) store.notifyError(error);
+      if (!cancelled) {
+        const cause = new Error(
+          `Website preview assets failed: ${String(error)}`,
+          { cause: error },
+        );
+        setFailure({ html, message: cause.message });
+        store.notifyError(cause);
+      }
     });
 
     return () => {
       cancelled = true;
       urls.forEach(url => URL.revokeObjectURL(url));
     };
-  }, [store, html, artifact]);
+  }, [store, html, artifact, attempt]);
 
-  return resolved?.html === html ? resolved.result : '';
+  return {
+    html: resolved?.html === html ? resolved.result : '',
+    error: failure?.html === html ? failure.message : undefined,
+    retry: () => setAttempt(n => n + 1),
+  };
 }

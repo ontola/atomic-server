@@ -1,3 +1,4 @@
+import { Button } from '@components/Button';
 import { useWebsitePreviewHtml } from './useWebsitePreviewHtml';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -116,6 +117,16 @@ export function WebsiteInlinePreview({
 
   const previewHtml = useWebsitePreviewHtml(html, artifact);
 
+  if (previewHtml.error)
+    return (
+      <div role='alert'>
+        <p>{previewHtml.error}</p>
+        <Button subtle onClick={previewHtml.retry}>
+          Retry preview
+        </Button>
+      </div>
+    );
+
   return (
     <>
       <p>
@@ -133,11 +144,14 @@ export function WebsiteInlinePreview({
       <iframe
         title='Website preview'
         sandbox='allow-same-origin'
-        srcDoc={previewHtml}
+        srcDoc={previewHtml.html}
         onLoad={event => {
-          void setup(event.currentTarget).catch(cause =>
-            setError(String(cause)),
-          );
+          void setup(event.currentTarget).catch(cause => {
+            setError(String(cause));
+            store.notifyError(
+              cause instanceof Error ? cause : new Error(String(cause)),
+            );
+          });
         }}
       />
       <EditModeProvider active={!saving} commit={commit}>
