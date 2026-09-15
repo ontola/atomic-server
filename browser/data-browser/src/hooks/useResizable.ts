@@ -18,7 +18,7 @@ interface UseResizeResult {
 
 const dragRule = (cursor: string) => `
  * {
-  cursor: ;
+  cursor: ${cursor};
   user-select: none;
   pointer-events: none;
  }
