@@ -5,7 +5,6 @@ import {
   type SuggestionProps,
 } from '@tiptap/suggestion';
 import { computePosition, flip, inline, shift } from '@floating-ui/dom';
-import styles from '../floatingMenu.module.css';
 
 import {
   CommandList,
@@ -57,22 +56,28 @@ export const createRenderFunction =
         return;
       }
 
-      computePosition(props.decorationNode, component.element, {
+      const element = component.element;
+      // Adopt into the editor document before measuring iframe coordinates.
+      container.appendChild(element);
+      Object.assign(element.style, {
+        position: 'absolute',
+        width: 'max-content',
+        zIndex: '1000',
+      });
+      computePosition(props.decorationNode, element, {
         placement: 'bottom-start',
         middleware: [flip(), shift(), inline()],
       }).then(({ x, y }) => {
-        component.element.style.setProperty('--left', `${x}px`);
-        component.element.style.setProperty('--top', `${y}px`);
-        container.appendChild(component.element);
+        element.style.left = `${x}px`;
+        element.style.top = `${y}px`;
       });
     };
 
     return {
       onStart(props) {
         component = new ReactRenderer(CommandList, {
-          props,
+          props: { ...props, ownerDocument: container.ownerDocument },
           editor: props.editor,
-          className: styles.renderer,
         });
 
         // Set the initial position, this position might be obstructed so we update the position again after we render the elements.

@@ -9341,6 +9341,7 @@ msgstr "Opening view"
 #~ msgstr "Choose which view opens when you visit this integration or its table."
 
 #: src/chunks/PluginRuns/PluginPage.tsx
+#: src/chunks/Website/WebsitePage.tsx
 msgid "Edit with AI"
 msgstr "Edit with AI"
 

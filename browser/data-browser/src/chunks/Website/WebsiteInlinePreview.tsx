@@ -210,6 +210,8 @@ export function WebsiteInlinePreview({
           <StyleSheetManager target={element.ownerDocument.head}>
             <Suspense fallback={<p>Loading document editor…</p>}>
               <CollaborativeEditor
+                embedded
+                menuContainer={element.ownerDocument.body}
                 resource={resource}
                 doc={resource.getLoroDoc()!}
                 property={dataBrowser.properties.documentContent}

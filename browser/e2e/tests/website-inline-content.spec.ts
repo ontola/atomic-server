@@ -13,7 +13,7 @@ test('inline website editing saves rich documents and typed prices to Atomic', a
   await page.getByRole('button', { name: 'More', exact: true }).click();
   await page.keyboard.press('Escape');
   await waitForSynced(page);
-  const document = new URL(page.url()).searchParams.get('subject')!;
+  const documentSubject = new URL(page.url()).searchParams.get('subject')!;
   const fixture = await page.evaluate(async document => {
     const store = window.store;
     const core = {
@@ -67,16 +67,17 @@ test('inline website editing saves rich documents and typed prices to Atomic', a
       },
     ];
     const site = await createWebsite(store, store.getDrive()!, config);
+
     return { subject: site.subject, row: row.subject, price: price.subject };
-  }, document);
+  }, documentSubject);
   await page.goto(
     `${new URL(page.url()).origin}/app/show?subject=${encodeURIComponent(fixture.subject)}`,
   );
   await page.getByRole('button', { name: 'Edit on page', exact: true }).click();
   const frame = page.frameLocator('iframe[title="Website preview"]');
-  const price = frame.locator('dd [contenteditable]').nth(1);
-  await expect(price).toHaveText('4.5');
-  await price.fill('5.75');
+  const priceField = frame.locator('dd [contenteditable]').nth(1);
+  await expect(priceField).toHaveText('4.5');
+  await priceField.fill('5.75');
   await page.getByText('Click an outlined field', { exact: false }).click();
   await expect
     .poll(() =>
@@ -89,6 +90,27 @@ test('inline website editing saves rich documents and typed prices to Atomic', a
     .toBe(5.75);
   const editor = frame.getByLabel('Rich Text Editor', { exact: true });
   await expect(editor).toContainText('Fresh bread every morning.');
+  await expect(editor.locator('..').locator('..')).toHaveCSS(
+    'background-color',
+    'rgba(0, 0, 0, 0)',
+  );
+  await editor.fill('');
+  await editor.pressSequentially('/heading');
+  await expect(frame.getByText('Heading 1', { exact: true })).toBeVisible();
+  await editor.press('Enter');
+  await editor.pressSequentially('A heading');
+  await expect(editor.locator('h1')).toHaveText('A heading');
+  await editor.fill('');
+  await editor.press('ControlOrMeta+Alt+0');
+  await editor.pressSequentially('# ');
+  await editor.pressSequentially('Markdown heading');
+  await expect(editor.locator('h1')).toHaveText('Markdown heading');
+  await editor.fill('');
+  await editor.pressSequentially('@');
+  await expect(
+    frame.getByText('Products', { exact: true }).last(),
+  ).toBeVisible();
+  await editor.press('Escape');
   await editor.fill('Fresh pastries every morning.');
   await page.getByText('Click an outlined field', { exact: false }).click();
   await waitForSynced(page);
