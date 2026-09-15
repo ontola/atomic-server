@@ -646,3 +646,39 @@ Existing locale edits were preserved; only five new diagnostic UI messages were
 added to each catalog. No real feedback was sent; browser tests intercepted it.
 
 - [x] Simplify feedback diagnostics: keep the explicit “Include diagnostic data” checkbox between feedback and email, and place recording controls and preview inside a collapsed Diagnostics disclosure. Existing browser scenarios now expand the disclosure before using those controls.
+
+## Interrupted two-client reconciliation — 2026-09-15
+
+- [x] Add a deterministic real-server integration scenario with separate accounts
+  and independent WASM client databases. Both clients edit different fields of
+  the same resource and create child rows while HTTP and WebSocket access are
+  unavailable. Expected field values and row names are defined before writes.
+- [x] Forward a real SYNC probe and immediately disconnect its client before
+  response delivery. Record and assert the fault boundary was reached.
+- [x] Acknowledge a further offline edit, assert it remains queued, discard the
+  Store/resource/outbox instances, and rehydrate from the retained database and
+  persisted outbox. Reconnect both clients and require convergence.
+- [x] Check both local databases directly, plus an independent server reader,
+  against the expected values and row identities. Require empty, unblocked queues.
+  On failure emit the ledger, acknowledgement results, sync status and diagnostics.
+- [ ] Extend this combined two-client scenario to actual OS-process termination
+  with persistent storage. Store recreation uses in-memory WASM databases and
+  mocked localStorage; existing Chromium SIGKILL coverage is separate evidence.
+- [ ] Expand into seeded failure schedules and conflicting-edit semantics after
+  the deterministic baseline.
+
+Run from the repository root:
+
+```sh
+corepack pnpm --dir browser/lib test:integration interrupted-sync.integration.test.ts lost-ack.integration.test.ts
+```
+
+This checks resource-level disjoint field edits and child rows, not rich-text
+editing, table UI/query membership, attachments, server restart or power loss.
+The deterministic scenario passed without a production code change.
+
+Validation: the new scenario and existing lost-ack integration test passed together
+(2 tests, 15.02 seconds). Library typecheck and a separate TypeScript check that
+includes the new integration file passed, as did focused lint/format checks and
+`git diff --check`. The ordinary library tsconfig excludes `tests/`, so its
+typecheck alone would not validate this new file.
