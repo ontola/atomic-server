@@ -1,3 +1,8 @@
+AI sidebar navigation: browser coverage checks the default visible chat list,
+its header new-chat action while collapsed, and reopening saved replies without
+changing the main URL. Switching chats checkpoints the current message first.
+Successful reply persistence clears error descriptions using Resource.remove.
+
 Website media: a real browser test uploads a private PNG, renders it in the draft,
 publishes it, and checks decoded image dimensions as an anonymous visitor.
 Unit tests cover gallery/File-cell image packaging, unselected relationship

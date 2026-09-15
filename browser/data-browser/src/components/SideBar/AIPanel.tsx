@@ -3,26 +3,24 @@ import {
   ai,
   commits,
   core,
-  StoreEvents,
   unknownSubject,
   useArray,
-  useCanWrite,
   useChildren,
   useCollection,
   useResource,
-  useStore,
   useString,
 } from '@tomic/react';
 import { useEffect, useState, type JSX } from 'react';
-import { FaPlus } from 'react-icons/fa6';
+import { FaPlus, FaRegComment } from 'react-icons/fa6';
+import { IconButton } from '@components/IconButton/IconButton';
+import { useAISidebar } from '@components/AI/AISidebarContext';
+import { useTitle } from '@tomic/react';
 import { usePrivateDrive } from '@hooks/usePrivateDrive';
-import { useCreateAndNavigate } from '@hooks/useCreateAndNavigate';
-import { getOrCreateAiChatsFolder } from '@helpers/standardLocations';
-import { SharedWithMeLink } from './SharedWithMeLink';
 import {
   SideBarMenuRow,
-  SideBarMenuRowIcon,
   SideBarMenuRowLabel,
+  SideBarMenuRowIcon,
+  SideBarMenuItemLink,
 } from './SideBarMenuItem';
 
 /**
@@ -33,66 +31,19 @@ import {
  * panel is populated as soon as the resources are, with no index lag.
  */
 export function AIChatsPanel(): JSX.Element | null {
-  const store = useStore();
-  const { privateDrive, loading } = usePrivateDrive();
+  const { privateDrive } = usePrivateDrive();
   const driveResource = useResource(privateDrive);
-  const canWriteToDrive = useCanWrite(driveResource);
   const [aiChatsFolder] = useString(driveResource, ai.properties.aiChatsFolder);
   const folderChats = useNewestFirstChildren(aiChatsFolder);
   const { subjects: rootChildren } = useChildren(
     privateDrive ?? unknownSubject,
   );
-  const createAndNavigate = useCreateAndNavigate();
-  // Chats created from this panel, shown instantly (the collection catches up
-  // through its live-membership bridge).
-  const [justCreated, setJustCreated] = useState<string[]>([]);
-
-  useEffect(() => {
-    return store.on(StoreEvents.ResourceRemoved, subject => {
-      setJustCreated(prev => prev.filter(s => s !== subject));
-    });
-  }, [store]);
-
-  const createNewChat = async () => {
-    if (!privateDrive) {
-      return;
-    }
-
-    const folder = await getOrCreateAiChatsFolder(store, privateDrive);
-
-    createAndNavigate(
-      ai.classes.aiChat,
-      {
-        [core.properties.name]: 'Untitled Chat',
-      },
-      {
-        parent: folder,
-        onCreated: newChat => {
-          setJustCreated(prev => [newChat.subject, ...prev]);
-        },
-        // The folder is hidden from the drive tree; no need to notify it.
-        skipNotify: true,
-      },
-    );
-  };
-
-  const seen = new Set<string>();
-  const chats = [...justCreated, ...folderChats].filter(subject =>
-    seen.has(subject) ? false : (seen.add(subject), true),
-  );
+  const chats = folderChats;
 
   return (
     <Wrapper>
-      {!loading && canWriteToDrive && privateDrive && (
-        <NewChatButton onClick={createNewChat}>
-          <SideBarMenuRowIcon>
-            <FaPlus />
-          </SideBarMenuRowIcon>
-          <SideBarMenuRowLabel>New Chat</SideBarMenuRowLabel>
-        </NewChatButton>
-      )}
       {chats.map(subject => (
-        <SharedWithMeLink key={subject} subject={subject} />
+        <ChatLink key={subject} subject={subject} />
       ))}
       {rootChildren.map(subject => (
         <LegacyRootChat key={subject} subject={subject} />
@@ -162,7 +113,7 @@ function LegacyRootChat({ subject }: { subject: string }): JSX.Element | null {
     return null;
   }
 
-  return <SharedWithMeLink subject={subject} />;
+  return <ChatLink subject={subject} />;
 }
 
 const Wrapper = styled.div`
@@ -170,10 +121,43 @@ const Wrapper = styled.div`
   overflow-y: auto;
 `;
 
-/** Same row look as the menu links, but a real button. */
-const NewChatButton = styled(SideBarMenuRow).attrs({ as: 'button' })`
-  border: none;
-  background: none;
-  cursor: pointer;
-  font: inherit;
-`;
+export function NewSidebarChatButton() {
+  const { openChat } = useAISidebar();
+
+  return (
+    <IconButton
+      title='New Chat'
+      size='small'
+      color='textLight'
+      onClick={() => openChat()}
+    >
+      <FaPlus />
+    </IconButton>
+  );
+}
+
+function ChatLink({ subject }: { subject: string }) {
+  const resource = useResource(subject);
+  const [title] = useTitle(resource);
+  const { openChat } = useAISidebar();
+
+  return (
+    <SideBarMenuItemLink
+      subject={subject}
+      clean
+      onClick={event => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+          return;
+        event.preventDefault();
+        openChat(subject);
+      }}
+    >
+      <SideBarMenuRow>
+        <SideBarMenuRowIcon>
+          <FaRegComment />
+        </SideBarMenuRowIcon>
+        <SideBarMenuRowLabel>{title || 'Untitled Chat'}</SideBarMenuRowLabel>
+      </SideBarMenuRow>
+    </SideBarMenuItemLink>
+  );
+}
