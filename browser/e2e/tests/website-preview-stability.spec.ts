@@ -1,13 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { before } from './test-utils';
 
-test('opening Design with AI preserves the preview document', async ({
+test('opening Edit with AI preserves the preview document', async ({
   page,
 }) => {
   await before({ page });
   const subject = await page.evaluate(async () => {
     const { createWebsite, starterWebsite } =
       await import('/src/chunks/Website/websiteModel.ts');
+
     return (
       await createWebsite(
         window.store,
@@ -40,7 +41,18 @@ test('opening Design with AI preserves the preview document', async ({
   await expect(page.getByTestId('menu-item-data').locator('svg')).toHaveCount(
     1,
   );
-  await page.getByTestId('menu-item-website-design').click();
+  await expect(page.getByTestId('menu-item-website-design')).toBeVisible();
+  await page.keyboard.press('Escape');
+  const editWithAI = page.getByRole('button', {
+    name: 'Edit with AI',
+    exact: true,
+  });
+  await expect(
+    editWithAI
+      .locator('..')
+      .getByRole('button', { name: 'Edit on page', exact: true }),
+  ).toBeVisible();
+  await editWithAI.click();
   // Allow the panel's mount, context reads and resource notifications to settle.
   await page.waitForTimeout(2000);
   await expect(preview.locator('body')).toHaveAttribute(

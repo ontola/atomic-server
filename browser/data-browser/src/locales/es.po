@@ -9352,6 +9352,7 @@ msgstr ""
 #~ msgstr ""
 
 #: src/chunks/PluginRuns/PluginPage.tsx
+#: src/chunks/Website/WebsitePage.tsx
 msgid "Edit with AI"
 msgstr ""
 

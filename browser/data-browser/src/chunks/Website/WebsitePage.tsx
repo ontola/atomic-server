@@ -176,23 +176,28 @@ export function WebsitePage({ resource }: { resource: Resource }) {
     [store],
   );
 
+  const designWithAI = useCallback(
+    () =>
+      askAI({
+        prompt:
+          /* @wc-ignore */ 'Help me design this website. Read it with describe_website, ask what I want to change, then use update_website. Keep content in its existing Atomic documents and tables.',
+        context: [
+          newContextItem<AIAtomicResourceMessageContext>({
+            type: 'atomic-resource',
+            subject: resource.subject,
+          }),
+        ],
+      }),
+    [askAI, resource.subject],
+  );
+
   const exportActions = useMemo(
     () => [
       {
         id: 'website-design',
         label: 'Design with AI',
         disabled: !canWrite,
-        onClick: () =>
-          askAI({
-            prompt:
-              /* @wc-ignore */ 'Help me design this website. Read it with describe_website, ask what I want to change, then use update_website. Keep content in its existing Atomic documents and tables.',
-            context: [
-              newContextItem<AIAtomicResourceMessageContext>({
-                type: 'atomic-resource',
-                subject: resource.subject,
-              }),
-            ],
-          }),
+        onClick: designWithAI,
       },
       {
         id: 'website-prepare',
@@ -216,8 +221,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
       },
     ],
     [
-      askAI,
-      resource.subject,
+      designWithAI,
       draft,
       canWrite,
       busy,
@@ -422,15 +426,20 @@ export function WebsitePage({ resource }: { resource: Resource }) {
                     : 'Live draft preview'}
             </p>
             {!review && !showRelease && (
-              <Button
-                subtle
-                disabled={!draft || busy || refreshing || !!problem}
-                onClick={() =>
-                  setInlineArtifact(inlineArtifact ? undefined : draft)
-                }
-              >
-                {inlineArtifact ? 'Done editing' : 'Edit on page'}
-              </Button>
+              <Row>
+                <Button subtle disabled={!canWrite} onClick={designWithAI}>
+                  Edit with AI
+                </Button>
+                <Button
+                  subtle
+                  disabled={!draft || busy || refreshing || !!problem}
+                  onClick={() =>
+                    setInlineArtifact(inlineArtifact ? undefined : draft)
+                  }
+                >
+                  {inlineArtifact ? 'Done editing' : 'Edit on page'}
+                </Button>
+              </Row>
             )}
           </PreviewToolbar>
           {!review &&
@@ -561,6 +570,7 @@ const Title = styled.div`
 `;
 const PreviewToolbar = styled.div`
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
