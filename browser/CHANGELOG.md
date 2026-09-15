@@ -4,6 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: creating a second table column with a name that already exists in the drive's ontology (e.g. two "Status" columns) no longer mints a colliding property shortname that silently corrupts the ontology. A compatible existing property is reused instead; an incompatible one gets a disambiguated shortname (`status-2`) ([#1504](https://github.com/ontola/atomic-server/issues/1504)).
 - Stop restoring stale right-side panels across sessions, accounts and drives; close meeting/comments panels when their target disappears.
 - Following indicator: a tight blue ring on the followed avatar in the navbar and sidebar, expanding to a "Following" chip on hover ([#1486](https://github.com/ontola/atomic-server/issues/1486)).
 
