@@ -527,3 +527,58 @@ Evidence directory from this run:
 `/var/folders/n1/1f33j70s5vs1ytzpshgpk11h0000gn/T/atomic-s3-restore-evidence-1_2zyl4u`.
 Only a disposable local bucket and synthetic data were used. The test container
 was removed after validation; the JSON reports and local Vault fixtures remain.
+
+
+## Local diagnostic recorder — 2026-09-15
+
+- [x] Add an opt-in recorder per Store, with fixed event codes and explicit numeric
+  fields. Resource aliases use weak object identity within one recording; no URLs,
+  titles, filenames, raw errors, request bodies, or signed data enter the buffer.
+- [x] Record save start/outcome, outbox drain attempts/results, connection changes,
+  pending and blocked counts. A save running for 30 seconds produces `save-slow`;
+  an online pending queue with unchanged counts for 60 seconds produces
+  `queue-stalled`. These are investigation hints, not proof of data loss.
+- [x] Bound events and unfinished-save tracking to 500 entries each. Keep a rolling
+  10-minute event window, stop and erase after 30 minutes, and clear on account
+  changes. Recording is memory-only; reload/crash loses it and does not re-enable it.
+- [x] Add controls in Feedback to start/clear recording, preview a frozen report,
+  download JSON, and explicitly include that exact preview with feedback. Inclusion
+  defaults off; refreshing the preview resets inclusion. A cleared/expired session
+  cannot submit an older preview. Recording does not enable Sentry or networking.
+- [x] Include build identity and a fixed browser runtime label. Feedback events use
+  an allowlist that excludes inherited Sentry breadcrumbs, URLs, user context,
+  arbitrary tags and extra fields. User-entered message/email remain intentional.
+- [x] Cover bounds, expiry, late completion, actual save rejection, listener failures,
+  account changes, frozen preview selection, explicit inclusion, and privacy filters
+  in unit tests. Browser acceptance intercepts Sentry; it never sends a real report.
+- [ ] Add separate local storage/server acknowledgement stage codes, cross-process
+  correlation, and resource lifecycle/index diagnostics as needed by real incidents.
+- [ ] Decide a production report retention/access/deletion policy before expanding
+  collection. This slice inherits the installation's existing Sentry opt-in setting.
+
+Operational limits: recording must be enabled before reproducing an issue. It is
+not a crash-persistent recorder and captures no payloads or replay. Downloaded or
+explicitly submitted reports outlive the local recording according to the user's
+file handling or the installation's existing reporting policy. Background browser
+suspension can delay timer-based warnings and clearing until execution resumes;
+export checks expiry synchronously as well. Local storage failures cannot break
+recording because the recorder performs no storage writes.
+
+Validation: 508 client-library tests and 894 app unit tests passed; all 11 focused
+report/privacy tests also passed after the expiry changes. Fresh pinned browser
+run `2026-09-15T09-22-55.392Z-VIsqtQ` passed all five selected feedback/Ollama tests
+(19.4 seconds), including exact preview-to-envelope equality, JSON download,
+private content/URL exclusion, and recording off after reload. The preview
+screenshot was visually checked. Earlier first attempts exposed missing generated
+locale entries (`2026-09-15T09-16-36.692Z-rqhO0h`) and a React Compiler cached
+recording flag (`2026-09-15T09-19-48.442Z-Vq2ACo`); both were corrected, and their
+failure artifacts remain. No real reports were submitted.
+
+Compiler follow-up: removed the unsupported `finally` in `FeedbackMenuItem`;
+Oxc now reports zero diagnostics and emits memoization. A targeted regression
+requires both feedback components to compile without bailouts. All 12 focused
+compiler/feedback tests and app typecheck pass. Browser run
+`2026-09-15T09-58-43.250Z-3g0p9m` passed all five feedback/Ollama tests against
+freshly rebuilt assets (17.7 seconds). The preceding build attempt ran out of
+Cargo cache space; removing stale Atomic Server incremental caches allowed the
+same server build to complete. No tests or hooks were bypassed.

@@ -33,3 +33,20 @@ describe('feedback delivery', () => {
     await expect(submitFeedback(' ', '')).rejects.toThrow();
   });
 });
+
+it('includes diagnostics only when explicitly supplied', async () => {
+  vi.mocked(Sentry.isEnabled).mockReturnValue(true);
+  vi.mocked(Sentry.sendFeedback).mockResolvedValue('receipt');
+  await submitFeedback('Problem', '', '{"events":[]}');
+  expect(Sentry.sendFeedback).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      message: expect.stringContaining('{"events":[]}'),
+    }),
+    { includeReplay: false },
+  );
+  await submitFeedback('Problem', '');
+  expect(Sentry.sendFeedback).toHaveBeenLastCalledWith(
+    expect.objectContaining({ message: 'Problem' }),
+    { includeReplay: false },
+  );
+});
