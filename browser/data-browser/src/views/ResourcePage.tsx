@@ -1,4 +1,5 @@
 import { LocalThoughtSync } from '@chunks/PluginRuns/LocalThoughtSyncPanel';
+import { useWebsiteClass } from '@chunks/Website/useWebsiteClass';
 import { ImportResolutionNotice } from '@chunks/PluginRuns/ImportResolutionNotice';
 import { useEffect, useState, lazy, Suspense } from 'react';
 import {
@@ -56,6 +57,10 @@ const DashboardPage = lazy(() =>
   import('../chunks/DashboardPage').then(m => ({ default: m.DashboardPage })),
 );
 
+const WebsitePage = lazy(() =>
+  import('@chunks/Website/WebsitePage').then(m => ({ default: m.WebsitePage })),
+);
+
 const AppPage = lazy(() =>
   import('../chunks/AppPage').then(m => ({ default: m.AppPage })),
 );
@@ -83,6 +88,7 @@ const ResourcePage: React.FC<Props> = ({ subject }) => {
   const store = useStore();
   const drive = store.getDrive();
   const appClass = useAppClass(drive);
+  const websiteClass = useWebsiteClass(isAList.join('|'));
 
   // The body can have an inert attribute when the user navigated from an open dialog.
   // we remove it to make the page interactive again.
@@ -167,6 +173,18 @@ const ResourcePage: React.FC<Props> = ({ subject }) => {
 
   if (ReturnComponent === ResourcePageDefault) {
     if (loading) return null;
+
+    if (websiteClass && resource.hasClasses(websiteClass)) {
+      return (
+        <Main subject={subject}>
+          <ErrorBoundary>
+            <Suspense fallback={<Spinner />}>
+              <WebsitePage resource={resource} />
+            </Suspense>
+          </ErrorBoundary>
+        </Main>
+      );
+    }
 
     // Like a plugin's, an app's class is minted per drive, so it cannot be a
     // case in `selectComponent`. An app opens to its own view.

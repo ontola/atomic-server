@@ -1,4 +1,5 @@
 import toast from 'react-hot-toast';
+import { createWebsite, starterWebsite } from '@chunks/Website/websiteModel';
 import { canvas, core, dataBrowser, forks, server } from '@tomic/react';
 import {
   FaArrowUpRightFromSquare,
@@ -88,6 +89,29 @@ export const resourceActions: ActionDefinition[] = [
       });
 
       ctx.navigate(constructOpenURL(subject));
+    },
+  },
+  {
+    id: 'new-website',
+    scope: 'resource',
+    section: 'action',
+    label: () => 'New website',
+    helper: () =>
+      'Design a website with Assistant, using Atomic documents and tables.',
+    keywords: ['website', 'site', 'publish', 'webpage'],
+    icon: () => <FaWindowMaximize />,
+    searchOnly: true,
+    available: ctx => ctx.canWrite && ctx.drive !== undefined,
+    run: async ctx => {
+      const doc = ctx.resource.hasClasses(dataBrowser.classes.documentV2)
+        ? ctx.subject
+        : undefined;
+      const resource = await createWebsite(
+        ctx.store,
+        ctx.drive!,
+        starterWebsite(doc ? ctx.resource.title : 'My website', doc),
+      );
+      ctx.navigate(constructOpenURL(resource.subject));
     },
   },
   {

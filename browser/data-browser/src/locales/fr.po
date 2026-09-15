@@ -68,9 +68,8 @@ msgstr "Aucune clé API OpenRouter n'est définie. Ajoutez-en une ou passez à u
 msgid "No AI model provider is available. Set one up to send — you can keep typing in the meantime."
 msgstr "Aucun fournisseur de modèle d'IA n'est disponible. Configurez-en un pour envoyer — vous pouvez continuer à taper en attendant."
 
-#: src/chunks/AI/RealAIChat.tsx
-msgid "Something went wrong"
-msgstr "Quelque chose s'est mal passé"
+#~ msgid "Something went wrong"
+#~ msgstr "Quelque chose s'est mal passé"
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Generating"
@@ -136,7 +135,9 @@ msgstr "<0/> Créer un nouvel agent"
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx src/components/AvatarCropper.tsx
+#: src/chunks/Website/WebsitePage.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
@@ -279,10 +280,15 @@ msgstr "Compacte automatiquement la conversation lorsque les jetons d'entrée d�
 
 #: src/chunks/AI/MessageContextItem.tsx
 #: src/chunks/DashboardPage/DashboardBlock.tsx
+#: src/chunks/EmojiInput/EmojiInput.tsx
 #: src/chunks/EmojiInput/EmojiInput.tsx src/chunks/RTE/EditLinkForm.tsx
+#: src/chunks/RTE/EditLinkForm.tsx
+#: src/chunks/TablePage/DerivedColumnHeading.tsx
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
 #: src/routes/SyncRoute.tsx
@@ -357,9 +363,8 @@ msgstr "Onglets des paramètres de l'IA"
 msgid "Agents"
 msgstr "Agents"
 
-#: src/chunks/AI/ClientOnlyTransport.ts
-msgid "No custom classes found on the current drive."
-msgstr "Aucune classe personnalisée trouvée sur le lecteur actuel."
+#~ msgid "No custom classes found on the current drive."
+#~ msgstr "Aucune classe personnalisée trouvée sur le lecteur actuel."
 
 #: src/chunks/AI/AIChatMessageParts/UserMessage.tsx
 #: src/chunks/Conference/ConferenceRoom.tsx
@@ -546,6 +551,7 @@ msgstr "En-têtes HTTP optionnels à envoyer lors de la connexion à ce serveur 
 #: src/chunks/PluginRuns/PluginPage.tsx
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
 #: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx src/routes/EditRoute.tsx
 #: src/routes/EditRoute.tsx
 #: src/views/OntologyPage/OntologyPage.tsx
@@ -556,6 +562,7 @@ msgstr "Modifier"
 
 #: src/chunks/AI/AgentConfigItem.tsx
 #: src/chunks/AI/AgentConfigItem.tsx src/chunks/TablePage/TableViewTabs.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Duplicate"
 msgstr "Dupliquer"
 
@@ -578,6 +585,7 @@ msgstr "Modèle par défaut"
 
 #: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
 #: src/chunks/TablePage/EditorCells/MultiRelationCell.tsx
+#: src/chunks/TablePage/EditorCells/SelectCell.tsx
 #: src/chunks/TablePage/EditorCells/SelectCell.tsx src/components/ComboBox.tsx
 #: src/components/ComboBox.tsx
 msgid "No results"
@@ -1512,9 +1520,11 @@ msgstr "Description textuelle <0/>"
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/RTE/ImagePicker.tsx
 #: src/chunks/RTE/ImagePicker.tsx src/chunks/TablePage/BreakdownDialog.tsx
+#: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx src/components/AvatarCropper.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/Settings/IntegrationSettings.tsx
@@ -1692,6 +1702,7 @@ msgstr "Cet appareil"
 #: src/chunks/TablePage/Kanban/KanbanColumn.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/chunks/TablePage/quickAdd.test.ts src/components/EditLanguagesDialog.tsx
+#: src/components/EditLanguagesDialog.tsx
 msgid "Add"
 msgstr "Ajouter"
 
@@ -1848,6 +1859,7 @@ msgstr "Définir un titre"
 msgid "Untitled"
 msgstr "Sans titre"
 
+#: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx src/components/EditableTitle.tsx
 #: src/components/EditableTitle.tsx
 msgid "Click to edit title"
@@ -2054,6 +2066,7 @@ msgstr ""
 
 #: src/actions/resourceActions.tsx
 #: src/chunks/DashboardPage/blocks/ViewBlock.tsx
+#: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx src/routes/SettingsAgent.tsx
 #: src/routes/SettingsAgent.tsx
 #: src/routes/SettingsAgent.tsx
@@ -3337,6 +3350,11 @@ msgid "Install"
 msgstr "Installer"
 
 #: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
 msgid "unset"
 msgstr "non défini"
 
@@ -3348,6 +3366,7 @@ msgstr "Remarque"
 msgid "Data Table"
 msgstr "Tableau de données"
 
+#: src/chunks/RTE/CollaborativeEditor.tsx
 #: src/chunks/RTE/CollaborativeEditor.tsx
 msgid "Untitled Agent"
 msgstr "Agent sans titre"
@@ -3465,6 +3484,7 @@ msgstr "Pas de texte alternatif"
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/Demo/SimulatedTypist.ts src/chunks/TablePage/NewColumnButton.tsx
+#: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Text"
 msgstr "Texte"
 
@@ -3503,7 +3523,11 @@ msgid "Table filters"
 msgstr "Filtres du tableau"
 
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
+#: src/chunks/TablePage/DerivedColumnHeading.tsx
 #: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/TableHeading.tsx
+#: src/chunks/TablePage/TableHeading.tsx
 #: src/chunks/TablePage/TableHeading.tsx
 msgid "Drag column"
 msgstr "Faire glisser la colonne"
@@ -3511,7 +3535,9 @@ msgstr "Faire glisser la colonne"
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/PluginRuns/ConnectNotion.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx src/chunks/TablePage/useTableView.ts
+#: src/chunks/TablePage/useTableView.ts
 msgid "View"
 msgstr "Afficher"
 
@@ -3576,6 +3602,7 @@ msgid "Filter operator"
 msgstr "Opérateur de filtre"
 
 #: src/chunks/TablePage/useTableView.ts
+#: src/chunks/TablePage/useTableView.ts
 msgid "Default View"
 msgstr "Vue par défaut"
 
@@ -3620,6 +3647,7 @@ msgstr "Entrez une URL Atomique ou recherchez (appuyez sur \"/\")"
 msgid "Search"
 msgstr "Rechercher"
 
+#: src/components/InviteForm.tsx
 #: src/components/InviteForm.tsx src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/prepareDriveSharing.ts
@@ -3629,6 +3657,7 @@ msgstr "Rechercher"
 msgid "Disabled"
 msgstr ""
 
+#: src/components/forms/MinMaxInput.tsx
 #: src/components/forms/MinMaxInput.tsx
 msgid "Value should be a round number."
 msgstr "La valeur doit être un nombre entier."
@@ -4640,6 +4669,8 @@ msgstr ""
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Syncing…"
 msgstr ""
 
@@ -4733,6 +4764,7 @@ msgstr ""
 
 #: src/chunks/AI/RealAIChat.tsx
 #: src/chunks/AI/RealAIChat.tsx src/components/pairing/PairingFlowProvider.tsx
+#: src/chunks/PluginRuns/WorkspaceControls.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "Try again"
 msgstr ""
@@ -5648,6 +5680,7 @@ msgid "Duration"
 msgstr ""
 
 #: src/chunks/TablePage/TableViewTabs.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Toggle properties"
 msgstr ""
 
@@ -5935,7 +5968,9 @@ msgstr ""
 msgid "groups"
 msgstr ""
 
+#: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx src/chunks/TablePage/rowActions.ts
+#: src/chunks/TablePage/rowActions.ts
 msgid "Value"
 msgstr ""
 
@@ -5980,6 +6015,7 @@ msgstr ""
 #: src/actions/runAction.ts
 #: src/actions/runAction.ts src/chunks/TablePage/NewColumnButton.tsx
 #: src/chunks/PluginRuns/IntegrationActions.tsx
+#: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Action"
 msgstr ""
 
@@ -7070,6 +7106,7 @@ msgstr ""
 msgid "Are you sure you want to delete"
 msgstr ""
 
+#: src/chunks/TablePage/TableExportDialog.tsx
 #: src/chunks/TablePage/TableExportDialog.tsx src/views/File/DownloadButton.tsx
 #: src/views/File/DownloadButton.tsx
 msgid "Download"
@@ -7280,6 +7317,9 @@ msgstr ""
 
 #~ msgid "Cloud Server: each editor uses one seat on this drive. An existing editor on this drive counts once. Viewers are free."
 #~ msgstr ""
+#: src/components/InviteForm.tsx
+msgid "Cloud Server: each editor uses one seat on this drive. An existing editor on this drive counts once. Viewers are free."
+msgstr ""
 
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Find your workspace"
@@ -7518,6 +7558,9 @@ msgstr ""
 
 #~ msgid "Browser collaboration is free. Editor seats apply only when this drive uses Cloud Server."
 #~ msgstr ""
+#: src/components/InviteForm.tsx
+msgid "Browser collaboration is free. Editor seats apply only when this drive uses Cloud Server."
+msgstr ""
 
 #: src/routes/InviteRoute.tsx
 msgid "Invalid invitation."
@@ -8321,6 +8364,8 @@ msgstr ""
 #: src/chunks/PluginRuns/CreateEventAutomation.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
+#: src/chunks/PluginRuns/WorkspaceControls.tsx
+#: src/chunks/PluginRuns/WorkspaceControls.tsx
 msgid "Automations"
 msgstr ""
 
@@ -8354,12 +8399,18 @@ msgstr ""
 
 #~ msgid "Use the data source UUID from Notion, not a database URL. Share its database with your Notion connection first."
 #~ msgstr ""
+#: src/chunks/PluginRuns/ConnectNotionManual.tsx
+msgid "Use the data source UUID from Notion, not a database URL. Share its database with your Notion connection first."
+msgstr ""
 
 #~ msgid "Notion connection token"
 #~ msgstr ""
 
 #~ msgid "The token is stored on your AtomicServer. Formatted text, relations, formulas and filtered views need additional mappings. Compatibility notes appear on the connection before you approve any sync."
 #~ msgstr ""
+#: src/chunks/PluginRuns/ConnectNotionManual.tsx
+msgid "The token is stored on your AtomicServer. Formatted text, relations, formulas and filtered views need additional mappings. Compatibility notes appear on the connection before you approve any sync."
+msgstr ""
 
 #: src/chunks/PluginRuns/ConnectNotion.tsx
 msgid "Connect Notion"
@@ -8432,6 +8483,9 @@ msgstr ""
 
 #~ msgid "Sync titles, descriptions and status in both directions. Create issues from either app."
 #~ msgstr ""
+#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
+msgid "Sync titles, descriptions and status in both directions. Create issues from either app."
+msgstr ""
 
 #~ msgid "Start automations when a new issue is discovered."
 #~ msgstr ""
@@ -8770,6 +8824,9 @@ msgstr ""
 
 #~ msgid "Connect a Notion database, then review what will sync before making changes."
 #~ msgstr ""
+#: src/chunks/PluginRuns/ConnectNotionManual.tsx
+msgid "Connect a Notion database, then review what will sync before making changes."
+msgstr ""
 
 #: src/chunks/PluginRuns/ConnectGitHub.tsx
 msgid "Enter a repository and token to continue."
@@ -8809,6 +8866,9 @@ msgstr ""
 
 #~ msgid "Only databases shared with this connection appear. Reconnect to select more pages in Notion, then search again. A database with multiple data sources can appear more than once."
 #~ msgstr ""
+#: src/chunks/PluginRuns/ConnectNotion.tsx
+msgid "Only databases shared with this connection appear. Reconnect to select more pages in Notion, then search again. A database with multiple data sources can appear more than once."
+msgstr ""
 
 #: src/chunks/PluginRuns/ConnectNotion.tsx
 msgid "Load more databases"
@@ -8816,6 +8876,9 @@ msgstr ""
 
 #~ msgid "No databases found. Try another name, or reconnect and grant access to the database in Notion."
 #~ msgstr ""
+#: src/chunks/PluginRuns/ConnectNotion.tsx
+msgid "No databases found. Try another name, or reconnect and grant access to the database in Notion."
+msgstr ""
 
 #~ msgid "Connect another workspace"
 #~ msgstr ""
@@ -8826,12 +8889,18 @@ msgstr ""
 
 #~ msgid "Choose what to sync from Notion. You’ll review the first sync before any changes are applied."
 #~ msgstr ""
+#: src/chunks/PluginRuns/ConnectNotion.tsx
+msgid "Choose what to sync from Notion. You’ll review the first sync before any changes are applied."
+msgstr ""
 
 #~ msgid "Loading connections…"
 #~ msgstr ""
 
 #~ msgid "Notion sign-in needs to be configured by your server administrator. Existing connections can still be used."
 #~ msgstr ""
+#: src/chunks/PluginRuns/ConnectNotion.tsx
+msgid "Notion sign-in needs to be configured by your server administrator. Existing connections can still be used."
+msgstr ""
 
 #: src/chunks/PluginRuns/ConnectNotion.tsx
 msgid "Reconnect Notion"
@@ -8958,6 +9027,7 @@ msgstr ""
 #: src/chunks/PluginRuns/ConnectClockify.tsx
 #: src/chunks/PluginRuns/ImportMT940.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
+#: src/chunks/Website/WebsitePage.tsx
 msgid "Preparing preview…"
 msgstr ""
 
@@ -9311,6 +9381,7 @@ msgid "Choose which view opens when you visit this workspace."
 msgstr ""
 
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
+#: src/chunks/PluginRuns/WorkspaceControls.tsx
 msgid "Connections"
 msgstr ""
 
@@ -9390,6 +9461,9 @@ msgstr ""
 
 #~ msgid "Connect your personal account through LocalThought, then return here to preview an import."
 #~ msgstr ""
+#: src/chunks/PluginRuns/ConnectLocalThought.tsx
+msgid "Connect your personal account through LocalThought, then return here to preview an import."
+msgstr ""
 
 #~ msgid "Open imported records"
 #~ msgstr ""
@@ -9416,6 +9490,10 @@ msgstr ""
 
 #~ msgid "Devonian issue tracker demo"
 #~ msgstr ""
+
+#: src/routes/DevonianDemoRoute.tsx
+msgid "Devonian issue tracker demo"
+msgstr ""
 
 #: src/routes/DevonianDemoRoute.tsx
 msgid "Sync issues and comments in both directions. Devonian runs in this browser; the Atomic tracker is stored on this device."
@@ -9491,6 +9569,9 @@ msgstr ""
 
 #~ msgid "Connect through LocalThought. The tenant secret is used in this tab to start the connection and is never saved."
 #~ msgstr ""
+#: src/routes/DevonianDemoRoute.tsx
+msgid "Connect through LocalThought. The tenant secret is used in this tab to start the connection and is never saved."
+msgstr ""
 
 #: src/routes/DevonianDemoRoute.tsx
 msgid "Connect GitHub tracker"
@@ -9524,6 +9605,10 @@ msgstr ""
 
 #~ msgid "Imports the collections described by the platform, following pagination. Review changes before applying them. No background sync. {0}"
 #~ msgstr ""
+#. 0: writable ? ' After importing, preview supported edits to send changes back.' \\: ' No provider writes.'
+#: src/chunks/PluginRuns/ConnectLocalThought.tsx
+msgid "Imports the collections described by the platform, following pagination. Review changes before applying them. No background sync. {0}"
+msgstr ""
 
 #: src/chunks/PluginRuns/CalendarSync.tsx
 msgid "Preview edits for Google"
@@ -9642,6 +9727,7 @@ msgstr ""
 
 #~ msgid "<0/>{0} Enable keyboard drag & drop in sidebar"
 #~ msgstr ""
+#~ msgstr "<0/>{0} Activer le glisser-déposer au clavier dans la barre latérale"
 
 #~ msgid "<0/> Search"
 #~ msgstr ""
@@ -9676,6 +9762,9 @@ msgstr ""
 #~ msgid "Manage account & plan →"
 #~ msgstr ""
 
+#~ msgid "Manage account & plan →"
+#~ msgstr ""
+
 #~ msgid "<0/> Create Invite"
 #~ msgstr ""
 
@@ -9689,6 +9778,9 @@ msgstr ""
 #~ msgstr ""
 
 #~ msgid "<0/> Resource with error"
+#~ msgstr ""
+
+#~ msgid "Could not update your list: no personal drive is set up for this account yet."
 #~ msgstr ""
 
 #~ msgid "Could not update your list: no personal drive is set up for this account yet."
@@ -9750,6 +9842,27 @@ msgstr ""
 
 #~ msgid "<0/> This document needs to be updated to the new format in order to be edited."
 #~ msgstr ""
+
+#~ msgid ""
+#~ "{0}{1}\n"
+#~ "const value = resource.get({2});\n"
+#~ ""
+#~ msgstr ""
+
+#~ msgid "{0}const resource = await store.getResource{1}('{2}');"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "{0}\n"
+#~ "const value = {1};\n"
+#~ ""
+#~ msgstr ""
+
+#~ msgid "Sign in to access this drive"
+#~ msgstr ""
+
+#~ msgid "<0/> This document needs to be updated to the new format in order to be edited."
+#~ msgstr "<0/> Ce document doit être mis à jour vers le nouveau format afin de pouvoir être modifié."
 
 #~ msgid ""
 #~ "{0}{1}\n"
@@ -9894,6 +10007,12 @@ msgstr ""
 #~ msgid "Set up Cloud Server"
 #~ msgstr ""
 
+#~ msgid "Timed out connecting to the Cloud Server node."
+#~ msgstr ""
+
+#~ msgid "Keep an encrypted copy of this workspace in {0}. It is sealed on this device, so we store it without being able to read it."
+#~ msgstr ""
+
 #~ msgid "<0/> Restore"
 #~ msgstr ""
 
@@ -10001,6 +10120,7 @@ msgstr ""
 
 #~ msgid "Enter your recovery code to show your secret or add a passkey on this device. Your existing recovery code will keep working."
 #~ msgstr ""
+#~ msgstr "Saisissez votre code de récupération pour afficher votre secret ou ajouter une clé d’accès sur cet appareil. Votre code de récupération actuel restera valide."
 
 #~ msgid "Peer sync"
 #~ msgstr ""
@@ -10599,6 +10719,140 @@ msgid "The response was interrupted."
 #~ "Saisissez votre code de récupération pour afficher votre secret ou "
 #~ "ajouter une clé d’accès sur cet appareil. Votre code de récupération "
 #~ "actuel restera valide."
+#: src/actions/resourceActions.tsx
+msgid "New website"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Release ready"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Unreleased changes"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Draft"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Design with Assistant"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Prepare release"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Content stays in Atomic. Export a frozen website for static hosting. Online publishing is not connected yet."
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Create release"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Review release"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "This freezes the pages shown below. It does not make your website public."
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "documents,"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "selected rows"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Review website release"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Pages and content"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Page"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Add a document"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Accent color"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Typography"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Show draft"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Show release"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "No release yet."
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Release review"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Frozen release"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Live draft preview"
+msgstr ""
+
+#: src/chunks/Website/WebsiteInlinePreview.tsx
+#: src/chunks/Website/WebsitePage.tsx
+#: src/chunks/Website/WebsitePreview.tsx
+msgid "Website preview"
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "Design a website with Assistant, using Atomic documents and tables."
+msgstr ""
+
+#: src/actions/resourceActions.tsx
+msgid "My website"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Done editing"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Edit on page"
+msgstr ""
+
+#: src/chunks/Website/WebsiteInlinePreview.tsx
+msgid "Click an outlined text field to edit its Atomic record. Leave the field to save. Document formatting stays in the document editor."
+msgstr ""
+
+#: src/chunks/Website/WebsiteInlinePreview.tsx
+msgid "Saving content…"
+msgstr ""
+
+#: src/chunks/Website/WebsiteInlinePreview.tsx
+msgid "Content saved. The existing release is unchanged."
+msgstr ""
+
+#. 0: targets.length
+#: src/chunks/Website/WebsiteInlinePreview.tsx
+msgid "{0} editable text fields"
+msgstr ""
 
 #: src/views/File/ConvertToDocumentButton.tsx
 msgid "Converted to document"
@@ -10639,3 +10893,5 @@ msgstr ""
 #: src/helpers/searchResultHint.ts
 msgid "Matched title"
 msgstr ""
+#~ msgid "The model request failed."
+#~ msgstr ""

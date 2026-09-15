@@ -1,0 +1,345 @@
+import { test, expect } from '@playwright/test';
+import { before } from './test-utils';
+import { enableAIForTesting, setupScriptedToolCallMocks } from './ai-mock';
+
+/** A private document stays editable; an exported release keeps its old text. */
+test('website document preview, frozen release and reload', async ({
+  page,
+}) => {
+  await before({ page });
+  await page
+    .getByRole('button', { name: 'New Document', exact: true })
+    .first()
+    .click();
+  await page.locator('#document-editor').waitFor();
+  await page
+    .locator('#document-editor')
+    .fill('This is the first published garden note.');
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByPlaceholder(/filter actions/i).fill('website');
+  await page.getByTestId('menu-item-new-website').click();
+  const prepare = page.getByRole('button', {
+    name: 'Prepare release',
+    exact: true,
+  });
+  await expect(prepare).toBeEnabled({ timeout: 30000 });
+  const websiteURL = page.url();
+  const preview = page.frameLocator('iframe[title="Website preview"]');
+  await expect(
+    preview.getByText('This is the first published garden note.'),
+  ).toBeVisible();
+  await prepare.click();
+  await page
+    .getByRole('button', { name: 'Create release', exact: true })
+    .click();
+  await expect(page.getByText('Frozen release', { exact: true })).toBeVisible();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'Download website', exact: true }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe('website.zip');
+  await download.saveAs(test.info().outputPath('website.zip'));
+  await page.getByRole('link', { name: 'Edit document', exact: true }).click();
+  await page
+    .locator('#document-editor')
+    .fill('A private change after the release.');
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await page.goto(websiteURL);
+  await expect(prepare).toBeEnabled({ timeout: 30000 });
+  await expect(
+    preview.getByText('A private change after the release.'),
+  ).toBeVisible();
+  await expect(
+    page.getByText('Unreleased changes', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Show release', exact: true }).click();
+  await expect(
+    preview.getByText('This is the first published garden note.'),
+  ).toBeVisible();
+  await expect(
+    preview.getByText('A private change after the release.'),
+  ).toHaveCount(0);
+  await page.reload();
+  await expect(prepare).toBeEnabled({ timeout: 30000 });
+  await expect(
+    preview.getByText('A private change after the release.'),
+  ).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath('website-workspace.png'),
+    fullPage: true,
+  });
+});
+
+// The model is scripted, but these are the real Assistant tools and Atomic writes.
+test('Assistant creates and redesigns a website using existing table content', async ({
+  page,
+}) => {
+  test.slow();
+  let tableSubject = '';
+  let rowSubject = '';
+  let otherSubject = '';
+  let documentSubject = '';
+  const config = () => ({
+    version: 1,
+    title: 'Field notes',
+    description: 'Ideas for small gardens',
+    language: 'en',
+    accent: '#315c49',
+    background: '#f5f3eb',
+    font: 'serif',
+    css: 'header{padding:1.5rem 0}.intro{position:sticky;top:2rem}main{padding-top:3rem}h1{font-family:Georgia,serif;font-weight:400}.garden-notes{border-top:4px solid var(--accent);padding-top:1rem}.card{box-shadow:0 6px 24px #20302008}body{background:radial-gradient(ellipse at top left,#e4ebd7,transparent 55%),var(--paper)}',
+    pages: [
+      {
+        path: '/',
+        title: 'Home',
+        sections: [
+          { kind: 'intro', index: 0, span: 'half', className: 'garden-intro' },
+          { kind: 'table', index: 0, span: 'half', className: 'garden-notes' },
+        ],
+        documents: [],
+        tables: [
+          {
+            table: tableSubject,
+            title: 'Growing notes',
+            layout: 'grid',
+            search: true,
+            rows: [rowSubject, otherSubject],
+            columns: [
+              {
+                property: 'https://atomicdata.dev/properties/name',
+                label: 'Note',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        path: '/about/',
+        title: 'About the garden',
+        documents: [documentSubject],
+        tables: [],
+        sections: [
+          { kind: 'intro', index: 0, span: 'half', className: 'about-garden' },
+          {
+            kind: 'document',
+            index: 0,
+            span: 'half',
+            className: 'garden-story',
+          },
+        ],
+      },
+    ],
+  });
+  const websiteFrom = (results: string[]) => {
+    for (const result of results) {
+      const match = /"website"\s*:\s*"([^"]+)"/.exec(result);
+      if (match) return match[1];
+    }
+    throw new Error('Assistant did not return a website.');
+  };
+  const state = await setupScriptedToolCallMocks(
+    page,
+    [
+      { tool: 'create_website', args: () => ({ config: config() }) },
+      {
+        tool: 'describe_website',
+        args: results => ({ website: websiteFrom(results) }),
+      },
+      {
+        tool: 'update_website',
+        args: results => ({
+          website: websiteFrom(results),
+          config: {
+            ...config(),
+            title: 'The garden notebook',
+            accent: '#a64427',
+            font: 'sans',
+          },
+        }),
+      },
+    ],
+    'The website design is ready to preview.',
+  );
+  await enableAIForTesting(page);
+  await before({ page });
+  await page
+    .getByRole('button', { name: 'New Document', exact: true })
+    .first()
+    .click();
+  await page
+    .locator('#document-editor')
+    .fill(
+      'A small garden can change the rhythm of a day. We collect practical growing notes for balconies, windowsills and city plots. Start with one plant, watch what changes, and keep a notebook. These notes are edited in Atomic; each website release preserves the version we chose to share.',
+    );
+  documentSubject = new URL(page.url()).searchParams.get('subject')!;
+  expect(documentSubject).toBeTruthy();
+  const fixture = await page.evaluate(async () => {
+    const store = window.store;
+    const name = 'https://atomicdata.dev/properties/name';
+    const table = await store.newResource({
+      parent: store.getDrive(),
+      isA: ['https://atomicdata.dev/classes/Table'],
+      propVals: {
+        [name]: 'Garden notes',
+        'https://atomicdata.dev/properties/classtype':
+          'https://atomicdata.dev/classes/Resource',
+      },
+    });
+    await table.save();
+    const row = await store.newResource({
+      parent: table.subject,
+      propVals: {
+        [name]: 'Sow spinach in September',
+        'https://atomicdata.dev/properties/description':
+          'PRIVATE FIELD MUST NOT EXPORT',
+      },
+    });
+    await row.save();
+    const unrelated = await store.newResource({
+      parent: table.subject,
+      propVals: { [name]: 'PRIVATE ROW MUST NOT EXPORT' },
+    });
+    await unrelated.save();
+    const other = await store.newResource({
+      parent: table.subject,
+      propVals: { [name]: 'Grow rosemary on a sunny balcony' },
+    });
+    await other.save();
+    return { table: table.subject, row: row.subject, other: other.subject };
+  });
+  tableSubject = fixture.table;
+  rowSubject = fixture.row;
+  otherSubject = fixture.other;
+  const sidebar = page.locator('[data-open]');
+  const chatInput = sidebar.locator('[contenteditable="true"]');
+  await expect(chatInput).toBeVisible({ timeout: 15000 });
+  await chatInput.fill(
+    'Make a website from my garden notes and refine the design.',
+  );
+  await sidebar.getByTitle('Send').click();
+  await expect(
+    page.getByText('The website design is ready to preview.'),
+  ).toBeVisible({ timeout: 60000 });
+  expect(state.toolResults.join('\n')).toContain('checkedPages');
+  expect(state.toolResults.join('\n')).toContain('updated');
+  const subject = await page.evaluate(() => {
+    let found = '';
+    window.store.resources.forEach(resource => {
+      if (
+        resource.get('https://atomicdata.dev/properties/name') ===
+        'The garden notebook'
+      )
+        found = resource.subject;
+    });
+    return found;
+  });
+  expect(subject).toBeTruthy();
+  await page.goto(
+    `${new URL(page.url()).origin}/app/show?subject=${encodeURIComponent(subject)}`,
+  );
+  await expect(
+    page.getByRole('button', { name: 'Prepare release' }),
+  ).toBeEnabled({ timeout: 30000 });
+  const preview = page.frameLocator('iframe[title="Website preview"]');
+  await expect(
+    preview.getByRole('heading', { name: 'The garden notebook', exact: true }),
+  ).toBeVisible();
+  await expect(
+    preview
+      .frameLocator('iframe[title="Search Growing notes"]')
+      .getByText('Sow spinach in September'),
+  ).toBeVisible();
+  await expect(preview.getByText('PRIVATE FIELD MUST NOT EXPORT')).toHaveCount(
+    0,
+  );
+  await expect(preview.getByText('PRIVATE ROW MUST NOT EXPORT')).toHaveCount(0);
+  const search = preview.frameLocator('iframe[title="Search Growing notes"]');
+  await expect(search.getByText('2 results', { exact: true })).toBeVisible();
+  await expect(search.getByText('PRIVATE FIELD MUST NOT EXPORT')).toHaveCount(
+    0,
+  );
+  await expect(search.getByText('PRIVATE ROW MUST NOT EXPORT')).toHaveCount(0);
+  await search.getByRole('searchbox').fill('rosemary');
+  await expect(search.getByText('1 results', { exact: true })).toBeVisible();
+  await expect(search.getByText('Sow spinach in September')).toHaveCount(0);
+  await search.getByRole('searchbox').fill('no such plant');
+  await expect(search.getByText('No matching results')).toBeVisible();
+  await search.getByRole('searchbox').fill('');
+  await preview
+    .getByRole('link', { name: 'About the garden', exact: true })
+    .click();
+  await expect(
+    preview.getByRole('heading', { name: 'About the garden', exact: true }),
+  ).toBeVisible();
+  await preview.getByRole('link', { name: 'Home', exact: true }).click();
+  await expect(search.getByRole('searchbox')).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Prepare release', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Create release', exact: true })
+    .click();
+  const [siteDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'Download website', exact: true }).click(),
+  ]);
+  await siteDownload.saveAs(test.info().outputPath('garden-site.zip'));
+  await page.getByRole('button', { name: 'Show draft', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit on page', exact: true }).click();
+  await expect(preview.locator('[contenteditable="true"]')).toHaveCount(2);
+  const field = preview.locator('[contenteditable="true"]').first();
+  await field.fill('Plant winter lettuce in October');
+  await page
+    .getByText('Click an outlined text field', { exact: false })
+    .click();
+  await expect(
+    page.getByText('Content saved. The existing release is unchanged.'),
+  ).toBeVisible();
+  // Clearing a text field is an explicit write, not a silently ignored blur.
+  await field.fill('');
+  await page
+    .getByText('Click an outlined text field', { exact: false })
+    .click();
+  await expect
+    .poll(async () =>
+      page.evaluate(
+        async subject =>
+          (await window.store.getResource(subject)).get(
+            'https://atomicdata.dev/properties/name',
+          ),
+        rowSubject,
+      ),
+    )
+    .toBe('');
+  await field.fill('Plant winter lettuce in October');
+  await page
+    .getByText('Click an outlined text field', { exact: false })
+    .click();
+  await expect(
+    page.getByText('Content saved. The existing release is unchanged.'),
+  ).toBeVisible();
+  const stored = await page.evaluate(
+    async subject =>
+      (await window.store.getResource(subject)).get(
+        'https://atomicdata.dev/properties/name',
+      ),
+    rowSubject,
+  );
+  expect(stored).toBe('Plant winter lettuce in October');
+  await page.getByRole('button', { name: 'Done editing', exact: true }).click();
+  await expect(
+    search.getByText('Plant winter lettuce in October'),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Show release', exact: true }).click();
+  await expect(preview.getByText('Sow spinach in September')).toBeVisible();
+  await expect(preview.locator('[contenteditable]')).toHaveCount(0);
+  await page.reload();
+  await expect(search.getByText('Plant winter lettuce in October')).toBeVisible(
+    { timeout: 30000 },
+  );
+  await page.screenshot({
+    path: test.info().outputPath('assistant-website.png'),
+    fullPage: true,
+  });
+});

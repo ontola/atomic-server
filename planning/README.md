@@ -47,6 +47,8 @@ Ranked by impact. Each links to the plan that owns the work.
 10. ~~**Dashboards have no entry point and fork review shows only a count.**~~ Both closed 2026-09-16: a table's dashboard is a view tab, and the fork bar shows the per-property diff. Still open there: suggest-for-non-writers, per-property revert, Canvas forks. [`dashboards.md`](./dashboards.md), [`drafts-and-suggestions.md`](./drafts-and-suggestions.md).
 
 ## Active
+- [Drive sharing and hosting state](drive-sharing-state.md) — verified transition for unenrolled drives; authoritative seat counts and staging acceptance remain.
+- [Assistant-authored websites](./assistant-websites.md) — first local prototype validated; plugin abstraction audit and remaining SaaS deployment work.
 
 Remaining work, not "this file exists."
 
