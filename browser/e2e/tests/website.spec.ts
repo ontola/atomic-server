@@ -41,9 +41,8 @@ test('website document preview, frozen release and reload', async ({
   expect(download.suggestedFilename()).toBe('website.zip');
   await download.saveAs(test.info().outputPath('website.zip'));
   await page
-    .locator('a')
-    .filter({ has: page.getByText('Document', { exact: true }) })
-    .filter({ has: page.locator('small') })
+    .getByRole('region', { name: 'Website content' })
+    .getByRole('link', { name: 'Document', exact: true })
     .click();
   await page
     .locator('#document-editor')

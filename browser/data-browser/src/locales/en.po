@@ -1445,7 +1445,6 @@ msgstr "Folder"
 msgid "ChatRoom"
 msgstr "ChatRoom"
 
-#: src/chunks/Website/WebsitePage.tsx
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 msgid "Document"
@@ -2316,7 +2315,6 @@ msgid "Ok"
 msgstr "Ok"
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
-#: src/chunks/Website/WebsitePage.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/views/OntologyPage/Class/NewClassInstanceButton.tsx
 msgid "Table"
@@ -3730,7 +3728,6 @@ msgid "Quote"
 msgstr "Quote"
 
 #: src/chunks/RTE/SlashMenu/CommandsExtension.ts
-#: src/chunks/Website/WebsitePage.tsx
 msgid "Image"
 msgstr "Image"
 
@@ -10909,3 +10906,7 @@ msgstr "Export actions"
 #: src/chunks/Website/WebsiteExportPage.tsx
 msgid "Loading saved preview…"
 msgstr "Loading saved preview…"
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Website content"
+msgstr "Website content"

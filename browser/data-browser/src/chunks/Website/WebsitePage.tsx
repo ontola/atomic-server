@@ -3,15 +3,14 @@ import styled from 'styled-components';
 import {
   dataBrowser,
   useCanWrite,
-  useResource,
   useStore,
   type Resource,
 } from '@tomic/react';
 import { Button } from '@components/Button';
 import { Row, Column } from '@components/Row';
-import { AtomicLink } from '@components/AtomicLink';
+import { ResourceRow } from '@views/ResourceRow';
 import Field from '@components/forms/Field';
-import { FaRegFileLines, FaTable, FaPlus, FaImage } from 'react-icons/fa6';
+import { FaPlus } from 'react-icons/fa6';
 import { ResourceSelector } from '@components/forms/ResourceSelector';
 import { useAISidebar, newContextItem } from '@components/AI/AISidebarContext';
 import type { AIAtomicResourceMessageContext } from '@chunks/AI/types';
@@ -256,7 +255,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
         </Review>
       )}
       <Layout>
-        <Controls>
+        <Controls role='region' aria-label='Website content'>
           <h2>Content</h2>
           {config && (
             <Field label='Page' fieldId='website-page'>
@@ -274,20 +273,16 @@ export function WebsitePage({ resource }: { resource: Resource }) {
             </Field>
           )}
           {currentPage?.documents.map(subject => (
-            <ContentSource key={subject} subject={subject} kind='document' />
+            <ResourceRow key={subject} subject={subject} clickable />
           ))}
           {currentPage?.tables.map(table => (
-            <ContentSource
-              key={table.table}
-              subject={table.table}
-              kind='table'
-            />
+            <ResourceRow key={table.table} subject={table.table} clickable />
           ))}
           {currentPage?.media?.map(media => (
-            <ContentSource
+            <ResourceRow
               key={media.subject}
               subject={media.subject}
-              kind='image'
+              clickable
             />
           ))}
           {canWrite && (
@@ -392,63 +387,6 @@ export function WebsitePage({ resource }: { resource: Resource }) {
     </Workspace>
   );
 }
-
-function ContentSource({
-  subject,
-  kind,
-}: {
-  subject: string;
-  kind: 'document' | 'table' | 'image';
-}) {
-  const source = useResource(subject);
-
-  return (
-    <SourceLink subject={subject} clean>
-      {kind === 'image' ? (
-        <FaImage aria-hidden />
-      ) : kind === 'table' ? (
-        <FaTable aria-hidden />
-      ) : (
-        <FaRegFileLines aria-hidden />
-      )}
-      <span>
-        <strong>{source.title}</strong>
-        <small>
-          {kind === 'table' ? 'Table' : kind === 'image' ? 'Image' : 'Document'}
-        </small>
-      </span>
-    </SourceLink>
-  );
-}
-
-const SourceLink = styled(AtomicLink)`
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  padding: 0.6rem;
-  border-radius: ${p => p.theme.radius};
-  color: inherit;
-  text-decoration: none;
-  &:hover {
-    background: ${p => p.theme.colors.bg1};
-  }
-  > svg {
-    flex-shrink: 0;
-    color: ${p => p.theme.colors.textLight};
-  }
-  span {
-    min-width: 0;
-  }
-  strong {
-    display: block;
-    font-weight: 500;
-    overflow-wrap: anywhere;
-  }
-  small {
-    display: block;
-    color: ${p => p.theme.colors.textLight};
-  }
-`;
 
 const Workspace = styled.div`
   padding: ${p => p.theme.size(3)};

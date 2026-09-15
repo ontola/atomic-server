@@ -1445,7 +1445,6 @@ msgstr "Carpeta"
 msgid "ChatRoom"
 msgstr "Sala de chat"
 
-#: src/chunks/Website/WebsitePage.tsx
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 msgid "Document"
@@ -2316,7 +2315,6 @@ msgid "Ok"
 msgstr "Aceptar"
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
-#: src/chunks/Website/WebsitePage.tsx
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
 #: src/views/OntologyPage/Class/NewClassInstanceButton.tsx
 msgid "Table"
@@ -3730,7 +3728,6 @@ msgid "Quote"
 msgstr "Cita"
 
 #: src/chunks/RTE/SlashMenu/CommandsExtension.ts
-#: src/chunks/Website/WebsitePage.tsx
 msgid "Image"
 msgstr "Imagen"
 
@@ -10869,4 +10866,8 @@ msgstr ""
 
 #: src/chunks/Website/WebsiteExportPage.tsx
 msgid "Loading saved preview…"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Website content"
 msgstr ""
