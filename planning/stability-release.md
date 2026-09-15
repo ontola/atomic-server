@@ -529,7 +529,10 @@ Only a disposable local bucket and synthetic data were used. The test container
 was removed after validation; the JSON reports and local Vault fixtures remain.
 
 
-## Local diagnostic recorder — 2026-09-15
+## Initial local diagnostic recorder — 2026-09-15
+
+Historical implementation below. Default persistent recording now supersedes the
+opt-in/memory-only policy and 30-minute app recording limit; see schema 3 below.
 
 - [x] Add an opt-in recorder per Store, with fixed event codes and explicit numeric
   fields. Resource aliases use weak object identity within one recording; no URLs,
@@ -582,3 +585,64 @@ compiler/feedback tests and app typecheck pass. Browser run
 freshly rebuilt assets (17.7 seconds). The preceding build attempt ran out of
 Cargo cache space; removing stale Atomic Server incremental caches allowed the
 same server build to complete. No tests or hooks were bypassed.
+
+## Agent-readable diagnostics (schema 2)
+
+- [x] Add separate local persistence, server submission, outbox and reconciliation boundaries.
+- [x] Include ordered evidence IDs, operation IDs and anonymous resource aliases; document that alias correlation is not causality and call ordinals are not proven retries.
+- [x] Embed event meanings, missing capabilities, collection limits and dropped/unfinished evidence counts in the frozen report.
+- [x] Preserve opt-in preview/export and content-free recording.
+- [x] Add an investigation guide and deterministic fault-injection evidence tests (see `browser/DIAGNOSTICS.md`).
+- [x] Run an initial blind cheaper-model triage pilot: GPT-5.6 Luna correctly interpreted four synthetic reports (19/20 qualitative rubric points). See `browser/diagnostic-evaluations/2026-09-15/README.md`.
+- [ ] Broaden to independent runs and real transport faults; the pilot does not establish production accuracy or repair ability.
+
+Validation: the full library suite passed (511 tests), followed by the added
+reconciliation test (12 diagnostic tests total). Nine report/privacy tests,
+library/app/E2E type checks, workspace lint, and both Feedback React Compiler
+checks passed. A fresh frontend build and recovered server build passed;
+all five feedback browser tests passed in
+`.e2e-runs/2026-09-15T11-20-27.582Z-q9g1ag` (17.8s), including schema-2 export,
+privacy, download and explicit inclusion. Initial server compilation exhausted
+the shared cache; deleting older rebuildable incremental entries resolved it.
+The frontend build also refreshed locale metadata in already-modified catalogs.
+
+
+## Default persistent diagnostics (schema 3)
+
+- [x] Enable app recording by default; standalone library Stores remain opt-in.
+- [x] Use independent IndexedDB storage with two-second batched transactions, a
+  shared 500-event / 20-session cap and ten-minute retention on reads/writes.
+- [x] Restore prior recording sessions without merging their aliases, operation
+  IDs, elapsed times or build identities. Export no persistent IDs/timestamps.
+- [x] Freeze history when Feedback opens; keep explicit inclusion unchecked.
+- [x] Persist disable-and-clear; reset on account changes and fence stale tabs.
+- [x] Expose memory fallback, pending writes and failed preference/clear operations.
+- [x] Test retention, reload, stale writer and account-reset races, failure handling
+  and privacy allowlists at the helper layer.
+- [x] Verify the real IndexedDB reload/disable/multi-tab journey in Chromium.
+
+Limits: batches can be lost in a crash. Background timers can be delayed. Expired
+records remain on disk until the app next accesses storage. If IndexedDB cannot
+open, its stored preference cannot be read and this session records in memory.
+Clearing failures stop recording and require an explicit retry or site-data clear.
+
+
+Validation for schema 3: all 512 library tests and 916 app tests passed; workspace
+lint, app/E2E TypeScript checks and the three edited React modules' compiler checks
+passed. Six Chromium feedback tests passed (24.7s) in
+`.e2e-runs/2026-09-15T11-57-28.100Z-v5b0qw`, including real IndexedDB reload,
+persisted disable/clear and cross-tab pausing. The preview screenshot was inspected.
+The embedded and built frontend index hashes matched for that run.
+
+An initial browser attempt was invalidated by a standalone frontend rebuild
+without the runner's E2E environment; the final run used the normal runner end to
+end. Broad app tests also exposed a compiler-hook fixture timeout: its CLI changed
+TMPDIR only after fixture Git setup. A fresh-TMPDIR Git probe measured 2.9 seconds
+versus roughly 25ms for subsequent calls, exceeding the hook's five-second budget
+under load. Fixture setup now uses the same TMPDIR as its CLI; the normal parallel
+suite passed without changing the production hook's timeout or checks.
+
+Existing locale edits were preserved; only five new diagnostic UI messages were
+added to each catalog. No real feedback was sent; browser tests intercepted it.
+
+- [x] Simplify feedback diagnostics: keep the explicit “Include diagnostic data” checkbox between feedback and email, and place recording controls and preview inside a collapsed Diagnostics disclosure. Existing browser scenarios now expand the disclosure before using those controls.

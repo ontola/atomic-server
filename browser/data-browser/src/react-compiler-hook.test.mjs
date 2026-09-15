@@ -19,7 +19,14 @@ const root = join(dir, 'repo with spaces');
 const src = join(root, 'browser/data-browser/src');
 mkdirSync(src, { recursive: true });
 const git = (...args) =>
-  execFileSync('git', args, { cwd: root, stdio: 'pipe' });
+  execFileSync('git', args, {
+    cwd: root,
+    stdio: 'pipe',
+    // Match the CLI test's environment. On macOS a fresh TMPDIR triggers
+    // toolchain initialization; do that during fixture setup, not inside
+    // the hook's bounded Git probe.
+    env: { ...process.env, TMPDIR: dir },
+  });
 git('init', '-q');
 git(
   '-c',

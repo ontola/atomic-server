@@ -3651,6 +3651,23 @@ export class Resource<C extends OptionalClass = any> {
   public async persistToClientDb(
     options: { required?: boolean } = {},
   ): Promise<void> {
+    const finish = this.store.diagnostics.beginBoundary(
+      'local',
+      this.__internalObject,
+    );
+
+    try {
+      const written = await this.persistToClientDbInner(options);
+      finish(written ? 'ok' : 'skipped');
+    } catch (error) {
+      finish(error instanceof RequestCancelledError ? 'cancelled' : 'error');
+      throw error;
+    }
+  }
+
+  private async persistToClientDbInner(options: {
+    required?: boolean;
+  }): Promise<boolean> {
     // The identity database can be between workers while its key is derived.
     // A save must not resolve in that gap without writing its snapshot.
     const identity = this.store.getAgent()?.subject;
@@ -3671,7 +3688,7 @@ export class Resource<C extends OptionalClass = any> {
 
       // Online clients without OPFS (including desktop) rely on the server's
       // durable acknowledgement. This optional cache is not their save target.
-      return;
+      return false;
     }
 
     // A resource without propvals still gets its `@id` row: this path is the
@@ -3696,6 +3713,8 @@ export class Resource<C extends OptionalClass = any> {
       // Tell the store's dedup cache what is now on disk, so the next
       // `addResource` for this subject does not rewrite the same row.
       this.store.recordPersistedState(this.subject, jsonAd, snapshot);
+
+      return true;
     } catch (e) {
       closePersist({ err: e instanceof Error ? e.message : String(e) });
 

@@ -147,6 +147,18 @@ const store = new Store({
   connect: !isOriginWithoutNode(serverUrl),
 });
 
+import { PersistentDiagnostics } from './helpers/persistent-diagnostics';
+const persistentDiagnostics = new PersistentDiagnostics(store, undefined, {
+  reset: locked,
+});
+// Best effort lifecycle flush; never await it in an application save path.
+window.addEventListener('pagehide', () => {
+  void persistentDiagnostics.flush();
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') void persistentDiagnostics.flush();
+});
+
 const initialDrive = driveStorage.get();
 
 if (initialDrive) {
