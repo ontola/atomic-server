@@ -10593,3 +10593,7 @@ msgstr ""
 #: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 msgid "Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google."
 msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "The response was interrupted."
+msgstr ""

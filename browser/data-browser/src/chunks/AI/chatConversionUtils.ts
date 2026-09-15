@@ -5,13 +5,11 @@ import {
   ai,
   core,
   server,
-  type JSONObject,
+  type JSONValue,
   dataBrowser,
 } from '@tomic/react';
 import {
-  getToolName,
   isToolUIPart,
-  type DynamicToolUIPart,
   type FileUIPart,
   type ReasoningUIPart,
   type SourceUrlUIPart,
@@ -26,7 +24,7 @@ import {
   type AtomicUIMessage,
   isAtomicResourceContext,
 } from './types';
-import { addFieldsIf } from '@helpers/addIf';
+import { restoreToolPart, toolPartValues } from './toolHistory';
 
 const TAG_TO_ROLE_MAPPING = {
   'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/user': 'user',
@@ -63,7 +61,13 @@ export const uiMessageToResource = async (
   message: AtomicUIMessage,
   parent: Resource<Ai.AiChat>,
   store: Store,
-  { persistToServer = true }: { persistToServer?: boolean } = {},
+  {
+    persistToServer = true,
+    existingResource,
+  }: {
+    persistToServer?: boolean;
+    existingResource?: Resource<Ai.AiMessage>;
+  } = {},
 ): Promise<Resource<Ai.AiMessage>> => {
   // Summary messages are stored with role 'summary' regardless of their UI role.
   const persistedRole = message.metadata?.isSummary ? 'summary' : message.role;
@@ -79,14 +83,29 @@ export const uiMessageToResource = async (
   // attempt — that was the ai-message ingest loop. The outbox now classifies
   // "missing. Is required in class" as terminal (local-outbox.ts) so a malformed
   // commit is dropped instead of retried forever.
-  const messageResource = await store.newResource<Ai.AiMessage>({
-    isA: ai.classes.aiMessage,
-    parent: parent.subject,
-    propVals: {
-      [ai.properties.role]: roleToTag(persistedRole),
-      [ai.properties.parts]: [],
-    },
-  });
+  const messageResource =
+    existingResource ??
+    (await store.newResource<Ai.AiMessage>({
+      isA: ai.classes.aiMessage,
+      parent: parent.subject,
+      propVals: {
+        [ai.properties.role]: roleToTag(persistedRole),
+        [ai.properties.parts]: [],
+      },
+    }));
+
+  // A message description records why this reply stopped; its received parts
+  // remain normal parts and survive provider failures and reloads.
+  if (
+    message.role === 'assistant' &&
+    message.metadata &&
+    'error' in message.metadata
+  ) {
+    await messageResource.set(
+      core.properties.description,
+      message.metadata?.error,
+    );
+  }
 
   const context = message.metadata?.userContext;
 
@@ -106,36 +125,40 @@ export const uiMessageToResource = async (
       message.metadata.serverContext;
   }
 
-  const builder = partsToResourceBuilder(messageResource, store);
-  const partResources = await Promise.all(
-    message.parts
-      .filter(part => part.type !== 'step-start')
-      .map(part => {
-        if (part.type === 'file') {
-          return builder.filePartToResource(part);
-        } else if (part.type === 'text') {
-          return builder.textPartToResource(part);
-        } else if (part.type === 'reasoning') {
-          return builder.reasoningPartToResource(part);
-        } else if (isToolUIPart(part)) {
-          return builder.toolCallPartToResource(part);
-        } else if (part.type === 'source-url') {
-          return builder.sourceUrlPartToResource(part);
-        } else {
-          throw new Error(`Unknown content type: ${part.type}`);
-        }
-      }),
-  );
+  const priorParts = messageResource.props.parts ?? [];
+  const partSubjects: string[] = [];
 
-  for (const partResource of partResources) {
-    if (!persistToServer) {
-      messageResource.push(ai.properties.parts, [partResource.subject]);
-      continue;
+  for (const [index, part] of message.parts
+    .filter(p => p.type !== 'step-start')
+    .entries()) {
+    const spec = messagePartSpec(part);
+    const existing = priorParts[index]
+      ? await store.getResource(priorParts[index])
+      : undefined;
+    let partResource: Resource;
+
+    if (existing?.hasClasses(spec.isA)) {
+      partResource = existing;
+
+      for (const [property, value] of Object.entries(spec.propVals)) {
+        if (
+          JSON.stringify(partResource.get(property)) !== JSON.stringify(value)
+        ) {
+          await partResource.set(property, value);
+        }
+      }
+    } else {
+      partResource = await store.newResource({
+        ...spec,
+        parent: messageResource.subject,
+      });
     }
 
-    await partResource.save();
-    messageResource.push(ai.properties.parts, [partResource.subject]);
+    if (persistToServer) await partResource.save();
+    partSubjects.push(partResource.subject);
   }
+
+  await messageResource.set(ai.properties.parts, partSubjects);
 
   if (!persistToServer) {
     return messageResource;
@@ -146,6 +169,14 @@ export const uiMessageToResource = async (
   return messageResource;
 };
 
+// Serialize checkpoints per chat so an older partial reply cannot overwrite
+// its completed version, and concurrent saves cannot append duplicate messages.
+const chatWrites = new WeakMap<Resource, Promise<unknown>>();
+const chatMessageResources = new WeakMap<
+  Resource,
+  Map<string, Resource<Ai.AiMessage>>
+>();
+
 export const addMessageToChatResource = async (
   message: AtomicUIMessage,
   chatResource: Resource<Ai.AiChat>,
@@ -155,20 +186,41 @@ export const addMessageToChatResource = async (
     persistToServer = true,
   }: { saveChat?: boolean; persistToServer?: boolean } = {},
 ): Promise<Resource<Ai.AiMessage>> => {
-  const messageResource = await uiMessageToResource(
-    message,
-    chatResource,
-    store,
-    { persistToServer },
-  );
+  const snapshot = structuredClone(message);
+  const previous = chatWrites.get(chatResource) ?? Promise.resolve();
+  const work = previous
+    .catch(() => {})
+    .then(async () => {
+      let known = chatMessageResources.get(chatResource);
 
-  chatResource.push(ai.properties.messages, [messageResource.subject]);
+      if (!known) {
+        known = new Map();
+        chatMessageResources.set(chatResource, known);
+      }
 
-  if (saveChat) {
-    await chatResource.save();
-  }
+      const existingResource = known.get(snapshot.id);
+      const messageResource = await uiMessageToResource(
+        snapshot,
+        chatResource,
+        store,
+        {
+          persistToServer,
+          existingResource,
+        },
+      );
+      known.set(snapshot.id, messageResource);
 
-  return messageResource;
+      if (!chatResource.props.messages?.includes(messageResource.subject)) {
+        chatResource.push(ai.properties.messages, [messageResource.subject]);
+      }
+
+      if (saveChat) await chatResource.save();
+
+      return messageResource;
+    });
+  chatWrites.set(chatResource, work);
+
+  return work;
 };
 
 export const removeMessageFromChatResource = async (
@@ -410,6 +462,13 @@ export const messageResourcesToDisplayMessages = async (
     }
 
     if (message) {
+      if (role === 'assistant' && resource.get(core.properties.description)) {
+        message.metadata = {
+          ...message.metadata,
+          error: resource.get(core.properties.description),
+        };
+      }
+
       messages.set(message, resource);
     }
   }
@@ -484,28 +543,8 @@ const toReasoningPart = (
   text: resource.props.description,
 });
 
-const toToolCallPart = (resource: Resource<Ai.ToolCallPart>): ToolUIPart => {
-  let state: ToolUIPart['state'] = 'input-streaming';
-
-  if (resource.props.toolResultIsError) {
-    state = 'output-error';
-  } else if (resource.props.toolInput !== undefined) {
-    state = 'input-available';
-
-    if (resource.props.toolOutput !== undefined) {
-      state = 'output-available';
-    }
-  }
-
-  // @ts-expect-error - ToolUIPart type does not expect input and output fields to be present for certain states but we handle this beforehand.
-  return {
-    type: `tool-${resource.props.toolName}`,
-    state,
-    toolCallId: resource.props.toolId,
-    input: resource.props.toolInput,
-    output: resource.props.toolOutput,
-  };
-};
+const toToolCallPart = (resource: Resource<Ai.ToolCallPart>): ToolUIPart =>
+  restoreToolPart(resource.props);
 
 const toSourceUrlPart = (
   resource: Resource<Ai.SourceUrlPart>,
@@ -516,74 +555,39 @@ const toSourceUrlPart = (
   title: resource.props.name,
 });
 
-const partsToResourceBuilder = (
-  parent: Resource<Ai.AiMessage>,
-  store: Store,
-) => ({
-  async filePartToResource(part: FileUIPart) {
-    const data = part.url;
-
-    return await store.newResource<Ai.FilePart>({
+function messagePartSpec(part: AtomicUIMessage['parts'][number]): {
+  isA: string;
+  propVals: Record<string, JSONValue>;
+} {
+  if (part.type === 'file')
+    return {
       isA: ai.classes.filePart,
-      parent: parent.subject,
       propVals: {
-        [ai.properties.data]: data,
+        [ai.properties.data]: part.url,
         [server.properties.mimetype]: part.mediaType,
         ...(part.filename
-          ? {
-              [server.properties.filename]: part.filename,
-            }
+          ? { [server.properties.filename]: part.filename }
           : {}),
       },
-    });
-  },
-
-  async textPartToResource(part: TextUIPart) {
-    return await store.newResource<Ai.TextPart>({
-      isA: ai.classes.textPart,
-      parent: parent.subject,
+    };
+  if (part.type === 'text' || part.type === 'reasoning')
+    return {
+      isA:
+        part.type === 'text' ? ai.classes.textPart : ai.classes.reasoningPart,
       propVals: { [core.properties.description]: part.text },
-    });
-  },
-
-  async reasoningPartToResource(part: ReasoningUIPart) {
-    return await store.newResource<Ai.ReasoningPart>({
-      isA: ai.classes.reasoningPart,
-      parent: parent.subject,
-      propVals: { [core.properties.description]: part.text },
-    });
-  },
-
-  async toolCallPartToResource(part: ToolUIPart | DynamicToolUIPart) {
-    return await store.newResource<Ai.ToolCallPart>({
-      isA: ai.classes.toolCallPart,
-      parent: parent.subject,
-      propVals: {
-        [ai.properties.toolName]: getToolName(part),
-        [ai.properties.toolId]: part.toolCallId,
-        ...addFieldsIf(!!part.input, {
-          [ai.properties.toolInput]: part.input as JSONObject,
-        }),
-        ...addFieldsIf(!!part.output, {
-          [ai.properties.toolOutput]: part.output as JSONObject,
-        }),
-      },
-    });
-  },
-
-  async sourceUrlPartToResource(part: SourceUrlUIPart) {
-    return await store.newResource<Ai.SourceUrlPart>({
+    };
+  if (isToolUIPart(part))
+    return { isA: ai.classes.toolCallPart, propVals: toolPartValues(part) };
+  if (part.type === 'source-url')
+    return {
       isA: ai.classes.sourceUrlPart,
-      parent: parent.subject,
       propVals: {
         [dataBrowser.properties.url]: part.url,
-        ...addFieldsIf(!!part.title, {
-          [core.properties.name]: part.title,
-        }),
+        ...(part.title ? { [core.properties.name]: part.title } : {}),
       },
-    });
-  },
-});
+    };
+  throw new Error(`Unknown content type: ${part.type}`);
+}
 
 const resourceIsFilePart = (
   resource: Resource,
