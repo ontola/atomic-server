@@ -87,3 +87,75 @@ test('disabled feedback explains availability without claiming a failed send', a
     dialog.getByRole('button', { name: 'Send feedback', exact: true }),
   ).toBeDisabled();
 });
+
+test('local diagnostics require preview and explicit inclusion and exclude private context', async ({
+  page,
+}, testInfo) => {
+  const reports: string[] = [];
+  await page.route('https://example.com/api/123/envelope/**', async route => {
+    const body = route.request().postData() ?? '';
+    if (body.includes('"type":"feedback"')) reports.push(body);
+    await route.fulfill({
+      status: 200,
+      body: '{}',
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' },
+    });
+  });
+  await page.getByTestId('sidebar').hover();
+  await page.getByRole('button', { name: 'Feedback', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Start local recording' }).click();
+  await page.evaluate(async () => {
+    const resource = await window.store.newResource({
+      parent: window.store.getDrive(),
+      propVals: {
+        'https://atomicdata.dev/properties/name': 'PRIVATE_DIAGNOSTIC_TEXT',
+      },
+    });
+    await resource.save();
+    window.history.replaceState(
+      {},
+      '',
+      `${window.location.pathname}${window.location.search}${window.location.search ? '&' : '?'}secret=PRIVATE_DIAGNOSTIC_URL`,
+    );
+  });
+  await dialog.getByRole('button', { name: 'Preview diagnostics' }).click();
+  const preview = dialog.getByRole('textbox', {
+    name: 'Diagnostic report preview',
+  });
+  await expect(preview).toHaveValue(/save-started/);
+  const previewText = await preview.inputValue();
+  expect(previewText).not.toContain('PRIVATE_DIAGNOSTIC');
+  const include = dialog.getByRole('checkbox', {
+    name: 'Include this preview with my feedback',
+  });
+  await expect(include).not.toBeChecked();
+  expect(reports).toHaveLength(0);
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    dialog.getByRole('button', { name: 'Download diagnostics' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe('atomic-diagnostics.json');
+  expect(reports).toHaveLength(0);
+  await include.check();
+  await page.screenshot({
+    path: testInfo.outputPath('diagnostics-preview.png'),
+  });
+  await dialog
+    .getByRole('textbox', { name: 'Feedback', exact: true })
+    .fill('Synthetic diagnostic feedback');
+  await dialog
+    .getByRole('button', { name: 'Send feedback', exact: true })
+    .click();
+  await expect(dialog.getByRole('status')).toContainText('has been received');
+  expect(reports).toHaveLength(1);
+  expect(reports[0]).toContain(JSON.stringify(previewText).slice(1, -1));
+  expect(reports[0]).not.toContain('PRIVATE_DIAGNOSTIC');
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.reload();
+  await page.waitForFunction(() => !!window.store);
+  expect(await page.evaluate(() => window.store.diagnostics.active)).toBe(
+    false,
+  );
+});

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Sentry from '@sentry/react';
 import { initSentry } from './sentry';
-vi.mock('@sentry/react', () => ({ init: vi.fn() }));
+vi.mock('@sentry/react', () => ({ init: vi.fn(), addEventProcessor: vi.fn() }));
 describe('Sentry configuration', () => {
   beforeEach(() => {
     vi.clearAllMocks();

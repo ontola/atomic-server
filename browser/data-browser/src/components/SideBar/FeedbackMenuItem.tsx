@@ -1,3 +1,9 @@
+import { useStore } from '@tomic/react';
+import { FeedbackDiagnostics } from './FeedbackDiagnostics';
+import {
+  currentDiagnosticText,
+  type DiagnosticPreview,
+} from '../../helpers/diagnostic-report';
 import { useId, useRef, useState } from 'react';
 import { FaComment } from 'react-icons/fa6';
 import * as Sentry from '@sentry/react';
@@ -23,6 +29,9 @@ import {
 import { submitFeedback } from '../../helpers/feedback';
 
 export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
+  const store = useStore();
+  const [diagnosticPreview, setDiagnosticPreview] =
+    useState<DiagnosticPreview>();
   const feedbackTitle = 'Send feedback';
   const messageId = useId();
   const emailId = useId();
@@ -42,14 +51,19 @@ export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
     setFailed(false);
 
     try {
-      await submitFeedback(message, email);
+      await submitFeedback(
+        message,
+        email,
+        currentDiagnosticText(store.diagnostics, diagnosticPreview),
+      );
+      setDiagnosticPreview(undefined);
       setSent(true);
       setMessage('');
     } catch {
       setFailed(true);
-    } finally {
-      setBusy(false);
     }
+
+    setBusy(false);
   }
 
   return (
@@ -128,6 +142,10 @@ export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
                   />
                 </InputWrapper>
               </label>
+              <FeedbackDiagnostics
+                onSelect={setDiagnosticPreview}
+                disabled={busy}
+              />
               {!enabled && (
                 <p role='status'>
                   Feedback reporting is unavailable on this installation. Email{' '}

@@ -3348,10 +3348,17 @@ export class Resource<C extends OptionalClass = any> {
     this._saveDepth++;
     this.eventManager.emit(ResourceEvents.SaveStateChange);
     const closeSave = perfSpan('resource.save');
+    const finishDiagnostic = this.store.diagnostics.beginSave(
+      this.__internalObject,
+    );
 
     try {
-      return await this._saveInner(hasChanges);
+      const result = await this._saveInner(hasChanges);
+      finishDiagnostic(result);
+
+      return result;
     } catch (error) {
+      finishDiagnostic('error');
       // Includes local-only saves and a failed offline fallback. Neither may
       // appear idle/merely queued after its persistence barrier rejected.
       this.commitError =
