@@ -1,3 +1,4 @@
+import { websiteVersionName } from '@chunks/Website/websiteVersionName';
 import { forwardRef, memo } from 'react';
 import { styled, css, keyframes } from 'styled-components';
 import { SideBarItem } from '../SideBarItem';
@@ -77,7 +78,8 @@ export const SidebarItemTitle = memo(
       // here would render once at mount and never update — the row only
       // refreshed when navigation forced a top-down re-render, which is
       // the "title only updates when I click in the sidebar" symptom.
-      const [title] = useTitle(resource);
+      const [storedTitle] = useTitle(resource);
+      const title = websiteVersionName(storedTitle);
 
       const expandLabel = expanded ? 'Collapse folder' : 'Expand folder';
 

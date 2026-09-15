@@ -10871,3 +10871,12 @@ msgstr ""
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Website content"
 msgstr ""
+
+#: src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
+msgid "Show fewer versions"
+msgstr ""
+
+#. 0: orderedChildren.length
+#: src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
+msgid "Show all versions ({0})"
+msgstr ""

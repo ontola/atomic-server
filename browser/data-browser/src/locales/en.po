@@ -10910,3 +10910,12 @@ msgstr "Loading saved preview…"
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Website content"
 msgstr "Website content"
+
+#: src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
+msgid "Show fewer versions"
+msgstr "Show fewer versions"
+
+#. 0: orderedChildren.length
+#: src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
+msgid "Show all versions ({0})"
+msgstr "Show all versions ({0})"
