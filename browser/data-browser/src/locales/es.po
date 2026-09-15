@@ -11065,3 +11065,15 @@ msgstr ""
 #: src/chunks/Website/WebsitePage.tsx
 msgid "<0/> Add content"
 msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Drop files to attach"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Choose a model that supports attachments first."
+msgstr ""
+
+#~ msgid "Files"
+#~ msgstr ""

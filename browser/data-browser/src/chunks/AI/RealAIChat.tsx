@@ -266,6 +266,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const [userInput, setUserInput] = useState('');
   const [handoffDraft, setHandoffDraft] = useState<string>();
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [draggingFiles, setDraggingFiles] = useState(false);
+  const fileDragDepth = useRef(0);
   const { defaultChatModel, setDefaultChatModel } = useAISettings();
   const [selectedAgent, setSelectedAgent] = useState<AIAgent>(
     getInitialAgent(!chatSubject, chatSubject),
@@ -794,7 +796,67 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                 </Button>
               </ProviderNotice>
             )}
-            <ChatInputWrapper>
+            <ChatInputWrapper
+              data-testid='assistant-file-dropzone'
+              onDragEnterCapture={event => {
+                if (
+                  !event.dataTransfer.types.includes(/* @wc-ignore */ 'Files')
+                )
+                  return;
+                event.preventDefault();
+                fileDragDepth.current += 1;
+                setDraggingFiles(true);
+              }}
+              onDragOverCapture={event => {
+                if (
+                  !event.dataTransfer.types.includes(/* @wc-ignore */ 'Files')
+                )
+                  return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = checkModelSupportsImageInput(
+                  activeModel,
+                )
+                  ? 'copy'
+                  : 'none';
+              }}
+              onDragLeaveCapture={event => {
+                if (
+                  !event.dataTransfer.types.includes(/* @wc-ignore */ 'Files')
+                )
+                  return;
+                fileDragDepth.current = Math.max(0, fileDragDepth.current - 1);
+                if (!fileDragDepth.current) setDraggingFiles(false);
+              }}
+              onDropCapture={event => {
+                if (
+                  !event.dataTransfer.types.includes(/* @wc-ignore */ 'Files')
+                )
+                  return;
+                event.preventDefault();
+                event.stopPropagation();
+                fileDragDepth.current = 0;
+                setDraggingFiles(false);
+
+                if (!checkModelSupportsImageInput(activeModel)) {
+                  store.notifyError(
+                    new Error(
+                      'Choose a model that supports attachments first.',
+                    ),
+                  );
+
+                  return;
+                }
+
+                handleFileUpload(Array.from(event.dataTransfer.files));
+              }}
+            >
+              {draggingFiles && (
+                <FileDropOverlay role='status'>
+                  {checkModelSupportsImageInput(activeModel)
+                    ? 'Drop files to attach'
+                    : 'Choose a model that supports attachments first.'}
+                </FileDropOverlay>
+              )}
               <Column
                 fullWidth
                 gap='none'
@@ -857,7 +919,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                   // provider (the notice above the input explains why).
                   disabled={false}
                   disableSubmit={!canUseInput}
-                  hasFiles={!!attachedFiles}
+                  hasFiles={attachedFiles.length > 0}
                   onMentionUpdate={handleMentionUpdate}
                   onChange={setUserInput}
                   onSubmit={handleSubmit}
@@ -1017,6 +1079,21 @@ const filesToFileParts = (files: File[]): Promise<FileUIPart[]> =>
         }),
     ),
   );
+
+const FileDropOverlay = styled.div`
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  text-align: center;
+  border: 2px dashed ${p => p.theme.colors.main};
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg};
+  color: ${p => p.theme.colors.text};
+`;
 
 const ChatInputWrapper = styled.div`
   background-color: ${p => p.theme.colors.bg};
