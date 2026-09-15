@@ -1,3 +1,4 @@
+import { websiteVersionName } from './websiteVersionName';
 import { optimizeWebsiteImage } from './optimizeWebsiteImage';
 import {
   storeWebsiteAsset,
@@ -321,7 +322,9 @@ export async function saveWebsiteRelease(
     parent: resource.subject,
     isA: [schema.classes!['website-export']],
     propVals: {
-      [core.properties.name]: `Website release ${artifact.createdAt}`,
+      [core.properties.name]: websiteVersionName(
+        `Website release ${artifact.createdAt}`,
+      ),
       [schema.properties!['website-artifact']]: JSON.stringify(artifact),
     },
   });
