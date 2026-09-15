@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { hostingRequest } from './hostingClient';
+import { hostingRequest, sameWebsiteOutput } from './hostingClient';
 import { signRequest, type Store } from '@tomic/lib';
 vi.mock('@tomic/lib', () => ({
   signRequest: vi.fn(async () => ({ 'x-atomic-signature': 'proof' })),
@@ -51,5 +51,33 @@ describe('hosting control requests', () => {
       }),
     ).rejects.toThrow('Publication changed');
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('published output comparison', () => {
+  it('ignores entry order and treats missing assets as empty', () => {
+    expect(
+      sameWebsiteOutput(
+        { version: 1, files: { a: 'one', b: 'two' } },
+        { version: 1, files: { b: 'two', a: 'one' }, assets: {} },
+      ),
+    ).toBe(true);
+  });
+  it('detects changed text, removed files and changed image hashes', () => {
+    const base = {
+      version: 1 as const,
+      files: { 'index.html': 'Bread' },
+      assets: { 'assets/photo.webp': 'old' },
+    };
+    expect(
+      sameWebsiteOutput(base, { ...base, files: { 'index.html': 'Cake' } }),
+    ).toBe(false);
+    expect(sameWebsiteOutput(base, { ...base, files: {} })).toBe(false);
+    expect(
+      sameWebsiteOutput(base, {
+        ...base,
+        assets: { 'assets/photo.webp': 'new' },
+      }),
+    ).toBe(false);
   });
 });

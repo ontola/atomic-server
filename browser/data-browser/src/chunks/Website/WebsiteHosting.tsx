@@ -5,12 +5,18 @@ import { useStore } from '@tomic/react';
 import { Button, ButtonSubtle } from '@components/Button';
 import Field from '@components/forms/Field';
 import type { WebsiteArtifact } from './renderWebsite';
-import { hostingRequest, type HostingStatus } from './hostingClient';
+import {
+  hostingRequest,
+  sameWebsiteOutput,
+  type WebsitePackage,
+  type HostingStatus,
+} from './hostingClient';
 
 export function WebsiteHosting({
   project,
   draft,
   canWrite,
+  draftError,
   saveRelease,
   secondary = false,
   children,
@@ -18,14 +24,21 @@ export function WebsiteHosting({
   project: string;
   draft?: WebsiteArtifact;
   canWrite: boolean;
+  draftError?: string;
   saveRelease: (artifact: WebsiteArtifact) => Promise<void>;
   secondary?: boolean;
   children?: ReactNode;
 }) {
   const store = useStore();
   const [status, setStatus] = useState<HostingStatus>();
+  const [published, setPublished] = useState<{
+    id: string;
+    package: WebsitePackage;
+  }>();
+  const publishedCache = useRef<
+    { id: string; package: WebsitePackage } | undefined
+  >(undefined);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
   const [previous, setPrevious] = useState('');
   const [statusError, setStatusError] = useState('');
   const reportedStatusError = useRef('');
@@ -37,8 +50,24 @@ export function WebsiteHosting({
     const refresh = () => {
       const request = ++sequence;
       hostingRequest<HostingStatus>(store, project)
-        .then(value => {
+        .then(async value => {
+          const id = value.state?.active;
+          const snapshot = id
+            ? publishedCache.current?.id === id
+              ? publishedCache.current
+              : {
+                  id,
+                  package: await hostingRequest<WebsitePackage>(
+                    store,
+                    project,
+                    `/preview/${id}`,
+                  ),
+                }
+            : undefined;
+
           if (active && request === sequence) {
+            publishedCache.current = snapshot;
+            setPublished(snapshot);
             setStatus(value);
             setStatusError('');
             reportedStatusError.current = '';
@@ -70,7 +99,6 @@ export function WebsiteHosting({
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
-    setDone(false);
 
     try {
       await action();
@@ -98,7 +126,6 @@ export function WebsiteHosting({
       },
     );
     setStatus(next);
-    setDone(true);
   };
 
   const publish = () =>
@@ -140,6 +167,26 @@ export function WebsiteHosting({
       await activate(uploaded.deployment!, uploaded);
     });
 
+  const currentPackage: WebsitePackage | undefined = draft && {
+    version: 1,
+    files: draft.files,
+    assets: Object.fromEntries(
+      Object.entries(draft.assets ?? {}).map(([path, asset]) => [
+        path,
+        asset.hash,
+      ]),
+    ),
+  };
+  const live = status?.state?.active;
+  const checking = !status || !draft || (!!live && published?.id !== live);
+  const upToDate =
+    !!live &&
+    !checking &&
+    !!currentPackage &&
+    !!published &&
+    sameWebsiteOutput(currentPackage, published.package);
+  const unavailable = !!draftError || !!statusError;
+
   return (
     <Actions>
       <ActionRow>
@@ -149,16 +196,22 @@ export function WebsiteHosting({
           </SiteLink>
         )}
         <Button
-          subtle={secondary}
-          data-website-primary={!secondary ? true : undefined}
-          disabled={busy || !canWrite || !draft}
+          subtle={secondary || upToDate || checking || unavailable}
+          data-website-primary={
+            !secondary && !upToDate && !checking && !unavailable
+              ? true
+              : undefined
+          }
+          disabled={busy || !canWrite || checking || upToDate || unavailable}
           onClick={publish}
         >
           {busy
             ? 'Publishing…'
-            : status?.state?.active
-              ? 'Update site'
-              : 'Publish site'}
+            : upToDate
+              ? 'Up to date'
+              : status?.state?.active
+                ? 'Update site'
+                : 'Publish site'}
         </Button>
         <details>
           <summary aria-label='Publishing options'>•••</summary>
@@ -226,13 +279,19 @@ export function WebsiteHosting({
           </Settings>
         </details>
       </ActionRow>
-      {done && (
-        <p role='status'>
-          {status?.state?.active
-            ? 'Website published.'
-            : 'Website is not published'}
-        </p>
-      )}
+      <p role='status'>
+        {busy
+          ? 'Publishing…'
+          : unavailable
+            ? 'Cannot check changes'
+            : checking
+              ? 'Checking changes…'
+              : upToDate
+                ? 'All changes are published'
+                : live
+                  ? 'Unpublished changes'
+                  : 'Not published yet'}
+      </p>
       {statusError ? <p role='alert'>{statusError}</p> : null}
     </Actions>
   );

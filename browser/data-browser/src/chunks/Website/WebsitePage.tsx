@@ -159,6 +159,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
             key={resource.subject}
             project={resource.subject}
             draft={draft}
+            draftError={problem}
             canWrite={!!canWrite}
             secondary={!!review}
             saveRelease={async artifact => {

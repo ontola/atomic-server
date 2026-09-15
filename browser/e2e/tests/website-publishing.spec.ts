@@ -37,12 +37,12 @@ test('one-click website publishing, draft isolation and version recovery', async
   const link = page.getByRole('link', { name: 'View site', exact: true });
   await expect(link).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Update site', exact: true }),
-  ).toBeEnabled();
+    page.getByRole('button', { name: 'Up to date', exact: true }),
+  ).toBeDisabled();
   const headerActions = [
     page.getByRole('button', { name: 'Design with AI', exact: true }),
     link,
-    page.getByRole('button', { name: 'Update site', exact: true }),
+    page.getByRole('button', { name: 'Up to date', exact: true }),
   ];
   const heights = await Promise.all(
     headerActions.map(action =>
@@ -81,11 +81,21 @@ test('one-click website publishing, draft isolation and version recovery', async
   expect(await (await getPublic()).text()).toContain(
     'Bakery bread costs five euros.',
   );
+  await expect(
+    page.getByText('Unpublished changes', { exact: true }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Update site', exact: true }).click();
   await expect
     .poll(async () => (await getPublic()).text())
     .toContain('Bakery bread costs six euros.');
-  await expect(page.locator('[data-website-primary]')).toHaveCount(1);
+  await expect(
+    page.getByRole('button', { name: 'Up to date', exact: true }),
+  ).toBeDisabled();
+  await expect(page.locator('[data-website-primary]')).toHaveCount(0);
+  await page.reload();
+  await expect(
+    page.getByRole('button', { name: 'Up to date', exact: true }),
+  ).toBeDisabled();
   await page.getByLabel('Publishing options').click();
   await page
     .getByLabel('Previous version', { exact: true })
@@ -96,6 +106,9 @@ test('one-click website publishing, draft isolation and version recovery', async
   await expect
     .poll(async () => (await getPublic()).text())
     .toContain('Bakery bread costs five euros.');
+  await expect(
+    page.getByText('Unpublished changes', { exact: true }),
+  ).toBeVisible();
   await page
     .getByRole('button', { name: 'Unpublish website', exact: true })
     .click();
