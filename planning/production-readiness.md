@@ -18,10 +18,10 @@ owning plan where one exists. Verification logs stay out of this file.
 
 ## Server hardening
 
-- [ ] Rate limiting on write endpoints (`/commit`, `/upload`, `/blob`,
-      `/iroh-sync`, WS `COMMIT`). No limiter exists in `server/src`. Owned by
-      [`foss-public-host-mode.md`](./foss-public-host-mode.md) Phase 3 and
-      [`security-audit-2026-09.md`](./security-audit-2026-09.md) section D.
+- [x] Rate limiting on write endpoints (`/commit`, `/upload`, `/blob`,
+      `/iroh-sync`, WS `COMMIT`): `server/src/rate_limit.rs`, 2026-09-15.
+      Still open from the same audit line: permissive CORS, client errors
+      answered as 500 ([`security-audit-2026-09.md`](./security-audit-2026-09.md) D).
 - [x] Library-owned durable flush so the Flutter binding stops losing writes
       on app kill ([`atomic-lib-runtime.md`](./atomic-lib-runtime.md), 2026-09-15).
 - [ ] Desktop CSP (audit B7): `desktop/tauri.conf.json` still has `csp: null`.

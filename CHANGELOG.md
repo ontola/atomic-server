@@ -7,6 +7,13 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Rate-limit the write endpoints. `POST /commit` (HTTP and the WebSocket
+  `COMMIT` frame), `/upload`, `PUT /blob`, `/iroh-sync`, `/forget-peer` and
+  resource posts spend a per-agent token (`--write-rate-limit`, default 6000
+  per minute, `ATOMIC_WRITE_RATE_LIMIT`); requests without a signed agent
+  share a per-peer-address budget (`--anonymous-write-rate-limit`, default
+  60 per minute). Over budget answers `429 Too Many Requests` with a
+  `Retry-After`; `0` disables either limit.
 - Fix: writes made through a directly opened file store (the Flutter/Android
   binding) were never made durable. Every redb commit skips the fsync and
   relies on a periodic flush that only the server, desktop and WASM hosts

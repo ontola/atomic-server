@@ -106,7 +106,7 @@ Fix: for `/agents/{key}` subjects, require the key in the path to equal the auth
 
 - `Cors::permissive()` with credentials (`serve.rs:390`); currently saved by `SameSite=Lax` on the client cookie.
 - `atomic_session` cookie set without `Secure` (`browser/lib/src/authentication.ts:118-121`).
-- Unauthenticated WS `SUBSCRIBE_INDEX_STATUS` inserts per-connection state for arbitrary drive strings; `RBSR_FP` ranges unbounded (`web_sockets.rs:566-579,638-682`). No rate limiting on `/commit`, `/upload`, `/iroh-sync`.
+- Unauthenticated WS `SUBSCRIBE_INDEX_STATUS` inserts per-connection state for arbitrary drive strings; `RBSR_FP` ranges unbounded (`web_sockets.rs:566-579,638-682`). ~~No rate limiting on `/commit`, `/upload`, `/iroh-sync`.~~ Fixed 2026-09-15 (`server/src/rate_limit.rs`, per-agent and per-peer budgets on every write endpoint and the WS `COMMIT` frame).
 - Auth failures and most client errors return HTTP 500 (`helpers.rs:183`, `errors.rs:119-137`), filling Sentry; `default_service` logs `error!` on every unmatched request (`serve.rs:405-408`).
 - `/plugin-ui` and `/plugin-list` unauthenticated, read with `ForAgent::Sudo`, echo filesystem paths (`plugin_ui.rs:443-521`).
 - `Agent` and `Config` derive `Debug` including the private key (`agents.rs:57-69`, `config.rs:129-142`).

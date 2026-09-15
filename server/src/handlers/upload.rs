@@ -40,6 +40,7 @@ pub async fn upload_handler(
         .to_string();
     let subject = atomic_lib::Subject::from_raw(&path_and_query, None).resolve(&origin);
     let agent = get_client_agent(req.headers(), &appstate, &subject).await?;
+    crate::helpers::enforce_write_rate_limit(&appstate, &req, &agent)?;
     check_write(store, &parent, &agent).await?;
 
     let mut created_resources: Vec<Resource> = Vec::new();

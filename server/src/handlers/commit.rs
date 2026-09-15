@@ -20,12 +20,29 @@ pub async fn post_commit(
         let random_number = rng.gen_range(100..1000);
         tokio::time::sleep(tokio::time::Duration::from_millis(random_number)).await;
     }
+    // The signer is the acting agent; `ingest_commit_json` verifies the
+    // signature, so a forged signer only spends someone else's budget on a
+    // commit that is rejected anyway.
+    let for_agent = match commit_signer(&body) {
+        Some(signer) => atomic_lib::agents::ForAgent::AgentSubject(signer.into()),
+        None => atomic_lib::agents::ForAgent::Public,
+    };
+    crate::helpers::enforce_write_rate_limit(&appstate, &req, &for_agent)?;
     let store = &appstate.store;
     let message = apply_commit_json(store, &context.origin, &body, None).await?;
 
     Ok(HttpResponse::Ok()
         .content_type("application/ad+json")
         .body(message))
+}
+
+/// The `signer` of a JSON-AD commit body, without validating anything else.
+fn commit_signer(body: &str) -> Option<String> {
+    serde_json::from_str::<serde_json::Value>(body)
+        .ok()?
+        .get(atomic_lib::urls::SIGNER)?
+        .as_str()
+        .map(str::to_owned)
 }
 
 /// Apply a signed JSON-AD commit sent by a client. Delegates to the sync
