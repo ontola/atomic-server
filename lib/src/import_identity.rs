@@ -286,13 +286,12 @@ pub fn validate_baseline(old: Option<&Resource>, new: &Resource) -> AtomicResult
             if before != Some(desired) || after != before {
                 return Err("Existing import has no baseline; local values must be reviewed before adoption".into());
             }
-        } else if after != before {
-            if before != previous_values.and_then(|v| v.get(property)) || after != Some(desired) {
-                return Err(
-                    "Import conflicts with a local edit; preview again and resolve the conflict"
-                        .into(),
-                );
-            }
+        } else if after != before
+            && (before != previous_values.and_then(|v| v.get(property)) || after != Some(desired))
+        {
+            return Err(
+                "Import conflicts with a local edit; preview again and resolve the conflict".into(),
+            );
         }
     }
     Ok(())

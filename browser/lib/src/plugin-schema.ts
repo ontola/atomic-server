@@ -171,7 +171,11 @@ async function pick(
   subjects: string[],
   specs: Array<{ shortname: string; subject?: string }>,
 ): Promise<Record<string, string>> {
-  const found = await byShortname(store, subjects);
+  const found = await byShortname(
+    store,
+    subjects,
+    new Set(specs.map(spec => spec.shortname)),
+  );
 
   return Object.fromEntries(
     specs
@@ -235,7 +239,11 @@ async function ensureAll<T extends { shortname: string; subject?: string }>(
   build: (spec: T) => { isA: string[]; propVals: Record<string, JSONValue> },
 ): Promise<Record<string, string>> {
   const existing = asList(ontology.get(listProperty));
-  const found = await byShortname(store, existing);
+  const found = await byShortname(
+    store,
+    existing,
+    new Set(specs.map(spec => spec.shortname)),
+  );
   const result: Record<string, string> = {};
   const added: string[] = [];
 
@@ -324,9 +332,21 @@ async function ensureAll<T extends { shortname: string; subject?: string }>(
   return result;
 }
 
+/**
+ * Resolves shortnames to subjects among an ontology's existing properties or
+ * classes.
+ *
+ * `interesting` scopes ambiguity checking to the shortnames the caller
+ * actually asked about. A drive's ontology accumulates entries from every
+ * table and plugin that ever ran on it, so two unrelated columns landing on
+ * the same shortname (two different "Status" select columns, say) is real but
+ * none of this call's business — it must not fail a lookup for a shortname it
+ * was never asked about.
+ */
 async function byShortname(
   store: SchemaStore,
   subjects: string[],
+  interesting: Set<string>,
 ): Promise<Map<string, string>> {
   const entries = await Promise.all(
     subjects.map(async subject => {
@@ -340,7 +360,7 @@ async function byShortname(
   const result = new Map<string, string>();
 
   for (const [shortname, subject] of entries) {
-    if (!shortname) continue;
+    if (!shortname || !interesting.has(shortname)) continue;
     if (result.has(shortname) && result.get(shortname) !== subject)
       throw new Error(`ambiguous schema shortname: ${shortname}`);
     result.set(shortname, subject);

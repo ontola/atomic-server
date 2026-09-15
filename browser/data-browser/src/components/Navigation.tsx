@@ -87,7 +87,9 @@ export function NavWrapper({ children }: NavWrapperProps): JSX.Element {
   );
 
   return (
-    <RightPanelProvider>
+    <RightPanelProvider
+      scope={JSON.stringify([agent?.subject, drive, hideGlobalChrome])}
+    >
       <AISidebarContextProvider>
         <AppVerifierProvider>
           <AppSetupProvider>

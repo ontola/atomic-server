@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
-import { styled } from 'styled-components';
 import { useDrivePresence, useResource, useTitle } from '@tomic/react';
 import { FaLocationArrow, FaUser } from 'react-icons/fa6';
 import { DropdownMenu, type DropdownItem } from '../Dropdown';
 import type { DropdownTriggerProps } from '../Dropdown/DropdownTrigger';
 import { AgentAvatar } from './AgentAvatar';
+import { FollowingIndicator } from './FollowingIndicator';
 import { useFollow } from './FollowContext';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../../helpers/navigation';
@@ -21,7 +21,8 @@ interface PresenceAvatarMenuProps {
  * drive (issue #1229). An online agent gets a green presence dot. Used
  * everywhere an agent avatar appears (facepiles, chat) so the menu is
  * consistent. Renders as a focusable span so it stays valid markup inside
- * sidebar row links.
+ * sidebar row links. While following, the avatar uses the shared tight
+ * blue ring + hover "Following" chip (issue #1486).
  */
 export function PresenceAvatarMenu({
   agentSubject,
@@ -79,72 +80,37 @@ export function PresenceAvatarMenu({
   ]);
 
   const Trigger = useMemo(
-    () => buildAvatarTrigger(agentSubject, name, size, isFollowing, online),
+    () => buildPresenceTrigger(agentSubject, name, size, isFollowing, online),
     [agentSubject, name, size, isFollowing, online],
   );
 
   return <DropdownMenu items={items} Trigger={Trigger} />;
 }
 
-/** Trigger rendering the avatar itself. A `role="button"` span rather than
- *  a real `<button>`: sidebar avatars live inside the row's `<a>`, where a
- *  nested button is invalid HTML. Click/keyboard events stop propagating so
- *  opening the menu doesn't also navigate the row. */
-const buildAvatarTrigger = (
+const buildPresenceTrigger = (
   agentSubject: string,
   name: string,
   size: string | undefined,
   following: boolean,
   online: boolean,
 ): React.FC<DropdownTriggerProps> => {
-  const Comp = ({
-    onClick,
-    menuId,
-    isActive,
-    ref,
-    id,
-  }: DropdownTriggerProps) => (
-    <AvatarButton
-      id={id}
-      role='button'
-      tabIndex={0}
-      aria-controls={menuId}
-      aria-expanded={isActive}
-      aria-haspopup='menu'
-      aria-label={name}
-      $following={following}
-      ref={ref as unknown as React.Ref<HTMLSpanElement>}
-      onClick={e => {
-        e.preventDefault();
-        e.stopPropagation();
-        onClick(e);
-      }}
-      onKeyDown={e => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          e.stopPropagation();
-          onClick(e as unknown as React.MouseEvent);
-        }
-      }}
+  const Comp = (props: DropdownTriggerProps) => (
+    <FollowingIndicator
+      {...props}
+      following={following}
+      title={following ? 'Following — press for actions' : name}
+      ariaLabel={following ? `Following ${name}` : name}
     >
-      <AgentAvatar agentSubject={agentSubject} size={size} online={online} />
-    </AvatarButton>
+      <AgentAvatar
+        agentSubject={agentSubject}
+        size={size}
+        online={online}
+        following={following}
+      />
+    </FollowingIndicator>
   );
 
   Comp.displayName = 'PresenceAvatarTrigger';
 
   return Comp;
 };
-
-const AvatarButton = styled.span<{ $following: boolean }>`
-  display: inline-flex;
-  border-radius: 50%;
-  cursor: pointer;
-  outline: ${p => (p.$following ? `2px solid ${p.theme.colors.main}` : 'none')};
-  outline-offset: 1px;
-
-  &:hover,
-  &:focus-visible {
-    outline: 2px solid ${p => p.theme.colors.main};
-  }
-`;

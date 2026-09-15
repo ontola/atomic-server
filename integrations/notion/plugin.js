@@ -708,7 +708,7 @@ function run(input) {
           ).property;
         else remove.push(P.group);
       }
-      if (equal2(here, change.desired) && (change.kind !== "page" || input.read(cursor.subject)[c.identity] === cursor.id && input.read(cursor.subject)[IMPORT_LOCAL_ID] === `notion:${uuid(c.dataSource)}:page:${uuid(cursor.id)}` && input.read(cursor.subject)[P.name] === change.desired[c.fields.find((f) => f.type === "title").id]))
+      if (equal2(here, change.desired) && (change.kind !== "page" || input.read(cursor.subject)[c.identity] === cursor.id && input.read(cursor.subject)[IMPORT_LOCAL_ID] === `notion:${uuid(c.dataSource)}:page:${uuid(cursor.id)}` && input.read(cursor.subject)[P.name] === change.desired[c.fields.find((f) => f.type === "title").id] && input.read(cursor.subject)[c.fields.find((f) => f.type === "title").property] === change.desired[c.fields.find((f) => f.type === "title").id]))
         cursor = { ...cursor, stage: "verify" };
       else {
         const intents = cursor.subject ? [

@@ -56,6 +56,7 @@ pub mod invite;
 pub mod journal;
 #[cfg(feature = "wasm-plugins")]
 pub mod js_runtime;
+#[cfg(feature = "wasm-plugins")]
 pub mod manifest;
 pub mod path;
 #[cfg(feature = "wasm-plugins")]
@@ -96,12 +97,12 @@ pub mod sync_worker;
 #[cfg(all(test, feature = "wasm-plugins"))]
 mod notion_sync_tests;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "wasm-plugins"))]
 mod clockify_tests;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "wasm-plugins"))]
 #[path = "mt940_tests.rs"]
 mod bank_statement_tests;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "wasm-plugins"))]
 mod pets_tests;

@@ -53,6 +53,7 @@ overrides:
   markdown-it: '>=14.2.0 <15.0.0'
 
 # React 19 replays memo initializers; warn only when the types object changes.
+# Why each patch exists and when it can go: see patches/README.md.
 patchedDependencies:
   '@reactflow/core': patches/@reactflow__core.patch
   playwright-core@1.63.0: patches/playwright-core@1.63.0.patch
