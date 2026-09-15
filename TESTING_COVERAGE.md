@@ -241,6 +241,16 @@ behavior. Slow/stalled events are heuristic warnings, not data-loss assertions.
 
 ## Save failure boundaries and recovery
 
+- `browser/lib/tests/interrupted-sync.integration.test.ts` uses two accounts,
+  independent WASM databases and a real server. It checks disjoint offline field
+  edits and child creation, interrupts a sent SYNC probe, then recreates one Store
+  with an acknowledged pending edit. Both local databases and a fresh server
+  reader must match a predefined ledger; pending and blocked queues must clear.
+  Failure output includes acknowledgement results and diagnostic windows.
+  This is JS client-state recreation with retained in-memory storage, not a
+  two-client OS crash/OPFS durability test. It does not cover table query/UI
+  membership, conflicting edits or seeded schedules.
+
 - `server/src/handlers/commit/durability_tests.rs` injects a real redb flush failure,
   verifies no acknowledgement, retries the identical signed commit, and checks
   duplicate delivery adds no history.
