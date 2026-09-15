@@ -7,6 +7,13 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Fix: writes made through a directly opened file store (the Flutter/Android
+  binding) were never made durable. Every redb commit skips the fsync and
+  relies on a periodic flush that only the server, desktop and WASM hosts
+  ran, so on Android an app kill rolled back every edit since the last drive
+  switch. `Db::init_redb_file` now owns the 100ms durable-flush tick for every
+  binding, and an idle tick no longer writes anything.
+
 ## [v0.41.0-beta.7] - 2026-09-12
 
 - Store hosted files in S3 without silently falling back to node-local storage.

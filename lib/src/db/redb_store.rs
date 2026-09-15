@@ -1,6 +1,7 @@
 //! RedbStore: KvStore backed by redb — works natively and in WASM.
 //! Uses InMemoryBackend by default. Can be swapped to OPFS backend for persistence.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use redb::{
@@ -91,6 +92,10 @@ pub struct RedbStore {
     /// Reads consult the buffer first (read-your-writes within a batch).
     /// Call `commit_batch()` to flush all buffered ops in a single transaction.
     batch_buffer: std::sync::Mutex<Option<BatchBuffer>>,
+    /// Set by every `Durability::None` commit, cleared by `flush`. Lets the
+    /// durable-flush tick skip the fsync (and the sentinel write) when nothing
+    /// changed, which is most ticks on an idle node or a phone in a pocket.
+    dirty: AtomicBool,
 }
 
 /// Per-tree map of pending operations. Used for fast read-your-writes lookups.
@@ -185,6 +190,7 @@ impl RedbStore {
         Ok(RedbStore {
             db: Arc::new(db),
             batch_buffer: std::sync::Mutex::new(None),
+            dirty: AtomicBool::new(false),
         })
     }
 
@@ -209,6 +215,7 @@ impl RedbStore {
         Ok(RedbStore {
             db: Arc::new(db),
             batch_buffer: std::sync::Mutex::new(None),
+            dirty: AtomicBool::new(false),
         })
     }
 
@@ -252,6 +259,7 @@ impl RedbStore {
         Ok(RedbStore {
             db: Arc::new(db),
             batch_buffer: std::sync::Mutex::new(None),
+            dirty: AtomicBool::new(false),
         })
     }
 }
@@ -512,10 +520,17 @@ impl KvStore for RedbStore {
             }
         }
         tx.commit().map_err(|e| format!("redb commit batch: {e}"))?;
+        self.dirty.store(true, Ordering::SeqCst);
         Ok(())
     }
 
     fn flush(&self) -> AtomicResult<()> {
+        // Nothing committed since the last durable point: skip. A write that
+        // lands between this swap and the commit below sets the flag again
+        // and is picked up by the next flush.
+        if !self.dirty.swap(false, Ordering::SeqCst) {
+            return Ok(());
+        }
         // Per-commit writes use Durability::None (no fsync) for throughput.
         // redb only persists those to disk once a *subsequent* Immediate
         // commit lands, so this flush — a quick Immediate commit — is what
@@ -542,7 +557,10 @@ impl KvStore for RedbStore {
         }
         // Immediate is the default durability; committing flushes + fsyncs all
         // prior Durability::None commits.
-        tx.commit().map_err(|e| format!("redb flush commit: {e}"))?;
+        if let Err(e) = tx.commit() {
+            self.dirty.store(true, Ordering::SeqCst);
+            return Err(format!("redb flush commit: {e}").into());
+        }
         Ok(())
     }
 
@@ -602,6 +620,98 @@ impl KvStore for RedbStore {
             }
         }
         tx.commit().map_err(|e| format!("redb commit batch: {e}"))?;
+        self.dirty.store(true, Ordering::SeqCst);
         Ok(())
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+
+    fn temp_path(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "atomic-redb-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join("atomic.redb")
+    }
+
+    const ABORT_CHILD_ENV: &str = "ATOMIC_REDB_ABORT_CHILD_PATH";
+    const ABORT_TEST_NAME: &str =
+        "db::redb_store::tests::unflushed_writes_are_lost_on_abort_and_flushed_ones_survive";
+
+    /// Per-commit writes are `Durability::None`; only `flush` makes them
+    /// survive an unclean exit. A clean `drop` closes redb durably, so the
+    /// loss only shows when the process dies mid-flight: the Android app
+    /// kill that motivated the library-owned flush tick. This test re-runs
+    /// itself as a child that writes one flushed and one unflushed key, then
+    /// aborts (no destructors), and checks what the parent can read back.
+    #[test]
+    fn unflushed_writes_are_lost_on_abort_and_flushed_ones_survive() {
+        if let Ok(path) = std::env::var(ABORT_CHILD_ENV) {
+            let store = RedbStore::new_file(std::path::Path::new(&path)).unwrap();
+            store.insert(Tree::PluginMeta, b"kept", b"1").unwrap();
+            assert!(store.dirty.load(Ordering::SeqCst));
+            store.flush().unwrap();
+            assert!(!store.dirty.load(Ordering::SeqCst));
+            store.insert(Tree::PluginMeta, b"lost", b"1").unwrap();
+            std::process::abort();
+        }
+
+        let path = temp_path("abort");
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                ABORT_TEST_NAME,
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env(ABORT_CHILD_ENV, &path)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .unwrap();
+        assert!(!status.success(), "the child must abort, not exit cleanly");
+
+        let store = RedbStore::new_file(&path).unwrap();
+        assert_eq!(
+            store.get(Tree::PluginMeta, b"kept").unwrap(),
+            Some(b"1".to_vec()),
+            "a flushed write must survive an abort"
+        );
+        assert_eq!(
+            store.get(Tree::PluginMeta, b"lost").unwrap(),
+            None,
+            "a Durability::None commit must not survive an abort without flush"
+        );
+        drop(store);
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn flush_is_a_no_op_when_nothing_changed() {
+        let path = temp_path("noop");
+        let store = RedbStore::new_file(&path).unwrap();
+        store.insert(Tree::PluginMeta, b"k", b"v").unwrap();
+        store.flush().unwrap();
+        let size_after_first_flush = std::fs::metadata(&path).unwrap().len();
+        // The sentinel write would grow or rewrite the file; a clean store
+        // must not touch it at all.
+        for _ in 0..10 {
+            store.flush().unwrap();
+        }
+        assert!(!store.dirty.load(Ordering::SeqCst));
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().len(),
+            size_after_first_flush
+        );
+        drop(store);
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 }

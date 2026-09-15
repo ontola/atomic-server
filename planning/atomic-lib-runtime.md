@@ -641,12 +641,17 @@ needing an HTTP server in front of it.
       (`OnceLock<Arc<Db>>`, `save_locally` direct) and `desktop/src/lib.rs` /
       `desktop/src/vfs.rs`. This is the parallel `simple.rs` surface the
       accepted runtime-boundary decision says must not exist.
-- [ ] **Durability belongs to the library, not the host.** Every redb write
-      uses `Durability::None`; only `serve.rs` (server, desktop) and the WASM
-      worker run the 100ms durable-flush tick. The Flutter binding never
-      flushes except in `set_active_drive`, so an app kill rolls back every
-      edit since the last drive switch. Fix: own the flush cadence in
-      `atomic_lib` (`Db` or `AtomicNode`) so no binding can forget it.
+- [x] **Durability belongs to the library, not the host** (2026-09-15).
+      Every redb write uses `Durability::None`; until now only `serve.rs`
+      (server, desktop) and the WASM worker ran the 100ms durable-flush tick,
+      and the Flutter binding never flushed except in `set_active_drive`, so
+      an app kill rolled back every edit since the last drive switch.
+      `Db::init_redb_file` now spawns `Db::spawn_durable_flush` itself
+      (`DURABLE_FLUSH_INTERVAL`), `RedbStore::flush` is a no-op when nothing
+      was written, and `serve.rs` no longer runs its own thread. Regression:
+      `redb_store::tests::unflushed_writes_are_lost_on_abort_and_flushed_ones_survive`
+      (aborting child process) and
+      `db::test::file_store_writes_survive_reopen_without_an_explicit_flush`.
 
 Tests:
 

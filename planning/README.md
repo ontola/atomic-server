@@ -35,7 +35,7 @@ now live in [`completed/`](./completed/):
 
 Ranked by impact. Each links to the plan that owns the work.
 
-1. **Flutter writes are not durable.** Every redb write uses `Durability::None`; only the server, desktop and WASM hosts run the flush tick. The Flutter binding never flushes, so an app kill rolls back every edit since the last drive switch. [`atomic-lib-runtime.md`](./atomic-lib-runtime.md).
+1. ~~**Flutter writes are not durable.**~~ Fixed 2026-09-15: `Db::init_redb_file` owns the durable-flush tick, so every file-backed binding has the same 100ms loss bound. [`atomic-lib-runtime.md`](./atomic-lib-runtime.md).
 2. **No rate limiting on any write endpoint**, and the managed-node bootstrap grace has no reaper. [`foss-public-host-mode.md`](./foss-public-host-mode.md) Phase 3, [`security-audit-2026-09.md`](./security-audit-2026-09.md) D, [`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md).
 3. **Signed envelopes do not replicate** over bulk sync or the vault, so restored or invited devices see history as unattributed. [`auditability-loro-history.md`](./auditability-loro-history.md).
 4. **Flutter and desktop bypass the runtime boundary**: both hold a raw `Db` instead of `AtomicNode`, which is how gap 1 happened. [`atomic-lib-runtime.md`](./atomic-lib-runtime.md).

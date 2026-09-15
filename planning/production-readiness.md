@@ -22,8 +22,8 @@ owning plan where one exists. Verification logs stay out of this file.
       `/iroh-sync`, WS `COMMIT`). No limiter exists in `server/src`. Owned by
       [`foss-public-host-mode.md`](./foss-public-host-mode.md) Phase 3 and
       [`security-audit-2026-09.md`](./security-audit-2026-09.md) section D.
-- [ ] Library-owned durable flush so the Flutter binding stops losing writes
-      on app kill ([`atomic-lib-runtime.md`](./atomic-lib-runtime.md)).
+- [x] Library-owned durable flush so the Flutter binding stops losing writes
+      on app kill ([`atomic-lib-runtime.md`](./atomic-lib-runtime.md), 2026-09-15).
 - [ ] Desktop CSP (audit B7): `desktop/tauri.conf.json` still has `csp: null`.
 - [ ] Managed-node paid-abuse gate: the bootstrap grace admits any drive for
       ten minutes with no reaper
