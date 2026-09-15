@@ -1865,6 +1865,10 @@ export class AtomicServer {
           browserContainer.directory('/app/create-template'),
         )
         .withDirectory('/app/lib', browserContainer.directory('/app/lib'))
+        // Several specs import fixtures and mocks from the repo's integrations
+        // tree (`../../../integrations/...` from /app/e2e/tests), and Playwright
+        // loads every spec file even when a grep selects a subset.
+        .withDirectory('/integrations', this.source.directory('integrations'))
         .withDirectory(
           '/app/node_modules',
           browserContainer.directory('/app/node_modules'),
