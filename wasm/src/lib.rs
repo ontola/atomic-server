@@ -82,6 +82,11 @@ impl ClientDb {
     /// error surfaces verbatim, except that an undecryptable file is tagged
     /// with `WRONG_KEY_MARKER` so the caller can drop and recreate the cache.
     #[wasm_bindgen(constructor)]
+    // wasm-bindgen deprecated async constructors (invalid TS codegen); switching
+    // this to a static async factory is a real API change for callers and out
+    // of scope here, so silence the lint rather than making that change as a
+    // drive-by.
+    #[allow(deprecated)]
     pub async fn new(
         base_url: Option<String>,
         db_name: Option<String>,
@@ -546,7 +551,7 @@ impl ClientDb {
                 }
                 Err(e) => {
                     web_sys::console::warn_1(
-                        &format!("[ClientDb] Failed to read VV for {}: {e}", &subject).into(),
+                        &format!("[ClientDb] Failed to read VV for {}: {e}", subject).into(),
                     );
                 }
             }
@@ -585,7 +590,7 @@ impl ClientDb {
                         }
                         Err(e) => {
                             web_sys::console::warn_1(
-                                &format!("[ClientDb] Failed to read VV for {}: {e}", &subject)
+                                &format!("[ClientDb] Failed to read VV for {}: {e}", subject)
                                     .into(),
                             );
                         }
@@ -596,7 +601,7 @@ impl ClientDb {
                 Ok(None) => {}
                 Err(e) => {
                     web_sys::console::warn_1(
-                        &format!("[ClientDb] VV read error for {}: {e}", &subject).into(),
+                        &format!("[ClientDb] VV read error for {}: {e}", subject).into(),
                     );
                 }
             }
