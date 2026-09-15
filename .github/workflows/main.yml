@@ -19,25 +19,19 @@ concurrency:
   cancel-in-progress: ${{ github.ref_type == 'branch' && github.ref_name != 'develop' }}
 
 # Main prefers Mancave (self-hosted) so Dagger cache volumes stay warm.
-# GitHub-hosted runs ONLY when Mancave is unavailable — never as a retry
+# GitHub-hosted runs only when explicitly selected or required for PRs, never as a retry
 # after a red test suite.
 #
 # Flow:
-#   1. Pick runner — online self-hosted? (optional CI_RUNNER_STATUS_TOKEN)
+#   1. Pick runner — trusted self-hosted or explicitly hosted
 #   2. Main (Mancave) XOR Main (GitHub) — one path, not failure-failover
 #   3. Main — aggregator for the required status check
 #
-# Availability check needs a PAT that can list repo runners (GITHUB_TOKEN
-# cannot). Store it as Actions secret CI_RUNNER_STATUS_TOKEN. Without that
-# secret we assume Mancave is up (same as before) and will not fall back
-# when tests fail.
-#
-# Escape hatch (force hosted, skip Mancave):
-#   Settings -> Secrets and variables -> Actions -> Variables
-#   CI_RUNNER = ["ubuntu-latest"]
-#
-# Only this workflow uses the self-hosted runner. Releasing/deploying stay
-# on ubuntu-latest — a release must not depend on one PC being awake.
+# Trusted runs start directly on Mancave, including selector and result jobs.
+# There is no GitHub-hosted prerequisite, so exhausted Actions budgets do not
+# block self-hosted CI. If Mancave is offline, jobs queue; explicitly set the
+# repository variable CI_RUNNER = ["ubuntu-latest"] to use hosted runners.
+# No runner-status PAT is needed. Deployments retain their existing runners.
 #
 # SECURITY: pull_request / pull_request_target are forced onto hosted
 # runners (never Mancave).
@@ -47,7 +41,9 @@ name: "Main pipeline: build, lint, test"
 jobs:
   pick:
     name: Pick runner
-    runs-on: ubuntu-latest
+    # Trusted runs can start without a GitHub-hosted billing prerequisite.
+    # Mancave must be online; use CI_RUNNER to explicitly select hosted runners.
+    runs-on: ${{ fromJSON((github.event_name == 'pull_request_target' || github.event_name == 'pull_request' || vars.CI_RUNNER == '["ubuntu-latest"]') && '["ubuntu-latest"]' || (vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]')) }}
     permissions:
       contents: read
       pull-requests: read
@@ -57,7 +53,6 @@ jobs:
     steps:
       - id: pick
         env:
-          GH_TOKEN: ${{ secrets.CI_RUNNER_STATUS_TOKEN }}
           FORCE_RUNNER: ${{ vars.CI_RUNNER }}
           EVENT_NAME: ${{ github.event_name }}
           REPO: ${{ github.repository }}
@@ -76,37 +71,8 @@ jobs:
             exit 0
           fi
 
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "No CI_RUNNER_STATUS_TOKEN — assuming Mancave online"
-            echo "host=mancave" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # Any online runner carrying the self-hosted label counts as
-          # available (busy is fine — the job will wait its turn).
-          # On API errors (bad/insufficient PAT), prefer Mancave — do NOT
-          # treat a 403 as "offline" or we skip the warm box forever.
-          set +e
-          body=$(gh api "repos/$REPO/actions/runners" 2>/tmp/runner-api.err)
-          api_status=$?
-          set -e
-          if [ "$api_status" -ne 0 ]; then
-            echo "Runner API failed (is CI_RUNNER_STATUS_TOKEN a fine-grained PAT with Repository Administration: Read?):"
-            cat /tmp/runner-api.err || true
-            echo "Assuming Mancave online"
-            echo "host=mancave" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if printf '%s' "$body" | jq -e \
-            'any(.runners[]; .status == "online" and any(.labels[]; .name == "self-hosted"))' \
-            >/dev/null; then
-            echo "Self-hosted runner online — using Mancave"
-            echo "host=mancave" >> "$GITHUB_OUTPUT"
-          else
-            echo "No online self-hosted runner — falling back to GitHub-hosted"
-            echo "host=hosted" >> "$GITHUB_OUTPUT"
-          fi
+          echo "Selector is running on the self-hosted runner — using Mancave"
+          echo "host=mancave" >> "$GITHUB_OUTPUT"
 
       - id: e2e
         env:
@@ -289,7 +255,7 @@ jobs:
           cargo test --locked -p atomic-managed-node
           git diff --exit-code -- Cargo.lock
 
-  # Hosted only when pick said Mancave is unavailable (or escape/PR).
+  # Hosted only when explicitly selected or required for PR events.
   # Deliberately does NOT run when Mancave finished with test failures.
   github:
     name: Main (GitHub)
@@ -313,7 +279,7 @@ jobs:
     name: Main
     needs: [pick, mancave, github, downstream-saas]
     if: always() && needs.pick.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(needs.pick.outputs.host == 'hosted' && '["ubuntu-latest"]' || (vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]')) }}
     steps:
       - name: Resolve runner outcome
         run: |
