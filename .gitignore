@@ -15,6 +15,9 @@ artifact
 # only, kept out of the dev store on purpose.
 /.e2e-store
 /.e2e-runs
+
+# One-off diagnostic agent evaluation artifacts
+/browser/diagnostic-evaluations/
 server/assets_tmp
 server/js-build.log
 .netlify

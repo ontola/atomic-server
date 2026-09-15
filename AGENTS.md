@@ -70,6 +70,9 @@ In E2E tests, most specs use `test.beforeEach(before)` from `test-utils.ts`, whi
 
 ## Debugging process
 
+When reading feedback diagnostic reports, use [browser/DIAGNOSTICS.md](browser/DIAGNOSTICS.md)
+for interpretation rules, evidence limits, investigation entry points and reporting guidance.
+
 1. Identify the bug, where it's coming from.
 2. Reproduce the bug in a test at the cheapest layer that can fail: Rust /
    vitest first, then `browser/lib` `*.integration.test.ts` (real server, no

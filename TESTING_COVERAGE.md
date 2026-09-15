@@ -193,7 +193,16 @@ caught it, and if the answer is "none", that is the row to add.
 
 ---
 
-## Opt-in local diagnostic recorder
+## Local diagnostic recorder with explicit sharing
+
+Schema 2 adds operation boundary and completeness evidence. `diagnostics.test.ts`
+checks overlapping operations, retention loss, and public save paths with injected
+local-write and transport failures. `diagnostic-report.test.ts` checks exhaustive
+embedded event meanings and export completeness. See `browser/DIAGNOSTICS.md`
+for interpretation limits and the blind agent evaluation rubric. The initial
+GPT-5.6 Luna synthetic triage pilot is recorded in
+`browser/diagnostic-evaluations/2026-09-15/README.md`; it does not validate repair success.
+
 
 `browser/lib/src/diagnostics.test.ts` covers disabled defaults, content-free events,
 500-event bounds, rolling retention/expiry, slow saves and unchanged online queues,
@@ -202,9 +211,15 @@ listeners. `diagnostic-report.test.ts`, `feedback.test.ts`, and
 `feedback-privacy.test.ts` cover frozen previews, expired-session refusal, explicit
 inclusion, build identity and stripping inherited private Sentry context.
 `feedback.spec.ts` checks preview/checkbox controls, intercepted report delivery,
-private text/URL exclusion and recording disabled after reload.
+private text/URL exclusion, schema-3 export, recording/history surviving reload,
+and disabling/clearing across tabs in real IndexedDB.
+`persistent-diagnostics.test.ts` covers default recording, reload session separation,
+origin-wide bounds, age pruning, continuous recording, persisted disabling, stale
+writer fencing, account reset races, frozen previews, storage/clear failures and
+allowlisted reads, unavailable cross-tab messaging and preserving a remotely
+disabled preference during an account change.
 
-Not covered: crash-persistent recording (not implemented), cross-process correlation,
+Not covered: actual browser/OS crash durability of the last batch, cross-process correlation,
 production Sentry retention/access policies, and platform-specific background timer
 behavior. Slow/stalled events are heuristic warnings, not data-loss assertions.
 

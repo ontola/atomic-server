@@ -1056,7 +1056,9 @@ export class Store {
         sort: this.sortOutboxEntries,
         tierOf: this.outboxTierOf,
         drainSubject: async subject => {
-          const finish = this.diagnostics.beginDrain();
+          const finish = this.diagnostics.beginDrain(
+            this.resources.get(subject)?.__internalObject,
+          );
 
           try {
             await this.drainOutboxSubject(subject);
@@ -4182,6 +4184,8 @@ export class Store {
     this._serverConnectionError = nextError;
 
     if (!connected) {
+      this.finishDiagnosticSync?.('cancelled');
+      this.finishDiagnosticSync = undefined;
       this._driveSyncInProgress = false;
     }
 
@@ -4304,7 +4308,13 @@ export class Store {
     return this.saveStatus.subscribe(resource, callback);
   }
 
+  private finishDiagnosticSync?: (
+    outcome: 'ok' | 'error' | 'cancelled',
+  ) => void;
+
   public startDriveSync(): void {
+    this.finishDiagnosticSync?.('cancelled');
+    this.finishDiagnosticSync = this.diagnostics.beginBoundary('reconcile');
     this._driveSyncInProgress = true;
     this.emitSyncStatus();
   }
@@ -4334,6 +4344,8 @@ export class Store {
     timestamp: number,
   ): void {
     this._driveSyncInProgress = false;
+    this.finishDiagnosticSync?.('ok');
+    this.finishDiagnosticSync = undefined;
     this._lastDriveSync = { drive, count, timestamp };
 
     if (drive) {
@@ -4357,6 +4369,8 @@ export class Store {
    * refused" instead of a green check.
    */
   public failDriveSync(drive: string, message: string): void {
+    this.finishDiagnosticSync?.('error');
+    this.finishDiagnosticSync = undefined;
     this._driveSyncInProgress = false;
     this._lastDriveSyncError = { drive, message, timestamp: Date.now() };
 
@@ -5967,12 +5981,17 @@ export class Store {
 
   /** Posts a Commit to some endpoint. Returns the Commit created by the server. */
   public async postCommit(commit: Commit, endpoint: string): Promise<Commit> {
+    const finish = this.diagnostics.beginBoundary(
+      'server',
+      this.resources.get(commit.subject)?.__internalObject,
+    );
     const close = perfSpan('store.postCommit', {
       genesis: !!commit.isGenesis,
     });
 
     try {
       const created = await this.sendCommit(commit, endpoint);
+      finish('ok');
       close('ok');
       this.pushCommitLog(
         this.buildCommitLogEntry(commit, 'outgoing', 'sent', {
@@ -5982,6 +6001,7 @@ export class Store {
 
       return created;
     } catch (e) {
+      finish(e instanceof RequestCancelledError ? 'cancelled' : 'error');
       const errMsg = e instanceof Error ? e.message : String(e);
       close({ err: errMsg });
       // Pass the error through `extras.error`; the derived commitId in

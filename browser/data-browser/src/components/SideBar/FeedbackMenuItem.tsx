@@ -129,23 +129,26 @@ export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
                   />
                 </InputWrapper>
               </label>
-              <label htmlFor={emailId}>
-                Email for a reply (optional)
-                <InputWrapper>
-                  <InputStyled
-                    id={emailId}
-                    type='email'
-                    ref={emailRef}
-                    value={email}
-                    onChange={event => setEmail(event.target.value)}
-                    disabled={busy}
-                  />
-                </InputWrapper>
-              </label>
-              <FeedbackDiagnostics
-                onSelect={setDiagnosticPreview}
-                disabled={busy}
-              />
+              {dialogProps.show && (
+                <FeedbackDiagnostics
+                  onSelect={setDiagnosticPreview}
+                  disabled={busy}
+                >
+                  <label htmlFor={emailId}>
+                    Email for a reply (optional)
+                    <InputWrapper>
+                      <InputStyled
+                        id={emailId}
+                        type='email'
+                        ref={emailRef}
+                        value={email}
+                        onChange={event => setEmail(event.target.value)}
+                        disabled={busy}
+                      />
+                    </InputWrapper>
+                  </label>
+                </FeedbackDiagnostics>
+              )}
               {!enabled && (
                 <p role='status'>
                   Feedback reporting is unavailable on this installation. Email{' '}
