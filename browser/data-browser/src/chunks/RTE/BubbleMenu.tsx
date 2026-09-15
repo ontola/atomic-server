@@ -11,8 +11,8 @@ import { styled } from 'styled-components';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { Column, Row } from '../../components/Row';
 
-import { Popover } from '../../components/Popover';
-import { useState } from 'react';
+import { Popover, PopoverContainer } from '../../components/Popover';
+import { useCallback, useState } from 'react';
 import { transparentize } from 'polished';
 import { EditLinkForm } from './EditLinkForm';
 import { useTipTapEditor } from './TiptapContext';
@@ -33,6 +33,11 @@ export function BubbleMenu({
 }: BubbleMenuProps): React.JSX.Element {
   const editor = useTipTapEditor();
   const [linkMenuOpen, setLinkMenuOpen] = useState(false);
+  // Focusing the link form blurs the editor, which would hide the menu the
+  // popover is anchored to and send it flying to the corner. Keep the menu
+  // shown while the form is open; the popover also portals into the menu so
+  // the plugin's blur guard sees focus staying inside it.
+  const keepShown = useCallback(() => true, []);
 
   const {
     isBold,
@@ -60,76 +65,83 @@ export function BubbleMenu({
   }
 
   return (
-    <TipTapBubbleMenu editor={editor} options={{ onShow }}>
+    <TipTapBubbleMenu
+      editor={editor}
+      shouldShow={linkMenuOpen ? keepShown : null}
+      options={{ onShow }}
+    >
       <BubbleMenuInner>
-        <Row gap='0.5ch'>
-          <NodeSelectMenu />
-          <ToggleButton
-            title='Toggle bold'
-            $active={isBold}
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            disabled={!editor.can().chain().focus().toggleBold().run()}
-            type='button'
-          >
-            <FaBold />
-          </ToggleButton>
-          <ToggleButton
-            title='Toggle italic'
-            $active={isItalic}
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            disabled={!editor.can().chain().focus().toggleItalic().run()}
-            type='button'
-          >
-            <FaItalic />
-          </ToggleButton>
-          <ToggleButton
-            title='Toggle strikethrough'
-            $active={isStrikethrough}
-            onClick={() => editor.chain().focus().toggleStrike().run()}
-            disabled={!editor.can().chain().focus().toggleStrike().run()}
-            type='button'
-          >
-            <FaStrikethrough />
-          </ToggleButton>
-          <ToggleButton
-            title='Toggle blockquote'
-            $active={isBlockquote}
-            onClick={() => editor.chain().focus().toggleBlockquote().run()}
-            disabled={!editor.can().chain().focus().toggleBlockquote().run()}
-            type='button'
-          >
-            <FaQuoteLeft />
-          </ToggleButton>
-          <ToggleButton
-            title='Toggle inline code'
-            $active={isCode}
-            onClick={() => editor.chain().focus().toggleCode().run()}
-            disabled={!editor.can().chain().focus().toggleCode().run()}
-            type='button'
-          >
-            <FaCode />
-          </ToggleButton>
-          <StyledPopover
-            modal
-            open={linkMenuOpen}
-            onOpenChange={setLinkMenuOpen}
-            side='top'
-            Trigger={
-              <ToggleButton
-                as={RadixPopover.Trigger}
-                $active={isLink}
-                disabled={!editor.can().chain().focus().toggleLink().run()}
-                type='button'
-              >
-                <FaLink />
-              </ToggleButton>
-            }
-          >
-            <EditLinkForm onDone={() => setLinkMenuOpen(false)} />
-          </StyledPopover>
-          {children}
-        </Row>
-        {extraItems}
+        <PopoverContainer>
+          <Row gap='0.5ch'>
+            <NodeSelectMenu />
+            <ToggleButton
+              title='Toggle bold'
+              $active={isBold}
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              disabled={!editor.can().chain().focus().toggleBold().run()}
+              type='button'
+            >
+              <FaBold />
+            </ToggleButton>
+            <ToggleButton
+              title='Toggle italic'
+              $active={isItalic}
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              disabled={!editor.can().chain().focus().toggleItalic().run()}
+              type='button'
+            >
+              <FaItalic />
+            </ToggleButton>
+            <ToggleButton
+              title='Toggle strikethrough'
+              $active={isStrikethrough}
+              onClick={() => editor.chain().focus().toggleStrike().run()}
+              disabled={!editor.can().chain().focus().toggleStrike().run()}
+              type='button'
+            >
+              <FaStrikethrough />
+            </ToggleButton>
+            <ToggleButton
+              title='Toggle blockquote'
+              $active={isBlockquote}
+              onClick={() => editor.chain().focus().toggleBlockquote().run()}
+              disabled={!editor.can().chain().focus().toggleBlockquote().run()}
+              type='button'
+            >
+              <FaQuoteLeft />
+            </ToggleButton>
+            <ToggleButton
+              title='Toggle inline code'
+              $active={isCode}
+              onClick={() => editor.chain().focus().toggleCode().run()}
+              disabled={!editor.can().chain().focus().toggleCode().run()}
+              type='button'
+            >
+              <FaCode />
+            </ToggleButton>
+            <StyledPopover
+              modal
+              open={linkMenuOpen}
+              onOpenChange={setLinkMenuOpen}
+              side='top'
+              Trigger={
+                <ToggleButton
+                  as={RadixPopover.Trigger}
+                  title='Set link'
+                  $active={isLink}
+                  disabled={!editor.can().chain().focus().toggleLink().run()}
+                  type='button'
+                >
+                  <FaLink />
+                </ToggleButton>
+              }
+            >
+              <EditLinkForm onDone={() => setLinkMenuOpen(false)} />
+            </StyledPopover>
+            {children}
+          </Row>
+          {extraItems}
+        </PopoverContainer>
       </BubbleMenuInner>
     </TipTapBubbleMenu>
   );

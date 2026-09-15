@@ -1,4 +1,5 @@
 import { Button } from '@components/Button';
+import { PopoverContainer } from '@components/Popover';
 import { useWebsitePreviewHtml } from './useWebsitePreviewHtml';
 import { lazy, Suspense, useState } from 'react';
 import { StyleSheetManager } from 'styled-components';
@@ -47,7 +48,11 @@ export function WebsiteInlinePreview({
   const page =
     artifact.config.pages.find(candidate => candidate.path === pagePath) ??
     artifact.config.pages[0];
-  const html = artifact.files[`${page.path.slice(1)}index.html`];
+  // The sandbox blocks scripts anyway; dropping the runtime tag avoids a console error per load.
+  const html = artifact.files[`${page.path.slice(1)}index.html`].replace(
+    '<script src="website-runtime.js" defer></script>',
+    '',
+  );
 
   const setup = async (frame: HTMLIFrameElement) => {
     const doc = frame.contentDocument;
@@ -208,15 +213,18 @@ export function WebsiteInlinePreview({
       {documents.map(({ element, resource }) =>
         createPortal(
           <StyleSheetManager target={element.ownerDocument.head}>
-            <Suspense fallback={<p>Loading document editor…</p>}>
-              <CollaborativeEditor
-                embedded
-                menuContainer={element.ownerDocument.body}
-                resource={resource}
-                doc={resource.getLoroDoc()!}
-                property={dataBrowser.properties.documentContent}
-              />
-            </Suspense>
+            {/* Popovers (link form) must portal into the iframe, not the app document. */}
+            <PopoverContainer>
+              <Suspense fallback={<p>Loading document editor…</p>}>
+                <CollaborativeEditor
+                  embedded
+                  menuContainer={element.ownerDocument.body}
+                  resource={resource}
+                  doc={resource.getLoroDoc()!}
+                  property={dataBrowser.properties.documentContent}
+                />
+              </Suspense>
+            </PopoverContainer>
           </StyleSheetManager>,
           element,
           resource.subject,
