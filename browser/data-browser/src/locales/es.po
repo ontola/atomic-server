@@ -431,6 +431,7 @@ msgstr "Escribe la documentación markdown para la habilidad aquí..."
 
 #: src/chunks/AI/SkillsConfigTab.tsx
 #: src/chunks/AI/SkillsConfigTab.tsx
+#: src/chunks/Website/WebsitePage.tsx
 msgid "Content"
 msgstr "Contenido"
 
@@ -856,6 +857,7 @@ msgstr "Aprende más y participa"
 msgid "v{0}"
 msgstr "v{0}"
 
+#: src/chunks/Website/WebsiteHosting.tsx
 #: src/routes/AboutRoute.tsx
 #: src/routes/AboutRoute.tsx src/routes/History/HistoryMobileView.tsx
 #: src/routes/History/HistoryMobileView.tsx
@@ -10723,21 +10725,17 @@ msgid "The response was interrupted."
 msgid "New website"
 msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Release ready"
-msgstr ""
+#~ msgid "Release ready"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Unreleased changes"
-msgstr ""
+#~ msgid "Unreleased changes"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Draft"
-msgstr ""
+#~ msgid "Draft"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Design with Assistant"
-msgstr ""
+#~ msgid "Design with Assistant"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Prepare release"
@@ -10770,9 +10768,8 @@ msgstr ""
 msgid "Review website release"
 msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Pages and content"
-msgstr ""
+#~ msgid "Pages and content"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Page"
@@ -10895,69 +10892,54 @@ msgstr ""
 #~ msgid "The model request failed."
 #~ msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Content stays in Atomic. Create a frozen release to download or publish."
-msgstr ""
+#~ msgid "Content stays in Atomic. Create a frozen release to download or publish."
+#~ msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Refresh hosting status"
-msgstr ""
+#~ msgid "Refresh hosting status"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Upload saved release"
-msgstr ""
+#~ msgid "Upload saved release"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Publish on your Atomic Server"
-msgstr ""
+#~ msgid "Publish on your Atomic Server"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Upload a saved release, review it, then publish. Editing content leaves the live website unchanged."
-msgstr ""
+#~ msgid "Upload a saved release, review it, then publish. Editing content leaves the live website unchanged."
+#~ msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Website is live"
-msgstr ""
+#~ msgid "Website is live"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Website is not published"
 msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Open website"
-msgstr ""
+#~ msgid "Open website"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Review an uploaded release"
-msgstr ""
+#~ msgid "Review an uploaded release"
+#~ msgstr ""
 
 #~ msgid "Review an uploaded release <0><0>Select a release</0> {0}</0>"
 #~ msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Preview uploaded page"
-msgstr ""
+#~ msgid "Preview uploaded page"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Uploaded website preview"
-msgstr ""
+#~ msgid "Uploaded website preview"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Review before publishing"
-msgstr ""
+#~ msgid "Review before publishing"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "These uploaded pages will become publicly accessible. This preview disables scripts."
-msgstr ""
+#~ msgid "These uploaded pages will become publicly accessible. This preview disables scripts."
+#~ msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Publish reviewed release"
-msgstr ""
+#~ msgid "Publish reviewed release"
+#~ msgstr ""
 
-#. 0: status.state!.deployments.indexOf(entry.deployment) + 1
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Release {0}"
-msgstr ""
+#~ msgid "Release {0}"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Unpublished"
@@ -10967,18 +10949,119 @@ msgstr ""
 msgid "Publication history"
 msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Website hosting"
-msgstr ""
+#~ msgid "Website hosting"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Unpublish website"
 msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Release"
+#~ msgid "Release"
+#~ msgstr ""
+
+#~ msgid "Select a release"
+#~ msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Changes stay private until you publish."
+msgstr ""
+
+#~ msgid "Close publishing"
+#~ msgstr ""
+
+#~ msgid "Publish…"
+#~ msgstr ""
+
+#~ msgid "Export & versions"
+#~ msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Download website"
 msgstr ""
 
 #: src/chunks/Website/WebsiteHosting.tsx
-msgid "Select a release"
+msgid "Publishing…"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Update site"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Publish site"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Publishing options"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Previous version"
+msgstr ""
+
+#. 0: status.state!.deployments.indexOf(entry.deployment) + 1
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Version {0}"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "View site"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Publishing"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Hosted on your Atomic Server. Updates publish the current draft."
+msgstr ""
+
+#~ msgid "Refresh status"
+#~ msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Choose a version"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Restore version"
+msgstr ""
+
+#~ msgid "Your site is up to date."
+#~ msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Website published."
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Export"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Design with AI"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Edit document"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Add content"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Add to page"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Design"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Editorial"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Modern"
 msgstr ""

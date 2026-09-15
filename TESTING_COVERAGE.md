@@ -1,3 +1,10 @@
+Website publishing UX follow-up (2026-09-15): the Chromium publishing E2E now
+uses one-click Publish site / Update site, checks a single primary action and no
+manual status refresh control, and verifies a failed hosting request reaches the
+standard Store error pipeline (visible toast plus console error). Desktop/mobile
+screenshots exercise the preview-first layout. Existing document/export and
+Assistant design scenarios retain coverage behind the collapsed export controls.
+
 Self-hosted website publication (2026-09-15): `atomic_lib` website tests cover
 bounded packages, unsafe paths, content identity, private upload, activation,
 stale revisions, rollback and unpublish. The Actix website HTTP test uses a real

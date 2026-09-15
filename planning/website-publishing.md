@@ -22,8 +22,9 @@ drive root, whereas source editing can be delegated more narrowly.
 - [x] Local persistent storage adapter, private uploads and atomic active pointer.
 - [x] Authenticated status/upload/preview/activate API.
 - [x] Separate customer-host routing, public files only, no fallback to Atomic APIs.
-- [x] Website UI: saved release upload, uploaded preview, explicit publish,
-  existing-release selection for rollback, unpublish and publication history.
+- [x] Website UI: one-click Publish site / Update site; saving, uploading and
+  activation happen inside that action. Secondary options contain rollback,
+  unpublish and publication history. Hosting status refreshes automatically.
 - [ ] Managed SaaS adapter, account/drive ownership proof, object storage and serving.
 - [ ] Production capacity measurements, garbage collection and richer assets.
 
@@ -58,11 +59,15 @@ routing domains and must also be separate from any externally hosted editor.
 This does not implement domain acquisition, DNS provisioning or ACME wildcard
 certificate management. With the setting absent, publishing is disabled.
 
-Create a website, prepare and save a release, then choose **Upload saved release**.
-Review the returned package in the script-disabled preview and choose **Publish
-reviewed release**. New source edits remain drafts until another saved release is
-uploaded and explicitly activated. **Refresh hosting status** restores server
-state after navigating/reloading and clears any outdated pending review.
+Create a website and click **Publish site**. Later edits go live with **Update
+site**. That single explicit action saves the draft snapshot, uploads it and
+conditionally activates it. Conflicting publication changes are refused; the
+current site stays available if saving/uploading fails. One blue primary button
+is visible at a time. **Publishing options** contains version restore and
+unpublish. The same **Publishing options** menu contains export controls; there is no separate versions panel. Status loads on
+mount, after actions and when the browser window regains focus; no manual
+refresh control is exposed. Action errors use `store.notifyError` for the
+standard toast and logging pipeline.
 
 API routes (all control requests signed with the existing Atomic request proof):
 

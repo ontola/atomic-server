@@ -106,7 +106,9 @@ export function WebsiteInlinePreview({
         setSaved(true);
       })
       .catch(cause => {
-        setError(String(cause));
+        store.notifyError(
+          cause instanceof Error ? cause : new Error(String(cause)),
+        );
       })
       .finally(() => setSaving(false));
   };

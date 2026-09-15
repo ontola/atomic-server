@@ -97,7 +97,9 @@ export function WebsitePage({ resource }: { resource: Resource }) {
     try {
       await action();
     } catch (error) {
-      setProblem(String(error));
+      store.notifyError(
+        error instanceof Error ? error : new Error(String(error)),
+      );
     }
 
     setBusy(false);
@@ -116,44 +118,72 @@ export function WebsitePage({ resource }: { resource: Resource }) {
 
   return (
     <Workspace>
-      <Row>
-        <div>
+      <Header>
+        <Title>
           <h1>{config?.title ?? resource.title}</h1>
-          <p role='status'>
-            {release
-              ? draft?.digest === release.digest
-                ? 'Release ready'
-                : 'Unreleased changes'
-              : 'Draft'}
-          </p>
-        </div>
-        <Button
-          disabled={!canWrite}
-          onClick={() =>
-            askAI({
-              prompt:
-                /* @wc-ignore */ 'Help me design this website. Read it with describe_website, ask what I want to change, then use update_website. Keep content in its existing Atomic documents and tables.',
-              context: [
-                newContextItem<AIAtomicResourceMessageContext>({
-                  type: 'atomic-resource',
-                  subject: resource.subject,
-                }),
-              ],
-            })
-          }
-        >
-          Design with Assistant
-        </Button>
-        <Button
-          disabled={!draft || !canWrite || busy}
-          onClick={() => setReview(draft)}
-        >
-          Prepare release
-        </Button>
-      </Row>
-      <p>
-        Content stays in Atomic. Create a frozen release to download or publish.
-      </p>
+          <p>Changes stay private until you publish.</p>
+        </Title>
+        <Row>
+          <Button
+            subtle
+            disabled={!canWrite}
+            onClick={() =>
+              askAI({
+                prompt:
+                  /* @wc-ignore */ 'Help me design this website. Read it with describe_website, ask what I want to change, then use update_website. Keep content in its existing Atomic documents and tables.',
+                context: [
+                  newContextItem<AIAtomicResourceMessageContext>({
+                    type: 'atomic-resource',
+                    subject: resource.subject,
+                  }),
+                ],
+              })
+            }
+          >
+            Design with AI
+          </Button>
+          <WebsiteHosting
+            key={resource.subject}
+            project={resource.subject}
+            draft={draft}
+            canWrite={!!canWrite}
+            secondary={!!review}
+            saveRelease={async artifact => {
+              await saveWebsiteRelease(store, drive, resource, artifact);
+              setRelease(artifact);
+            }}
+          >
+            <>
+              <h3>Export</h3>
+              <Button
+                subtle
+                disabled={!draft || !canWrite || busy}
+                onClick={() => {
+                  setReview(draft);
+                }}
+              >
+                Prepare release
+              </Button>
+              {release ? (
+                <>
+                  <Button subtle onClick={() => setShowRelease(!showRelease)}>
+                    {showRelease ? 'Show draft' : 'Show release'}
+                  </Button>
+                  <Button
+                    subtle
+                    disabled={busy}
+                    onClick={() => perform(() => downloadWebsite(release))}
+                  >
+                    Download website
+                  </Button>
+                </>
+              ) : (
+                <p>No release yet.</p>
+              )}
+            </>
+          </WebsiteHosting>
+        </Row>
+      </Header>
       {problem && <p role='alert'>{problem}</p>}
       {review && (
         <Review aria-label='Review website release'>
@@ -173,6 +203,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
           </ul>
           <Row>
             <Button
+              data-website-primary
               disabled={busy}
               onClick={() =>
                 perform(async () => {
@@ -191,15 +222,9 @@ export function WebsitePage({ resource }: { resource: Resource }) {
           </Row>
         </Review>
       )}
-      <WebsiteHosting
-        key={resource.subject}
-        project={resource.subject}
-        release={release}
-        canWrite={!!canWrite}
-      />
       <Layout>
         <Controls>
-          <h2>Pages and content</h2>
+          <h2>Content</h2>
           {config && (
             <Field label='Page' fieldId='website-page'>
               <select
@@ -227,106 +252,99 @@ export function WebsitePage({ resource }: { resource: Resource }) {
           ))}
           {canWrite && (
             <>
-              <Field label='Add a document' fieldId='website-document'>
-                <ResourceSelector
-                  id='website-document'
-                  isA={dataBrowser.classes.documentV2}
-                  value={document}
-                  setSubject={setDocument}
-                  hideCreateOption
-                />
-              </Field>
-              <Button
-                disabled={!document || !config || busy}
-                onClick={() => {
-                  if (!document || !config || !currentPage) return;
-                  void change({
-                    ...config,
-                    pages: config.pages.map(page =>
-                      page.path === currentPage.path
-                        ? {
-                            ...page,
-                            documents: [
-                              ...new Set([...page.documents, document]),
-                            ],
-                          }
-                        : page,
-                    ),
-                  });
-                  setDocument(undefined);
-                }}
-              >
-                Add to page
-              </Button>
+              <details>
+                <summary>Add content</summary>
+                <Field label='Add a document' fieldId='website-document'>
+                  <ResourceSelector
+                    id='website-document'
+                    isA={dataBrowser.classes.documentV2}
+                    value={document}
+                    setSubject={setDocument}
+                    hideCreateOption
+                  />
+                </Field>
+                <Button
+                  subtle
+                  disabled={!document || !config || busy}
+                  onClick={() => {
+                    if (!document || !config || !currentPage) return;
+                    void change({
+                      ...config,
+                      pages: config.pages.map(page =>
+                        page.path === currentPage.path
+                          ? {
+                              ...page,
+                              documents: [
+                                ...new Set([...page.documents, document]),
+                              ],
+                            }
+                          : page,
+                      ),
+                    });
+                    setDocument(undefined);
+                  }}
+                >
+                  Add to page
+                </Button>
+              </details>
             </>
           )}
           {config && (
             <>
-              <h2>Design</h2>
-              <Field label='Accent color' fieldId='website-accent'>
-                <InputStyled
-                  id='website-accent'
-                  type='color'
-                  value={config.accent}
-                  disabled={!canWrite || busy}
-                  onChange={event =>
-                    void change({ ...config, accent: event.target.value })
-                  }
-                />
-              </Field>
-              <Field label='Typography' fieldId='website-font'>
-                <select
-                  id='website-font'
-                  value={config.font}
-                  disabled={!canWrite || busy}
-                  onChange={event =>
-                    void change({
-                      ...config,
-                      font: event.target.value as WebsiteConfig['font'],
-                    })
-                  }
-                >
-                  <option value='serif'>Editorial</option>
-                  <option value='sans'>Modern</option>
-                </select>
-              </Field>
+              <details>
+                <summary>Design</summary>
+                <Field label='Accent color' fieldId='website-accent'>
+                  <InputStyled
+                    id='website-accent'
+                    type='color'
+                    value={config.accent}
+                    disabled={!canWrite || busy}
+                    onChange={event =>
+                      void change({ ...config, accent: event.target.value })
+                    }
+                  />
+                </Field>
+                <Field label='Typography' fieldId='website-font'>
+                  <select
+                    id='website-font'
+                    value={config.font}
+                    disabled={!canWrite || busy}
+                    onChange={event =>
+                      void change({
+                        ...config,
+                        font: event.target.value as WebsiteConfig['font'],
+                      })
+                    }
+                  >
+                    <option value='serif'>Editorial</option>
+                    <option value='sans'>Modern</option>
+                  </select>
+                </Field>
+              </details>
             </>
-          )}
-          <h2>Release</h2>
-          {release ? (
-            <>
-              <Button subtle onClick={() => setShowRelease(!showRelease)}>
-                {showRelease ? 'Show draft' : 'Show release'}
-              </Button>
-              <Button
-                disabled={busy}
-                onClick={() => perform(() => downloadWebsite(release))}
-              >
-                Download website
-              </Button>
-            </>
-          ) : (
-            <p>No release yet.</p>
           )}
         </Controls>
         <Preview>
-          <p>
-            {review
-              ? 'Release review'
-              : showRelease
-                ? 'Frozen release'
-                : 'Live draft preview'}
-          </p>
-          {!review && !showRelease && (
-            <Button
-              disabled={!draft || busy}
-              onClick={() =>
-                setInlineArtifact(inlineArtifact ? undefined : draft)
-              }
-            >
-              {inlineArtifact ? 'Done editing' : 'Edit on page'}
-            </Button>
-          )}
+          <PreviewToolbar>
+            <p>
+              {review
+                ? 'Release review'
+                : showRelease
+                  ? 'Frozen release'
+                  : 'Live draft preview'}
+            </p>
+            {!review && !showRelease && (
+              <Button
+                subtle
+                disabled={!draft || busy}
+                onClick={() =>
+                  setInlineArtifact(inlineArtifact ? undefined : draft)
+                }
+              >
+                {inlineArtifact ? 'Done editing' : 'Edit on page'}
+              </Button>
+            )}
+          </PreviewToolbar>
           {!review &&
           !showRelease &&
           inlineArtifact?.project === resource.subject ? (
@@ -354,7 +372,10 @@ export function WebsitePage({ resource }: { resource: Resource }) {
 }
 
 const Workspace = styled.div`
-  padding: ${p => p.theme.size(2)};
+  padding: ${p => p.theme.size(3)};
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   h1 {
     margin: 0;
   }
@@ -364,14 +385,31 @@ const Workspace = styled.div`
 `;
 const Layout = styled.div`
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
-  gap: 2rem;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 1.5rem;
   @media (max-width: 800px) {
     grid-template-columns: 1fr;
   }
 `;
 const Controls = styled(Column)`
+  @media (max-width: 800px) {
+    order: 2;
+  }
   gap: 1rem;
+  min-width: 0;
+  font-size: 0.9rem;
+  details {
+    border-top: 1px solid ${p => p.theme.colors.bg2};
+    padding-top: 1rem;
+  }
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+  details > button {
+    margin-top: 0.75rem;
+  }
   h2 {
     font-size: 1rem;
     margin: 1rem 0 0;
@@ -385,7 +423,8 @@ const Preview = styled.div`
   min-width: 0;
   iframe {
     width: 100%;
-    height: 75vh;
+    height: 76vh;
+    display: block;
     border: 1px solid ${p => p.theme.colors.bg2};
     border-radius: 12px;
     background: white;
@@ -396,4 +435,48 @@ const Review = styled.section`
   margin: 1rem 0;
   border: 1px solid ${p => p.theme.colors.main};
   border-radius: 12px;
+`;
+
+const Header = styled.header`
+  button,
+  a {
+    font: inherit;
+    line-height: 1.25;
+  }
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  > div:last-child {
+    flex-wrap: wrap;
+  }
+`;
+const Title = styled.div`
+  min-width: 0;
+  flex: 1 1 260px;
+  h1 {
+    font-size: clamp(1.25rem, 2.3vw, 1.8rem);
+    overflow-wrap: anywhere;
+    line-height: 1.2;
+  }
+  p {
+    font-size: 0.85rem;
+    opacity: 0.65;
+    margin: 0.4rem 0 0;
+  }
+`;
+const PreviewToolbar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 2.5rem;
+  margin-bottom: 0.75rem;
+  p {
+    margin: 0;
+    font-size: 0.85rem;
+    opacity: 0.7;
+  }
 `;
