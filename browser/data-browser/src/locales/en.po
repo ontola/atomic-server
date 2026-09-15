@@ -11193,10 +11193,13 @@ msgstr "Set link"
 msgid "Page edit"
 msgstr "Page edit"
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "<0/> AI edit"
-msgstr "<0/> AI edit"
+#~ msgid "<0/> AI edit"
+#~ msgstr "<0/> AI edit"
 
 #: src/components/SideBar/AIPanel.tsx
 msgid "Drag to resize"
 msgstr "Drag to resize"
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "AI edit"
+msgstr "AI edit"

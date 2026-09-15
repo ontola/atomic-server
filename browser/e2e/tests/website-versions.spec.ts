@@ -21,6 +21,7 @@ test('website versions deduplicate without creating sidebar resources', async ({
       createdAt: new Date().toISOString(),
     });
     const { schema } = await readWebsite(store, drive, site);
+
     return {
       subject: site.subject,
       first,

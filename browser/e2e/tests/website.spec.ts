@@ -74,6 +74,7 @@ test('website document preview, frozen release and reload', async ({
       await import('/src/chunks/Website/hostingClient.ts');
     const subject = new URL(location.href).searchParams.get('subject')!;
     const status = await hostingRequest(window.store, subject);
+
     return `/app/show?subject=${encodeURIComponent(subject)}&view=website-version:${status.state.deployments.at(-1)}`;
   });
   await page.goto(`${new URL(websiteURL).origin}${versionURL}`);
@@ -163,13 +164,16 @@ test('Assistant creates and redesigns a website using existing table content', a
       },
     ],
   });
+
   const websiteFrom = (results: string[]) => {
     for (const result of results) {
       const match = /"website"\s*:\s*"([^"]+)"/.exec(result);
       if (match) return match[1];
     }
+
     throw new Error('Assistant did not return a website.');
   };
+
   const state = await setupScriptedToolCallMocks(
     page,
     [
@@ -238,6 +242,7 @@ test('Assistant creates and redesigns a website using existing table content', a
       propVals: { [name]: 'Grow rosemary on a sunny balcony' },
     });
     await other.save();
+
     return { table: table.subject, row: row.subject, other: other.subject };
   });
   tableSubject = fixture.table;
@@ -264,6 +269,7 @@ test('Assistant creates and redesigns a website using existing table content', a
       )
         found = resource.subject;
     });
+
     return found;
   });
   expect(subject).toBeTruthy();
@@ -339,8 +345,8 @@ test('Assistant creates and redesigns a website using existing table content', a
   await expect
     .poll(async () =>
       page.evaluate(
-        async subject =>
-          (await window.store.getResource(subject)).get(
+        async row =>
+          (await window.store.getResource(row)).get(
             'https://atomicdata.dev/properties/name',
           ),
         rowSubject,
@@ -353,8 +359,8 @@ test('Assistant creates and redesigns a website using existing table content', a
     page.getByText('Content saved. The existing release is unchanged.'),
   ).toBeVisible();
   const stored = await page.evaluate(
-    async subject =>
-      (await window.store.getResource(subject)).get(
+    async row =>
+      (await window.store.getResource(row)).get(
         'https://atomicdata.dev/properties/name',
       ),
     rowSubject,

@@ -25,6 +25,7 @@ test('selected private image renders in a published gallery', async ({
     const config = starterWebsite('Bakery gallery');
     config.pages[0].media = [{ subject: photo, alt: 'Fresh bread' }];
     const website = await createWebsite(store, drive, config);
+
     return website.subject;
   });
   await page.goto(
@@ -101,6 +102,7 @@ test('large original photos are optimized in the browser without changing the so
     const bitmap = await createImageBitmap(optimized);
     const dimensions = [bitmap.width, bitmap.height];
     bitmap.close();
+
     return {
       original: original.size,
       optimized: optimized.size,
