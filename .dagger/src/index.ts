@@ -33,6 +33,22 @@ const TOUCH_WORKSPACE_SOURCES = [
     '-type f -exec touch {} +',
 ];
 
+/**
+ * Runs the touch above on every pipeline run. A `withExec` is a cached layer
+ * keyed on its inputs, and the Rust sources are the same bytes across many
+ * commits, so the touch was replayed from cache with its old mtimes. Any
+ * artifact another pipeline wrote to the shared target volume in the meantime
+ * was then newer than the sources, and cargo kept it: `atomic-server` failed
+ * to compile against an `atomic_lib` from a different branch (2026-09-15).
+ * The changing variable makes the layer unique per run without touching the
+ * command itself.
+ */
+function touchWorkspaceSources(container: Container): Container {
+  return container
+    .withEnvVariable('ATOMIC_TOUCH_RUN', new Date().toISOString())
+    .withExec(TOUCH_WORKSPACE_SOURCES);
+}
+
 const NODE_IMAGE = 'node:22';
 const RUST_IMAGE = 'rust:bookworm';
 
@@ -652,7 +668,7 @@ export class AtomicServer {
           '/code/target',
           dag.cacheVolume('rust-wasm-target-v3'),
         )
-        .withExec(TOUCH_WORKSPACE_SOURCES)
+        .with(touchWorkspaceSources)
         .withWorkdir('/code/wasm')
         // The encoded-rustflags separator applies only to the WASM build.
         .withExec([
@@ -704,7 +720,7 @@ export class AtomicServer {
         )
         .withDirectory('/code/tools', this.source.directory('tools'))
         .withMountedCache('/code/target', dag.cacheVolume('rust-slim-target-v3'))
-        .withExec(TOUCH_WORKSPACE_SOURCES)
+        .with(touchWorkspaceSources)
         .withWorkdir('/code')
         .withEnvVariable('ATOMICSERVER_SKIP_JS_BUILD', 'true')
         // build.rs still wants to bundle the data-browser dist as embedded
@@ -1145,7 +1161,7 @@ export class AtomicServer {
       .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
       .withDirectory('/code/tools', source.directory('tools'))
       .withMountedCache('/code/target', dag.cacheVolume('rust-target-v3'))
-      .withExec(TOUCH_WORKSPACE_SOURCES)
+      .with(touchWorkspaceSources)
       .withWorkdir('/code')
       .withExec(['cargo', 'fetch']);
 
@@ -1308,7 +1324,7 @@ export class AtomicServer {
         .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
         .withDirectory('/code/tools', source.directory('tools'))
         .withMountedCache('/code/target', dag.cacheVolume('rust-checks-target-v3'))
-        .withExec(TOUCH_WORKSPACE_SOURCES)
+        .with(touchWorkspaceSources)
         .withWorkdir('/code')
         // build.rs in atomic-server wants to bundle a JS dist. Skip it —
         // fmt/clippy/test don't need it and including the bundle would
