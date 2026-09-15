@@ -150,7 +150,7 @@ impl KvStore for BTreeMapStore {
         // Take a single write lock to apply all operations atomically
         let mut trees = self.trees.write().unwrap();
         for op in operations {
-            let name = Self::tree_name(op.tree.clone());
+            let name = Self::tree_name(op.tree);
             let data = trees.entry(name).or_default();
             match op.method {
                 Method::Insert => {
