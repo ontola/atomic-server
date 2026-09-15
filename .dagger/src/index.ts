@@ -203,10 +203,14 @@ const HOST_PROFILES: Record<HostProfile, HostKnobs> = {
     // headroom, and `ci()` still runs these browsers alongside clippy,
     // nextest, flutter and two vitest suites.
     e2ePlaywrightRetries: '2',
-    nextestTestThreads: '6',
+    // Measured 2026-09-15 on a 15-minute smoke run (24 threads, 31 GiB): the
+    // engine sat at 14 to 20 cores while compiling, but only 7 to 13 cores for
+    // the 7.5-minute nextest phase and the e2e phase (idle 45 to 70%). Memory
+    // peaked at 8 GiB. The test widths below are where the headroom was.
+    nextestTestThreads: '12',
     nextestRetries: '1',
-    nextestBuildJobs: '4',
-    cargoBuildJobs: '8',
+    nextestBuildJobs: '8',
+    cargoBuildJobs: '12',
   },
   // Sized for GitHub's standard hosted runner. The widths below said 2 for
   // every knob, which matched the 2-vCPU runner this profile was written
