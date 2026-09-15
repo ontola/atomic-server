@@ -1409,6 +1409,26 @@ pub(crate) fn admit_unknown_drive(
     }
 }
 
+/// The drive a synced resource belongs to, for the membership check in
+/// [`import_sync_push`]: its own drive stamp when it has one, else its parent's
+/// stored drive (or the parent itself, when the parent is the drive), else the
+/// resource itself, which is the drive-root case.
+async fn resolve_drive(store: &Db, resource: &crate::Resource) -> String {
+    if let Ok(drive) = resource.get(crate::urls::DRIVE_PROP) {
+        return drive.to_string();
+    }
+    if let Ok(parent_val) = resource.get(crate::urls::PARENT) {
+        let parent_subject = crate::Subject::from(parent_val.to_string());
+        if let Ok(parent_res) = store.get_resource(&parent_subject).await {
+            return parent_res
+                .get(crate::urls::DRIVE_PROP)
+                .map(|v| v.to_string())
+                .unwrap_or_else(|_| parent_subject.to_string());
+        }
+    }
+    resource.get_subject().to_string()
+}
+
 /// Import resources from a SYNC_PUSH message into the local store.
 ///
 /// `for_agent` is the identity the sending peer proved. `trust_owned` is true
@@ -1524,10 +1544,11 @@ pub async fn import_sync_push(
             .await
             .ok();
         if let Some(existing) = &existing_resource {
-            let stored_drive = existing
-                .get(crate::urls::DRIVE_PROP)
-                .map(|v| v.to_string())
-                .unwrap_or_else(|_| existing.get_subject().to_string());
+            // Same resolution as for a new subject below: a stored resource
+            // without a drive stamp is a member of its parent's drive, not of
+            // itself. Falling back to its own subject made every replay for
+            // such a resource look foreign and get dropped.
+            let stored_drive = resolve_drive(store, existing).await;
             if normalize(&stored_drive) != admitted_drive {
                 tracing::warn!(
                     "import_sync_push: {} belongs to drive {}, not to {} this push was admitted for; skipped",
@@ -1595,19 +1616,7 @@ pub async fn import_sync_push(
         // be the drive root itself. (A peer gains nothing by stamping a NEW
         // resource into a drive it already has write on.)
         if existing_resource.is_none() {
-            let mut claimed = resource
-                .get(crate::urls::DRIVE_PROP)
-                .map(|v| v.to_string())
-                .unwrap_or_else(|_| resource.get_subject().to_string());
-            if let Ok(parent_val) = resource.get(crate::urls::PARENT) {
-                let parent_subject = crate::Subject::from(parent_val.to_string());
-                if let Ok(parent_res) = store.get_resource(&parent_subject).await {
-                    claimed = parent_res
-                        .get(crate::urls::DRIVE_PROP)
-                        .map(|v| v.to_string())
-                        .unwrap_or_else(|_| parent_subject.to_string());
-                }
-            }
+            let claimed = resolve_drive(store, &resource).await;
             if normalize(&claimed) != admitted_drive {
                 tracing::warn!(
                     "import_sync_push: new resource {} resolves to drive {}, not to {} this push was admitted for; skipped",
