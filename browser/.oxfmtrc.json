@@ -23,6 +23,7 @@
     "**/dev-drive-trace-*.json",
     "browser/data-browser/src/locales/**",
     "**/*.min.js",
+    "**/Website/runtime/search-view.html",
     "**/*.min.css"
   ]
 }
