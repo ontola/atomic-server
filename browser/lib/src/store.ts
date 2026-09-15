@@ -3865,6 +3865,7 @@ export class Store {
   public async getResources<C extends OptionalClass = UnknownClass>(
     subjects: string[],
   ): Promise<Resource<C>[]> {
+    const close = perfSpan('store.getResources', { count: subjects.length });
     const pending = new Map<string, Promise<Resource<C>>>();
     const batches = new Map<WSClient, string[]>();
     const misses: string[] = [];
@@ -3965,7 +3966,12 @@ export class Store {
       }
     }
 
-    return Promise.all(subjects.map(subject => pending.get(subject)!));
+    const results = await Promise.all(
+      subjects.map(subject => pending.get(subject)!),
+    );
+    close({ misses: misses.length });
+
+    return results;
   }
 
   /**

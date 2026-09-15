@@ -27,6 +27,7 @@ import { RealAIChat } from './RealAIChat';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { styled } from 'styled-components';
 import { consumePendingFirstMessage } from './pendingFirstMessage';
+import { userTiming } from '@helpers/userTiming';
 
 const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   const store = useStore();
@@ -192,7 +193,9 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
 
   // On load create AIChatDisplayMessages from the resource's messages.
   useEffect(() => {
+    const timing = userTiming('chat:page');
     messageResourcesToDisplayMessages(messageSubjects, store).then(map => {
+      timing.step('load');
       const allMessages = Array.from(map.keys());
       const lastSummaryIndex = allMessages.findLastIndex(
         m => m.metadata?.isSummary,
@@ -207,6 +210,10 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
 
       setMessageToResourceMap(map);
       setLoading(false);
+      // Two frames later the list is on screen: that is the render cost.
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => timing.step('render')),
+      );
 
       // A brand-new chat (e.g. from the search overlay's "Start AI Chat
       // with ..." action) may have a first message waiting to be sent.
