@@ -1,3 +1,16 @@
+Self-hosted website publication (2026-09-15): `atomic_lib` website tests cover
+bounded packages, unsafe paths, content identity, private upload, activation,
+stale revisions, rollback and unpublish. The Actix website HTTP test uses a real
+DB and signed requests to check private preview, anonymous refusal, customer
+hosts excluding API routes, and drive-root publication authority. The opt-in
+`website-publishing.spec.ts` ran on an isolated node with WEBSITE_HOSTING_E2E=1:
+Chromium completed private document -> release -> upload/review -> publish,
+an independent signed-out browser read, draft isolation, republish, rollback
+and unpublish (1 passed, 7.7s). No model API or cloud service is mocked into this
+publication path. `hostingClient.test.ts` checks trusted-origin signing, no key
+in the payload and conflict refusal without retry. SaaS deployment, production
+TLS/DNS, load testing and full-suite/CI validation remain outside these checks.
+
 Website composition and snapshot views: the focused website/FrameBridge set has
 16 passing tests, including invalid layout references and a host that refuses
 non-snapshot operations and foreign frames. `website.spec.ts` exercises a two-page

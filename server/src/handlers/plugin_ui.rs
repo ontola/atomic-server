@@ -603,7 +603,7 @@ mod tests {
     /// host, and these are the three ways out.
     #[test]
     fn every_route_out_of_a_broken_app_reaches_the_host() {
-        let html = render_plugin_ui_html_with("format=html", false, "n0nce", true);
+        let html = render_plugin_ui_html("n0nce");
 
         // Threw while opening.
         assert!(html.contains("window.__atomicReportError(e, 'load')"));
@@ -621,7 +621,7 @@ mod tests {
     /// is still loading — or one that rendered nothing at all.
     #[test]
     fn an_app_that_worked_says_so_and_says_how_much_it_drew() {
-        let html = render_plugin_ui_html_with("format=html", false, "n0nce", true);
+        let html = render_plugin_ui_html("n0nce");
 
         assert!(html.contains("'__atomic_plugin_rendered'"));
         assert!(html.contains("root.childElementCount"));
@@ -633,7 +633,7 @@ mod tests {
     /// every load-time error.
     #[test]
     fn the_reporter_is_defined_by_the_time_a_load_error_looks_for_it() {
-        let html = render_plugin_ui_html_with("format=html", false, "n0nce", true);
+        let html = render_plugin_ui_html("n0nce");
 
         let reporter = html
             .find("window.__atomicReportError = function")

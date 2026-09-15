@@ -31,6 +31,8 @@ now live in [`completed/`](./completed/):
 
 ## Active
 
+- [Website publishing](./website-publishing.md) — FOSS publication adapter and shared contract for managed SaaS hosting.
+
 - [Assistant-authored websites](./assistant-websites.md) — first local prototype validated; plugin abstraction audit and remaining SaaS deployment work.
 
 Remaining work, not "this file exists."
