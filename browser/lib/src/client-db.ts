@@ -637,6 +637,19 @@ export class ClientDbWorker {
     return r ?? { jsonAd: null, snapshot: null };
   }
 
+  /** Every subject in one worker round trip, in order; see the worker. */
+  async getResourcesWithSnapshots(
+    subjects: string[],
+  ): Promise<Array<{ jsonAd: string | null; snapshot: Uint8Array | null }>> {
+    if (subjects.length === 0) return [];
+    const rows = (await this.send({
+      type: 'getResourcesWithSnapshots',
+      subjects,
+    })) as Array<{ jsonAd: string | null; snapshot: Uint8Array | null }> | null;
+
+    return rows ?? subjects.map(() => ({ jsonAd: null, snapshot: null }));
+  }
+
   async putResource(jsonAd: string): Promise<void> {
     await this.send({ type: 'putResource', jsonAd });
   }
