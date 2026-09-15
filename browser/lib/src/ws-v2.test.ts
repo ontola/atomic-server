@@ -69,6 +69,9 @@ import {
   encodeError,
   encodeHello,
   decodeGet,
+  decodeGetMany,
+  decodeGetManyResult,
+  encodeGetMany,
   decodeSubject,
   decodeSyncDiff,
   decodeSyncOk,
@@ -123,6 +126,8 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
       'auth_ok_caps',
       'error',
       'get',
+      'get_many',
+      'get_many_result',
       'update_delta_push',
       'destroy',
       'commit',
@@ -151,6 +156,9 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
 
   it('encodes byte-identically to Rust', ({ expect }) => {
     expect(toHex(encodeGet(1, 'did:ad:x'))).toBe(toHex(vectors.get));
+    expect(toHex(encodeGetMany(2, ['did:ad:x', 'did:ad:y']))).toBe(
+      toHex(vectors.get_many),
+    );
     expect(toHex(encodeCommit(9, '{"a":1}'))).toBe(toHex(vectors.commit));
     expect(toHex(encodeSub('did:ad:d'))).toBe(toHex(vectors.sub));
     expect(toHex(encodeUnsub('did:ad:d'))).toBe(toHex(vectors.unsub));
@@ -258,6 +266,22 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
     expect(decodeGet(payload('get'))).toEqual({
       requestId: 1,
       subject: 'did:ad:x',
+    });
+    expect(decodeGetMany(payload('get_many'))).toEqual({
+      requestId: 2,
+      subjects: ['did:ad:x', 'did:ad:y'],
+    });
+    const many = decodeGetManyResult(payload('get_many_result'))!;
+    expect(many.requestId).toBe(2);
+    expect(many.frames.map(f => f[0])).toEqual([Tag.UPDATE, Tag.ERROR]);
+    expect(decodeUpdate(many.frames[0].subarray(1))).toMatchObject({
+      requestId: 2,
+      subject: 'did:ad:x',
+      flags: Flags.SNAPSHOT,
+    });
+    expect(decodeError(many.frames[1].subarray(1))).toMatchObject({
+      requestId: 2,
+      message: 'Resource not found. did:ad:y',
     });
 
     const update = decodeUpdate(payload('update_delta_push'));

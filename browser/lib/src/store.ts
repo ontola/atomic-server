@@ -386,6 +386,8 @@ export interface IncomingChange {
 
 /** Returns True if the client has WebSocket support */
 const supportsWebSockets = () => typeof WebSocket !== 'undefined';
+/** Subjects per GET_MANY frame; keeps one answer well under a single large frame. */
+const GET_MANY_CHUNK = 200;
 
 /**
  * How long resource fallback and collection reads wait for the app's
@@ -3709,6 +3711,122 @@ export class Store {
   }
 
   /**
+   * Gets many resources at once, in the order asked. Nearest source first:
+   * whatever is already in memory (or in flight) is reused, then the embedded
+   * database is asked for the rest in parallel, and only what neither has
+   * goes to the server, as one `GET_MANY` per chunk over the WebSocket (or as
+   * parallel single fetches where that is impossible: no socket, local-only
+   * subjects). Each entry is what `getResource` would have produced, so a
+   * missing subject comes back as a resource carrying `error` rather than as
+   * an exception.
+   */
+  public async getResources<C extends OptionalClass = UnknownClass>(
+    subjects: string[],
+  ): Promise<Resource<C>[]> {
+    const pending = new Map<string, Promise<Resource<C>>>();
+    const batches = new Map<WSClient, string[]>();
+    const misses: string[] = [];
+
+    for (const subject of new Set(subjects)) {
+      const resolved = this.resolveSubject(subject);
+      const found = this.resources.get(resolved);
+
+      if (found && (found.isReady() || found.error)) {
+        pending.set(subject, Promise.resolve(found as Resource<C>));
+        continue;
+      }
+
+      const inflight = this._inFlightFetches.get(
+        this.normalizeSubject(subject),
+      );
+
+      if (inflight) {
+        pending.set(subject, inflight as Promise<Resource<C>>);
+        continue;
+      }
+
+      misses.push(subject);
+    }
+
+    // The embedded database holds everything this device has synced; a hit
+    // hydrates the resource into memory without a round trip to the server.
+    const local = await Promise.all(
+      misses.map(async subject => {
+        const resolved = this.resolveSubject(subject);
+        const hit = await this.hydrateFromLocalDb(resolved);
+        const resource = this.resources.get(resolved);
+
+        return hit && resource?.isReady()
+          ? (resource as Resource<C>)
+          : undefined;
+      }),
+    );
+
+    for (const [index, subject] of misses.entries()) {
+      const resolved = this.resolveSubject(subject);
+      const fromDb = local[index];
+
+      if (fromDb) {
+        pending.set(subject, Promise.resolve(fromDb));
+        continue;
+      }
+
+      const ws =
+        supportsWebSockets() &&
+        !this.isLocalOnlySubject(resolved) &&
+        !resolved.startsWith('_new:') &&
+        !resolved.startsWith('_local:')
+          ? this.getWebSocketForSubject(resolved)
+          : undefined;
+
+      if (ws?.readyState !== WebSocket.OPEN) {
+        pending.set(subject, this.getResource<C>(subject));
+        continue;
+      }
+
+      batches.set(ws, [...(batches.get(ws) ?? []), subject]);
+    }
+
+    for (const [ws, wanted] of batches) {
+      for (let i = 0; i < wanted.length; i += GET_MANY_CHUNK) {
+        const chunk = wanted.slice(i, i + GET_MANY_CHUNK);
+        const batch = ws.fetchMany(chunk);
+
+        chunk.forEach((subject, index) => {
+          const normalized = this.normalizeSubject(subject);
+          const one = batch.then(entries => {
+            const entry = entries[index];
+
+            if (!(entry instanceof Error)) return entry as Resource<C>;
+
+            // Same shape as a failed single fetch: the placeholder (created
+            // here if nothing asked for it yet) carries the error.
+            const existing = this.getResolved(subject);
+
+            if (!existing) {
+              const placeholder = new Resource<C>(this.resolveSubject(subject));
+              this.addResource(placeholder, { skipCommitCompare: true });
+            }
+
+            this.failResource(subject, entry);
+
+            return this.getResolved(subject) as Resource<C>;
+          });
+          const tracked = one.finally(() => {
+            if (this._inFlightFetches.get(normalized) === tracked) {
+              this._inFlightFetches.delete(normalized);
+            }
+          });
+          this._inFlightFetches.set(normalized, tracked);
+          pending.set(subject, tracked);
+        });
+      }
+    }
+
+    return Promise.all(subjects.map(subject => pending.get(subject)!));
+  }
+
+  /**
    * Gets a resource by URL. Fetches and parses it if it's not available in the
    * store. Not recommended to use this for rendering, because it might cause
    * resources to be fetched multiple times.
@@ -3788,7 +3906,26 @@ export class Store {
       );
     }
 
-    const result = await this.fetchResourceFromServer(resolved);
+    // Nearest source first, the policy `useResource` already follows: a copy
+    // in the embedded database is served without asking the server (the live
+    // drive subscription keeps it current), and only a miss goes to the
+    // network. Callers never choose between the two. Agents belong to no
+    // drive, so nothing refreshes a cached one; they still come from the
+    // server, as in `fetchResourceWithLocalFallback`.
+    if (this.clientDb?.isInitialized && !resolved.startsWith('did:ad:agent:')) {
+      const hit = await this.hydrateFromLocalDb(resolved);
+      const local = this.resources.get(resolved);
+
+      if (hit && local?.isReady()) {
+        if (!local.hasClasses(commits.classes.commit)) {
+          this.subscribeWebSocket(resolved);
+        }
+
+        return local as Resource<C>;
+      }
+    }
+
+    const result = await this.fetchResourceFromServer<C>(resolved);
 
     // A delta response may have started recovery of missing base history.
     // Do not return its empty placeholder while the full snapshot is pending.
