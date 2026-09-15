@@ -331,14 +331,12 @@ export const messageResourcesToDisplayMessages = async (
   subjects: string[],
   store: Store,
 ): Promise<Map<AtomicUIMessage, Resource<Ai.AiMessage>>> => {
-  const resources = await Promise.all(
-    subjects.map(s => store.getResource<Ai.AiMessage>(s)),
-  );
+  const resources = await store.getResources<Ai.AiMessage>(subjects);
   const loaded = resources.filter(r => !r.error);
   const partSubjects = loaded.flatMap(r => r.props.parts ?? []);
   const contextSubjects = loaded.flatMap(r => r.props.providedContext ?? []);
   const [parts, contexts] = await Promise.all([
-    Promise.all(partSubjects.map(s => store.getResource(s))),
+    store.getResources(partSubjects),
     Promise.allSettled(
       contextSubjects.map(s => resourceToAIMessageContext(s, store)),
     ),

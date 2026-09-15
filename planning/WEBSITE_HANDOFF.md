@@ -313,6 +313,12 @@ live S3 verification. Read current PR checks before merge.
   icons, "Content" and "Live draft preview" labels removed, preview fills the page.
 - AI chats: titles are generated on the first user message (fallback on the
   reply) and include an emoji shown in the sidebar and the chat panel heading.
+- Chat loading: messages load in two rounds instead of one per message, and
+  `store.getResource` / the new `store.getResources` are local-first (embedded
+  database before the server). A `GET_MANY` (0x15) / `GET_MANY_RESULT` (0x16)
+  WebSocket frame pair, capability `get-many`, batches server fetches; on
+  localhost it measured within noise of pipelined single GETs (about 200ms
+  for 120 subjects either way), so the transport was not the bottleneck.
 
 ## Suggested next session
 
