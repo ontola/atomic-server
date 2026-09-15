@@ -10668,9 +10668,8 @@ msgstr "The response was interrupted."
 #~ msgid "Website is live"
 #~ msgstr "Website is live"
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Website is not published"
-msgstr "Website is not published"
+#~ msgid "Website is not published"
+#~ msgstr "Website is not published"
 
 #~ msgid "Open website"
 #~ msgstr "Open website"
@@ -10738,6 +10737,7 @@ msgid "Download website"
 msgstr "Download website"
 
 #: src/chunks/Website/WebsiteHosting.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
 msgid "Publishing…"
 msgstr "Publishing…"
 
@@ -10788,9 +10788,8 @@ msgstr "Restore version"
 #~ msgid "Your site is up to date."
 #~ msgstr "Your site is up to date."
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Website published."
-msgstr "Website published."
+#~ msgid "Website published."
+#~ msgstr "Website published."
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Export"
@@ -10863,3 +10862,27 @@ msgstr "Could not load website hosting status: {0}"
 #: src/chunks/Website/useWebsitePreviewHtml.ts
 msgid "Website preview assets failed: {0}"
 msgstr "Website preview assets failed: {0}"
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Up to date"
+msgstr "Up to date"
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Cannot check changes"
+msgstr "Cannot check changes"
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Checking changes…"
+msgstr "Checking changes…"
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "All changes are published"
+msgstr "All changes are published"
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Unpublished changes"
+msgstr "Unpublished changes"
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Not published yet"
+msgstr "Not published yet"

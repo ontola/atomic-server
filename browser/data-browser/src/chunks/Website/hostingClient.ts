@@ -4,6 +4,7 @@ import { signRequest, errorMessageFromResponse, type Store } from '@tomic/lib';
 export interface WebsitePackage {
   version: 1;
   files: Record<string, string>;
+  assets?: Record<string, string>;
 }
 export interface HostingStatus {
   url: string;
@@ -44,4 +45,18 @@ export async function hostingRequest<T>(
     );
 
   return result.json() as Promise<T>;
+}
+
+/** Compare delivered bytes and image hashes, ignoring authoring metadata and timestamps. */
+export function sameWebsiteOutput(
+  a: WebsitePackage,
+  b: WebsitePackage,
+): boolean {
+  const same = (left: Record<string, string>, right: Record<string, string>) =>
+    Object.keys(left).length === Object.keys(right).length &&
+    Object.entries(left).every(
+      ([key, value]) => Object.hasOwn(right, key) && right[key] === value,
+    );
+
+  return same(a.files, b.files) && same(a.assets ?? {}, b.assets ?? {});
 }

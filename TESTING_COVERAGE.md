@@ -1,3 +1,7 @@
+Website publication state: browser coverage verifies unchanged output after publishing
+and reload, pending document edits, and pending changes after rollback. Unit tests
+compare page bytes and image hashes, including removed files and entry ordering.
+
 Website error recovery: Chromium verifies an unreadable selected image emits the
 Store toast and console error, replaces the loading placeholder, disables publication,
 and recovers after repairing the selection. Explicit retry is available.
