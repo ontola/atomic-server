@@ -21,6 +21,7 @@ pub(crate) mod prop_val_sub_index;
 mod query_index;
 #[cfg(feature = "db-redb")]
 pub mod redb_store;
+pub mod website;
 // `PropVal` is half of `QueryFilter`'s public surface: without it a caller
 // outside this crate can read `filters` but cannot build one.
 pub use query_index::{drive_prefix_from_subject, query_id, PropVal, QueryFilter};

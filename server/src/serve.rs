@@ -395,6 +395,7 @@ where
             .wrap(middleware::DefaultHeaders::new().add((SERVER_VERSION_HEADER, SERVER_VERSION)))
             .wrap(tracing_actix_web::TracingLogger::<AtomicRootSpanBuilder>::new())
             .wrap(middleware::Compress::default())
+            .configure(crate::handlers::website::content_routes)
             // Here are the actual handlers / endpoints
             .configure(crate::routes::config_routes)
             // Anything no route claims: a wrong method on a known path, a

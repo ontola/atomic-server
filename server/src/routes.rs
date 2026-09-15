@@ -343,6 +343,7 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
 }
 
 pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
+    handlers::website::control_routes(app);
     app.service(
         web::resource("/upload")
             .guard(guard::Method(Method::POST))

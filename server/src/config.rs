@@ -54,6 +54,11 @@ pub struct Opts {
     #[clap(long, default_value = "localhost", env = "ATOMIC_DOMAIN")]
     pub domain: String,
 
+    /// Dedicated website base origin, e.g. https://sites.example.net. Each project uses a subdomain.
+    /// Must be separate from Atomic editor and API domains. Omit to disable publishing.
+    #[clap(long, env = "ATOMIC_WEBSITE_ORIGIN")]
+    pub website_origin: Option<String>,
+
     // 9.883 is decimal for the `⚛` character.
     /// The port where the HTTP app is available. Set to 80 if you want this to be available on the network.
     #[clap(short, long, default_value = "9883", env = "ATOMIC_PORT")]

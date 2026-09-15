@@ -23,6 +23,7 @@ import {
   selectedSubjects,
 } from './websiteExport';
 import type { WebsiteArtifact } from './renderWebsite';
+import { WebsiteHosting } from './WebsiteHosting';
 import { WebsitePreview } from './WebsitePreview';
 import { WebsiteInlinePreview } from './WebsiteInlinePreview';
 
@@ -151,8 +152,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
         </Button>
       </Row>
       <p>
-        Content stays in Atomic. Export a frozen website for static hosting.
-        Online publishing is not connected yet.
+        Content stays in Atomic. Create a frozen release to download or publish.
       </p>
       {problem && <p role='alert'>{problem}</p>}
       {review && (
@@ -191,6 +191,12 @@ export function WebsitePage({ resource }: { resource: Resource }) {
           </Row>
         </Review>
       )}
+      <WebsiteHosting
+        key={resource.subject}
+        project={resource.subject}
+        release={release}
+        canWrite={!!canWrite}
+      />
       <Layout>
         <Controls>
           <h2>Pages and content</h2>

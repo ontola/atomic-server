@@ -10715,9 +10715,8 @@ msgstr ""
 msgid "Prepare release"
 msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Content stays in Atomic. Export a frozen website for static hosting. Online publishing is not connected yet."
-msgstr ""
+#~ msgid "Content stays in Atomic. Export a frozen website for static hosting. Online publishing is not connected yet."
+#~ msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Create release"
@@ -10867,3 +10866,91 @@ msgid "Matched title"
 msgstr ""
 #~ msgid "The model request failed."
 #~ msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Content stays in Atomic. Create a frozen release to download or publish."
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Refresh hosting status"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Upload saved release"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Publish on your Atomic Server"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Upload a saved release, review it, then publish. Editing content leaves the live website unchanged."
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Website is live"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Website is not published"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Open website"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Review an uploaded release"
+msgstr ""
+
+#~ msgid "Review an uploaded release <0><0>Select a release</0> {0}</0>"
+#~ msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Preview uploaded page"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Uploaded website preview"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Review before publishing"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "These uploaded pages will become publicly accessible. This preview disables scripts."
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Publish reviewed release"
+msgstr ""
+
+#. 0: status.state!.deployments.indexOf(entry.deployment) + 1
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Release {0}"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Unpublished"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Publication history"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Website hosting"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Unpublish website"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Release"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Select a release"
+msgstr ""
