@@ -11161,3 +11161,7 @@ msgstr ""
 #: src/chunks/Website/WebsitePage.tsx
 msgid "<0/> AI edit"
 msgstr ""
+
+#: src/components/SideBar/AIPanel.tsx
+msgid "Drag to resize"
+msgstr ""
