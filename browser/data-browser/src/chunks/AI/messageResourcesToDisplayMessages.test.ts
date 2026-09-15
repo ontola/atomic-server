@@ -41,6 +41,7 @@ function deferredStore(resources: FakeResource[]) {
   const bySubject = new Map(resources.map(r => [r.subject, r]));
   const requested: string[] = [];
   const pending = new Map<string, (resource: FakeResource) => void>();
+
   const getResource = (subject: string) => {
     requested.push(subject);
 
@@ -48,6 +49,7 @@ function deferredStore(resources: FakeResource[]) {
       pending.set(subject, resolve);
     });
   };
+
   const store = {
     getResource,
     getResources: (subjects: string[]) =>
