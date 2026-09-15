@@ -3731,6 +3731,7 @@ msgid "Quote"
 msgstr "Cita"
 
 #: src/chunks/RTE/SlashMenu/CommandsExtension.ts
+#: src/chunks/Website/WebsitePage.tsx
 msgid "Image"
 msgstr "Imagen"
 

@@ -81,3 +81,19 @@ describe('shortenRefsDeep', () => {
     expect(shortenRefsDeep(text)).toBe(text);
   });
 });
+
+it('retains emitted refs when the module reloads in the same tab', async () => {
+  const { vi } = await import('vitest');
+  const storage = new Map<string, string>();
+  vi.stubGlobal('sessionStorage', {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => storage.set(key, value),
+  });
+  vi.resetModules();
+  const first = await import('./subjectRefs');
+  const ref = first.shortenSubject(DID_A);
+  vi.resetModules();
+  const reopened = await import('./subjectRefs');
+  expect(reopened.expandSubject(ref)).toBe(DID_A);
+  vi.unstubAllGlobals();
+});

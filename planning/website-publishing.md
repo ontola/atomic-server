@@ -93,3 +93,20 @@ the existing trusted SaaS login/account flow, never forward a signing secret or
 send Atomic proofs to arbitrary customer domains. Billing/domain registration
 remain separate from this publication milestone. Do not bump the SaaS server pin
 until both adapters and the cross-repository compatibility checks are ready.
+
+### Media and Assistant authoring
+
+Selected atomicURL columns with File classtype export supported raster images
+as embedded data URLs. Pages can also declare `media` (File subject, alt text,
+optional caption), with an ordered `gallery` section at index 0. Exports retain
+the restrictive image CSP and need no live private image URL. The pilot allows
+2 MB per image within the existing 5 MB package limit. Search widgets show image
+alt labels; the static table/cards render the images. Document File embeds and
+a folder-to-gallery picker remain future work; select individual files explicitly.
+
+`update_table_rows` batches existing row edits using schema shortnames and refs,
+prechecks table membership and write permissions, and reports partial completion.
+Creating columns remains a separate existing tool call. Subject refs persist in
+this tab's sessionStorage across reloads; unknown older refs still require
+rediscovery. This addresses lost in-memory mappings without claiming a reproduced
+cause for every reported same-turn reference failure.

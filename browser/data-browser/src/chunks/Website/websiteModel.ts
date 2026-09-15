@@ -43,11 +43,23 @@ export const websiteConfigSchema = z
             path: route,
             title: z.string().min(1).max(120),
             documents: z.array(resourceSubject).max(30),
+            media: z
+              .array(
+                z
+                  .object({
+                    subject: resourceSubject,
+                    alt: z.string().max(400),
+                    caption: z.string().max(400).optional(),
+                  })
+                  .strict(),
+              )
+              .max(30)
+              .optional(),
             sections: z
               .array(
                 z
                   .object({
-                    kind: z.enum(['intro', 'document', 'table']),
+                    kind: z.enum(['intro', 'document', 'table', 'gallery']),
                     index: z.number().int().min(0).max(29),
                     span: z.enum(['full', 'half', 'third']),
                     className: z.string().regex(/^[a-zA-Z0-9 _-]{0,120}$/),
@@ -101,7 +113,9 @@ export const websiteConfigSchema = z
           (section.kind === 'document' &&
             section.index >= page.documents.length) ||
           (section.kind === 'table' && section.index >= page.tables.length) ||
-          (section.kind === 'intro' && section.index !== 0)
+          (section.kind === 'intro' && section.index !== 0) ||
+          (section.kind === 'gallery' &&
+            (section.index !== 0 || !page.media?.length))
         )
           ctx.addIssue({
             code: 'custom',

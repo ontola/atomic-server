@@ -1,3 +1,4 @@
+import { updateTableRows } from './updateTableRows';
 // @wc-ignore-file
 import { websiteTools } from '@chunks/Website/websiteTools';
 import { useAppSetup } from '../../components/AppSetup/AppSetupProvider';
@@ -953,6 +954,32 @@ export function useAtomicMCPTools({
     },
     write: {
       ...derivedWriteTools,
+      update_table_rows: tool({
+        description:
+          'Patch multiple existing rows of one table in one call. Each row has subject and values (property shortnames or full property subjects, with normal compact values including File refs). Use add_table_columns once first if needed. Does not publish websites. Rows are saved individually; completed rows are reported if a later row fails, so retry only the remaining rows.',
+        inputSchema: z.object({
+          table: z.string(),
+          rows: z
+            .array(
+              z.object({
+                subject: z.string(),
+                values: z.record(
+                  z.string(),
+                  z.union([
+                    z.string(),
+                    z.number(),
+                    z.boolean(),
+                    z.array(z.string()),
+                  ]),
+                ),
+              }),
+            )
+            .min(1)
+            .max(200),
+        }),
+        execute: ({ table, rows }) =>
+          updateTableRows(store, table, rows, onResourceEdited),
+      }),
       [TOOL_NAMES.EDIT_ATOMIC_RESOURCE]: tool({
         description:
           'Change a property on a resource. The property accepts a compact shortname (resolved against the resource\'s class, e.g. "status") or a full property URL. Select/tag values accept tag names.',

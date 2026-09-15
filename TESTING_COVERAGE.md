@@ -1,3 +1,8 @@
+Website media: a real browser test uploads a private PNG, renders it in the draft,
+publishes it, and checks decoded image dimensions as an anonymous visitor.
+Unit tests cover gallery/File-cell image packaging, unselected relationship
+exclusion, media limits, reference reload persistence and batch row save failures.
+
 Website publishing UX follow-up (2026-09-15): the Chromium publishing E2E now
 uses one-click Publish site / Update site, checks a single primary action and no
 manual status refresh control, and verifies a failed hosting request reaches the
