@@ -10833,3 +10833,32 @@ msgstr "Choose a model that supports attachments first."
 
 #~ msgid "Files"
 #~ msgstr "Files"
+
+#. 0: error instanceof Error ? error.message \\: String(error)
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Website preview failed: {0}"
+msgstr "Website preview failed: {0}"
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Publishing is unavailable until the draft preview can be built. Check access to the selected content, then retry."
+msgstr "Publishing is unavailable until the draft preview can be built. Check access to the selected content, then retry."
+
+#: src/chunks/Website/WebsiteInlinePreview.tsx
+#: src/chunks/Website/WebsitePage.tsx
+#: src/chunks/Website/WebsitePreview.tsx
+msgid "Retry preview"
+msgstr "Retry preview"
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Preview unavailable. Resolve the error above and retry."
+msgstr "Preview unavailable. Resolve the error above and retry."
+
+#. 0: error instanceof Error ? error.message \\: String(error)
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Could not load website hosting status: {0}"
+msgstr "Could not load website hosting status: {0}"
+
+#. 0: String(error)
+#: src/chunks/Website/useWebsitePreviewHtml.ts
+msgid "Website preview assets failed: {0}"
+msgstr "Website preview assets failed: {0}"

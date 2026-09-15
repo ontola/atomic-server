@@ -1,3 +1,4 @@
+import { Button } from '@components/Button';
 import { useWebsitePreviewHtml } from './useWebsitePreviewHtml';
 import { useEffect, useRef } from 'react';
 import searchViewUrl from './runtime/search-view.html?url';
@@ -23,11 +24,21 @@ export function WebsitePreview({
 
   const previewHtml = useWebsitePreviewHtml(html, artifact);
 
+  if (previewHtml.error)
+    return (
+      <div role='alert'>
+        <p>{previewHtml.error}</p>
+        <Button subtle onClick={previewHtml.retry}>
+          Retry preview
+        </Button>
+      </div>
+    );
+
   return (
     <iframe
       title='Website preview'
       sandbox='allow-same-origin allow-scripts'
-      srcDoc={previewHtml}
+      srcDoc={previewHtml.html}
       onLoad={event => {
         cleanups.current.forEach(close => close());
         cleanups.current = [];

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 import {
   dataBrowser,
@@ -41,6 +41,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
   const [pagePath, setPagePath] = useState('/');
   const [showRelease, setShowRelease] = useState(false);
   const [problem, setProblem] = useState('');
+  const reportedProblem = useRef('');
   const [busy, setBusy] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [document, setDocument] = useState<string>();
@@ -64,12 +65,23 @@ export function WebsitePage({ resource }: { resource: Resource }) {
         ]);
 
         if (active) {
+          reportedProblem.current = '';
           setDraft(next);
           setRelease(saved);
         }
       })
       .catch(error => {
-        if (active) setProblem(String(error));
+        if (!active) return;
+        const failure = new Error(
+          `Website preview failed: ${error instanceof Error ? error.message : String(error)}`,
+          { cause: error },
+        );
+        setProblem(failure.message);
+
+        if (reportedProblem.current !== failure.message) {
+          reportedProblem.current = failure.message;
+          store.notifyError(failure);
+        }
       });
 
     return () => {
@@ -94,7 +106,6 @@ export function WebsitePage({ resource }: { resource: Resource }) {
 
   const perform = async (action: () => Promise<unknown>) => {
     setBusy(true);
-    setProblem('');
 
     try {
       await action();
@@ -188,7 +199,24 @@ export function WebsitePage({ resource }: { resource: Resource }) {
           </WebsiteHosting>
         </Row>
       </Header>
-      {problem && <p role='alert'>{problem}</p>}
+      {problem && (
+        <div role='alert'>
+          <p>{problem}</p>
+          <p>
+            Publishing is unavailable until the draft preview can be built.
+            Check access to the selected content, then retry.
+          </p>
+          <Button
+            subtle
+            onClick={() => {
+              reportedProblem.current = '';
+              setRefresh(n => n + 1);
+            }}
+          >
+            Retry preview
+          </Button>
+        </div>
+      )}
       {review && (
         <Review aria-label='Review website release'>
           <h2>Review release</h2>
@@ -352,7 +380,11 @@ export function WebsitePage({ resource }: { resource: Resource }) {
               onNavigate={setPagePath}
             />
           ) : (
-            <p>Preparing preview…</p>
+            <p>
+              {problem
+                ? 'Preview unavailable. Resolve the error above and retry.'
+                : 'Preparing preview…'}
+            </p>
           )}
         </Preview>
       </Layout>

@@ -1,5 +1,5 @@
 import { uploadWebsiteAssets } from './websiteAssets';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import styled from 'styled-components';
 import { useStore } from '@tomic/react';
 import { Button, ButtonSubtle } from '@components/Button';
@@ -27,6 +27,8 @@ export function WebsiteHosting({
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [previous, setPrevious] = useState('');
+  const [statusError, setStatusError] = useState('');
+  const reportedStatusError = useRef('');
   useEffect(() => {
     if (busy) return;
     let active = true;
@@ -36,9 +38,25 @@ export function WebsiteHosting({
       const request = ++sequence;
       hostingRequest<HostingStatus>(store, project)
         .then(value => {
-          if (active && request === sequence) setStatus(value);
+          if (active && request === sequence) {
+            setStatus(value);
+            setStatusError('');
+            reportedStatusError.current = '';
+          }
         })
-        .catch(() => {});
+        .catch(error => {
+          if (!active || request !== sequence) return;
+          const failure = new Error(
+            `Could not load website hosting status: ${error instanceof Error ? error.message : String(error)}`,
+            { cause: error },
+          );
+          setStatusError(failure.message);
+
+          if (reportedStatusError.current !== failure.message) {
+            reportedStatusError.current = failure.message;
+            store.notifyError(failure);
+          }
+        });
     };
 
     refresh();
@@ -215,6 +233,7 @@ export function WebsiteHosting({
             : 'Website is not published'}
         </p>
       )}
+      {statusError ? <p role='alert'>{statusError}</p> : null}
     </Actions>
   );
 }

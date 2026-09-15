@@ -1,3 +1,7 @@
+Website error recovery: Chromium verifies an unreadable selected image emits the
+Store toast and console error, replaces the loading placeholder, disables publication,
+and recovers after repairing the selection. Explicit retry is available.
+
 AI sidebar navigation: browser coverage checks the default visible chat list,
 its header new-chat action while collapsed, and reopening saved replies without
 changing the main URL. Switching chats checkpoints the current message first.
