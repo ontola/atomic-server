@@ -8821,6 +8821,18 @@ msgid "Retry save"
 msgstr "Retry save"
 
 #: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Local diagnostics"
+msgstr "Local diagnostics"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Record save and connection events for troubleshooting. No document text, filenames, URLs, or error messages are collected. Recording stays in memory: up to 500 events from the last 10 minutes. It stops and clears after 30 minutes, on reload, or when switching accounts. Nothing is uploaded automatically."
+msgstr "Record save and connection events for troubleshooting. No document text, filenames, URLs, or error messages are collected. Recording stays in memory: up to 500 events from the last 10 minutes. It stops and clears after 30 minutes, on reload, or when switching accounts. Nothing is uploaded automatically."
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "<0/> Include this preview with my feedback"
+msgstr "<0/> Include this preview with my feedback"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
 msgid "Stop and clear recording"
 msgstr "Stop and clear recording"
 
@@ -8837,21 +8849,37 @@ msgid "Preview diagnostics"
 msgstr "Preview diagnostics"
 
 #: src/components/SideBar/FeedbackDiagnostics.tsx
-msgid "Local diagnostics"
-msgstr "Local diagnostics"
-
-#: src/components/SideBar/FeedbackDiagnostics.tsx
-msgid "Record save and connection events for troubleshooting. No document text, filenames, URLs, or error messages are collected. Recording stays in memory: up to 500 events from the last 10 minutes. It stops and clears after 30 minutes, on reload, or when switching accounts. Nothing is uploaded automatically."
-msgstr "Record save and connection events for troubleshooting. No document text, filenames, URLs, or error messages are collected. Recording stays in memory: up to 500 events from the last 10 minutes. It stops and clears after 30 minutes, on reload, or when switching accounts. Nothing is uploaded automatically."
-
-#: src/components/SideBar/FeedbackDiagnostics.tsx
 msgid "Events show timing and activity counts, which can still be sensitive. Review before sharing."
 msgstr "Events show timing and activity counts, which can still be sensitive. Review before sharing."
 
 #: src/components/SideBar/FeedbackDiagnostics.tsx
-msgid "<0/> Include this preview with my feedback"
-msgstr "<0/> Include this preview with my feedback"
-
-#: src/components/SideBar/FeedbackDiagnostics.tsx
 msgid "Download diagnostics"
 msgstr "Download diagnostics"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Retry clearing diagnostics"
+msgstr "Retry clearing diagnostics"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Diagnostic storage is unavailable. Recent events are only in memory and may be lost on reload."
+msgstr "Diagnostic storage is unavailable. Recent events are only in memory and may be lost on reload."
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Could not clear diagnostic storage or save the recording preference. Recording is stopped. Retry clearing before leaving this browser."
+msgstr "Could not clear diagnostic storage or save the recording preference. Recording is stopped. Retry clearing before leaving this browser."
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Recording was reset in another tab. Reload this tab before recording again."
+msgstr "Recording was reset in another tab. Reload this tab before recording again."
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Recent save and connection events are recorded locally by default. No document text, filenames, URLs, or error messages are collected. Up to 500 events from the last 10 minutes are kept in this browser, including across reloads. Expired records are removed when the app next accesses storage. Nothing is uploaded automatically."
+msgstr "Recent save and connection events are recorded locally by default. No document text, filenames, URLs, or error messages are collected. Up to 500 events from the last 10 minutes are kept in this browser, including across reloads. Expired records are removed when the app next accesses storage. Nothing is uploaded automatically."
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Diagnostics"
+msgstr "Diagnostics"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "<0/> Include diagnostic data"
+msgstr "<0/> Include diagnostic data"

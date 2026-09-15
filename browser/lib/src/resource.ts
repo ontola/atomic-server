@@ -3567,6 +3567,23 @@ export class Resource<C extends OptionalClass = any> {
   public async persistToClientDb(
     options: { required?: boolean } = {},
   ): Promise<void> {
+    const finish = this.store.diagnostics.beginBoundary(
+      'local',
+      this.__internalObject,
+    );
+
+    try {
+      const written = await this.persistToClientDbInner(options);
+      finish(written ? 'ok' : 'skipped');
+    } catch (error) {
+      finish(error instanceof RequestCancelledError ? 'cancelled' : 'error');
+      throw error;
+    }
+  }
+
+  private async persistToClientDbInner(options: {
+    required?: boolean;
+  }): Promise<boolean> {
     // The identity database can be between workers while its key is derived.
     // A save must not resolve in that gap without writing its snapshot.
     const identity = this.store.getAgent()?.subject;
@@ -3587,7 +3604,7 @@ export class Resource<C extends OptionalClass = any> {
 
       // Online clients without OPFS (including desktop) rely on the server's
       // durable acknowledgement. This optional cache is not their save target.
-      return;
+      return false;
     }
 
     const obj: Record<string, unknown> = { '@id': this.subject };
@@ -3614,6 +3631,8 @@ export class Resource<C extends OptionalClass = any> {
       // This RPC includes the durable flush. A second RPC could race the
       // identity handoff closing this worker after the write has completed.
       closePersist();
+
+      return true;
     } catch (e) {
       closePersist({ err: e instanceof Error ? e.message : String(e) });
 
