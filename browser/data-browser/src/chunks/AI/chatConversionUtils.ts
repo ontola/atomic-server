@@ -25,6 +25,7 @@ import {
   isAtomicResourceContext,
 } from './types';
 import { restoreToolPart, toolPartValues } from './toolHistory';
+import { userTiming } from '@helpers/userTiming';
 
 const TAG_TO_ROLE_MAPPING = {
   'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/user': 'user',
@@ -331,7 +332,9 @@ export const messageResourcesToDisplayMessages = async (
   subjects: string[],
   store: Store,
 ): Promise<Map<AtomicUIMessage, Resource<Ai.AiMessage>>> => {
+  const timing = userTiming('chat:load');
   const resources = await store.getResources<Ai.AiMessage>(subjects);
+  timing.step('messages');
   const loaded = resources.filter(r => !r.error);
   const partSubjects = loaded.flatMap(r => r.props.parts ?? []);
   const contextSubjects = loaded.flatMap(r => r.props.providedContext ?? []);
@@ -341,6 +344,7 @@ export const messageResourcesToDisplayMessages = async (
       contextSubjects.map(s => resourceToAIMessageContext(s, store)),
     ),
   ]);
+  timing.step('parts');
   const partBySubject = new Map(partSubjects.map((s, i) => [s, parts[i]]));
   const contextBySubject = new Map(
     contextSubjects.map((s, i) => [s, contexts[i]]),
@@ -491,6 +495,8 @@ export const messageResourcesToDisplayMessages = async (
       messages.set(message, resource);
     }
   }
+
+  timing.step('convert');
 
   return messages;
 };
