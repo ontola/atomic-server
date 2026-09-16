@@ -546,7 +546,7 @@ impl ClientDb {
                 }
                 Err(e) => {
                     web_sys::console::warn_1(
-                        &format!("[ClientDb] Failed to read VV for {}: {e}", &subject).into(),
+                        &format!("[ClientDb] Failed to read VV for {}: {e}", subject).into(),
                     );
                 }
             }
@@ -585,7 +585,7 @@ impl ClientDb {
                         }
                         Err(e) => {
                             web_sys::console::warn_1(
-                                &format!("[ClientDb] Failed to read VV for {}: {e}", &subject)
+                                &format!("[ClientDb] Failed to read VV for {}: {e}", subject)
                                     .into(),
                             );
                         }
@@ -596,7 +596,7 @@ impl ClientDb {
                 Ok(None) => {}
                 Err(e) => {
                     web_sys::console::warn_1(
-                        &format!("[ClientDb] VV read error for {}: {e}", &subject).into(),
+                        &format!("[ClientDb] VV read error for {}: {e}", subject).into(),
                     );
                 }
             }
