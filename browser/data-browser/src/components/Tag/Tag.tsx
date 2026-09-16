@@ -179,7 +179,7 @@ const TagWrapperButton = styled(TagWrapper)`
   &:focus,
   &.selected-tag {
     --shadow-color: ${({ theme }) =>
-      theme.darkMode ? 'var(--dark-color)' : 'var(--light-color)'};
+      theme.darkMode ? 'var(--tag-light-color)' : 'var(--tag-dark-color)'};
     filter: brightness(1.05);
     transform: scale(1.1);
     box-shadow: 0 1px 20px 0px var(--shadow-color);

@@ -414,7 +414,7 @@ const SelectableResult: React.FC<SelectableResultProps> = ({
       data-index={index}
       style={{
         borderRadius: '0.375rem',
-        background: selected ? 'var(--color-bg1)' : 'transparent',
+        background: selected ? 'var(--color-bg-subtle)' : 'transparent',
         cursor: 'pointer',
         transition: 'background 80ms',
       }}
