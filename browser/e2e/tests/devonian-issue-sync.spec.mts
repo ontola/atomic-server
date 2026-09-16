@@ -190,16 +190,21 @@ const cardIn = (col: Locator, title: string) =>
  * distance (see kanban.spec.ts for the same helper).
  */
 async function dndDrag(page: Page, source: Locator, target: Locator) {
+  // Hover first: it waits for the card to stop moving, so the press lands on
+  // the card and not on where a FLIP animation last drew it.
+  await source.hover();
   const s = await source.boundingBox();
-  const t = await target.boundingBox();
-  if (!s || !t) throw new Error('drag source/target has no bounding box');
+  if (!s) throw new Error('drag source has no bounding box');
   const sx = s.x + s.width / 2;
   const sy = s.y + s.height / 2;
-  const tx = t.x + t.width / 2;
-  const ty = t.y + t.height / 2;
   await page.mouse.move(sx, sy);
   await page.mouse.down();
   await page.mouse.move(sx + 15, sy, { steps: 5 });
+  // Measured after activation: mounting the drag changes the board's layout.
+  const t = await target.boundingBox();
+  if (!t) throw new Error('drag target has no bounding box');
+  const tx = t.x + t.width / 2;
+  const ty = t.y + t.height / 2;
   await page.mouse.move(tx, ty, { steps: 10 });
   await page.mouse.move(tx, ty + 1, { steps: 2 });
   await page.mouse.up();
