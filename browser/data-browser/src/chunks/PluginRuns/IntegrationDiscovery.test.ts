@@ -1,5 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { bundledIntegrations } from './IntegrationDiscovery';
+import {
+  bundledIntegrations,
+  visibleBundledIntegrations,
+} from './IntegrationDiscovery';
 vi.mock('./IntegrationEvidence', () => ({ IntegrationEvidence: () => null }));
 afterEach(() => vi.unstubAllGlobals());
 it('keeps every bundled integration discoverable without a proxy catalog', () => {
@@ -7,13 +10,42 @@ it('keeps every bundled integration discoverable without a proxy catalog', () =>
   vi.stubGlobal('fetch', fetch);
   const entries = bundledIntegrations();
   expect(entries.map(entry => entry.id)).toEqual([
+    'devonian-github-issues',
+    'devonian-google-calendar',
     'mt940',
     'clockify',
-    'github-issues',
     'notion',
   ]);
   expect(
-    entries.find(entry => entry.id === 'github-issues')?.capabilities,
-  ).toContain('both directions');
+    entries.find(entry => entry.id === 'devonian-github-issues')?.capabilities,
+  ).toContain('comments');
+  expect(
+    entries.find(entry => entry.id === 'devonian-google-calendar')
+      ?.capabilities,
+  ).toContain('recurring');
   expect(fetch).not.toHaveBeenCalled();
 });
+
+it.each([
+  [false, false, []],
+  [false, true, []],
+  [true, false, ['mt940', 'clockify']],
+  [
+    true,
+    true,
+    [
+      'devonian-github-issues',
+      'devonian-google-calendar',
+      'mt940',
+      'clockify',
+      'notion',
+    ],
+  ],
+])(
+  'gates proxy-backed bundled cards for experimental=%s api=%s',
+  (experimental, api, expected) => {
+    expect(
+      visibleBundledIntegrations(experimental, api).map(entry => entry.id),
+    ).toEqual(expected);
+  },
+);

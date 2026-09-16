@@ -18,7 +18,7 @@ const wrongKeyMessage =
 
 /**
  * A stand-in for the generated WASM module. `openFailures` are thrown by the
- * first N factory calls; later calls succeed with a marker object.
+ * first N `open` calls; later calls succeed with a marker object.
  */
 function fakeWasm(openFailures: Error[]) {
   const opened: Array<{ dbName?: string; dbKey?: Uint8Array }> = [];
@@ -27,7 +27,7 @@ function fakeWasm(openFailures: Error[]) {
 
   const wasm = {
     ClientDb: {
-      open: function (_baseUrl?: string, dbName?: string, dbKey?: Uint8Array) {
+      open(_baseUrl?: string, dbName?: string, dbKey?: Uint8Array) {
         opened.push({ dbName, dbKey });
         const failure = openFailures[call++];
 

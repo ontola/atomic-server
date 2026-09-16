@@ -31,5 +31,3 @@ pub mod iroh_transport;
 mod tests;
 mod trace;
 // Force rebuild for blake3
-
-pub mod oauth;

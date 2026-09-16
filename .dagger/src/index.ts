@@ -1817,77 +1817,80 @@ export class AtomicServer {
 
     // Bug fix (2026-07-02): mount the full pnpm workspace before
     // `pnpm install` — see git history for ERR_PNPM_WORKSPACE_PKG_NOT_FOUND.
-    return playwrightContainer
-      .withEnvVariable('CI', 'true')
-      .withEnvVariable(
-        'ATOMIC_E2E_CLONE_SESSION',
-        this.e2eCloneSessions ? '1' : '0',
-      )
-      // Playwright-run knobs — see `e2eRunKnobs` / `--playwright-mode`. Isolated
-      // from `hostKnobs` so a light suite does not change nextest width.
-      .withEnvVariable(
-        'PLAYWRIGHT_WORKERS',
-        this.e2eRun.workers,
-      )
-      .withEnvVariable(
-        'PLAYWRIGHT_RETRIES',
-        this.e2eRun.retries,
-      )
-      .withFile('/app/package.json', browserContainer.file('/app/package.json'))
-      .withFile(
-        '/app/pnpm-lock.yaml',
-        browserContainer.file('/app/pnpm-lock.yaml'),
-      )
-      .withFile(
-        '/app/pnpm-workspace.yaml',
-        browserContainer.file('/app/pnpm-workspace.yaml'),
-      )
-      .withDirectory('/app/patches', browserContainer.directory('/app/patches'))
-      .withDirectory(
-        '/app/e2e',
-        this.source
-          .directory('browser/e2e')
-          .withoutDirectory('tests')
-          .withoutDirectory('playwright-report')
-          .withoutDirectory('node_modules')
-          .withoutDirectory('test-results'),
-      )
-      .withDirectory('/app/cli', browserContainer.directory('/app/cli'))
-      .withDirectory('/app/react', browserContainer.directory('/app/react'))
-      .withDirectory('/app/svelte', browserContainer.directory('/app/svelte'))
-      .withDirectory(
-        '/app/create-template',
-        browserContainer.directory('/app/create-template'),
-      )
-      .withDirectory('/app/lib', browserContainer.directory('/app/lib'))
-      .withDirectory(
-        '/app/node_modules',
-        browserContainer.directory('/app/node_modules'),
-      )
-      .withWorkdir('/app/e2e')
-      .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
-      .withExec(['pnpm', 'config', 'set', 'store-dir', '/app/.pnpm-store'])
-      .withExec(['pnpm', 'install'])
-      // No browser cache volume: the image already carries the builds this
-      // Playwright wants (see PLAYWRIGHT_VERSION), so this verifies them and
-      // exits. Mounting a volume over `~/.cache/ms-playwright` did nothing —
-      // the image points `PLAYWRIGHT_BROWSERS_PATH` at `/ms-playwright`.
-      .withExec(['pnpm', 'exec', 'playwright', 'install'])
-      .withEnvVariable('LANGUAGE', 'en_GB')
-      .withEnvVariable('FRONTEND_URL', `http://atomic.localhost:9883`)
-      .withEnvVariable('SERVER_URL', `http://atomic.localhost:9883`)
-      .withEnvVariable(
-        'ATOMIC_SERVICE_URL',
-        `http://${ATOMIC_DOMAIN}:9883`,
-      )
-      .withEnvVariable(
-        'ATOMIC_TEST_HOST_MAP',
-        `MAP atomic.localhost ${ATOMIC_DOMAIN}`,
-      )
-      .withDirectory(
-        '/app/e2e/tests',
-        this.source.directory('browser/e2e/tests'),
-      );
+    return (
+      playwrightContainer
+        .withEnvVariable('CI', 'true')
+        .withEnvVariable(
+          'ATOMIC_E2E_CLONE_SESSION',
+          this.e2eCloneSessions ? '1' : '0',
+        )
+        // Playwright-run knobs — see `e2eRunKnobs` / `--playwright-mode`. Isolated
+        // from `hostKnobs` so a light suite does not change nextest width.
+        .withEnvVariable('PLAYWRIGHT_WORKERS', this.e2eRun.workers)
+        .withEnvVariable('PLAYWRIGHT_RETRIES', this.e2eRun.retries)
+        .withFile(
+          '/app/package.json',
+          browserContainer.file('/app/package.json'),
+        )
+        .withFile(
+          '/app/pnpm-lock.yaml',
+          browserContainer.file('/app/pnpm-lock.yaml'),
+        )
+        .withFile(
+          '/app/pnpm-workspace.yaml',
+          browserContainer.file('/app/pnpm-workspace.yaml'),
+        )
+        .withDirectory(
+          '/app/patches',
+          browserContainer.directory('/app/patches'),
+        )
+        .withDirectory(
+          '/app/e2e',
+          this.source
+            .directory('browser/e2e')
+            .withoutDirectory('tests')
+            .withoutDirectory('playwright-report')
+            .withoutDirectory('node_modules')
+            .withoutDirectory('test-results'),
+        )
+        .withDirectory('/app/cli', browserContainer.directory('/app/cli'))
+        .withDirectory('/app/react', browserContainer.directory('/app/react'))
+        .withDirectory('/app/svelte', browserContainer.directory('/app/svelte'))
+        .withDirectory(
+          '/app/create-template',
+          browserContainer.directory('/app/create-template'),
+        )
+        .withDirectory('/app/lib', browserContainer.directory('/app/lib'))
+        .withDirectory(
+          '/app/node_modules',
+          browserContainer.directory('/app/node_modules'),
+        )
+        // Raw imports in browser/e2e/tests (e.g. mt940.spec.ts,
+        // devonian-issue-sync.spec.mts) reach into ../../../integrations
+        // relative to /app/e2e/tests, resolving to /integrations here.
+        .withDirectory('/integrations', this.source.directory('integrations'))
+        .withWorkdir('/app/e2e')
+        .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
+        .withExec(['pnpm', 'config', 'set', 'store-dir', '/app/.pnpm-store'])
+        .withExec(['pnpm', 'install'])
+        // No browser cache volume: the image already carries the builds this
+        // Playwright wants (see PLAYWRIGHT_VERSION), so this verifies them and
+        // exits. Mounting a volume over `~/.cache/ms-playwright` did nothing —
+        // the image points `PLAYWRIGHT_BROWSERS_PATH` at `/ms-playwright`.
+        .withExec(['pnpm', 'exec', 'playwright', 'install'])
+        .withEnvVariable('LANGUAGE', 'en_GB')
+        .withEnvVariable('FRONTEND_URL', `http://atomic.localhost:9883`)
+        .withEnvVariable('SERVER_URL', `http://atomic.localhost:9883`)
+        .withEnvVariable('ATOMIC_SERVICE_URL', `http://${ATOMIC_DOMAIN}:9883`)
+        .withEnvVariable(
+          'ATOMIC_TEST_HOST_MAP',
+          `MAP atomic.localhost ${ATOMIC_DOMAIN}`,
+        )
+        .withDirectory(
+          '/app/e2e/tests',
+          this.source.directory('browser/e2e/tests'),
+        )
+    );
   }
 
   /** Unique per `dagger call`; see `e2eShardContainer`. */

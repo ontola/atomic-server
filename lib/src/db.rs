@@ -1,8 +1,8 @@
 //! Persistent, ACID compliant, threadsafe to-disk store.
 //! Powered by Sled - an embedded database.
 
-pub mod blob_backend;
 pub mod app_agent;
+pub mod blob_backend;
 pub mod btreemap_store;
 mod encoding;
 #[cfg(feature = "db-redb")]
@@ -374,7 +374,7 @@ pub struct Db {
     /// peer that never responds would otherwise leak one entry per missing
     /// blob forever, so `note_pending_blob_request` also lazily prunes
     /// anything older than `PENDING_BLOB_REQUEST_TTL`.
-    pending_blob_requests: Arc<RwLock<PendingBlobRequests>>,
+    pending_blob_requests: PendingBlobRequests,
 }
 
 /// How long an unanswered `BLOB_REQUEST` stays in `pending_blob_requests`
@@ -382,6 +382,7 @@ pub struct Db {
 /// round trip (seconds) — this bounds a slow leak from peers that vanish
 /// mid-sync, not a normal-latency budget.
 const PENDING_BLOB_REQUEST_TTL: std::time::Duration = std::time::Duration::from_secs(300);
+type PendingBlobRequests = Arc<RwLock<HashMap<[u8; 32], (String, web_time::Instant)>>>;
 
 /// The default (permissive) sync policy reference used by every `Db` until a
 /// managed node installs one.
@@ -3582,7 +3583,7 @@ impl Storelike for Db {
                 }
             }
         }
-        for (_subject, resource) in map.iter() {
+        for resource in map.values() {
             self.add_resource(resource).await?
         }
         self.kv.flush()?;

@@ -23,9 +23,11 @@ export function modelMessagesWithToolRecovery(messages: AtomicUIMessage[]) {
           text: `Previous tool call ${part.toolCallId} (${getToolName(part)}) has no recorded result. Its outcome is unknown. Check current state before retrying any operation that could already have taken effect.`,
         };
       }
+
       return part;
     }),
   }));
+
   return convertToModelMessages(annotated);
 }
 
@@ -65,6 +67,7 @@ export function restoreToolPart(props: {
     toolCallId: props.toolId,
     input: props.toolInput,
   };
+
   if (props.toolResultIsError) {
     return {
       ...base,
@@ -75,9 +78,11 @@ export function restoreToolPart(props: {
           : 'Tool failed; no error details were recorded.',
     };
   }
+
   if (props.toolOutput !== undefined) {
     return { ...base, state: 'output-available', output: props.toolOutput };
   }
+
   return {
     ...base,
     state:

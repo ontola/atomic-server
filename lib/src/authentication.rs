@@ -33,7 +33,7 @@ pub struct AuthValues {
 #[tracing::instrument(skip_all)]
 pub fn check_auth_signature(subject: &str, auth_header: &AuthValues) -> AtomicResult<()> {
     let agent_pubkey = decode_base64(&auth_header.public_key)?;
-    let message = format!("{} {}", subject, &auth_header.timestamp);
+    let message = format!("{} {}", subject, auth_header.timestamp);
     let pubkey_bytes: [u8; 32] = agent_pubkey
         .try_into()
         .map_err(|_| "Ed25519 public key must be 32 bytes")?;
@@ -61,7 +61,7 @@ pub fn check_auth_signature(subject: &str, auth_header: &AuthValues) -> AtomicRe
             if url.query().is_some() {
                 let mut url_no_query = url.clone();
                 url_no_query.set_query(None);
-                let message_no_query = format!("{} {}", url_no_query, &auth_header.timestamp);
+                let message_no_query = format!("{} {}", url_no_query, auth_header.timestamp);
                 if verifying_key
                     .verify(message_no_query.as_bytes(), &sig)
                     .is_ok()

@@ -48,6 +48,8 @@ Ranked by impact. Each links to the plan that owns the work.
 
 ## Active
 
+- [Drive sharing and hosting state](drive-sharing-state.md) — verified transition for unenrolled drives; authoritative seat counts and staging acceptance remain.
+
 Remaining work, not "this file exists."
 
 Cross-repository account recovery: the canonical active plan is

@@ -54,6 +54,7 @@ test.describe('AI Chat', () => {
       'Your bakery website will use the existing products table. Prices stay in Atomic.';
     await page.evaluate(text => {
       const originalFetch = window.fetch.bind(window);
+
       window.fetch = async (input, init) => {
         if (
           String(input).includes('/chat/completions') &&
@@ -74,6 +75,7 @@ test.describe('AI Chat', () => {
               },
             ],
           };
+
           return new Response(
             new ReadableStream({
               start(controller) {
@@ -96,6 +98,7 @@ test.describe('AI Chat', () => {
             { headers: { 'Content-Type': 'text/event-stream' } },
           );
         }
+
         return originalFetch(input, init);
       };
     }, partial);
@@ -117,30 +120,35 @@ test.describe('AI Chat', () => {
       .poll(
         async () =>
           page.evaluate(
-            async ({ subject, partial }) => {
+            async ({ subject: subjectArg, partial: partialArg }) => {
               const store = window.store;
-              const chat = await store.getResource(subject);
+              const chat = await store.getResource(subjectArg);
               const messages =
                 (chat.get(
                   'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/messages',
                 ) as string[]) ?? [];
+
               if (messages.length !== 2) return false;
+
               for (const id of messages) {
                 const message = await store.getResource(id);
                 const parts =
                   (message.get(
                     'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/content',
                   ) as string[]) ?? [];
+
                 for (const partId of parts) {
                   const part = await store.getResource(partId);
+
                   if (
                     part.get(
                       'https://atomicdata.dev/properties/description',
-                    ) === partial
+                    ) === partialArg
                   )
                     return true;
                 }
               }
+
               return false;
             },
             { subject, partial },
@@ -153,8 +161,9 @@ test.describe('AI Chat', () => {
       .poll(
         async () =>
           page.evaluate(
-            async ({ subject, partial }) => {
+            async ({ subject: subjectArg, partial: partialArg }) => {
               const store = window.store;
+
               const read = async (id: string) => {
                 const result = await store.client.fetchResourceHTTP(id, {
                   signInfo: {
@@ -163,8 +172,10 @@ test.describe('AI Chat', () => {
                   },
                   serverURL: store.getServerUrl(),
                 });
+
                 if (result.resource.error) {
                   const local = await store.getResource(id);
+
                   throw new Error(
                     JSON.stringify({
                       missing: id,
@@ -178,30 +189,37 @@ test.describe('AI Chat', () => {
                     }),
                   );
                 }
+
                 return result.resource;
               };
-              const chat = await read(subject);
+
+              const chat = await read(subjectArg);
               const messages =
                 (chat.get(
                   'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/messages',
                 ) as string[]) ?? [];
+
               if (messages.length !== 2) return false;
+
               for (const id of messages) {
                 const message = await read(id);
                 const parts =
                   (message.get(
                     'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/content',
                   ) as string[]) ?? [];
+
                 for (const partId of parts) {
                   const part = await read(partId);
+
                   if (
                     part.get(
                       'https://atomicdata.dev/properties/description',
-                    ) === partial
+                    ) === partialArg
                   )
                     return true;
                 }
               }
+
               return false;
             },
             { subject, partial },
@@ -209,6 +227,7 @@ test.describe('AI Chat', () => {
         { timeout: 15000 },
       )
       .toBe(true);
+
     if (browserName === 'firefox') {
       browserDiagnostics.expect(
         'warning',
@@ -217,6 +236,7 @@ test.describe('AI Chat', () => {
         1,
       );
     }
+
     await page.goto(chatUrl);
     await reloadReconnected(page);
     await expect(page.getByText(partial, { exact: true }).first()).toBeVisible({
@@ -243,6 +263,7 @@ test.describe('AI Chat', () => {
       1,
     );
     const loggedProviderErrors: unknown[] = [];
+
     if (browserName === 'firefox') {
       browserDiagnostics.expect(
         'error',
@@ -262,10 +283,12 @@ test.describe('AI Chat', () => {
         }
       });
     }
+
     const reasoning =
       'I will reuse the existing product prices for the bakery website.';
     await page.evaluate(text => {
       const originalFetch = window.fetch.bind(window);
+
       window.fetch = async (input, init) => {
         if (
           String(input).includes('/chat/completions') &&
@@ -304,6 +327,7 @@ test.describe('AI Chat', () => {
             { headers: { 'Content-Type': 'text/event-stream' } },
           );
         }
+
         return originalFetch(input, init);
       };
     }, reasoning);

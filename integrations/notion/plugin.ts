@@ -426,7 +426,10 @@ export function run(input: Input): unknown {
             input.read(cursor.subject!)[IMPORT_LOCAL_ID] ===
               `notion:${uuid(c.dataSource)}:page:${uuid(cursor.id!)}` &&
             input.read(cursor.subject!)[P.name] ===
-              change.desired[c.fields.find(f => f.type === 'title')!.id]))
+              change.desired[c.fields.find(f => f.type === 'title')!.id] &&
+            input.read(cursor.subject!)[
+              c.fields.find(f => f.type === 'title')!.property
+            ] === change.desired[c.fields.find(f => f.type === 'title')!.id]))
       )
         cursor = { ...cursor, stage: 'verify' };
       else {
