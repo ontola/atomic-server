@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
-import { dataBrowser, useResource, useStore } from '@tomic/react';
+import { dataBrowser, useResource, useStore, useTitle } from '@tomic/react';
 import { styled } from 'styled-components';
 import { RightPanel } from '../RightPanel/RightPanel';
+import { useRightPanel } from '../RightPanel/RightPanelContext';
 import { useContextualPanel } from '../RightPanel/useContextualPanel';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { useLastSeenComments } from '../../hooks/useLastSeenComments';
@@ -21,29 +22,52 @@ import { Column } from '../Row';
  * is just a regular client-signed commit.
  */
 export const CommentsPanelContainer: React.FC = () => {
-  const [subject] = useCurrentSubject();
+  const [pageSubject] = useCurrentSubject();
+  const { commentSubject, clearCommentTarget } = useRightPanel();
+  // The panel's scope outlives a navigation (it is keyed by agent + drive), so
+  // a thread opened for something on *this* page — a table row — must not
+  // follow the user to the next one.
+  useEffect(() => {
+    clearCommentTarget();
+  }, [pageSubject, clearCommentTarget]);
+  const subject = commentSubject ?? pageSubject;
   const isOpen = useContextualPanel('comments', subject);
 
   return (
     <RightPanel isOpen={isOpen} testId='comments-panel'>
-      {isOpen && <CommentsPanel />}
+      {isOpen && subject && (
+        <CommentsPanel subject={subject} isRowThread={!!commentSubject} />
+      )}
+      {isOpen && !subject && (
+        <EmptyState>Open a resource to see its comments.</EmptyState>
+      )}
     </RightPanel>
   );
 };
 
-function CommentsPanel() {
-  const [subject] = useCurrentSubject();
-
-  if (!subject) {
-    return <EmptyState>Open a resource to see its comments.</EmptyState>;
-  }
-
+function CommentsPanel({
+  subject,
+  isRowThread,
+}: {
+  subject: string;
+  isRowThread: boolean;
+}) {
   return (
     <PanelWrapper>
       <PanelTitle>Comments</PanelTitle>
+      {/* Which row you are commenting on isn't visible from the panel
+       * otherwise — the page behind it still shows the whole table. */}
+      {isRowThread && <ThreadSubtitle subject={subject} />}
       <Comments subject={subject} />
     </PanelWrapper>
   );
+}
+
+function ThreadSubtitle({ subject }: { subject: string }) {
+  const resource = useResource(subject);
+  const [title] = useTitle(resource);
+
+  return <Subtitle data-testid='comments-panel-subtitle'>{title}</Subtitle>;
 }
 
 function Comments({ subject }: { subject: string }) {
@@ -97,6 +121,16 @@ const PanelTitle = styled.h2`
   font-size: 1rem;
   margin: 0;
   padding-block: ${p => p.theme.size(2)};
+`;
+
+const Subtitle = styled.p`
+  margin: 0;
+  padding-bottom: ${p => p.theme.size(2)};
+  color: ${p => p.theme.colors.textLight};
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `;
 
 const EmptyState = styled.div`

@@ -2112,7 +2112,9 @@ failure checks also pass. Actual staging phone restore latency remains unmeasure
 
 ## Right-panel lifecycle
 
-`components/RightPanel/panelState.test.ts` covers session-local initial state, exclusive panels, cleared meeting selection, account/drive scoping, stale callbacks, and missing/unauthorized versus temporarily unavailable targets.
+`components/RightPanel/panelState.test.ts` covers session-local initial state, exclusive panels, cleared meeting selection, account/drive scoping, stale callbacks, and missing/unauthorized versus temporarily unavailable targets. It also covers the comments panel's target: aiming it at another resource switches threads instead of toggling, the NavBar button (no target) returns to the page's own thread rather than closing a row's, the target is dropped when another panel takes over, and `closePanelState` closes the panel whatever it is aimed at — which a targetless toggle cannot express.
+
+`e2e/tests/table-row-comments.spec.ts` covers commenting on a table row from the gutter bubble: the panel opens headed by the row's title, the count is live and belongs to that row alone, another row's bubble switches threads, the same row's closes the panel, the comment survives a reload, and the trailing entry row (no resource yet) offers no bubble. What is NOT covered: reaching the bubble by keyboard — it shares the row-gutter's mouse-only reachability with the existing expand button, since the grid owns Tab for cell navigation.
 
 `e2e/tests/right-panel-lifecycle.spec.ts` asserts visible panel state with legacy localStorage values for meeting/comments/AI, SPA navigation away from commentable resources, deletion of an explicitly opened meeting, and switching drives and back without resurrecting the panel. Existing `meetings.spec.ts` agenda/start/end coverage verifies that minutes and explicitly opened meeting chat still work. AI chat E2E (`ai.spec.ts`, `table-tools.spec.ts`) opens the assistant with the navbar button rather than `atomic.rightPanel.active`, because that key is no longer restored.
 

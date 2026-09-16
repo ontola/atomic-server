@@ -50,6 +50,7 @@ import { TableFilterBar } from './TableFilterBar';
 import { TableViewTabs } from './TableViewTabs';
 import { VIEW_KIND_LABELS } from './tableViewKinds';
 import { ExpandedRowDialog } from './ExpandedRowDialog';
+import { RowCommentButton } from './RowCommentButton';
 import { KanbanView } from './Kanban/KanbanView';
 import { CalendarView } from './Calendar/CalendarView';
 import { DashboardView } from './Dashboard/DashboardView';
@@ -900,6 +901,26 @@ export const TableResource: React.FC<TableResourceProps> = ({
     [memberCount, newRowSubjects],
   );
 
+  // See `TablePageContextType.getRowSubject`. Only collection members have a
+  // resource: a session row keeps its local `_new:` identity until it
+  // materializes, and nothing outside the grid may point at that. The index can
+  // momentarily exceed the collection (a filter shrinks it while a virtualized
+  // row for an old index is still mounted), which `getMemberWithIndex` rejects.
+  const getRowSubject = useCallback(
+    async (index: number) => {
+      if (index >= memberCount) {
+        return undefined;
+      }
+
+      const subject = await collection
+        .getMemberWithIndex(index)
+        .catch(() => undefined);
+
+      return subject ?? undefined;
+    },
+    [collection, memberCount],
+  );
+
   const [showExpandedRowDialog, setShowExpandedRowDialog] = useState(false);
   const [expandedRowSubject, setExpandedRowSubject] = useState<string>();
 
@@ -945,6 +966,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       updateDerivedColumn,
       removeDerivedColumn,
       addItemsToHistoryStack,
+      getRowSubject,
     }),
     [
       resource.subject,
@@ -974,6 +996,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       updateDerivedColumn,
       removeDerivedColumn,
       addItemsToHistoryStack,
+      getRowSubject,
     ],
   );
 
@@ -1229,6 +1252,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
               onRowExpand={handleRowExpand}
               onInsertRowBelow={handleInsertRowBelow}
               onSelectedCellChange={handleSelectedCellChange}
+              RowHeaderAddonComponent={RowCommentButton}
               HeadingComponent={TableHeading}
               NewColumnButtonComponent={NewColumnButton}
               FooterComponent={TableTotalsFooter}

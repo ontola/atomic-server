@@ -89,6 +89,14 @@ export interface TablePageContextType {
   /** Drop a row action from the active view. */
   removeRowAction: (id: string) => void;
   addItemsToHistoryStack: AddItemToHistoryStack;
+  /**
+   * The subject of the resource shown at a grid row index, or `undefined` for a
+   * row that has no resource yet — the trailing entry row, which stays local
+   * until it is typed into. Row-scoped affordances rendered by the grid (the
+   * comment bubble in the gutter) are handed nothing but an index, so this is
+   * how they reach the row itself.
+   */
+  getRowSubject: (index: number) => Promise<string | undefined>;
 }
 
 export const TablePageContext = createContext<TablePageContextType>({
@@ -126,4 +134,5 @@ export const TablePageContext = createContext<TablePageContextType>({
   updateRowAction: () => undefined,
   removeRowAction: () => undefined,
   addItemsToHistoryStack: () => undefined,
+  getRowSubject: async () => undefined,
 });

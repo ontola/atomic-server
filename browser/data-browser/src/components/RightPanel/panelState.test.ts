@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AtomicError, ErrorType } from '@tomic/react';
 import {
+  closePanelState,
   emptyPanelState,
   updatePanelState,
   type PanelState,
@@ -62,6 +63,67 @@ describe('right panel lifecycle', () => {
     expect(
       updatePanelState(open, 'a', 'ai', value => !value).activePanel,
     ).toBeNull();
+  });
+  it('switches threads instead of closing when aimed at another row', () => {
+    const rowOne = updatePanelState(
+      emptyPanelState('a'),
+      'a',
+      'comments',
+      open => !open,
+      'did:ad:row-one',
+    );
+    expect(rowOne).toMatchObject({
+      activePanel: 'comments',
+      commentSubject: 'did:ad:row-one',
+    });
+
+    // Another row: an open, not a toggle.
+    const rowTwo = updatePanelState(
+      rowOne,
+      'a',
+      'comments',
+      open => !open,
+      'did:ad:row-two',
+    );
+    expect(rowTwo).toMatchObject({
+      activePanel: 'comments',
+      commentSubject: 'did:ad:row-two',
+    });
+
+    // The same row again closes the panel.
+    expect(
+      updatePanelState(rowTwo, 'a', 'comments', open => !open, 'did:ad:row-two')
+        .activePanel,
+    ).toBeNull();
+
+    // The NavBar button carries no target: it comes back to the page's own
+    // thread rather than closing the row's.
+    const page = updatePanelState(rowTwo, 'a', 'comments', open => !open);
+    expect(page.activePanel).toBe('comments');
+    expect(page.commentSubject).toBeUndefined();
+  });
+  it('drops the comment target when another panel takes over or it closes', () => {
+    const row: PanelState = {
+      scope: 'a',
+      activePanel: 'comments',
+      commentSubject: 'did:ad:row-one',
+    };
+    expect(
+      updatePanelState(row, 'a', 'followSession', true).commentSubject,
+    ).toBeUndefined();
+    expect(closePanelState(row, 'a', 'comments')).toEqual(emptyPanelState('a'));
+  });
+  it('closes a panel whatever it is aimed at, and leaves the others alone', () => {
+    // A close request carries no target, so toggling cannot express it: it
+    // would read as "close the page's thread" and leave the row's open.
+    const row: PanelState = {
+      scope: 'a',
+      activePanel: 'comments',
+      commentSubject: 'did:ad:row-one',
+    };
+    expect(updatePanelState(row, 'a', 'comments', false)).toEqual(row);
+    expect(closePanelState(row, 'a', 'ai')).toBe(row);
+    expect(closePanelState(row, 'other-scope', 'comments')).toBe(row);
   });
   it('closes targets that disappeared or lost access, without treating offline/loading as deletion', () => {
     expect(panelTargetAvailable()).toBe(false);
