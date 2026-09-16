@@ -17,6 +17,8 @@ mod iroh_e2e;
 pub mod outbox;
 #[cfg(feature = "iroh")]
 pub mod peer;
+#[cfg(feature = "iroh")]
+mod peer_verification;
 pub mod policy;
 pub mod protocol;
 pub mod rbsr;

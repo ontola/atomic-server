@@ -9,7 +9,7 @@ import { createAuthentication } from './authentication.js';
 import { Resource } from './resource.js';
 import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
 import { StoreEvents, type Store, type DriveSyncState } from './store.js';
-import { reconcile, type Item, type RemoteRange } from './rbsr.js';
+import { reconcile, type Item, type RemoteRange, type VV } from './rbsr.js';
 import {
   AtomicError,
   ErrorType,
@@ -208,6 +208,15 @@ function shortPropName(url: string): string {
   return lastSlash >= 0 ? url.slice(lastSlash + 1) : url;
 }
 
+interface SyncTransfer {
+  pendingAcks: number;
+  incoming: boolean;
+  count: number;
+  failed: boolean;
+  sent: Array<{ subject: string; loroBytes: Uint8Array; vv: VV }>;
+  retries: number;
+}
+
 /**
  * A WebSocket client using the v2 binary protocol.
  * All messages are binary frames — no JSON-AD parsing on the hot path.
@@ -226,15 +235,7 @@ export class WSClient {
   private activeSyncs = new Set<string>();
   private queuedSyncs = new Set<string>();
   private syncFrames: Promise<void> = Promise.resolve();
-  private syncTransfers = new Map<
-    string,
-    {
-      pendingAcks: number;
-      incoming: boolean;
-      count: number;
-      failed: boolean;
-    }
-  >();
+  private syncTransfers = new Map<string, SyncTransfer>();
   private _retryDelay = 1000;
   private _retryTimer: ReturnType<typeof setTimeout> | undefined;
   private _onlineListener: (() => void) | undefined;
@@ -1412,7 +1413,7 @@ export class WSClient {
 
           if (transfer) {
             transfer.pendingAcks = Math.max(0, transfer.pendingAcks - 1);
-            this.finishSyncTransfer(msg.drive);
+            await this.finishSyncTransfer(msg.drive);
           } else if (this.activeSyncs.has(msg.drive)) {
             // A matching hash (including after a reduced/full-vector
             // request) has no transfer in either direction.
@@ -1444,6 +1445,8 @@ export class WSClient {
               incoming: true,
               count: 0,
               failed: false,
+              sent: [],
+              retries: 0,
             });
           }
 
@@ -1486,7 +1489,7 @@ export class WSClient {
 
           if (msg.last && current()) {
             transfer.incoming = false;
-            this.finishSyncTransfer(msg.drive);
+            await this.finishSyncTransfer(msg.drive);
           }
         }
 
@@ -2053,11 +2056,13 @@ export class WSClient {
   }) {
     const current = this.connectionGuard();
     if (!current()) return;
-    const transfer = {
+    const transfer: SyncTransfer = {
       pendingAcks: 0,
       incoming: diff.push.length > 0,
       count: 0,
       failed: false,
+      sent: [],
+      retries: 0,
     };
     this.syncTransfers.set(diff.drive, transfer);
     const clientDb = this.store.getClientDb();
@@ -2109,24 +2114,26 @@ export class WSClient {
       if (this.store.outbox.hasPending(subject)) continue;
       const memDoc = this.store.resources.get(subject)?.getLoroDoc?.();
 
+      let doc = memDoc;
+
       if (stored?.length) {
         const combined = new Resource(subject);
         combined.importLoroUpdate(stored, true);
-
-        if (memDoc) {
+        if (memDoc)
           combined.importLoroUpdate(memDoc.export({ mode: 'snapshot' }));
-        }
-
-        loroBytes = Resource.exportLoroBytesForSync(
-          combined.getLoroDoc()!,
-          serverVv,
-        );
-      } else if (memDoc) {
-        loroBytes = Resource.exportLoroBytesForSync(memDoc, serverVv);
+        doc = combined.getLoroDoc();
       }
 
-      if (loroBytes && loroBytes.length > 0) {
+      if (doc) loroBytes = Resource.exportLoroBytesForSync(doc, serverVv);
+
+      if (loroBytes && loroBytes.length > 0 && doc) {
         entries.push({ subject, loroBytes });
+        // Freeze the version actually exported, not a later edit's version.
+        transfer.sent.push({
+          subject,
+          loroBytes,
+          vv: Object.fromEntries(doc.oplogVersion().toJSON()),
+        });
       }
     }
 
@@ -2157,10 +2164,10 @@ export class WSClient {
       }
     }
 
-    this.finishSyncTransfer(diff.drive);
+    await this.finishSyncTransfer(diff.drive);
   }
 
-  private finishSyncTransfer(drive: string): void {
+  private async finishSyncTransfer(drive: string): Promise<void> {
     const transfer = this.syncTransfers.get(drive);
     if (
       !transfer ||
@@ -2169,6 +2176,55 @@ export class WSClient {
       transfer.incoming
     )
       return;
+
+    if (transfer.sent.length) {
+      const current = this.connectionGuard();
+      const subjects = transfer.sent.map(entry => entry.subject).sort();
+      // One existing metadata-only range query after the whole push has been
+      // acknowledged. An ACK alone admits a chunk but can skip its entries.
+      const items = await this.rbsrItems(
+        drive,
+        subjects[0],
+        subjects.at(-1)! + '\0',
+      );
+      if (
+        !current() ||
+        this.syncTransfers.get(drive) !== transfer ||
+        transfer.failed
+      )
+        return;
+      const remote = new Map(items.map(item => [item.subject, item.vv]));
+      const missing = transfer.sent.filter(entry => {
+        const vv = remote.get(entry.subject);
+
+        return (
+          !vv ||
+          Object.entries(entry.vv).some(
+            ([peer, count]) =>
+              !Number.isSafeInteger(vv[peer]) || vv[peer] < count,
+          )
+        );
+      });
+
+      if (missing.length) {
+        if (transfer.retries >= 2) {
+          this.failSyncTransfer(
+            drive,
+            `The server has not confirmed ${missing.length} resource(s) after sync retries. Local data is retained. Reconnect to retry.`,
+          );
+
+          return;
+        }
+
+        transfer.retries++;
+        const frames = encodeSyncPushChunks(drive, missing);
+        transfer.pendingAcks = frames.length;
+        for (const frame of frames) this.sendBinary(frame);
+
+        return;
+      }
+    }
+
     this.syncTransfers.delete(drive);
     this.completeSyncDrive(drive, transfer.count);
   }
@@ -2185,6 +2241,8 @@ export class WSClient {
       incoming: false,
       count: 0,
       failed: true,
+      sent: [],
+      retries: 0,
     };
     transfer.failed = true;
     this.activeSyncs.delete(drive);

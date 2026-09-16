@@ -73,7 +73,7 @@ fn child_hosts_a_drive_over_iroh() {
             .await
             .unwrap();
 
-        let (node_id, router) = atomic_lib::sync::peer::start(store).await.unwrap();
+        let (node_id, router) = atomic_lib::sync::peer::start(store.clone()).await.unwrap();
         let addr = router.endpoint().node_addr().await.unwrap();
 
         let handshake = Handshake {
@@ -96,6 +96,22 @@ fn child_hosts_a_drive_over_iroh() {
 
         // Stay reachable. The parent kills this process once it has synced; the
         // ceiling only stops a stray child outliving a crashed parent.
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(120);
+        while tokio::time::Instant::now() < deadline {
+            if dir.join("read-after-completion").exists() {
+                use atomic_lib::Storelike;
+                // Read exactly once when the parent says reconciliation is
+                // complete. Waiting for IPC is not polling away a sync race.
+                let resource = store
+                    .get_resource(&handshake.canvas.as_str().into())
+                    .await
+                    .unwrap();
+                let name = resource.get(atomic_lib::urls::NAME).unwrap().to_string();
+                std::fs::write(dir.join("receipt"), name).unwrap();
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
         tokio::time::sleep(std::time::Duration::from_secs(120)).await;
     });
 }
@@ -184,13 +200,56 @@ async fn a_drive_reconciles_across_a_process_boundary() {
     )
     .await;
 
+    let pushed = if synced.is_ok() {
+        atomic_lib::sync::peer::remove_live_peer_any(&remote.node_id);
+        let mut canvas = store
+            .get_resource(&remote.canvas.as_str().into())
+            .await
+            .unwrap();
+        canvas.ensure_materialized().unwrap();
+        canvas
+            .set_unsafe(
+                atomic_lib::urls::NAME.into(),
+                atomic_lib::Value::String("Offline edit from parent".into()),
+            )
+            .unwrap();
+        canvas.save_locally(&store).await.unwrap();
+        let result = atomic_lib::sync::peer::sync_drive_with_peer_using_outcome(
+            &endpoint,
+            &remote.node_id,
+            &remote.drive,
+            &store,
+            true,
+        )
+        .await;
+        if result.is_ok() {
+            std::fs::write(child_dir.join("read-after-completion"), b"read once").unwrap();
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+            while !child_dir.join("receipt").exists() && tokio::time::Instant::now() < deadline {
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            }
+        }
+        Some(result)
+    } else {
+        None
+    };
     let _ = child.kill();
     let _ = child.wait();
+    endpoint.close().await;
 
     let count = synced.expect("sync with the remote process should succeed");
     assert!(
         count > 0,
         "expected resources to cross the process boundary"
+    );
+
+    let outcome = pushed
+        .unwrap()
+        .expect("outbound offline edit must be verified");
+    assert!(outcome.pushed > 0);
+    assert_eq!(
+        std::fs::read_to_string(child_dir.join("receipt")).unwrap(),
+        "Offline edit from parent"
     );
 
     // The drive arriving is not enough — the canvas the remote actually drew
