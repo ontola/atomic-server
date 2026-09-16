@@ -271,7 +271,8 @@ const HiddenColorInput = styled.input`
 `;
 
 const ColorInputLabel = styled.label<{ color: string | undefined }>`
-  --CIL_foreground: ${p => readableColor(p.color || p.theme.colors.bg)};
+  --CIL_foreground: ${p =>
+    p.color ? readableColor(p.color) : p.theme.colors.text};
   cursor: pointer;
   position: relative;
   gap: 0.5rem;

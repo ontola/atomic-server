@@ -1,5 +1,5 @@
 import { css, keyframes } from 'styled-components';
-import { transparentize } from 'polished';
+import { withAlpha } from '../styles/withAlpha';
 
 /**
  * The one look for floating UI surfaces — dropdown menus and popovers share
@@ -11,7 +11,7 @@ import { transparentize } from 'polished';
  * equivalent `@starting-style` transition for the entrance.
  */
 export const floatingSurface = css`
-  background-color: ${p => transparentize(0.2, p.theme.colors.bgBody)};
+  background-color: ${p => withAlpha(p.theme.colors.bgBody, 0.8)};
   backdrop-filter: blur(10px);
   box-shadow: ${p => p.theme.boxShadowSoft};
   border-radius: ${p => p.theme.radius};

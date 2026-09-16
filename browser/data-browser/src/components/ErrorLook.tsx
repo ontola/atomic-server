@@ -1,4 +1,3 @@
-import { lighten } from 'polished';
 import { styled, css } from 'styled-components';
 
 import { FaTriangleExclamation } from 'react-icons/fa6';
@@ -56,7 +55,7 @@ const ErrorLookBig = styled.div`
   font-size: 1rem;
   padding: ${p => p.theme.margin}rem;
   border-radius: ${p => p.theme.radius};
-  border: 1px solid ${p => lighten(0.2, p.theme.colors.alert)};
+  border: 1px solid ${p => p.theme.colors.alertLight};
   background-color: ${p => p.theme.colors.bg1};
 `;
 

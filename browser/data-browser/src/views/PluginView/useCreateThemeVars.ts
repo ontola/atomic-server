@@ -1,4 +1,5 @@
 import { useTheme } from 'styled-components';
+import { resolveCssVars } from '../../styles/resolveTokens';
 
 /**
  * Returns a stylesheet that adds all our theme variables to an iframe's document as css variables.
@@ -59,10 +60,14 @@ export function useCreateThemeVars() {
     '--t-size-15': theme.size(15),
   };
 
+  // The theme now holds `var(--token)` references, and the iframe this
+  // stylesheet is injected into has no `:root` carrying them. Resolve on the
+  // way out so the plugin gets colours; the `--t-*` contract plugins are
+  // written against is unchanged.
   return `
   :root {
     ${Object.entries(themeVars)
-      .map(([key, value]) => `${key}: ${value};`)
+      .map(([key, value]) => `${key}: ${resolveCssVars(value)};`)
       .join('\n')}
   }
   * {

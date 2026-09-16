@@ -3,17 +3,12 @@ import {
   DefaultTheme,
   ThemeProvider,
 } from 'styled-components';
-import {
-  complement,
-  darken,
-  lighten,
-  setLightness,
-  setSaturation,
-} from 'polished';
 import './reset.css';
-import { useContext, type JSX } from 'react';
+import './styles/tokens.css';
+import { useContext, useLayoutEffect, type JSX } from 'react';
 import { SettingsContext } from './helpers/AppSettings';
 import { CurrentBackgroundColor } from './globalCssVars';
+import { applyAccentRamp } from './styles/accentRamp';
 import {
   BREADCRUMB_BAR_TRANSITION_TAG,
   MEETING_PANEL_TITLE_TRANSITION_TAG,
@@ -21,45 +16,58 @@ import {
   RESOURCE_PAGE_TRANSITION_TAG,
 } from './helpers/transitionName';
 
+export { presetColors } from './styles/presetColors';
+
 interface ThemeWrapperProps {
   children: React.ReactNode;
 }
 
 /**
  * Provides the theme for all components below. Make sure to wrap this inside
- * SettingsContext
+ * SettingsContext.
+ *
+ * The theme object is a *facade* over the CSS custom properties in
+ * `styles/tokens.css`: every value it carries is a `var(--token)` reference
+ * rather than a colour. Two consequences worth knowing about:
+ *
+ * - It no longer depends on the main colour, so there are exactly two theme
+ *   objects (light and dark) and changing the accent re-renders nothing. The
+ *   old object was rebuilt on every settings change and invalidated the whole
+ *   tree through context.
+ * - Anything that wants to *compute* with a colour cannot, because it is
+ *   holding the string `var(--color-bg)`. Use `color-mix()` (see
+ *   `styles/withAlpha.ts`) or add a token; the polished helpers only work on
+ *   colours that come from data, such as a user's tag colour.
  */
 export const ThemeWrapper = ({ children }: ThemeWrapperProps): JSX.Element => {
   const { mainColor, darkMode, colorfulMode } = useContext(SettingsContext);
 
+  // Layout effect, not effect: the ramp has to be on `:root` before the first
+  // paint of a theme change, or the page flashes the previous accent.
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+
+    root.dataset.theme = darkMode ? 'dark' : 'light';
+    applyAccentRamp(root, {
+      mainColor,
+      darkMode,
+      colorful: colorfulMode,
+    });
+  }, [mainColor, darkMode, colorfulMode]);
+
   return (
-    <>
-      <ThemeProvider theme={buildTheme(darkMode, mainColor, colorfulMode)}>
-        {children}
-      </ThemeProvider>
-    </>
+    <ThemeProvider theme={darkMode ? darkTheme : lightTheme}>
+      {children}
+    </ThemeProvider>
   );
 };
 
 /**
- * The app's muted color palette: the main-color presets in the appearance
- * settings, and the default colors for new tags.
- */
-export const presetColors = [
-  '#4C6FA5', // dusty blue
-  '#6E9B7B', // sage green
-  '#CC7B54', // terracotta
-  '#B5657A', // dusty rose
-  '#CC9A44', // mustard
-  '#7C7BB8', // periwinkle
-  '#4E9B96', // muted teal
-  '#A9825E', // warm taupe
-];
-
-/**
- * Wraps the app chrome (sidebar, navbar). In colorful mode it swaps the
- * neutral ramp for tones of the main color, so no grey ever sits on a colored
- * surface. Outside colorful mode it changes nothing.
+ * Wraps the app chrome (sidebar, navbar). In colourful mode the chrome tokens
+ * carry tones of the main colour, so no neutral ever sits on a coloured
+ * surface; outside colourful mode they fall back to the neutral ramp and this
+ * changes nothing. Either way the decision lives in `accentRamp.ts`, and this
+ * only points the theme at the other set of variables.
  */
 export const ChromeTheme = ({ children }: ThemeWrapperProps): JSX.Element => (
   <ThemeProvider theme={chromeTheme}>{children}</ThemeProvider>
@@ -68,34 +76,21 @@ export const ChromeTheme = ({ children }: ThemeWrapperProps): JSX.Element => (
 const chromeTheme = (outer: DefaultTheme | undefined): DefaultTheme => {
   // ChromeTheme is always nested inside ThemeWrapper, so outer is never
   // actually undefined.
-  if (!outer || !outer.colorful) {
-    return outer!;
-  }
+  const base = outer ?? lightTheme;
 
-  const tone = (lightness: number, saturation: number) =>
-    setLightness(lightness, setSaturation(saturation, outer.colors.main));
-
-  const colors = outer.darkMode
-    ? {
-        bg: tone(0.12, 0.35),
-        bg1: tone(0.18, 0.35),
-        bg2: tone(0.28, 0.3),
-        text: tone(0.92, 0.3),
-        text1: tone(0.85, 0.3),
-        textLight: tone(0.72, 0.25),
-        textLight2: tone(0.5, 0.25),
-      }
-    : {
-        bg: tone(0.93, 0.55),
-        bg1: tone(0.88, 0.5),
-        bg2: tone(0.8, 0.4),
-        text: tone(0.13, 0.4),
-        text1: tone(0.18, 0.4),
-        textLight: tone(0.35, 0.3),
-        textLight2: tone(0.55, 0.25),
-      };
-
-  return { ...outer, colors: { ...outer.colors, ...colors } };
+  return {
+    ...base,
+    colors: {
+      ...base.colors,
+      bg: 'var(--chrome-bg)',
+      bg1: 'var(--chrome-bg-subtle)',
+      bg2: 'var(--chrome-border)',
+      text: 'var(--chrome-text)',
+      text1: 'var(--chrome-text)',
+      textLight: 'var(--chrome-text-subtle)',
+      textLight2: 'var(--chrome-text-subtle)',
+    },
+  };
 };
 
 /**
@@ -111,134 +106,103 @@ export const zIndex = {
   toast: 400,
 };
 
-/** Default animation duration in ms */
+/** Default animation duration in ms. Mirrors `--duration-fast`. */
 export const animationDuration = 100;
 
 const breadCrumbBarHeight = '2.2rem';
 const floatingSearchBarPadding = '4.2rem';
 
+/**
+ * The spacing scale, as a reference to the matching `--space-n` token.
+ *
+ * The indices are the ones this function has always used, so every existing
+ * `size(4)` keeps its value; it now resolves through CSS instead of returning a
+ * literal, which is what lets plain CSS reach the same scale.
+ */
 function size(index = 3): string {
-  const sizes = [
-    size.raw(0.25),
-    size.raw(0.5),
-    size.raw(1),
-    size.raw(1.25),
-    size.raw(1.5),
-    size.raw(1.75),
-    size.raw(2),
-    size.raw(3),
-    size.raw(4),
-    size.raw(5),
-    size.raw(7.5),
-    size.raw(10),
-    size.raw(15),
-    size.raw(20),
-    size.raw(30),
-  ];
-
-  const sizeStr = sizes[index - 1];
-
-  if (sizeStr === undefined) {
+  if (!Number.isInteger(index) || index < 1 || index > 15) {
     throw new Error(`Size index ${index} out of bounds`);
   }
 
-  return sizeStr;
+  return `var(--space-${index})`;
 }
 
 size.raw = (multiplier: number) => `${multiplier}rem`;
 
-/** Construct a StyledComponents theme object */
-export const buildTheme = (
-  darkMode: boolean,
-  mainIn: string,
-  colorful = false,
-): DefaultTheme => {
-  // Guard against undefined during HMR re-initialization (e.g. useLocalStorage cold start)
-  const safeMain = mainIn || '#1b50d8';
-  const main = darkMode ? lighten(0.2, safeMain) : safeMain;
-  const complementaryIn = complement(safeMain);
-  const complementary = darkMode
-    ? lighten(0.2, complementaryIn)
-    : complementaryIn;
-  const bg = darkMode ? '#000000' : '#ffffff';
-  const text = darkMode ? '#fff' : '#000';
-  // Colorful mode: content and text stay neutral for readability; the main
-  // color shows in the app chrome (sidebar, navbar) via ChromeTheme, with a
-  // barely-there tint on the body behind it. Tinting the full neutral ramp
-  // reads as a monochrome wash, not as color.
-  const bgBodyColorful = darkMode
-    ? setLightness(0.045, setSaturation(0.25, safeMain))
-    : setLightness(0.975, setSaturation(0.35, safeMain));
-  const shadowColor = darkMode ? 'rgba(255,255,255,.15)' : 'rgba(0,0,0,0.07)';
-  const shadowColorIntense = darkMode
-    ? 'rgba(255,255,255,.3)'
-    : 'rgba(0,0,0,0.2)';
+/**
+ * The theme, as a map onto the token layer.
+ *
+ * Only `darkMode` actually varies — every other member is a constant string.
+ * It is still a styled-components theme because 415 files read it that way;
+ * migrating those to `var(--token)` directly is the next slice, and each one
+ * that moves can simply stop reading `p.theme`.
+ */
+export const buildTheme = (darkMode: boolean): DefaultTheme => ({
+  darkMode,
+  colorful: false,
+  fontFamilyHeader: 'var(--font-family-heading)',
+  fontFamily: 'var(--font-family)',
+  boxShadow: 'var(--elevation-1)',
+  boxShadowIntense: 'var(--elevation-3)',
+  boxShadowSoft: 'var(--elevation-2)',
+  containerWidth: 40,
+  containerWidthWide: '900px',
+  fontSizeBody: 1,
+  fontSizeH1: 2,
+  sideBarWidth: 15,
+  margin: 1,
+  radius: 'var(--radius-md)',
+  heights: {
+    breadCrumbBar: breadCrumbBarHeight,
+    floatingSearchBarPadding: floatingSearchBarPadding,
+    fullPage: `100%`,
+  },
+  size,
+  colors: {
+    main: 'var(--color-accent)',
+    mainLight: 'var(--color-accent-hover)',
+    // Every remaining call site uses this as accent-coloured *text*, which is
+    // a different requirement from the fill — see `--color-accent-text`.
+    mainDark: 'var(--color-accent-text)',
+    complementary: 'var(--accent-complementary)',
+    bg: 'var(--color-bg)',
+    bgBody: 'var(--color-bg-body)',
+    mainSelectedBg: 'var(--color-accent-subtle)',
+    mainSelectedFg: 'var(--color-accent-text)',
+    bg1: 'var(--color-bg-subtle)',
+    bg2: 'var(--color-border)',
+    text: 'var(--color-text)',
+    text1: 'var(--color-text)',
+    textLight: 'var(--color-text-subtle)',
+    textLight2: 'var(--color-text-subtle)',
+    alert: 'var(--color-alert)',
+    alertLight: 'var(--color-alert-subtle)',
+    warning: 'var(--color-warning)',
+    diff: {
+      addedBg: 'var(--color-diff-added-bg)',
+      addedFg: 'var(--color-diff-added-text)',
+      removedBg: 'var(--color-diff-removed-bg)',
+      removedFg: 'var(--color-diff-removed-text)',
+    },
+  },
+  animation: {
+    duration: 'var(--duration-fast)',
+  },
+  zIndex,
+});
 
-  return {
-    darkMode,
-    colorful,
-    fontFamilyHeader:
-      "'Montserrat', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-    fontFamily:
-      "'Open Sans', 'Helvetica Neue', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-    boxShadow: `0 0 10px 0px ${shadowColor}`,
-    boxShadowIntense: `0 0 22px 0px ${shadowColorIntense}`,
-    boxShadowSoft: `0px 1.5px 2.2px rgba(0, 0, 0, 0.02),
-    0px 3.5px 5.3px rgba(0, 0, 0, 0.028), 0px 6.6px 10px rgba(0, 0, 0, 0.035),
-    0px 11.8px 17.9px rgba(0, 0, 0, 0.042),
-    0px 22.1px 33.4px rgba(0, 0, 0, 0.05), 0px 53px 80px rgba(0, 0, 0, 0.07);`,
-    containerWidth: 40,
-    containerWidthWide: '900px',
-    fontSizeBody: 1,
-    fontSizeH1: 2,
-    sideBarWidth: 15,
-    margin: 1,
-    radius: '9px',
-    heights: {
-      breadCrumbBar: breadCrumbBarHeight,
-      floatingSearchBarPadding: floatingSearchBarPadding,
-      fullPage: `100%`,
-    },
-    size,
-    colors: {
-      main,
-      mainLight: darkMode ? lighten(0.08)(main) : lighten(0.08)(main),
-      mainDark: darkMode ? darken(0.08)(main) : darken(0.08)(main),
-      complementary,
-      bg: bg,
-      // Use pitch black for dark mode
-      bgBody: colorful ? bgBodyColorful : darkMode ? bg : darken(0.02)(bg),
-      mainSelectedBg: setLightness(darkMode ? 0.05 : 0.97, main),
-      mainSelectedFg: setLightness(darkMode ? 0.7 : 0.25, main),
-      bg1: darkMode ? lighten(0.1)(bg) : darken(0.05)(bg),
-      bg2: darkMode ? lighten(0.3)(bg) : darken(0.2)(bg),
-      text,
-      text1: darkMode ? darken(0.1)(text) : lighten(0.1)(text),
-      textLight: darkMode ? darken(0.4)(text) : lighten(0.4)(text),
-      textLight2: darkMode ? darken(0.8)(text) : lighten(0.8)(text),
-      alert: '#cf5b5b',
-      alertLight: '#e66f6f',
-      warning: '#f5a623',
-      diff: {
-        addedBg: '#e4ffe4',
-        addedFg: '#003500',
-        removedBg: '#ffcdcd',
-        removedFg: '#2d0000',
-      },
-    },
-    animation: {
-      duration: `${animationDuration}ms`,
-    },
-    zIndex,
-  };
-};
+const lightTheme = buildTheme(false);
+const darkTheme = buildTheme(true);
 
 // Styled-components requires overwriting the default theme
 declare module 'styled-components' {
   export interface DefaultTheme {
     /** If true, make things dark */
     darkMode: boolean;
-    /** If true, the app chrome (via ChromeTheme) is tinted with the main color */
+    /**
+     * @deprecated Colourful mode is a property of the chrome tokens now, not
+     * of the theme object. Nothing reads this.
+     */
     colorful: boolean;
     fontFamilyHeader: string;
     fontFamily: string;
@@ -270,7 +234,8 @@ declare module 'styled-components' {
     };
 
     /**
-     * Function that returns a size in rem for the given index.
+     * Function that returns a size in rem for the given index, as a reference
+     * to the matching `--space-n` token.
      * Based on the following ratio:
      * 1) size.raw(0.25),
      * 2) size.raw(0.5),
@@ -292,11 +257,12 @@ declare module 'styled-components' {
      */
     size: typeof size;
     colors: {
-      /** Main accent color, used for links */
+      /** Main accent color, as a filled surface. Not readable as text — use
+       * `mainDark` for that. */
       main: string;
-      /** Slightly lighter version of Main accent color */
+      /** Hover state of a filled accent surface */
       mainLight: string;
-      /** Slightly darker version of Main accent color */
+      /** Accent color that is readable as text */
       mainDark: string;
       /** Background color of selected items */
       mainSelectedBg: string;
@@ -306,19 +272,26 @@ declare module 'styled-components' {
       complementary: string;
       /** The background color of the body, which is subtly different from bg */
       bgBody: string;
-      /** Most common background color */
+      /** Most common background color: cards, dialogs, the navbar */
       bg: string;
       /** Subtle background color */
       bg1: string;
-      /** Subtle background color */
+      /** Border color. Historically a third background step, used as a border
+       * in 214 of its call sites. */
       bg2: string;
       /** Main (body) text color */
       text: string;
-      /** Sublty different hue of the main text color */
+      /**
+       * @deprecated Identical to `text`. Was a barely-different hue of it.
+       */
       text1: string;
-      /** Lighter shade of text */
+      /** Lighter shade of text, still readable */
       textLight: string;
-      /** Lighter shade of text, not accessible for some */
+      /**
+       * @deprecated Use `textLight`. This used to be #ccc on white (1.6:1) —
+       * the theme's own comment called it "not accessible for some" — and now
+       * resolves to the same token as `textLight`.
+       */
       textLight2: string;
       /** Error / warning color */
       alert: string;
@@ -338,8 +311,14 @@ declare module 'styled-components' {
   }
 }
 
-/** Adds basic styles for the entire app */
-export const GlobalStyle = createGlobalStyle`
+/**
+ * Adds basic styles for the entire app.
+ *
+ * Explicitly generic over `object`: with the colours now coming from tokens
+ * there are no function interpolations left for styled-components to infer the
+ * props from, and its fallback inference makes `theme` a *required* prop.
+ */
+export const GlobalStyle = createGlobalStyle<object>`
 
   :root {
     --view-transition-duration: 150ms;
@@ -354,7 +333,7 @@ export const GlobalStyle = createGlobalStyle`
 
   * {
     box-sizing: border-box;
-    scrollbar-color: ${p => p.theme.colors.bg2} transparent;
+    scrollbar-color: var(--color-border) transparent;
     @media print {
       scrollbar-color: transparent transparent;
     }
@@ -368,22 +347,21 @@ export const GlobalStyle = createGlobalStyle`
     &::-webkit-scrollbar-thumb {
       width: 8px;
       margin: auto;
-      background-color: ${p =>
-        p.theme.colors.bg2}; /* color of the tracking area */
-      border-radius: ${p => p.theme.radius};
+      background-color: var(--color-border); /* color of the tracking area */
+      border-radius: var(--radius-md);
 
       &:hover {
-        background-color: ${p => darken(0.1)(p.theme.colors.bg2)};
+        background-color: var(--color-border-strong);
       }
     }
   }
 
   body {
-    ${CurrentBackgroundColor.define(p => p.theme.colors.bgBody)}
+    ${CurrentBackgroundColor.define('var(--color-bg-body)')}
     background-color: ${CurrentBackgroundColor.var()};
-    color: ${props => props.theme.colors.text};
-    font-family: ${props => props.theme.fontFamily};
-    line-height: 1.5em;
+    color: var(--color-text);
+    font-family: var(--font-family);
+    line-height: var(--line-height-base);
     word-wrap: break-word;
     overflow-wrap: anywhere;
     // Prevents weird scrollbars appearing for a split second when opening a dialog
@@ -392,7 +370,7 @@ export const GlobalStyle = createGlobalStyle`
     margin: 0;
     /** Pretty dark mode transition */
     transition: background-color .2s ease, border-color .2s ease, color .2s ease;
-    font-size: 1rem;
+    font-size: var(--font-size-base);
   }
 
   input, button, body {
@@ -400,23 +378,34 @@ export const GlobalStyle = createGlobalStyle`
     overflow-wrap: normal;
   }
 
+  /* Links are accent-coloured *text*, so they use the accent step that is
+     readable rather than the one meant to be filled. With the fill, a light
+     main colour (the mustard preset, say) produced links at 2.2:1. */
   a {
-    color: ${props => props.theme.colors.main};
+    color: var(--color-accent-text);
   }
 
   h1 {
-    font-size: ${p => p.theme.fontSizeH1}rem;
+    font-size: var(--font-size-3xl);
   }
 
   h2 {
-    font-size: 1.7rem;
+    font-size: var(--font-size-2xl);
+  }
+
+  h3 {
+    font-size: var(--font-size-xl);
+  }
+
+  h4 {
+    font-size: var(--font-size-lg);
   }
 
   h1,h2,h3,h4,h5,h6 {
-    margin-bottom: ${props => props.theme.size()};
-    font-weight: bold;
-    font-family: ${p => p.theme.fontFamilyHeader};
-    line-height: 1em;
+    margin-bottom: var(--space-3);
+    font-weight: var(--font-weight-bold);
+    font-family: var(--font-family-heading);
+    line-height: var(--line-height-tight);
     margin-top: 0;
     word-break: break-word;
   }
@@ -427,23 +416,23 @@ export const GlobalStyle = createGlobalStyle`
 
   p {
     margin-top: 0;
-    margin-bottom: ${props => props.theme.size()};
+    margin-bottom: var(--space-3);
   }
 
   ul {
     margin-top: 0;
-    margin-bottom: ${props => props.theme.size()};
+    margin-bottom: var(--space-3);
     padding: 0;
 
     li {
       list-style-type: disc;
-      margin-left: ${props => props.theme.size(7)};
-      margin-bottom: ${props => props.theme.size(2)};
+      margin-left: var(--space-7);
+      margin-bottom: var(--space-2);
     }
   }
 
   b {
-    font-weight: bold;
+    font-weight: var(--font-weight-bold);
   }
 
   /* —— View transitions ——

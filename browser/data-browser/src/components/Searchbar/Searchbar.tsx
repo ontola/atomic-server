@@ -1,5 +1,4 @@
 import { Client, useResource, useTitle } from '@tomic/react';
-import { transparentize } from 'polished';
 import { useEffect, useRef, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { constructOpenURL } from '../../helpers/navigation';
@@ -9,6 +8,7 @@ import { FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { SearchbarFakeInput, SearchbarInput } from './SearchbarInput';
 import { useSearchOverlay } from './SearchOverlayContext';
+import { withAlpha } from '../../styles/withAlpha';
 
 export function Searchbar(): JSX.Element {
   const [currentSubject] = useCurrentSubject();
@@ -108,7 +108,7 @@ const Wrapper = styled.div`
   display: flex;
 
   :hover {
-    ${props => transparentize(0.6, props.theme.colors.main)};
+    ${props => withAlpha(props.theme.colors.main, 0.4)};
     ${SearchbarFakeInput} {
       color: ${p => p.theme.colors.text};
     }

@@ -2,7 +2,7 @@ import { useDroppable } from '@dnd-kit/core';
 
 import { styled } from 'styled-components';
 import { transition } from '@helpers/transition';
-import { transparentize } from 'polished';
+import { withAlpha } from '../../styles/withAlpha';
 
 interface ReorderDropAreaProps {
   index: number;
@@ -30,7 +30,7 @@ const ReorderDropZone = styled.div<{ hover: boolean }>`
   top: 0;
   left: calc(var(--dropzone-width) * 0.5 * -1);
   z-index: 10;
-  box-shadow: 0 0 7px 0 ${p => transparentize(0.3, p.theme.colors.main)};
+  box-shadow: 0 0 7px 0 ${p => withAlpha(p.theme.colors.main, 0.7)};
   transform: scaleX(${p => (p.hover ? 1 : 0)});
   ${transition('transform', 'opacity')}
 `;

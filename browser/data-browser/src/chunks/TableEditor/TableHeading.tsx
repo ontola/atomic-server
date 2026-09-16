@@ -4,9 +4,9 @@ import { DragAreaBase, useResizable } from '@hooks/useResizable';
 import { useTableEditorContext } from './TableEditorContext';
 import { useDraggable } from '@dnd-kit/core';
 import { ReorderDropArea } from './ReorderDropArea';
-import { transparentize } from 'polished';
 import { DEFAULT_SIZE_PX } from './hooks/useCellSizes';
 import type { TableHeadingComponent } from './TableHeader';
+import { withAlpha } from '../../styles/withAlpha';
 
 interface TableHeadingProps<T> {
   index: number;
@@ -97,9 +97,7 @@ export interface TableHeadingWrapperProps {
 export const TableHeadingWrapper = styled.div<TableHeadingWrapperProps>`
   position: relative;
   background-color: ${p =>
-    p.reordering
-      ? transparentize(0.5, p.theme.colors.bg)
-      : p.theme.colors.bgBody};
+    p.reordering ? withAlpha(p.theme.colors.bg, 0.5) : p.theme.colors.bgBody};
   display: flex;
   width: 100%;
   align-items: center;
@@ -110,7 +108,7 @@ export const TableHeadingWrapper = styled.div<TableHeadingWrapperProps>`
   isolation: isolate;
   color: ${p =>
     p.reordering
-      ? transparentize(0.5, p.theme.colors.textLight)
+      ? withAlpha(p.theme.colors.textLight, 0.5)
       : p.theme.colors.textLight};
 `;
 

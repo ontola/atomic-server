@@ -1,4 +1,3 @@
-import { transparentize } from 'polished';
 import { useCallback, useEffect, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import {
@@ -10,6 +9,7 @@ import {
 } from './helpers/indicatorPosition';
 import { scrollIntoView } from './helpers/scrollIntoView';
 import { CursorMode, useTableEditorContext } from './TableEditorContext';
+import { withAlpha } from '../../styles/withAlpha';
 
 type OnScrollCallbackOptions = {
   scrollUpdateWasRequested: boolean;
@@ -227,5 +227,5 @@ const Indicator = styled.div.attrs<IndicatorProps>(p => ({
   background-color: ${p =>
     p.cursorMode === CursorMode.Edit
       ? 'none'
-      : transparentize(0.85, p.theme.colors.main)};
+      : withAlpha(p.theme.colors.main, 0.15)};
 `;

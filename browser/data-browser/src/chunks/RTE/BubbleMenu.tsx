@@ -13,12 +13,12 @@ import { Column, Row } from '../../components/Row';
 
 import { Popover } from '../../components/Popover';
 import { useState } from 'react';
-import { transparentize } from 'polished';
 import { EditLinkForm } from './EditLinkForm';
 import { useTipTapEditor } from './TiptapContext';
 import { ToggleButton } from './ToggleButton';
 import { NodeSelectMenu } from './NodeSelectMenu';
 import { useEditorState } from '@tiptap/react';
+import { withAlpha } from '../../styles/withAlpha';
 
 interface BubbleMenuProps {
   children?: React.ReactNode;
@@ -143,7 +143,7 @@ const BubbleMenuInner = styled(Column)`
   border: ${p =>
     p.theme.darkMode ? `1px solid ${p.theme.colors.bg2}` : 'none'};
   @supports (backdrop-filter: blur(5px)) {
-    background-color: ${p => transparentize(0.15, p.theme.colors.bg)};
+    background-color: ${p => withAlpha(p.theme.colors.bg, 0.85)};
     backdrop-filter: blur(5px);
   }
 `;
@@ -157,7 +157,7 @@ const StyledPopover = styled(Popover)`
     p.theme.darkMode ? `1px solid ${p.theme.colors.bg2}` : 'none'};
 
   @supports (backdrop-filter: blur(5px)) {
-    background-color: ${p => transparentize(0.15, p.theme.colors.bg)};
+    background-color: ${p => withAlpha(p.theme.colors.bg, 0.85)};
     backdrop-filter: blur(5px);
   }
 `;

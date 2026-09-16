@@ -1,4 +1,3 @@
-import { transparentize } from 'polished';
 import {
   MouseEventHandler,
   useCallback,
@@ -8,6 +7,7 @@ import {
   useState,
 } from 'react';
 import { styled } from 'styled-components';
+import { withAlpha } from '../styles/withAlpha';
 
 interface UseResizeResult {
   size: string;
@@ -187,7 +187,7 @@ interface DragAreaBaseProps {
 }
 
 export const DragAreaBase = styled.div<DragAreaBaseProps>`
-  --drag-color: ${p => transparentize(0.7, p.theme.colors.main)};
+  --drag-color: ${p => withAlpha(p.theme.colors.main, 0.3)};
   position: absolute;
   cursor: col-resize;
 

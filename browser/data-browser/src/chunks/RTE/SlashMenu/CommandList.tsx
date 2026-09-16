@@ -1,4 +1,3 @@
-import { transparentize } from 'polished';
 import {
   forwardRef,
   useState,
@@ -11,6 +10,7 @@ import { ScrollArea } from '../../../components/ScrollArea';
 import type { SuggestionItem } from '../types';
 import { useOnValueChange } from '@helpers/useOnValueChange';
 import { Column } from '@components/Row';
+import { withAlpha } from '../../../styles/withAlpha';
 
 export type CommandListRefType = {
   onKeyDown: (event: KeyboardEvent) => boolean;
@@ -122,7 +122,7 @@ const ScrollingList = styled(ScrollArea)`
   gap: 0.5rem;
   align-items: flex-start;
   @supports (backdrop-filter: blur(5px)) {
-    background-color: ${p => transparentize(0.15, p.theme.colors.bg)};
+    background-color: ${p => withAlpha(p.theme.colors.bg, 0.85)};
     backdrop-filter: blur(5px);
   }
 `;

@@ -1,5 +1,5 @@
 import { urls, useResource, useString, useTitle } from '@tomic/react';
-import { lighten, setLightness, setSaturation, transparentize } from 'polished';
+import { setLightness, setSaturation, transparentize } from 'polished';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { useCallback, useMemo, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
@@ -199,6 +199,6 @@ const DeleteButton = styled(Button)`
 
   &:hover,
   &:focus {
-    background-color: ${p => lighten(0.1, p.theme.colors.alert)} !important;
+    background-color: ${p => p.theme.colors.alertLight} !important;
   }
 `;

@@ -1,8 +1,9 @@
 # Data browser UI
 
-**Status:** proposal, written 2026-09-16. Nothing here has shipped. This is an
-audit of `browser/data-browser/src` plus a recommended order of work. Numbers
-are measured against `develop` at `3b9f7e4`.
+**Status:** Phase 1 shipped on `claude/data-browser-ui-refactor-0ps7ge`
+(2026-09-16); Phases 2-5 are still proposals. This is an audit of
+`browser/data-browser/src` plus a recommended order of work. Numbers are
+measured against `develop` at `3b9f7e4`, before the change.
 
 ## The short version
 
@@ -128,11 +129,51 @@ CSS, from the RTE, from the canvas, and from any future non-React surface.
 Ordered. Each phase is independently shippable and leaves the app working.
 Phases 1-3 are the ones that matter; 4-5 are follow-on.
 
-### Phase 1 — Tokens as CSS custom properties
+### Phase 1 — Tokens as CSS custom properties — **shipped**
 
-Define the full token set once, in CSS, on `:root`, with a
-`[data-theme='dark']` block. Keep `styled-components` and keep the theme object
-as a thin facade that reads the variables, so nothing breaks on day one.
+Landed in `browser/data-browser/src/styles/`:
+
+| File | What it is |
+| --- | --- |
+| `tokens.css` | The static layer: two 12-step ramps, a 7-step type scale, the existing space ratio as `--space-1..15`, radius, one elevation ladder, motion. Light plus a `[data-theme='dark']` block. |
+| `oklch.ts` | Oklab/OKLCH ↔ sRGB and WCAG contrast. No dependency; the inverse is needed for the gate. |
+| `accentRamp.ts` | The one ramp that cannot be static, derived from the user's main colour and written to `:root`. Also the colourful-mode chrome tones. |
+| `withAlpha.ts` | `color-mix()` in place of polished's `transparentize`, which cannot parse a `var()`. |
+| `resolveTokens.ts` | Resolves `var()` for the plugin iframe, the one place a token value leaves the document that defines it. |
+| `tokens.contrast.test.ts` | The gate: 104 assertions, reading the shipped CSS. |
+
+`styling.tsx` keeps the `DefaultTheme` shape so all 415 files compile
+unchanged, but every value it carries is now a `var(--token)` reference. Two
+consequences worth stating:
+
+- The theme object no longer depends on the main colour, so there are exactly
+  two of them. Changing the accent re-renders nothing; it writes thirteen
+  custom properties. Changing theme writes one attribute.
+- Nothing can do arithmetic on a theme colour any more. That was 25 call sites,
+  19 of them `transparentize`; they moved to `color-mix()`, or to a token that
+  should always have existed (`alertLight`, `complementary`). The polished
+  helpers remain only where the colour comes from data — a tag colour, a Kanban
+  tint — which is the only place they were ever right.
+
+What the gate caught on its first run, all of it pre-existing:
+
+- **A primary button below AA on six of the nine main-colour presets.** The
+  theme used one value for both the button fill and the label on it, the label
+  being the page background. The mustard preset was 2.5:1. The fill now picks
+  the label it can carry and only moves when neither white nor near-black
+  works — six of the nine come through as the exact hex the user picked.
+- **`textLight2` at 1.61:1**, in eight places, with a doc comment admitting it.
+  Now aliased to `textLight` and deprecated.
+- **Accent-as-text using the fill step**, so a light main colour produced links
+  at ~2.2:1. Links now use `--color-accent-text` (step 11).
+- **Dark-mode surfaces indistinguishable from the page** — `bg` and `bgBody`
+  were both `#000000`, so a card could only be found by its border.
+
+Demonstrated on `Button`, `Card`, `cardSurface`, `AllProps` and `PropVal` —
+the default resource page and the shared surfaces. A specimen of the ramps,
+the type scale and the before/after is published as an artifact.
+
+The original plan for this phase, for reference:
 
 - **Colour**: author in OKLCH. Two ramps (neutral, accent) of 12 steps each,
   in the Radix-colors shape: app background, subtle background, component
@@ -152,7 +193,7 @@ as a thin facade that reads the variables, so nothing breaks on day one.
 
 Ship the ramps with a contrast unit test so the gate cannot silently regress.
 
-### Phase 2 — Codemod the literals away
+### Phase 2 — Codemod the literals away — **next**
 
 The token set is worthless until the 1155 styled components use it. This is
 mechanical and should be done with a script plus review, not by hand and not
@@ -246,3 +287,20 @@ sizes in a different syntax.
 3. **How much codemod risk is acceptable per PR?** Suggested: one property per
    PR (all `font-size`, then all `gap`), with the e2e suite and the visual
    snapshots in `e2e.spec.ts-snapshots` as the gate.
+
+## Known gaps in the shipped slice
+
+- **The visual snapshots in `e2e.spec.ts-snapshots` predate the ramps** and
+  will need regolding. They could not be run in the environment this landed in
+  (no WASM build, no server), so that is unverified rather than done.
+- **`PAGE_LIGHT` / `PAGE_DARK` in `accentRamp.ts` mirror `--color-bg`
+  numerically**, because the legibility search needs the page colour as a
+  number. The contrast gate reads the real value out of the CSS, so a drift
+  between the two fails the test rather than shipping an invisible button —
+  but it is a duplication, and relative colour syntax would remove it.
+- **`theme.colorful` is now unread.** It stays on `DefaultTheme` as a
+  deprecated member; colourful mode is a property of the chrome tokens.
+- **`ChromeTheme` is still a React context.** With the chrome tones being CSS
+  variables it could be a cascade scope instead, but that means adding a DOM
+  element inside the navbar and sidebar, which is a layout change rather than
+  a styling one. Left for when one of those is being touched anyway.

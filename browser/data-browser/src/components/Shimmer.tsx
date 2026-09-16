@@ -1,6 +1,6 @@
 import { PropsWithChildren } from 'react';
 import { styled, keyframes } from 'styled-components';
-import { transparentize } from 'polished';
+import { withAlpha } from '../styles/withAlpha';
 
 const sweep = keyframes`
   from {
@@ -51,18 +51,18 @@ const Wrapper = styled.span`
       transparent 0%,
       ${p =>
           p.theme.darkMode
-            ? transparentize(0, p.theme.colors.bg)
-            : transparentize(0.85, p.theme.colors.main)}
+            ? withAlpha(p.theme.colors.bg, 1)
+            : withAlpha(p.theme.colors.main, 0.15)}
         45%,
       ${p =>
           p.theme.darkMode
-            ? transparentize(0, p.theme.colors.bg)
-            : transparentize(0.7, p.theme.colors.main)}
+            ? withAlpha(p.theme.colors.bg, 1)
+            : withAlpha(p.theme.colors.main, 0.3)}
         50%,
       ${p =>
           p.theme.darkMode
-            ? transparentize(0, p.theme.colors.bg)
-            : transparentize(0.85, p.theme.colors.main)}
+            ? withAlpha(p.theme.colors.bg, 1)
+            : withAlpha(p.theme.colors.main, 0.15)}
         55%,
       transparent 100%
     );

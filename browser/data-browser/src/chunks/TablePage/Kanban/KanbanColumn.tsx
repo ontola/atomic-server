@@ -1,7 +1,7 @@
 import { Property } from '@tomic/react';
 import { useDroppable } from '@dnd-kit/core';
 import { styled } from 'styled-components';
-import { mix, setLightness } from 'polished';
+import { setLightness } from 'polished';
 import { useCallback, useRef, useState, type JSX } from 'react';
 import { FaPlus } from 'react-icons/fa6';
 import { useTagData } from '@components/Tag';
@@ -9,6 +9,7 @@ import { IconButton } from '@components/IconButton/IconButton';
 import { SkeletonButton } from '@components/SkeletonButton';
 import { InputStyled } from '@components/forms/InputStyles';
 import { KanbanCard } from './KanbanCard';
+import { blend } from '../../../styles/withAlpha';
 
 /** Placeholder subject passed to `useTagData` for the uncategorized column,
  *  which has no tag — its data is loaded but never rendered. */
@@ -236,7 +237,7 @@ const CardList = styled.div<{ $over: boolean; $tint: string | undefined }>`
     // to bg1 that it still reads as neutral, but ties the card list to its
     // column.
     return p.$tint
-      ? mix(0.08, p.$tint, p.theme.colors.bg1)
+      ? blend(p.$tint, p.theme.colors.bg1, 0.08)
       : p.theme.colors.bg1;
   }};
   border: 1px dashed ${p => (p.$over ? p.theme.colors.main : 'transparent')};
