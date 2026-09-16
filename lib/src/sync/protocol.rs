@@ -670,11 +670,15 @@ pub fn encode_sync_diff(
     remove_commits: &std::collections::HashMap<String, String>,
 ) -> Vec<u8> {
     let drive_bytes = drive.as_bytes();
+    // Keys in alphabetical order: `serde_json` sorts map keys unless the
+    // `preserve_order` feature is on, and a workspace build turns it on for
+    // every crate. Alphabetical insertion is the one order both agree on, so
+    // the golden `sync_diff` vector holds in either build.
     let mut diff = serde_json::json!({
         "pull": pull,
+        "pullFrom": pull_from,
         "push": push,
         "remove": remove,
-        "pullFrom": pull_from,
     });
     // Keep the golden `sync_diff` vector byte-identical when there is no
     // signed destroy to attach; older decoders ignore unknown fields anyway.
@@ -1213,12 +1217,13 @@ pub fn encode_sync(
 /// A hash-first `SYNC` probe: the drive and its hash, no version vectors.
 /// The responder answers `SYNC_OK` when its hash over what this session may
 /// read matches, `SYNC_RESEND` when not, and `ERROR UNAUTHORIZED_READ` for
-/// a drive the session may not read. Payload: `{"peers":[],"resources":{},"probe":true}`.
+/// a drive the session may not read. Payload: `{"peers":[],"probe":true,"resources":{}}`
+/// (keys alphabetical, see `encode_sync_diff`).
 pub fn encode_sync_probe(drive: &str, drive_hash: &str) -> Vec<u8> {
     encode_sync_json(
         drive,
         drive_hash,
-        serde_json::json!({ "peers": [], "resources": {}, "probe": true }),
+        serde_json::json!({ "peers": [], "probe": true, "resources": {} }),
     )
 }
 

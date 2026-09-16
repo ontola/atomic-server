@@ -605,7 +605,7 @@ This is the sequence the browser runs on connect, after draining its outbox.
 the hash:
 
 ```
--> SYNC (0x30) <drive> <hash> {"peers":[],"resources":{},"probe":true}
+-> SYNC (0x30) <drive> <hash> {"peers":[],"probe":true,"resources":{}}
 ```
 
 The server recomputes the hash over the subjects this session's agent may
