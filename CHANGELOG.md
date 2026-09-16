@@ -7,6 +7,8 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Fix remaining `clippy` warnings in `wasm/src/lib.rs` blocking `develop`'s pre-commit hook ([#1508](https://github.com/ontola/atomic-server/issues/1508)).
+
 ## [v0.41.0-beta.7] - 2026-09-12
 
 - Store hosted files in S3 without silently falling back to node-local storage.
