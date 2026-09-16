@@ -14,8 +14,8 @@ import {
   proxyOperation,
 } from '../../../../../integrations/notion/proxy';
 import { run } from '../../../../../integrations/notion/plugin';
-import source from '../../../../../integrations/notion/plugin.js?raw';
 import type { Connection } from '../../../../../integrations/notion/atomic';
+import { fetchIntegrationSource } from '@helpers/integrationSource';
 import {
   browserIntegrations,
   proxyRequest,
@@ -126,11 +126,11 @@ function NotionConnection({
     );
   };
 
-  const plugin = (config: Connection): BrowserPlugin => ({
+  const plugin = (config: Connection, pluginSource: string): BrowserPlugin => ({
     drive,
     plugin: config.plugin,
     config,
-    source,
+    source: pluginSource,
     run,
     read: proxyOperation(config.dataSource, request, 'read'),
     write: proxyOperation(config.dataSource, request, 'write'),
@@ -196,6 +196,7 @@ function NotionConnection({
   const prepare = (existing?: Connection) =>
     attempt(async () => {
       if (!connection) throw new Error('Connect Notion before continuing');
+      const source = await fetchIntegrationSource('notion');
       let config = existing ?? installed[database];
 
       if (!config) {
@@ -227,23 +228,28 @@ function NotionConnection({
           ),
         ),
       );
-      const previous = savedBrowserSync(store, plugin(config));
+      const previous = savedBrowserSync(store, plugin(config, source));
       setPreview(
         previous && !previous.complete
           ? previous
-          : await previewBrowserPlugin(store, plugin(config)),
+          : await previewBrowserPlugin(store, plugin(config, source)),
       );
     });
   const apply = () =>
     attempt(async () => {
       if (!active || !preview) return;
+      const source = await fetchIntegrationSource('notion');
 
       try {
-        const result = await applyBrowserPlugin(store, plugin(active), preview);
+        const result = await applyBrowserPlugin(
+          store,
+          plugin(active, source),
+          preview,
+        );
         setPreview(undefined);
         setCompleted(!!result.complete);
       } catch (reason) {
-        setPreview(savedBrowserSync(store, plugin(active)) ?? preview);
+        setPreview(savedBrowserSync(store, plugin(active, source)) ?? preview);
         throw reason;
       }
     });

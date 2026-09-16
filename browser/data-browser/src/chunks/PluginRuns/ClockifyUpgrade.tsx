@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore, pinPluginRelease } from '@tomic/react';
 import { Button } from '@components/Button';
 import { Column } from '@components/Row';
 import { setPluginSource } from './runScript';
 import { clockifyUpgrade } from './clockifyUpgradeSource';
-import bundle from '../../../../../integrations/clockify/plugin.js?raw';
+import { fetchIntegrationSource } from '@helpers/integrationSource';
 
 export function ClockifyUpgrade({
   source,
@@ -20,7 +20,20 @@ export function ClockifyUpgrade({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [pending, setPending] = useState<string>();
-  const next = pending ?? clockifyUpgrade(source, bundle);
+  const [bundle, setBundle] = useState<string>();
+  useEffect(() => {
+    let active = true;
+    void fetchIntegrationSource('clockify').then(text => {
+      if (active) setBundle(text);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+  const next =
+    pending ??
+    (bundle === undefined ? undefined : clockifyUpgrade(source, bundle));
   if (!next) return null;
 
   const upgrade = async () => {

@@ -14,7 +14,7 @@ import { ErrMessage } from '@components/forms/InputStyles';
 import { AtomicLink } from '@components/AtomicLink';
 import { petsSchema } from '../../../../../integrations/pets/schema';
 import type { Config } from '../../../../../integrations/pets/plugin';
-import source from '../../../../../integrations/pets/plugin.js?raw';
+import { fetchIntegrationSource } from '@helpers/integrationSource';
 import { pluginClassesFor } from './runScript';
 import { ensureInstallationResource } from './installationResources';
 import { RunPluginDialog } from './RunPluginDialog';
@@ -42,6 +42,7 @@ export function ConnectPets({ drive }: { drive: string }) {
     setImported(false);
 
     try {
+      const source = await fetchIntegrationSource('pets');
       const pluginTerms = await pluginClassesFor(store, drive);
       const resource = await ensureInstallationResource(store, drive, {
         parent: drive,
