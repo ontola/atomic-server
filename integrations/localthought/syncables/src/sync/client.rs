@@ -81,6 +81,19 @@ pub struct SyncReport {
     pub errors: Vec<String>,
 }
 
+impl SyncReport {
+    /// Records a non-fatal problem, collapsing repeats of the same message.
+    ///
+    /// A capacity limit or a systemic storage failure surfaces identically
+    /// for every remaining record in a collection; without this, one large
+    /// import turns into thousands of copies of the same line.
+    fn push_error(&mut self, message: String) {
+        if !self.errors.contains(&message) {
+            self.errors.push(message);
+        }
+    }
+}
+
 /// Errors the engine itself raises.
 #[derive(Debug)]
 pub enum SyncError {
@@ -292,14 +305,14 @@ impl SyncClient {
                                     value: record.value.clone(),
                                 };
                                 if let Err(error) = storage.put(&stored).await {
-                                    report.errors.push(format!("{}: {error}", collection.name));
+                                    report.push_error(format!("{}: {error}", collection.name));
                                 }
                             }
                             collection_records.extend(records);
                         }
-                        Err(message) => report
-                            .errors
-                            .push(format!("{}: {message}", collection.name)),
+                        Err(message) => {
+                            report.push_error(format!("{}: {message}", collection.name))
+                        }
                     }
                 }
 
@@ -316,7 +329,7 @@ impl SyncClient {
                 // the same model, but never spin: report and stop rather
                 // than loop forever if it somehow is.
                 for collection in still_pending {
-                    report.errors.push(format!(
+                    report.push_error(format!(
                         "{}: could not resolve its context parameters",
                         collection.name
                     ));
@@ -359,7 +372,7 @@ impl SyncClient {
                         let bound_path = match bind_url(&read.url, &invocation.path) {
                             Ok(path) => path,
                             Err(error) => {
-                                report.errors.push(format!("{}: {error}", read.name));
+                                report.push_error(format!("{}: {error}", read.name));
                                 continue;
                             }
                         };
@@ -380,12 +393,12 @@ impl SyncClient {
                             value,
                         };
                         if let Err(error) = storage.put(&stored).await {
-                            report.errors.push(format!("{}: {error}", read.name));
+                            report.push_error(format!("{}: {error}", read.name));
                         } else {
                             *report.read.entry(read.resource.clone()).or_insert(0) += 1;
                         }
                     }
-                    Err(message) => report.errors.push(format!("{}: {message}", read.name)),
+                    Err(message) => report.push_error(format!("{}: {message}", read.name)),
                 }
             }
         }
