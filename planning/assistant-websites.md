@@ -1,3 +1,5 @@
+> Follow-up: [Website publishing](./website-publishing.md) adds opt-in self-hosted publication. The prototype results below describe the earlier export-only slice. Managed SaaS activation remains pending.
+
 # Assistant-authored websites: first implementation and abstraction review
 
 Status: first local prototype validated on `codex/assistant-website-publication`, based

@@ -7,9 +7,9 @@
  * inputs expand them again.
  *
  * Refs are DERIVED (a prefix of the DID), not allocated — no counter state to
- * persist. Expansion still needs this session registry (filled by every
+ * persist. Expansion still needs this tab registry (filled by every
  * shorten call, re-seeded each turn by the drive tree in the system prompt);
- * a ref from an older session that is no longer registered fails loudly and
+ * the registry survives refresh in sessionStorage; an unknown ref fails loudly and
  * the model recovers by searching. Refs never reach storage: they are
  * expanded at the tool boundary and in link rendering only.
  */
@@ -21,6 +21,32 @@ const REF_PATTERN = /^#([A-Za-z0-9_-]{8,})$/;
 
 /** ref body → full subject */
 const registry = new Map<string, string>();
+const STORAGE_KEY = 'atomic.ai.subject-refs.v1';
+
+// Retain emitted refs when a chunk reloads or the conversation is reopened in
+// this tab. They identify resources only; normal Store permissions still apply.
+try {
+  const saved: unknown = JSON.parse(
+    sessionStorage.getItem(STORAGE_KEY) ?? '[]',
+  );
+
+  if (Array.isArray(saved)) {
+    for (const entry of saved) {
+      if (
+        Array.isArray(entry) &&
+        entry.length === 2 &&
+        typeof entry[0] === 'string' &&
+        typeof entry[1] === 'string' &&
+        REF_PATTERN.test(`#${entry[0]}`) &&
+        SHORTENABLE.test(entry[1]) &&
+        entry[1].slice(DID_PREFIX.length).startsWith(entry[0])
+      )
+        registry.set(entry[0], entry[1]);
+    }
+  }
+} catch {
+  /* Storage may be disabled. In-memory refs still work. */
+}
 
 /**
  * Returns the short ref for a subject, registering it for later expansion.
@@ -41,7 +67,15 @@ export const shortenSubject = (subject: string): string => {
     key = body.slice(0, length);
   }
 
-  registry.set(key, subject);
+  if (registry.get(key) !== subject) {
+    registry.set(key, subject);
+
+    try {
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify([...registry]));
+    } catch {
+      /* Storage may be disabled or full. */
+    }
+  }
 
   return `#${key}`;
 };

@@ -1,11 +1,15 @@
 use std::path::PathBuf;
 
 use actix_web::{http::header, web, HttpResponse};
-use atomic_lib::{db::plugin_meta::PluginMetaKey, hierarchy::check_read, urls, Storelike, Subject, Value};
+use atomic_lib::{
+    db::plugin_meta::PluginMetaKey, hierarchy::check_read, urls, Storelike, Subject, Value,
+};
 use base64::{engine::general_purpose, Engine as _};
 
 use crate::{
-    appstate::AppState, context::RequestContext, errors::{AtomicServerError, AtomicServerResult},
+    appstate::AppState,
+    context::RequestContext,
+    errors::{AtomicServerError, AtomicServerResult},
     helpers::get_client_agent,
 };
 
@@ -603,7 +607,7 @@ mod tests {
     /// host, and these are the three ways out.
     #[test]
     fn every_route_out_of_a_broken_app_reaches_the_host() {
-        let html = render_plugin_ui_html_with("format=html", false, "n0nce", true);
+        let html = render_drive_plugin_ui_html_with("format=html", false, "n0nce", true);
 
         // Threw while opening.
         assert!(html.contains("window.__atomicReportError(e, 'load')"));
@@ -621,7 +625,7 @@ mod tests {
     /// is still loading — or one that rendered nothing at all.
     #[test]
     fn an_app_that_worked_says_so_and_says_how_much_it_drew() {
-        let html = render_plugin_ui_html_with("format=html", false, "n0nce", true);
+        let html = render_drive_plugin_ui_html_with("format=html", false, "n0nce", true);
 
         assert!(html.contains("'__atomic_plugin_rendered'"));
         assert!(html.contains("root.childElementCount"));
@@ -633,7 +637,7 @@ mod tests {
     /// every load-time error.
     #[test]
     fn the_reporter_is_defined_by_the_time_a_load_error_looks_for_it() {
-        let html = render_plugin_ui_html_with("format=html", false, "n0nce", true);
+        let html = render_drive_plugin_ui_html_with("format=html", false, "n0nce", true);
 
         let reporter = html
             .find("window.__atomicReportError = function")

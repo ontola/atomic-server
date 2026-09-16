@@ -138,6 +138,7 @@ msgstr "<0/> Créer un nouvel agent"
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx src/components/AvatarCropper.tsx
 #: src/chunks/Website/WebsitePage.tsx
+#: src/chunks/Website/WebsitePage.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/ConfirmationDialog.tsx
 #: src/components/ParentPicker/ParentPickerDialog.tsx
@@ -856,6 +857,7 @@ msgstr "En savoir plus et participer"
 msgid "v{0}"
 msgstr "v{0}"
 
+#: src/chunks/Website/WebsiteHosting.tsx
 #: src/routes/AboutRoute.tsx
 #: src/routes/AboutRoute.tsx src/routes/History/HistoryMobileView.tsx
 #: src/routes/History/HistoryMobileView.tsx
@@ -3383,6 +3385,7 @@ msgstr "Cliquez pour voir le document..."
 msgid "Type '/' for options or '@' for resources"
 msgstr "Tapez « / » pour les options ou « @ » pour les ressources"
 
+#: src/chunks/RTE/AsyncMarkdownEditor.tsx
 #: src/chunks/RTE/AsyncMarkdownEditor.tsx
 msgid "Start typing..."
 msgstr "Commencez à taper..."
@@ -10474,29 +10477,24 @@ msgstr ""
 msgid "New website"
 msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Release ready"
-msgstr ""
+#~ msgid "Release ready"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Unreleased changes"
-msgstr ""
+#~ msgid "Unreleased changes"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Draft"
-msgstr ""
+#~ msgid "Draft"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Design with Assistant"
-msgstr ""
+#~ msgid "Design with Assistant"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Prepare release"
 msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Content stays in Atomic. Export a frozen website for static hosting. Online publishing is not connected yet."
-msgstr ""
+#~ msgid "Content stays in Atomic. Export a frozen website for static hosting. Online publishing is not connected yet."
+#~ msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Create release"
@@ -10522,9 +10520,8 @@ msgstr ""
 msgid "Review website release"
 msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Pages and content"
-msgstr ""
+#~ msgid "Pages and content"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Page"
@@ -10534,13 +10531,11 @@ msgstr ""
 msgid "Add a document"
 msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Accent color"
-msgstr ""
+#~ msgid "Accent color"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Typography"
-msgstr ""
+#~ msgid "Typography"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Show draft"
@@ -10550,9 +10545,8 @@ msgstr ""
 msgid "Show release"
 msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "No release yet."
-msgstr ""
+#~ msgid "No release yet."
+#~ msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Release review"
@@ -10562,9 +10556,8 @@ msgstr ""
 msgid "Frozen release"
 msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Live draft preview"
-msgstr ""
+#~ msgid "Live draft preview"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsiteInlinePreview.tsx
 #: src/chunks/Website/WebsitePage.tsx
@@ -10584,13 +10577,11 @@ msgstr ""
 msgid "Done editing"
 msgstr ""
 
-#: src/chunks/Website/WebsitePage.tsx
-msgid "Edit on page"
-msgstr ""
+#~ msgid "Edit on page"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsiteInlinePreview.tsx
-msgid "Click an outlined text field to edit its Atomic record. Leave the field to save. Document formatting stays in the document editor."
-msgstr ""
+#~ msgid "Click an outlined text field to edit its Atomic record. Leave the field to save. Document formatting stays in the document editor."
+#~ msgstr ""
 
 #: src/chunks/Website/WebsiteInlinePreview.tsx
 msgid "Saving content…"
@@ -10600,10 +10591,8 @@ msgstr ""
 msgid "Content saved. The existing release is unchanged."
 msgstr ""
 
-#. 0: targets.length
-#: src/chunks/Website/WebsiteInlinePreview.tsx
-msgid "{0} editable text fields"
-msgstr ""
+#~ msgid "{0} editable text fields"
+#~ msgstr ""
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "The response was interrupted."
@@ -10611,3 +10600,315 @@ msgstr ""
 
 #~ msgid "The model request failed."
 #~ msgstr ""
+
+#~ msgid "Content stays in Atomic. Create a frozen release to download or publish."
+#~ msgstr ""
+
+#~ msgid "Refresh hosting status"
+#~ msgstr ""
+
+#~ msgid "Upload saved release"
+#~ msgstr ""
+
+#~ msgid "Publish on your Atomic Server"
+#~ msgstr ""
+
+#~ msgid "Upload a saved release, review it, then publish. Editing content leaves the live website unchanged."
+#~ msgstr ""
+
+#~ msgid "Website is live"
+#~ msgstr ""
+
+#~ msgid "Website is not published"
+#~ msgstr ""
+
+#~ msgid "Open website"
+#~ msgstr ""
+
+#~ msgid "Review an uploaded release"
+#~ msgstr ""
+
+#~ msgid "Review an uploaded release <0><0>Select a release</0> {0}</0>"
+#~ msgstr ""
+
+#~ msgid "Preview uploaded page"
+#~ msgstr ""
+
+#~ msgid "Uploaded website preview"
+#~ msgstr ""
+
+#~ msgid "Review before publishing"
+#~ msgstr ""
+
+#~ msgid "These uploaded pages will become publicly accessible. This preview disables scripts."
+#~ msgstr ""
+
+#~ msgid "Publish reviewed release"
+#~ msgstr ""
+
+#~ msgid "Release {0}"
+#~ msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Unpublished"
+msgstr ""
+
+#~ msgid "Publication history"
+#~ msgstr ""
+
+#~ msgid "Website hosting"
+#~ msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Unpublish website"
+msgstr ""
+
+#~ msgid "Release"
+#~ msgstr ""
+
+#~ msgid "Select a release"
+#~ msgstr ""
+
+#~ msgid "Changes stay private until you publish."
+#~ msgstr ""
+
+#~ msgid "Close publishing"
+#~ msgstr ""
+
+#~ msgid "Publish…"
+#~ msgstr ""
+
+#~ msgid "Export & versions"
+#~ msgstr ""
+
+#: src/chunks/Website/WebsiteExportPage.tsx
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Download website"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Publishing…"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Update site"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Publish site"
+msgstr ""
+
+#~ msgid "Publishing options"
+#~ msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Previous version"
+msgstr ""
+
+#. 0: status.state!.deployments.indexOf(entry.deployment) + 1
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Version {0}"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "View site"
+msgstr ""
+
+#~ msgid "Publishing"
+#~ msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Hosted on your Atomic Server. Updates publish the current draft."
+msgstr ""
+
+#~ msgid "Refresh status"
+#~ msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Choose a version"
+msgstr ""
+
+#~ msgid "Restore version"
+#~ msgstr ""
+
+#~ msgid "Your site is up to date."
+#~ msgstr ""
+
+#~ msgid "Website published."
+#~ msgstr ""
+
+#~ msgid "Export"
+#~ msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Design with AI"
+msgstr ""
+
+#~ msgid "Edit document"
+#~ msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Add content"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Add to page"
+msgstr ""
+
+#~ msgid "Design"
+#~ msgstr ""
+
+#~ msgid "Editorial"
+#~ msgstr ""
+
+#~ msgid "Modern"
+#~ msgstr ""
+
+#~ msgid "<0/> Add content"
+#~ msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Drop files to attach"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Choose a model that supports attachments first."
+msgstr ""
+
+#~ msgid "Files"
+#~ msgstr ""
+
+#. 0: error instanceof Error ? error.message \\: String(error)
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Website preview failed: {0}"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Publishing is unavailable until the draft preview can be built. Check access to the selected content, then retry."
+msgstr ""
+
+#: src/chunks/Website/WebsiteExportPage.tsx
+#: src/chunks/Website/WebsiteInlinePreview.tsx
+#: src/chunks/Website/WebsitePage.tsx
+#: src/chunks/Website/WebsitePreview.tsx
+msgid "Retry preview"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Preview unavailable. Resolve the error above and retry."
+msgstr ""
+
+#. 0: error instanceof Error ? error.message \\: String(error)
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Could not load website hosting status: {0}"
+msgstr ""
+
+#. 0: String(error)
+#: src/chunks/Website/useWebsitePreviewHtml.ts
+msgid "Website preview assets failed: {0}"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Up to date"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Cannot check changes"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Checking changes…"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "All changes are published"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Unpublished changes"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Not published yet"
+msgstr ""
+
+#. 0: new Date(artifact.createdAt).toLocaleString()
+#: src/chunks/Website/WebsiteExportPage.tsx
+msgid "Saved version · {0}"
+msgstr ""
+
+#: src/chunks/Website/WebsiteExportPage.tsx
+msgid "Preview page"
+msgstr ""
+
+#: src/chunks/Website/WebsiteExportPage.tsx
+msgid "Back to website"
+msgstr ""
+
+#: src/chunks/Website/WebsiteExportPage.tsx
+msgid "Export actions"
+msgstr ""
+
+#: src/chunks/Website/WebsiteExportPage.tsx
+msgid "Loading saved preview…"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Website content"
+msgstr ""
+
+#~ msgid "Show fewer versions"
+#~ msgstr ""
+
+#~ msgid "Show all versions ({0})"
+#~ msgstr ""
+
+#~ msgid "Preview version"
+#~ msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Could not load saved website version: "
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Updating preview…"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Website versions"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Preview, restore and inspect publication history"
+msgstr ""
+
+#: src/chunks/Website/WebsiteInlinePreview.tsx
+msgid "Click an outlined field to edit its Atomic record. Leave the field to save. Documents save automatically as you type."
+msgstr ""
+
+#. 0: targets.length; 1: documents.length
+#: src/chunks/Website/WebsiteInlinePreview.tsx
+msgid "{0} editable fields and {1} documents"
+msgstr ""
+
+#: src/chunks/RTE/BubbleMenu.tsx
+msgid "Set link"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "Page edit"
+msgstr ""
+
+#~ msgid "<0/> AI edit"
+#~ msgstr ""
+
+#: src/components/SideBar/AIPanel.tsx
+msgid "Drag to resize"
+msgstr ""
+
+#: src/chunks/Website/WebsitePage.tsx
+msgid "AI edit"
+msgstr ""

@@ -13,6 +13,7 @@ test('downloaded website navigates and filters with no Atomic connection', async
   const requests: string[] = [];
   await page.route('**/*', route => {
     requests.push(route.request().url());
+
     return new URL(route.request().url()).origin === origin
       ? route.continue()
       : route.abort();

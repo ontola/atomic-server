@@ -18,10 +18,8 @@ test('website document preview, frozen release and reload', async ({
   await page.getByRole('button', { name: 'More', exact: true }).click();
   await page.getByPlaceholder(/filter actions/i).fill('website');
   await page.getByTestId('menu-item-new-website').click();
-  const prepare = page.getByRole('button', {
-    name: 'Prepare release',
-    exact: true,
-  });
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  const prepare = page.getByTestId('menu-item-website-prepare');
   await expect(prepare).toBeEnabled({ timeout: 30000 });
   const websiteURL = page.url();
   const preview = page.frameLocator('iframe[title="Website preview"]');
@@ -35,25 +33,26 @@ test('website document preview, frozen release and reload', async ({
   await expect(page.getByText('Frozen release', { exact: true })).toBeVisible();
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Download website', exact: true }).click(),
+    websiteAction(page, 'website-download'),
   ]);
   expect(download.suggestedFilename()).toBe('website.zip');
   await download.saveAs(test.info().outputPath('website.zip'));
-  await page.getByRole('link', { name: 'Edit document', exact: true }).click();
+  await page
+    .getByRole('region', { name: 'Website content' })
+    .getByRole('link', { name: 'Document', exact: true })
+    .click();
   await page
     .locator('#document-editor')
     .fill('A private change after the release.');
   await page.getByRole('button', { name: 'More', exact: true }).click();
   await page.keyboard.press('Escape');
   await page.goto(websiteURL);
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   await expect(prepare).toBeEnabled({ timeout: 30000 });
   await expect(
     preview.getByText('A private change after the release.'),
   ).toBeVisible();
-  await expect(
-    page.getByText('Unreleased changes', { exact: true }),
-  ).toBeVisible();
-  await page.getByRole('button', { name: 'Show release', exact: true }).click();
+  await websiteAction(page, 'website-show-release');
   await expect(
     preview.getByText('This is the first published garden note.'),
   ).toBeVisible();
@@ -61,6 +60,7 @@ test('website document preview, frozen release and reload', async ({
     preview.getByText('A private change after the release.'),
   ).toHaveCount(0);
   await page.reload();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   await expect(prepare).toBeEnabled({ timeout: 30000 });
   await expect(
     preview.getByText('A private change after the release.'),
@@ -69,6 +69,39 @@ test('website document preview, frozen release and reload', async ({
     path: test.info().outputPath('website-workspace.png'),
     fullPage: true,
   });
+  const versionURL = await page.evaluate(async () => {
+    const { hostingRequest } =
+      await import('/src/chunks/Website/hostingClient.ts');
+    const subject = new URL(location.href).searchParams.get('subject')!;
+    const status = await hostingRequest(window.store, subject);
+
+    return `/app/show?subject=${encodeURIComponent(subject)}&view=website-version:${status.state.deployments.at(-1)}`;
+  });
+  await page.goto(`${new URL(websiteURL).origin}${versionURL}`);
+  await expect(
+    page.getByRole('link', { name: 'Back to website', exact: true }),
+  ).toBeVisible();
+  await expect(
+    preview.getByText('This is the first published garden note.'),
+  ).toBeVisible();
+  await expect(
+    preview.getByText('A private change after the release.'),
+  ).toHaveCount(0);
+  await expect(page.locator('iframe[title="Website preview"]')).toHaveAttribute(
+    'sandbox',
+    'allow-same-origin',
+  );
+  await expect(
+    page.getByRole('button', { name: 'Update site', exact: true }),
+  ).toHaveCount(0);
+  await page.screenshot({
+    path: '/private/tmp/website-export-preview.png',
+    fullPage: true,
+  });
+  await page.reload();
+  await expect(
+    preview.getByText('This is the first published garden note.'),
+  ).toBeVisible();
 });
 
 // The model is scripted, but these are the real Assistant tools and Atomic writes.
@@ -131,13 +164,16 @@ test('Assistant creates and redesigns a website using existing table content', a
       },
     ],
   });
+
   const websiteFrom = (results: string[]) => {
     for (const result of results) {
       const match = /"website"\s*:\s*"([^"]+)"/.exec(result);
       if (match) return match[1];
     }
+
     throw new Error('Assistant did not return a website.');
   };
+
   const state = await setupScriptedToolCallMocks(
     page,
     [
@@ -206,6 +242,7 @@ test('Assistant creates and redesigns a website using existing table content', a
       propVals: { [name]: 'Grow rosemary on a sunny balcony' },
     });
     await other.save();
+
     return { table: table.subject, row: row.subject, other: other.subject };
   });
   tableSubject = fixture.table;
@@ -232,15 +269,24 @@ test('Assistant creates and redesigns a website using existing table content', a
       )
         found = resource.subject;
     });
+
     return found;
   });
   expect(subject).toBeTruthy();
   await page.goto(
     `${new URL(page.url()).origin}/app/show?subject=${encodeURIComponent(subject)}`,
   );
+  // The authoring assistant is still open after navigation; close it before
+  // exercising the menu so its delayed input autofocus cannot take menu focus.
+  await page.getByRole('button', { name: 'AI', exact: true }).click();
   await expect(
-    page.getByRole('button', { name: 'Prepare release' }),
+    page.getByRole('button', { name: 'Publish site', exact: true }),
   ).toBeEnabled({ timeout: 30000 });
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await expect(page.getByTestId('menu-item-website-prepare')).toBeEnabled({
+    timeout: 30000,
+  });
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   const preview = page.frameLocator('iframe[title="Website preview"]');
   await expect(
     preview.getByRole('heading', { name: 'The garden notebook', exact: true }),
@@ -274,38 +320,33 @@ test('Assistant creates and redesigns a website using existing table content', a
   ).toBeVisible();
   await preview.getByRole('link', { name: 'Home', exact: true }).click();
   await expect(search.getByRole('searchbox')).toBeVisible();
-  await page
-    .getByRole('button', { name: 'Prepare release', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByTestId('menu-item-website-prepare').click();
   await page
     .getByRole('button', { name: 'Create release', exact: true })
     .click();
   const [siteDownload] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Download website', exact: true }).click(),
+    websiteAction(page, 'website-download'),
   ]);
   await siteDownload.saveAs(test.info().outputPath('garden-site.zip'));
-  await page.getByRole('button', { name: 'Show draft', exact: true }).click();
-  await page.getByRole('button', { name: 'Edit on page', exact: true }).click();
+  await websiteAction(page, 'website-show-release');
+  await page.getByRole('button', { name: 'Page edit', exact: true }).click();
   await expect(preview.locator('[contenteditable="true"]')).toHaveCount(2);
   const field = preview.locator('[contenteditable="true"]').first();
   await field.fill('Plant winter lettuce in October');
-  await page
-    .getByText('Click an outlined text field', { exact: false })
-    .click();
+  await page.getByText('Click an outlined field', { exact: false }).click();
   await expect(
     page.getByText('Content saved. The existing release is unchanged.'),
   ).toBeVisible();
   // Clearing a text field is an explicit write, not a silently ignored blur.
   await field.fill('');
-  await page
-    .getByText('Click an outlined text field', { exact: false })
-    .click();
+  await page.getByText('Click an outlined field', { exact: false }).click();
   await expect
     .poll(async () =>
       page.evaluate(
-        async subject =>
-          (await window.store.getResource(subject)).get(
+        async row =>
+          (await window.store.getResource(row)).get(
             'https://atomicdata.dev/properties/name',
           ),
         rowSubject,
@@ -313,15 +354,13 @@ test('Assistant creates and redesigns a website using existing table content', a
     )
     .toBe('');
   await field.fill('Plant winter lettuce in October');
-  await page
-    .getByText('Click an outlined text field', { exact: false })
-    .click();
+  await page.getByText('Click an outlined field', { exact: false }).click();
   await expect(
     page.getByText('Content saved. The existing release is unchanged.'),
   ).toBeVisible();
   const stored = await page.evaluate(
-    async subject =>
-      (await window.store.getResource(subject)).get(
+    async row =>
+      (await window.store.getResource(row)).get(
         'https://atomicdata.dev/properties/name',
       ),
     rowSubject,
@@ -331,10 +370,11 @@ test('Assistant creates and redesigns a website using existing table content', a
   await expect(
     search.getByText('Plant winter lettuce in October'),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Show release', exact: true }).click();
+  await websiteAction(page, 'website-show-release');
   await expect(preview.getByText('Sow spinach in September')).toBeVisible();
   await expect(preview.locator('[contenteditable]')).toHaveCount(0);
   await page.reload();
+  await page.getByRole('button', { name: 'More', exact: true }).click();
   await expect(search.getByText('Plant winter lettuce in October')).toBeVisible(
     { timeout: 30000 },
   );
@@ -343,3 +383,13 @@ test('Assistant creates and redesigns a website using existing table content', a
     fullPage: true,
   });
 });
+
+async function websiteAction(
+  page: import('@playwright/test').Page,
+  id: string,
+) {
+  const item = page.getByTestId('menu-item-' + id);
+  if (!(await item.isVisible()))
+    await page.getByRole('button', { name: 'More', exact: true }).click();
+  await item.click();
+}

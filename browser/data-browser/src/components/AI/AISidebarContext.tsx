@@ -20,6 +20,9 @@ export const AISidebarContext = createContext<{
   setContextItems: React.Dispatch<React.SetStateAction<AIMessageContext[]>>;
   /** Opens the panel on a new chat and asks. */
   askAI: (ask: AIAsk) => void;
+  openChat: (subject?: string) => void;
+  pendingChat: { subject?: string } | undefined;
+  clearPendingChat: () => void;
   pendingAsk: AIAsk | undefined;
   clearPendingAsk: () => void;
 }>({
@@ -28,6 +31,9 @@ export const AISidebarContext = createContext<{
   contextItems: [],
   setContextItems: () => {},
   askAI: () => {},
+  openChat: () => {},
+  pendingChat: undefined,
+  clearPendingChat: () => {},
   pendingAsk: undefined,
   clearPendingAsk: () => {},
 });
@@ -56,9 +62,20 @@ export const AISidebarContextProvider: React.FC<React.PropsWithChildren> = ({
   // Held here rather than delivered directly, because the sidebar may not be
   // mounted yet when the ask is made — the caller opens it in the same breath.
   const [pendingAsk, setPendingAsk] = useState<AIAsk>();
+  const [pendingChat, setPendingChat] = useState<{ subject?: string }>();
+  const openChat = useCallback(
+    (subject?: string) => {
+      setPendingAsk(undefined);
+      setPendingChat({ subject });
+      setPanelOpen('ai', true);
+    },
+    [setPanelOpen],
+  );
+  const clearPendingChat = useCallback(() => setPendingChat(undefined), []);
 
   const askAI = useCallback(
     (ask: AIAsk) => {
+      setPendingChat(undefined);
       setPendingAsk(ask);
       setPanelOpen('ai', true);
     },
@@ -75,6 +92,9 @@ export const AISidebarContextProvider: React.FC<React.PropsWithChildren> = ({
         contextItems,
         setContextItems,
         askAI,
+        openChat,
+        pendingChat,
+        clearPendingChat,
         pendingAsk,
         clearPendingAsk,
       }}

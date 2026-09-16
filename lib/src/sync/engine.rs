@@ -193,6 +193,64 @@ pub async fn handle_frame(
     handle_frame_full(frame, store, agent).await.frames
 }
 
+/// The answer to one fetched subject: an `UPDATE` carrying the full snapshot,
+/// or an `ERROR` when it is missing, unreadable or has no state. Shared by
+/// `GET` (one subject) and `GET_MANY` (one entry per subject).
+async fn answer_get(
+    store: &Db,
+    agent: &crate::agents::ForAgent,
+    request_id: u16,
+    raw_subject: &str,
+) -> Vec<u8> {
+    let subject = crate::Subject::from_raw(raw_subject, store.get_base_domain().as_deref());
+
+    match store.get_resource_extended(&subject, false, agent).await {
+        Ok(r) => {
+            let resource = r.to_single();
+            let snapshot = resource.materialized_state().unwrap_or_else(|| {
+                resource
+                    .build_state_doc()
+                    .map(|doc| doc.export_snapshot())
+                    .unwrap_or_default()
+            });
+
+            if snapshot.is_empty() {
+                protocol::encode_error(request_id, protocol::error_code::UNKNOWN, "No state")
+            } else {
+                // Resolve `internal:/…` to this node's origin —
+                // `internal:` is a node-local concept and must not
+                // cross the wire; the recipient keys its resource
+                // cache on whatever subject we emit. A no-op for
+                // normal (External/DID) subjects, so it's safe on
+                // every transport, not just the server's origin.
+                let origin = store
+                    .get_base_domain()
+                    .unwrap_or_else(|| "http://localhost".to_string());
+                let subject_resolved = resource.get_subject().resolve(&origin);
+                // Include `lastCommit` so the recipient can stamp
+                // `_lastCommit` and not mis-detect genesis on save.
+                let last_commit = resource
+                    .get(crate::urls::LAST_COMMIT)
+                    .ok()
+                    .map(|v| v.to_string())
+                    .filter(|s| !s.is_empty());
+                let mut flags = protocol::flags::SNAPSHOT;
+                if last_commit.is_some() {
+                    flags |= protocol::flags::HAS_COMMIT_ID;
+                }
+                protocol::encode_update(
+                    flags,
+                    request_id,
+                    &subject_resolved,
+                    last_commit.as_deref(),
+                    &snapshot,
+                )
+            }
+        }
+        Err(e) => protocol::encode_error(request_id, protocol::error_code::UNKNOWN, &e.to_string()),
+    }
+}
+
 /// Like [`handle_frame`], plus the `SUB`/`UNSUB` session commands a hub
 /// applies to its commit monitor.
 pub async fn handle_frame_full(
@@ -227,69 +285,39 @@ pub async fn handle_frame_full(
 
         protocol::tag::GET => {
             if let Some(decoded) = protocol::decode_get(payload) {
-                let subject =
-                    crate::Subject::from_raw(decoded.subject, store.get_base_domain().as_deref());
-
-                match store.get_resource_extended(&subject, false, agent).await {
-                    Ok(r) => {
-                        let resource = r.to_single();
-                        let snapshot = resource.materialized_state().unwrap_or_else(|| {
-                            resource
-                                .build_state_doc()
-                                .map(|doc| doc.export_snapshot())
-                                .unwrap_or_default()
-                        });
-
-                        if snapshot.is_empty() {
-                            vec![protocol::encode_error(
-                                decoded.request_id,
-                                protocol::error_code::UNKNOWN,
-                                "No state",
-                            )]
-                        } else {
-                            // Resolve `internal:/…` to this node's origin —
-                            // `internal:` is a node-local concept and must not
-                            // cross the wire; the recipient keys its resource
-                            // cache on whatever subject we emit. A no-op for
-                            // normal (External/DID) subjects, so it's safe on
-                            // every transport, not just the server's origin.
-                            let origin = store
-                                .get_base_domain()
-                                .unwrap_or_else(|| "http://localhost".to_string());
-                            let subject_resolved = resource.get_subject().resolve(&origin);
-                            // Include `lastCommit` so the recipient can stamp
-                            // `_lastCommit` and not mis-detect genesis on save.
-                            let last_commit = resource
-                                .get(crate::urls::LAST_COMMIT)
-                                .ok()
-                                .map(|v| v.to_string())
-                                .filter(|s| !s.is_empty());
-                            let mut flags = protocol::flags::SNAPSHOT;
-                            if last_commit.is_some() {
-                                flags |= protocol::flags::HAS_COMMIT_ID;
-                            }
-                            vec![protocol::encode_update(
-                                flags,
-                                decoded.request_id,
-                                &subject_resolved,
-                                last_commit.as_deref(),
-                                &snapshot,
-                            )]
-                        }
-                    }
-                    Err(e) => {
-                        vec![protocol::encode_error(
-                            decoded.request_id,
-                            protocol::error_code::UNKNOWN,
-                            &e.to_string(),
-                        )]
-                    }
-                }
+                vec![answer_get(store, agent, decoded.request_id, decoded.subject).await]
             } else {
                 vec![protocol::encode_error(
                     0,
                     protocol::error_code::UNKNOWN,
                     "Invalid GET frame",
+                )]
+            }
+        }
+
+        protocol::tag::GET_MANY => {
+            if let Some(decoded) = protocol::decode_get_many(payload) {
+                // One answer per subject, in request order (join_all keeps it), so
+                // the client can pair an `ERROR` (which names no subject) with what
+                // it asked. Evaluated concurrently: the batch is only worth its
+                // frame if it is not slower than the single GETs it replaces.
+                let agent: &crate::agents::ForAgent = agent;
+                let answers = futures::future::join_all(
+                    decoded
+                        .subjects
+                        .iter()
+                        .map(|subject| answer_get(store, agent, decoded.request_id, subject)),
+                )
+                .await;
+                vec![protocol::encode_get_many_result(
+                    decoded.request_id,
+                    &answers,
+                )]
+            } else {
+                vec![protocol::encode_error(
+                    0,
+                    protocol::error_code::UNKNOWN,
+                    "Invalid GET_MANY frame",
                 )]
             }
         }
@@ -1381,6 +1409,26 @@ pub(crate) fn admit_unknown_drive(
     }
 }
 
+/// The drive a synced resource belongs to, for the membership check in
+/// [`import_sync_push`]: its own drive stamp when it has one, else its parent's
+/// stored drive (or the parent itself, when the parent is the drive), else the
+/// resource itself, which is the drive-root case.
+async fn resolve_drive(store: &Db, resource: &crate::Resource) -> String {
+    if let Ok(drive) = resource.get(crate::urls::DRIVE_PROP) {
+        return drive.to_string();
+    }
+    if let Ok(parent_val) = resource.get(crate::urls::PARENT) {
+        let parent_subject = crate::Subject::from(parent_val.to_string());
+        if let Ok(parent_res) = store.get_resource(&parent_subject).await {
+            return parent_res
+                .get(crate::urls::DRIVE_PROP)
+                .map(|v| v.to_string())
+                .unwrap_or_else(|_| parent_subject.to_string());
+        }
+    }
+    resource.get_subject().to_string()
+}
+
 /// Import resources from a SYNC_PUSH message into the local store.
 ///
 /// `for_agent` is the identity the sending peer proved. `trust_owned` is true
@@ -1496,10 +1544,11 @@ pub async fn import_sync_push(
             .await
             .ok();
         if let Some(existing) = &existing_resource {
-            let stored_drive = existing
-                .get(crate::urls::DRIVE_PROP)
-                .map(|v| v.to_string())
-                .unwrap_or_else(|_| existing.get_subject().to_string());
+            // Same resolution as for a new subject below: a stored resource
+            // without a drive stamp is a member of its parent's drive, not of
+            // itself. Falling back to its own subject made every replay for
+            // such a resource look foreign and get dropped.
+            let stored_drive = resolve_drive(store, existing).await;
             if normalize(&stored_drive) != admitted_drive {
                 tracing::warn!(
                     "import_sync_push: {} belongs to drive {}, not to {} this push was admitted for; skipped",
@@ -1567,19 +1616,7 @@ pub async fn import_sync_push(
         // be the drive root itself. (A peer gains nothing by stamping a NEW
         // resource into a drive it already has write on.)
         if existing_resource.is_none() {
-            let mut claimed = resource
-                .get(crate::urls::DRIVE_PROP)
-                .map(|v| v.to_string())
-                .unwrap_or_else(|_| resource.get_subject().to_string());
-            if let Ok(parent_val) = resource.get(crate::urls::PARENT) {
-                let parent_subject = crate::Subject::from(parent_val.to_string());
-                if let Ok(parent_res) = store.get_resource(&parent_subject).await {
-                    claimed = parent_res
-                        .get(crate::urls::DRIVE_PROP)
-                        .map(|v| v.to_string())
-                        .unwrap_or_else(|_| parent_subject.to_string());
-                }
-            }
+            let claimed = resolve_drive(store, &resource).await;
             if normalize(&claimed) != admitted_drive {
                 tracing::warn!(
                     "import_sync_push: new resource {} resolves to drive {}, not to {} this push was admitted for; skipped",
@@ -1903,6 +1940,42 @@ mod bootstrap_and_sub_tests {
             db.sync_policy().admit_drive_write(drive),
             "the owner's new drive must be enrolled so later writes land"
         );
+    }
+
+    #[tokio::test]
+    async fn get_many_answers_every_subject_in_order() {
+        let db = Db::init_temp("get_many").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let alice_subject = alice.subject.to_string();
+        let frame = protocol::encode_get_many(21, &[&drive, "did:ad:missing", &alice_subject]);
+        let mut agent = ForAgent::from(alice.clone());
+        let out = handle_frame_full(&frame, &db, &mut agent).await;
+        assert_eq!(out.frames.len(), 1, "one result frame for the whole batch");
+        assert_eq!(out.frames[0][0], tag::GET_MANY_RESULT);
+        let result = protocol::decode_get_many_result(&out.frames[0][1..]).unwrap();
+        assert_eq!(result.request_id, 21);
+        assert_eq!(result.frames.len(), 3);
+
+        let first = protocol::decode_update(&result.frames[0][1..]).unwrap();
+        assert_eq!(result.frames[0][0], tag::UPDATE);
+        assert_eq!(first.subject, drive);
+        assert_eq!(first.request_id, 21);
+        assert!(!first.loro_bytes.is_empty());
+
+        assert_eq!(
+            result.frames[1][0],
+            tag::ERROR,
+            "a missing subject is an ERROR entry"
+        );
+        let missing = protocol::decode_error(&result.frames[1][1..]).unwrap();
+        assert!(
+            missing.message.contains("did:ad:missing"),
+            "{}",
+            missing.message
+        );
+
+        let third = protocol::decode_update(&result.frames[2][1..]).unwrap();
+        assert_eq!(third.subject, alice_subject);
     }
 
     #[tokio::test]

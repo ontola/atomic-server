@@ -1,3 +1,48 @@
+Website exports open in a dedicated frozen preview. Browser coverage verifies the
+export resource shows original content after source edits and reload, with scripts
+disabled and no publication action.
+
+Website publication state: browser coverage verifies unchanged output after publishing
+and reload, pending document edits, and pending changes after rollback. Unit tests
+compare page bytes and image hashes, including removed files and entry ordering.
+
+Website error recovery: Chromium verifies an unreadable selected image emits the
+Store toast and console error, replaces the loading placeholder, disables publication,
+and recovers after repairing the selection. Explicit retry is available.
+
+AI sidebar navigation: browser coverage checks the default visible chat list,
+its header new-chat action while collapsed, and reopening saved replies without
+changing the main URL. Switching chats checkpoints the current message first.
+Successful reply persistence clears error descriptions using Resource.remove.
+
+Website media: a real browser test uploads a private PNG, renders it in the draft,
+publishes it, and checks decoded image dimensions and a separate HTTP asset as an
+anonymous visitor. A browser test optimizes a 6.55 MB JPEG without changing its
+source. The object-store adapter test checks blob storage, project isolation and
+publication gating; this is not a live S3 bucket test.
+Unit tests cover gallery/File-cell image packaging, unselected relationship
+exclusion, media limits, reference reload persistence and batch row save failures.
+
+Website publishing UX follow-up (2026-09-15): the Chromium publishing E2E now
+uses one-click Publish site / Update site, checks a single primary action and no
+manual status refresh control, and verifies a failed hosting request reaches the
+standard Store error pipeline (visible toast plus console error). Desktop/mobile
+screenshots exercise the preview-first layout. Existing document/export and
+Assistant design scenarios retain coverage behind the collapsed export controls.
+
+Self-hosted website publication (2026-09-15): `atomic_lib` website tests cover
+bounded packages, unsafe paths, content identity, private upload, activation,
+stale revisions, rollback and unpublish. The Actix website HTTP test uses a real
+DB and signed requests to check private preview, anonymous refusal, customer
+hosts excluding API routes, and drive-root publication authority. The opt-in
+`website-publishing.spec.ts` ran on an isolated node with WEBSITE_HOSTING_E2E=1:
+Chromium completed private document -> release -> upload/review -> publish,
+an independent signed-out browser read, draft isolation, republish, rollback
+and unpublish (1 passed, 7.7s). No model API or cloud service is mocked into this
+publication path. `hostingClient.test.ts` checks trusted-origin signing, no key
+in the payload and conflict refusal without retry. SaaS deployment, production
+TLS/DNS, load testing and full-suite/CI validation remain outside these checks.
+
 Website composition and snapshot views: the focused website/FrameBridge set has
 16 passing tests, including invalid layout references and a host that refuses
 non-snapshot operations and foreign frames. `website.spec.ts` exercises a two-page

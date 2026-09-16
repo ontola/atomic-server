@@ -1,3 +1,5 @@
+import { Button } from '@components/Button';
+import { useWebsitePreviewHtml } from './useWebsitePreviewHtml';
 import { useEffect, useRef } from 'react';
 import searchViewUrl from './runtime/search-view.html?url';
 import { hostSnapshot } from './runtime/snapshotHost';
@@ -8,8 +10,10 @@ export function WebsitePreview({
   artifact,
   pagePath,
   onNavigate,
+  frozen = false,
 }: {
   artifact: WebsiteArtifact;
+  frozen?: boolean;
   pagePath: string;
   onNavigate(path: string): void;
 }) {
@@ -20,11 +24,23 @@ export function WebsitePreview({
     artifact.files['index.html']
   ).replace('<script src="website-runtime.js" defer></script>', '');
 
+  const previewHtml = useWebsitePreviewHtml(html, artifact);
+
+  if (previewHtml.error)
+    return (
+      <div role='alert'>
+        <p>{previewHtml.error}</p>
+        <Button subtle onClick={previewHtml.retry}>
+          Retry preview
+        </Button>
+      </div>
+    );
+
   return (
     <iframe
       title='Website preview'
-      sandbox='allow-same-origin allow-scripts'
-      srcDoc={html}
+      sandbox={frozen ? 'allow-same-origin' : 'allow-same-origin allow-scripts'}
+      srcDoc={previewHtml.html}
       onLoad={event => {
         cleanups.current.forEach(close => close());
         cleanups.current = [];
@@ -40,6 +56,8 @@ export function WebsitePreview({
           );
           if (page) onNavigate(page.path);
         });
+
+        if (frozen) return;
 
         for (const frame of doc.querySelectorAll<HTMLIFrameElement>(
           'iframe[data-snapshot]',

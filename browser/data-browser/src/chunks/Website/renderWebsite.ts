@@ -1,4 +1,5 @@
 // @wc-ignore-file
+import type { WebsiteAsset } from './websiteAssets';
 import type { WebsiteConfig } from './websiteModel';
 
 export interface RichNode {
@@ -66,9 +67,9 @@ export function renderDocument(node: RichNode, depth = 0): string {
   if (node.type === 'image') {
     const src = String(node.attrs?.src ?? '');
     // No live private media URLs in a supposedly self-contained release.
-    if (!/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(src))
+    if (!/^\/assets\/[a-f0-9]{64}\.(png|jpeg|webp|gif)$/.test(src))
       throw new Error(
-        'Image export requires an embedded PNG, JPEG, WebP or GIF. Private media packaging is not implemented yet.',
+        'Image export requires a packaged PNG, JPEG, WebP or GIF blob asset.',
       );
 
     return `<img src="${escapeHtml(src)}" alt="${escapeHtml(String(node.attrs?.alt ?? ''))}">`;
@@ -111,6 +112,7 @@ export interface WebsiteArtifact {
   project: string;
   config: WebsiteConfig;
   files: Record<string, string>;
+  assets?: Record<string, WebsiteAsset>;
   digest: string;
   createdAt: string;
 }
@@ -139,7 +141,7 @@ export function renderWebsitePage(
   return `<!doctype html>
 <html lang="${escapeHtml(config.language)}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; frame-src 'self'; style-src 'unsafe-inline'; img-src data:; base-uri 'self'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; frame-src 'self'; style-src 'unsafe-inline'; img-src 'self' blob:; base-uri 'self'; form-action 'none'">
 <base href="${base}"><title>${escapeHtml(page.title)} · ${escapeHtml(config.title)}</title>
 <meta name="description" content="${escapeHtml(config.description)}">
 <style>
@@ -153,13 +155,17 @@ ${config.css}
 }
 export function renderRows(
   table: WebsiteConfig['pages'][number]['tables'][number],
-  rows: string[][],
+  rows: (string | { src: string; alt: string })[][],
   tableIndex = 0,
 ) {
+  const cell = (value: string | { src: string; alt: string }) =>
+    typeof value === 'string'
+      ? escapeHtml(value)
+      : renderDocument({ type: 'image', attrs: value });
   const content =
     table.layout === 'grid'
-      ? `<div class="cards">${rows.map(row => `<dl class="card">${table.columns.map((c, i) => `<dt>${escapeHtml(c.label)}</dt><dd>${escapeHtml(row[i])}</dd>`).join('')}</dl>`).join('')}</div>`
-      : `<div class="table-wrap"><table><thead><tr>${table.columns.map(c => `<th>${escapeHtml(c.label)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      ? `<div class="cards">${rows.map(row => `<dl class="card">${table.columns.map((c, i) => `<dt>${escapeHtml(c.label)}</dt><dd>${cell(row[i])}</dd>`).join('')}</dl>`).join('')}</div>`
+      : `<div class="table-wrap"><table><thead><tr>${table.columns.map(c => `<th>${escapeHtml(c.label)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(value => `<td>${cell(value)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 
   return `<section data-website-table="${tableIndex}"><h2>${escapeHtml(table.title)}</h2>${content}</section>`;
 }

@@ -56,6 +56,11 @@ const DashboardPage = lazy(() =>
   import('../chunks/DashboardPage').then(m => ({ default: m.DashboardPage })),
 );
 
+const WebsiteExportPage = lazy(() =>
+  import('@chunks/Website/WebsiteExportPage').then(m => ({
+    default: m.WebsiteExportPage,
+  })),
+);
 const WebsitePage = lazy(() =>
   import('@chunks/Website/WebsitePage').then(m => ({ default: m.WebsitePage })),
 );
@@ -71,6 +76,7 @@ export type ResourcePageProps<Subject extends OptionalClass = never> = {
 
 type Props = {
   subject: string;
+  websiteVersion?: string;
 };
 
 /**
@@ -78,7 +84,7 @@ type Props = {
  * is rendered prominently at the top. If the Resource has a
  * particular Class, it will render a different Component.
  */
-const ResourcePage: React.FC<Props> = ({ subject }) => {
+const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
   const resource = useResource(subject);
   const { getPluginForClass, loading } = useCustomViews();
   const [isAList] = useArray(resource, core.properties.isA);
@@ -88,6 +94,10 @@ const ResourcePage: React.FC<Props> = ({ subject }) => {
   const drive = store.getDrive();
   const appClass = useAppClass(drive);
   const websiteClass = useWebsiteClass(isAList.join('|'));
+  const websiteExportClass = useWebsiteClass(
+    isAList.join('|'),
+    'website-export',
+  );
 
   // The body can have an inert attribute when the user navigated from an open dialog.
   // we remove it to make the page interactive again.
@@ -173,12 +183,28 @@ const ResourcePage: React.FC<Props> = ({ subject }) => {
   if (ReturnComponent === ResourcePageDefault) {
     if (loading) return null;
 
-    if (websiteClass && resource.hasClasses(websiteClass)) {
+    if (
+      (websiteClass && resource.hasClasses(websiteClass)) ||
+      (websiteExportClass && resource.hasClasses(websiteExportClass))
+    ) {
       return (
         <Main subject={subject}>
           <ErrorBoundary>
             <Suspense fallback={<Spinner />}>
-              <WebsitePage resource={resource} />
+              {websiteExportClass ? (
+                <WebsiteExportPage resource={resource} />
+              ) : (
+                <>
+                  {websiteVersion ? (
+                    <WebsiteExportPage
+                      resource={resource}
+                      deployment={websiteVersion}
+                    />
+                  ) : (
+                    <WebsitePage resource={resource} />
+                  )}
+                </>
+              )}
             </Suspense>
           </ErrorBoundary>
         </Main>

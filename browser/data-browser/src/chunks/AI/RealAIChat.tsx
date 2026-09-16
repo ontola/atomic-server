@@ -81,7 +81,8 @@ interface RealAIChatProps {
    * as the chat's title.
    */
   autoSubmitMessage?: string;
-  onNewMessage: (message: AtomicUIMessage) => void;
+  onNewMessage: (message: AtomicUIMessage) => void | Promise<void>;
+  prepareToLeave?: { current: (() => Promise<void>) | undefined };
   /**
    * Called after compaction. All prior messages move to historical UI state;
    * only the summary is kept for LLM context.
@@ -122,6 +123,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   chatSubject,
   setExternalContextItems,
   onNewMessage,
+  prepareToLeave,
   onCompacted,
   onSummaryDeleted,
   onDeleteMessage,
@@ -266,6 +268,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const [userInput, setUserInput] = useState('');
   const [handoffDraft, setHandoffDraft] = useState<string>();
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [draggingFiles, setDraggingFiles] = useState(false);
+  const fileDragDepth = useRef(0);
   const { defaultChatModel, setDefaultChatModel } = useAISettings();
   const [selectedAgent, setSelectedAgent] = useState<AIAgent>(
     getInitialAgent(!chatSubject, chatSubject),
@@ -407,10 +411,25 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
   // Save streamed progress even when a tool or provider keeps the run open.
   // The persistence layer updates one message and serializes partial/final saves.
-  const checkpointRef = useRef({ messages, onNewMessage });
+  const checkpointRef = useRef({ messages, onNewMessage, status });
   useEffect(() => {
-    checkpointRef.current = { messages, onNewMessage };
-  }, [messages, onNewMessage]);
+    checkpointRef.current = { messages, onNewMessage, status };
+  }, [messages, onNewMessage, status]);
+  useEffect(() => {
+    if (!prepareToLeave) return;
+
+    prepareToLeave.current = async () => {
+      // An idle chat already persisted its last message in onFinish; only a
+      // run still in flight has unsaved progress. Saving again anyway made
+      // every switch to another chat wait on a needless write.
+      if (['ready', 'error'].includes(checkpointRef.current.status)) return;
+      const latest = checkpointRef.current.messages.at(-1);
+      await stop();
+      if (latest)
+        await checkpointRef.current.onNewMessage(structuredClone(latest));
+    };
+  }, [prepareToLeave, stop]);
+
   useEffect(() => {
     if (status !== 'streaming') return;
     let lastSaved = '';
@@ -794,7 +813,67 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                 </Button>
               </ProviderNotice>
             )}
-            <ChatInputWrapper>
+            <ChatInputWrapper
+              data-testid='assistant-file-dropzone'
+              onDragEnterCapture={event => {
+                if (
+                  !event.dataTransfer.types.includes(/* @wc-ignore */ 'Files')
+                )
+                  return;
+                event.preventDefault();
+                fileDragDepth.current += 1;
+                setDraggingFiles(true);
+              }}
+              onDragOverCapture={event => {
+                if (
+                  !event.dataTransfer.types.includes(/* @wc-ignore */ 'Files')
+                )
+                  return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = checkModelSupportsImageInput(
+                  activeModel,
+                )
+                  ? 'copy'
+                  : 'none';
+              }}
+              onDragLeaveCapture={event => {
+                if (
+                  !event.dataTransfer.types.includes(/* @wc-ignore */ 'Files')
+                )
+                  return;
+                fileDragDepth.current = Math.max(0, fileDragDepth.current - 1);
+                if (!fileDragDepth.current) setDraggingFiles(false);
+              }}
+              onDropCapture={event => {
+                if (
+                  !event.dataTransfer.types.includes(/* @wc-ignore */ 'Files')
+                )
+                  return;
+                event.preventDefault();
+                event.stopPropagation();
+                fileDragDepth.current = 0;
+                setDraggingFiles(false);
+
+                if (!checkModelSupportsImageInput(activeModel)) {
+                  store.notifyError(
+                    new Error(
+                      'Choose a model that supports attachments first.',
+                    ),
+                  );
+
+                  return;
+                }
+
+                handleFileUpload(Array.from(event.dataTransfer.files));
+              }}
+            >
+              {draggingFiles && (
+                <FileDropOverlay role='status'>
+                  {checkModelSupportsImageInput(activeModel)
+                    ? 'Drop files to attach'
+                    : 'Choose a model that supports attachments first.'}
+                </FileDropOverlay>
+              )}
               <Column
                 fullWidth
                 gap='none'
@@ -857,7 +936,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                   // provider (the notice above the input explains why).
                   disabled={false}
                   disableSubmit={!canUseInput}
-                  hasFiles={!!attachedFiles}
+                  hasFiles={attachedFiles.length > 0}
                   onMentionUpdate={handleMentionUpdate}
                   onChange={setUserInput}
                   onSubmit={handleSubmit}
@@ -1017,6 +1096,21 @@ const filesToFileParts = (files: File[]): Promise<FileUIPart[]> =>
         }),
     ),
   );
+
+const FileDropOverlay = styled.div`
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  text-align: center;
+  border: 2px dashed ${p => p.theme.colors.main};
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg};
+  color: ${p => p.theme.colors.text};
+`;
 
 const ChatInputWrapper = styled.div`
   background-color: ${p => p.theme.colors.bg};

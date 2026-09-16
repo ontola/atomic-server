@@ -11,10 +11,10 @@ export interface WebsiteField {
   subject: string;
   property: string;
   label: string;
-  original: string;
+  original: string | number;
 }
 
-/** Only explicit text fields of a selected row may be written from the preview. */
+/** Only explicit supported fields of a selected row may be written from the preview. */
 export async function commitWebsiteField(
   store: Store,
   project: string,
@@ -40,14 +40,18 @@ export async function commitWebsiteField(
     throw new Error('This row no longer belongs to the selected table.');
   await assertPrivateWebsiteParent(store, field.subject);
   const property = await store.getResource(field.property);
-  if (property.get(core.properties.datatype) !== Datatype.STRING)
-    throw new Error('Use the record editor for this field type.');
+  const parsed = parseWebsiteFieldValue(
+    String(property.get(core.properties.datatype)),
+    value,
+  );
   if ((resource.get(field.property) ?? '') !== field.original)
     throw new Error(
       'This field changed since the preview opened. Refresh the preview before editing it.',
     );
-  await resource.set(field.property, value);
+  await resource.set(field.property, parsed);
   await saveWebsiteResource(resource);
+
+  return parsed;
 }
 
 /** Positions correspond to our closed static renderer, never to arbitrary site HTML. */
@@ -65,4 +69,24 @@ export function pageFields(page: WebsiteConfig['pages'][number]) {
       })),
     ),
   );
+}
+
+export function parseWebsiteFieldValue(
+  datatype: string,
+  value: string,
+): string | number {
+  if (datatype === Datatype.STRING) return value;
+  if (datatype !== Datatype.INTEGER && datatype !== Datatype.FLOAT)
+    throw new Error('Use the record editor for this field type.');
+  const text = value.trim();
+  if (
+    !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(text) ||
+    !Number.isFinite(Number(text))
+  )
+    throw new Error('Enter a valid number.');
+  const number = Number(text);
+  if (datatype === Datatype.INTEGER && !Number.isSafeInteger(number))
+    throw new Error('Enter a whole number within the supported range.');
+
+  return number;
 }

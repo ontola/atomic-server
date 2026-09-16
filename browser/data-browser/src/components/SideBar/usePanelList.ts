@@ -13,7 +13,7 @@ export const usePanelList = (): {
 } => {
   const [enabledPanels, setEnabledPanels] = useLocalStorage<Panel[]>(
     'atomic.sidebar-panels',
-    [],
+    [Panel.AIChats],
   );
 
   const enablePanel = useCallback(

@@ -38,6 +38,9 @@ export function ResourceGlyph({
   const [iconImage] = useSubject(resource, dataBrowser.properties.icon);
   const [emoji] = useString(resource, dataBrowser.properties.emoji);
   const [isA] = useArray(resource, core.properties.isA);
+  // Per-drive schema classes are recognised by shortname, so load the class.
+  const classResource = useResource(isA[0]);
+  const [classShortname] = useString(classResource, core.properties.shortname);
 
   if (iconImage) {
     return (
@@ -61,7 +64,8 @@ export function ResourceGlyph({
     return null;
   }
 
-  const Icon = fallbackIcon ?? getIconForClass(isA[0]);
+  const Icon =
+    fallbackIcon ?? getIconForClass(isA[0], undefined, classShortname);
 
   return <Icon className={className} />;
 }

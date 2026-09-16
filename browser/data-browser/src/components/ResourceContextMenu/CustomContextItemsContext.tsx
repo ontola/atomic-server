@@ -5,12 +5,13 @@ import {
   useCallback,
   type PropsWithChildren,
   useEffect,
+  useId,
 } from 'react';
 import type { DropdownItem } from '../Dropdown';
 
 export interface CustomContextItemsContextValue {
   items: DropdownItem[];
-  registerItems: (items: DropdownItem[]) => () => void;
+  registerItems: (items: DropdownItem[], id?: string) => () => void;
 }
 
 const CustomContextItemsContext = createContext<
@@ -22,26 +23,27 @@ export function CustomContextItemsProvider({ children }: PropsWithChildren) {
     new Map(),
   );
 
-  const registerItems = useCallback((items: DropdownItem[]) => {
-    const id = Math.random().toString(36).substring(7);
-
-    setItemsMap(prev => {
-      const next = new Map(prev);
-      next.set(id, items);
-
-      return next;
-    });
-
-    // Return cleanup function
-    return () => {
+  const registerItems = useCallback(
+    (items: DropdownItem[], id = Math.random().toString(36).substring(7)) => {
       setItemsMap(prev => {
         const next = new Map(prev);
-        next.delete(id);
+        next.set(id, items);
 
         return next;
       });
-    };
-  }, []);
+
+      // Return cleanup function
+      return () => {
+        setItemsMap(prev => {
+          const next = new Map(prev);
+          next.delete(id);
+
+          return next;
+        });
+      };
+    },
+    [],
+  );
 
   const items = Array.from(itemsMap.values()).flat();
 
@@ -87,9 +89,16 @@ export function useCustomContextItemsContext() {
 export function useCustomContextItems(items: DropdownItem[]) {
   const { registerItems } = useCustomContextItemsContext();
 
+  const id = useId();
+  // Update this registration in place. Removing/readding on every state change
+  // reorders action groups while the menu is open.
   useEffect(() => {
-    const cleanup = registerItems(items);
-
-    return cleanup;
-  }, [registerItems, items]);
+    registerItems(items, id);
+  }, [registerItems, items, id]);
+  useEffect(
+    () => () => {
+      registerItems([], id)();
+    },
+    [registerItems, id],
+  );
 }
