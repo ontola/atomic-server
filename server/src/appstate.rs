@@ -183,7 +183,7 @@ impl AppState {
         }
 
         let index_status_broadcast = Arc::new(IndexStatusBroadcast::new());
-        let index_notifier: Arc<dyn Fn(&str, bool) + Send + Sync> = {
+        let index_notifier: crate::vector_search::IndexNotifier = {
             let b = index_status_broadcast.clone();
             Arc::new(move |drive: &str, indexing: bool| {
                 b.notify(drive, indexing);

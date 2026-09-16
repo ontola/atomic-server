@@ -69,14 +69,15 @@ fn peer_resources(store: &Db) -> Vec<atomic_lib::values::SubResource> {
     // the stored peer; reporting it is what lets a device card say when it last
     // exchanged anything instead of only whether a socket is open. "Connected"
     // alone cannot distinguish a healthy link from one that has moved nothing.
-    let mut seen: Vec<(
+    type PeerSummary = (
         String,
         Option<String>,
         bool,
         Option<i64>,
         Option<u32>,
         Option<u32>,
-    )> = Vec::new();
+    );
+    let mut seen: Vec<PeerSummary> = Vec::new();
 
     let stored_for = |id: &str| -> Option<&atomic_lib::sync::peer::KnownPeer> {
         known

@@ -179,7 +179,7 @@ impl IndexStatusBroadcast {
             g.get(drive).cloned().unwrap_or_default()
         };
         for addr in addrs {
-            let _ = addr.do_send(IndexStatusPush {
+            addr.do_send(IndexStatusPush {
                 drive: drive.to_string(),
                 indexing,
             });
@@ -378,6 +378,7 @@ impl WebSocketConnection {
             // subscription. The monitor still re-checks on `Subscribe` as
             // defence in depth.
             ws_v2::tag::GET
+            | ws_v2::tag::GET_MANY
             | ws_v2::tag::SYNC
             | ws_v2::tag::SYNC_PUSH
             | ws_v2::tag::BLOB_REQUEST

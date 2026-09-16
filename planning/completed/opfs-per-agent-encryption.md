@@ -45,7 +45,7 @@ wasm):
   "indexes leak plaintext" hole value-level encryption would have left.
 
 Key plumbed through `RedbStore::new_opfs(filename, Option<&[u8; 32]>)` →
-`Db::init_redb_opfs` → wasm `ClientDb::new(base_url, db_name, db_key)` →
+`Db::init_redb_opfs` → wasm `ClientDb::open(base_url, db_name, db_key)` →
 worker `init` message → `ClientDbWorker` options.
 
 ### 3. Key hierarchy (per `CLOUD_VAULT_ARCHITECTURE.md` conventions)

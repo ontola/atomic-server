@@ -18,7 +18,9 @@ import {
   encodeCommitOk,
   encodeError,
   encodeAuthOk,
+  Flags,
 } from './ws-v2.js';
+import { LoroLoader } from './loro-loader.js';
 import type { Commit } from './commit.js';
 import { serializeDeterministically } from './commit.js';
 
@@ -859,6 +861,147 @@ describe('WSClient SYNC_DIFF and the outbox', () => {
 
     expect(exported).toEqual(['did:ad:clean']);
     expect(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(1);
+    client.close();
+  });
+});
+
+describe('WSClient.fetchMany', () => {
+  const original = globalThis.WebSocket;
+
+  afterEach(() => {
+    globalThis.WebSocket = original;
+    vi.restoreAllMocks();
+  });
+
+  const enc = new TextEncoder();
+
+  /** A complete UPDATE frame carrying a Loro snapshot, as the server builds it. */
+  const updateFrame = (
+    requestId: number,
+    subject: string,
+    loro: Uint8Array,
+  ) => {
+    const s = enc.encode(subject);
+    const buf = new Uint8Array(6 + s.length + loro.length);
+    const view = new DataView(buf.buffer);
+    buf[0] = Tag.UPDATE;
+    buf[1] = Flags.SNAPSHOT;
+    view.setUint16(2, requestId);
+    view.setUint16(4, s.length);
+    buf.set(s, 6);
+    buf.set(loro, 6 + s.length);
+
+    return buf;
+  };
+
+  /** `[0x16] [request_id] [count] ([frame_len: u32] [frame])*` */
+  const resultFrame = (requestId: number, frames: Uint8Array[]) => {
+    const buf = new Uint8Array(
+      5 + frames.reduce((sum, f) => sum + 4 + f.length, 0),
+    );
+    const view = new DataView(buf.buffer);
+    buf[0] = Tag.GET_MANY_RESULT;
+    view.setUint16(1, requestId);
+    view.setUint16(3, frames.length);
+    let off = 5;
+
+    for (const frame of frames) {
+      view.setUint32(off, frame.length);
+      buf.set(frame, off + 4);
+      off += 4 + frame.length;
+    }
+
+    return buf;
+  };
+
+  const requestIdOf = (frame: Uint8Array) =>
+    new DataView(frame.buffer, frame.byteOffset).getUint16(1);
+
+  it('sends one GET_MANY and settles every entry in order', async ({
+    expect,
+  }) => {
+    const { client, socket, store } = await connectedClient();
+    vi.spyOn(client, 'authenticate').mockResolvedValue(undefined);
+    socket.receive(encodeAuthOk(['get-many']));
+    expect(client.supportsGetMany).toBe(true);
+
+    await LoroLoader.initializeLoro();
+    const { LoroDoc } = LoroLoader.Loro;
+    const doc = new LoroDoc();
+    doc
+      .getMap('properties')
+      .set('https://atomicdata.dev/properties/name', 'Batched');
+    doc.commit();
+
+    const results = client.fetchMany([
+      'did:ad:found',
+      'did:ad:missing',
+      'did:ad:private',
+    ]);
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.GET_MANY)).toHaveLength(1),
+    );
+    expect(framesWithTag(socket, Tag.GET)).toHaveLength(0);
+    const requestId = requestIdOf(framesWithTag(socket, Tag.GET_MANY)[0]);
+    socket.receive(
+      resultFrame(requestId, [
+        updateFrame(
+          requestId,
+          'did:ad:found',
+          doc.export({ mode: 'snapshot' }),
+        ),
+        encodeError(
+          requestId,
+          ErrorCode.UNKNOWN,
+          'Resource not found. did:ad:missing',
+        ),
+        encodeError(
+          requestId,
+          ErrorCode.UNKNOWN,
+          'Unauthorized. did:ad:private',
+        ),
+      ]),
+    );
+
+    const [found, missing, unauthorized] = await results;
+    expect(found).toBeInstanceOf(Resource);
+    expect((found as Resource).subject).toBe('did:ad:found');
+    expect(
+      (found as Resource).get('https://atomicdata.dev/properties/name'),
+    ).toBe('Batched');
+    expect(store.resources.get('did:ad:found')).toBe(found);
+    expect(missing).toMatchObject({ type: ErrorType.NotFound });
+    expect(unauthorized).toMatchObject({ type: ErrorType.Unauthorized });
+    client.close();
+  });
+
+  it('falls back to single GETs when the server lacks the capability', async ({
+    expect,
+  }) => {
+    const { client, socket } = await connectedClient();
+    vi.spyOn(client, 'authenticate').mockResolvedValue(undefined);
+    socket.receive(encodeAuthOk([]));
+    expect(client.supportsGetMany).toBe(false);
+
+    const results = client.fetchMany(['did:ad:a', 'did:ad:b']);
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.GET)).toHaveLength(2),
+    );
+    expect(framesWithTag(socket, Tag.GET_MANY)).toHaveLength(0);
+
+    for (const frame of framesWithTag(socket, Tag.GET)) {
+      socket.receive(
+        encodeError(
+          requestIdOf(frame),
+          ErrorCode.UNKNOWN,
+          'Resource not found. did:ad:x',
+        ),
+      );
+    }
+
+    const settled = await results;
+    expect(settled).toHaveLength(2);
+    expect(settled[0]).toMatchObject({ type: ErrorType.NotFound });
     client.close();
   });
 });

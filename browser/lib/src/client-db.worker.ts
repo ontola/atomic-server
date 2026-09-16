@@ -41,6 +41,7 @@ export type WorkerRequest =
     }
   | { id: number; type: 'getResource'; subject: string }
   | { id: number; type: 'getResourceWithSnapshot'; subject: string }
+  | { id: number; type: 'getResourcesWithSnapshots'; subjects: string[] }
   | { id: number; type: 'putResource'; jsonAd: string }
   | { id: number; type: 'putResources'; jsonAds: string[] }
   | {
@@ -173,6 +174,25 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       await ensureInit();
 
       return db!.getResource(msg.subject);
+    }
+
+    case 'getResourcesWithSnapshots': {
+      // One round trip for a whole list: opening a chat asks for every
+      // message and part at once, and a postMessage per subject queued
+      // behind boot-time sync traffic made that the slow part of the open.
+      await ensureInit();
+      const rows: Array<{
+        jsonAd: string | null;
+        snapshot: Uint8Array | null;
+      }> = [];
+
+      for (const subject of msg.subjects) {
+        const jsonAd = await db!.getResource(subject);
+        const snapshot = jsonAd ? await db!.getLoroSnapshot(subject) : null;
+        rows.push({ jsonAd: jsonAd ?? null, snapshot: snapshot ?? null });
+      }
+
+      return rows;
     }
 
     case 'getResourceWithSnapshot': {
@@ -497,7 +517,7 @@ async function doInit(
   const t2 = performance.now();
 
   // One-time migration of the legacy shared DB file into the per-agent
-  // `dbName`. Must run BEFORE `new ClientDb` takes the OPFS handle. A failed
+  // `dbName`. Must run BEFORE `ClientDb.open` takes the OPFS handle. A failed
   // migration must not block opening the new DB — the legacy file is left in
   // place for a later attempt.
   if (migrateLegacy && dbName && dbName !== 'atomic_data.redb') {
@@ -514,7 +534,7 @@ async function doInit(
     }
   }
 
-  // `new ClientDb` opens the OPFS-backed database (acquire OPFS handle, open
+  // `ClientDb.open` opens the OPFS-backed database (acquire OPFS handle, open
   // redb, run migrations). `openClientDb` adds one recovery step: an existing
   // file this agent's key can no longer decrypt is deleted and recreated,
   // because it is a cache whose contents are unreadable either way. Every

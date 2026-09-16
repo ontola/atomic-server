@@ -23,19 +23,20 @@
  */
 
 /**
- * Token spliced into the error message by `ClientDb::new`. Keep in sync with
+ * Token spliced into the error message by `ClientDb::open`. Keep in sync with
  * `WRONG_KEY_MARKER` in `wasm/src/lib.rs`.
  */
 export const WRONG_KEY_MARKER = 'ATOMIC_DB_WRONG_KEY';
 
 /** The subset of the generated WASM module that opening a database needs. */
 export interface ClientDbWasm {
-  /** wasm-bindgen renders the async constructor as a Promise-returning `new`. */
-  ClientDb: new (
-    baseUrl?: string,
-    dbName?: string,
-    dbKey?: Uint8Array,
-  ) => Promise<unknown>;
+  ClientDb: {
+    open: (
+      baseUrl?: string,
+      dbName?: string,
+      dbKey?: Uint8Array,
+    ) => Promise<unknown>;
+  };
   /** Added alongside the self-heal; absent in older WASM builds. */
   deleteClientDb?: (dbName: string) => Promise<boolean>;
 }
@@ -63,7 +64,7 @@ export function isWrongKeyDbError(error: unknown): boolean {
 }
 
 /**
- * Token spliced into the error message by `ClientDb::new` when the browser
+ * Token spliced into the error message by `ClientDb::open` when the browser
  * refuses this origin storage outright. Keep in sync with
  * `STORAGE_BLOCKED_MARKER` in `wasm/src/lib.rs`.
  */
@@ -96,7 +97,7 @@ export async function openClientDb(
 ): Promise<OpenClientDbResult> {
   try {
     return {
-      db: await new wasm.ClientDb(baseUrl, dbName, dbKey),
+      db: await wasm.ClientDb.open(baseUrl, dbName, dbKey),
       recreated: false,
     };
   } catch (e) {
@@ -121,7 +122,7 @@ export async function openClientDb(
     // No second recovery attempt: a fresh file opens or something else is
     // wrong, and a delete loop would be worse than a clear error.
     return {
-      db: await new wasm.ClientDb(baseUrl, dbName, dbKey),
+      db: await wasm.ClientDb.open(baseUrl, dbName, dbKey),
       recreated: true,
     };
   }

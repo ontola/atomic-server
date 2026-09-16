@@ -8,7 +8,7 @@ mod test {
     #[ignore]
     #[test]
     fn get_url() {
-        let mut cmd = Command::cargo_bin(assert_cmd::crate_name!()).unwrap();
+        let mut cmd = Command::cargo_bin(assert_cmd::pkg_name!()).unwrap();
         cmd.args(["get", TEST_URL]).assert().success();
     }
 
@@ -16,7 +16,7 @@ mod test {
     #[test]
     fn search() {
         let parent = "https://atomicdata.dev/ontology/core";
-        let mut cmd = Command::cargo_bin(assert_cmd::crate_name!()).unwrap();
+        let mut cmd = Command::cargo_bin(assert_cmd::pkg_name!()).unwrap();
         cmd.args(["search", "a", "--parent", parent])
             .assert()
             .success();
@@ -31,7 +31,7 @@ mod test {
             .unwrap()
             .as_secs()
             .to_string();
-        let mut cmd_set = Command::cargo_bin(assert_cmd::crate_name!()).unwrap();
+        let mut cmd_set = Command::cargo_bin(assert_cmd::pkg_name!()).unwrap();
         cmd_set
             .args([
                 "set",
@@ -42,7 +42,7 @@ mod test {
             .assert()
             .success();
 
-        let mut cmd_get = Command::cargo_bin(assert_cmd::crate_name!()).unwrap();
+        let mut cmd_get = Command::cargo_bin(assert_cmd::pkg_name!()).unwrap();
         let result = cmd_get
             .args(["get", "https://atomicdata.dev/test shortname"])
             .assert()

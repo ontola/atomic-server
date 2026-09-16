@@ -79,6 +79,7 @@ The current list (`protocol::CAPABILITIES`):
 | `rebind-on-auth` | Re-evaluates the connection's subscriptions against the new identity when an `AUTH` lands, dropping the ones it may no longer read. |
 | `sync-probe` | Reads the `probe` and `subjects` keys of a `SYNC (0x30)` JSON tail and answers a stale probe with `SYNC_RESEND (0x38)`. |
 | `ephemeral` | Reads and writes `EPHEMERAL (0x40)` over WebSocket for edits in progress, cursors and drive presence, in place of the `LORO_SYNC_UPDATE` / `LORO_EPHEMERAL_UPDATE` / `PRESENCE_UPDATE` text frames. |
+| `get-many` | Answers `GET_MANY (0x15)`, a list of subjects, with one `GET_MANY_RESULT (0x16)` holding an `UPDATE` or `ERROR` entry per subject, so a client fetches a whole list in one round trip. |
 
 The list is **additive only**: a name is never renamed or reused once
 shipped. Treat an absent name as "not supported" and fall back, never as an
@@ -110,6 +111,8 @@ logged and dropped, not answered.
 | `0x12` | `DESTROY` | responder | client. **No WS server arm.** The Iroh live loop explicitly ignores it (see [Deletes](#deletes)). |
 | `0x13` | `COMMIT` | client; Iroh live push loop, for destroys | WS handler (hub semantics), engine (peer semantics) |
 | `0x14` | `COMMIT_OK` | responder | client / initiator only. Payload is the full commit JSON-AD, or the bare commit id for a client whose `HELLO` listed `commit-ok-slim`. |
+| `0x15` | `GET_MANY` | client | engine (both transports). Sent only to a responder advertising `get-many`. |
+| `0x16` | `GET_MANY_RESULT` | responder | client only. |
 | `0x20` | `SUB` | client | WS handler only. **No engine arm**, so an Iroh peer cannot subscribe. |
 | `0x21` | `UNSUB` | client | WS handler only. **No engine arm.** |
 | `0x30` | `SYNC` | Iroh initiator; the browser, as a hash-only probe and then filtered to the differing subjects | engine (both transports) |
@@ -137,6 +140,8 @@ the end of the frame.
 [0x02] [capabilities_json_utf8]?                 // AUTH_OK, JSON array, may be absent
 [0x03] [request_id: u16] [code: u16] [message_utf8]      // ERROR
 [0x10] [request_id: u16] [subject_utf8]                  // GET
+[0x15] [request_id: u16] [count: u16] ([subject_len: u16] [subject_utf8])*   // GET_MANY
+[0x16] [request_id: u16] [count: u16] ([frame_len: u32] [frame])*             // GET_MANY_RESULT
 [0x12] [request_id: u16] [subject_utf8]                  // DESTROY
 [0x13] [request_id: u16] [signed_commit_json_ad_utf8]    // COMMIT
 [0x14] [request_id: u16] [created_commit_json_ad_utf8]   // COMMIT_OK, full form
@@ -460,6 +465,24 @@ genesis commit, which the responder rejects. A resource with no state answers
 `ERROR` `UNKNOWN` with the lookup error, on the same `request_id`.
 That `lastCommit` id is a receipt for genesis detection, not a refetchable
 resource.
+
+A client that needs many subjects at once (a chat and every part of every
+message, say) sends one `GET_MANY` instead of one `GET` per subject, when
+the responder advertises `get-many`:
+
+```
+-> GET_MANY (0x15) [request_id] [count] [subject]*
+<- GET_MANY_RESULT (0x16) [request_id] [count] [frame]*
+```
+
+Each entry is exactly the frame a single `GET` for that subject would have
+been answered with, a complete `UPDATE` or `ERROR` frame with its tag byte,
+in request order, all carrying the batch's `request_id`. Order is what
+pairs an `ERROR` (which names no subject) with the subject it answers. The
+responder evaluates every subject with the connection's identity, exactly as
+for `GET`, so a batch never reveals more than the same single fetches would.
+The browser chunks a request at 200 subjects and falls back to single `GET`s
+when the capability is absent.
 
 ## Persisted commits
 
