@@ -363,3 +363,6 @@ async fn failed_sync_flush_blocks_push_and_matching_probe_acknowledgements() {
         AtomicLoroDoc::vv_map_from_snapshot(&snapshot).unwrap()
     );
 }
+
+#[path = "seeded_sync_tests.rs"]
+mod seeded_sync_tests;
