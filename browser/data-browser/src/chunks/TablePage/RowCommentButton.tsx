@@ -1,6 +1,12 @@
-import { useContext, useEffect, useState, type JSX } from 'react';
+import { useContext, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { FaMessage, FaRegMessage } from 'react-icons/fa6';
+import {
+  unknownSubject,
+  useMemberFromCollection,
+  useResource,
+  type Collection,
+} from '@tomic/react';
 import { useRightPanel } from '@components/RightPanel/RightPanelContext';
 import { useCommentCount } from '../../hooks/useCommentCount';
 import { TablePageContext } from './tablePageContext';
@@ -20,36 +26,53 @@ export function RowCommentButton({
 }: {
   rowIndex: number;
 }): JSX.Element | null {
-  const { getRowSubject } = useContext(TablePageContext);
-  const [resolved, setResolved] = useState<{
-    index: number;
-    subject: string;
-  }>();
+  const { rowSource } = useContext(TablePageContext);
+  const source = rowSource(rowIndex);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    getRowSubject(rowIndex).then(subject => {
-      if (!cancelled && subject) {
-        setResolved({ index: rowIndex, subject });
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [getRowSubject, rowIndex]);
-
-  // Keyed on the index the subject was resolved for, so a row that moves shows
-  // nothing rather than the previous occupant's thread. The trailing entry row
-  // resolves to nothing at all: it is local until it is typed into, and a
-  // comment needs a subject to point at.
-  if (resolved?.index !== rowIndex) {
+  if (!source) {
     return null;
   }
 
-  return <RowCommentBubble subject={resolved.subject} />;
+  // The two kinds of row reach their resource by different routes, so each gets
+  // the hook the grid itself uses for it.
+  return source.kind === 'member' ? (
+    <MemberRowComments collection={source.collection} index={source.index} />
+  ) : (
+    <SessionRowComments rowKey={source.key} />
+  );
 }
+
+function MemberRowComments({
+  collection,
+  index,
+}: {
+  collection: Collection;
+  index: number;
+}): JSX.Element | null {
+  const resource = useMemberFromCollection(collection, index);
+
+  return resource.subject === unknownSubject ? null : (
+    <RowCommentBubble subject={resource.subject} />
+  );
+}
+
+/** A row added this session: local, under a `_new:` key, until the user types
+ *  into it and it materializes — at which point the store aliases that key to
+ *  the row's real subject and there is finally something to comment on. */
+function SessionRowComments({
+  rowKey,
+}: {
+  rowKey: string;
+}): JSX.Element | null {
+  const resource = useResource(rowKey, NEW_RESOURCE_OPTS);
+
+  return resource.subject.startsWith('_new:') ? null : (
+    <RowCommentBubble subject={resource.subject} />
+  );
+}
+
+/** Matches TableNewRow: resolve the placeholder locally, never fetch it. */
+const NEW_RESOURCE_OPTS = { newResource: true };
 
 function RowCommentBubble({ subject }: { subject: string }): JSX.Element {
   const { count, hasUnseen } = useCommentCount(subject);

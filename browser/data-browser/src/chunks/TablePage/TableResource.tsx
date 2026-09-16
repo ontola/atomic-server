@@ -26,6 +26,7 @@ import {
 } from '@chunks/TablePage/helpers/useTableHistory';
 import {
   TablePageContext,
+  type RowSource,
   type TablePageContextType,
 } from '@chunks/TablePage/tablePageContext';
 import { TableNewRow, TableRow } from '@chunks/TablePage/TableRow';
@@ -901,24 +902,23 @@ export const TableResource: React.FC<TableResourceProps> = ({
     [memberCount, newRowSubjects],
   );
 
-  // See `TablePageContextType.getRowSubject`. Only collection members have a
-  // resource: a session row keeps its local `_new:` identity until it
-  // materializes, and nothing outside the grid may point at that. The index can
-  // momentarily exceed the collection (a filter shrinks it while a virtualized
-  // row for an old index is still mounted), which `getMemberWithIndex` rejects.
-  const getRowSubject = useCallback(
-    async (index: number) => {
-      if (index >= memberCount) {
-        return undefined;
+  // See `TablePageContextType.rowSource`. The SAME index→row mapping the grid
+  // renders with, for the same reason `handleDeleteRow` repeats it: members
+  // come from the collection, session rows from `newRowSubjects`. A session row
+  // keeps its `_new:` key for its whole life here — materializing does not turn
+  // it into a member — so resolving everything through the collection would
+  // address the wrong row.
+  const rowSource = useCallback(
+    (index: number): RowSource | undefined => {
+      if (index < memberCount) {
+        return { kind: 'member', collection, index };
       }
 
-      const subject = await collection
-        .getMemberWithIndex(index)
-        .catch(() => undefined);
+      const key = newRowSubjects[index - memberCount];
 
-      return subject ?? undefined;
+      return key ? { kind: 'session', key } : undefined;
     },
-    [collection, memberCount],
+    [collection, memberCount, newRowSubjects],
   );
 
   const [showExpandedRowDialog, setShowExpandedRowDialog] = useState(false);
@@ -966,7 +966,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       updateDerivedColumn,
       removeDerivedColumn,
       addItemsToHistoryStack,
-      getRowSubject,
+      rowSource,
     }),
     [
       resource.subject,
@@ -996,7 +996,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       updateDerivedColumn,
       removeDerivedColumn,
       addItemsToHistoryStack,
-      getRowSubject,
+      rowSource,
     ],
   );
 
