@@ -126,3 +126,38 @@ it('serializes simultaneous remote arrivals without dropping either change', asy
   expect(stored[core.properties.description]).toBe('remote edit');
   expect(stored['https://example.test/flag']).toBe(true);
 });
+
+it.each([false, true])(
+  'awaits durable incoming persistence (fails: %s)',
+  async fails => {
+    const { store, subject, change } = fixture();
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    vi.spyOn(
+      store.getClientDb()!,
+      'putResourceWithSnapshot',
+    ).mockImplementation(async () => {
+      await gate;
+      if (fails) throw new Error('durable put failed');
+    });
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let settled = false;
+    const work = store.applyRemoteIncoming(change);
+    void work.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await vi.waitFor(() => expect(store.resources.has(subject)).toBe(true));
+    expect(settled).toBe(false);
+    release();
+    if (fails) await expect(work).rejects.toThrow('durable put failed');
+    else await expect(work).resolves.toBe('applied');
+    logged.mockRestore();
+  },
+);

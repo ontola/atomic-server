@@ -776,9 +776,11 @@ persistence. Browser repetition before this correction had two convergence
 failures and four passes (`2026-09-15T14-48-35.151Z-ljvOqF`); all three existing
 single-browser document/table/attachment crash runs passed.
 
-- [ ] Tighten the public drive-sync completion contract to wait for outbound
-  server acknowledgement and incoming persistence, including chunked responses.
-  The acceptance test uses independent server evidence until that contract exists.
+- [x] Tighten drive-sync completion to wait for each outbound chunk acknowledgement
+  and queued incoming persistence. Frame regressions cover reordered async work,
+  rejection, invalid updates, disconnect and overlapping probes.
+- [ ] Consider semantic per-entry receipts or verification probes: the existing
+  protocol's SYNC_OK admits a chunk but does not certify every entry was imported.
 
 With the server-persistence barrier, all three browser runs passed the data,
 causal-history and independent server checks (`2026-09-15T14-51-49.339Z-t56Aia`).
@@ -792,5 +794,53 @@ Final acceptance: all three repeated two-client Chromium SIGKILL tests passed
 (45.6 seconds total, `2026-09-15T14-53-37.650Z-joiOVc`). No product changes were
 made after the 522 library / 916 app test runs. Final test-file typechecks,
 scoped lint/format and `git diff --check` are clean. Locale files retain their
-pre-build contents. The new acceptance test and recovery fixes remain uncommitted;
-the earlier Node test was committed as `c41ded112` before this work began.
+pre-build contents. The acceptance test and recovery fixes were subsequently
+committed as `6d87c0fee`; the earlier Node test is `c41ded112`.
+
+## Acknowledged sync completion — 2026-09-16
+
+Recovery fixes committed as `6d87c0fee` with hooks enabled. The next change waits
+for every outbound chunk's SYNC_OK and serializes SYNC_DIFF / SYNC_PUSH / SYNC_OK
+processing. Final incoming chunks cannot overtake earlier asynchronous imports.
+Remote ingestion awaits its queued canonical database write and propagates write
+failure; failed or invalid incoming state and rejected pushes cannot complete.
+Overlapping same-drive probes are coalesced because the wire has no request ID.
+Queued work is fenced to its connection and identity. Blob fetching and future
+local edits are separate work; completion concerns this reconciliation round.
+
+A rejection regression also found that drive parsing stopped at the first colon
+of a DID. The parser now uses the colon-space separator before the reason, so a
+late acknowledgement cannot clear a rejection recorded for the wrong drive.
+
+The Node and browser crash tests now wait for a fresh completion status, then
+perform a single independent server read, instead of polling the server until
+it happens to catch up. The wire contract remains important: SYNC_OK confirms
+chunk admission, not per-entry semantic success (see docs/src/websockets.md).
+
+Repeated Node acceptance exposed a separate adapter race: NodeClientDb's composed
+JSON/snapshot operation awaited the JSON write before writing the snapshot, while
+other reads could run between them. WASM's temporary JSON-derived snapshot could
+therefore enter reconciliation as competing history. Captured frames showed the
+actual chunk acknowledgement followed by a stale field winning that invented
+history; it was not an acknowledgement-order failure. A cheap Node adapter test
+failed while the JSON write was paused. Public adapter operations now share a
+serialized queue, matching the browser worker. The test passes without exposing
+the intermediate snapshot. Temporary wire tracing was removed.
+
+A final frame regression covers a hash-match response after the reduced/full-vector
+fallback: that path has consumed the cached probe state, but the round remains
+active and must still accept its SYNC_OK. The regression failed before checking
+active rounds instead of only cached probe state.
+
+Validation: 916 app tests pass. Both real-server recovery variants pass three
+consecutive runs after the Node queue fix (six cases); the lost-ack case also
+passed during this change. The rebuilt two-client Chromium crash test passes
+three consecutive runs with a single server read after completion
+(`2026-09-16T09-28-46.098Z-YR4lkq`, 41.6 seconds); the existing document/table/file
+crash test also passed in the earlier combined run. The subsequent Node-only
+queue change and fallback-ack fix have focused unit coverage. Locale files were
+restored to their pre-build contents. These sync-completion changes remain
+uncommitted, following the requested initial recovery commit.
+
+Final gate: all 534 library tests pass; library, E2E and integration TypeScript
+checks, scoped lint/format and `git diff --check` pass.

@@ -2013,6 +2013,8 @@ export class Store {
       });
   }
 
+  private resourcePersistence = new Map<string, Promise<void>>();
+
   private remoteIngress = new Map<
     string,
     { tail: Promise<unknown>; cancelled: boolean }
@@ -2081,7 +2083,7 @@ export class Store {
 
       if (!valid()) throw new RequestCancelledError('Remote ingress cancelled');
 
-      return this.applyIncoming({
+      const result = this.applyIncoming({
         ...change,
         // A full server snapshot is not authority to discard local operations.
         // Incomplete local seeds still use the existing full-state repair path.
@@ -2089,6 +2091,12 @@ export class Store {
           ? false
           : change.replaceLoroDocsFromRemote,
       });
+      // addResource queues the canonical merged snapshot before notifying.
+      // Await that write, including its failure, before acknowledging ingress.
+      await this.resourcePersistence.get(subject);
+      if (!valid()) throw new RequestCancelledError('Remote ingress cancelled');
+
+      return result;
     };
 
     // Keep the no-storage path synchronous for non-browser consumers.
@@ -2420,17 +2428,31 @@ export class Store {
 
           if (this.lastPersistedStamp.get(emitResource.subject) !== stamp) {
             this.lastPersistedStamp.set(emitResource.subject, stamp);
-            this.clientDb
-              .putResourceWithSnapshot(emitResource.subject, jsonAd, snapshot)
-              .catch(e => {
-                // Failed write: drop the stamp so the next attempt is not
-                // skipped as a duplicate of a write that never landed.
-                this.lastPersistedStamp.delete(emitResource.subject);
-                console.error(
-                  `[ClientDb] put failed for ${emitResource.subject.slice(0, 60)}:`,
-                  e,
-                );
-              });
+            const persistence = this.clientDb.putResourceWithSnapshot(
+              emitResource.subject,
+              jsonAd,
+              snapshot,
+            );
+            this.resourcePersistence.set(emitResource.subject, persistence);
+
+            const clear = () => {
+              if (
+                this.resourcePersistence.get(emitResource.subject) ===
+                persistence
+              )
+                this.resourcePersistence.delete(emitResource.subject);
+            };
+
+            void persistence.then(clear, clear);
+            void persistence.catch(e => {
+              // Failed write: drop the stamp so the next attempt is not
+              // skipped as a duplicate of a write that never landed.
+              this.lastPersistedStamp.delete(emitResource.subject);
+              console.error(
+                `[ClientDb] put failed for ${emitResource.subject.slice(0, 60)}:`,
+                e,
+              );
+            });
           }
         }
       } catch (e) {

@@ -321,45 +321,56 @@ test('two offline clients converge after interrupted sync and SIGKILL', async ({
       contentType: 'application/json',
     });
 
-    b.online = true;
-    await b.page.evaluate(() => window.store.reconnect());
-    await waitForSynced(b.page);
-    restarted.online = true;
-    await restarted.page.evaluate(() => window.store.reconnect());
-    await waitForSynced(restarted.page);
-    // The shared helper only drains the outbox; raw reconciliation can still
-    // be in flight. Observe server persistence before B's final reconcile.
-    await expect
-      .poll(
-        () =>
-          restarted.page.evaluate(
-            async ({ subject, name }) => {
-              const StoreType = window.store.constructor as new (options: {
-                serverUrl: string;
-                connect: boolean;
-              }) => typeof window.store;
-              const reader = new StoreType({
-                serverUrl: window.store.getServerUrl(),
-                connect: false,
-              });
-              reader.setAgent(window.store.getAgent());
-              const resource = await reader.fetchResourceFromServer(subject, {
-                noWebSocket: true,
-              });
+    async function reconnectAndWait(page: Page) {
+      const previous = await page.evaluate(
+        () => window.store.getSyncStatus().lastDriveSync?.timestamp,
+      );
+      await page.evaluate(() => window.store.reconnect());
+      await expect
+        .poll(
+          () =>
+            page.evaluate(before => {
+              const status = window.store.getSyncStatus();
 
-              return resource?.get(name);
-            },
-            { subject: initial.subject, name: nameProperty },
-          ),
-        {
-          timeout: 30_000,
-          message:
-            'Server must retain A’s acknowledged edit before B reconciles',
-        },
-      )
-      .toBe(ledger.name);
-    await b.page.evaluate(() => window.store.reconnect());
-    await waitForSynced(b.page);
+              return (
+                !!status.lastDriveSync &&
+                status.lastDriveSync.timestamp !== before &&
+                !status.syncInProgress &&
+                status.pendingDirtyCount === 0
+              );
+            }, previous),
+          { timeout: 30_000 },
+        )
+        .toBe(true);
+    }
+
+    b.online = true;
+    await reconnectAndWait(b.page);
+    restarted.online = true;
+    await reconnectAndWait(restarted.page);
+    // One independent read after completion: polling here would hide an early
+    // sync-complete signal. The server must already have acknowledged this edit.
+    const serverName = await restarted.page.evaluate(
+      async ({ subject, name }) => {
+        const StoreType = window.store.constructor as new (options: {
+          serverUrl: string;
+          connect: boolean;
+        }) => typeof window.store;
+        const reader = new StoreType({
+          serverUrl: window.store.getServerUrl(),
+          connect: false,
+        });
+        reader.setAgent(window.store.getAgent());
+        const resource = await reader.fetchResourceFromServer(subject, {
+          noWebSocket: true,
+        });
+
+        return resource?.get(name);
+      },
+      { subject: initial.subject, name: nameProperty },
+    );
+    expect(serverName).toBe(ledger.name);
+    await reconnectAndWait(b.page);
 
     for (const client of [restarted, b]) {
       await expect
