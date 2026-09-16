@@ -788,31 +788,6 @@ mod tests {
         assert!(!outbox.has_pending(&subject));
     }
 
-    /// Bulk reconcile must not push a subject the outbox still owns: its
-    /// state goes out as a signed commit, or not at all.
-    #[tokio::test]
-    async fn bulk_push_skips_outbox_pending_subjects() {
-        let device = Db::init_temp("outbox_skip_push").await.unwrap();
-        let (alice, drive) = device.setup("Alice").await.unwrap();
-        let (subject, edit) = create_and_edit(&device, &drive).await;
-        let agent = crate::agents::ForAgent::from(alice);
-        let subjects = vec![subject.clone()];
-        let served =
-            crate::sync::engine::collect_readable_snapshots(&device, &agent, &subjects, None).await;
-        assert_eq!(served.len(), 1);
-
-        let outbox = Outbox::new(device.clone());
-        outbox.mark_dirty(&edit).await.unwrap();
-        let served =
-            crate::sync::engine::collect_readable_snapshots(&device, &agent, &subjects, None).await;
-        assert!(served.is_empty(), "pending subject must not be pushed raw");
-
-        outbox.clear(&subject).unwrap();
-        let served =
-            crate::sync::engine::collect_readable_snapshots(&device, &agent, &subjects, None).await;
-        assert_eq!(served.len(), 1);
-    }
-
     #[test]
     fn backoff_doubles_and_caps() {
         assert_eq!(backoff_ms(0), 0);

@@ -371,9 +371,14 @@ plumbing around it, which still carries HTTP-era shapes:
    Flutter's `try_push_commit` now records into it and drains over the
    `WsClient` (`impl CommitTransport for Arc<WsClient>`); `open_ws_sync`
    drains on connect, and `peer::LivePeerCommitTransport` drains over a live
-   Iroh link. `collect_readable_snapshots` skips `Outbox::pending_subjects()`
-   (the interim guard in "State-first wire" below). Sequential per subject for
-   now: pipelining (item 2) is the next slice.
+   Iroh link. The interim guard in "State-first wire" below (skip
+   `Outbox::pending_subjects()` in bulk pushes) was tried and reverted the
+   same day: `collect_readable_snapshots` also serves a same-agent replica's
+   first sync, and withholding a pending subject there left the second
+   device waiting on a live-link drain (`peer_tests::a_canvas_syncs_to_a_second_device_through_the_bridge`
+   failed in CI). The guard needs a hub-versus-replica distinction the
+   collector does not have. Sequential per subject for now: pipelining
+   (item 2) is the next slice.
 
 ## State-first wire: commit as provenance envelope
 
