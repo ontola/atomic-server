@@ -493,7 +493,7 @@ impl KvStore for RedbStore {
         {
             for op in operations {
                 let mut table = tx
-                    .open_table(table_def(op.tree.clone()))
+                    .open_table(table_def(op.tree))
                     .map_err(|e| format!("redb open table: {e}"))?;
 
                 match op.method {
@@ -583,7 +583,7 @@ impl KvStore for RedbStore {
         {
             for op in &ops {
                 let mut table = tx
-                    .open_table(table_def(op.tree.clone()))
+                    .open_table(table_def(op.tree))
                     .map_err(|e| format!("redb open table: {e}"))?;
 
                 match op.method {

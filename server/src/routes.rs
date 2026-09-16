@@ -192,44 +192,6 @@ async fn iroh_sync_handler(
     )
 }
 
-#[cfg(test)]
-mod node_id_tests {
-    use super::node_id_from_did;
-
-    #[test]
-    fn accepts_node_did() {
-        let node_id = "a".repeat(64);
-        assert_eq!(
-            node_id_from_did(&format!("did:ad:node:{node_id}")).unwrap(),
-            node_id
-        );
-    }
-
-    #[test]
-    fn accepts_node_did_with_label_suffix() {
-        let node_id = "a".repeat(64);
-        assert_eq!(
-            node_id_from_did(&format!("did:ad:node:{node_id}:Joe%27s%20Tablet")).unwrap(),
-            node_id
-        );
-    }
-
-    #[test]
-    fn rejects_iroh_prefix() {
-        assert!(node_id_from_did("iroh:abcdef").is_err());
-    }
-
-    #[test]
-    fn rejects_raw_node_id() {
-        assert!(node_id_from_did(&"a".repeat(64)).is_err());
-    }
-
-    #[test]
-    fn rejects_invalid_node_id() {
-        assert!(node_id_from_did("did:ad:node:not-a-node").is_err());
-    }
-}
-
 /// Set up the Actix server routes. This defines which paths are used.
 // Keep in mind that the order of these matters. An early, greedy route will take
 // precedence over a later route.
@@ -326,4 +288,42 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
     )
     // Also allow the home resource (not matched by the previous one)
     .service(web::resource("/").to(handlers::get_resource::handle_get_resource));
+}
+
+#[cfg(test)]
+mod node_id_tests {
+    use super::node_id_from_did;
+
+    #[test]
+    fn accepts_node_did() {
+        let node_id = "a".repeat(64);
+        assert_eq!(
+            node_id_from_did(&format!("did:ad:node:{node_id}")).unwrap(),
+            node_id
+        );
+    }
+
+    #[test]
+    fn accepts_node_did_with_label_suffix() {
+        let node_id = "a".repeat(64);
+        assert_eq!(
+            node_id_from_did(&format!("did:ad:node:{node_id}:Joe%27s%20Tablet")).unwrap(),
+            node_id
+        );
+    }
+
+    #[test]
+    fn rejects_iroh_prefix() {
+        assert!(node_id_from_did("iroh:abcdef").is_err());
+    }
+
+    #[test]
+    fn rejects_raw_node_id() {
+        assert!(node_id_from_did(&"a".repeat(64)).is_err());
+    }
+
+    #[test]
+    fn rejects_invalid_node_id() {
+        assert!(node_id_from_did("did:ad:node:not-a-node").is_err());
+    }
 }

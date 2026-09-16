@@ -346,6 +346,33 @@ pub fn exposure_warning(reachability: Reachability) -> String {
     )
 }
 
+/// Install the admission policy this node's mode calls for.
+///
+/// Open installs nothing: the default [`atomic_lib::sync::policy::OpenPolicy`]
+/// is already what an ungated node wants, and leaving it untouched is what makes
+/// this change a no-op for every existing deployment.
+pub async fn install_policy(store: &atomic_lib::Db, host_mode: &HostModeConfig) {
+    let Some(owner_agent) = host_mode.owner_agent.as_deref() else {
+        return;
+    };
+
+    if !host_mode.is_owner_mode() {
+        return;
+    }
+
+    let policy = atomic_lib::sync::policy::OwnerPolicy::new(owner_agent);
+    let existing = store.drive_subjects().await;
+
+    tracing::info!(
+        "Host mode: owner ({}). Hosting {} existing Drive(s); new Drives here are the owner's alone.",
+        owner_agent,
+        existing.len()
+    );
+
+    policy.enroll_existing(existing);
+    store.set_sync_policy(std::sync::Arc::new(policy));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -489,31 +516,4 @@ mod tests {
             assert!(domain_looks_public(public), "expected public: {public:?}");
         }
     }
-}
-
-/// Install the admission policy this node's mode calls for.
-///
-/// Open installs nothing: the default [`atomic_lib::sync::policy::OpenPolicy`]
-/// is already what an ungated node wants, and leaving it untouched is what makes
-/// this change a no-op for every existing deployment.
-pub async fn install_policy(store: &atomic_lib::Db, host_mode: &HostModeConfig) {
-    let Some(owner_agent) = host_mode.owner_agent.as_deref() else {
-        return;
-    };
-
-    if !host_mode.is_owner_mode() {
-        return;
-    }
-
-    let policy = atomic_lib::sync::policy::OwnerPolicy::new(owner_agent);
-    let existing = store.drive_subjects().await;
-
-    tracing::info!(
-        "Host mode: owner ({}). Hosting {} existing Drive(s); new Drives here are the owner's alone.",
-        owner_agent,
-        existing.len()
-    );
-
-    policy.enroll_existing(existing);
-    store.set_sync_policy(std::sync::Arc::new(policy));
 }

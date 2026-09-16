@@ -8,6 +8,7 @@ use atomic_lib::storelike::Query;
 use atomic_lib::{urls, Resource, Storelike, Subject, Value};
 
 use serde::Deserialize;
+#[cfg(feature = "img")]
 use std::collections::HashSet;
 
 #[serde_with::serde_as]
@@ -265,6 +266,7 @@ async fn serve_processed_image(
 /// Deterministic 32-byte cache key for a processed rendition. Same source
 /// hash + same params => same key on every server, so the rendition is
 /// content-addressable across the mesh.
+#[cfg(feature = "img")]
 fn processed_cache_key(source_hash: &[u8], format: &str, params: &DownloadParams) -> [u8; 32] {
     let canonical = format!(
         "processed|hash={}|f={}|q={}|w={}",
@@ -305,6 +307,7 @@ fn quantize_params(params: &DownloadParams) -> DownloadParams {
     }
 }
 
+#[cfg(feature = "img")]
 fn mimetype_for(format: &str) -> &'static str {
     match format {
         "webp" => "image/webp",
@@ -313,6 +316,7 @@ fn mimetype_for(format: &str) -> &'static str {
     }
 }
 
+#[cfg(feature = "img")]
 fn get_format(params: &DownloadParams) -> AtomicServerResult<String> {
     let supported_compression_formats: HashSet<String> =
         HashSet::from_iter(vec!["webp".to_string(), "avif".to_string()]);

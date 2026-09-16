@@ -1226,9 +1226,7 @@ pub async fn handle_sync_vv_filtered(
                 }
             } else {
                 pull.push(subject.clone());
-                pull_from
-                    .entry(subject.clone())
-                    .or_insert_with(std::collections::HashMap::new);
+                pull_from.entry(subject.clone()).or_default();
             }
         }
     }
