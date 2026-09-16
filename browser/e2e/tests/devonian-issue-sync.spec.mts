@@ -262,9 +262,7 @@ test('Dragging a card in the real Atomic kanban board closes and reopens the lin
     exact: true,
   });
   await expect(openKanban).toBeVisible();
-  const demoIssue = page
-    .getByTestId('atomic-issue')
-    .filter({ hasText: title });
+  const demoIssue = page.getByTestId('atomic-issue').filter({ hasText: title });
   await expect(demoIssue).toContainText('Todo');
   await expect(page.getByRole('alert')).toHaveCount(0);
 
@@ -287,12 +285,12 @@ test('Dragging a card in the real Atomic kanban board closes and reopens the lin
   // local status change and closed the GitHub-side (fixture) issue.
   await page.goto(`${FRONTEND_URL}/app/devonian-demo`);
   await tryAgain();
-  await expect(page.getByRole('button', { name: 'Sync now', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Sync now', exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(demoIssue).toContainText('Done');
-  await expect(
-    page.getByText('closed', { exact: true }).first(),
-  ).toBeVisible();
+  await expect(page.getByText('closed', { exact: true }).first()).toBeVisible();
 
   // Drag it back to Todo — the fixture issue must reopen.
   await openKanban.click();
@@ -307,7 +305,9 @@ test('Dragging a card in the real Atomic kanban board closes and reopens the lin
 
   await page.goto(`${FRONTEND_URL}/app/devonian-demo`);
   await tryAgain();
-  await expect(page.getByRole('button', { name: 'Sync now', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Sync now', exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(demoIssue).toContainText('Todo');
   await expect(page.getByText('open', { exact: true }).first()).toBeVisible();
