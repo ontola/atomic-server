@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
 import {
@@ -9,12 +9,13 @@ import {
   useValue,
   type Resource,
 } from '@tomic/react';
-import { FaCodeBranch, FaCodeMerge } from 'react-icons/fa6';
+import { FaCodeBranch, FaCodeMerge, FaListCheck } from 'react-icons/fa6';
 import { useNavigateWithTransition } from '../hooks/useNavigateWithTransition';
 import { constructOpenURL } from '../helpers/navigation';
 import { ResourceInline } from '../views/ResourceInline/ResourceInline';
 import { Button } from './Button';
 import { Row } from './Row';
+import { ResourceDiff, type AtomicDiff } from './ResourceDiff/ResourceDiff';
 
 interface ForkBarProps {
   resource: Resource;
@@ -49,6 +50,19 @@ export function ForkBar({ resource }: ForkBarProps): React.JSX.Element | null {
     // the proxy reference. Re-run when either resource commits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [resource, originalResource, forkCommit, originalCommit],
+  );
+
+  // The review panel: every changed property, the original's current value
+  // against the fork's. Off by default so the bar stays one line; a reviewer
+  // opens it before merging instead of trusting a count.
+  const [reviewing, setReviewing] = useState(false);
+  const diff = useMemo(
+    (): AtomicDiff => ({
+      oldResource: originalResource,
+      newResource: resource,
+      changedProps: changes.map(c => c.property),
+    }),
+    [originalResource, resource, changes],
   );
 
   if (!resource.isFork || !original) {
@@ -126,6 +140,17 @@ export function ForkBar({ resource }: ForkBarProps): React.JSX.Element | null {
           )}
         </Row>
         <Row center gap='1ch'>
+          {changes.length > 0 && (
+            <Button
+              subtle
+              onClick={() => setReviewing(r => !r)}
+              data-testid='fork-review'
+              aria-expanded={reviewing}
+            >
+              <FaListCheck />{' '}
+              <span>{reviewing ? 'Hide changes' : 'Review changes'}</span>
+            </Button>
+          )}
           <Button subtle onClick={discard}>
             Discard
           </Button>
@@ -134,9 +159,49 @@ export function ForkBar({ resource }: ForkBarProps): React.JSX.Element | null {
           </Button>
         </Row>
       </Row>
+      {reviewing && changes.length > 0 && (
+        <ReviewPanel data-testid='fork-review-panel'>
+          {/* Old is the original as it is now, new is the fork: what a merge
+              would write over what. */}
+          <ResourceDiff diff={diff} />
+          {conflicts.length > 0 && (
+            <ConflictNote>
+              <span>
+                Also changed on the original since this fork was made:
+              </span>
+              {conflicts.map(c => (
+                <ConflictProp key={c.property}>
+                  <ResourceInline subject={c.property} />
+                </ConflictProp>
+              ))}
+              <span>Merging keeps the fork's version.</span>
+            </ConflictNote>
+          )}
+        </ReviewPanel>
+      )}
     </Wrapper>
   );
 }
+
+const ReviewPanel = styled.div`
+  margin-top: ${p => p.theme.size(2)};
+  padding: ${p => p.theme.size(2)};
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.bg};
+`;
+
+const ConflictNote = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1ch;
+  align-items: center;
+  margin-top: ${p => p.theme.size(2)};
+  color: ${p => p.theme.colors.alert};
+`;
+
+const ConflictProp = styled.span`
+  font-weight: bold;
+`;
 
 const Subtle = styled.span`
   color: ${p => p.theme.colors.textLight};

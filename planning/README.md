@@ -44,7 +44,7 @@ Ranked by impact. Each links to the plan that owns the work.
 7. ~~**No Rust outbox**~~ Ported 2026-09-16 (`lib/src/sync/outbox.rs`), drained over WS and over live Iroh links. [`unified-sync.md`](./unified-sync.md), [`serverless-p2p.md`](./serverless-p2p.md).
 8. ~~**Desktop CSP is disabled**~~ Set 2026-09-15, pending a packaged-build smoke test. [`security-audit-2026-09.md`](./security-audit-2026-09.md).
 9. **Plugins and code-first schemas live only in unmergeable PRs** (#1307 at 532 files with conflicts, #1262 a stale draft). [`plugins.md`](./plugins.md), [`json-schema-code-first.md`](./json-schema-code-first.md).
-10. ~~**Dashboards have no entry point**~~ (a table's dashboard is a view tab since 2026-09-16) **and fork review shows only a count.** [`dashboards.md`](./dashboards.md), [`drafts-and-suggestions.md`](./drafts-and-suggestions.md).
+10. ~~**Dashboards have no entry point and fork review shows only a count.**~~ Both closed 2026-09-16: a table's dashboard is a view tab, and the fork bar shows the per-property diff. Still open there: suggest-for-non-writers, per-property revert, Canvas forks. [`dashboards.md`](./dashboards.md), [`drafts-and-suggestions.md`](./drafts-and-suggestions.md).
 
 ## Active
 
@@ -82,7 +82,7 @@ browser flow; standalone recovery remains self-managed.
 | [`p2p-presence.md`](./p2p-presence.md) | **Mostly built.** `EPHEMERAL 0x40` codec, peer send/receive and the server bridge are in. Remaining: two-device verification (M12), bandwidth (OQ1), and the OQ3 outbound agent filter, which is a cross-agent presence leak on a multi-agent hub. |
 | [`zones.md`](./zones.md) | **Proposal.** Nothing built. Structural fix for the permission-check half of [`index-performance.md`](./index-performance.md). Partly overtaken by the authority-unit decision. |
 | [`partial-sync.md`](./partial-sync.md) | **Proposal.** Replicate part of a drive per device. Nothing built. |
-| [`drafts-and-suggestions.md`](./drafts-and-suggestions.md) | **Mechanism shipped** (`Fork` class, `diffFork`/`mergeFork`, document body CRDT merge). `ForkBar` renders a count only; review/diff UI, suggest-for-non-writers, reject-with-reason, Canvas fork still open. |
+| [`drafts-and-suggestions.md`](./drafts-and-suggestions.md) | **Mechanism shipped** (`Fork` class, `diffFork`/`mergeFork`, document body CRDT merge) and, since 2026-09-16, the review diff in `ForkBar`. Open: suggest-for-non-writers, per-property revert, reject-with-reason, Canvas fork. |
 | [`device-pairing.md`](./device-pairing.md) | **Proposal.** One-scan pairing; QR is routing only (no secret). P0/P1/P2.5 shipped. Remaining: P2 (`pair` kind, mDNS list, pkarr redial), P3, M4, extra-workspace inventory. |
 | [`json-ad-compact.md`](./json-ad-compact.md) | **Phase 1–2 shipped** (resolver, tool I/O, context providers). Remaining: rebase `create_table.rows` on `fromCompact`; server `format=compact`. |
 | [`table-view-filters.md`](./table-view-filters.md) | **Views shipped** — Default View (filters, sort, columns, operators) and the multi-view switcher (`TableViewTabs`, `?view=`). Remaining: index-accelerated range scans. |

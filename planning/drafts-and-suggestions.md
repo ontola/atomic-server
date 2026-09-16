@@ -206,6 +206,10 @@ so each verb appears in the context menu, ⌘K, ⌘M and the AI/MCP surface for 
   folder. Generic; nothing website-specific.
 - A resource with pending drafts shows them (each draft names its `originalSubject`, so the
   reverse lookup is a plain query — no back-reference property needed).
+- **Review/diff view: shipped 2026-09-16** in `ForkBar` ("Review changes"): the
+  existing `ResourceDiff` over `diffFork`'s properties, original-now against fork,
+  plus the conflicting properties named. Per-property accept/revert and
+  reject-with-reason remain open.
 
 ## Website template consequences
 
