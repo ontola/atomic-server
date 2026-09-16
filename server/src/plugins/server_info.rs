@@ -18,6 +18,15 @@ use atomic_lib::{
     urls, Db, Resource, Value,
 };
 
+type PeerState = (
+    String,
+    Option<String>,
+    bool,
+    Option<i64>,
+    Option<u32>,
+    Option<u32>,
+);
+
 /// The node facts that live in AppState rather than in the store.
 #[derive(Clone)]
 pub struct ServerInfo {
@@ -69,15 +78,7 @@ fn peer_resources(store: &Db) -> Vec<atomic_lib::values::SubResource> {
     // the stored peer; reporting it is what lets a device card say when it last
     // exchanged anything instead of only whether a socket is open. "Connected"
     // alone cannot distinguish a healthy link from one that has moved nothing.
-    type PeerSummary = (
-        String,
-        Option<String>,
-        bool,
-        Option<i64>,
-        Option<u32>,
-        Option<u32>,
-    );
-    let mut seen: Vec<PeerSummary> = Vec::new();
+    let mut seen: Vec<PeerState> = Vec::new();
 
     let stored_for = |id: &str| -> Option<&atomic_lib::sync::peer::KnownPeer> {
         known

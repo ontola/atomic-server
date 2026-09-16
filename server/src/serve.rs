@@ -364,6 +364,16 @@ where
         crate::plugins::replicate::reconcile_replication_targets(&replication_store).await;
     });
 
+    // Runs plugins nobody is watching. Sleeps on a server with no schedules.
+    #[cfg(feature = "wasm-plugins")]
+    crate::plugins::scheduler::spawn(appstate.clone());
+
+    // Runs plugins because the data moved. Idle on a server with no triggers.
+    #[cfg(feature = "wasm-plugins")]
+    crate::plugins::triggers::spawn(appstate.clone());
+    #[cfg(feature = "wasm-plugins")]
+    crate::plugins::sync_worker::spawn(appstate.clone());
+
     // Embedder hook: the store, indexes and transports are up, but the HTTP
     // server hasn't started accepting connections yet. A managed-node wrapper
     // (atomic-saas/managed-node) uses this to flip the `managed` flag, install
@@ -472,7 +482,7 @@ where
                 println!("{}", message);
                 server
                     .bind_rustls_0_23(&endpoint, https_config)
-                    .map_err(|e| format!("Cannot bind to endpoint {}: {}", &endpoint, e))?
+                    .map_err(|e| format!("Cannot bind to endpoint {}: {}", endpoint, e))?
                     .shutdown_timeout(TIMEOUT)
                     .run()
                     .await?;
@@ -485,8 +495,8 @@ where
         tracing::info!("Binding HTTP server to endpoint {}", endpoint);
         println!("{}", message);
         server
-            .bind(&format!("{}:{}", config.opts.ip, config.opts.port))
-            .map_err(|e| format!("Cannot bind to endpoint {}: {}", &endpoint, e))?
+            .bind(&endpoint)
+            .map_err(|e| format!("Cannot bind to endpoint {}: {}", endpoint, e))?
             .shutdown_timeout(TIMEOUT)
             .run()
             .await?;

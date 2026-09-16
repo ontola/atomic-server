@@ -13,6 +13,8 @@ import {
 } from '@tomic/react';
 import type { CellIndex } from '@chunks/TableEditor';
 import toast from 'react-hot-toast';
+import { styled } from 'styled-components';
+import { AppFrame } from '@chunks/AppPage/AppFrame';
 import { computeSortOrder, readSortKey } from '@helpers/fractionalSortOrder';
 import { useHandleClearCells } from '@chunks/TablePage/helpers/useHandleClearCells';
 import { useHandleColumnResize } from '@chunks/TablePage/helpers/useHandleColumnResize';
@@ -138,6 +140,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
     ready,
     invalidateCollection,
     viewKind,
+    appView,
     viewDashboard,
     viewGroupBy,
     setViewGroupBy,
@@ -656,6 +659,14 @@ export const TableResource: React.FC<TableResourceProps> = ({
     baselineMemberCountRef.current = null;
   }
 
+  // A session row that has already been persisted is counted by the collection
+  // AND still rendered from `newRowSubjects` (it keeps its `_new:` key, see
+  // above). Every count derived from the collection has to leave those out, or
+  // the row is drawn twice: once as a member, once as itself.
+  const materialisedSessionRows = newRowSubjects.filter(subject =>
+    store.isAliased(subject),
+  ).length;
+
   // Freeze the count only once the collection actually answers what was asked.
   // Edits land faster than collections arrive — change a filter's operator and
   // then type its value, and the collection built for the operator-only query
@@ -663,12 +674,19 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // the current query would freeze it for good: the collection that finally
   // answers carries the same query, so it would never be allowed to re-capture,
   // and the grid would keep rendering the previous filter's rows.
+  //
+  // The user may have typed a row before the collection answered (a slow
+  // cold load); that row is already in the count, so it is not part of the
+  // member baseline.
   if (
     ready &&
     answeredQuery === requestedQuery &&
     baselineMemberCountRef.current === null
   ) {
-    baselineMemberCountRef.current = collection.totalMembers;
+    baselineMemberCountRef.current = Math.max(
+      0,
+      collection.totalMembers - materialisedSessionRows,
+    );
     baselineQueryKeyRef.current = requestedQuery;
   }
 
@@ -698,9 +716,6 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // below, and session rows keep their `_new:` key through the index shift
   // (`itemKey` offsets by `memberCount`), so nothing remounts.
   if (baselineMemberCountRef.current !== null) {
-    const materialisedSessionRows = newRowSubjects.filter(subject =>
-      store.isAliased(subject),
-    ).length;
     const accountedFor =
       baselineMemberCountRef.current + materialisedSessionRows;
 
@@ -710,7 +725,8 @@ export const TableResource: React.FC<TableResourceProps> = ({
   }
 
   const memberCount = Math.min(
-    baselineMemberCountRef.current ?? collection.totalMembers,
+    baselineMemberCountRef.current ??
+      Math.max(0, collection.totalMembers - materialisedSessionRows),
     collection.totalMembers,
   );
 
@@ -1092,6 +1108,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
       <TablePresenceContext value={presenceValue}>
         {!embedded && (
           <TableViewTabs
+            rowClass={tableClass.subject}
             views={views}
             activeView={activeView}
             setActiveView={setActiveView}
@@ -1135,7 +1152,18 @@ export const TableResource: React.FC<TableResourceProps> = ({
             onRowCreated={notifyEntryCreated}
           />
         )}
-        {viewKind === 'dashboard' ? (
+        {appView !== undefined ? (
+          // An app rendering this table's rows. It sits beside the Table tab
+          // rather than in place of it: adding a way to look at rows never
+          // takes one away, and the table is always one tab over.
+          <AppViewWrapper>
+            <AppFrame
+              app={appView}
+              drive={store.getDrive()!}
+              table={resource.subject}
+            />
+          </AppViewWrapper>
+        ) : viewKind === 'dashboard' ? (
           <DashboardView dashboard={viewDashboard} />
         ) : viewKind === 'kanban' ? (
           <KanbanView
@@ -1188,7 +1216,6 @@ export const TableResource: React.FC<TableResourceProps> = ({
               // load shift the row's index, not its key (`itemKey` offsets by
               // `memberCount`), so nothing remounts.
               itemCount={memberCount + newRowSubjects.length}
-              busy={!ready}
               itemKey={itemKey}
               columnToKey={columnToKey}
               labelledBy={titleId}
@@ -1233,3 +1260,16 @@ export const TableResource: React.FC<TableResourceProps> = ({
     </TablePageContext>
   );
 };
+
+/**
+ * Sizes the app tab the same way the Kanban and Calendar tabs size themselves:
+ * fill the space under the title and view tabs, capped so the page chrome
+ * stays reachable. An iframe cannot report how tall its document is, so the
+ * box has to be decided out here.
+ */
+const AppViewWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+  height: min(80vh, calc(100dvh - 13rem));
+  min-height: 18rem;
+`;

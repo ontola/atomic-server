@@ -151,6 +151,13 @@ pub async fn resolve_update(
     let drive_subject = match drive_subject {
         Some(d) => d,
         None => {
+            // Genuinely new subjects must not trust a directly-asserted
+            // DRIVE_PROP in the payload. Resolve through PARENT instead
+            // (mirrors commit.rs's safety net). A lied-about PARENT cannot
+            // escalate: admission and ACLs then check the claimed drive, and
+            // an attacker gains nothing by pointing at a drive they do not
+            // control. No parent (or no local parent) makes this a drive root,
+            // so it falls back to its own subject.
             let mut resolved = resource.get_subject().to_string();
             if let Ok(parent_val) = resource.get(crate::urls::PARENT) {
                 let parent_subject = crate::Subject::from(parent_val.to_string());
@@ -182,9 +189,8 @@ pub async fn persist_update(
     let snapshot_key =
         crate::Subject::from_raw(subject, store.get_base_domain().as_deref()).pure_id();
 
-    // Exclusive for the same reason `apply_commit` is: both the insert below and
-    // `add_resource_opts` replace the stored snapshot, so a commit landing
-    // between them would be clobbered (or clobber this).
+    // Exclusive for the same reason `apply_commit` is: persistence replaces
+    // the stored snapshot, so a concurrent commit must not be clobbered.
     let _subject_guard = store.subject_locks.lock(&snapshot_key).await;
 
     // `resolved` was built from a read taken before the lock, so re-merge it
@@ -194,39 +200,19 @@ pub async fn persist_update(
     let doc = match store.kv.get(
         crate::db::trees::Tree::LoroSnapshots,
         snapshot_key.as_bytes(),
-    ) {
-        Ok(Some(current)) => match crate::loro::AtomicLoroDoc::from_snapshot(&current) {
-            Ok(doc) => {
-                if let Err(e) = doc.import_update(&resolved.snapshot) {
-                    tracing::warn!("[ws_apply] re-merge failed for {snapshot_key}: {e}");
-                }
-                Some(doc)
-            }
-            Err(_) => None,
-        },
-        _ => None,
-    };
-
-    let mut resource = resolved.resource;
-    let snapshot = match doc {
-        Some(doc) => {
-            let snapshot = doc.export_snapshot();
-            // The resource carries the doc that `add_resource_opts` re-exports
-            // from, so it has to hold the merged state too — otherwise that
-            // call writes the pre-merge snapshot straight back over this one.
-            let _ = resource.apply_state_doc(doc);
-            snapshot
+    )? {
+        Some(current) => {
+            let doc = crate::loro::AtomicLoroDoc::from_snapshot(&current)?;
+            doc.import_update(&resolved.snapshot)?;
+            doc
         }
-        None => resolved.snapshot,
+        None => crate::loro::AtomicLoroDoc::from_snapshot(&resolved.snapshot)?,
     };
-
-    let _ = store.kv.insert(
-        crate::db::trees::Tree::LoroSnapshots,
-        snapshot_key.as_bytes(),
-        &snapshot,
-    );
-    let _ = store.add_resource_opts(&resource, false, true, true).await;
-    Ok(())
+    let mut resource = resolved.resource;
+    resource.apply_state_doc(doc)?;
+    // Projection, indexes and snapshot must commit together. Do not acknowledge
+    // a snapshot whose searchable resource failed to persist.
+    store.persist_replicated_resource(&resource).await
 }
 
 /// Remove a resource from the local store (a `DESTROY` frame or a

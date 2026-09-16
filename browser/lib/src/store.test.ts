@@ -5,6 +5,29 @@ import { bootstrapCoreVocab } from './test-vocab.js';
 import { testStore } from './test-store.js';
 
 describe('Store', () => {
+  it('settles concurrent readers when a WebSocket GET fails', async ({
+    expect,
+  }) => {
+    const store = new Store({ serverUrl: 'https://example.com' });
+    const subject = 'https://example.com/app';
+    const placeholder = new Resource(subject);
+    placeholder.loading = true;
+    store.addResource(placeholder);
+    const failure = new Error('Resource not found.');
+    vi.spyOn(store, 'getWebSocketForSubject').mockReturnValue({
+      readyState: WebSocket.OPEN,
+      fetch: vi.fn().mockRejectedValue(failure),
+      unsubscribeAgentProfile: vi.fn(),
+      subscribeAgentProfile: vi.fn(),
+    } as never);
+    const waiting = store.getResource(subject);
+    const fetched = await store.fetchResourceFromServer(subject);
+    expect(fetched.error).toBe(failure);
+    expect(fetched.loading).toBe(false);
+    expect((await waiting).error).toBe(failure);
+    expect((await store.getResource(subject)).error).toBe(failure);
+  });
+
   it('does not start a second fetch when applying a received snapshot', async ({
     expect,
   }) => {
@@ -681,6 +704,24 @@ describe('Store', () => {
     const resource = await store.newResource({ did: false });
 
     expect(resource.props.parent).toBe('https://myserver.dev/');
+  });
+
+  it('returns the canonical resource when an HTTP query responds with an alias', async ({
+    expect,
+  }) => {
+    const store = new Store();
+    const canonical = new Resource('https://atomicdata.dev/query?canonical=1');
+    await canonical.set(core.properties.name, 'Query result', false);
+    vi.spyOn(store.client, 'fetchResourceHTTP').mockResolvedValue({
+      resource: canonical,
+      createdResources: [],
+    });
+    const result = await store.fetchResourceFromServer(
+      'https://atomicdata.dev/query?requested=1',
+      { noWebSocket: true },
+    );
+    expect(result).toBe(canonical);
+    expect(result.title).toBe('Query result');
   });
 
   it('resolves aliases correctly', async ({ expect }) => {

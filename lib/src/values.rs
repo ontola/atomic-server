@@ -73,7 +73,7 @@ impl SubResource {
                 *sub = store.normalize_subject(sub);
             }
             SubResource::Nested(propvals) => {
-                for (_, val) in propvals.iter_mut() {
+                for val in propvals.values_mut() {
                     val.normalize(store);
                 }
             }
@@ -172,7 +172,7 @@ impl Value {
             }
             DataType::ResourceArray => {
                 let vector: Vec<String> = crate::parse::parse_json_array(value).map_err(|e| {
-                    format!("Could not deserialize ResourceArray: {}. Should be a Json array of strings. {}", &value, e)
+                    format!("Could not deserialize ResourceArray: {}. Should be a Json array of strings. {}", value, e)
                 })?;
                 let mut new_vec = Vec::new();
                 for i in vector {
