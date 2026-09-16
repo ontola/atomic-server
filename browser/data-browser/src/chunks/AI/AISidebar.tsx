@@ -330,30 +330,23 @@ const AISidebar: React.FC = () => {
 
   useEffect(() => {
     if (!pendingChat) return;
-    let cancelled = false;
+    // Consume the request before doing the work. `startNewChat` clears the
+    // context items, which hands this effect new callback identities while
+    // the chat is still loading; with the request still pending, that re-ran
+    // the effect and loaded the same chat a second time.
+    clearPendingChat();
     void (async () => {
       const timing = userTiming('chat:sidebar');
       await prepareToLeaveRef.current?.();
       timing.step('leave');
-      if (cancelled) return;
       startNewChat();
       timing.step('reset');
       if (pendingChat.subject) await loadExistingChat(pendingChat.subject);
       timing.step('load');
-      if (!cancelled) clearPendingChat();
       requestAnimationFrame(() =>
         requestAnimationFrame(() => timing.step('render')),
       );
-    })().catch(error => {
-      if (!cancelled) {
-        clearPendingChat();
-        store.notifyError(error);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
+    })().catch(error => store.notifyError(error));
   }, [pendingChat, clearPendingChat, startNewChat, loadExistingChat, store]);
 
   const onRegenerateMessage = async (message: AtomicUIMessage) => {
