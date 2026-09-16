@@ -1,11 +1,12 @@
+// @wc-ignore-file
 import {
-  convertToModelMessages,
   stepCountIs,
   streamText,
   type ChatTransport,
   type ToolSet,
   type UIMessageChunk,
 } from 'ai';
+import { modelMessagesWithToolRecovery } from './toolHistory';
 import { AIProvider } from '@components/AI/aiContstants';
 import {
   type AIAgent,
@@ -72,7 +73,7 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
     const agent = this.options.selectedAgent;
 
     const result = streamText({
-      messages: await convertToModelMessages(transformedMessages),
+      messages: await modelMessagesWithToolRecovery(transformedMessages),
       model: this.getModel(this.options.model),
       system: await this._prepareSystemPrompt(agent.systemPrompt),
       tools: this.options.tools,
@@ -91,6 +92,13 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
             outputTokensUsed: part.totalUsage.outputTokens,
           };
         }
+      },
+      onError: error => {
+        if (error instanceof Error) return error.message;
+        if (error && typeof error === 'object' && 'message' in error)
+          return String(error.message);
+
+        return 'The model request failed.';
       },
       sendSources: true,
       sendReasoning: true,

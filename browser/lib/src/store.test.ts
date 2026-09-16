@@ -5,6 +5,29 @@ import { bootstrapCoreVocab } from './test-vocab.js';
 import { testStore } from './test-store.js';
 
 describe('Store', () => {
+  it('settles concurrent readers when a WebSocket GET fails', async ({
+    expect,
+  }) => {
+    const store = new Store({ serverUrl: 'https://example.com' });
+    const subject = 'https://example.com/app';
+    const placeholder = new Resource(subject);
+    placeholder.loading = true;
+    store.addResource(placeholder);
+    const failure = new Error('Resource not found.');
+    vi.spyOn(store, 'getWebSocketForSubject').mockReturnValue({
+      readyState: WebSocket.OPEN,
+      fetch: vi.fn().mockRejectedValue(failure),
+      unsubscribeAgentProfile: vi.fn(),
+      subscribeAgentProfile: vi.fn(),
+    } as never);
+    const waiting = store.getResource(subject);
+    const fetched = await store.fetchResourceFromServer(subject);
+    expect(fetched.error).toBe(failure);
+    expect(fetched.loading).toBe(false);
+    expect((await waiting).error).toBe(failure);
+    expect((await store.getResource(subject)).error).toBe(failure);
+  });
+
   it('does not start a second fetch when applying a received snapshot', async ({
     expect,
   }) => {

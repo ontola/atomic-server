@@ -90,6 +90,8 @@ describe('persistSidebarMessage', () => {
     // Before any reply exists. This is the whole fix: the model may take
     // minutes, and until now that was minutes of holding the only copy in a
     // JavaScript variable.
+    // The React setter is deliberately deferred/no-op in this fixture.
+    expect(serverPersisted).toContain('message-user');
     expect(saved).toContain('chat-1');
     expect(isChatSavedRef.current).toBe(true);
   });

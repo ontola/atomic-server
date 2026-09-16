@@ -28,7 +28,7 @@ pub fn init() {
     console_error_panic_hook::set_once();
 }
 
-/// Marker spliced into the `new ClientDb` error message when the existing OPFS
+/// Marker spliced into the `ClientDb.open` error message when the existing OPFS
 /// file is a well-formed encrypted database that this key cannot decrypt.
 ///
 /// The local database is a pure cache, so JS self-heals that one case by
@@ -81,13 +81,8 @@ impl ClientDb {
     /// OPFS is genuinely broken (corrupt, quota, unsupported browser) — the
     /// error surfaces verbatim, except that an undecryptable file is tagged
     /// with `WRONG_KEY_MARKER` so the caller can drop and recreate the cache.
-    #[wasm_bindgen(constructor)]
-    // wasm-bindgen deprecated async constructors (invalid TS codegen); switching
-    // this to a static async factory is a real API change for callers and out
-    // of scope here, so silence the lint rather than making that change as a
-    // drive-by.
-    #[allow(deprecated)]
-    pub async fn new(
+    #[wasm_bindgen(js_name = open)]
+    pub async fn open(
         base_url: Option<String>,
         db_name: Option<String>,
         db_key: Option<Vec<u8>>,

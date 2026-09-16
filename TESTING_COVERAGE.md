@@ -119,6 +119,13 @@ caught it, and if the answer is "none", that is the row to add.
 
 ---
 
+## WASM database opening
+
+`browser/lib/src/client-db-open.test.ts` covers `ClientDb.open()` success,
+wrong-key cache recovery, and propagation of blocked/corrupt-storage errors.
+The save-state and crash-durability browser tests exercise the generated WASM
+factory through the real worker and OPFS; the async constructor is no longer used.
+
 ## E2E isolation and performance harness (#1461)
 
 `search.test.ts` verifies search-cache invalidation only evicts memory entries,
@@ -136,10 +143,23 @@ not establish full Dagger E2E acceptance or a supported worker count.
 `loro-selection.test.ts` checks cursor preservation across a remote metadata
 update followed by keystrokes before and after queued timers. The scoped
 loro-prosemirror 0.4.3 patch restores document and selection atomically.
+
+`loro-typing-history.test.ts` exercises ordinary typing and fallback formatting
+with real ProseMirror transactions and Loro documents. Its synthetic imported
+history reproduces redundant inclusive-mark operations without private document
+data. Assertions cover materialization counts, formatting-history growth, text
+container identity, UTF-16 edits and persisted marks.
+`loro-typing-collaboration.test.ts` covers undo/redo followed by typing, concurrent
+text/format convergence without import echoes, duplicate paragraph mappings and
+multi-step composition fallback. `editor-typing.spec.ts` runs against the built
+GUI, checks that real keystrokes avoid `toDelta`, and verifies text after reload;
+it records frame timings without a machine-dependent timing threshold.
+
 `documentUndoSession.test.ts` covers document undo/redo across editor bindings,
 authentication-session isolation, system/remote changes and callback ownership.
 `browser/e2e/tests/document-undo.spec.ts` checks undo and redo through the
 Data View round trip, including persisted content after reload.
+
 `store-search-server.test.ts` checks that authoritative server lookups after
 imports do not wait on local indexing or WebSocket readiness.
 
@@ -677,8 +697,9 @@ Not covered: visual morph of a grid card into the resource page in Firefox (need
 |---|---|---|
 | V1 element list + paragraph markdown (+ resource embed) → TipTap JSON; leftover Yjs `XmlFragment` walker; `{ type: 'ydoc' }` detection without loading `yjs` | glue | `browser/data-browser/src/views/Document/documentMigrationUtils.test.ts` |
 | Opening a writable v1 document migrates it silently into the Loro editor (no "Update Document" button) | flow | `browser/e2e/tests/documents.spec.ts` |
+| Uploaded text-file conversion: supported MIME/extensions, literal text and line breaks, Markdown parsing, permission/download failure, and class replacement | glue | `browser/data-browser/src/views/File/convertFileToDocument.test.ts` |
 
-Not covered: leftover Yjs-era DocumentV2 bodies end-to-end (needs a stored `{ type: 'ydoc' }` fixture); read-only v1 documents stay on the element list and have no e2e.
+No automated end-to-end coverage: uploaded-file conversion through the full UI and a server-backed save/reload (manually verified in Chromium). Also not covered: leftover Yjs-era DocumentV2 bodies end-to-end (needs a stored `{ type: 'ydoc' }` fixture); read-only v1 documents stay on the element list and have no e2e.
 
 ## Commits as envelopes
 
@@ -1822,6 +1843,38 @@ unsupported declarations. This is library coverage: marketplace UI, real-server
 package persistence, schema/template graph import and sandbox activation remain
 unverified/unimplemented by this slice.
 
+### Assistant context failure recovery
+
+`useCurrentSubject.test.ts` covers `/app` and nested app routes remaining UI
+routes rather than becoming backend resource subjects.
+`processAtomicResources.test.ts` verifies an unavailable attachment does not
+discard a readable product attachment or abort context preparation.
+`store.test.ts` covers a failed WebSocket GET settling concurrent readers and
+subsequent reads of its error placeholder. Existing gap-recovery and ingress
+tests cover missing-history and snapshot recovery; these are not proof that
+every resource in a user's live session has recovered.
+
+`toolHistory.test.ts` checks interrupted tool calls remain explicitly unknown
+in outgoing model history, completed calls retain results, and persisted tool
+errors and falsy outputs survive round trips. Recovery does not replay tools
+or mutate the user's stored chat. Live provider recovery is not covered by
+the scripted website E2E.
+
+### Streamed Assistant message persistence
+
+The AI chat partial-response E2E holds the model stream open, emits two text
+updates, checks that a single Assistant message reached the backend through an
+independent authenticated HTTP read, and reopens it after refresh.
+`persistSidebarMessage.test.ts` requires the current message to persist even
+when React does not run the state updater immediately. Streaming checkpoints
+run once per second and serialize updates to the same message and parts;
+refresh before the first completed checkpoint can still lose the newest text.
+
+The AI rate-limit E2E emits received reasoning followed by a provider 429. It
+checks the reasoning remains visible and that reopening the chat restores both
+the reasoning and the provider error. Error replies do not launch follow-up
+question generation or automatic compaction.
+
 ## Signed-out local drive opened from the portal
 
 `browser/data-browser/src/helpers/isDriveSignInError.test.ts` covers a local-only missing-resource error with no app agent, including origins with a configured node. It also covers signed-out DID resources absent from the current node: their copy may be in the account vault, so they offer unlock. Signed-in users, ordinary HTTP 404s, and unrelated transport failures retain their error handling.
@@ -1962,7 +2015,8 @@ failure checks also pass. Actual staging phone restore latency remains unmeasure
 
 `components/RightPanel/panelState.test.ts` covers session-local initial state, exclusive panels, cleared meeting selection, account/drive scoping, stale callbacks, and missing/unauthorized versus temporarily unavailable targets.
 
-`e2e/tests/right-panel-lifecycle.spec.ts` asserts visible panel state with legacy localStorage values for meeting/comments/AI, SPA navigation away from commentable resources, deletion of an explicitly opened meeting, and switching drives and back without resurrecting the panel. Existing `meetings.spec.ts` agenda/start/end coverage verifies that minutes and explicitly opened meeting chat still work.
+`e2e/tests/right-panel-lifecycle.spec.ts` asserts visible panel state with legacy localStorage values for meeting/comments/AI, SPA navigation away from commentable resources, deletion of an explicitly opened meeting, and switching drives and back without resurrecting the panel. Existing `meetings.spec.ts` agenda/start/end coverage verifies that minutes and explicitly opened meeting chat still work. AI chat E2E (`ai.spec.ts`, `table-tools.spec.ts`) opens the assistant with the navbar button rather than `atomic.rightPanel.active`, because that key is no longer restored.
+
 ## Replication completion and CI tool installation
 
 `lib/src/sync/replicate.rs` has five scripted WebSocket peer tests covering
@@ -1988,3 +2042,11 @@ subject-only) and direct reads, while the authorized agent can still read it.
 `client::helpers` origin tests reject lookalike hosts, userinfo-host confusion,
 changed ports/schemes, malformed URLs and non-HTTP URLs; normalized same-origin
 and localhost requests remain eligible for DID-agent authentication.
+
+## Drive root file drops
+
+`views/Drive/DrivePage.test.tsx` renders the drive page with its real dropzone
+and upload hook, then delivers multiple files through the drop callback. It
+verifies the upload targets the displayed drive even when the current drive
+setting differs. Native drag events, overlay geometry and the refreshed child
+list are not covered by this component test.

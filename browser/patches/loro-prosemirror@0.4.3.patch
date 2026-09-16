@@ -1,74 +1,432 @@
---- a/src/sync-plugin.ts
-+++ b/src/sync-plugin.ts
-@@ -1,6 +1,6 @@
- import type { Cursor, LoroEventBatch, LoroMap } from "loro-crdt";
- import { Fragment, Slice } from "prosemirror-model";
--import { type EditorState, Plugin, type StateField } from "prosemirror-state";
-+import { type EditorState, Plugin, type StateField, TextSelection } from "prosemirror-state";
- import type { EditorView } from "prosemirror-view";
- 
- import {
-@@ -209,14 +209,16 @@
-   tr.setMeta(loroSyncPluginKey, {
-     type: "non-local-updates",
-   });
-+  // Restore selection atomically: a later timer can overwrite a newer key's cursor.
-+  if (anchor != null) {
-+    const anchorPos = cursorToAbsolutePosition(anchor, state.doc, mapping)[0];
-+    const focusPos = focus ? cursorToAbsolutePosition(focus, state.doc, mapping)[0] : anchorPos;
-+    const size = tr.doc.content.size;
-+    if (anchorPos != null && focusPos != null && anchorPos >= 0 && focusPos >= 0 && anchorPos <= size && focusPos <= size) {
-+      tr.setSelection(TextSelection.between(tr.doc.resolve(anchorPos), tr.doc.resolve(focusPos)));
-+    }
-+  }
-   view.dispatch(tr);
--
--  if (anchor == null) {
--    return;
--  }
--  setTimeout(() => {
--    syncCursorsToPmSelection(view, anchor, focus);
--  });
- }
- 
- /**
---- a/dist/index.js
-+++ b/dist/index.js
-@@ -652,11 +652,16 @@
- 	const { anchor, focus } = convertPmSelectionToCursors(view.state.doc, view.state.selection, state);
- 	let tr = view.state.tr.replace(0, view.state.doc.content.size, new Slice(Fragment.from(node), 0, 0));
- 	tr.setMeta(loroSyncPluginKey, { type: "non-local-updates" });
-+	// Restore selection atomically: a later timer can overwrite a newer key's cursor.
-+	if (anchor != null) {
-+	  const anchorPos = cursorToAbsolutePosition(anchor, state.doc, mapping)[0];
-+	  const focusPos = focus ? cursorToAbsolutePosition(focus, state.doc, mapping)[0] : anchorPos;
-+	  const size = tr.doc.content.size;
-+	  if (anchorPos != null && focusPos != null && anchorPos >= 0 && focusPos >= 0 && anchorPos <= size && focusPos <= size) {
-+	    tr.setSelection(TextSelection.between(tr.doc.resolve(anchorPos), tr.doc.resolve(focusPos)));
-+	  }
-+	}
- 	view.dispatch(tr);
--	if (anchor == null) return;
--	setTimeout(() => {
--		syncCursorsToPmSelection(view, anchor, focus);
--	});
- }
- /**
- * Update ProseMirror selection based on the given Loro cursors.
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 74c4b30c8be44a01bfa974046502af2de912f667..8983d1a5ea05a39f7ffe6ec530f79223b8e1640f 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
-@@ -653,11 +653,16 @@
+@@ -5,7 +5,6 @@ let loro_crdt = require("loro-crdt");
+ let prosemirror_view = require("prosemirror-view");
+ let lib0_diff = require("lib0/diff");
+ let lib0_function = require("lib0/function");
+-
+ //#region src/lib.ts
+ const ROOT_DOC_KEY = "doc";
+ const ATTRIBUTES_KEY = "attributes";
+@@ -15,16 +14,26 @@ const NODE_NAME_KEY = "nodeName";
+ * Maps PM non-text nodes to their corresponding Loro Container IDs.
+ */
+ const WEAK_NODE_TO_LORO_CONTAINER_MAPPING = /* @__PURE__ */ new WeakMap();
+-function updateLoroToPmState(doc, mapping, editorState, containerId) {
++function cachedTextDelta(obj, cache) {
++	const cached = cache.get(obj.id);
++	if (cached != null) return cached;
++	const delta = obj.toDelta();
++	cache.set(obj.id, delta);
++	return delta;
++}
++function invalidateTextDelta(obj, cache) {
++	cache.delete(obj.id);
++}
++function updateLoroToPmState(doc, mapping, editorState, containerId, transactions, oldEditorState) {
+ 	const node = editorState.doc;
+-	const map = containerId ? doc.getContainerById(containerId) : doc.getMap(ROOT_DOC_KEY);
++	const map = containerId ? doc.getContainerById(containerId) : doc.getMap("doc");
+ 	let isInit = false;
+ 	if (map.get("nodeName") == null) {
+ 		doc.commit();
+ 		isInit = true;
+ 		map.set("nodeName", node.type.name);
+ 	}
+-	updateLoroMap(map, node, mapping);
++	if (!tryUpdateLoroTextFromTransaction(doc, map, mapping, oldEditorState, editorState, transactions)) updateLoroMap(map, node, mapping, /* @__PURE__ */ new Map());
+ 	if (isInit) doc.commit({ origin: "sys:init" });
+ 	else doc.commit({ origin: "loroSyncPlugin" });
+ }
+@@ -80,22 +89,170 @@ function createLoroText(parentList, pos, nodes, mapping) {
+ 	mapping.set(obj.id, nodes);
+ 	return obj;
+ }
+-function updateLoroText(obj, nodes, mapping) {
++function updateLoroText(obj, nodes, mapping, cache = /* @__PURE__ */ new Map()) {
+ 	mapping.set(obj.id, nodes);
+-	let str = obj.toString();
+-	const attrs = {};
+-	for (const delta of obj.toDelta()) for (const key of Object.keys(delta.attributes ?? {})) attrs[key] = null;
++	const before = cachedTextDelta(obj, cache);
++	const str = before.map((part) => part.insert ?? "").join("");
+ 	const content = nodes.map((p) => ({
+ 		insert: p.text,
+-		attributes: Object.assign({}, attrs, nodeMarksToAttributes(p.marks))
++		attributes: nodeMarksToAttributes(p.marks)
+ 	}));
+ 	const { insert, remove, index } = (0, lib0_diff.simpleDiff)(str, content.map((c) => c.insert).join(""));
+-	if (remove > 0) obj.delete(index, remove);
+-	if (insert.length) obj.insert(index, insert);
+-	obj.applyDelta(content.map((c) => ({
+-		retain: c.insert.length,
+-		attributes: c.attributes
+-	})));
++	if (remove > 0) {
++		invalidateTextDelta(obj, cache);
++		obj.delete(index, remove);
++	}
++	if (insert.length) {
++		invalidateTextDelta(obj, cache);
++		obj.applyDelta([...index === 0 ? [] : [{ retain: index }], ...contentForRange(content, index, insert.length, markNamesForDelta(before, content))]);
++	}
++	reconcileLoroTextFormatting(obj, content, cache);
++}
++/**
++* The normal typing case is a single closed ReplaceStep inside one existing
++* text-only block. Updating that LoroText directly preserves its identity and
++* avoids the repeated `toDelta()` traversal that a whole-tree reconciliation
++* needs. Reject anything even slightly less regular before mutation.
++*/
++function tryUpdateLoroTextFromTransaction(doc, root, mapping, oldEditorState, editorState, transactions) {
++	if (oldEditorState == null || transactions == null) return false;
++	const changed = transactions.filter((tr) => tr.docChanged);
++	if (changed.length !== 1 || changed[0].steps.length !== 1) return false;
++	const step = changed[0].steps[0];
++	if (step.toJSON().stepType !== "replace" || !("from" in step) || !("to" in step) || !("slice" in step)) return false;
++	const replace = step;
++	if (replace.slice.openStart !== 0 || replace.slice.openEnd !== 0) return false;
++	if (replace.slice.content.content.some((child) => !child.isText)) return false;
++	const oldPos = oldEditorState.doc.resolve(replace.from);
++	const newPos = editorState.doc.resolve(replace.from);
++	if (oldPos.depth !== newPos.depth || !oldPos.parent.isTextblock || !allText(oldPos.parent) || !allText(newPos.parent) || replace.to > oldPos.end(oldPos.depth) || !sameAncestors(oldPos, newPos)) return false;
++	for (let depth = 0; depth <= oldPos.depth; depth++) {
++		const ancestor = oldPos.node(depth);
++		const id = depth === 0 ? root.id : WEAK_NODE_TO_LORO_CONTAINER_MAPPING.get(ancestor);
++		if (id == null || mapping.get(id) !== ancestor) return false;
++	}
++	const parentId = WEAK_NODE_TO_LORO_CONTAINER_MAPPING.get(oldPos.parent);
++	if (parentId == null) return false;
++	const parent = doc.getContainerById(parentId);
++	if (!(parent instanceof loro_crdt.LoroMap)) return false;
++	const oldTextNodes = oldPos.parent.content.content;
++	const text = getLoroMapChildren(parent).toArray().find((child) => child instanceof loro_crdt.LoroText && mappedTextMatches(mapping.get(child.id), oldTextNodes));
++	if (!(text instanceof loro_crdt.LoroText)) return false;
++	const from = oldPos.parentOffset;
++	const to = from + replace.to - replace.from;
++	if (from < 0 || to < from || to > text.length) return false;
++	const newTextNodes = newPos.parent.content.content;
++	const markNames = markNamesForNodes(oldTextNodes, newTextNodes);
++	text.applyDelta([
++		...from === 0 ? [] : [{ retain: from }],
++		...to === from ? [] : [{ delete: to - from }],
++		...replace.slice.content.content.map((child) => ({
++			insert: child.text,
++			attributes: completeMarkAttributes(child.marks, markNames)
++		}))
++	]);
++	refreshChangedAncestorMappings(mapping, root, text.id, oldPos, newPos, newTextNodes);
++	return true;
++}
++function allText(node) {
++	return node.content.content.every((child) => child.isText);
++}
++function sameAncestors(oldPos, newPos) {
++	for (let depth = 0; depth <= oldPos.depth; depth++) {
++		const oldNode = oldPos.node(depth);
++		const newNode = newPos.node(depth);
++		if (oldNode.type !== newNode.type || !eqAttrs(oldNode.attrs, newNode.attrs)) return false;
++	}
++	return true;
++}
++function mappedTextMatches(mapped, nodes) {
++	return Array.isArray(mapped) && mapped.length === nodes.length && mapped.every((node, index) => node === nodes[index]);
++}
++function refreshChangedAncestorMappings(mapping, root, textId, oldPos, newPos, newTextNodes) {
++	for (let depth = 0; depth <= oldPos.depth; depth++) {
++		const oldNode = oldPos.node(depth);
++		const newNode = newPos.node(depth);
++		const id = depth === 0 ? root.id : WEAK_NODE_TO_LORO_CONTAINER_MAPPING.get(oldNode);
++		if (id == null) continue;
++		mapping.set(id, newNode);
++		WEAK_NODE_TO_LORO_CONTAINER_MAPPING.set(newNode, id);
++	}
++	mapping.set(textId, [...newTextNodes]);
++}
++function markNamesForNodes(...nodeGroups) {
++	const names = /* @__PURE__ */ new Set();
++	for (const nodes of nodeGroups) for (const node of nodes) for (const mark of node.marks) names.add(mark.type.name);
++	return names;
++}
++function markNamesForDelta(delta, content) {
++	const names = /* @__PURE__ */ new Set();
++	for (const part of delta) Object.keys(part.attributes ?? {}).forEach((name) => names.add(name));
++	for (const part of content) Object.keys(part.attributes).forEach((name) => names.add(name));
++	return names;
++}
++function completeMarkAttributes(marks, markNames) {
++	const attrs = {};
++	for (const name of markNames) attrs[name] = null;
++	Object.assign(attrs, nodeMarksToAttributes(marks));
++	return attrs;
++}
++function contentForRange(content, offset, length, markNames) {
++	const end = offset + length;
++	const result = [];
++	let cursor = 0;
++	for (const part of content) {
++		const partEnd = cursor + part.insert.length;
++		const start = Math.max(cursor, offset);
++		const stop = Math.min(partEnd, end);
++		if (start < stop) result.push({
++			insert: part.insert.slice(start - cursor, stop - cursor),
++			attributes: completeAttributes(part.attributes, markNames)
++		});
++		cursor = partEnd;
++	}
++	return result;
++}
++function completeAttributes(attributes, markNames) {
++	const complete = {};
++	for (const name of markNames) complete[name] = null;
++	return Object.assign(complete, attributes);
++}
++function reconcileLoroTextFormatting(obj, content, cache) {
++	const actual = cachedTextDelta(obj, cache).filter((part) => part.insert != null);
++	const markNames = markNamesForDelta(actual, content);
++	const operations = [];
++	let actualIndex = 0, expectedIndex = 0, actualOffset = 0, expectedOffset = 0;
++	while (actualIndex < actual.length && expectedIndex < content.length) {
++		const current = actual[actualIndex], expected = content[expectedIndex];
++		const length = Math.min(current.insert.length - actualOffset, expected.insert.length - expectedOffset);
++		const patch = changedAttributes(current.attributes ?? {}, expected.attributes, markNames);
++		operations.push(patch == null ? { retain: length } : {
++			retain: length,
++			attributes: patch
++		});
++		actualOffset += length;
++		expectedOffset += length;
++		if (actualOffset === current.insert.length) {
++			actualIndex++;
++			actualOffset = 0;
++		}
++		if (expectedOffset === expected.insert.length) {
++			expectedIndex++;
++			expectedOffset = 0;
++		}
++	}
++	if (operations.some((operation) => operation.attributes != null)) {
++		invalidateTextDelta(obj, cache);
++		obj.applyDelta(operations);
++	}
++}
++function changedAttributes(current, expected, names) {
++	const result = {};
++	for (const name of names) {
++		const hasCurrent = Object.hasOwn(current, name);
++		if (hasCurrent !== Object.hasOwn(expected, name) || hasCurrent && !eqAttrs(current[name], expected[name])) result[name] = expected[name] ?? null;
++	}
++	return Object.keys(result).length === 0 ? null : result;
+ }
+ function nodeMarksToAttributes(marks) {
+ 	const pattrs = {};
+@@ -106,8 +263,8 @@ function valueToAttrs(value) {
+ 	if (value != null && typeof value === "object" && !Array.isArray(value) && !(value instanceof Uint8Array)) return value;
+ 	return null;
+ }
+-function eqLoroTextNodes(obj, nodes) {
+-	const delta = obj.toDelta();
++function eqLoroTextNodes(obj, nodes, cache) {
++	const delta = cachedTextDelta(obj, cache);
+ 	return delta.length === nodes.length && delta.every((delta, i) => delta.insert === nodes[i].text && Object.keys(delta.attributes || {}).length === nodes[i].marks.length && nodes[i].marks.every((mark) => {
+ 		const attrs = valueToAttrs((delta.attributes || {})[mark.type.name]);
+ 		return attrs != null && eqAttrs(attrs, mark.attrs);
+@@ -116,14 +273,14 @@ function eqLoroTextNodes(obj, nodes) {
+ /**
+ * Whether the loro object is equal to the node.
+ */
+-function eqLoroObjNode(obj, node) {
++function eqLoroObjNode(obj, node, cache) {
+ 	if (obj instanceof loro_crdt.LoroMap) {
+ 		if (Array.isArray(node) || !eqNodeName(obj, node)) return false;
+ 		const loroChildren = getLoroMapChildren(obj);
+ 		const normalizedContent = normalizeNodeContent(node);
+-		return loroChildren.length === normalizedContent.length && eqAttrs(getLoroMapAttributes(obj).toJSON(), node.attrs) && normalizedContent.every((childNode, i) => eqLoroObjNode(loroChildren.get(i), childNode));
++		return loroChildren.length === normalizedContent.length && eqAttrs(getLoroMapAttributes(obj).toJSON(), node.attrs) && normalizedContent.every((childNode, i) => eqLoroObjNode(loroChildren.get(i), childNode, cache));
+ 	}
+-	return obj instanceof loro_crdt.LoroText && Array.isArray(node) && eqLoroTextNodes(obj, node);
++	return obj instanceof loro_crdt.LoroText && Array.isArray(node) && eqLoroTextNodes(obj, node, cache);
+ }
+ function eqAttrs(attrs1, attrs2) {
+ 	const keys = Object.keys(attrs1).filter((key) => attrs1[key] !== null);
+@@ -172,7 +329,7 @@ function normalizeNodeContent(node) {
+ 	});
+ 	return res;
+ }
+-function computeChildEqualityFactor(obj, node, mapping) {
++function computeChildEqualityFactor(obj, node, mapping, cache) {
+ 	const loroChildren = getLoroMapChildren(obj);
+ 	const loroChildLength = loroChildren.length;
+ 	const nodeChildren = normalizeNodeContent(node);
+@@ -185,13 +342,13 @@ function computeChildEqualityFactor(obj, node, mapping) {
+ 		const leftLoro = loroChildren.get(left);
+ 		const leftNode = nodeChildren[left];
+ 		if (eqMappedNode(leftLoro != null && (0, loro_crdt.isContainer)(leftLoro) ? mapping.get(leftLoro.id) : void 0, leftNode)) foundMappedChild = true;
+-		else if (leftLoro == null || leftNode == null || !eqLoroObjNode(leftLoro, leftNode)) break;
++		else if (leftLoro == null || leftNode == null || !eqLoroObjNode(leftLoro, leftNode, cache)) break;
+ 	}
+ 	for (; left + right < minLength; right++) {
+ 		const rightLoro = loroChildren.get(loroChildLength - right - 1);
+ 		const rightNode = nodeChildren[nodeChildLength - right - 1];
+ 		if (eqMappedNode(rightLoro != null && (0, loro_crdt.isContainer)(rightLoro) ? mapping.get(rightLoro.id) : void 0, rightNode)) foundMappedChild = true;
+-		else if (rightLoro == null || rightNode == null || !eqLoroObjNode(rightLoro, rightNode)) break;
++		else if (rightLoro == null || rightNode == null || !eqLoroObjNode(rightLoro, rightNode, cache)) break;
+ 	}
+ 	return {
+ 		factor: left + right,
+@@ -209,12 +366,12 @@ function createLoroMap(parentList, pos, node, mapping) {
+ 	mapping.set(obj.id, node);
+ 	return obj;
+ }
+-function updateLoroMap(obj, node, mapping) {
++function updateLoroMap(obj, node, mapping, cache = /* @__PURE__ */ new Map()) {
+ 	mapping.set(obj.id, node);
+ 	WEAK_NODE_TO_LORO_CONTAINER_MAPPING.set(node, obj.id);
+ 	if (!eqNodeName(obj, node)) throw new Error("node name mismatch!");
+ 	updateLoroMapAttributes(obj, node, mapping);
+-	updateLoroMapChildren(obj, node, mapping);
++	updateLoroMapChildren(obj, node, mapping, cache);
+ }
+ function getLoroMapAttributes(obj) {
+ 	return obj.getOrCreateContainer(ATTRIBUTES_KEY, new loro_crdt.LoroMap());
+@@ -234,7 +391,7 @@ function updateLoroMapAttributes(obj, node, _mapping) {
+ function getLoroMapChildren(obj) {
+ 	return obj.getOrCreateContainer(CHILDREN_KEY, new loro_crdt.LoroList());
+ }
+-function updateLoroMapChildren(obj, node, mapping) {
++function updateLoroMapChildren(obj, node, mapping, cache = /* @__PURE__ */ new Map()) {
+ 	const loroChildren = getLoroMapChildren(obj);
+ 	const loroChildLength = loroChildren.length;
+ 	const nodeChildren = normalizeNodeContent(node);
+@@ -246,17 +403,21 @@ function updateLoroMapChildren(obj, node, mapping) {
+ 		const leftLoro = loroChildren.get(left);
+ 		const leftNode = nodeChildren[left];
+ 		if (leftLoro == null || leftNode == null) break;
+-		if ((0, loro_crdt.isContainer)(leftLoro) && mapping.get(leftLoro.id) !== leftNode) if (eqMappedNode(mapping.get(leftLoro.id), leftNode) || eqLoroObjNode(leftLoro, leftNode)) {
+-			if (!Array.isArray(leftNode)) updateLoroMap(leftLoro, leftNode, mapping);
+-		} else break;
++		if ((0, loro_crdt.isContainer)(leftLoro) && mapping.get(leftLoro.id) !== leftNode) {
++			if (eqMappedNode(mapping.get(leftLoro.id), leftNode) || eqLoroObjNode(leftLoro, leftNode, cache)) {
++				if (!Array.isArray(leftNode)) updateLoroMap(leftLoro, leftNode, mapping, cache);
++			} else break;
++		}
+ 	}
+ 	for (; right + left < minLength; right++) {
+ 		const rightLoro = loroChildren.get(loroChildLength - right - 1);
+ 		const rightNode = nodeChildren[nodeChildLength - right - 1];
+ 		if (rightLoro == null || rightNode == null) break;
+-		if ((0, loro_crdt.isContainer)(rightLoro) && mapping.get(rightLoro.id) !== rightNode) if (eqMappedNode(mapping.get(rightLoro.id), rightNode) || eqLoroObjNode(rightLoro, rightNode)) {
+-			if (!Array.isArray(rightNode)) updateLoroMap(rightLoro, rightNode, mapping);
+-		} else break;
++		if ((0, loro_crdt.isContainer)(rightLoro) && mapping.get(rightLoro.id) !== rightNode) {
++			if (eqMappedNode(mapping.get(rightLoro.id), rightNode) || eqLoroObjNode(rightLoro, rightNode, cache)) {
++				if (!Array.isArray(rightNode)) updateLoroMap(rightLoro, rightNode, mapping, cache);
++			} else break;
++		}
+ 	}
+ 	while (loroChildLength - left - right > 0 && nodeChildLength - left - right > 0) {
+ 		const leftLoro = loroChildren.get(left);
+@@ -264,24 +425,24 @@ function updateLoroMapChildren(obj, node, mapping) {
+ 		const rightLoro = loroChildren.get(loroChildLength - right - 1);
+ 		const rightNode = nodeChildren[nodeChildLength - right - 1];
+ 		if (leftLoro instanceof loro_crdt.LoroText && Array.isArray(leftNode)) {
+-			if (!eqLoroTextNodes(leftLoro, leftNode)) updateLoroText(leftLoro, leftNode, mapping);
++			if (!eqLoroTextNodes(leftLoro, leftNode, cache)) updateLoroText(leftLoro, leftNode, mapping, cache);
+ 			left += 1;
+ 		} else {
+ 			let updateLeft = leftLoro instanceof loro_crdt.LoroMap && eqNodeName(leftLoro, leftNode);
+ 			let updateRight = rightLoro instanceof loro_crdt.LoroMap && eqNodeName(rightLoro, rightNode);
+ 			if (updateLeft && updateRight) {
+-				const leftEquality = computeChildEqualityFactor(leftLoro, leftNode, mapping);
+-				const rightEquality = computeChildEqualityFactor(rightLoro, rightNode, mapping);
++				const leftEquality = computeChildEqualityFactor(leftLoro, leftNode, mapping, cache);
++				const rightEquality = computeChildEqualityFactor(rightLoro, rightNode, mapping, cache);
+ 				if (leftEquality.foundMappedChild && !rightEquality.foundMappedChild) updateRight = false;
+ 				else if (rightEquality.foundMappedChild && !leftEquality.foundMappedChild) updateLeft = false;
+ 				else if (leftEquality.factor < rightEquality.factor) updateLeft = false;
+ 				else updateRight = false;
+ 			}
+ 			if (updateLeft) {
+-				updateLoroMap(leftLoro, leftNode, mapping);
++				updateLoroMap(leftLoro, leftNode, mapping, cache);
+ 				left += 1;
+ 			} else if (updateRight) {
+-				updateLoroMap(rightLoro, rightNode, mapping);
++				updateLoroMap(rightLoro, rightNode, mapping, cache);
+ 				right += 1;
+ 			} else {
+ 				const child = loroChildren.get(left);
+@@ -296,6 +457,7 @@ function updateLoroMapChildren(obj, node, mapping) {
+ 	if (loroChildLength === 1 && nodeChildLength === 0 && loroChildren.get(0) instanceof loro_crdt.LoroText) {
+ 		const loroText = loroChildren.get(0);
+ 		mapping.delete(loroText.id);
++		invalidateTextDelta(loroText, cache);
+ 		loroText.delete(0, loroText.length);
+ 	} else if (loroDelLength > 0) {
+ 		loroChildren.toArray().slice(left, left + loroDelLength).filter(loro_crdt.isContainer).forEach((type) => mapping.delete(type.id));
+@@ -328,7 +490,6 @@ function safeSetSelection(view, anchor, head) {
+ 	const selection = prosemirror_state.TextSelection.between($anchor, $head || $anchor);
+ 	view.dispatch(view.state.tr.setSelection(selection));
+ }
+-
+ //#endregion
+ //#region src/sync-plugin-key.ts
+ const loroSyncPluginKey = new prosemirror_state.PluginKey("loro-sync");
+@@ -573,7 +734,7 @@ const LoroSyncPlugin = (props) => {
+ 				else state.changedBy = "local";
+ 				switch (meta?.type) {
+ 					case "doc-changed":
+-						if (!undoState?.isUndoing.current) updateLoroToPmState(state.doc, state.mapping, newEditorState, props.containerId);
++						if (!undoState?.isUndoing.current) updateLoroToPmState(state.doc, state.mapping, newEditorState, props.containerId, meta.transactions, meta.oldEditorState);
+ 						break;
+ 					case "update-state":
+ 						state = {
+@@ -584,14 +745,16 @@ const LoroSyncPlugin = (props) => {
+ 							origin: "sys:init",
+ 							timestamp: Date.now()
+ 						});
+-						break;
+-					default: break;
+ 				}
+ 				return state;
+ 			}
+ 		},
+-		appendTransaction: (transactions, _oldEditorState, newEditorState) => {
+-			if (transactions.some((tr) => tr.docChanged)) return newEditorState.tr.setMeta(loroSyncPluginKey, { type: "doc-changed" });
++		appendTransaction: (transactions, oldEditorState, newEditorState) => {
++			if (transactions.some((tr) => tr.docChanged)) return newEditorState.tr.setMeta(loroSyncPluginKey, {
++				type: "doc-changed",
++				transactions,
++				oldEditorState
++			});
+ 			return null;
+ 		},
+ 		view: (view) => {
+@@ -614,7 +777,7 @@ function init(view) {
+ 		updateNodeOnLoroEvent(view, event);
+ 	});
+ 	else docSubscription = state.doc.subscribe((event) => updateNodeOnLoroEvent(view, event));
+-	const innerDoc = state.containerId ? state.doc.getContainerById(state.containerId) : state.doc.getMap(ROOT_DOC_KEY);
++	const innerDoc = state.containerId ? state.doc.getContainerById(state.containerId) : state.doc.getMap("doc");
+ 	const mapping = /* @__PURE__ */ new Map();
+ 	if (innerDoc.size === 0) {
+ 		const tr = view.state.tr.delete(0, view.state.doc.content.size);
+@@ -649,15 +812,17 @@ function updateNodeOnLoroEvent(view, event) {
+ 	if (event.by === "local" && event.origin !== "undo") return;
+ 	const mapping = state.mapping;
+ 	clearChangedNodes(state.doc, event, mapping);
+-	const node = createNodeFromLoroObj(view.state.schema, state.containerId ? state.doc.getContainerById(state.containerId) : state.doc.getMap(ROOT_DOC_KEY), mapping);
++	const node = createNodeFromLoroObj(view.state.schema, state.containerId ? state.doc.getContainerById(state.containerId) : state.doc.getMap("doc"), mapping);
  	const { anchor, focus } = convertPmSelectionToCursors(view.state.doc, view.state.selection, state);
  	let tr = view.state.tr.replace(0, view.state.doc.content.size, new prosemirror_model.Slice(prosemirror_model.Fragment.from(node), 0, 0));
  	tr.setMeta(loroSyncPluginKey, { type: "non-local-updates" });
-+	// Restore selection atomically: a later timer can overwrite a newer key's cursor.
 +	if (anchor != null) {
-+	  const anchorPos = cursorToAbsolutePosition(anchor, state.doc, mapping)[0];
-+	  const focusPos = focus ? cursorToAbsolutePosition(focus, state.doc, mapping)[0] : anchorPos;
-+	  const size = tr.doc.content.size;
-+	  if (anchorPos != null && focusPos != null && anchorPos >= 0 && focusPos >= 0 && anchorPos <= size && focusPos <= size) {
-+	    tr.setSelection(prosemirror_state.TextSelection.between(tr.doc.resolve(anchorPos), tr.doc.resolve(focusPos)));
-+	  }
++		const anchorPos = cursorToAbsolutePosition(anchor, state.doc, mapping)[0];
++		const focusPos = focus ? cursorToAbsolutePosition(focus, state.doc, mapping)[0] : anchorPos;
++		const size = tr.doc.content.size;
++		if (anchorPos != null && focusPos != null && anchorPos >= 0 && focusPos >= 0 && anchorPos <= size && focusPos <= size) tr.setSelection(prosemirror_state.TextSelection.between(tr.doc.resolve(anchorPos), tr.doc.resolve(focusPos)));
 +	}
  	view.dispatch(tr);
 -	if (anchor == null) return;
@@ -78,3 +436,1039 @@
  }
  /**
  * Update ProseMirror selection based on the given Loro cursors.
+@@ -672,7 +837,6 @@ function syncCursorsToPmSelection(view, anchor, focus) {
+ 	if (anchorPos == null) return;
+ 	safeSetSelection(view, anchorPos, focusPos);
+ }
+-
+ //#endregion
+ //#region \0@oxc-project+runtime@0.112.0/helpers/typeof.js
+ function _typeof(o) {
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 187d0891377a3b876b77ed2a4d617c71057eff84..5b75bca6b51989e4f82256ea06df1737779300ed 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -1,6 +1,6 @@
+ import { Node, Schema } from "prosemirror-model";
+ import * as prosemirror_state0 from "prosemirror-state";
+-import { Command, EditorState, Plugin, PluginKey, Selection } from "prosemirror-state";
++import { Command, EditorState, Plugin, PluginKey, Selection, Transaction } from "prosemirror-state";
+ import { Awareness, ContainerID, Cursor, EphemeralStore, LoroDoc, LoroList, LoroMap, LoroText, LoroTree, PeerID, Subscription, UndoManager, Value } from "loro-crdt";
+ import * as prosemirror_view0 from "prosemirror-view";
+ import { DecorationAttrs, DecorationSet, EditorView } from "prosemirror-view";
+@@ -24,7 +24,7 @@ declare const ROOT_DOC_KEY = "doc";
+ declare const ATTRIBUTES_KEY = "attributes";
+ declare const CHILDREN_KEY = "children";
+ declare const NODE_NAME_KEY = "nodeName";
+-declare function updateLoroToPmState(doc: LoroDocType, mapping: LoroNodeMapping, editorState: EditorState, containerId?: ContainerID): void;
++declare function updateLoroToPmState(doc: LoroDocType, mapping: LoroNodeMapping, editorState: EditorState, containerId?: ContainerID, transactions?: readonly Transaction[], oldEditorState?: EditorState): void;
+ declare function createNodeFromLoroObj(schema: Schema, obj: LoroNode, mapping: LoroNodeMapping): Node;
+ declare function createNodeFromLoroObj(schema: Schema, obj: LoroText, mapping: LoroNodeMapping): Node[];
+ //#endregion
+diff --git a/dist/index.js b/dist/index.js
+index e41095d5b08a1fdebb48143beceb7fe93aa20565..54b1d2ff3177a97dedc4155d191a224835953f40 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -4,7 +4,6 @@ import { Awareness, Cursor, EphemeralStore, LoroDoc, LoroList, LoroMap, LoroText
+ import { Decoration, DecorationSet, EditorView } from "prosemirror-view";
+ import { simpleDiff } from "lib0/diff";
+ import { equalityDeep } from "lib0/function";
+-
+ //#region src/lib.ts
+ const ROOT_DOC_KEY = "doc";
+ const ATTRIBUTES_KEY = "attributes";
+@@ -14,16 +13,26 @@ const NODE_NAME_KEY = "nodeName";
+ * Maps PM non-text nodes to their corresponding Loro Container IDs.
+ */
+ const WEAK_NODE_TO_LORO_CONTAINER_MAPPING = /* @__PURE__ */ new WeakMap();
+-function updateLoroToPmState(doc, mapping, editorState, containerId) {
++function cachedTextDelta(obj, cache) {
++	const cached = cache.get(obj.id);
++	if (cached != null) return cached;
++	const delta = obj.toDelta();
++	cache.set(obj.id, delta);
++	return delta;
++}
++function invalidateTextDelta(obj, cache) {
++	cache.delete(obj.id);
++}
++function updateLoroToPmState(doc, mapping, editorState, containerId, transactions, oldEditorState) {
+ 	const node = editorState.doc;
+-	const map = containerId ? doc.getContainerById(containerId) : doc.getMap(ROOT_DOC_KEY);
++	const map = containerId ? doc.getContainerById(containerId) : doc.getMap("doc");
+ 	let isInit = false;
+ 	if (map.get("nodeName") == null) {
+ 		doc.commit();
+ 		isInit = true;
+ 		map.set("nodeName", node.type.name);
+ 	}
+-	updateLoroMap(map, node, mapping);
++	if (!tryUpdateLoroTextFromTransaction(doc, map, mapping, oldEditorState, editorState, transactions)) updateLoroMap(map, node, mapping, /* @__PURE__ */ new Map());
+ 	if (isInit) doc.commit({ origin: "sys:init" });
+ 	else doc.commit({ origin: "loroSyncPlugin" });
+ }
+@@ -79,22 +88,170 @@ function createLoroText(parentList, pos, nodes, mapping) {
+ 	mapping.set(obj.id, nodes);
+ 	return obj;
+ }
+-function updateLoroText(obj, nodes, mapping) {
++function updateLoroText(obj, nodes, mapping, cache = /* @__PURE__ */ new Map()) {
+ 	mapping.set(obj.id, nodes);
+-	let str = obj.toString();
+-	const attrs = {};
+-	for (const delta of obj.toDelta()) for (const key of Object.keys(delta.attributes ?? {})) attrs[key] = null;
++	const before = cachedTextDelta(obj, cache);
++	const str = before.map((part) => part.insert ?? "").join("");
+ 	const content = nodes.map((p) => ({
+ 		insert: p.text,
+-		attributes: Object.assign({}, attrs, nodeMarksToAttributes(p.marks))
++		attributes: nodeMarksToAttributes(p.marks)
+ 	}));
+ 	const { insert, remove, index } = simpleDiff(str, content.map((c) => c.insert).join(""));
+-	if (remove > 0) obj.delete(index, remove);
+-	if (insert.length) obj.insert(index, insert);
+-	obj.applyDelta(content.map((c) => ({
+-		retain: c.insert.length,
+-		attributes: c.attributes
+-	})));
++	if (remove > 0) {
++		invalidateTextDelta(obj, cache);
++		obj.delete(index, remove);
++	}
++	if (insert.length) {
++		invalidateTextDelta(obj, cache);
++		obj.applyDelta([...index === 0 ? [] : [{ retain: index }], ...contentForRange(content, index, insert.length, markNamesForDelta(before, content))]);
++	}
++	reconcileLoroTextFormatting(obj, content, cache);
++}
++/**
++* The normal typing case is a single closed ReplaceStep inside one existing
++* text-only block. Updating that LoroText directly preserves its identity and
++* avoids the repeated `toDelta()` traversal that a whole-tree reconciliation
++* needs. Reject anything even slightly less regular before mutation.
++*/
++function tryUpdateLoroTextFromTransaction(doc, root, mapping, oldEditorState, editorState, transactions) {
++	if (oldEditorState == null || transactions == null) return false;
++	const changed = transactions.filter((tr) => tr.docChanged);
++	if (changed.length !== 1 || changed[0].steps.length !== 1) return false;
++	const step = changed[0].steps[0];
++	if (step.toJSON().stepType !== "replace" || !("from" in step) || !("to" in step) || !("slice" in step)) return false;
++	const replace = step;
++	if (replace.slice.openStart !== 0 || replace.slice.openEnd !== 0) return false;
++	if (replace.slice.content.content.some((child) => !child.isText)) return false;
++	const oldPos = oldEditorState.doc.resolve(replace.from);
++	const newPos = editorState.doc.resolve(replace.from);
++	if (oldPos.depth !== newPos.depth || !oldPos.parent.isTextblock || !allText(oldPos.parent) || !allText(newPos.parent) || replace.to > oldPos.end(oldPos.depth) || !sameAncestors(oldPos, newPos)) return false;
++	for (let depth = 0; depth <= oldPos.depth; depth++) {
++		const ancestor = oldPos.node(depth);
++		const id = depth === 0 ? root.id : WEAK_NODE_TO_LORO_CONTAINER_MAPPING.get(ancestor);
++		if (id == null || mapping.get(id) !== ancestor) return false;
++	}
++	const parentId = WEAK_NODE_TO_LORO_CONTAINER_MAPPING.get(oldPos.parent);
++	if (parentId == null) return false;
++	const parent = doc.getContainerById(parentId);
++	if (!(parent instanceof LoroMap)) return false;
++	const oldTextNodes = oldPos.parent.content.content;
++	const text = getLoroMapChildren(parent).toArray().find((child) => child instanceof LoroText && mappedTextMatches(mapping.get(child.id), oldTextNodes));
++	if (!(text instanceof LoroText)) return false;
++	const from = oldPos.parentOffset;
++	const to = from + replace.to - replace.from;
++	if (from < 0 || to < from || to > text.length) return false;
++	const newTextNodes = newPos.parent.content.content;
++	const markNames = markNamesForNodes(oldTextNodes, newTextNodes);
++	text.applyDelta([
++		...from === 0 ? [] : [{ retain: from }],
++		...to === from ? [] : [{ delete: to - from }],
++		...replace.slice.content.content.map((child) => ({
++			insert: child.text,
++			attributes: completeMarkAttributes(child.marks, markNames)
++		}))
++	]);
++	refreshChangedAncestorMappings(mapping, root, text.id, oldPos, newPos, newTextNodes);
++	return true;
++}
++function allText(node) {
++	return node.content.content.every((child) => child.isText);
++}
++function sameAncestors(oldPos, newPos) {
++	for (let depth = 0; depth <= oldPos.depth; depth++) {
++		const oldNode = oldPos.node(depth);
++		const newNode = newPos.node(depth);
++		if (oldNode.type !== newNode.type || !eqAttrs(oldNode.attrs, newNode.attrs)) return false;
++	}
++	return true;
++}
++function mappedTextMatches(mapped, nodes) {
++	return Array.isArray(mapped) && mapped.length === nodes.length && mapped.every((node, index) => node === nodes[index]);
++}
++function refreshChangedAncestorMappings(mapping, root, textId, oldPos, newPos, newTextNodes) {
++	for (let depth = 0; depth <= oldPos.depth; depth++) {
++		const oldNode = oldPos.node(depth);
++		const newNode = newPos.node(depth);
++		const id = depth === 0 ? root.id : WEAK_NODE_TO_LORO_CONTAINER_MAPPING.get(oldNode);
++		if (id == null) continue;
++		mapping.set(id, newNode);
++		WEAK_NODE_TO_LORO_CONTAINER_MAPPING.set(newNode, id);
++	}
++	mapping.set(textId, [...newTextNodes]);
++}
++function markNamesForNodes(...nodeGroups) {
++	const names = /* @__PURE__ */ new Set();
++	for (const nodes of nodeGroups) for (const node of nodes) for (const mark of node.marks) names.add(mark.type.name);
++	return names;
++}
++function markNamesForDelta(delta, content) {
++	const names = /* @__PURE__ */ new Set();
++	for (const part of delta) Object.keys(part.attributes ?? {}).forEach((name) => names.add(name));
++	for (const part of content) Object.keys(part.attributes).forEach((name) => names.add(name));
++	return names;
++}
++function completeMarkAttributes(marks, markNames) {
++	const attrs = {};
++	for (const name of markNames) attrs[name] = null;
++	Object.assign(attrs, nodeMarksToAttributes(marks));
++	return attrs;
++}
++function contentForRange(content, offset, length, markNames) {
++	const end = offset + length;
++	const result = [];
++	let cursor = 0;
++	for (const part of content) {
++		const partEnd = cursor + part.insert.length;
++		const start = Math.max(cursor, offset);
++		const stop = Math.min(partEnd, end);
++		if (start < stop) result.push({
++			insert: part.insert.slice(start - cursor, stop - cursor),
++			attributes: completeAttributes(part.attributes, markNames)
++		});
++		cursor = partEnd;
++	}
++	return result;
++}
++function completeAttributes(attributes, markNames) {
++	const complete = {};
++	for (const name of markNames) complete[name] = null;
++	return Object.assign(complete, attributes);
++}
++function reconcileLoroTextFormatting(obj, content, cache) {
++	const actual = cachedTextDelta(obj, cache).filter((part) => part.insert != null);
++	const markNames = markNamesForDelta(actual, content);
++	const operations = [];
++	let actualIndex = 0, expectedIndex = 0, actualOffset = 0, expectedOffset = 0;
++	while (actualIndex < actual.length && expectedIndex < content.length) {
++		const current = actual[actualIndex], expected = content[expectedIndex];
++		const length = Math.min(current.insert.length - actualOffset, expected.insert.length - expectedOffset);
++		const patch = changedAttributes(current.attributes ?? {}, expected.attributes, markNames);
++		operations.push(patch == null ? { retain: length } : {
++			retain: length,
++			attributes: patch
++		});
++		actualOffset += length;
++		expectedOffset += length;
++		if (actualOffset === current.insert.length) {
++			actualIndex++;
++			actualOffset = 0;
++		}
++		if (expectedOffset === expected.insert.length) {
++			expectedIndex++;
++			expectedOffset = 0;
++		}
++	}
++	if (operations.some((operation) => operation.attributes != null)) {
++		invalidateTextDelta(obj, cache);
++		obj.applyDelta(operations);
++	}
++}
++function changedAttributes(current, expected, names) {
++	const result = {};
++	for (const name of names) {
++		const hasCurrent = Object.hasOwn(current, name);
++		if (hasCurrent !== Object.hasOwn(expected, name) || hasCurrent && !eqAttrs(current[name], expected[name])) result[name] = expected[name] ?? null;
++	}
++	return Object.keys(result).length === 0 ? null : result;
+ }
+ function nodeMarksToAttributes(marks) {
+ 	const pattrs = {};
+@@ -105,8 +262,8 @@ function valueToAttrs(value) {
+ 	if (value != null && typeof value === "object" && !Array.isArray(value) && !(value instanceof Uint8Array)) return value;
+ 	return null;
+ }
+-function eqLoroTextNodes(obj, nodes) {
+-	const delta = obj.toDelta();
++function eqLoroTextNodes(obj, nodes, cache) {
++	const delta = cachedTextDelta(obj, cache);
+ 	return delta.length === nodes.length && delta.every((delta, i) => delta.insert === nodes[i].text && Object.keys(delta.attributes || {}).length === nodes[i].marks.length && nodes[i].marks.every((mark) => {
+ 		const attrs = valueToAttrs((delta.attributes || {})[mark.type.name]);
+ 		return attrs != null && eqAttrs(attrs, mark.attrs);
+@@ -115,14 +272,14 @@ function eqLoroTextNodes(obj, nodes) {
+ /**
+ * Whether the loro object is equal to the node.
+ */
+-function eqLoroObjNode(obj, node) {
++function eqLoroObjNode(obj, node, cache) {
+ 	if (obj instanceof LoroMap) {
+ 		if (Array.isArray(node) || !eqNodeName(obj, node)) return false;
+ 		const loroChildren = getLoroMapChildren(obj);
+ 		const normalizedContent = normalizeNodeContent(node);
+-		return loroChildren.length === normalizedContent.length && eqAttrs(getLoroMapAttributes(obj).toJSON(), node.attrs) && normalizedContent.every((childNode, i) => eqLoroObjNode(loroChildren.get(i), childNode));
++		return loroChildren.length === normalizedContent.length && eqAttrs(getLoroMapAttributes(obj).toJSON(), node.attrs) && normalizedContent.every((childNode, i) => eqLoroObjNode(loroChildren.get(i), childNode, cache));
+ 	}
+-	return obj instanceof LoroText && Array.isArray(node) && eqLoroTextNodes(obj, node);
++	return obj instanceof LoroText && Array.isArray(node) && eqLoroTextNodes(obj, node, cache);
+ }
+ function eqAttrs(attrs1, attrs2) {
+ 	const keys = Object.keys(attrs1).filter((key) => attrs1[key] !== null);
+@@ -171,7 +328,7 @@ function normalizeNodeContent(node) {
+ 	});
+ 	return res;
+ }
+-function computeChildEqualityFactor(obj, node, mapping) {
++function computeChildEqualityFactor(obj, node, mapping, cache) {
+ 	const loroChildren = getLoroMapChildren(obj);
+ 	const loroChildLength = loroChildren.length;
+ 	const nodeChildren = normalizeNodeContent(node);
+@@ -184,13 +341,13 @@ function computeChildEqualityFactor(obj, node, mapping) {
+ 		const leftLoro = loroChildren.get(left);
+ 		const leftNode = nodeChildren[left];
+ 		if (eqMappedNode(leftLoro != null && isContainer(leftLoro) ? mapping.get(leftLoro.id) : void 0, leftNode)) foundMappedChild = true;
+-		else if (leftLoro == null || leftNode == null || !eqLoroObjNode(leftLoro, leftNode)) break;
++		else if (leftLoro == null || leftNode == null || !eqLoroObjNode(leftLoro, leftNode, cache)) break;
+ 	}
+ 	for (; left + right < minLength; right++) {
+ 		const rightLoro = loroChildren.get(loroChildLength - right - 1);
+ 		const rightNode = nodeChildren[nodeChildLength - right - 1];
+ 		if (eqMappedNode(rightLoro != null && isContainer(rightLoro) ? mapping.get(rightLoro.id) : void 0, rightNode)) foundMappedChild = true;
+-		else if (rightLoro == null || rightNode == null || !eqLoroObjNode(rightLoro, rightNode)) break;
++		else if (rightLoro == null || rightNode == null || !eqLoroObjNode(rightLoro, rightNode, cache)) break;
+ 	}
+ 	return {
+ 		factor: left + right,
+@@ -208,12 +365,12 @@ function createLoroMap(parentList, pos, node, mapping) {
+ 	mapping.set(obj.id, node);
+ 	return obj;
+ }
+-function updateLoroMap(obj, node, mapping) {
++function updateLoroMap(obj, node, mapping, cache = /* @__PURE__ */ new Map()) {
+ 	mapping.set(obj.id, node);
+ 	WEAK_NODE_TO_LORO_CONTAINER_MAPPING.set(node, obj.id);
+ 	if (!eqNodeName(obj, node)) throw new Error("node name mismatch!");
+ 	updateLoroMapAttributes(obj, node, mapping);
+-	updateLoroMapChildren(obj, node, mapping);
++	updateLoroMapChildren(obj, node, mapping, cache);
+ }
+ function getLoroMapAttributes(obj) {
+ 	return obj.getOrCreateContainer(ATTRIBUTES_KEY, new LoroMap());
+@@ -233,7 +390,7 @@ function updateLoroMapAttributes(obj, node, _mapping) {
+ function getLoroMapChildren(obj) {
+ 	return obj.getOrCreateContainer(CHILDREN_KEY, new LoroList());
+ }
+-function updateLoroMapChildren(obj, node, mapping) {
++function updateLoroMapChildren(obj, node, mapping, cache = /* @__PURE__ */ new Map()) {
+ 	const loroChildren = getLoroMapChildren(obj);
+ 	const loroChildLength = loroChildren.length;
+ 	const nodeChildren = normalizeNodeContent(node);
+@@ -245,17 +402,21 @@ function updateLoroMapChildren(obj, node, mapping) {
+ 		const leftLoro = loroChildren.get(left);
+ 		const leftNode = nodeChildren[left];
+ 		if (leftLoro == null || leftNode == null) break;
+-		if (isContainer(leftLoro) && mapping.get(leftLoro.id) !== leftNode) if (eqMappedNode(mapping.get(leftLoro.id), leftNode) || eqLoroObjNode(leftLoro, leftNode)) {
+-			if (!Array.isArray(leftNode)) updateLoroMap(leftLoro, leftNode, mapping);
+-		} else break;
++		if (isContainer(leftLoro) && mapping.get(leftLoro.id) !== leftNode) {
++			if (eqMappedNode(mapping.get(leftLoro.id), leftNode) || eqLoroObjNode(leftLoro, leftNode, cache)) {
++				if (!Array.isArray(leftNode)) updateLoroMap(leftLoro, leftNode, mapping, cache);
++			} else break;
++		}
+ 	}
+ 	for (; right + left < minLength; right++) {
+ 		const rightLoro = loroChildren.get(loroChildLength - right - 1);
+ 		const rightNode = nodeChildren[nodeChildLength - right - 1];
+ 		if (rightLoro == null || rightNode == null) break;
+-		if (isContainer(rightLoro) && mapping.get(rightLoro.id) !== rightNode) if (eqMappedNode(mapping.get(rightLoro.id), rightNode) || eqLoroObjNode(rightLoro, rightNode)) {
+-			if (!Array.isArray(rightNode)) updateLoroMap(rightLoro, rightNode, mapping);
+-		} else break;
++		if (isContainer(rightLoro) && mapping.get(rightLoro.id) !== rightNode) {
++			if (eqMappedNode(mapping.get(rightLoro.id), rightNode) || eqLoroObjNode(rightLoro, rightNode, cache)) {
++				if (!Array.isArray(rightNode)) updateLoroMap(rightLoro, rightNode, mapping, cache);
++			} else break;
++		}
+ 	}
+ 	while (loroChildLength - left - right > 0 && nodeChildLength - left - right > 0) {
+ 		const leftLoro = loroChildren.get(left);
+@@ -263,24 +424,24 @@ function updateLoroMapChildren(obj, node, mapping) {
+ 		const rightLoro = loroChildren.get(loroChildLength - right - 1);
+ 		const rightNode = nodeChildren[nodeChildLength - right - 1];
+ 		if (leftLoro instanceof LoroText && Array.isArray(leftNode)) {
+-			if (!eqLoroTextNodes(leftLoro, leftNode)) updateLoroText(leftLoro, leftNode, mapping);
++			if (!eqLoroTextNodes(leftLoro, leftNode, cache)) updateLoroText(leftLoro, leftNode, mapping, cache);
+ 			left += 1;
+ 		} else {
+ 			let updateLeft = leftLoro instanceof LoroMap && eqNodeName(leftLoro, leftNode);
+ 			let updateRight = rightLoro instanceof LoroMap && eqNodeName(rightLoro, rightNode);
+ 			if (updateLeft && updateRight) {
+-				const leftEquality = computeChildEqualityFactor(leftLoro, leftNode, mapping);
+-				const rightEquality = computeChildEqualityFactor(rightLoro, rightNode, mapping);
++				const leftEquality = computeChildEqualityFactor(leftLoro, leftNode, mapping, cache);
++				const rightEquality = computeChildEqualityFactor(rightLoro, rightNode, mapping, cache);
+ 				if (leftEquality.foundMappedChild && !rightEquality.foundMappedChild) updateRight = false;
+ 				else if (rightEquality.foundMappedChild && !leftEquality.foundMappedChild) updateLeft = false;
+ 				else if (leftEquality.factor < rightEquality.factor) updateLeft = false;
+ 				else updateRight = false;
+ 			}
+ 			if (updateLeft) {
+-				updateLoroMap(leftLoro, leftNode, mapping);
++				updateLoroMap(leftLoro, leftNode, mapping, cache);
+ 				left += 1;
+ 			} else if (updateRight) {
+-				updateLoroMap(rightLoro, rightNode, mapping);
++				updateLoroMap(rightLoro, rightNode, mapping, cache);
+ 				right += 1;
+ 			} else {
+ 				const child = loroChildren.get(left);
+@@ -295,6 +456,7 @@ function updateLoroMapChildren(obj, node, mapping) {
+ 	if (loroChildLength === 1 && nodeChildLength === 0 && loroChildren.get(0) instanceof LoroText) {
+ 		const loroText = loroChildren.get(0);
+ 		mapping.delete(loroText.id);
++		invalidateTextDelta(loroText, cache);
+ 		loroText.delete(0, loroText.length);
+ 	} else if (loroDelLength > 0) {
+ 		loroChildren.toArray().slice(left, left + loroDelLength).filter(isContainer).forEach((type) => mapping.delete(type.id));
+@@ -327,7 +489,6 @@ function safeSetSelection(view, anchor, head) {
+ 	const selection = TextSelection.between($anchor, $head || $anchor);
+ 	view.dispatch(view.state.tr.setSelection(selection));
+ }
+-
+ //#endregion
+ //#region src/sync-plugin-key.ts
+ const loroSyncPluginKey = new PluginKey("loro-sync");
+@@ -572,7 +733,7 @@ const LoroSyncPlugin = (props) => {
+ 				else state.changedBy = "local";
+ 				switch (meta?.type) {
+ 					case "doc-changed":
+-						if (!undoState?.isUndoing.current) updateLoroToPmState(state.doc, state.mapping, newEditorState, props.containerId);
++						if (!undoState?.isUndoing.current) updateLoroToPmState(state.doc, state.mapping, newEditorState, props.containerId, meta.transactions, meta.oldEditorState);
+ 						break;
+ 					case "update-state":
+ 						state = {
+@@ -583,14 +744,16 @@ const LoroSyncPlugin = (props) => {
+ 							origin: "sys:init",
+ 							timestamp: Date.now()
+ 						});
+-						break;
+-					default: break;
+ 				}
+ 				return state;
+ 			}
+ 		},
+-		appendTransaction: (transactions, _oldEditorState, newEditorState) => {
+-			if (transactions.some((tr) => tr.docChanged)) return newEditorState.tr.setMeta(loroSyncPluginKey, { type: "doc-changed" });
++		appendTransaction: (transactions, oldEditorState, newEditorState) => {
++			if (transactions.some((tr) => tr.docChanged)) return newEditorState.tr.setMeta(loroSyncPluginKey, {
++				type: "doc-changed",
++				transactions,
++				oldEditorState
++			});
+ 			return null;
+ 		},
+ 		view: (view) => {
+@@ -613,7 +776,7 @@ function init(view) {
+ 		updateNodeOnLoroEvent(view, event);
+ 	});
+ 	else docSubscription = state.doc.subscribe((event) => updateNodeOnLoroEvent(view, event));
+-	const innerDoc = state.containerId ? state.doc.getContainerById(state.containerId) : state.doc.getMap(ROOT_DOC_KEY);
++	const innerDoc = state.containerId ? state.doc.getContainerById(state.containerId) : state.doc.getMap("doc");
+ 	const mapping = /* @__PURE__ */ new Map();
+ 	if (innerDoc.size === 0) {
+ 		const tr = view.state.tr.delete(0, view.state.doc.content.size);
+@@ -648,15 +811,17 @@ function updateNodeOnLoroEvent(view, event) {
+ 	if (event.by === "local" && event.origin !== "undo") return;
+ 	const mapping = state.mapping;
+ 	clearChangedNodes(state.doc, event, mapping);
+-	const node = createNodeFromLoroObj(view.state.schema, state.containerId ? state.doc.getContainerById(state.containerId) : state.doc.getMap(ROOT_DOC_KEY), mapping);
++	const node = createNodeFromLoroObj(view.state.schema, state.containerId ? state.doc.getContainerById(state.containerId) : state.doc.getMap("doc"), mapping);
+ 	const { anchor, focus } = convertPmSelectionToCursors(view.state.doc, view.state.selection, state);
+ 	let tr = view.state.tr.replace(0, view.state.doc.content.size, new Slice(Fragment.from(node), 0, 0));
+ 	tr.setMeta(loroSyncPluginKey, { type: "non-local-updates" });
++	if (anchor != null) {
++		const anchorPos = cursorToAbsolutePosition(anchor, state.doc, mapping)[0];
++		const focusPos = focus ? cursorToAbsolutePosition(focus, state.doc, mapping)[0] : anchorPos;
++		const size = tr.doc.content.size;
++		if (anchorPos != null && focusPos != null && anchorPos >= 0 && focusPos >= 0 && anchorPos <= size && focusPos <= size) tr.setSelection(TextSelection.between(tr.doc.resolve(anchorPos), tr.doc.resolve(focusPos)));
++	}
+ 	view.dispatch(tr);
+-	if (anchor == null) return;
+-	setTimeout(() => {
+-		syncCursorsToPmSelection(view, anchor, focus);
+-	});
+ }
+ /**
+ * Update ProseMirror selection based on the given Loro cursors.
+@@ -671,7 +836,6 @@ function syncCursorsToPmSelection(view, anchor, focus) {
+ 	if (anchorPos == null) return;
+ 	safeSetSelection(view, anchorPos, focusPos);
+ }
+-
+ //#endregion
+ //#region \0@oxc-project+runtime@0.112.0/helpers/typeof.js
+ function _typeof(o) {
+diff --git a/src/lib.ts b/src/lib.ts
+index 51d62a8b2229abd051454ab031fa898f4e94c67b..896bab8a3bb0313c25b1cf7c9d3be421b5d712f9 100644
+--- a/src/lib.ts
++++ b/src/lib.ts
+@@ -12,8 +12,8 @@ import {
+   LoroTree,
+   type Value,
+ } from "loro-crdt";
+-import { type Attrs, Mark, Node, Schema } from "prosemirror-model";
+-import { type EditorState, TextSelection } from "prosemirror-state";
++import { type Attrs, Mark, Node, type ResolvedPos, Schema } from "prosemirror-model";
++import { type EditorState, TextSelection, type Transaction } from "prosemirror-state";
+ import type { EditorView } from "prosemirror-view";
+ 
+ export type LoroChildrenListType = LoroList<
+@@ -68,11 +68,30 @@ export const WEAK_NODE_TO_LORO_CONTAINER_MAPPING = new WeakMap<
+   ContainerID
+ >();
+ 
++// A reconciliation visits the same LoroText from equality checks and the
++// eventual update. Keep that expensive materialization local to one pass;
++// never let a stale delta escape a mutation or a later transaction.
++type DeltaCache = Map<ContainerID, Delta<string>[]>;
++
++function cachedTextDelta(obj: LoroText, cache: DeltaCache): Delta<string>[] {
++  const cached = cache.get(obj.id);
++  if (cached != null) return cached;
++  const delta = obj.toDelta();
++  cache.set(obj.id, delta);
++  return delta;
++}
++
++function invalidateTextDelta(obj: LoroText, cache: DeltaCache) {
++  cache.delete(obj.id);
++}
++
+ export function updateLoroToPmState(
+   doc: LoroDocType,
+   mapping: LoroNodeMapping,
+   editorState: EditorState,
+   containerId?: ContainerID,
++  transactions?: readonly Transaction[],
++  oldEditorState?: EditorState,
+ ) {
+   const node = editorState.doc;
+   const map = containerId
+@@ -86,7 +105,18 @@ export function updateLoroToPmState(
+     map.set("nodeName", node.type.name);
+   }
+ 
+-  updateLoroMap(map, node, mapping);
++  if (
++    !tryUpdateLoroTextFromTransaction(
++      doc,
++      map,
++      mapping,
++      oldEditorState,
++      editorState,
++      transactions,
++    )
++  ) {
++    updateLoroMap(map, node, mapping, new Map());
++  }
+   if (isInit) {
+     doc.commit({ origin: "sys:init" });
+   } else {
+@@ -208,38 +238,229 @@ export function updateLoroText(
+   obj: LoroText,
+   nodes: Node[],
+   mapping: LoroNodeMapping,
++  cache: DeltaCache = new Map(),
+ ) {
+   mapping.set(obj.id, nodes);
+ 
+-  let str = obj.toString();
+-  const attrs: { [key: string]: Attrs | null } = {};
+-  for (const delta of obj.toDelta()) {
+-    for (const key of Object.keys(delta.attributes ?? {})) {
+-      attrs[key] = null;
+-    }
+-  }
+-
++  const before = cachedTextDelta(obj, cache);
++  const str = before.map((part) => part.insert ?? "").join("");
+   const content = nodes.map((p) => ({
+     insert: p.text!,
+-    attributes: Object.assign({}, attrs, nodeMarksToAttributes(p.marks)),
++    attributes: nodeMarksToAttributes(p.marks),
+   }));
+   const { insert, remove, index } = simpleDiff(
+     str,
+     content.map((c) => c.insert).join(""),
+   );
+   if (remove > 0) {
++    invalidateTextDelta(obj, cache);
+     obj.delete(index, remove);
+   }
+   if (insert.length) {
+-    obj.insert(index, insert);
++    invalidateTextDelta(obj, cache);
++    obj.applyDelta([
++      ...(index === 0 ? [] : [{ retain: index }]),
++      ...contentForRange(content, index, insert.length, markNamesForDelta(before, content)),
++    ]);
+   }
+ 
+-  obj.applyDelta(
+-    content.map((c) => ({
+-      retain: c.insert.length,
+-      attributes: c.attributes,
++  reconcileLoroTextFormatting(obj, content, cache);
++}
++
++/**
++ * The normal typing case is a single closed ReplaceStep inside one existing
++ * text-only block. Updating that LoroText directly preserves its identity and
++ * avoids the repeated `toDelta()` traversal that a whole-tree reconciliation
++ * needs. Reject anything even slightly less regular before mutation.
++ */
++function tryUpdateLoroTextFromTransaction(
++  doc: LoroDocType,
++  root: LoroNode,
++  mapping: LoroNodeMapping,
++  oldEditorState: EditorState | undefined,
++  editorState: EditorState,
++  transactions: readonly Transaction[] | undefined,
++): boolean {
++  if (oldEditorState == null || transactions == null) return false;
++  const changed = transactions.filter((tr) => tr.docChanged);
++  if (changed.length !== 1 || changed[0].steps.length !== 1) return false;
++  const transaction = changed[0];
++  const step = transaction.steps[0];
++  // Do not use `instanceof`: applications can bundle a second copy of
++  // prosemirror-transform. ReplaceAroundStep has the same slice fields, so
++  // use ProseMirror's serialized discriminator before inspecting it.
++  if (
++    step.toJSON().stepType !== "replace" ||
++    !("from" in step) ||
++    !("to" in step) ||
++    !("slice" in step)
++  ) return false;
++  const replace = step as typeof step & { from: number; to: number; slice: { openStart: number; openEnd: number; content: { content: readonly Node[] } } };
++  if (replace.slice.openStart !== 0 || replace.slice.openEnd !== 0) return false;
++  if (replace.slice.content.content.some((child) => !child.isText)) return false;
++
++  const oldPos = oldEditorState.doc.resolve(replace.from);
++  const newPos = editorState.doc.resolve(replace.from);
++  if (
++    oldPos.depth !== newPos.depth ||
++    !oldPos.parent.isTextblock ||
++    !allText(oldPos.parent) ||
++    !allText(newPos.parent) ||
++    replace.to > oldPos.end(oldPos.depth) ||
++    !sameAncestors(oldPos, newPos)
++  ) return false;
++
++  for (let depth = 0; depth <= oldPos.depth; depth++) {
++    const ancestor = oldPos.node(depth);
++    const id = depth === 0 ? root.id : WEAK_NODE_TO_LORO_CONTAINER_MAPPING.get(ancestor);
++    if (id == null || mapping.get(id) !== ancestor) return false;
++  }
++  const parentId = WEAK_NODE_TO_LORO_CONTAINER_MAPPING.get(oldPos.parent);
++  if (parentId == null) return false;
++  const parent = doc.getContainerById(parentId) as LoroNode | undefined;
++  if (!(parent instanceof LoroMap)) return false;
++  const oldTextNodes = oldPos.parent.content.content;
++  const text = getLoroMapChildren(parent)
++    .toArray()
++    .find((child) => child instanceof LoroText && mappedTextMatches(mapping.get(child.id), oldTextNodes));
++  if (!(text instanceof LoroText)) return false;
++
++  const from = oldPos.parentOffset;
++  const to = from + replace.to - replace.from;
++  if (from < 0 || to < from || to > text.length) return false;
++  const newTextNodes = newPos.parent.content.content;
++  const markNames = markNamesForNodes(oldTextNodes, newTextNodes);
++  text.applyDelta([
++    ...(from === 0 ? [] : [{ retain: from }]),
++    ...(to === from ? [] : [{ delete: to - from }]),
++    ...replace.slice.content.content.map((child) => ({
++      insert: child.text!,
++      attributes: completeMarkAttributes(child.marks, markNames),
+     })),
+-  );
++  ]);
++  refreshChangedAncestorMappings(mapping, root, text.id, oldPos, newPos, newTextNodes);
++  return true;
++}
++
++function allText(node: Node): boolean {
++  return node.content.content.every((child) => child.isText);
++}
++
++function sameAncestors(oldPos: ResolvedPos, newPos: ResolvedPos): boolean {
++  for (let depth = 0; depth <= oldPos.depth; depth++) {
++    const oldNode = oldPos.node(depth);
++    const newNode = newPos.node(depth);
++    if (oldNode.type !== newNode.type || !eqAttrs(oldNode.attrs, newNode.attrs)) return false;
++  }
++  return true;
++}
++
++function mappedTextMatches(mapped: Node | Node[] | undefined, nodes: readonly Node[]): boolean {
++  return Array.isArray(mapped) && mapped.length === nodes.length && mapped.every((node, index) => node === nodes[index]);
++}
++
++function refreshChangedAncestorMappings(
++  mapping: LoroNodeMapping,
++  root: LoroNode,
++  textId: ContainerID,
++  oldPos: ResolvedPos,
++  newPos: ResolvedPos,
++  newTextNodes: readonly Node[],
++) {
++  for (let depth = 0; depth <= oldPos.depth; depth++) {
++    const oldNode = oldPos.node(depth);
++    const newNode = newPos.node(depth);
++    const id = depth === 0 ? root.id : WEAK_NODE_TO_LORO_CONTAINER_MAPPING.get(oldNode);
++    if (id == null) continue;
++    mapping.set(id, newNode);
++    WEAK_NODE_TO_LORO_CONTAINER_MAPPING.set(newNode, id);
++  }
++  // The text container itself keeps its original Loro identity.
++  mapping.set(textId, [...newTextNodes]);
++}
++
++function markNamesForNodes(...nodeGroups: readonly (readonly Node[])[]): Set<string> {
++  const names = new Set<string>();
++  for (const nodes of nodeGroups) for (const node of nodes) for (const mark of node.marks) names.add(mark.type.name);
++  return names;
++}
++
++function markNamesForDelta(
++  delta: readonly Delta<string>[],
++  content: readonly { attributes: { [key: string]: Attrs }; }[],
++): Set<string> {
++  const names = new Set<string>();
++  for (const part of delta) Object.keys(part.attributes ?? {}).forEach((name) => names.add(name));
++  for (const part of content) Object.keys(part.attributes).forEach((name) => names.add(name));
++  return names;
++}
++
++function completeMarkAttributes(marks: readonly Mark[], markNames: ReadonlySet<string>): { [key: string]: Attrs | null } {
++  const attrs: { [key: string]: Attrs | null } = {};
++  for (const name of markNames) attrs[name] = null;
++  Object.assign(attrs, nodeMarksToAttributes(marks));
++  return attrs;
++}
++
++function contentForRange(
++  content: readonly { insert: string; attributes: { [key: string]: Attrs }; }[],
++  offset: number,
++  length: number,
++  markNames: ReadonlySet<string>,
++) {
++  const end = offset + length;
++  const result: { insert: string; attributes: { [key: string]: Attrs | null }; }[] = [];
++  let cursor = 0;
++  for (const part of content) {
++    const partEnd = cursor + part.insert.length;
++    const start = Math.max(cursor, offset);
++    const stop = Math.min(partEnd, end);
++    if (start < stop) result.push({ insert: part.insert.slice(start - cursor, stop - cursor), attributes: completeAttributes(part.attributes, markNames) });
++    cursor = partEnd;
++  }
++  return result;
++}
++
++function completeAttributes(attributes: { [key: string]: Attrs }, markNames: ReadonlySet<string>) {
++  const complete: { [key: string]: Attrs | null } = {};
++  for (const name of markNames) complete[name] = null;
++  return Object.assign(complete, attributes);
++}
++
++function reconcileLoroTextFormatting(
++  obj: LoroText,
++  content: readonly { insert: string; attributes: { [key: string]: Attrs }; }[],
++  cache: DeltaCache,
++) {
++  const actual = cachedTextDelta(obj, cache).filter((part) => part.insert != null) as { insert: string; attributes?: { [key: string]: Attrs }; }[];
++  const markNames = markNamesForDelta(actual, content);
++  const operations: { retain: number; attributes?: { [key: string]: Attrs | null }; }[] = [];
++  let actualIndex = 0, expectedIndex = 0, actualOffset = 0, expectedOffset = 0;
++  while (actualIndex < actual.length && expectedIndex < content.length) {
++    const current = actual[actualIndex], expected = content[expectedIndex];
++    const length = Math.min(current.insert.length - actualOffset, expected.insert.length - expectedOffset);
++    const patch = changedAttributes(current.attributes ?? {}, expected.attributes, markNames);
++    operations.push(patch == null ? { retain: length } : { retain: length, attributes: patch });
++    actualOffset += length; expectedOffset += length;
++    if (actualOffset === current.insert.length) { actualIndex++; actualOffset = 0; }
++    if (expectedOffset === expected.insert.length) { expectedIndex++; expectedOffset = 0; }
++  }
++  if (operations.some((operation) => operation.attributes != null)) {
++    invalidateTextDelta(obj, cache);
++    obj.applyDelta(operations);
++  }
++}
++
++function changedAttributes(current: { [key: string]: Attrs }, expected: { [key: string]: Attrs }, names: ReadonlySet<string>) {
++  const result: { [key: string]: Attrs | null } = {};
++  for (const name of names) {
++    const hasCurrent = Object.hasOwn(current, name);
++    const hasExpected = Object.hasOwn(expected, name);
++    if (hasCurrent !== hasExpected || (hasCurrent && !eqAttrs(current[name], expected[name]))) {
++      result[name] = expected[name] ?? null;
++    }
++  }
++  return Object.keys(result).length === 0 ? null : result;
+ }
+ 
+ function nodeMarksToAttributes(marks: readonly Mark[]): {
+@@ -264,8 +485,8 @@ function valueToAttrs(value: Value | Attrs | null | undefined): Attrs | null {
+   return null;
+ }
+ 
+-function eqLoroTextNodes(obj: LoroText, nodes: Node[]) {
+-  const delta = obj.toDelta();
++function eqLoroTextNodes(obj: LoroText, nodes: Node[], cache: DeltaCache) {
++  const delta = cachedTextDelta(obj, cache);
+   return (
+     delta.length === nodes.length &&
+     delta.every(
+@@ -284,7 +505,7 @@ function eqLoroTextNodes(obj: LoroText, nodes: Node[]) {
+ /**
+  * Whether the loro object is equal to the node.
+  */
+-function eqLoroObjNode(obj: LoroType, node: Node | Node[]): boolean {
++function eqLoroObjNode(obj: LoroType, node: Node | Node[], cache: DeltaCache): boolean {
+   if (obj instanceof LoroMap) {
+     if (Array.isArray(node) || !eqNodeName(obj, node)) {
+       return false;
+@@ -296,13 +517,13 @@ function eqLoroObjNode(obj: LoroType, node: Node | Node[]): boolean {
+       loroChildren.length === normalizedContent.length &&
+       eqAttrs(getLoroMapAttributes(obj).toJSON(), node.attrs) &&
+       normalizedContent.every((childNode, i) =>
+-        eqLoroObjNode(loroChildren.get(i)!, childNode),
++        eqLoroObjNode(loroChildren.get(i)!, childNode, cache),
+       )
+     );
+   }
+ 
+   return (
+-    obj instanceof LoroText && Array.isArray(node) && eqLoroTextNodes(obj, node)
++    obj instanceof LoroText && Array.isArray(node) && eqLoroTextNodes(obj, node, cache)
+   );
+ }
+ 
+@@ -391,6 +612,7 @@ function computeChildEqualityFactor(
+   obj: LoroNode,
+   node: Node,
+   mapping: LoroNodeMapping,
++  cache: DeltaCache,
+ ): {
+   factor: number;
+   foundMappedChild: boolean;
+@@ -421,7 +643,7 @@ function computeChildEqualityFactor(
+     } else if (
+       leftLoro == null ||
+       leftNode == null ||
+-      !eqLoroObjNode(leftLoro, leftNode)
++      !eqLoroObjNode(leftLoro, leftNode, cache)
+     ) {
+       break;
+     }
+@@ -441,7 +663,7 @@ function computeChildEqualityFactor(
+     } else if (
+       rightLoro == null ||
+       rightNode == null ||
+-      !eqLoroObjNode(rightLoro, rightNode)
++      !eqLoroObjNode(rightLoro, rightNode, cache)
+     ) {
+       break;
+     }
+@@ -485,6 +707,7 @@ export function updateLoroMap(
+   obj: LoroNode,
+   node: Node,
+   mapping: LoroNodeMapping,
++  cache: DeltaCache = new Map(),
+ ) {
+   mapping.set(obj.id, node);
+   WEAK_NODE_TO_LORO_CONTAINER_MAPPING.set(node, obj.id);
+@@ -494,7 +717,7 @@ export function updateLoroMap(
+   }
+ 
+   updateLoroMapAttributes(obj, node, mapping);
+-  updateLoroMapChildren(obj, node, mapping);
++  updateLoroMapChildren(obj, node, mapping, cache);
+ }
+ 
+ export function getLoroMapAttributes(
+@@ -537,6 +760,7 @@ export function updateLoroMapChildren(
+   obj: LoroNode,
+   node: Node,
+   mapping: LoroNodeMapping,
++  cache: DeltaCache = new Map(),
+ ): void {
+   const loroChildren = getLoroMapChildren(obj);
+   const loroChildLength = loroChildren.length;
+@@ -559,11 +783,11 @@ export function updateLoroMapChildren(
+     if (isContainer(leftLoro) && mapping.get(leftLoro.id) !== leftNode) {
+       if (
+         eqMappedNode(mapping.get(leftLoro.id), leftNode) ||
+-        eqLoroObjNode(leftLoro, leftNode)
++        eqLoroObjNode(leftLoro, leftNode, cache)
+       ) {
+         // We need to refresh all the mappings under this node
+         if (!Array.isArray(leftNode)) {
+-          updateLoroMap(leftLoro as LoroNode, leftNode as Node, mapping);
++          updateLoroMap(leftLoro as LoroNode, leftNode as Node, mapping, cache);
+         }
+       } else {
+         break;
+@@ -582,11 +806,11 @@ export function updateLoroMapChildren(
+     if (isContainer(rightLoro) && mapping.get(rightLoro.id) !== rightNode) {
+       if (
+         eqMappedNode(mapping.get(rightLoro.id), rightNode) ||
+-        eqLoroObjNode(rightLoro, rightNode)
++        eqLoroObjNode(rightLoro, rightNode, cache)
+       ) {
+         // We need to refresh all the mappings under this node
+         if (!Array.isArray(rightNode)) {
+-          updateLoroMap(rightLoro as LoroNode, rightNode as Node, mapping);
++          updateLoroMap(rightLoro as LoroNode, rightNode as Node, mapping, cache);
+         }
+       } else {
+         break;
+@@ -605,8 +829,8 @@ export function updateLoroMapChildren(
+     const rightNode = nodeChildren[nodeChildLength - right - 1];
+ 
+     if (leftLoro instanceof LoroText && Array.isArray(leftNode)) {
+-      if (!eqLoroTextNodes(leftLoro, leftNode)) {
+-        updateLoroText(leftLoro, leftNode, mapping);
++      if (!eqLoroTextNodes(leftLoro, leftNode, cache)) {
++        updateLoroText(leftLoro, leftNode, mapping, cache);
+       }
+       left += 1;
+     } else {
+@@ -620,12 +844,12 @@ export function updateLoroMapChildren(
+         const leftEquality = computeChildEqualityFactor(
+           leftLoro as LoroNode,
+           leftNode as Node,
+-          mapping,
++          mapping, cache,
+         );
+         const rightEquality = computeChildEqualityFactor(
+           rightLoro as LoroNode,
+           rightNode as Node,
+-          mapping,
++          mapping, cache,
+         );
+ 
+         if (leftEquality.foundMappedChild && !rightEquality.foundMappedChild) {
+@@ -643,10 +867,10 @@ export function updateLoroMapChildren(
+       }
+ 
+       if (updateLeft) {
+-        updateLoroMap(leftLoro as LoroNode, leftNode as Node, mapping);
++        updateLoroMap(leftLoro as LoroNode, leftNode as Node, mapping, cache);
+         left += 1;
+       } else if (updateRight) {
+-        updateLoroMap(rightLoro as LoroNode, rightNode as Node, mapping);
++        updateLoroMap(rightLoro as LoroNode, rightNode as Node, mapping, cache);
+         right += 1;
+       } else {
+         // recreate the element at left
+@@ -671,6 +895,7 @@ export function updateLoroMapChildren(
+     // Otherwise, the LoroText object will be deleted and all the concurrent edits to the same LoroText object will be lost
+     const loroText = loroChildren.get(0) as LoroText;
+     mapping.delete(loroText.id);
++    invalidateTextDelta(loroText, cache);
+     loroText.delete(0, loroText.length);
+   } else if (loroDelLength > 0) {
+     loroChildren
+diff --git a/src/sync-plugin.ts b/src/sync-plugin.ts
+index e5ef3228ed0c3edd57e9bea474c682fde01cf422..08100f94c4b375dca1d97b6d35ac36121693434d 100644
+--- a/src/sync-plugin.ts
++++ b/src/sync-plugin.ts
+@@ -1,6 +1,12 @@
+ import type { Cursor, LoroEventBatch, LoroMap } from "loro-crdt";
+ import { Fragment, Slice } from "prosemirror-model";
+-import { type EditorState, Plugin, type StateField } from "prosemirror-state";
++import {
++  type EditorState,
++  Plugin,
++  type StateField,
++  TextSelection,
++  type Transaction,
++} from "prosemirror-state";
+ import type { EditorView } from "prosemirror-view";
+ 
+ import {
+@@ -28,6 +34,8 @@ import { loroUndoPluginKey } from "./undo-plugin-key";
+ type PluginTransactionType =
+   | {
+       type: "doc-changed";
++      transactions?: readonly Transaction[];
++      oldEditorState?: EditorState;
+     }
+   | {
+       type: "non-local-updates";
+@@ -76,6 +84,8 @@ export const LoroSyncPlugin = (props: LoroSyncPluginProps): Plugin => {
+                 state.mapping,
+                 newEditorState,
+                 props.containerId,
++                meta.transactions,
++                meta.oldEditorState,
+               );
+             }
+             break;
+@@ -92,10 +102,12 @@ export const LoroSyncPlugin = (props: LoroSyncPluginProps): Plugin => {
+         return state;
+       },
+     } as StateField<LoroSyncPluginState>,
+-    appendTransaction: (transactions, _oldEditorState, newEditorState) => {
++    appendTransaction: (transactions, oldEditorState, newEditorState) => {
+       if (transactions.some((tr) => tr.docChanged)) {
+         return newEditorState.tr.setMeta(loroSyncPluginKey, {
+           type: "doc-changed",
++          transactions,
++          oldEditorState,
+         });
+       }
+       return null;
+@@ -209,14 +221,30 @@ function updateNodeOnLoroEvent(view: EditorView, event: LoroEventBatch) {
+   tr.setMeta(loroSyncPluginKey, {
+     type: "non-local-updates",
+   });
+-  view.dispatch(tr);
+-
+-  if (anchor == null) {
+-    return;
++  // Restore selection atomically: a later timer can overwrite a newer key's cursor.
++  if (anchor != null) {
++    const anchorPos = cursorToAbsolutePosition(anchor, state.doc, mapping)[0];
++    const focusPos = focus
++      ? cursorToAbsolutePosition(focus, state.doc, mapping)[0]
++      : anchorPos;
++    const size = tr.doc.content.size;
++    if (
++      anchorPos != null &&
++      focusPos != null &&
++      anchorPos >= 0 &&
++      focusPos >= 0 &&
++      anchorPos <= size &&
++      focusPos <= size
++    ) {
++      tr.setSelection(
++        TextSelection.between(
++          tr.doc.resolve(anchorPos),
++          tr.doc.resolve(focusPos),
++        ),
++      );
++    }
+   }
+-  setTimeout(() => {
+-    syncCursorsToPmSelection(view, anchor, focus);
+-  });
++  view.dispatch(tr);
+ }
+ 
+ /**

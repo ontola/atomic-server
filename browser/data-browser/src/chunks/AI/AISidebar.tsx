@@ -215,7 +215,9 @@ const AISidebar: React.FC = () => {
   };
 
   const addNewMessage = (message: AtomicUIMessage) => {
-    const newMessages = [...messagesRef.current, message];
+    const newMessages = messagesRef.current.some(m => m.id === message.id)
+      ? messagesRef.current.map(m => (m.id === message.id ? message : m))
+      : [...messagesRef.current, message];
 
     messagesRef.current = newMessages;
     setMessages(newMessages);

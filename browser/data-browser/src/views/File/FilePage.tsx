@@ -1,4 +1,4 @@
-import { properties } from '@tomic/react';
+import { properties, useCanWrite } from '@tomic/react';
 
 import { styled } from 'styled-components';
 import { ContainerWide } from '../../components/Containers';
@@ -9,11 +9,14 @@ import { useFileInfo } from '../../hooks/useFile';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { ResourcePageProps } from '../ResourcePage';
 import { DownloadButton, DownloadIconButton } from './DownloadButton';
+import { ConvertToDocumentButton } from './ConvertToDocumentButton';
 import { FilePreview } from './FilePreview';
 
 /** Full page File resource for showing and downloading files */
 export function FilePage({ resource }: ResourcePageProps) {
-  const { downloadFile, bytes } = useFileInfo(resource);
+  const { downloadFile, downloadUrl, bytes, mimeType, loading } =
+    useFileInfo(resource);
+  const canWrite = useCanWrite(resource);
   const wideScreen = useMediaQuery('(min-width: 600px)');
 
   return (
@@ -21,12 +24,24 @@ export function FilePage({ resource }: ResourcePageProps) {
       <Column gap='2rem'>
         <Row center justify='space-between'>
           <StyledEditableTitle resource={resource} />
-          {wideScreen && (
-            <DownloadButton downloadFile={downloadFile} fileSize={bytes} />
-          )}
-          {!wideScreen && (
-            <DownloadIconButton downloadFile={downloadFile} fileSize={bytes} />
-          )}
+          <Row center gap='0.5rem' wrapItems>
+            {wideScreen && (
+              <DownloadButton downloadFile={downloadFile} fileSize={bytes} />
+            )}
+            {!wideScreen && (
+              <DownloadIconButton
+                downloadFile={downloadFile}
+                fileSize={bytes}
+              />
+            )}
+            {canWrite && !loading && (
+              <ConvertToDocumentButton
+                resource={resource}
+                downloadUrl={downloadUrl}
+                mimeType={mimeType}
+              />
+            )}
+          </Row>
         </Row>
         <ValueForm resource={resource} propertyURL={properties.description} />
         <FilePreview resource={resource} />

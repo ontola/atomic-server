@@ -1,9 +1,6 @@
 use crate::config::Config;
 use crate::errors::AtomicServerResult;
 use atomic_lib::{Db, Resource};
-use std::sync::Arc;
-
-type IndexNotifier = Arc<dyn Fn(&str, bool) + Send + Sync>;
 
 /// No-op vector search state when the `vector-search` feature is disabled at compile time.
 #[derive(Clone)]
@@ -16,7 +13,7 @@ impl VectorSearchState {
 
     pub async fn new(
         config: &Config,
-        _index_notifier: Option<IndexNotifier>,
+        _index_notifier: Option<crate::vector_search::IndexNotifier>,
     ) -> AtomicServerResult<Self> {
         // `skip_vector_index` is false only when the operator explicitly passed
         // `--enable-vector-index`. Saying nothing there would leave them waiting

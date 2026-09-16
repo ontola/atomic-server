@@ -39,7 +39,14 @@ jobs:
     env:
       NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+      - name: Isolate Docker credentials for this job
+        shell: bash
+        run: |
+          # Persistent runners can have desktop-only credential helpers.
+          # Keep both registry logins and Dagger on one job-local config.
+          docker_config=$(mktemp -d "$RUNNER_TEMP/docker-config.XXXXXX")
+          echo "DOCKER_CONFIG=$docker_config" >> "$GITHUB_ENV"
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:

@@ -1,4 +1,4 @@
-import { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 const TEST_MODEL = '~google/gemini-flash-latest';
@@ -684,9 +684,77 @@ export async function enableAIForTesting(page: Page) {
       }),
     );
     localStorage.setItem('atomic.ai.setupComplete', JSON.stringify(true));
-    // The AI sidebar shares the right-panel slot with the Comments panel;
-    // its open state lives in `atomic.rightPanel.active`.
-    localStorage.setItem('atomic.rightPanel.active', JSON.stringify('ai'));
     localStorage.setItem('atomic.sidebar-panels', JSON.stringify(['aichats']));
   });
+}
+
+/**
+ * Open the AI right panel if it is not already open.
+ *
+ * Panels are session-local (#1475) and are not restored from
+ * `atomic.rightPanel.active`, so tests must click the navbar toggle.
+ */
+export async function openAISidebar(page: Page) {
+  const sidebar = page.getByTestId('ai-sidebar');
+
+  if ((await sidebar.getAttribute('data-open')) !== null) {
+    return;
+  }
+
+  await page.getByTestId('navbar-ai-button').click();
+  await expect(sidebar).toHaveAttribute('data-open', '');
+}
+
+/**
+ * Types a message into the AI sidebar chat input and submits it by clicking
+ * the Send button. Using the button (rather than Enter) is intentional: when a
+ * new drive is created the server runs vector indexing, which disables the
+ * Enter key handler for agents with canReadAtomicData. Waiting for the Send
+ * button to be enabled also waits out that indexing delay.
+ *
+ * AIChatInput is lazily loaded, so we wait explicitly for the contenteditable
+ * to appear after opening the panel.
+ */
+export async function sendChatMessage(
+  page: Page,
+  text: string,
+  options: { timeout?: number } = {},
+) {
+  const timeout = options.timeout ?? 30_000;
+  await openAISidebar(page);
+  const sidebar = page.getByTestId('ai-sidebar');
+  const chatInput = sidebar.locator('[contenteditable="true"]');
+
+  await expect(chatInput).toBeVisible({ timeout: 15_000 });
+
+  // Vector indexing after drive creation or chat save disables Send.
+  const indexing = sidebar.getByText('Indexing', { exact: true });
+  await indexing.waitFor({ state: 'hidden', timeout }).catch(() => {});
+
+  await chatInput.click();
+  await page.keyboard.type(text);
+
+  // Wait for Send to be enabled — this naturally waits out server indexing.
+  const sendButton = sidebar.getByTitle('Send');
+  await expect(sendButton).toBeEnabled({ timeout });
+
+  // Then wait for any toast to clear. Toasts stack in the bottom-right corner,
+  // which is exactly where this sidebar's Send button is: the container is
+  // `pointer-events: none` but each toast bar sets `auto` (it has Clear and
+  // Copy buttons), so a leftover setup toast — "Signed in!", "Dev agent
+  // created" — swallows the click for as long as it is on screen. Observed as
+  // a 10s retry loop reporting `<div data-rht-toaster> subtree intercepts
+  // pointer events`.
+  //
+  // Waiting rather than `{ force: true }` on purpose. Forcing would dispatch
+  // the click regardless of what is on top, so this same helper would keep
+  // passing if a dialog or an overlay ever genuinely covered Send — which is a
+  // real bug and one this suite should be able to catch.
+  // Hover pauses toast expiry; move away from the corner before waiting.
+  await page.mouse.move(0, 0);
+  await expect(page.locator('[data-rht-toaster] > div')).toHaveCount(0, {
+    timeout: 15_000,
+  });
+
+  await sendButton.click();
 }

@@ -27,27 +27,18 @@ test('integration categories default off and independent Atomic preferences surv
     });
   });
   await page.goto(new URL('/app/integrations', page.url()).href);
-  const apiPrompt = page.getByRole('link', {
-    name: 'Consider enabling API plugins in Settings → Integration.',
+  const apiToggle = page.getByRole('checkbox', { name: 'Show API plugins' });
+  const experimentalToggle = page.getByRole('checkbox', {
+    name: 'Show experimental plugins',
   });
-  const experimentalPrompt = page.getByRole('link', {
-    name: 'Consider enabling experimental plugins in Settings → Integration.',
-  });
-  await expect(apiPrompt).toBeVisible();
-  await expect(experimentalPrompt).toBeVisible();
+  await expect(apiToggle).toBeVisible();
+  await expect(experimentalToggle).toBeVisible();
+  await expect(apiToggle).not.toBeChecked();
+  await expect(experimentalToggle).not.toBeChecked();
   await expect(page.locator('[data-integration]')).toHaveCount(0);
   expect(catalogRequests).toHaveLength(0);
 
-  await experimentalPrompt.click();
-  await page.getByPlaceholder('Search settings...').fill('plugins');
-  const api = page.getByRole('checkbox', { name: 'Show API plugins' });
-  const experimental = page.getByRole('checkbox', {
-    name: 'Show experimental plugins',
-  });
-  await expect(api).not.toBeChecked();
-  await expect(experimental).not.toBeChecked();
-  await experimental.check();
-  await expect(experimental).toBeEnabled();
+  await experimentalToggle.check();
   await expect
     .poll(() =>
       page.evaluate(async () => {
@@ -78,33 +69,46 @@ test('integration categories default off and independent Atomic preferences surv
       }),
     )
     .toBe(true);
-  await page.reload();
-  await page.getByPlaceholder('Search settings...').fill('plugins');
-  await expect(experimental).toBeChecked();
-  await expect(api).not.toBeChecked();
+  // Once enabled, the inline toggle for that category is no longer shown.
+  await expect(experimentalToggle).toHaveCount(0);
 
-  await page.goto(new URL('/app/integrations', page.url()).href);
+  await page.reload();
   await expect(page.locator('[data-integration="mt940"]')).toBeVisible();
   await expect(page.locator('[data-release="fixture-release"]')).toBeVisible();
-  await expect(apiPrompt).toBeVisible();
-  await expect(experimentalPrompt).toHaveCount(0);
+  await expect(apiToggle).toBeVisible();
+  await expect(
+    page.getByRole('checkbox', {
+      name: 'Show experimental plugins',
+    }),
+  ).toHaveCount(0);
   expect(catalogRequests.length).toBeGreaterThan(0);
 
-  await apiPrompt.click();
+  await page.goto(new URL('/app/settings', page.url()).href);
   await page.getByPlaceholder('Search settings...').fill('plugins');
-  await experimental.uncheck();
-  await expect(experimental).toBeEnabled();
-  await api.check();
-  await expect(api).toBeEnabled();
+  const settingsApi = page.getByRole('checkbox', { name: 'Show API plugins' });
+  const settingsExperimental = page.getByRole('checkbox', {
+    name: 'Show experimental plugins',
+  });
+  await expect(settingsExperimental).toBeChecked();
+  await expect(settingsApi).not.toBeChecked();
+
+  await settingsExperimental.uncheck();
+  await expect(settingsExperimental).toBeEnabled();
+  await settingsApi.check();
+  await expect(settingsApi).toBeEnabled();
   await page.reload();
   await page.getByPlaceholder('Search settings...').fill('plugins');
-  await expect(api).toBeChecked();
-  await expect(experimental).not.toBeChecked();
+  await expect(settingsApi).toBeChecked();
+  await expect(settingsExperimental).not.toBeChecked();
 
   await page.goto(new URL('/app/integrations', page.url()).href);
   await expect(page.locator('[data-integration="proxy:pets"]')).toBeVisible();
-  await expect(apiPrompt).toHaveCount(0);
-  await expect(experimentalPrompt).toBeVisible();
+  await expect(apiToggle).toHaveCount(0);
+  await expect(
+    page.getByRole('checkbox', {
+      name: 'Show experimental plugins',
+    }),
+  ).toBeVisible();
   await expect(page.locator('[data-integration="mt940"]')).toHaveCount(0);
   await expect(page.locator('[data-release]')).toHaveCount(0);
 });
@@ -127,14 +131,10 @@ test('existing connections remain visible while both discovery categories are hi
       .getByRole('link', { name: 'New plugin', exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', {
-      name: 'Consider enabling API plugins in Settings → Integration.',
-    }),
+    page.getByRole('checkbox', { name: 'Show API plugins' }),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', {
-      name: 'Consider enabling experimental plugins in Settings → Integration.',
-    }),
+    page.getByRole('checkbox', { name: 'Show experimental plugins' }),
   ).toBeVisible();
   await expect(page.locator('[data-integration]')).toHaveCount(0);
 });

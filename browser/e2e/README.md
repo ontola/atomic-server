@@ -209,5 +209,13 @@ netlify deploy --dir playwright-report --prod --site atomic-tests
 The scoped `loro-prosemirror@0.4.3` patch restores the selection in the same
 transaction as an imported document update. The upstream deferred cursor timer
 can run after a subsequent keystroke and reorder typed text. Its regression is
-`data-browser/src/chunks/RTE/loro-selection.test.ts`; remove the patch when the
-upstream binding includes an equivalent atomic selection fix.
+`data-browser/src/chunks/RTE/loro-selection.test.ts`.
+
+The patch also applies validated inline replacements directly to their existing
+Loro text container and reconciles only changed formatting. This avoids
+repeatedly materializing accumulated formatting history while typing. Keep both
+the cursor and typing fixes until the upstream binding includes equivalent
+behavior. The typing unit regressions are `loro-typing-history.test.ts` and
+`loro-typing-collaboration.test.ts` in the same directory; `editor-typing.spec.ts`
+checks real keystrokes against the built app so minification cannot silently
+disable the optimization.
