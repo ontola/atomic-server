@@ -15,6 +15,24 @@ struct ImportOverrides {
     query_overrides: Vec<QueryOverride>,
 }
 
+/// Dereferences a single `$ref` hop (e.g. `#/components/parameters/foo`),
+/// falling back to the node itself when it isn't a ref. This document is
+/// patched before `load_open_api_document` expands refs (see
+/// `fetch_integration`), but real-world catalogs commonly declare a query
+/// parameter once under `components.parameters` and reference it from each
+/// operation instead of repeating `{name, in, schema}` inline; without this,
+/// every such parameter looks undeclared here even though the catalog does
+/// declare it.
+fn resolve_parameter<'a>(document: &'a Value, parameter: &'a Value) -> &'a Value {
+    match parameter.get("$ref").and_then(Value::as_str) {
+        Some(reference) => reference
+            .strip_prefix('#')
+            .and_then(|pointer| document.pointer(pointer))
+            .unwrap_or(parameter),
+        None => parameter,
+    }
+}
+
 /// Applies values supplied by the selected external lens. The host only
 /// matches documented collection URL templates and knows no provider names.
 pub(super) fn apply_query_overrides(
@@ -50,6 +68,7 @@ pub(super) fn apply_query_overrides(
                 .and_then(Value::as_array)
                 .into_iter()
                 .flatten()
+                .map(|parameter| resolve_parameter(document, parameter))
                 .any(|parameter| {
                     parameter.get("name").and_then(Value::as_str) == Some(name)
                         && parameter.get("in").and_then(Value::as_str) == Some("query")
@@ -166,6 +185,36 @@ mod tests {
         assert_eq!(
             doc["components"]["crudResources"]["event"]["collections"]["events"]["x-list-query"],
             json!({"singleEvents": false})
+        );
+    }
+
+    #[test]
+    fn accepts_a_parameter_declared_via_a_shared_ref() {
+        // Real-world catalogs (e.g. Google Calendar's) commonly declare a
+        // reused query parameter once under components.parameters and
+        // reference it with $ref on each operation, instead of inlining
+        // {name, in, schema} everywhere the mock fixtures above do.
+        let mut doc = json!({
+            "paths": {"/calendars/{calendarId}/events": {"get": {"parameters": [
+                {"name": "calendarId", "in": "path", "required": true},
+                {"$ref": "#/components/parameters/showDeleted"}
+            ]}}},
+            "components": {
+                "parameters": {
+                    "showDeleted": {"name": "showDeleted", "in": "query", "schema": {"type": "boolean"}}
+                },
+                "crudResources": {"event": {"collections": {"events": {"urlTemplate": "/calendars/{calendarId}/events"}}}}
+            }
+        });
+        apply_query_overrides(
+            &mut doc,
+            r#"{"query_overrides":[{"path":"/calendars/{calendarId}/events","values":{"showDeleted":true}}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            doc["components"]["crudResources"]["event"]["collections"]["events"]["x-list-query"]
+                ["showDeleted"],
+            true
         );
     }
 }
