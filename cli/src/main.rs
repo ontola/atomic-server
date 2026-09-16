@@ -265,15 +265,13 @@ async fn exec_command(context: &mut Context) -> AtomicResult<()> {
         Commands::Destroy { subject } => {
             commit::destroy(context, &subject).await?;
         }
+        #[cfg(feature = "native")]
         Commands::Edit { subject, property } => {
-            #[cfg(feature = "native")]
-            {
-                commit::edit(context, &subject, &property).await?;
-            }
-            #[cfg(not(feature = "native"))]
-            {
-                return Err("Feature not available. Compile with `native` feature.".into());
-            }
+            commit::edit(context, &subject, &property).await?;
+        }
+        #[cfg(not(feature = "native"))]
+        Commands::Edit { .. } => {
+            return Err("Feature not available. Compile with `native` feature.".into());
         }
         Commands::Get { subject, as_ } => {
             get::get_resource(context, &subject, &as_).await?;

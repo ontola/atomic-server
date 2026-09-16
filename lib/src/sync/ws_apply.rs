@@ -129,17 +129,14 @@ pub async fn resolve_update(
     // doesn't exist locally to hit the bootstrap carve-out), bypassing the
     // real drive's admission/ACL entirely. Same class of bug as the
     // IS_A: [Agent] spoof fixed in commit.rs (`7ae8bcc1`).
-    // Existing subject: its already-stored drive is authoritative, captured
-    // BEFORE the incoming delta is merged. Never re-derived from post-merge
-    // state. Genuinely new subject (`None`): nothing local to protect yet,
-    // but we still don't trust a directly-asserted DRIVE_PROP on the payload —
-    // resolve via PARENT instead (mirrors commit.rs's safety net). A
-    // lied-about PARENT can't escalate: admission/ACL then checks against
-    // whatever drive was claimed, and an attacker gains nothing by pointing at
-    // a drive they don't control. No parent (or it doesn't resolve locally)
-    // means this is a drive root — falls back to its own subject, exactly
-    // like the existing-subject case.
+    // For a new subject, leave the drive unset here: resolve via PARENT below,
+    // rather than trusting a directly asserted DRIVE_PROP on the payload.
+    // Admission/ACL checks still apply to the resolved drive; without a locally
+    // resolving parent, the subject itself is treated as the drive root.
     let drive_subject = existing.as_ref().map(|existing| {
+        // Existing subject: its already-stored drive is authoritative,
+        // captured BEFORE the incoming delta is merged. Never re-derived
+        // from post-merge state.
         existing
             .get(crate::urls::DRIVE_PROP)
             .map(|v| v.to_string())

@@ -9,7 +9,7 @@ use base64::Engine;
 fn decode(s: &str) -> Vec<u8> {
     let padded = {
         let mut p = s.to_string();
-        while p.len() % 4 != 0 {
+        while !p.len().is_multiple_of(4) {
             p.push('=');
         }
         p

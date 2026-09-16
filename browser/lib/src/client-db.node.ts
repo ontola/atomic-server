@@ -151,6 +151,12 @@ export class NodeClientDb {
     return { jsonAd: jsonAd ?? null, snapshot: snapshot ?? null };
   }
 
+  async getResourcesWithSnapshots(
+    subjects: string[],
+  ): Promise<Array<{ jsonAd: string | null; snapshot: Uint8Array | null }>> {
+    return Promise.all(subjects.map(s => this.getResourceWithSnapshot(s)));
+  }
+
   /** Match the worker persistence barrier for headless Store clients. */
   async flush(): Promise<void> {
     this.requireDb().flush();

@@ -8,7 +8,7 @@
 //! `cargo test -p atomic_lib --features db-redb --test watched_filter_scaling -- --ignored --nocapture`
 #![cfg(feature = "db-redb")]
 
-use atomic_lib::{db::QueryFilter, urls, Db, Storelike, Subject, Value};
+use atomic_lib::{db::QueryFilter, urls, Db, Subject, Value};
 
 const CREATES_PER_ROUND: usize = 200;
 const FILTER_COUNTS: [usize; 3] = [0, 2000, 10_000];
