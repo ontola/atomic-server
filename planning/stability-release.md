@@ -839,8 +839,60 @@ three consecutive runs with a single server read after completion
 (`2026-09-16T09-28-46.098Z-YR4lkq`, 41.6 seconds); the existing document/table/file
 crash test also passed in the earlier combined run. The subsequent Node-only
 queue change and fallback-ack fix have focused unit coverage. Locale files were
-restored to their pre-build contents. These sync-completion changes remain
-uncommitted, following the requested initial recovery commit.
+restored to their pre-build contents. These sync-completion changes were committed as `3a5ca6f1e`.
 
 Final gate: all 534 library tests pass; library, E2E and integration TypeScript
 checks, scoped lint/format and `git diff --check` pass.
+
+
+### Verify reconciliation with existing version vectors — 2026-09-16
+
+- [x] Reproduce false completion when an acknowledged chunk omits an update.
+- [x] After outbound ACKs, query existing RBSR_ITEMS once for the sent subject
+  range. Require server vectors to dominate the frozen exported vectors.
+- [x] Retry only missing original updates, at most twice. Exhaustion or query
+  failure leaves a recoverable failed sync and retains local data.
+- [x] Fence asynchronous verification against disconnects and later local edits.
+- [x] Cover skipped-entry recovery against a real server with a valid modified
+  chunk and an independent HTTP read immediately after sync completion.
+
+No new receipt protocol is introduced. Hash-match and receive-only rounds need
+no additional query. Outbound rounds add a metadata range query; the server
+currently enumerates drive items for it, so large-drive cost remains a performance
+measurement to make. Version coverage establishes delivery of exported resource
+operations, not attachment availability or preservation of a particular LWW value.
+
+Validation: all 538 library tests pass; four real-server integration cases pass
+(interrupted recovery with retained/lost queue, acknowledged missing entry, and
+lost commit acknowledgement). Library plus integration TypeScript checks and
+scoped lint/format checks pass. The unit regression failed before the change
+because the first ACK completed the round without retrying the missing update.
+
+### Iroh reconciliation completion — 2026-09-16
+
+- [x] Reproduce a real QUIC peer rejecting an outgoing push while the caller
+  still returned success and stamped the peer as synced.
+- [x] Wait for every outgoing chunk ACK, then verify the stored snapshot version
+  covers the frozen snapshot sent. Use existing GET/UPDATE frames: Iroh does not
+  expose the browser's metadata-only RBSR_ITEMS request.
+- [x] Retry only missing snapshots, at most twice; query failures, rejection,
+  disconnect, invalid frames and bounded verification timeouts fail the call.
+  Local resources remain available for a later reconciliation.
+- [x] Preserve interleaved live frames for the normal authenticated dispatcher,
+  with a bounded buffer. Retry traffic does not inflate sent-resource counts.
+- [x] Stop treating the accepting side's switch to live mode as verified sync.
+  Its timestamp advances on a matching SYNC probe or its own verified dial.
+- [x] Validate focused peer tests, real QUIC regressions, and two-process offline
+  edit recovery with a single receiver read after reported completion.
+
+Version coverage checks resource-operation delivery, not attachment availability
+or a remote fsync guarantee. GET adds a full snapshot response per sent resource;
+a metadata-only Iroh query can be considered if measurements justify it. Each
+verification round has a 30-second deadline. Large-drive throughput and physical
+device/network acceptance remain separate work.
+
+
+Validation: 32 focused peer/verification tests, 15 existing real-QUIC tests,
+the new accepting-side timestamp test, and the two-process recovery test all
+pass (49 total; the subprocess entry point is intentionally ignored when not
+launched by its parent). Scoped rustfmt and `git diff --check` pass.

@@ -744,9 +744,23 @@ chunk has received its acknowledgement and the final incoming chunk's queued
 local resource writes have settled. A send alone, an empty outbox, or receipt of
 `LAST` alone is insufficient. Sync frames are processed in order, and overlapping
 rounds for one drive are coalesced because acknowledgements have no request ID.
-Rejected pushes and failed incoming writes remain failed. This completion signal
-is still bounded by the chunk acknowledgement semantics above; it does not prove
-that every entry was accepted or that attachment downloads have finished.
+After outbound acknowledgements, the browser queries the existing RBSR_ITEMS
+range API and checks that the server's version vectors cover the exact versions
+exported. Additional server operations are allowed. Missing updates are retried
+up to twice; continued absence or a query failure leaves sync failed, with local
+data retained for a later reconciliation. Edits made after export belong to a
+later round. Rejected pushes and failed incoming writes remain failed. This
+checks resource operations, not completion of attachment downloads. The query
+covers the range of sent subjects and may include other resources' metadata.
+
+The Iroh initiator also waits for all outgoing chunk acknowledgements before
+reporting completion. It uses existing GET/UPDATE snapshot responses to check
+version coverage, retrying only missing snapshots up to twice. Verification
+rounds have a 30-second deadline; failure retains local data for a later retry.
+Interleaved live frames are buffered within a fixed limit and then dispatched
+through the normal permission checks. This verifies resource delivery, not blob
+availability or a remote disk flush. The accepting side's transition to live
+mode alone no longer advances its last-synced timestamp.
 
 A push refused **as a whole** is answered with `ERROR`, `request_id = 0`,
 code `SYNC_REJECTED (6)`, message

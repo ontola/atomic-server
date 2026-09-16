@@ -6,7 +6,7 @@ import { Store } from '../src/store.js';
 import { NodeClientDb } from '../src/client-db.node.js';
 import type { ClientDbWorker } from '../src/client-db.js';
 import { core } from '../src/ontologies/core.js';
-import { Tag } from '../src/ws-v2.js';
+import { Tag, decodeSyncPush, encodeSyncPush } from '../src/ws-v2.js';
 
 let server: ServerHandle;
 beforeAll(async () => {
@@ -16,9 +16,13 @@ afterAll(async () => {
   await server?.stop();
 });
 
-it.each([true, false])(
-  'preserves disjoint offline edits after interrupted reconciliation (queue retained: %s)',
-  async queueRetained => {
+it.each([
+  { queueRetained: true, skipEntry: false },
+  { queueRetained: false, skipEntry: false },
+  { queueRetained: false, skipEntry: true },
+])(
+  'preserves disjoint offline edits after interrupted reconciliation ($queueRetained, skipped entry: $skipEntry)',
+  async ({ queueRetained, skipEntry }) => {
     const owner = await Agent.fromSecret(server.agentSecret);
     const keys = await Agent.generateKeyPair();
     const guest = await Agent.fromSecret(
@@ -173,13 +177,56 @@ it.each([true, false])(
         .poll(() => b.store.getSyncStatus().lastDriveSync, { timeout: 15_000 })
         .toBeTruthy();
       restarted.store.subscribe(doc.subject, () => {});
+      let skipped = false;
+      let retried = false;
+      const dropEntry = vi
+        .spyOn(WebSocket.prototype, 'send')
+        .mockImplementation(function (this: WebSocket, data) {
+          if (
+            skipEntry &&
+            data instanceof Uint8Array &&
+            data[0] === Tag.SYNC_PUSH
+          ) {
+            const message = decodeSyncPush(data.subarray(1))!;
+
+            if (message.entries.some(entry => entry.subject === doc.subject)) {
+              if (!skipped) {
+                skipped = true;
+                // Forward a valid chunk without one update: the real server
+                // acknowledges it, but its stored vector cannot cover that edit.
+                send.call(
+                  this,
+                  new Uint8Array(
+                    encodeSyncPush(
+                      message.drive,
+                      message.entries.filter(
+                        entry => entry.subject !== doc.subject,
+                      ),
+                      message.last,
+                    ),
+                  ),
+                );
+
+                return;
+              }
+
+              retried = true;
+            }
+          }
+
+          send.call(this, data);
+        });
       await restarted.store.reconnect();
       await expect
         .poll(() => restarted.store.getSyncStatus().lastDriveSync, {
           timeout: 15_000,
         })
         .toBeTruthy();
-      // Completion now guarantees the server acknowledged our outbound data.
+      dropEntry.mockRestore();
+      expect(skipped).toBe(skipEntry);
+      expect(retried).toBe(skipEntry);
+      // Completion verifies the server has the exported operations.
+
       // A single independent read must already see it; do not poll away a race.
       const completedReader = new Store({
         serverUrl: server.serverUrl,

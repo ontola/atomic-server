@@ -2269,6 +2269,30 @@ subject-only) and direct reads, while the authorized agent can still read it.
 changed ports/schemes, malformed URLs and non-HTTP URLs; normalized same-origin
 and localhost requests remain eligible for DID-agent authentication.
 
+
+Reconciliation completion additionally checks server version-vector coverage
+(`websockets.test.ts`): skipped entries are selectively retried, two failed retries
+leave local resources intact, newer server versions are accepted, and later local
+edits/disconnects cannot change the frozen verification target. The skipped-entry
+variant of `interrupted-sync.integration.test.ts` forwards a valid chunk missing
+one update to the real server, requires its retry, then verifies the expected edit
+with a single independent HTTP read after reported completion.
+
+Iroh completion checks:
+- `peer::sync_completion_tests` uses real QUIC with a faulting responder:
+  an explicitly rejected push cannot stamp success; a chunk acknowledged without
+  import must be retried before a single receiver DB read succeeds.
+- `peer_verification::tests` covers multiple chunk ACKs, selective retry,
+  remote version dominance, bounded retry exhaustion, disconnect, and preservation
+  of interleaved live updates for the normal authenticated dispatcher.
+- `cross_process_sync` additionally disconnects after initial download, saves an
+  offline edit, reconnects, and triggers one independent receiver read only after
+  the sending process reports completion. This does not emulate power loss.
+
+- `iroh_e2e::accepting_peer_records_sync_only_after_matching_probe` checks that
+  becoming live leaves an unverified timestamp unchanged, while a later matching
+  probe advances it.
+
 ## Drive root file drops
 
 `views/Drive/DrivePage.test.tsx` renders the drive page with its real dropzone
