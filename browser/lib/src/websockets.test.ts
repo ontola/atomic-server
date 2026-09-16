@@ -23,7 +23,6 @@ import {
   encodeAuthOk,
   Flags,
 } from './ws-v2.js';
-import { LoroLoader } from './loro-loader.js';
 import type { Commit } from './commit.js';
 import { serializeDeterministically } from './commit.js';
 
@@ -849,6 +848,10 @@ describe('WSClient SYNC_DIFF and the outbox', () => {
     const { client, socket, store } = await connectedClient();
     const finish = vi.spyOn(store, 'finishDriveSync');
     const subjects = ['did:ad:accepted', 'did:ad:skipped'];
+    vi.spyOn(store, 'getClientDb').mockReturnValue({
+      getLoroSnapshot: async () => null,
+      envelopesFor: async () => ({ [subjects[1]]: ['signed-envelope'] }),
+    } as unknown as NonNullable<ReturnType<typeof store.getClientDb>>);
     const expected = subjects.map(subject => {
       const resource = new Resource(subject);
       resource.getLoroDoc()!.getMap('properties').set('name', subject);
@@ -883,6 +886,9 @@ describe('WSClient SYNC_DIFF and the outbox', () => {
       framesWithTag(socket, Tag.SYNC_PUSH)[1].subarray(1),
     )!;
     assert(retry.entries.map(entry => entry.subject)).toEqual([subjects[1]]);
+    assert(retry.envelopes).toEqual([
+      { subject: subjects[1], json: 'signed-envelope' },
+    ]);
     socket.receive(syncFrame(Tag.SYNC_OK, 'did:ad:drive'));
     await vi.waitFor(() => assert(finish).toHaveBeenCalledTimes(1));
     assert(verify).toHaveBeenCalledTimes(2);
@@ -1229,6 +1235,7 @@ describe('WSClient SYNC_DIFF and the outbox', () => {
     const snapshot = durable.export({ mode: 'snapshot' });
     vi.spyOn(store, 'getClientDb').mockReturnValue({
       getLoroSnapshot: async () => snapshot,
+      envelopesFor: async () => ({}),
     } as unknown as NonNullable<ReturnType<typeof store.getClientDb>>);
     await (
       client as unknown as {

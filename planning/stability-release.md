@@ -959,3 +959,19 @@ the default agent; the harness now restores that separate identity explicitly.
 Details and evidence limits are in `planning/sentry-feedback-readiness.md`.
 No synthetic feedback or notifications were sent. Item 1 is committed as
 `a5f1a2269`; item 2 is committed as `63937702f`.
+
+## Develop integration — 2026-09-16
+
+- [x] Rebase onto `develop` (`3b9f7e417`) without merge commits.
+- [x] Retain the library-owned periodic flush from develop. Crash harnesses use
+  the shared file-store initializer with the background tick disabled, so only
+  explicit acknowledgement barriers can make their writes durable.
+- [x] Preserve signed history envelopes in browser and Iroh selective retries;
+  extend the existing retry tests to check the envelope payload.
+- [x] Serialize the new Node database envelope methods with resource writes;
+  extend the persistence race test to cover both envelope reads and imports.
+- [x] Run client and app unit tests, TypeScript checks, server durability and
+  seeded failure schedules, and the receiver-kill cross-process test.
+- [x] Finish the native sync suite (204 passed, one ignored), Chromium crash
+  regressions (two passed), and real-server interrupted-sync / lost-ACK tests
+  (four passed). Browser lint and staged-snapshot Clippy hooks pass.

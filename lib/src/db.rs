@@ -724,6 +724,16 @@ impl Db {
         base_domain: Option<String>,
         uploads_path: &std::path::Path,
     ) -> AtomicResult<Db> {
+        Self::init_redb_file_inner(path, base_domain, uploads_path, true).await
+    }
+
+    #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+    pub(crate) async fn init_redb_file_inner(
+        path: &std::path::Path,
+        base_domain: Option<String>,
+        uploads_path: &std::path::Path,
+        periodic_flush: bool,
+    ) -> AtomicResult<Db> {
         tracing::info!("Opening ReDB database at {:?}", path);
 
         std::fs::create_dir_all(path).map_err(|e| {
@@ -812,7 +822,9 @@ impl Db {
             .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
         crate::search::maybe_rebuild_search_index(&store)?;
-        store.spawn_durable_flush(DURABLE_FLUSH_INTERVAL);
+        if periodic_flush {
+            store.spawn_durable_flush(DURABLE_FLUSH_INTERVAL);
+        }
         Ok(store)
     }
 

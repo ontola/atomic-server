@@ -11195,4 +11195,345 @@ msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "AI edit"
+
+#: src/helpers/syncPresentation.test.ts
+msgid "Cloud Vault is on"
+msgstr ""
+
+#: src/oxc-react-compiler.test.ts
+msgid "FeedbackMenuItem"
+msgstr ""
+
+#: src/oxc-react-compiler.test.ts
+msgid "FeedbackDiagnostics"
+msgstr ""
+
+#: src/oxc-styled-components.test.ts
+msgid "Button.tsx"
+msgstr ""
+
+#: src/react-compiler-cli.test.ts
+msgid "ThrowStatement"
+msgstr ""
+
+#: src/actions/matchActions.test.ts
+msgid "Searchable-Folder"
+msgstr ""
+
+#: src/handlers/errorHandler.test.ts
+msgid "Could not reach the server"
+msgstr ""
+
+#: src/components/ForkBar.tsx
+msgid "Hide changes"
+msgstr ""
+
+#: src/components/ForkBar.tsx
+msgid "Review changes"
+msgstr ""
+
+#: src/components/ForkBar.tsx
+msgid "Also changed on the original since this fork was made:"
+msgstr ""
+
+#. 0: Math.max(0, seats.included! - seats.used!); 1: seats.included
+#: src/components/InviteForm.tsx
+msgid "{0} of {1} editor seats available on this drive."
+msgstr ""
+
+#: src/components/InviteForm.tsx
+msgid "Editor seat availability for this drive is unavailable."
+msgstr ""
+
+#: src/components/InviteForm.tsx
+msgid "Viewers are free."
+msgstr ""
+
+#: src/components/InviteForm.tsx
+msgid "Preparing invite…"
+msgstr ""
+
+#: src/routes/DataRoute.tsx
+msgid "Retry save"
+msgstr "Réessayer l’enregistrement"
+
+#: src/helpers/adoptDriveFromDeepLink.test.ts
+msgid "Drive"
+msgstr ""
+
+#: src/helpers/feedback-privacy.test.ts
+msgid "Explicit feedback"
+msgstr ""
+
+#: src/helpers/feedback.test.ts
+msgid "Problem"
+msgstr ""
+
+#: src/helpers/initClientDb.handoff.test.ts
+msgid "Worker"
+msgstr ""
+
+#: src/helpers/onboardingStorage.test.ts
+msgid "Storage denied"
+msgstr ""
+
+#: src/helpers/pairing.test.ts
+msgid "Forbidden"
+msgstr ""
+
+#: src/helpers/persistent-diagnostics.test.ts
+msgid "BroadcastChannel"
+msgstr ""
+
+#: src/helpers/searchResultHint.test.ts
+msgid "İ needle"
+msgstr ""
+
+#: src/helpers/searchResultHint.test.ts
+msgid "İ"
+msgstr ""
+
+#: src/helpers/searchResultHint.test.ts
+msgid "İstanbul"
+msgstr ""
+
+#: src/helpers/searchResultHint.test.ts
+msgid "A sentence before the needle phrase and a sentence after it."
+msgstr ""
+
+#: src/helpers/searchResultHint.test.ts
+msgid "Avocado notes"
+msgstr ""
+
+#: src/helpers/searchResultHint.test.ts
+msgid "Remember to buy an avocado tomorrow."
+msgstr ""
+
+#: src/helpers/searchResultHint.test.ts
+msgid "Ripe avocado toast"
+msgstr ""
+
+#: src/helpers/searchResultHint.test.ts
+msgid "Anything"
+msgstr ""
+
+#: src/helpers/searchResultHint.test.ts
+msgid "Apple"
+msgstr ""
+
+#: src/chunks/AI/persistSidebarMessage.test.ts
+msgid "A good title"
+msgstr ""
+
+#: src/chunks/AI/persistSidebarMessage.test.ts
+msgid "Something the user typed"
+msgstr ""
+
+#: src/chunks/RTE/loro-typing-collaboration.test.ts
+msgid "Aword"
+msgstr ""
+
+#: src/chunks/RTE/loroSelection.test.ts
+msgid "Server acknowledgement"
+msgstr ""
+
+#: src/helpers/originNode.test.ts
+msgid "JSON without a version or node id is not a node"
+msgstr ""
+
+#: src/chunks/Templates/keepTemplateDemo.test.ts
+msgid "My studies"
+msgstr ""
+
+#: src/chunks/Templates/keepTemplateDemo.test.ts
+msgid "Studies"
+msgstr ""
+
+#: src/chunks/Templates/model.test.ts
+msgid "Assignments"
+msgstr ""
+
+#: src/chunks/Templates/model.test.ts
+msgid "Circular"
+msgstr ""
+
+#: src/chunks/Templates/model.test.ts
+msgid "Missing"
+msgstr ""
+
+#. 0: tableName
+#. 0: tableName
+#: src/chunks/TablePage/useTableView.ts
+msgid "{0} dashboard"
+msgstr ""
+
+#: src/components/Presence/FollowStatus.tsx
+msgid "FollowingTrigger"
+msgstr ""
+
+#. 0: name
+#: src/components/Presence/PresenceAvatarMenu.tsx
+msgid "Following {0}"
+msgstr ""
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Retry clearing diagnostics"
+msgstr ""
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Stop and clear recording"
+msgstr ""
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Start local recording"
+msgstr ""
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Diagnostic report preview"
+msgstr ""
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid ""
+"Diagnostic storage is unavailable. Recent events are only in memory and may "
+"be lost on reload."
+msgstr ""
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid ""
+"Could not clear diagnostic storage or save the recording preference. "
+"Recording is stopped. Retry clearing before leaving this browser."
+msgstr ""
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid ""
+"Recording was reset in another tab. Reload this tab before recording again."
+msgstr ""
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Preview diagnostics"
+msgstr ""
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid ""
+"Recent save and connection events are recorded locally by default. No "
+"document text, filenames, URLs, or error messages are collected. Up to 500 "
+"events from the last 10 minutes are kept in this browser, including across "
+"reloads. Expired records are removed when the app next accesses storage. "
+"Nothing is uploaded automatically."
+msgstr ""
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid ""
+"Events show timing and activity counts, which can still be sensitive. Review "
+"before sharing."
+msgstr ""
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Download diagnostics"
+msgstr ""
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Diagnostics"
+msgstr ""
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "<0/> Include diagnostic data"
+msgstr ""
+
+#: src/routes/NewResource/creationCatalog.test.ts
+msgid "Issue Tracker"
+msgstr ""
+
+#: src/routes/NewResource/creationCatalog.test.ts
+msgid "A kanban board"
+msgstr ""
+
+#: src/routes/NewResource/creationCatalog.test.ts
+msgid "A calendar"
+msgstr ""
+
+#: src/routes/NewResource/creationCatalog.test.ts
+msgid "A reading log"
+msgstr ""
+
+#: src/helpers/managed/api.test.ts
+msgid "Bearer sess"
+msgstr ""
+
+#: src/helpers/managed/driveHostingState.test.ts
+#: src/helpers/managed/reconcile.test.ts
+msgid "Pending"
+msgstr ""
+
+#: src/helpers/managed/driveHostingState.test.ts
+msgid "Suspended"
+msgstr ""
+
+#: src/helpers/managed/enrollmentApi.test.ts
+msgid "Could not check"
+msgstr ""
+
+#: src/helpers/managed/enrollmentApi.test.ts
+msgid "Invalid"
+msgstr ""
+
+#: src/helpers/managed/enrollment.test.ts
+msgid "HostingPaymentRequiredError"
+msgstr ""
+
+#: src/helpers/managed/enrollment.test.ts
+msgid "Ed25519"
+msgstr ""
+
+#: src/helpers/managed/enrollment.test.ts
+msgid "Not Found"
+msgstr ""
+
+#: src/helpers/managed/prepareDriveSharing.test.ts
+msgid "Missing attachment"
+msgstr ""
+
+#: src/helpers/managed/vaultAutoBackup.test.ts
+msgid "Personal notes"
+msgstr ""
+
+#: src/helpers/managed/vault.test.ts
+#: src/helpers/managed/vaultAutoBackup.test.ts
+msgid "Design"
+msgstr ""
+
+#: src/helpers/managed/vaultAutoBackup.test.ts
+msgid "Studio"
+msgstr ""
+
+#: src/helpers/managed/vault.test.ts
+msgid "AbortError"
+msgstr ""
+
+#: src/chunks/TableEditor/hooks/useAvailableHeight.test.ts
+msgid "ResizeObserver"
+msgstr ""
+
+#: src/chunks/TableEditor/hooks/useAvailableHeight.test.ts
+msgid "MutationObserver"
+msgstr ""
+
+#: src/chunks/TablePage/Dashboard/DashboardView.tsx
+msgid "This view has no dashboard yet."
+msgstr ""
+
+#: src/chunks/TablePage/Dashboard/DashboardView.tsx
+msgid "Loading dashboard…"
+msgstr ""
+
+#: src/chunks/TablePage/Kanban/createSelectProperty.test.ts
+msgid "Priority"
+msgstr ""
+
+#: src/chunks/TablePage/Kanban/createSelectProperty.test.ts
+msgid "Todo"
+msgstr ""
+
+#: src/chunks/TablePage/Kanban/createSelectProperty.test.ts
+msgid "Blocked"
 msgstr ""

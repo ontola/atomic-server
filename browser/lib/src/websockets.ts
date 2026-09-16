@@ -215,6 +215,7 @@ interface SyncTransfer {
   failed: boolean;
   sent: Array<{ subject: string; loroBytes: Uint8Array; vv: VV }>;
   retries: number;
+  envelopes?: Record<string, string[]>;
 }
 
 /**
@@ -2152,6 +2153,7 @@ export class WSClient {
       }
 
       try {
+        transfer.envelopes = envelopes;
         const frames = encodeSyncPushChunks(diff.drive, entries, envelopes);
         // Each chunk receives its own SYNC_OK. Register before sending.
         transfer.pendingAcks = frames.length;
@@ -2217,7 +2219,7 @@ export class WSClient {
         }
 
         transfer.retries++;
-        const frames = encodeSyncPushChunks(drive, missing);
+        const frames = encodeSyncPushChunks(drive, missing, transfer.envelopes);
         transfer.pendingAcks = frames.length;
         for (const frame of frames) this.sendBinary(frame);
 

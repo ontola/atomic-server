@@ -38,7 +38,7 @@ fn handshake_path(dir: &Path) -> PathBuf {
 }
 
 async fn open_store(dir: &Path) -> atomic_lib::Db {
-    atomic_lib::Db::init_redb_file(dir, None, &dir.join("uploads"))
+    atomic_lib::test_utils::init_redb_file_without_periodic_flush(dir)
         .await
         .expect("open store")
 }
