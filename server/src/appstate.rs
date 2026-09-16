@@ -36,13 +36,13 @@ pub struct AppState {
     /// manifest endpoint so the welcome screen can route account creation to the
     /// dashboard.
     pub managed_dashboard_url: Arc<std::sync::RwLock<Option<String>>>,
+    /// Short-lived capabilities that let a null-origin plugin iframe read the
+    /// one plugin's source it was opened for. See `plugins::view_token`.
+    pub view_tokens: Arc<crate::plugins::view_token::ViewTokens>,
     /// Per-agent and per-peer budgets for the write endpoints; see
     /// `crate::rate_limit`. Sized from `--write-rate-limit` and
     /// `--anonymous-write-rate-limit`.
     pub write_rate_limiter: Arc<crate::rate_limit::WriteRateLimiter>,
-    /// Short-lived capabilities that let a null-origin plugin iframe read the
-    /// one plugin's source it was opened for. See `plugins::view_token`.
-    pub view_tokens: Arc<crate::plugins::view_token::ViewTokens>,
 }
 
 impl AppState {

@@ -505,6 +505,7 @@ export class AtomicServer {
         playwrightWorkers,
         playwrightShards,
         playwrightRetries,
+        '',
         playwrightCloneSessions,
       ),
       this.jsTest(),
@@ -1048,11 +1049,7 @@ export class AtomicServer {
         // a restart with `Locked` sharing), leaving mdbook missing from
         // PATH on replay. Bundling makes any cache hit imply the binaries
         // are present too; `cargo install` no-ops when they are current.
-        .withExec([
-          'sh',
-          '-c',
-          INSTALL_DOCS_TOOLS + ' && mdbook build',
-        ])
+        .withExec(['sh', '-c', INSTALL_DOCS_TOOLS + ' && mdbook build'])
         .directory('/docs/build')
     );
   }
@@ -1245,17 +1242,7 @@ export class AtomicServer {
       )
       .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
       .withDirectory('/code/tools', source.directory('tools'))
-      // v3 -> v4: `atomic-server`'s build.rs only declares
-      // `rerun-if-changed` on `plugin-runtime/{src,wit}` and
-      // `ATOMICSERVER_SKIP_PLUGIN_RUNTIME` — it has no way to know "the
-      // wasm32-wasip2 target just became installed". Adding the `rustup
-      // target add` step above changed the container, but every prior CI
-      // run had already fingerprinted build.rs's output (an empty embedded
-      // runtime, from before that target existed) into this cache volume,
-      // so cargo kept trusting the stale fingerprint and never re-ran
-      // build_plugin_runtime() to notice the target was now there. Bumping
-      // the volume forces one full rebuild that actually re-evaluates it.
-      .withMountedCache('/code/target', dag.cacheVolume('rust-target-v4'))
+      .withMountedCache('/code/target', dag.cacheVolume('rust-target-v3'))
       .with(touchWorkspaceSources)
       .withWorkdir('/code')
       .withExec(['cargo', 'fetch']);
@@ -1743,12 +1730,10 @@ export class AtomicServer {
         permissions: 0o755,
       })
       .withEnvVariable('ATOMIC_DOMAIN', ATOMIC_DOMAIN)
-      // First-run flag — sets up the bootstrap agent + public drive +
-      // /app/dev-drive endpoint that the e2e tests' `beforeEach` relies on.
-      // Without this, every test's `before()` hook times out fetching it.
       .withEnvVariable('ATOMIC_INITIALIZE', 'true')
       .withExposedPort(9883)
       .withEntrypoint(['/atomic-server-bin']);
+
     if (e2e)
       runtime = runtime
         .withDirectory(
@@ -1900,31 +1885,33 @@ export class AtomicServer {
   private e2eShardContainer(base: Container, shardIndex: number): Container {
     const shardCount = this.e2eRun.shardCount;
 
-    return base
-      .withServiceBinding(
-        'atomic',
-        this.atomicService(true, `${this.e2eRunNonce}-${shardIndex}`),
-      )
-      .withExec([
-        'sh',
-        '-c',
-        `for i in $(seq 1 30); do curl -fsS http://${ATOMIC_DOMAIN}:9883/setup && exit 0 || sleep 1; done; exit 1`,
-      ])
-      // Dagger caches an exec by its inputs, and the shard script always
-      // exits 0 (the real exit code goes to a file), so a run whose sources
-      // matched an earlier one replayed that run's output verbatim: a
-      // workflow-only change, an empty commit or `gh run rerun` all "passed"
-      // or "failed" with the previous run's exact log and shard timings. A
-      // per-invocation nonce on this step makes the browsers run every time.
-      // It sits after the service binding and the setup probe, so the build
-      // layers above stay cached; only the Playwright exec is unique.
-      .withEnvVariable('E2E_RUN_NONCE', this.e2eRunNonce)
-      .withEnvVariable('ATOMIC_MOCK_INTEGRATION_PROXY', '1')
-      .withExec([
-        '/bin/bash',
-        '-c',
-        e2eShardRunScript(this.e2eRun.grep, shardIndex, shardCount),
-      ]);
+    return (
+      base
+        .withServiceBinding(
+          'atomic',
+          this.atomicService(true, `${this.e2eRunNonce}-${shardIndex}`),
+        )
+        .withExec([
+          'sh',
+          '-c',
+          `for i in $(seq 1 30); do curl -fsS http://${ATOMIC_DOMAIN}:9883/setup && exit 0 || sleep 1; done; exit 1`,
+        ])
+        // Dagger caches an exec by its inputs, and the shard script always
+        // exits 0 (the real exit code goes to a file), so a run whose sources
+        // matched an earlier one replayed that run's output verbatim: a
+        // workflow-only change, an empty commit or `gh run rerun` all "passed"
+        // or "failed" with the previous run's exact log and shard timings. A
+        // per-invocation nonce on this step makes the browsers run every time.
+        // It sits after the service binding and the setup probe, so the build
+        // layers above stay cached; only the Playwright exec is unique.
+        .withEnvVariable('E2E_RUN_NONCE', this.e2eRunNonce)
+        .withEnvVariable('ATOMIC_MOCK_INTEGRATION_PROXY', '1')
+        .withExec([
+          '/bin/bash',
+          '-c',
+          e2eShardRunScript(this.e2eRun.grep, shardIndex, shardCount),
+        ])
+    );
   }
 
   @func()
@@ -1942,14 +1929,14 @@ export class AtomicServer {
     @argument() playwrightShards: number = 0,
     /** -1 keeps the host profile; 0 exposes failures without retrying. */
     @argument() playwrightRetries: number = -1,
-    /** Reuse closed worker profiles for eligible drive-scoped specs. */
-    @argument() playwrightCloneSessions: boolean = false,
     /**
      * Optional Playwright regular expression for one focused browser journey.
      * A focused run stays on one server/shard, so an exact test does not run
      * alongside unrelated E2E failures.
      */
     @argument() playwrightGrep: string = '',
+    /** Reuse closed worker profiles for eligible drive-scoped specs. */
+    @argument() playwrightCloneSessions: boolean = false,
   ): Promise<string> {
     this.e2eCloneSessions = playwrightCloneSessions;
     // Shards × own atomic-server. Count comes from `--host-profile`

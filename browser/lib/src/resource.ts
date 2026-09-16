@@ -3422,11 +3422,7 @@ export class Resource<C extends OptionalClass = any> {
       await this.persistToClientDb();
       this.commitError = undefined;
 
-      // Draining attempts queued writes; retryable failures/backoff leave them
-      // pending without throwing. Local durability is not a server acknowledgement.
-      return this.store.outbox.hasPending(this.subject)
-        ? 'offline'
-        : 'persisted';
+      return 'persisted';
     } catch (e) {
       if (isNetworkError(e)) {
         this.store.setServerConnected(false);

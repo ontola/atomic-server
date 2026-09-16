@@ -613,7 +613,9 @@ export class Collection {
       this._removedSubjects.add(subject);
       this._optimisticAdds.delete(subject);
     } else if (matches && !resource.new && !this._assemblingPage) {
-      this._removedSubjects.delete(subject);
+      if (this._removedSubjects.delete(subject)) {
+        this._queriedMembers.delete(subject);
+      }
     }
 
     // O(1) lookup via the maintained subject→page index instead of
@@ -757,8 +759,8 @@ export class Collection {
     // Share the index too — both clones look at the same `pages` Map,
     // so they should observe the same membership.
     collection._memberIndex = this._memberIndex;
-    collection._removedSubjects = this._removedSubjects;
     collection._queriedMembers = this._queriedMembers;
+    collection._removedSubjects = this._removedSubjects;
 
     return collection;
   }

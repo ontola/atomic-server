@@ -342,14 +342,6 @@ pnpm --filter @tomic/data-browser build:wasm
 
 Only re-run this when the `wasm/` or `lib/` Rust changes; it is not part of `pnpm start`.
 
-This also applies to `cargo run` in `server/`, not just `pnpm start`: `server/build.rs`
-decides whether to rerun the JS build by comparing mtimes of `browser/data-browser/src`,
-`browser/lib/src`, `browser/react/src`, and a few config files against `dist` — `wasm/`
-and `lib/` are never in that watch list, so a Rust-only change there is invisible to it
-too. Restarting `cargo run` and hard-refreshing the browser will keep serving the old
-`atomic_wasm_bg.wasm` until you run `pnpm --filter @tomic/data-browser build:wasm`
-yourself first.
-
 ### Running the frontend
 
 `cd browser && pnpm start` runs `@tomic/lib` + `@tomic/react` (tsup watch) and the Vite dev

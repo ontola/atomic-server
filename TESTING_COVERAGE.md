@@ -1631,78 +1631,6 @@ Onboarding dialog feedback: the authorization/invite and chatroom cases in
 `e2e.spec.ts` verify Continue remains clickable while feedback is offered.
 `onboarding-storage.spec.ts` checks feedback availability;
 `drive-template-onboarding.spec.ts` checks mobile creation and dismissal.
-
-`prepareDriveSharing.test.ts` covers verified local transition before peer invitation, rejection on failed verification, preservation of an enrolled drive connection, and isolation from another drive enrollment. `local-drive-copy.test.ts` covers missing history, incomplete inventory, and missing or corrupt attachments. Full sharing UI acceptance remains pending.
-## Signed-out local drive opened from the portal
-
-`browser/data-browser/src/helpers/isDriveSignInError.test.ts` covers a local-only missing-resource error with no app agent, including origins with a configured node. It also covers signed-out DID resources absent from the current node: their copy may be in the account vault, so they offer unlock. Signed-in users, ordinary HTTP 404s, and unrelated transport failures retain their error handling.
-
-Paired SaaS `portal/e2e/passkey-open-drive.spec.ts` covers account/profile creation, passkey enrollment, recovery-code acknowledgement, completed app sign-out, portal passkey sign-in, and the Open link reaching the app unlock screen. It then unlocks and verifies the original drive title. Chromium virtual PRF state is tied to the original CDP target, so the unlock portion runs there after verifying the real popup handoff. Unlocking within the popup itself remains a physical-browser acceptance check.
-## Ontology codegen (`@tomic/cli`) and DID fetch
-
-| Flow | Where |
-|---|---|
-| HTTP path `https://host/did:ad:…` and `/did?subject=` extract the same DID | `browser/lib/src/subject.test.ts` |
-| JSON-AD parse accepts `@id: did:ad:…` when the request used the HTTP path alias | `browser/lib/src/parse.test.ts` |
-| `Client.fetchResourceHTTP` resolves DIDs via `/did?subject=` and does not touch `window` in Node | `browser/lib/src/client.fetch.test.ts` |
-| Store fetch by HTTP path alias returns the resource stored under the DID | `browser/lib/src/store.test.ts` |
-
-Not covered: `ad-generate ontologies` end-to-end against a live server (no CLI test runner).
-
-`helpers/managed/vaultAutoBackup.test.ts` verifies successful vault restoration preserves known node absence as local-only routing, while transport failures and failed restores do not disable node sync. Paired SaaS second-browser coverage verifies the original profile and vault-only canary after restore, with bounded pre-restore refusal diagnostics.
-
-Paired SaaS `portal/e2e/identity-reconcile.spec.ts` exercises dev-drive creation while a managed account is active: reconciliation waits until the temporary identity has a drive, and creation must not enroll it in the account.
-
-Session restore routing: `helpers/managed/reconcile.test.ts` covers connecting the
-exact hosted drive before availability checks, clearing local-only routing,
-skipping Pending/Disabled placements and other drives, and ignoring discovery
-that completes after its deadline. Staging phone restore latency and end-to-end
-WebSocket query delivery remain unverified.
-
-Cloud Vault download concurrency: `helpers/managed/vault.test.ts` holds network
-responses open to verify concurrent downloads are bounded at four and that
-reverse completion preserves listing order at import. Existing progress and
-failure checks also pass. Actual staging phone restore latency remains unmeasured.
-
-## Right-panel lifecycle
-
-`components/RightPanel/panelState.test.ts` covers session-local initial state, exclusive panels, cleared meeting selection, account/drive scoping, stale callbacks, and missing/unauthorized versus temporarily unavailable targets.
-
-`e2e/tests/right-panel-lifecycle.spec.ts` asserts visible panel state with legacy localStorage values for meeting/comments/AI, SPA navigation away from commentable resources, deletion of an explicitly opened meeting, and switching drives and back without resurrecting the panel. Existing `meetings.spec.ts` agenda/start/end coverage verifies that minutes and explicitly opened meeting chat still work. AI chat E2E (`ai.spec.ts`, `table-tools.spec.ts`) opens the assistant with the navbar button rather than `atomic.rightPanel.active`, because that key is no longer restored.
-
-## Replication completion and CI tool installation
-
-`lib/src/sync/replicate.rs` has five scripted WebSocket peer tests covering
-resource-only completion without the idle timeout, acknowledgement of every
-chunk, unrelated-drive acknowledgements, an independently mismatching hash,
-trailing blob requests and asynchronous storage errors, and the fallback for
-peers without keepalive support. They exercise the real Rust WebSocket client
-and snapshot/chunk encoding with an isolated in-memory source; the peer scripts
-simulate replies and do not validate authentication or remote import policy.
-The real-server `server/tests/it/replicate.rs` tests retain destination-data,
-repeat-push, boot-reconcile and export-authorization assertions.
-
-The pinned wasm-pack installer was executed in Dagger's `rust:bookworm` image
-on Linux x86_64, including a cached install followed by changed downstream
-source input and execution of the retained binary. Its aarch64 archive digest
-is pinned to the upstream release; native aarch64 execution is not covered by
-that check. Full CI wall-time savings require a completed hosted run.
-## External cache access and authentication origins (#170)
-
-`db::test::cached_external_resources_keep_read_permissions` checks that a cached
-external resource remains private in public collection queries (nested and
-subject-only) and direct reads, while the authorized agent can still read it.
-`client::helpers` origin tests reject lookalike hosts, userinfo-host confusion,
-changed ports/schemes, malformed URLs and non-HTTP URLs; normalized same-origin
-and localhost requests remain eligible for DID-agent authentication.
-
-## Drive root file drops
-
-`views/Drive/DrivePage.test.tsx` renders the drive page with its real dropzone
-and upload hook, then delivers multiple files through the drop callback. It
-verifies the upload targets the displayed drive even when the current drive
-setting differs. Native drag events, overlay geometry and the refreshed child
-list are not covered by this component test.
 ## Paged table hydration count (2026-09-08)
 
 `collection-page-assemble.test.ts` reproduces 90 rows becoming 150 when deferred
@@ -1948,6 +1876,7 @@ checks the reasoning remains visible and that reopening the chat restores both
 the reasoning and the provider error. Error replies do not launch follow-up
 question generation or automatic compaction.
 
+`prepareDriveSharing.test.ts` covers verified local transition before peer invitation, rejection on failed verification, preservation of an enrolled drive connection, and isolation from another drive enrollment. `local-drive-copy.test.ts` covers missing history, incomplete inventory, and missing or corrupt attachments. Full sharing UI acceptance remains pending.
 ## Signed-out local drive opened from the portal
 
 `browser/data-browser/src/helpers/isDriveSignInError.test.ts` covers a local-only missing-resource error with no app agent, including origins with a configured node. It also covers signed-out DID resources absent from the current node: their copy may be in the account vault, so they offer unlock. Signed-in users, ordinary HTTP 404s, and unrelated transport failures retain their error handling.
@@ -1979,6 +1908,29 @@ responses open to verify concurrent downloads are bounded at four and that
 reverse completion preserves listing order at import. Existing progress and
 failure checks also pass. Actual staging phone restore latency remains unmeasured.
 
+## Right-panel lifecycle
+
+`components/RightPanel/panelState.test.ts` covers session-local initial state, exclusive panels, cleared meeting selection, account/drive scoping, stale callbacks, and missing/unauthorized versus temporarily unavailable targets.
+
+`e2e/tests/right-panel-lifecycle.spec.ts` asserts visible panel state with legacy localStorage values for meeting/comments/AI, SPA navigation away from commentable resources, deletion of an explicitly opened meeting, and switching drives and back without resurrecting the panel. Existing `meetings.spec.ts` agenda/start/end coverage verifies that minutes and explicitly opened meeting chat still work. AI chat E2E (`ai.spec.ts`, `table-tools.spec.ts`) opens the assistant with the navbar button rather than `atomic.rightPanel.active`, because that key is no longer restored.
+
+## Replication completion and CI tool installation
+
+`lib/src/sync/replicate.rs` has five scripted WebSocket peer tests covering
+resource-only completion without the idle timeout, acknowledgement of every
+chunk, unrelated-drive acknowledgements, an independently mismatching hash,
+trailing blob requests and asynchronous storage errors, and the fallback for
+peers without keepalive support. They exercise the real Rust WebSocket client
+and snapshot/chunk encoding with an isolated in-memory source; the peer scripts
+simulate replies and do not validate authentication or remote import policy.
+The real-server `server/tests/it/replicate.rs` tests retain destination-data,
+repeat-push, boot-reconcile and export-authorization assertions.
+
+The pinned wasm-pack installer was executed in Dagger's `rust:bookworm` image
+on Linux x86_64, including a cached install followed by changed downstream
+source input and execution of the retained binary. Its aarch64 archive digest
+is pinned to the upstream release; native aarch64 execution is not covered by
+that check. Full CI wall-time savings require a completed hosted run.
 ## External cache access and authentication origins (#170)
 
 Paired SaaS `portal/e2e/recovery-passkey.spec.ts` uses Chromium virtual PRF authenticators with the real control plane to verify app enrollment followed by portal login using one credential, reuse of a portal-created credential, and account-settings migration without replacing ciphertext or old wrappers. Physical Safari/iCloud, Android/password-manager and native-shell behavior remain device acceptance checks.

@@ -108,10 +108,10 @@ export interface UseTableViewResult {
   deleteView: (subject: string) => void;
   /** Which renderer the active view uses ('table' until a View exists). */
   viewKind: ViewKind;
-  /** For dashboard views: the Dashboard resource the tab shows. */
-  viewDashboard: string | undefined;
   /** Set when this view is rendered by an app rather than a built-in kind. */
   appView: string | undefined;
+  /** For dashboard views: the Dashboard resource the tab shows. */
+  viewDashboard: string | undefined;
   /**
    * The property this view arranges rows by: a SelectProperty (kanban), a date
    * property (calendar), or the start timestamp (timer).
@@ -1039,8 +1039,8 @@ export function useTableView(
     duplicateView,
     deleteView,
     viewKind: normalizeViewKind(storedKind),
-    viewDashboard,
     appView: appViewOf(storedKind),
+    viewDashboard,
     viewGroupBy,
     setViewGroupBy,
     viewEndProp,

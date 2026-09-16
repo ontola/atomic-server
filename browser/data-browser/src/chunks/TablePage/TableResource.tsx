@@ -140,8 +140,8 @@ export const TableResource: React.FC<TableResourceProps> = ({
     ready,
     invalidateCollection,
     viewKind,
-    viewDashboard,
     appView,
+    viewDashboard,
     viewGroupBy,
     setViewGroupBy,
     viewEndProp,
@@ -1152,9 +1152,6 @@ export const TableResource: React.FC<TableResourceProps> = ({
             onRowCreated={notifyEntryCreated}
           />
         )}
-        {viewKind === 'dashboard' ? (
-          <DashboardView dashboard={viewDashboard} />
-        ) : appView !== undefined ? (
         {appView !== undefined ? (
           // An app rendering this table's rows. It sits beside the Table tab
           // rather than in place of it: adding a way to look at rows never
@@ -1166,6 +1163,8 @@ export const TableResource: React.FC<TableResourceProps> = ({
               table={resource.subject}
             />
           </AppViewWrapper>
+        ) : viewKind === 'dashboard' ? (
+          <DashboardView dashboard={viewDashboard} />
         ) : viewKind === 'kanban' ? (
           <KanbanView
             tableSubject={resource.subject}

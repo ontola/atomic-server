@@ -10,13 +10,13 @@ pub enum AppErrorType {
     NotFound,
     Unauthorized,
     MethodNotAllowed,
-    /// A write refused by `crate::rate_limit`; rendered as `429` with `Retry-After`.
-    TooManyRequests,
     /// The request was understood and refused on its merits — a precondition
     /// the caller can satisfy, not a fault on this side. Without this, a
     /// refusal reports itself as a crash, and a caller cannot tell "you may
     /// not do that yet" from "something here is broken".
     BadRequest,
+    /// A write refused by `crate::rate_limit`; rendered as `429` with `Retry-After`.
+    TooManyRequests,
     Other,
 }
 
