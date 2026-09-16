@@ -104,7 +104,7 @@ export function useChildren(parentSubject: string | undefined): {
     // the late writer used to overwrite the new data with the old.
     let cancelled = false;
 
-    const extractMembers = async () => {
+    const extractMembers = async (attempt = 0) => {
       await collection.waitForReady();
       if (cancelled) return;
 
@@ -119,6 +119,28 @@ export function useChildren(parentSubject: string | undefined): {
         ),
       );
       if (cancelled) return;
+
+      // A slot that comes back undefined means the cached page is older than
+      // the member count it is being read against — `getMemberWithIndex` asks
+      // page N for an index the server has since added and that page does not
+      // hold. Accepting the short list silently loses a child forever (the
+      // second device that unlocks a drive shows an empty sidebar until a
+      // reload, `second-device-load.spec.ts`), so re-read the page instead.
+      //
+      // Only while this hook has never produced a list. Once children are on
+      // screen, an undefined slot is far more likely to be one that just went
+      // away — a delete leaves the count ahead of the page for a moment — and
+      // re-fetching then pulls the deleted resource back into the store.
+      if (
+        subjectsRef.current.length === 0 &&
+        resolved.some(member => member === undefined) &&
+        attempt < 3
+      ) {
+        await collection.refresh();
+        if (cancelled) return;
+
+        return extractMembers(attempt + 1);
+      }
 
       // Drop commit subjects: they leak into parent= queries when a resource
       // is created/updated, but they're never tree-children. Also dedupe —
