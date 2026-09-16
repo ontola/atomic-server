@@ -8188,3 +8188,15 @@ msgstr ""
 #: src/views/File/ConvertToDocumentButton.tsx
 msgid "Document converted locally, but could not be saved."
 msgstr ""
+
+#: src/helpers/searchResultHint.ts
+msgid "In document"
+msgstr ""
+
+#: src/helpers/searchResultHint.ts
+msgid "In description"
+msgstr ""
+
+#: src/helpers/searchResultHint.ts
+msgid "Matched title"
+msgstr ""
