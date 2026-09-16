@@ -943,3 +943,19 @@ This campaign checks disjoint field edits and deletion dominance, not every LWW
 conflict policy, browser quota behavior, physical devices or a long-running soak.
 The first run exposed a harness omission: resource storage reload does not restore
 the default agent; the harness now restores that separate identity explicitly.
+
+### Deployed diagnostics readiness — 2026-09-16
+
+- [x] Sixteen local tests pass for diagnostic exports, persistent recording and
+  Sentry helpers.
+- [x] Identify the public staging release as
+  `atomic-data-browser@0.41.0-beta.7+9c9cff0`.
+- [x] Check available access: the pinned official Sentry CLI is unauthenticated.
+  Neither repository's Actions secret list contains a SENTRY_AUTH_TOKEN; broader
+  deployment/organization configuration remains unverified.
+- [ ] Complete received-event, attachment, symbolication and backend acceptance
+  with Sentry authentication and the intended deployed build.
+
+Details and evidence limits are in `planning/sentry-feedback-readiness.md`.
+No synthetic feedback or notifications were sent. Item 1 is committed as
+`a5f1a2269`; item 2 is committed as `63937702f`.
