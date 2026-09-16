@@ -24,8 +24,7 @@ This is by design, as storing signed state changes allows for fully verifiable a
 
 If you want to know whether a specific value that you see is signed by a specific Agent, you need to find the Commit that created the value.
 
-This can be achieved by using a Collection.
-The easiest way to do this, is by using the [`/all-versions` Endpoint](https://atomicdata.dev/all-versions) and finding the Signer of the version that is relevant to your question.
+This can be achieved by using the `/history-attribution` endpoint, which returns the verified signer for each change in a resource's history, as far as this node retained the signed envelopes.
 
 In the near future, we will introduce a `/verify` Endpoint that will allow you to verify a specific value.
 

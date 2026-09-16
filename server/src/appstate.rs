@@ -124,8 +124,6 @@ impl AppState {
         store.add_endpoint(plugins::server_info::server_info_endpoint(
             server_info.clone(),
         ))?;
-        store.add_endpoint(plugins::versioning::version_endpoint())?;
-        store.add_endpoint(plugins::versioning::all_versions_endpoint())?;
         store.add_endpoint(plugins::did::did_endpoint())?;
         store.add_endpoint(plugins::bind_drive::bind_drive_endpoint())?;
         store.add_endpoint(plugins::bookmark::bookmark_endpoint())?;
