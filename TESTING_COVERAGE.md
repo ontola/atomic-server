@@ -2437,6 +2437,13 @@ verifies the upload targets the displayed drive even when the current drive
 setting differs. Native drag events, overlay geometry and the refreshed child
 list are not covered by this component test.
 
+Develop integration (2026-09-16): selective retry tests in `websockets.test.ts`
+and `peer_verification::tests` also assert that signed history envelopes travel
+with retried snapshots. `client-db.node.test.ts` covers envelope reads/imports
+queued behind a combined JSON/snapshot write. Server acknowledgement crash tests
+and `cross_process_sync` use `test_utils::init_redb_file_without_periodic_flush`
+to keep the library's background durability tick from masking early success.
+
 ## Rust build alignment
 
 `scripts/test_rust_alignment.py` tests matching pairs, compiler/workflow pin drift,

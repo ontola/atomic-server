@@ -2149,6 +2149,7 @@ pub async fn sync_drive_with_peer_using_outcome(
         drive,
         &sent_snapshots,
         pending_acks,
+        &crate::envelopes::for_subjects(store, sent_snapshots.iter().map(|(s, _)| s.as_str())),
     )
     .await?;
 

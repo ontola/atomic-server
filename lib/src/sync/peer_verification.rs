@@ -28,6 +28,7 @@ pub(super) async fn verify<W: AsyncWrite + Unpin, R: AsyncRead + Unpin>(
     drive: &str,
     entries: &[(String, Vec<u8>)],
     mut pending_acks: usize,
+    envelopes: &std::collections::HashMap<String, Vec<String>>,
 ) -> AtomicResult<Vec<Vec<u8>>> {
     let expected = entries
         .iter()
@@ -120,7 +121,7 @@ pub(super) async fn verify<W: AsyncWrite + Unpin, R: AsyncRead + Unpin>(
             .iter()
             .map(|&i| (entries[i].0.as_str(), entries[i].1.as_slice()))
             .collect::<Vec<_>>();
-        let frames = protocol::encode_sync_push_chunks(drive, &refs);
+        let frames = protocol::encode_sync_push_chunks_with_envelopes(drive, &refs, envelopes);
         pending_acks = frames.len();
         tokio::time::timeout(std::time::Duration::from_secs(30), async {
             for frame in frames {
@@ -193,6 +194,9 @@ mod tests {
             assert_eq!(retry.entries.len(), 1);
             assert_eq!(retry.entries[0].subject, "did:ad:b");
             assert_eq!(retry.entries[0].loro_bytes, snapshot);
+            assert_eq!(retry.envelopes.len(), 1);
+            assert_eq!(retry.envelopes[0].subject, "did:ad:b");
+            assert_eq!(retry.envelopes[0].json, "signed-envelope");
             write(&mut send, &protocol::encode_sync_ok("did:ad:drive"))
                 .await
                 .unwrap();
@@ -219,9 +223,16 @@ mod tests {
             }
             live
         });
-        let deferred = verify(&mut send, &mut recv, "did:ad:drive", &entries, 2)
-            .await
-            .unwrap();
+        let deferred = verify(
+            &mut send,
+            &mut recv,
+            "did:ad:drive",
+            &entries,
+            2,
+            &std::collections::HashMap::from([("did:ad:b".into(), vec!["signed-envelope".into()])]),
+        )
+        .await
+        .unwrap();
         assert_eq!(deferred, vec![task.await.unwrap()]);
     }
 
@@ -254,7 +265,15 @@ mod tests {
                 }
             }
         });
-        let result = verify(&mut send, &mut recv, "did:ad:drive", &entries, 1).await;
+        let result = verify(
+            &mut send,
+            &mut recv,
+            "did:ad:drive",
+            &entries,
+            1,
+            &Default::default(),
+        )
+        .await;
         assert!(result
             .unwrap_err()
             .to_string()
@@ -267,8 +286,15 @@ mod tests {
         let (local, remote) = tokio::io::duplex(64);
         drop(remote);
         let (mut recv, mut send) = tokio::io::split(local);
-        assert!(verify(&mut send, &mut recv, "did:ad:drive", &[], 1)
-            .await
-            .is_err());
+        assert!(verify(
+            &mut send,
+            &mut recv,
+            "did:ad:drive",
+            &[],
+            1,
+            &Default::default()
+        )
+        .await
+        .is_err());
     }
 }

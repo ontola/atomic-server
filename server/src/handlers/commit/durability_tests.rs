@@ -20,7 +20,7 @@ impl Drop for ChildGuard {
 }
 
 async fn open(dir: &Path) -> Db {
-    Db::init_redb_file(dir, None, &dir.join("uploads"))
+    atomic_lib::test_utils::init_redb_file_without_periodic_flush(dir)
         .await
         .unwrap()
 }
