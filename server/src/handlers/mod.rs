@@ -8,6 +8,7 @@ However, some features reside in atomic-server.
 pub mod app_agent;
 #[cfg(all(test, feature = "wasm-plugins"))]
 mod app_endpoints_test;
+#[cfg(feature = "wasm-plugins")]
 pub mod app_write;
 pub mod blob;
 pub mod commit;
@@ -21,12 +22,18 @@ pub mod history_attribution;
 pub mod image;
 #[cfg(feature = "wasm-plugins")]
 pub mod plugin_connection;
+#[cfg(feature = "wasm-plugins")]
 pub mod plugin_external;
+#[cfg(feature = "wasm-plugins")]
 pub mod plugin_release;
+#[cfg(feature = "wasm-plugins")]
 pub mod plugin_run;
+#[cfg(feature = "wasm-plugins")]
 pub mod plugin_schedule;
 pub mod plugin_secret;
+#[cfg(feature = "wasm-plugins")]
 pub mod plugin_trigger;
+#[cfg(feature = "wasm-plugins")]
 pub mod plugin_ui;
 pub mod post_resource;
 pub mod search;
@@ -42,5 +49,3 @@ pub mod plugin_sync;
 
 #[cfg(feature = "wasm-plugins")]
 pub mod integration_action;
-
-pub mod integration_oauth;

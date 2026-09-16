@@ -4,6 +4,12 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Local Thought connections install a folder after one access check and import in the browser without a preview dialog. Opening the folder or a table refreshes automatically, with five-minute refreshes while open, visible sync status, and local-edit preservation.
+- Fix: creating a second table column with a name that already exists in the drive's ontology (e.g. two "Status" columns) no longer mints a colliding property shortname that silently corrupts the ontology. A compatible existing property is reused instead; an incompatible one gets a disambiguated shortname (`status-2`) ([#1504](https://github.com/ontola/atomic-server/issues/1504)).
+- Verified the GitHub issues (devonian) plugin keeps issue open/closed state and Atomic kanban card status in sync in both directions, including dragging a card in the real kanban board; added regression coverage for reopening and for the native drag path ([#1505](https://github.com/ontola/atomic-server/issues/1505)).
+- Stop restoring stale right-side panels across sessions, accounts and drives; close meeting/comments panels when their target disappears.
+- Following indicator: a tight blue ring on the followed avatar in the navbar and sidebar, expanding to a "Following" chip on hover ([#1486](https://github.com/ontola/atomic-server/issues/1486)).
+
 - Fix: file previews and avatars wait for the local blob lookup before requesting the server, avoiding transient 404s for offline uploads. `useFileObjectUrl` accepts an optional network fallback URL and returns `undefined` while the local lookup is pending.
 
 - Fix: `@tomic/cli` `ad-generate ontologies` works with `did:ad:` ontology subjects. A DID is not an HTTP URL: the CLI needs `serverUrl` (the Atomic Server origin) and fetches `GET {serverUrl}/did?subject=…`. Pasting the address-bar form `https://host/did:ad:…` no longer fails with `Resource has wrong subject in @id` — that URL is an alias, and the resource's `@id` is the DID. `ad-generate init` writes `serverUrl`.

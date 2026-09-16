@@ -1,4 +1,4 @@
-import { test, expect, type Page } from './fixtures';
+import { test, expect } from './fixtures';
 import { before, waitForSynced, reloadReconnected } from './test-utils';
 import {
   AFTER_COMPACT_USER,
@@ -6,6 +6,7 @@ import {
   enableAIForTesting,
   FIRST_RESPONSE,
   FIRST_USER,
+  sendChatMessage,
   setupAICompactMocks,
   setupAIRouteMocks,
   setupAIToolCallMocks,
@@ -53,6 +54,7 @@ test.describe('AI Chat', () => {
       'Your bakery website will use the existing products table. Prices stay in Atomic.';
     await page.evaluate(text => {
       const originalFetch = window.fetch.bind(window);
+
       window.fetch = async (input, init) => {
         if (
           String(input).includes('/chat/completions') &&
@@ -73,6 +75,7 @@ test.describe('AI Chat', () => {
               },
             ],
           };
+
           return new Response(
             new ReadableStream({
               start(controller) {
@@ -95,6 +98,7 @@ test.describe('AI Chat', () => {
             { headers: { 'Content-Type': 'text/event-stream' } },
           );
         }
+
         return originalFetch(input, init);
       };
     }, partial);
@@ -116,30 +120,35 @@ test.describe('AI Chat', () => {
       .poll(
         async () =>
           page.evaluate(
-            async ({ subject, partial }) => {
+            async ({ subject: subjectArg, partial: partialArg }) => {
               const store = window.store;
-              const chat = await store.getResource(subject);
+              const chat = await store.getResource(subjectArg);
               const messages =
                 (chat.get(
                   'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/messages',
                 ) as string[]) ?? [];
+
               if (messages.length !== 2) return false;
+
               for (const id of messages) {
                 const message = await store.getResource(id);
                 const parts =
                   (message.get(
                     'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/content',
                   ) as string[]) ?? [];
+
                 for (const partId of parts) {
                   const part = await store.getResource(partId);
+
                   if (
                     part.get(
                       'https://atomicdata.dev/properties/description',
-                    ) === partial
+                    ) === partialArg
                   )
                     return true;
                 }
               }
+
               return false;
             },
             { subject, partial },
@@ -152,8 +161,9 @@ test.describe('AI Chat', () => {
       .poll(
         async () =>
           page.evaluate(
-            async ({ subject, partial }) => {
+            async ({ subject: subjectArg, partial: partialArg }) => {
               const store = window.store;
+
               const read = async (id: string) => {
                 const result = await store.client.fetchResourceHTTP(id, {
                   signInfo: {
@@ -162,8 +172,10 @@ test.describe('AI Chat', () => {
                   },
                   serverURL: store.getServerUrl(),
                 });
+
                 if (result.resource.error) {
                   const local = await store.getResource(id);
+
                   throw new Error(
                     JSON.stringify({
                       missing: id,
@@ -177,30 +189,37 @@ test.describe('AI Chat', () => {
                     }),
                   );
                 }
+
                 return result.resource;
               };
-              const chat = await read(subject);
+
+              const chat = await read(subjectArg);
               const messages =
                 (chat.get(
                   'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/messages',
                 ) as string[]) ?? [];
+
               if (messages.length !== 2) return false;
+
               for (const id of messages) {
                 const message = await read(id);
                 const parts =
                   (message.get(
                     'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/property/content',
                   ) as string[]) ?? [];
+
                 for (const partId of parts) {
                   const part = await read(partId);
+
                   if (
                     part.get(
                       'https://atomicdata.dev/properties/description',
-                    ) === partial
+                    ) === partialArg
                   )
                     return true;
                 }
               }
+
               return false;
             },
             { subject, partial },
@@ -208,6 +227,7 @@ test.describe('AI Chat', () => {
         { timeout: 15000 },
       )
       .toBe(true);
+
     if (browserName === 'firefox') {
       browserDiagnostics.expect(
         'warning',
@@ -216,6 +236,7 @@ test.describe('AI Chat', () => {
         1,
       );
     }
+
     await page.goto(chatUrl);
     await reloadReconnected(page);
     await expect(page.getByText(partial, { exact: true }).first()).toBeVisible({
@@ -242,6 +263,7 @@ test.describe('AI Chat', () => {
       1,
     );
     const loggedProviderErrors: unknown[] = [];
+
     if (browserName === 'firefox') {
       browserDiagnostics.expect(
         'error',
@@ -261,10 +283,12 @@ test.describe('AI Chat', () => {
         }
       });
     }
+
     const reasoning =
       'I will reuse the existing product prices for the bakery website.';
     await page.evaluate(text => {
       const originalFetch = window.fetch.bind(window);
+
       window.fetch = async (input, init) => {
         if (
           String(input).includes('/chat/completions') &&
@@ -303,6 +327,7 @@ test.describe('AI Chat', () => {
             { headers: { 'Content-Type': 'text/event-stream' } },
           );
         }
+
         return originalFetch(input, init);
       };
     }, reasoning);
@@ -456,7 +481,7 @@ test.describe('AI Compacting', () => {
       timeout: 15_000,
     });
 
-    const sidebar = page.locator('[data-open]');
+    const sidebar = page.getByTestId('ai-sidebar');
     const summaryMessageRow = sidebar.locator('[data-summary-message]');
     await summaryMessageRow.hover();
     await summaryMessageRow.getByTitle('Delete Message').click();
@@ -474,59 +499,3 @@ test.describe('AI Compacting', () => {
     });
   });
 });
-
-/**
- * Types a message into the AI sidebar chat input and submits it by clicking
- * the Send button. Using the button (rather than Enter) is intentional: when a
- * new drive is created the server runs vector indexing, which disables the
- * Enter key handler for agents with canReadAtomicData. Waiting for the Send
- * button to be enabled also waits out that indexing delay.
- *
- * The sidebar is scoped via [data-open] to avoid matching other contenteditable
- * elements that may be present after drive creation. AIChatInput is lazily
- * loaded, so we wait explicitly for the contenteditable to appear.
- */
-async function sendChatMessage(
-  page: Page,
-  text: string,
-  options: { timeout?: number } = {},
-) {
-  const timeout = options.timeout ?? 30_000;
-  const sidebar = page.locator('[data-open]');
-  const chatInput = sidebar.locator('[contenteditable="true"]');
-
-  // AIChatInput is the second lazy-loaded component inside the sidebar;
-  // the "Atomic Assistant" heading appears before it, so we wait explicitly.
-  await expect(chatInput).toBeVisible({ timeout: 15_000 });
-
-  // Vector indexing after drive creation or chat save disables Send.
-  const indexing = sidebar.getByText('Indexing', { exact: true });
-  await indexing.waitFor({ state: 'hidden', timeout }).catch(() => {});
-
-  await chatInput.click();
-  await page.keyboard.type(text);
-
-  // Wait for Send to be enabled — this naturally waits out server indexing.
-  const sendButton = sidebar.getByTitle('Send');
-  await expect(sendButton).toBeEnabled({ timeout });
-
-  // Then wait for any toast to clear. Toasts stack in the bottom-right corner,
-  // which is exactly where this sidebar's Send button is: the container is
-  // `pointer-events: none` but each toast bar sets `auto` (it has Clear and
-  // Copy buttons), so a leftover setup toast — "Signed in!", "Dev agent
-  // created" — swallows the click for as long as it is on screen. Observed as
-  // a 10s retry loop reporting `<div data-rht-toaster> subtree intercepts
-  // pointer events`.
-  //
-  // Waiting rather than `{ force: true }` on purpose. Forcing would dispatch
-  // the click regardless of what is on top, so this same helper would keep
-  // passing if a dialog or an overlay ever genuinely covered Send — which is a
-  // real bug and one this suite should be able to catch.
-  // Hover pauses toast expiry; move away from the corner before waiting.
-  await page.mouse.move(0, 0);
-  await expect(page.locator('[data-rht-toaster] > div')).toHaveCount(0, {
-    timeout: 15_000,
-  });
-
-  await sendButton.click();
-}

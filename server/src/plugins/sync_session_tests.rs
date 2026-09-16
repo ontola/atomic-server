@@ -360,6 +360,23 @@ async fn sandbox_import_merge_columns_and_noop_with_real_atomic_storage() {
     let writes = t.host.provider.lock().unwrap().writes;
     t.sync().await;
     assert_eq!(t.host.provider.lock().unwrap().writes, writes);
+
+    // Dragging the card back to Todo must reopen the issue on GitHub (#1505).
+    t.edit(
+        &card,
+        t.config["status"].as_str().unwrap(),
+        AtomicValue::ResourceArray(vec![t.config["tags"]["Todo"].as_str().unwrap().into()]),
+    )
+    .await;
+    t.sync().await;
+    {
+        let p = t.host.provider.lock().unwrap();
+        assert_eq!(p.issues[&1]["state"], "open");
+        assert_eq!(p.issues[&1]["labels"], json!(["bug"]));
+    }
+    let writes = t.host.provider.lock().unwrap().writes;
+    t.sync().await;
+    assert_eq!(t.host.provider.lock().unwrap().writes, writes);
 }
 #[actix_web::test]
 async fn sandbox_create_uncertain_response_is_not_repeated() {

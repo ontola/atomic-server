@@ -3,7 +3,8 @@ import { BrowserIntegrations } from '../../../../../integrations/localthought/br
 import { endpoint } from 'devonian/platform-lenses/github-issues/adapter';
 import { get, set } from 'idb-keyval';
 import { core, server, dataBrowser, Datatype, enableLoro } from '@tomic/lib';
-import * as devonian from 'devonian';
+// The package root also exports the Node client (node:events). Use the browser API.
+import * as devonian from './devonian.js';
 import { ensureAgentForDemo } from '../Demo/guestAgent';
 import { buildTableFromSpec } from '../TablePage/createTableFromSpec';
 import { Bridge } from 'devonian/platform-lenses/github-issues';
@@ -269,72 +270,82 @@ export async function connectDemo(store, options) {
   location.assign(result.url);
 }
 export async function resumeDemo(store) {
-  const url = new URL(location.href);
-  const callbackCode = url.searchParams.get('connection_code');
-  const callbackState = url.searchParams.get('integration_state');
-  const callbackPlatform = url.searchParams.get('platform');
-  const callbackError = url.searchParams.get('error');
-  const handoff = JSON.parse(sessionStorage.getItem(handoffKey) ?? 'null');
+  // `history.replaceState` can remount the route while a completed callback is
+  // still being redeemed. Keep every read and update of the one-time handoff
+  // in one critical section, distinct from the per-tracker lock in `openDemo`.
+  return navigator.locks.request(resumeKey, async () => {
+    const url = new URL(location.href);
+    const callbackCode = url.searchParams.get('connection_code');
+    const callbackState = url.searchParams.get('integration_state');
+    const callbackPlatform = url.searchParams.get('platform');
+    const callbackError = url.searchParams.get('error');
+    const handoff = JSON.parse(sessionStorage.getItem(handoffKey) ?? 'null');
 
-  // Save the validated handoff before removing credentials from the URL, so a
-  // reload while OPFS opens cannot abandon the completed proxy consent.
-  if (callbackCode || callbackState) {
-    history.replaceState(null, '', url.pathname);
-    if (
-      !handoff ||
-      callbackState !== handoff.state ||
-      callbackPlatform !== handoff.platform ||
-      handoff.actor !== store.getAgent()?.subject ||
-      (!callbackCode && callbackError !== 'access_denied') ||
-      (callbackCode && callbackError)
-    )
-      throw new Error('Invalid connection callback state');
+    // Save the validated handoff before removing credentials from the URL, so a
+    // reload while OPFS opens cannot abandon the completed proxy consent.
+    if (callbackCode || callbackState) {
+      history.replaceState(null, '', url.pathname);
+      if (
+        !handoff ||
+        callbackState !== handoff.state ||
+        callbackPlatform !== handoff.platform ||
+        handoff.actor !== store.getAgent()?.subject ||
+        (!callbackCode && callbackError !== 'access_denied') ||
+        (callbackCode && callbackError)
+      )
+        throw new Error('Invalid connection callback state');
 
-    if (callbackError) {
-      client(handoff.proxy).cancel(handoff.drive, handoff.actor, handoff.state);
-      sessionStorage.removeItem(handoffKey);
-      throw new Error(
-        'The connection was not authorized. Start connecting again when you are ready.',
-      );
-    }
+      if (callbackError) {
+        client(handoff.proxy).cancel(
+          handoff.drive,
+          handoff.actor,
+          handoff.state,
+        );
+        sessionStorage.removeItem(handoffKey);
+        throw new Error(
+          'The connection was not authorized. Start connecting again when you are ready.',
+        );
+      }
 
-    handoff.code = callbackCode;
-    sessionStorage.setItem(handoffKey, JSON.stringify(handoff));
-  }
-
-  const code = handoff?.code;
-  const stateId = handoff?.state;
-  const key = code ? handoff.key : sessionStorage.getItem(resumeKey);
-
-  if (!key) {
-    if (callbackCode || callbackState)
-      throw new Error('Missing browser connection handoff');
-
-    return;
-  }
-
-  const saved = await get(key);
-  if (!saved) throw new Error('Missing local tracker');
-  const demo = await openDemo(store, saved.options);
-  if (demo.key !== key) throw new Error('Connection belongs to another agent');
-
-  if (code) {
-    if (!handoff.finished) {
-      await client(saved.options.proxy).finish(
-        saved.config.connection.drive,
-        store.getAgent().subject,
-        stateId,
-        code,
-      );
-      handoff.finished = true;
+      handoff.code = callbackCode;
       sessionStorage.setItem(handoffKey, JSON.stringify(handoff));
     }
 
-    demo.state.connection = stateId;
-    await set(key, demo.state);
-    sessionStorage.removeItem(handoffKey);
-    sessionStorage.setItem(resumeKey, key);
-  }
+    const code = handoff?.code;
+    const stateId = handoff?.state;
+    const key = code ? handoff.key : sessionStorage.getItem(resumeKey);
 
-  return demo;
+    if (!key) {
+      if (callbackCode || callbackState)
+        throw new Error('Missing browser connection handoff');
+
+      return;
+    }
+
+    const saved = await get(key);
+    if (!saved) throw new Error('Missing local tracker');
+    const demo = await openDemo(store, saved.options);
+    if (demo.key !== key)
+      throw new Error('Connection belongs to another agent');
+
+    if (code) {
+      if (!handoff.finished) {
+        await client(saved.options.proxy).finish(
+          saved.config.connection.drive,
+          store.getAgent().subject,
+          stateId,
+          code,
+        );
+        handoff.finished = true;
+        sessionStorage.setItem(handoffKey, JSON.stringify(handoff));
+      }
+
+      demo.state.connection = stateId;
+      await set(key, demo.state);
+      sessionStorage.removeItem(handoffKey);
+      sessionStorage.setItem(resumeKey, key);
+    }
+
+    return demo;
+  });
 }

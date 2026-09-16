@@ -1,3 +1,5 @@
+import { enableIntegrationDiscovery } from './integration-settings-utils';
+import { openLegacyGithubSetup } from './legacy-github-setup';
 import { test, expect } from '@playwright/test';
 import {
   before,
@@ -21,8 +23,11 @@ import {
  */
 test.describe('plugins', () => {
   test.beforeEach(before);
+  test.beforeEach(async ({ page }) => {
+    await enableIntegrationDiscovery(page, true);
+  });
 
-  test('Pets imports from the mock integration proxy after account connection and review', async ({
+  test('Pets imports in the background after account connection', async ({
     page,
   }) => {
     test.skip(
@@ -67,20 +72,14 @@ test.describe('plugins', () => {
       })
       .click();
     await expect(page).not.toHaveURL(/connection_code=/);
-    await page.getByRole('button', { name: 'Fetch and preview' }).click();
-
-    const review = page.locator('dialog[open]');
-    // The browser creates the local ontology, tables and reviewed proposal.
-    // Allow the one-time installation more than the interaction timeout.
+    await page.getByRole('button', { name: 'Complete installation' }).click();
+    await page.getByRole('link', { name: 'Open folder', exact: true }).click();
     await expect(
-      review.getByRole('button', { name: 'Apply 5 changes', exact: true }),
-    ).toBeEnabled({ timeout: 45_000 });
-    await review
-      .getByRole('button', { name: 'Apply 5 changes', exact: true })
-      .click();
-
+      page.getByRole('status').filter({ hasText: 'Last synced' }),
+    ).toBeVisible({ timeout: 60000 });
     await page
-      .getByRole('link', { name: 'Open imported records', exact: true })
+      .locator('[data-test="folder-list"]')
+      .getByRole('link', { name: 'Pets', exact: true })
       .click();
     const main = page.getByRole('main');
     await expect(
@@ -170,158 +169,224 @@ export function run() { return { intents: [] }; }
     ).toBeVisible();
   });
 
-  for (const managed of [false, true]) {
-    test(`Notion ${managed ? 'managed' : 'direct'} OAuth selects a database by name and reports revoked access`, async ({
-      page,
-    }) => {
-      const connection = {
-        id: 'fixture-connection',
-        name: 'Design team',
-        workspace: 'fixture-workspace',
-      };
-      await page.route('**/integration-oauth/notion/list', route =>
-        route.fulfill({ json: { configured: true, connections: [] } }),
-      );
-      await page.route('**/integration-oauth/notion/start', route =>
-        route.fulfill({
-          json: {
-            state: 'fixture-state',
-            ...(managed ? { mode: 'managed' } : {}),
-            url: `${SERVER_URL}/integration-oauth/notion/callback?state=fixture-state&code=fixture`,
-          },
-        }),
-      );
-      await page
-        .context()
-        .route('**/integration-oauth/notion/callback?**', route =>
-          route.fulfill({
-            contentType: 'text/html',
-            body: managed
-              ? 'Authorization finished. Return to Atomic.'
-              : `<script>opener.postMessage({type:'atomic-notion-oauth',state:'fixture-state',code:'fixture',error:null},${JSON.stringify(new URL(page.url()).origin)})</script>`,
+  test('Notion discovers databases through the proxy and reports revoked access without server OAuth', async ({
+    page,
+  }) => {
+    const actor = Agent.fromSecret(await getDevDriveSecret(page), 'js').subject;
+    const drive = new URL(page.url()).searchParams.get('subject')!;
+    const origin = 'https://notion-proxy.test';
+    const connection = 'notion-fixture';
+    const dataSource = '11111111-1111-4111-8111-111111111111';
+    const notionPage = {
+      object: 'page',
+      id: '22222222-2222-4222-8222-222222222222',
+      parent: { data_source_id: dataSource },
+      properties: {
+        Name: {
+          id: 'title',
+          type: 'title',
+          title: [{ type: 'text', text: { content: 'Proxy task' } }],
+        },
+      },
+    };
+    await page.evaluate(
+      ({
+        actor: storedActor,
+        drive: storedDrive,
+        origin: storedOrigin,
+        connection: storedConnection,
+      }) => {
+        localStorage.setItem('integration-proxy-url', storedOrigin);
+        window.dispatchEvent(new Event('integration-proxy-change'));
+        localStorage.setItem(
+          `localthought-browser:${JSON.stringify([storedOrigin, storedDrive, storedActor, 'notion'])}`,
+          JSON.stringify({
+            actor: storedActor,
+            drive: storedDrive,
+            platform: 'notion',
+            connection: storedConnection,
           }),
         );
-      let finishCalls = 0;
-      await page.route('**/integration-oauth/notion/finish', async route => {
-        expect(route.request().postDataJSON()).toMatchObject({
-          state: 'fixture-state',
-          ...(managed ? {} : { code: 'fixture' }),
-        });
-        if (managed)
-          expect(route.request().postDataJSON()).not.toHaveProperty('code');
-        finishCalls++;
-        await route.fulfill({
-          json: managed && finishCalls === 1 ? { pending: true } : connection,
-        });
-      });
-      let credentialBindings = 0;
-      await page.route('**/integration-oauth/notion/bind', async route => {
-        expect(route.request().postDataJSON()).toMatchObject({
-          connection: connection.id,
-        });
-        expect(route.request().postDataJSON()).not.toHaveProperty('value');
-        credentialBindings++;
-        await route.fulfill({ json: true });
-      });
-      await page.route('**/plugin-external-read', async route => {
-        const operation = route.request().postDataJSON().intent.operation;
-        const data =
-          operation === 'schema'
-            ? {
-                id: '11111111-1111-4111-8111-111111111111',
-                properties: {
-                  Name: { id: 'title', name: 'Name', type: 'title' },
+        localStorage.setItem(
+          `localthought-browser-v1:${storedConnection}`,
+          JSON.stringify({
+            actor: storedActor,
+            drive: storedDrive,
+            origin: storedOrigin,
+            platform: 'notion',
+            ready: true,
+            expires: Date.now() + 600000,
+            code: 'fixture-code',
+          }),
+        );
+      },
+      { actor, drive, origin, connection },
+    );
+    const forbidden: string[] = [];
+    page.on('request', req => {
+      if (
+        req.url().includes('/integration-oauth/') ||
+        req.url().includes('/plugin-secret')
+      )
+        forbidden.push(req.url());
+    });
+    await page.route(`${origin}/catalog`, route =>
+      route.fulfill({
+        json: ['notion'],
+        headers: { 'Access-Control-Allow-Origin': '*' },
+      }),
+    );
+    await page.route(`${origin}/proxy/notion/**`, async route => {
+      const path = new URL(route.request().url()).pathname;
+      if (route.request().method() === 'PATCH')
+        notionPage.properties.Name.title = route
+          .request()
+          .postDataJSON().properties.title.title;
+      await route.fulfill({
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Expose-Headers': 'X-Connection-Code',
+          'X-Connection-Code': 'next-code',
+        },
+        json: path.endsWith('/query')
+          ? { results: [notionPage], has_more: false, next_cursor: null }
+          : path.includes('/pages/')
+            ? notionPage
+            : path.endsWith('/views')
+              ? { results: [], has_more: false, next_cursor: null }
+              : {
+                  id: dataSource,
+                  properties: {
+                    Name: { id: 'title', name: 'Name', type: 'title' },
+                  },
                 },
-              }
-            : { results: [], has_more: false, next_cursor: null };
-        await route.fulfill({
-          json: { status: 200, body: JSON.stringify(data) },
-        });
       });
-      let revoked = false;
-      await page.route('**/integration-oauth/notion/discover', async route => {
-        expect(route.request().postDataJSON().connection).toBe(connection.id);
-        if (revoked)
-          await route.fulfill({
-            status: 401,
-            body: 'Notion access was revoked. Reconnect Notion to continue.',
-          });
-        else
-          await route.fulfill({
-            json: {
+    });
+    let revoked = false;
+    await page.route(`${origin}/proxy/notion/v1/search`, async route => {
+      expect(route.request().postDataJSON().query).toBe('Project');
+      await route.fulfill({
+        status: revoked ? 401 : 200,
+        headers: {
+          'X-Connection-Code': 'rotated-fixture-code',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Expose-Headers': 'X-Connection-Code',
+        },
+        json: revoked
+          ? { message: 'Unauthorized' }
+          : {
               results: [
                 {
+                  object: 'data_source',
                   id: '11111111-1111-4111-8111-111111111111',
-                  name: 'Project tasks',
-                  icon: '✅',
+                  title: [{ plain_text: 'Project tasks' }],
+                  icon: { emoji: '✅' },
                 },
               ],
-              cursor: null,
+              has_more: false,
+              next_cursor: null,
             },
-          });
       });
-      await page
-        .getByRole('link', { name: 'Integrations', exact: true })
-        .click();
-      await page
-        .locator('[data-integration=notion]')
-        .getByRole('button', { name: 'Set up connection' })
-        .click();
-      await page
-        .getByRole('button', { name: 'Connect Notion', exact: true })
-        .click();
-      await expect(
-        page.getByLabel('Notion workspace', { exact: true }),
-      ).toHaveValue(connection.id);
-      await page.getByLabel('Find a database', { exact: true }).fill('Project');
-      await page
-        .getByRole('button', { name: 'Find databases', exact: true })
-        .click();
-      await page
-        .getByLabel('Database', { exact: true })
-        .selectOption({ label: '✅ Project tasks' });
-      await expect(
-        page.getByRole('button', {
-          name: 'Continue to sync setup',
-          exact: true,
-        }),
-      ).toBeEnabled();
-      await expect(
-        page.getByLabel('Data source ID', { exact: true }),
-      ).not.toBeVisible();
-      revoked = true;
-      await page
-        .getByRole('button', { name: 'Find databases', exact: true })
-        .click();
-      await expect(page.getByRole('alert')).toContainText('Reconnect Notion');
-      await expect(
-        page.getByRole('button', { name: 'Reconnect Notion', exact: true }),
-      ).toBeEnabled();
-      revoked = false;
-      await page
-        .getByRole('button', { name: 'Find databases', exact: true })
-        .click();
-      await page
-        .getByLabel('Database', { exact: true })
-        .selectOption({ label: '✅ Project tasks' });
-      await page
-        .getByRole('button', { name: 'Continue to sync setup', exact: true })
-        .click();
-      await expect(
-        page
-          .getByRole('main')
-          .getByRole('heading', { name: /Notion rows/, level: 1 }),
-      ).toBeVisible();
-      expect(credentialBindings).toBe(1);
     });
-  }
+    await page.getByRole('link', { name: 'Integrations', exact: true }).click();
+    await page
+      .locator('[data-integration=notion]')
+      .getByRole('button', { name: 'Set up connection' })
+      .click();
+    await page.getByLabel('Find a database', { exact: true }).fill('Project');
+    await page
+      .getByRole('button', { name: 'Find databases', exact: true })
+      .click();
+    await page
+      .getByLabel('Database', { exact: true })
+      .selectOption({ label: '✅ Project tasks' });
+    await expect(
+      page.getByRole('button', { name: 'Preview sync', exact: true }),
+    ).toBeEnabled();
+    revoked = true;
+    await page
+      .getByRole('button', { name: 'Find databases', exact: true })
+      .click();
+    await expect(page.locator('dialog[open]').getByRole('alert')).toContainText(
+      'Notion',
+    );
+    revoked = false;
+    await page
+      .getByRole('button', { name: 'Preview sync', exact: true })
+      .click();
+    await expect(
+      page.getByRole('button', { name: 'Approve and sync', exact: true }),
+    ).toBeEnabled({ timeout: 45000 });
+    await expect(
+      page
+        .locator('dialog[open]')
+        .getByText('Proxy task', { exact: true })
+        .first(),
+    ).toBeVisible();
+    await page
+      .getByRole('button', { name: 'Approve and sync', exact: true })
+      .click();
+    await expect(page.getByText('Sync complete.', { exact: true })).toBeVisible(
+      { timeout: 45000 },
+    );
+    const rowSubject = await page.evaluate(
+      async ({ dataSource: installationDataSource, drive: queryDrive }) => {
+        const key = Object.keys(localStorage).find(k =>
+          k.includes('notion-proxy-installations-v1'),
+        )!;
+        const config = JSON.parse(localStorage.getItem(key)!)[
+          installationDataSource
+        ];
+        const result = await window.store!.queryLocalDb({
+          drive: queryDrive,
+          property: 'https://atomicdata.dev/properties/parent',
+          value: config.table,
+        });
+        const row = await window.store!.getLocalResource(result!.subjects[0]);
+        await row.set(
+          'https://atomicdata.dev/properties/name',
+          'Edited locally',
+        );
+        await row.save();
+
+        return row.subject;
+      },
+      { dataSource, drive },
+    );
+    await page
+      .getByRole('button', { name: 'Sync this table', exact: true })
+      .click();
+    await page
+      .getByRole('button', { name: 'Approve and sync', exact: true })
+      .click();
+    await expect(
+      page.getByText('Sync complete.', { exact: true }),
+    ).toBeVisible();
+    expect(notionPage.properties.Name.title[0].text.content).toBe(
+      'Edited locally',
+    );
+    notionPage.properties.Name.title[0].text.content = 'Edited in Notion';
+    await page
+      .getByRole('button', { name: 'Sync this table', exact: true })
+      .click();
+    await page
+      .getByRole('button', { name: 'Approve and sync', exact: true })
+      .click();
+    await expect(
+      page.getByText('Sync complete.', { exact: true }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        async subject => (await window.store!.getLocalResource(subject)).title,
+        rowSubject,
+      ),
+    ).toBe('Edited in Notion');
+    expect(forbidden).toEqual([]);
+  });
 
   test('Notion setup validates identifiers before storing credentials', async ({
     page,
   }) => {
-    await page.route('**/integration-oauth/notion/list', route =>
-      route.fulfill({ json: { configured: false, connections: [] } }),
-    );
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
     const secretWrites: string[] = [];
@@ -779,7 +844,7 @@ export function run() { return { intents: [] }; }
     ).toBe(originalSource.source);
   });
 
-  test('GitHub reuses a task template table without replacing its views', async ({
+  test('GitHub setup through assistant reuses a task template table without replacing its views', async ({
     page,
   }) => {
     await createTableFromDialog(page, {
@@ -802,24 +867,19 @@ export function run() { return { intents: [] }; }
         'https://atomicdata.dev/task/v1/body',
       ]),
     );
-    await page.getByRole('link', { name: 'Integrations', exact: true }).click();
-    await page
-      .locator('[data-integration=github-issues]')
-      .getByRole('button', { name: 'Set up connection' })
-      .click();
-    await expect(page.getByLabel('Sync into')).toContainText(
+    const { dialog } = await openLegacyGithubSetup(page, {
+      repository: 'atomic-fixtures/shared-tasks',
+    });
+    await expect(dialog.getByLabel('Sync into')).toContainText(
       'Shared project tasks',
     );
-    await page
+    await dialog
       .getByLabel('Sync into')
       .selectOption({ label: 'Shared project tasks' });
-    await page
-      .getByLabel('Repository', { exact: true })
-      .fill('atomic-fixtures/shared-tasks');
-    await page
+    await dialog
       .getByLabel('GitHub token', { exact: true })
       .fill('local-install-test-token');
-    await page
+    await dialog
       .getByRole('button', { name: 'Connect GitHub', exact: true })
       .click();
     await expect(page).toHaveURL(tableUrl, { timeout: 30000 });
@@ -830,30 +890,18 @@ export function run() { return { intents: [] }; }
     await expect(page.getByText('Schedule', { exact: true })).toBeVisible();
   });
 
-  test('GitHub can be installed from Integrations without a CLI', async ({
+  test('GitHub can be installed through the assistant without a CLI', async ({
     page,
   }) => {
     const pageErrors: string[] = [];
     page.on('pageerror', e => pageErrors.push(e.message));
-    await page.getByRole('link', { name: 'Integrations', exact: true }).click();
-    await expect(page.getByLabel('GitHub token', { exact: true })).toHaveCount(
-      0,
-    );
-    await page
-      .getByRole('textbox', { name: 'Search integrations' })
-      .fill('kanban');
-    await expect(page.locator('[data-integration=notion]')).toHaveCount(0);
-    await page
-      .locator('[data-integration=github-issues]')
-      .getByRole('button', { name: 'Set up connection' })
-      .click();
-    await page
-      .getByLabel('Repository', { exact: true })
-      .fill('atomic-fixtures/issues');
-    await page
+    const { dialog } = await openLegacyGithubSetup(page, {
+      repository: 'atomic-fixtures/issues',
+    });
+    await dialog
       .getByLabel('GitHub token', { exact: true })
       .fill('local-install-test-token');
-    await page
+    await dialog
       .getByRole('button', { name: 'Connect GitHub', exact: true })
       .click();
     await expect(page).toHaveURL(/\/app\/show\?subject=/, { timeout: 30000 });

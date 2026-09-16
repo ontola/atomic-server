@@ -28,6 +28,20 @@ cleanup and the current assistant handoff. External approval transport is stubbe
 
 # Testing coverage map
 
+Devonian discovery: `PluginRuns/localThoughtCatalogEntries.test.ts` checks that
+generated API entries follow the remote catalog without injecting Calendar.
+`PluginRuns/IntegrationDiscovery.test.ts` covers separate bundled Devonian
+Calendar and GitHub issue/comment entries and removal of the older GitHub-to-kanban
+listing. The Devonian GitHub route uses the browser-safe bundle, avoiding
+node:events from the package root. Discovery unit checks do not exercise live
+provider consent.
+
+Calendar category isolation: `PluginRuns/localThoughtExtension.test.ts` and
+`PluginRuns/localThoughtSync.test.ts` cover explicit generated/Devonian mode,
+separate schema namespaces, and legacy Calendar refresh behavior.
+`PluginRuns/localThoughtCallback.test.ts` checks originating-entry selection
+and callback redemption; real provider consent remains outside these unit tests.
+
 Typed app setup: `browser/lib/src/plugin-setup.test.ts` covers shared input validation,
 partial model drafts, forbidden arguments and size limits. It also validates resource JSON
 setup declarations: detached round-trips, supported constraints, malformed schemas,
@@ -68,6 +82,12 @@ consent/replay, optional credential grants, callback binding and redemption expi
 CORS was verified with the earlier live browser flow; the new secret-free flow
 still requires matching proxy/frontend deployments and live verification.
 
+`browser/data-browser/src/chunks/DevonianDemo/demo.test.ts` covers overlapping
+OAuth callback resumes: one redemption completes and both callers recover the
+same tracker. It also checks callback ownership and refusal to retry an uncertain
+redemption. This covers callback orchestration separately from the browser
+transport tests; live OAuth acceptance still requires a matching app build.
+
 `browser/e2e/tests/devonian-issue-sync.spec.mts` exercises the no-paste redirect,
 selected-platform consent and PKCE redemption, direct HTTP writes and local OPFS storage for two-way issue
 creation, comments, close/reopen and reload without duplicate resources. Its
@@ -99,6 +119,13 @@ caught it, and if the answer is "none", that is the row to add.
 
 ---
 
+## WASM database opening
+
+`browser/lib/src/client-db-open.test.ts` covers `ClientDb.open()` success,
+wrong-key cache recovery, and propagation of blocked/corrupt-storage errors.
+The save-state and crash-durability browser tests exercise the generated WASM
+factory through the real worker and OPFS; the async constructor is no longer used.
+
 ## E2E isolation and performance harness (#1461)
 
 `search.test.ts` verifies search-cache invalidation only evicts memory entries,
@@ -116,6 +143,23 @@ not establish full Dagger E2E acceptance or a supported worker count.
 `loro-selection.test.ts` checks cursor preservation across a remote metadata
 update followed by keystrokes before and after queued timers. The scoped
 loro-prosemirror 0.4.3 patch restores document and selection atomically.
+
+`loro-typing-history.test.ts` exercises ordinary typing and fallback formatting
+with real ProseMirror transactions and Loro documents. Its synthetic imported
+history reproduces redundant inclusive-mark operations without private document
+data. Assertions cover materialization counts, formatting-history growth, text
+container identity, UTF-16 edits and persisted marks.
+`loro-typing-collaboration.test.ts` covers undo/redo followed by typing, concurrent
+text/format convergence without import echoes, duplicate paragraph mappings and
+multi-step composition fallback. `editor-typing.spec.ts` runs against the built
+GUI, checks that real keystrokes avoid `toDelta`, and verifies text after reload;
+it records frame timings without a machine-dependent timing threshold.
+
+`documentUndoSession.test.ts` covers document undo/redo across editor bindings,
+authentication-session isolation, system/remote changes and callback ownership.
+`browser/e2e/tests/document-undo.spec.ts` checks undo and redo through the
+Data View round trip, including persisted content after reload.
+
 `store-search-server.test.ts` checks that authoritative server lookups after
 imports do not wait on local indexing or WebSocket readiness.
 
@@ -133,6 +177,15 @@ Playwright provides accounting, reports and step timings. Custom build caches,
 host sampling and matrix-acceptance scripts were removed to simplify maintenance.
 `node --experimental-strip-types --test scripts/e2e-budget.test.mjs` validates
 CI overrides without mutating the profile or coverage selection.
+`pnpm --dir .dagger test` also exercises the actual Dagger module against a
+recording SDK double: lint must not construct a WASM build, CI validates and
+forwards budget arguments, and E2E applies them to shard and clone settings.
+These checks run before Dagger in CI and reproduce the incomplete merge in
+`2ccff0976`; they do not substitute for container or browser execution.
+The existing full-snapshot duplicate-import test also covers parent-only resources
+through initial sync, replay and later offline edits.
+`parent_only_existing_resource_cannot_be_pushed_through_another_drive` verifies
+that resolving their stored parent does not permit a cross-drive overwrite.
 `initClientDb.handoff.test.ts` checks the deferred anonymous startup and identity
 handoff guard.
 The ontology E2E test gates an earlier instance save's completion while the next
@@ -644,8 +697,9 @@ Not covered: visual morph of a grid card into the resource page in Firefox (need
 |---|---|---|
 | V1 element list + paragraph markdown (+ resource embed) → TipTap JSON; leftover Yjs `XmlFragment` walker; `{ type: 'ydoc' }` detection without loading `yjs` | glue | `browser/data-browser/src/views/Document/documentMigrationUtils.test.ts` |
 | Opening a writable v1 document migrates it silently into the Loro editor (no "Update Document" button) | flow | `browser/e2e/tests/documents.spec.ts` |
+| Uploaded text-file conversion: supported MIME/extensions, literal text and line breaks, Markdown parsing, permission/download failure, and class replacement | glue | `browser/data-browser/src/views/File/convertFileToDocument.test.ts` |
 
-Not covered: leftover Yjs-era DocumentV2 bodies end-to-end (needs a stored `{ type: 'ydoc' }` fixture); read-only v1 documents stay on the element list and have no e2e.
+No automated end-to-end coverage: uploaded-file conversion through the full UI and a server-backed save/reload (manually verified in Chromium). Also not covered: leftover Yjs-era DocumentV2 bodies end-to-end (needs a stored `{ type: 'ydoc' }` fixture); read-only v1 documents stay on the element list and have no e2e.
 
 ## Commits as envelopes
 
@@ -1064,33 +1118,29 @@ silently disabled), invalid identifiers before credential storage, Enter submiss
 and a mocked credential-storage rejection with a visible error and retry enabled.
 OAuth and named database discovery now have coverage described below; live provider verification remains open.
 
-Notion OAuth: `handlers::integration_oauth::tests` covers state ownership,
-expiry and consumption plus connection ownership and sanitized database choices.
-`notionAuth.test.ts` checks popup origin/source/state and cancellation cleanup.
-`db::plugin_secret::store_tests` covers shared reference rotation/revocation,
-origin/drive restrictions and legacy positional MessagePack decoding. Browser
-`Notion OAuth selects a database by name and reports revoked access` uses mocked
-provider authorization/discovery (not live Notion). Live OAuth and automatic
-refresh remain unverified/unimplemented respectively.
+Notion proxy migration: `integrations/notion/proxy.test.ts` checks named search
+and POST pagination, endpoint/read-vs-write constraints, parity with the shipped
+provider preview, import/checkpoint and an Atomic-to-Notion update.
+`integrations/localthought/async-plugin.test.ts` checks bounded receipt replay
+without duplicate HTTP requests. `browser-sync.test.ts` checks durable uncertainty
+and refusal to replay a lost write, plus converged checkpoints. Browser
+`Notion discovers databases through the proxy and reports revoked access without
+server OAuth` uses synthetic browser-owned credentials and proxy replies, imports
+and checkpoints with AtomicServer unavailable, and rejects server OAuth/secret
+requests. The shared browser transport tests cover PKCE and code rotation.
+The former Notion-specific server OAuth and popup tests were removed with that
+implementation. Live proxy deployment and Notion consent are not certified by
+these fixtures. Browser sync is manual; server schedules and discovery
+notifications remain only on legacy token installations.
 
-Shared OAuth handoff: `oauth::handoff::tests` tests ownership across server,
-agent, drive, provider and attempt, wrong retrieval proof, pending polling,
-single-use delivery, concurrent redemption, duplicate completion, expiry,
-credential removal and cleanup pagination past active entries. Service HTTP transport/authentication now has the tests described below.
-Production TLS deployment and live provider exchanges remain unverified.
-
-OAuth HTTP transport: `oauth::service::tests` covers missing credentials,
-body-forged server identity, cross-server redemption, callback cancellation and
-replay, bounded per-host admission, URL validation and a real loopback HTTP
-client/service round trip. `notionAuth.test.ts` covers managed local polling and
-abort. Playwright runs the same Notion setup fixture in direct and managed modes,
-through native mapping creation, plus the manual fallback. These are authored
-provider responses; production TLS/proxy configuration, real Notion consent,
-refresh, immediate remote cancellation and SaaS deployment remain unverified.
+Runtime feature coverage: `cargo check -p atomic-server` and
+`cargo check -p atomic-server --no-default-features --features light` validate
+both default runtime-on and runtime-off binaries. The `wasm-plugins` feature
+controls the nested WASM build, runtime modules and runtime HTTP registrations.
 
 Integration UX walkthrough (2026-09-07): desktop browser checked discovery and
 connection dialogs. Four focused `plugins.spec.ts` cases pass, including the
-Notion “Continue to sync setup” transition and GitHub automation creation.
+Notion proxy preview/approval transition and GitHub automation creation.
 Provider calls are fixtures; this does not verify live account authorization.
 
 `discoverIntegrations.test.ts` checks assistant capability search, exclusion of
@@ -1688,8 +1738,10 @@ start data, invalid active events, namespace isolation and repeat import/local
 field preservation. `browser/e2e/tests/google-calendar-import.spec.mts` uses the
 shared HTTP mock integration-proxy with a paginated Google Calendar, selected
 platform consent and PKCE redemption. It covers browser WASM fetching, local
-schema/proposal/apply, Calendar display, provider updates, OPFS reload and
-stable identities while AtomicServer HTTP/WebSockets are unavailable. Missing
+one-request validation, immediate folder creation before a held background import,
+automatic schema/application, Calendar display, refresh on reopening, OPFS reload,
+stable identities and local-only notes while AtomicServer HTTP/WebSockets are
+unavailable. A failed refresh retains records and reopening recovers. Missing
 rows in a bounded snapshot are retained, not interpreted as deletions.
 Live-provider browser OAuth and write verification are tracked separately in PR
 and release verification; this fixture intentionally uses no live provider
@@ -1761,8 +1813,8 @@ coverage.
 
 `integrations/localthought/browser.test.ts` covers consumer-owned request budgets,
 Retry-After handling with rotating credentials, deadline rejection, and separate
-catalog selections with explicit caller precedence. Existing Notion OAuth
-coverage and its wire protocol remain unchanged.
+catalog selections with explicit caller precedence. Notion now uses this shared
+browser authorization flow; its proxy migration coverage is described above.
 
 The Local Thought Vitest suite imports Calendar code from the pinned Devonian
 package. Existing GitHub, Notion and Clockify implementations, fixture suites,
@@ -1779,8 +1831,8 @@ traversal uses `operationId`. The browser preview rejects more than 5,000 record
 with an explicit incomplete-import error rather than silently truncating.
 
 `IntegrationDiscovery.test.ts` verifies that all four bundled plugins remain
-discoverable without contacting an integration proxy. The original Notion auth
-and Clockify upgrade tests remain alongside it.
+discoverable without contacting an integration proxy. Clockify upgrade tests
+remain alongside the Notion proxy tests.
 
 
 Portable app definitions: `browser/lib/src/app-package.test.ts` loads a standalone
@@ -1856,9 +1908,145 @@ failure checks also pass. Actual staging phone restore latency remains unmeasure
 
 ## External cache access and authentication origins (#170)
 
+Paired SaaS `portal/e2e/recovery-passkey.spec.ts` uses Chromium virtual PRF authenticators with the real control plane to verify app enrollment followed by portal login using one credential, reuse of a portal-created credential, and account-settings migration without replacing ciphertext or old wrappers. Physical Safari/iCloud, Android/password-manager and native-shell behavior remain device acceptance checks.
+
+## September 10 SaaS and browser invite regressions
+
+- `browser/lib/src/browser-peer-invite.test.ts`: signed invitation validation, expiry, target and issuer checks, recipient proof, and additive permission grants.
+- `browser/e2e/tests/browser-invite.spec.ts`: distinct signed-in identities join a local drive through the app without the server invite endpoint.
+- `browser/e2e/scripts/verify-peer-sync.mjs` with `ATOMIC_PEER_INVITE=1`: invitation bootstrap and real WebRTC reconciliation with HTTP data access disabled.
+- `browser/e2e/tests/recovery-option.spec.ts`: recovery availability in the managed welcome flow.
+- Existing-drive migration to browser-only storage and fresh-account email onboarding through a peer invitation remain unverified.
+
+- `browser/data-browser/src/helpers/passkeySupport.test.ts` checks secure-context and credential API availability. `browser/e2e/tests/passkey-unavailable.spec.ts` removes WebAuthn from the browser and verifies that account settings explain the limitation, hide passkey setup, and preserve recovery-code access. Native credential-provider failures with the API present remain outside this check.
+
+
+## Managed sync presentation and local transition
+
+`syncPresentation.test.ts` covers Vault-aware summaries and hiding unrelated
+saved managed nodes. `enrollmentApi.test.ts` distinguishes unknown hosting from a
+successful empty enrollment list. `client-db.test.ts` covers nested WASM Map
+normalization, and `local-drive-copy.test.ts` rejects incomplete history and
+missing/corrupt attachments.
+
+`managed-sync-presentation.spec.ts` uses a real local node and OPFS with mocked
+account/enrollment/Vault responses. It reproduces both reported connection states,
+checks refusal when local history cannot be read, switches to browser-only sync,
+and verifies an edit plus attachment survive reload without HTTP/WS data writes.
+It also exercises the compiled Vault session error path (no React hook in an
+error constructor). Actual staging billing/admission and multi-device migration
+remain separate acceptance checks.
+
+Merge integration regression: `IntegrationDiscovery.test.ts` imports the bundled
+integration UI and catches a Dialog → Feedback → file-picker initialization cycle.
+Dialog loads its onboarding feedback lazily so its exported content component is
+initialized before feedback-dependent dialogs are imported.
+
+Standalone Rust library tests enable Tokio’s multithread runtime through a dev
+dependency. `db::app_agent::store_tests::revocation_survives_process_exit_without_destructors`
+exercises runtime construction in both the parent and its abruptly exiting child
+with `cargo test -p atomic_lib --features db-redb --lib`, without workspace feature
+unification or an extra Tokio feature on the command line.
+
+Integration discovery preferences: `integrationVisibility.test.ts` covers absent
+or malformed values and all four independent boolean combinations.
+`integration-visibility.spec.ts` covers default-hidden discovery, settings links,
+Atomic persistence across reloads, independent toggles, visible existing connections
+and no community catalog fetch while disabled. Existing plugin/setup/MT940 browser tests explicitly opt in
+through Settings. Cross-device preference sync uses normal private-drive sync;
+a dedicated multi-device preference test is not yet present.
+
+## Local Thought browser refresh
+
+- `integrations/localthought/browser.test.ts`: one provider request for validation,
+  no pagination/retry or import, credential rotation, and denied/throttled/failed
+  access checks.
+- `browser/data-browser/src/chunks/PluginRuns/localThoughtSync.test.ts`: install
+  without importing, failed validation before folder creation, overlapping refresh
+  exclusion, failure/recovery with last-success preservation, blocked imports and
+  switching accounts during a fetch.
+- `browser/e2e/tests/google-calendar-import.spec.mts`: real WASM and browser OPFS
+  journey for background installation, folder-open and five-minute timer refresh,
+  preserved identities, local edits and notes, failure/recovery, and Calendar
+  instances/series. No live accounts.
+- Online and visibility lifecycle hooks use the same refresh function.
+  Closed-browser execution is intentionally unsupported.
+Portable app definitions: `browser/lib/src/app-package.test.ts` loads a standalone
+JSON fixture through the shared importer, planner and apply engine with in-memory
+storage. It verifies nested placement, native localId, repeat import, conflicting
+revision reuse, opaque source/setup text, and refusal of installation fields or
+unsupported declarations. This is library coverage: marketplace UI, real-server
+package persistence, schema/template graph import and sandbox activation remain
+unverified/unimplemented by this slice.
+
+`prepareDriveSharing.test.ts` covers verified local transition before peer invitation, rejection on failed verification, preservation of an enrolled drive connection, and isolation from another drive enrollment. `local-drive-copy.test.ts` covers missing history, incomplete inventory, and missing or corrupt attachments. Full sharing UI acceptance remains pending.
+## Signed-out local drive opened from the portal
+
+`browser/data-browser/src/helpers/isDriveSignInError.test.ts` covers a local-only missing-resource error with no app agent, including origins with a configured node. It also covers signed-out DID resources absent from the current node: their copy may be in the account vault, so they offer unlock. Signed-in users, ordinary HTTP 404s, and unrelated transport failures retain their error handling.
+
+Paired SaaS `portal/e2e/passkey-open-drive.spec.ts` covers account/profile creation, passkey enrollment, recovery-code acknowledgement, completed app sign-out, portal passkey sign-in, and the Open link reaching the app unlock screen. It then unlocks and verifies the original drive title. Chromium virtual PRF state is tied to the original CDP target, so the unlock portion runs there after verifying the real popup handoff. Unlocking within the popup itself remains a physical-browser acceptance check.
+## Ontology codegen (`@tomic/cli`) and DID fetch
+
+| Flow | Where |
+|---|---|
+| HTTP path `https://host/did:ad:…` and `/did?subject=` extract the same DID | `browser/lib/src/subject.test.ts` |
+| JSON-AD parse accepts `@id: did:ad:…` when the request used the HTTP path alias | `browser/lib/src/parse.test.ts` |
+| `Client.fetchResourceHTTP` resolves DIDs via `/did?subject=` and does not touch `window` in Node | `browser/lib/src/client.fetch.test.ts` |
+| Store fetch by HTTP path alias returns the resource stored under the DID | `browser/lib/src/store.test.ts` |
+
+Not covered: `ad-generate ontologies` end-to-end against a live server (no CLI test runner).
+
+`helpers/managed/vaultAutoBackup.test.ts` verifies successful vault restoration preserves known node absence as local-only routing, while transport failures and failed restores do not disable node sync. Paired SaaS second-browser coverage verifies the original profile and vault-only canary after restore, with bounded pre-restore refusal diagnostics.
+
+Paired SaaS `portal/e2e/identity-reconcile.spec.ts` exercises dev-drive creation while a managed account is active: reconciliation waits until the temporary identity has a drive, and creation must not enroll it in the account.
+
+Session restore routing: `helpers/managed/reconcile.test.ts` covers connecting the
+exact hosted drive before availability checks, clearing local-only routing,
+skipping Pending/Disabled placements and other drives, and ignoring discovery
+that completes after its deadline. Staging phone restore latency and end-to-end
+WebSocket query delivery remain unverified.
+
+Cloud Vault download concurrency: `helpers/managed/vault.test.ts` holds network
+responses open to verify concurrent downloads are bounded at four and that
+reverse completion preserves listing order at import. Existing progress and
+failure checks also pass. Actual staging phone restore latency remains unmeasured.
+
+## Right-panel lifecycle
+
+`components/RightPanel/panelState.test.ts` covers session-local initial state, exclusive panels, cleared meeting selection, account/drive scoping, stale callbacks, and missing/unauthorized versus temporarily unavailable targets.
+
+`e2e/tests/right-panel-lifecycle.spec.ts` asserts visible panel state with legacy localStorage values for meeting/comments/AI, SPA navigation away from commentable resources, deletion of an explicitly opened meeting, and switching drives and back without resurrecting the panel. Existing `meetings.spec.ts` agenda/start/end coverage verifies that minutes and explicitly opened meeting chat still work. AI chat E2E (`ai.spec.ts`, `table-tools.spec.ts`) opens the assistant with the navbar button rather than `atomic.rightPanel.active`, because that key is no longer restored.
+
+## Replication completion and CI tool installation
+
+`lib/src/sync/replicate.rs` has five scripted WebSocket peer tests covering
+resource-only completion without the idle timeout, acknowledgement of every
+chunk, unrelated-drive acknowledgements, an independently mismatching hash,
+trailing blob requests and asynchronous storage errors, and the fallback for
+peers without keepalive support. They exercise the real Rust WebSocket client
+and snapshot/chunk encoding with an isolated in-memory source; the peer scripts
+simulate replies and do not validate authentication or remote import policy.
+The real-server `server/tests/it/replicate.rs` tests retain destination-data,
+repeat-push, boot-reconcile and export-authorization assertions.
+
+The pinned wasm-pack installer was executed in Dagger's `rust:bookworm` image
+on Linux x86_64, including a cached install followed by changed downstream
+source input and execution of the retained binary. Its aarch64 archive digest
+is pinned to the upstream release; native aarch64 execution is not covered by
+that check. Full CI wall-time savings require a completed hosted run.
+## External cache access and authentication origins (#170)
+
 `db::test::cached_external_resources_keep_read_permissions` checks that a cached
 external resource remains private in public collection queries (nested and
 subject-only) and direct reads, while the authorized agent can still read it.
 `client::helpers` origin tests reject lookalike hosts, userinfo-host confusion,
 changed ports/schemes, malformed URLs and non-HTTP URLs; normalized same-origin
 and localhost requests remain eligible for DID-agent authentication.
+
+## Drive root file drops
+
+`views/Drive/DrivePage.test.tsx` renders the drive page with its real dropzone
+and upload hook, then delivers multiple files through the drop callback. It
+verifies the upload targets the displayed drive even when the current drive
+setting differs. Native drag events, overlay geometry and the refreshed child
+list are not covered by this component test.

@@ -1,13 +1,14 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
+import { ButtonLink } from '@components/ButtonLink';
 import { Card } from '@components/Card';
 import { Column } from '@components/Row';
 import { Button } from '@components/Button';
 import { Dialog, useDialog } from '@components/Dialog';
 import { IntegrationEvidence } from './IntegrationEvidence';
+import { googleCalendarIntegration } from '@localthought/atomic-integrations/ui/GoogleCalendar';
+import { useIntegrationProxy } from '@helpers/integrationProxy';
+import { useLocalThoughtCompletedPlatform } from './localThoughtCallback';
 
-const GitHubSetup = lazy(() =>
-  import('./ConnectGitHub').then(m => ({ default: m.ConnectGitHub })),
-);
 const NotionSetup = lazy(() =>
   import('./ConnectNotion').then(m => ({ default: m.ConnectNotion })),
 );
@@ -20,8 +21,59 @@ const MT940Setup = lazy(() =>
   import('./ImportMT940').then(m => ({ default: m.ImportMT940 })),
 );
 
-export function bundledIntegrations() {
+const LocalThoughtSetup = lazy(() =>
+  import('./ConnectLocalThought').then(m => ({
+    default: m.ConnectLocalThought,
+  })),
+);
+
+type BundledIntegration = {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  capabilities: string;
+  events: string;
+  limitation: string;
+  keywords: string;
+  requiresApiPlugins?: boolean;
+  platform?: string;
+  callbackPlatform?: string;
+  extension?: typeof googleCalendarIntegration;
+};
+
+export function bundledIntegrations(): BundledIntegration[] {
   return [
+    {
+      id: 'devonian-github-issues' as const,
+      name: 'GitHub issues and comments (Devonian)',
+      icon: '🐙',
+      description: 'Connect a GitHub repository to a local issue tracker.',
+      capabilities:
+        'Sync issues and comments in both directions, including closing and reopening issues.',
+      events:
+        'Connect through LocalThought, then use Sync now to exchange changes.',
+      limitation:
+        'Creates a separate local drive. Keep the browser open to sync. Sync writes changes to your GitHub repository.',
+      keywords: 'devonian github issues comments lens local tracker',
+      requiresApiPlugins: true,
+    },
+    {
+      id: 'devonian-google-calendar',
+      name: 'Google Calendar (Devonian)',
+      icon: '🗓️',
+      description: 'Import Google Calendar events into calendar views.',
+      capabilities:
+        'Preserves recurring series and previews supported edits to send back to Google.',
+      events:
+        'Connect through LocalThought, then use Sync now to exchange changes.',
+      limitation:
+        'Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google.',
+      keywords: 'google calendar devonian events recurring lens local tracker',
+      requiresApiPlugins: true,
+      platform: 'google-calendar',
+      extension: googleCalendarIntegration,
+    },
     {
       id: 'mt940' as const,
       name: 'Bank statements',
@@ -50,17 +102,6 @@ export function bundledIntegrations() {
       keywords: 'clockify time tracking timesheet projects billable import',
     },
     {
-      id: 'github-issues' as const,
-      name: 'GitHub issues',
-      icon: '🐙',
-      description: 'Keep GitHub issues and your kanban board in sync.',
-      capabilities:
-        'Sync titles, descriptions and status in both directions. Create issues from either app.',
-      events: 'Start automations when a new issue is discovered.',
-      limitation: 'Issues only. Comments and pull requests are not synced.',
-      keywords: 'github issues kanban development engineering tasks automation',
-    },
-    {
       id: 'notion' as const,
       name: 'Notion',
       icon: '📓',
@@ -71,8 +112,19 @@ export function bundledIntegrations() {
       limitation:
         'Formatted text, relations, formulas and filtered views need additional mappings.',
       keywords: 'notion database table board rows knowledge tasks automation',
+      requiresApiPlugins: true,
+      callbackPlatform: 'notion',
     },
   ];
+}
+
+export function visibleBundledIntegrations(
+  showExperimentalPlugins: boolean,
+  showApiPlugins: boolean,
+) {
+  return (showExperimentalPlugins ? bundledIntegrations() : []).filter(
+    entry => !entry.requiresApiPlugins || showApiPlugins,
+  );
 }
 
 export function IntegrationDiscovery({
@@ -80,11 +132,21 @@ export function IntegrationDiscovery({
   drive,
   workspace,
 }: {
-  entry: ReturnType<typeof bundledIntegrations>[number];
+  entry: BundledIntegration;
   drive?: string;
   workspace?: string;
 }) {
-  const [dialog, show, , isOpen] = useDialog();
+  const origin = useIntegrationProxy();
+  const returned = useLocalThoughtCompletedPlatform(drive, origin, entry.id);
+  const [dialog, show, , isOpen] = useDialog({
+    onCancel: () => {
+      if (returned) sessionStorage.removeItem('localthought-completed');
+    },
+  });
+  useEffect(() => {
+    if (returned && returned === (entry.platform ?? entry.callbackPlatform))
+      show();
+  }, [returned, entry.platform, entry.callbackPlatform, show]);
 
   return (
     <Card data-integration={entry.id}>
@@ -106,10 +168,20 @@ export function IntegrationDiscovery({
         {workspace && (entry.id === 'notion' || entry.id === 'mt940') && (
           <p>This integration creates a new workspace for its imported data.</p>
         )}
-        <IntegrationEvidence id={entry.id} />
-        <Button disabled={!drive} onClick={show}>
-          Set up connection
-        </Button>
+        {entry.id === 'devonian-github-issues' ? (
+          <ButtonLink href='/app/devonian-demo'>Install plugin</ButtonLink>
+        ) : (
+          <>
+            {!entry.platform && (
+              <IntegrationEvidence
+                id={entry.id as 'mt940' | 'clockify' | 'notion'}
+              />
+            )}
+            <Button disabled={!drive} onClick={show}>
+              Set up connection
+            </Button>
+          </>
+        )}
       </Column>
       <Dialog {...dialog} width='38rem'>
         <Dialog.Title>
@@ -121,12 +193,17 @@ export function IntegrationDiscovery({
           <Suspense fallback={<p>Loading setup…</p>}>
             {isOpen &&
               drive &&
-              (entry.id === 'mt940' ? (
+              (entry.platform ? (
+                <LocalThoughtSetup
+                  drive={drive}
+                  platform={entry.platform}
+                  extension={entry.extension}
+                  entry={entry.id}
+                />
+              ) : entry.id === 'mt940' ? (
                 <MT940Setup drive={drive} />
               ) : entry.id === 'clockify' ? (
                 <ClockifySetup drive={drive} workspace={workspace} />
-              ) : entry.id === 'github-issues' ? (
-                <GitHubSetup drive={drive} workspace={workspace} />
               ) : (
                 <NotionSetup drive={drive} />
               ))}

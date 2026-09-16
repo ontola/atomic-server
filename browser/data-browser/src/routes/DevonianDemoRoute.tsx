@@ -97,7 +97,7 @@ function DevonianDemo() {
     <Main>
       <ContainerWide>
         <Column gap='1.5rem'>
-          <h1>Devonian issue tracker demo</h1>
+          <h1>GitHub issues and comments (Devonian)</h1>
           <p>
             Sync issues and comments in both directions. Devonian runs in this
             browser; the Atomic tracker is stored on this device.
@@ -107,8 +107,8 @@ function DevonianDemo() {
               <Button disabled={busy} onClick={() => start(true)}>
                 Try sample data
               </Button>
-              <details>
-                <summary>Connect a real GitHub repository</summary>
+              <details open>
+                <summary>Connect a GitHub repository</summary>
                 <Column gap='0.75rem'>
                   <p>
                     LocalThought will ask you to sign in and authorize the

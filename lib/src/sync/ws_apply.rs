@@ -129,28 +129,19 @@ pub async fn resolve_update(
     // doesn't exist locally to hit the bootstrap carve-out), bypassing the
     // real drive's admission/ACL entirely. Same class of bug as the
     // IS_A: [Agent] spoof fixed in commit.rs (`7ae8bcc1`).
-    let drive_subject = if let Some(existing) = &existing {
+    // For a new subject, leave the drive unset here: resolve via PARENT below,
+    // rather than trusting a directly asserted DRIVE_PROP on the payload.
+    // Admission/ACL checks still apply to the resolved drive; without a locally
+    // resolving parent, the subject itself is treated as the drive root.
+    let drive_subject = existing.as_ref().map(|existing| {
         // Existing subject: its already-stored drive is authoritative,
         // captured BEFORE the incoming delta is merged. Never re-derived
         // from post-merge state.
-        Some(
-            existing
-                .get(crate::urls::DRIVE_PROP)
-                .map(|v| v.to_string())
-                .unwrap_or_else(|_| existing.get_subject().to_string()),
-        )
-    } else {
-        // Genuinely new subject: nothing local to protect yet, but we still
-        // don't trust a directly-asserted DRIVE_PROP on the payload — resolve
-        // via PARENT instead (mirrors commit.rs's safety net). A lied-about
-        // PARENT can't escalate: admission/ACL then checks against whatever
-        // drive was claimed, and an attacker gains nothing by pointing at a
-        // drive they don't control. No parent (or it doesn't resolve
-        // locally) means this is a drive root — falls back to its own
-        // subject, exactly like the existing-subject case above.
-        None
-    };
-
+        existing
+            .get(crate::urls::DRIVE_PROP)
+            .map(|v| v.to_string())
+            .unwrap_or_else(|_| existing.get_subject().to_string())
+    });
     let mut resource = existing.unwrap_or_else(|| crate::Resource::new(subject.to_string()));
     if resource.apply_state_doc(doc).is_err() {
         return None;
@@ -159,6 +150,13 @@ pub async fn resolve_update(
     let drive_subject = match drive_subject {
         Some(d) => d,
         None => {
+            // Genuinely new subjects must not trust a directly-asserted
+            // DRIVE_PROP in the payload. Resolve through PARENT instead
+            // (mirrors commit.rs's safety net). A lied-about PARENT cannot
+            // escalate: admission and ACLs then check the claimed drive, and
+            // an attacker gains nothing by pointing at a drive they do not
+            // control. No parent (or no local parent) makes this a drive root,
+            // so it falls back to its own subject.
             let mut resolved = resource.get_subject().to_string();
             if let Ok(parent_val) = resource.get(crate::urls::PARENT) {
                 let parent_subject = crate::Subject::from(parent_val.to_string());

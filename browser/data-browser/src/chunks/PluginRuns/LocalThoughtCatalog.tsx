@@ -1,18 +1,14 @@
+import { localThoughtCatalogEntries } from './localThoughtCatalogEntries';
 import { useIntegrationProxy } from '@helpers/integrationProxy';
-import { useEffect, useState, useRef, Suspense } from 'react';
-import { useStore } from '@tomic/react';
+import { useEffect, useState, Suspense } from 'react';
 import { Card } from '@components/Card';
 import { Column } from '@components/Row';
 import { Button } from '@components/Button';
 import { Dialog, useDialog } from '@components/Dialog';
 import { ErrMessage } from '@components/forms/InputStyles';
 import { ConnectLocalThought } from './ConnectLocalThought';
-import {
-  browserIntegrations,
-  connectionKey,
-  platformName,
-  proxyRequest,
-} from './localThought';
+import { browserIntegrations, platformName } from './localThought';
+import { useLocalThoughtCompletedPlatform } from './localThoughtCallback';
 
 export function LocalThoughtCatalog({
   drive,
@@ -21,17 +17,13 @@ export function LocalThoughtCatalog({
   drive?: string;
   search: string;
 }) {
-  const store = useStore();
   const origin = useIntegrationProxy();
   const [platforms, setPlatforms] = useState<string[]>();
   const [error, setError] = useState('');
-  const [returned, setReturned] = useState<string>();
-  const completing = useRef(false);
   useEffect(() => {
     const controller = new AbortController();
     setPlatforms(undefined);
     setError('');
-    setReturned(undefined);
     browserIntegrations(origin)
       .catalog(controller.signal)
       .then(data => {
@@ -42,76 +34,8 @@ export function LocalThoughtCatalog({
       });
 
     return () => controller.abort();
-  }, [store, origin]);
-  useEffect(() => {
-    if (!drive || completing.current) return;
-    const url = new URL(location.href);
-    const state = url.searchParams.get('integration_state');
-    const code = url.searchParams.get('connection_code');
-    const callbackPlatform = url.searchParams.get('platform');
-    const callbackError = url.searchParams.get('error');
-    if (!state) return;
-    completing.current = true;
-    // Remove the single-use credential before fetching anything else or following links.
-    history.replaceState(history.state, '', `${url.pathname}`);
-
-    const finish = async () => {
-      const raw = sessionStorage.getItem('localthought-pending');
-      const pending = raw ? JSON.parse(raw) : undefined;
-      const actor = store.getAgent()?.subject;
-      if (
-        !pending ||
-        pending.state !== state ||
-        pending.drive !== drive ||
-        pending.actor !== actor ||
-        pending.platform !== callbackPlatform ||
-        (!code && callbackError !== 'access_denied') ||
-        (code && callbackError)
-      )
-        throw new Error(
-          'Connection return is missing, expired or belongs to another account. Start connecting again.',
-        );
-      // A redeem response can be lost after the one-time code is consumed.
-      sessionStorage.removeItem('localthought-pending');
-
-      if (callbackError) {
-        browserIntegrations(pending.origin ?? origin).cancel(
-          drive,
-          actor!,
-          state,
-        );
-        throw new Error(
-          'The connection was not authorized. Start connecting again when you are ready.',
-        );
-      }
-
-      const result = await proxyRequest<{
-        connection: string;
-        platform: string;
-      }>(store, 'finish', {
-        drive,
-        state,
-        connectionCode: code!,
-        origin: pending.origin ?? origin,
-      });
-      if (result.platform !== pending.platform)
-        throw new Error(
-          'Returned platform did not match the requested platform',
-        );
-      localStorage.setItem(
-        connectionKey(drive, actor!, result.platform, pending.origin ?? origin),
-        JSON.stringify({
-          ...result,
-          drive,
-          actor,
-        }),
-      );
-      setReturned(result.platform);
-    };
-
-    void finish().catch(reason => setError(String(reason)));
-  }, [drive, store]);
-  const visible = platforms?.filter(id =>
+  }, [origin]);
+  const visible = localThoughtCatalogEntries(platforms).filter(id =>
     `${id} ${platformName(id)}`.toLowerCase().includes(search.toLowerCase()),
   );
 
@@ -119,13 +43,12 @@ export function LocalThoughtCatalog({
     <>
       {error && <ErrMessage role='alert'>{error}</ErrMessage>}
       {!platforms && !error && <p>Loading LocalThought platforms…</p>}
-      {visible?.map(platform => (
+      {visible.map(platform => (
         <PlatformCard
-          key={`${origin}:${platform}:${returned}`}
+          key={`${origin}:${platform}`}
           platform={platform}
           origin={origin}
           drive={drive}
-          returned={returned === platform}
         />
       ))}
     </>
@@ -135,15 +58,20 @@ export function LocalThoughtCatalog({
 function PlatformCard({
   platform,
   drive,
-  returned,
   origin,
 }: {
   platform: string;
   drive?: string;
-  returned: boolean;
   origin: string;
 }) {
-  const [dialog, show, , isOpen] = useDialog();
+  const returned =
+    useLocalThoughtCompletedPlatform(drive, origin, `proxy:${platform}`) ===
+    platform;
+  const [dialog, show, , isOpen] = useDialog({
+    onCancel: () => {
+      if (returned) sessionStorage.removeItem('localthought-completed');
+    },
+  });
   useEffect(() => {
     if (returned) show();
   }, [returned, show]);
@@ -176,6 +104,7 @@ function PlatformCard({
                 drive={drive}
                 platform={platform}
                 origin={origin}
+                entry={`proxy:${platform}`}
               />
             </Suspense>
           )}

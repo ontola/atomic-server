@@ -17,6 +17,9 @@ If the file is an image they will also get an `imageWidth` and `imageHeight` pro
 
 ## Uploading a file
 
+In the web app, drop files onto a folder or drive page to upload them there.
+You need write access to the destination.
+
 In `atomic-server`, a `/upload` endpoint exists for uploading a file.
 
 - Decide where you want to add the file in the [hierarchy](hierarchy.md) of your server. You can add a file to any resource - your file will refer to this resource as its [`parent`](https://atomicdata.dev/properties/parent). Make sure you have `write` rights on this parent.
@@ -24,6 +27,18 @@ In `atomic-server`, a `/upload` endpoint exists for uploading a file.
 - Send an HTTP `POST` request to the server's `/upload` endpoint containing [`multi-part-form-data`](https://developer.mozilla.org/en-US/docs/Web/API/FormData/Using_FormData_Objects). You can upload multiple files in one request. Add [authentication](authentication.md) headers, and sign the HTTP request with the
 - The server will check your authentication headers, your permissions, and will persist your uploaded file(s). It will now create File resources.
 - The server will reply with an array of created Atomic Data Files
+
+## Editing an uploaded text file
+
+Open an uploaded Markdown (`.md` or `.markdown`) or plain text (`.txt`) file and
+select **Convert to document** to edit its contents in the document editor.
+This action is available when you can edit the file. Markdown formatting becomes
+editable document formatting; plain text keeps its literal characters and line
+breaks.
+
+Conversion keeps the resource's link, location, description, and permissions.
+The original uploaded bytes remain stored, but editing the document does not
+change those bytes. Other file formats continue to open as files.
 
 ## Downloading a file
 
