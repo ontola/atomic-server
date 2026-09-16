@@ -102,6 +102,8 @@ export function CustomViewProvider({ children }: PropsWithChildren) {
   const serverUrl = store.getServerUrl();
 
   const refresh = async () => {
+    if (!drive) return;
+
     const [list, newManifests] = await fetchPluginList(store, drive);
     setCustomViews(list);
     setUIPluginDataMap(newManifests);
@@ -116,6 +118,16 @@ export function CustomViewProvider({ children }: PropsWithChildren) {
   };
 
   useEffect(() => {
+    // Before a drive is chosen — a share link, the first seconds of
+    // onboarding — there is nothing to scope the list to. Asking anyway sent
+    // `?drive=`, which the server answers with an error carrying no CORS
+    // headers, so the browser logged a blocked fetch on every such page.
+    if (!drive) {
+      setLoading(false);
+
+      return;
+    }
+
     fetchPluginList(store, drive)
       .then(([views, manifests]) => {
         setCustomViews(views);

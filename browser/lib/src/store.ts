@@ -3768,7 +3768,16 @@ export class Store {
     // re-renders / getSnapshot should be cached" infinite render hang
     // any caller that passes `undefined` (e.g. `useResource(drive)`
     // before the drive setting hydrates) used to trigger.
-    if (subjectRaw === unknownSubject || subjectRaw === null) {
+    // The empty string is the same class of non-subject: `useResource(x ?? '')`
+    // and `useResource(drive)` before the drive setting hydrates both land
+    // here, and `normalizeSubject('')` resolves them to the server's root —
+    // a URL that holds no resource on a DID drive, so every such render fired
+    // a fetch that 404s and logs two console errors.
+    if (
+      subjectRaw === unknownSubject ||
+      subjectRaw === null ||
+      subjectRaw === ''
+    ) {
       let resource = this.resources.get(unknownSubject) as
         | Resource<C>
         | undefined;
@@ -3989,7 +3998,13 @@ export class Store {
 
     if (!found) {
       // Temporary subjects are never fetched; `getResourceLoading` knows.
-      if (normalized.startsWith('_new:') || normalized.startsWith('_local:')) {
+      // Neither is the empty string, which normalization would otherwise turn
+      // into the server's root.
+      if (
+        subjectRaw === '' ||
+        normalized.startsWith('_new:') ||
+        normalized.startsWith('_local:')
+      ) {
         return this.getResourceLoading<C>(subjectRaw);
       }
 
