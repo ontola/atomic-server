@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { mockProxy } from '../../../integrations/localthought/mock-proxy.mjs';
 import { enableIntegrationDiscovery } from './integration-settings-utils';
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:6747';
 const SERVER_URL = process.env.SERVER_URL ?? 'http://localhost:9883';
@@ -13,6 +12,10 @@ for (const keepSeries of [false, true]) {
   }) => {
     test.setTimeout(180_000);
     await page.clock.install();
+    // The mock proxy is an ES module; a static import would make this spec
+    // ESM too, and then it could not import the CommonJS test helpers.
+    const { mockProxy } =
+      await import('../../../integrations/localthought/mock-proxy.mjs');
     const proxy = mockProxy({ frontendOrigin: new URL(FRONTEND_URL).origin });
     const month = new Date().toISOString().slice(0, 7);
     proxy.calendar.events[0].start = { date: `${month}-10` };
