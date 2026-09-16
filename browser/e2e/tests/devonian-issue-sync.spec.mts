@@ -221,13 +221,16 @@ async function waitForCardStatus(page: Page, title: string, col: Locator) {
     ({ cardTitle, expectedTag, nameProp: prop }) => {
       const store = window.store;
       if (!store) return false;
+
       for (const resource of store.resources.values()) {
         if (resource.get?.(prop) !== cardTitle) continue;
+
         for (const [, value] of resource.getEntries?.() ?? []) {
           const subjects = Array.isArray(value) ? value : [];
           if (subjects.includes(expectedTag)) return true;
         }
       }
+
       return false;
     },
     { cardTitle: title, expectedTag: tagSubject, nameProp },
