@@ -7,6 +7,17 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- `atomic_lib` has a durable outbox (`sync::outbox`, `Tree::Outbox`): local
+  commits mark their subject dirty per signing agent, a drain exports the
+  Loro delta since the version the hub holds, signs one commit per subject
+  in parent-before-child order and sends it as a `COMMIT` frame over any
+  `CommitTransport` (the WebSocket client implements it). Refusals back off
+  exponentially, park the entry after repeated authorization failures, and
+  drop it only when the hub says it can never apply. The Flutter binding
+  records every local save in it and drains on save and on session open, so
+  an edit made offline on Android now survives an app kill and reaches the
+  hub on the next connection (`planning/unified-sync.md`, Outbox
+  modernization item 6).
 - Desktop: the app window now runs under a Content Security Policy
   (`desktop/tauri.conf.json`; security audit B7). Scripts only from the
   bundle plus WebAssembly, connections to the embedded and remote servers

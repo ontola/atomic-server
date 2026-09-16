@@ -255,10 +255,12 @@ now load-bearing rather than hygiene:
   `handle_frame_full`). `IrohTransport` / `WsTransport` wrappers are not
   wired; `handle_stream` / `register_live_peer` still own the Iroh
   lifecycle.
-- [ ] **Port `LocalOutbox` semantics into `atomic_lib`** (`AtomicNode`
-  outbox): dirty bit, genesis envelope, `baseVersion`, backoff, blocked
-  states, structured-error classification. Android needs durable offline
-  queuing exactly like the browser; Flutter's `try_push_commit` is not it.
+- [x] **Port `LocalOutbox` semantics into `atomic_lib`** (2026-09-16,
+  `lib/src/sync/outbox.rs`): dirty bit, genesis/destroy envelope,
+  `base_version`, backoff, blocked states, structured-error classification,
+  per signing agent in `Tree::Outbox`. Flutter's `try_push_commit` records
+  into it and drains over the WS client. Draining over an Iroh session (P4)
+  needs a `CommitTransport` for the live peer stream.
 - [ ] **`SyncSession` state machine** beyond the responder loop: connect →
   mutual AUTH (fail closed) → VV reconcile → live → drain-on-dirty;
   reconnect with backoff; emits `NodeEvent`s. Replaces `handle_stream` +

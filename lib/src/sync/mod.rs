@@ -26,6 +26,8 @@ pub mod session;
 mod tests;
 #[cfg(feature = "db")]
 pub mod tombstones;
+/// The durable dirty-subject queue a device drains to a hub.
+pub mod outbox;
 #[cfg(feature = "db")]
 pub mod transport;
 #[cfg(feature = "db")]

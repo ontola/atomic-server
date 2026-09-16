@@ -17,7 +17,8 @@ use state::{
 };
 pub use types::{AgentInfo, CanvasListItem, FolderListItem, SetupResult, VersionMetadata};
 
-/// Save resource locally and push commit over WS when a session is open.
+/// Save resource locally, record it in the durable outbox, and drain the
+/// outbox over WS when a session is open. Offline edits wait on disk.
 async fn save_and_push(resource: &mut atomic_lib::Resource, store: &atomic_lib::Db) -> Result<(), String> {
     touch_date_edited(resource);
     let response = resource.save_locally(store).await.map_err(err)?;
@@ -27,7 +28,7 @@ async fn save_and_push(resource: &mut atomic_lib::Resource, store: &atomic_lib::
             atomic_lib::sync::peer::broadcast_live_update(&subject_key, bytes);
         }
     }
-    let ws_ok = ws_sync::try_push_commit(store, &response.commit).await;
+    let ws_ok = ws_sync::try_push_commit(store, &response).await;
     // Hub unreachable or no WS session: bulk Iroh reconcile. When live peers exist
     // we already broadcast above; still bulk-nudge if P2P-only (no hub).
     if !ws_ok || atomic_lib::sync::peer::live_peer_count() == 0 {
@@ -667,7 +668,7 @@ async fn destroy_resource_and_sync(subject: String) -> Result<(), String> {
         ..atomic_lib::commit::CommitOpts::no_validations_no_index()
     };
     let response = store.apply_commit(commit, &opts).await.map_err(err)?;
-    let ws_ok = ws_sync::try_push_commit(store.as_ref(), &response.commit).await;
+    let ws_ok = ws_sync::try_push_commit(store.as_ref(), &response).await;
     if !ws_ok {
         nudge_peers_after_local_change(store.as_ref()).await;
     }

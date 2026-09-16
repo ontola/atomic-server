@@ -49,7 +49,7 @@ protocol). Encoding lives in `lib/src/sync/protocol.rs`; semantics in
 | Piece | Browser | Flutter native |
 | --- | --- | --- |
 | Local store | OPFS (`ClientDb`) | redb (`Db` in FRB) |
-| Outbox shape | **Dirty-bit + sign-at-drain** (`local-outbox.ts`) — one signed commit per subject per drain pass; genesis envelope + offline `baseVersion` are the only stored artifacts; identity-scoped localStorage | Partial (`try_push_commit` when session open); no durable dirty queue, no backoff/blocked states |
+| Outbox shape | **Dirty-bit + sign-at-drain** (`local-outbox.ts`) — one signed commit per subject per drain pass; genesis envelope + offline `baseVersion` are the only stored artifacts; identity-scoped localStorage | **Ported (2026-09-16)**: `lib/src/sync/outbox.rs`, durable in `Tree::Outbox`, per agent, with backoff and blocked states; Flutter drains it over the WS client. Sequential per subject; no Iroh drain yet |
 | Persist commits | **WS `COMMIT` preferred**, HTTP `/commit` fallback (`Store.sendCommit`) ✅ | WS `COMMIT` when session open; else local only |
 | Live updates | WS `SUB` → `UPDATE`/`DESTROY` (QUERY_UPDATE retired) | WS session + `pollDbEvent` |
 | Bulk reconcile | binary `SYNC` on reconnect (hash-first probe, then filtered to the differing subjects), after outbox drain, narrowed by an RBSR range exchange (`RBSR_FP`/`RBSR_ITEMS`, full-VV fallback); `SYNC_DIFF.remove` applied ✅ | Iroh `SYNC`/`SYNC_PUSH` (peer.rs) |
@@ -231,7 +231,7 @@ that turned out to be already done, or blocked by a finding, say so inline.
 
 ### Architecture
 
-- [ ] Port `LocalOutbox` semantics (dirty bit, genesis envelope, `baseVersion`,
+- [x] (2026-09-16) Port `LocalOutbox` semantics (dirty bit, genesis envelope, `baseVersion`,
   backoff, blocked) into `atomic_lib` as the `AtomicNode` outbox — one
   implementation for browser-wasm and Flutter (this doc,
   [`serverless-p2p.md`](./serverless-p2p.md)).
@@ -363,9 +363,17 @@ plumbing around it, which still carries HTTP-era shapes:
    re-exports one bigger delta and signs one fresh commit. Document this as the
    contract; the commit *chain* granularity is "one commit per drain pass that reached
    the server", which is the right audit granularity.
-6. **Rust/mobile parity.** Port `LocalOutbox` semantics (dirty bit, genesis envelope,
-   `baseVersion`, backoff, blocked) into `atomic_lib` as the `AtomicNode` outbox so
-   Flutter stops maintaining a partial reimplementation (`try_push_commit`).
+6. ~~**Rust/mobile parity.**~~ Shipped 2026-09-16: `lib/src/sync/outbox.rs`
+   (`Outbox`, `OutboxEntry`, `CommitTransport`, `Tree::Outbox`) ports the dirty
+   bit, verbatim genesis/destroy envelope, `base_version`, exponential backoff,
+   blocked-after-eight and terminal-drop classification (`error_code` first,
+   `classify_commit_error` fallback). Entries are keyed per signing agent.
+   Flutter's `try_push_commit` now records into it and drains over the
+   `WsClient` (`impl CommitTransport for Arc<WsClient>`); `open_ws_sync`
+   drains on connect. Sequential per subject for now: pipelining (item 2)
+   and draining over an Iroh `SyncSession` are the next slices. Bulk reconcile
+   does not yet skip `Outbox::pending_subjects()` (the interim guard in
+   "State-first wire" below).
 
 ## State-first wire: commit as provenance envelope
 

@@ -29,6 +29,7 @@ pub struct SledStore {
     search_doc_tokens: sled::Tree,
     search_trigrams: sled::Tree,
     envelopes: sled::Tree,
+    outbox: sled::Tree,
 }
 
 impl SledStore {
@@ -57,6 +58,7 @@ impl SledStore {
         let search_doc_tokens = db.open_tree(Tree::SearchDocTokens)?;
         let search_trigrams = db.open_tree(Tree::SearchTrigrams)?;
         let envelopes = db.open_tree(Tree::Envelopes)?;
+        let outbox = db.open_tree(Tree::Outbox)?;
 
         Ok(SledStore {
             db,
@@ -75,6 +77,7 @@ impl SledStore {
             search_doc_tokens,
             search_trigrams,
             envelopes,
+            outbox,
         })
     }
 
@@ -100,6 +103,7 @@ impl SledStore {
             Tree::SearchDocTokens => &self.search_doc_tokens,
             Tree::SearchTrigrams => &self.search_trigrams,
             Tree::Envelopes => &self.envelopes,
+            Tree::Outbox => &self.outbox,
         }
     }
 }
@@ -184,6 +188,7 @@ impl KvStore for SledStore {
         let mut batch_search_doc_tokens = sled::Batch::default();
         let mut batch_search_trigrams = sled::Batch::default();
         let mut batch_envelopes = sled::Batch::default();
+        let mut batch_outbox = sled::Batch::default();
 
         for op in operations {
             let batch = match op.tree {
@@ -202,6 +207,7 @@ impl KvStore for SledStore {
                 Tree::SearchDocTokens => &mut batch_search_doc_tokens,
                 Tree::SearchTrigrams => &mut batch_search_trigrams,
                 Tree::Envelopes => &mut batch_envelopes,
+                Tree::Outbox => &mut batch_outbox,
             };
             match op.method {
                 Method::Insert => {
@@ -272,6 +278,9 @@ impl KvStore for SledStore {
         self.envelopes
             .apply_batch(batch_envelopes)
             .map_err(|e| format!("Failed to apply envelopes batch: {}", e))?;
+        self.outbox
+            .apply_batch(batch_outbox)
+            .map_err(|e| format!("Failed to apply outbox batch: {}", e))?;
 
         Ok(())
     }
