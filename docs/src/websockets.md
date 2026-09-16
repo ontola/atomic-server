@@ -739,6 +739,15 @@ asynchronous blob storage: transfers with blob requests, and peers without
 `keepalive`, retain the idle wait. Only the independent matching-hash response
 sets the replication result's `in_sync` flag.
 
+The browser reports a reconciliation round complete only after every outbound
+chunk has received its acknowledgement and the final incoming chunk's queued
+local resource writes have settled. A send alone, an empty outbox, or receipt of
+`LAST` alone is insufficient. Sync frames are processed in order, and overlapping
+rounds for one drive are coalesced because acknowledgements have no request ID.
+Rejected pushes and failed incoming writes remain failed. This completion signal
+is still bounded by the chunk acknowledgement semantics above; it does not prove
+that every entry was accepted or that attachment downloads have finished.
+
 A push refused **as a whole** is answered with `ERROR`, `request_id = 0`,
 code `SYNC_REJECTED (6)`, message
 `SYNC_PUSH rejected for drive <drive>: <reason>`, and **no `SYNC_OK`**.

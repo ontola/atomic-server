@@ -179,25 +179,18 @@ it.each([true, false])(
           timeout: 15_000,
         })
         .toBeTruthy();
-      // A sync-complete signal can precede server processing of our push.
-      // Independently observe persistence before B's final reconciliation.
-      await expect
-        .poll(
-          async () => {
-            const reader = new Store({
-              serverUrl: server.serverUrl,
-              agent: owner,
-              connect: false,
-            });
-            const resource = await reader.fetchResourceFromServer(doc.subject, {
-              noWebSocket: true,
-            });
-
-            return resource.get(core.properties.name);
-          },
-          { timeout: 15_000 },
-        )
-        .toBe(ledger.name);
+      // Completion now guarantees the server acknowledged our outbound data.
+      // A single independent read must already see it; do not poll away a race.
+      const completedReader = new Store({
+        serverUrl: server.serverUrl,
+        agent: owner,
+        connect: false,
+      });
+      const completedResource = await completedReader.fetchResourceFromServer(
+        doc.subject,
+        { noWebSocket: true },
+      );
+      expect(completedResource.get(core.properties.name)).toBe(ledger.name);
       // B may have reconciled before A's final push; reconcile once more.
       await b.store.reconnect();
       await expect

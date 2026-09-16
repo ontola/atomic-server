@@ -237,7 +237,8 @@ behavior. Slow/stalled events are heuristic warnings, not data-loss assertions.
 - `interrupted-sync-crash.spec.ts` uses two dedicated Chromium processes and OPFS,
   interrupts a SYNC probe, SIGKILLs one client immediately after an offline save,
   verifies recovery with remote data blocked, observes A’s edit through an
-  independent server reader before B reconnects, then checks both replicas and server.
+  independent server reader after a fresh sync-complete status and before B
+  reconnects, then checks both replicas and server. This read does not retry.
   It found a cold-ingress overwrite when the outbox entry did not survive the kill,
   and query hydration replacing original causal history with newly invented ops.
 - `cold-ingress-recovery.test.ts` covers that overwrite at the library boundary,
@@ -248,7 +249,13 @@ behavior. Slow/stalled events are heuristic warnings, not data-loss assertions.
   their original version vector; `client-db.worker.test.ts` checks query payloads
   include aligned causal snapshots in the same worker operation.
 - `websockets.test.ts` verifies reconciliation includes acknowledged OPFS
-  operations even when an already-mounted resource contains older state.
+  operations even when an already-mounted resource contains older state. It also
+  covers per-chunk acknowledgements, bidirectional completion, earlier incoming
+  chunks delayed on persistence, failure/invalid imports, disconnect, rejection
+  with a DID drive, and coalesced overlapping probes. `cold-ingress-recovery.test.ts`
+  checks that ingestion awaits the actual persistence promise and propagates failure.
+- `client-db.node.test.ts` pauses the JSON half of a composed snapshot write and
+  verifies a concurrent read cannot observe its temporary reconstructed history.
   These cases do not cover power loss, other browsers/native platforms, table
   query/UI membership, conflicting edits or seeded schedules.
 
