@@ -231,9 +231,26 @@ behavior. Slow/stalled events are heuristic warnings, not data-loss assertions.
   with an acknowledged pending edit. Both local databases and a fresh server
   reader must match a predefined ledger; pending and blocked queues must clear.
   Failure output includes acknowledgement results and diagnostic windows.
-  This is JS client-state recreation with retained in-memory storage, not a
-  two-client OS crash/OPFS durability test. It does not cover table query/UI
-  membership, conflicting edits or seeded schedules.
+  It runs with and without retained localStorage queue metadata. This is JS
+  client-state recreation with retained in-memory storage; it does not reproduce
+  every browser ingress ordering.
+- `interrupted-sync-crash.spec.ts` uses two dedicated Chromium processes and OPFS,
+  interrupts a SYNC probe, SIGKILLs one client immediately after an offline save,
+  verifies recovery with remote data blocked, observes A’s edit through an
+  independent server reader before B reconnects, then checks both replicas and server.
+  It found a cold-ingress overwrite when the outbox entry did not survive the kill,
+  and query hydration replacing original causal history with newly invented ops.
+- `cold-ingress-recovery.test.ts` covers that overwrite at the library boundary,
+  complete-snapshot merging, storage read failures, database/connection replacement
+  or deletion during a read, and simultaneous arrivals. Remote ingress must preserve durable
+  local history even when there is no outbox entry.
+- `collection-page-assemble.test.ts` verifies persisted query members retain
+  their original version vector; `client-db.worker.test.ts` checks query payloads
+  include aligned causal snapshots in the same worker operation.
+- `websockets.test.ts` verifies reconciliation includes acknowledged OPFS
+  operations even when an already-mounted resource contains older state.
+  These cases do not cover power loss, other browsers/native platforms, table
+  query/UI membership, conflicting edits or seeded schedules.
 
 - `server/src/handlers/commit/durability_tests.rs` injects a real redb flush failure,
   verifies no acknowledgement, retries the identical signed commit, and checks

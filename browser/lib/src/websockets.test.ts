@@ -1,12 +1,14 @@
 import { Resource } from './resource.js';
 import { AtomicError, ErrorType } from './error.js';
 import { describe, it, vi, afterEach, expect as assert } from 'vitest';
+import { LoroLoader } from './loro-loader.js';
 import { testStore } from './test-store.js';
 import { WSClient } from './websockets.js';
 import {
   Tag,
   ErrorCode,
   CLIENT_CAPABILITIES,
+  decodeSyncPush,
   decodeCommit,
   decodeHelloCaps,
   encodeChallenge,
@@ -827,6 +829,38 @@ describe('WSClient SYNC_DIFF and the outbox', () => {
   afterEach(() => {
     globalThis.WebSocket = original;
     vi.restoreAllMocks();
+  });
+
+  it('includes durable operations when the mounted resource is behind OPFS', async () => {
+    const { client, socket, store } = await connectedClient();
+    const subject = 'did:ad:durable';
+    const resource = new Resource(subject);
+    const doc = resource.getLoroDoc()!;
+    doc.getMap('properties').set('name', 'before');
+    const base = doc.export({ mode: 'snapshot' });
+    store.resources.set(subject, resource);
+    const durable = new LoroLoader.Loro.LoroDoc();
+    durable.import(base);
+    durable.getMap('properties').set('name', 'acknowledged offline');
+    const snapshot = durable.export({ mode: 'snapshot' });
+    vi.spyOn(store, 'getClientDb').mockReturnValue({
+      getLoroSnapshot: async () => snapshot,
+    } as unknown as NonNullable<ReturnType<typeof store.getClientDb>>);
+    await (
+      client as unknown as {
+        handleSyncDiff: (d: unknown) => Promise<void>;
+      }
+    ).handleSyncDiff({ drive: 'did:ad:drive', pull: [subject], push: [] });
+    const frames = framesWithTag(socket, Tag.SYNC_PUSH);
+    assert(frames).toHaveLength(1);
+    const pushed = decodeSyncPush(frames[0]!.subarray(1))!;
+    const server = new LoroLoader.Loro.LoroDoc();
+    server.import(base);
+    server.import(pushed.entries[0]!.loroBytes);
+    assert(server.getMap('properties').get('name')).toBe(
+      'acknowledged offline',
+    );
+    client.close();
   });
 
   it('does not push a subject the outbox still owns', async ({ expect }) => {

@@ -16,220 +16,260 @@ afterAll(async () => {
   await server?.stop();
 });
 
-it('preserves disjoint offline edits and new rows after interrupted reconciliation and client recreation', async () => {
-  const owner = await Agent.fromSecret(server.agentSecret);
-  const keys = await Agent.generateKeyPair();
-  const guest = await Agent.fromSecret(
-    Agent.buildSecret(keys.privateKey, `did:ad:agent:${keys.publicKey}`),
-  );
-  const clients: Store[] = [];
+it.each([true, false])(
+  'preserves disjoint offline edits after interrupted reconciliation (queue retained: %s)',
+  async queueRetained => {
+    const owner = await Agent.fromSecret(server.agentSecret);
+    const keys = await Agent.generateKeyPair();
+    const guest = await Agent.fromSecret(
+      Agent.buildSecret(keys.privateKey, `did:ad:agent:${keys.publicKey}`),
+    );
+    const clients: Store[] = [];
 
-  const makeClient = async (agent: Agent, retainedDb?: NodeClientDb) => {
-    localStorage.setItem('ws-disconnected', '1');
-    const db =
-      retainedDb ??
-      new NodeClientDb({
-        wasmPath: resolve('../../wasm/pkg/atomic_wasm_bg.wasm'),
-        baseUrl: server.serverUrl,
+    const makeClient = async (agent: Agent, retainedDb?: NodeClientDb) => {
+      localStorage.setItem('ws-disconnected', '1');
+      const db =
+        retainedDb ??
+        new NodeClientDb({
+          wasmPath: resolve('../../wasm/pkg/atomic_wasm_bg.wasm'),
+          baseUrl: server.serverUrl,
+        });
+      if (!retainedDb) await db.init();
+      const store = new Store({ serverUrl: server.serverUrl, agent });
+      store.setClientDb(db as unknown as ClientDbWorker);
+      store.diagnostics.start();
+      clients.push(store);
+
+      return { store, db };
+    };
+
+    const a = await makeClient(owner);
+    const b = await makeClient(guest);
+    // Values are specified independently of either replica, before any writes.
+    const ledger = {
+      name: 'Final offline name from A',
+      description: 'Offline description from B',
+      rows: ['Row created by A', 'Row created by B'],
+    };
+    const acknowledged: Array<{ subject: string; result: string }> = [];
+
+    try {
+      a.store.setServerConnected(true);
+      const drive = await a.store.newResource({
+        isA: 'https://atomicdata.dev/classes/Drive',
+        noParent: true,
+        propVals: {
+          [core.properties.name]: 'Partition fixture',
+          [core.properties.read]: [owner.subject, guest.subject],
+          [core.properties.write]: [owner.subject, guest.subject],
+        },
       });
-    if (!retainedDb) await db.init();
-    const store = new Store({ serverUrl: server.serverUrl, agent });
-    store.setClientDb(db as unknown as ClientDbWorker);
-    store.diagnostics.start();
-    clients.push(store);
+      expect(await drive.save()).toBe('persisted');
+      a.store.setDrive(drive.subject);
+      b.store.setDrive(drive.subject);
+      const doc = await a.store.newResource({
+        parent: drive.subject,
+        propVals: {
+          [core.properties.name]: 'Before partition',
+          [core.properties.description]: 'Before partition',
+        },
+      });
+      expect(await doc.save()).toBe('persisted');
+      b.store.setServerConnected(true);
+      const otherDoc = await b.store.getResource(doc.subject);
+      expect(otherDoc.error).toBeUndefined();
+      expect(otherDoc.get(core.properties.name)).toBe('Before partition');
+      await b.store.getResource(drive.subject);
 
-    return { store, db };
-  };
+      for (const { store } of [a, b]) {
+        store.setServerConnected(false);
+        store.injectFetch(async () => {
+          throw new TypeError('Failed to fetch');
+        });
+      }
 
-  const a = await makeClient(owner);
-  const b = await makeClient(guest);
-  // Values are specified independently of either replica, before any writes.
-  const ledger = {
-    name: 'Final offline name from A',
-    description: 'Offline description from B',
-    rows: ['Row created by A', 'Row created by B'],
-  };
-  const acknowledged: Array<{ subject: string; result: string }> = [];
+      await doc.set(core.properties.name, 'First offline name from A', false);
+      await otherDoc.set(
+        core.properties.description,
+        ledger.description,
+        false,
+      );
 
-  try {
-    a.store.setServerConnected(true);
-    const drive = await a.store.newResource({
-      isA: 'https://atomicdata.dev/classes/Drive',
-      noParent: true,
-      propVals: {
-        [core.properties.name]: 'Partition fixture',
-        [core.properties.read]: [owner.subject, guest.subject],
-        [core.properties.write]: [owner.subject, guest.subject],
-      },
-    });
-    expect(await drive.save()).toBe('persisted');
-    a.store.setDrive(drive.subject);
-    b.store.setDrive(drive.subject);
-    const doc = await a.store.newResource({
-      parent: drive.subject,
-      propVals: {
-        [core.properties.name]: 'Before partition',
-        [core.properties.description]: 'Before partition',
-      },
-    });
-    expect(await doc.save()).toBe('persisted');
-    b.store.setServerConnected(true);
-    const otherDoc = await b.store.getResource(doc.subject);
-    expect(otherDoc.error).toBeUndefined();
-    expect(otherDoc.get(core.properties.name)).toBe('Before partition');
-    await b.store.getResource(drive.subject);
+      for (const resource of [doc, otherDoc]) {
+        const result = await resource.save();
+        expect(result).toBe('offline');
+        acknowledged.push({ subject: resource.subject, result });
+      }
 
-    for (const { store } of [a, b]) {
-      store.setServerConnected(false);
-      store.injectFetch(async () => {
+      const rows: string[] = [];
+
+      for (const [index, { store }] of [a, b].entries()) {
+        const row = await store.newResource({
+          parent: drive.subject,
+          propVals: { [core.properties.name]: ledger.rows[index] },
+        });
+        const result = await row.save();
+        expect(result).toBe('offline');
+        rows.push(row.subject);
+        acknowledged.push({ subject: row.subject, result });
+      }
+
+      expect(acknowledged).toHaveLength(4);
+
+      // Forward an actual SYNC probe, then close before its response can be
+      // delivered. No sleeps or probabilistic disconnect timing.
+      let interrupted = false;
+      const send = WebSocket.prototype.send;
+      const intercept = vi
+        .spyOn(WebSocket.prototype, 'send')
+        .mockImplementation(function (this: WebSocket, data) {
+          send.call(this, data);
+
+          if (
+            !interrupted &&
+            data instanceof Uint8Array &&
+            data[0] === Tag.SYNC
+          ) {
+            interrupted = true;
+            a.store.disconnect();
+          }
+        });
+      a.store.injectFetch(fetch);
+      await a.store.reconnect();
+      await expect.poll(() => interrupted).toBe(true);
+      intercept.mockRestore();
+      // A further acknowledged edit has not reached the server when JS state
+      // is discarded. Recovery must rehydrate and drain this persisted work.
+      a.store.setServerConnected(false);
+      a.store.injectFetch(async () => {
         throw new TypeError('Failed to fetch');
       });
-    }
+      await doc.set(core.properties.name, ledger.name, false);
+      const pendingResult = await doc.save();
+      expect(pendingResult).toBe('offline');
+      acknowledged.push({ subject: doc.subject, result: pendingResult });
+      expect(a.store.outbox.hasPending(doc.subject)).toBe(true);
+      a.store.outbox.flush();
+      expect(
+        JSON.parse((await a.db.getResource(doc.subject))!)[
+          core.properties.name
+        ],
+      ).toBe(ledger.name);
 
-    await doc.set(core.properties.name, 'First offline name from A', false);
-    await otherDoc.set(core.properties.description, ledger.description, false);
+      if (!queueRetained) {
+        localStorage.removeItem(`atomic.outbox.${owner.subject}`);
+      }
 
-    for (const resource of [doc, otherDoc]) {
-      const result = await resource.save();
-      expect(result).toBe('offline');
-      acknowledged.push({ subject: resource.subject, result });
-    }
+      // Recreate all JS Store/resource/outbox state, retaining only the local
+      // database and persisted outbox. This is not an OS/OPFS crash test.
+      const restarted = await makeClient(owner, a.db);
+      restarted.store.setDrive(drive.subject);
+      expect(restarted.store.outbox.hasPending(doc.subject)).toBe(
+        queueRetained,
+      );
+      b.store.injectFetch(fetch);
+      await b.store.reconnect();
+      await expect
+        .poll(() => b.store.getSyncStatus().lastDriveSync, { timeout: 15_000 })
+        .toBeTruthy();
+      restarted.store.subscribe(doc.subject, () => {});
+      await restarted.store.reconnect();
+      await expect
+        .poll(() => restarted.store.getSyncStatus().lastDriveSync, {
+          timeout: 15_000,
+        })
+        .toBeTruthy();
+      // A sync-complete signal can precede server processing of our push.
+      // Independently observe persistence before B's final reconciliation.
+      await expect
+        .poll(
+          async () => {
+            const reader = new Store({
+              serverUrl: server.serverUrl,
+              agent: owner,
+              connect: false,
+            });
+            const resource = await reader.fetchResourceFromServer(doc.subject, {
+              noWebSocket: true,
+            });
 
-    const rows: string[] = [];
+            return resource.get(core.properties.name);
+          },
+          { timeout: 15_000 },
+        )
+        .toBe(ledger.name);
+      // B may have reconciled before A's final push; reconcile once more.
+      await b.store.reconnect();
+      await expect
+        .poll(
+          async () => {
+            const states = [];
 
-    for (const [index, { store }] of [a, b].entries()) {
-      const row = await store.newResource({
-        parent: drive.subject,
-        propVals: { [core.properties.name]: ledger.rows[index] },
-      });
-      const result = await row.save();
-      expect(result).toBe('offline');
-      rows.push(row.subject);
-      acknowledged.push({ subject: row.subject, result });
-    }
+            for (const { db } of [restarted, b]) {
+              const raw = await db.getResource(doc.subject);
+              states.push(raw ? JSON.parse(raw) : null);
+            }
 
-    expect(acknowledged).toHaveLength(4);
+            return states.map(state => [
+              state?.[core.properties.name],
+              state?.[core.properties.description],
+            ]);
+          },
+          { timeout: 15_000 },
+        )
+        .toEqual([
+          [ledger.name, ledger.description],
+          [ledger.name, ledger.description],
+        ]);
 
-    // Forward an actual SYNC probe, then close before its response can be
-    // delivered. No sleeps or probabilistic disconnect timing.
-    let interrupted = false;
-    const send = WebSocket.prototype.send;
-    const intercept = vi
-      .spyOn(WebSocket.prototype, 'send')
-      .mockImplementation(function (this: WebSocket, data) {
-        send.call(this, data);
+      // A fresh HTTP-only reader independently checks the server, while local
+      // DB reads above cannot hide divergence through network fallback.
+      const reader = await makeClient(owner);
+      reader.store.setServerConnected(true);
 
-        if (
-          !interrupted &&
-          data instanceof Uint8Array &&
-          data[0] === Tag.SYNC
-        ) {
-          interrupted = true;
-          a.store.disconnect();
+      for (const { db, store } of [restarted, b]) {
+        expect(store.getSyncStatus().blockedCount).toBe(0);
+        await expect
+          .poll(() => store.getSyncStatus().pendingDirtyCount)
+          .toBe(0);
+
+        for (const [index, subject] of rows.entries()) {
+          await expect
+            .poll(async () => {
+              const raw = await db.getResource(subject);
+
+              return raw ? JSON.parse(raw)[core.properties.name] : undefined;
+            })
+            .toBe(ledger.rows[index]);
         }
-      });
-    a.store.injectFetch(fetch);
-    await a.store.reconnect();
-    await expect.poll(() => interrupted).toBe(true);
-    intercept.mockRestore();
-    // A further acknowledged edit has not reached the server when JS state
-    // is discarded. Recovery must rehydrate and drain this persisted work.
-    a.store.setServerConnected(false);
-    a.store.injectFetch(async () => {
-      throw new TypeError('Failed to fetch');
-    });
-    await doc.set(core.properties.name, ledger.name, false);
-    const pendingResult = await doc.save();
-    expect(pendingResult).toBe('offline');
-    acknowledged.push({ subject: doc.subject, result: pendingResult });
-    expect(a.store.outbox.hasPending(doc.subject)).toBe(true);
-    a.store.outbox.flush();
+      }
 
-    // Recreate all JS Store/resource/outbox state, retaining only the local
-    // database and persisted outbox. This is not an OS/OPFS crash test.
-    const restarted = await makeClient(owner, a.db);
-    restarted.store.setDrive(drive.subject);
-    expect(restarted.store.outbox.hasPending(doc.subject)).toBe(true);
-    b.store.injectFetch(fetch);
-    await b.store.reconnect();
-    await expect
-      .poll(() => b.store.getSyncStatus().lastDriveSync, { timeout: 15_000 })
-      .toBeTruthy();
-    await restarted.store.reconnect();
-    await expect
-      .poll(() => restarted.store.getSyncStatus().lastDriveSync, {
-        timeout: 15_000,
-      })
-      .toBeTruthy();
-    // B may have reconciled before A's final push; reconcile once more.
-    await b.store.reconnect();
-    await expect
-      .poll(
-        async () => {
-          const states = [];
-
-          for (const { db } of [restarted, b]) {
-            const raw = await db.getResource(doc.subject);
-            states.push(raw ? JSON.parse(raw) : null);
-          }
-
-          return states.map(state => [
-            state?.[core.properties.name],
-            state?.[core.properties.description],
-          ]);
-        },
-        { timeout: 15_000 },
-      )
-      .toEqual([
-        [ledger.name, ledger.description],
-        [ledger.name, ledger.description],
-      ]);
-
-    // A fresh HTTP-only reader independently checks the server, while local
-    // DB reads above cannot hide divergence through network fallback.
-    const reader = await makeClient(owner);
-    reader.store.setServerConnected(true);
-
-    for (const { db, store } of [restarted, b]) {
-      expect(store.getSyncStatus().blockedCount).toBe(0);
-      await expect.poll(() => store.getSyncStatus().pendingDirtyCount).toBe(0);
+      const remote = await reader.store.getResource(doc.subject);
+      expect(remote.get(core.properties.name)).toBe(ledger.name);
+      expect(remote.get(core.properties.description)).toBe(ledger.description);
 
       for (const [index, subject] of rows.entries()) {
-        await expect
-          .poll(async () => {
-            const raw = await db.getResource(subject);
-
-            return raw ? JSON.parse(raw)[core.properties.name] : undefined;
-          })
-          .toBe(ledger.rows[index]);
+        const row = await reader.store.getResource(subject);
+        expect(row.get(core.properties.name)).toBe(ledger.rows[index]);
+        expect(row.get(core.properties.parent)).toBe(drive.subject);
       }
+    } catch (error) {
+      console.error(
+        'Interrupted sync evidence',
+        JSON.stringify({
+          ledger,
+          acknowledged,
+          clients: clients.map(store => ({
+            status: store.getSyncStatus(),
+            diagnostics: store.diagnostics.capture(),
+          })),
+        }),
+      );
+      throw error;
+    } finally {
+      vi.restoreAllMocks();
+      for (const store of clients) store.disconnect();
+      // WASM is released with this isolated Vitest process, after WS callbacks.
     }
-
-    const remote = await reader.store.getResource(doc.subject);
-    expect(remote.get(core.properties.name)).toBe(ledger.name);
-    expect(remote.get(core.properties.description)).toBe(ledger.description);
-
-    for (const [index, subject] of rows.entries()) {
-      const row = await reader.store.getResource(subject);
-      expect(row.get(core.properties.name)).toBe(ledger.rows[index]);
-      expect(row.get(core.properties.parent)).toBe(drive.subject);
-    }
-  } catch (error) {
-    console.error(
-      'Interrupted sync evidence',
-      JSON.stringify({
-        ledger,
-        acknowledged,
-        clients: clients.map(store => ({
-          status: store.getSyncStatus(),
-          diagnostics: store.diagnostics.capture(),
-        })),
-      }),
-    );
-    throw error;
-  } finally {
-    vi.restoreAllMocks();
-    for (const store of clients) store.disconnect();
-    // WASM is released with this isolated Vitest process, after WS callbacks.
-  }
-});
+  },
+);

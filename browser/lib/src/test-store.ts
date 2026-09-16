@@ -18,7 +18,11 @@ export function attachTestDb(store: Store) {
     waitForInit: async () => {},
     putResourceWithSnapshot,
     getResource: async (subject: string) => records.get(subject)?.jsonAd,
-    getResourceWithSnapshot: async (subject: string) => records.get(subject),
+    removeResource: async (subject: string) => {
+      records.delete(subject);
+    },
+    getResourceWithSnapshot: async (subject: string) =>
+      records.get(subject) ?? { jsonAd: null, snapshot: null },
   } as unknown as NonNullable<ReturnType<Store['getClientDb']>>);
 
   return { records, putResourceWithSnapshot };
