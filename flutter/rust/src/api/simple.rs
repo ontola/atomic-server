@@ -32,6 +32,12 @@ async fn save_and_push(
         }
     }
     let ws_ok = ws_sync::drain_outbox(store).await;
+    // No hub in reach: a paired peer takes the signed commit instead
+    // (planning/serverless-p2p.md P4). The raw broadcast above already gave
+    // every live peer the state; this is what makes it attributable.
+    if !ws_ok {
+        atomic_lib::sync::peer::drain_outbox_to_any_live_peer(store).await;
+    }
     // Hub unreachable or no WS session: bulk Iroh reconcile. When live peers exist
     // we already broadcast above; still bulk-nudge if P2P-only (no hub).
     if !ws_ok || atomic_lib::sync::peer::live_peer_count() == 0 {

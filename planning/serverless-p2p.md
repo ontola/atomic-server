@@ -303,9 +303,14 @@ Same-agent pairing needs no consent dialog — the key is the consent
   previous-commit checks off for concurrent peer writes, but timestamps ARE
   validated (replay bounding). Tests:
   `engine_commit_from_authorized_signer_is_applied` /
-  `..._unauthorized_signer_is_rejected` (rights gate revert-proven). **Still
-  to do:** the *sending* half — the outbox actually draining `COMMIT` frames
-  over an Iroh `SyncSession` (needs P2's outbox port + session).
+  `..._unauthorized_signer_is_rejected` (rights gate revert-proven).
+  **Sending half shipped 2026-09-16:** `peer::LivePeerCommitTransport` sends
+  a `COMMIT` through the live write loop and the read loop resolves the
+  matching `COMMIT_OK` / `ERROR` (`COMMIT_WAITERS`); `register_live_peer`
+  drains the outbox on connect and Flutter falls back to
+  `drain_outbox_to_any_live_peer` when no WS session is open. Test:
+  `iroh_e2e::e2e_outbox_drains_over_the_live_link`. Not a `SyncSession`
+  yet: the live loop still owns the link.
 - [ ] `SYNC_PUSH` fast-path kept for initial reconcile between the two
   same-agent devices (permitted by Principle 3's exception; both sides have
   proven the same key).

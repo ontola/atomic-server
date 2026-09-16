@@ -7,6 +7,12 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- The outbox drains over a live Iroh link too (`sync::peer::LivePeerCommitTransport`):
+  a device with no hub in reach delivers its queued writes to a paired peer as
+  signed `COMMIT` frames, which the peer validates and applies like a hub
+  would, and a freshly registered live link drains on connect. The Flutter
+  binding falls back to it when no WebSocket session is open. This is the
+  sending half of serverless sync (`planning/serverless-p2p.md` P4).
 - `atomic_lib` has a durable outbox (`sync::outbox`, `Tree::Outbox`): local
   commits mark their subject dirty per signing agent, a drain exports the
   Loro delta since the version the hub holds, signs one commit per subject

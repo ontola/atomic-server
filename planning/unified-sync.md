@@ -370,10 +370,10 @@ plumbing around it, which still carries HTTP-era shapes:
    `classify_commit_error` fallback). Entries are keyed per signing agent.
    Flutter's `try_push_commit` now records into it and drains over the
    `WsClient` (`impl CommitTransport for Arc<WsClient>`); `open_ws_sync`
-   drains on connect. Sequential per subject for now: pipelining (item 2)
-   and draining over an Iroh `SyncSession` are the next slices. Bulk reconcile
-   does not yet skip `Outbox::pending_subjects()` (the interim guard in
-   "State-first wire" below).
+   drains on connect, and `peer::LivePeerCommitTransport` drains over a live
+   Iroh link. `collect_readable_snapshots` skips `Outbox::pending_subjects()`
+   (the interim guard in "State-first wire" below). Sequential per subject for
+   now: pipelining (item 2) is the next slice.
 
 ## State-first wire: commit as provenance envelope
 

@@ -41,7 +41,7 @@ Ranked by impact. Each links to the plan that owns the work.
 4. **Flutter and desktop bypass the runtime boundary**: both hold a raw `Db` instead of `AtomicNode`, which is how gap 1 happened. [`atomic-lib-runtime.md`](./atomic-lib-runtime.md).
 5. **`SYNC_PUSH` is an unsigned cross-trust import** gated by one drive-level ACL verdict; no grant-chain proof exists. [`authorization-sync.md`](./authorization-sync.md).
 6. **npm is seven betas behind**: `@tomic/*` still serves `0.41.0-beta.0`. The `npm` release job exists since 2026-09-15; the next tag publishes once `plugin` and `edit-mode` have trusted-publisher entries. [`production-readiness.md`](./production-readiness.md).
-7. ~~**No Rust outbox**~~ Ported 2026-09-16 (`lib/src/sync/outbox.rs`, drained over WS by Flutter). Still open: draining over an Iroh session for serverless Android sync. [`unified-sync.md`](./unified-sync.md), [`serverless-p2p.md`](./serverless-p2p.md).
+7. ~~**No Rust outbox**~~ Ported 2026-09-16 (`lib/src/sync/outbox.rs`), drained over WS and over live Iroh links. [`unified-sync.md`](./unified-sync.md), [`serverless-p2p.md`](./serverless-p2p.md).
 8. ~~**Desktop CSP is disabled**~~ Set 2026-09-15, pending a packaged-build smoke test. [`security-audit-2026-09.md`](./security-audit-2026-09.md).
 9. **Plugins and code-first schemas live only in unmergeable PRs** (#1307 at 532 files with conflicts, #1262 a stale draft). [`plugins.md`](./plugins.md), [`json-schema-code-first.md`](./json-schema-code-first.md).
 10. **Dashboards have no entry point and fork review shows only a count.** [`dashboards.md`](./dashboards.md), [`drafts-and-suggestions.md`](./drafts-and-suggestions.md).
