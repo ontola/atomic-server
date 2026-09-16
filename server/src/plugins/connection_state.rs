@@ -239,6 +239,7 @@ mod tests {
                 subject: copies[1].get_subject().to_string(),
                 loro_bytes: copies[1].build_state_doc().unwrap().export_snapshot(),
             }],
+            envelopes: Vec::new(),
         };
         atomic_lib::sync::engine::import_sync_push(
             &push,
