@@ -188,7 +188,12 @@ test('workspace starts automation chat without requiring a connection', async ({
       .getByText('Help me create a new automation.', { exact: false })
       .first(),
   ).toBeVisible();
-  await expect(page.getByRole('dialog')).not.toBeVisible();
+  // The workspace dialog must be gone — but not "no dialog at all": with no AI
+  // provider configured, `askAI` legitimately raises the model-setup dialog
+  // (`AISetupPanel`), and that is what this used to catch.
+  await expect(
+    page.getByRole('dialog').getByText('No automations yet.', { exact: true }),
+  ).not.toBeVisible();
   const automation = await page.evaluate(async workspace => {
     const scriptPath = '/src/chunks/PluginRuns/runScript.ts';
     const { createPlugin } = await import(/* @vite-ignore */ scriptPath);

@@ -38,7 +38,10 @@ test('integration categories default off and independent Atomic preferences surv
   await expect(page.locator('[data-integration]')).toHaveCount(0);
   expect(catalogRequests).toHaveLength(0);
 
-  await experimentalToggle.check();
+  // `check()` verifies the box is checked afterwards — but enabling the
+  // category removes the inline toggle (asserted below), so the verification
+  // has nothing to read and retries until it times out. Click it instead.
+  await experimentalToggle.click();
   await expect
     .poll(() =>
       page.evaluate(async () => {
