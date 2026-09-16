@@ -50,6 +50,7 @@ import { VIEW_KIND_LABELS } from './tableViewKinds';
 import { ExpandedRowDialog } from './ExpandedRowDialog';
 import { KanbanView } from './Kanban/KanbanView';
 import { CalendarView } from './Calendar/CalendarView';
+import { DashboardView } from './Dashboard/DashboardView';
 import { TimerToolbar } from './Timer/TimerToolbar';
 import { useTimerColumns } from './Timer/useTimerColumns';
 import { useDerivedColumns } from './useDerivedColumns';
@@ -137,6 +138,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
     ready,
     invalidateCollection,
     viewKind,
+    viewDashboard,
     viewGroupBy,
     setViewGroupBy,
     viewEndProp,
@@ -1133,7 +1135,9 @@ export const TableResource: React.FC<TableResourceProps> = ({
             onRowCreated={notifyEntryCreated}
           />
         )}
-        {viewKind === 'kanban' ? (
+        {viewKind === 'dashboard' ? (
+          <DashboardView dashboard={viewDashboard} />
+        ) : viewKind === 'kanban' ? (
           <KanbanView
             tableSubject={resource.subject}
             tableClass={tableClass}

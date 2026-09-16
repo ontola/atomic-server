@@ -44,7 +44,7 @@ Ranked by impact. Each links to the plan that owns the work.
 7. ~~**No Rust outbox**~~ Ported 2026-09-16 (`lib/src/sync/outbox.rs`), drained over WS and over live Iroh links. [`unified-sync.md`](./unified-sync.md), [`serverless-p2p.md`](./serverless-p2p.md).
 8. ~~**Desktop CSP is disabled**~~ Set 2026-09-15, pending a packaged-build smoke test. [`security-audit-2026-09.md`](./security-audit-2026-09.md).
 9. **Plugins and code-first schemas live only in unmergeable PRs** (#1307 at 532 files with conflicts, #1262 a stale draft). [`plugins.md`](./plugins.md), [`json-schema-code-first.md`](./json-schema-code-first.md).
-10. **Dashboards have no entry point and fork review shows only a count.** [`dashboards.md`](./dashboards.md), [`drafts-and-suggestions.md`](./drafts-and-suggestions.md).
+10. ~~**Dashboards have no entry point**~~ (a table's dashboard is a view tab since 2026-09-16) **and fork review shows only a count.** [`dashboards.md`](./dashboards.md), [`drafts-and-suggestions.md`](./drafts-and-suggestions.md).
 
 ## Active
 
@@ -87,7 +87,7 @@ browser flow; standalone recovery remains self-managed.
 | [`json-ad-compact.md`](./json-ad-compact.md) | **Phase 1–2 shipped** (resolver, tool I/O, context providers). Remaining: rebase `create_table.rows` on `fromCompact`; server `format=compact`. |
 | [`table-view-filters.md`](./table-view-filters.md) | **Views shipped** — Default View (filters, sort, columns, operators) and the multi-view switcher (`TableViewTabs`, `?view=`). Remaining: index-accelerated range scans. |
 | [`unified-templates.md`](./unified-templates.md) | **Initial slice shipped** (#1428: catalogue, editable previews, template chat). Remaining: portable format, website adapter, demo-lifecycle extraction, provenance and resume, live-AI acceptance. |
-| [`dashboards.md`](./dashboards.md) | **First slice shipped.** No `dashboard` view kind or `table-dashboard` property yet, so dashboards are unreachable from a table. Also open: the set-level action verb, parameters, templates shipping a dashboard. |
+| [`dashboards.md`](./dashboards.md) | **First slice shipped**, reachable from its table as a `dashboard` view tab since 2026-09-16. Open: the set-level action verb, parameters, templates shipping a dashboard. |
 | [`content-i18n.md`](./content-i18n.md) | **LocalizedText + template locales shipped.** Nothing in the app resolves translation siblings. Remaining: TranslationsBar, `useTranslation`, `/query` `lang`, search language filter. |
 | [`website-templates.md`](./website-templates.md) | Template repair complete (DID), two-locale E2E exists. Its CMS list is the website view of `drafts-and-suggestions.md` and `content-i18n.md`. Open: publication visibility, CMS origin, in-page edit affordance, canonical paths. PRs #1498 and #1500 (assistant-designed and self-hosted sites) are in flight. |
 | [`structural-problems-index.md`](./structural-problems-index.md) | **Live index.** React subscription audit is partial; save-state APIs shipped with two consumers. Browser metadata cleanup and subject-brand consumers remain; server subscription work is complete. |
