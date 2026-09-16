@@ -2013,6 +2013,108 @@ export class Store {
       });
   }
 
+  private remoteIngress = new Map<
+    string,
+    { tail: Promise<unknown>; cancelled: boolean }
+  >();
+
+  /**
+   * Remote state must merge with the durable local snapshot even when the
+   * resource is unmounted and a process crash lost its localStorage outbox.
+   * Serialize per subject so two remote arrivals cannot both read an old
+   * snapshot and overwrite each other's newly imported state.
+   */
+  public applyRemoteIncoming(
+    change: IncomingChange,
+    current: () => boolean = () => true,
+  ): Promise<'applied' | 'deduped' | 'invalid'> {
+    const subject = this.normalizeSubject(
+      change.resource?.subject ?? change.subject,
+    );
+    const identity = this.agent;
+    const previous = this.remoteIngress.get(subject);
+    const queue = previous ?? { tail: Promise.resolve(), cancelled: false };
+    const valid = () =>
+      current() && this.agent === identity && !queue.cancelled;
+
+    const apply = async () => {
+      if (!valid()) throw new RequestCancelledError('Remote ingress cancelled');
+      await this.waitForClientDb(10_000);
+      const db = this.clientDb;
+      let hasCompleteLocalState = false;
+
+      if (db && !db.unsupportedEnvironment && !db.initError) {
+        await db.waitForInit();
+
+        if (!valid() || this.clientDb !== db) {
+          throw new RequestCancelledError('Remote ingress database changed');
+        }
+
+        const { jsonAd, snapshot } = await db.getResourceWithSnapshot(subject);
+
+        if (!valid() || this.clientDb !== db) {
+          throw new RequestCancelledError('Remote ingress database changed');
+        }
+
+        if (jsonAd && snapshot?.length) {
+          const local = new Resource(subject);
+          local.applyHydratedValues(
+            Object.entries(JSON.parse(jsonAd)).filter(
+              ([key]) => key !== '@id',
+            ) as [string, JSONValue][],
+          );
+          hasCompleteLocalState = local.importLoroUpdate(
+            snapshot,
+            true,
+          ).complete;
+
+          if (hasCompleteLocalState) {
+            local.loading = false;
+            this.applyIncoming({
+              subject,
+              resource: local,
+              source: 'offline-replay',
+            });
+          }
+        }
+      }
+
+      if (!valid()) throw new RequestCancelledError('Remote ingress cancelled');
+
+      return this.applyIncoming({
+        ...change,
+        // A full server snapshot is not authority to discard local operations.
+        // Incomplete local seeds still use the existing full-state repair path.
+        replaceLoroDocsFromRemote: hasCompleteLocalState
+          ? false
+          : change.replaceLoroDocsFromRemote,
+      });
+    };
+
+    // Keep the no-storage path synchronous for non-browser consumers.
+    if (!previous && !this.clientDb && !this.clientDbExpected) {
+      if (!valid())
+        return Promise.reject(
+          new RequestCancelledError('Remote ingress cancelled'),
+        );
+
+      return Promise.resolve(this.applyIncoming(change));
+    }
+
+    const work = queue.tail.catch(() => undefined).then(apply);
+    queue.tail = work;
+    this.remoteIngress.set(subject, queue);
+
+    const clear = () => {
+      if (this.remoteIngress.get(subject) === queue && queue.tail === work)
+        this.remoteIngress.delete(subject);
+    };
+
+    void work.then(clear, clear);
+
+    return work;
+  }
+
   /**
    * Single ingress for resource state from any source: subject
    * normalisation, commit-id dedup, Loro hydration, atomic OPFS
@@ -3544,11 +3646,15 @@ export class Store {
    * Used by collection page loads so members have their propvals available
    * for client-side sorting before the consumer's individual fetches happen.
    */
-  public hydrateResourceFromJsonAd(subject: string, jsonAd: string): boolean {
+  public hydrateResourceFromJsonAd(
+    subject: string,
+    jsonAd: string,
+    snapshot?: Uint8Array,
+  ): boolean {
     try {
       const parsed = JSON.parse(jsonAd) as Record<string, unknown>;
 
-      return this.hydrateResourceFromJson(subject, parsed);
+      return this.hydrateResourceFromJson(subject, parsed, snapshot);
     } catch {
       return false;
     }
@@ -3841,7 +3947,7 @@ export class Store {
       // The `subject` arg becomes the alias if it differs from the
       // resolved subject (e.g. POST endpoint that returns the
       // canonical resource).
-      this.applyIncoming({
+      await this.applyRemoteIncoming({
         subject,
         resource,
         source: 'http-fetch',
@@ -3849,16 +3955,17 @@ export class Store {
       });
 
       const primarySubject = this.normalizeSubject(resource.subject);
-      createdResources.forEach(r => {
+
+      for (const r of createdResources) {
         if (this.normalizeSubject(r.subject) !== primarySubject) {
-          this.applyIncoming({
+          await this.applyRemoteIncoming({
             subject: r.subject,
             resource: r,
             source: 'http-fetch',
             replaceLoroDocsFromRemote: !!opts.forceOverride,
           });
         }
-      });
+      }
     }
 
     // Resolve HTTP aliases of a DID (`https://host/did:ad:…` → `did:ad:…`)
@@ -4821,6 +4928,13 @@ export class Store {
   /** Removes resource from this store, does not delete it from the server, use `resource.destroy()` to delete it from the server. */
   public removeResource(subjectRaw: string, shouldNotify = true): void {
     const resolved = this.resolveSubject(subjectRaw);
+    const ingress = this.remoteIngress.get(resolved);
+
+    if (ingress) {
+      // A late read started before deletion must not recreate the resource.
+      ingress.cancelled = true;
+      this.remoteIngress.delete(resolved);
+    }
 
     // The in-memory half of the tombstone below. Recorded before the eviction
     // notifies, so a listener that reacts by re-reading a query already sees

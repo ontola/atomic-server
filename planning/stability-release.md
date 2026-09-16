@@ -661,9 +661,8 @@ added to each catalog. No real feedback was sent; browser tests intercepted it.
 - [x] Check both local databases directly, plus an independent server reader,
   against the expected values and row identities. Require empty, unblocked queues.
   On failure emit the ledger, acknowledgement results, sync status and diagnostics.
-- [ ] Extend this combined two-client scenario to actual OS-process termination
-  with persistent storage. Store recreation uses in-memory WASM databases and
-  mocked localStorage; existing Chromium SIGKILL coverage is separate evidence.
+- [x] Extend the combined scenario to actual Chromium process termination with
+  persistent storage; see the crash acceptance and resulting fix below.
 - [ ] Expand into seeded failure schedules and conflicting-edit semantics after
   the deterministic baseline.
 
@@ -682,3 +681,116 @@ Validation: the new scenario and existing lost-ack integration test passed toget
 includes the new integration file passed, as did focused lint/format checks and
 `git diff --check`. The ordinary library tsconfig excludes `tests/`, so its
 typecheck alone would not validate this new file.
+
+
+## Two-client browser crash acceptance — 2026-09-15
+
+- [x] Add a full-suite Chromium test with two dedicated processes/profiles and
+  real OPFS. Both clients edit different fields and create child resources offline.
+- [x] Interrupt a forwarded SYNC probe, acknowledge a further offline edit and
+  SIGKILL only the owned browser process without an explicit flush or unload.
+- [x] Reopen the same profile with HTTP data access and WebSocket recovery blocked;
+  read OPFS directly before allowing either client to reconcile.
+- [x] Reconnect both clients and compare their local databases and forced HTTP
+  server reads with an independent expected-value/acknowledgement ledger.
+- [x] Retain the ledger, recovered outbox, browser diagnostics and per-client
+  diagnostic windows as test artifacts.
+
+The new test exposed acknowledged-edit loss after recovery: OPFS retained the
+final edit, but the outbox's localStorage entry was absent after SIGKILL.
+Subsequent incoming state could build a Resource from only the older server
+snapshot and overwrite OPFS when the local resource was not mounted.
+
+The first run stopped on an overly strict assertion that an outbox entry must
+survive. The second checked the actual user-data contract and failed: the final
+name became the earlier name after reconciliation. The smaller
+`cold-ingress-recovery.test.ts` reproduced the overwrite without a browser.
+The Node integration scenario alone did not reproduce the browser's ingress
+ordering, even with localStorage queue metadata removed.
+
+Remote HTTP and WebSocket ingestion now reads the local snapshot before applying
+remote state, merges complete local causal history instead of replacing it,
+serializes updates per subject, and rejects late work after a database/connection
+change. Storage read failures fail ingestion rather than overwrite unread data.
+Local synchronous ingestion remains unchanged. This adds a local read to remote
+ingestion; it does not make localStorage crash-durable or introduce a new outbox.
+
+The test-storage double now returns the real ClientDb cache-miss shape
+(`{jsonAd: null, snapshot: null}`) rather than undefined. Two existing tests
+revealed that mismatch when HTTP ingestion began consulting local storage.
+
+An initial rebuilt-browser acceptance passed (19.3 seconds) in
+`.e2e-runs/2026-09-15T14-21-42.191Z-Sw0ygt`.
+A later combined run (`2026-09-15T14-29-03.451Z-vPYRWE`) failed again, so that
+initial pass was insufficient. Tracing in `2026-09-15T14-34-02.811Z-TzjaiF`
+showed collection JSON hydration rebuilding a fresh LoroDoc and replacing the
+original persisted history. The visible local value survived, but the other
+client and server did not converge. A unit regression compared original and
+hydrated version vectors and failed before the fix. Query results now carry
+the stored snapshots through hydration in the same worker operation. The browser
+check also compares recovered causal history and uses an independent HTTP reader.
+
+The prior failing runs are retained:
+`2026-09-15T14-14-31.537Z-sWYDut` and
+`2026-09-15T14-15-30.572Z-PmICjH`.
+
+Limits: POSIX Chromium, one deterministic disjoint-edit schedule, graph fields and
+child resources. This does not establish power-loss, other browsers/native apps,
+conflicting edits, or table UI/query membership. No real user data or external
+feedback is involved.
+
+Validation before the query-snapshot fix: all 519 library unit tests passed, including seven focused recovery
+cases.
+All 916 app tests and three real-server integration cases passed. The existing
+Chromium document/table/attachment SIGKILL check also passed (21.8 seconds), using
+those freshly rebuilt artifacts in `2026-09-15T14-24-13.203Z-JEvssk`.
+Generated locale churn was restored to its pre-build contents.
+
+A final regression reproduced a deletion race introduced by asynchronous ingress:
+a read begun before deletion could recreate the resource on completion. Deletion
+now cancels that subject's pending ingress queue; its regression passes alongside
+database and connection invalidation checks.
+
+A second rebuilt browser run (`2026-09-15T14-41-34.611Z-5nnfN8`) still failed
+convergence while preserving the recovered version vector. The outbound SYNC_DIFF
+path preferred any non-empty in-memory export over OPFS, even when memory lagged
+behind durable state during reload. A frame-level regression reproduced the
+omitted acknowledged edit. Reconciliation now exports the union of memory and
+durable snapshots, checking the connection and outbox again after the read.
+A retained-outbox Node integration run also failed intermittently during this
+investigation; a rerun alone passed and was not treated as proof of a fix.
+
+Latest validation after the outbound export fix: 522 library tests, 916 app tests,
+three real-server integration cases, library/E2E/integration TypeScript checks and
+scoped lint/format checks pass. The rebuilt two-client browser SIGKILL acceptance
+passed in 14.7 seconds (`2026-09-15T14-46-10.561Z-nfgtmu`), including identical
+recovered causal history and independent HTTP server reads. Repeated browser
+acceptance was required because earlier single passes hid intermittent loss.
+
+Repetition exposed an additional harness sequencing error: `waitForSynced` only
+waits for the outbox (plus a database flush), and a drive-sync status can be emitted
+before server processing of an outbound push. B sometimes reconnected too early.
+The new tests now independently poll the server for A's acknowledged edit before
+B's final reconciliation, rather than treating an empty queue as proof of remote
+persistence. Browser repetition before this correction had two convergence
+failures and four passes (`2026-09-15T14-48-35.151Z-ljvOqF`); all three existing
+single-browser document/table/attachment crash runs passed.
+
+- [ ] Tighten the public drive-sync completion contract to wait for outbound
+  server acknowledgement and incoming persistence, including chunked responses.
+  The acceptance test uses independent server evidence until that contract exists.
+
+With the server-persistence barrier, all three browser runs passed the data,
+causal-history and independent server checks (`2026-09-15T14-51-49.339Z-t56Aia`).
+One run failed only the diagnostic collector: blocked service-worker registration
+retried, exceeding the four-warning allowance. The exact Playwright warning now
+has a bounded allowance of eight across four navigations; unrelated warnings and
+errors remain failures. Both Node recovery variants passed three consecutive
+runs (six cases total) with the barrier.
+
+Final acceptance: all three repeated two-client Chromium SIGKILL tests passed
+(45.6 seconds total, `2026-09-15T14-53-37.650Z-joiOVc`). No product changes were
+made after the 522 library / 916 app test runs. Final test-file typechecks,
+scoped lint/format and `git diff --check` are clean. Locale files retain their
+pre-build contents. The new acceptance test and recovery fixes remain uncommitted;
+the earlier Node test was committed as `c41ded112` before this work began.

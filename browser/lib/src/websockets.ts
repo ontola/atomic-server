@@ -1062,14 +1062,18 @@ export class WSClient {
     this._probeSent = false;
 
     if (ev.data instanceof ArrayBuffer) {
-      this.handleBinary(new Uint8Array(ev.data));
+      this.handleBinary(new Uint8Array(ev.data)).catch(error => {
+        if (!(error instanceof RequestCancelledError))
+          this.store.notifyError(error);
+      });
     } else if (typeof ev.data === 'string') {
       // Legacy text messages (Loro sync, query updates) — handle minimally
       this.handleText(ev.data);
     }
   }
 
-  private handleBinary(data: Uint8Array) {
+  private async handleBinary(data: Uint8Array) {
+    const current = this.connectionGuard();
     if (data.length === 0) return;
 
     if (this.debug) {
@@ -1231,17 +1235,26 @@ export class WSClient {
           : undefined;
 
         if (pending) {
-          this.store.applyIncoming({
-            subject: msg.subject,
-            loroBytes: msg.loroBytes,
-            commitId: msg.commitId,
-            source: 'ws-pending-get',
-            // A GET response with the SNAPSHOT flag is authoritative full
-            // state — replace any partial doc the client seeded from an
-            // earlier SUB push, rather than merging (which can keep only the
-            // seed's props and render the resource class-less).
-            replaceLoroDocsFromRemote: !!(msg.flags & Flags.SNAPSHOT),
-          });
+          try {
+            await this.store.applyRemoteIncoming(
+              {
+                subject: msg.subject,
+                loroBytes: msg.loroBytes,
+                commitId: msg.commitId,
+                source: 'ws-pending-get',
+                // A GET response with the SNAPSHOT flag is authoritative full
+                // state — replace any partial doc the client seeded from an
+                // earlier SUB push, rather than merging (which can keep only the
+                // seed's props and render the resource class-less).
+                replaceLoroDocsFromRemote: !!(msg.flags & Flags.SNAPSHOT),
+              },
+              current,
+            );
+          } catch (error) {
+            pending.reject(error);
+            throw error;
+          }
+
           // The resource we just hydrated is what the GET caller is
           // waiting for — read it back from the store map.
           const resource = this.store.resources.get(msg.subject);
@@ -1257,12 +1270,15 @@ export class WSClient {
         // pre-import lastCommit equals the post-import (e.g. a
         // properties-only push) — applyIncoming sets it
         // unconditionally, so the gate runs once at the top.
-        this.store.applyIncoming({
-          subject: msg.subject,
-          loroBytes: msg.loroBytes,
-          commitId: msg.commitId,
-          source: msg.flags & Flags.PUSH ? 'ws-sub-push' : 'ws-pending-get',
-        });
+        await this.store.applyRemoteIncoming(
+          {
+            subject: msg.subject,
+            loroBytes: msg.loroBytes,
+            commitId: msg.commitId,
+            source: msg.flags & Flags.PUSH ? 'ws-sub-push' : 'ws-pending-get',
+          },
+          current,
+        );
 
         const resource = this.store.resources.get(msg.subject);
         if (resource) this.checkForMissingBlobs(resource);
@@ -1375,11 +1391,14 @@ export class WSClient {
           // collapsed into one `applyIncoming` call per entry.
           // The chunked-final-chunk drive-sync signal stays here.
           for (const { subject, loroBytes } of msg.entries) {
-            this.store.applyIncoming({
-              subject,
-              loroBytes,
-              source: 'ws-sync-push',
-            });
+            await this.store.applyRemoteIncoming(
+              {
+                subject,
+                loroBytes,
+                source: 'ws-sync-push',
+              },
+              current,
+            );
             const resource = this.store.resources.get(subject);
             if (resource) this.checkForMissingBlobs(resource);
           }
@@ -1421,7 +1440,6 @@ export class WSClient {
           const clientDb = this.store.getClientDb();
 
           if (clientDb) {
-            const current = this.connectionGuard();
             clientDb.getBlob(hash).then(bytes => {
               if (current() && bytes) {
                 this.sendBinary(encodeBlobResponse(hash, bytes));
@@ -1947,8 +1965,8 @@ export class WSClient {
    * Handle SYNC_DIFF: server tells us which resources differ.
    * We send Loro deltas for resources the server needs (pull list).
    *
-   * For each `pull` subject we try the in-memory `Resource` first, then
-   * fall back to the on-disk ClientDb snapshot. The fallback breaks the
+   * For each `pull` subject we merge the in-memory Resource with its
+   * on-disk ClientDb snapshot. Including durable state breaks the
    * "stale VV" stalemate where server thinks the client is ahead but
    * the client has only just opened the WS — none of those resources
    * are in `store.resources` yet, so the old in-memory-only loop sent
@@ -2005,23 +2023,26 @@ export class WSClient {
 
       let loroBytes: Uint8Array | undefined;
       const serverVv = diff.pullFrom?.[subject];
+      // A mounted resource can lag OPFS during reload. Export the union,
+      // otherwise even a non-empty in-memory delta can omit acknowledged ops.
+      const stored = clientDb
+        ? await clientDb.getLoroSnapshot(subject)
+        : undefined;
+      if (!current()) return;
+      if (this.store.outbox.hasPending(subject)) continue;
       const memDoc = this.store.resources.get(subject)?.getLoroDoc?.();
 
-      if (memDoc) {
+      if (stored?.length) {
+        const combined = new Resource(subject);
+        combined.importLoroUpdate(stored, true);
+        if (memDoc)
+          combined.importLoroUpdate(memDoc.export({ mode: 'snapshot' }));
+        loroBytes = Resource.exportLoroBytesForSync(
+          combined.getLoroDoc()!,
+          serverVv,
+        );
+      } else if (memDoc) {
         loroBytes = Resource.exportLoroBytesForSync(memDoc, serverVv);
-      }
-
-      if ((!loroBytes || loroBytes.length === 0) && clientDb) {
-        try {
-          const stored = await clientDb.getLoroSnapshot(subject);
-          if (!current()) return;
-
-          if (stored && stored.length > 0) {
-            loroBytes = stored;
-          }
-        } catch {
-          // skip
-        }
       }
 
       if (loroBytes && loroBytes.length > 0) {

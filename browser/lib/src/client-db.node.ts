@@ -210,7 +210,15 @@ export class NodeClientDb {
       opts.drive ?? null,
     );
 
-    return r as ClientDbQueryResult;
+    const result = r as ClientDbQueryResult;
+
+    if (opts.includeResources) {
+      result.snapshots = result.subjects.map(
+        subject => this.requireDb().getLoroSnapshot(subject) ?? null,
+      );
+    }
+
+    return result;
   }
 
   async search(
