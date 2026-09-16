@@ -93,6 +93,9 @@ export function LocalThoughtSync({ resource }: { resource: Resource }) {
       {installation.error && (
         <ErrMessage role='alert'>{installation.error}</ErrMessage>
       )}
+      {!installation.error && installation.warning && (
+        <small role='status'>Synced with issues: {installation.warning}</small>
+      )}
       {Sync && config && (
         <Sync
           config={config}
