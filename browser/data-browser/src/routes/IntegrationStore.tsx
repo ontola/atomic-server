@@ -34,7 +34,6 @@ import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { useSettings } from '@helpers/AppSettings';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
-import type { IntegrationVisibilityKey } from '@helpers/integrationVisibility';
 
 interface Listing {
   metadata: {
@@ -261,24 +260,28 @@ function IntegrationStore(): React.JSX.Element {
           {showExperimentalPlugins && !listings && !catalogError && (
             <p>Loading integrations…</p>
           )}
-          {!showApiPlugins && (
-            <PluginVisibilityToggle
-              pluginKey='show-api-plugins'
-              label='Show API plugins'
-              ready={visibilityReady}
-              saving={visibilitySaving}
-              setVisibility={setVisibility}
-            />
-          )}
-          {!showExperimentalPlugins && (
-            <PluginVisibilityToggle
-              pluginKey='show-experimental-plugins'
-              label='Show experimental plugins'
-              ready={visibilityReady}
-              saving={visibilitySaving}
-              setVisibility={setVisibility}
-            />
-          )}
+          <Column gap='0.5rem'>
+            <CheckboxLabel>
+              <Checkbox
+                checked={showApiPlugins}
+                disabled={!visibilityReady || visibilitySaving}
+                onChange={value =>
+                  void setVisibility('show-api-plugins', value)
+                }
+              />
+              Show API plugins
+            </CheckboxLabel>
+            <CheckboxLabel>
+              <Checkbox
+                checked={showExperimentalPlugins}
+                disabled={!visibilityReady || visibilitySaving}
+                onChange={value =>
+                  void setVisibility('show-experimental-plugins', value)
+                }
+              />
+              Show experimental plugins
+            </CheckboxLabel>
+          </Column>
           <Grid>
             {showApiPlugins && (
               <LocalThoughtCatalog drive={drive} search={search} />
@@ -425,35 +428,5 @@ function AutomationEmptyState() {
       No automations yet. Create one to respond to events from your connected
       apps.
     </p>
-  );
-}
-
-interface PluginVisibilityToggleProps {
-  pluginKey: IntegrationVisibilityKey;
-  label: string;
-  ready: boolean;
-  saving: boolean;
-  setVisibility: (
-    key: IntegrationVisibilityKey,
-    value: boolean,
-  ) => Promise<void>;
-}
-
-function PluginVisibilityToggle({
-  pluginKey,
-  label,
-  ready,
-  saving,
-  setVisibility,
-}: PluginVisibilityToggleProps) {
-  return (
-    <CheckboxLabel>
-      <Checkbox
-        checked={false}
-        disabled={!ready || saving}
-        onChange={value => void setVisibility(pluginKey, value)}
-      />
-      {label}
-    </CheckboxLabel>
   );
 }
