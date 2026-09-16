@@ -629,11 +629,33 @@ needing an HTTP server in front of it.
 ### Phase 1: Introduce `AtomicNode` Without Behavior Change
 
 - [x] Add `lib/src/runtime/`.
-- [x] Add `AtomicNode`, `NodeConfig`, and simple constructors around existing `Db`
-  initialization.
+- [x] Add `AtomicNode` and simple constructors around existing `Db`
+  initialization. (`NodeConfig` / `open(NodeConfig)` shipped and was cut on
+  2026-09-04 with the rest of the unused surface; it does not exist today, so
+  the plugin-optionality text below describes a type still to be reintroduced.)
 - [x] Add `get`, `query`, `apply_commit` by delegating to existing code.
 - [ ] Add `put_blob` and `get_blob`.
 - [ ] Keep server using `AppState`, but allow `AppState` to hold an `AtomicNode`.
+- [~] **Bind Flutter and desktop to the node (2026-09-15).** Both still hold a
+      raw `Db` and re-implement save/ingest policy: `flutter/rust/src/api/simple.rs`
+      (`OnceLock<Arc<Db>>`) and `desktop/src/lib.rs` / `desktop/src/vfs.rs`.
+      This is the parallel `simple.rs` surface the accepted runtime-boundary
+      decision says must not exist. First slice 2026-09-16: `AtomicNode`
+      gained `outbox()`, `save_locally`, `apply_local_commit` and
+      `drain_outbox`, and every Flutter write (save, undo, destroy) goes
+      through `state::node()` so it lands in the durable outbox. Reads,
+      queries, peer sync and the desktop still bypass the node.
+- [x] **Durability belongs to the library, not the host** (2026-09-15).
+      Every redb write uses `Durability::None`; until now only `serve.rs`
+      (server, desktop) and the WASM worker ran the 100ms durable-flush tick,
+      and the Flutter binding never flushed except in `set_active_drive`, so
+      an app kill rolled back every edit since the last drive switch.
+      `Db::init_redb_file` now spawns `Db::spawn_durable_flush` itself
+      (`DURABLE_FLUSH_INTERVAL`), `RedbStore::flush` is a no-op when nothing
+      was written, and `serve.rs` no longer runs its own thread. Regression:
+      `redb_store::tests::unflushed_writes_are_lost_on_abort_and_flushed_ones_survive`
+      (aborting child process) and
+      `db::test::file_store_writes_survive_reopen_without_an_explicit_flush`.
 
 Tests:
 

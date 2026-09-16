@@ -255,8 +255,14 @@ impl BrowserPeerSession {
                         .iter()
                         .map(|(s, b)| (s.as_str(), b.as_slice()))
                         .collect();
+                    let envelopes =
+                        crate::envelopes::for_subjects(db, entries.iter().map(|(s, _)| s.as_str()));
                     out.frames
-                        .extend(protocol::encode_sync_push_chunks(&self.drive, &refs));
+                        .extend(protocol::encode_sync_push_chunks_with_envelopes(
+                            &self.drive,
+                            &refs,
+                            &envelopes,
+                        ));
                 }
             }
             protocol::tag::COMMIT => {

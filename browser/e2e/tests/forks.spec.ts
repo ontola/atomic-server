@@ -70,6 +70,15 @@ test.describe('forks', () => {
     // The original is untouched while the fork is edited.
     await editTitle('Revised Cheese', page);
 
+    // Review before merging: the bar shows what a merge would write over
+    // what, not just how many properties changed.
+    await page.getByTestId('fork-review').click();
+    const review = page.getByTestId('fork-review-panel');
+    await expect(review.getByText('Revised Cheese')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(review.getByText('Original Cheese')).toBeVisible();
+
     // Merge from the fork bar.
     await page.getByRole('button', { name: 'Merge' }).click();
 

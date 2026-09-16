@@ -36,6 +36,10 @@ pub struct AppState {
     /// manifest endpoint so the welcome screen can route account creation to the
     /// dashboard.
     pub managed_dashboard_url: Arc<std::sync::RwLock<Option<String>>>,
+    /// Per-agent and per-peer budgets for the write endpoints; see
+    /// `crate::rate_limit`. Sized from `--write-rate-limit` and
+    /// `--anonymous-write-rate-limit`.
+    pub write_rate_limiter: Arc<crate::rate_limit::WriteRateLimiter>,
 }
 
 impl AppState {
@@ -213,9 +217,14 @@ impl AppState {
                 tracing::error!("Failed to add all resources to vector search index: {}", e);
             }
         }
+        let write_rate_limiter = Arc::new(crate::rate_limit::WriteRateLimiter::new(
+            config.opts.write_rate_limit,
+            config.opts.anonymous_write_rate_limit,
+        ));
         Ok(AppState {
             store,
             config,
+            write_rate_limiter,
             commit_monitor,
             vector_search_state,
             index_status_broadcast,

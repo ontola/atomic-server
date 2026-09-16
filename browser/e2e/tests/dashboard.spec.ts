@@ -309,6 +309,47 @@ test.describe('dashboards', () => {
     await expect(page.getByRole('menuitem', { name: 'Button' })).toBeVisible();
   });
 
+  test('a table reaches its dashboard as a tab', async ({ page }) => {
+    // A dashboard nobody can find has no users. "Add view → Dashboard" makes
+    // one as a child of the table and shows it beside Table and Board; the
+    // tab survives a reload because the view names the dashboard.
+    const fixture = await createSpendingTable(page);
+    await page.goto(
+      `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(fixture.table)}`,
+    );
+    await expect(page.getByRole('gridcell', { name: 'Coffee' })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await page.getByTitle('Add view').click();
+    await page
+      .getByRole('menuitem', { name: 'Dashboard', exact: true })
+      .click();
+    await expect(page.getByRole('tab', { name: 'Dashboard' })).toBeVisible({
+      timeout: 15_000,
+    });
+    // The empty dashboard's own editor, inside the table page.
+    await expect(page.getByTitle('Add block')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText(/Nothing here yet/)).toBeVisible();
+    await waitForSynced(page);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('tab', { name: 'Dashboard' })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByTitle('Add block')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // The rows are one tab away.
+    await page.getByRole('tab', { name: 'Default View' }).click();
+    await expect(page.getByRole('gridcell', { name: 'Coffee' })).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
   test(
     'the four block kinds each show what they were configured to',
     smoke,

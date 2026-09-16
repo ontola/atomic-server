@@ -474,6 +474,43 @@ impl ClientDb {
         serde_json::to_string(&report).map_err(to_js_err)
     }
 
+    /// The retained signed envelopes of each subject, as
+    /// `{ "<subject>": ["<commit JSON-AD>", ...] }`, to ride along a
+    /// `SYNC_PUSH` (`atomic_lib::envelopes::for_subjects`). `subjects_json`
+    /// is a JSON array of subjects.
+    #[wasm_bindgen(js_name = "envelopesFor")]
+    pub fn envelopes_for(&self, subjects_json: &str) -> Result<String, JsError> {
+        let subjects: Vec<String> = serde_json::from_str(subjects_json).map_err(to_js_err)?;
+        let map =
+            atomic_lib::envelopes::for_subjects(self.db(), subjects.iter().map(String::as_str));
+        serde_json::to_string(&map).map_err(to_js_err)
+    }
+
+    /// Keep envelopes that arrived with a `SYNC_PUSH`: a JSON array of
+    /// `{ subject, json }`. Each is verified before it is stored
+    /// (`atomic_lib::envelopes::import_envelope`); returns how many were kept.
+    #[wasm_bindgen(js_name = "importEnvelopes")]
+    pub async fn import_envelopes(&self, envelopes_json: &str) -> Result<u32, JsError> {
+        let items: Vec<serde_json::Value> =
+            serde_json::from_str(envelopes_json).map_err(to_js_err)?;
+        let mut kept = 0u32;
+        for item in items {
+            let (Some(subject), Some(json)) = (
+                item.get("subject").and_then(|v| v.as_str()),
+                item.get("json").and_then(|v| v.as_str()),
+            ) else {
+                continue;
+            };
+            if atomic_lib::envelopes::import_envelope(self.db(), subject, json)
+                .await
+                .is_ok()
+            {
+                kept += 1;
+            }
+        }
+        Ok(kept)
+    }
+
     /// Back-compat alias for browser client-db (`getLoroSnapshot`).
     #[wasm_bindgen(js_name = "getLoroSnapshot")]
     pub fn get_loro_snapshot(&self, subject: &str) -> Result<JsValue, JsError> {

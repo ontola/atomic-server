@@ -3,8 +3,8 @@
 > **Status:** Shipped. Drive-scoped fan-out + a server-side drive safety net
 > close both the leak and the chatroom regression. Full genesis-cert wiring
 > (Part B) deferred. Builds on
-> [`sync.md`](./sync.md) (the WS `UPDATE`/`DESTROY` fan-out channel) and
-> [`genesis-self-verifying.md`](./genesis-self-verifying.md) (the immutable
+> [`sync.md`](../sync.md) (the WS `UPDATE`/`DESTROY` fan-out channel) and
+> [`genesis-self-verifying.md`](../genesis-self-verifying.md) (the immutable
 > `drive` field this fan-out routes by). Full genesis-cert wiring is deferred to
 > that doc's steps 2–4.
 
@@ -115,7 +115,7 @@ A4 is green (confirm with user).
 
 ## Part B — full genesis-cert wiring (deferred)
 
-Lives in [`genesis-self-verifying.md`](./genesis-self-verifying.md) §"Code impact /
+Lives in [`genesis-self-verifying.md`](../genesis-self-verifying.md) §"Code impact /
 implementation order" (tasks #4–6). It makes `drive`/`parent`/`createdAt`/`createdBy`
 ride inline on the signed cert (race-free, offline-verifiable) — a breaking DID-derivation
 change. Touch-point map for that effort: sign `GenesisCert` instead of the commit in
@@ -141,7 +141,7 @@ cd browser/e2e && ATOMIC_NO_PER_WORKER_SERVER=true SERVER_URL=http://localhost:9
 
 ## Cross-references
 
-- [`sync.md`](./sync.md) — WS `UPDATE`/`DESTROY` fan-out channel + test-coverage table
+- [`sync.md`](../sync.md) — WS `UPDATE`/`DESTROY` fan-out channel + test-coverage table
   (add `ws_commit_isolation`).
-- [`genesis-self-verifying.md`](./genesis-self-verifying.md) — the `drive` field, its
+- [`genesis-self-verifying.md`](../genesis-self-verifying.md) — the `drive` field, its
   materialization, and the deferred full cert wiring.

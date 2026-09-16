@@ -52,6 +52,7 @@ pub async fn handle_post_resource(
     timer.add("parse_headers");
 
     let for_agent = get_client_agent(headers, &appstate, &full_subject).await?;
+    crate::helpers::enforce_write_rate_limit(&appstate, &req, &for_agent)?;
     timer.add("get_agent");
 
     let mut builder = HttpResponse::Ok();

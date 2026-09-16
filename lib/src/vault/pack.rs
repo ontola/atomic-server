@@ -43,6 +43,12 @@ pub struct PackEntry {
     /// `AtomicLoroDoc::export_updates_since` output. Opaque here on purpose:
     /// the pack layer never interprets CRDT bytes.
     pub update: Vec<u8>,
+    /// The resource's retained signed envelopes (commit JSON-AD), so a
+    /// restore can attribute the history it replays. Absent from packs
+    /// written before 2026-09-15; a reader that predates the field ignores
+    /// it, and an empty list is not written.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub envelopes: Vec<String>,
 }
 
 /// A batch of updates plus the deletions that happened alongside them.
@@ -143,10 +149,12 @@ mod tests {
                 PackEntry {
                     subject: "did:ad:drive/resource-a".to_string(),
                     update: vec![1, 2, 3, 4],
+                    envelopes: Vec::new(),
                 },
                 PackEntry {
                     subject: "did:ad:drive/resource-b".to_string(),
                     update: vec![5, 6],
+                    envelopes: Vec::new(),
                 },
             ],
             vec!["did:ad:drive/deleted".to_string()],
@@ -169,6 +177,7 @@ mod tests {
             vec![PackEntry {
                 subject: "s".into(),
                 update: update.clone(),
+                envelopes: Vec::new(),
             }],
             vec![],
         );

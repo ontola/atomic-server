@@ -136,6 +136,7 @@ async fn iroh_sync_handler(
     let origin = crate::context::RequestContext::new(&req, &appstate).origin;
     let full_url = format!("{}{}", origin, req.uri());
     let for_agent = crate::helpers::get_client_agent(req.headers(), &appstate, &full_url).await?;
+    crate::helpers::enforce_write_rate_limit(&appstate, &req, &for_agent)?;
     if matches!(for_agent, atomic_lib::agents::ForAgent::Public) {
         return Err(atomic_lib::errors::AtomicError::unauthorized(
             "Syncing with a peer requires a signed-in agent with write rights on the drive".into(),

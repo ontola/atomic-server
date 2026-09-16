@@ -21,10 +21,8 @@ pub(super) fn touch_date_edited(resource: &mut atomic_lib::Resource) {
     // undo button skips this op. Without it, `push_stroke + touch_date`
     // produces two undo groups and the first tap of the undo button looks
     // like a no-op (reverts the date tick, leaves the stroke).
-    let _ = resource.patch_loro_property_sys(
-        CANVAS_DATE_EDITED,
-        atomic_lib::Value::Timestamp(now_ms()),
-    );
+    let _ = resource
+        .patch_loro_property_sys(CANVAS_DATE_EDITED, atomic_lib::Value::Timestamp(now_ms()));
 }
 
 /// Read gallery sort timestamp; falls back to legacy `"Canvas {millis}"` names.
@@ -47,6 +45,13 @@ pub(super) fn canvas_date_edited_ms(resource: &atomic_lib::Resource) -> i64 {
 
 pub(super) fn db() -> Result<&'static Arc<atomic_lib::Db>, String> {
     DB.get().ok_or_else(|| "Call openDb() first.".into())
+}
+
+/// The runtime the binding writes through (`planning/atomic-lib-runtime.md`):
+/// saves and self-signed commits go via the node so they land in the
+/// outbox. Cheap: a `Db` is a bundle of `Arc`s.
+pub(super) fn node() -> Result<atomic_lib::runtime::AtomicNode, String> {
+    Ok(atomic_lib::runtime::AtomicNode::from_db((**db()?).clone()))
 }
 
 pub(super) fn set_db(store: atomic_lib::Db) {

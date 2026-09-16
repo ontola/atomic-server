@@ -4,6 +4,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fork bar: "Review changes" opens the per-property diff (the original's current value against the fork's) and names the properties the original also changed since the fork, so a reviewer sees what a merge writes over instead of a count.
+- A dashboard is reachable from its table: "Add view" offers **Dashboard**, which creates an empty Dashboard as a child of the table and shows it as a tab (`view-kind: dashboard`, `view-dashboard`). Switching an existing tab to Dashboard does the same. The Dashboard stays a resource of its own, so a Drive page or a document can still embed it.
 - Fix: creating a second table column with a name that already exists in the drive's ontology (e.g. two "Status" columns) no longer mints a colliding property shortname that silently corrupts the ontology. A compatible existing property is reused instead; an incompatible one gets a disambiguated shortname (`status-2`) ([#1504](https://github.com/ontola/atomic-server/issues/1504)).
 - Stop restoring stale right-side panels across sessions, accounts and drives; close meeting/comments panels when their target disappears.
 - Following indicator: a tight blue ring on the followed avatar in the navbar and sidebar, expanding to a "Following" chip on hover ([#1486](https://github.com/ontola/atomic-server/issues/1486)).

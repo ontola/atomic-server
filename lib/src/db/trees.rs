@@ -41,6 +41,11 @@ pub enum Tree {
     /// commit's JSON-AD exactly as accepted. Not a resource, not indexed, so
     /// it never shows up in queries or `all_resources`. See `crate::envelopes`.
     Envelopes,
+    /// The durable outbox: subjects with local writes a hub has not
+    /// acknowledged, per signing agent. Key `agent_pure_id || 0x00 ||
+    /// subject_pure_id`, value a JSON [`crate::sync::outbox::OutboxEntry`].
+    /// See `crate::sync::outbox`.
+    Outbox,
 }
 
 const RESOURCES: &str = "resources_v3";
@@ -68,6 +73,7 @@ const SEARCH_DOCS: &str = "search_docs_v1";
 const SEARCH_DOC_TOKENS: &str = "search_doc_tokens_v1";
 const SEARCH_TRIGRAMS: &str = "search_trigrams_v1";
 const ENVELOPES: &str = "envelopes_v1";
+const OUTBOX: &str = "outbox_v1";
 
 impl std::fmt::Display for Tree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -87,6 +93,7 @@ impl std::fmt::Display for Tree {
             Tree::SearchDocTokens => f.write_str(SEARCH_DOC_TOKENS),
             Tree::SearchTrigrams => f.write_str(SEARCH_TRIGRAMS),
             Tree::Envelopes => f.write_str(ENVELOPES),
+            Tree::Outbox => f.write_str(OUTBOX),
         }
     }
 }
@@ -110,6 +117,7 @@ impl AsRef<[u8]> for Tree {
             Tree::SearchDocTokens => SEARCH_DOC_TOKENS.as_bytes(),
             Tree::SearchTrigrams => SEARCH_TRIGRAMS.as_bytes(),
             Tree::Envelopes => ENVELOPES.as_bytes(),
+            Tree::Outbox => OUTBOX.as_bytes(),
         }
     }
 }

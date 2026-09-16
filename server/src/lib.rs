@@ -20,6 +20,7 @@ pub mod invite_token;
 mod jsonerrors;
 mod metrics;
 pub mod plugins;
+pub mod rate_limit;
 pub mod routes;
 pub mod serve;
 pub mod vector_search;

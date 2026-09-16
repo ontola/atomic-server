@@ -253,6 +253,31 @@ export class NodeClientDb {
     return (r as Uint8Array | null) ?? null;
   }
 
+  async envelopesFor(subjects: string[]): Promise<Record<string, string[]>> {
+    const db = this.requireDb();
+
+    if (subjects.length === 0 || typeof db.envelopesFor !== 'function') {
+      return {};
+    }
+
+    return JSON.parse(db.envelopesFor(JSON.stringify(subjects))) as Record<
+      string,
+      string[]
+    >;
+  }
+
+  async importEnvelopes(
+    envelopes: Array<{ subject: string; json: string }>,
+  ): Promise<number> {
+    const db = this.requireDb();
+
+    if (envelopes.length === 0 || typeof db.importEnvelopes !== 'function') {
+      return 0;
+    }
+
+    return (await db.importEnvelopes(JSON.stringify(envelopes))) as number;
+  }
+
   async historyAttribution(
     subject: string,
   ): Promise<HistoryAttribution | null> {

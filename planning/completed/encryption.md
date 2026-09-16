@@ -8,7 +8,7 @@
 > node that serves a drive is a **verifier**: it holds the drive key (or the
 > plaintext), materializes, indexes, authorizes, and fans out. What ships as
 > encryption is problems 2–4 below: local encryption at rest (shipped 2026-07, see
-> [`opfs-per-agent-encryption.md`](../opfs-per-agent-encryption.md)), server
+> [`opfs-per-agent-encryption.md`](./opfs-per-agent-encryption.md)), server
 > encryption at rest (to build), and the blind vault for backups
 > (vault v1 in `lib/src/vault/`, shipped 2026-08-04,
 > [`encrypted-vault-format.md`](../encrypted-vault-format.md)). End-to-end
@@ -89,7 +89,7 @@ The following features should not be treated as one toggle:
 
 > **Status: shipped (2026-07).** The mechanism below is implemented — one
 > encrypted OPFS database per agent, keyed to the active session. See
-> [`opfs-per-agent-encryption.md`](../opfs-per-agent-encryption.md) for the
+> [`opfs-per-agent-encryption.md`](./opfs-per-agent-encryption.md) for the
 > as-built design, key hierarchy, migration, and accepted gaps.
 
 "Local encryption at rest" (#2 above) is usually motivated by a lost or stolen
