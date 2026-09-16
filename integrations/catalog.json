@@ -1,0 +1,80 @@
+[
+  {
+    "@id": "https://atomicdata.dev/integrations/ontology/catalog",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/class/ontology"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology",
+    "https://atomicdata.dev/properties/shortname": "integrations-catalog",
+    "https://atomicdata.dev/properties/description": "The store's plugin gate: which of the bundled integrations in this folder are shown to every visitor of the Integrations page, and which stay hidden until a visitor enables 'Show experimental plugins'. `shortname` on each PluginCatalogEntry matches a `BundledIntegration.id` in browser/data-browser/src/chunks/PluginRuns/IntegrationDiscovery.tsx, which still owns the copy, icon and setup flow. An id with no entry here, same as one entered with `experimental: true`, is experimental-only. Flip an entry to `experimental: false` once its package.json `atomicCertification.support` has left \"experimental\" — see integrations/README.md.",
+    "https://atomicdata.dev/properties/classes": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/properties": [
+      "https://atomicdata.dev/integrations/properties/experimental"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/classes/PluginCatalogEntry",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/integrations/ontology/catalog",
+    "https://atomicdata.dev/properties/shortname": "plugin-catalog-entry",
+    "https://atomicdata.dev/properties/description": "One bundled integration's visibility gate.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/shortname",
+      "https://atomicdata.dev/integrations/properties/experimental"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/properties/experimental",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/integrations/ontology/catalog",
+    "https://atomicdata.dev/properties/shortname": "experimental",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "True until this integration's advertised capabilities have current live evidence. An experimental entry is hidden from the Integrations page unless the visitor turns on 'Show experimental plugins'."
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/catalog/devonian-github-issues",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/shortname": "devonian-github-issues",
+    "https://atomicdata.dev/integrations/properties/experimental": true
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/catalog/devonian-google-calendar",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/shortname": "devonian-google-calendar",
+    "https://atomicdata.dev/integrations/properties/experimental": true
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/catalog/mt940",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/shortname": "mt940",
+    "https://atomicdata.dev/integrations/properties/experimental": true
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/catalog/clockify",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/shortname": "clockify",
+    "https://atomicdata.dev/integrations/properties/experimental": true
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/catalog/notion",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/shortname": "notion",
+    "https://atomicdata.dev/integrations/properties/experimental": true
+  }
+]
