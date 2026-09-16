@@ -205,10 +205,6 @@ if (window.parent) window.parent.postMessage({{ type: '__atomic_plugin_ready' }}
     )
 }
 
-fn render_drive_plugin_ui_html(query_string: &str, css_exists: bool, nonce: &str) -> String {
-    render_drive_plugin_ui_html_with(query_string, css_exists, nonce, false)
-}
-
 /// `calls_view`: a plugin whose source is in the drive exports `view` and is
 /// called, rather than executing on import. That is what makes it writable by
 /// someone who has never seen this codebase — there is no bootstrap to
@@ -367,10 +363,6 @@ pub async fn handle_plugin_ui(
 
         return serve_drive_plugin(&appstate, plugin_name, format, req.query_string()).await;
     }
-    let (namespace, name) = match split_plugin_name(plugin_name) {
-        Ok(parts) => parts,
-        Err(e) => return Ok(HttpResponse::BadRequest().body(e.message)),
-    };
 
     let (namespace, name) = match split_plugin_name(plugin_name) {
         Ok(parts) => parts,

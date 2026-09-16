@@ -91,10 +91,10 @@ pub async fn handle_app_write(
         .map_err(AtomicServerError::bad_request)?;
     // This endpoint is for a directly installed app, not for borrowing an
     // ancestor's identity or opting into the legacy server signer.
-    if !host
+    if host
         .signing_as
         .as_ref()
-        .is_some_and(|key| key.app == body.app)
+        .is_none_or(|key| key.app != body.app)
     {
         return Err(AtomicServerError::bad_request(
             "This app has no key of its own; connect an identity before writing",

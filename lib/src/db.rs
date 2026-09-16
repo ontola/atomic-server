@@ -3810,11 +3810,10 @@ impl Storelike for Db {
         crate::envelopes::record_ops(store, &commit_response, &mut transaction)?;
 
         match (&commit_response.resource_old, &commit_response.resource_new) {
-            (None, None) => {
-                if !commit_response.commit.destroy.unwrap_or(false) {
-                    return Err("Neither an old nor a new resource is returned from the commit - something went wrong.".into());
-                }
+            (None, None) if !commit_response.commit.destroy.unwrap_or(false) => {
+                return Err("Neither an old nor a new resource is returned from the commit - something went wrong.".into());
             }
+            (None, None) => {}
             (Some(_old), None) => {
                 let normalized_commit_subject =
                     self.normalize_subject(&commit_response.commit.subject.clone());

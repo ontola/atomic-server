@@ -172,7 +172,7 @@ exit "$HOOK_TEST_CARGO_STATUS"
     commit(false);
     assert.match(
       readFileSync(join(root, 'clippy-args'), 'utf8'),
-      /--features\nlight\n--\n-D\nwarnings\n/,
+      /--features\nlight,wasm-plugins\n--\n-D\nwarnings\n/,
     );
     env.HOOK_TEST_CARGO_STATUS = '0';
     commit(true);
