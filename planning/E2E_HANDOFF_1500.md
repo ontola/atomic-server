@@ -148,3 +148,102 @@ never been green on this branch, and several of the failures above are stale
 tests or missing declarations in code the PR itself introduces — they are not
 regressions against `develop`. Deciding how many of them must be green before
 merging is Joep's call.
+
+---
+
+# Second pass: where the failures actually come from
+
+Prompted by "develop is 0 failed" — that is **not reproducible in this
+environment**, and the comparison needs care.
+
+## The local harness was never the CI harness
+
+**The checkout's dependencies came from a different branch.** Every
+`node_modules` under `browser/` was a symlink into
+`/private/tmp/atomic-assistant-website` (which itself resolves into
+`~/dev/atomic-server-plugin-model`). This branch's own `pnpm-lock.yaml` had
+never been installed. Consequences, all of which looked like product bugs:
+
+- `browser/patches/loro-prosemirror@0.4.3.patch` was not applied (the manual
+  copy + Vite alias described above is no longer needed — a real install
+  applies it, and the result is byte-identical).
+- A **hard WASM crash** in the production build: `[ClientDb Worker Error]
+  Uncaught Error: null pointer passed to rust`, which broke every `@smoke`
+  test (18/18 failing).
+
+Fix: remove the symlinks (never `rm -rf` — they point at other checkouts) and
+`pnpm install --frozen-lockfile` in `browser/`. It takes ~8s. Several workspace
+packages must then be built before the data-browser will bundle:
+`@tomic/service-ui`, `@tomic/plugin`, `@tomic/react`, `@tomic/lib`
+(`pnpm --filter <pkg> build`). After that the prod `@smoke` run went 18 failed
+→ **2 failed, 16 passed**.
+
+**CI serves a production build, not Vite.** `.dagger/src/index.ts` builds
+`data-browser/dist`, copies it to `server/assets_tmp`, and the server embeds
+and serves it; Playwright's `FRONTEND_URL` is the server itself. Reproduce with:
+
+```
+cd browser/data-browser && SKIP_WASM_BUILD=1 VITE_E2E=true \
+  VITE_INTEGRATION_PROXY_URL=http://127.0.0.1:19090 pnpm build
+cd ../.. && rm -rf server/assets_tmp && mkdir -p server/assets_tmp \
+  && cp -R browser/data-browser/dist/. server/assets_tmp/
+cargo build -p atomic-server      # with the CLT env; build.rs embeds assets_tmp
+# then FRONTEND_URL=http://localhost:9897
+```
+
+## Measured, on a correct install
+
+| Stack | Result |
+|---|---|
+| Vite dev, correct deps | 230 passed / **47 failed** / 7 skipped |
+| Production build (CI topology) | 229 passed / **49 failed** / 7 skipped |
+| `@smoke` on the production build | 16 passed / 2 failed |
+
+The *number* barely moved; the *composition* did (prod fixes meetings,
+table-create-perf, opfs-init-perf, template, recovery-option and breaks the
+website specs — the website preview iframe wants an origin separate from the
+app, which the same-origin prod topology does not give it). Failures stable
+across all three topologies are the real ones.
+
+## Attribution — the answer to "develop is 0 failed"
+
+Of the failing specs, **these do not exist on develop at all**: `plugins`
+(11), `apps` (6), `google-calendar-import` (2), `integration-workspace` (2),
+`integration-visibility` (2), `drive-template-onboarding` (2),
+`devonian-issue-sync` (1), `website-inline-rte` (1). That is **~27 of 47** —
+new tests for new features, which develop cannot fail because it does not have
+them. `develop` being green says nothing about them.
+
+Four failing specs are **byte-identical** to develop: `meetings`,
+`second-device-load`, `opfs-init-perf`, `offline-tables`. Run against a
+develop stack built in this same environment (worktree at
+`/private/tmp/atomic-develop-base`, server on 9898, Vite on 6764), **all of
+them fail there too** — 7 failures on develop versus 4 on the branch. So they
+are not branch regressions. (That develop stack has its own setup gap —
+`/app/dev-drive` times out for most specs — so treat it as evidence about
+these four specs, not as a full baseline.)
+
+Conclusion: the branch is not ~47 regressions deep. The bulk is new-feature
+tests that have never passed, plus environment and flake. What genuinely needs
+work before "green" is the new-feature specs, led by `plugins` and `apps`.
+
+## `apps.spec.ts` — two real bugs found (6 failures)
+
+1. **A freshly created app renders its generic resource page, not its own
+   view; a reload fixes it.** `ResourcePage` gates the app view on
+   `appClass !== undefined && resource.hasClasses(appClass)`, and `appClass`
+   comes from `useDriveClass` in `chunks/PluginRuns/runScript.ts`. That hook
+   reads the drive's `defaultOntology` once and subscribes to it — but a drive
+   with no plugin schema yet **has no `defaultOntology`**, so it subscribes to
+   nothing. Creating the first app mints the schema and sets the property, and
+   the hook never hears about it; `appClass` stays `undefined` until a
+   remount. Fix direction: also subscribe to the drive resource and
+   re-subscribe when the ontology appears. (Written and reverted here — it is
+   correct on its own terms but bug 2 masks any test-visible benefit, so it
+   should land with a test that proves it.)
+2. **App creation itself races.** In some runs `createApp` completes and
+   navigation lands on the app (verified by instrumenting the action:
+   `run:start → createApp:done → handOver:ok → navigate:<app>`). In others the
+   URL stays on the drive and `findSchema(store, drive, pluginSchema())`
+   returns a schema with an **empty `classes` map**. Same code, same stack —
+   so `ensureSchema` has a race. This is the one to chase first.
