@@ -358,7 +358,10 @@ impl Outbox {
         let mut report = DrainReport::default();
         let mut request_id: u16 = 1;
         for (_, entry) in candidates {
-            match self.drain_subject(entry, transport, &mut request_id).await? {
+            match self
+                .drain_subject(entry, transport, &mut request_id)
+                .await?
+            {
                 SubjectOutcome::Sent(n) => report.sent += n,
                 SubjectOutcome::Deferred => report.deferred += 1,
                 SubjectOutcome::Blocked => report.blocked += 1,
@@ -601,7 +604,11 @@ mod tests {
             .unwrap();
         let mut resource = device.get_resource(&subject.as_str().into()).await.unwrap();
         resource
-            .set(urls::NAME.into(), Value::String("edited offline".into()), device)
+            .set(
+                urls::NAME.into(),
+                Value::String("edited offline".into()),
+                device,
+            )
             .await
             .unwrap();
         let response = resource.save_locally(device).await.unwrap();
@@ -680,10 +687,7 @@ mod tests {
         device.populate().await.unwrap();
         let drive = device.create_drive("Offline").await.unwrap();
         let (subject, edit) = create_and_edit(&device, &drive).await;
-        Outbox::new(device.clone())
-            .mark_dirty(&edit)
-            .await
-            .unwrap();
+        Outbox::new(device.clone()).mark_dirty(&edit).await.unwrap();
         drop(device);
 
         let reopened = Db::init_redb_file(&dir, Some("https://localhost".into()), &uploads)
@@ -782,6 +786,31 @@ mod tests {
         let report = outbox.drain(&mut transport).await.unwrap();
         assert_eq!(report.dropped, 1, "{report:?}");
         assert!(!outbox.has_pending(&subject));
+    }
+
+    /// Bulk reconcile must not push a subject the outbox still owns: its
+    /// state goes out as a signed commit, or not at all.
+    #[tokio::test]
+    async fn bulk_push_skips_outbox_pending_subjects() {
+        let device = Db::init_temp("outbox_skip_push").await.unwrap();
+        let (alice, drive) = device.setup("Alice").await.unwrap();
+        let (subject, edit) = create_and_edit(&device, &drive).await;
+        let agent = crate::agents::ForAgent::from(alice);
+        let subjects = vec![subject.clone()];
+        let served =
+            crate::sync::engine::collect_readable_snapshots(&device, &agent, &subjects, None).await;
+        assert_eq!(served.len(), 1);
+
+        let outbox = Outbox::new(device.clone());
+        outbox.mark_dirty(&edit).await.unwrap();
+        let served =
+            crate::sync::engine::collect_readable_snapshots(&device, &agent, &subjects, None).await;
+        assert!(served.is_empty(), "pending subject must not be pushed raw");
+
+        outbox.clear(&subject).unwrap();
+        let served =
+            crate::sync::engine::collect_readable_snapshots(&device, &agent, &subjects, None).await;
+        assert_eq!(served.len(), 1);
     }
 
     #[test]

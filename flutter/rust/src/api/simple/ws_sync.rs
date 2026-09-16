@@ -71,7 +71,10 @@ pub async fn open_ws_sync(server_origin: &str) -> Result<(), String> {
         // under the drive fans out as `UPDATE` / `DESTROY` on this
         // subscription. See `planning/sync.md` ("QUERY_UPDATE removed").
         client.subscribe_drive(&drive).await.map_err(err)?;
-        tracing::info!("[ws_sync] subscribed to drive {}", &drive[..drive.len().min(24)]);
+        tracing::info!(
+            "[ws_sync] subscribed to drive {}",
+            &drive[..drive.len().min(24)]
+        );
     }
 
     let client_loop = client.clone();
@@ -139,13 +142,19 @@ async fn ensure_drive_materialized(store: &atomic_lib::Db, drive: &str) -> Resul
 
 async fn handle_ws_message(store: &atomic_lib::Db, msg: WsMessage) -> Result<(), String> {
     match msg {
-        WsMessage::Update { subject, loro_bytes, .. } => {
+        WsMessage::Update {
+            subject,
+            loro_bytes,
+            ..
+        } => {
             ws_apply::apply_state_update(store, &subject, &loro_bytes)
                 .await
                 .map_err(err)?;
         }
         WsMessage::Destroy { subject } => {
-            ws_apply::apply_destroy(store, &subject).await.map_err(err)?;
+            ws_apply::apply_destroy(store, &subject)
+                .await
+                .map_err(err)?;
         }
         WsMessage::Error { code, message, .. } => {
             tracing::warn!("[ws_sync] server error (code {code}): {message}")
@@ -170,7 +179,11 @@ async fn fetch_resource_state(_store: &atomic_lib::Db, subject: &str) -> Result<
     match tokio::time::timeout(std::time::Duration::from_secs(15), async {
         while let Ok(msg) = rx.recv().await {
             match msg {
-                WsMessage::Update { subject: s, loro_bytes, .. } if s == subject => {
+                WsMessage::Update {
+                    subject: s,
+                    loro_bytes,
+                    ..
+                } if s == subject => {
                     return Ok(loro_bytes);
                 }
                 WsMessage::Error {
@@ -194,36 +207,12 @@ async fn fetch_resource_state(_store: &atomic_lib::Db, subject: &str) -> Result<
 /// Best-effort: push a locally signed commit over WS when a session is open.
 /// Returns `true` if the commit was accepted by the hub.
 ///
-/// Record a local commit in the durable outbox and drain it when a session
-/// is open. Returns whether the outbox is empty afterwards: `false` means
-/// something is still waiting for a hub (offline, refused, or parked), and
-/// the caller falls back to the peer path.
-///
-/// Rust-only, though it lives under `crate::api`: Dart never pushes a commit
-/// itself, it calls something that saves and pushes. Mirroring it would drag
-/// `Db` and `CommitResponse` across as opaque types for no caller.
-#[flutter_rust_bridge::frb(ignore)]
-pub async fn try_push_commit(
-    store: &atomic_lib::Db,
-    response: &atomic_lib::commit::CommitResponse,
-) -> bool {
-    let outbox = Outbox::new(store.clone());
-    if let Err(e) = outbox.mark_dirty(response).await {
-        tracing::warn!("[ws_sync] outbox record failed: {e}");
-    }
-    drain_outbox(store).await
-}
-
 /// Drain the outbox over the open WebSocket session. `true` when nothing is
 /// left waiting. Without a session nothing is attempted; the entries stay
 /// on disk for the next `open_ws_sync`.
 #[flutter_rust_bridge::frb(ignore)]
 pub async fn drain_outbox(store: &atomic_lib::Db) -> bool {
-    let Some(client) = ws_client_slot()
-        .lock()
-        .ok()
-        .and_then(|guard| guard.clone())
-    else {
+    let Some(client) = ws_client_slot().lock().ok().and_then(|guard| guard.clone()) else {
         return false;
     };
     let mut transport = client;

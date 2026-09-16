@@ -12,6 +12,8 @@ pub mod discover;
 pub mod engine;
 #[cfg(all(test, feature = "iroh", feature = "db-redb"))]
 mod iroh_e2e;
+/// The durable dirty-subject queue a device drains to a hub.
+pub mod outbox;
 #[cfg(feature = "iroh")]
 pub mod peer;
 pub mod policy;
@@ -26,8 +28,6 @@ pub mod session;
 mod tests;
 #[cfg(feature = "db")]
 pub mod tombstones;
-/// The durable dirty-subject queue a device drains to a hub.
-pub mod outbox;
 #[cfg(feature = "db")]
 pub mod transport;
 #[cfg(feature = "db")]

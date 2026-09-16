@@ -1723,9 +1723,24 @@ pub async fn collect_readable_snapshots(
         None
     };
 
+    // A subject with a pending outbox entry is the drain's to deliver, as a
+    // signed commit; pushing its raw state here would be the unsigned write
+    // the interim guard in planning/unified-sync.md ("State-first wire")
+    // exists to prevent. The browser's handleSyncDiff makes the same skip.
+    let pending = crate::sync::outbox::Outbox::new(store.clone())
+        .pending_subjects()
+        .unwrap_or_default();
+
     let mut entries = Vec::new();
     for subject in subjects {
         let subj = crate::Subject::from_raw(subject, store.get_base_domain().as_deref());
+        if pending.contains(&subj.pure_id()) {
+            tracing::debug!(
+                "[sync] not pushing {}: pending in the outbox",
+                &subject[..subject.len().min(30)]
+            );
+            continue;
+        }
         match store.get_resource(&subj).await {
             Ok(resource) => {
                 let mut readable = crate::hierarchy::check_read(store, &resource, agent)

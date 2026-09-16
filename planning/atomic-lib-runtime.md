@@ -636,11 +636,15 @@ needing an HTTP server in front of it.
 - [x] Add `get`, `query`, `apply_commit` by delegating to existing code.
 - [ ] Add `put_blob` and `get_blob`.
 - [ ] Keep server using `AppState`, but allow `AppState` to hold an `AtomicNode`.
-- [ ] **Bind Flutter and desktop to the node (2026-09-15).** Both still hold a
+- [~] **Bind Flutter and desktop to the node (2026-09-15).** Both still hold a
       raw `Db` and re-implement save/ingest policy: `flutter/rust/src/api/simple.rs`
-      (`OnceLock<Arc<Db>>`, `save_locally` direct) and `desktop/src/lib.rs` /
-      `desktop/src/vfs.rs`. This is the parallel `simple.rs` surface the
-      accepted runtime-boundary decision says must not exist.
+      (`OnceLock<Arc<Db>>`) and `desktop/src/lib.rs` / `desktop/src/vfs.rs`.
+      This is the parallel `simple.rs` surface the accepted runtime-boundary
+      decision says must not exist. First slice 2026-09-16: `AtomicNode`
+      gained `outbox()`, `save_locally`, `apply_local_commit` and
+      `drain_outbox`, and every Flutter write (save, undo, destroy) goes
+      through `state::node()` so it lands in the durable outbox. Reads,
+      queries, peer sync and the desktop still bypass the node.
 - [x] **Durability belongs to the library, not the host** (2026-09-15).
       Every redb write uses `Durability::None`; until now only `serve.rs`
       (server, desktop) and the WASM worker ran the 100ms durable-flush tick,

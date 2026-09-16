@@ -1,9 +1,9 @@
 use atomic_lib::Storelike;
 use flutter_rust_bridge::frb;
 
-mod state;
 #[cfg(test)]
 mod peer_tests;
+mod state;
 #[cfg(test)]
 mod tests;
 pub mod types;
@@ -12,23 +12,26 @@ pub mod ws_sync;
 pub use atomic_lib::{Commit, Db};
 
 use state::{
-    canvas_date_edited_ms, db, err, now_ms, set_db, touch_date_edited, CANVAS_CLASS,
+    canvas_date_edited_ms, db, err, node, now_ms, set_db, touch_date_edited, CANVAS_CLASS,
     CANVAS_DATE_EDITED, CANVAS_FOLDER_ID, CANVAS_STROKE_DATA, FOLDER_CLASS,
 };
 pub use types::{AgentInfo, CanvasListItem, FolderListItem, SetupResult, VersionMetadata};
 
 /// Save resource locally, record it in the durable outbox, and drain the
 /// outbox over WS when a session is open. Offline edits wait on disk.
-async fn save_and_push(resource: &mut atomic_lib::Resource, store: &atomic_lib::Db) -> Result<(), String> {
+async fn save_and_push(
+    resource: &mut atomic_lib::Resource,
+    store: &atomic_lib::Db,
+) -> Result<(), String> {
     touch_date_edited(resource);
-    let response = resource.save_locally(store).await.map_err(err)?;
+    let response = node()?.save_locally(resource).await.map_err(err)?;
     if let Some(bytes) = &response.commit.loro_update {
         if !bytes.is_empty() {
             let subject_key = response.commit.subject.pure_id();
             atomic_lib::sync::peer::broadcast_live_update(&subject_key, bytes);
         }
     }
-    let ws_ok = ws_sync::try_push_commit(store, &response).await;
+    let ws_ok = ws_sync::drain_outbox(store).await;
     // Hub unreachable or no WS session: bulk Iroh reconcile. When live peers exist
     // we already broadcast above; still bulk-nudge if P2P-only (no hub).
     if !ws_ok || atomic_lib::sync::peer::live_peer_count() == 0 {
@@ -49,8 +52,7 @@ fn refresh_editing_session(
     store: &atomic_lib::Db,
     subject: &str,
 ) {
-    let key =
-        atomic_lib::Subject::from_raw(subject, store.get_base_domain().as_deref()).pure_id();
+    let key = atomic_lib::Subject::from_raw(subject, store.get_base_domain().as_deref()).pure_id();
     if let Ok(Some(snapshot)) = store
         .kv
         .get(atomic_lib::db::trees::Tree::LoroSnapshots, key.as_bytes())
@@ -89,22 +91,22 @@ async fn nudge_peers_after_local_change(store: &atomic_lib::Db) {
     }
     #[cfg(not(test))]
     {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0);
-    let last = LAST_PEER_NUDGE_MS.load(std::sync::atomic::Ordering::Relaxed);
-    if now.saturating_sub(last) < 2_000 {
-        return;
-    }
-    LAST_PEER_NUDGE_MS.store(now, std::sync::atomic::Ordering::Relaxed);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        let last = LAST_PEER_NUDGE_MS.load(std::sync::atomic::Ordering::Relaxed);
+        if now.saturating_sub(last) < 2_000 {
+            return;
+        }
+        LAST_PEER_NUDGE_MS.store(now, std::sync::atomic::Ordering::Relaxed);
 
-    if ensure_sync_connectivity(store).await.is_err() {
-        return;
-    }
-    if let Err(e) = try_auto_peer_sync(store).await {
-        tracing::debug!("[save_and_push] peer nudge failed: {e}");
-    }
+        if ensure_sync_connectivity(store).await.is_err() {
+            return;
+        }
+        if let Err(e) = try_auto_peer_sync(store).await {
+            tracing::debug!("[save_and_push] peer nudge failed: {e}");
+        }
     }
 }
 
@@ -389,8 +391,7 @@ pub async fn create_folder(name: String) -> Result<String, String> {
 pub async fn list_folders() -> Result<Vec<FolderListItem>, String> {
     let store = db()?;
     let drive = store.get_active_drive().ok_or("No active drive")?;
-    let query =
-        atomic_lib::storelike::Query::new_prop_val(atomic_lib::urls::PARENT, &drive);
+    let query = atomic_lib::storelike::Query::new_prop_val(atomic_lib::urls::PARENT, &drive);
     let result = store.query(&query).await.map_err(err)?;
     let mut items = Vec::new();
     for subject in &result.subjects {
@@ -421,10 +422,7 @@ pub async fn set_canvas_folder(subject: String, folder_id: Option<String>) -> Re
     let mut guard = get_canvas(&subject).await?;
     let resource = guard.as_mut().unwrap();
     if let Some(fid) = folder_id.filter(|s| !s.is_empty()) {
-        resource.set_unsafe(
-            CANVAS_FOLDER_ID.into(),
-            atomic_lib::Value::String(fid),
-        );
+        resource.set_unsafe(CANVAS_FOLDER_ID.into(), atomic_lib::Value::String(fid));
     } else {
         resource.remove_propval(CANVAS_FOLDER_ID);
     }
@@ -473,7 +471,10 @@ fn ensure_cache_listener() {
                     subject,
                     from_commit,
                     ..
-                }) => (subject, !from_commit || atomic_lib::sync::ws_apply::is_importing()),
+                }) => (
+                    subject,
+                    !from_commit || atomic_lib::sync::ws_apply::is_importing(),
+                ),
                 Ok(atomic_lib::DbEvent::Destroyed { subject, .. }) => {
                     (subject, atomic_lib::sync::ws_apply::is_importing())
                 }
@@ -609,8 +610,7 @@ pub async fn list_canvases() -> Result<Vec<CanvasListItem>, String> {
 pub async fn list_canvases_json() -> Result<String, String> {
     let store = db()?;
     let drive = store.get_active_drive().ok_or("No active drive")?;
-    let query =
-        atomic_lib::storelike::Query::new_prop_val(atomic_lib::urls::PARENT, &drive);
+    let query = atomic_lib::storelike::Query::new_prop_val(atomic_lib::urls::PARENT, &drive);
     let result = store.query(&query).await.map_err(err)?;
 
     let mut items = Vec::new();
@@ -644,10 +644,7 @@ pub async fn list_canvases_json() -> Result<String, String> {
 
 /// Signed destroy commit + WS push + Iroh live/bulk nudge (same path for canvases and folders).
 async fn destroy_resource_and_sync(subject: String) -> Result<(), String> {
-    tracing::info!(
-        "[destroy_resource] {}",
-        &subject[..subject.len().min(30)]
-    );
+    tracing::info!("[destroy_resource] {}", &subject[..subject.len().min(30)]);
     let store = db()?;
     let mut builder = atomic_lib::commit::CommitBuilder::new(subject.clone().into());
     builder.destroy(true);
@@ -667,8 +664,11 @@ async fn destroy_resource_and_sync(subject: String) -> Result<(), String> {
         update_index: true,
         ..atomic_lib::commit::CommitOpts::no_validations_no_index()
     };
-    let response = store.apply_commit(commit, &opts).await.map_err(err)?;
-    let ws_ok = ws_sync::try_push_commit(store.as_ref(), &response).await;
+    let response = node()?
+        .apply_local_commit(commit, &opts)
+        .await
+        .map_err(err)?;
+    let ws_ok = ws_sync::drain_outbox(store.as_ref()).await;
     if !ws_ok {
         nudge_peers_after_local_change(store.as_ref()).await;
     }
@@ -1006,9 +1006,7 @@ async fn sync_connectivity_inner(store: &atomic_lib::Db) -> Result<SyncConnectiv
             Ok(Ok(node_id)) => {
                 match tokio::time::timeout(
                     PEER_SYNC_ATTEMPT_TIMEOUT,
-                    atomic_lib::sync::peer::sync_drive_with_peer_if_needed(
-                        &node_id, &drive, store,
-                    ),
+                    atomic_lib::sync::peer::sync_drive_with_peer_if_needed(&node_id, &drive, store),
                 )
                 .await
                 {
@@ -1264,7 +1262,6 @@ pub fn remove_known_peer(node_id: String) {
 // ── Legacy stubs (kept for frb_generated.rs compatibility) ─────────────────
 // These will be removed when FRB codegen is regenerated.
 
-
 // Legacy stubs — removed.
 
 #[frb(sync)]
@@ -1407,13 +1404,14 @@ pub async fn set_strokes(subject: String, strokes_json: String) -> Result<(), St
         return Ok(());
     }
 
-    let arr: Vec<serde_json::Value> = if let Some(strokes) = parsed.get("strokes").and_then(|s| s.as_array()) {
-        strokes.clone()
-    } else if parsed.is_array() {
-        parsed.as_array().cloned().unwrap_or_default()
-    } else {
-        return Err("Expected stroke array or {checkout_version_id: [...]}".into());
-    };
+    let arr: Vec<serde_json::Value> =
+        if let Some(strokes) = parsed.get("strokes").and_then(|s| s.as_array()) {
+            strokes.clone()
+        } else if parsed.is_array() {
+            parsed.as_array().cloned().unwrap_or_default()
+        } else {
+            return Err("Expected stroke array or {checkout_version_id: [...]}".into());
+        };
 
     let mut guard = get_canvas(&subject).await?;
     let resource = guard.as_mut().unwrap();
