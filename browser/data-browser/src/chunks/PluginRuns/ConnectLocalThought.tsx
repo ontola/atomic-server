@@ -10,6 +10,7 @@ import { Button } from '@components/Button';
 import { Column } from '@components/Row';
 import Field from '@components/forms/Field';
 import { Input, ErrMessage } from '@components/forms/InputStyles';
+import { BasicSelect } from '@components/forms/BasicSelect';
 import { AtomicLink } from '@components/AtomicLink';
 import {
   browserIntegrations,
@@ -17,6 +18,11 @@ import {
   type SavedConnection,
 } from './localThought';
 import { installLocalThought, refreshLocalThought } from './localThoughtSync';
+import {
+  PARAMETER_OPTION_LOOKUPS,
+  parseParameterOptions,
+  type ParameterOption,
+} from './parameterOptions';
 
 export function ConnectLocalThought({
   drive,
@@ -76,6 +82,9 @@ function GenericConnection({
   });
   const [parameters, setParameters] = useState<string[]>([]);
   const [constants, setConstants] = useState<Record<string, string>>({});
+  const [parameterOptions, setParameterOptions] = useState<
+    Record<string, ParameterOption[]>
+  >({});
   const [collections, setCollections] = useState<string[]>([]);
   const [selection, setSelection] = useState(() =>
     extension?.defaultSelection(),
@@ -110,6 +119,41 @@ function GenericConnection({
 
     return () => controller.abort();
   }, [store, platform, origin, extension?.defaultConstants]);
+
+  useEffect(() => {
+    if (!connection || folder) return;
+    const lookups = PARAMETER_OPTION_LOOKUPS[platform];
+    if (!lookups) return;
+    let cancelled = false;
+    const client = browserIntegrations(origin);
+
+    (async () => {
+      for (const [parameter, lookup] of Object.entries(lookups)) {
+        if (!parameters.includes(parameter)) continue;
+
+        try {
+          const { status, body } = await client.request(
+            drive,
+            actor,
+            connection.connection,
+            platform,
+            lookup.path,
+          );
+          if (cancelled) return;
+          if (status !== 200) continue;
+          const options = parseParameterOptions(body, lookup);
+          if (options.length)
+            setParameterOptions(prev => ({ ...prev, [parameter]: options }));
+        } catch {
+          // Manual entry remains available when the lookup fails.
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [connection, folder, platform, origin, parameters, drive, actor]);
 
   const connect = async () => {
     setBusy(true);
@@ -192,22 +236,52 @@ function GenericConnection({
       </Button>
       {connection && !folder && (
         <>
-          {parameters.map(parameter => (
-            <Field
-              key={parameter}
-              fieldId={`proxy-${parameter}`}
-              label={parameter}
-            >
-              <Input
-                id={`proxy-${parameter}`}
-                value={constants[parameter] ?? ''}
-                onChange={e =>
-                  setConstants({ ...constants, [parameter]: e.target.value })
-                }
-                disabled={busy}
-              />
-            </Field>
-          ))}
+          {parameters.map(parameter => {
+            const options = parameterOptions[parameter];
+
+            return (
+              <Field
+                key={parameter}
+                fieldId={`proxy-${parameter}`}
+                label={parameter}
+              >
+                {options ? (
+                  <BasicSelect
+                    id={`proxy-${parameter}`}
+                    value={constants[parameter] ?? ''}
+                    onChange={e =>
+                      setConstants({
+                        ...constants,
+                        [parameter]: e.target.value,
+                      })
+                    }
+                    disabled={busy}
+                  >
+                    <option value='' disabled>
+                      Select…
+                    </option>
+                    {options.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </BasicSelect>
+                ) : (
+                  <Input
+                    id={`proxy-${parameter}`}
+                    value={constants[parameter] ?? ''}
+                    onChange={e =>
+                      setConstants({
+                        ...constants,
+                        [parameter]: e.target.value,
+                      })
+                    }
+                    disabled={busy}
+                  />
+                )}
+              </Field>
+            );
+          })}
           {ImportControls && selection && (
             <ImportControls
               value={selection}
