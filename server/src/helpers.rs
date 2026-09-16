@@ -188,6 +188,39 @@ pub async fn get_client_agent(
     Ok(for_agent)
 }
 
+/// Rate-limit key for a request without a signed agent: the socket peer
+/// address. Deliberately not `X-Forwarded-For`: a direct client could spoof
+/// that header to dodge the limit. Behind a reverse proxy every anonymous
+/// write then shares one bucket, which fails closed rather than open.
+pub fn peer_ip(req: &actix_web::HttpRequest) -> String {
+    req.peer_addr()
+        .map(|addr| addr.ip().to_string())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+/// Spend one write token for this request, keyed by the signed agent when
+/// there is one and by the peer address otherwise. `Sudo` is the node's own
+/// process and is never limited. Call it after authentication and before any
+/// work, so a flood costs the node nothing beyond the check.
+pub fn enforce_write_rate_limit(
+    appstate: &AppState,
+    req: &actix_web::HttpRequest,
+    for_agent: &ForAgent,
+) -> AtomicServerResult<()> {
+    let result = match for_agent {
+        ForAgent::Sudo => return Ok(()),
+        ForAgent::AgentSubject(subject) => appstate
+            .write_rate_limiter
+            .check(&subject.to_string(), false),
+        ForAgent::Public => appstate.write_rate_limiter.check(&peer_ip(req), true),
+    };
+    result.map_err(|limited| AtomicServerError {
+        message: limited.to_string(),
+        error_type: AppErrorType::TooManyRequests,
+        error_resource: None,
+    })
+}
+
 /// Finds the extension
 pub fn try_extension(path: &str) -> Option<(ContentType, &str)> {
     let items: Vec<&str> = path.split('.').collect();

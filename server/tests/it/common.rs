@@ -7,11 +7,20 @@ use std::time::Duration;
 /// `name` namespaces the on-disk state under ./.temp/; a random suffix keeps
 /// concurrent and repeated runs isolated.
 pub fn start_server(name: &str) -> u16 {
+    start_server_with_args(name, &[])
+}
+
+/// `start_server` with extra CLI flags appended, for suites that exercise a
+/// non-default option (a small rate limit, a host mode).
+pub fn start_server_with_args(name: &str, extra_args: &[&str]) -> u16 {
     let unique = format!("{}_{}", name, atomic_lib::utils::random_string(10));
     let port = pick_port();
 
     use clap::Parser;
-    let opts = atomic_server::config::Opts::parse_from([
+    let port_str = port.to_string();
+    let data_dir = format!("./.temp/{unique}/db");
+    let config_dir = format!("./.temp/{unique}/config");
+    let mut args = vec![
         "atomic-server",
         "--initialize",
         // Loopback IPv4 rather than the `::` default: the tests connect to
@@ -21,12 +30,14 @@ pub fn start_server(name: &str) -> u16 {
         "--ip",
         "127.0.0.1",
         "--port",
-        &port.to_string(),
+        &port_str,
         "--data-dir",
-        &format!("./.temp/{unique}/db"),
+        &data_dir,
         "--config-dir",
-        &format!("./.temp/{unique}/config"),
-    ]);
+        &config_dir,
+    ];
+    args.extend_from_slice(extra_args);
+    let opts = atomic_server::config::Opts::parse_from(args);
 
     let mut config = atomic_server::config::build_config(opts).expect("config failed");
     config.search_index_path = format!("./.temp/{unique}/search").into();

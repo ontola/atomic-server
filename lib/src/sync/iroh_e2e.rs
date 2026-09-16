@@ -322,6 +322,65 @@ async fn e2e_presence_crosses_the_link_without_being_stored() {
     );
 }
 
+/// The sending half of serverless sync: an edit B made with no link up sits
+/// in its outbox, and draining over the live Iroh link delivers it to A as a
+/// signed commit A validates and applies.
+#[tokio::test]
+async fn e2e_outbox_drains_over_the_live_link() {
+    let pair = setup_pair("e2e_outbox").await;
+    let canvas = pair
+        .db_a
+        .create_resource(CANVAS_CLASS, &pair.drive, "Shared canvas", None)
+        .await
+        .unwrap();
+
+    sync_b_from_a(&pair).await;
+    wait_for_live_peers(1, std::time::Duration::from_secs(3)).await;
+    assert!(pair
+        .db_b
+        .get_resource(&canvas.as_str().into())
+        .await
+        .is_ok());
+
+    // B edits through its node, which records the outbox; B runs no live
+    // push loop in this harness, so nothing but the drain can carry it.
+    let node_b = crate::runtime::AtomicNode::from_db(pair.db_b.clone());
+    let mut resource_b = pair
+        .db_b
+        .get_resource(&canvas.as_str().into())
+        .await
+        .unwrap();
+    resource_b
+        .set(
+            crate::urls::NAME.into(),
+            crate::Value::String("renamed on B".into()),
+            &pair.db_b,
+        )
+        .await
+        .unwrap();
+    node_b.save_locally(&mut resource_b).await.unwrap();
+    assert!(node_b.outbox().has_pending(&canvas));
+
+    let report = crate::sync::peer::drain_outbox_to_live_peer(&pair.db_b, &pair.node_id_a)
+        .await
+        .expect("drain over the live link");
+    assert_eq!(report.sent, 1, "{report:?}");
+    assert_eq!(report.remaining, 0, "{report:?}");
+    assert!(!node_b.outbox().has_pending(&canvas));
+
+    let arrived = wait_until(std::time::Duration::from_secs(5), || async {
+        pair.db_a
+            .get_resource(&canvas.as_str().into())
+            .await
+            .ok()
+            .and_then(|r| r.get(crate::urls::NAME).ok().map(|v| v.to_string()))
+            .as_deref()
+            == Some("renamed on B")
+    })
+    .await;
+    assert!(arrived, "A must hold B's edit as an applied signed commit");
+}
+
 #[tokio::test]
 async fn e2e_stroke_append_after_sync() {
     let pair = setup_pair("e2e_stroke").await;

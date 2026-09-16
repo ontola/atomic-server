@@ -20,8 +20,21 @@
       }
     ],
     "security": {
-      "csp": null,
-      "dangerousDisableAssetCspModification": true
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self' 'wasm-unsafe-eval'",
+        "style-src": "'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src": "'self' data: https://fonts.gstatic.com",
+        "img-src": "'self' data: blob: http: https:",
+        "media-src": "'self' data: blob: http: https:",
+        "connect-src": "'self' ipc: http://ipc.localhost http: https: ws: wss:",
+        "worker-src": "'self' blob:",
+        "frame-src": "'self' blob: http: https:",
+        "object-src": "'none'",
+        "base-uri": "'self'",
+        "form-action": "'self'"
+      },
+      "dangerousDisableAssetCspModification": false
     }
   },
   "bundle": {
@@ -56,9 +69,17 @@
   },
   "plugins": {
     "deep-link": {
-      "mobile": [{ "scheme": ["atomic"] }],
+      "mobile": [
+        {
+          "scheme": [
+            "atomic"
+          ]
+        }
+      ],
       "desktop": {
-        "schemes": ["atomic"]
+        "schemes": [
+          "atomic"
+        ]
       }
     }
   }

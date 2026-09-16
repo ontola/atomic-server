@@ -237,3 +237,12 @@ tick, and the desktop goes through that same path.
 
 Either the outbox must persist content without the ClientDb on this platform, or
 the app must not claim local safety it does not have.
+
+## Carried over from `fork-banner-refresh.md` (deleted 2026-09-15)
+
+The UI guard that validates `Fork` type and `originalSubject` before counting
+proposals shipped in #1397. Unreproduced: Safari once returned unrelated drive
+resources for the fork proposal query. Local HTTP, WS and OPFS queries return
+the correct empty set and Playwright WebKit fails OPFS initialisation before
+the dev drive exists, so no query-engine cause was confirmed. Do not describe
+the guard as a fix to the query engine.

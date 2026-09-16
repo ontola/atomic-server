@@ -4,6 +4,7 @@ import {
   FaTableColumns,
   FaCalendarDays,
   FaStopwatch,
+  FaChartPie,
 } from 'react-icons/fa6';
 
 /**
@@ -12,7 +13,19 @@ import {
  * kinds can be added without a schema migration; this union is the frontend's
  * source of truth for the ones we actually render.
  */
-export const VIEW_KINDS = ['table', 'kanban', 'calendar', 'timer'] as const;
+/**
+ * `dashboard` is the one kind that renders no rows: it shows the Dashboard
+ * resource the view names in `view-dashboard`, so a dashboard is reachable as
+ * a tab of the table it describes while staying a resource of its own
+ * (`planning/dashboards.md`, Remaining work 1).
+ */
+export const VIEW_KINDS = [
+  'table',
+  'kanban',
+  'calendar',
+  'timer',
+  'dashboard',
+] as const;
 
 export type ViewKind = (typeof VIEW_KINDS)[number];
 
@@ -48,6 +61,7 @@ export const VIEW_KIND_LABELS: Record<ViewKind, string> = {
   kanban: 'Kanban',
   calendar: 'Calendar',
   timer: 'Timer',
+  dashboard: 'Dashboard',
 };
 
 export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {
@@ -55,4 +69,5 @@ export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {
   kanban: FaTableColumns,
   calendar: FaCalendarDays,
   timer: FaStopwatch,
+  dashboard: FaChartPie,
 };

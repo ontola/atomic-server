@@ -92,6 +92,7 @@ import {
   encodeSub,
   encodeSync,
   encodeSyncPush,
+  encodeSyncPushChunks,
   encodeUnsub,
   Flags,
 } from './ws-v2.js';
@@ -211,6 +212,48 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
         ),
       ),
     ).toBe(toHex(vectors.sync_push_last));
+  });
+
+  it('carries SYNC_PUSH envelopes in a trailer old decoders never read', ({
+    expect,
+  }) => {
+    const entries = [
+      { subject: 'did:ad:x', loroBytes: new Uint8Array([1, 2]) },
+      { subject: 'did:ad:y', loroBytes: new Uint8Array([3]) },
+    ];
+    const envelopes = [
+      { subject: 'did:ad:x', json: '{"a":1}' },
+      { subject: 'did:ad:x', json: '{"b":2}' },
+    ];
+    const pushFrame = encodeSyncPush('did:ad:d', entries, true, envelopes);
+    const decoded = decodeSyncPush(pushFrame.subarray(1));
+    expect(decoded?.entries.map(e => e.subject)).toEqual([
+      'did:ad:x',
+      'did:ad:y',
+    ]);
+    expect(decoded?.envelopes).toEqual(envelopes);
+
+    // Without envelopes the bytes are the plain frame.
+    expect(toHex(encodeSyncPush('did:ad:d', entries, true, []))).toBe(
+      toHex(encodeSyncPush('did:ad:d', entries, true)),
+    );
+
+    // Clearing the flag is what a pre-envelope decoder sees: entries only.
+    const flagsAt = 3 + new TextEncoder().encode('did:ad:d').length;
+    const unflagged = new Uint8Array(pushFrame);
+    unflagged[flagsAt] &= ~0b0010;
+    const old = decodeSyncPush(unflagged.subarray(1));
+    expect(old?.entries.length).toBe(2);
+    expect(old?.envelopes).toEqual([]);
+
+    // The chunker attaches each subject's envelopes to its own chunk.
+    const chunks = encodeSyncPushChunks('did:ad:d', entries, {
+      'did:ad:y': ['{"y":1}'],
+    });
+    const lastChunk = decodeSyncPush(chunks[chunks.length - 1].subarray(1));
+    expect(lastChunk?.envelopes).toEqual([
+      { subject: 'did:ad:y', json: '{"y":1}' },
+    ]);
   });
 
   it('encodes SYNC with the length-prefixed hex hash Rust decodes', ({
@@ -340,6 +383,7 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
     expect(push?.drive).toBe('did:ad:d');
     expect(push?.last).toBe(true);
     expect(push?.entries.map(e => e.subject)).toEqual(['did:ad:x']);
+    expect(push?.envelopes).toEqual([]);
 
     expect([...(decodeBlobRequest(payload('blob_request')) ?? [])]).toEqual(
       new Array(32).fill(0xab),

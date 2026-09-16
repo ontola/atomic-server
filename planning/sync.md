@@ -30,7 +30,7 @@ integration tests ever sent it. The lib's watched-query index stays.
 subscribers of the resource's *owning* drive (via `Subject::is_within_drive` +
 the genesis `drive` propval), not to every drive subscriber. This closes a
 cross-tenant commit leak (and the e2e 401-spillover flake it caused). See
-[`commit-fanout-drive-isolation.md`](./commit-fanout-drive-isolation.md).
+[`commit-fanout-drive-isolation.md`](./completed/commit-fanout-drive-isolation.md).
 
 ---
 
@@ -340,5 +340,5 @@ Add or update tests at these levels:
 - [x] Update docs.
 - [x] Server WS integration: `server/tests/it/ws_commit.rs` (COMMIT + subscriber UPDATE).
 - [x] Run server integration (`sync`, `query_subscribe`, `ws_commit`) + browser lib vitest.
-- [ ] Browser lib: dedicated `WSClient.postCommit()` COMMIT_OK / ERROR tests (still mocked in commit tests).
-- [ ] E2E save flows (browser `test-e2e`).
+- [x] Browser lib: `WSClient.postCommit()` COMMIT_OK / ERROR tests (`browser/lib/src/commit.test.ts`, `save-acknowledgement.test.ts`).
+- [x] E2E save flows (browser `test-e2e`).

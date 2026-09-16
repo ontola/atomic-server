@@ -43,6 +43,38 @@ describe('isCommitSubject', () => {
  * server has acked.
  */
 describe('Resource save flow', () => {
+  it('signs one genesis when two saves race on a draft', async ({ expect }) => {
+    const { store, postCommitSpy } = await testStore();
+    const drive = await store.newResource({
+      isA: 'https://atomicdata.dev/classes/Drive',
+      propVals: { [core.properties.name]: 'Home' },
+      noParent: true,
+    });
+    await drive.save();
+    postCommitSpy.mockClear();
+
+    // A table row: a `_new:` placeholder under a saved parent. Its first
+    // commit resolves the drive through the parent, and that write is the
+    // await a second save slips through.
+    const placeholder = `_new:${Math.random().toString(36).slice(2)}`;
+    const draft = store.getResourceLoading(placeholder, { newResource: true });
+    await draft.set(core.properties.parent, drive.subject, false);
+    await draft.set(core.properties.name, 'Raced', false);
+
+    // A row's materialize timer and its unmount flush can both call save()
+    // before either has signed.
+    await Promise.all([draft.save(), draft.save()]);
+
+    expect(draft.subject).toMatch(/^did:ad:/);
+    expect(postCommitSpy.mock.calls.length).toBe(1);
+    // The placeholder still resolves to the one persisted resource, and does
+    // so stably: a dangling alias would mint a fresh Resource per read.
+    expect(store.getResourceLoading(placeholder).subject).toBe(draft.subject);
+    expect(store.getResourceSnapshot(placeholder)).toBe(
+      store.getResourceSnapshot(placeholder),
+    );
+  });
+
   it('creates a DID resource and posts sequential saves', async ({
     expect,
   }) => {
