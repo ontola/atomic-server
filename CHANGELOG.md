@@ -57,6 +57,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   ran, so on Android an app kill rolled back every edit since the last drive
   switch. `Db::init_redb_file` now owns the 100ms durable-flush tick for every
   binding, and an idle tick no longer writes anything.
+- Fix remaining `clippy` warnings in `wasm/src/lib.rs` blocking `develop`'s pre-commit hook ([#1508](https://github.com/ontola/atomic-server/issues/1508)).
 
 ## [v0.41.0-beta.7] - 2026-09-12
 
