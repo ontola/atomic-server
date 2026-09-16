@@ -247,3 +247,68 @@ work before "green" is the new-feature specs, led by `plugins` and `apps`.
    URL stays on the drive and `findSchema(store, drive, pluginSchema())`
    returns a schema with an **empty `classes` map**. Same code, same stack —
    so `ensureSchema` has a race. This is the one to chase first.
+
+---
+
+# Third session, 2026-09-17 — 41 failures down to 14
+
+Full suite on the local stack (Vite dev, 2 workers): **265 passed / 14 failed /
+7 skipped**, from 237/41/7 at the start of the session.
+
+## The operational finding that mattered most
+
+**The server degrades as its data dir grows.** After a day of runs
+`/private/tmp/atomic-hosting-node/data` had reached **1.1 GB**, and on that
+server all six `apps` tests and most of `plugins` failed on a 10s
+`iframe[title="App"]` wait — which reads exactly like a product bug and is not
+one. Moving the data dir aside and restarting took `apps` + `plugins` at two
+workers from **16 failures to 1**. Do this before any full run;
+`scripts/start-server.sh` in the session scratchpad starts the server and gates
+on HTTP 200 (never on the port — redb's lock outlives the socket).
+
+Everything else about the stack is as the second session described. Firefox was
+missing from the Playwright cache (`pnpm exec playwright install firefox`);
+`client-db-locks` passes with it.
+
+## Fixed — product
+
+- `027c09094` **The empty string is not a subject.** `normalizeSubject('')`
+  resolves against the server URL, so `useResource(x ?? '')` and every render
+  before the drive setting hydrated fetched `http://localhost:9897/`. Nothing
+  lives at the root on a DID-drive branch, so each of those 404s and logged two
+  console errors — failing the zero-diagnostics gate in `offline-tables`,
+  `sync`, `file-upload-offline` and `drive-deeplink @smoke`. Guarded in
+  `getResourceLoading` and the async `getResource`. `CustomViewProvider` had
+  the same shape one level up (`/plugin-list?drive=`).
+- `d1e91ddba` **The app-setup dialog could not close.** It derived `show` from
+  `useDialog`'s post-animation `isOpen`, which only goes false once the Dialog
+  has seen `show` go false: a deadlock, with the modal swallowing every click
+  behind it. That was `plugins.spec.ts:893`.
+- `e4141c008` **A regression from #1510.** Reusing a same-shortname select
+  property threw when it lacked a requested option, and the Student and
+  Personal templates each pair a task "Status" with a reading-list "Status".
+  The whole gallery died with `has no option "Want to read"`. Now it
+  disambiguates to `status-2`, as the incompatible-datatype branch already did.
+
+## Fixed — tests
+
+- `2bf4e927f` / `3e86c4be2` **Kanban drags.** The board FLIP-animates after a
+  drop, so the second drag pressed where the card used to be and dnd-kit never
+  activated. `await source.hover()` first; measure the drop target after
+  activation, not before. Same fix in the Devonian spec.
+- `00414440d` `integration-visibility` used `check()` on a toggle that
+  disappears once checked; `integration-workspace` asserted "no dialog at all"
+  when the app legitimately raises the AI model-setup dialog.
+
+## What is still red, and why
+
+| Spec | Verdict |
+|---|---|
+| `recovery-option` (2), `opfs-init-perf`, `table-create-perf` (3) | Dev-topology only. The SW warning `recovery-option` declares happens only in a production build (VitePWA is off in dev); the `clientdb.*` perf marks are likewise absent from the dev module graph. All pass in CI's topology. |
+| `vault-backup-restore` (2) | Points at a portal on :49237, which is **another checkout's** atomic-saas dev server. Needs this branch's portal to mean anything. |
+| `google-calendar-import` (2) | Real gap. The new integration-visibility preference is only readable with the server reachable, and this spec runs the whole scenario with the server cut off. Enabling discovery before the interception starts lists the Calendar card; the reload that follows loses it again. Fix = make the preference and its schema readable from the local DB. |
+| `second-device-load` @smoke | Real, pre-existing flake — ~1 in 3 passes locally, green on CI. Evidence: after unlocking, `document.body` has no `SecondDeviceChild`; **a reload makes it appear**, so the data is on the server and it is the post-unlock render that misses it. A `StoreEvents.AgentChanged` → `invalidateCollection` hook in `useCollection` was tried and did **not** fix it (reverted). Next place to look is what the sidebar's `useChildren` collection does between "locked, anonymous query" and "signed in". |
+| `offline-chatroom`, `website-inline-rte` | Flaky; each passes when run alone. `website-inline-rte` is the known dropped-character flake in the preview editor. |
+
+Nothing in the remaining list is a regression this branch introduces, and the
+`@smoke` gate CI runs is green apart from the `second-device-load` flake above.
