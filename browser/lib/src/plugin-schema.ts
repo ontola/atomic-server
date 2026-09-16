@@ -230,6 +230,12 @@ async function reconcile(
   if (changed) await resource.save();
 }
 
+/** The native identity a schema term is saved under, so an interrupted
+ * ontology-link write can still be recovered by its own id. */
+function localIdFor(listProperty: string, shortname: string): string {
+  return `schema:${listProperty === core.properties.properties ? 'property' : 'class'}:${shortname}`;
+}
+
 async function ensureAll<T extends { shortname: string; subject?: string }>(
   store: SchemaStore,
   ontology: SchemaResource,
@@ -246,6 +252,28 @@ async function ensureAll<T extends { shortname: string; subject?: string }>(
   );
   const result: Record<string, string> = {};
   const added: string[] = [];
+
+  // Recovering an orphan is one server round-trip per term, and on a drive
+  // that has no schema yet every term takes it. Awaited inside the loop below
+  // that was ~19 sequential queries of ~700ms — 13 of the 14 seconds it took
+  // to create an app, before anything was written. The lookups are
+  // independent reads of different localIds, so make them together and let
+  // the loop consume the answers; creation stays ordered.
+  const orphans = new Map<string, SchemaResource | undefined>();
+  await Promise.all(
+    specs
+      .filter(spec => !spec.subject && !found.has(spec.shortname))
+      .map(async spec => {
+        orphans.set(
+          spec.shortname,
+          await store.findByLocalId(
+            drive,
+            ontology.subject,
+            localIdFor(listProperty, spec.shortname),
+          ),
+        );
+      }),
+  );
 
   for (const spec of specs) {
     if (spec.subject) {
@@ -269,11 +297,9 @@ async function ensureAll<T extends { shortname: string; subject?: string }>(
       continue;
     }
 
-    const localId = `schema:${listProperty === core.properties.properties ? 'property' : 'class'}:${spec.shortname}`;
-    const orphan = found.has(spec.shortname)
-      ? undefined
-      : await store.findByLocalId(drive, ontology.subject, localId);
-    const hit = found.get(spec.shortname) ?? orphan?.subject;
+    const localId = localIdFor(listProperty, spec.shortname);
+    const hit =
+      found.get(spec.shortname) ?? orphans.get(spec.shortname)?.subject;
 
     if (hit) {
       result[spec.shortname] = hit;
