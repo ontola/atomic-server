@@ -8,6 +8,36 @@ import { IntegrationEvidence } from './IntegrationEvidence';
 import { googleCalendarIntegration } from '@localthought/atomic-integrations/ui/GoogleCalendar';
 import { useIntegrationProxy } from '@helpers/integrationProxy';
 import { useLocalThoughtCompletedPlatform } from './localThoughtCallback';
+import pluginCatalog from '../../../../../integrations/catalog.json';
+
+const CATALOG_ENTRY_CLASS =
+  'https://atomicdata.dev/integrations/classes/PluginCatalogEntry';
+const CATALOG_EXPERIMENTAL_PROP =
+  'https://atomicdata.dev/integrations/properties/experimental';
+const IS_A_PROP = 'https://atomicdata.dev/properties/isA';
+const SHORTNAME_PROP = 'https://atomicdata.dev/properties/shortname';
+
+type CatalogResource = Record<string, unknown>;
+
+// integrations/catalog.json gates which bundled integrations are visible by
+// default; an id missing from it, like one explicitly marked experimental, is
+// only shown once the visitor enables 'Show experimental plugins'.
+const experimentalById = new Map<string, boolean>(
+  (pluginCatalog as CatalogResource[])
+    .filter(resource =>
+      (resource[IS_A_PROP] as string[] | undefined)?.includes(
+        CATALOG_ENTRY_CLASS,
+      ),
+    )
+    .map(resource => [
+      resource[SHORTNAME_PROP] as string,
+      resource[CATALOG_EXPERIMENTAL_PROP] !== false,
+    ]),
+);
+
+function isExperimental(id: string): boolean {
+  return experimentalById.get(id) ?? true;
+}
 
 const NotionSetup = lazy(() =>
   import('./ConnectNotion').then(m => ({ default: m.ConnectNotion })),
@@ -122,9 +152,9 @@ export function visibleBundledIntegrations(
   showExperimentalPlugins: boolean,
   showApiPlugins: boolean,
 ) {
-  return (showExperimentalPlugins ? bundledIntegrations() : []).filter(
-    entry => !entry.requiresApiPlugins || showApiPlugins,
-  );
+  return bundledIntegrations()
+    .filter(entry => showExperimentalPlugins || !isExperimental(entry.id))
+    .filter(entry => !entry.requiresApiPlugins || showApiPlugins);
 }
 
 export function IntegrationDiscovery({
