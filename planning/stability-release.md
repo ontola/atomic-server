@@ -896,3 +896,23 @@ Validation: 32 focused peer/verification tests, 15 existing real-QUIC tests,
 the new accepting-side timestamp test, and the two-process recovery test all
 pass (49 total; the subprocess entry point is intentionally ignored when not
 launched by its parent). Scoped rustfmt and `git diff --check` pass.
+
+
+### Crash immediately after verified sync — 2026-09-16
+
+- [x] Reproduce acknowledged-write loss in the shared WebSocket engine: import,
+  confirm ACK and GET version coverage, exit without destructors, reopen redb.
+- [x] Reproduce the same loss over real Iroh: two processes, verified outgoing
+  edit, SIGKILL receiver immediately after completion, reopen its redb.
+- [x] Flush shared sync imports before returning success, including incoming
+  Iroh imports. Flush matching-hash acknowledgements too: an earlier failed
+  flush can leave equal but volatile vectors.
+- [x] Inject a flush failure and require ERROR instead of ACK for pushes and
+  both hash-probe forms; replay the identical update without duplicate history.
+- [x] Run targeted regression gates: four server durability cases, the two-process
+  kill/reopen case, and twelve shared engine cases pass.
+
+Both failing crash tests recovered the previous name despite successful sync.
+This is process-crash evidence, not physical power-loss testing. The durability
+barrier applies to upgraded responders; existing wire version vectors do not
+prove that an older responder flushed its writes.

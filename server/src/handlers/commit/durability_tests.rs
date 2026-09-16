@@ -56,17 +56,27 @@ async fn child_acknowledges_then_exits_uncleanly() {
 
 #[tokio::test]
 async fn acknowledged_commit_survives_unclean_exit() {
+    check_acknowledged_survives(
+        "handlers::commit::durability_tests::child_acknowledges_then_exits_uncleanly",
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn acknowledged_sync_survives_unclean_exit() {
+    check_acknowledged_survives(
+        "handlers::commit::durability_tests::child_acknowledges_sync_then_exits_uncleanly",
+    )
+    .await;
+}
+
+async fn check_acknowledged_survives(child_test: &str) {
     let dir = tempfile::tempdir().unwrap();
     let log_path = dir.path().join("child.log");
     let log = std::fs::File::create(&log_path).unwrap();
     let mut child = ChildGuard(
         Command::new(std::env::current_exe().unwrap())
-            .args([
-                "handlers::commit::durability_tests::child_acknowledges_then_exits_uncleanly",
-                "--exact",
-                "--ignored",
-                "--nocapture",
-            ])
+            .args([child_test, "--exact", "--ignored", "--nocapture"])
             .env(CHILD_DIR, dir.path())
             .stdout(Stdio::from(log.try_clone().unwrap()))
             .stderr(Stdio::from(log))
@@ -234,5 +244,122 @@ async fn failed_flush_is_not_acknowledged_and_exact_retry_recovers() {
     assert_eq!(
         atomic_lib::history::versions(&saved).unwrap().len(),
         versions
+    );
+}
+
+/// Same shared engine entry point used by the WebSocket handler, with no
+/// periodic flush task that could hide an early acknowledgement.
+#[tokio::test]
+#[ignore = "subprocess entry point"]
+async fn child_acknowledges_sync_then_exits_uncleanly() {
+    use atomic_lib::{
+        db::trees::Tree,
+        loro::AtomicLoroDoc,
+        sync::{engine, protocol},
+    };
+    let dir = std::path::PathBuf::from(std::env::var(CHILD_DIR).unwrap());
+    let store = open(&dir).await;
+    let (agent, drive) = store.setup("Sync crash test").await.unwrap();
+    store.flush().unwrap();
+    let key = atomic_lib::Subject::from_raw(&drive, None).pure_id();
+    let bytes = store
+        .kv
+        .get(Tree::LoroSnapshots, key.as_bytes())
+        .unwrap()
+        .unwrap();
+    let doc = AtomicLoroDoc::from_snapshot(&bytes).unwrap();
+    doc.set_property(
+        atomic_lib::urls::NAME,
+        &atomic_lib::Value::String(UPDATED_NAME.into()),
+    )
+    .unwrap();
+    let snapshot = doc.export_snapshot();
+    let frame = protocol::encode_sync_push(&drive, &[(&drive, &snapshot)], true);
+    let mut as_agent = atomic_lib::agents::ForAgent::from(agent);
+    let result = engine::handle_frame_full(&frame, &store, &mut as_agent).await;
+    assert!(result.frames.contains(&protocol::encode_sync_ok(&drive)));
+    // The verification response must also cover what was sent.
+    let result =
+        engine::handle_frame_full(&protocol::encode_get(1, &drive), &store, &mut as_agent).await;
+    let update = protocol::decode_update(&result.frames[0][1..]).unwrap();
+    let remote = AtomicLoroDoc::vv_map_from_snapshot(&update.loro_bytes).unwrap();
+    let sent = AtomicLoroDoc::vv_map_from_snapshot(&snapshot).unwrap();
+    assert!(sent
+        .iter()
+        .all(|(peer, count)| remote.get(peer).copied().unwrap_or(0) >= *count));
+    std::fs::write(dir.join("acknowledged-subject"), drive).unwrap();
+    std::mem::forget(store);
+    std::process::exit(73);
+}
+
+#[tokio::test]
+async fn failed_sync_flush_blocks_push_and_matching_probe_acknowledgements() {
+    use atomic_lib::{
+        db::trees::Tree,
+        loro::AtomicLoroDoc,
+        sync::{engine, protocol},
+    };
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = open(dir.path()).await;
+    let (agent, drive) = store.setup("Sync flush failure").await.unwrap();
+    store.flush().unwrap();
+    let key = atomic_lib::Subject::from_raw(&drive, None).pure_id();
+    let bytes = store
+        .kv
+        .get(Tree::LoroSnapshots, key.as_bytes())
+        .unwrap()
+        .unwrap();
+    let doc = AtomicLoroDoc::from_snapshot(&bytes).unwrap();
+    doc.set_property(
+        atomic_lib::urls::NAME,
+        &atomic_lib::Value::String(UPDATED_NAME.into()),
+    )
+    .unwrap();
+    let snapshot = doc.export_snapshot();
+    let push = protocol::encode_sync_push(&drive, &[(&drive, &snapshot)], true);
+    let fail = Arc::new(AtomicBool::new(true));
+    store.kv = Arc::new(FlushGate {
+        inner: store.kv.clone(),
+        fail: fail.clone(),
+    });
+    let mut as_agent = atomic_lib::agents::ForAgent::from(agent);
+    let replies = engine::handle_frame_full(&push, &store, &mut as_agent)
+        .await
+        .frames;
+    assert!(!replies.contains(&protocol::encode_sync_ok(&drive)));
+    assert_eq!(replies[0][0], protocol::tag::ERROR);
+    // An import can be readable despite flush failure. A subsequent matching
+    // hash must not turn that volatile state into an apparent durable success.
+    let hash = engine::drive_sync_hash_for(&store, &drive, &as_agent)
+        .await
+        .unwrap();
+    for probe in [
+        protocol::encode_sync_probe(&drive, &hash),
+        protocol::encode_sync(&drive, &hash, &[], &Default::default()),
+    ] {
+        let replies = engine::handle_frame_full(&probe, &store, &mut as_agent)
+            .await
+            .frames;
+        assert_eq!(replies[0][0], protocol::tag::ERROR);
+    }
+    fail.store(false, Ordering::SeqCst);
+    for _ in 0..2 {
+        let replies = engine::handle_frame_full(&push, &store, &mut as_agent)
+            .await
+            .frames;
+        assert!(replies.contains(&protocol::encode_sync_ok(&drive)));
+    }
+    let bytes = store
+        .kv
+        .get(Tree::LoroSnapshots, key.as_bytes())
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        AtomicLoroDoc::vv_map_from_snapshot(&bytes).unwrap(),
+        AtomicLoroDoc::vv_map_from_snapshot(&snapshot).unwrap()
     );
 }

@@ -758,8 +758,11 @@ reporting completion. It uses existing GET/UPDATE snapshot responses to check
 version coverage, retrying only missing snapshots up to twice. Verification
 rounds have a 30-second deadline; failure retains local data for a later retry.
 Interleaved live frames are buffered within a fixed limit and then dispatched
-through the normal permission checks. This verifies resource delivery, not blob
-availability or a remote disk flush. The accepting side's transition to live
+through the normal permission checks. Version coverage verifies resource delivery,
+not blob availability. Current responders flush imported resource state before
+acknowledging a chunk, and flush before acknowledging a matching hash. A flush
+failure returns an error, including when the operations are already readable.
+Older responders may lack that durability barrier; vectors alone cannot prove it. The accepting side's transition to live
 mode alone no longer advances its last-synced timestamp.
 
 A push refused **as a whole** is answered with `ERROR`, `request_id = 0`,
