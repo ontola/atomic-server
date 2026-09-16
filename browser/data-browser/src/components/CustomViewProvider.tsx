@@ -122,13 +122,11 @@ export function CustomViewProvider({ children }: PropsWithChildren) {
     // onboarding — there is nothing to scope the list to. Asking anyway sent
     // `?drive=`, which the server answers with an error carrying no CORS
     // headers, so the browser logged a blocked fetch on every such page.
-    if (!drive) {
-      setLoading(false);
+    const request: Promise<PluginListResult> = drive
+      ? fetchPluginList(store, drive)
+      : Promise.resolve([new Map(), new Map()]);
 
-      return;
-    }
-
-    fetchPluginList(store, drive)
+    request
       .then(([views, manifests]) => {
         setCustomViews(views);
         setUIPluginDataMap(manifests);
