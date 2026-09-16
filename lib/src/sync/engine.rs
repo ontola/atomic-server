@@ -1226,9 +1226,7 @@ pub async fn handle_sync_vv_filtered(
                 }
             } else {
                 pull.push(subject.clone());
-                pull_from
-                    .entry(subject.clone())
-                    .or_insert_with(std::collections::HashMap::new);
+                pull_from.entry(subject.clone()).or_default();
             }
         }
     }
@@ -1260,8 +1258,12 @@ pub async fn handle_sync_vv_filtered(
             .collect();
         // `encode_sync_push_chunks` splits by entry count + byte budget and
         // marks the final frame LAST. Each frame is independent on the wire;
-        // the receiver loops reading SYNC_PUSH until it sees LAST.
-        for chunk in protocol::encode_sync_push_chunks(drive, &entries) {
+        // the receiver loops reading SYNC_PUSH until it sees LAST. Each
+        // subject's retained envelopes ride in its chunk so the receiver can
+        // attribute what it imports (`envelopes::import_envelope`).
+        let envelopes =
+            crate::envelopes::for_subjects(store, push_subjects.iter().map(String::as_str));
+        for chunk in protocol::encode_sync_push_chunks_with_envelopes(drive, &entries, &envelopes) {
             frames.push(chunk);
         }
     }
@@ -1458,6 +1460,7 @@ pub async fn import_sync_push(
 
     let mut count = 0;
     let mut blob_requests = Vec::new();
+    let mut imported: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     let base_domain = store.get_base_domain();
     let normalize = |s: &str| crate::Subject::from_raw(s, base_domain.as_deref()).pure_id();
@@ -1613,6 +1616,7 @@ pub async fn import_sync_push(
             continue;
         }
         count += 1;
+        imported.insert(snapshot_key.clone());
 
         // Check for missing blobs
         if let Ok(blob_val) = resource.get(crate::urls::BLOB) {
@@ -1634,6 +1638,23 @@ pub async fn import_sync_push(
                     }
                 }
             }
+        }
+    }
+
+    // Envelopes ride with the entries they sign. Only a subject imported
+    // above may receive one (same admission as its entry), and each is
+    // verified before it is kept; a bad one is dropped, never the push.
+    for envelope in &push.envelopes {
+        if !imported.contains(&normalize(&envelope.subject)) {
+            continue;
+        }
+        if let Err(e) =
+            crate::envelopes::import_envelope(store, &envelope.subject, &envelope.json).await
+        {
+            tracing::warn!(
+                "import_sync_push: envelope for {} rejected: {e}",
+                &envelope.subject[..envelope.subject.len().min(30)]
+            );
         }
     }
 
@@ -1758,6 +1779,67 @@ mod bootstrap_and_sub_tests {
     fn empty_push(drive: &str) -> protocol::DecodedSyncPush {
         let frame = protocol::encode_sync_push(drive, &[], true);
         protocol::decode_sync_push(&frame[1..]).unwrap()
+    }
+
+    /// A pushed envelope is kept only when it is verified and names a subject
+    /// imported from the same push; one for a subject the push did not carry
+    /// (or that was rejected) is dropped without failing the push.
+    #[tokio::test]
+    async fn push_envelopes_are_kept_only_for_imported_subjects() {
+        let source = Db::init_temp("push_envelopes_source").await.unwrap();
+        let (alice, drive) = source.setup("Alice").await.unwrap();
+        let note = source
+            .create_resource(crate::urls::FOLDER, &drive, "note", None)
+            .await
+            .unwrap();
+        let drive_snapshot = source
+            .kv
+            .get(Tree::LoroSnapshots, drive.as_bytes())
+            .unwrap()
+            .unwrap();
+        let note_snapshot = source
+            .kv
+            .get(Tree::LoroSnapshots, note.as_bytes())
+            .unwrap()
+            .unwrap();
+        let note_envelope = crate::envelopes::latest_envelope(&source, &note)
+            .unwrap()
+            .json;
+        let drive_envelope = crate::envelopes::latest_envelope(&source, &drive)
+            .unwrap()
+            .json;
+
+        // Bootstrap the drive on a second node; the note's envelope rides
+        // with it, the drive's own envelope names a subject that is not in
+        // this frame's entries.
+        let entries: [(&str, &[u8]); 2] = [(&drive, &drive_snapshot), (&note, &note_snapshot)];
+        let envelopes = [
+            (note.as_str(), note_envelope.as_str()),
+            ("did:ad:not-in-this-push", drive_envelope.as_str()),
+        ];
+        let frame = protocol::encode_sync_push_with_envelopes(&drive, &entries, &envelopes, true);
+        let push = protocol::decode_sync_push(&frame[1..]).unwrap();
+
+        let sink = Db::init_temp("push_envelopes_sink").await.unwrap();
+        let (count, _) = import_sync_push(&push, &sink, &ForAgent::from(alice), false)
+            .await
+            .unwrap();
+        assert_eq!(count, 2);
+        let kept = crate::envelopes::envelopes(&sink, &note);
+        assert_eq!(kept.len(), 1, "the imported note keeps its envelope");
+        assert_eq!(kept[0].json, note_envelope);
+        assert!(
+            crate::envelopes::envelopes(&sink, "did:ad:not-in-this-push").is_empty(),
+            "an envelope for a subject the push did not import is dropped"
+        );
+        assert!(
+            crate::envelopes::envelopes(&sink, &drive).is_empty(),
+            "nothing is stored under the envelope's own subject either"
+        );
+        let report = crate::envelopes::attribute_history(&sink, &note)
+            .await
+            .unwrap();
+        assert!(report.attributions.iter().any(|a| a.verified && a.genesis));
     }
 
     #[tokio::test]

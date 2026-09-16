@@ -87,6 +87,8 @@ export type WorkerRequest =
   | { id: number; type: 'importAllResources'; jsonArray: string }
   | { id: number; type: 'getLoroSnapshot'; subject: string }
   | { id: number; type: 'historyAttribution'; subject: string }
+  | { id: number; type: 'envelopesFor'; subjects: string[] }
+  | { id: number; type: 'importEnvelopes'; envelopes: string }
   | { id: number; type: 'putBlob'; hash: Uint8Array; data: Uint8Array }
   | { id: number; type: 'getBlob'; hash: Uint8Array }
   | { id: number; type: 'blake3Hash'; data: Uint8Array }
@@ -343,6 +345,18 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       await ensureInit();
 
       return (await db!.historyAttribution(msg.subject)) as string;
+    }
+
+    case 'envelopesFor': {
+      await ensureInit();
+
+      return db!.envelopesFor(JSON.stringify(msg.subjects)) as string;
+    }
+
+    case 'importEnvelopes': {
+      await ensureInit();
+
+      return (await db!.importEnvelopes(msg.envelopes)) as number;
     }
 
     case 'putBlob': {

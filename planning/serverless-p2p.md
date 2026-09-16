@@ -196,8 +196,10 @@ unblocked:
   envelopes; the receiver applies them as a peer `COMMIT` and does not
   fall back to the unsigned path on a bad signature. Unsigned entries
   stay admission-gated for senders that never stored the envelope.
-  Requiring an envelope on every `remove[]` still waits on
-  `Tree::Envelopes` (commit-retention floor).
+  `Tree::Envelopes` shipped (`lib/src/envelopes.rs`, #1313) and envelopes
+  now travel with `SYNC_PUSH` (2026-09-15), so requiring an envelope on
+  every `remove[]` no longer waits on anything; it is unfinished work, not a
+  blocked item.
 - [x] Pre-auth frame budget in the live read loop (the `matches!(agent,
   Public)` gate exists in `handle_stream`; mirror it in
   `register_live_peer`). (2026-09-01: the live loop now refuses every
@@ -326,7 +328,7 @@ Same-agent pairing needs no consent dialog — the key is the consent
 - Multi-peer topologies (>2 devices, mesh gossip), Reticulum/LoRa transport
   ([`reticulum-sync.md`](./reticulum-sync.md)), NAT-hostile relay policy.
 - High-audit per-change signatures
-  ([`sign-at-drain.md`](./sign-at-drain.md) § profiles).
+  ([`sign-at-drain.md`](./completed/sign-at-drain.md) § profiles).
 
 ## What gets deleted (yes, deleted — B is not "keep everything")
 

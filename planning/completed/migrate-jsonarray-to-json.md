@@ -11,7 +11,7 @@ historical. What remains of legacy tolerance is split by layer:
 JSON-*string* Loro value from older writers; the browser parser
 (`browser/lib/src/canvas-strokes.ts`) does **not** — a string payload yields
 `[]` (pinned by `canvas-strokes.test.ts`). So
-[`canvas-undo-consolidation.md`](./canvas-undo-consolidation.md)'s "legacy
+[`canvas-undo-consolidation.md`](../canvas-undo-consolidation.md)'s "legacy
 string parser dropped" is true of the browser only; pre-migration canvases
 still need the one-time rewrite it mentions.
 

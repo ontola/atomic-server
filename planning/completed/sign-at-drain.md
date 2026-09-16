@@ -15,7 +15,7 @@
 > the signature of a small inline binary **genesis certificate**
 > (`create_did_with_cert`, `lib/src/genesis.rs`; browser `mintCertDid`) —
 > shipped in `0b1b13b36` and `232aca8a0`, documented in
-> [`genesis-self-verifying.md`](./genesis-self-verifying.md). The server
+> [`genesis-self-verifying.md`](../genesis-self-verifying.md). The server
 > still dual-accepts the legacy commit-signature form for existing subjects
 > (`lib/src/commit.rs`, the `verify` fallback). Statements below that say the
 > subject is derived from, or verified via, the genesis commit are superseded
@@ -25,11 +25,11 @@
 > for DID derivation" branch: the sync signature now produces the genesis
 > cert, and the first commit is signed at drain like any other.
 >
-> Supersedes [`unified-data-layer.md`](./unified-data-layer.md) § S4a's
+> Supersedes [`unified-data-layer.md`](../unified-data-layer.md) § S4a's
 > per-step plan with a smaller, less invasive sequence.
 >
 > **Depends on:**
-> [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md)
+> [`commit-retention-and-state-certificates.md`](../commit-retention-and-state-certificates.md)
 > Phase 1 (split `validate_loro_causality` into idempotent-replay vs
 > LWW-loss) — without it, drain replays of an already-applied commit are
 > wrongly rejected and the outbox strands.
@@ -215,7 +215,7 @@ wait on. The drain itself is fire-and-forget; the user-visible
 
 ## Protocol cleanups this enables
 
-The wire format defined in [`docs/src/websockets.md`](../docs/src/websockets.md)
+The wire format defined in [`docs/src/websockets.md`](../../docs/src/websockets.md)
 doesn't _have to_ change for sign-at-drain to ship. But moving every
 property edit through one canonical signed path makes a handful of
 existing frames redundant or strictly informational. Each is independent;
@@ -233,7 +233,7 @@ None. The plan ships with the protocol unchanged.
 | `UPDATE (0x11)` `PUSH` flag (0x04)          | Distinguishes subscription broadcast from GET response | Redundant with `request_id` matching (`request_id == 0` ⇒ unsolicited). Drop. Safe today: the only readers are a `WsMessage::Update.is_push` field nobody consumes and a browser `source` label that is already inside the no-pending-request branch. Low value; not done. |
 | `SYNC_OK (0x31)`                            | Two roles, not one: "drives match" **and** the per-chunk `SYNC_PUSH` ack (`engine.rs` answers an admitted chunk with `SYNC_OK`) | **Do not fold yet (2026-09-04 finding):** the browser would be fine (an empty `SYNC_DIFF` reaches the same `finishDriveSync`), but `replicate.rs` sets `in_sync` only on `SYNC_OK`, the Iroh dial side sets `acked_in_sync` only on it, the Iroh accept side counts imported pushes by scanning for it, and the trailing `register_live_peer` has no `SYNC_DIFF` equivalent. Fold only together with those four call sites. |
 | `0x36` reserved slot                        | Held since QUERY_UPDATE retirement                     | Reclaim.                                                                                                                                                                         |
-| `SUBSCRIBE` / `SUBSCRIBE_QUERY` text frames | Two text-frame registrars + `SUB (0x20)` binary        | Fold into one binary `SUBSCRIBE (0x20)` with a `{scope: drive \| subject \| filter, target}` body, per [`unify-subscription-primitives.md`](./unify-subscription-primitives.md). |
+| `SUBSCRIBE` / `SUBSCRIBE_QUERY` text frames | Two text-frame registrars + `SUB (0x20)` binary        | Fold into one binary `SUBSCRIBE (0x20)` with a `{scope: drive \| subject \| filter, target}` body, per [`unify-subscription-primitives.md`](../unify-subscription-primitives.md). |
 | `COMMIT_OK (0x14)` body                     | ✅ **Shipped 2026-09-04.** Slim form `[request_id] [commit_id]` for a client whose `HELLO` lists `commit-ok-slim` (browser and `WsClient` both do); the full JSON stays for older clients. Both decoders read both forms. | Done. |
 
 ### Frame-count math (honest)
@@ -341,7 +341,7 @@ Content-addressed blob sync is orthogonal to commit signing. Unchanged.
 ### Removing `previousCommit`
 
 Demoted to optional audit metadata per
-[`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md)
+[`commit-retention-and-state-certificates.md`](../commit-retention-and-state-certificates.md)
 lines 196–200 and 420–429, but the field still rides on every Commit
 today and that doesn't change here.
 
@@ -770,8 +770,8 @@ transitions intact.
 
 | Doc                                                                                          | Relationship                                                                                                                                                                        |
 | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md) | Phase 1 (idempotency) is the prereq. Defines that batched Commits are allowed (line 307-309). High-audit profile is an extension of that doc's `retention=full` Loro-aware variant. |
-| [`unified-data-layer.md`](./unified-data-layer.md)                                           | Supersedes § S4a's step-by-step plan with this smaller sequence. § S4 (LocalOutbox as the durable queue) stays the right outbox abstraction, just with a simpler entry shape.       |
-| [`unified-sync.md`](./unified-sync.md)                                                       | `DriveSyncState` VV exchange complements drain-time batching: it's the "what's new from peer to peer" side.                                                                         |
-| [`authorization-sync.md`](./authorization-sync.md)                                           | High-audit profile's per-change signatures interlock with cross-agent grant-chain verification. Low-bw profile defers grant-chain checks to the batched Commit boundary.            |
-| [`sync.md`](./sync.md)                                                                       | `COMMIT` frame is unchanged; this plan changes only _when_ one is built, not the wire format.                                                                                       |
+| [`commit-retention-and-state-certificates.md`](../commit-retention-and-state-certificates.md) | Phase 1 (idempotency) is the prereq. Defines that batched Commits are allowed (line 307-309). High-audit profile is an extension of that doc's `retention=full` Loro-aware variant. |
+| [`unified-data-layer.md`](../unified-data-layer.md)                                           | Supersedes § S4a's step-by-step plan with this smaller sequence. § S4 (LocalOutbox as the durable queue) stays the right outbox abstraction, just with a simpler entry shape.       |
+| [`unified-sync.md`](../unified-sync.md)                                                       | `DriveSyncState` VV exchange complements drain-time batching: it's the "what's new from peer to peer" side.                                                                         |
+| [`authorization-sync.md`](../authorization-sync.md)                                           | High-audit profile's per-change signatures interlock with cross-agent grant-chain verification. Low-bw profile defers grant-chain checks to the batched Commit boundary.            |
+| [`sync.md`](../sync.md)                                                                       | `COMMIT` frame is unchanged; this plan changes only _when_ one is built, not the wire format.                                                                                       |

@@ -276,6 +276,11 @@ impl DriveFilters {
     }
 }
 
+/// Crash data-loss bound for file-backed stores: one fsync per interval,
+/// amortised across every commit in the window. See `Db::spawn_durable_flush`.
+#[cfg(not(target_arch = "wasm32"))]
+pub const DURABLE_FLUSH_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+
 /// The Db is a persistent on-disk Atomic Data store.
 /// It's an implementation of [Storelike].
 /// It uses a [KvStore] backend for key-value storage (sled, BTreeMap, etc.).
@@ -348,8 +353,11 @@ pub struct Db {
     /// peer that never responds would otherwise leak one entry per missing
     /// blob forever, so `note_pending_blob_request` also lazily prunes
     /// anything older than `PENDING_BLOB_REQUEST_TTL`.
-    pending_blob_requests: Arc<RwLock<HashMap<[u8; 32], (String, web_time::Instant)>>>,
+    pending_blob_requests: PendingBlobRequests,
 }
+
+/// Blob hash → (subject that references it, when it was requested).
+type PendingBlobRequests = Arc<RwLock<HashMap<[u8; 32], (String, web_time::Instant)>>>;
 
 /// How long an unanswered `BLOB_REQUEST` stays in `pending_blob_requests`
 /// before lazy pruning drops it. Generous relative to a realistic peer
@@ -640,7 +648,34 @@ impl Db {
             .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
         crate::search::maybe_rebuild_search_index(&store)?;
+        store.spawn_durable_flush(DURABLE_FLUSH_INTERVAL);
         Ok(store)
+    }
+
+    /// Make `Durability::None` commits durable on a fixed cadence.
+    ///
+    /// Every redb write skips the fsync for throughput and only becomes
+    /// durable at the next `flush`. This thread is that flush. It belongs to
+    /// the library, not the host, so that no binding can open a file store
+    /// and forget it: the Flutter app did exactly that and lost every edit
+    /// since the last drive switch on an app kill. The tick is cheap when
+    /// idle (`RedbStore::flush` returns early unless something was written)
+    /// and blocks on fsync when not, hence a dedicated OS thread rather than
+    /// a tokio task. It holds only a `Weak` to the store and exits once the
+    /// last `Db` clone is dropped.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn spawn_durable_flush(&self, interval: std::time::Duration) {
+        let kv: std::sync::Weak<dyn KvStore> = Arc::downgrade(&self.kv);
+        std::thread::Builder::new()
+            .name("durable-flush".into())
+            .spawn(move || loop {
+                std::thread::sleep(interval);
+                let Some(kv) = kv.upgrade() else { break };
+                if let Err(e) = kv.flush() {
+                    tracing::warn!("periodic durable flush failed: {e}");
+                }
+            })
+            .expect("spawn durable-flush thread");
     }
 
     #[cfg(all(feature = "db-redb", feature = "db-sled", not(target_arch = "wasm32")))]
@@ -732,9 +767,9 @@ impl Db {
 
         // Migrate other metadata trees
         for tree in [Tree::PluginMeta, Tree::DriveMapping, Tree::DidMapping] {
-            for item in sled_store.iter_tree(tree.clone()) {
+            for item in sled_store.iter_tree(tree) {
                 let (key, val) = item?;
-                redb_store.insert(tree.clone(), &key, &val)?;
+                redb_store.insert(tree, &key, &val)?;
             }
         }
 

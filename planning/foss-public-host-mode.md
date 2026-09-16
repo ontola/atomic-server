@@ -383,7 +383,9 @@ Tests (flow):
 
 ### Phase 3 — abuse leftovers
 
-- Rate-limit unknown-agent `/commit` and `/blob`.
+- [x] Rate-limit `/commit` and `/blob` (2026-09-15): `server/src/rate_limit.rs`,
+  per-agent and per-peer token buckets on every write endpoint including the
+  WS `COMMIT` frame; `--write-rate-limit` / `--anonymous-write-rate-limit`.
 - Optional: refuse Iroh streams whose AUTH agent has no `read` on any
   hosted Drive.
 - Docs: installation “going public” section; FAQ “how do I put this on

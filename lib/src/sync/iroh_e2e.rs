@@ -591,7 +591,7 @@ async fn e2e_managed_node_replicates_missing_drive() {
     // ...reports usage for it...
     let usage = pair
         .db_b
-        .per_drive_usage(&[pair.drive.clone()])
+        .per_drive_usage(std::slice::from_ref(&pair.drive))
         .await
         .unwrap();
     let row = usage

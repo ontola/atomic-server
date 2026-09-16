@@ -37,6 +37,19 @@ pub struct Opts {
     #[clap(long, default_value = "latest", env = "ATOMIC_ENVELOPE_RETENTION")]
     pub envelope_retention: String,
 
+    /// How many write requests per minute one signed agent may make (commits
+    /// over HTTP or WebSocket, uploads, blob puts, peer sync pushes, resource
+    /// posts) before the server answers `429 Too Many Requests`. The budget
+    /// refills continuously, so a burst up to this size is fine. `0` disables
+    /// the limit.
+    #[clap(long, default_value = "6000", env = "ATOMIC_WRITE_RATE_LIMIT")]
+    pub write_rate_limit: u32,
+
+    /// The same budget for write requests that carry no signed agent, keyed by
+    /// the connecting peer address. `0` disables the limit.
+    #[clap(long, default_value = "60", env = "ATOMIC_ANONYMOUS_WRITE_RATE_LIMIT")]
+    pub anonymous_write_rate_limit: u32,
+
     /// The origin domain where the app is hosted, without the port and schema values.
     #[clap(long, default_value = "localhost", env = "ATOMIC_DOMAIN")]
     pub domain: String,

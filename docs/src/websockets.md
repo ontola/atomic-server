@@ -241,10 +241,21 @@ The encoder always emits all four keys; decoders default `remove` and
 [0x33] [drive_len: u16] [drive_utf8] [flags: u8] [count: u16] [entry × count]
 
 entry := [subject_len: u16] [subject_utf8] [bytes_len: u32] [loro_bytes...]
+
+# only when flag 0x02 ENVELOPES is set, after the last entry:
+[env_count: u16] [envelope × env_count]
+envelope := [subject_len: u16] [subject_utf8] [json_len: u32] [commit_json_ad_utf8]
 ```
 
 Flags: `0x01` `LAST` marks the final chunk of a run. See
-[Chunking](#sync_push-chunking-and-acknowledgement).
+[Chunking](#sync_push-chunking-and-acknowledgement). `0x02` `ENVELOPES`
+says the frame ends with the retained signed envelopes of the subjects it
+pushes (the commit JSON-AD exactly as `/commit` accepted it; one per subject
+on a `latest` node, every one on `all`), so the receiver can attribute the
+history it imports. The receiver verifies each envelope's signature and that
+it names a subject imported from the same frame before keeping it; a bad
+envelope is dropped, never the push. A decoder that predates the flag stops
+after `count` entries and does not see the section.
 
 ### HELLO (0x37)
 

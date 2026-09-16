@@ -95,6 +95,7 @@ pub async fn handle_forget_peer(
     // so the signature check matches what it signed.
     let full_url = format!("{}{}", origin, req.uri());
     let for_agent = get_client_agent(req.headers(), &appstate, &full_url).await?;
+    crate::helpers::enforce_write_rate_limit(&appstate, &req, &for_agent)?;
 
     let node = params.node.clone();
     if !is_node_admin(&appstate, &for_agent)

@@ -1,6 +1,14 @@
 # Commits as State Certificates
 
-> **Status:** Proposal (2026-05; per-resource retention added 2026-05-29).
+> **Status:** Superseded (2026-09-15). Phase 1 (idempotent replay,
+> `lib/src/commit.rs`) and Phase 2.5 (intrinsic `createdAt`/`createdBy` via the
+> genesis cert) shipped; the retention design was replaced by envelope-on-resource
+> (`Tree::Envelopes`, `--envelope-retention latest|all`) and its remaining work
+> lives in [`auditability-loro-history.md`](./auditability-loro-history.md).
+> Still open from this document only: the `stateHash` certificate and a
+> per-resource `retention` propval. Everything else below is history.
+>
+> Original status: Proposal (2026-05; per-resource retention added 2026-05-29).
 >
 > **Decision (accepted 2026-09-01):** the retention floor is envelope-on-resource
 > ([`completed/commit-retention-floor-decision.md`](./completed/commit-retention-floor-decision.md));
@@ -371,7 +379,7 @@ finely the kept history is attributable*). They compose:
 
 Most resources want `none` or `recent`. Legal/regulated resources opt into
 `full` + per-change signing. The per-change profile is specified in
-[`sign-at-drain.md`](./sign-at-drain.md) ("high-audit profile"); it is not a
+[`sign-at-drain.md`](./completed/sign-at-drain.md) ("high-audit profile"); it is not a
 prerequisite for per-resource retention and can land later.
 
 ### Mechanism: Loro shallow snapshots

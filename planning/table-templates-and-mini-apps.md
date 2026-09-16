@@ -1,6 +1,6 @@
 # Table Templates and Mini-Apps
 
-> **Status:** Partial. Steps 3 to 6 shipped 2026-07-31 (derived and computed columns, aggregation with breakdowns, assistant tools, the template catalogue). Remaining: derived columns usable in filters and aggregates.
+> **Status:** Complete (reconciled 2026-09-15). Steps 3 to 6 shipped 2026-07-31 (derived and computed columns, aggregation with breakdowns, assistant tools, the template catalogue). Derived columns in filters and aggregates shipped too (`tableFiltering.ts` `derivedFilterKey`, `TableTotalsFooter.tsx`). Kept as the as-built record for the template/mini-app model; the template product direction continues in [`unified-templates.md`](./unified-templates.md).
 
 ## Status
 
@@ -16,7 +16,7 @@ making derived columns first-class in filters and aggregates.
 We have three ways to ship "an app that is mostly a table":
 
 1. **A table template** — a data shape offered in the New Table dialog
-   (`tableTemplates.ts`). Today: Blank, Issue Tracker. Pure config: a row
+   (`tableTemplates.ts`). Today: thirteen, from Blank to Inventory. Pure config: a row
    class, its columns, and some views. No code.
 2. **A built-in view kind** — a new renderer in `TablePage`
    (`table` / `kanban` / `calendar` / `timer`). Real code, shipped in the

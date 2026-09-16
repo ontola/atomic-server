@@ -7,6 +7,40 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Desktop: the app window now runs under a Content Security Policy
+  (`desktop/tauri.conf.json`; security audit B7). Scripts only from the
+  bundle plus WebAssembly, connections to the embedded and remote servers
+  over HTTP and WebSocket, Google Fonts, no plugins or objects. Tauri hashes
+  the bundle's inline scripts itself, so `dangerousDisableAssetCspModification`
+  is off. A script injected through synced content can no longer reach the
+  IPC surface.
+- CI: a `v*` tag now publishes `@tomic/*` to npm through Trusted Publishing
+  (`release.yml` `npm` job). Tags only published crates.io and GitHub assets
+  before, which is why npm `latest` stayed on 0.40.0 and `beta` on
+  0.41.0-beta.0 through v0.41.0-beta.7. Pre-releases get the `beta` (or
+  `rc`, …) dist-tag, not `latest`; `@tomic/plugin` and `@tomic/edit-mode`
+  are marked public for their first publication.
+- Signed history now replicates. `SYNC_PUSH` carries the retained envelopes
+  of the subjects it pushes (flag `0x02 ENVELOPES`, a trailer old decoders
+  never read) over WebSocket, Iroh and browser peer links, and Cloud Vault
+  packs carry them per entry. Receivers verify each envelope's signature and
+  subject before keeping it, honouring their own `--envelope-retention`. A
+  restored or newly invited device therefore shows who signed each change
+  instead of "Unattributed" (`planning/auditability-loro-history.md`).
+- Rate-limit the write endpoints. `POST /commit` (HTTP and the WebSocket
+  `COMMIT` frame), `/upload`, `PUT /blob`, `/iroh-sync`, `/forget-peer` and
+  resource posts spend a per-agent token (`--write-rate-limit`, default 6000
+  per minute, `ATOMIC_WRITE_RATE_LIMIT`); requests without a signed agent
+  share a per-peer-address budget (`--anonymous-write-rate-limit`, default
+  60 per minute). Over budget answers `429 Too Many Requests` with a
+  `Retry-After`; `0` disables either limit.
+- Fix: writes made through a directly opened file store (the Flutter/Android
+  binding) were never made durable. Every redb commit skips the fsync and
+  relies on a periodic flush that only the server, desktop and WASM hosts
+  ran, so on Android an app kill rolled back every edit since the last drive
+  switch. `Db::init_redb_file` now owns the 100ms durable-flush tick for every
+  binding, and an idle tick no longer writes anything.
+
 ## [v0.41.0-beta.7] - 2026-09-12
 
 - Store hosted files in S3 without silently falling back to node-local storage.

@@ -1225,6 +1225,16 @@ export class WSClient {
             if (resource) this.checkForMissingBlobs(resource);
           }
 
+          // The signed envelopes of what was just applied, so History can
+          // attribute it locally. Verified in WASM before being kept; a
+          // client without a database simply asks the server later.
+          if (msg.envelopes.length > 0) {
+            this.store
+              .getClientDb()
+              ?.importEnvelopes(msg.envelopes)
+              .catch(e => console.warn('[WS] envelope import failed:', e));
+          }
+
           // Only mark the drive sync as finished on the final chunk —
           // SYNC_PUSH is chunked and intermediate chunks shouldn't trigger
           // the "done" UI state.
@@ -1858,12 +1868,23 @@ export class WSClient {
     if (!current()) return;
 
     if (entries.length > 0) {
+      // Our retained envelopes ride with the snapshots, so the server can
+      // attribute history it never saw applied live.
+      const envelopes = clientDb
+        ? await clientDb.envelopesFor(entries.map(e => e.subject))
+        : {};
+      if (!current()) return;
+
       if (this.readyState !== WebSocket.OPEN) {
         return;
       }
 
       try {
-        for (const frame of encodeSyncPushChunks(diff.drive, entries)) {
+        for (const frame of encodeSyncPushChunks(
+          diff.drive,
+          entries,
+          envelopes,
+        )) {
           this.sendBinary(frame);
         }
       } catch (e) {

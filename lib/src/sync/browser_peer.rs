@@ -45,7 +45,7 @@ impl BrowserPeerSession {
     }
 
     fn in_drive(&self, resource: &Resource) -> bool {
-        resource.get_subject().to_string() == self.drive
+        *resource.get_subject() == self.drive
             || resource
                 .get(crate::urls::DRIVE_PROP)
                 .is_ok_and(|value| value.to_string() == self.drive)
@@ -255,8 +255,14 @@ impl BrowserPeerSession {
                         .iter()
                         .map(|(s, b)| (s.as_str(), b.as_slice()))
                         .collect();
+                    let envelopes =
+                        crate::envelopes::for_subjects(db, entries.iter().map(|(s, _)| s.as_str()));
                     out.frames
-                        .extend(protocol::encode_sync_push_chunks(&self.drive, &refs));
+                        .extend(protocol::encode_sync_push_chunks_with_envelopes(
+                            &self.drive,
+                            &refs,
+                            &envelopes,
+                        ));
                 }
             }
             protocol::tag::COMMIT => {
@@ -275,7 +281,7 @@ impl BrowserPeerSession {
                 for subject in subjects {
                     let resource = db.get_resource(&subject.as_str().into()).await?;
                     if let Ok(blob) = resource.get(crate::urls::BLOB) {
-                        if Subject::from(blob.to_string()).blob_hash_hex().as_deref()
+                        if Subject::from(blob.to_string()).blob_hash_hex()
                             == Some(hex::encode(hash).as_str())
                             && crate::hierarchy::check_read(db, &resource, &self.agent)
                                 .await

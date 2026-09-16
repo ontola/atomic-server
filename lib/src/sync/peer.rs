@@ -1733,8 +1733,14 @@ pub async fn sync_drive_with_peer_using_outcome(
                                     .iter()
                                     .map(|(s, b)| (s.as_str(), b.as_slice()))
                                     .collect();
-                                for chunk in super::protocol::encode_sync_push_chunks(drive, &refs)
-                                {
+                                for chunk in super::protocol::encode_sync_push_chunks_with_envelopes(
+                                    drive,
+                                    &refs,
+                                    &crate::envelopes::for_subjects(
+                                        store,
+                                        entries.iter().map(|(s, _)| s.as_str()),
+                                    ),
+                                ) {
                                     send.write_u32(chunk.len() as u32).await.map_err(io_err)?;
                                     send.write_all(&chunk).await.map_err(io_err)?;
                                 }
@@ -1820,7 +1826,14 @@ pub async fn sync_drive_with_peer_using_outcome(
                             .iter()
                             .map(|(s, b)| (s.as_str(), b.as_slice()))
                             .collect();
-                        for chunk in super::protocol::encode_sync_push_chunks(drive, &refs) {
+                        for chunk in super::protocol::encode_sync_push_chunks_with_envelopes(
+                            drive,
+                            &refs,
+                            &crate::envelopes::for_subjects(
+                                store,
+                                entries.iter().map(|(s, _)| s.as_str()),
+                            ),
+                        ) {
                             send.write_u32(chunk.len() as u32).await.map_err(io_err)?;
                             send.write_all(&chunk).await.map_err(io_err)?;
                         }

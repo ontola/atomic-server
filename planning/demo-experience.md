@@ -247,32 +247,13 @@ and loses the property that the demo ships entirely as static assets.
 
 | Piece | File | Role |
 | --- | --- | --- |
-| Local-only drive flag | `lib/src/store.ts`, `lib/src/local-outbox.ts` | suppress outbox / WS / server fetch for demo drive subjects |
-| Presence inject hook | `lib/src/presence.ts` | `injectEntry` / `removeEntry` on `DrivePresenceManager` |
-| Demo template | `data-browser/src/components/Template/templates/demoWorkspace.ts` | JSON-AD starter data + persona agents + lorodoc seeds |
-| Client-side apply | `data-browser/src/components/Template/` | JSONADParser → `applyIncoming` path (no server import) |
-| Director | `data-browser/src/demo/director.ts` | scenario runner: steps → applyIncoming / presence writes |
-| Scenario | `data-browser/src/demo/scenario.ts` | declarative timeline, arc with wind-down |
-| Entry point | `data-browser/src/views/getting-started/GettingStartedFlow.tsx` | "demo team vs empty" choice after identity creation |
+| Demo template | `data-browser/src/chunks/Demo/demoWorkspace.ts` | JSON-AD starter data + persona agents + lorodoc seeds |
+| Director | `data-browser/src/chunks/Demo/DemoDirector.ts` | scenario runner: steps → applyIncoming / presence writes |
+| Entry | `data-browser/src/chunks/Demo/startDemo.ts`, `routes/DemoRoute.tsx` | `/app/demo` and the onboarding choice |
 
-## TODO
-
-- [ ] Verify `sync-import` state: can a local drive be promoted to a
-      server-synced drive today? (shapes the exit ramp)
-- [ ] Lib: local-only drive flag (outbox no-op, no WS subscribe, no
-      server fetch) + tests.
-- [ ] Lib: `DrivePresenceManager.injectEntry`/`removeEntry` + tests.
-- [ ] Template: demo workspace JSON-AD (folders, docs with lorodoc
-      seeds, table, canvas, files, persona agents, rights for the
-      user's agent).
-- [ ] Client-side template apply (JSONADParser → applyIncoming),
-      demo drive minted via `newResource` genesis.
-- [ ] Director + scenario v1 ("Your first day", see Scenario
-      section): fixed timeline beats + the three reactive triggers +
-      no-follow fallback, wind-down arc, visibility pause.
-- [ ] Onboarding choice in `GettingStartedFlow`.
-- [ ] Verify live: fresh profile → demo drive feels alive; user can
-      edit the doc being typed in; follow a persona; delete things.
+The v1 TODO list (local-only drive flag, presence inject hook, client-side
+template apply, director, onboarding choice, live verification) shipped in
+full and was removed from this document on 2026-09-15.
 
 ## v2 content feedback (Joep, July 2026) — BUILT
 

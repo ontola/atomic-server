@@ -6,10 +6,12 @@
 > → WASM client-db → React `useCollection`). UI lives in
 > [`table-view-filters.md`](./table-view-filters.md).
 >
-> **Scope (noted 2026-09-01):** "shipped" covers queries and collections. WS
-> **query subscriptions** are still a single `property=value` pair
-> (`server/src/commit_monitor.rs` `SUBSCRIBE_QUERY` → `QueryFilter::single`;
-> `QuerySubscriptionJSON` has no `filters` field), as
+> **Scope (noted 2026-09-01, amended 2026-09-15):** "shipped" covers queries and
+> collections. The `SUBSCRIBE_QUERY` frame this note used to describe was
+> removed on 2026-09-04 (one `SUB <subject>` frame, see
+> [`completed/`](./completed/) `unify-subscription-primitives` history in
+> [`unify-subscription-primitives.md`](./unify-subscription-primitives.md));
+> there is no multi-filter query subscription on the wire, as
 > [`social-apps.md`](./social-apps.md) says. The index-side matcher already
 > ANDs (`query_index.rs` `resource_matches_filter`); the wire frame does not
 > expose it.

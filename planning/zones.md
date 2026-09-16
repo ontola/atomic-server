@@ -5,7 +5,7 @@
 chain is hybrid/additive, not replace-and-replay
 ([`completed/authority-unit-decision.md`](./completed/authority-unit-decision.md)).
 Successor-in-spirit to the drive-stamp mechanics in
-[`commit-fanout-drive-isolation.md`](./commit-fanout-drive-isolation.md) and the
+[`commit-fanout-drive-isolation.md`](./completed/commit-fanout-drive-isolation.md) and the
 authority-replay ideas in [`authorization-sync.md`](./authorization-sync.md).
 Motivated by the social overlay a recipes/social app needs (feeds, sharing,
 likes, comments across users), but the model is general.
