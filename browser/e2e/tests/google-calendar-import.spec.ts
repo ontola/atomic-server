@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { enableIntegrationDiscovery } from './integration-settings-utils';
+import { waitForClientDbFlush } from './test-utils';
 const FRONTEND_URL = process.env.FRONTEND_URL ?? 'http://localhost:6747';
 const SERVER_URL = process.env.SERVER_URL ?? 'http://localhost:9883';
 test.use({ serviceWorkers: 'block' });
@@ -11,7 +12,6 @@ for (const keepSeries of [false, true]) {
     page,
   }) => {
     test.setTimeout(180_000);
-    await page.clock.install();
     // The mock proxy is an ES module; a static import would make this spec
     // ESM too, and then it could not import the CommonJS test helpers.
     const { mockProxy } =
@@ -57,6 +57,20 @@ for (const keepSeries of [false, true]) {
     const proxyOrigin = `http://127.0.0.1:${port}`;
     const configuredProxy =
       process.env.VITE_INTEGRATION_PROXY_URL || 'https://localthought.io';
+    // Before anything is intercepted. Turning on API-plugin discovery writes a
+    // preference to the private drive, and the routes below cut the server
+    // off — with the write blocked the toggle never sticks and the Calendar
+    // card is never listed.
+    await page.goto(`${FRONTEND_URL}/app/dev-drive`);
+    await page.waitForURL(/app\/show\?subject=/, { timeout: 60000 });
+    const driveUrl = page.url();
+    await enableIntegrationDiscovery(page, true);
+    await page.goto(new URL('/app/integrations', page.url()).href);
+    await page
+      .locator('[data-integration="devonian-google-calendar"]')
+      .waitFor({ timeout: 30000 });
+    await waitForClientDbFlush(page);
+    await page.clock.install();
     await page.routeWebSocket('**/*', socket => socket.close());
     const forbidden: string[] = [];
     const providerMethods: string[] = [];
@@ -108,9 +122,12 @@ for (const keepSeries of [false, true]) {
     });
 
     try {
-      await page.goto(`${FRONTEND_URL}/app/dev-drive`);
+      // Open the drive by subject, not through `/app/dev-drive`: that route
+      // bootstraps the dev drive, and with the server gone it rebuilds the
+      // ontology empty — the visibility preference then reads as unset and
+      // the Calendar card is not listed.
+      await page.goto(driveUrl);
       await page.waitForURL(/app\/show\?subject=/, { timeout: 60000 });
-      await enableIntegrationDiscovery(page, true);
 
       const setup = async () => {
         await page
