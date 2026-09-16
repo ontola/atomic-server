@@ -2408,6 +2408,16 @@ Iroh completion checks:
   becoming live leaves an unverified timestamp unchanged, while a later matching
   probe advances it.
 
+
+Sync crash durability: `cross_process_sync::verified_sync_survives_receiver_kill`
+now kills the receiver immediately after the sender reports verified completion
+and reopens its redb, checking both resource content and Loro version coverage.
+The earlier single in-process receipt read is superseded by this crash boundary.
+Server `handlers::commit::durability_tests` exercises the shared WS sync handler
+without a periodic flush: chunk ACK plus GET coverage followed by unclean exit
+must survive reopening. Injected flush failures block both chunk ACKs and
+matching hash ACKs; exact retries retain the same CRDT version.
+
 ## Drive root file drops
 
 `views/Drive/DrivePage.test.tsx` renders the drive page with its real dropzone
