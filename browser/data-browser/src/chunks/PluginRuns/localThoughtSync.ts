@@ -40,6 +40,8 @@ export interface LocalThoughtInstallation {
   syncing?: boolean;
   lastSuccess?: number;
   error?: string;
+  /** Set alongside `lastSuccess`: the sync completed, but not with everything. */
+  warning?: string;
 }
 const key = (entry: LocalThoughtInstallation) =>
   prefix + JSON.stringify([entry.drive, entry.actor, entry.folder]);
@@ -133,7 +135,12 @@ export async function refreshLocalThought(
 
         try {
           assertOwner(store, entry);
-          entry = { ...entry, syncing: true, error: undefined };
+          entry = {
+            ...entry,
+            syncing: true,
+            error: undefined,
+            warning: undefined,
+          };
           saveInstallation(entry);
           const response: FetchedPlatform = await browserIntegrations(
             entry.origin,
@@ -146,6 +153,9 @@ export async function refreshLocalThought(
           );
           if (response.platform !== entry.platform)
             throw new Error('Imported platform did not match this connection');
+          const incomplete = response.errors?.length
+            ? response.errors.join('; ')
+            : undefined;
           const extension = localThoughtExtension(
             entry.platform,
             entry.extension,
@@ -191,7 +201,7 @@ export async function refreshLocalThought(
             throw new Error(
               'Some records could not be synced. Open the folder again to retry.',
             );
-          entry = { ...entry, lastSuccess: Date.now() };
+          entry = { ...entry, lastSuccess: Date.now(), warning: incomplete };
         } catch (error) {
           entry = { ...entry, error: String(error) };
         } finally {

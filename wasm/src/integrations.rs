@@ -95,20 +95,24 @@ pub async fn fetch_integration(
         .sync_document(&doc, &storage)
         .await
         .map_err(js_error)?;
-    if !report.errors.is_empty() {
+    let ontology = storage.ontology.lock().unwrap();
+    let records = storage.records.lock().unwrap();
+    // A partial fetch (e.g. a host-imposed record cap) still has real
+    // records worth previewing; only a wholly failed sync has nothing to
+    // show for it.
+    if records.is_empty() && !report.errors.is_empty() {
         return Err(js_error(format!(
             "Import incomplete; no changes proposed: {}",
             report.errors.join("; ")
         )));
     }
-    let ontology = storage.ontology.lock().unwrap();
-    let records = storage.records.lock().unwrap();
     preview(
         ontology
             .as_ref()
             .ok_or_else(|| js_error("Missing ontology"))?,
         &records,
         &platform,
+        &report.errors,
     )
     .map(|v| v.to_string())
     .map_err(js_error)
@@ -189,7 +193,12 @@ fn typed_value(value: &Value, datatype: Option<&str>) -> Result<Option<Value>> {
     }
     Ok(Some(value.clone()))
 }
-fn preview(ontology: &Ontology, records: &[Record], platform: &str) -> Result<Value> {
+fn preview(
+    ontology: &Ontology,
+    records: &[Record],
+    platform: &str,
+    errors: &[String],
+) -> Result<Value> {
     let field_terms: BTreeMap<_, _> = ontology
         .terms
         .iter()
@@ -211,6 +220,6 @@ fn preview(ontology: &Ontology, records: &[Record], platform: &str) -> Result<Va
         output.push(json!({"resource":ontology_shortname(&record.resource),"namespace":record.namespace,"id":record.id,"values":values,"name":record.value.get("title").or_else(||record.value.get("summary")).or_else(||record.value.get("name")).cloned().unwrap_or(json!(record.id))}));
     }
     Ok(
-        json!({"platform":platform,"ontology":{"description":ontology.description,"terms":terms},"records":output}),
+        json!({"platform":platform,"ontology":{"description":ontology.description,"terms":terms},"records":output,"errors":errors}),
     )
 }

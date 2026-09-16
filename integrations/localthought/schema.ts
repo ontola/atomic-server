@@ -21,6 +21,8 @@ export interface FetchedPlatform {
   platform: string;
   ontology: { description: string; terms: Term[] };
   records: FetchedRecord[];
+  /** Non-fatal problems from a partial fetch, e.g. a host-imposed record cap. */
+  errors?: string[];
 }
 export const termKey = (platform: string, term: Pick<Term, "kind" | "shortname">) =>
   `lt-${platform}-${term.kind}-${term.shortname}`;
