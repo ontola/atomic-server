@@ -221,7 +221,7 @@ const AutoscrollListItem: React.FC<
 };
 
 const StyledPopover = styled(Popover)`
-  margin-top: ${p => p.theme.size(2)};
+  margin-top: var(--space-2);
 `;
 
 const TagPopoverContentWrapper = styled.div`
@@ -243,15 +243,15 @@ const TagList = styled.ul`
 
     & label {
       height: 100%;
-      padding: ${p => p.theme.size(2)};
-      border-radius: ${p => p.theme.radius};
+      padding: var(--space-2);
+      border-radius: var(--radius-md);
       display: flex;
       align-items: center;
       gap: 1ch;
       cursor: pointer;
 
       &[data-selected='true'] {
-        background-color: ${p => p.theme.colors.mainSelectedBg};
+        background-color: var(--color-accent-subtle);
       }
 
       & ${() => OpenTagButton} {
@@ -276,13 +276,13 @@ const OpenTagButton = styled.button`
   padding: 0.2em;
   border: none;
   background: transparent;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   cursor: pointer;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   font-size: 0.7em;
 
   &:hover {
-    color: ${p => p.theme.colors.text};
+    color: var(--color-text);
   }
 `;
 
@@ -290,5 +290,5 @@ const EmptyMessage = styled.div`
   height: 100%;
   display: grid;
   place-items: center;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;

@@ -153,7 +153,7 @@ export const About: React.FunctionComponent = () => {
 const Tagline = styled.p`
   font-size: 1.3rem;
   font-style: italic;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   margin-bottom: 0.5rem;
 `;
 
@@ -175,14 +175,14 @@ const Feature = styled.li`
   flex-direction: column;
   gap: 0.1rem;
   padding-inline-start: 1rem;
-  border-inline-start: 3px solid ${p => p.theme.colors.main};
+  border-inline-start: 3px solid var(--color-accent);
 
   strong {
-    color: ${p => p.theme.colors.text};
+    color: var(--color-text);
   }
 
   span {
-    color: ${p => p.theme.colors.textLight};
+    color: var(--color-text-subtle);
   }
 `;
 
@@ -198,10 +198,10 @@ const LinkCard = styled.a`
   align-items: center;
   gap: 0.85rem;
   padding: 1rem;
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg};
-  color: ${p => p.theme.colors.text};
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg);
+  color: var(--color-text);
   text-decoration: none;
   transition:
     border-color 0.1s ease,
@@ -209,14 +209,14 @@ const LinkCard = styled.a`
 
   &:hover,
   &:focus-visible {
-    border-color: ${p => p.theme.colors.main};
+    border-color: var(--color-accent);
     transform: translateY(-2px);
   }
 `;
 
 const LinkIcon = styled.span`
   font-size: 1.6rem;
-  color: ${p => p.theme.colors.main};
+  color: var(--color-accent);
   display: flex;
 `;
 
@@ -231,7 +231,7 @@ const LinkLabel = styled.span`
 
 const LinkDescription = styled.span`
   font-size: 0.9rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const BuildInfo = styled.footer`
@@ -240,13 +240,13 @@ const BuildInfo = styled.footer`
   align-items: center;
   gap: 0.5rem 0.75rem;
   padding-top: 1.5rem;
-  border-top: 1px solid ${p => p.theme.colors.bg2};
-  color: ${p => p.theme.colors.textLight};
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-subtle);
   font-size: 0.85rem;
 `;
 
 const Mono = styled.code`
-  background-color: ${p => p.theme.colors.bg1};
-  border-radius: ${p => p.theme.radius};
+  background-color: var(--color-bg-subtle);
+  border-radius: var(--radius-md);
   padding: 0.1rem 0.4rem;
 `;

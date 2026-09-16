@@ -74,7 +74,7 @@ const Wrap = styled.div`
   flex-direction: column;
   gap: 1rem;
   padding: 1rem;
-  border-top: 1px solid ${p => p.theme.colors.bg2};
+  border-top: 1px solid var(--color-border);
 `;
 
 const Section = styled.div`
@@ -85,7 +85,7 @@ const Section = styled.div`
 
 const Heading = styled.div`
   font-weight: bold;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const Pre = styled.pre`
@@ -95,6 +95,6 @@ const Pre = styled.pre`
 `;
 
 const Muted = styled.span`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-style: italic;
 `;

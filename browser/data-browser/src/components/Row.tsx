@@ -66,7 +66,7 @@ Column.displayName = 'Column';
 export const Flex = styled.div<FlexProps>`
   align-items: ${p => (p.center ? 'center' : (p.align ?? 'initial'))};
   display: flex;
-  gap: ${p => p.gap ?? `${p.theme.margin}rem`};
+  gap: ${p => p.gap ?? `var(--space-3)`};
   justify-content: ${p => p.justify ?? 'start'};
   flex-direction: ${p => p.direction ?? 'row'};
   flex-wrap: ${p => (p.wrapItems ? 'wrap' : 'nowrap')};

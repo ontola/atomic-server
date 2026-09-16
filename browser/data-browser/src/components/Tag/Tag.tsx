@@ -188,17 +188,17 @@ const TagWrapperButton = styled(TagWrapper)`
 
 const PopoverContent = styled.div`
   padding: 1rem;
-  border-radius: ${p => p.theme.radius};
-  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
   max-width: 20rem;
 `;
 
 const DeleteButton = styled(Button)`
-  background-color: ${p => p.theme.colors.alert};
+  background-color: var(--color-alert);
   border: none;
 
   &:hover,
   &:focus {
-    background-color: ${p => p.theme.colors.alertLight} !important;
+    background-color: var(--color-alert-subtle) !important;
   }
 `;

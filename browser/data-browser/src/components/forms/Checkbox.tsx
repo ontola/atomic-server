@@ -37,8 +37,8 @@ const InputCheckBox = styled.input`
   --inset: 1px;
   --size: calc(100% - (var(--inset) * 2));
 
-  background-color: ${p => p.theme.colors.bg};
-  border: 1px solid ${p => p.theme.colors.bg2};
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
   width: 1rem;
   height: 1rem;
   border-radius: 3px;
@@ -53,7 +53,7 @@ const InputCheckBox = styled.input`
     width: 100%;
     height: 100%;
     border-radius: 2px;
-    background-color: ${p => p.theme.colors.bg};
+    background-color: var(--color-bg);
     ${transition('opacity', 'background-color')}
   }
 
@@ -64,7 +64,7 @@ const InputCheckBox = styled.input`
     inset: var(--inset);
     width: var(--size);
     height: var(--size);
-    background-color: ${p => p.theme.colors.bg};
+    background-color: var(--color-bg);
     clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
   }
 
@@ -72,7 +72,7 @@ const InputCheckBox = styled.input`
     border: none;
 
     &::before {
-      background-color: ${p => p.theme.colors.main};
+      background-color: var(--color-accent);
       content: '';
     }
 
@@ -85,7 +85,7 @@ const InputCheckBox = styled.input`
   &:hover,
   &[data-selected='true'] {
     &:not(:checked)::before {
-      background-color: ${p => p.theme.colors.main};
+      background-color: var(--color-accent);
       content: '';
       opacity: ${p => (p.theme.darkMode ? 0.5 : 0.2)};
     }

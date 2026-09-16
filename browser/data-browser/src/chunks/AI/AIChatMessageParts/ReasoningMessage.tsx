@@ -6,10 +6,10 @@ import { Shimmer } from '@components/Shimmer';
 import { PartSummary } from './PartSummary';
 
 const ReasoningMessageWrapper = styled.div`
-  padding: ${p => p.theme.size()};
-  color: ${p => p.theme.colors.textLight};
+  padding: var(--space-3);
+  color: var(--color-text-subtle);
   font-style: italic;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   width: 90%;
 `;
 

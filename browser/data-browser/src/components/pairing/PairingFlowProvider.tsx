@@ -348,11 +348,11 @@ const StepRow = styled.li<{ $status: StepStatus }>`
   gap: 0.7rem;
   font-size: 0.95rem;
   color: ${p =>
-    p.$status === 'pending' ? p.theme.colors.textLight : p.theme.colors.text};
+    p.$status === 'pending' ? 'var(--color-text-subtle)' : 'var(--color-text)'};
 
   svg {
     color: ${p =>
-      p.$status === 'failed' ? p.theme.colors.alert : p.theme.colors.main};
+      p.$status === 'failed' ? 'var(--color-alert)' : 'var(--color-accent)'};
   }
 `;
 
@@ -363,18 +363,18 @@ const StepIcon = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: ${p => p.theme.colors.main};
+  color: var(--color-accent);
 `;
 
 const PendingDot = styled.span`
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
-  background: ${p => p.theme.colors.bg2};
+  background: var(--color-border);
 `;
 
 const Explainer = styled.p`
   margin-top: 1rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-size: 0.85rem;
 `;

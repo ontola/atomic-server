@@ -84,8 +84,8 @@ const OriginPart = styled.span`
   display: flex;
   align-items: center;
   padding-inline: 0.5rem;
-  background-color: ${p => p.theme.colors.bg1};
-  color: ${p => p.theme.colors.textLight};
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-subtle);
 `;
 
 const ReadOnlySubject = styled.span`
@@ -95,7 +95,7 @@ const ReadOnlySubject = styled.span`
   padding-inline: 0.5rem;
   font-family: monospace;
   font-size: 0.85em;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   word-break: break-all;
 `;
 

@@ -134,9 +134,9 @@ function selectCodeBlockText(pre: HTMLPreElement | null): void {
 
 export const CodeBlockStyled = styled.pre`
   position: relative;
-  background-color: ${p => p.theme.colors.bg1};
-  border-radius: ${p => p.theme.radius};
-  border: solid 1px ${p => p.theme.colors.bg2};
+  background-color: var(--color-bg-subtle);
+  border-radius: var(--radius-md);
+  border: solid 1px var(--color-border);
   padding: 0.3rem;
   font-family: monospace;
   width: 100%;

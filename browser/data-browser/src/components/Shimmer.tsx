@@ -39,7 +39,7 @@ const Wrapper = styled.span`
   display: inline-block;
   overflow: hidden;
   isolation: isolate;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   height: fit-content;
   &[data-active='true']::after {
     content: '';
@@ -51,18 +51,18 @@ const Wrapper = styled.span`
       transparent 0%,
       ${p =>
           p.theme.darkMode
-            ? withAlpha(p.theme.colors.bg, 1)
-            : withAlpha(p.theme.colors.main, 0.15)}
+            ? withAlpha('var(--color-bg)', 1)
+            : withAlpha('var(--color-accent)', 0.15)}
         45%,
       ${p =>
           p.theme.darkMode
-            ? withAlpha(p.theme.colors.bg, 1)
-            : withAlpha(p.theme.colors.main, 0.3)}
+            ? withAlpha('var(--color-bg)', 1)
+            : withAlpha('var(--color-accent)', 0.3)}
         50%,
       ${p =>
           p.theme.darkMode
-            ? withAlpha(p.theme.colors.bg, 1)
-            : withAlpha(p.theme.colors.main, 0.15)}
+            ? withAlpha('var(--color-bg)', 1)
+            : withAlpha('var(--color-accent)', 0.15)}
         55%,
       transparent 100%
     );

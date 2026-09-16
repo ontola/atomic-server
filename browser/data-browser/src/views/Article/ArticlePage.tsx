@@ -72,10 +72,10 @@ export function ArticlePage({ resource }: ResourcePageProps): JSX.Element {
 
 const Content = styled.div`
   position: relative;
-  background-color: ${({ theme }) => theme.colors.bg};
-  padding: ${({ theme }) => theme.margin}rem;
-  border-radius: ${({ theme }) => theme.radius};
-  border: solid 1px ${({ theme }) => theme.colors.bg2};
+  background-color: var(--color-bg);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: solid 1px var(--color-border);
   overflow: hidden;
 `;
 
@@ -99,14 +99,14 @@ const ArticleContainer = styled(ContainerWide)`
 
 const ChildrenSection = styled.section`
   width: 100%;
-  background-color: ${({ theme }) => theme.colors.bg};
-  padding-top: ${({ theme }) => theme.margin}rem;
+  background-color: var(--color-bg);
+  padding-top: var(--space-3);
 `;
 
 const Grid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
-  gap: ${({ theme }) => theme.margin}rem;
+  gap: var(--space-3);
 `;
 
 const ContainerWider = styled(ContainerWide)`

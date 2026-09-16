@@ -65,15 +65,15 @@ export const PluginPermissions: React.FC<PluginPermissionsProps> = ({
 const PermissionList = styled.ul`
   display: flex;
   flex-direction: column;
-  gap: ${p => p.theme.size()};
+  gap: var(--space-3);
   padding: 0;
   margin: 0;
 
   li {
-    background-color: ${p => p.theme.colors.bg1};
-    border-radius: ${p => p.theme.radius};
+    background-color: var(--color-bg-subtle);
+    border-radius: var(--radius-md);
     list-style: none;
-    padding: ${p => p.theme.size()};
+    padding: var(--space-3);
     margin: 0;
 
     p {
@@ -85,5 +85,5 @@ const PermissionList = styled.ul`
 const PermissionTitle = styled(Row)`
   font-weight: bold;
   font-size: 0.9rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;

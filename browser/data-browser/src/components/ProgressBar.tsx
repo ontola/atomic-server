@@ -9,8 +9,8 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({ value }) => {
 };
 
 const Progress = styled.progress`
-  --progress-bg: ${p => p.theme.colors.bg1};
-  --progress-fg: ${p => p.theme.colors.main};
+  --progress-bg: var(--color-bg-subtle);
+  --progress-fg: var(--color-accent);
   --progress-radius: 2rem;
   --progress-height: 0.5rem;
 

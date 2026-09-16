@@ -133,7 +133,7 @@ function BucketLabel({
 const Bars = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${p => p.theme.size(1)};
+  gap: var(--space-1);
   overflow-y: auto;
   min-height: 0;
 `;
@@ -142,7 +142,7 @@ const Bar = styled.div`
   display: grid;
   grid-template-columns: minmax(4rem, 8rem) 1fr auto;
   align-items: center;
-  gap: ${p => p.theme.size(1)};
+  gap: var(--space-1);
   font-size: 0.8rem;
 `;
 
@@ -150,12 +150,12 @@ const Label = styled.span`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const Track = styled.span`
-  background-color: ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
+  background-color: var(--color-border);
+  border-radius: var(--radius-md);
   height: 0.75rem;
   min-width: 0;
 `;
@@ -164,8 +164,8 @@ const Fill = styled.span`
   display: block;
   height: 100%;
   min-width: 2px;
-  background-color: ${p => p.theme.colors.main};
-  border-radius: ${p => p.theme.radius};
+  background-color: var(--color-accent);
+  border-radius: var(--radius-md);
 `;
 
 const Amount = styled.span`
@@ -174,11 +174,11 @@ const Amount = styled.span`
 `;
 
 const Empty = styled.span`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-style: italic;
 `;
 
 const Note = styled.span`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-size: 0.75rem;
 `;

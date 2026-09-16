@@ -23,8 +23,8 @@ const StyledDiv = styled.div`
   height: var(--table-row-height);
 
   & > div {
-    border-bottom: 1px solid ${p => p.theme.colors.bg2};
-    border-right: 1px solid ${p => p.theme.colors.bg2};
+    border-bottom: 1px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
 
     &:last-child {
       border-right: none;

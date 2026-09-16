@@ -162,7 +162,7 @@ const Avatar = styled.button`
   font-size: 3rem;
   overflow: hidden;
   border-radius: 50%;
-  background: ${p => p.theme.colors.bg1};
+  background: var(--color-bg-subtle);
   img {
     width: 100%;
     height: 100%;

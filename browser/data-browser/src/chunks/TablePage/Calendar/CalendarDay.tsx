@@ -129,7 +129,7 @@ const Cell = styled.div<{ $inMonth: boolean }>`
   gap: 0.25rem;
   padding: 0.3rem;
   min-height: 0;
-  background-color: ${p => (p.$inMonth ? p.theme.colors.bg : 'transparent')};
+  background-color: ${p => (p.$inMonth ? 'var(--color-bg)' : 'transparent')};
   opacity: ${p => (p.$inMonth ? 1 : 0.5)};
 `;
 
@@ -150,8 +150,8 @@ const DayNumber = styled.span<{ $today: boolean }>`
   border-radius: 50%;
   font-size: 0.85em;
   font-weight: ${p => (p.$today ? 'bold' : 'normal')};
-  background-color: ${p => (p.$today ? p.theme.colors.main : 'transparent')};
-  color: ${p => (p.$today ? 'white' : p.theme.colors.textLight)};
+  background-color: ${p => (p.$today ? 'var(--color-accent)' : 'transparent')};
+  color: ${p => (p.$today ? 'white' : 'var(--color-text-subtle)')};
 `;
 
 const AddIcon = styled(IconButton)`
@@ -178,9 +178,9 @@ const EventChip = styled.button`
   border: none;
   text-align: start;
   padding: 0.15rem 0.4rem;
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg1};
-  color: ${p => p.theme.colors.text};
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text);
   font-size: 0.8em;
   cursor: pointer;
   white-space: nowrap;
@@ -189,7 +189,7 @@ const EventChip = styled.button`
   flex-shrink: 0;
 
   &:hover {
-    background-color: ${p => p.theme.colors.bg2};
+    background-color: var(--color-border);
   }
 `;
 
@@ -199,7 +199,7 @@ const AddInput = styled(InputStyled)`
   min-height: 1.6rem;
   padding: 0.15rem 0.4rem;
   font-size: 0.8em;
-  border: 1px solid ${p => p.theme.colors.main};
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg};
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg);
 `;

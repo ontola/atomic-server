@@ -24,15 +24,15 @@ const PromptButton = styled.button`
   background: none;
   border: none;
   cursor: pointer;
-  padding: ${p => p.theme.size(2)};
-  border-radius: ${p => p.theme.radius};
-  color: ${p => p.theme.colors.main};
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  color: var(--color-accent);
   text-align: start;
   word-break: break-all;
   font-size: 0.9rem;
   animation: ${fadeIn} 0.2s ease-in-out;
   &:hover,
   &:focus-visible {
-    background-color: ${p => p.theme.colors.bg1};
+    background-color: var(--color-bg-subtle);
   }
 `;

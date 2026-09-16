@@ -551,9 +551,9 @@ const IconBtn = styled.button`
   height: 1.85rem;
   width: 1.85rem;
   border: none;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   background-color: transparent;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   cursor: pointer;
 
   &:disabled {
@@ -562,8 +562,8 @@ const IconBtn = styled.button`
   }
 
   &:hover:not(:disabled) {
-    background-color: ${p => p.theme.colors.bg1};
-    color: ${p => p.theme.colors.text};
+    background-color: var(--color-bg-subtle);
+    color: var(--color-text);
   }
 `;
 
@@ -574,15 +574,16 @@ const Tab = styled.button<{ $active: boolean }>`
   height: 1.85rem;
   padding: 0.1rem 0.7rem;
   border: none;
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => (p.$active ? p.theme.colors.bg1 : 'transparent')};
-  color: ${p => (p.$active ? p.theme.colors.text : p.theme.colors.textLight)};
+  border-radius: var(--radius-md);
+  background-color: ${p =>
+    p.$active ? 'var(--color-bg-subtle)' : 'transparent'};
+  color: ${p => (p.$active ? 'var(--color-text)' : 'var(--color-text-subtle)')};
   font-weight: ${p => (p.$active ? 'bold' : 'normal')};
   cursor: pointer;
   white-space: nowrap;
 
   &:hover {
-    background-color: ${p => p.theme.colors.bg1};
+    background-color: var(--color-bg-subtle);
   }
 `;
 

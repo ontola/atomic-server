@@ -511,7 +511,7 @@ const AISidebar: React.FC = () => {
 const Heading = styled.h2`
   font-size: 1rem;
   font-weight: 600;
-  margin-bottom: ${p => p.theme.size(2)};
+  margin-bottom: var(--space-2);
 `;
 
 export default AISidebar;

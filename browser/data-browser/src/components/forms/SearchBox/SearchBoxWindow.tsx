@@ -446,24 +446,24 @@ const SearchInputWrapper = styled.div`
   display: flex;
   flex-direction: row;
   align-items: center;
-  border: solid 1px ${p => p.theme.colors.bg2};
+  border: solid 1px var(--color-border);
   height: var(--radix-popover-trigger-height);
   padding-inline-start: 0.5rem;
   width: 100%;
 
   & svg {
-    color: ${p => p.theme.colors.textLight};
+    color: var(--color-text-subtle);
   }
   &:focus-within {
-    border-color: ${p => p.theme.colors.main};
-    box-shadow: 0 0 0 1px ${p => p.theme.colors.main};
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 1px var(--color-accent);
     outline: none;
   }
 `;
 
 const Input = styled.input`
   background-color: transparent;
-  color: ${p => p.theme.colors.text};
+  color: var(--color-text);
   padding: 0.5rem;
   height: 100%;
   flex: 1;
@@ -476,7 +476,7 @@ const Input = styled.input`
 const ResultBox = styled.div`
   container: searchbox / inline-size;
   flex: 1;
-  border: solid 1px ${p => p.theme.colors.bg2};
+  border: solid 1px var(--color-border);
   height: calc(100% - 2rem);
   overflow: hidden;
 `;
@@ -497,9 +497,9 @@ const List = styled.ul`
 const Wrapper = styled.div<{ $above: boolean }>`
   display: flex;
 
-  background-color: ${p => p.theme.colors.bg};
-  border-radius: ${p => p.theme.radius};
-  box-shadow: ${p => p.theme.boxShadowSoft};
+  background-color: var(--color-bg);
+  border-radius: var(--radius-md);
+  box-shadow: var(--elevation-2);
   width: 100%;
   height: ${BOX_HEIGHT_REM}rem;
   position: absolute;
@@ -507,21 +507,21 @@ const Wrapper = styled.div<{ $above: boolean }>`
   left: 0;
   animation: ${fadeIn} 0.2s ease-in-out;
 
-  ${({ $above, theme }) =>
+  ${({ $above }) =>
     $above
       ? css`
           bottom: 0;
           flex-direction: column-reverse;
 
           ${SearchInputWrapper}, ${Input} {
-            border-bottom-left-radius: ${theme.radius};
-            border-bottom-right-radius: ${theme.radius};
+            border-bottom-left-radius: var(--radius-md);
+            border-bottom-right-radius: var(--radius-md);
           }
 
           ${ResultBox} {
             border-bottom: none;
-            border-top-left-radius: ${p => p.theme.radius};
-            border-top-right-radius: ${p => p.theme.radius};
+            border-top-left-radius: var(--radius-md);
+            border-top-right-radius: var(--radius-md);
           }
         `
       : css`
@@ -529,14 +529,14 @@ const Wrapper = styled.div<{ $above: boolean }>`
           flex-direction: column;
 
           ${SearchInputWrapper}, ${Input} {
-            border-top-left-radius: ${theme.radius};
-            border-top-right-radius: ${theme.radius};
+            border-top-left-radius: var(--radius-md);
+            border-top-right-radius: var(--radius-md);
           }
 
           ${ResultBox} {
             border-top: none;
-            border-bottom-left-radius: ${p => p.theme.radius};
-            border-bottom-right-radius: ${p => p.theme.radius};
+            border-bottom-left-radius: var(--radius-md);
+            border-bottom-right-radius: var(--radius-md);
           }
         `}
 `;
@@ -545,7 +545,7 @@ const CenteredMessage = styled.div`
   place-items: center;
   height: 100%;
   width: 100%;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const StyledScrollArea = styled(ScrollArea)`
@@ -554,12 +554,12 @@ const StyledScrollArea = styled(ScrollArea)`
 `;
 
 const CreateLineInputText = styled.span`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-style: italic;
 `;
 
 const Divider = styled.div`
-  border-top: 1px solid ${props => props.theme.colors.bg2};
+  border-top: 1px solid var(--color-border);
   grid-column: 1/3;
 
   @container (max-width: 520px) {

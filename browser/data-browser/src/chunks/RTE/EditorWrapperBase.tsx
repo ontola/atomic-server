@@ -2,11 +2,11 @@ import { styled } from 'styled-components';
 
 export const EditorWrapperBase = styled.div<{ hideEditor: boolean }>`
   position: relative;
-  background-color: ${p => p.theme.colors.bg};
+  background-color: var(--color-bg);
 
   &:not(:focus-within) {
     & .tiptap p.is-editor-empty:first-child::before {
-      color: ${p => p.theme.colors.textLight};
+      color: var(--color-text-subtle);
       content: attr(data-placeholder);
       float: left;
       height: 0;
@@ -71,8 +71,8 @@ export const EditorWrapperBase = styled.div<{ hideEditor: boolean }>`
 
     pre {
       padding: 0.75rem 1rem;
-      background-color: ${p => p.theme.colors.bg1};
-      border-radius: ${p => p.theme.radius};
+      background-color: var(--color-bg-subtle);
+      border-radius: var(--radius-md);
       font-family: monospace;
 
       code {
@@ -86,8 +86,8 @@ export const EditorWrapperBase = styled.div<{ hideEditor: boolean }>`
 
     blockquote {
       margin-inline-start: 0;
-      border-inline-start: 3px solid ${p => p.theme.colors.textLight2};
-      color: ${p => p.theme.colors.textLight};
+      border-inline-start: 3px solid var(--color-text-subtle);
+      color: var(--color-text-subtle);
       padding-inline-start: 1rem;
     }
 
@@ -136,8 +136,8 @@ export const EditorWrapperBase = styled.div<{ hideEditor: boolean }>`
       border-collapse: collapse;
       td,
       th {
-        border: 1px solid ${p => p.theme.colors.bg2};
-        padding: ${p => p.theme.size(2)};
+        border: 1px solid var(--color-border);
+        padding: var(--space-2);
       }
     }
   }

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import styled, { useTheme } from 'styled-components';
+import styled from 'styled-components';
 import { Row } from '@components/Row';
 import { FaCheck, FaTriangleExclamation } from 'react-icons/fa6';
 
@@ -14,8 +14,6 @@ export const ProviderStatus: React.FC<ProviderStatusProps> = ({
   configured,
   checking,
 }) => {
-  const theme = useTheme();
-
   if (!configured) {
     return <Subtle>Not configured</Subtle>;
   }
@@ -23,7 +21,7 @@ export const ProviderStatus: React.FC<ProviderStatusProps> = ({
   if (connected) {
     return (
       <Row center gap='1ch'>
-        <FaCheck title='Connected' color={theme.colors.main} />
+        <FaCheck title='Connected' color={'var(--color-accent)'} />
         <Subtle>Connected</Subtle>
       </Row>
     );
@@ -34,7 +32,7 @@ export const ProviderStatus: React.FC<ProviderStatusProps> = ({
       <Row center gap='1ch'>
         <FaTriangleExclamation
           title='Checking server…'
-          color={theme.colors.warning}
+          color={'var(--color-warning)'}
         />
         <Subtle>Checking server…</Subtle>
       </Row>
@@ -45,7 +43,7 @@ export const ProviderStatus: React.FC<ProviderStatusProps> = ({
     <Row center gap='1ch'>
       <FaTriangleExclamation
         title='Not responding'
-        color={theme.colors.warning}
+        color={'var(--color-warning)'}
       />
       <Subtle>Not responding</Subtle>
     </Row>
@@ -54,6 +52,6 @@ export const ProviderStatus: React.FC<ProviderStatusProps> = ({
 
 export const Subtle = styled.div`
   font-size: 0.8rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   margin: 0;
 `;

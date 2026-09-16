@@ -22,7 +22,7 @@ import { SIDEBAR_WIDTH_PROP } from './SidebarCSSVars';
 import { useRef, type JSX } from 'react';
 import { CalculatedPageHeight } from '../../globalCssVars';
 import { AIChatsPanel } from './AIPanel';
-import { ChromeTheme } from '../../styling';
+import { CHROME_SCOPE } from '../../styling';
 
 /** Amount of pixels where the sidebar automatically shows */
 export const SIDEBAR_TOGGLE_WIDTH = 600;
@@ -78,51 +78,50 @@ export function SideBar(): JSX.Element {
 
   return (
     <SideBarContainer>
-      <ChromeTheme>
-        <StyledNav
-          ref={mountRefs}
-          size={size}
-          data-testid='sidebar'
-          locked={isWideScreen && sideBarLocked}
-          exposed={sidebarVisible}
-          {...listeners}
-        >
-          {/* The key is set to make sure the component is re-loaded when the baseURL changes */}
-          <SideBarDriveMemo
-            onItemClick={closeSideBar}
-            key={drive}
-            onIsRearangingChange={setIsRearanging}
-          />
-          <MenuWrapper>
-            <Column gap='0.5rem' align='stretch'>
-              <SideBarHomePanels onItemClick={closeSideBar} />
-              {enabledPanels.has(Panel.AIChats) && (
-                <SideBarPanel title='AI Chats' key={drive}>
-                  <AIChatsPanel />
-                </SideBarPanel>
-              )}
-              {enabledPanels.has(Panel.Ontologies) && (
-                <SideBarPanel title='Ontologies' key={drive}>
-                  <OntologiesPanel />
-                </SideBarPanel>
-              )}
-              <SideBarPanel title='App'>
-                <Column gap='0.5rem' align='stretch'>
-                  <AppMenu onItemClick={closeSideBar} />
-                </Column>
+      <StyledNav
+        ref={mountRefs}
+        size={size}
+        className={CHROME_SCOPE}
+        data-testid='sidebar'
+        locked={isWideScreen && sideBarLocked}
+        exposed={sidebarVisible}
+        {...listeners}
+      >
+        {/* The key is set to make sure the component is re-loaded when the baseURL changes */}
+        <SideBarDriveMemo
+          onItemClick={closeSideBar}
+          key={drive}
+          onIsRearangingChange={setIsRearanging}
+        />
+        <MenuWrapper>
+          <Column gap='0.5rem' align='stretch'>
+            <SideBarHomePanels onItemClick={closeSideBar} />
+            {enabledPanels.has(Panel.AIChats) && (
+              <SideBarPanel title='AI Chats' key={drive}>
+                <AIChatsPanel />
               </SideBarPanel>
-            </Column>
-          </MenuWrapper>
-          <OverlapSpacer />
-          {!isRearanging && (
-            <SideBarDragArea
-              ref={dragAreaRef}
-              isDragging={isDragging}
-              {...dragAreaListeners}
-            />
-          )}
-        </StyledNav>
-      </ChromeTheme>
+            )}
+            {enabledPanels.has(Panel.Ontologies) && (
+              <SideBarPanel title='Ontologies' key={drive}>
+                <OntologiesPanel />
+              </SideBarPanel>
+            )}
+            <SideBarPanel title='App'>
+              <Column gap='0.5rem' align='stretch'>
+                <AppMenu onItemClick={closeSideBar} />
+              </Column>
+            </SideBarPanel>
+          </Column>
+        </MenuWrapper>
+        <OverlapSpacer />
+        {!isRearanging && (
+          <SideBarDragArea
+            ref={dragAreaRef}
+            isDragging={isDragging}
+            {...dragAreaListeners}
+          />
+        )}
+      </StyledNav>
       <SideBarOverlay
         onClick={() => setSideBarLocked(false)}
         visible={sideBarLocked && !isWideScreen}
@@ -146,9 +145,9 @@ const StyledNav = styled.nav.attrs<StyledNavProps>(p => ({
     [SIDEBAR_WIDTH_PROP.raw]: p.size,
   } as Record<string, string>,
 }))`
-  z-index: ${p => p.theme.zIndex.sidebar};
+  z-index: var(--z-sidebar);
   box-sizing: border-box;
-  background: ${p => p.theme.colors.bg};
+  background: var(--color-bg);
   transition:
     opacity 0.3s,
     left 0.3s;
@@ -159,13 +158,13 @@ const StyledNav = styled.nav.attrs<StyledNavProps>(p => ({
   height: ${CalculatedPageHeight.var()};
   width: ${SIDEBAR_WIDTH_PROP.var()};
   position: ${p => (p.locked ? 'relative' : 'absolute')};
-  border-right: ${p => `1px solid ${p.theme.colors.bg2}`};
-  box-shadow: ${p => (p.locked ? 'none' : p.theme.boxShadowSoft)};
+  border-right: 1px solid var(--color-border);
+  box-shadow: ${p => (p.locked ? 'none' : 'var(--elevation-2)')};
   display: flex;
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-bottom: ${p => p.theme.size()};
+  padding-bottom: var(--space-3);
 
   @media print {
     display: none;
@@ -182,7 +181,7 @@ const MenuWrapper = styled.div`
   width: 100%;
   min-width: 0;
   /* Same horizontal inset as drive {@link SideBarDrive} ListWrapper */
-  padding-inline: ${p => p.theme.margin}rem;
+  padding-inline: var(--space-3);
 `;
 
 /** Just needed for positioning the overlay */

@@ -268,35 +268,35 @@ const ColorSwatch = styled.button<{ color: string; $selected: boolean }>`
   border: none;
   height: 1.75rem;
   width: 1.75rem;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   cursor: pointer;
   outline: 2px solid transparent;
   outline-offset: 2px;
-  ${p => p.$selected && `outline-color: ${p.theme.colors.textLight};`}
+  ${p => p.$selected && `outline-color: var(--color-text-subtle);`}
   &:hover,
   &:focus-visible {
-    outline-color: ${p => p.theme.colors.textLight};
+    outline-color: var(--color-text-subtle);
   }
 `;
 
 const CustomizeButton = styled.button<{ $selected: boolean }>`
   height: 1.75rem;
   padding-inline: 0.6rem;
-  border-radius: ${p => p.theme.radius};
-  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
   background-color: ${p =>
-    p.$selected ? p.theme.colors.bg1 : p.theme.colors.bg};
-  color: ${p => p.theme.colors.text};
+    p.$selected ? 'var(--color-bg-subtle)' : 'var(--color-bg)'};
+  color: var(--color-text);
   font-size: 0.8rem;
   cursor: pointer;
   &:hover,
   &:focus-visible {
-    border-color: ${p => p.theme.colors.textLight};
+    border-color: var(--color-text-subtle);
   }
 `;
 
 const SettingsSearchWrapper = styled(InputWrapper)`
-  margin-block: ${p => p.theme.margin}rem;
+  margin-block: var(--space-3);
 `;
 
 const ClearButton = styled.button`
@@ -307,13 +307,13 @@ const ClearButton = styled.button`
   border: none;
   cursor: pointer;
   padding: 0.4rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   &:hover {
-    color: ${p => p.theme.colors.text};
+    color: var(--color-text);
   }
 `;
 
 const SubLabel = styled.span`
   font-size: 0.85rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;

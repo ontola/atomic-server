@@ -73,6 +73,6 @@ export function VirtualDriveSettings(): React.JSX.Element {
 }
 
 const Mounted = styled.span`
-  color: ${p => p.theme.colors.main};
+  color: var(--color-accent);
   font-weight: 500;
 `;

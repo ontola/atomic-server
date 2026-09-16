@@ -42,7 +42,7 @@ import { EditorEvents } from './EditorEvents';
 import { useLoroSync } from './useLoroSync';
 import { colorForAgent } from '@components/Presence/AgentAvatar';
 import { EditorWrapperBase } from './EditorWrapperBase';
-import styled, { useTheme } from 'styled-components';
+import styled from 'styled-components';
 import { useSettings } from '@helpers/AppSettings';
 import { FullBubbleMenu } from './FullBubbleMenu';
 import { IsInRTEContex } from '@hooks/useIsInRTE';
@@ -110,8 +110,7 @@ export default function CollaborativeEditor({
   const { oldDocumentSnapshots, hasAIChanges } = useAIChanges();
   const comparisonBaseline = oldDocumentSnapshots[resource.subject];
 
-  const theme = useTheme();
-  useCustomBodyColor(theme.colors.bg);
+  useCustomBodyColor('var(--color-bg)');
 
   const uploadAndInsertImage = async (
     currentEditor: Editor,
@@ -460,7 +459,7 @@ const ClickUnderHandler = styled.div`
 export const StyledEditorWrapper = styled(EditorWrapperBase)`
   box-shadow: none;
   min-height: 100%;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   min-height: 10rem;
   width: 100%;
   flex: 1;
@@ -484,7 +483,7 @@ export const StyledEditorWrapper = styled(EditorWrapperBase)`
       position: absolute;
       top: 0;
       left: 0;
-      color: ${p => p.theme.colors.textLight2};
+      color: var(--color-text-subtle);
       pointer-events: none;
     }
 
@@ -493,14 +492,14 @@ export const StyledEditorWrapper = styled(EditorWrapperBase)`
     }
 
     .diff-added {
-      background-color: ${p => p.theme.colors.diff.addedBg};
-      color: ${p => p.theme.colors.diff.addedFg};
+      background-color: var(--color-diff-added-bg);
+      color: var(--color-diff-added-text);
     }
 
     .diff-removed,
     .diff-removed-node {
-      background-color: ${p => p.theme.colors.diff.removedBg};
-      color: ${p => p.theme.colors.diff.removedFg};
+      background-color: var(--color-diff-removed-bg);
+      color: var(--color-diff-removed-text);
       text-decoration: line-through;
     }
   }
@@ -512,6 +511,6 @@ export const StyledEditorWrapper = styled(EditorWrapperBase)`
     height: 1.5rem;
     justify-content: center;
     width: 1.5rem;
-    color: ${p => p.theme.colors.textLight2};
+    color: var(--color-text-subtle);
   }
 `;

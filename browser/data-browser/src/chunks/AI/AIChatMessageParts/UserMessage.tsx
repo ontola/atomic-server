@@ -37,29 +37,29 @@ export const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
 };
 
 const ContextItemRow = styled(Row)`
-  margin-block-end: ${p => p.theme.size(2)};
+  margin-block-end: var(--space-2);
 `;
 
 const MessageWrapper = styled.div`
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   width: 90%;
-  padding-block: ${p => p.theme.size()};
+  padding-block: var(--space-3);
 
   &:hover {
-    background-color: ${p => p.theme.colors.bg};
+    background-color: var(--color-bg);
   }
 `;
 
 const UserMessageWrapper = styled(MessageWrapper)`
-  padding: ${p => p.theme.size()};
-  background-color: ${p => p.theme.colors.bg};
+  padding: var(--space-3);
+  background-color: var(--color-bg);
   align-self: flex-end;
-  border: solid 1px ${p => p.theme.colors.bg2};
+  border: solid 1px var(--color-border);
 `;
 
 const SenderName = styled.span`
   font-weight: bold;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-size: 0.8rem;
   margin-bottom: 0.5rem;
   display: block;

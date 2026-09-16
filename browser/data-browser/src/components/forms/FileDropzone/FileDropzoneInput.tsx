@@ -82,25 +82,25 @@ export function FileDropzoneInput({
 
 const VisualDropZone = styled.div`
   backdrop-filter: blur(10px);
-  border: 2px dashed ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
   display: grid;
   place-items: center;
   font-size: 1.3rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   min-height: 10rem;
   cursor: pointer;
 
   &:hover,
   &:focus {
-    color: ${p => p.theme.colors.main};
-    border-color: ${p => p.theme.colors.main};
+    color: var(--color-accent);
+    border-color: var(--color-accent);
   }
 `;
 
 const TextWrapper = styled.div`
   display: flex;
   align-items: center;
-  padding: ${p => p.theme.margin}rem;
+  padding: var(--space-3);
   gap: 1rem;
 `;

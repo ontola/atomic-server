@@ -116,5 +116,5 @@ const SetupContent = styled.main`
   width: min(100%, 65rem);
   display: flex;
   flex-direction: column;
-  gap: ${p => p.theme.size(6)};
+  gap: var(--space-6);
 `;

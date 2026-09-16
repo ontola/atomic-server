@@ -39,6 +39,6 @@ function LoadedDashboard({ subject }: { subject: string }): JSX.Element {
 }
 
 const Empty = styled.p`
-  color: ${p => p.theme.colors.textLight};
-  padding: ${p => p.theme.size(4)};
+  color: var(--color-text-subtle);
+  padding: var(--space-4);
 `;

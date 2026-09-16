@@ -5,7 +5,7 @@ export const TableList = styled.table`
   border-collapse: collapse;
 
   td {
-    padding: ${p => p.theme.size(2)};
+    padding: var(--space-2);
 
     &:first-child {
       padding-inline-start: 0;
@@ -14,7 +14,7 @@ export const TableList = styled.table`
 
   tr {
     &:not(:last-child) {
-      border-bottom: 1px solid ${p => p.theme.colors.bg2};
+      border-bottom: 1px solid var(--color-border);
     }
   }
 `;

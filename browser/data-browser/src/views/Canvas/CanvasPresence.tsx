@@ -130,7 +130,7 @@ const RemoteCursor = styled.div<{ $color: string }>`
     height: 10px;
     border-radius: 50%;
     background-color: ${p => p.$color};
-    border: 2px solid ${p => p.theme.colors.bg};
+    border: 2px solid var(--color-bg);
     transform: translate(-50%, -50%);
   }
 

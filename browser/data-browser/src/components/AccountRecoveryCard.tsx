@@ -771,11 +771,11 @@ export function AccountRecoveryCard({
 
 const Protections = styled.p`
   margin: 0;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const Hint = styled.p`
   margin: 0;
   font-size: 0.9rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;

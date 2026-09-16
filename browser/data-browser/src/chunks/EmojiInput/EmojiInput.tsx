@@ -171,7 +171,7 @@ const Placeholder = styled(Preview)`
 
 const PickerButton = styled(RadixPopover.Trigger)`
   border: none;
-  border-radius: ${({ theme }) => theme.radius};
+  border-radius: var(--radius-md);
   width: 2rem;
   height: 2rem;
   background: transparent;
@@ -201,9 +201,9 @@ const PickerWrapper = styled.div`
 const HeaderRow = styled.div`
   display: flex;
   justify-content: flex-end;
-  gap: ${p => p.theme.size(1)};
-  padding: ${p => p.theme.size(2)};
-  padding-bottom: ${p => p.theme.size(1)};
+  gap: var(--space-1);
+  padding: var(--space-2);
+  padding-bottom: var(--space-1);
 `;
 
 /** Quiet toolbar buttons so the picker itself stays the focal point. */
@@ -214,8 +214,8 @@ const HeaderButton = styled.button`
   border: none;
   background: transparent;
   padding: 0.3rem 0.5rem;
-  border-radius: ${p => p.theme.radius};
-  color: ${p => p.theme.colors.textLight};
+  border-radius: var(--radius-md);
+  color: var(--color-text-subtle);
   font-size: 0.85rem;
   cursor: pointer;
 
@@ -225,7 +225,7 @@ const HeaderButton = styled.button`
 
   &:hover,
   &:focus-visible {
-    background-color: ${p => p.theme.colors.bg1};
-    color: ${p => p.theme.colors.text};
+    background-color: var(--color-bg-subtle);
+    color: var(--color-text);
   }
 `;

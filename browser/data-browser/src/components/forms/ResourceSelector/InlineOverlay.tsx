@@ -18,5 +18,5 @@ export function InlineOverlay({ subject }: InlineOverlayProps): JSX.Element {
 const Wrapper = styled.span<{ valid: boolean }>`
   /* Since the overlay is rendered in an input we shift it by one pixel to prevent layout shift when typing */
   margin-left: 1px;
-  color: ${p => (p.valid ? p.theme.colors.main : 'currentColor')};
+  color: ${p => (p.valid ? 'var(--color-accent)' : 'currentColor')};
 `;

@@ -269,13 +269,13 @@ const GridItem = styled.div`
   word-break: break-word;
   overflow: hidden; /* fix for Firefox */
   break-inside: avoid-column;
-  margin-bottom: ${p => p.theme.margin}rem;
+  margin-bottom: var(--space-3);
 `;
 
 const ButtonsBar = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: ${p => p.theme.margin}rem;
+  gap: var(--space-3);
 `;
 
 /**
@@ -284,7 +284,7 @@ const ButtonsBar = styled.div`
  */
 const Masonry = styled.div`
   column-count: 1;
-  column-gap: ${props => props.theme.margin}rem;
+  column-gap: var(--space-3);
   overflow: visible;
   box-sizing: border-box;
 
@@ -292,8 +292,8 @@ const Masonry = styled.div`
     display: grid;
     grid-template-columns: repeat(1, 1fr);
     grid-template-rows: masonry;
-    /* grid-gap: ${props => props.theme.margin}rem; */
-    grid-column-gap: ${props => props.theme.margin}rem;
+    /* grid-gap: var(--space-3); */
+    grid-column-gap: var(--space-3);
   }
 
   /* Masonry on small screens */

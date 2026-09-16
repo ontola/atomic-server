@@ -127,12 +127,12 @@ export const OllamaModelSelector: React.FC<OllamaModelSelectorProps> = ({
 
 const ModelAmount = styled.div`
   font-size: 0.8em;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const ModelDetailsTable = styled.div`
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: ${p => p.theme.size()};
+  gap: var(--space-3);
   row-gap: 0.2rem;
 `;

@@ -23,17 +23,17 @@ const Wrapper = styled.a`
   align-items: center;
   gap: 1ch;
   padding: 0.5em 1em;
-  background-color: ${p => p.theme.colors.bg1};
+  background-color: var(--color-bg-subtle);
   border-radius: 50px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  margin-bottom: ${p => p.theme.size(2)};
+  margin-bottom: var(--space-2);
   max-width: var(--source-url-width);
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-size: 0.8rem;
   a {
-    color: ${p => p.theme.colors.textLight};
+    color: var(--color-text-subtle);
     text-decoration: none;
     white-space: nowrap;
     overflow: hidden;

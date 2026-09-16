@@ -66,11 +66,11 @@ const Image = styled.img`
 `;
 
 const NoPreview = styled.div`
-  background-color: ${({ theme }) => theme.colors.bg1};
+  background-color: var(--color-bg-subtle);
   display: grid;
-  padding: ${({ theme }) => theme.margin}rem;
+  padding: var(--space-3);
   place-items: center;
-  color: ${({ theme }) => theme.colors.textLight};
+  color: var(--color-text-subtle);
   text-wrap: balance;
   text-align: center;
 `;

@@ -1,6 +1,6 @@
 import {
   createGlobalStyle,
-  DefaultTheme,
+  type DefaultTheme,
   ThemeProvider,
 } from 'styled-components';
 import './reset.css';
@@ -26,18 +26,11 @@ interface ThemeWrapperProps {
  * Provides the theme for all components below. Make sure to wrap this inside
  * SettingsContext.
  *
- * The theme object is a *facade* over the CSS custom properties in
- * `styles/tokens.css`: every value it carries is a `var(--token)` reference
- * rather than a colour. Two consequences worth knowing about:
- *
- * - It no longer depends on the main colour, so there are exactly two theme
- *   objects (light and dark) and changing the accent re-renders nothing. The
- *   old object was rebuilt on every settings change and invalidated the whole
- *   tree through context.
- * - Anything that wants to *compute* with a colour cannot, because it is
- *   holding the string `var(--color-bg)`. Use `color-mix()` (see
- *   `styles/withAlpha.ts`) or add a token; the polished helpers only work on
- *   colours that come from data, such as a user's tag colour.
+ * The theme carries one thing: whether dark mode is on. Every design value
+ * lives in `styles/tokens.css` and is read from CSS directly, so this context
+ * changing no longer means the tree restyles — and a main-colour change does
+ * not touch React at all. It writes custom properties onto `:root` and the
+ * cascade does the rest.
  */
 export const ThemeWrapper = ({ children }: ThemeWrapperProps): JSX.Element => {
   const { mainColor, darkMode, colorfulMode } = useContext(SettingsContext);
@@ -48,11 +41,7 @@ export const ThemeWrapper = ({ children }: ThemeWrapperProps): JSX.Element => {
     const root = document.documentElement;
 
     root.dataset.theme = darkMode ? 'dark' : 'light';
-    applyAccentRamp(root, {
-      mainColor,
-      darkMode,
-      colorful: colorfulMode,
-    });
+    applyAccentRamp(root, { mainColor, darkMode, colorful: colorfulMode });
   }, [mainColor, darkMode, colorfulMode]);
 
   return (
@@ -63,39 +52,19 @@ export const ThemeWrapper = ({ children }: ThemeWrapperProps): JSX.Element => {
 };
 
 /**
- * Wraps the app chrome (sidebar, navbar). In colourful mode the chrome tokens
- * carry tones of the main colour, so no neutral ever sits on a coloured
- * surface; outside colourful mode they fall back to the neutral ramp and this
- * changes nothing. Either way the decision lives in `accentRamp.ts`, and this
- * only points the theme at the other set of variables.
+ * The class the app chrome (navbar, sidebar) puts on itself to re-point the
+ * surface tokens at the chrome ramp — see `.chrome-scope` in `tokens.css`.
+ *
+ * This was a nested `ThemeProvider` wrapping each of them. As a cascade scope
+ * it needs no context and no wrapper element, and it nests correctly with
+ * anything else that scopes a token.
  */
-export const ChromeTheme = ({ children }: ThemeWrapperProps): JSX.Element => (
-  <ThemeProvider theme={chromeTheme}>{children}</ThemeProvider>
-);
-
-const chromeTheme = (outer: DefaultTheme | undefined): DefaultTheme => {
-  // ChromeTheme is always nested inside ThemeWrapper, so outer is never
-  // actually undefined.
-  const base = outer ?? lightTheme;
-
-  return {
-    ...base,
-    colors: {
-      ...base.colors,
-      bg: 'var(--chrome-bg)',
-      bg1: 'var(--chrome-bg-subtle)',
-      bg2: 'var(--chrome-border)',
-      text: 'var(--chrome-text)',
-      text1: 'var(--chrome-text)',
-      textLight: 'var(--chrome-text-subtle)',
-      textLight2: 'var(--chrome-text-subtle)',
-    },
-  };
-};
+export const CHROME_SCOPE = 'chrome-scope';
 
 /**
- * Adjust the z-index order here. Watch out: do not use in styled-components,
- * prefer to use `theme.zIndex`
+ * Adjust the z-index order here. The values live in `tokens.css` as `--z-*`;
+ * this mirrors them for the rare consumer that needs the number in JS (the
+ * toast library takes one as a prop).
  */
 export const zIndex = {
   sidebar: 10,
@@ -109,205 +78,21 @@ export const zIndex = {
 /** Default animation duration in ms. Mirrors `--duration-fast`. */
 export const animationDuration = 100;
 
-const breadCrumbBarHeight = '2.2rem';
-const floatingSearchBarPadding = '4.2rem';
+const lightTheme: DefaultTheme = { darkMode: false };
+const darkTheme: DefaultTheme = { darkMode: true };
 
-/**
- * The spacing scale, as a reference to the matching `--space-n` token.
- *
- * The indices are the ones this function has always used, so every existing
- * `size(4)` keeps its value; it now resolves through CSS instead of returning a
- * literal, which is what lets plain CSS reach the same scale.
- */
-function size(index = 3): string {
-  if (!Number.isInteger(index) || index < 1 || index > 15) {
-    throw new Error(`Size index ${index} out of bounds`);
-  }
-
-  return `var(--space-${index})`;
-}
-
-size.raw = (multiplier: number) => `${multiplier}rem`;
-
-/**
- * The theme, as a map onto the token layer.
- *
- * Only `darkMode` actually varies — every other member is a constant string.
- * It is still a styled-components theme because 415 files read it that way;
- * migrating those to `var(--token)` directly is the next slice, and each one
- * that moves can simply stop reading `p.theme`.
- */
-export const buildTheme = (darkMode: boolean): DefaultTheme => ({
-  darkMode,
-  colorful: false,
-  fontFamilyHeader: 'var(--font-family-heading)',
-  fontFamily: 'var(--font-family)',
-  boxShadow: 'var(--elevation-1)',
-  boxShadowIntense: 'var(--elevation-3)',
-  boxShadowSoft: 'var(--elevation-2)',
-  containerWidth: 40,
-  containerWidthWide: '900px',
-  fontSizeBody: 1,
-  fontSizeH1: 2,
-  sideBarWidth: 15,
-  margin: 1,
-  radius: 'var(--radius-md)',
-  heights: {
-    breadCrumbBar: breadCrumbBarHeight,
-    floatingSearchBarPadding: floatingSearchBarPadding,
-    fullPage: `100%`,
-  },
-  size,
-  colors: {
-    main: 'var(--color-accent)',
-    mainLight: 'var(--color-accent-hover)',
-    // Every remaining call site uses this as accent-coloured *text*, which is
-    // a different requirement from the fill — see `--color-accent-text`.
-    mainDark: 'var(--color-accent-text)',
-    complementary: 'var(--accent-complementary)',
-    bg: 'var(--color-bg)',
-    bgBody: 'var(--color-bg-body)',
-    mainSelectedBg: 'var(--color-accent-subtle)',
-    mainSelectedFg: 'var(--color-accent-text)',
-    bg1: 'var(--color-bg-subtle)',
-    bg2: 'var(--color-border)',
-    text: 'var(--color-text)',
-    text1: 'var(--color-text)',
-    textLight: 'var(--color-text-subtle)',
-    textLight2: 'var(--color-text-subtle)',
-    alert: 'var(--color-alert)',
-    alertLight: 'var(--color-alert-subtle)',
-    warning: 'var(--color-warning)',
-    diff: {
-      addedBg: 'var(--color-diff-added-bg)',
-      addedFg: 'var(--color-diff-added-text)',
-      removedBg: 'var(--color-diff-removed-bg)',
-      removedFg: 'var(--color-diff-removed-text)',
-    },
-  },
-  animation: {
-    duration: 'var(--duration-fast)',
-  },
-  zIndex,
-});
-
-const lightTheme = buildTheme(false);
-const darkTheme = buildTheme(true);
-
-// Styled-components requires overwriting the default theme
+// Styled-components requires overwriting the default theme.
 declare module 'styled-components' {
   export interface DefaultTheme {
-    /** If true, make things dark */
-    darkMode: boolean;
     /**
-     * @deprecated Colourful mode is a property of the chrome tokens now, not
-     * of the theme object. Nothing reads this.
-     */
-    colorful: boolean;
-    fontFamilyHeader: string;
-    fontFamily: string;
-    /** Body font size in rem */
-    fontSizeBody: number;
-    /** Header font size in rem */
-    fontSizeH1: number;
-    boxShadow: string;
-    boxShadowIntense: string;
-    boxShadowSoft: string;
-    /**
-     * @deprecated
-     * use size() instead
-     */
-    margin: number;
-    /** Width of the container, in rem */
-    containerWidth: number;
-    /** Width of the container */
-    containerWidthWide: string;
-    /** Width of the sidebar, in rem */
-    sideBarWidth: number;
-    /** Roundness of some elements / Border radius */
-    radius: string;
-    /** All theme colors */
-    heights: {
-      breadCrumbBar: string;
-      fullPage: string;
-      floatingSearchBarPadding: string;
-    };
-
-    /**
-     * Function that returns a size in rem for the given index, as a reference
-     * to the matching `--space-n` token.
-     * Based on the following ratio:
-     * 1) size.raw(0.25),
-     * 2) size.raw(0.5),
-     * 3) size.raw(1),
-     * 4) size.raw(1.25),
-     * 5) size.raw(1.5),
-     * 6) size.raw(1.75),
-     * 7) size.raw(2),
-     * 8) size.raw(3),
-     * 9) size.raw(4),
-     * 10) size.raw(5),
-     * 11) size.raw(7.5),
-     * 12) size.raw(10),
-     * 13) size.raw(15),
-     * 14) size.raw(20),
-     * 15) size.raw(30),
+     * Whether dark mode is on.
      *
-     * When given no index it returns the default size (3)
+     * The only thing left on the theme. It is here rather than in CSS because
+     * roughly thirty components pass it to something that is not CSS — a
+     * CodeMirror theme object, emoji-mart's `theme` prop, ReactFlow. Anything
+     * that ends up as a style belongs in `styles/tokens.css` instead.
      */
-    size: typeof size;
-    colors: {
-      /** Main accent color, as a filled surface. Not readable as text — use
-       * `mainDark` for that. */
-      main: string;
-      /** Hover state of a filled accent surface */
-      mainLight: string;
-      /** Accent color that is readable as text */
-      mainDark: string;
-      /** Background color of selected items */
-      mainSelectedBg: string;
-      /** Foreground color of selected items */
-      mainSelectedFg: string;
-      /** Complementary color of main */
-      complementary: string;
-      /** The background color of the body, which is subtly different from bg */
-      bgBody: string;
-      /** Most common background color: cards, dialogs, the navbar */
-      bg: string;
-      /** Subtle background color */
-      bg1: string;
-      /** Border color. Historically a third background step, used as a border
-       * in 214 of its call sites. */
-      bg2: string;
-      /** Main (body) text color */
-      text: string;
-      /**
-       * @deprecated Identical to `text`. Was a barely-different hue of it.
-       */
-      text1: string;
-      /** Lighter shade of text, still readable */
-      textLight: string;
-      /**
-       * @deprecated Use `textLight`. This used to be #ccc on white (1.6:1) —
-       * the theme's own comment called it "not accessible for some" — and now
-       * resolves to the same token as `textLight`.
-       */
-      textLight2: string;
-      /** Error / warning color */
-      alert: string;
-      alertLight: string;
-      warning: string;
-      diff: {
-        addedBg: string;
-        addedFg: string;
-        removedBg: string;
-        removedFg: string;
-      };
-    };
-    animation: {
-      duration: string;
-    };
-    zIndex: typeof zIndex;
+    darkMode: boolean;
   }
 }
 

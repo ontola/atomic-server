@@ -181,17 +181,17 @@ type LinkViewProps = {
 /** Look clickable, should be used for opening things only - not interactions. */
 export const LinkView = styled.a<LinkViewProps>`
   color: ${props =>
-    props.disabled ? props.theme.colors.text : props.theme.colors.main};
+    props.disabled ? 'var(--color-text)' : 'var(--color-accent)'};
   text-decoration: none;
   cursor: pointer;
   pointer-events: ${props => (props.disabled ? 'none' : 'inherit')};
 
   &:hover {
-    color: ${props => props.theme.colors.mainLight};
+    color: var(--color-accent-hover);
     text-decoration: ${p => (p.clean ? 'none' : 'underline')};
   }
   &:active {
-    color: ${props => props.theme.colors.mainDark};
+    color: var(--color-accent-text);
   }
 
   &.atomic-link_external {

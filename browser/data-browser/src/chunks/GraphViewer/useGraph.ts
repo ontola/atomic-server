@@ -8,7 +8,6 @@ import {
 import { EdgeData, NodeData, applyNodeStyling } from './buildGraph';
 import { useCallback, useMemo, useState } from 'react';
 import Dagre from '@dagrejs/dagre';
-import { useTheme } from 'styled-components';
 import { dataBrowser, Resource, useValue } from '@tomic/react';
 
 interface CustomNodePositioning {
@@ -67,8 +66,6 @@ const placeNodesInSpace = (
 };
 
 export function useGraph(ontology: Resource): UseNodeReturn {
-  const theme = useTheme();
-
   // `customNodePositioning` is a JSON property holding a plain object that maps
   // each node's subject to its `[x, y]` position. Read and write it as a native
   // object via `useValue` — NOT as a `JSON.stringify`'d string. The stringified
@@ -97,10 +94,10 @@ export function useGraph(ontology: Resource): UseNodeReturn {
         _edges,
         customPositioning,
       );
-      setNodes(applyNodeStyling(positionedNodes, theme));
+      setNodes(applyNodeStyling(positionedNodes));
       setEdges(positionedEdges);
     },
-    [theme, customPositioning],
+    [customPositioning],
   );
 
   const handleNodeDoubleClick = useCallback(

@@ -3,9 +3,10 @@ import {
   ButtonHTMLAttributes,
   AnchorHTMLAttributes,
 } from 'react';
-import { styled, DefaultTheme, keyframes } from 'styled-components';
+import { styled, keyframes } from 'styled-components';
 import { transition } from '../../helpers/transition';
 import { adjustHue } from 'polished';
+import { colorTokens, type ColorTokenName } from '../../styles/colorTokens';
 
 export enum IconButtonVariant {
   Simple,
@@ -16,7 +17,7 @@ export enum IconButtonVariant {
   Magic,
 }
 
-type ColorProp = keyof DefaultTheme['colors'] | 'inherit';
+type ColorProp = ColorTokenName | 'inherit';
 
 type BaseProps = {
   className?: string;
@@ -87,7 +88,7 @@ const IconButtonBase = styled.button<ButtonBaseProps>`
   display: inline-grid;
   place-items: center;
   ${transition('background-color', 'color', 'box-shadow', 'filter')};
-  color: ${p => p.theme.colors.text};
+  color: var(--color-text);
   font-size: ${p => p.size ?? '1em'};
   border: none;
   user-select: none;
@@ -110,86 +111,86 @@ interface ButtonStyleProps {
 }
 
 const SimpleIconButton = styled(IconButtonBase)<ButtonStyleProps>`
-  color: ${p => (p.color === 'inherit' ? 'inherit' : p.theme.colors[p.color])};
+  color: ${p => (p.color === 'inherit' ? 'inherit' : colorTokens[p.color])};
   background-color: transparent;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
 
   &:not([disabled]) {
     &:hover,
     &:focus-visible {
-      background-color: ${p => p.theme.colors.bg1};
+      background-color: var(--color-bg-subtle);
     }
 
     &:active {
-      background-color: ${p => p.theme.colors.bg2};
+      background-color: var(--color-border);
     }
   }
 `;
 
 const OutlineIconButton = styled(IconButtonBase)<ButtonStyleProps>`
-  color: ${p => (p.color === 'inherit' ? 'inherit' : p.theme.colors[p.color])};
-  background-color: ${p => p.theme.colors.bg};
+  color: ${p => (p.color === 'inherit' ? 'inherit' : colorTokens[p.color])};
+  background-color: var(--color-bg);
   border-radius: 50%;
 
   &:not([disabled]) {
     &:hover,
     &:focus-visible {
-      color: ${p => p.theme.colors.main};
+      color: var(--color-accent);
       box-shadow:
-        0px 0px 0px 1.5px ${p => p.theme.colors.main},
-        ${p => p.theme.boxShadowSoft};
+        0px 0px 0px 1.5px var(--color-accent),
+        var(--elevation-2);
     }
   }
 
   &&:active {
-    background-color: ${p => p.theme.colors.main};
+    background-color: var(--color-accent);
     color: white;
   }
 `;
 
 const SquareIconButton = styled(IconButtonBase)<ButtonStyleProps>`
-  color: ${p => (p.color === 'inherit' ? 'inherit' : p.theme.colors[p.color])};
-  background-color: ${p => p.theme.colors.bg};
-  border-radius: ${p => p.theme.radius};
-  border: 1px solid ${p => p.theme.colors.bg2};
+  color: ${p => (p.color === 'inherit' ? 'inherit' : colorTokens[p.color])};
+  background-color: var(--color-bg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
 
   &:not([disabled]) {
     &:hover,
     &:focus-visible {
-      color: ${p => p.theme.colors.main};
-      border-color: ${p => p.theme.colors.main};
-      box-shadow: ${p => p.theme.boxShadowSoft};
+      color: var(--color-accent);
+      border-color: var(--color-accent);
+      box-shadow: var(--elevation-2);
     }
   }
 
   &&:active {
-    background-color: ${p => p.theme.colors.main};
+    background-color: var(--color-accent);
     color: white;
   }
 `;
 
 const FillIconButton = styled(IconButtonBase)<ButtonStyleProps>`
-  color: ${p => (p.color === 'inherit' ? 'inherit' : p.theme.colors[p.color])};
+  color: ${p => (p.color === 'inherit' ? 'inherit' : colorTokens[p.color])};
   background-color: unset;
   border-radius: 50%;
   &:hover,
   &:focus-visible {
     color: white;
-    background-color: ${p => p.theme.colors.main};
-    box-shadow: ${p => p.theme.boxShadowSoft};
+    background-color: var(--color-accent);
+    box-shadow: var(--elevation-2);
   }
 `;
 
 const ColoredIconButton = styled(IconButtonBase)<ButtonStyleProps>`
   color: white;
   background-color: ${p =>
-    p.color === 'inherit' ? 'inherit' : p.theme.colors[p.color]};
+    p.color === 'inherit' ? 'inherit' : colorTokens[p.color]};
   border-radius: 50%;
   &:hover,
   &:focus-visible {
     color: white;
     filter: brightness(1.3);
-    box-shadow: ${p => p.theme.boxShadowSoft};
+    box-shadow: var(--elevation-2);
   }
 `;
 
@@ -222,7 +223,7 @@ const MagicIconButton = styled(IconButtonBase)<ButtonStyleProps>`
   }
 
   &::before {
-    border-radius: ${p => p.theme.radius};
+    border-radius: var(--radius-md);
     inset: 0;
     opacity: 0;
     z-index: -2;
@@ -248,14 +249,14 @@ const MagicIconButton = styled(IconButtonBase)<ButtonStyleProps>`
     inset: var(--border-width);
     opacity: var(--bg-opacity);
     will-change: transform;
-    border-radius: calc(${p => p.theme.radius} - var(--border-width));
-    background: ${p => p.theme.colors.bg};
+    border-radius: calc(var(--radius-md) - var(--border-width));
+    background: var(--color-bg);
     z-index: -1;
   }
 
   &:hover,
   &:focus-visible {
-    color: ${p => p.theme.colors.text};
+    color: var(--color-text);
     &::before,
     &::after {
       transform: scale(1);

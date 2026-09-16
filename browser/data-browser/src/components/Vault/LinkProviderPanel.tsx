@@ -193,7 +193,7 @@ const Icon = styled.div`
   height: ${CARD_ICON_SIZE};
   font-size: ${CARD_ICON_FONT};
   border-radius: 50%;
-  background-color: ${p => p.theme.colors.main};
+  background-color: var(--color-accent);
   color: white;
 `;
 
@@ -221,18 +221,18 @@ const Title = styled.h3`
 
 const Sub = styled.p`
   margin: 0;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-size: ${CARD_SUB_FONT};
 `;
 
 const ErrorText = styled.p`
   margin: 0;
-  color: ${p => p.theme.colors.alert};
+  color: var(--color-alert);
   font-size: ${CARD_SUB_FONT};
 `;
 
 const Link = styled.a`
-  color: ${p => p.theme.colors.main};
+  color: var(--color-accent);
 `;
 
 /** Big and spaced: this is read off one screen and typed into another. */
@@ -241,7 +241,7 @@ const Code = styled.output`
   font-size: 1.5rem;
   letter-spacing: 0.15em;
   margin: 0.4rem 0;
-  color: ${p => p.theme.colors.text};
+  color: var(--color-text);
 `;
 
 const Actions = styled.div<{ $compact?: boolean }>`

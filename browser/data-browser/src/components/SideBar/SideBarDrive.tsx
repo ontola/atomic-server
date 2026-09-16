@@ -233,7 +233,7 @@ const DriveGlyph = styled.span`
   flex-shrink: 0;
   font-size: 1rem;
   line-height: 1;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const DriveTitle = styled.h2`
@@ -263,22 +263,21 @@ const TitleButton = styled(Button)<{ current?: boolean }>`
   flex: 1;
   min-width: 0;
   padding: 0.35rem 0.5rem;
-  border: 1px solid ${p => p.theme.colors.bg2};
+  border: 1px solid var(--color-border);
   border-right: none;
-  border-radius: ${props => props.theme.radius} 0 0
-    ${props => props.theme.radius};
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
 
-  ${({ current, theme }) =>
+  ${({ current }) =>
     current &&
     `
-    color: ${theme.colors.main};
+    color: var(--color-accent);
   `}
 
   &:hover {
-    background-color: ${props => props.theme.colors.bg1};
+    background-color: var(--color-bg-subtle);
   }
   &:active {
-    background-color: ${props => props.theme.colors.bg2};
+    background-color: var(--color-border);
   }
 `;
 
@@ -287,18 +286,18 @@ const SwitcherButton = styled(IconButton)`
   height: auto;
   width: auto;
   padding-inline: 0.35rem;
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: 0 ${p => p.theme.radius} ${p => p.theme.radius} 0;
-  color: ${p => p.theme.colors.textLight};
+  border: 1px solid var(--color-border);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  color: var(--color-text-subtle);
   font-size: 0.85rem;
 
   &:hover,
   &:focus-visible {
-    background-color: ${p => p.theme.colors.bg1};
-    color: ${p => p.theme.colors.text};
+    background-color: var(--color-bg-subtle);
+    color: var(--color-text);
   }
   &:active {
-    background-color: ${p => p.theme.colors.bg2};
+    background-color: var(--color-border);
   }
 `;
 
@@ -309,13 +308,13 @@ const DriveSwitcherTrigger = buildDefaultTrigger(
 );
 
 const SideBarErr = styled(SimpleErrorBlock)`
-  margin-inline-end: ${props => props.theme.size()};
+  margin-inline-end: var(--space-3);
 `;
 
 const ListWrapper = styled.div`
   overflow-x: hidden;
   position: relative;
-  padding-inline: ${p => p.theme.margin}rem;
+  padding-inline: var(--space-3);
 `;
 
 const StyledScrollArea = styled(ScrollArea)`

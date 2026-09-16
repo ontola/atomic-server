@@ -11,18 +11,18 @@ export const PartSummary = styled.div<{ $interactive?: boolean }>`
   align-items: center;
   gap: 0.5ch;
   padding: 0.5em;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   font-size: 0.7rem;
   width: fit-content;
-  color: ${p => p.theme.colors.textLight};
-  transition: background-color ${p => p.theme.animation.duration} ease-out;
+  color: var(--color-text-subtle);
+  transition: background-color var(--duration-fast) ease-out;
 
   ${p =>
     p.$interactive
       ? css`
           &:hover,
           &:focus-visible {
-            background-color: ${p.theme.colors.bg1};
+            background-color: var(--color-bg-subtle);
           }
         `
       : ''}

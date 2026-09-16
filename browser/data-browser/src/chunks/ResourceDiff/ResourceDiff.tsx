@@ -301,13 +301,13 @@ const DiffTag = styled.span<{ type: 'added' | 'removed' | 'changed' }>`
       case 'added':
         return '#3cad3c';
       case 'removed':
-        return p.theme.colors.alert;
+        return 'var(--color-alert)';
       case 'changed':
-        return p.theme.colors.main;
+        return 'var(--color-accent)';
     }
   }};
   padding: 0 5px;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   font-size: 0.55rem;
   font-weight: bold;
   text-transform: uppercase;
@@ -321,22 +321,22 @@ const DiffTag = styled.span<{ type: 'added' | 'removed' | 'changed' }>`
 
 const PropLineWrapper = styled(Column)`
   &:not(:last-child) {
-    border-bottom: 1px solid ${p => p.theme.colors.bg2};
-    padding-bottom: ${p => p.theme.size()};
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: var(--space-3);
   }
 `;
 
 const Empty = styled.span`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-style: italic;
 `;
 
 const OldDiffValue = styled.span`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const DiffArrow = styled(FaArrowRight)`
-  color: ${p => p.theme.colors.main};
+  color: var(--color-accent);
 `;
 
 const DiffRow = styled(Row)`

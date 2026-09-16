@@ -206,16 +206,16 @@ const CodeEditorWrapper = styled.div`
   display: contents;
 
   &.json-editor__error .cm-editor {
-    border-color: ${p => p.theme.colors.alert} !important;
+    border-color: var(--color-alert) !important;
   }
 
   & .cm-editor {
-    border: 1px solid ${p => p.theme.colors.bg2};
-    border-radius: ${p => p.theme.radius};
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
     outline: none;
 
     &:focus-within {
-      border-color: ${p => p.theme.colors.main};
+      border-color: var(--color-accent);
     }
 
     & .cm-scroller {
@@ -224,12 +224,12 @@ const CodeEditorWrapper = styled.div`
   }
 
   & .cm-tooltip-hover {
-    background-color: ${p => p.theme.colors.bg};
-    padding: ${p => p.theme.size(2)};
-    box-shadow: ${p => p.theme.boxShadowSoft};
-    border-radius: ${p => p.theme.radius};
+    background-color: var(--color-bg);
+    padding: var(--space-2);
+    box-shadow: var(--elevation-2);
+    border-radius: var(--radius-md);
     border: ${p => (p.theme.darkMode ? '1px solid' : 'none')};
-    ${p => p.theme.colors.bg2};
+    var(--color-border);
 
     & .cm-tooltip-arrow {
       display: none;
@@ -237,9 +237,9 @@ const CodeEditorWrapper = styled.div`
   }
 
   & .cm-gutters {
-    background: ${p => p.theme.colors.bg};
-    border-top-left-radius: ${p => p.theme.radius};
-    border-bottom-left-radius: ${p => p.theme.radius};
+    background: var(--color-bg);
+    border-top-left-radius: var(--radius-md);
+    border-bottom-left-radius: var(--radius-md);
     min-height: 150px;
 
     & .cm-gutterElement {
@@ -249,7 +249,7 @@ const CodeEditorWrapper = styled.div`
 
     & .cm-lint-marker-error {
       content: '';
-      background: ${p => p.theme.colors.alert};
+      background: var(--color-alert);
       border-radius: 50%;
       height: 0.5rem;
       width: 0.5rem;
@@ -257,27 +257,27 @@ const CodeEditorWrapper = styled.div`
   }
 
   & .cm-tooltip {
-    background-color: ${p => p.theme.colors.bg};
-    box-shadow: ${p => p.theme.boxShadowSoft};
-    border-radius: ${p => p.theme.radius};
+    background-color: var(--color-bg);
+    box-shadow: var(--elevation-2);
+    border-radius: var(--radius-md);
     border: none;
 
     & > ul > li {
       background-color: none;
-      padding: ${p => p.theme.size(2)} !important;
+      padding: var(--space-2) !important;
       margin: 0;
 
       &:first-of-type {
-        border-top-left-radius: ${p => p.theme.radius};
-        border-top-right-radius: ${p => p.theme.radius};
+        border-top-left-radius: var(--radius-md);
+        border-top-right-radius: var(--radius-md);
       }
       &:last-of-type {
-        border-bottom-left-radius: ${p => p.theme.radius};
-        border-bottom-right-radius: ${p => p.theme.radius};
+        border-bottom-left-radius: var(--radius-md);
+        border-bottom-right-radius: var(--radius-md);
       }
       &[aria-selected='true'] {
-        background-color: ${p => p.theme.colors.mainSelectedBg};
-        color: ${p => p.theme.colors.mainSelectedFg};
+        background-color: var(--color-accent-subtle);
+        color: var(--color-accent-text);
       }
     }
   }

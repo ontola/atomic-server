@@ -38,7 +38,7 @@ const ScrollBar = styled(RadixScrollArea.Scrollbar)`
   touch-action: none;
   padding: 2px;
   background-color: transparent;
-  transition: background-color ${p => p.theme.animation.duration} ease-out;
+  transition: background-color var(--duration-fast) ease-out;
   &[data-orientation='horizontal'] {
     flex-direction: column;
     height: ${() => SIZE};
@@ -52,7 +52,7 @@ const Thumb = styled(RadixScrollArea.Thumb)`
   position: relative;
   bottom: 1px;
   flex: 1;
-  background-color: ${p => withAlpha(p.theme.colors.bg2, 0.75)};
+  background-color: ${withAlpha('var(--color-border)', 0.75)};
   border-radius: ${() => SIZE};
   backdrop-filter: blur(10px);
   z-index: 2;

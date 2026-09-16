@@ -138,8 +138,8 @@ const PreviewBar = styled.div`
       font-size: 0.875rem;
     }
   }
-  background: ${p => p.theme.colors.bg1};
-  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  background: var(--color-bg-subtle);
+  border-bottom: 1px solid var(--color-border);
 `;
 
 const BackLabel = styled.span`

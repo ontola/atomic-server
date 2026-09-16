@@ -89,20 +89,20 @@ const RangeInput = styled.input.attrs<{ $progress: number }>(p => ({
   appearance: none;
 
   &:focus-visible {
-    outline: 2px solid ${p => p.theme.colors.main};
+    outline: 2px solid var(--color-accent);
     outline-offset: 2px;
-    border-radius: ${p => p.theme.radius};
+    border-radius: var(--radius-md);
   }
 
   &::-webkit-slider-runnable-track {
     height: var(--track-height);
-    border-radius: ${p => p.theme.radius};
+    border-radius: var(--radius-md);
     background: linear-gradient(
       to right,
-      ${p => p.theme.colors.main} 0%,
-      ${p => p.theme.colors.main} var(--progress),
-      ${p => p.theme.colors.bg2} var(--progress),
-      ${p => p.theme.colors.bg2} 100%
+      var(--color-accent) 0%,
+      var(--color-accent) var(--progress),
+      var(--color-border) var(--progress),
+      var(--color-border) 100%
     );
   }
 
@@ -113,35 +113,35 @@ const RangeInput = styled.input.attrs<{ $progress: number }>(p => ({
     height: var(--thumb-size);
     margin-top: calc((var(--thumb-size) - var(--track-height)) / -2);
     border-radius: 50%;
-    background: ${p => p.theme.colors.main};
+    background: var(--color-accent);
   }
 
   &:hover::-webkit-slider-thumb {
-    background: ${p => p.theme.colors.mainLight};
+    background: var(--color-accent-hover);
   }
 
   &::-moz-range-track {
     height: var(--track-height);
-    border-radius: ${p => p.theme.radius};
-    background: ${p => p.theme.colors.bg2};
+    border-radius: var(--radius-md);
+    background: var(--color-border);
   }
 
   &::-moz-range-progress {
     height: var(--track-height);
-    border-radius: ${p => p.theme.radius};
-    background: ${p => p.theme.colors.main};
+    border-radius: var(--radius-md);
+    background: var(--color-accent);
   }
 
   &::-moz-range-thumb {
     width: var(--thumb-size);
     height: var(--thumb-size);
     border-radius: 50%;
-    background: ${p => p.theme.colors.main};
+    background: var(--color-accent);
     cursor: pointer;
   }
 
   &:hover::-moz-range-thumb {
-    background: ${p => p.theme.colors.mainLight};
+    background: var(--color-accent-hover);
   }
 `;
 
@@ -160,5 +160,5 @@ const NumberInput = styled(InputStyled)`
 
 const EndAlignedInputWrapper = styled(InputWrapper)`
   justify-content: flex-end;
-  padding-inline-end: ${p => p.theme.size(2)};
+  padding-inline-end: var(--space-2);
 `;

@@ -133,7 +133,7 @@ const Wrapper = styled.div`
   flex-direction: column;
   gap: 0.5rem;
   padding-block: 0.5rem;
-  border-top: 1px solid ${p => p.theme.colors.bg2};
+  border-top: 1px solid var(--color-border);
 `;
 
 const Breakdown = styled.table`
@@ -143,14 +143,14 @@ const Breakdown = styled.table`
 
   caption {
     text-align: left;
-    color: ${p => p.theme.colors.textLight};
+    color: var(--color-text-subtle);
     font-size: 0.8rem;
     padding-bottom: 0.2rem;
   }
 
   td {
     padding: 0.15rem 0.75rem 0.15rem 0;
-    border-top: 1px solid ${p => p.theme.colors.bg2};
+    border-top: 1px solid var(--color-border);
   }
 `;
 
@@ -167,12 +167,12 @@ const ValueCell = styled.td`
 `;
 
 const CountCell = styled.td`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-variant-numeric: tabular-nums;
   text-align: right;
 `;
 
 const TruncatedCell = styled.td`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-size: 0.8rem;
 `;

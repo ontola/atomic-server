@@ -134,11 +134,11 @@ const StyledTableRow = styled(TableRow)`
 `;
 
 const StyledDragOverlay = styled(DragOverlay)`
-  box-shadow: ${p => p.theme.boxShadowSoft};
-  background-color: ${p => p.theme.colors.bg};
+  box-shadow: var(--elevation-2);
+  background-color: var(--color-bg);
   display: flex;
   align-items: center;
-  border-radius: ${p => p.theme.radius};
-  padding-inline: ${p => p.theme.margin}rem;
+  border-radius: var(--radius-md);
+  padding-inline: var(--space-3);
   opacity: 0.88;
 `;

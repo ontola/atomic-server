@@ -45,10 +45,10 @@ export function ParentPicker({
 }
 
 const PickerWrapper = styled.section`
-  background-color: ${p => p.theme.colors.bg};
-  border-radius: ${p => p.theme.radius};
-  border: 1px solid ${p => p.theme.colors.bg2};
-  padding: ${p => p.theme.margin}rem;
+  background-color: var(--color-bg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  padding: var(--space-3);
 
   height: 20.5rem;
   overflow-y: auto;

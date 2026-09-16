@@ -240,5 +240,5 @@ const CornerTag = styled.div`
 
 const Overflow = styled.span`
   font-size: 0.7rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;

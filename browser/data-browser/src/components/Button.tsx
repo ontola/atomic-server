@@ -122,15 +122,15 @@ export const ButtonBase = styled(ButtonClean)<ButtonPropsStyled>`
   align-items: center;
   gap: 1ch;
   justify-content: center;
-  background-color: ${props => props.theme.colors.main};
-  color: ${props => props.theme.colors.bg};
+  background-color: var(--color-accent);
+  color: var(--color-bg);
   /* Long labels used to run off the side of narrow (phone) screens rather
      than wrap. The anywhere value covers the unbreakable cases too: a
      recovery code or a URL in a label has no space to break at. */
   white-space: normal;
   overflow-wrap: anywhere;
   text-align: center;
-  margin-bottom: ${p => (p.$gutter ? `${p.theme.margin}rem` : '')};
+  margin-bottom: ${p => (p.$gutter ? `var(--space-3)` : '')};
   ${transition(
     'background-color',
     'box-shadow',
@@ -144,15 +144,15 @@ export const ButtonBase = styled(ButtonClean)<ButtonPropsStyled>`
   @media (hover: hover) and (pointer: fine) {
     &:hover:not([disabled]),
     &:focus-visible:not([disabled]) {
-      border-color: ${props => props.theme.colors.main};
+      border-color: var(--color-accent);
       outline: 0;
     }
   }
 
   &:active:not([disabled]) {
     transition: all 0s;
-    /* background-color: ${props => props.theme.colors.mainDark}; */
-    /* color: ${props => props.theme.colors.bg}; */
+    /* background-color: var(--color-accent-text); */
+    /* color: var(--color-bg); */
   }
 
   &:disabled {
@@ -174,7 +174,7 @@ export const ButtonBar = styled(ButtonClean)<ButtonBarProps>`
   padding-left: var(--space-2);
   color: var(--color-accent-text);
   background-color: ${p =>
-    p.selected ? p.theme.colors.bg2 : p.theme.colors.bg};
+    p.selected ? 'var(--color-border)' : 'var(--color-bg)'};
   height: 100%;
   display: flex;
   align-items: center;
@@ -182,11 +182,11 @@ export const ButtonBar = styled(ButtonClean)<ButtonBarProps>`
   &:hover:not([disabled]),
   /* &:active:not([disabled]), */
   &:focus-visible:not([disabled]) {
-    background-color: ${p => p.theme.colors.bg1};
+    background-color: var(--color-bg-subtle);
   }
 
   &:active:not([disabled]) {
-    background-color: ${p => p.theme.colors.bg2};
+    background-color: var(--color-border);
   }
 
   padding-left: ${p => (p.leftPadding ? 'var(--space-4)' : '')};
@@ -195,10 +195,10 @@ export const ButtonBar = styled(ButtonClean)<ButtonBarProps>`
 
 /** Button with some optional margins around it */
 export const ButtonDefault = styled(ButtonBase)<ButtonPropsStyled>`
-  --button-bg-color: ${p => p.theme.colors.main};
-  --button-bg-color-hover: ${p => p.theme.colors.mainLight};
-  --button-border-color: ${p => p.theme.colors.main};
-  --button-border-color-hover: ${p => p.theme.colors.mainLight};
+  --button-bg-color: var(--color-accent);
+  --button-bg-color-hover: var(--color-accent-hover);
+  --button-border-color: var(--color-accent);
+  --button-border-color-hover: var(--color-accent-hover);
   /* The label of a filled accent surface, not the page background. Those used
      to be the same value, which is how seven of the eight main-colour presets
      shipped a primary button below 4.5:1 -- see styles/accentRamp.ts. */
@@ -217,31 +217,31 @@ export const ButtonDefault = styled(ButtonBase)<ButtonPropsStyled>`
 
   &:focus-visible:not([disabled]),
   &:hover:not([disabled]) {
-    box-shadow: ${p => p.theme.boxShadowSoft};
+    box-shadow: var(--elevation-2);
     background-color: var(--button-bg-color-hover);
     color: var(--button-text-color-hover);
     border-color: var(--button-border-color-hover);
   }
 
   &:active:not([disabled]) {
-    box-shadow: inset ${p => p.theme.boxShadowIntense};
+    box-shadow: inset var(--elevation-3);
   }
 `;
 
 export const ButtonSubtle = styled(ButtonDefault)`
-  --button-bg-color: ${p => p.theme.colors.bg};
-  --button-bg-color-hover: ${p => p.theme.colors.bg};
-  --button-border-color: ${p => p.theme.colors.bg2};
-  --button-border-color-hover: ${p => p.theme.colors.main};
-  --button-text-color: ${p => p.theme.colors.textLight};
-  --button-text-color-hover: ${p => p.theme.colors.main};
+  --button-bg-color: var(--color-bg);
+  --button-bg-color-hover: var(--color-bg);
+  --button-border-color: var(--color-border);
+  --button-border-color-hover: var(--color-accent);
+  --button-text-color: var(--color-text-subtle);
+  --button-text-color-hover: var(--color-accent);
 `;
 
 export const ButtonAlert = styled(ButtonDefault)`
-  --button-bg-color: ${p => p.theme.colors.alert};
-  --button-bg-color-hover: ${p => p.theme.colors.alertLight};
-  --button-border-color: ${p => p.theme.colors.alert};
-  --button-border-color-hover: ${p => p.theme.colors.alertLight};
+  --button-bg-color: var(--color-alert);
+  --button-bg-color-hover: var(--color-alert-subtle);
+  --button-border-color: var(--color-alert);
+  --button-border-color-hover: var(--color-alert-subtle);
 `;
 
 /**
@@ -267,8 +267,8 @@ export const ghostButtonStyles = css`
 
   &:hover:not([disabled]),
   &:focus-visible:not([disabled]) {
-    background-color: ${p => p.theme.colors.bg1};
-    color: ${p => p.theme.colors.text};
+    background-color: var(--color-bg-subtle);
+    color: var(--color-text);
   }
 
   &:disabled {
@@ -297,24 +297,24 @@ export const ButtonIcon = styled(ButtonDefault)`
   padding: 0;
 
   &:active:not([disabled]) {
-    box-shadow: ${props => props.theme.boxShadowIntense};
+    box-shadow: var(--elevation-3);
   }
 
   &:active:not([disabled]) {
-    box-shadow: inset ${props => props.theme.boxShadowIntense};
+    box-shadow: inset var(--elevation-3);
   }
 `;
 
 /** A button inside an input field */
 export const ButtonInput = styled(ButtonBase)`
   padding: 0 0.5rem;
-  background-color: ${props => props.theme.colors.bg};
-  color: ${props => props.theme.colors.textLight};
+  background-color: var(--color-bg);
+  color: var(--color-text-subtle);
   flex: 0;
   height: auto;
   /* Sized by the field it sits in, which can be shorter than the base floor. */
   min-height: 0;
-  border-left: solid 1px ${props => props.theme.colors.bg2};
+  border-left: solid 1px var(--color-border);
   border-radius: 0;
 
   /** Prevent sticky hover buttons on touch devices */
@@ -322,13 +322,13 @@ export const ButtonInput = styled(ButtonBase)`
     &:hover:not([disabled]),
     &:active:not([disabled]),
     &:focus-visible:not([disabled]) {
-      color: ${props => props.theme.colors.main};
-      background-color: ${props => props.theme.colors.bg1};
+      color: var(--color-accent);
+      background-color: var(--color-bg-subtle);
     }
   }
 
   &:last-child {
-    border-radius: ${props => props.theme.radius};
+    border-radius: var(--radius-md);
     border-top-left-radius: 0;
     border-bottom-left-radius: 0;
   }

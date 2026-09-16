@@ -223,7 +223,7 @@ const buildBadgedTrigger = (
 const Row = styled.div`
   display: flex;
   align-items: center;
-  gap: ${p => p.theme.size(2)};
+  gap: var(--space-2);
 `;
 
 const BadgedButton = styled.button`
@@ -237,7 +237,7 @@ const BadgedButton = styled.button`
   border-radius: 50%;
 
   &:focus-visible {
-    outline: 2px solid ${p => p.theme.colors.main};
+    outline: 2px solid var(--color-accent);
     outline-offset: 1px;
   }
 `;
@@ -249,7 +249,7 @@ const Badge = styled.span`
   transform: translateX(-50%);
   padding: 0 0.3rem;
   border-radius: 0.5rem;
-  background-color: ${p => p.theme.colors.main};
+  background-color: var(--color-accent);
   color: white;
   font-size: 0.55rem;
   font-weight: bold;
@@ -273,8 +273,8 @@ const MutedPill = styled.div`
   gap: 0.3rem;
   padding: 0.1rem 0.5rem;
   border-radius: 1rem;
-  background-color: ${p => p.theme.colors.bg1};
-  color: ${p => p.theme.colors.textLight};
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text-subtle);
   font-size: 0.85rem;
   white-space: nowrap;
 `;
@@ -284,7 +284,7 @@ const ReEnableButton = styled.button`
   background: none;
   padding: 0;
   cursor: pointer;
-  color: ${p => p.theme.colors.main};
+  color: var(--color-accent);
   font-size: 0.85rem;
   text-decoration: underline;
 `;

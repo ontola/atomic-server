@@ -112,11 +112,11 @@ export function QuickAddDialog({
 const Fields = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${p => p.theme.size(2)};
+  gap: var(--space-2);
 `;
 
 const Intro = styled.p`
   margin: 0;
   font-size: 0.85rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;

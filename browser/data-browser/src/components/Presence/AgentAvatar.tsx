@@ -147,7 +147,7 @@ const OnlineDot = styled.span<{ $size: string }>`
   min-height: 0.5rem;
   border-radius: 50%;
   background: #34c759;
-  border: 2px solid ${p => p.theme.colors.bg};
+  border: 2px solid var(--color-bg);
   box-sizing: border-box;
 `;
 
@@ -164,14 +164,14 @@ const CircleBase = styled.div<{
   height: ${p => p.$size};
   border-radius: 50%;
   border: 2px solid
-    ${p => (p.$following ? p.theme.colors.main : p.theme.colors.bg)};
+    ${p => (p.$following ? 'var(--color-accent)' : 'var(--color-bg)')};
   overflow: hidden;
   user-select: none;
   ${transition('border-color')}
 `;
 
 const ImageCircle = styled(CircleBase)`
-  background-color: ${p => p.theme.colors.bg2};
+  background-color: var(--color-border);
 
   & img,
   & picture {

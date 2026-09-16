@@ -7,7 +7,7 @@ export function BetaBadge(): JSX.Element {
 }
 
 const Badge = styled.span`
-  background-color: ${p => p.theme.colors.main};
+  background-color: var(--color-accent);
   border-radius: 0.25rem;
   color: white;
   font-weight: bold;

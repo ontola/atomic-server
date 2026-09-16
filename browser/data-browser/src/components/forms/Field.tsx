@@ -142,18 +142,18 @@ Field.Label = FieldLabel;
 
 const Astrisk = styled(FaAsterisk)`
   margin-bottom: 0.5em;
-  color: ${p => p.theme.colors.complementary};
+  color: var(--accent-complementary);
 `;
 
 export const FieldHelper = styled.div`
   font-size: 0.9em;
-  color: ${props => props.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 Field.Helper = FieldHelper;
 
 const LabelWrapper = styled.div`
-  margin-bottom: ${p => p.theme.size(2)};
+  margin-bottom: var(--space-2);
 `;
 
 export default Field;

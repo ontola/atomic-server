@@ -267,9 +267,9 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
 
 const Wrapper = styled.div<{ highlight: boolean }>`
   background-color: ${p =>
-    p.highlight ? withAlpha(p.theme.colors.main, 0.1) : 'none'};
+    p.highlight ? withAlpha('var(--color-accent)', 0.1) : 'none'};
 
-  border-radius: ${({ theme }) => theme.radius};
+  border-radius: var(--radius-md);
   ${transition('background-color')}
 `;
 

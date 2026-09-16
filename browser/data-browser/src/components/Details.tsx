@@ -134,9 +134,9 @@ const SummaryWrapper = styled.div<{ $clickable: boolean }>`
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   user-select: none;
-  transition: background-color ${p => p.theme.animation.duration} ease-out;
+  transition: background-color var(--duration-fast) ease-out;
 
   cursor: ${p => (p.$clickable ? 'pointer' : 'default')};
 
@@ -148,11 +148,11 @@ const SummaryWrapper = styled.div<{ $clickable: boolean }>`
 
           &:hover,
           &:focus-within {
-            background-color: ${p.theme.colors.bg1};
+            background-color: var(--color-bg-subtle);
           }
 
           &:active {
-            background-color: ${p.theme.colors.bg2};
+            background-color: var(--color-border);
           }
         `
       : ''}
@@ -182,8 +182,7 @@ const TitleAsButton = styled.button<{ $subtle: boolean }>`
   padding: 0;
   margin: 0;
   font: inherit;
-  color: ${({ theme, $subtle }) =>
-    $subtle ? theme.colors.textLight : 'inherit'};
+  color: ${({ $subtle }) => ($subtle ? 'var(--color-text-subtle)' : 'inherit')};
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -201,14 +200,14 @@ const TitleAsButton = styled.button<{ $subtle: boolean }>`
 `;
 
 const Icon = styled(FaCaretRight)<{ $turn: boolean; $subtle: boolean }>`
-  color: ${({ theme, $subtle }) =>
-    $subtle ? theme.colors.textLight : theme.colors.main};
+  color: ${({ $subtle }) =>
+    $subtle ? 'var(--color-text-subtle)' : 'var(--color-accent)'};
   margin-top: auto;
   cursor: pointer;
   * {
     cursor: pointer;
   }
-  --speed: ${p => p.theme.animation.duration};
+  --speed: var(--duration-fast);
   transition:
     transform var(--speed) ease-in-out,
     background-color var(--speed) ease;
@@ -225,5 +224,5 @@ const StyledIconButton = styled(IconButton)<{ hide: boolean }>`
 `;
 
 const StyledCollapse = styled(Collapse)<{ noIndent?: boolean }>`
-  margin-left: ${p => (p.noIndent ? 0 : p.theme.margin) + 'rem'};
+  margin-left: ${p => (p.noIndent ? 0 : 'var(--space-3)') + 'rem'};
 `;

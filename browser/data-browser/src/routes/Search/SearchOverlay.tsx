@@ -18,7 +18,7 @@ import { useSearchOverlay } from '../../components/Searchbar/SearchOverlayContex
 const OverlayBackdrop = styled.div`
   position: fixed;
   inset: 0;
-  z-index: ${p => p.theme.zIndex.searchOverlay};
+  z-index: var(--z-search-overlay);
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(6px);
   animation: fadeIn 100ms ease-out;
@@ -38,16 +38,16 @@ const CommandPalettePanel = styled.div`
   top: 15vh;
   left: 50%;
   transform: translateX(-50%);
-  z-index: ${p => p.theme.zIndex.searchOverlay};
+  z-index: var(--z-search-overlay);
   width: 100%;
   max-width: 38rem;
   max-height: 70vh;
   display: flex;
   flex-direction: column;
-  background: ${p => p.theme.colors.bg};
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  box-shadow: ${p => p.theme.boxShadow};
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--elevation-1);
   animation: slideIn 100ms ease-out;
   overflow: hidden;
 
@@ -68,10 +68,10 @@ const SearchInputWrapper = styled.div`
   align-items: center;
   gap: 0.75rem;
   padding: 0.875rem 1rem;
-  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  border-bottom: 1px solid var(--color-border);
 
   svg {
-    color: ${p => p.theme.colors.textLight};
+    color: var(--color-text-subtle);
     flex-shrink: 0;
   }
 `;
@@ -82,21 +82,21 @@ const SearchInput = styled.input`
   border: none;
   outline: none;
   font-size: 1rem;
-  color: ${p => p.theme.colors.text};
+  color: var(--color-text);
   font-family: inherit;
 
   &::placeholder {
-    color: ${p => p.theme.colors.textLight};
+    color: var(--color-text-subtle);
   }
 `;
 
 const ShortcutHint = styled.kbd`
-  background: ${p => p.theme.colors.bg1};
-  border: 1px solid ${p => p.theme.colors.bg2};
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
   border-radius: 0.25rem;
   padding: 0.1rem 0.35rem;
   font-size: 0.7rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-family: inherit;
 `;
 
@@ -117,8 +117,8 @@ const HeadingRow = styled.div`
   align-items: center;
   gap: 0.75rem;
   padding: 0.875rem 1rem;
-  border-bottom: 1px solid ${p => p.theme.colors.bg2};
-  color: ${p => p.theme.colors.textLight};
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-subtle);
   font-size: 0.875rem;
 `;
 
@@ -128,12 +128,12 @@ const HeadingIcon = styled.span`
 `;
 
 const TagHeading = styled.span`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-weight: bold;
 `;
 
 const HelperMessage = styled.p`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-size: 0.875rem;
   padding: 0.75rem 1rem;
   line-height: 1.5;
@@ -144,9 +144,9 @@ const FooterRow = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 0.5rem 1rem;
-  border-top: 1px solid ${p => p.theme.colors.bg2};
+  border-top: 1px solid var(--color-border);
   font-size: 0.75rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const FooterHints = styled.div`

@@ -31,11 +31,11 @@ const Label = styled.label`
   }
 
   &[aria-disabled='true'] {
-    color: ${p => p.theme.colors.textLight};
+    color: var(--color-text-subtle);
   }
 
   &:focus-within {
-    color: ${p => p.theme.colors.main};
+    color: var(--color-accent);
   }
 
   transition: ${transition('color')};
@@ -48,20 +48,20 @@ const Input = styled.input`
   appearance: none;
   margin: 0;
   width: 1.15em;
-  background-color: ${p => p.theme.colors.bg};
-  border: solid 1px ${p => p.theme.colors.bg2};
+  background-color: var(--color-bg);
+  border: solid 1px var(--color-border);
   border-radius: 50%;
   aspect-ratio: 1/1;
   transition: ${transition('border-color')};
 
   &:not(:disabled):checked,
   &:not(:disabled):hover {
-    border-color: ${p => p.theme.colors.main};
+    border-color: var(--color-accent);
   }
 
   &::before {
     content: '';
-    background-color: ${p => p.theme.colors.main};
+    background-color: var(--color-accent);
     width: 75%;
     aspect-ratio: 1/1;
     border-radius: 50%;
@@ -70,7 +70,7 @@ const Input = styled.input`
   }
 
   &:disabled::before {
-    background-color: ${p => p.theme.colors.bg2};
+    background-color: var(--color-border);
   }
 
   &:checked::before {
@@ -82,7 +82,7 @@ const Input = styled.input`
   }
 
   &:focus {
-    outline-color: ${p => p.theme.colors.main};
+    outline-color: var(--color-accent);
   }
 `;
 

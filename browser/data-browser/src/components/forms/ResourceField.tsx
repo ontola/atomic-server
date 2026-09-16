@@ -116,7 +116,7 @@ const HelperTextWrapper = styled.div`
 `;
 
 const Extra = styled(Row)`
-  color: ${props => props.theme.colors.textLight};
+  color: var(--color-text-subtle);
   margin-top: 0.5rem;
 `;
 

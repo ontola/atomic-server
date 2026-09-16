@@ -233,13 +233,13 @@ const Wrapper = styled.div`
 
   &:has(li) {
     ${InputWrapper} {
-      box-shadow: ${p => p.theme.boxShadowSoft};
-      border-radius: ${p => p.theme.radius} ${p => p.theme.radius} 0 0;
+      box-shadow: var(--elevation-2);
+      border-radius: var(--radius-md) var(--radius-md) 0 0;
       border-bottom: none;
 
       &.menu-above-input {
-        border-radius: 0 0 ${p => p.theme.radius} ${p => p.theme.radius};
-        border-bottom: solid 1px ${p => p.theme.colors.main};
+        border-radius: 0 0 var(--radius-md) var(--radius-md);
+        border-bottom: solid 1px var(--color-accent);
         border-top: none;
       }
     }
@@ -249,25 +249,25 @@ const Wrapper = styled.div`
 const ListItem = styled.li`
   list-style: none;
   margin: 0;
-  padding: ${p => p.theme.size(1)} ${p => p.theme.size(2)};
+  padding: var(--space-1) var(--space-2);
   font-size: 0.9rem;
   &[data-selected='true'] {
-    background-color: ${p => p.theme.colors.mainSelectedBg};
-    color: ${p => p.theme.colors.mainSelectedFg};
+    background-color: var(--color-accent-subtle);
+    color: var(--color-accent-text);
   }
 `;
 
 const Description = styled.span`
   font-size: 0.8rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const List = styled.ul<{ $open: boolean; anchorName: string }>`
-  max-height: ${p => p.theme.size(15)};
+  max-height: var(--space-15);
   overflow: auto;
   margin: 0;
-  box-shadow: ${p => p.theme.boxShadowSoft};
-  border-radius: 0 0 ${p => p.theme.radius} ${p => p.theme.radius};
+  box-shadow: var(--elevation-2);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
 
   position-anchor: ${p => p.anchorName};
   top: anchor(bottom);
@@ -275,18 +275,18 @@ const List = styled.ul<{ $open: boolean; anchorName: string }>`
   bottom: unset;
   min-width: max(100%, 25rem);
   max-width: 95vw;
-  background-color: ${p => p.theme.colors.bg};
-  scrollbar-color: ${p => p.theme.colors.bg2} transparent;
-  border: solid 1px ${p => p.theme.colors.main};
+  background-color: var(--color-bg);
+  scrollbar-color: var(--color-border) transparent;
+  border: solid 1px var(--color-accent);
   border-top: none;
   position-try: flip-block;
 
   &.menu-above-input {
     top: unset;
     bottom: anchor(top);
-    border-radius: ${p => p.theme.radius} ${p => p.theme.radius} 0 0;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
     border-bottom: none;
-    border-top: solid 1px ${p => p.theme.colors.main};
+    border-top: solid 1px var(--color-accent);
     box-shadow: none;
   }
 `;
@@ -315,7 +315,7 @@ const StyledInputWrapper = styled(InputWrapper)<{
 
       &:hover:has(input:not(:disabled)),
       &:hover {
-        background-color: ${p.theme.colors.bg1};
+        background-color: var(--color-bg-subtle);
         border-color: transparent;
       }
     `}

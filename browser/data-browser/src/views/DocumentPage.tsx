@@ -73,30 +73,30 @@ const DocumentTitle = styled.h1<ViewTransitionProps>`
 `;
 
 const DocumentContainer = styled.div`
-  width: min(100%, ${p => p.theme.containerWidth}rem);
+  width: min(100%, var(--container-width));
   margin: auto;
   display: flex;
   flex: 1;
   flex-direction: column;
   padding: 2rem;
-  @media (max-width: ${props => props.theme.containerWidth}rem) {
-    padding: ${p => p.theme.size()};
+  @media (max-width: var(--container-width)) {
+    padding: var(--space-3);
   }
 `;
 
 const FullPageWrapper = styled.div`
-  background-color: ${p => p.theme.colors.bg};
+  background-color: var(--color-bg);
   display: flex;
   flex: 1;
   flex-direction: column;
-  min-height: ${p => p.theme.heights.fullPage};
+  min-height: 100%;
   box-sizing: border-box;
 `;
 
 const LoadingRow = styled.div`
   display: flex;
   justify-content: center;
-  padding: ${p => p.theme.size(4)};
+  padding: var(--space-4);
 `;
 
 export default DocumentPage;

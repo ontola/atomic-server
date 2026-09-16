@@ -163,7 +163,7 @@ const VirtualWrapper = styled.div`
   gap: 0.5rem;
   width: 100%;
   align-self: stretch;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   /* The header cell is bold; a property's heading renders its name in a button
    * that isn't, so match that rather than standing out as the odd column. */
   font-weight: normal;

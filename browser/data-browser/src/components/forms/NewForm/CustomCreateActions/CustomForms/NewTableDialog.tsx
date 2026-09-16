@@ -393,7 +393,7 @@ const TemplateHeading = styled.span`
   gap: 0.5ch;
 
   svg {
-    color: ${p => p.theme.colors.textLight};
+    color: var(--color-text-subtle);
     flex-shrink: 0;
   }
 `;
@@ -404,22 +404,22 @@ const TemplateCard = styled.button<{ $selected: boolean }>`
   gap: 0.25rem;
   text-align: left;
   padding: 0.6rem 0.75rem;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   border: 1px solid
-    ${p => (p.$selected ? p.theme.colors.main : p.theme.colors.bg2)};
+    ${p => (p.$selected ? 'var(--color-accent)' : 'var(--color-border)')};
   background-color: ${p =>
-    p.$selected ? p.theme.colors.mainSelectedBg : p.theme.colors.bg};
-  color: ${p => p.theme.colors.text};
+    p.$selected ? 'var(--color-accent-subtle)' : 'var(--color-bg)'};
+  color: var(--color-text);
   cursor: pointer;
 
   &:hover {
-    border-color: ${p => p.theme.colors.main};
+    border-color: var(--color-accent);
   }
 `;
 
 const TemplateDescription = styled.span`
   font-size: 0.8em;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   /* Two lines, so every card is the same height. The card's title attribute
      carries the whole description. */
   display: -webkit-box;

@@ -216,7 +216,7 @@ const Indicator = styled.div.attrs<IndicatorProps>(p => ({
   position: absolute;
   top: 0;
   left: 0;
-  border: 2px solid ${p => p.theme.colors.main};
+  border: 2px solid var(--color-accent);
   pointer-events: none;
   will-change: transform, width;
   transition:
@@ -227,5 +227,5 @@ const Indicator = styled.div.attrs<IndicatorProps>(p => ({
   background-color: ${p =>
     p.cursorMode === CursorMode.Edit
       ? 'none'
-      : withAlpha(p.theme.colors.main, 0.15)};
+      : withAlpha('var(--color-accent)', 0.15)};
 `;

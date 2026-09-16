@@ -5,6 +5,6 @@ export const InputBase = styled.input`
   border: none;
   inset: 0;
   padding-inline: var(--table-inner-padding);
-  background-color: ${p => p.theme.colors.bg};
-  color: ${p => p.theme.colors.text};
+  background-color: var(--color-bg);
+  color: var(--color-text);
 `;

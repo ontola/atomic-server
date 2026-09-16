@@ -529,22 +529,22 @@ const AgentsList = styled.ul`
   list-style: none;
   padding: 0;
   margin: 0;
-  margin-top: ${p => p.theme.size(2)};
+  margin-top: var(--space-2);
   display: flex;
   flex-direction: column;
-  gap: ${p => p.theme.size(2)};
+  gap: var(--space-2);
 `;
 
 const CreateButton = styled(SkeletonButton)`
   width: 100%;
-  padding: ${p => p.theme.size(2)} ${p => p.theme.size(3)};
+  padding: var(--space-2) var(--space-3);
   height: 3rem;
 `;
 
 const FormContainer = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${p => p.theme.size(3)};
+  gap: var(--space-3);
 `;
 
 const StyledField = styled(Field)`
@@ -554,12 +554,12 @@ const StyledField = styled(Field)`
 `;
 
 const SystemPromptPreview = styled.div`
-  background-color: ${p => p.theme.colors.bg};
-  border-radius: ${p => p.theme.radius};
-  box-shadow: 0 0 0 1px ${p => p.theme.colors.bg2};
+  background-color: var(--color-bg);
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 1px var(--color-border);
   max-height: 30rem;
   overflow: auto;
-  padding: ${p => p.theme.size()};
+  padding: var(--space-3);
 `;
 
 const ToolList = styled.ul`
@@ -576,5 +576,5 @@ const ToolList = styled.ul`
 
 const SubtleText = styled.p`
   font-size: 0.875rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;

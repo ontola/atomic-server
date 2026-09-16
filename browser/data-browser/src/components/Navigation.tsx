@@ -22,7 +22,7 @@ import { useResource } from '@tomic/react';
 import NavBarContent from './NavBar';
 import { useLocation } from '@tanstack/react-router';
 import { useSettings } from '../helpers/AppSettings';
-import { ChromeTheme } from '../styling';
+import { CHROME_SCOPE } from '../styling';
 import { paths, pathNames } from '../routes/paths';
 import { useRootWelcomeLayout } from '../context/RootWelcomeLayoutContext';
 import { isHostedDistribution } from '../helpers/managedServer';
@@ -152,15 +152,14 @@ const TopBar = React.memo(function TopBar({
   const resource = useResource(subject);
 
   return (
-    <ChromeTheme>
-      <NavBarStyled
-        aria-label='navigation'
-        top={top}
-        previewHeight={previewHeight}
-      >
-        <NavBarContent resource={resource} />
-      </NavBarStyled>
-    </ChromeTheme>
+    <NavBarStyled
+      aria-label='navigation'
+      className={CHROME_SCOPE}
+      top={top}
+      previewHeight={previewHeight}
+    >
+      <NavBarContent resource={resource} />
+    </NavBarStyled>
   );
 });
 
@@ -169,11 +168,11 @@ const NavBarStyled = styled.div<{ top: boolean; previewHeight: string }>`
   ${p => (p.top ? `top: ${p.previewHeight};` : 'bottom: 0;')}
   left: 0;
   right: 0;
-  z-index: ${p => p.theme.zIndex.sidebar};
-  height: ${p => p.theme.heights.breadCrumbBar};
+  z-index: var(--z-sidebar);
+  height: var(--height-breadcrumb-bar);
   display: flex;
-  background-color: ${props => props.theme.colors.bg};
-  border-${p => (p.top ? 'bottom' : 'top')}: solid 1px ${props => props.theme.colors.bg2};
+  background-color: var(--color-bg);
+  border-${p => (p.top ? 'bottom' : 'top')}: solid 1px var(--color-border);
   container-name: nav-bar;
   container-type: inline-size;
 
@@ -197,7 +196,7 @@ const SideBarWrapper = styled.div<{
     p.fullViewportContent
       ? CalculatedPageHeight.define(`calc(100dvh - var(--keyboard-inset, 0px))`)
       : CalculatedPageHeight.define(
-          `calc(100dvh - ${p.theme.heights.breadCrumbBar} - ${p.previewHeight} - var(--keyboard-inset, 0px))`,
+          `calc(100dvh - var(--height-breadcrumb-bar) - ${p.previewHeight} - var(--keyboard-inset, 0px))`,
         )}
   display: flex;
   height: ${CalculatedPageHeight.var()};
@@ -207,7 +206,7 @@ const SideBarWrapper = styled.div<{
       return 'top: 0;';
     }
 
-    return `top: calc(${p.previewHeight} + ${p.top ? p.theme.heights.breadCrumbBar : '0px'});`;
+    return `top: calc(${p.previewHeight} + ${p.top ? 'var(--height-breadcrumb-bar)' : '0px'});`;
   }}
   left: 0;
   right: 0;
@@ -230,5 +229,5 @@ const PreviewHeader = styled.div`
   position: fixed;
   inset: 0 0 auto;
   height: 3.5rem;
-  z-index: ${p => p.theme.zIndex.sidebar};
+  z-index: var(--z-sidebar);
 `;

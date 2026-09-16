@@ -107,17 +107,17 @@ const CodeText = styled.code`
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.75rem;
-  color: ${p => p.theme.colors.textLight};
-  background: ${p => p.theme.colors.bg1};
+  color: var(--color-text-subtle);
+  background: var(--color-bg-subtle);
   padding: 0.35rem 0.5rem;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
 `;
 
 const QrBox = styled.div`
   width: 13rem;
   height: 13rem;
   max-width: 100%;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   overflow: hidden;
   background: white;
   padding: 0.5rem;

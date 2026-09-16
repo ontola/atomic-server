@@ -11,16 +11,15 @@ import { withAlpha } from '../styles/withAlpha';
  * equivalent `@starting-style` transition for the entrance.
  */
 export const floatingSurface = css`
-  background-color: ${p => withAlpha(p.theme.colors.bgBody, 0.8)};
+  background-color: ${withAlpha('var(--color-bg-body)', 0.8)};
   backdrop-filter: blur(10px);
-  box-shadow: ${p => p.theme.boxShadowSoft};
-  border-radius: ${p => p.theme.radius};
-  border: ${p =>
-    p.theme.darkMode ? `1px solid ${p.theme.colors.bg2}` : 'none'};
+  box-shadow: var(--elevation-2);
+  border-radius: var(--radius-md);
+  border: ${p => (p.theme.darkMode ? `1px solid var(--color-border)` : 'none')};
 
   @media (prefers-contrast: more) {
-    border: 1px solid ${p => p.theme.colors.bg2};
-    background-color: ${p => p.theme.colors.bg};
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg);
     backdrop-filter: none;
   }
 `;

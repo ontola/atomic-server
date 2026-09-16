@@ -31,7 +31,7 @@ export function FloatingActions({
 const Wrapper = styled.span<{ dropdownActive: boolean }>`
   visibility: hidden;
   font-size: 0.9rem;
-  color: ${p => p.theme.colors.main};
+  color: var(--color-accent);
 
   @media (pointer: fine) {
     visibility: ${p => (p.dropdownActive ? 'visible' : 'hidden')};

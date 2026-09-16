@@ -53,10 +53,10 @@ const StyledAtomicLink = styled(AtomicLink)`
   display: inline-flex;
   align-items: center;
   gap: 0.5ch;
-  color: ${props => props.theme.colors.mainSelectedFg};
-  background-color: ${props => props.theme.colors.mainSelectedBg};
+  color: var(--color-accent-text);
+  background-color: var(--color-accent-subtle);
   padding: 0rem 0.4rem;
-  border-radius: ${props => props.theme.radius};
-  border: 1px solid ${props => props.theme.colors.mainSelectedFg};
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-accent-text);
   user-select: none;
 `;

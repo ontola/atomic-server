@@ -49,19 +49,19 @@ const SubGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 1rem;
-  padding: ${p => p.theme.size()};
-  border-radius: ${p => p.theme.radius};
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
 
   @container ${CARD_CONTAINER} (inline-size < 400px) {
     grid-template-columns: 1fr;
   }
 
   &:nth-child(even) {
-    background-color: ${p => p.theme.colors.bg1};
+    background-color: var(--color-bg-subtle);
   }
 
   & svg {
-    fill: ${p => p.theme.colors.textLight};
+    fill: var(--color-text-subtle);
   }
 `;
 
@@ -70,7 +70,7 @@ const MarkdownWrapper = styled.span`
     grid-column: 1 / 3;
   }
 
-  color: ${({ theme }) => theme.colors.textLight};
+  color: var(--color-text-subtle);
   padding-bottom: 0.5rem;
 `;
 

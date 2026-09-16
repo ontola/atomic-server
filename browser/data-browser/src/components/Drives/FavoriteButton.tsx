@@ -48,7 +48,7 @@ const StyledButton = styled.button`
   background: none;
   border: none;
   cursor: pointer;
-  color: ${p => p.theme.colors.main};
+  color: var(--color-accent);
   width: 1.3rem;
   display: flex;
   align-items: center;

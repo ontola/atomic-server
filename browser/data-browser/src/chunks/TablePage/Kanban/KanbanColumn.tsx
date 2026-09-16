@@ -159,7 +159,7 @@ const Column = styled.div`
   height: 100%;
   /* Header + card list are one continuous rounded card; this clips both to
    * match the outer radius instead of each rounding its own corners. */
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   overflow: hidden;
 `;
 
@@ -170,8 +170,8 @@ const ColumnHeader = styled.div<{ $bg: string | undefined }>`
   padding: 0.6rem 0.75rem;
   /* Stays put while the card list below scrolls. */
   flex-shrink: 0;
-  background-color: ${p => p.$bg ?? p.theme.colors.bg2};
-  color: ${p => (p.$bg ? 'white' : p.theme.colors.textLight)};
+  background-color: ${p => p.$bg ?? 'var(--color-border)'};
+  color: ${p => (p.$bg ? 'white' : 'var(--color-text-subtle)')};
 `;
 
 const ColumnHeaderTitle = styled.span`
@@ -212,9 +212,9 @@ const AddInput = styled(InputStyled)`
   height: auto;
   min-height: 2.4rem;
   padding: 0.5rem 0.6rem;
-  border: 1px solid ${p => p.theme.colors.main};
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg};
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg);
 `;
 
 const CardList = styled.div<{ $over: boolean; $tint: string | undefined }>`
@@ -230,17 +230,17 @@ const CardList = styled.div<{ $over: boolean; $tint: string | undefined }>`
   overflow-y: auto;
   background-color: ${p => {
     if (p.$over) {
-      return p.theme.colors.bg2;
+      return 'var(--color-border)';
     }
 
     // A faint wash of the header's hue over the usual grey — close enough
     // to bg1 that it still reads as neutral, but ties the card list to its
     // column.
     return p.$tint
-      ? blend(p.$tint, p.theme.colors.bg1, 0.08)
-      : p.theme.colors.bg1;
+      ? blend(p.$tint, 'var(--color-bg-subtle)', 0.08)
+      : 'var(--color-bg-subtle)';
   }};
-  border: 1px dashed ${p => (p.$over ? p.theme.colors.main : 'transparent')};
+  border: 1px dashed ${p => (p.$over ? 'var(--color-accent)' : 'transparent')};
   transition:
     background-color 0.1s ease-in-out,
     border-color 0.1s ease-in-out;

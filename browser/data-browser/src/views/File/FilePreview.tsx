@@ -78,18 +78,18 @@ const StyledImageViewer = styled(ImageViewer)`
 const NoPreview = styled.div`
   display: grid;
   place-items: center;
-  border: 1px solid ${({ theme }) => theme.colors.bg2};
-  border-radius: ${({ theme }) => theme.radius};
-  background-color: ${({ theme }) => theme.colors.bg1};
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-subtle);
   height: 8rem;
 `;
 
 const StyledTextPreview = styled(TextPreview)`
   width: 100%;
-  border: 1px solid ${({ theme }) => theme.colors.bg2};
-  background-color: ${({ theme }) => theme.colors.bg};
-  border-radius: ${({ theme }) => theme.radius};
-  padding: ${({ theme }) => theme.margin}rem;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
 `;
 
 interface SizeWarningProps {

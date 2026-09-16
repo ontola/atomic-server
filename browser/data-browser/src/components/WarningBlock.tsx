@@ -8,8 +8,8 @@ export function WarningBlock({
 }
 
 const Wrapper = styled.div`
-  border: 2px solid ${p => p.theme.colors.warning};
-  border-radius: ${p => p.theme.radius};
+  border: 2px solid var(--color-warning);
+  border-radius: var(--radius-md);
   padding: 1rem;
 `;
 

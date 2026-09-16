@@ -63,6 +63,7 @@ import { useAIChanges } from '@components/AIChangesContext';
 import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
 import { useLocalStorage } from '@hooks/useLocalStorage';
 import { Spinner } from '@components/Spinner';
+import { withAlpha } from '../../styles/withAlpha';
 
 const AIChatInput = React.lazy(
   () => import('@chunks/RTE/AIChatInput/AsyncAIChatInput'),
@@ -986,20 +987,20 @@ const filesToFileParts = (files: File[]): Promise<FileUIPart[]> =>
   );
 
 const ChatInputWrapper = styled.div`
-  background-color: ${p => p.theme.colors.bg};
-  padding: ${p => p.theme.size(2)};
-  border-radius: ${p => p.theme.radius};
-  border: solid 1px ${p => p.theme.colors.bg2};
+  background-color: var(--color-bg);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  border: solid 1px var(--color-border);
   display: flex;
   flex: 1;
   align-items: flex-end;
-  gap: ${p => p.theme.size()};
+  gap: var(--space-3);
   position: relative;
   min-width: 0;
 
   ${transition('border-color')}
   &:focus-within {
-    border-color: ${p => p.theme.colors.main};
+    border-color: var(--color-accent);
   }
 
   textarea {
@@ -1011,17 +1012,17 @@ const AttachmentPreview = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background-color: ${p => p.theme.colors.bg};
-  padding: ${p => p.theme.size(1)};
-  border-radius: ${p => p.theme.radius};
+  background-color: var(--color-bg);
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
   font-size: 0.8rem;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 `;
 
 const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
-  ${p => p.fullView && `background-color: ${p.theme.colors.bgBody};`}
-  padding: ${p => (p.fullView ? p.theme.size() : 0)};
-  padding-top: ${p => (p.fullView ? p.theme.size(2) : 0)};
+  ${p => p.fullView && `background-color: var(--color-bg-body);`}
+  padding: ${p => (p.fullView ? 'var(--space-3)' : 0)};
+  padding-top: ${p => (p.fullView ? 'var(--space-2)' : 0)};
   position: relative;
   display: grid;
   grid-template-rows: ${p =>
@@ -1047,7 +1048,7 @@ const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
 
 const TokensUsed = styled.p`
   font-size: 0.8rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const SubtleButton = styled.button`
@@ -1056,9 +1057,9 @@ const SubtleButton = styled.button`
   background: none;
   border: none;
   color: inherit;
-  border-radius: ${p => p.theme.radius};
-  padding: ${p => p.theme.size(1)};
-  padding-inline: ${p => p.theme.size(2)};
+  border-radius: var(--radius-md);
+  padding: var(--space-1);
+  padding-inline: var(--space-2);
 
   white-space: nowrap;
   overflow: hidden;
@@ -1068,7 +1069,7 @@ const SubtleButton = styled.button`
 
   &:focus-visible,
   &:hover {
-    background-color: ${p => p.theme.colors.bg1};
+    background-color: var(--color-bg-subtle);
   }
 `;
 
@@ -1079,11 +1080,11 @@ const ProviderNotice = styled.div`
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
-  padding: ${p => p.theme.size(2)} ${p => p.theme.size(3)};
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.alert}1a;
-  border: 1px solid ${p => p.theme.colors.alert}55;
-  color: ${p => p.theme.colors.text};
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background-color: ${withAlpha('var(--color-alert)', 0.1)};
+  border: 1px solid ${withAlpha('var(--color-alert)', 0.33)};
+  color: var(--color-text);
   font-size: 0.85rem;
 
   span {
@@ -1095,21 +1096,21 @@ const FloatingChatWidgetsContainer = styled.div`
   display: flex;
   flex-direction: column;
   height: fit-content;
-  gap: ${p => p.theme.size(2)};
+  gap: var(--space-2);
   position: absolute;
   width: 100%;
-  bottom: calc(100% + ${p => p.theme.size(3)});
+  bottom: calc(100% + var(--space-3));
   left: 0;
   right: 0;
   z-index: 10;
 `;
 
 const ContextItemRow = styled(Row)`
-  padding-inline: ${p => p.theme.size(2)};
+  padding-inline: var(--space-2);
 `;
 
 const IndexingIndicator = styled(Row)`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 /**

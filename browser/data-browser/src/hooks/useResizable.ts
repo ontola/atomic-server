@@ -187,7 +187,7 @@ interface DragAreaBaseProps {
 }
 
 export const DragAreaBase = styled.div<DragAreaBaseProps>`
-  --drag-color: ${p => withAlpha(p.theme.colors.main, 0.3)};
+  --drag-color: ${withAlpha('var(--color-accent)', 0.3)};
   position: absolute;
   cursor: col-resize;
 
@@ -202,5 +202,5 @@ export const DragAreaBase = styled.div<DragAreaBaseProps>`
     backdrop-filter: blur(5px);
   }
 
-  border-radius: ${({ theme }) => theme.radius};
+  border-radius: var(--radius-md);
 `;

@@ -17,11 +17,11 @@ export const JSONRenderer: React.FC<JSONRendererProps> = ({ value }) => {
 };
 
 const StyledHighlightedCodeBlock = styled(HighlightedCodeBlock)`
-  width: calc(100cqw - ${p => p.theme.size()});
-  background-color: ${p => p.theme.colors.bgBody};
+  width: calc(100cqw - var(--space-3));
+  background-color: var(--color-bg-body);
 
   max-height: 40rem;
   pre {
-    background-color: ${p => p.theme.colors.bgBody} !important;
+    background-color: var(--color-bg-body) !important;
   }
 `;

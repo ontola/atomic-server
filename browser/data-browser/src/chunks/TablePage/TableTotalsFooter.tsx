@@ -395,11 +395,11 @@ function targetOf(column: TableColumn): AggregateTarget | undefined {
  * otherwise quiet table.
  */
 const FooterRow = styled(TableRow)`
-  background-color: ${p => p.theme.colors.bg1};
+  background-color: var(--color-bg-subtle);
 
   & > div {
     border-bottom: none;
-    border-right: 1px solid ${p => p.theme.colors.bg2};
+    border-right: 1px solid var(--color-border);
 
     &:last-child {
       border-right: none;
@@ -408,7 +408,7 @@ const FooterRow = styled(TableRow)`
 
   /* Each extra totals row is separated from the one above it. */
   & + & > div {
-    border-top: 1px solid ${p => p.theme.colors.bg2};
+    border-top: 1px solid var(--color-border);
   }
 
   span[data-hint='true'] {
@@ -444,7 +444,7 @@ const CellButton = styled.button`
   overflow: hidden;
 
   &:focus-visible {
-    outline: 2px solid ${p => p.theme.colors.main};
+    outline: 2px solid var(--color-accent);
     outline-offset: -2px;
   }
 `;
@@ -456,7 +456,7 @@ const CountCell = styled(TableHeadingWrapper)`
   font-size: 0.8rem;
   justify-content: flex-end;
   padding: 0;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const FillerCell = styled(TableHeadingWrapper)`
@@ -477,18 +477,18 @@ const Label = styled.span`
   letter-spacing: 0.03em;
   /* textLight, not textLight2: in dark mode the latter is darkened almost to
    * the background, which left this label unreadable. */
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const Amount = styled.span`
   font-variant-numeric: tabular-nums;
   font-weight: bold;
-  color: ${p => p.theme.colors.text};
+  color: var(--color-text);
 `;
 
 /** A column that cannot carry a total, marked as such on hover. */
 const Unavailable = styled.span`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   opacity: 0;
   transition: opacity 0.1s;
   padding-inline: var(--table-inner-padding);
@@ -501,5 +501,5 @@ const Unavailable = styled.span`
 
 const Hint = styled.span`
   transition: opacity 0.1s;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;

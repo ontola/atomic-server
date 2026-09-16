@@ -62,7 +62,7 @@ const StyledDocument = styled(Document)`
 
 const StyledPage = styled(Page)`
   margin: auto;
-  border-radius: ${({ theme }) => theme.radius};
+  border-radius: var(--radius-md);
   overflow: hidden;
-  box-shadow: ${({ theme }) => theme.boxShadow};
+  box-shadow: var(--elevation-1);
 `;

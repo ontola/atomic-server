@@ -253,8 +253,8 @@ export const ResourceSelector = memo(function ResourceSelector({
 const StyledSearchBox = styled(SearchBox)``;
 
 const Wrapper = styled.div<{ first?: boolean; last?: boolean }>`
-  ${SB_TOP_RADIUS.define(p => (p.first ? p.theme.radius : 0))}
-  ${SB_BOTTOM_RADIUS.define(p => (p.last ? p.theme.radius : 0))}
+  ${SB_TOP_RADIUS.define(p => (p.first ? 'var(--radius-md)' : 0))}
+  ${SB_BOTTOM_RADIUS.define(p => (p.last ? 'var(--radius-md)' : 0))}
 
   flex: 1;
   max-width: 100%;

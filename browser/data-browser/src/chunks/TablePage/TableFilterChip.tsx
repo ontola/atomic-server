@@ -191,7 +191,7 @@ function DerivedValueInput({
 }
 
 const Suffix = styled.span`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-size: 0.85rem;
   white-space: nowrap;
 `;
@@ -203,17 +203,17 @@ const ChipTrigger = styled(RadixPopover.Trigger)<{ $active: boolean }>`
   max-width: 24rem;
   padding: 0.1rem 0.5rem;
   height: 1.75rem;
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   background-color: ${p =>
-    p.$active ? p.theme.colors.bg1 : p.theme.colors.bg};
-  color: ${p => p.theme.colors.text};
+    p.$active ? 'var(--color-bg-subtle)' : 'var(--color-bg)'};
+  color: var(--color-text);
   cursor: pointer;
   font-size: 0.85rem;
   white-space: nowrap;
 
   &:hover {
-    border-color: ${p => p.theme.colors.main};
+    border-color: var(--color-accent);
   }
 `;
 
@@ -224,7 +224,7 @@ const ChipLabel = styled.span`
 `;
 
 const ChipOperator = styled.span`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const ChipValue = styled.span`
@@ -234,12 +234,12 @@ const ChipValue = styled.span`
 `;
 
 const Placeholder = styled.span`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const PopoverInner = styled(Column)`
-  padding: ${p => p.theme.size()};
-  gap: ${p => p.theme.size()};
+  padding: var(--space-3);
+  gap: var(--space-3);
   min-width: 18rem;
 `;
 
@@ -250,15 +250,15 @@ const Header = styled.span`
 const RemoveButton = styled.button`
   background: none;
   border: none;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   cursor: pointer;
   display: flex;
   align-items: center;
   padding: 0.25rem;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
 
   &:hover {
-    color: ${p => p.theme.colors.alert};
-    background-color: ${p => p.theme.colors.bg1};
+    color: var(--color-alert);
+    background-color: var(--color-bg-subtle);
   }
 `;

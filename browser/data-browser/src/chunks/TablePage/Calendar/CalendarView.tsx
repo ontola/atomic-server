@@ -332,7 +332,7 @@ const WeekdayRow = styled.div`
 const Weekday = styled.span`
   padding: 0.25rem 0.3rem;
   font-size: 0.8em;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   text-transform: capitalize;
 `;
 
@@ -342,9 +342,9 @@ const Grid = styled.div<{ $weeks: number }>`
   grid-template-rows: repeat(${p => p.$weeks}, minmax(5rem, 1fr));
   gap: 1px;
   /* The gap + this background paints the hairline grid between the cells. */
-  background-color: ${p => p.theme.colors.bg2};
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
+  background-color: var(--color-border);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   overflow: hidden;
   flex: 1;
   min-height: 0;
@@ -355,5 +355,5 @@ const Center = styled.div`
   justify-content: center;
   align-items: center;
   padding: 2rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;

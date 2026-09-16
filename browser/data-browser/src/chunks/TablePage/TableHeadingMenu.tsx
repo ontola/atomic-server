@@ -225,6 +225,6 @@ const Wrapper = styled.div`
   margin-left: auto;
 
   & > button {
-    color: ${p => p.theme.colors.textLight};
+    color: var(--color-text-subtle);
   }
 `;

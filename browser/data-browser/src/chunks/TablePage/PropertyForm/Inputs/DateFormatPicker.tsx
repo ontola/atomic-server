@@ -75,19 +75,19 @@ export function DateFormatPicker({
 const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
 `;
 
 const OptionWrapper = styled.div`
-  padding: ${p => p.theme.margin}rem;
+  padding: var(--space-3);
 
   &:not(:last-child) {
-    border-bottom: 1px solid ${p => p.theme.colors.bg2};
+    border-bottom: 1px solid var(--color-border);
   }
 `;
 
 const FormattedDate = styled.span`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-style: italic;
 `;

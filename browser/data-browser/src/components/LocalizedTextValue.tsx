@@ -49,12 +49,12 @@ export function LocalizedTextValue({
 }
 
 const MissingFallback = styled.span`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-style: italic;
 
   &::after {
     content: ' ●';
-    color: ${p => p.theme.colors.warning};
+    color: var(--color-warning);
     font-size: 0.6em;
     vertical-align: super;
   }

@@ -79,10 +79,10 @@ const StyledPre = styled.pre`
     padding: 1rem;
     overflow: visible;
     height: min-content;
-    background-color: ${p => p.theme.colors.bg1};
+    background-color: var(--color-bg-subtle);
     code[class*='language-'],
     &[class*='language-'] {
-      color: ${p => p.theme.colors.text};
+      color: var(--color-text);
       text-shadow: none;
     }
     & .operator {
@@ -101,8 +101,8 @@ const StyledPre = styled.pre`
 
 const StyledScrollArea = styled(ScrollArea)`
   filter: ${p => (p.theme.darkMode ? 'brightness(1.5)' : 'none')};
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg1};
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-subtle);
   overflow: auto;
 `;
 

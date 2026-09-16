@@ -142,7 +142,7 @@ const FieldInput = styled(InputStyled)`
   flex: 1;
   min-width: 12rem;
   max-width: 30rem;
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   padding: 0.4rem 0.6rem;
 `;

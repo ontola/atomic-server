@@ -52,7 +52,7 @@ const Title = styled.h2<ViewTransitionProps>`
 const TitleRow = styled(Row)`
   max-width: 100%;
   overflow: hidden;
-  color: ${({ theme }) => theme.colors.textLight};
+  color: var(--color-text-subtle);
 
   svg {
     min-width: 1em;

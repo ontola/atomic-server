@@ -295,7 +295,7 @@ const DummySelector = (props: ResourceSelectorProps) => {
 };
 
 const StyledDragOverlay = styled(DragOverlay)`
-  ${SB_BACKGROUND.define(p => withAlpha(p.theme.colors.bg, 0.5))}
+  ${SB_BACKGROUND.define(withAlpha('var(--color-bg)', 0.5))}
   backdrop-filter: blur(3px);
 `;
 
@@ -313,12 +313,12 @@ const DragHandle = styled.button`
   &:active {
     cursor: grabbing;
     svg {
-      color: ${p => p.theme.colors.textLight};
+      color: var(--color-text-subtle);
     }
   }
 
   svg {
-    color: ${p => p.theme.colors.textLight2};
+    color: var(--color-text-subtle);
   }
 `;
 
@@ -329,7 +329,7 @@ const DragWrapper = styled(Row)<{ active: boolean }>`
 
   &:hover {
     ${DragHandle} svg {
-      color: ${p => p.theme.colors.textLight};
+      color: var(--color-text-subtle);
     }
   }
 `;
@@ -342,13 +342,13 @@ const AddButton = styled(Button)`
   align-self: flex-start;
   width: 100%;
   box-shadow: none;
-  border: 1px dashed ${p => p.theme.colors.bg2};
+  border: 1px dashed var(--color-border);
   background: none;
 
   &:not(:disabled) {
     &:hover,
     &:focus-visible {
-      border: 1px solid ${p => p.theme.colors.main};
+      border: 1px solid var(--color-accent);
       box-shadow: none !important;
     }
   }
@@ -360,7 +360,7 @@ const DropEdgeElement = styled.div<{ visible: boolean; active: boolean }>`
   height: 3px;
   border-radius: 1.5px;
   transform: scaleX(${p => (p.active ? 1.1 : 1)});
-  background: ${p => p.theme.colors.main};
+  background: var(--color-accent);
   opacity: ${p => (p.active ? 1 : 0)};
   z-index: 2;
   width: 100%;

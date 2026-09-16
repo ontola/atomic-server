@@ -1,12 +1,12 @@
-import { css, DefaultTheme } from 'styled-components';
+import { css } from 'styled-components';
 
+/** Standard transition for a set of properties, on the shared motion token. */
 export function transition(...properties: string[]) {
-  const interpolate = (theme: DefaultTheme) =>
-    properties
-      .map(p => `${p} ${theme.animation.duration} ease-in-out`)
-      .join(',');
+  const value = properties
+    .map(property => `${property} var(--duration-fast) ease-in-out`)
+    .join(',');
 
   return css`
-    transition: ${({ theme }) => interpolate(theme)};
+    transition: ${value};
   `;
 }

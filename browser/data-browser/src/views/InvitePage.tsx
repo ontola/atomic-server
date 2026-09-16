@@ -561,20 +561,20 @@ export default InvitePage;
 
 const LogoWrap = styled.div`
   text-align: center;
-  margin-bottom: ${p => p.theme.size(4)};
+  margin-bottom: var(--space-4);
 `;
 
 const DescriptionWrap = styled.div`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   text-align: center;
-  margin-bottom: ${p => p.theme.size(5)};
+  margin-bottom: var(--space-5);
 `;
 
 const StyledCodeBlock = styled(CodeBlock)`
   word-break: break-word;
 
   & button {
-    top: ${p => p.theme.size(1)};
-    right: ${p => p.theme.size(1)};
+    top: var(--space-1);
+    right: var(--space-1);
   }
 `;

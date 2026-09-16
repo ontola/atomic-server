@@ -102,11 +102,11 @@ const PanelContainer = styled.div.attrs<PanelContainerProps>(p => ({
           top: 0;
           right: 0;
           bottom: 0;
-          z-index: ${p.theme.zIndex.sidebar};
+          z-index: var(--z-sidebar);
           width: ${PANEL_WIDTH};
           transform: translateX(100%);
           opacity: 0;
-          box-shadow: ${p.theme.boxShadowIntense};
+          box-shadow: var(--elevation-3);
           transition: ${p.$dragging
             ? 'none'
             : 'transform 0.3s ease, opacity 0.3s ease'};
@@ -148,10 +148,10 @@ const PanelInner = styled.div`
   box-sizing: border-box;
   /* Grey backdrop: chat content renders directly on it (no inset box),
    * matching the full-page AI chat. */
-  background-color: ${p => p.theme.colors.bgBody};
-  border-left: 1px solid ${p => p.theme.colors.bg2};
+  background-color: var(--color-bg-body);
+  border-left: 1px solid var(--color-border);
   overflow: hidden;
-  padding: ${p => p.theme.size()};
+  padding: var(--space-3);
   padding-top: 2px;
 `;
 
@@ -159,7 +159,7 @@ const PanelInner = styled.div`
 const Backdrop = styled.div<{ $visible: boolean }>`
   position: fixed;
   inset: 0;
-  z-index: ${p => p.theme.zIndex.sidebar - 1};
+  z-index: calc(var(--z-sidebar) - 1);
   cursor: pointer;
   transition: background-color 0.3s ease;
   background-color: ${p =>

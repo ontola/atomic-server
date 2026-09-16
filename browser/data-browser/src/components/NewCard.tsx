@@ -15,24 +15,24 @@ export function NewCard({ onClick }: NewCardProps) {
 }
 
 const Thing = styled(GridCard)`
-  background-color: ${p => p.theme.colors.bg1};
-  border: 1px solid ${p => p.theme.colors.bg2};
+  background-color: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
   cursor: pointer;
   display: grid;
   place-items: center;
   height: 100%;
   width: 100%;
   font-size: 3rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   transition:
     color 0.1s ease-in-out,
     font-size 0.1s ease-out,
     border-color 0.1s ease-in-out;
   &:hover,
   &:focus {
-    color: ${p => p.theme.colors.main};
+    color: var(--color-accent);
     font-size: 3.8rem;
-    border-color: ${p => p.theme.colors.main};
+    border-color: var(--color-accent);
   }
 
   :active {

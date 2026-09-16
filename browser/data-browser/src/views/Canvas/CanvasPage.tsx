@@ -1734,23 +1734,23 @@ const Page = styled.div`
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: ${p => p.theme.heights.fullPage};
-  background: ${p => p.theme.colors.bg};
+  min-height: 100%;
+  background: var(--color-bg);
   position: relative;
 `;
 
 const SaveStatus = styled.span<{ $error?: boolean }>`
   position: absolute;
-  top: ${p => p.theme.size()};
-  right: ${p => p.theme.size(2)};
+  top: var(--space-3);
+  right: var(--space-2);
   z-index: 2;
   font-size: 0.875rem;
   padding: 4px 10px;
-  border-radius: ${p => p.theme.radius};
-  background: ${p => p.theme.colors.bg};
-  color: ${p => (p.$error ? p.theme.colors.alert : p.theme.colors.textLight)};
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: ${p => (p.$error ? 'var(--color-alert)' : 'var(--color-text-subtle)')};
   border: 1px solid
-    ${p => (p.$error ? p.theme.colors.alert : p.theme.colors.bg2)};
+    ${p => (p.$error ? 'var(--color-alert)' : 'var(--color-border)')};
 `;
 
 const CanvasArea = styled.div<{
@@ -1764,7 +1764,7 @@ const CanvasArea = styled.div<{
   min-height: 400px;
   overflow: hidden;
   touch-action: none;
-  background: ${p => p.theme.colors.bg};
+  background: var(--color-bg);
   cursor: ${p =>
     p.$panMode === 'ready'
       ? 'grab'
@@ -1813,11 +1813,11 @@ const HelpList = styled.ul`
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  color: ${p => p.theme.colors.text};
+  color: var(--color-text);
 
   & kbd {
-    background: ${p => p.theme.colors.bg1};
-    border: 1px solid ${p => p.theme.colors.bg2};
+    background: var(--color-bg-subtle);
+    border: 1px solid var(--color-border);
     border-radius: 4px;
     padding: 0 0.35em;
     font-size: 0.85em;
@@ -1832,7 +1832,7 @@ const HelpList = styled.ul`
  */
 const BottomToolbar = styled.div`
   position: absolute;
-  bottom: ${p => p.theme.size(2)};
+  bottom: var(--space-2);
   left: 50%;
   transform: translateX(-50%);
   z-index: 3;
@@ -1840,8 +1840,8 @@ const BottomToolbar = styled.div`
   align-items: center;
   gap: 6px;
   padding: 6px;
-  background: ${p => p.theme.colors.bg};
-  border: 1px solid ${p => p.theme.colors.bg2};
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
   border-radius: 32px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
 `;
@@ -1855,13 +1855,13 @@ const CircleButton = styled.button<CircleButtonProps>`
   height: 44px;
   border-radius: 50%;
   border: none;
-  background: ${p => (p.$active ? p.theme.colors.main : 'transparent')};
+  background: ${p => (p.$active ? 'var(--color-accent)' : 'transparent')};
   color: ${p =>
     p.$active
-      ? p.theme.colors.bg
+      ? 'var(--color-bg)'
       : p.disabled
-        ? p.theme.colors.textLight
-        : p.theme.colors.text};
+        ? 'var(--color-text-subtle)'
+        : 'var(--color-text)'};
   cursor: ${p => (p.disabled ? 'default' : 'pointer')};
   opacity: ${p => (p.disabled ? 0.4 : 1)};
   display: inline-flex;
@@ -1872,7 +1872,8 @@ const CircleButton = styled.button<CircleButtonProps>`
   transition: background 120ms ease;
 
   &:hover:not(:disabled) {
-    background: ${p => (p.$active ? p.theme.colors.main : p.theme.colors.bg1)};
+    background: ${p =>
+      p.$active ? 'var(--color-accent)' : 'var(--color-bg-subtle)'};
   }
 `;
 
@@ -1891,12 +1892,12 @@ const ColorCircleButton = styled.button<{ $color: number }>`
   height: 44px;
   border-radius: 50%;
   background: ${p => colorIntToHex(p.$color)};
-  border: 2px solid ${p => p.theme.colors.bg2};
+  border: 2px solid var(--color-border);
   cursor: pointer;
   padding: 0;
 
   &:hover {
-    border-color: ${p => p.theme.colors.text};
+    border-color: var(--color-text);
   }
 `;
 
@@ -1917,7 +1918,7 @@ const WidthCircleButton = styled.button`
   padding: 0;
 
   &:hover {
-    background: ${p => p.theme.colors.bg1};
+    background: var(--color-bg-subtle);
   }
 `;
 
@@ -1925,5 +1926,5 @@ const WidthDot = styled.span<{ $size: number }>`
   width: ${p => p.$size}px;
   height: ${p => p.$size}px;
   border-radius: 50%;
-  background: ${p => p.theme.colors.text};
+  background: var(--color-text);
 `;

@@ -181,8 +181,8 @@ const Cell = styled.div<{ $w: number; $h: number }>`
  */
 const Controls = styled.div`
   position: absolute;
-  top: ${p => p.theme.size(1)};
-  right: ${p => p.theme.size(1)};
+  top: var(--space-1);
+  right: var(--space-1);
   z-index: 1;
   opacity: 0;
   transition: opacity 0.1s ease-in-out;

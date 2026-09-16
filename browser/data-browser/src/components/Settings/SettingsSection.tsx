@@ -16,7 +16,7 @@ export const SettingsGroup = styled.div`
 
 /** A single collapsible settings row with bottom border. */
 export const SettingsSectionWrapper = styled.div`
-  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  border-bottom: 1px solid var(--color-border);
   padding-block: 0.4rem;
 
   &:first-child {
@@ -32,7 +32,7 @@ export const SettingsSectionWrapper = styled.div`
 export const SettingsLabel = styled.span`
   font-size: 0.9rem;
   font-weight: 500;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 /** Padding wrapper for content inside a settings section. */

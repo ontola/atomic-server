@@ -28,7 +28,7 @@ const Subtle = styled.p`
   grid-column: 2;
   font-size: 0.8rem;
   margin: 0;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const Grid = styled.div`

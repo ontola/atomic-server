@@ -35,10 +35,10 @@ const Heading = styled.h2`
   font-size: 1rem;
   gap: 1ch;
   width: fit-content;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-weight: normal;
-  padding-inline: ${p => p.theme.size(2)};
-  margin-inline-start: ${p => p.theme.size(2)};
+  padding-inline: var(--space-2);
+  margin-inline-start: var(--space-2);
   background-color: ${CurrentBackgroundColor.var()};
   position: absolute;
   top: -0.5rem;
@@ -46,20 +46,20 @@ const Heading = styled.h2`
 `;
 
 const SectionWrapper = styled.div`
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  padding: ${p => p.theme.size()};
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
   position: relative;
   // Because the heading sticks out of the section we need some extra margin to make it look visually consistent.
   margin-block-start: 0.5rem;
 
   &.extra-padding {
-    padding: ${p => p.theme.size(6)};
+    padding: var(--space-6);
 
     ${Heading} {
       margin: 0;
-      padding-inline: ${p => p.theme.size()};
-      left: ${p => p.theme.size()};
+      padding-inline: var(--space-3);
+      left: var(--space-3);
     }
   }
 `;

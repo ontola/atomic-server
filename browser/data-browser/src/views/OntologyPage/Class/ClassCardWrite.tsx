@@ -103,11 +103,10 @@ export function ClassCardWrite({ subject }: ClassCardWriteProps): JSX.Element {
 }
 
 const StyledCard = styled(TargetableCard)`
-  padding-bottom: ${p => p.theme.size()}rem;
+  padding-bottom: var(--space-3);
   max-width: 100rem;
-  box-shadow: ${p => p.theme.boxShadow};
-  border: ${p =>
-    p.theme.darkMode ? `1px solid ${p.theme.colors.bg2}` : 'none'};
+  box-shadow: var(--elevation-1);
+  border: ${p => (p.theme.darkMode ? `1px solid var(--color-border)` : 'none')};
 
   input,
   select {

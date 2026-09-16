@@ -58,17 +58,17 @@ interface MessageWrapperProps {
 }
 
 const TextWrapper = styled.div`
-  background-color: ${p => p.theme.colors.bg};
+  background-color: var(--color-bg);
   padding: 0.5rem;
   border-radius: 15px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: ${p => p.theme.colors.text};
+  color: var(--color-text);
 `;
 
 const MessageWrapper = styled.div<MessageWrapperProps>`
-  padding-inline: ${p => p.theme.margin}rem;
+  padding-inline: var(--space-3);
   width: 100%;
   text-align: ${p => p.alignment ?? 'left'};
 
@@ -80,7 +80,7 @@ const MessageWrapper = styled.div<MessageWrapperProps>`
 `;
 
 const CommitWrapper = styled.div`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   padding-inline: 0.5rem;
   width: 100%;
   white-space: nowrap;

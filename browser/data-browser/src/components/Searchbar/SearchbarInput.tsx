@@ -374,11 +374,11 @@ export const SearchbarFakeInput = styled.div<{ $placeholder: string }>`
   overflow: hidden;
   padding-block: 0.4rem;
   padding-inline-start: 0rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   flex: 1;
 
   &:focus {
-    color: ${p => p.theme.colors.text};
+    color: var(--color-text);
     outline: none;
   }
 
@@ -388,8 +388,8 @@ export const SearchbarFakeInput = styled.div<{ $placeholder: string }>`
   }
 
   &::highlight(tag-highlight) {
-    color: ${p => p.theme.colors.mainSelectedFg};
-    background-color: ${p => p.theme.colors.mainSelectedBg};
+    color: var(--color-accent-text);
+    background-color: var(--color-accent-subtle);
     padding: 0.2rem;
     display: inline-block;
   }

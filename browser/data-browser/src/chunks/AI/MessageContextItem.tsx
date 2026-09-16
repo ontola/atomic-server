@@ -54,10 +54,10 @@ const ResourceContextItem = ({ subject }: ResourceContextItemProps) => {
 const Badge = styled.span`
   display: inline-flex;
   align-items: center;
-  background-color: ${p => p.theme.colors.mainSelectedBg};
-  border-radius: ${p => p.theme.radius};
-  padding-inline: ${p => p.theme.size(1)};
-  color: ${p => p.theme.colors.mainSelectedFg};
-  border: 1px solid ${p => p.theme.colors.mainSelectedFg};
+  background-color: var(--color-accent-subtle);
+  border-radius: var(--radius-md);
+  padding-inline: var(--space-1);
+  color: var(--color-accent-text);
+  border: 1px solid var(--color-accent-text);
   font-size: 0.6rem;
 `;

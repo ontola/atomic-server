@@ -273,33 +273,33 @@ const ExpandToggleButton = styled.button`
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  min-height: ${p => p.theme.margin * 0.5 + 1}rem;
+  min-height: var(--space-5);
   width: calc(1.5rem + 0.4rem);
   margin: 0;
   padding: 0.2rem;
   border: none;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   background: transparent;
   cursor: pointer;
-  color: ${p => p.theme.colors.main};
+  color: var(--color-accent);
 
   &:hover {
-    background-color: ${p => p.theme.colors.bg1};
+    background-color: var(--color-bg-subtle);
   }
 
   &:active {
-    background-color: ${p => p.theme.colors.bg2};
+    background-color: var(--color-border);
   }
 
   &:focus-visible {
-    outline: 2px solid ${p => p.theme.colors.main};
+    outline: 2px solid var(--color-accent);
     outline-offset: 1px;
   }
 `;
 
 const ExpandCaret = styled(FaCaretRight)<{ $open: boolean }>`
   flex-shrink: 0;
-  transition: transform ${p => p.theme.animation.duration} ease-in-out;
+  transition: transform var(--duration-fast) ease-in-out;
   transform: rotate(${p => (p.$open ? '90deg' : '0deg')});
   font-size: 0.8rem;
 `;
@@ -331,8 +331,7 @@ const FloatingActionsCell = styled.span`
 
 const ActionWrapper = styled.div<{ isDragging?: boolean }>`
   --aw-box-shadow-start: 0 0 0 0px rgba(0, 0, 0, 0.1);
-  --aw-box-shadow-end:
-    0 0 0 1px ${p => p.theme.colors.main}, ${p => p.theme.boxShadowSoft};
+  --aw-box-shadow-end: 0 0 0 1px var(--color-accent), var(--elevation-2);
 
   box-sizing: border-box;
   display: flex;
@@ -341,7 +340,7 @@ const ActionWrapper = styled.div<{ isDragging?: boolean }>`
   min-width: 0;
   gap: 0;
   ${floatingHoverStyles}
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   ${p =>
     p.isDragging &&
     css`

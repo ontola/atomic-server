@@ -272,16 +272,16 @@ function PeerTile({ peer }: { peer: PeerState }) {
 }
 
 const CallSection = styled(Column)`
-  gap: ${p => p.theme.size(2)};
-  padding-bottom: ${p => p.theme.size(2)};
-  border-bottom: 1px solid ${p => p.theme.colors.bg2};
-  margin-bottom: ${p => p.theme.size(2)};
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--space-2);
 `;
 
 const TileGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-  gap: ${p => p.theme.size(2)};
+  gap: var(--space-2);
   max-height: 40vh;
   overflow-y: auto;
 `;
@@ -289,9 +289,9 @@ const TileGrid = styled.div`
 const Tile = styled.div`
   position: relative;
   aspect-ratio: 4 / 3;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   overflow: hidden;
-  background-color: ${p => p.theme.colors.bg1};
+  background-color: var(--color-bg-subtle);
 `;
 
 const PeerVideo = styled.video<{ $mirrored?: boolean }>`
@@ -329,18 +329,18 @@ const ConnectingNote = styled.span`
   display: grid;
   place-items: center;
   font-size: 0.8rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const WaitingNote = styled.span`
   font-size: 0.8rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   text-align: center;
 `;
 
 const ErrorMessage = styled.span`
   font-size: 0.85rem;
-  color: ${p => p.theme.colors.alert};
+  color: var(--color-alert);
   text-align: center;
 `;
 

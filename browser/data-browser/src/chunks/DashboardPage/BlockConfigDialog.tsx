@@ -435,32 +435,32 @@ function ViewOption({ subject }: { subject: string }): JSX.Element {
 const Fields = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${p => p.theme.size(2)};
+  gap: var(--space-2);
 `;
 
 const Field = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${p => p.theme.size(1)};
+  gap: var(--space-1);
 
   label {
     font-size: 0.85rem;
-    color: ${p => p.theme.colors.textLight};
+    color: var(--color-text-subtle);
   }
 `;
 
 const StyledSelect = styled.select`
   padding: 0.4rem;
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg};
-  color: ${p => p.theme.colors.text};
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg);
+  color: var(--color-text);
 `;
 
 const TextArea = styled.textarea`
   border: none;
   background: transparent;
-  color: ${p => p.theme.colors.text};
+  color: var(--color-text);
   padding: 0.4rem;
   width: 100%;
   resize: vertical;

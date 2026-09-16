@@ -97,7 +97,7 @@ export interface TableHeadingWrapperProps {
 export const TableHeadingWrapper = styled.div<TableHeadingWrapperProps>`
   position: relative;
   background-color: ${p =>
-    p.reordering ? withAlpha(p.theme.colors.bg, 0.5) : p.theme.colors.bgBody};
+    p.reordering ? withAlpha('var(--color-bg)', 0.5) : 'var(--color-bg-body)'};
   display: flex;
   width: 100%;
   align-items: center;
@@ -108,8 +108,8 @@ export const TableHeadingWrapper = styled.div<TableHeadingWrapperProps>`
   isolation: isolate;
   color: ${p =>
     p.reordering
-      ? withAlpha(p.theme.colors.textLight, 0.5)
-      : p.theme.colors.textLight};
+      ? withAlpha('var(--color-text-subtle)', 0.5)
+      : 'var(--color-text-subtle)'};
 `;
 
 const TableHeadingWrapperDummy = styled(TableHeadingWrapper)`

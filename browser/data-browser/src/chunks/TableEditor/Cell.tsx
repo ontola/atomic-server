@@ -316,7 +316,7 @@ const IndexNumber = styled.span``;
 
 const StyledIndexCell = styled(Cell)<{ hasMarking: boolean }>`
   justify-content: flex-end !important;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 
   & button {
     display: none;
@@ -345,7 +345,7 @@ export const CellWrapper = styled.div.attrs<CellWrapperProps>(p => ({
   } as Record<string, string>,
 }))`
   background-color: ${p =>
-    p.disabled ? p.theme.colors.bg1 : p.theme.colors.bg};
+    p.disabled ? 'var(--color-bg-subtle)' : 'var(--color-bg)'};
   cursor: ${p => (p.disabled ? 'not-allowed' : 'pointer')};
   display: flex;
   width: 100%;

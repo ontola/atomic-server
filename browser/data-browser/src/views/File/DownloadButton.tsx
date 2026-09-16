@@ -27,7 +27,7 @@ export function DownloadIconButton({
 }
 
 const DownloadIcon = styled(FaDownload)`
-  color: ${({ theme }) => theme.colors.main};
+  color: var(--color-accent);
 `;
 
 export function DownloadButton({

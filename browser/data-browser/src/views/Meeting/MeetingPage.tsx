@@ -99,13 +99,13 @@ export function MeetingPage({
 }
 
 const Page = styled(Column)`
-  width: min(100%, ${p => p.theme.containerWidthWide});
+  width: min(100%, var(--container-width-wide));
   margin: auto;
   box-sizing: border-box;
   min-width: 0;
-  padding: clamp(1rem, 4vw, ${p => p.theme.size(7)});
+  padding: clamp(1rem, 4vw, var(--space-7));
   container-type: inline-size;
-  gap: ${p => p.theme.size(4)};
+  gap: var(--space-4);
 `;
 
 const MeetingHeader = styled(Row)`
@@ -118,9 +118,9 @@ const MeetingHeader = styled(Row)`
     flex-direction: column;
     align-items: stretch;
   }
-  gap: ${p => p.theme.size(3)};
-  padding-bottom: ${p => p.theme.size(3)};
-  border-bottom: 2px solid ${p => p.theme.colors.main};
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 2px solid var(--color-accent);
 `;
 
 const MeetingActions = styled(Row)`
@@ -134,7 +134,7 @@ const MeetingActions = styled(Row)`
 `;
 
 const Phase = styled.span`
-  color: ${p => p.theme.colors.main};
+  color: var(--color-accent);
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.08em;

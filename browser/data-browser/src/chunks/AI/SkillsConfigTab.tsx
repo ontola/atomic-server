@@ -312,17 +312,17 @@ const SkillsList = styled.ul`
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: ${p => p.theme.size()};
+  gap: var(--space-3);
 `;
 
 const SkillItem = styled.li`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: ${p => p.theme.size(2)};
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg};
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg);
   margin: 0;
 `;
 
@@ -333,15 +333,15 @@ const CreateButton = styled(SkeletonButton)`
 const SubtleText = styled.p`
   margin: 0;
   font-size: 0.875rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const ReferenceContainer = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${p => p.theme.size(1)};
-  padding: ${p => p.theme.size(2)};
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg1};
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-subtle);
 `;

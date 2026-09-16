@@ -138,20 +138,20 @@ function RowActionCell({
 const Button = styled.button<{ $active: boolean; $confirming: boolean }>`
   width: 100%;
   border: 1px solid
-    ${p => (p.$active ? p.theme.colors.main : p.theme.colors.bg2)};
-  border-radius: ${p => p.theme.radius};
+    ${p => (p.$active ? 'var(--color-accent)' : 'var(--color-border)')};
+  border-radius: var(--radius-md);
   background-color: ${p =>
     p.$confirming
-      ? p.theme.colors.main
+      ? 'var(--color-accent)'
       : p.$active
-        ? p.theme.colors.mainSelectedBg
-        : p.theme.colors.bg};
+        ? 'var(--color-accent-subtle)'
+        : 'var(--color-bg)'};
   color: ${p =>
     p.$confirming
-      ? p.theme.colors.bg
+      ? 'var(--color-bg)'
       : p.$active
-        ? p.theme.colors.main
-        : p.theme.colors.text};
+        ? 'var(--color-accent)'
+        : 'var(--color-text)'};
   cursor: pointer;
   font-size: 0.8rem;
   padding: 0.15rem 0.3rem;
@@ -165,7 +165,7 @@ const Button = styled.button<{ $active: boolean; $confirming: boolean }>`
     color 0.15s ease-out;
 
   &:hover:not(:disabled) {
-    border-color: ${p => p.theme.colors.main};
+    border-color: var(--color-accent);
   }
 
   &:disabled {

@@ -87,5 +87,5 @@ export function NewClassInstanceButton({
 }
 
 const PlusIcon = styled(FaPlus)`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;

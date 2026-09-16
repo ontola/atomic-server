@@ -61,6 +61,6 @@ const PluginItem: React.FC<{ subject: string }> = ({ subject }) => {
 };
 
 const NoPluginsInstalled = styled.p`
-  color: ${p => p.theme.colors.textLight};
-  padding-block: ${p => p.theme.size()};
+  color: var(--color-text-subtle);
+  padding-block: var(--space-3);
 `;

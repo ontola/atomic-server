@@ -65,6 +65,6 @@ const OpenLabel = styled.span`
 `;
 
 const Empty = styled.span`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-style: italic;
 `;

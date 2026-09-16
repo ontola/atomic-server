@@ -48,19 +48,19 @@ interface NavStyleButtonStylingProps {
 
 const NavStyleButtonStyling = styled.button<NavStyleButtonStylingProps>`
   rect {
-    fill: ${p => (p.current ? p.theme.colors.main : p.theme.colors.bg2)};
+    fill: ${p => (p.current ? 'var(--color-accent)' : 'var(--color-border)')};
   }
   &:hover {
-    border-color: ${p => p.theme.colors.mainLight};
+    border-color: var(--color-accent-hover);
   }
   &:active {
-    border-color: ${p => p.theme.colors.mainDark};
+    border-color: var(--color-accent-text);
   }
-  background-color: ${props => props.theme.colors.bg};
+  background-color: var(--color-bg);
   cursor: pointer;
   border: solid 1px
-    ${p => (p.current ? p.theme.colors.mainLight : p.theme.colors.bg2)};
-  border-radius: ${props => props.theme.radius};
+    ${p => (p.current ? 'var(--color-accent-hover)' : 'var(--color-border)')};
+  border-radius: var(--radius-md);
   padding: 0;
   overflow: hidden;
   line-height: 0;

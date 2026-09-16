@@ -3,6 +3,7 @@ import { styled } from 'styled-components';
 import { FaCheck } from 'react-icons/fa6';
 import { Dialog, DialogContent, DialogTitle, useDialog } from './Dialog';
 import { Button } from './Button';
+import { withAlpha } from '../styles/withAlpha';
 
 interface ConnectServerDialogProps {
   /** Servers this browser already knows about; the active one is checked. */
@@ -128,7 +129,7 @@ export function ConnectServerDialog({
 }
 
 const Explainer = styled.p`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-size: 0.85rem;
 `;
 
@@ -148,15 +149,16 @@ const SwitchItem = styled.button<{ $active: boolean }>`
   text-align: left;
   border: none;
   cursor: pointer;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   padding: 0.4rem 0.6rem;
   font-size: 0.85rem;
-  color: ${p => (p.$active ? p.theme.colors.main : p.theme.colors.text)};
+  color: ${p => (p.$active ? 'var(--color-accent)' : 'var(--color-text)')};
   font-weight: ${p => (p.$active ? 600 : 400)};
-  background: ${p => (p.$active ? `${p.theme.colors.main}14` : 'transparent')};
+  background: ${p =>
+    p.$active ? withAlpha('var(--color-accent)', 0.08) : 'transparent'};
 
   &:hover {
-    background: ${p => p.theme.colors.bg2};
+    background: var(--color-border);
   }
 
   svg {
@@ -172,19 +174,19 @@ const AddServerRow = styled.form`
 `;
 
 const ServerInput = styled.input`
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   padding: 0.4rem 0.6rem;
   font-size: 0.85rem;
-  background: ${p => p.theme.colors.bg};
-  color: ${p => p.theme.colors.text};
+  background: var(--color-bg);
+  color: var(--color-text);
   flex: 1;
   min-width: 0;
 `;
 
 const DocsLink = styled.a`
   font-size: 0.8rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   margin-top: 0.6rem;
   display: inline-block;
 `;

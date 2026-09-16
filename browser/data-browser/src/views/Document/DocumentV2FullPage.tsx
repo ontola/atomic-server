@@ -144,21 +144,21 @@ export const DocumentV2FullPage: React.FC<ResourcePageProps> = ({
 };
 
 const ErrorWrapper = styled.div`
-  width: min(100%, ${p => p.theme.containerWidthWide});
+  width: min(100%, var(--container-width-wide));
   margin: auto;
-  padding: ${p => p.theme.size(7)};
-  color: ${p => p.theme.colors.textLight};
+  padding: var(--space-7);
+  color: var(--color-text-subtle);
   h2 {
-    color: ${p => p.theme.colors.alert};
+    color: var(--color-alert);
   }
 `;
 
 const FullPageWrapper = styled.div`
-  background-color: ${p => p.theme.colors.bg};
+  background-color: var(--color-bg);
   display: flex;
   flex: 1;
   flex-direction: column;
-  min-height: ${p => p.theme.heights.fullPage};
+  min-height: 100%;
   box-sizing: border-box;
   @media print {
     min-height: 100vh;
@@ -166,17 +166,17 @@ const FullPageWrapper = styled.div`
 `;
 
 const DocumentContainer = styled.div`
-  width: min(100%, ${p => p.theme.containerWidthWide});
+  width: min(100%, var(--container-width-wide));
   margin: auto;
   display: flex;
-  gap: ${p => p.theme.size()};
+  gap: var(--space-3);
   flex: 1;
   flex-direction: column;
-  padding: ${p => p.theme.size(7)};
+  padding: var(--space-7);
   h1 {
     margin-bottom: 0;
   }
-  @media (max-width: ${props => props.theme.containerWidthWide}) {
-    padding: ${p => p.theme.size()};
+  @media (max-width: var(--container-width-wide)) {
+    padding: var(--space-3);
   }
 `;

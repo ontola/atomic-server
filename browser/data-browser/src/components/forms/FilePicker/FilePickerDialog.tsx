@@ -137,7 +137,7 @@ const StyledDialogContent = styled(DialogContent)`
   padding-top: 1px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
-  gap: ${p => p.theme.margin * 2}rem;
+  gap: var(--space-7);
   height: 80dvh;
 `;
 

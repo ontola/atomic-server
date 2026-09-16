@@ -136,28 +136,26 @@ export function BubbleMenu({
 }
 
 const BubbleMenuInner = styled(Column)`
-  background-color: ${p => p.theme.colors.bg};
-  border-radius: ${p => p.theme.radius};
-  padding: ${p => p.theme.size(2)};
-  box-shadow: ${p => p.theme.boxShadowSoft};
-  border: ${p =>
-    p.theme.darkMode ? `1px solid ${p.theme.colors.bg2}` : 'none'};
+  background-color: var(--color-bg);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+  box-shadow: var(--elevation-2);
+  border: ${p => (p.theme.darkMode ? `1px solid var(--color-border)` : 'none')};
   @supports (backdrop-filter: blur(5px)) {
-    background-color: ${p => withAlpha(p.theme.colors.bg, 0.85)};
+    background-color: ${withAlpha('var(--color-bg)', 0.85)};
     backdrop-filter: blur(5px);
   }
 `;
 
 const StyledPopover = styled(Popover)`
-  background-color: ${p => p.theme.colors.bg};
+  background-color: var(--color-bg);
   backdrop-filter: blur(5px);
-  padding: ${p => p.theme.size()};
-  border-radius: ${p => p.theme.radius};
-  border: ${p =>
-    p.theme.darkMode ? `1px solid ${p.theme.colors.bg2}` : 'none'};
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: ${p => (p.theme.darkMode ? `1px solid var(--color-border)` : 'none')};
 
   @supports (backdrop-filter: blur(5px)) {
-    background-color: ${p => withAlpha(p.theme.colors.bg, 0.85)};
+    background-color: ${withAlpha('var(--color-bg)', 0.85)};
     backdrop-filter: blur(5px);
   }
 `;

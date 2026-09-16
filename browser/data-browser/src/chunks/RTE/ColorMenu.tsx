@@ -217,7 +217,7 @@ const ColorButton = styled.button<{ color: string }>`
 
   &.unset {
     position: relative;
-    border: 1px solid ${p => p.theme.colors.textLight};
+    border: 1px solid var(--color-text-subtle);
     display: grid;
     place-items: center;
     &::before {
@@ -225,7 +225,7 @@ const ColorButton = styled.button<{ color: string }>`
       position: absolute;
       height: 100%;
       width: 2px;
-      background-color: ${p => p.theme.colors.alert};
+      background-color: var(--color-alert);
       transform: rotate(45deg);
       transform-origin: center;
     }
@@ -272,7 +272,7 @@ const HiddenColorInput = styled.input`
 
 const ColorInputLabel = styled.label<{ color: string | undefined }>`
   --CIL_foreground: ${p =>
-    p.color ? readableColor(p.color) : p.theme.colors.text};
+    p.color ? readableColor(p.color) : 'var(--color-text)'};
   cursor: pointer;
   position: relative;
   gap: 0.5rem;
@@ -282,7 +282,7 @@ const ColorInputLabel = styled.label<{ color: string | undefined }>`
   border-radius: 50%;
   border: 1px solid var(--CIL_foreground);
   &:focus-within {
-    outline: solid ${p => p.theme.colors.main};
+    outline: solid var(--color-accent);
   }
   div {
     position: absolute;

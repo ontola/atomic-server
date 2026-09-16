@@ -75,9 +75,9 @@ export function UsageCard({
 }
 
 const DetailsCard = styled.div`
-  border: 1px solid ${({ theme }) => theme.colors.bg2};
-  border-radius: ${({ theme }) => theme.radius};
-  background-color: ${({ theme }) => theme.colors.bg};
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg);
 `;
 
 const DetailsTitleRow = styled.div`
@@ -90,14 +90,14 @@ const DetailsTitleRow = styled.div`
 const PageButtons = styled.div`
   display: flex;
   align-items: center;
-  gap: ${({ theme }) => theme.size(1)};
+  gap: var(--space-1);
 `;
 
 const PageNumber = styled.span`
-  color: ${({ theme }) => theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-size: 0.875rem;
 `;
 
 const Empty = styled.span`
-  color: ${({ theme }) => theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;

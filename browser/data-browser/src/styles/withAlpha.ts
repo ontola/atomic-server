@@ -2,14 +2,13 @@
  * Alpha on a token.
  *
  * `transparentize(0.2, theme.colors.bg)` used to work because the theme held a
- * colour. It now holds the string `var(--color-bg)`, which polished cannot
- * parse — so the blend moves to CSS, where the browser resolves the variable
- * first. `color-mix` in oklab also fades more evenly than an sRGB alpha,
- * because it interpolates perceptually.
+ * colour. Colours are tokens now, and polished cannot parse `var(--color-bg)`
+ * — so the blend moves to CSS, where the browser resolves the variable first.
+ * `color-mix` in oklab also fades more evenly than an sRGB alpha, because it
+ * interpolates perceptually.
  *
  * ```ts
  * background: ${withAlpha('var(--color-bg)', 0.8)};
- * background: ${p => withAlpha(p.theme.colors.bg, 0.8)};
  * ```
  *
  * @param color Any CSS colour, including a `var(--token)` reference.

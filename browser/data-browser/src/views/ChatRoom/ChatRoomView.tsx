@@ -477,7 +477,7 @@ const FollowEventLine = styled.div`
   gap: 0.4ch;
   /* Line up with the chat messages (no extra inline padding). */
   padding: 0.1rem 0;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-size: 0.85rem;
   min-width: 0;
 
@@ -557,7 +557,7 @@ const MessageDetails = styled.div`
   gap: 1ch;
   width: 100%;
   min-width: 0;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const MessageMetaRow = styled.div`
@@ -588,7 +588,7 @@ const MessageActions = styled.div`
   margin-left: auto;
   flex-shrink: 0;
   opacity: 0;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 /** Everything to the right of the avatar: meta row + message body. The hover
@@ -598,7 +598,7 @@ const MessageBody = styled.div`
   flex: 1;
   min-width: 0;
   padding: 0.3rem 0.5rem;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   /* Bleed a little into the panel's right padding so the chip isn't cramped. */
   margin-right: -0.5rem;
 `;
@@ -617,7 +617,7 @@ const MessageComponent = styled.div`
   padding-block: 0.1rem;
 
   &:hover ${MessageBody} {
-    background: ${p => p.theme.colors.bg1};
+    background: var(--color-bg-subtle);
   }
 
   &:hover ${MessageActions}, &:focus-within ${MessageActions} {
@@ -628,8 +628,8 @@ const MessageComponent = styled.div`
 const SendButton = styled(Button)`
   padding-left: 1rem;
   padding-right: 1rem;
-  color: ${p => p.theme.colors.bg};
-  background: ${p => p.theme.colors.main};
+  color: var(--color-bg);
+  background: var(--color-accent);
 
   &:disabled {
     cursor: default;
@@ -639,16 +639,16 @@ const SendButton = styled(Button)`
 `;
 
 const MessageInput = styled.textarea`
-  color: ${p => p.theme.colors.text};
+  color: var(--color-text);
   background: none;
   flex: 1;
   padding: 0.5rem 1rem;
-  border: ${p => p.theme.colors.bg2} solid 1px;
+  border: var(--color-border) solid 1px;
   border-right: none;
   line-height: inherit;
   min-height: 2rem;
   max-height: 50vh;
-  font-family: ${p => p.theme.fontFamily};
+  font-family: var(--font-family);
 `;
 
 /** Wrapper for the new message form */
@@ -656,18 +656,18 @@ const MessageForm = styled.form<{ $viewTransition?: boolean }>`
   display: flex;
   flex-basis: 3rem;
   flex-direction: row;
-  border-radius: ${p => p.theme.radius};
-  background: ${p => p.theme.colors.bg};
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
 
   view-transition-name: ${p => (p.$viewTransition ? 'chat-input' : 'none')};
 
   > :first-child {
-    border-top-left-radius: ${p => p.theme.radius};
-    border-bottom-left-radius: ${p => p.theme.radius};
+    border-top-left-radius: var(--radius-md);
+    border-bottom-left-radius: var(--radius-md);
   }
   > :last-child {
-    border-top-right-radius: ${p => p.theme.radius};
-    border-bottom-right-radius: ${p => p.theme.radius};
+    border-top-right-radius: var(--radius-md);
+    border-bottom-right-radius: var(--radius-md);
   }
 `;
 
@@ -676,7 +676,7 @@ const ViewWrapper = styled.div`
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  gap: ${p => p.theme.size(2)};
+  gap: var(--space-2);
 `;
 
 const ScrollAreaWrapper = styled.div`
@@ -691,7 +691,7 @@ const EmptyChatState = styled.div`
   justify-content: center;
   gap: 0.4rem;
   padding-block: 4rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   opacity: 0.5;
 
   & > svg {

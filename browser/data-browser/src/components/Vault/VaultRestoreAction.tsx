@@ -57,6 +57,6 @@ const Offer = styled.div`
 `;
 
 const ErrorText = styled.p`
-  color: ${p => p.theme.colors.alert};
+  color: var(--color-alert);
   margin: 0;
 `;

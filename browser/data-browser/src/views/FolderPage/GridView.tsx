@@ -40,20 +40,20 @@ const Grid = styled.div`
 `;
 
 const NewCard = styled(GridCard)`
-  background-color: ${p => p.theme.colors.bg1};
-  border: 1px solid ${p => p.theme.colors.bg2};
+  background-color: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
   cursor: pointer;
   display: grid;
   place-items: center;
   font-size: 3rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   transition:
     color 0.1s ease-in-out,
     font-size 0.1s ease-out,
     box-shadow 0.1s ease-in-out;
   ${GridItemWrapper}:hover &,
   ${GridItemWrapper}:focus & {
-    color: ${p => p.theme.colors.main};
+    color: var(--color-accent);
     font-size: 3.8rem;
   }
 

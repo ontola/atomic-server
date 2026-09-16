@@ -64,6 +64,6 @@ export function EditLinkForm({ onDone }: EditLinkFormProps): React.JSX.Element {
 
 const StyledInputWrapper = styled(InputWrapper)`
   &:has(:user-invalid) {
-    border-color: ${p => p.theme.colors.alert} !important;
+    border-color: var(--color-alert) !important;
   }
 `;

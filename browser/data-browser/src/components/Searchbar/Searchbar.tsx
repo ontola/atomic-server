@@ -102,22 +102,22 @@ const Wrapper = styled.div`
   gap: 1ch;
   display: flex;
   align-items: center;
-  padding-inline: ${p => p.theme.size(2)};
+  padding-inline: var(--space-2);
   overflow: hidden;
   border-radius: 999px;
   display: flex;
 
   :hover {
-    ${props => withAlpha(props.theme.colors.main, 0.4)};
+    ${withAlpha('var(--color-accent)', 0.4)};
     ${SearchbarFakeInput} {
-      color: ${p => p.theme.colors.text};
+      color: var(--color-text);
     }
   }
 `;
 
 const Tag = styled.span`
-  background-color: ${p => p.theme.colors.bg1};
-  border-radius: ${p => p.theme.radius};
+  background-color: var(--color-bg-subtle);
+  border-radius: var(--radius-md);
   padding: 0.2rem 0.5rem;
   display: flex;
   flex-direction: row;

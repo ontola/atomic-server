@@ -81,29 +81,29 @@ export const ModelSelect = ({
 };
 
 const Wrapper = styled.div`
-  background-color: ${p => p.theme.colors.bg};
-  border-radius: ${p => p.theme.radius};
+  background-color: var(--color-bg);
+  border-radius: var(--radius-md);
 
-  border: 1px solid ${p => p.theme.colors.bg2};
+  border: 1px solid var(--color-border);
   ${transition('border-color')}
   &:has(*.${TAB_PANEL_HAS_ERROR_CLASS}) {
-    border: 1px solid ${p => p.theme.colors.alert};
+    border: 1px solid var(--color-alert);
   }
 `;
 
 const StyledTabPanel = styled(TabPanel)`
-  padding: ${p => p.theme.size()};
+  padding: var(--space-3);
   padding-top: unset;
 `;
 
 const NotConfiguredMessage = styled.div`
   display: grid;
   place-items: center;
-  margin: -${p => p.theme.size()};
-  padding: ${p => p.theme.size()};
-  background-color: ${p => p.theme.colors.bgBody};
-  border-radius: ${p => p.theme.radius};
-  color: ${p => p.theme.colors.textLight};
+  margin: -var(--space-3);
+  padding: var(--space-3);
+  background-color: var(--color-bg-body);
+  border-radius: var(--radius-md);
+  color: var(--color-text-subtle);
 `;
 
 export default ModelSelect;

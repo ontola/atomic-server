@@ -96,7 +96,7 @@ const PanelWrapper = styled(Column)`
 const PanelTitle = styled.h2`
   font-size: 1rem;
   margin: 0;
-  padding-block: ${p => p.theme.size(2)};
+  padding-block: var(--space-2);
 `;
 
 const EmptyState = styled.div`
@@ -106,5 +106,5 @@ const EmptyState = styled.div`
   justify-content: center;
   gap: 0.4rem;
   height: 100%;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;

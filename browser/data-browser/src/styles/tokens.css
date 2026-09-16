@@ -173,6 +173,27 @@
   --space-14: 20rem;
   --space-15: 30rem;
 
+  /* ──────────────────── Layout constants ──────────────────────────────
+   * These lived on the theme object as plain values, which meant CSS could
+   * not reach them without a styled-components interpolation. Same numbers.
+   */
+  --height-breadcrumb-bar: 2.2rem;
+  --height-floating-search-bar: 4.2rem;
+  --container-width: 40rem;
+  --container-width-wide: 900px;
+  --sidebar-width: 15rem;
+
+  /* ────────────────────────── Stacking order ──────────────────────────
+   * Was `theme.zIndex`. Kept as tokens so the order is readable in one
+   * place and a component cannot invent a layer between two of them.
+   */
+  --z-search-overlay: 9;
+  --z-sidebar: 10;
+  --z-dialog: 100;
+  --z-dropdown: 200;
+  --z-network-indicator: 300;
+  --z-toast: 400;
+
   /* ──────────────────────────── Radius ────────────────────────────────── */
   --radius-sm: 5px;
   --radius-md: 9px;
@@ -244,6 +265,23 @@
   --elevation-1: 0 1px 2px oklch(0 0 0 / 0.3);
   --elevation-2: 0 2px 8px oklch(0 0 0 / 0.4);
   --elevation-3: 0 8px 32px oklch(0 0 0 / 0.55);
+}
+
+/**
+ * The app chrome (navbar, sidebar) re-points the surface tokens at the chrome
+ * ramp for its own subtree. This was a nested `ThemeProvider`; as a cascade
+ * scope it costs no React context and no wrapper element — the navbar and the
+ * sidebar carry the class on the element they already render.
+ *
+ * Outside colourful mode the chrome variables resolve to their neutral
+ * counterparts, so this changes nothing.
+ */
+.chrome-scope {
+  --color-bg: var(--chrome-bg);
+  --color-bg-subtle: var(--chrome-bg-subtle);
+  --color-border: var(--chrome-border);
+  --color-text: var(--chrome-text);
+  --color-text-subtle: var(--chrome-text-subtle);
 }
 
 @media (prefers-contrast: more) {

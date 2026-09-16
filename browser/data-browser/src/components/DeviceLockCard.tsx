@@ -105,7 +105,7 @@ export function DeviceLockCard({
 
 const Explanation = styled.p`
   margin: 0;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const Options = styled.div`

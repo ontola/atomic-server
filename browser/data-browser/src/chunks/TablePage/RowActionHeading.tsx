@@ -128,7 +128,7 @@ const Wrapper = styled.div`
   gap: 0.5rem;
   width: 100%;
   align-self: stretch;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   /* Matches a property heading: the header cell is bold, its name button is not. */
   font-weight: normal;
   /* The menu button must survive a narrow column — it's the only way to edit
@@ -169,6 +169,6 @@ const MenuWrapper = styled.div`
   flex-shrink: 0;
 
   & > button {
-    color: ${p => p.theme.colors.textLight};
+    color: var(--color-text-subtle);
   }
 `;

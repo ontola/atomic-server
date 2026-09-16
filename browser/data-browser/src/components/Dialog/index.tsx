@@ -294,11 +294,11 @@ const DialogContentSlot = styled(Slot)`
   overflow-y: auto;
   /* The main section should leave room for the footer */
   max-height: calc(80vh - 8rem);
-  padding-bottom: ${p => p.theme.size()};
+  padding-bottom: var(--space-3);
   // Position the scrollbar against the side of the dialog without any spacing inbetween.
   // This also fixes ugly horizontal shadow cutoff.
-  margin-inline: -${p => p.theme.size()};
-  padding-inline: ${p => p.theme.size()};
+  margin-inline: -var(--space-3);
+  padding-inline: var(--space-3);
 
   container: ${DIALOG_CONTENT_CONTAINER} / inline-size;
   scrollbar-gutter: stable;
@@ -306,10 +306,10 @@ const DialogContentSlot = styled(Slot)`
 
 const DialogActionsSlot = styled(Slot)`
   display: flex;
-  gap: ${p => p.theme.size()};
+  gap: var(--space-3);
   align-items: center;
   justify-content: flex-end;
-  border-top: 1px solid ${props => props.theme.colors.bg2};
+  border-top: 1px solid var(--color-border);
   padding-top: 1rem;
 `;
 
@@ -318,12 +318,12 @@ const StyledInnerDialog = styled.div`
   grid-template-columns: minmax(0, 1fr) 2.25rem;
   /* Title row auto height; main grows and scrolls; footer auto */
   grid-template-rows: auto minmax(0, 1fr) auto;
-  column-gap: ${p => p.theme.size()};
-  row-gap: ${p => p.theme.size()};
+  column-gap: var(--space-3);
+  row-gap: var(--space-3);
   grid-template-areas: 'title close' 'content content' 'actions actions';
-  max-block-size: calc(100vh - ${p => p.theme.size()} * 2);
+  max-block-size: calc(100vh - var(--space-3) * 2);
   /* Extra breathing room so the header matches side padding visually */
-  padding-block-start: ${p => p.theme.size(2)};
+  padding-block-start: var(--space-2);
 `;
 
 const fadeInForground = keyframes`
@@ -349,27 +349,27 @@ const fadeInBackground = keyframes`
 `;
 
 const StyledDialog = styled.dialog<{ $width?: CSS.Property.Width }>`
-  ${CurrentBackgroundColor.define(p => p.theme.colors.bg)}
+  ${CurrentBackgroundColor.define('var(--color-bg)')}
   --dialog-width: min(90vw, ${p => p.$width ?? '60ch'});
 
   ${VAR_DIALOG_INNER_WIDTH}: calc(
-    var(--dialog-width) - 2 * ${p => p.theme.size()}
+    var(--dialog-width) - 2 * var(--space-3)
   );
 
   box-sizing: border-box;
   inset: 0px;
   position: relative;
-  z-index: ${p => p.theme.zIndex.dialog};
-  padding: ${p => p.theme.size()};
-  color: ${props => props.theme.colors.text};
+  z-index: var(--z-dialog);
+  padding: var(--space-3);
+  color: var(--color-text);
   background-color: ${CurrentBackgroundColor.var()};
-  border-radius: ${props => props.theme.radius};
-  border: solid 1px ${props => props.theme.colors.bg2};
+  border-radius: var(--radius-md);
+  border: solid 1px var(--color-border);
   inline-size: var(--dialog-width);
   max-block-size: 100vh;
   height: fit-content;
   overflow: visible;
-  box-shadow: ${p => p.theme.boxShadowSoft};
+  box-shadow: var(--elevation-2);
 
   // Animation props
   opacity: 0;

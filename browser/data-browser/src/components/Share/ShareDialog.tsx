@@ -202,20 +202,20 @@ const BackButton = styled.button`
   gap: 0.3rem;
   background: none;
   border: none;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   cursor: pointer;
   font-size: 0.85rem;
   padding: 0;
   margin-right: 0.5rem;
 
   &:hover {
-    color: ${p => p.theme.colors.text};
+    color: var(--color-text);
   }
 `;
 
 const RightsCard = styled.div`
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   overflow: hidden;
 `;
 
@@ -225,13 +225,13 @@ const InheritedToggle = styled.button`
   gap: 0.4rem;
   background: none;
   border: none;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   cursor: pointer;
   font-size: 0.9rem;
   padding: 0;
 
   &:hover {
-    color: ${p => p.theme.colors.text};
+    color: var(--color-text);
   }
 
   svg {
@@ -265,8 +265,8 @@ function CopyLinkButton({ subject }: { subject: string }): JSX.Element {
 }
 
 const RightsHeaderRow = styled.div`
-  padding: 0.4rem ${p => p.theme.size()};
-  color: ${p => p.theme.colors.textLight};
+  padding: 0.4rem var(--space-3);
+  color: var(--color-text-subtle);
   font-size: 0.9rem;
 `;
 
@@ -297,13 +297,13 @@ const PrivateDriveWarning = styled.div`
   align-items: flex-start;
   gap: 0.6rem;
   padding: 0.6rem 0.75rem;
-  border: 1px solid ${p => p.theme.colors.alert};
-  border-radius: ${p => p.theme.radius};
-  background-color: ${p => p.theme.colors.bg1};
-  color: ${p => p.theme.colors.text};
+  border: 1px solid var(--color-alert);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-subtle);
+  color: var(--color-text);
 
   svg {
-    color: ${p => p.theme.colors.alert};
+    color: var(--color-alert);
     flex-shrink: 0;
     margin-top: 0.2rem;
   }

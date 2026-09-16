@@ -150,8 +150,8 @@ const SplitView = styled.main`
   width: 100%;
   height: 100%;
   height: calc(100vh - 6rem);
-  padding: ${p => p.theme.size()};
-  gap: ${p => p.theme.size()};
+  padding: var(--space-3);
+  gap: var(--space-3);
 
   & code {
     word-break: break-word;

@@ -35,7 +35,7 @@ const ExternalLinkPlain = styled.a`
   display: inline-flex;
   align-items: center;
   gap: 0.6ch;
-  color: ${props => props.theme.colors.main};
+  color: var(--color-accent);
   text-decoration: none;
 `;
 
@@ -43,16 +43,16 @@ const ExternalLinkButton = styled.a`
   padding-inline: 0.8rem;
   padding-block: 0.4rem;
   width: fit-content;
-  background-color: ${props => props.theme.colors.bg};
-  border: 1.5px solid ${props => props.theme.colors.main};
-  border-radius: ${p => p.theme.radius};
+  background-color: var(--color-bg);
+  border: 1.5px solid var(--color-accent);
+  border-radius: var(--radius-md);
   text-decoration: none;
   gap: 1ch;
   display: flex;
   align-items: center;
   font-weight: 600;
   justify-content: center;
-  color: ${props => props.theme.colors.main};
+  color: var(--color-accent);
   white-space: nowrap;
   transition:
     0.1s transform,
@@ -62,7 +62,7 @@ const ExternalLinkButton = styled.a`
 
   &:hover,
   &:focus-within {
-    background-color: ${props => props.theme.colors.main};
+    background-color: var(--color-accent);
     color: white;
   }
 `;

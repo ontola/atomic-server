@@ -152,7 +152,7 @@ const PanelWrapper = styled(Column)`
 `;
 
 const PanelHeader = styled(Row)`
-  padding-block: ${p => p.theme.size(2)};
+  padding-block: var(--space-2);
 `;
 
 /** Shrinks to make room for ButtonRow; the panel is narrow by nature, so the
@@ -204,16 +204,16 @@ const CallToggleButton = styled(ButtonSubtle)<{ $active: boolean }>`
     p.$active &&
     css`
       && {
-        color: ${p.theme.colors.main};
+        color: var(--color-accent);
       }
     `}
 `;
 
 const CallFallback = styled.span`
   font-size: 0.8rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   text-align: center;
-  padding-block: ${p => p.theme.size(2)};
+  padding-block: var(--space-2);
 `;
 
 const Facepile = styled.span`
@@ -228,5 +228,5 @@ const Facepile = styled.span`
 const Overflow = styled.span`
   margin-left: 0.15rem;
   font-size: 0.8rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;

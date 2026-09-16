@@ -126,13 +126,13 @@ const ToastCard = styled.button`
   gap: 0.6rem;
   max-width: 22rem;
   padding: 0.6rem 0.8rem;
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
-  background: ${p => p.theme.colors.bg};
-  box-shadow: ${p => p.theme.boxShadowSoft};
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  box-shadow: var(--elevation-2);
   cursor: pointer;
   text-align: left;
-  color: ${p => p.theme.colors.text};
+  color: var(--color-text);
 `;
 
 const ToastBody = styled.span`
@@ -151,7 +151,7 @@ const ToastAuthor = styled.span`
 
 const ToastText = styled.span`
   font-size: 0.85rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -222,7 +222,7 @@ const SelectableResult: React.FC<SelectableResultProps> = ({
 };
 
 const Heading = styled.h1`
-  color: ${p => p.theme.colors.text};
+  color: var(--color-text);
   display: flex;
   align-items: center;
   gap: 0.7ch;
@@ -237,17 +237,17 @@ const Heading = styled.h1`
 `;
 
 const QueryText = styled.span`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 const TagHeading = styled.span`
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   font-weight: bold;
 `;
 
 const HelperMessage = styled.p`
-  color: ${p => p.theme.colors.textLight};
-  border: 1px solid ${p => p.theme.colors.bg2};
+  color: var(--color-text-subtle);
+  border: 1px solid var(--color-border);
   padding: 1rem;
   border-radius: 0.5rem;
 `;

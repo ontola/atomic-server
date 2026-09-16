@@ -77,7 +77,7 @@ const List = styled.ul`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
 `;
 
 function Value({ subject }: { subject: string }): JSX.Element {

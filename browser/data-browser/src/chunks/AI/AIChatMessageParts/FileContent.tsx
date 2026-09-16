@@ -43,19 +43,19 @@ export const ImageContent: React.FC<ImageContentProps> = ({ part }) => {
 };
 
 const MessageFileWrapper = styled.div`
-  margin: ${p => p.theme.size(1)} 0;
+  margin: var(--space-1) 0;
 
-  background-color: ${p => p.theme.colors.bg1};
-  padding: ${p => p.theme.size(1)};
-  border-radius: ${p => p.theme.radius};
+  background-color: var(--color-bg-subtle);
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
 `;
 
 const MessageImageWrapper = styled.div`
-  margin: ${p => p.theme.size(1)} 0;
+  margin: var(--space-1) 0;
 
   img {
     max-width: 100%;
     max-height: 300px;
-    border-radius: ${p => p.theme.radius};
+    border-radius: var(--radius-md);
   }
 `;

@@ -147,7 +147,7 @@ const SidebarSlot = styled.div`
 const ListSlot = styled.div`
   grid-area: list;
   min-width: 0;
-  padding: ${p => p.theme.size()};
+  padding: var(--space-3);
 `;
 
 const FullPageWrapper = styled.div<{ edit: boolean }>`
@@ -161,7 +161,7 @@ const FullPageWrapper = styled.div<{ edit: boolean }>`
   grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) minmax(auto, 13rem);
   grid-template-rows: 4rem auto;
   width: 100%;
-  min-height: ${p => p.theme.heights.fullPage};
+  min-height: 100%;
 
   @container (max-width: 950px) {
     grid-template-areas: ${p =>
@@ -193,13 +193,13 @@ const FullPageWrapper = styled.div<{ edit: boolean }>`
 
 const TitleSlot = styled.div`
   grid-area: title;
-  padding: ${p => p.theme.size()};
+  padding: var(--space-3);
 `;
 
 const GraphSlot = styled.div`
   grid-area: graph;
   min-width: 0;
-  padding: ${p => p.theme.size()};
+  padding: var(--space-3);
   height: 100%;
 `;
 

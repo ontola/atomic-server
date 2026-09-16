@@ -24,24 +24,24 @@ export function TemplateListItem({
 }
 
 const Wrapper = styled.button`
-  --template-color-bg: ${p => p.theme.colors.bg};
-  --template-color-bg1: ${p => p.theme.colors.bg2};
-  --template-color-bg2: ${p => p.theme.colors.textLight};
+  --template-color-bg: var(--color-bg);
+  --template-color-bg1: var(--color-border);
+  --template-color-bg2: var(--color-text-subtle);
 
   appearance: none;
   padding: 0;
   cursor: pointer;
-  background-color: ${p => p.theme.colors.bg};
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-radius: ${p => p.theme.radius};
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   overflow: clip;
 
-  color: ${p => p.theme.colors.text};
+  color: var(--color-text);
 
   &:hover,
   &:focus-visible {
-    border-color: ${p => p.theme.colors.main};
-    --template-color-bg2: ${p => p.theme.colors.main};
+    border-color: var(--color-accent);
+    --template-color-bg2: var(--color-accent);
   }
 
   & svg {
@@ -51,6 +51,6 @@ const Wrapper = styled.button`
 `;
 
 const Content = styled.div`
-  border-top: 1px solid ${p => p.theme.colors.bg2};
+  border-top: 1px solid var(--color-border);
   padding: 1rem;
 `;

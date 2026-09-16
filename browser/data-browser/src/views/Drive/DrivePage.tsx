@@ -234,9 +234,9 @@ const DeleteTagButton = styled.button`
   padding: 0.2em;
   border: none;
   background: transparent;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   cursor: pointer;
-  border-radius: ${p => p.theme.radius};
+  border-radius: var(--radius-md);
   opacity: 0;
   font-size: 0.75em;
 
@@ -245,7 +245,7 @@ const DeleteTagButton = styled.button`
   }
 
   &:hover {
-    color: ${p => p.theme.colors.alert};
+    color: var(--color-alert);
   }
 `;
 

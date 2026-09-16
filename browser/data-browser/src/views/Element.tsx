@@ -34,8 +34,8 @@ const ElementFocusStyle = css`
 
 const ElementTextStyle = css`
   line-height: 1.4rem;
-  font-family: ${p => p.theme.fontFamily};
-  font-size: ${p => p.theme.fontSizeBody}rem;
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
 `;
 
 const ElementWrapper = styled.div<ElementViewProps>`

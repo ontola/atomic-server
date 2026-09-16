@@ -18,14 +18,14 @@ const calcHeight = (value: string) => {
 
 export const StyledEditorWrapper = styled(EditorWrapperBase)`
   min-height: ${MIN_EDITOR_HEIGHT};
-  border-radius: ${p => p.theme.radius};
-  box-shadow: 0 0 0 1px ${p => p.theme.colors.bg2};
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 1px var(--color-border);
   min-height: ${MIN_EDITOR_HEIGHT};
-  padding: ${p => p.theme.size()};
+  padding: var(--space-3);
   ${transition('box-shadow')}
 
   &:focus-within {
-    box-shadow: 0 0 0 2px ${p => p.theme.colors.main};
+    box-shadow: 0 0 0 2px var(--color-accent);
   }
 
   & .tiptap {
@@ -44,7 +44,7 @@ export const RawEditor = styled.textarea.attrs(p => ({
   overflow: visible;
   height: fit-content;
   background-color: transparent;
-  color: ${p => p.theme.colors.text};
+  color: var(--color-text);
   resize: none;
 `;
 

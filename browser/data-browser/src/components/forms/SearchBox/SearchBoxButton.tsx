@@ -4,22 +4,21 @@ import { SB_BOTTOM_RADIUS, SB_HIGHLIGHT, SB_TOP_RADIUS } from './searchboxVars';
 export const SearchBoxButton = styled.button<{ ephimeral?: boolean }>`
   background-color: transparent;
   border: none;
-  border-left: ${p =>
-    p.ephimeral ? 'none' : '1px solid ' + p.theme.colors.bg2};
+  border-left: ${p => (p.ephimeral ? 'none' : '1px solid var(--color-border)')};
   display: flex;
   align-items: center;
   padding: 0.5rem;
-  color: ${p => p.theme.colors.textLight};
+  color: var(--color-text-subtle);
   cursor: pointer;
   visibility: ${p => (p.ephimeral ? 'hidden' : 'visible')};
 
   &:last-child {
-    border-top-right-radius: ${p => SB_TOP_RADIUS.var(p.theme.radius)};
-    border-bottom-right-radius: ${p => SB_BOTTOM_RADIUS.var(p.theme.radius)};
+    border-top-right-radius: ${SB_TOP_RADIUS.var('var(--radius-md)')};
+    border-bottom-right-radius: ${SB_BOTTOM_RADIUS.var('var(--radius-md)')};
   }
 
   &:disabled {
-    color: ${p => p.theme.colors.textLight2};
+    color: var(--color-text-subtle);
     cursor: not-allowed;
   }
 
@@ -27,7 +26,7 @@ export const SearchBoxButton = styled.button<{ ephimeral?: boolean }>`
     &:hover,
     &:focus-visible {
       color: ${SB_HIGHLIGHT.var()};
-      background-color: ${p => p.theme.colors.bg1};
+      background-color: var(--color-bg-subtle);
       border-color: ${SB_HIGHLIGHT.var()};
     }
   }

@@ -1,7 +1,7 @@
 # Data browser UI
 
-**Status:** Phase 1 shipped on `claude/data-browser-ui-refactor-0ps7ge`
-(2026-09-16); Phases 2-5 are still proposals. This is an audit of
+**Status:** Phases 1 and 2 shipped on `claude/data-browser-ui-refactor-0ps7ge`
+(2026-09-16); Phases 3-5 are still proposals. This is an audit of
 `browser/data-browser/src` plus a recommended order of work. Numbers are
 measured against `develop` at `3b9f7e4`, before the change.
 
@@ -193,7 +193,69 @@ The original plan for this phase, for reference:
 
 Ship the ramps with a contrast unit test so the gate cannot silently regress.
 
-### Phase 2 — Codemod the literals away — **next**
+### Phase 2 — Retire the facade — **shipped**
+
+Phase 1 deliberately kept a theme facade so it would not have to touch 415
+files. That left two systems live: `tokens.css` as the source of truth and
+1752 `p.theme` interpolations reading it through a React context. This removes
+the second one.
+
+| | before | after |
+| --- | --- | --- |
+| `p.theme` interpolations | 1752 | 18 |
+| files reading the theme | 326 | 21 |
+| distinct theme members in use | 57 | 1 |
+| `styling.tsx` | 552 lines | 326 |
+
+What is left is `theme.darkMode`, in 30 places, and it stays: those pass it to
+something that is not CSS — a CodeMirror theme object, emoji-mart's `theme`
+prop, ReactFlow. `DefaultTheme` is now that one boolean.
+
+The substitution itself is safe by construction — the facade returned exactly
+the strings the codemod wrote, so `p.theme.colors.bg` → `var(--color-bg)`
+cannot change a rendered value. The work was in the cases that were *not* that:
+
+- **`ChromeTheme` became a cascade scope.** It was a nested `ThemeProvider`
+  that swapped the surface colours for the sidebar and navbar; it is now a
+  `.chrome-scope` class those two elements put on themselves. One less context,
+  no wrapper element, and it composes with anything else that scopes a token.
+- **Arithmetic on theme numbers.** `theme.margin / 2`, `* 2`, `* 0.5 + 1`,
+  `-theme.margin`, `zIndex.sidebar - 1`. Each resolved to a step on the scale.
+  Two of them (`-theme.margin`) would have rendered `NaN`.
+- **Hex-alpha suffixes on a colour** — `${theme.colors.main}0a`, `1c`, `22`,
+  `33`, `55`, `1a`, `14`, `0d` — 16 sites across 9 files. These only work on a
+  literal, so they became `color-mix()` at the same ratio. They were invisible
+  to the typechecker, and the audit below is what found them.
+- **`theme.colors[p.color]`**, a lookup by name in `IconButton`'s public prop
+  API. That one keeps a four-entry map in `styles/colorTokens.ts`.
+- Layout constants the theme held as plain values (bar heights, container and
+  sidebar widths) and the z-index scale became tokens, so CSS can reach them.
+
+**How it was verified.** Typecheck, 1047 unit tests, and zero lint errors are
+necessary but not sufficient: invalid *CSS* is valid TypeScript. Two further
+checks did the real work.
+
+1. **A re-derivation audit.** Re-run the safe passes over every file's HEAD
+   content and diff against what is on disk; whitespace-normalised, what
+   remains is exactly the set of hand edits. That is what surfaced the
+   hex-alpha sites and a `var(--space-3) rem` left behind where a destructured
+   `({ theme })` parameter defeated the unit-stripping regex.
+2. **A real browser.** Every element on the rendered page, both themes, checked
+   for a computed style still containing `var(`, `NaN` or `undefined`. Zero, on
+   216 elements.
+
+Worth recording as a caution: a blunt regex pass over `$`-sigil code corrupted
+Svelte 5 runes (`$state`, `$derived`, `$effect`, `$props`) inside the code
+generators in `views/CodeUsage/`, which emit code as template strings. Those
+files hold no theme reads and were reverted. Any future sweep of this kind
+should exclude code that generates code.
+
+**Still open from the original Phase 2 plan:** the literals themselves. This
+moved every *theme* read onto a token; it did not collapse the 56 font sizes,
+53 gaps and 108 paddings that were never in the theme to begin with. That is
+the per-property codemod plus the lint rule, and it is the next slice:
+
+### Phase 2b — Codemod the remaining literals — **next**
 
 The token set is worthless until the 1155 styled components use it. This is
 mechanical and should be done with a script plus review, not by hand and not
@@ -288,19 +350,18 @@ sizes in a different syntax.
    PR (all `font-size`, then all `gap`), with the e2e suite and the visual
    snapshots in `e2e.spec.ts-snapshots` as the gate.
 
-## Known gaps in the shipped slice
+## Known gaps in the shipped slices
 
 - **The visual snapshots in `e2e.spec.ts-snapshots` predate the ramps** and
   will need regolding. They could not be run in the environment this landed in
   (no WASM build, no server), so that is unverified rather than done.
+- **The app was never exercised past its storage guard.** The browser check
+  covered the shell, the token bridge and every element it rendered, but the
+  data-browser proper needs a WASM build and a running server. A human should
+  click through a resource page, a table and the sidebar before this merges.
 - **`PAGE_LIGHT` / `PAGE_DARK` in `accentRamp.ts` mirror `--color-bg`
   numerically**, because the legibility search needs the page colour as a
   number. The contrast gate reads the real value out of the CSS, so a drift
   between the two fails the test rather than shipping an invisible button —
   but it is a duplication, and relative colour syntax would remove it.
-- **`theme.colorful` is now unread.** It stays on `DefaultTheme` as a
-  deprecated member; colourful mode is a property of the chrome tokens.
-- **`ChromeTheme` is still a React context.** With the chrome tones being CSS
-  variables it could be a cascade scope instead, but that means adding a DOM
-  element inside the navbar and sidebar, which is a layout change rather than
-  a styling one. Left for when one of those is being touched anyway.
+- **`theme.colorful` is gone** along with the rest of the facade.

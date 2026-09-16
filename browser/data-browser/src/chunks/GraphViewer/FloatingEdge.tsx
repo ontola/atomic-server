@@ -6,7 +6,7 @@ import {
   EdgeProps,
   Node,
 } from 'reactflow';
-import { styled, useTheme } from 'styled-components';
+import { styled } from 'styled-components';
 import { getEdgeParams, getSelfReferencePath } from './getEdgeParams';
 import { EdgeData } from './buildGraph';
 
@@ -68,7 +68,6 @@ export function FloatingEdge({
   label,
   data,
 }: EdgeProps<EdgeData>) {
-  const theme = useTheme();
   const sourceNode = useFlowStore(
     useCallback(store => store.nodeInternals.get(source), [source]),
   );
@@ -100,10 +99,10 @@ export function FloatingEdge({
         y={labelY}
         label={<Label text={label as string} />}
         labelStyle={{
-          fill: theme.colors.text,
+          fill: 'var(--color-text)',
         }}
         labelShowBg
-        labelBgStyle={{ fill: theme.colors.bg1 }}
+        labelBgStyle={{ fill: 'var(--color-bg-subtle)' }}
         labelBgPadding={[2, 4]}
         labelBgBorderRadius={2}
       />
