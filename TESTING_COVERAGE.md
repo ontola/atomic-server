@@ -2303,6 +2303,17 @@ without a periodic flush: chunk ACK plus GET coverage followed by unclean exit
 must survive reopening. Injected flush failures block both chunk ACKs and
 matching hash ACKs; exact retries retain the same CRDT version.
 
+Seeded shared-engine schedules:
+`handlers::commit::durability_tests::seeded_sync_tests::seeded_sync_failure_schedules`
+runs four fixed seeds against two redb replicas (288 scheduled operations).
+Every shuffled block includes disjoint field edits, delayed/dropped/duplicate
+delivery, storage reopen with identity restoration, failed disk flush, signed
+deletion and stale replay. Both content and parent-query membership are compared
+with an independent ledger after bounded reconciliation. Failures retain the
+seed, operation log, expected ledger and synthetic databases; set
+`ATOMIC_SYNC_SEED` to the reported decimal seed to replay. This is transport-level
+schedule simulation, not a browser/process-crash or arbitrary conflict-policy test.
+
 ## Drive root file drops
 
 `views/Drive/DrivePage.test.tsx` renders the drive page with its real dropzone

@@ -916,3 +916,30 @@ Both failing crash tests recovered the previous name despite successful sync.
 This is process-crash evidence, not physical power-loss testing. The durability
 barrier applies to upgraded responders; existing wire version vectors do not
 prove that an older responder flushed its writes.
+
+### Seeded sync failure schedules — 2026-09-16
+
+- [x] Add a shared-engine campaign over two real redb replicas: four fixed seeds,
+  eight shuffled blocks per seed, nine operation types per block (288 scheduled
+  operations plus resource creation and final reconciliation).
+- [x] Mix independent field edits on partitioned replicas, delayed/dropped/
+  duplicated snapshots, reopen with restored identity, injected disk-flush
+  failures, signed deletions and stale-update replay.
+- [x] Compare both replicas and parent-query membership with an independent
+  field/deletion ledger after two fixed final exchanges; do not poll until equal.
+- [x] Keep the seed, schedule, expected ledger and synthetic databases on failure.
+  Replay with ATOMIC_SYNC_SEED=<decimal seed> and the command below.
+- [x] Final four-seed campaign passes (24.9 seconds); scoped rustfmt and diff checks pass.
+
+```sh
+ATOMICSERVER_SKIP_JS_BUILD=true cargo test -p atomic-server --lib --no-default-features --features light seeded_sync_failure_schedules
+ATOMIC_SYNC_SEED=42 ATOMICSERVER_SKIP_JS_BUILD=true cargo test -p atomic-server --lib --no-default-features --features light seeded_sync_failure_schedules
+```
+
+The schedule and operation choices are deterministic; generated keys and wall
+clock timestamps are not. Transport scheduling is simulated at the shared engine,
+and reopen is a persisted-state reload, not an OS crash (covered by item 1).
+This campaign checks disjoint field edits and deletion dominance, not every LWW
+conflict policy, browser quota behavior, physical devices or a long-running soak.
+The first run exposed a harness omission: resource storage reload does not restore
+the default agent; the harness now restores that separate identity explicitly.
