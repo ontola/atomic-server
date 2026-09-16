@@ -1388,10 +1388,15 @@ export class WSClient {
           // attribute it locally. Verified in WASM before being kept; a
           // client without a database simply asks the server later.
           if (msg.envelopes.length > 0) {
-            this.store
-              .getClientDb()
-              ?.importEnvelopes(msg.envelopes)
-              .catch(e => console.warn('[WS] envelope import failed:', e));
+            const clientDb = this.store.getClientDb();
+
+            // Not every client-db implementation carries envelope import;
+            // one that doesn't simply asks the server for attribution later.
+            if (typeof clientDb?.importEnvelopes === 'function') {
+              clientDb
+                .importEnvelopes(msg.envelopes)
+                .catch(e => console.warn('[WS] envelope import failed:', e));
+            }
           }
 
           // Only mark the drive sync as finished on the final chunk —

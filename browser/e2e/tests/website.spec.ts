@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { before } from './test-utils';
-import { enableAIForTesting, setupScriptedToolCallMocks } from './ai-mock';
+import {
+  enableAIForTesting,
+  sendChatMessage,
+  setupScriptedToolCallMocks,
+} from './ai-mock';
 
 /** A private document stays editable; an exported release keeps its old text. */
 test('website document preview, frozen release and reload', async ({
@@ -248,13 +252,13 @@ test('Assistant creates and redesigns a website using existing table content', a
   tableSubject = fixture.table;
   rowSubject = fixture.row;
   otherSubject = fixture.other;
-  const sidebar = page.locator('[data-open]');
-  const chatInput = sidebar.locator('[contenteditable="true"]');
-  await expect(chatInput).toBeVisible({ timeout: 15000 });
-  await chatInput.fill(
+  // The right panel is transient state and is never restored from storage
+  // (#1475), so the panel has to be opened before the chat input exists.
+  // `sendChatMessage` does that, and waits out vector indexing and toasts.
+  await sendChatMessage(
+    page,
     'Make a website from my garden notes and refine the design.',
   );
-  await sidebar.getByTitle('Send').click();
   await expect(
     page.getByText('The website design is ready to preview.'),
   ).toBeVisible({ timeout: 60000 });

@@ -6,12 +6,13 @@ test('workspace owns its views and links to separate connection settings', async
   page,
 }) => {
   const installed = await page.evaluate(async () => {
-    const setupPath = '/src/chunks/PluginRuns/ConnectGitHub.tsx';
+    // `ConnectGitHub.tsx` is a thin compatibility wrapper around the
+    // schema-driven AppSetupForm and no longer imports the installer;
+    // `githubInstaller.ts` is the module that still names its path.
+    const setupPath = '/src/chunks/PluginRuns/githubInstaller.ts';
     await import(/* @vite-ignore */ setupPath);
     // Vite serves the installer after loading its owning UI module.
-    const ui = await fetch('/src/chunks/PluginRuns/ConnectGitHub.tsx').then(r =>
-      r.text(),
-    );
+    const ui = await fetch(setupPath).then(r => r.text());
     const path = ui.match(
       /"([^"]*integrations\/github-issues\/atomic[^"]*)"/,
     )![1];
@@ -149,7 +150,7 @@ test('workspace owns its views and links to separate connection settings', async
     });
   }
 
-  await page.getByRole('button', { name: 'AI edit', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit with AI', exact: true }).click();
   await expect(
     page.getByText('Help me edit this integration.', { exact: false }).first(),
   ).toBeVisible();

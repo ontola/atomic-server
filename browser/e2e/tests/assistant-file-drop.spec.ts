@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test';
 import { before } from './test-utils';
-import { enableAIForTesting, setupAIRouteMocks } from './ai-mock';
+import {
+  enableAIForTesting,
+  openAISidebar,
+  setupAIRouteMocks,
+} from './ai-mock';
 
 test('dropping files on the Assistant preserves text and attaches each file once', async ({
   page,
@@ -8,6 +12,9 @@ test('dropping files on the Assistant preserves text and attaches each file once
   await setupAIRouteMocks(page);
   await enableAIForTesting(page);
   await before({ page });
+  // The right panel is transient state and is never restored from storage
+  // (#1475), so it has to be opened before the dropzone exists.
+  await openAISidebar(page);
   const zone = page.getByTestId('assistant-file-dropzone');
   const input = zone.locator('[contenteditable="true"]');
   await expect(input).toBeVisible();
