@@ -242,16 +242,22 @@ export async function createPropertyOnClass(
 
 /**
  * Attaches an already-existing select property to a new table instead of
- * minting a duplicate that would share its shortname. The caller's requested
- * options must already exist among the property's tags — silently adding new
- * options to a property shared by other tables/columns would surprise them.
+ * minting a duplicate that would share its shortname — but only if the
+ * caller's requested options already exist among the property's tags.
+ * Two unrelated columns can independently land on the same name (e.g. a
+ * task board's "Status" of Todo/Doing/Done vs. a reading list's "Status" of
+ * Want to read/Reading/Finished) without either author knowing about the
+ * other, so a tag mismatch here isn't a template error — it means these are
+ * different enums that happen to share a shortname. Returns `null` in that
+ * case so the caller can mint a disambiguated property instead, rather than
+ * silently adding options to (or failing on) a property shared elsewhere.
  */
 async function reuseSelectProperty(
   store: Store,
   tableClass: Resource,
   existing: Resource,
   opts: { name: string; tags: TagSeed[]; deferAttach?: boolean },
-): Promise<CreatedSelectProperty> {
+): Promise<CreatedSelectProperty | null> {
   const optionSubjects = (existing.get(core.properties.allowsOnly) ??
     []) as string[];
   // Tags are created with only a shortname (see below) — no `core:name` — so
@@ -274,9 +280,7 @@ async function reuseSelectProperty(
     const subject = subjectByShortname[stringToSlug(seed.name)];
 
     if (!subject) {
-      throw new Error(
-        `Shared property "${opts.name}" has no option "${seed.name}"`,
-      );
+      return null;
     }
 
     tagsByName[seed.name] = subject;
@@ -321,12 +325,18 @@ export async function createSelectPropertyOnClass(
     const existing = taken.get(shortname);
 
     if (existing) {
-      if (isCompatibleSelectProperty(existing)) {
-        return reuseSelectProperty(store, tableClass, existing, opts);
+      const reused = isCompatibleSelectProperty(existing)
+        ? await reuseSelectProperty(store, tableClass, existing, opts)
+        : null;
+
+      if (reused) {
+        return reused;
       }
 
-      // A different, incompatible property already owns this shortname —
-      // mint under a disambiguated one instead of silently colliding.
+      // Either a different, incompatible property already owns this
+      // shortname, or it's a select property whose tags don't cover what
+      // this column needs (a same-named but unrelated enum) — mint under a
+      // disambiguated one instead of silently colliding.
       shortname = disambiguateShortname(taken, shortname);
     }
   }
