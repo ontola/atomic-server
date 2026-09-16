@@ -88,7 +88,7 @@ test('disabled feedback explains availability without claiming a failed send', a
   ).toBeDisabled();
 });
 
-test('local diagnostics require preview and explicit inclusion and exclude private context', async ({
+test('local diagnostics require explicit inclusion and exclude private context', async ({
   page,
 }, testInfo) => {
   const reports: string[] = [];
@@ -109,12 +109,12 @@ test('local diagnostics require preview and explicit inclusion and exclude priva
     dialog.getByRole('checkbox', { name: 'Include diagnostic data' }),
   ).toBeVisible();
   await expect(
-    dialog.getByRole('button', { name: 'Stop and clear recording' }),
+    dialog.getByRole('button', { name: 'Stop and clear' }),
   ).not.toBeVisible();
-  await dialog.getByText('Diagnostics', { exact: true }).click();
-  await expect(
-    dialog.getByRole('button', { name: 'Stop and clear recording' }),
-  ).toBeVisible();
+  const include = dialog.getByRole('checkbox', {
+    name: 'Include diagnostic data',
+  });
+  await expect(include).toBeEnabled();
   await page.evaluate(async () => {
     const resource = await window.store.newResource({
       parent: window.store.getDrive(),
@@ -129,7 +129,12 @@ test('local diagnostics require preview and explicit inclusion and exclude priva
       `${window.location.pathname}${window.location.search}${window.location.search ? '&' : '?'}secret=PRIVATE_DIAGNOSTIC_URL`,
     );
   });
-  await dialog.getByRole('button', { name: 'Preview diagnostics' }).click();
+  await include.check();
+  await expect(include).toBeChecked();
+  await dialog.getByText('Diagnostic data', { exact: true }).click();
+  await expect(
+    dialog.getByRole('button', { name: 'Stop and clear' }),
+  ).toBeVisible();
   const preview = dialog.getByRole('textbox', {
     name: 'Diagnostic report preview',
   });
@@ -145,18 +150,14 @@ test('local diagnostics require preview and explicit inclusion and exclude priva
     'may have applied',
   );
   expect(previewText).not.toContain('PRIVATE_DIAGNOSTIC');
-  const include = dialog.getByRole('checkbox', {
-    name: 'Include diagnostic data',
-  });
-  await expect(include).not.toBeChecked();
+  await expect(include).toBeChecked();
   expect(reports).toHaveLength(0);
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    dialog.getByRole('button', { name: 'Download diagnostics' }).click(),
+    dialog.getByRole('button', { name: 'Download report' }).click(),
   ]);
   expect(download.suggestedFilename()).toBe('atomic-diagnostics.json');
   expect(reports).toHaveLength(0);
-  await include.check();
   await page.screenshot({
     path: testInfo.outputPath('diagnostics-preview.png'),
   });
@@ -214,7 +215,8 @@ test('diagnostics survive reload and disabling clears IndexedDB across tabs', as
   await page.getByTestId('sidebar').hover();
   await page.getByRole('button', { name: 'Feedback', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  await dialog.getByText('Diagnostics', { exact: true }).click();
+  await dialog.getByText('Diagnostic data', { exact: true }).click();
+  await dialog.getByRole('button', { name: 'Review report' }).click();
   const preview = dialog.getByRole('textbox', {
     name: 'Diagnostic report preview',
   });
@@ -227,9 +229,7 @@ test('diagnostics survive reload and disabling clears IndexedDB across tabs', as
   const other = await context.newPage();
   await other.goto(page.url());
   await other.waitForFunction(() => window.store?.diagnostics.active);
-  await dialog
-    .getByRole('button', { name: 'Stop and clear recording' })
-    .click();
+  await dialog.getByRole('button', { name: 'Stop and clear' }).click();
   await expect.poll(async () => (await readState()).enabled).toBe(false);
   expect((await readState()).sessions).toEqual([]);
   await other.waitForFunction(
@@ -241,10 +241,10 @@ test('diagnostics survive reload and disabling clears IndexedDB across tabs', as
   await page.getByRole('button', { name: 'Feedback', exact: true }).click();
   await page
     .getByRole('dialog')
-    .getByText('Diagnostics', { exact: true })
+    .getByText('Diagnostic data', { exact: true })
     .click();
   await expect(
-    page.getByRole('button', { name: 'Start local recording' }),
+    page.getByRole('button', { name: 'Start recording' }),
   ).toBeEnabled();
   expect(await page.evaluate(() => window.store.diagnostics.active)).toBe(
     false,

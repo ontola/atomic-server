@@ -6,11 +6,12 @@ import {
   type ReactNode,
 } from 'react';
 import { useStore } from '@tomic/react';
+import { styled } from 'styled-components';
 import { getPersistentDiagnostics } from '../../helpers/persistent-diagnostics';
 import { Details } from '../Details';
 import { Button } from '../Button';
 import { Checkbox } from '../forms/Checkbox';
-import { Column } from '../Row';
+import { Column, Row } from '../Row';
 import { TextAreaStyled } from '../forms/InputStyles';
 import {
   previewDiagnostics,
@@ -44,9 +45,7 @@ export function FeedbackDiagnostics({
     recorder.subscribe,
     () => recorder.active,
   );
-  const [preview, setPreview] = useState<DiagnosticPreview | undefined>(() =>
-    recorder.active ? previewDiagnostics(recorder) : undefined,
-  );
+  const [preview, setPreview] = useState<DiagnosticPreview | undefined>();
   const [included, setIncluded] = useState(false);
   const current = preview?.session === session ? preview : undefined;
 
@@ -61,107 +60,120 @@ export function FeedbackDiagnostics({
   );
 
   return (
-    <>
+    <DiagnosticsLayout>
       <label htmlFor={includeId}>
         <Checkbox
           id={includeId}
           checked={included}
-          disabled={disabled || !current}
+          disabled={disabled || !active}
           onChange={value => {
             setIncluded(value);
-            onSelect(value ? current : undefined);
+
+            if (!value) {
+              onSelect(undefined);
+
+              return;
+            }
+
+            const selected = previewDiagnostics(recorder);
+
+            setPreview(selected);
+            onSelect(selected);
           }}
         />
         Include diagnostic data
       </label>
       {children}
-      <Details title='Diagnostics'>
-        <Column>
+      <Details
+        title={
+          <DiagnosticsTitle>
+            <span>Diagnostic data</span>
+          </DiagnosticsTitle>
+        }
+        noIndent
+      >
+        <DiagnosticsCard>
+          <RecordingState $active={active}>
+            {active ? 'Recording locally' : 'Not recording'}
+          </RecordingState>
           <p>
-            Recent save and connection events are recorded locally by default.
-            No document text, filenames, URLs, or error messages are collected.
-            Up to 500 events from the last 10 minutes are kept in this browser,
-            including across reloads. Expired records are removed when the app
-            next accesses storage. Nothing is uploaded automatically.
+            Recent save and connection activity only. No document content,
+            names, URLs, or error messages. Nothing is shared unless you attach
+            it below.
           </p>
           {persistenceStatus === 'memory-only' && (
-            <p role='status'>
-              Diagnostic storage is unavailable. Recent events are only in
-              memory and may be lost on reload.
-            </p>
+            <StatusMessage role='status'>
+              Kept in this tab only; it will be lost on reload.
+            </StatusMessage>
           )}
           {persistenceStatus === 'clear-failed' && (
-            <p role='alert'>
-              Could not clear diagnostic storage or save the recording
-              preference. Recording is stopped. Retry clearing before leaving
-              this browser.
-            </p>
+            <StatusMessage role='alert'>
+              Couldn’t clear local diagnostics. Recording is stopped; retry
+              before leaving this browser.
+            </StatusMessage>
           )}
           {persistenceStatus === 'paused' && (
-            <p role='status'>
-              Recording was reset in another tab. Reload this tab before
-              recording again.
-            </p>
+            <StatusMessage role='status'>
+              Reset in another tab. Reload to record again.
+            </StatusMessage>
           )}
-          <Button
-            subtle
-            disabled={
-              disabled ||
-              persistenceStatus === 'loading' ||
-              persistenceStatus === 'paused'
-            }
-            onClick={() => {
-              if (persistence) {
-                void persistence.setEnabled(
-                  persistenceStatus === 'clear-failed'
-                    ? false
-                    : !recorder.active,
-                );
-              } else if (recorder.active) recorder.clear();
-              else {
-                recorder.start();
-                recorder.connection(store.serverConnected);
-                const status = store.getSyncStatus();
-                recorder.queue(
-                  status.pendingDirtyCount,
-                  status.blockedCount,
-                  status.serverConnected,
-                );
-              }
-            }}
-          >
-            {persistenceStatus === 'clear-failed'
-              ? 'Retry clearing diagnostics'
-              : active
-                ? 'Stop and clear recording'
-                : 'Start local recording'}
-          </Button>
-          {active && (
+          <Row gap='0.5rem' wrapItems>
             <Button
               subtle
-              disabled={disabled}
+              disabled={
+                disabled ||
+                persistenceStatus === 'loading' ||
+                persistenceStatus === 'paused'
+              }
               onClick={() => {
-                setPreview(previewDiagnostics(recorder));
-                setIncluded(false);
-                onSelect(undefined);
+                if (persistence) {
+                  void persistence.setEnabled(
+                    persistenceStatus === 'clear-failed'
+                      ? false
+                      : !recorder.active,
+                  );
+                } else if (recorder.active) recorder.clear();
+                else {
+                  recorder.start();
+                  recorder.connection(store.serverConnected);
+                  const status = store.getSyncStatus();
+                  recorder.queue(
+                    status.pendingDirtyCount,
+                    status.blockedCount,
+                    status.serverConnected,
+                  );
+                }
               }}
             >
-              Preview diagnostics
+              {persistenceStatus === 'clear-failed'
+                ? 'Retry clearing diagnostics'
+                : active
+                  ? 'Stop and clear'
+                  : 'Start recording'}
             </Button>
-          )}
+            {active && (
+              <Button
+                subtle
+                disabled={disabled}
+                onClick={() => {
+                  setPreview(previewDiagnostics(recorder));
+                  setIncluded(false);
+                  onSelect(undefined);
+                }}
+              >
+                Review report
+              </Button>
+            )}
+          </Row>
           {current && (
-            <>
-              <p>
-                Events show timing and activity counts, which can still be
-                sensitive. Review before sharing.
-              </p>
+            <ReviewPanel>
+              <p>Review the timing and activity counts before sharing.</p>
               <TextAreaStyled
                 aria-label='Diagnostic report preview'
                 readOnly
-                rows={10}
+                rows={8}
                 value={current.text}
               />
-
               <Button
                 subtle
                 disabled={disabled}
@@ -170,12 +182,51 @@ export function FeedbackDiagnostics({
                   if (text) downloadDiagnostics(text);
                 }}
               >
-                Download diagnostics
+                Download report
               </Button>
-            </>
+            </ReviewPanel>
           )}
-        </Column>
+        </DiagnosticsCard>
       </Details>
-    </>
+    </DiagnosticsLayout>
   );
 }
+
+const DiagnosticsLayout = styled(Column)`
+  gap: 1rem;
+`;
+
+const DiagnosticsTitle = styled.span`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+`;
+
+const RecordingState = styled.span<{ $active: boolean }>`
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.main : theme.colors.textLight};
+  font-size: 0.8em;
+  font-weight: normal;
+`;
+
+const DiagnosticsCard = styled(Column)`
+  gap: 0.75rem;
+  margin: 0.5rem 0 0;
+  padding: 0.85rem;
+  border: 1px solid ${({ theme }) => theme.colors.bg2};
+  border-radius: ${({ theme }) => theme.radius};
+  background: ${({ theme }) => theme.colors.bg1};
+`;
+
+const StatusMessage = styled.p`
+  color: ${({ theme }) => theme.colors.textLight};
+`;
+
+const ReviewPanel = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid ${({ theme }) => theme.colors.bg2};
+`;

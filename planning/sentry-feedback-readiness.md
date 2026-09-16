@@ -2,6 +2,12 @@
 
 Production remains on hold. Updated 2026-09-07.
 
+## Feedback diagnostics presentation
+
+- [x] Replace the verbose diagnostic disclosure with a compact, review-first
+  control that keeps the feedback form readable while preserving explicit
+  attachment and download flows.
+
 - [x] Audit browser initialization and sidebar.
 - [x] Report React caught, uncaught and recoverable errors using React 19 root callbacks.
 - [x] Add sidebar feedback with optional reply email, validation, retained text on delivery failure, and info@ontola.io fallback.
