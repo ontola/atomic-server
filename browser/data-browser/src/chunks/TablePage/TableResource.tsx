@@ -659,6 +659,14 @@ export const TableResource: React.FC<TableResourceProps> = ({
     baselineMemberCountRef.current = null;
   }
 
+  // A session row that has already been persisted is counted by the collection
+  // AND still rendered from `newRowSubjects` (it keeps its `_new:` key, see
+  // above). Every count derived from the collection has to leave those out, or
+  // the row is drawn twice: once as a member, once as itself.
+  const materialisedSessionRows = newRowSubjects.filter(subject =>
+    store.isAliased(subject),
+  ).length;
+
   // Freeze the count only once the collection actually answers what was asked.
   // Edits land faster than collections arrive — change a filter's operator and
   // then type its value, and the collection built for the operator-only query
@@ -666,12 +674,19 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // the current query would freeze it for good: the collection that finally
   // answers carries the same query, so it would never be allowed to re-capture,
   // and the grid would keep rendering the previous filter's rows.
+  //
+  // The user may have typed a row before the collection answered (a slow
+  // cold load); that row is already in the count, so it is not part of the
+  // member baseline.
   if (
     ready &&
     answeredQuery === requestedQuery &&
     baselineMemberCountRef.current === null
   ) {
-    baselineMemberCountRef.current = collection.totalMembers;
+    baselineMemberCountRef.current = Math.max(
+      0,
+      collection.totalMembers - materialisedSessionRows,
+    );
     baselineQueryKeyRef.current = requestedQuery;
   }
 
@@ -701,9 +716,6 @@ export const TableResource: React.FC<TableResourceProps> = ({
   // below, and session rows keep their `_new:` key through the index shift
   // (`itemKey` offsets by `memberCount`), so nothing remounts.
   if (baselineMemberCountRef.current !== null) {
-    const materialisedSessionRows = newRowSubjects.filter(subject =>
-      store.isAliased(subject),
-    ).length;
     const accountedFor =
       baselineMemberCountRef.current + materialisedSessionRows;
 
@@ -713,7 +725,8 @@ export const TableResource: React.FC<TableResourceProps> = ({
   }
 
   const memberCount = Math.min(
-    baselineMemberCountRef.current ?? collection.totalMembers,
+    baselineMemberCountRef.current ??
+      Math.max(0, collection.totalMembers - materialisedSessionRows),
     collection.totalMembers,
   );
 
