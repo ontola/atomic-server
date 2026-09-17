@@ -19,6 +19,7 @@ import {
   FaGripVertical,
 } from 'react-icons/fa6';
 import { styled } from 'styled-components';
+import { columnLabel } from './helpers/columnLabel';
 import { TableHeadingMenu, TableHeadingMenuHandle } from './TableHeadingMenu';
 import { TablePageContext } from './tablePageContext';
 import { IconType } from 'react-icons';
@@ -123,7 +124,7 @@ export const TableHeading: TableHeadingComponent<TableColumn> = ({
     );
   }
 
-  const text = `${title || property.shortname}${isRequired ? '*' : ''}`;
+  const text = `${columnLabel(title, property.shortname)}${isRequired ? '*' : ''}`;
 
   return (
     <>
