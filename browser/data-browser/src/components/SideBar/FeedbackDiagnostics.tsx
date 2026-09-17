@@ -61,7 +61,7 @@ export function FeedbackDiagnostics({
 
   return (
     <DiagnosticsLayout>
-      <label htmlFor={includeId}>
+      <Checkbox.Label htmlFor={includeId}>
         <Checkbox
           id={includeId}
           checked={included}
@@ -82,7 +82,7 @@ export function FeedbackDiagnostics({
           }}
         />
         <span>Include diagnostic data</span>
-      </label>
+      </Checkbox.Label>
       {children}
       <Details
         title={
