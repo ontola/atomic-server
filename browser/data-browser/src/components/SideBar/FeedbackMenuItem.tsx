@@ -20,6 +20,7 @@ import {
   TextAreaStyled,
 } from '../forms/InputStyles';
 import { Button } from '../Button';
+import Field from '../forms/Field';
 import { Column } from '../Row';
 import {
   SideBarMenuRow,
@@ -118,8 +119,7 @@ export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
                 optional email go to the Atomic team through Sentry. Please
                 leave out private workspace content.
               </p>
-              <label htmlFor={messageId}>
-                Feedback
+              <Field label='Feedback' fieldId={messageId} disabled={busy}>
                 <InputWrapper>
                   <TextAreaStyled
                     id={messageId}
@@ -131,14 +131,17 @@ export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
                     style={{ width: '100%', boxSizing: 'border-box' }}
                   />
                 </InputWrapper>
-              </label>
+              </Field>
               {dialogProps.show && (
                 <FeedbackDiagnostics
                   onSelect={setDiagnosticPreview}
                   disabled={busy}
                 >
-                  <label htmlFor={emailId}>
-                    Email for a reply (optional)
+                  <Field
+                    label='Email for a reply (optional)'
+                    fieldId={emailId}
+                    disabled={busy}
+                  >
                     <InputWrapper>
                       <InputStyled
                         id={emailId}
@@ -149,7 +152,7 @@ export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
                         disabled={busy}
                       />
                     </InputWrapper>
-                  </label>
+                  </Field>
                 </FeedbackDiagnostics>
               )}
               {!enabled && (

@@ -34,15 +34,15 @@ function ResourceField({
 
   if (!property) {
     return (
-      <Field label={labelProp || 'loading...'} fieldId={fieldId}>
+      <CapitalizedField label={labelProp || 'loading...'} fieldId={fieldId}>
         <InputWrapper>
           <InputStyled
             disabled={disabled}
-            placeholder='loading property...'
+            placeholder="loading property..."
             id={fieldId}
           />
         </InputWrapper>
-      </Field>
+      </CapitalizedField>
     );
   }
 
@@ -52,7 +52,7 @@ function ResourceField({
 
   if (property.isDynamic) {
     return (
-      <Field
+      <CapitalizedField
         helper={
           <HelperText text={property.description} link={property.subject} />
         }
@@ -69,16 +69,16 @@ function ResourceField({
           autoFocus={autoFocus}
           disabled
         />
-        <Extra center gap='1ch'>
+        <Extra center gap="1ch">
           <FaServer />
           <span>This field is calculated server-side.</span>
         </Extra>
-      </Field>
+      </CapitalizedField>
     );
   }
 
   return (
-    <Field
+    <CapitalizedField
       helper={
         <HelperText text={property.description} link={property.subject} />
       }
@@ -101,7 +101,7 @@ function ResourceField({
         autoFocus={autoFocus}
         disabled={disabled}
       />
-    </Field>
+    </CapitalizedField>
   );
 }
 
@@ -168,3 +168,10 @@ interface IFieldProps {
 }
 
 export default ResourceField;
+
+const CapitalizedField = styled(Field)`
+  & label,
+  & legend {
+    text-transform: capitalize;
+  }
+`;
