@@ -231,9 +231,38 @@ cannot change a rendered value. The work was in the cases that were *not* that:
 - Layout constants the theme held as plain values (bar heights, container and
   sidebar widths) and the z-index scale became tokens, so CSS can reach them.
 
-**How it was verified.** Typecheck, 1047 unit tests, and zero lint errors are
-necessary but not sufficient: invalid *CSS* is valid TypeScript. Two further
-checks did the real work.
+**The feedback loop that replaces the typecheck.** A custom property is a
+string wherever it appears, so `var(--color-bgg)` typechecks, lints, renders
+and silently does nothing. That is the real cost of this phase, and it is paid
+back by `oxlint-plugins/tokenVars.js`, a local oxlint JS plugin
+(`token-vars/no-unknown-custom-property`): it collects every `--x` declared
+anywhere in `src/` and errors on any `var()` without a fallback that names
+something else, at the exact line and column. A `var(--x, 0)` is skipped
+because a fallback states what to do when the property is absent.
+
+A lint rule rather than a test, because this wants to be a squiggle while you
+type and a pre-commit failure. It reads the whole tree once per run (2.2s for
+the package, unchanged) rather than working per file, because a
+component-local property is legitimately declared in one file and read in
+another: `--template-color-bg1` is set in `TemplateListItem` and read by the
+SVG in `websiteImage`.
+
+It found two live bugs on its first run, both predating any of this work:
+`SearchOverlay` set `var(--color-bg1)` on the selected row (the token is
+`--color-bg-subtle`, so there was no highlight), and `Tag` read
+`var(--dark-color)` for its hover shadow while declaring `--tag-dark-color`
+twenty lines above. Neither is a hole the theme object covered: the theme only
+type-checked its own member names, and both of these lived in an inline style
+and in component-local properties. The rule covers all 164 properties the app
+references.
+
+Note that oxlint's `jsPlugins` API is marked alpha and not subject to semver.
+If that becomes a problem, the same check exists as a vitest suite in the
+history at `d07001f` and can be restored.
+
+**How the rest was verified.** Typecheck, 1047 unit tests, and zero lint errors
+are necessary but not sufficient: invalid *CSS* is valid TypeScript. Two
+further checks did the real work.
 
 1. **A re-derivation audit.** Re-run the safe passes over every file's HEAD
    content and diff against what is on disk; whitespace-normalised, what
