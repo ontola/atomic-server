@@ -128,6 +128,29 @@ export async function planVerdict(
       .map(i => [minted[i.localId], i.isA]),
   );
 
+  // Every fetch this plan needs, started together.
+  //
+  // Planning is a loop of awaits, so each distinct property and each subject
+  // used to cost its own round trip in series: an import of five rows with six
+  // columns spent six sequential fetches before the first row was planned, in
+  // front of a dialog the user is watching. The memo below is what makes this
+  // safe — the loop still reads exactly the same promises, it just no longer
+  // waits for one to start the next.
+  const prefetch = (promise: Promise<unknown>) => {
+    // Failures are handled where the value is actually awaited; this only
+    // marks the promise as observed so starting it early cannot surface as an
+    // unhandled rejection.
+    void promise.catch(() => undefined);
+  };
+
+  for (const intent of resolved) {
+    if (intent.op !== 'create') prefetch(resources(intent.subject));
+
+    if (intent.op === 'create' || intent.op === 'set') {
+      for (const url of Object.keys(intent.set)) prefetch(properties(url));
+    }
+  }
+
   const changes: PlannedChange[] = [];
 
   for (const intent of resolved) {
