@@ -8,19 +8,20 @@ export default function InputBoolean({
   resource,
   property,
   commit,
+  commitDebounceInterval,
+  required: _required,
   ...props
 }: InputProps): JSX.Element {
-  const { required: _required, ...otherProps } = props;
-
   const [err, setErr] = useState<Error | undefined>(undefined);
   const [value, setValue] = useBoolean(resource, property.subject, {
     handleValidationError: setErr,
     commit,
+    commitDebounce: commitDebounceInterval,
   });
 
   return (
     <>
-      <Checkbox checked={value ?? false} onChange={setValue} {...otherProps} />
+      <Checkbox checked={value ?? false} onChange={setValue} {...props} />
       {err && <ErrMessage>{err.message}</ErrMessage>}
     </>
   );
