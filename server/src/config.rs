@@ -138,8 +138,34 @@ pub struct Opts {
 
     /// The base domain for multi-tenant hosting.
     /// If set, the server will allow serving subdomains of this domain (e.g. *.atomicserver.eu).
+    ///
+    /// Note that this does two things at once: it accepts subdomain `Host`
+    /// headers *and* it becomes the store's base domain, which is what
+    /// `Subject::from_raw` normalizes absolute URLs against. If you only need
+    /// the former — answering for names a control plane routes to you, without
+    /// changing how subjects are stored — use `--served-domain-suffix`.
     #[clap(long, env = "ATOMIC_BASE_DOMAIN")]
     pub base_domain: Option<String>,
+
+    /// An extra domain whose subdomains this server answers for, e.g.
+    /// `atomicserver.eu` so that `acme.atomicserver.eu` is treated as one of
+    /// this server's own names.
+    ///
+    /// Deliberately separate from `--base-domain`. Only the set of `Host`
+    /// headers the server trusts is affected: the request origin (what signed
+    /// auth proofs bind to, and what served subjects are localized to) follows
+    /// the hostname the request actually arrived on, instead of falling back to
+    /// the configured origin and handing a visitor links to a different
+    /// hostname than the one they typed. The store's own base domain is
+    /// untouched, so nothing about how subjects are normalized or migrated
+    /// changes — which is what makes this safe to switch on for a node that
+    /// already holds data.
+    ///
+    /// This is what a managed node is given for hosted vanity subdomains; the
+    /// mapping from such a hostname to a Drive is separate, and lives in
+    /// `Tree::DriveMapping`.
+    #[clap(long, env = "ATOMIC_SERVED_DOMAIN_SUFFIX")]
+    pub served_domain_suffix: Option<String>,
 
     /// Serve one Drive as this server's front page.
     ///
