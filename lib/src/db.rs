@@ -38,7 +38,10 @@ mod val_prop_sub_index;
 
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, Mutex, RwLock},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc, Mutex, RwLock,
+    },
     vec,
 };
 
@@ -376,6 +379,21 @@ pub struct Db {
     /// blob forever, so `note_pending_blob_request` also lazily prunes
     /// anything older than `PENDING_BLOB_REQUEST_TTL`.
     pending_blob_requests: Arc<RwLock<PendingBlobRequests>>,
+    /// How often the full-decode vs propvals-only fetch paths ran. Shared
+    /// across clones; used by tests to pin query-path cost to call counts
+    /// rather than wall clock (snapshots in a fresh store are too small
+    /// to show the difference). See `planning/slow-collection-queries.md`.
+    fetch_counters: Arc<FetchCounters>,
+}
+
+#[derive(Default)]
+struct FetchCounters {
+    get_resource: AtomicUsize,
+    get_resource_shallow: AtomicUsize,
+}
+
+fn default_fetch_counters() -> Arc<FetchCounters> {
+    Arc::new(FetchCounters::default())
 }
 
 /// How long an unanswered `BLOB_REQUEST` stays in `pending_blob_requests`
@@ -624,6 +642,7 @@ impl Db {
             sync_policy: default_sync_policy(),
             envelope_retention: Arc::new(RwLock::new(Default::default())),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
+            fetch_counters: default_fetch_counters(),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -666,6 +685,7 @@ impl Db {
             sync_policy: default_sync_policy(),
             envelope_retention: Arc::new(RwLock::new(Default::default())),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
+            fetch_counters: default_fetch_counters(),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -704,6 +724,7 @@ impl Db {
             sync_policy: default_sync_policy(),
             envelope_retention: Arc::new(RwLock::new(Default::default())),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
+            fetch_counters: default_fetch_counters(),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -803,6 +824,7 @@ impl Db {
             sync_policy: default_sync_policy(),
             envelope_retention: Arc::new(RwLock::new(Default::default())),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
+            fetch_counters: default_fetch_counters(),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -985,6 +1007,7 @@ impl Db {
             sync_policy: default_sync_policy(),
             envelope_retention: Arc::new(RwLock::new(Default::default())),
             pending_blob_requests: Arc::new(RwLock::new(HashMap::new())),
+            fetch_counters: default_fetch_counters(),
         };
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
@@ -2137,6 +2160,9 @@ impl Db {
     /// CRDT-authoritative state matters. Subject normalization (incl. the DID
     /// drive hint) matches `get_resource`, so ids/subjects stay consistent.
     pub fn get_resource_shallow(&self, subject: &Subject) -> AtomicResult<Resource> {
+        self.fetch_counters
+            .get_resource_shallow
+            .fetch_add(1, Ordering::Relaxed);
         let normalized = self.normalize_subject(subject);
         let subject_str = normalized.pure_id();
         let propvals = self.get_propvals(&subject_str)?;
@@ -2154,6 +2180,27 @@ impl Db {
         }
 
         Ok(Resource::from_propvals(propvals, res_subject))
+    }
+
+    /// Zero the fetch counters. Tests call this after fixture setup so the
+    /// subsequent query's counts aren't mixed with bootstrap / save traffic.
+    pub fn reset_fetch_counters(&self) {
+        self.fetch_counters.get_resource.store(0, Ordering::Relaxed);
+        self.fetch_counters
+            .get_resource_shallow
+            .store(0, Ordering::Relaxed);
+    }
+
+    /// Full-decode [`Storelike::get_resource`] calls since the last reset.
+    pub fn get_resource_call_count(&self) -> usize {
+        self.fetch_counters.get_resource.load(Ordering::Relaxed)
+    }
+
+    /// Propvals-only [`Db::get_resource_shallow`] calls since the last reset.
+    pub fn get_resource_shallow_call_count(&self) -> usize {
+        self.fetch_counters
+            .get_resource_shallow
+            .load(Ordering::Relaxed)
     }
 
     /// Removes all values from the indexes.
@@ -3006,6 +3053,9 @@ impl Db {
                 continue;
             }
 
+            // Denied members do not grow `subjects`, so we keep resolving
+            // until the page is full of *authorized* hits — a private streak
+            // must not hide a later readable row.
             if q.limit.is_none() || subjects.len() < q.limit.unwrap() {
                 // Sudo without nested bodies needs no per-member work at all.
                 if q.for_agent == ForAgent::Sudo && !q.include_nested {
@@ -4013,6 +4063,9 @@ impl Storelike for Db {
 
     #[instrument(skip_all)]
     async fn get_resource(&self, subject: &Subject) -> AtomicResult<Resource> {
+        self.fetch_counters
+            .get_resource
+            .fetch_add(1, Ordering::Relaxed);
         let normalized = self.normalize_subject(subject);
         let subject_str = normalized.pure_id();
         if let Ok(propvals) = self.get_propvals(&subject_str) {
@@ -4042,9 +4095,7 @@ impl Storelike for Db {
                     // We already hold the exact bytes `doc` was just imported
                     // from — reuse them instead of having `apply_state_doc`
                     // re-export an equivalent snapshot. This is the hot path
-                    // for every resource read (including once per member of
-                    // a collection query), so the saved export is per-read,
-                    // not one-off.
+                    // for every CRDT-authoritative resource read.
                     let _ = resource.apply_state_doc_with_snapshot(doc, snapshot);
                 }
             }
@@ -4188,6 +4239,10 @@ impl Storelike for Db {
         }
     }
 
+    async fn get_resource_shallow(&self, subject: &Subject) -> AtomicResult<Resource> {
+        Db::get_resource_shallow(self, subject)
+    }
+
     fn has_stored_resource(&self, subject: &Subject) -> bool {
         let normalized = self.normalize_subject(subject);
         self.get_propvals(&normalized.pure_id()).is_ok()
@@ -4240,6 +4295,32 @@ impl Storelike for Db {
 
             let mut root_subject: Option<String> = None;
 
+            // Response shaping below (`incomplete`, class extenders) writes
+            // dynamic propvals through `Resource::set`, which also records each
+            // write as a Loro op on the doc `get_resource` decoded from the
+            // stored snapshot; serialization would then re-export that doc as
+            // the served `loroUpdate`. Those ops are never persisted, so a
+            // client that seeds its doc from the response builds every later
+            // delta on ops this store does not have, and `apply_commit` parks
+            // them as pending ("Commit's Loro update depends on ops the server
+            // does not have"). Observed as the form builder's Publish never
+            // reaching visitors: the Form extender's `form-submission-summary`
+            // op poisoned every doc hydrated from an HTTP GET. Whatever the
+            // extender does to the doc, the response carries the persisted
+            // snapshot.
+            let persisted_snapshot = match resource.get(crate::urls::LORO_UPDATE) {
+                Ok(crate::Value::LoroDoc(bytes)) => Some(bytes.clone()),
+                _ => None,
+            };
+            let served_id = resource.get_subject().pure_id();
+            let serve_persisted = |shaped: &mut Resource| {
+                if let Some(snapshot) = &persisted_snapshot {
+                    if shaped.get_subject().pure_id() == served_id {
+                        shaped.restore_persisted_state(snapshot.clone());
+                    }
+                }
+            };
+
             let extenders = self
                 .class_extenders
                 .read()
@@ -4269,6 +4350,7 @@ impl Storelike for Db {
                                 self,
                             )
                             .await?;
+                        serve_persisted(&mut resource);
 
                         return Ok(resource.into());
                     }
@@ -4286,10 +4368,12 @@ impl Storelike for Db {
                         // make sure the actual subject matches the one requested - It should not be changed in the logic above
                         match resource_response {
                             ResourceResponse::Resource(mut resource) => {
+                                serve_persisted(&mut resource);
                                 resource.set_subject(subject.to_string());
                                 return Ok(resource.into());
                             }
                             ResourceResponse::ResourceWithReferenced(mut resource, referenced) => {
+                                serve_persisted(&mut resource);
                                 resource.set_subject(subject.to_string());
 
                                 return Ok(ResourceResponse::ResourceWithReferenced(

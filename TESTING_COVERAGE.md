@@ -439,6 +439,9 @@ templates, and offline variants stay in the full suite. Policy:
 
 ## Where the suites live
 
+`browser/lib/src/store.test.ts` covers async reads waiting through intermediate
+loading notifications before exposing a resource to callers such as table columns.
+
 | Suite | Command | CI job |
 |---|---|---|
 | `atomic_lib` unit + integration | `cargo nextest run -p atomic_lib --features db-redb,iroh,ws` | `rustTest` |
@@ -935,6 +938,16 @@ editors do not expose state/commands) and `oxc-react-compiler.test.ts` (producti
 compilation does not hoist command getters into render). `sentry.test.ts` covers
 packaged WebView initialization without server-injected Sentry configuration.
 
+`react-compiler-cli.test.ts` covers the file-targeted compiler command: emitted
+memoization, a bailout in a partially optimized file, explicit opt-outs, relative
+paths, and continued checking after an unreadable file with a failing exit code.
+It also verifies compact line/column diagnostics and optional verbose output.
+`react-compiler-hook.test.mjs` covers UTF-8 source locations, advisory hook JSON,
+per-session content caching, source changes, staged/untracked/deleted files,
+excluded files, subdirectory invocation and the repository hook registration.
+The Claude Code registration is exercised with an Edit event, verifying compact
+advisory JSON and silence on a repeated check through the shared hook command.
+
 Automatic Vault scheduling (`vaultAutoBackup.test.ts`) covers sustained-edit
 maximum delay, queued edits across drive switches, late account availability,
 connectivity recovery, enrollment rediscovery after reload, account expiry during
@@ -980,6 +993,7 @@ stays off with its setup action visible.
 - Managed Vault display metadata: `vaultAutoBackup.test.ts` now covers a drive
   present only in local storage, as well as rename/emoji refresh. Manual enable
   and automatic backup share `driveDisplayMetadata`; only name and emoji are sent.
+- FOSS account lookup: `helpers/managed/session.test.ts` verifies that an installation with no managed API does not probe the hosted account endpoint.
 - FOSS logout: `helpers/managed/session.test.ts` verifies that an installation
   with no configured control plane makes no SaaS logout request (the CI smoke
   test exposed a 405 at `/api/logout`).
@@ -1004,6 +1018,7 @@ This does not yet prove restoration of the user's private staging workspace.
 - `signout-signin-data.spec.ts` uses fresh persistent profiles on macOS WebKit because ephemeral contexts reject OPFS; these remain browser tests, not native Tauri acceptance.
 
 - `browser/lib/src/store.test.ts`: receiving an older resource preserves the merged value in both JSON and the persisted Loro snapshot; dashboard configuration reload exercises the real OPFS path.
+
 ## Plugin release and recovery additions
 
 | Flow | Layer | Where |
@@ -2149,3 +2164,186 @@ and upload hook, then delivers multiple files through the drop callback. It
 verifies the upload targets the displayed drive even when the current drive
 setting differs. Native drag events, overlay geometry and the refreshed child
 list are not covered by this component test.
+
+---
+
+## Collection query authorization
+
+| Flow | Where |
+|---|---|
+| Destroyed children don't inflate `parent=` `totalMembers` | `lib/src/db/test.rs` `destroy_clears_parent_index_count` |
+| In-page auth-denied members: `count` equals `subjects.len()` | `unauthorized_query_count_matches_subjects` |
+| Public child after a private streak still fills the page | `unauthorized_query_skips_denials_to_fill_the_page` (20 private, then one public) |
+| Auth-denied listing does not full-decode ancestors; each member is still shallow-fetched | `unauthorized_collection_query_bounds_fetch_counts` (call counts, not wall clock) |
+
+Not covered: wall-clock on a large real store (the 21.7KB-parent form from
+`planning/slow-collection-queries.md`); per-GET rights walks on the invite-code
+panel (memo is per-query, not per-request).
+
+---
+
+## Commit delivery and the Loro save cursor
+
+The client exports each commit as a delta starting at its save cursor
+(`_loroVersionAtLastSave`). If the cursor ever sits past ops the server never
+received, every later delta is un-importable server-side — and Loro parks such
+ops as *pending* (VV unchanged, empty diff), which without a guard is
+indistinguishable from an idempotent replay. This lost a real user's
+`form-pages` write in 2026-08.
+
+| Flow | Where |
+|---|---|
+| Server rejects a delta whose deps it never received (pending import), and accepts the full-range re-send | `lib/src/commit.rs::commit_with_pending_loro_deps_is_rejected` |
+| Idempotent replay of an already-applied commit is still accepted | `lib/src/commit.rs::idempotent_commit_replay_is_accepted` |
+| Drain reacts to the pending-deps rejection by clearing the cursor and re-sending a self-contained snapshot | `browser/lib/src/store.test.ts` ("recovers from a server pending-deps rejection…") |
+| `clone()` / `merge(replaceLoroDocs)` carries the cursor VALUE, not the current doc version | `browser/lib/src/resource.test.ts` ("clone preserves the save cursor value…") |
+| Imports/echoes don't advance the cursor past unsigned local edits | `browser/lib/src/resource.test.ts` ("importLoroUpdate does not advance…") |
+
+Not covered: the OPFS-suppression window (edits live only in memory between
+`markDirty` and a successful drain — an app kill in that window still loses
+them, `store.ts` `addResource`'s `!hasPendingCommits` gate); WS `COMMIT_OK`
+acks carrying no server-side apply confirmation beyond the echoed commit.
+
+---
+
+## Forms
+
+AI `create_form` resource graphs (standalone pages, typed properties and choice tags; existing-table schema preservation; invalid mappings rejected before writes) are covered by `browser/data-browser/src/chunks/FormBuilder/createFormFromSpec.test.ts`. `formOps.test.ts` covers inspection, partial JSON patches, page/field additions, ordering and deletion, choice Tag identity preservation, shared-schema protection, membership checks, and conditional-order validation. `formFieldSettings.test.ts` covers explicit option schemas in both creation/editing, persisted type-specific settings, numeric bounds enforced by renderer validation, clearing bounds, invalid patches rejected before writes, and shared-column selection limits. Model tool selection and live AI-to-published-form submission are not covered by these unit tests.
+
+| Flow | Where |
+|---|---|
+| Existing table → form checklist → unused-column menu → label rename preserves Property → publish → anonymous submit → original table row | `browser/e2e/tests/forms-from-tables.spec.ts` |
+| Column datatype/cardinality → compatible input types; unsupported types excluded; mapping creates only presentation and respects required columns | `browser/data-browser/src/chunks/FormBuilder/tableColumns.test.ts` |
+| Removing a form destroys pages, questions and conditions while keeping columns and Tags | `browser/data-browser/src/chunks/FormBuilder/deleteForm.test.ts` |
+| Pre-existing required column and named SelectProperty Tags validate without a form-owned schema | `server/src/forms.rs::existing_table_columns_validate_without_form_owned_schema` |
+| Number presentation preserves integer storage and rejects fractions | `server/src/forms.rs::number_presentation_preserves_integer_columns` + `browser/form-renderer/src/validation.test.ts` |
+| FormCondition evaluator (visibility + hidden-field validation skip) | Shared fixtures `testdata/form-conditions.json` loaded by `server/src/forms.rs::condition_fixtures_match_ts` **and** `browser/form-renderer/src/conditions.test.ts`. A fix to one is a fix to the other. |
+| Definition serializer inlines FormCondition resources as `{field, operator, value}` | `server/src/forms.rs::definition_inlines_field_conditions` |
+| Form ontology populate (incl. FormCondition) | `lib/src/store.rs::populate_forms_ontology` |
+| Publish → anonymous submit of a branching follow-up | `browser/e2e/tests/forms-submission.spec.ts` ("branching hides a follow-up unless its condition matches") |
+| Extended question types: validation + coercion per type (phone/url shape, currency bounds, dropdown membership, likert/rating range, matrix rows/columns + completeness, table columns/types/row bounds, address subfields), and all-empty composites reading as unanswered | `server/src/forms.rs` (`phone_field_accepts_common_shapes_and_rejects_junk` … `all_empty_composites_count_as_unanswered`) |
+| Extended types route onto the existing summary shapes (choice counts / histogram / answer sample) | `server/src/forms.rs::extended_types_reuse_the_existing_summary_shapes` |
+| `picture-choice` option images: subjects rewritten into `/form/{id}/image?file=`, and that route refuses files the form doesn't reference | `server/src/forms.rs::rewrite_option_images_only_touches_option_image_subjects` + `server/src/tests.rs::form_submission_flow` (step 3d) |
+| Choice options resolve from the mapped SelectProperty's `allowsOnly` Tags into inline `{value,label,color,emoji,image}` objects, in order, with unset keys omitted | `server/src/forms.rs::resolves_choice_options_from_the_mapped_propertys_tags` |
+| Option membership fails closed: a question with no options allows nothing, and a *label* is not an answer (answers are option subjects) | `server/src/forms.rs::choice_options_are_empty_when_the_property_allows_nothing` + `browser/form-renderer/src/validation.test.ts` ("choice option membership") |
+| Non-choice questions keep their options bag untouched by option resolution | `server/src/forms.rs::non_choice_fields_keep_their_options_bag` |
+| A question can borrow another column's Tags (`optionsSource.property`) — the source's list wins over the question's own | `server/src/forms.rs::choice_options_can_mirror_another_columns_tags` |
+| A question can offer a table's *rows* (`optionsSource.table`) — answers are row subjects, a row *label* is not an answer | `server/src/forms.rs::choice_options_can_be_the_rows_of_a_table` |
+| An `optionsSource` pointing at a deleted Property/Table fails closed (empty list) rather than falling back to the question's own tags | `server/src/forms.rs::an_unresolvable_options_source_allows_nothing` |
+| A row whose label column is empty is left out of the options instead of falling back to its `name` | `server/src/forms.rs::rows_the_label_column_is_empty_for_are_not_offered` |
+| A freshly added choice question has *no* options (no placeholder Tag resources) | `browser/e2e/tests/forms.spec.ts` ("create a form, add every field type…", step 4) |
+| Every choice type stores a `resourceArray` of option subjects, single-pick included | `server/src/forms.rs::dropdowns_enforce_option_membership` |
+| Multi-pick selection bounds (`minSelected`/`maxSelected`): too few / too many rejected, membership checked first, an empty answer still reads as unanswered, unusable bounds ignored | `server/src/forms.rs::multi_picks_enforce_selection_bounds` + `browser/form-renderer/src/validation.test.ts` ("multi-select selection bounds") |
+| A maximum set in the builder reaches the rendered form: the hint line, options disabled at the cap, re-enabled on untick | `browser/e2e/tests/forms.spec.ts` ("a multi-select respects the maximum set in the builder") |
+| Renaming an option in the builder rewrites the label in place (options are Tags, not copied strings) | `browser/e2e/tests/forms.spec.ts` ("create a form, add every field type…", step 4) |
+| Builder can add every question type and they survive a reload | `browser/e2e/tests/forms.spec.ts` ("create a form, add every field type…") |
+| `phone` accepts both the renderer's E.164 output and loosely formatted national numbers, and rejects a half-typed one | `browser/form-renderer/src/validation.test.ts` + `server/src/forms.rs::phone_field_accepts_common_shapes_and_rejects_junk` |
+| `country` stores an ISO 3166-1 code: the list is complete and named, names localize, and a country *name* is rejected | `browser/form-renderer/src/validation.test.ts` + `server/src/forms.rs::country_field_takes_an_iso_code_and_rejects_a_name` |
+| `country` summaries count picked codes by popularity (no configured option list to zero-fill) | `server/src/forms.rs::country_counts_rank_by_popularity_then_code` |
+| Builder → publish → anonymous submit → row, for one type per value shape (dropdown/rating/address) | `browser/e2e/tests/forms-submission.spec.ts` ("extended field types round-trip from builder to submission") |
+| Page transitions: off until the builder's Animate-page-transitions switch is on, then the page leaves in the right direction and the arriving page fades in one element at a time — a choice question's options included, each taking the slot after its own question — and `prefers-reduced-motion` still skips both | `browser/e2e/tests/forms.spec.ts` ("page transitions animate once switched on") + `browser/form-renderer/src/pageTransition.test.ts` |
+| Every element in the cascade gets its own delay, in order, and a long page compresses the step rather than capping it (a cap made later options arrive with the question below them) | `browser/e2e/tests/forms.spec.ts` ("page transitions animate once switched on", computed-delay checks) + `pageTransition.test.ts::enterEnvelopeMs` |
+| The animation opt-in survives the definition round-trip (unset = no animation, `true` = animated) | `server/src/forms.rs::definition_can_enable_page_animations` + `definition_includes_styling` |
+| Drafts: what gets stored (answered values only, with each answer's field type), and what is dropped on load — another version, an expired draft, a deleted or retyped question, a page index the form no longer reaches. Storage that is absent or refuses (private mode, quota, partitioned iframe) leaves the form working | `browser/form-renderer/src/draft.test.ts` |
+| Drafts end to end: returning to a half-filled form opens the resume dialog over the seeded answers, Continue keeps them, Reset wipes them on screen *and* on disk, and submitting clears the draft so the next visitor on that browser gets a blank form | `browser/e2e/tests/forms-submission.spec.ts` ("an unfinished form is restored from the visitor's own device") |
+| The drafts opt-out survives the definition round-trip (unset = drafts on and the key absent from the wire format, `false` = off) | `server/src/forms.rs::definition_can_disable_drafts` |
+| Scheduling: `form-published-at` stays the master switch (a schedule alone never publishes), half-open window edges, either bound alone, an inverted window never opening, and the UTC rendering of a bound | `server/src/forms.rs` (`unpublished_form_is_never_available` … `schedule_moment_renders_in_utc`) |
+| Scheduling end to end: a close-at in the past and an open-at in the future each 410 the definition, the HTML page (still embeddable) and submit; clearing both bounds reopens the form, for a real anonymous visitor too | `server/src/tests.rs::form_submission_flow` (step 7b) + `browser/e2e/tests/forms-submission.spec.ts` ("a scheduled window opens and closes a published form") |
+| A GET of a Form serves the *persisted* Loro snapshot: the class extender's `form-submission-summary` is in the JSON-AD but never as a Loro op the store does not have (the op that parked every later commit from a builder tab that had hydrated over HTTP) | `server/src/tests.rs::form_submission_flow` (step 2b) + `lib/src/class_extender.rs::extended_get_serves_the_persisted_snapshot` |
+| Visitor-facing form routes forbid HTTP caching (`Cache-Control: no-store` on the definition, 200 and 410 alike) — a cached 410 is what made the builder's publish look like it never reached the server | `server/src/tests.rs::form_submission_flow` (steps 1 and 2) |
+| Custom CSS is sanitized and minified on the way out: `@import` stripped (it would fetch a third-party sheet into every visitor's browser), `@font-face` kept, empty / unparseable / over-50 KB dropped whole, and brace breakouts re-serialized balanced so they cannot escape the renderer's `@layer`/`@scope` wrapper | `server/src/forms.rs` (`sanitize_custom_css_minifies_and_keeps_rules` … `sanitize_custom_css_reserializes_brace_breakouts`) |
+| Sanitized custom CSS reaches `styling.customCss` in the definition, and the key is absent from the wire format when unset | `server/src/forms.rs::definition_carries_sanitized_custom_css` + `definition_omits_custom_css_when_unset` |
+| The renderer wraps custom CSS in `@layer atomic-form-custom` + `@scope (.atomic-form-shell)` verbatim, and injects nothing at all when there is none | `browser/form-renderer/src/customCss.test.ts` |
+| The builder's CSS editor catches what would silently lose an owner's work: unbalanced braces (ignoring braces inside comments and strings) and CSS past the server's byte cap | `browser/data-browser/src/chunks/CodeEditor/cssLint.test.ts` |
+| Custom CSS end to end: written in the builder, published, and applied for an anonymous visitor on the real `/form/:id` route — including the layering claim itself, since a bare `h1` (0-0-1) overrides the renderer's `.atomic-form-title` (0-1-0), which only a later cascade layer can do; plus `:scope` re-theming through `--atomic-form-*`, `@import` gone from the served definition, and a `body` rule matching nothing (`@scope` held) | `browser/e2e/tests/forms-submission.spec.ts` ("a published form carries the owner's custom CSS") |
+
+Previously listed here as "Not covered (scheduling, blocked by a sync bug)":
+the reopen half of the scheduling e2e. Two things were going on, neither of
+them the sync race it was filed as. The commit that got parked ("Commit's
+Loro update depends on ops the server does not have") depended on a Loro op
+the server had written into the response of an HTTP GET but never persisted
+— the Form class extender used `set` for the summary, and the doc was
+re-exported as the served `loroUpdate` (fixed in `get_resource_extended`, and
+the extender now shapes the response without touching the doc). The client's
+recovery for a parked commit (drop the save cursor, re-send a full snapshot)
+did work, so the server converged; what kept the test — and a console
+`fetch` — reporting the old state was Chromium replaying a cached `410` for
+the definition URL. The e2e probe now fetches with `cache: 'no-store'` and the
+server sends `Cache-Control: no-store` on those routes.
+
+Not covered (custom CSS): only one browser. `@scope` sets the floor at Chrome
+118 / Safari 17.4 / Firefox 128 and the suite is chromium-only, so a visitor
+below that floor silently gets the base styling and no test would notice. The
+e2e above deliberately asserts the *layer* rather than just "some CSS applied"
+— an identical `h1` rule placed in `atomic-form-base` loses to
+`.atomic-form-title`, and in `atomic-form-custom` wins, so that assertion fails
+if the layering regresses rather than passing on a coincidence.
+
+Not covered (extended types): the client-side mirror of the new validators in
+`browser/form-renderer/src/validation.ts` is only unit-tested for `phone` (the
+one rule that deliberately diverges — it is stricter than the server for E.164
+values); every other type is tested on the Rust side only, and the two are
+hand-mirrored, so they can drift (the
+same known gap as `buildFormDefinition.ts` vs `build_form_definition`, and as
+`chunks/FormBuilder/formSchedule.ts` vs `form_availability_at` — the builder's
+schedule status line is hand-mirrored from the server rule and has no test of
+its own, though the server side it mirrors is fully covered); the
+option-image *picker* in `PictureChoiceOptions.tsx` (uploading or picking a file
+for an option) is only exercised manually; `choice-matrix` / `table-input` /
+`picture-choice` are rendered and validated but never submitted end-to-end in
+e2e.
+
+Not covered (options as resources): that a form's choice column is usable *as a
+table column* — picking its tags in `SelectCell`, grouping a kanban by it — is
+untested, even though making that work is the reason the mapped Property is a
+real SelectProperty. `max` enforcement in `SelectCell` (how single-pick is
+expressed) has no test either. Deleting an option that submissions already
+reference folds those answers into the summary's "Other" bucket; that path is
+reasoned about but not pinned by a test.
+
+Not covered (options from another table): the whole builder side is manual —
+`LinkOptionsDialog` (picking a table + column), the "linked to X" panel and
+unlinking, and everything `applyOptionsSource` does to the mapped Property
+(mirroring `allowsOnly`, switching to a relation column for row-sourced
+questions, destroying the question's own orphaned Tags). The client mirror
+`rowOptions`/`tagOptions` in `buildFormDefinition.ts` has no test either — the
+same hand-mirroring drift as the rest of that file. `OPTIONS_ROW_LIMIT`
+truncation (a table with more than 1,000 rows silently offering only the first
+1,000, and rejecting a pick past the cap) is untested, and the preview
+deliberately applies no cap at all.
+
+Not covered (drafts): the debounce/flush wiring in `useFormDraft` — the
+`pagehide` and `visibilitychange` flushes in particular — is only exercised
+through the e2e (which waits for the debounced write rather than forcing a
+flush); a tab closed mid-keystroke is reasoned about, not pinned. The
+`saveDrafts` opt-out is tested at the definition layer but never toggled in
+the builder UI, and multi-page draft resume (the stored `pageIndex`) is unit
+tested only. The resume dialog is exercised through its buttons; dismissing it
+with Escape (which maps to Continue) is not.
+
+Not covered: builder UI for adding/removing conditions (the e2e walks it once as setup, not as its own assertion); page-level (not field-level) branching in e2e (unit fixtures cover it); add/delete-page write ordering in `PageTabBar` (both now `await` the form's `form-pages` save — add before selecting, delete before destroying — but no test pins that ordering).
+
+---
+
+## Files and image previews
+
+| Flow | Where |
+|---|---|
+| Upload → blob stored → content-addressed download round-trip | `server/src/tests.rs::upload_download_test` |
+| `/download/files/{hash}` answers with the File's real mimetype, not `application/octet-stream` | `server/src/tests.rs::upload_download_test` |
+| An uploaded SVG actually decodes in the preview (local `blob:` URL **and** the server `downloadURL`) | `browser/e2e/tests/filePicker.spec.ts` ("uploaded SVG renders in the preview") |
+| File picker lists files, filters by name, previews text | `browser/e2e/tests/filePicker.spec.ts` |
+| Upload while offline, then reconnect | `browser/e2e/tests/file-upload-offline.spec.ts`, `browser/lib/tests/upload-offline-reconnect.integration.test.ts` |
+
+Both halves of the SVG row guard the same class of bug and neither implies the
+other: a `blob:` URL takes its Content-Type from the `Blob`'s `type`, the
+network URL from the response header, and an `<img>` renders SVG only when that
+type is exactly `image/svg+xml` (raster formats it will sniff; SVG it never
+will). `user_blob_response` also sets `nosniff`, so an `application/octet-stream`
+answer breaks *every* image type on the network path, not just SVG.
+
+Not covered: that the network `downloadURL` path is what actually renders once
+the local bytes are evicted — the e2e asserts the header directly rather than
+clearing the ClientDb and re-rendering. No test pins the `?w=`/`?f=` rendition
+route's refusal to process SVG (`is_image_bytes` rejects it); the app avoids
+that route for SVG, but nothing enforces that it keeps doing so.

@@ -12,6 +12,7 @@ import {
   server,
   core,
   ai,
+  forms,
   useArray,
 } from '@tomic/react';
 
@@ -68,6 +69,10 @@ const WebsitePage = lazy(() =>
 
 const AppPage = lazy(() =>
   import('../chunks/AppPage').then(m => ({ default: m.AppPage })),
+);
+
+const FormBuilderPage = lazy(() =>
+  import('../chunks/FormBuilder').then(m => ({ default: m.FormBuilderPage })),
 );
 
 /** These properties are passed to every View at Page level */
@@ -320,6 +325,8 @@ function selectComponent(klass: string | undefined) {
       return CanvasPage;
     case server.classes.plugin:
       return PluginPage;
+    case forms.classes.form:
+      return FormBuilderPage;
     default:
       return ResourcePageDefault;
   }

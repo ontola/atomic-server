@@ -9,6 +9,7 @@
     "@bugsnag/core": "^8.9.0",
     "@bugsnag/js": "^8.9.0",
     "@bugsnag/plugin-react": "^8.9.0",
+    "@codemirror/lang-css": "^6.3.1",
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/lint": "^6.9.6",
     "@codemirror/state": "^6.6.0",
@@ -51,6 +52,7 @@
     "@tiptap/starter-kit": "^3.30.4",
     "@tiptap/suggestion": "^3.30.4",
     "@tomic/edit-mode": "workspace:*",
+    "@tomic/form-renderer": "workspace:*",
     "@tomic/lib": "workspace:*",
     "@tomic/plugin": "workspace:*",
     "@tomic/react": "workspace:*",
@@ -74,6 +76,7 @@
     "ollama-ai-provider-v2": "^3.5.1",
     "polished": "^4.3.1",
     "prismjs": "^1.30.0",
+    "qrcode": "^1.5.4",
     "quick-score": "^0.2.0",
     "react": "^19.2.6",
     "react-colorful": "^5.7.0",
@@ -109,6 +112,7 @@
   "devDependencies": {
     "@tanstack/router-devtools": "^1.167.0",
     "@types/prismjs": "^1.26.6",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
@@ -116,7 +120,7 @@
     "gh-pages": "^6.3.0",
     "lint-staged": "^17.0.5",
     "loro-prosemirror": "^0.4.3",
-    "oxc-transform-react": "0.145.0",
+    "oxc-transform-react": "^0.149.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.14",
     "vite-plugin-prismjs": "^0.0.11",
@@ -151,6 +155,7 @@
     "start": "node scripts/build-website-runtime.mjs && vite",
     "test": "vitest run --exclude scripts/integration-mcp.test.mjs && node --test scripts/integration-mcp.test.mjs",
     "typecheck": "pnpm exec tsc --noEmit -p tsconfig.json",
+    "check:react-compiler": "node scripts/check-react-compiler.mjs",
     "clean-translations": "pnpm exec wuchale --clean"
   }
 }

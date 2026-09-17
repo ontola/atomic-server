@@ -25,6 +25,8 @@ pub struct AppState {
     /// The Actix Address of the CommitMonitor, which should receive updates when a commit is applied
     /// (and also hosts Loro ephemera / drive presence fan-out).
     pub commit_monitor: actix::Addr<CommitMonitor>,
+    /// Verifies published-form submission captchas (`crate::captcha`).
+    pub captcha: Arc<dyn crate::captcha::CaptchaVerifier>,
     pub vector_search_state: crate::vector_search::VectorSearchState,
     pub index_status_broadcast: Arc<IndexStatusBroadcast>,
     /// Whether this node is managed (reports to a control plane). Set at runtime
@@ -104,6 +106,7 @@ impl AppState {
         store.add_class_extender(plugins::files::build_file_extender(
             config.uploads_path.clone(),
         ))?;
+        store.add_class_extender(plugins::form::build_form_extender())?;
 
         // Owned here rather than in the AppState literal below, because the
         // `/server` endpoint closes over them to report this node's status.
@@ -235,11 +238,14 @@ impl AppState {
             config.opts.write_rate_limit,
             config.opts.anonymous_write_rate_limit,
         ));
+        let captcha = Arc::new(crate::captcha::AltchaVerifier::from_store(&store));
+
         Ok(AppState {
             store,
             config,
             write_rate_limiter,
             commit_monitor,
+            captcha,
             vector_search_state,
             index_status_broadcast,
             managed: server_info.managed,

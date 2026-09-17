@@ -1,4 +1,4 @@
-import { hexToBytes, type Resource } from '@tomic/lib';
+import { hexToBytes, server, type Resource } from '@tomic/lib';
 import { useEffect, useState } from 'react';
 import { useStore } from './hooks.js';
 
@@ -29,6 +29,10 @@ export function useFileObjectUrl(
   const blobValue = resource.get(BLOB);
   const blobDid = typeof blobValue === 'string' ? blobValue : undefined;
 
+  const mimetypeValue = resource.get(server.properties.mimetype);
+  const mimetype =
+    typeof mimetypeValue === 'string' ? mimetypeValue : undefined;
+
   useEffect(() => {
     if (!blobDid?.startsWith(BLOB_DID_PREFIX) || !clientDb) return;
 
@@ -42,7 +46,12 @@ export function useFileObjectUrl(
         if (cancelled) return;
 
         if (bytes) {
-          revoked = URL.createObjectURL(new Blob([bytes as BlobPart]));
+          // The Blob's type becomes the object URL's Content-Type. Without it
+          // an `<img>` can still sniff raster formats, but never SVG — browsers
+          // only render SVG when the type is exactly `image/svg+xml`.
+          revoked = URL.createObjectURL(
+            new Blob([bytes as BlobPart], mimetype ? { type: mimetype } : {}),
+          );
         }
 
         setResolved({ blobDid, clientDb, url: revoked });
@@ -55,7 +64,7 @@ export function useFileObjectUrl(
       cancelled = true;
       if (revoked) URL.revokeObjectURL(revoked);
     };
-  }, [blobDid, clientDb]);
+  }, [blobDid, clientDb, mimetype]);
 
   if (!blobDid?.startsWith(BLOB_DID_PREFIX) || !clientDb) return fallbackUrl;
 

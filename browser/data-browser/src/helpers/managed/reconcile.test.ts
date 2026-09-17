@@ -17,6 +17,7 @@ function mockFetch(opts: {
   account?: { email: string } | null;
   enrollments?: ManagedEnrollmentSummary[];
 }) {
+  vi.stubEnv('VITE_MANAGED_API_BASE', 'https://portal.example/api');
   globalThis.fetch = vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
 
@@ -65,6 +66,7 @@ describe('evaluateServerReconciliation', () => {
 
   afterEach(() => {
     globalThis.fetch = realFetch;
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
