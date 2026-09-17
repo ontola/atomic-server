@@ -147,7 +147,7 @@
     ],
     "https://atomicdata.dev/properties/shortname": "devonian-github-issues",
     "https://atomicdata.dev/integrations/properties/experimental": true,
-    "https://atomicdata.dev/integrations/properties/enabled": false,
+    "https://atomicdata.dev/integrations/properties/enabled": true,
     "https://atomicdata.dev/properties/name": "GitHub issues and comments (Devonian)",
     "https://atomicdata.dev/properties/emoji": "🐙",
     "https://atomicdata.dev/properties/description": "Connect a GitHub repository to a local issue tracker.",
