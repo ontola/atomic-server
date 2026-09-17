@@ -68,9 +68,8 @@ msgstr "Aucune clé API OpenRouter n'est définie. Ajoutez-en une ou passez à u
 msgid "No AI model provider is available. Set one up to send — you can keep typing in the meantime."
 msgstr "Aucun fournisseur de modèle d'IA n'est disponible. Configurez-en un pour envoyer — vous pouvez continuer à taper en attendant."
 
-#: src/chunks/AI/RealAIChat.tsx
-msgid "Something went wrong"
-msgstr "Quelque chose s'est mal passé"
+#~ msgid "Something went wrong"
+#~ msgstr "Quelque chose s'est mal passé"
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Generating"
@@ -136,6 +135,7 @@ msgstr "<0/> Créer un nouvel agent"
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx src/components/AvatarCropper.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/ConfirmationDialog.tsx
@@ -279,10 +279,14 @@ msgstr "Compacte automatiquement la conversation lorsque les jetons d'entrée d�
 
 #: src/chunks/AI/MessageContextItem.tsx
 #: src/chunks/DashboardPage/DashboardBlock.tsx
+#: src/chunks/EmojiInput/EmojiInput.tsx
 #: src/chunks/EmojiInput/EmojiInput.tsx src/chunks/RTE/EditLinkForm.tsx
+#: src/chunks/TablePage/DerivedColumnHeading.tsx
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
 #: src/routes/SyncRoute.tsx
@@ -357,9 +361,8 @@ msgstr "Onglets des paramètres de l'IA"
 msgid "Agents"
 msgstr "Agents"
 
-#: src/chunks/AI/ClientOnlyTransport.ts
-msgid "No custom classes found on the current drive."
-msgstr "Aucune classe personnalisée trouvée sur le lecteur actuel."
+#~ msgid "No custom classes found on the current drive."
+#~ msgstr "Aucune classe personnalisée trouvée sur le lecteur actuel."
 
 #: src/chunks/AI/AIChatMessageParts/UserMessage.tsx
 #: src/chunks/Conference/ConferenceRoom.tsx
@@ -546,6 +549,7 @@ msgstr "En-têtes HTTP optionnels à envoyer lors de la connexion à ce serveur 
 #: src/chunks/PluginRuns/PluginPage.tsx
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
 #: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx src/routes/EditRoute.tsx
 #: src/routes/EditRoute.tsx
 #: src/views/OntologyPage/OntologyPage.tsx
@@ -556,6 +560,7 @@ msgstr "Modifier"
 
 #: src/chunks/AI/AgentConfigItem.tsx
 #: src/chunks/AI/AgentConfigItem.tsx src/chunks/TablePage/TableViewTabs.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Duplicate"
 msgstr "Dupliquer"
 
@@ -578,6 +583,7 @@ msgstr "Modèle par défaut"
 
 #: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
 #: src/chunks/TablePage/EditorCells/MultiRelationCell.tsx
+#: src/chunks/TablePage/EditorCells/SelectCell.tsx
 #: src/chunks/TablePage/EditorCells/SelectCell.tsx src/components/ComboBox.tsx
 #: src/components/ComboBox.tsx
 msgid "No results"
@@ -1050,6 +1056,7 @@ msgstr "Copier le secret pour continuer"
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx src/views/PeerInvitePage.tsx
+#: src/views/File/ConvertToDocumentButton.tsx
 #: src/views/PeerInvitePage.tsx
 msgid "Retry"
 msgstr "Réessayer"
@@ -1512,9 +1519,11 @@ msgstr "Description textuelle <0/>"
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/RTE/ImagePicker.tsx
 #: src/chunks/RTE/ImagePicker.tsx src/chunks/TablePage/BreakdownDialog.tsx
+#: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx src/components/AvatarCropper.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/Settings/IntegrationSettings.tsx
@@ -1692,6 +1701,7 @@ msgstr "Cet appareil"
 #: src/chunks/TablePage/Kanban/KanbanColumn.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/chunks/TablePage/quickAdd.test.ts src/components/EditLanguagesDialog.tsx
+#: src/components/EditLanguagesDialog.tsx
 msgid "Add"
 msgstr "Ajouter"
 
@@ -1848,6 +1858,7 @@ msgstr "Définir un titre"
 msgid "Untitled"
 msgstr "Sans titre"
 
+#: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx src/components/EditableTitle.tsx
 #: src/components/EditableTitle.tsx
 msgid "Click to edit title"
@@ -2054,6 +2065,7 @@ msgstr ""
 
 #: src/actions/resourceActions.tsx
 #: src/chunks/DashboardPage/blocks/ViewBlock.tsx
+#: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx src/routes/SettingsAgent.tsx
 #: src/routes/SettingsAgent.tsx
 #: src/routes/SettingsAgent.tsx
@@ -3465,6 +3477,7 @@ msgstr "Pas de texte alternatif"
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/Demo/SimulatedTypist.ts src/chunks/TablePage/NewColumnButton.tsx
+#: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Text"
 msgstr "Texte"
 
@@ -3503,7 +3516,11 @@ msgid "Table filters"
 msgstr "Filtres du tableau"
 
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
+#: src/chunks/TablePage/DerivedColumnHeading.tsx
 #: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/TableHeading.tsx
+#: src/chunks/TablePage/TableHeading.tsx
 #: src/chunks/TablePage/TableHeading.tsx
 msgid "Drag column"
 msgstr "Faire glisser la colonne"
@@ -3511,7 +3528,9 @@ msgstr "Faire glisser la colonne"
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/PluginRuns/ConnectNotion.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx src/chunks/TablePage/useTableView.ts
+#: src/chunks/TablePage/useTableView.ts
 msgid "View"
 msgstr "Afficher"
 
@@ -3576,6 +3595,7 @@ msgid "Filter operator"
 msgstr "Opérateur de filtre"
 
 #: src/chunks/TablePage/useTableView.ts
+#: src/chunks/TablePage/useTableView.ts
 msgid "Default View"
 msgstr "Vue par défaut"
 
@@ -3629,6 +3649,7 @@ msgstr "Rechercher"
 msgid "Disabled"
 msgstr ""
 
+#: src/components/forms/MinMaxInput.tsx
 #: src/components/forms/MinMaxInput.tsx
 msgid "Value should be a round number."
 msgstr "La valeur doit être un nombre entier."
@@ -4670,6 +4691,7 @@ msgid "Developer"
 msgstr ""
 
 #: src/chunks/Conference/ConferenceRoom.tsx src/routes/SyncRoute.tsx
+#: src/chunks/PluginRuns/ConnectClockify.tsx
 #: src/components/AppSetup/AppSetupForm.tsx
 #: src/components/AppSetup/AppSetupForm.tsx
 #: src/routes/SyncRoute.tsx
@@ -4733,6 +4755,7 @@ msgstr ""
 
 #: src/chunks/AI/RealAIChat.tsx
 #: src/chunks/AI/RealAIChat.tsx src/components/pairing/PairingFlowProvider.tsx
+#: src/chunks/PluginRuns/WorkspaceControls.tsx
 #: src/components/pairing/PairingFlowProvider.tsx
 msgid "Try again"
 msgstr ""
@@ -5648,6 +5671,7 @@ msgid "Duration"
 msgstr ""
 
 #: src/chunks/TablePage/TableViewTabs.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Toggle properties"
 msgstr ""
 
@@ -5935,7 +5959,9 @@ msgstr ""
 msgid "groups"
 msgstr ""
 
+#: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx src/chunks/TablePage/rowActions.ts
+#: src/chunks/TablePage/rowActions.ts
 msgid "Value"
 msgstr ""
 
@@ -5980,6 +6006,7 @@ msgstr ""
 #: src/actions/runAction.ts
 #: src/actions/runAction.ts src/chunks/TablePage/NewColumnButton.tsx
 #: src/chunks/PluginRuns/IntegrationActions.tsx
+#: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Action"
 msgstr ""
 
@@ -7070,6 +7097,7 @@ msgstr ""
 msgid "Are you sure you want to delete"
 msgstr ""
 
+#: src/chunks/TablePage/TableExportDialog.tsx
 #: src/chunks/TablePage/TableExportDialog.tsx src/views/File/DownloadButton.tsx
 #: src/views/File/DownloadButton.tsx
 msgid "Download"
@@ -8321,6 +8349,8 @@ msgstr ""
 #: src/chunks/PluginRuns/CreateEventAutomation.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
+#: src/chunks/PluginRuns/WorkspaceControls.tsx
+#: src/chunks/PluginRuns/WorkspaceControls.tsx
 msgid "Automations"
 msgstr ""
 
@@ -8440,25 +8470,20 @@ msgstr ""
 #~ msgstr ""
 
 #: src/chunks/PluginRuns/ConnectNotion.tsx
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 msgid "Notion"
 msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Work with your Notion database in Atomic."
-msgstr ""
+#~ msgid "Work with your Notion database in Atomic."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Sync supported row fields, property names and table or board views."
-msgstr ""
+#~ msgid "Sync supported row fields, property names and table or board views."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Start automations from newly discovered rows."
-msgstr ""
+#~ msgid "Start automations from newly discovered rows."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Formatted text, relations, formulas and filtered views need additional mappings."
-msgstr ""
+#~ msgid "Formatted text, relations, formulas and filtered views need additional mappings."
+#~ msgstr ""
 
 #: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 msgid "Supported scope"
@@ -8886,25 +8911,20 @@ msgstr ""
 msgid "Review this external action before approving it."
 msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Clockify"
-msgstr ""
+#~ msgid "Clockify"
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Bring your completed work into the Time Tracker."
-msgstr ""
+#~ msgid "Bring your completed work into the Time Tracker."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Import completed entries with project and person links, start/end times and billable flags."
-msgstr ""
+#~ msgid "Import completed entries with project and person links, start/end times and billable flags."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Review imports before applying them. This first version does not sync changes back."
-msgstr ""
+#~ msgid "Review imports before applying them. This first version does not sync changes back."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Your entries only; up to 31 days. No active timers, updates, deletions, tags, task links, rates or custom fields."
-msgstr ""
+#~ msgid "Your entries only; up to 31 days. No active timers, updates, deletions, tags, task links, rates or custom fields."
+#~ msgstr ""
 
 #: src/chunks/PluginRuns/ConnectClockify.tsx
 msgid "Enter your Clockify API key."
@@ -8931,9 +8951,8 @@ msgstr ""
 msgid "Find my workspaces"
 msgstr ""
 
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "Find your API key in Clockify profile settings. It is stored on your AtomicServer and only used for read requests."
-msgstr ""
+#~ msgid "Find your API key in Clockify profile settings. It is stored on your AtomicServer and only used for read requests."
+#~ msgstr ""
 
 #: src/chunks/PluginRuns/ConnectClockify.tsx
 msgid "Bring your completed entries into the Time Tracker template, linked to projects and the person who logged them. Review every proposed import first."
@@ -9020,25 +9039,20 @@ msgid "No automations yet. Create one to respond to events from your connected a
 msgstr ""
 
 #: src/chunks/PluginRuns/ImportMT940.tsx
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 msgid "Bank statements"
 msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Import bank transactions from bunq and other MT940 exports."
-msgstr ""
+#~ msgid "Import bank transactions from bunq and other MT940 exports."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Preview exact amounts, dates, account references and original descriptions in a Bank transactions table."
-msgstr ""
+#~ msgid "Preview exact amounts, dates, account references and original descriptions in a Bank transactions table."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Upload a statement when you need it. No bank token required."
-msgstr ""
+#~ msgid "Upload a statement when you need it. No bank token required."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "MT940 files only, up to 500 transactions and 512 KB. No payment initiation or live bank sync. Bank-specific formats may need additional support."
-msgstr ""
+#~ msgid "MT940 files only, up to 500 transactions and 512 KB. No payment initiation or live bank sync. Bank-specific formats may need additional support."
+#~ msgstr ""
 
 #: src/chunks/PluginRuns/ImportMT940.tsx
 msgid "Bank transactions"
@@ -9310,6 +9324,7 @@ msgstr ""
 msgid "Choose which view opens when you visit this workspace."
 msgstr ""
 
+#: src/chunks/PluginRuns/WorkspaceControls.tsx
 #: src/chunks/PluginRuns/WorkspaceControls.tsx
 msgid "Connections"
 msgstr ""
@@ -10458,10 +10473,12 @@ msgid "Close preview"
 msgstr ""
 
 #: src/components/Settings/IntegrationSettings.tsx
+#: src/routes/IntegrationStore.tsx
 msgid "<0/> Show API plugins"
 msgstr ""
 
 #: src/components/Settings/IntegrationSettings.tsx
+#: src/routes/IntegrationStore.tsx
 msgid "<0/> Show experimental plugins"
 msgstr ""
 
@@ -10469,43 +10486,34 @@ msgstr ""
 msgid "These preferences are saved in your private Atomic drive. Existing connections remain available."
 msgstr ""
 
-#: src/routes/IntegrationStore.tsx
-msgid "Consider enabling API plugins in Settings → Integration."
-msgstr ""
+#~ msgid "Consider enabling API plugins in Settings → Integration."
+#~ msgstr ""
 
-#: src/routes/IntegrationStore.tsx
-msgid "Consider enabling experimental plugins in Settings → Integration."
-msgstr ""
+#~ msgid "Consider enabling experimental plugins in Settings → Integration."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 #: src/routes/DevonianDemoRoute.tsx
 msgid "GitHub issues and comments (Devonian)"
 msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Connect a GitHub repository to a local issue tracker."
-msgstr ""
+#~ msgid "Connect a GitHub repository to a local issue tracker."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Sync issues and comments in both directions, including closing and reopening issues."
-msgstr ""
+#~ msgid "Sync issues and comments in both directions, including closing and reopening issues."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Connect through LocalThought, then use Sync now to exchange changes."
-msgstr ""
+#~ msgid "Connect through LocalThought, then use Sync now to exchange changes."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Creates a separate local drive. Keep the browser open to sync. Sync writes changes to your GitHub repository."
-msgstr ""
+#~ msgid "Creates a separate local drive. Keep the browser open to sync. Sync writes changes to your GitHub repository."
+#~ msgstr ""
 
 #: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 msgid "Install plugin"
 msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Google Calendar (Devonian)"
-msgstr ""
+#~ msgid "Google Calendar (Devonian)"
+#~ msgstr ""
 
 #~ msgid "Import events into calendar views, preserve recurring series and preview supported edits to send back to Google."
 #~ msgstr ""
@@ -10582,23 +10590,18 @@ msgstr ""
 msgid "Preparing invite…"
 msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Import Google Calendar events into calendar views."
-msgstr ""
+#~ msgid "Import Google Calendar events into calendar views."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Preserves recurring series and previews supported edits to send back to Google."
-msgstr ""
+#~ msgid "Preserves recurring series and previews supported edits to send back to Google."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google."
-msgstr ""
+#~ msgid "Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google."
+#~ msgstr ""
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "The response was interrupted."
-#~ "Saisissez votre code de récupération pour afficher votre secret ou "
-#~ "ajouter une clé d’accès sur cet appareil. Votre code de récupération "
-#~ "actuel restera valide."
+msgstr ""
 
 #: src/views/File/ConvertToDocumentButton.tsx
 msgid "Converted to document"
@@ -10626,4 +10629,39 @@ msgstr ""
 
 #: src/views/File/ConvertToDocumentButton.tsx
 msgid "Document converted locally, but could not be saved."
+msgstr ""
+
+#~ msgid "The response was interrupted.Introduce tu código de recuperación para mostrar tu secreto o añadir una clave de acceso en este dispositivo. Tu código de recuperación actual seguirá funcionando."
+#~ msgstr ""
+
+#~ msgid "The response was interrupted.Saisissez votre code de récupération pour afficher votre secret ou ajouter une clé d’accès sur cet appareil. Votre code de récupération actuel restera valide."
+#~ msgstr ""
+
+#~ msgid "The response was interrupted.Gib deinen Wiederherstellungscode ein, um deinen geheimen Schlüssel anzuzeigen oder diesem Gerät einen Passkey hinzuzufügen. Dein bisheriger Wiederherstellungscode bleibt gültig."
+#~ msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "No integrations match your search."
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "No integrations are available right now."
+msgstr ""
+
+#. 0: installation.warning
+#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
+msgid "Synced with issues: {0}"
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectLocalThought.tsx
+msgid "Select…"
+msgstr ""
+
+#: src/chunks/PluginRuns/ConnectClockify.tsx
+msgid "The Clockify “Manage API keys” page, under Preferences, with the “Generate new” button in the top right corner."
+msgstr ""
+
+#. 0: ' '; 1: ' '
+#: src/chunks/PluginRuns/ConnectClockify.tsx
+msgid "Open{0} <0>app.clockify.me/manage-api-keys</0>{1} and choose <1>Generate new</1>. Paste the generated key above. It is stored on your AtomicServer and only used for read requests."
 msgstr ""

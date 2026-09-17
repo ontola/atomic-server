@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { useStore } from '@tomic/react';
 import type { Evidence } from '../../../../../integrations/tooling/evidence.mjs';
 
 import type { BundledEvidenceId } from './integrationEvidenceLoader';
 
 export function IntegrationEvidence({ id }: { id: BundledEvidenceId }) {
+  const store = useStore();
   const [evidence, setEvidence] = useState<Evidence | null>();
   const [loading, setLoading] = useState(false);
 
@@ -13,7 +15,7 @@ export function IntegrationEvidence({ id }: { id: BundledEvidenceId }) {
 
     try {
       const { loadEvidence } = await import('./integrationEvidenceLoader');
-      setEvidence(await loadEvidence(id));
+      setEvidence(await loadEvidence(store.getServerUrl(), id));
     } catch {
       setEvidence(null);
     } finally {

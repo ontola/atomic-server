@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { styled } from 'styled-components';
 import {
   useStore,
   ensureSchema,
@@ -115,7 +116,10 @@ export function ConnectClockify({
     setError('');
 
     try {
-      const source = await fetchIntegrationSource('clockify');
+      const source = await fetchIntegrationSource(
+        store.getServerUrl(),
+        'clockify',
+      );
       const subject =
         plugin ??
         (await createPlugin(
@@ -184,7 +188,10 @@ export function ConnectClockify({
     setError('');
 
     try {
-      const source = await fetchIntegrationSource('clockify');
+      const source = await fetchIntegrationSource(
+        store.getServerUrl(),
+        'clockify',
+      );
       const existing = target
         ? (await timeTrackerTables(store, drive)).find(
             t => t.tableSubject === target,
@@ -298,10 +305,7 @@ export function ConnectClockify({
                 onChange={e => setKey(e.target.value)}
               />
             </Field>
-            <p>
-              Find your API key in Clockify profile settings. It is stored on
-              your AtomicServer and only used for read requests.
-            </p>
+            <ClockifyKeyHelp />
             <Button disabled={busy} type='submit'>
               {busy ? 'Connecting…' : 'Find my workspaces'}
             </Button>
@@ -378,6 +382,36 @@ export function ConnectClockify({
 }
 
 // Keep these messages outside guarded JSX so extraction retains every sibling.
+function ClockifyKeyHelp() {
+  return (
+    <Column>
+      <p>
+        Open{' '}
+        <a
+          href='https://app.clockify.me/manage-api-keys'
+          target='_blank'
+          rel='noreferrer'
+        >
+          app.clockify.me/manage-api-keys
+        </a>{' '}
+        and choose <strong>Generate new</strong>. Paste the generated key above.
+        It is stored on your AtomicServer and only used for read requests.
+      </p>
+      <KeyScreenshot
+        src='/app_data/images/clockify-api-keys.png'
+        alt='The Clockify “Manage API keys” page, under Preferences, with the “Generate new” button in the top right corner.'
+      />
+    </Column>
+  );
+}
+
+const KeyScreenshot = styled.img`
+  width: 100%;
+  max-width: 40rem;
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
+`;
+
 function ClockifyImportHelp() {
   return (
     <Column>

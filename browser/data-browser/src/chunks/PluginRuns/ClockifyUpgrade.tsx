@@ -23,14 +23,14 @@ export function ClockifyUpgrade({
   const [bundle, setBundle] = useState<string>();
   useEffect(() => {
     let active = true;
-    void fetchIntegrationSource('clockify').then(text => {
+    void fetchIntegrationSource(store.getServerUrl(), 'clockify').then(text => {
       if (active) setBundle(text);
     });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [store]);
   const next =
     pending ??
     (bundle === undefined ? undefined : clockifyUpgrade(source, bundle));

@@ -95,7 +95,10 @@ export function ImportMT940({
         throw new Error(
           'Choose a statement smaller than 512 KB. Export a shorter period if needed.',
         );
-      const source = await fetchIntegrationSource('mt940');
+      const source = await fetchIntegrationSource(
+        store.getServerUrl(),
+        'mt940',
+      );
       const bytes = await file.arrayBuffer();
       // Prefer UTF-8, but older MT940 bank exports often use Windows-1252.
       let text: string;

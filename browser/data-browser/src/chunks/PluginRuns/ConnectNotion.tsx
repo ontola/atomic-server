@@ -196,7 +196,10 @@ function NotionConnection({
   const prepare = (existing?: Connection) =>
     attempt(async () => {
       if (!connection) throw new Error('Connect Notion before continuing');
-      const source = await fetchIntegrationSource('notion');
+      const source = await fetchIntegrationSource(
+        store.getServerUrl(),
+        'notion',
+      );
       let config = existing ?? installed[database];
 
       if (!config) {
@@ -238,7 +241,10 @@ function NotionConnection({
   const apply = () =>
     attempt(async () => {
       if (!active || !preview) return;
-      const source = await fetchIntegrationSource('notion');
+      const source = await fetchIntegrationSource(
+        store.getServerUrl(),
+        'notion',
+      );
 
       try {
         const result = await applyBrowserPlugin(

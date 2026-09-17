@@ -4,7 +4,10 @@ Experimental, read-only provider access. Uses the shared sandbox and normal
 proposed Atomic changes; no parallel execution engine. Credentials remain in
 AtomicServer secret storage. API v1: https://docs.clockify.me/.
 
-Setup reads the current user and their available workspaces, then offers a
+Setup asks for a personal API key, generated at
+https://app.clockify.me/manage-api-keys (Preferences → Manage API keys →
+**Generate new**); the connect dialog shows a screenshot of that page.
+It then reads the current user and their available workspaces, then offers a
 rolling 7/30-day bounded import into the Time Tracker template. Projects and the person
 are linked resources, keyed by provider-qualified identity, never merged by name.
 Repeated imports skip unchanged source records, update clean source fields, and

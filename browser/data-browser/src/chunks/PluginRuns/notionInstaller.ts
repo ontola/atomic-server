@@ -13,7 +13,7 @@ export async function installNotion(
   dataSource: string,
   token: string | Omit<ProxyConnection, 'schemaStore'>,
 ) {
-  const source = await fetchIntegrationSource('notion');
+  const source = await fetchIntegrationSource(store.getServerUrl(), 'notion');
 
   return install(
     store,
