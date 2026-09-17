@@ -133,6 +133,7 @@ import { appRoute } from './RootRoutes';
 import { pathNames, paths } from './paths';
 import { useSettings } from '../helpers/AppSettings';
 import { serverURLStorage } from '../helpers/serverURLStorage';
+import { NgSyncPanel } from '@tomic/ng-bridge-react';
 
 export const SyncRoute = createRoute({
   path: pathNames.sync,
@@ -1508,6 +1509,10 @@ function SyncPage() {
               )}
             </Column>
           )}
+
+        {/* Where this workspace stands with NextGraph. Renders its own card and
+            reads its own state; this page knows nothing about NextGraph. */}
+        <NgSyncPanel store={store} />
 
         {/* Everything our paid services own, in one card.
 
