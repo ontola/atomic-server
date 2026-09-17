@@ -1,44 +1,81 @@
-import { afterEach, expect, it, vi } from 'vitest';
-import {
-  bundledIntegrations,
-  visibleBundledIntegrations,
-} from './IntegrationDiscovery';
+import { expect, it, vi } from 'vitest';
+import { visibleBundledIntegrations } from './IntegrationDiscovery';
+import type { CatalogEntry } from './pluginCatalog';
+
 vi.mock('./IntegrationEvidence', () => ({ IntegrationEvidence: () => null }));
-afterEach(() => vi.unstubAllGlobals());
-it('keeps every bundled integration discoverable without a proxy catalog', () => {
-  const fetch = vi.fn(() => Promise.reject(new Error('Proxy unavailable')));
-  vi.stubGlobal('fetch', fetch);
-  const entries = bundledIntegrations();
-  expect(entries.map(entry => entry.id)).toEqual([
-    'devonian-github-issues',
-    'devonian-google-calendar',
-    'mt940',
-    'clockify',
-    'notion',
-  ]);
-  expect(
-    entries.find(entry => entry.id === 'devonian-github-issues')?.capabilities,
-  ).toContain('comments');
-  expect(
-    entries.find(entry => entry.id === 'devonian-google-calendar')
-      ?.capabilities,
-  ).toContain('recurring');
-  expect(fetch).not.toHaveBeenCalled();
-});
+
+function entry(
+  overrides: Partial<CatalogEntry> & { shortname: string },
+): CatalogEntry {
+  return {
+    experimental: true,
+    enabled: true,
+    name: overrides.shortname,
+    icon: '🔧',
+    description: 'description',
+    capabilities: 'capabilities',
+    events: 'events',
+    limitation: 'limitation',
+    keywords: 'keywords',
+    ...overrides,
+  };
+}
+
+const FIXTURE: CatalogEntry[] = [
+  entry({
+    shortname: 'devonian-github-issues',
+    requiresApiPlugins: true,
+    capabilities: 'Sync issues and comments in both directions.',
+  }),
+  entry({
+    shortname: 'devonian-google-calendar',
+    requiresApiPlugins: true,
+    platform: 'google-calendar',
+    capabilities: 'Preserves recurring series.',
+  }),
+  entry({ shortname: 'mt940' }),
+  entry({ shortname: 'clockify' }),
+  entry({
+    shortname: 'notion',
+    requiresApiPlugins: true,
+    callbackPlatform: 'notion',
+  }),
+];
 
 it.each([
   [false, false, []],
   [false, true, []],
-  // None of the bundled ids currently have a catalog.json entry (only
-  // 'pets', a raw LocalThought platform, does), so they stay dark matter —
-  // shipped in the bundle but unreachable — regardless of either toggle.
-  [true, false, []],
-  [true, true, []],
+  [true, false, ['mt940', 'clockify']],
+  [
+    true,
+    true,
+    [
+      'devonian-github-issues',
+      'devonian-google-calendar',
+      'mt940',
+      'clockify',
+      'notion',
+    ],
+  ],
 ])(
-  'gates proxy-backed bundled cards for experimental=%s api=%s',
+  'gates catalog-backed bundled cards for experimental=%s api=%s',
   (experimental, api, expected) => {
     expect(
-      visibleBundledIntegrations(experimental, api).map(entry => entry.id),
+      visibleBundledIntegrations(FIXTURE, experimental, api).map(
+        card => card.id,
+      ),
     ).toEqual(expected);
   },
 );
+
+it('keeps a disabled entry dark regardless of either toggle', () => {
+  const disabled = FIXTURE.map(item => ({ ...item, enabled: false }));
+  expect(visibleBundledIntegrations(disabled, true, true)).toEqual([]);
+});
+
+it('drops an enabled entry missing descriptive copy instead of rendering a broken card', () => {
+  const incomplete: CatalogEntry[] = [
+    { shortname: 'devonian-github-issues', experimental: true, enabled: true },
+  ];
+  expect(visibleBundledIntegrations(incomplete, true, true)).toEqual([]);
+});

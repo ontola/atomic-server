@@ -9,7 +9,11 @@ import { ErrMessage } from '@components/forms/InputStyles';
 import { ConnectLocalThought } from './ConnectLocalThought';
 import { browserIntegrations, platformName } from './localThought';
 import { useLocalThoughtCompletedPlatform } from './localThoughtCallback';
-import { isCatalogVisible } from './pluginCatalog';
+import {
+  catalogByShortname,
+  isCatalogVisible,
+  useIntegrationCatalog,
+} from './pluginCatalog';
 
 export function LocalThoughtCatalog({
   drive,
@@ -23,6 +27,8 @@ export function LocalThoughtCatalog({
   onVisibilityChange?: (hasResults: boolean) => void;
 }) {
   const origin = useIntegrationProxy();
+  const { entries: catalogEntries } = useIntegrationCatalog();
+  const catalogEntriesByShortname = catalogByShortname(catalogEntries);
   const [platforms, setPlatforms] = useState<string[]>();
   const [error, setError] = useState('');
   useEffect(() => {
@@ -41,7 +47,12 @@ export function LocalThoughtCatalog({
     return () => controller.abort();
   }, [origin]);
   const visible = localThoughtCatalogEntries(platforms)
-    .filter(id => isCatalogVisible(id, showExperimentalPlugins))
+    .filter(id =>
+      isCatalogVisible(
+        catalogEntriesByShortname.get(id),
+        showExperimentalPlugins,
+      ),
+    )
     .filter(id =>
       `${id} ${platformName(id)}`.toLowerCase().includes(search.toLowerCase()),
     );

@@ -397,8 +397,9 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
             .route(web::get().to(handlers::plugin_secret::handle_list_secrets))
             .route(web::delete().to(handlers::plugin_secret::handle_delete_secret)),
     )
-    // Plugin bundles from `integrations/`, embedded separately from the SPA
-    // assets below (see build.rs::embed_integrations). `/integrations` isn't
+    // Plugin bundles and catalog.json from `integrations/`, embedded
+    // separately from the SPA assets below (see build.rs::embed_integrations).
+    // `/integrations` isn't
     // shared with any other handler, so a missing file 404s here directly —
     // no `skip_handler_when_not_found`, whose guard checks the full request
     // path against the resource map rather than the prefix-stripped suffix
