@@ -105,7 +105,11 @@ test('integration categories default off and independent Atomic preferences surv
   await expect(settingsExperimental).not.toBeChecked();
 
   await page.goto(new URL('/app/integrations', page.url()).href);
-  await expect(page.locator('[data-integration="proxy:pets"]')).toBeVisible();
+  // Raw LocalThought platforms are gated by the same catalog as bundled
+  // integrations: API plugins alone surfaces the section, but an
+  // uncertified platform like 'pets' stays hidden until experimental
+  // plugins are shown too.
+  await expect(page.locator('[data-integration="proxy:pets"]')).toHaveCount(0);
   await expect(apiToggle).toHaveCount(0);
   await expect(
     page.getByRole('checkbox', {
