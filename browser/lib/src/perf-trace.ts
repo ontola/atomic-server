@@ -32,16 +32,38 @@ export interface PerfEvent {
 
 const MAX_EVENTS = 5000;
 
-let events: PerfEvent[] = [];
-let originTime = nowMs();
-
 function nowMs(): number {
   return typeof performance !== 'undefined' ? performance.now() : Date.now();
 }
 
+/**
+ * The buffer lives on `globalThis`, not in this module.
+ *
+ * A bundler is free to hand the same source to more than one graph — the app
+ * and a worker, a pre-bundled dependency and an aliased build — and each copy
+ * would then keep its own `events` array. Whichever copy loaded last owns
+ * `window.__atomicPerf`, so the reader could be a different copy than the one
+ * doing the recording: `opfs-init-perf` and `table-create-perf` both read an
+ * empty trace while the app was busily filling another one. One buffer keyed
+ * on the global object, and every copy writes and reads the same trace.
+ */
+interface PerfState {
+  events: PerfEvent[];
+  originTime: number;
+}
+
+const globalScope = globalThis as typeof globalThis & {
+  __atomicPerfState?: PerfState;
+};
+
+const state: PerfState = (globalScope.__atomicPerfState ??= {
+  events: [],
+  originTime: nowMs(),
+});
+
 export function perfMark(name: string, payload?: unknown): void {
-  if (events.length >= MAX_EVENTS) return;
-  events.push({ name, t: nowMs() - originTime, p: payload });
+  if (state.events.length >= MAX_EVENTS) return;
+  state.events.push({ name, t: nowMs() - state.originTime, p: payload });
 }
 
 export function perfSpan(
@@ -51,17 +73,17 @@ export function perfSpan(
   const start = nowMs();
   const startEvent: PerfEvent = {
     name: name + ':start',
-    t: start - originTime,
+    t: start - state.originTime,
     p: payload,
   };
-  if (events.length < MAX_EVENTS) events.push(startEvent);
+  if (state.events.length < MAX_EVENTS) state.events.push(startEvent);
 
   return (resultPayload?: unknown) => {
-    if (events.length >= MAX_EVENTS) return;
+    if (state.events.length >= MAX_EVENTS) return;
     const end = nowMs();
-    events.push({
+    state.events.push({
       name,
-      t: end - originTime,
+      t: end - state.originTime,
       d: end - start,
       p: resultPayload,
     });
@@ -91,7 +113,7 @@ export function perfSnapshot(): PerfSnapshot {
     { count: number; totalMs: number; maxMs: number }
   >();
 
-  for (const e of events) {
+  for (const e of state.events) {
     const existing = rollupMap.get(e.name);
     const dur = e.d ?? 0;
 
@@ -115,16 +137,16 @@ export function perfSnapshot(): PerfSnapshot {
     .sort((a, b) => b.totalMs - a.totalMs);
 
   return {
-    windowMs: round(nowMs() - originTime),
-    count: events.length,
-    events: events.slice(),
+    windowMs: round(nowMs() - state.originTime),
+    count: state.events.length,
+    events: state.events.slice(),
     rollup,
   };
 }
 
 export function perfReset(): void {
-  events = [];
-  originTime = nowMs();
+  state.events = [];
+  state.originTime = nowMs();
 }
 
 function round(n: number): number {
