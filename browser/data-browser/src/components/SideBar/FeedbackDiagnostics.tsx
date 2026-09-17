@@ -12,7 +12,7 @@ import { Details } from '../Details';
 import { Button } from '../Button';
 import { Checkbox } from '../forms/Checkbox';
 import { Column, Row } from '../Row';
-import { TextAreaStyled } from '../forms/InputStyles';
+import { CodeBlock } from '../CodeBlock';
 import {
   previewDiagnostics,
   currentDiagnosticText,
@@ -49,15 +49,17 @@ export function FeedbackDiagnostics({
   const [included, setIncluded] = useState(false);
   const current = preview?.session === session ? preview : undefined;
 
-  useEffect(
-    () =>
-      recorder.subscribe(() => {
-        setPreview(undefined);
-        setIncluded(false);
-        onSelect(undefined);
-      }),
-    [recorder, onSelect],
-  );
+  useEffect(() => {
+    const refresh = () => {
+      setPreview(recorder.active ? previewDiagnostics(recorder) : undefined);
+      setIncluded(false);
+      onSelect(undefined);
+    };
+
+    refresh();
+
+    return recorder.subscribe(refresh);
+  }, [recorder, onSelect]);
 
   return (
     <DiagnosticsLayout>
@@ -91,6 +93,11 @@ export function FeedbackDiagnostics({
           </DiagnosticsTitle>
         }
         noIndent
+        onStateToggle={open => {
+          if (open && active && !included) {
+            setPreview(previewDiagnostics(recorder));
+          }
+        }}
       >
         <DiagnosticsCard>
           <RecordingState $active={active}>
@@ -151,29 +158,13 @@ export function FeedbackDiagnostics({
                   ? 'Stop and clear'
                   : 'Start recording'}
             </Button>
-            {active && (
-              <Button
-                subtle
-                disabled={disabled}
-                onClick={() => {
-                  setPreview(previewDiagnostics(recorder));
-                  setIncluded(false);
-                  onSelect(undefined);
-                }}
-              >
-                Review report
-              </Button>
-            )}
           </Row>
           {current && (
             <ReviewPanel>
               <p>Review the timing and activity counts before sharing.</p>
-              <TextAreaStyled
-                aria-label='Diagnostic report preview'
-                readOnly
-                rows={8}
-                value={current.text}
-              />
+              <section aria-label='Diagnostic report preview'>
+                <DiagnosticCodeBlock content={current.text} wordWrap />
+              </section>
               <Button
                 subtle
                 disabled={disabled}
@@ -230,3 +221,11 @@ const ReviewPanel = styled.div`
   padding-top: 0.25rem;
   border-top: 1px solid ${({ theme }) => theme.colors.bg2};
 `;
+
+const DiagnosticCodeBlock = styled(CodeBlock)`
+  max-height: 16rem;
+  overflow: auto;
+  padding-right: 3rem;
+  background: ${({ theme }) => theme.colors.bg};
+`;
+
