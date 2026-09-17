@@ -17,9 +17,9 @@ import {
 import { transition } from '../../helpers/transition';
 import { FaGripVertical, FaPlus, FaTrash } from 'react-icons/fa6';
 import { createPortal } from 'react-dom';
+import { transparentize } from 'polished';
 import { useValidation } from './formValidation/useValidation';
 import { SB_BACKGROUND } from './SearchBox/searchboxVars';
-import { withAlpha } from '../../styles/withAlpha';
 
 interface InputResourceArrayProps extends InputProps {
   isA?: string;
@@ -295,7 +295,7 @@ const DummySelector = (props: ResourceSelectorProps) => {
 };
 
 const StyledDragOverlay = styled(DragOverlay)`
-  ${SB_BACKGROUND.define(withAlpha('var(--color-bg)', 0.5))}
+  ${SB_BACKGROUND.define(p => transparentize(0.5, p.theme.colors.bg))}
   backdrop-filter: blur(3px);
 `;
 
@@ -313,12 +313,12 @@ const DragHandle = styled.button`
   &:active {
     cursor: grabbing;
     svg {
-      color: var(--color-text-subtle);
+      color: ${p => p.theme.colors.textLight};
     }
   }
 
   svg {
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight2};
   }
 `;
 
@@ -329,7 +329,7 @@ const DragWrapper = styled(Row)<{ active: boolean }>`
 
   &:hover {
     ${DragHandle} svg {
-      color: var(--color-text-subtle);
+      color: ${p => p.theme.colors.textLight};
     }
   }
 `;
@@ -342,13 +342,13 @@ const AddButton = styled(Button)`
   align-self: flex-start;
   width: 100%;
   box-shadow: none;
-  border: 1px dashed var(--color-border);
+  border: 1px dashed ${p => p.theme.colors.bg2};
   background: none;
 
   &:not(:disabled) {
     &:hover,
     &:focus-visible {
-      border: 1px solid var(--color-accent);
+      border: 1px solid ${p => p.theme.colors.main};
       box-shadow: none !important;
     }
   }
@@ -360,7 +360,7 @@ const DropEdgeElement = styled.div<{ visible: boolean; active: boolean }>`
   height: 3px;
   border-radius: 1.5px;
   transform: scaleX(${p => (p.active ? 1.1 : 1)});
-  background: var(--color-accent);
+  background: ${p => p.theme.colors.main};
   opacity: ${p => (p.active ? 1 : 0)};
   z-index: 2;
   width: 100%;

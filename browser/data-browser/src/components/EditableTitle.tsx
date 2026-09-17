@@ -275,7 +275,7 @@ const Title = styled.h1<TitleProps>`
   ${TitleShared}
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: ${p => p.theme.size()};
   cursor: ${props => (props.$canEdit ? 'text' : 'initial')};
   opacity: ${props => (props.$subtle ? 0.5 : 1)};
   /* Hug the text: this element is a view-transition morph target, and a
@@ -306,9 +306,9 @@ const TitleText = styled.span`
 
 const TitleInput = styled.textarea`
   ${TitleShared}
-  margin-bottom: var(--space-3);
-  font-size: var(--font-size-3xl);
-  color: var(--color-text);
+  margin-bottom: ${props => props.theme.margin}rem;
+  font-size: ${p => p.theme.fontSizeH1}rem;
+  color: ${p => p.theme.colors.text};
   border: none;
   font-weight: bold;
   display: block;
@@ -316,8 +316,8 @@ const TitleInput = styled.textarea`
   margin-top: 0;
   outline: none;
   background-color: transparent;
-  margin-bottom: var(--space-3);
-  font-family: var(--font-family-heading);
+  margin-bottom: ${p => p.theme.margin}rem;
+  font-family: ${p => p.theme.fontFamilyHeader};
   /* Wrap exactly like the rendered heading (see Title). */
   overflow-wrap: break-word;
   word-break: normal;
@@ -338,7 +338,7 @@ const TitleInput = styled.textarea`
 `;
 
 const Icon = styled(FaPencil)`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   opacity: 0;
   font-size: 0.8em;
   ${transition('opacity', 'color')};
@@ -352,8 +352,8 @@ const Icon = styled(FaPencil)`
 const EditingRow = styled.div`
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  font-size: var(--font-size-3xl);
+  gap: ${p => p.theme.size()};
+  font-size: ${p => p.theme.fontSizeH1}rem;
   ${narrowTitleFontSize}
 
   /* Hug the typed text like the rendered title does and grow with it
@@ -381,7 +381,7 @@ const TitleWrapper = styled.div`
      mid-word, even on a wide, hover-capable screen. */
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3);
+  gap: ${p => p.theme.size()};
   min-width: 0;
 
   /* Both modes must occupy the same box or everything below shifts when

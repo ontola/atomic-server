@@ -134,9 +134,9 @@ const SummaryWrapper = styled.div<{ $clickable: boolean }>`
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   user-select: none;
-  transition: background-color var(--duration-fast) ease-out;
+  transition: background-color ${p => p.theme.animation.duration} ease-out;
 
   cursor: ${p => (p.$clickable ? 'pointer' : 'default')};
 
@@ -148,11 +148,11 @@ const SummaryWrapper = styled.div<{ $clickable: boolean }>`
 
           &:hover,
           &:focus-within {
-            background-color: var(--color-bg-subtle);
+            background-color: ${p.theme.colors.bg1};
           }
 
           &:active {
-            background-color: var(--color-border);
+            background-color: ${p.theme.colors.bg2};
           }
         `
       : ''}
@@ -182,7 +182,8 @@ const TitleAsButton = styled.button<{ $subtle: boolean }>`
   padding: 0;
   margin: 0;
   font: inherit;
-  color: ${({ $subtle }) => ($subtle ? 'var(--color-text-subtle)' : 'inherit')};
+  color: ${({ theme, $subtle }) =>
+    $subtle ? theme.colors.textLight : 'inherit'};
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -200,14 +201,14 @@ const TitleAsButton = styled.button<{ $subtle: boolean }>`
 `;
 
 const Icon = styled(FaCaretRight)<{ $turn: boolean; $subtle: boolean }>`
-  color: ${({ $subtle }) =>
-    $subtle ? 'var(--color-text-subtle)' : 'var(--color-accent)'};
+  color: ${({ theme, $subtle }) =>
+    $subtle ? theme.colors.textLight : theme.colors.main};
   margin-top: auto;
   cursor: pointer;
   * {
     cursor: pointer;
   }
-  --speed: var(--duration-fast);
+  --speed: ${p => p.theme.animation.duration};
   transition:
     transform var(--speed) ease-in-out,
     background-color var(--speed) ease;
@@ -224,5 +225,5 @@ const StyledIconButton = styled(IconButton)<{ hide: boolean }>`
 `;
 
 const StyledCollapse = styled(Collapse)<{ noIndent?: boolean }>`
-  margin-left: ${p => (p.noIndent ? 0 : 'var(--space-3)') + 'rem'};
+  margin-left: ${p => (p.noIndent ? 0 : p.theme.margin) + 'rem'};
 `;

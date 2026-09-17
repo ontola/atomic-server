@@ -121,9 +121,26 @@ export function hexToOklch(hex: string): Oklch | undefined {
   return rgb && rgbToOklch(rgb);
 }
 
-/** Serialises for CSS. Rounded so the emitted custom properties stay legible. */
+/** Serialises as OKLCH. Rounded so emitted values stay legible. */
 export function formatOklch({ l, c, h }: Oklch): string {
   return `oklch(${l.toFixed(4)} ${c.toFixed(4)} ${h.toFixed(2)})`;
+}
+
+/**
+ * Serialises as sRGB hex.
+ *
+ * The ramps are *authored* in OKLCH because it is perceptually uniform, but
+ * the theme hands its colours to polished (`transparentize`, `lighten`) and to
+ * call sites that append an 8-bit alpha suffix. Neither understands `oklch()`,
+ * so the theme carries hex and OKLCH stays the authoring space.
+ */
+export function formatHex(color: Oklch): string {
+  const { r, g, b } = oklchToRgb(color);
+
+  return (
+    '#' +
+    [r, g, b].map(channel => channel.toString(16).padStart(2, '0')).join('')
+  );
 }
 
 /** Parses the `oklch(L C H)` form this module emits and `tokens.css` authors. */

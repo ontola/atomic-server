@@ -144,23 +144,23 @@ export const Mention: FC<MentionProps> = ({ id, label, variant }) => {
 const MentionBadge = styled.span`
   display: inline-flex;
   align-items: center;
-  background-color: var(--color-accent-subtle);
-  border-radius: var(--radius-md);
+  background-color: ${p => p.theme.colors.mainSelectedBg};
+  border-radius: ${p => p.theme.radius};
   padding-inline: 4px;
-  color: var(--color-accent-text);
-  border: 1px solid var(--color-accent-text);
+  color: ${p => p.theme.colors.mainSelectedFg};
+  border: 1px solid ${p => p.theme.colors.mainSelectedFg};
   font-size: 0.9em;
   text-decoration: none !important;
   vertical-align: middle;
   margin-inline: 0.2ch;
 
   &:hover {
-    color: var(--color-accent-text) !important;
-    background-color: var(--color-accent-subtle) !important;
+    color: ${p => p.theme.colors.mainSelectedFg} !important;
+    background-color: ${p => p.theme.colors.mainSelectedBg} !important;
     filter: brightness(1.1);
   }
 `;
 
 const SkillMentionText = styled.span`
-  color: var(--color-accent);
+  color: ${p => p.theme.colors.main};
 `;

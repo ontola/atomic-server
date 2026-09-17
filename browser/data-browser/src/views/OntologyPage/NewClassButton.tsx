@@ -126,9 +126,9 @@ const SubjectWrapper = styled.div`
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--color-text-subtle);
-  background-color: var(--color-bg-subtle);
+  color: ${p => p.theme.colors.textLight};
+  background-color: ${p => p.theme.colors.bg1};
   padding-inline: 0.5rem;
   padding-block: 0.2rem;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
 `;

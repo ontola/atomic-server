@@ -153,9 +153,9 @@ const Bar = styled.div`
 const NameInput = styled(InputStyled)`
   flex: 1;
   min-width: 12rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background-color: var(--color-bg);
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.bg};
   padding-inline: 0.6rem;
 `;
 
@@ -163,7 +163,7 @@ const Toggle = styled.label`
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.85em;
   white-space: nowrap;
   cursor: pointer;

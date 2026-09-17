@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "jsPlugins": ["@stylistic/eslint-plugin", "./oxlint-plugins/tokenVars.js"],
+  "jsPlugins": ["@stylistic/eslint-plugin"],
   "plugins": ["eslint", "typescript", "react", "jsx-a11y"],
   "categories": {
     "correctness": "error",
@@ -17,9 +17,6 @@
     "eslint/no-shadow": "off",
     "class-methods-use-this": "off",
     "eqeqeq": "error",
-    // Every `var(--x)` names a property that is declared. See
-    // oxlint-plugins/tokenVars.js for why this is a rule and not a test.
-    "token-vars/no-unknown-custom-property": "error",
     "@typescript-eslint/no-unused-vars": [
       "error",
       {

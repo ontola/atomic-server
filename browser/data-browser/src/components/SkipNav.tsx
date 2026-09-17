@@ -13,9 +13,9 @@ const SkipLink = styled.a`
   --skip-button-width: min(90vw, 20rem);
   position: absolute;
   width: 100vw;
-  background: var(--color-accent);
+  background: ${({ theme }) => theme.colors.main};
   z-index: 100;
-  box-shadow: var(--elevation-2);
+  box-shadow: ${({ theme }) => theme.boxShadowSoft};
   border: none;
   padding: 1rem;
   color: white;

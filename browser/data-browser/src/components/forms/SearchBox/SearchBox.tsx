@@ -7,7 +7,7 @@ import {
   useState,
   type JSX,
 } from 'react';
-import { styled } from 'styled-components';
+import { styled, useTheme } from 'styled-components';
 import { removeCachedSearchResults, useResource, useStore } from '@tomic/react';
 import { DropdownPortalContext } from '../../Dropdown/dropdownContext';
 import * as RadixPopover from '@radix-ui/react-popover';
@@ -73,6 +73,7 @@ export function SearchBox({
   onResourceError,
 }: React.PropsWithChildren<SearchBoxProps>): JSX.Element {
   const store = useStore();
+  const theme = useTheme();
   const navigate = useNavigateWithTransition();
   const selectedResource = useResource(value);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -193,7 +194,7 @@ export function SearchBox({
               <FaTriangleExclamation
                 title='Error'
                 size='0.8rem'
-                color={'var(--color-alert)'}
+                color={theme.colors.alert}
               />
             )}
             {value ? (
@@ -257,7 +258,7 @@ const TriggerButton = styled.button`
   display: flex;
   align-items: center;
   padding: 0.5rem;
-  border-radius: var(--radius-md);
+  border-radius: ${props => props.theme.radius};
   background: transparent;
   border: none;
   text-align: start;
@@ -266,34 +267,34 @@ const TriggerButton = styled.button`
   width: 100%;
   overflow: hidden;
   cursor: text;
-  color: var(--color-text);
+  color: ${p => p.theme.colors.text};
   &.empty {
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
   }
 `;
 
 const TriggerButtonWrapper = styled.div<{ disabled: boolean }>`
-  ${SB_HIGHLIGHT.define('var(--color-accent)')}
+  ${SB_HIGHLIGHT.define(p => p.theme.colors.main)}
 
   &.invalid {
-    ${SB_HIGHLIGHT.define('var(--color-alert)')}
+    ${SB_HIGHLIGHT.define(p => p.theme.colors.alert)}
   }
   max-width: 100cqw;
 
   display: flex;
   position: relative;
-  border: 1px solid var(--color-border);
+  border: 1px solid ${props => props.theme.colors.bg2};
 
-  border-top-left-radius: ${SB_TOP_RADIUS.var('var(--radius-md)')};
-  border-top-right-radius: ${SB_TOP_RADIUS.var('var(--radius-md)')};
-  border-bottom-left-radius: ${SB_BOTTOM_RADIUS.var('var(--radius-md)')};
-  border-bottom-right-radius: ${SB_BOTTOM_RADIUS.var('var(--radius-md)')};
+  border-top-left-radius: ${p => SB_TOP_RADIUS.var(p.theme.radius)};
+  border-top-right-radius: ${p => SB_TOP_RADIUS.var(p.theme.radius)};
+  border-bottom-left-radius: ${p => SB_BOTTOM_RADIUS.var(p.theme.radius)};
+  border-bottom-right-radius: ${p => SB_BOTTOM_RADIUS.var(p.theme.radius)};
 
-  background-color: ${SB_BACKGROUND.var('var(--color-bg)')};
+  background-color: ${p => SB_BACKGROUND.var(p.theme.colors.bg)};
   content-visibility: auto;
   contain-intrinsic-size: auto 2rem;
   &:has(:disabled) {
-    background-color: var(--color-bg-subtle);
+    background-color: ${props => props.theme.colors.bg1};
     opacity: 0.7;
   }
 
@@ -318,5 +319,5 @@ const ResourceTitle = styled.span`
 `;
 
 const PlaceholderText = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;

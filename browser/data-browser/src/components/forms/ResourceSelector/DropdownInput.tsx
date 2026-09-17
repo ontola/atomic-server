@@ -450,10 +450,10 @@ interface DropdownWrapperProps {
 const DropDownWrapper = styled.ul<DropdownWrapperProps>`
   display: flex;
   flex-direction: column;
-  background-color: var(--color-bg);
-  border: solid 1px var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--elevation-2);
+  background-color: ${props => props.theme.colors.bg};
+  border: solid 1px ${props => props.theme.colors.bg2};
+  border-radius: ${props => props.theme.radius};
+  box-shadow: ${props => props.theme.boxShadowSoft};
   max-height: min(calc(${p => p.height}px - 2rem), 30rem);
   contain: paint;
   --dropdown-width: ${p => p.width}px;
@@ -472,7 +472,7 @@ const DropDownItem = styled.li<DropDownItemProps>`
   width: var(--dropdown-width);
   overflow-x: hidden;
   flex-direction: row;
-  border-bottom: solid 1px var(--color-border);
+  border-bottom: solid 1px ${props => props.theme.colors.bg2};
   cursor: pointer;
   margin: 0;
   white-space: nowrap;
@@ -481,11 +481,11 @@ const DropDownItem = styled.li<DropDownItemProps>`
   ${props =>
     props.selected &&
     css`
-      background-color: var(--color-accent);
-      color: var(--color-bg);
+      background-color: ${p => p.theme.colors.main};
+      color: ${p => p.theme.colors.bg};
 
       & ${ResourceRowDescription} {
-        color: var(--color-bg);
+        color: ${p => p.theme.colors.bg};
       }
     `}
 
@@ -495,11 +495,11 @@ const DropDownItem = styled.li<DropDownItemProps>`
       &:hover,
       &:active,
       &:focus {
-        background-color: var(--color-accent);
-        color: var(--color-bg);
+        background-color: ${p => p.theme.colors.main};
+        color: ${p => p.theme.colors.bg};
 
         & ${ResourceRowDescription} {
-          color: var(--color-bg);
+          color: ${p => p.theme.colors.bg};
         }
       }
     `}

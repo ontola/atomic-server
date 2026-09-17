@@ -186,7 +186,7 @@ const LangTag = styled.span<{ $missing?: boolean }>`
   min-width: 5ch;
   font-family: monospace;
   color: ${p =>
-    p.$missing ? 'var(--color-warning)' : 'var(--color-text-subtle)'};
+    p.$missing ? p.theme.colors.warning : p.theme.colors.textLight};
 `;
 
 const TagInputWrapper = styled(InputWrapper)`

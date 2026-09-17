@@ -90,11 +90,11 @@ const Value = styled.span`
 `;
 
 const Caption = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.8rem;
 `;
 
 const Unconfigured = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-style: italic;
 `;

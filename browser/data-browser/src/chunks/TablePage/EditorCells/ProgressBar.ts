@@ -6,7 +6,7 @@ interface ProgressBarProps {
 
 export const ProgressBar = styled.span<ProgressBarProps>`
   --off: transparent;
-  --on: var(--color-accent);
+  --on: ${({ theme }) => theme.colors.main};
   position: absolute;
   background-image: ${props =>
     `linear-gradient(to right, var(--on), var(--on) ${props.percentage}%, var(--off) ${props.percentage}%)`};

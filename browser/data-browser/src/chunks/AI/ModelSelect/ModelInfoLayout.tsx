@@ -17,16 +17,16 @@ export const ModelInfoLayout = ({ Pricing, About }: ModelInfoLayoutProps) => {
 };
 
 ModelInfoLayout.Empty = styled.div`
-  background-color: var(--color-bg-subtle);
+  background-color: ${p => p.theme.colors.bg1};
   display: grid;
   place-items: center;
-  color: var(--color-text-subtle);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
+  color: ${p => p.theme.colors.textLight};
+  padding: ${p => p.theme.size()};
+  border-radius: ${p => p.theme.radius};
 `;
 
 const AboutWrapper = styled.div`
-  background-color: var(--color-bg-subtle);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
+  background-color: ${p => p.theme.colors.bg1};
+  padding: ${p => p.theme.size()};
+  border-radius: ${p => p.theme.radius};
 `;

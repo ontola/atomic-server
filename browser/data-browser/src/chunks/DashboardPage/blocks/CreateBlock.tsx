@@ -76,6 +76,6 @@ export function CreateBlock({ block, config }: BlockProps): JSX.Element {
 }
 
 const Empty = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-style: italic;
 `;

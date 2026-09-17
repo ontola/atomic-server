@@ -122,51 +122,51 @@ const Title = styled.span`
   font-weight: bold;
   font-size: 1rem;
   margin: 0;
-  font-family: var(--font-family-heading);
+  font-family: ${p => p.theme.fontFamilyHeader};
 `;
 
 const ReferenceContent = styled(Column)`
-  margin-top: var(--space-3);
+  margin-top: ${p => p.theme.size()};
 `;
 
 const PropertyContainer = styled.div<{ $level: number }>`
   background-color: ${p =>
-    p.$level % 2 === 0 ? 'var(--color-bg-subtle)' : 'var(--color-bg)'};
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
+    p.$level % 2 === 0 ? p.theme.colors.bg1 : p.theme.colors.bg};
+  padding: ${p => p.theme.size()};
+  border-radius: ${p => p.theme.radius};
+  border: 1px solid ${p => p.theme.colors.bg2};
 `;
 
 const SubPropertiesWrapper = styled.div`
-  margin-top: var(--space-2);
-  border-left: 2px solid var(--color-accent);
-  padding-left: var(--space-2);
+  margin-top: ${p => p.theme.size(2)};
+  border-left: 2px solid ${p => p.theme.colors.main};
+  padding-left: ${p => p.theme.size(2)};
 `;
 
 const PropertyName = styled.span`
   font-weight: bold;
-  font-family: var(--font-family-heading);
+  font-family: ${p => p.theme.fontFamilyHeader};
   font-size: 1.1rem;
 `;
 
 const RequiredBadge = styled.span`
-  color: var(--color-alert);
+  color: ${p => p.theme.colors.alert};
   font-size: 0.7rem;
-  margin-left: var(--space-2);
+  margin-left: ${p => p.theme.size(2)};
   text-transform: uppercase;
   font-weight: bold;
   vertical-align: middle;
 `;
 
 const PropertyType = styled.span`
-  color: var(--color-accent);
+  color: ${p => p.theme.colors.main};
   font-family: monospace;
   font-size: 0.9rem;
 `;
 
 const DescriptionWrapper = styled.div`
-  margin-top: var(--space-2);
-  color: var(--color-text);
+  margin-top: ${p => p.theme.size(2)};
+  color: ${p => p.theme.colors.text};
   font-size: 0.9rem;
 
   & p {
@@ -175,16 +175,16 @@ const DescriptionWrapper = styled.div`
 `;
 
 const DefaultValue = styled.div`
-  margin-top: var(--space-2);
+  margin-top: ${p => p.theme.size(2)};
   font-size: 0.8rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 
   & span {
     font-weight: bold;
   }
 
   & code {
-    background-color: var(--color-border);
+    background-color: ${p => p.theme.colors.bg2};
     padding: 2px 4px;
     border-radius: 4px;
     font-family: monospace;
@@ -192,9 +192,9 @@ const DefaultValue = styled.div`
 `;
 
 const EnumWrapper = styled.div`
-  margin-top: var(--space-2);
+  margin-top: ${p => p.theme.size(2)};
   font-size: 0.8rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
@@ -205,7 +205,7 @@ const EnumWrapper = styled.div`
   }
 
   & code {
-    background-color: var(--color-border);
+    background-color: ${p => p.theme.colors.bg2};
     padding: 2px 4px;
     border-radius: 4px;
     font-family: monospace;

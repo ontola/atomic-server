@@ -10,11 +10,11 @@ export const GridCard = styled.div.attrs<ViewTransitionProps>(p => ({
   style: getTransitionStyle(RESOURCE_PAGE_TRANSITION_TAG, p.subject),
 }))`
   grid-area: card;
-  background-color: var(--color-bg-subtle);
-  border-radius: var(--radius-md);
+  background-color: ${p => p.theme.colors.bg1};
+  border-radius: ${p => p.theme.radius};
   overflow: hidden;
   box-shadow: var(--shadow), var(--interaction-shadow);
-  border: 1px solid var(--color-border);
+  border: 1px solid ${p => p.theme.colors.bg2};
   transition:
     border 0.1s ease-in-out,
     box-shadow 0.1s ease-in-out;
@@ -26,12 +26,12 @@ export const GridItemWrapper = styled.a`
     0px 0.7px 1.3px rgba(0, 0, 0, 0.06), 0px 1.8px 3.2px rgba(0, 0, 0, 0.043),
     0px 3.4px 6px rgba(0, 0, 0, 0.036), 0px 6px 10.7px rgba(0, 0, 0, 0.03),
     0px 11.3px 20.1px rgba(0, 0, 0, 0.024), 0px 27px 48px rgba(0, 0, 0, 0.017);
-  --interaction-shadow: 0px 0px 0px 0px var(--color-accent);
+  --interaction-shadow: 0px 0px 0px 0px ${p => p.theme.colors.main};
   --card-banner-padding: 1rem;
   --card-banner-height: calc(var(--card-banner-padding) * 2 + 1.5em);
   outline: none;
   text-decoration: none;
-  color: var(--color-text);
+  color: ${p => p.theme.colors.text1};
   display: grid;
   grid-template-columns: 1fr;
   grid-template-rows: 1fr 2rem;
@@ -42,13 +42,13 @@ export const GridItemWrapper = styled.a`
   gap: 1rem;
 
   &:hover ${GridCard}, &:focus ${GridCard} {
-    --interaction-shadow: 0px 0px 0px 1px var(--color-accent);
-    border: 1px solid var(--color-accent);
+    --interaction-shadow: 0px 0px 0px 1px ${p => p.theme.colors.main};
+    border: 1px solid ${p => p.theme.colors.main};
   }
 
   &:hover,
   &:focus {
-    color: var(--color-accent);
+    color: ${p => p.theme.colors.main};
   }
 `;
 
@@ -67,10 +67,10 @@ export const GridItemTitle = styled.div.attrs<ViewTransitionProps>(p => ({
 
 export const GridItemDescription = styled.div`
   font-size: 1.1rem;
-  color: var(--color-text-subtle);
-  margin: var(--space-3);
+  color: ${p => p.theme.colors.textLight};
+  margin: ${p => p.theme.margin}rem;
   overflow: hidden;
-  height: calc(100% - var(--space-7));
+  height: calc(100% - ${p => p.theme.margin * 2}rem);
 `;
 
 export const InnerWrapper = styled.div`

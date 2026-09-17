@@ -83,23 +83,23 @@ const SearchBoxWrapper = styled.div`
 
 const AddButton = styled.button`
   background: none;
-  border: 1px dashed var(--color-border);
+  border: 1px dashed ${p => p.theme.colors.bg2};
   height: 2.5rem;
 
   width: ${BUTTON_WIDTH};
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 1ch;
   cursor: pointer;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 
   ${transition('border-color', 'color')}
   &:hover,
   &:focus-visible {
     border-style: solid;
-    border-color: var(--color-accent);
-    color: var(--color-accent);
+    border-color: ${p => p.theme.colors.main};
+    color: ${p => p.theme.colors.main};
   }
 `;

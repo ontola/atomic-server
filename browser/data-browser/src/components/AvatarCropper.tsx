@@ -247,8 +247,8 @@ const Viewport = styled.div`
   height: ${VIEWPORT}px;
   margin-inline: auto;
   overflow: hidden;
-  border-radius: var(--radius-md);
-  background-color: var(--color-bg-subtle);
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.bg1};
   cursor: grab;
   touch-action: none;
 
@@ -277,5 +277,5 @@ const MaskRing = styled.div<{ $circle: boolean }>`
 
 const ZoomSlider = styled.input`
   flex: 1;
-  accent-color: var(--color-accent);
+  accent-color: ${p => p.theme.colors.main};
 `;

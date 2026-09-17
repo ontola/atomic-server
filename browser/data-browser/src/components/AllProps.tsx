@@ -98,22 +98,22 @@ const AllPropsWrapper = styled.div<{ basic: boolean | undefined }>`
 
   display: flex;
   flex-direction: column;
-  border-radius: var(--radius-md);
-  background-color: ${p => (p.basic ? 'transparent' : 'var(--color-bg)')};
-  border: ${p => (p.basic ? 'none' : '1px solid var(--color-border)')};
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => (p.basic ? 'transparent' : p.theme.colors.bg)};
+  border: ${p => (p.basic ? 'none' : `1px solid ${p.theme.colors.bg2}`)};
 `;
 
 const StyledPropVal = styled(PropVal)<{ basic: boolean | undefined }>`
   ${p =>
     !p.basic &&
     css`
-      padding: var(--space-2) var(--space-3);
-      border-top: solid 1px var(--color-border-subtle);
+      padding: ${p.theme.size(2)} ${p.theme.size(3)};
+      border-top: solid 1px ${p.theme.colors.borderSubtle};
 
       &:nth-child(1) {
-        border-top-left-radius: var(--radius-md);
+        border-top-left-radius: ${p.theme.radius};
         border-top: none;
-        border-top-right-radius: var(--radius-md);
+        border-top-right-radius: ${p.theme.radius};
       }
     `}
 `;

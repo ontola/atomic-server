@@ -71,7 +71,7 @@ const Styled = styled(CodeBlock)`
   }
 
   & button {
-    top: var(--space-1);
-    right: var(--space-1);
+    top: ${p => p.theme.size(1)};
+    right: ${p => p.theme.size(1)};
   }
 `;

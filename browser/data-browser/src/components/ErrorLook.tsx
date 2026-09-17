@@ -1,3 +1,4 @@
+import { lighten } from 'polished';
 import { styled, css } from 'styled-components';
 
 import { FaTriangleExclamation } from 'react-icons/fa6';
@@ -6,7 +7,7 @@ import type { JSX } from 'react';
 import { getMessageForErrorType } from '@tomic/react';
 
 export const errorLookStyle = css`
-  color: var(--color-alert);
+  color: ${props => props.theme.colors.alert};
   font-family: monospace;
   line-height: 1.2rem;
 `;
@@ -16,10 +17,10 @@ export const ErrorLook = styled.span`
 `;
 
 export const SimpleErrorBlock = styled.div`
-  color: var(--color-alert);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-alert);
-  padding: var(--space-2);
+  color: ${props => props.theme.colors.alert};
+  border-radius: ${props => props.theme.radius};
+  border: 1px solid ${props => props.theme.colors.alert};
+  padding: ${props => props.theme.size(2)};
 `;
 
 export interface ErrorBlockProps {
@@ -51,19 +52,19 @@ export function ErrorBlock({ error, showTrace }: ErrorBlockProps): JSX.Element {
 }
 
 const ErrorLookBig = styled.div`
-  color: var(--color-alert);
+  color: ${p => p.theme.colors.alert};
   font-size: 1rem;
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-alert-subtle);
-  background-color: var(--color-bg-subtle);
+  padding: ${p => p.theme.margin}rem;
+  border-radius: ${p => p.theme.radius};
+  border: 1px solid ${p => lighten(0.2, p.theme.colors.alert)};
+  background-color: ${p => p.theme.colors.bg1};
 `;
 
 const Pre = styled.pre`
   white-space: pre-wrap;
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  background-color: var(--color-bg);
+  border-radius: ${p => p.theme.radius};
+  padding: ${p => p.theme.margin}rem;
+  background-color: ${p => p.theme.colors.bg};
   font-size: 0.9rem;
 `;
 

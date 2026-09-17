@@ -1,7 +1,7 @@
 import { Property } from '@tomic/react';
 import { useDroppable } from '@dnd-kit/core';
 import { styled } from 'styled-components';
-import { setLightness } from 'polished';
+import { mix, setLightness } from 'polished';
 import { useCallback, useRef, useState, type JSX } from 'react';
 import { FaPlus } from 'react-icons/fa6';
 import { useTagData } from '@components/Tag';
@@ -9,7 +9,6 @@ import { IconButton } from '@components/IconButton/IconButton';
 import { SkeletonButton } from '@components/SkeletonButton';
 import { InputStyled } from '@components/forms/InputStyles';
 import { KanbanCard } from './KanbanCard';
-import { blend } from '../../../styles/withAlpha';
 
 /** Placeholder subject passed to `useTagData` for the uncategorized column,
  *  which has no tag — its data is loaded but never rendered. */
@@ -159,7 +158,7 @@ const Column = styled.div`
   height: 100%;
   /* Header + card list are one continuous rounded card; this clips both to
    * match the outer radius instead of each rounding its own corners. */
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   overflow: hidden;
 `;
 
@@ -170,8 +169,8 @@ const ColumnHeader = styled.div<{ $bg: string | undefined }>`
   padding: 0.6rem 0.75rem;
   /* Stays put while the card list below scrolls. */
   flex-shrink: 0;
-  background-color: ${p => p.$bg ?? 'var(--color-border)'};
-  color: ${p => (p.$bg ? 'white' : 'var(--color-text-subtle)')};
+  background-color: ${p => p.$bg ?? p.theme.colors.bg2};
+  color: ${p => (p.$bg ? 'white' : p.theme.colors.textLight)};
 `;
 
 const ColumnHeaderTitle = styled.span`
@@ -212,9 +211,9 @@ const AddInput = styled(InputStyled)`
   height: auto;
   min-height: 2.4rem;
   padding: 0.5rem 0.6rem;
-  border: 1px solid var(--color-accent);
-  border-radius: var(--radius-md);
-  background-color: var(--color-bg);
+  border: 1px solid ${p => p.theme.colors.main};
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.bg};
 `;
 
 const CardList = styled.div<{ $over: boolean; $tint: string | undefined }>`
@@ -230,17 +229,17 @@ const CardList = styled.div<{ $over: boolean; $tint: string | undefined }>`
   overflow-y: auto;
   background-color: ${p => {
     if (p.$over) {
-      return 'var(--color-border)';
+      return p.theme.colors.bg2;
     }
 
     // A faint wash of the header's hue over the usual grey — close enough
     // to bg1 that it still reads as neutral, but ties the card list to its
     // column.
     return p.$tint
-      ? blend(p.$tint, 'var(--color-bg-subtle)', 0.08)
-      : 'var(--color-bg-subtle)';
+      ? mix(0.08, p.$tint, p.theme.colors.bg1)
+      : p.theme.colors.bg1;
   }};
-  border: 1px dashed ${p => (p.$over ? 'var(--color-accent)' : 'transparent')};
+  border: 1px dashed ${p => (p.$over ? p.theme.colors.main : 'transparent')};
   transition:
     background-color 0.1s ease-in-out,
     border-color 0.1s ease-in-out;

@@ -191,7 +191,7 @@ function DerivedValueInput({
 }
 
 const Suffix = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.85rem;
   white-space: nowrap;
 `;
@@ -203,17 +203,17 @@ const ChipTrigger = styled(RadixPopover.Trigger)<{ $active: boolean }>`
   max-width: 24rem;
   padding: 0.1rem 0.5rem;
   height: 1.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
   background-color: ${p =>
-    p.$active ? 'var(--color-bg-subtle)' : 'var(--color-bg)'};
-  color: var(--color-text);
+    p.$active ? p.theme.colors.bg1 : p.theme.colors.bg};
+  color: ${p => p.theme.colors.text};
   cursor: pointer;
   font-size: 0.85rem;
   white-space: nowrap;
 
   &:hover {
-    border-color: var(--color-accent);
+    border-color: ${p => p.theme.colors.main};
   }
 `;
 
@@ -224,7 +224,7 @@ const ChipLabel = styled.span`
 `;
 
 const ChipOperator = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const ChipValue = styled.span`
@@ -234,12 +234,12 @@ const ChipValue = styled.span`
 `;
 
 const Placeholder = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const PopoverInner = styled(Column)`
-  padding: var(--space-3);
-  gap: var(--space-3);
+  padding: ${p => p.theme.size()};
+  gap: ${p => p.theme.size()};
   min-width: 18rem;
 `;
 
@@ -250,15 +250,15 @@ const Header = styled.span`
 const RemoveButton = styled.button`
   background: none;
   border: none;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   cursor: pointer;
   display: flex;
   align-items: center;
   padding: 0.25rem;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
 
   &:hover {
-    color: var(--color-alert);
-    background-color: var(--color-bg-subtle);
+    color: ${p => p.theme.colors.alert};
+    background-color: ${p => p.theme.colors.bg1};
   }
 `;

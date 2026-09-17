@@ -264,9 +264,9 @@ const ResourceItemButtonWrapper = styled.span`
   display: inline-flex;
   padding-inline: 1ch;
   align-items: center;
-  border: 1px solid var(--color-accent);
-  color: var(--color-accent-text);
-  border-radius: var(--radius-md);
+  border: 1px solid ${p => p.theme.colors.main};
+  color: ${p => p.theme.colors.mainDark};
+  border-radius: ${p => p.theme.radius};
 `;
 
 const ResultButton = styled.button`
@@ -276,12 +276,12 @@ const ResultButton = styled.button`
   gap: 0.5rem;
   background: none;
   border: none;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   cursor: pointer;
   padding: 0.3rem;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
 
   svg {
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
   }
 `;

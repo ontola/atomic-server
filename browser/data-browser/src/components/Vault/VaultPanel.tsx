@@ -20,7 +20,6 @@ import {
 import { Button } from '../Button';
 import { PRODUCT_NAME } from '../../helpers/managed/product';
 import type { UseVaultBackup } from '../../helpers/managed/useVaultBackup';
-import { withAlpha } from '../../styles/withAlpha';
 
 /**
  * Cloud Vault controls for one drive.
@@ -270,7 +269,7 @@ function formatWhen(unixSeconds: number): string {
 
 // This panel sits in the Sync page's list of cards, so it uses that list's
 // surface and type scale rather than its own. It used to set padding and gap
-// from `'var(--space-2)'` (8px) while the cards around it used 0.9rem (14.4px),
+// from `theme.size(2)` (8px) while the cards around it used 0.9rem (14.4px),
 // and left its body text at the inherited 1rem against their 0.82rem — close
 // enough to look like a mistake rather than a distinction.
 const Panel = styled(ServiceSection)<{
@@ -278,9 +277,8 @@ const Panel = styled(ServiceSection)<{
   $embedded?: boolean;
 }>`
   ${cardSurface}
-  border-color: ${p => (p.$accent ? 'var(--color-accent)' : undefined)};
-  background: ${p =>
-    p.$accent ? withAlpha('var(--color-accent)', 0.04) : undefined};
+  border-color: ${p => (p.$accent ? p.theme.colors.main : undefined)};
+  background: ${p => (p.$accent ? `${p.theme.colors.main}0a` : undefined)};
 
   /* Inside the provider card the surrounding card already supplies the
      surface and the accent, so drawing them again would box one service
@@ -309,25 +307,25 @@ const Title = styled(ServiceTitle)`
 
 const Sub = styled(ServiceDescription)`
   margin: 0;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: ${CARD_SUB_FONT};
 `;
 
 const ErrorText = styled.p`
   margin: 0;
-  color: var(--color-alert);
+  color: ${p => p.theme.colors.alert};
   font-size: ${CARD_SUB_FONT};
 `;
 
 const OfferLink = styled.a`
   align-self: center;
-  color: var(--color-accent);
+  color: ${p => p.theme.colors.main};
   font-size: ${CARD_SUB_FONT};
   text-decoration: underline;
 
   &:hover,
   &:focus-visible {
-    color: var(--color-accent-text);
+    color: ${p => p.theme.colors.mainDark};
   }
 `;
 

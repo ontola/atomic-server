@@ -370,17 +370,17 @@ const ServerList = styled.ul`
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: ${p => p.theme.size()};
 `;
 
 const ServerItem = styled.li`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background-color: var(--color-bg);
+  padding: ${p => p.theme.size(2)};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.bg};
   margin: 0;
 `;
 
@@ -391,8 +391,8 @@ const CreateButton = styled(SkeletonButton)`
 const HeaderRows = styled.div`
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
+  gap: ${p => p.theme.size(2)};
+  margin-bottom: ${p => p.theme.size(2)};
 `;
 
 const HeaderRowContainer = styled(Row)`
@@ -402,5 +402,5 @@ const HeaderRowContainer = styled(Row)`
 const SubtleText = styled.p`
   margin: 0;
   font-size: 0.875rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;

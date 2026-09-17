@@ -157,6 +157,6 @@ export function DriveSwitcher({
 const HostingState = styled.span`
   margin-left: auto;
   font-size: 0.75rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   white-space: nowrap;
 `;

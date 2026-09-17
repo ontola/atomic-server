@@ -57,7 +57,6 @@ import {
 } from './overlayState';
 import { useDocumentText } from '../hooks/useDocumentText';
 import { getSearchResultHint } from '../helpers/searchResultHint';
-import { withAlpha } from '../styles/withAlpha';
 
 export { closeOverlay, openSearchOverlay, openShortcutsOverlay };
 
@@ -108,10 +107,10 @@ const OverlayPanel = styled.div`
   height: 30rem;
   display: flex;
   flex-direction: column;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--elevation-1);
+  background: ${p => p.theme.colors.bg};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
+  box-shadow: ${p => p.theme.boxShadow};
   animation: slideIn 100ms ease-out;
   overflow: visible;
 
@@ -132,8 +131,8 @@ const OverlayInputWrapper = styled.div`
   align-items: center;
   gap: 0.75rem;
   padding: 1rem;
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-text-subtle);
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const OverlayInput = styled.input`
@@ -141,21 +140,21 @@ const OverlayInput = styled.input`
   background: transparent;
   border: none;
   font-size: 1.125rem;
-  color: var(--color-text);
+  color: ${p => p.theme.colors.text};
   outline: none;
 
   &::placeholder {
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
   }
 `;
 
 const ShortcutHint = styled.kbd`
   padding: 0.2rem 0.4rem;
-  background: var(--color-bg-subtle);
-  border: 1px solid var(--color-border);
+  background: ${p => p.theme.colors.bg1};
+  border: 1px solid ${p => p.theme.colors.bg2};
   border-radius: 0.25rem;
   font-size: 0.75rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   cursor: pointer;
 `;
 
@@ -175,7 +174,7 @@ const ResultsArea = styled.div`
 `;
 
 const TagHeading = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-weight: 600;
   font-size: 0.75rem;
   text-transform: uppercase;
@@ -186,10 +185,10 @@ const FooterRow = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1rem;
-  border-top: 1px solid var(--color-border);
-  color: var(--color-text-subtle);
+  border-top: 1px solid ${p => p.theme.colors.bg2};
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.75rem;
-  background: var(--color-bg);
+  background: ${p => p.theme.colors.bg};
   border-bottom-left-radius: inherit;
   border-bottom-right-radius: inherit;
 `;
@@ -199,8 +198,8 @@ const FooterHints = styled.div`
   gap: 1rem;
 
   kbd {
-    background: var(--color-bg-subtle);
-    border: 1px solid var(--color-border);
+    background: ${p => p.theme.colors.bg1};
+    border: 1px solid ${p => p.theme.colors.bg2};
     border-radius: 0.2rem;
     padding: 0.1rem 0.3rem;
     font-family: inherit;
@@ -224,7 +223,7 @@ const SectionHeading = styled.div`
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const ActionRow = styled.button<{ $selected?: boolean }>`
@@ -234,20 +233,20 @@ const ActionRow = styled.button<{ $selected?: boolean }>`
   gap: 0.75rem;
   padding: 0.65rem 1rem;
   border: none;
-  border-bottom: 1px solid var(--color-border);
-  background: ${p => (p.$selected ? 'var(--color-bg-subtle)' : 'transparent')};
-  color: var(--color-text);
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  background: ${p => (p.$selected ? p.theme.colors.bg1 : 'transparent')};
+  color: ${p => p.theme.colors.text};
   font-size: 0.875rem;
   cursor: pointer;
   text-align: left;
   transition: background 80ms;
 
   &:hover {
-    background: var(--color-bg-subtle);
+    background: ${p => p.theme.colors.bg1};
   }
 
   svg {
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
     flex-shrink: 0;
   }
 
@@ -257,12 +256,12 @@ const ActionRow = styled.button<{ $selected?: boolean }>`
 `;
 
 const ActionShortcut = styled.kbd`
-  background: var(--color-bg-subtle);
-  border: 1px solid var(--color-border);
+  background: ${p => p.theme.colors.bg1};
+  border: 1px solid ${p => p.theme.colors.bg2};
   border-radius: 0.2rem;
   padding: 0.1rem 0.3rem;
   font-size: 0.7rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-family: inherit;
 `;
 
@@ -273,16 +272,16 @@ const AIChatRow = styled.button<{ $selected?: boolean }>`
   gap: 0.75rem;
   padding: 0.75rem 1rem;
   border: none;
-  border-bottom: 1px solid var(--color-border);
-  background: ${p => (p.$selected ? 'var(--color-bg-subtle)' : 'transparent')};
-  color: var(--color-text);
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  background: ${p => (p.$selected ? p.theme.colors.bg1 : 'transparent')};
+  color: ${p => p.theme.colors.text};
   font-size: 0.875rem;
   cursor: pointer;
   text-align: left;
   transition: background 80ms;
 
   &:hover {
-    background: var(--color-bg-subtle);
+    background: ${p => p.theme.colors.bg1};
   }
 
   span {
@@ -290,7 +289,7 @@ const AIChatRow = styled.button<{ $selected?: boolean }>`
   }
 
   svg {
-    color: var(--color-accent);
+    color: ${p => p.theme.colors.main};
     flex-shrink: 0;
   }
 `;
@@ -710,14 +709,14 @@ const ResultRowWrapper = styled.div<{ $selected?: boolean }>`
   width: 100%;
   cursor: pointer;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--color-border);
-  background: ${p => (p.$selected ? 'var(--color-bg-subtle)' : 'transparent')};
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  background: ${p => (p.$selected ? p.theme.colors.bg1 : 'transparent')};
   transition: background 80ms;
 `;
 
 const ResultHintLine = styled.div`
   margin-top: 0.35rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.75rem;
   line-height: 1.35;
   overflow: hidden;
@@ -725,13 +724,13 @@ const ResultHintLine = styled.div`
   white-space: nowrap;
 
   strong {
-    color: var(--color-text);
+    color: ${p => p.theme.colors.text};
     font-weight: 600;
   }
 
   mark {
     border-radius: 0.15rem;
-    background: ${withAlpha('var(--color-accent)', 0.13)};
+    background: ${p => p.theme.colors.main}22;
     color: inherit;
     font-weight: 600;
   }
@@ -788,7 +787,7 @@ const ShortcutRow = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 0.5rem 1rem;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
   font-size: 0.875rem;
 
   &:last-child {
@@ -797,16 +796,16 @@ const ShortcutRow = styled.div`
 `;
 
 const ShortcutLabel = styled.span`
-  color: var(--color-text);
+  color: ${p => p.theme.colors.text};
 `;
 
 const ShortcutKey = styled.kbd`
-  background: var(--color-bg-subtle);
-  border: 1px solid var(--color-border);
+  background: ${p => p.theme.colors.bg1};
+  border: 1px solid ${p => p.theme.colors.bg2};
   border-radius: 0.25rem;
   padding: 0.15rem 0.4rem;
   font-size: 0.75rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-family: inherit;
 `;
 
@@ -879,7 +878,7 @@ const ShortcutsList = styled.div`
 
 const NoShortcutsFound = styled.div`
   padding: 1rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.875rem;
 `;
 

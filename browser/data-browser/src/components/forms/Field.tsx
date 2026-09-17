@@ -5,6 +5,7 @@ import { Collapse } from '../Collapse';
 import { IconButton, IconButtonVariant } from '../IconButton/IconButton';
 import { Flex, Row } from '../Row';
 import { ErrMessage } from './InputStyles';
+import { complement } from 'polished';
 
 interface FieldProps {
   /** Label */
@@ -142,18 +143,18 @@ Field.Label = FieldLabel;
 
 const Astrisk = styled(FaAsterisk)`
   margin-bottom: 0.5em;
-  color: var(--accent-complementary);
+  color: ${p => complement(p.theme.colors.main)};
 `;
 
 export const FieldHelper = styled.div`
   font-size: 0.9em;
-  color: var(--color-text-subtle);
+  color: ${props => props.theme.colors.textLight};
 `;
 
 Field.Helper = FieldHelper;
 
 const LabelWrapper = styled.div`
-  margin-bottom: var(--space-2);
+  margin-bottom: ${p => p.theme.size(2)};
 `;
 
 export default Field;

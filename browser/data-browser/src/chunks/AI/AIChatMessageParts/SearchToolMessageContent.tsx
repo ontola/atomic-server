@@ -91,19 +91,19 @@ export function SearchToolMessageContent({
 }
 
 const Outer = styled(Column)`
-  padding: var(--space-3);
-  background-color: var(--color-bg);
-  border-radius: var(--radius-md);
+  padding: ${p => p.theme.size()};
+  background-color: ${p => p.theme.colors.bg};
+  border-radius: ${p => p.theme.radius};
   max-width: 100%;
 `;
 
 const QueryLine = styled(Row)`
   font-size: 0.8em;
   line-height: 1.45;
-  color: var(--color-text-subtle);
-  padding-bottom: var(--space-3);
+  color: ${p => p.theme.colors.textLight};
+  padding-bottom: ${p => p.theme.size()};
   margin-bottom: 2px;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
   width: 100%;
 `;
 
@@ -139,8 +139,8 @@ const QueryText = styled.span`
 
 const ListItem = styled(Column)`
   gap: 0.35em;
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--color-border);
+  padding-bottom: ${p => p.theme.size()};
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
 
   &:last-child {
     padding-bottom: 0;
@@ -151,26 +151,26 @@ const ListItem = styled(Column)`
 const ResultTitle = styled.div`
   font-weight: 600;
   font-size: 0.85em;
-  color: var(--color-text);
+  color: ${p => p.theme.colors.text};
 `;
 
 const ResultChunk = styled.div`
   font-size: 0.75em;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   white-space: pre-wrap;
   word-break: break-word;
 `;
 
 const EmptyHint = styled.div`
-  padding: var(--space-3);
+  padding: ${p => p.theme.size()};
   font-size: 0.75em;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const FallbackPre = styled.pre`
-  background-color: var(--color-bg);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
+  background-color: ${p => p.theme.colors.bg};
+  padding: ${p => p.theme.size()};
+  border-radius: ${p => p.theme.radius};
   overflow-x: auto;
   code {
     font-family: Monaco, monospace;

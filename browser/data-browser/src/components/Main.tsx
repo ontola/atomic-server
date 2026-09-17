@@ -30,7 +30,7 @@ const StyledMain = memo(styled.main<ViewTransitionProps>`
   ${p => transitionName(RESOURCE_PAGE_TRANSITION_TAG, p.subject)};
   height: ${CalculatedPageHeight.var()};
   overflow-y: auto;
-  scroll-padding: var(--space-2);
+  scroll-padding: ${p => p.theme.size(2)};
 
   width: 100cqw;
 

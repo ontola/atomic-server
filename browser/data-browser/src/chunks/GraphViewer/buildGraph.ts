@@ -1,6 +1,7 @@
 import { core, Datatype, Resource, Store } from '@tomic/react';
 import { Node, Edge, MarkerType } from 'reactflow';
 import { randomString } from '../../helpers/randomString';
+import { DefaultTheme } from 'styled-components';
 
 const RELEVANT_DATATYPES = [Datatype.ATOMIC_URL, Datatype.RESOURCEARRAY];
 
@@ -170,14 +171,17 @@ export async function buildGraph(
   return [nodes, edges];
 }
 
-export function applyNodeStyling(nodes: Node<NodeData>[]): Node<NodeData>[] {
+export function applyNodeStyling(
+  nodes: Node<NodeData>[],
+  theme: DefaultTheme,
+): Node<NodeData>[] {
   return nodes.map(node => ({
     ...node,
     style: {
       ...node.style,
-      backgroundColor: 'var(--color-bg)',
-      borderColor: 'var(--color-border)',
-      color: 'var(--color-text)',
+      backgroundColor: theme.colors.bg,
+      borderColor: theme.colors.bg2,
+      color: theme.colors.text,
       borderStyle: node.data.external ? 'dashed' : 'solid',
       opacity: node.data.external ? 0.7 : 1,
     },

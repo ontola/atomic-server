@@ -45,7 +45,7 @@ const Wrapper = styled.div`
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: var(--color-accent);
+  color: ${p => p.theme.colors.main};
 `;
 
 const StyledLink = styled(SimpleResourceLink)`

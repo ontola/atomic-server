@@ -1,6 +1,6 @@
 import { PropsWithChildren } from 'react';
 import { styled, keyframes } from 'styled-components';
-import { withAlpha } from '../styles/withAlpha';
+import { transparentize } from 'polished';
 
 const sweep = keyframes`
   from {
@@ -39,7 +39,7 @@ const Wrapper = styled.span`
   display: inline-block;
   overflow: hidden;
   isolation: isolate;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   height: fit-content;
   &[data-active='true']::after {
     content: '';
@@ -51,18 +51,18 @@ const Wrapper = styled.span`
       transparent 0%,
       ${p =>
           p.theme.darkMode
-            ? withAlpha('var(--color-bg)', 1)
-            : withAlpha('var(--color-accent)', 0.15)}
+            ? transparentize(0, p.theme.colors.bg)
+            : transparentize(0.85, p.theme.colors.main)}
         45%,
       ${p =>
           p.theme.darkMode
-            ? withAlpha('var(--color-bg)', 1)
-            : withAlpha('var(--color-accent)', 0.3)}
+            ? transparentize(0, p.theme.colors.bg)
+            : transparentize(0.7, p.theme.colors.main)}
         50%,
       ${p =>
           p.theme.darkMode
-            ? withAlpha('var(--color-bg)', 1)
-            : withAlpha('var(--color-accent)', 0.15)}
+            ? transparentize(0, p.theme.colors.bg)
+            : transparentize(0.85, p.theme.colors.main)}
         55%,
       transparent 100%
     );

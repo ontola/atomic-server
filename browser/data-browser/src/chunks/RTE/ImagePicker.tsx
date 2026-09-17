@@ -279,8 +279,8 @@ type ImageProps = SelectableProps & {
 const StyledImage = styled.img<ImageProps>`
   max-width: 100%;
   height: auto;
-  border-radius: var(--radius-md);
-  margin-bottom: var(--space-3);
+  border-radius: ${p => p.theme.radius};
+  margin-bottom: ${p => p.theme.size()};
 
   float: ${p => p.float};
   margin-left: ${p => (p.float === 'right' ? '1rem' : '0')};
@@ -290,7 +290,7 @@ const StyledImage = styled.img<ImageProps>`
 
   .tiptap:focus-within & {
     box-shadow: 0 0 0 2px
-      ${p => (p.selected ? 'var(--color-accent)' : 'transparent')};
+      ${p => (p.selected ? p.theme.colors.main : 'transparent')};
     filter: ${p => (p.selected ? 'brightness(0.9)' : 'none')};
   }
 
@@ -309,47 +309,47 @@ const StyledImage = styled.img<ImageProps>`
 
 const Wrapper = styled.div<SelectableProps>`
   border: 2px dashed
-    ${p => (p.selected ? 'var(--color-accent)' : 'var(--color-border)')};
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  margin-bottom: var(--space-3);
+    ${p => (p.selected ? p.theme.colors.main : p.theme.colors.bg2)};
+  border-radius: ${p => p.theme.radius};
+  padding: ${p => p.theme.size()};
+  margin-bottom: ${p => p.theme.size()};
 `;
 
 const ColumnGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
+  gap: ${p => p.theme.size()};
 `;
 
 const TextArea = styled.textarea`
   width: 100%;
-  color: var(--color-text);
-  background-color: var(--color-bg);
-  padding: var(--space-2);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
+  color: ${p => p.theme.colors.text};
+  background-color: ${p => p.theme.colors.bg};
+  padding: ${p => p.theme.margin / 2}rem;
+  border-radius: ${p => p.theme.radius};
+  border: 1px solid ${p => p.theme.colors.bg2};
   font-size: 1rem;
   font-family: inherit;
   resize: vertical;
   min-height: 5rem;
   &:focus {
-    border-color: var(--color-accent);
-    outline-color: var(--color-accent);
+    border-color: ${p => p.theme.colors.main};
+    outline-color: ${p => p.theme.colors.main};
   }
 `;
 
 const StyledInputWrapper = styled(InputWrapper)`
   flex: unset;
   &:has(:user-invalid) {
-    border-color: var(--color-alert) !important;
+    border-color: ${p => p.theme.colors.alert} !important;
   }
 `;
 
 const ImageError = styled.div<SelectableProps>`
-  background-color: var(--color-bg-subtle);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  color: var(--color-text-subtle);
+  background-color: ${p => p.theme.colors.bg1};
+  padding: ${p => p.theme.size()};
+  border-radius: ${p => p.theme.radius};
+  color: ${p => p.theme.colors.textLight};
   width: 50%;
   aspect-ratio: 1/1;
   display: grid;
@@ -360,21 +360,21 @@ const ImageError = styled.div<SelectableProps>`
 
   .tiptap:focus-within & {
     box-shadow: 0 0 0 2px
-      ${p => (p.selected ? 'var(--color-accent)' : 'transparent')};
+      ${p => (p.selected ? p.theme.colors.main : 'transparent')};
     filter: ${p => (p.selected ? 'brightness(0.9)' : 'none')};
   }
 `;
 
 const StyledFigure = styled.figure`
   margin: 0;
-  margin-bottom: var(--space-3);
+  margin-bottom: ${p => p.theme.size()};
   ${StyledImage} {
     margin-bottom: 0;
   }
 
   figcaption {
     font-size: 0.875rem;
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
   }
 `;
 

@@ -25,11 +25,11 @@ function FilePill({ subject }: FilePillProps): JSX.Element {
 
 const FilePillStyled = styled.div`
   display: inline-flex;
-  border: solid 1px var(--color-accent);
-  border-radius: var(--radius-md);
+  border: solid 1px ${t => t.theme.colors.main};
+  border-radius: ${t => t.theme.radius};
   padding: 0.4rem;
-  margin-bottom: var(--space-3);
-  margin-right: var(--space-3);
+  margin-bottom: ${t => t.theme.margin}rem;
+  margin-right: ${t => t.theme.margin}rem;
 `;
 
 export default FilePill;

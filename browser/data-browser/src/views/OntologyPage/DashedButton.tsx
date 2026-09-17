@@ -10,16 +10,16 @@ export const DashedButton = styled.button<{ buttonHeight?: string }>`
   gap: 1ch;
   appearance: none;
   background: none;
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-md);
-  color: var(--color-text-subtle);
+  border: 1px dashed ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
+  color: ${p => p.theme.colors.textLight};
   cursor: pointer;
   ${transition('background', 'color', 'border-color', 'border-style')}
   &:hover,
   &:focus-visible {
-    background: var(--color-bg);
-    border-color: var(--color-accent);
-    color: var(--color-accent);
+    background: ${p => p.theme.colors.bg};
+    border-color: ${p => p.theme.colors.main};
+    color: ${p => p.theme.colors.main};
     border-style: solid;
   }
 `;

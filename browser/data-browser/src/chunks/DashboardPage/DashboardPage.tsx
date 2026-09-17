@@ -122,7 +122,7 @@ const Grid = styled.div`
   display: grid;
   grid-template-columns: repeat(${GRID_COLUMNS}, 1fr);
   grid-auto-rows: minmax(7rem, auto);
-  gap: var(--space-2);
+  gap: ${p => p.theme.size(2)};
   align-items: stretch;
 
   /* One column when there isn't room: a 3-of-12 stat block is unreadable at
@@ -134,5 +134,5 @@ const Grid = styled.div`
 `;
 
 const Empty = styled.p`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;

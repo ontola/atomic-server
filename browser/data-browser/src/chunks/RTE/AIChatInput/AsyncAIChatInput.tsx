@@ -350,24 +350,24 @@ const Toolbar = styled(Row)`
   width: 100%;
   min-width: 0;
   overflow: hidden;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const EditorWrapper = styled(EditorWrapperBase)<{ $large?: boolean }>`
-  padding: var(--space-2);
+  padding: ${p => p.theme.size(2)};
   font-size: 16px;
   line-height: 1.5;
   flex: unset !important;
   min-height: ${p => (p.$large ? '8rem' : 'none')};
   .ai-chat-mention {
-    background-color: var(--color-accent-subtle);
-    color: var(--color-accent-text);
+    background-color: ${p => p.theme.colors.mainSelectedBg};
+    color: ${p => p.theme.colors.mainSelectedFg};
     border-radius: 5px;
-    padding-inline: var(--space-1);
+    padding-inline: ${p => p.theme.size(1)};
   }
 
   .ai-chat-skill-mention {
-    color: var(--color-accent);
+    color: ${p => p.theme.colors.main};
   }
 `;
 

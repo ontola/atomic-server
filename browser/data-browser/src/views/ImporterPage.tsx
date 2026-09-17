@@ -128,8 +128,8 @@ const Group = styled.div`
   padding: 1rem;
   flex-direction: column;
   gap: 1rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
 `;
 
 const Header = styled.h2`

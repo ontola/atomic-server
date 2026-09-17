@@ -89,13 +89,13 @@ const DemoStatus = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-5);
+  gap: ${p => p.theme.size(5)};
   max-width: 24rem;
   text-align: center;
 
   p {
     margin: 0;
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
   }
 `;
 

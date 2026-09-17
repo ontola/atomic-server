@@ -85,7 +85,7 @@ export const PropValRow = styled.div<PropValRowProps>`
   @container ${ALL_PROPS_CONTAINER} (min-width: 500px) {
     &:has(.${JSON_RENDERER_CLASS}) {
       grid-template-columns: 1fr;
-      gap: var(--space-2);
+      gap: 0.5rem;
     }
 
     grid-template-columns: 23ch auto;
@@ -95,16 +95,16 @@ export const PropValRow = styled.div<PropValRowProps>`
 
 /** The label column of a property row: secondary to the value it introduces. */
 export const PropertyLabel = styled.span`
-  font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-subtle);
+  font-weight: ${p => p.theme.fontWeight.medium};
+  font-size: ${p => p.theme.fontSize.sm};
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const StyledLoader = styled(LoaderInline)`
   grid-column: 1 / 3;
-  margin-inline: var(--space-3);
-  margin-block: var(--space-2);
-  width: calc(100% - var(--space-7));
+  margin-inline: 1rem;
+  margin-block: 0.5rem;
+  width: calc(100% - 2rem);
 `;
 
 interface PropValRowProps {

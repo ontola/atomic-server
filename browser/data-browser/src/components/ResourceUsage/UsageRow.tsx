@@ -33,10 +33,10 @@ const ListItem = styled.li`
   align-items: center;
   list-style: none;
   padding: 0.5rem 1rem;
-  border-radius: var(--radius-md);
+  border-radius: ${({ theme }) => theme.radius};
   margin: 0;
   height: 3rem;
   &:nth-child(odd) {
-    background-color: var(--color-bg-subtle);
+    background-color: ${({ theme }) => theme.colors.bg1};
   }
 `;

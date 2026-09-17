@@ -1,5 +1,5 @@
 import { urls, useResource, useString, useTitle } from '@tomic/react';
-import { setLightness, setSaturation, transparentize } from 'polished';
+import { lighten, setLightness, setSaturation, transparentize } from 'polished';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { useCallback, useMemo, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
@@ -188,17 +188,17 @@ const TagWrapperButton = styled(TagWrapper)`
 
 const PopoverContent = styled.div`
   padding: 1rem;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
+  border-radius: ${p => p.theme.radius};
+  border: 1px solid ${p => p.theme.colors.bg2};
   max-width: 20rem;
 `;
 
 const DeleteButton = styled(Button)`
-  background-color: var(--color-alert);
+  background-color: ${p => p.theme.colors.alert};
   border: none;
 
   &:hover,
   &:focus {
-    background-color: var(--color-alert-subtle) !important;
+    background-color: ${p => lighten(0.1, p.theme.colors.alert)} !important;
   }
 `;

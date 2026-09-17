@@ -30,7 +30,7 @@ interface TableRowProps {
 }
 
 const WarningIcon = styled(FaTriangleExclamation)`
-  color: var(--color-warning);
+  color: ${p => p.theme.colors.warning};
 `;
 
 const TableCellMemo = memo(TableCell);
@@ -272,7 +272,7 @@ interface LoaderProps {
 
 const Loader = styled.div<LoaderProps>`
   width: 100%;
-  --from-color: var(--color-bg);
-  --to-color: var(--color-bg-subtle);
+  --from-color: ${p => p.theme.colors.bg};
+  --to-color: ${p => p.theme.colors.bg1};
   animation: 0.8s ${p => p.delay}ms ease-in-out infinite alternate ${pulse};
 `;

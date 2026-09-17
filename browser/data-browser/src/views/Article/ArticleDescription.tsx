@@ -88,21 +88,21 @@ const EditButton = styled(IconButton)`
 
 const AddContentButton = styled.button`
   width: 100%;
-  border: 1px solid var(--color-border);
-  background-color: var(--color-bg-body);
-  border-radius: var(--radius-md);
+  border: 1px solid ${({ theme }) => theme.colors.bg2};
+  background-color: ${({ theme }) => theme.colors.bgBody};
+  border-radius: ${({ theme }) => theme.radius};
   height: 25rem;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 1ch;
-  color: var(--color-text-subtle);
+  color: ${({ theme }) => theme.colors.textLight};
   cursor: pointer;
   ${transition('border-color', 'color')};
 
   &:hover,
   &:focus {
-    border-color: var(--color-accent);
-    color: var(--color-accent);
+    border-color: ${({ theme }) => theme.colors.main};
+    color: ${({ theme }) => theme.colors.main};
   }
 `;

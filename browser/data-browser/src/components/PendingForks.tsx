@@ -75,8 +75,8 @@ export function PendingForks({
 
 /** A bar spanning the view it sits above, matching the ForkBar. */
 const Wrapper = styled.aside`
-  background-color: var(--color-bg-subtle);
-  border-bottom: 1px solid var(--color-border);
-  padding: var(--space-2) 0;
-  margin-bottom: var(--space-2);
+  background-color: ${p => p.theme.colors.bg1};
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  padding: ${p => p.theme.size(2)} 0;
+  margin-bottom: ${p => p.theme.size(2)};
 `;

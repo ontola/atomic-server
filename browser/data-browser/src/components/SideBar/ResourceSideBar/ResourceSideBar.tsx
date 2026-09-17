@@ -28,8 +28,8 @@ import { SidebarItemTitle } from './SidebarItemTitle';
 import { TextWrapper } from './shared';
 import { DropEdge } from './DropEdge';
 import { SideBarDragData, SideBarDropData } from '../useSidebarDnd';
+import { transparentize } from 'polished';
 import { transition } from '../../../helpers/transition';
-import { withAlpha } from '../../../styles/withAlpha';
 
 interface ResourceSideBarProps {
   subject: string;
@@ -267,9 +267,9 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
 
 const Wrapper = styled.div<{ highlight: boolean }>`
   background-color: ${p =>
-    p.highlight ? withAlpha('var(--color-accent)', 0.1) : 'none'};
+    p.highlight ? transparentize(0.9, p.theme.colors.main) : 'none'};
 
-  border-radius: var(--radius-md);
+  border-radius: ${({ theme }) => theme.radius};
   ${transition('background-color')}
 `;
 

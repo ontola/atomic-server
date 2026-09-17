@@ -458,7 +458,7 @@ function CustomChoice({
 
 const CatalogContainer = styled(ContainerWide)`
   [data-creation-result][data-selected='true'] {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid ${p => p.theme.colors.main};
     outline-offset: 2px;
   }
   max-width: 72rem;
@@ -468,19 +468,19 @@ const CatalogContainer = styled(ContainerWide)`
   }
 `;
 const Destination = styled(Row)`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   gap: 0.45rem;
 `;
 const Composer = styled.form`
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
   padding: 0.6rem 0.75rem;
-  background: var(--color-bg);
+  background: ${p => p.theme.colors.bg};
   &:focus-within {
-    border-color: var(--color-accent);
+    border-color: ${p => p.theme.colors.main};
   }
 `;
 const PromptInput = styled(TextAreaStyled)`
@@ -508,15 +508,15 @@ const ClearSearch = styled.button`
   height: 2rem;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   background: transparent;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   cursor: pointer;
   &:hover {
-    color: var(--color-accent);
+    color: ${p => p.theme.colors.main};
   }
   &:focus-visible {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid ${p => p.theme.colors.main};
   }
 `;
 const SearchInput = styled(InputWrapper)`
@@ -556,7 +556,7 @@ const BasicChoice = styled(Button)`
   padding: 0.65rem 0.85rem;
   gap: 0.55rem;
   svg {
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
   }
 `;
 const TemplateGrid = styled.div`
@@ -579,22 +579,22 @@ const CardHeading = styled.span`
   display: flex;
   align-items: center;
   gap: 0.7rem;
-  color: var(--color-text);
+  color: ${p => p.theme.colors.text};
   svg {
     flex-shrink: 0;
     font-size: 1.3rem;
-    color: var(--color-accent);
+    color: ${p => p.theme.colors.main};
   }
 `;
 const CardDescription = styled.span`
   font-weight: normal;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   line-height: 1.5;
   font-size: 0.9rem;
 `;
 const Kind = styled.span`
   font-size: 0.75rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-weight: normal;
   margin-top: auto;
   padding-top: 0.25rem;

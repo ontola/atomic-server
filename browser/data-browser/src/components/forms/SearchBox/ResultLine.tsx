@@ -96,7 +96,7 @@ function Icon({ resource }: IconProps): React.ReactElement {
 
 const Description = styled.span`
   white-space: nowrap;
-  color: var(--color-text-subtle);
+  color: ${({ theme }) => theme.colors.textLight};
   grid-column: 2/2;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -105,7 +105,7 @@ const Description = styled.span`
 export const ListItem = styled.li<{ selected: boolean; gridColumn?: string }>`
   --list-item-bg: none;
   --list-item-color: currentColor;
-  --list-item-svg-color: var(--color-text-subtle);
+  --list-item-svg-color: ${({ theme }) => theme.colors.textLight};
 
   background-color: var(--list-item-bg);
   color: var(--list-item-color);
@@ -113,7 +113,7 @@ export const ListItem = styled.li<{ selected: boolean; gridColumn?: string }>`
   padding: 0.5rem;
   list-style: none;
   margin: 0;
-  padding-left: var(--space-3);
+  padding-left: ${({ theme }) => theme.size()};
   width: 100cqw;
   white-space: nowrap;
   display: grid;
@@ -138,8 +138,8 @@ export const ListItem = styled.li<{ selected: boolean; gridColumn?: string }>`
   ${({ selected, theme }) =>
     selected &&
     css`
-      --list-item-bg: var(--color-accent-subtle);
-      --list-item-color: var(--color-accent-text);
+      --list-item-bg: ${theme.colors.mainSelectedBg};
+      --list-item-color: ${theme.colors.mainSelectedFg};
       --list-item-svg-color: var(--list-item-color);
 
       @media (prefers-contrast: more) {

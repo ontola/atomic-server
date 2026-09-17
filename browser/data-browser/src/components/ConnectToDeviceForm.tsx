@@ -88,12 +88,12 @@ const CodeForm = styled.form`
 `;
 
 const CodeInput = styled.input`
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
   padding: 0.5rem 0.6rem;
   font-size: 0.85rem;
-  background: var(--color-bg);
-  color: var(--color-text);
+  background: ${p => p.theme.colors.bg};
+  color: ${p => p.theme.colors.text};
   width: 100%;
   box-sizing: border-box;
 `;

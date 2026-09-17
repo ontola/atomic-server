@@ -71,15 +71,15 @@ Tabs.Panel = TabPanel;
 const TabList = styled(RadixTabs.List)`
   display: flex;
   justify-content: space-evenly;
-  margin-bottom: var(--space-3);
+  margin-bottom: ${p => p.theme.size()};
 `;
 
 const TabButton = styled(RadixTabs.Trigger)`
-  --tab-active-color: var(--color-accent);
+  --tab-active-color: ${p => p.theme.colors.main};
   background: none;
   border: none;
-  color: var(--color-text);
-  border-bottom: 1px solid var(--color-border);
+  color: ${p => p.theme.colors.text};
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
   padding: 1rem;
   flex: 1;
   ${transition('background', 'border-color', 'box-shadow')}
@@ -87,7 +87,7 @@ const TabButton = styled(RadixTabs.Trigger)`
   &:hover,
   &:focus-visible {
     outline: none;
-    background: var(--color-bg-subtle);
+    background: ${p => p.theme.colors.bg1};
   }
 
   &[data-state='active'] {
@@ -97,22 +97,22 @@ const TabButton = styled(RadixTabs.Trigger)`
   }
 
   &.${TAB_PANEL_HAS_ERROR_CLASS} {
-    --tab-active-color: var(--color-alert);
+    --tab-active-color: ${p => p.theme.colors.alert};
   }
 
   &.rounded-tab:first-child {
-    border-top-left-radius: var(--radius-md);
+    border-top-left-radius: ${p => p.theme.radius};
   }
 
   &.rounded-tab:last-child {
-    border-top-right-radius: var(--radius-md);
+    border-top-right-radius: ${p => p.theme.radius};
   }
 `;
 
 const StyledTabsRoot = styled(RadixTabs.Root)`
   &:has(*.${TAB_PANEL_HAS_ERROR_CLASS}) {
     & ${TabButton} {
-      --tab-active-color: var(--color-alert);
+      --tab-active-color: ${p => p.theme.colors.alert};
     }
   }
 `;

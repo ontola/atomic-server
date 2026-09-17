@@ -40,13 +40,13 @@ export function ContentLanguageSelect(): JSX.Element | null {
 const LanguageSelect = styled.select`
   border: none;
   background: none;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.85rem;
   cursor: pointer;
   align-self: center;
 
   &:hover,
   &:focus-visible {
-    color: var(--color-text);
+    color: ${p => p.theme.colors.text};
   }
 `;

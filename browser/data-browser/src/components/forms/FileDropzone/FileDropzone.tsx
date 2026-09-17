@@ -93,12 +93,12 @@ const VisualDropzone = styled.div`
   background-color: ${p =>
     p.theme.darkMode ? 'rgba(0, 0, 0, 0.8)' : 'rgba(255, 255, 255, 0.8)'};
   backdrop-filter: blur(10px);
-  border: 3px dashed var(--color-text-subtle);
-  border-radius: var(--radius-md);
+  border: 3px dashed ${p => p.theme.colors.textLight};
+  border-radius: ${p => p.theme.radius};
   display: grid;
   place-items: center;
   font-size: 1.8rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   animation: 0.1s ${fadeIn} ease-in;
 `;
 
@@ -106,5 +106,5 @@ const TextWrapper = styled.div`
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: var(--space-3);
+  padding: ${p => p.theme.margin}rem;
 `;

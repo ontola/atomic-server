@@ -359,7 +359,7 @@ function InfoHint({ title }: { title: string }) {
 const InfoHintIcon = styled.span`
   display: inline-flex;
   align-items: center;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   cursor: help;
   font-size: 0.9rem;
 `;

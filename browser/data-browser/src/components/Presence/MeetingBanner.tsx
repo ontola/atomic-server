@@ -202,7 +202,7 @@ const LiveDot = styled.i`
   border-radius: 50%;
   background: #ff4d4d;
   /* Ring in the bar's colour so the dot stays legible over the icon. */
-  box-shadow: 0 0 0 2px var(--color-bg);
+  box-shadow: 0 0 0 2px ${p => p.theme.colors.bg};
   animation: ${pulse} 2s ease-in-out infinite;
 
   @media (prefers-reduced-motion: reduce) {
@@ -224,6 +224,6 @@ const JoinTag = styled.span`
   padding: 0.05rem 0.55rem;
   font-size: 0.8rem;
   font-weight: 700;
-  background: var(--color-accent);
+  background: ${p => p.theme.colors.main};
   color: white;
 `;

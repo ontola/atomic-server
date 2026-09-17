@@ -182,7 +182,7 @@ const Popover = styled.div<{ anchorName: string }>`
   }
 
   ${floatingSurface}
-  animation: ${floatingSurfaceAppear} var(--duration-fast)
+  animation: ${floatingSurfaceAppear} ${p => p.theme.animation.duration}
     ease-in-out;
   margin: 0;
   padding: 0;

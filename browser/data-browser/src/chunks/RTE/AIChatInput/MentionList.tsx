@@ -262,9 +262,9 @@ const isSkillSuggestion = (item: SearchSuggestion): item is SkillSuggestion => {
 };
 
 const DropdownMenu = styled.div`
-  background: var(--color-bg);
+  background: ${p => p.theme.colors.bg};
   border-radius: 0.7rem;
-  box-shadow: var(--elevation-3);
+  box-shadow: ${p => p.theme.boxShadowIntense};
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
@@ -277,18 +277,18 @@ const DropdownMenu = styled.div`
     background: transparent;
     appearance: none;
     border: none;
-    border-radius: var(--radius-md);
+    border-radius: ${p => p.theme.radius};
     display: flex;
     align-items: center;
-    gap: var(--space-1);
+    gap: ${p => p.theme.size(1)};
     text-align: left;
     width: 100%;
     padding: 0.5rem;
     cursor: pointer;
 
     &.is-selected {
-      background-color: var(--color-accent-subtle);
-      color: var(--color-accent-text);
+      background-color: ${p => p.theme.colors.mainSelectedBg};
+      color: ${p => p.theme.colors.mainSelectedFg};
     }
   }
 `;
@@ -303,14 +303,14 @@ const SkillItemContent = styled.span`
 
 const SkillDescription = styled.span`
   font-size: 0.8rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 40ch;
 
   button.is-selected & {
-    color: var(--color-accent-text);
+    color: ${p => p.theme.colors.mainSelectedFg};
     opacity: 0.8;
   }
 `;

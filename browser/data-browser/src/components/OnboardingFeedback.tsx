@@ -14,5 +14,5 @@ const Corner = styled.div`
   position: fixed;
   right: max(1rem, env(safe-area-inset-right));
   bottom: max(1rem, env(safe-area-inset-bottom));
-  z-index: var(--z-sidebar);
+  z-index: ${p => p.theme.zIndex.sidebar};
 `;

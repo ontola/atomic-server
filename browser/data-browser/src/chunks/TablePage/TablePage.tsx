@@ -78,5 +78,5 @@ export function TablePage({ resource }: ResourcePageProps): JSX.Element {
  * empty space you can scroll the table's header row out of view to reach.
  */
 const BoundedHeightContainer = styled(ContainerFull)`
-  padding-bottom: var(--space-3);
+  padding-bottom: ${p => p.theme.size()};
 `;

@@ -2,7 +2,7 @@ import { useDroppable } from '@dnd-kit/core';
 
 import { styled } from 'styled-components';
 import { transition } from '@helpers/transition';
-import { withAlpha } from '../../styles/withAlpha';
+import { transparentize } from 'polished';
 
 interface ReorderDropAreaProps {
   index: number;
@@ -20,7 +20,7 @@ export function ReorderDropArea({ index }: ReorderDropAreaProps) {
 const ReorderDropZone = styled.div<{ hover: boolean }>`
   --dropzone-width: 0.4rem;
   position: absolute;
-  background-color: var(--color-accent);
+  background-color: ${p => p.theme.colors.main};
   opacity: 0.4;
   width: var(--dropzone-width);
   height: min(
@@ -30,7 +30,7 @@ const ReorderDropZone = styled.div<{ hover: boolean }>`
   top: 0;
   left: calc(var(--dropzone-width) * 0.5 * -1);
   z-index: 10;
-  box-shadow: 0 0 7px 0 ${withAlpha('var(--color-accent)', 0.7)};
+  box-shadow: 0 0 7px 0 ${p => transparentize(0.3, p.theme.colors.main)};
   transform: scaleX(${p => (p.hover ? 1 : 0)});
   ${transition('transform', 'opacity')}
 `;

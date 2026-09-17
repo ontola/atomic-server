@@ -94,7 +94,7 @@ const ShellSurface = styled.div.attrs(({ theme }) => ({
      ends up half-hidden behind the nav bar (the welcome buttons were
      unreachable on a phone). The safe-area insets (needs viewport-fit=cover,
      set in index.html) pad the content back into the visible region. */
-  padding: calc(1.5rem + env(safe-area-inset-top, 0px)) var(--space-5)
+  padding: calc(1.5rem + env(safe-area-inset-top, 0px)) ${p => p.theme.size(5)}
     calc(5.5rem + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
 `;
@@ -103,11 +103,11 @@ const cardSurface = css`
   box-sizing: border-box;
   width: 100%;
   margin-inline: auto;
-  padding: var(--space-7);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-subtle);
-  box-shadow: var(--elevation-2);
+  padding: ${p => p.theme.size(7)};
+  border-radius: ${p => p.theme.radius};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  background: ${p => p.theme.colors.bg1};
+  box-shadow: ${p => p.theme.boxShadowSoft};
   backdrop-filter: blur(10px);
 `;
 
@@ -117,7 +117,7 @@ export const Card = styled.div`
 `;
 
 export const CardTitle = styled.h2`
-  margin: 0 0 var(--space-6) 0;
+  margin: 0 0 ${p => p.theme.size(6)} 0;
   font-size: 1.4rem;
   font-weight: 700;
   line-height: 1.25;
@@ -125,16 +125,16 @@ export const CardTitle = styled.h2`
 `;
 
 export const CardSubtitle = styled.p`
-  margin: 0 0 var(--space-2) 0;
+  margin: 0 0 ${p => p.theme.size(2)} 0;
   font-size: 0.95rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   text-align: center;
 `;
 
 export const CardError = styled.p`
-  margin: var(--space-4) 0 0 0;
+  margin: ${p => p.theme.size(4)} 0 0 0;
   font-size: 0.9rem;
-  color: var(--color-alert);
+  color: ${p => p.theme.colors.alert};
 `;
 
 export const CtaButton = styled(Button)`
@@ -162,11 +162,11 @@ export const FooterBar = styled.div`
   width: 100%;
   max-width: 36rem;
   margin-inline: auto;
-  margin-top: var(--space-5);
+  margin-top: ${p => p.theme.size(5)};
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: ${p => p.theme.size(4)};
 `;
 
 export const BackLabel = styled.span`

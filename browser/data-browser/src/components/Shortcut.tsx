@@ -27,8 +27,8 @@ const Wrapper = styled.span`
 
 const KBD = styled.kbd`
   display: inline-block;
-  border: var(--color-border) solid 1px;
-  background-color: var(--color-bg-subtle);
+  border: ${p => p.theme.colors.bg2} solid 1px;
+  background-color: ${p => p.theme.colors.bg1};
   text-transform: capitalize;
   border-radius: 5px;
   font-family:

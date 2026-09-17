@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
-import { styled } from 'styled-components';
+import { styled, useTheme } from 'styled-components';
 import { constructOpenURL } from '../../helpers/navigation';
 import ResourceCard from '../../views/Card/ResourceCard';
 import { dataBrowser, useServerSearch } from '@tomic/react';
@@ -18,7 +18,7 @@ import { useSearchOverlay } from '../../components/Searchbar/SearchOverlayContex
 const OverlayBackdrop = styled.div`
   position: fixed;
   inset: 0;
-  z-index: var(--z-search-overlay);
+  z-index: ${p => p.theme.zIndex.searchOverlay};
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(6px);
   animation: fadeIn 100ms ease-out;
@@ -38,16 +38,16 @@ const CommandPalettePanel = styled.div`
   top: 15vh;
   left: 50%;
   transform: translateX(-50%);
-  z-index: var(--z-search-overlay);
+  z-index: ${p => p.theme.zIndex.searchOverlay};
   width: 100%;
   max-width: 38rem;
   max-height: 70vh;
   display: flex;
   flex-direction: column;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--elevation-1);
+  background: ${p => p.theme.colors.bg};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
+  box-shadow: ${p => p.theme.boxShadow};
   animation: slideIn 100ms ease-out;
   overflow: hidden;
 
@@ -68,10 +68,10 @@ const SearchInputWrapper = styled.div`
   align-items: center;
   gap: 0.75rem;
   padding: 0.875rem 1rem;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
 
   svg {
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
     flex-shrink: 0;
   }
 `;
@@ -82,21 +82,21 @@ const SearchInput = styled.input`
   border: none;
   outline: none;
   font-size: 1rem;
-  color: var(--color-text);
+  color: ${p => p.theme.colors.text};
   font-family: inherit;
 
   &::placeholder {
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
   }
 `;
 
 const ShortcutHint = styled.kbd`
-  background: var(--color-bg-subtle);
-  border: 1px solid var(--color-border);
+  background: ${p => p.theme.colors.bg1};
+  border: 1px solid ${p => p.theme.colors.bg2};
   border-radius: 0.25rem;
   padding: 0.1rem 0.35rem;
   font-size: 0.7rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-family: inherit;
 `;
 
@@ -117,8 +117,8 @@ const HeadingRow = styled.div`
   align-items: center;
   gap: 0.75rem;
   padding: 0.875rem 1rem;
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-text-subtle);
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.875rem;
 `;
 
@@ -128,12 +128,12 @@ const HeadingIcon = styled.span`
 `;
 
 const TagHeading = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-weight: bold;
 `;
 
 const HelperMessage = styled.p`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.875rem;
   padding: 0.75rem 1rem;
   line-height: 1.5;
@@ -144,9 +144,9 @@ const FooterRow = styled.div`
   align-items: center;
   justify-content: space-between;
   padding: 0.5rem 1rem;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid ${p => p.theme.colors.bg2};
   font-size: 0.75rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const FooterHints = styled.div`
@@ -407,6 +407,9 @@ const SelectableResult: React.FC<SelectableResultProps> = ({
   onClick,
 }) => {
   const ref = useRef<HTMLDivElement | null>(null);
+  // `var(--color-bg1)` was here, and no such custom property has ever been
+  // declared, so the selected row had no highlight at all.
+  const theme = useTheme();
 
   return (
     <div
@@ -414,7 +417,7 @@ const SelectableResult: React.FC<SelectableResultProps> = ({
       data-index={index}
       style={{
         borderRadius: '0.375rem',
-        background: selected ? 'var(--color-bg-subtle)' : 'transparent',
+        background: selected ? theme.colors.bg1 : 'transparent',
         cursor: 'pointer',
         transition: 'background 80ms',
       }}

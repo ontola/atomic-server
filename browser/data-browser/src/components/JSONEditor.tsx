@@ -15,7 +15,7 @@ export const JSONEditor: React.FC<JSONEditorProps> = props => {
 };
 
 const Loader = styled.div`
-  background-color: var(--color-bg);
-  border: 1px solid var(--color-border);
+  background-color: ${p => p.theme.colors.bg};
+  border: 1px solid ${p => p.theme.colors.bg2};
   height: 150px;
 `;

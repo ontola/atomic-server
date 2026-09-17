@@ -121,15 +121,13 @@ const FolderButton = styled.button<{ indented?: boolean; selected?: boolean }>`
   display: flex;
   align-items: center;
   gap: 1ch;
-  background-color: ${p =>
-    p.selected ? 'var(--color-bg-subtle)' : 'transparent'};
-  color: ${p =>
-    p.selected ? 'var(--color-accent)' : 'var(--color-text-subtle)'};
+  background-color: ${p => (p.selected ? p.theme.colors.bg1 : 'transparent')};
+  color: ${p => (p.selected ? p.theme.colors.main : p.theme.colors.textLight)};
   cursor: pointer;
   border: none;
   padding: 0.3rem 0.5rem;
   margin-inline-start: ${p => (p.indented ? '2rem' : '0')};
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   user-select: none;
   text-align: start;
 
@@ -138,7 +136,7 @@ const FolderButton = styled.button<{ indented?: boolean; selected?: boolean }>`
   }
 
   &:hover {
-    background-color: var(--color-bg-subtle);
-    color: ${p => (p.selected ? 'var(--color-accent)' : 'var(--color-text)')};
+    background-color: ${p => p.theme.colors.bg1};
+    color: ${p => (p.selected ? p.theme.colors.main : p.theme.colors.text)};
   }
 `;

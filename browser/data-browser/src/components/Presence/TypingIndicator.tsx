@@ -77,9 +77,9 @@ const Wrapper = styled.div`
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.15rem var(--space-2);
+  padding: 0.15rem ${p => p.theme.size(2)};
   min-height: 1.4rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.8rem;
 `;
 
@@ -99,7 +99,7 @@ const Label = styled.span`
 
   strong {
     font-weight: 600;
-    color: var(--color-text);
+    color: ${p => p.theme.colors.text};
   }
 `;
 

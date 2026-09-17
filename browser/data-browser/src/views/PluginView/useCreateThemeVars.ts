@@ -1,70 +1,68 @@
-import { resolveCssVars } from '../../styles/resolveTokens';
+import { useTheme } from 'styled-components';
 
 /**
  * Returns a stylesheet that adds all our theme variables to an iframe's document as css variables.
  */
 export function useCreateThemeVars() {
+  const theme = useTheme();
+
   const themeVars: Record<string, string> = {
-    '--t-container-width': `var(--container-width)`,
-    '--t-container-width-wide': 'var(--container-width-wide)',
-    '--t-sidebar-width': `var(--sidebar-width)`,
-    '--t-font-family': 'var(--font-family)',
-    '--t-font-family-header': 'var(--font-family-heading)',
-    '--t-font-size-body': `var(--font-size-base)`,
-    '--t-font-size-h1': `var(--font-size-3xl)`,
-    '--t-box-shadow': 'var(--elevation-1)',
-    '--t-box-shadow-intense': 'var(--elevation-3)',
-    '--t-box-shadow-soft': 'var(--elevation-2)',
-    '--t-radius': 'var(--radius-md)',
-    '--t-height-breadcrumb-bar': 'var(--height-breadcrumb-bar)',
-    '--t-height-full-page': '100%',
+    '--t-container-width': `${theme.containerWidth}rem`,
+    '--t-container-width-wide': theme.containerWidthWide,
+    '--t-sidebar-width': `${theme.sideBarWidth}rem`,
+    '--t-font-family': theme.fontFamily,
+    '--t-font-family-header': theme.fontFamilyHeader,
+    '--t-font-size-body': `${theme.fontSizeBody}rem`,
+    '--t-font-size-h1': `${theme.fontSizeH1}rem`,
+    '--t-box-shadow': theme.boxShadow,
+    '--t-box-shadow-intense': theme.boxShadowIntense,
+    '--t-box-shadow-soft': theme.boxShadowSoft,
+    '--t-radius': theme.radius,
+    '--t-height-breadcrumb-bar': theme.heights.breadCrumbBar,
+    '--t-height-full-page': theme.heights.fullPage,
     '--t-height-floating-search-bar-padding':
-      'var(--height-floating-search-bar)',
-    '--t-animation-duration': 'var(--duration-fast)',
+      theme.heights.floatingSearchBarPadding,
+    '--t-animation-duration': theme.animation.duration,
     // Colors
-    '--t-color-main': 'var(--color-accent)',
-    '--t-color-main-light': 'var(--color-accent-hover)',
-    '--t-color-main-dark': 'var(--color-accent-text)',
-    '--t-color-main-selected-bg': 'var(--color-accent-subtle)',
-    '--t-color-main-selected-fg': 'var(--color-accent-text)',
-    '--t-color-complementary': 'var(--accent-complementary)',
-    '--t-color-bg-body': 'var(--color-bg-body)',
-    '--t-color-bg': 'var(--color-bg)',
-    '--t-color-bg-1': 'var(--color-bg-subtle)',
-    '--t-color-bg-2': 'var(--color-border)',
-    '--t-color-text': 'var(--color-text)',
-    '--t-color-text-1': 'var(--color-text)',
-    '--t-color-text-light': 'var(--color-text-subtle)',
-    '--t-color-text-light-2': 'var(--color-text-subtle)',
-    '--t-color-alert': 'var(--color-alert)',
-    '--t-color-alert-light': 'var(--color-alert-subtle)',
-    '--t-color-warning': 'var(--color-warning)',
+    '--t-color-main': theme.colors.main,
+    '--t-color-main-light': theme.colors.mainLight,
+    '--t-color-main-dark': theme.colors.mainDark,
+    '--t-color-main-selected-bg': theme.colors.mainSelectedBg,
+    '--t-color-main-selected-fg': theme.colors.mainSelectedFg,
+    '--t-color-complementary': theme.colors.complementary,
+    '--t-color-bg-body': theme.colors.bgBody,
+    '--t-color-bg': theme.colors.bg,
+    '--t-color-bg-1': theme.colors.bg1,
+    '--t-color-bg-2': theme.colors.bg2,
+    '--t-color-text': theme.colors.text,
+    '--t-color-text-1': theme.colors.text1,
+    '--t-color-text-light': theme.colors.textLight,
+    '--t-color-text-light-2': theme.colors.textLight2,
+    '--t-color-alert': theme.colors.alert,
+    '--t-color-alert-light': theme.colors.alertLight,
+    '--t-color-warning': theme.colors.warning,
     // Spacing / Sizes
-    '--t-size-1': 'var(--space-1)',
-    '--t-size-2': 'var(--space-2)',
-    '--t-size-3': 'var(--space-3)',
-    '--t-size-4': 'var(--space-4)',
-    '--t-size-5': 'var(--space-5)',
-    '--t-size-6': 'var(--space-6)',
-    '--t-size-7': 'var(--space-7)',
-    '--t-size-8': 'var(--space-8)',
-    '--t-size-9': 'var(--space-9)',
-    '--t-size-10': 'var(--space-10)',
-    '--t-size-11': 'var(--space-11)',
-    '--t-size-12': 'var(--space-12)',
-    '--t-size-13': 'var(--space-13)',
-    '--t-size-14': 'var(--space-14)',
-    '--t-size-15': 'var(--space-15)',
+    '--t-size-1': theme.size(1),
+    '--t-size-2': theme.size(2),
+    '--t-size-3': theme.size(3),
+    '--t-size-4': theme.size(4),
+    '--t-size-5': theme.size(5),
+    '--t-size-6': theme.size(6),
+    '--t-size-7': theme.size(7),
+    '--t-size-8': theme.size(8),
+    '--t-size-9': theme.size(9),
+    '--t-size-10': theme.size(10),
+    '--t-size-11': theme.size(11),
+    '--t-size-12': theme.size(12),
+    '--t-size-13': theme.size(13),
+    '--t-size-14': theme.size(14),
+    '--t-size-15': theme.size(15),
   };
 
-  // The theme now holds `var(--token)` references, and the iframe this
-  // stylesheet is injected into has no `:root` carrying them. Resolve on the
-  // way out so the plugin gets colours; the `--t-*` contract plugins are
-  // written against is unchanged.
   return `
   :root {
     ${Object.entries(themeVars)
-      .map(([key, value]) => `${key}: ${resolveCssVars(value)};`)
+      .map(([key, value]) => `${key}: ${value};`)
       .join('\n')}
   }
   * {

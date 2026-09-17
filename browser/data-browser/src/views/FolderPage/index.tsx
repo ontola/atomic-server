@@ -117,11 +117,11 @@ interface FullPageWrapperProps {
 
 const FullPageWrapper = styled.div<FullPageWrapperProps>`
   --container-width: min(1300px, 100%);
-  min-height: 100%;
+  min-height: ${p => p.theme.heights.fullPage};
   display: flex;
   flex-direction: column;
   width: var(--container-width);
   margin-inline: auto;
-  padding: var(--space-3);
-  padding-bottom: var(--height-floating-search-bar);
+  padding: ${p => p.theme.size()};
+  padding-bottom: ${p => p.theme.heights.floatingSearchBarPadding};
 `;

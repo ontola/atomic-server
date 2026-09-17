@@ -300,12 +300,12 @@ const ResultButton = styled.button`
   border: none;
   color: currentColor;
   cursor: pointer;
-  color: var(--color-text);
+  color: ${p => p.theme.colors.text};
   padding: 0.3rem;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
 
   svg {
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
   }
 `;
 
@@ -319,19 +319,19 @@ const ViewerWrapper = styled.div`
   align-items: center;
   height: 100%;
   position: relative;
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
+  padding: ${p => p.theme.margin}rem;
+  border-radius: ${p => p.theme.radius};
+  border: 1px solid ${p => p.theme.colors.bg2};
 `;
 
 const ClearFileButton = styled(IconButton)`
   position: absolute;
   height: fit-content;
-  top: var(--space-3);
-  right: var(--space-3);
+  top: ${p => p.theme.margin}rem;
+  right: ${p => p.theme.margin}rem;
 `;
 
 const PreviewImg = styled.img`
   height: 100%;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
 `;

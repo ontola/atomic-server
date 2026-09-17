@@ -65,7 +65,7 @@ const Show: FC<PropsWithChildren<{ show: boolean }>> = ({ show, children }) => {
 };
 
 const Empty = styled.span`
-  color: var(--color-text-subtle);
+  color: ${({ theme }) => theme.colors.textLight};
 `;
 
 export default CollectionCard;

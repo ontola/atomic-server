@@ -146,16 +146,16 @@ const EmptyValue = styled.button`
   padding: 0.1rem 0.4rem;
   margin: -0.1rem -0.4rem;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   background: none;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-style: italic;
   cursor: text;
 
   &:hover,
   &:focus-visible {
-    background-color: var(--color-bg-subtle);
-    color: var(--color-text);
+    background-color: ${p => p.theme.colors.bg1};
+    color: ${p => p.theme.colors.text};
   }
 `;
 
@@ -165,7 +165,7 @@ const EditButton = styled.button`
   border: none;
   position: absolute;
   top: 0;
-  color: var(--color-accent);
+  color: ${p => p.theme.colors.main};
   right: 100%;
   cursor: pointer;
   opacity: 0;

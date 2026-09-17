@@ -177,13 +177,13 @@ const PluginName = styled.span`
 `;
 
 const DescriptionWrapper = styled.div`
-  background-color: var(--color-bg-subtle);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
+  background-color: ${p => p.theme.colors.bg1};
+  padding: ${p => p.theme.size()};
+  border-radius: ${p => p.theme.radius};
 `;
 
 const PluginAuthor = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const Label = styled.label`

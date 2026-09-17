@@ -66,13 +66,13 @@ export function TagPage({ resource }: ResourcePageProps<DataBrowser.Tag>) {
 }
 
 const EmojiInputWrapper = styled.div`
-  border: 1px solid var(--color-border);
+  border: 1px solid ${p => p.theme.colors.bg2};
   height: 2.2rem;
   width: 2.2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
 `;
 
 const TagWrapper = styled.span`

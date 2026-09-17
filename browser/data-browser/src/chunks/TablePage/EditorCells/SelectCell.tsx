@@ -175,7 +175,7 @@ function SelectCellDisplay({
 
 const StyledIcon = styled(FaPlus)`
   animation: ${fadeIn} 0.1s ease-in-out;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const TagIconButton = styled(IconButton)`
@@ -195,15 +195,16 @@ const TagIconButton = styled(IconButton)`
 
 const Content = styled.div`
   width: min(40ch, 90vh);
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
 `;
 
 const ResultWrapper = styled.div`
-  padding: var(--space-3);
-  border: ${p => (p.theme.darkMode ? '1px solid var(--color-border)' : 'none')};
+  padding: ${p => p.theme.margin}rem;
+  border: ${p =>
+    p.theme.darkMode ? '1px solid ' + p.theme.colors.bg2 : 'none'};
   border-top: none;
-  border-bottom-left-radius: var(--radius-md);
-  border-bottom-right-radius: var(--radius-md);
+  border-bottom-left-radius: ${p => p.theme.radius};
+  border-bottom-right-radius: ${p => p.theme.radius};
 `;
 
 const SearchInputWrapper = styled(InputWrapper)`

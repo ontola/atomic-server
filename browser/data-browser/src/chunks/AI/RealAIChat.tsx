@@ -63,7 +63,6 @@ import { useAIChanges } from '@components/AIChangesContext';
 import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
 import { useLocalStorage } from '@hooks/useLocalStorage';
 import { Spinner } from '@components/Spinner';
-import { withAlpha } from '../../styles/withAlpha';
 
 const AIChatInput = React.lazy(
   () => import('@chunks/RTE/AIChatInput/AsyncAIChatInput'),
@@ -987,20 +986,20 @@ const filesToFileParts = (files: File[]): Promise<FileUIPart[]> =>
   );
 
 const ChatInputWrapper = styled.div`
-  background-color: var(--color-bg);
-  padding: var(--space-2);
-  border-radius: var(--radius-md);
-  border: solid 1px var(--color-border);
+  background-color: ${p => p.theme.colors.bg};
+  padding: ${p => p.theme.size(2)};
+  border-radius: ${p => p.theme.radius};
+  border: solid 1px ${p => p.theme.colors.bg2};
   display: flex;
   flex: 1;
   align-items: flex-end;
-  gap: var(--space-3);
+  gap: ${p => p.theme.size()};
   position: relative;
   min-width: 0;
 
   ${transition('border-color')}
   &:focus-within {
-    border-color: var(--color-accent);
+    border-color: ${p => p.theme.colors.main};
   }
 
   textarea {
@@ -1012,17 +1011,17 @@ const AttachmentPreview = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background-color: var(--color-bg);
-  padding: var(--space-1);
-  border-radius: var(--radius-md);
+  background-color: ${p => p.theme.colors.bg};
+  padding: ${p => p.theme.size(1)};
+  border-radius: ${p => p.theme.radius};
   font-size: 0.8rem;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 `;
 
 const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
-  ${p => p.fullView && `background-color: var(--color-bg-body);`}
-  padding: ${p => (p.fullView ? 'var(--space-3)' : 0)};
-  padding-top: ${p => (p.fullView ? 'var(--space-2)' : 0)};
+  ${p => p.fullView && `background-color: ${p.theme.colors.bgBody};`}
+  padding: ${p => (p.fullView ? p.theme.size() : 0)};
+  padding-top: ${p => (p.fullView ? p.theme.size(2) : 0)};
   position: relative;
   display: grid;
   grid-template-rows: ${p =>
@@ -1048,7 +1047,7 @@ const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
 
 const TokensUsed = styled.p`
   font-size: 0.8rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const SubtleButton = styled.button`
@@ -1057,9 +1056,9 @@ const SubtleButton = styled.button`
   background: none;
   border: none;
   color: inherit;
-  border-radius: var(--radius-md);
-  padding: var(--space-1);
-  padding-inline: var(--space-2);
+  border-radius: ${p => p.theme.radius};
+  padding: ${p => p.theme.size(1)};
+  padding-inline: ${p => p.theme.size(2)};
 
   white-space: nowrap;
   overflow: hidden;
@@ -1069,7 +1068,7 @@ const SubtleButton = styled.button`
 
   &:focus-visible,
   &:hover {
-    background-color: var(--color-bg-subtle);
+    background-color: ${p => p.theme.colors.bg1};
   }
 `;
 
@@ -1080,11 +1079,11 @@ const ProviderNotice = styled.div`
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  background-color: ${withAlpha('var(--color-alert)', 0.1)};
-  border: 1px solid ${withAlpha('var(--color-alert)', 0.33)};
-  color: var(--color-text);
+  padding: ${p => p.theme.size(2)} ${p => p.theme.size(3)};
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.alert}1a;
+  border: 1px solid ${p => p.theme.colors.alert}55;
+  color: ${p => p.theme.colors.text};
   font-size: 0.85rem;
 
   span {
@@ -1096,21 +1095,21 @@ const FloatingChatWidgetsContainer = styled.div`
   display: flex;
   flex-direction: column;
   height: fit-content;
-  gap: var(--space-2);
+  gap: ${p => p.theme.size(2)};
   position: absolute;
   width: 100%;
-  bottom: calc(100% + var(--space-3));
+  bottom: calc(100% + ${p => p.theme.size(3)});
   left: 0;
   right: 0;
   z-index: 10;
 `;
 
 const ContextItemRow = styled(Row)`
-  padding-inline: var(--space-2);
+  padding-inline: ${p => p.theme.size(2)};
 `;
 
 const IndexingIndicator = styled(Row)`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 /**

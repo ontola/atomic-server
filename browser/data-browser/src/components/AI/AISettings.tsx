@@ -3,7 +3,7 @@ import * as React from 'react';
 import { Column, Row } from '@components/Row';
 import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
-import styled from 'styled-components';
+import styled, { useTheme } from 'styled-components';
 import { Suspense, useEffect, useState } from 'react';
 import { OpenRouterLoginButton } from './OpenRouterLoginButton';
 import { effectFetch } from '@helpers/effectFetch';
@@ -49,6 +49,7 @@ const AI_CHILD_KEYWORDS =
   'openrouter ollama mcp server generative model chat provider api key local';
 
 const AISettings: React.FC = () => {
+  const theme = useTheme();
   const { query: searchQuery } = useSettingsSearch();
   const {
     enableAI,
@@ -224,12 +225,12 @@ const AISettings: React.FC = () => {
                             (isOllamaUrlValid ? (
                               <FaCheck
                                 title='Server found'
-                                color={'var(--color-accent)'}
+                                color={theme.colors.main}
                               />
                             ) : (
                               <FaTriangleExclamation
                                 title='Server not responding'
-                                color={'var(--color-warning)'}
+                                color={theme.colors.warning}
                               />
                             ))}
                           <label htmlFor='ollama-url'>Ollama API Url</label>
@@ -308,7 +309,7 @@ const ConditionalSettings = styled(Column)<{ enabled: boolean }>`
 `;
 
 const SubGroup = styled.div`
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid ${p => p.theme.colors.bg2};
   margin-top: 0.25rem;
   padding-top: 0.75rem;
   display: flex;
@@ -328,7 +329,7 @@ const SubSection = styled.div`
   flex-direction: column;
   gap: 0.5rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
 
   &:last-child {
     border-bottom: 0;
@@ -340,13 +341,13 @@ const SubSectionTitle = styled.h3`
   margin: 0;
   font-size: 0.95rem;
   font-weight: 650;
-  color: var(--color-text);
+  color: ${p => p.theme.colors.text};
 `;
 
 const Subtle = styled.p`
   font-size: 0.8rem;
   margin: 0;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 export default AISettings;

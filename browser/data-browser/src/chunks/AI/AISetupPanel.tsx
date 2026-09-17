@@ -341,7 +341,7 @@ const OpenRouterLoginGroup = styled.div`
 `;
 
 const OrText = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.9rem;
 `;
 
@@ -371,13 +371,13 @@ const Title = styled.h3`
 
 const Subtle = styled.p`
   margin: 0;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const CheckboxRow = styled.label`
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   cursor: pointer;
 `;

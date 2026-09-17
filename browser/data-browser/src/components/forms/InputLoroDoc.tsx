@@ -5,5 +5,5 @@ export const InputLoroDoc = () => {
 };
 
 const Subtle = styled.div`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;

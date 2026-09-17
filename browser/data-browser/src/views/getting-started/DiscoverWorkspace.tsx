@@ -193,7 +193,7 @@ const Panel = styled.section`
     font-size: 1rem;
   }
   details {
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
   }
   summary {
     cursor: pointer;

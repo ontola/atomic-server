@@ -16,11 +16,11 @@ export const NoteComponent = () => {
 };
 
 const StyledNodeViewWrapper = styled(NodeViewWrapper)`
-  background-color: var(--color-accent-subtle);
+  background-color: ${p => p.theme.colors.mainSelectedBg};
   padding: 1rem;
-  border-left: 3px solid var(--color-accent);
+  border-left: 3px solid ${p => p.theme.colors.main};
   width: 100%;
-  margin-bottom: var(--space-3);
+  margin-bottom: ${p => p.theme.size()};
   clear: both;
   & p:last-child {
     margin-bottom: 0;
@@ -30,6 +30,6 @@ const StyledNodeViewWrapper = styled(NodeViewWrapper)`
 const Title = styled(Row)`
   font-weight: 600;
   font-size: 1.1rem;
-  color: var(--color-accent-text);
-  margin-bottom: var(--space-2);
+  color: ${p => p.theme.colors.mainSelectedFg};
+  margin-bottom: ${p => p.theme.size(2)};
 `;

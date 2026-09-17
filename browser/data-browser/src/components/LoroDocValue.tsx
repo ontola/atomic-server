@@ -92,12 +92,12 @@ export const LoroDocValue: React.FC<LoroDocValueProps> = ({
 };
 
 const SubtleButton = styled(Button)`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   display: flex;
   align-items: center;
   gap: 0.5rem;
   &:hover,
   &:focus-visible {
-    color: var(--color-accent);
+    color: ${p => p.theme.colors.main};
   }
 `;

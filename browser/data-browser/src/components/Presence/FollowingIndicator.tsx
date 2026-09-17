@@ -118,7 +118,7 @@ const Label = styled.span`
 `;
 
 const revealChip = css`
-  background-color: var(--color-accent);
+  background-color: ${p => p.theme.colors.main};
 
   ${Clip} {
     max-width: 7rem;
@@ -170,11 +170,11 @@ const Frame = styled.span<{ $following: boolean; $revealed: boolean }>`
     css`
       &:hover [data-agent-avatar],
       &:focus-visible [data-agent-avatar] {
-        border-color: var(--color-accent);
+        border-color: ${p.theme.colors.main};
       }
 
       &:focus-visible {
-        outline: 2px solid var(--color-accent);
+        outline: 2px solid ${p.theme.colors.main};
         outline-offset: 2px;
       }
     `}

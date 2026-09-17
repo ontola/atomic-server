@@ -109,9 +109,9 @@ const buildChipTrigger = (label: string): DropdownTriggerComponent => {
 
 const ChipButton = styled.button`
   border: none;
-  border-radius: var(--radius-md);
-  background-color: var(--color-bg-subtle);
-  color: var(--color-text-subtle);
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.bg1};
+  color: ${p => p.theme.colors.textLight};
   font-family: monospace;
   font-size: 0.75rem;
   padding: 0.1rem 0.35rem;
@@ -119,7 +119,7 @@ const ChipButton = styled.button`
 
   &:hover,
   &[aria-expanded='true'] {
-    background-color: var(--color-border);
-    color: var(--color-text);
+    background-color: ${p => p.theme.colors.bg2};
+    color: ${p => p.theme.colors.text};
   }
 `;

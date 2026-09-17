@@ -144,21 +144,21 @@ export const DocumentV2FullPage: React.FC<ResourcePageProps> = ({
 };
 
 const ErrorWrapper = styled.div`
-  width: min(100%, var(--container-width-wide));
+  width: min(100%, ${p => p.theme.containerWidthWide});
   margin: auto;
-  padding: var(--space-7);
-  color: var(--color-text-subtle);
+  padding: ${p => p.theme.size(7)};
+  color: ${p => p.theme.colors.textLight};
   h2 {
-    color: var(--color-alert);
+    color: ${p => p.theme.colors.alert};
   }
 `;
 
 const FullPageWrapper = styled.div`
-  background-color: var(--color-bg);
+  background-color: ${p => p.theme.colors.bg};
   display: flex;
   flex: 1;
   flex-direction: column;
-  min-height: 100%;
+  min-height: ${p => p.theme.heights.fullPage};
   box-sizing: border-box;
   @media print {
     min-height: 100vh;
@@ -166,17 +166,17 @@ const FullPageWrapper = styled.div`
 `;
 
 const DocumentContainer = styled.div`
-  width: min(100%, var(--container-width-wide));
+  width: min(100%, ${p => p.theme.containerWidthWide});
   margin: auto;
   display: flex;
-  gap: var(--space-3);
+  gap: ${p => p.theme.size()};
   flex: 1;
   flex-direction: column;
-  padding: var(--space-7);
+  padding: ${p => p.theme.size(7)};
   h1 {
     margin-bottom: 0;
   }
-  @media (max-width: var(--container-width-wide)) {
-    padding: var(--space-3);
+  @media (max-width: ${props => props.theme.containerWidthWide}) {
+    padding: ${p => p.theme.size()};
   }
 `;

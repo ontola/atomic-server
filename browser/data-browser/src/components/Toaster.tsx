@@ -6,7 +6,7 @@ import toast, {
   type Renderable,
 } from 'react-hot-toast';
 import { FaCopy, FaXmark } from 'react-icons/fa6';
-import styled from 'styled-components';
+import styled, { useTheme } from 'styled-components';
 import { zIndex } from '../styling';
 import { Row } from './Row';
 import { IconButton } from './IconButton/IconButton';
@@ -18,14 +18,16 @@ import { useRef, type JSX } from 'react';
  * somewhere high up in the app
  */
 export function Toaster(): JSX.Element {
+  const theme = useTheme();
+
   return (
     <ReactHotToast
       position='bottom-right'
       toastOptions={{
         style: {
           zIndex: zIndex.toast,
-          background: 'var(--color-bg)',
-          color: 'var(--color-text)',
+          background: theme.colors.bg,
+          color: theme.colors.text,
           wordBreak: 'break-word',
         },
       }}
@@ -35,7 +37,7 @@ export function Toaster(): JSX.Element {
           toast={t}
           style={{
             ...t.style,
-            border: `solid 1px var(--color-border)`,
+            border: `solid 1px ${theme.colors.bg2}`,
             position: 'relative',
             animation: t.visible
               ? 'toast-enter .2s ease-out'

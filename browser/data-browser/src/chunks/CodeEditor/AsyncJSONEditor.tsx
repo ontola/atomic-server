@@ -206,16 +206,16 @@ const CodeEditorWrapper = styled.div`
   display: contents;
 
   &.json-editor__error .cm-editor {
-    border-color: var(--color-alert) !important;
+    border-color: ${p => p.theme.colors.alert} !important;
   }
 
   & .cm-editor {
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
+    border: 1px solid ${p => p.theme.colors.bg2};
+    border-radius: ${p => p.theme.radius};
     outline: none;
 
     &:focus-within {
-      border-color: var(--color-accent);
+      border-color: ${p => p.theme.colors.main};
     }
 
     & .cm-scroller {
@@ -224,12 +224,12 @@ const CodeEditorWrapper = styled.div`
   }
 
   & .cm-tooltip-hover {
-    background-color: var(--color-bg);
-    padding: var(--space-2);
-    box-shadow: var(--elevation-2);
-    border-radius: var(--radius-md);
+    background-color: ${p => p.theme.colors.bg};
+    padding: ${p => p.theme.size(2)};
+    box-shadow: ${p => p.theme.boxShadowSoft};
+    border-radius: ${p => p.theme.radius};
     border: ${p => (p.theme.darkMode ? '1px solid' : 'none')};
-    var(--color-border);
+    ${p => p.theme.colors.bg2};
 
     & .cm-tooltip-arrow {
       display: none;
@@ -237,9 +237,9 @@ const CodeEditorWrapper = styled.div`
   }
 
   & .cm-gutters {
-    background: var(--color-bg);
-    border-top-left-radius: var(--radius-md);
-    border-bottom-left-radius: var(--radius-md);
+    background: ${p => p.theme.colors.bg};
+    border-top-left-radius: ${p => p.theme.radius};
+    border-bottom-left-radius: ${p => p.theme.radius};
     min-height: 150px;
 
     & .cm-gutterElement {
@@ -249,7 +249,7 @@ const CodeEditorWrapper = styled.div`
 
     & .cm-lint-marker-error {
       content: '';
-      background: var(--color-alert);
+      background: ${p => p.theme.colors.alert};
       border-radius: 50%;
       height: 0.5rem;
       width: 0.5rem;
@@ -257,27 +257,27 @@ const CodeEditorWrapper = styled.div`
   }
 
   & .cm-tooltip {
-    background-color: var(--color-bg);
-    box-shadow: var(--elevation-2);
-    border-radius: var(--radius-md);
+    background-color: ${p => p.theme.colors.bg};
+    box-shadow: ${p => p.theme.boxShadowSoft};
+    border-radius: ${p => p.theme.radius};
     border: none;
 
     & > ul > li {
       background-color: none;
-      padding: var(--space-2) !important;
+      padding: ${p => p.theme.size(2)} !important;
       margin: 0;
 
       &:first-of-type {
-        border-top-left-radius: var(--radius-md);
-        border-top-right-radius: var(--radius-md);
+        border-top-left-radius: ${p => p.theme.radius};
+        border-top-right-radius: ${p => p.theme.radius};
       }
       &:last-of-type {
-        border-bottom-left-radius: var(--radius-md);
-        border-bottom-right-radius: var(--radius-md);
+        border-bottom-left-radius: ${p => p.theme.radius};
+        border-bottom-right-radius: ${p => p.theme.radius};
       }
       &[aria-selected='true'] {
-        background-color: var(--color-accent-subtle);
-        color: var(--color-accent-text);
+        background-color: ${p => p.theme.colors.mainSelectedBg};
+        color: ${p => p.theme.colors.mainSelectedFg};
       }
     }
   }

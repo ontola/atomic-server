@@ -18,7 +18,7 @@ function Nestedresource({ resource }: Props): JSX.Element {
 }
 
 const NestedWrapper = styled.div`
-  margin-left: var(--space-3);
+  margin-left: ${p => p.theme.margin}rem;
 `;
 
 export default Nestedresource;

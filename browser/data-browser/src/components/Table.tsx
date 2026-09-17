@@ -54,9 +54,9 @@ function Table({ resource, members, columns }: TableProps) {
 const TableStyled = styled.table`
   overflow-y: auto;
   border-collapse: collapse;
-  margin-left: calc(var(--space-3) * -1);
-  margin-right: calc(var(--space-3) * -1);
-  margin-bottom: var(--space-3);
+  margin-left: ${p => -p.theme.margin}rem;
+  margin-right: ${p => -p.theme.margin}rem;
+  margin-bottom: ${p => p.theme.margin}rem;
   width: calc(100% + 2rem);
 `;
 
@@ -175,11 +175,11 @@ const TableRow = memo(function TableRow({ subject, propsArray }: RowProps) {
 });
 
 const RowStyled = styled.tr`
-  background-color: var(--color-bg);
-  border-top: solid 1px var(--color-border);
+  background-color: ${p => p.theme.colors.bg};
+  border-top: solid 1px ${props => props.theme.colors.bg2};
 
   &:last-child {
-    border-bottom: solid 1px var(--color-border);
+    border-bottom: solid 1px ${props => props.theme.colors.bg2};
   }
 `;
 
@@ -206,8 +206,8 @@ function Cell({ resource, prop: propUrl }: CellProps): JSX.Element {
 }
 
 const cellStyles = css`
-  padding: var(--space-2);
-  padding-left: var(--space-3);
+  padding: ${p => p.theme.margin / 2}rem;
+  padding-left: ${p => p.theme.margin}rem;
   vertical-align: top;
 
   &:last-child {

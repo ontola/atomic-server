@@ -431,7 +431,7 @@ function CommentsButton({ subject }: { subject: string }): JSX.Element {
 const NavBarWrapper = styled.nav`
   height: 100%;
   width: 100%;
-  padding-inline: var(--space-1);
+  padding-inline: ${p => p.theme.size(1)};
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -454,16 +454,16 @@ const NavIconButton = styled(IconButton)`
   &:not([disabled]) {
     &:hover,
     &:focus-visible {
-      color: var(--color-text);
+      color: ${p => p.theme.colors.text};
     }
   }
 `;
 
 const VerticalDivider = styled.div`
   width: 1px;
-  background-color: var(--color-border);
+  background-color: ${props => props.theme.colors.bg2};
   height: 1.5rem;
-  margin-inline: var(--space-1);
+  margin-inline: ${p => p.theme.size(1)};
 `;
 
 const Spacer = styled.span`
@@ -506,8 +506,8 @@ const WideOnly = styled.span`
 const ButtonArea = styled.div<{ $iconOnly: boolean }>`
   display: flex;
   margin-left: auto;
-  color: var(--color-text-subtle);
-  gap: var(--space-1);
+  color: ${p => p.theme.colors.textLight};
+  gap: ${p => p.theme.size(1)};
   align-items: center;
   flex-shrink: 0;
 
@@ -528,7 +528,7 @@ const ButtonArea = styled.div<{ $iconOnly: boolean }>`
 
 const CommentsLabelButton = styled(LabelButton)`
   &[data-unseen] {
-    color: var(--color-accent);
+    color: ${p => p.theme.colors.main};
     font-weight: bold;
   }
 `;
@@ -580,10 +580,10 @@ const Divider = styled.div`
 `;
 
 const BreadCrumbBase = css`
-  font-size: var(--font-size-base);
-  font-family: var(--font-family);
+  font-size: ${props => props.theme.fontSizeBody}rem;
+  font-family: ${props => props.theme.fontFamily};
   padding: 0.1rem 0.5rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -593,30 +593,30 @@ const BreadCrumbBase = css`
 
 const BreadCrumbCurrent = styled.span<{ $editable?: boolean }>`
   ${BreadCrumbBase}
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   cursor: ${p => (p.$editable ? 'text' : 'default')};
 
   ${p =>
     p.$editable &&
     css`
       &:hover {
-        background: var(--color-bg-subtle);
-        color: var(--color-text);
+        background: ${p.theme.colors.bg1};
+        color: ${p.theme.colors.text};
       }
     `}
 `;
 
 const BreadCrumbInput = styled.input`
   ${BreadCrumbBase}
-  color: var(--color-text);
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  color: ${p => p.theme.colors.text};
+  background: ${p => p.theme.colors.bg};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
   outline: none;
   min-width: 12ch;
 
   &:focus {
-    border-color: var(--color-accent);
+    border-color: ${p => p.theme.colors.main};
   }
 `;
 
@@ -690,15 +690,15 @@ const Breadcrumb = styled.a`
   align-self: center;
   cursor: pointer;
   text-decoration: none;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
 
   &:hover {
-    background: var(--color-bg-subtle);
-    color: var(--color-text);
+    background: ${p => p.theme.colors.bg1};
+    color: ${p => p.theme.colors.text};
   }
 
   &:active {
-    background: var(--color-border);
+    background: ${p => p.theme.colors.bg2};
   }
 `;
 

@@ -26,7 +26,7 @@ const SelectWrapper = styled.span<{ disabled: boolean }>`
   width: 100%;
   padding-inline: 0.5rem;
   background-color: ${p =>
-    p.disabled ? 'var(--color-bg-subtle)' : 'var(--color-bg)'};
+    p.disabled ? p.theme.colors.bg1 : p.theme.colors.bg};
 
   // Because we remove the appearance of the select for compatibility reasons, we have to add back the chevron.
   position: relative;
@@ -39,7 +39,7 @@ const SelectWrapper = styled.span<{ disabled: boolean }>`
     height: 100%;
     align-items: center;
     pointer-events: none;
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
   }
 `;
 
@@ -51,9 +51,9 @@ const Select = styled.select`
   outline: none;
   height: 2rem;
   background-color: transparent;
-  color: var(--color-text);
+  color: ${p => p.theme.colors.text};
   &:disabled {
-    color: var(--color-text-subtle);
+    color: ${props => props.theme.colors.textLight};
     background-color: transparent;
   }
 `;

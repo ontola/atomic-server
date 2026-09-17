@@ -404,11 +404,11 @@ const Table = styled.div.attrs<TableProps>(p => ({
   --table-row-height: ${p => p.rowHeight}px;
   --table-inner-padding: 0.5rem;
   --table-content-height: ${p => p.totalContentHeight}px;
-  background: var(--color-bg);
-  border-radius: var(--radius-md);
+  background: ${p => p.theme.colors.bg};
+  border-radius: ${p => p.theme.radius};
   overflow: hidden;
   overflow-x: auto;
-  border: 1px solid var(--color-border);
+  border: 1px solid ${p => p.theme.colors.bg2};
   width: 100%;
   position: relative;
   contain: paint;
@@ -416,18 +416,18 @@ const Table = styled.div.attrs<TableProps>(p => ({
 
   &:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px var(--color-accent);
+    box-shadow: 0 0 0 2px ${p => p.theme.colors.main};
   }
 `;
 
 const LoadingCell = styled.div`
-  padding: var(--space-3);
+  padding: ${p => p.theme.size()};
 
   > span {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--space-3);
+    gap: ${p => p.theme.size()};
   }
 `;
 
@@ -445,8 +445,8 @@ const StyledList = styled(List)`
 const FooterWrapper = styled.div`
   position: relative;
   z-index: 9;
-  background-color: var(--color-bg-body);
-  border-top: 1px solid var(--color-border);
+  background-color: ${p => p.theme.colors.bgBody};
+  border-top: 1px solid ${p => p.theme.colors.bg2};
 `;
 
 const AutoSizeTamer = styled.div`

@@ -96,7 +96,7 @@ const DropEdgeElement = styled.div<{ visible: boolean; active: boolean }>`
     width: 100%;
     height: 3px;
     border-radius: 1.5px;
-    background: var(--color-accent);
+    background: ${p => p.theme.colors.main};
     opacity: ${p => (p.active ? 1 : 0)};
     transform: scaleX(${p => (p.active ? 1 : 0.9)});
     ${transition('opacity', 'transform')}

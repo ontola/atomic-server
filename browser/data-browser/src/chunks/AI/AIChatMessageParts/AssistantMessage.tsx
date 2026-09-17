@@ -7,7 +7,6 @@ import { MessageToolPart } from './MessageToolPart';
 import { SourceUrlPart } from './SourceUrlPart';
 import { BasicMessage } from './BasicMessage';
 import { ReasoningMessage } from './ReasoningMessage';
-import { withAlpha } from '../../../styles/withAlpha';
 
 interface AssistantMessageProps {
   message: AtomicUIMessage;
@@ -58,10 +57,10 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
 };
 
 const ErrorNotice = styled.div`
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  background-color: ${withAlpha('var(--color-alert)', 0.1)};
-  border: 1px solid ${withAlpha('var(--color-alert)', 0.33)};
-  color: var(--color-text);
+  padding: ${p => p.theme.size(2)} ${p => p.theme.size(3)};
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.alert}1a;
+  border: 1px solid ${p => p.theme.colors.alert}55;
+  color: ${p => p.theme.colors.text};
   font-size: 0.85rem;
 `;

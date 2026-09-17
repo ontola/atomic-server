@@ -41,6 +41,6 @@ export const FloatingHint: React.FC<
 };
 
 export const FloatingMenuText = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   user-select: none;
 `;

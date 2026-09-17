@@ -107,8 +107,8 @@ const Label = styled.label`
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-md);
-  color: var(--color-text-subtle);
+  border-radius: ${p => p.theme.radius};
+  color: ${p => p.theme.colors.textLight};
   cursor: pointer;
 
   transition:
@@ -116,13 +116,13 @@ const Label = styled.label`
     color 0.1s ease-in-out;
 
   input:checked + & {
-    background-color: var(--color-bg-subtle);
-    color: var(--color-text);
-    border: 1px solid var(--color-border);
+    background-color: ${p => p.theme.colors.bg1};
+    color: ${p => p.theme.colors.text};
+    border: 1px solid ${p => p.theme.colors.bg2};
   }
 
   :hover {
-    background-color: var(--color-bg-subtle);
+    background-color: ${p => p.theme.colors.bg1};
   }
 `;
 

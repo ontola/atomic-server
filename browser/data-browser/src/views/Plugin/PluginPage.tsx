@@ -162,13 +162,13 @@ const PluginName = styled.span`
 `;
 
 const DescriptionWrapper = styled.section`
-  background-color: var(--color-bg-subtle);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
+  background-color: ${p => p.theme.colors.bg1};
+  padding: ${p => p.theme.size()};
+  border-radius: ${p => p.theme.radius};
   max-height: 33rem;
   overflow-y: auto;
 `;
 
 const PluginAuthor = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;

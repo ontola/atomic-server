@@ -83,7 +83,7 @@ const Wrapper = styled.div`
   padding-right: 0.5rem;
 
   &:hover {
-    background-color: var(--color-bg-subtle);
+    background-color: ${p => p.theme.colors.bg1};
   }
 `;
 
@@ -104,11 +104,11 @@ const Choice = styled.button<{ $selected: boolean }>`
   svg {
     flex-shrink: 0;
     color: ${p =>
-      p.$selected ? 'var(--color-accent)' : 'var(--color-text-subtle)'};
+      p.$selected ? p.theme.colors.main : p.theme.colors.textLight};
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid ${p => p.theme.colors.main};
     outline-offset: -2px;
   }
 `;

@@ -104,15 +104,15 @@ const InstanceButton = styled.button`
 
   cursor: pointer;
   appearance: none;
-  border: 2px dashed var(--color-border);
+  border: 2px dashed ${p => p.theme.colors.bg2};
   height: 10rem;
   background-color: transparent;
-  border-radius: var(--radius-md);
-  color: var(--color-text-subtle);
+  border-radius: ${p => p.theme.radius};
+  color: ${p => p.theme.colors.textLight};
   &:hover,
   &:focus {
-    border-color: var(--color-accent);
-    color: var(--color-accent);
-    background-color: var(--color-bg);
+    border-color: ${p => p.theme.colors.main};
+    color: ${p => p.theme.colors.main};
+    background-color: ${p => p.theme.colors.bg};
   }
 `;

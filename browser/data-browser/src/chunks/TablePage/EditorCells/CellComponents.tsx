@@ -8,9 +8,9 @@ export const AbsoluteCell = styled.div`
   z-index: 10;
   left: 0;
   top: 0;
-  background-color: var(--color-bg);
-  box-shadow: var(--elevation-2);
-  border: 2px solid var(--color-accent);
+  background-color: ${p => p.theme.colors.bg};
+  box-shadow: ${p => p.theme.boxShadowSoft};
+  border: 2px solid ${p => p.theme.colors.main};
   height: fit-content;
   width: 100%;
   padding-inline: var(--table-inner-padding);
@@ -20,7 +20,7 @@ export const AbsoluteCell = styled.div`
 `;
 
 export const SearchPopover = styled(CustomPopover)`
-  border: 1px solid var(--color-border);
+  border: 1px solid ${p => p.theme.colors.bg2};
   ${CustomPopover.Content} {
     padding: 1rem;
     display: flex;
@@ -43,11 +43,11 @@ export const SearchResultWrapper = styled.div`
   li {
     list-style: none;
     &[data-selected='true'] button {
-      background: var(--color-accent-subtle);
-      color: var(--color-accent-text);
-      box-shadow: 0 0 0 1px inset var(--color-accent-text);
+      background: ${p => p.theme.colors.mainSelectedBg};
+      color: ${p => p.theme.colors.mainSelectedFg};
+      box-shadow: 0 0 0 1px inset ${p => p.theme.colors.mainSelectedFg};
       svg {
-        color: var(--color-accent-text);
+        color: ${p => p.theme.colors.mainSelectedFg};
       }
     }
   }
@@ -56,7 +56,7 @@ export const SearchResultWrapper = styled.div`
 export const PopoverTrigger = styled.button`
   border: none;
   background: none;
-  color: var(--color-accent);
+  color: ${p => p.theme.colors.main};
   display: inline-flex;
   gap: 1ch;
   align-items: center;

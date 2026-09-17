@@ -87,24 +87,26 @@ export function Popover({
 }
 
 const Content = styled(RadixPopover.Content)`
-  --popover-close-offset: var(--space-3);
+  --popover-close-offset: ${p => p.theme.size()};
   --popover-close-size: 25px;
   --popover-close-safe-area: calc(
-    var(--popover-close-size) +
-      (var(--popover-close-offset) * 2) - var(--space-3)
+    var(--popover-close-size) + (var(--popover-close-offset) * 2) -
+      ${p => p.theme.size()}
   );
   ${floatingSurface}
   z-index: 10000000;
   transform-origin: var(--radix-popover-content-transform-origin);
-  animation: ${floatingSurfaceAppear} var(--duration-fast) ease-in-out;
+  animation: ${floatingSurfaceAppear} ${p => p.theme.animation.duration}
+    ease-in-out;
 
   &[data-state='closed'] {
-    animation: ${floatingSurfaceAppear} var(--duration-fast) ease-in-out reverse;
+    animation: ${floatingSurfaceAppear} ${p => p.theme.animation.duration}
+      ease-in-out reverse;
   }
 `;
 
 const Arrow = styled(RadixPopover.Arrow)`
-  fill: var(--color-border);
+  fill: ${p => p.theme.colors.bg2};
 `;
 
 const PopoverContainerContext =

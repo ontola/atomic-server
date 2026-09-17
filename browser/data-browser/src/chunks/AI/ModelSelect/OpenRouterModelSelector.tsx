@@ -107,9 +107,9 @@ export const OpenRouterModelSelector: React.FC<
 
 const ModelAmount = styled.div`
   font-size: 0.8em;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const SupportWarning = styled(Row)`
-  color: var(--color-warning);
+  color: ${p => p.theme.colors.warning};
 `;

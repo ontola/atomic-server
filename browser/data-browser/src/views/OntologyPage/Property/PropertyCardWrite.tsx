@@ -71,7 +71,8 @@ const TitleWrapper = styled.div`
 `;
 
 const StyledCard = styled(TargetableCard)`
-  box-shadow: var(--elevation-1);
-  border: ${p => (p.theme.darkMode ? `1px solid var(--color-border)` : 'none')};
-  padding-bottom: var(--space-3);
+  box-shadow: ${p => p.theme.boxShadow};
+  border: ${p =>
+    p.theme.darkMode ? `1px solid ${p.theme.colors.bg2}` : 'none'};
+  padding-bottom: ${p => p.theme.margin}rem;
 `;

@@ -25,10 +25,10 @@ const GraphWrapper = styled.div`
   display: grid;
   place-items: stretch;
   min-width: 0;
-  background-color: var(--color-bg-subtle);
-  border: 1px solid var(--color-border);
+  background-color: ${p => p.theme.colors.bg1};
+  border: 1px solid ${p => p.theme.colors.bg2};
   aspect-ratio: var(--ontology-graph-ratio);
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   top: 1rem;
   overflow: hidden;
 `;

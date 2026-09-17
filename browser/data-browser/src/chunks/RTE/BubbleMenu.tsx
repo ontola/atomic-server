@@ -13,12 +13,12 @@ import { Column, Row } from '../../components/Row';
 
 import { Popover } from '../../components/Popover';
 import { useState } from 'react';
+import { transparentize } from 'polished';
 import { EditLinkForm } from './EditLinkForm';
 import { useTipTapEditor } from './TiptapContext';
 import { ToggleButton } from './ToggleButton';
 import { NodeSelectMenu } from './NodeSelectMenu';
 import { useEditorState } from '@tiptap/react';
-import { withAlpha } from '../../styles/withAlpha';
 
 interface BubbleMenuProps {
   children?: React.ReactNode;
@@ -136,26 +136,28 @@ export function BubbleMenu({
 }
 
 const BubbleMenuInner = styled(Column)`
-  background-color: var(--color-bg);
-  border-radius: var(--radius-md);
-  padding: var(--space-2);
-  box-shadow: var(--elevation-2);
-  border: ${p => (p.theme.darkMode ? `1px solid var(--color-border)` : 'none')};
+  background-color: ${p => p.theme.colors.bg};
+  border-radius: ${p => p.theme.radius};
+  padding: ${p => p.theme.size(2)};
+  box-shadow: ${p => p.theme.boxShadowSoft};
+  border: ${p =>
+    p.theme.darkMode ? `1px solid ${p.theme.colors.bg2}` : 'none'};
   @supports (backdrop-filter: blur(5px)) {
-    background-color: ${withAlpha('var(--color-bg)', 0.85)};
+    background-color: ${p => transparentize(0.15, p.theme.colors.bg)};
     backdrop-filter: blur(5px);
   }
 `;
 
 const StyledPopover = styled(Popover)`
-  background-color: var(--color-bg);
+  background-color: ${p => p.theme.colors.bg};
   backdrop-filter: blur(5px);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  border: ${p => (p.theme.darkMode ? `1px solid var(--color-border)` : 'none')};
+  padding: ${p => p.theme.size()};
+  border-radius: ${p => p.theme.radius};
+  border: ${p =>
+    p.theme.darkMode ? `1px solid ${p.theme.colors.bg2}` : 'none'};
 
   @supports (backdrop-filter: blur(5px)) {
-    background-color: ${withAlpha('var(--color-bg)', 0.85)};
+    background-color: ${p => transparentize(0.15, p.theme.colors.bg)};
     backdrop-filter: blur(5px);
   }
 `;

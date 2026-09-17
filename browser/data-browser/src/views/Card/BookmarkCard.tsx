@@ -32,13 +32,13 @@ export function BookmarkCard({ resource }: CardViewProps): JSX.Element {
 }
 
 const MarkdownWrapper = styled.div`
-  margin-top: var(--space-3);
-  margin-inline: -var(--space-3);
-  padding: var(--space-3);
-  background-color: var(--color-bg-body);
-  border-top: 1px solid var(--color-border);
+  margin-top: ${p => p.theme.margin}rem;
+  margin-inline: -${p => p.theme.margin}rem;
+  padding: ${p => p.theme.margin}rem;
+  background-color: ${props => props.theme.colors.bgBody};
+  border-top: 1px solid ${props => props.theme.colors.bg2};
 
   img {
-    border-radius: var(--radius-md);
+    border-radius: ${props => props.theme.radius};
   }
 `;

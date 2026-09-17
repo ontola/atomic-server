@@ -89,14 +89,16 @@ function Item({ subject }: ItemProps): JSX.Element {
 }
 
 const Wrapper = styled.div`
-  --ontology-sidebar-height: calc(100vh - var(--height-breadcrumb-bar));
+  --ontology-sidebar-height: calc(
+    100vh - ${p => p.theme.heights.breadCrumbBar}
+  );
   position: sticky;
   top: 0px;
   display: flex;
   flex-direction: column;
-  background-color: var(--color-bg);
+  background-color: ${p => p.theme.colors.bg};
   height: var(--ontology-sidebar-height);
-  border-left: 1px solid var(--color-border);
+  border-left: 1px solid ${p => p.theme.colors.bg2};
   min-width: 10rem;
 `;
 
@@ -116,22 +118,22 @@ const StyledLi = styled.li`
 const ItemLink = styled.a<{ error: boolean }>`
   padding-left: 1rem;
   padding-block: 0.2rem;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   display: block;
-  color: ${p => (p.error ? 'var(--color-alert)' : 'var(--color-text-subtle)')};
+  color: ${p => (p.error ? p.theme.colors.alert : p.theme.colors.textLight)};
   text-decoration: none;
   width: 100%;
   &:hover,
   &:focus-visible {
-    color: var(--color-text);
-    background-color: var(--color-bg-subtle);
+    color: ${p => p.theme.colors.text};
+    background-color: ${p => p.theme.colors.bg1};
   }
   white-space: nowrap;
 `;
 
 const SideBarScrollArea = styled(ScrollArea)`
   overflow: hidden;
-  padding: var(--space-3);
+  padding: ${p => p.theme.size()};
   padding-left: 0.5rem;
   max-height: var(--ontology-sidebar-height);
 `;

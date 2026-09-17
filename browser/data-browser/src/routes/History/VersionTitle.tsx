@@ -99,10 +99,10 @@ function UnattributedBy({ peer }: { peer?: string }): JSX.Element | null {
 const Badge = styled.span<{ $verified: boolean }>`
   display: inline-block;
   padding: 0 0.4em;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   font-size: 0.8em;
   line-height: 1.6;
-  color: ${p => (p.$verified ? 'white' : 'var(--color-text-subtle)')};
+  color: ${p => (p.$verified ? 'white' : p.theme.colors.textLight)};
   background-color: ${p =>
-    p.$verified ? 'var(--color-accent)' : 'var(--color-bg-subtle)'};
+    p.$verified ? p.theme.colors.main : p.theme.colors.bg1};
 `;

@@ -123,10 +123,10 @@ const SuggestionPopover = styled.div<{ tagRect: DOMRect | undefined }>`
   transition:
     opacity 0.1s ease,
     display 0.1s ease allow-discrete;
-  border-radius: var(--radius-md);
-  box-shadow: var(--elevation-2);
-  background-color: var(--color-bg);
-  padding: var(--space-2);
+  border-radius: ${p => p.theme.radius};
+  box-shadow: ${p => p.theme.boxShadowSoft};
+  background-color: ${p => p.theme.colors.bg};
+  padding: ${p => p.theme.size(2)};
   min-width: 10rem;
   @starting-style {
     opacity: 0;
@@ -145,11 +145,11 @@ const TagRow = styled.button<{ selected: boolean }>`
   gap: 1ch;
   cursor: pointer;
   background-color: ${p =>
-    p.selected ? 'var(--color-accent-subtle)' : 'transparent'};
-  padding: var(--space-2);
-  border-radius: var(--radius-md);
+    p.selected ? p.theme.colors.mainSelectedBg : 'transparent'};
+  padding: ${p => p.theme.size(2)};
+  border-radius: ${p => p.theme.radius};
   color: ${p =>
-    p.selected ? 'var(--color-accent-text)' : 'var(--color-text)'};
+    p.selected ? p.theme.colors.mainSelectedFg : p.theme.colors.text};
 
   white-space: nowrap;
 `;
@@ -159,5 +159,5 @@ const StyledScrollArea = styled(ScrollArea)`
 `;
 
 const EmptyMessage = styled.div`
-  padding: var(--space-2);
+  padding: ${p => p.theme.size(2)};
 `;

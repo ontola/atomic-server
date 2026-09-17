@@ -222,12 +222,12 @@ const Card = styled.div<{ $dragging: boolean; $remoteDragging: boolean }>`
   flex-direction: column;
   gap: 0.35rem;
   padding: 0.6rem 0.75rem;
-  background-color: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  background-color: ${p => p.theme.colors.bg};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
   cursor: pointer;
   box-shadow: ${p =>
-    p.$dragging || p.$remoteDragging ? 'var(--elevation-3)' : 'none'};
+    p.$dragging || p.$remoteDragging ? p.theme.boxShadowIntense : 'none'};
   opacity: ${p => (p.$dragging ? 0.6 : 1)};
   /* A slight lift while a REMOTE session drags it — mirrors the drag
    * overlay they see, without moving the card out of its slot. */
@@ -236,7 +236,7 @@ const Card = styled.div<{ $dragging: boolean; $remoteDragging: boolean }>`
   user-select: none;
 
   &:hover {
-    border-color: var(--color-accent);
+    border-color: ${p => p.theme.colors.main};
   }
 `;
 
@@ -250,11 +250,11 @@ const CardTitle = styled.span`
   flex: 1;
   font-weight: bold;
   word-break: break-word;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
 
   &:hover {
-    background-color: var(--color-bg-subtle);
-    box-shadow: 0 0 0 3px var(--color-bg-subtle);
+    background-color: ${p => p.theme.colors.bg1};
+    box-shadow: 0 0 0 3px ${p => p.theme.colors.bg1};
   }
 `;
 
@@ -266,16 +266,16 @@ const OpenButton = styled.button`
   height: 1.4rem;
   width: 1.4rem;
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   background-color: transparent;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.1s ease-in-out;
 
   &:hover {
-    background-color: var(--color-bg-subtle);
-    color: var(--color-text);
+    background-color: ${p => p.theme.colors.bg1};
+    color: ${p => p.theme.colors.text};
   }
 
   ${Card}:hover & {
@@ -292,9 +292,9 @@ const TitleInput = styled(InputStyled)`
   font-weight: bold;
   padding: 0.1rem 0.3rem;
   margin: -0.1rem -0.3rem;
-  border: 1px solid var(--color-accent);
-  border-radius: var(--radius-md);
-  background-color: var(--color-bg);
+  border: 1px solid ${p => p.theme.colors.main};
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.bg};
 `;
 
 const FieldRow = styled.div`
@@ -302,12 +302,12 @@ const FieldRow = styled.div`
   gap: 0.5rem;
   align-items: baseline;
   font-size: 0.85em;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const FieldLabel = styled.span`
   flex-shrink: 0;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const FieldValue = styled.span`

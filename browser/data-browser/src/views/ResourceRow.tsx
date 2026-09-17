@@ -99,7 +99,7 @@ const IconWrapper = styled.div`
 `;
 
 export const ResourceRowDescription = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   white-space: nowrap;
 `;
 

@@ -13,6 +13,6 @@ export function DefaultGridItem({ resource }: GridItemViewProps): JSX.Element {
 }
 
 const DefaultGridWrapper = styled.div`
-  padding: var(--space-3);
+  padding: ${p => p.theme.margin}rem;
   pointer-events: none;
 `;

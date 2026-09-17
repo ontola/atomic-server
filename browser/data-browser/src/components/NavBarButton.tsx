@@ -17,10 +17,9 @@ export const LabelButton = styled.button<{ $active?: boolean }>`
    * rounded square. */
   height: 2rem;
   border: none;
-  border-radius: var(--radius-md);
-  background: ${p => (p.$active ? 'var(--color-bg-subtle)' : 'transparent')};
-  color: ${p =>
-    p.$active ? 'var(--color-accent)' : 'var(--color-text-subtle)'};
+  border-radius: ${p => p.theme.radius};
+  background: ${p => (p.$active ? p.theme.colors.bg1 : 'transparent')};
+  color: ${p => (p.$active ? p.theme.colors.main : p.theme.colors.textLight)};
   cursor: pointer;
   font-size: 0.875rem;
   white-space: nowrap;
@@ -40,12 +39,12 @@ export const LabelButton = styled.button<{ $active?: boolean }>`
   &:not([disabled]) {
     &:hover,
     &:focus-visible {
-      background: var(--color-bg-subtle);
-      color: ${p => (p.$active ? 'var(--color-accent)' : 'var(--color-text)')};
+      background: ${p => p.theme.colors.bg1};
+      color: ${p => (p.$active ? p.theme.colors.main : p.theme.colors.text)};
     }
 
     &:active {
-      background: var(--color-border);
+      background: ${p => p.theme.colors.bg2};
     }
   }
 `;

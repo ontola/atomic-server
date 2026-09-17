@@ -75,7 +75,7 @@ export function BookmarkPage({ resource }: ResourcePageProps): JSX.Element {
 }
 
 const Wrapper = styled.div`
-  margin-top: var(--space-3);
+  margin-top: ${p => p.theme.margin}rem;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -89,8 +89,8 @@ const Wrapper = styled.div`
 const ControlWrapper = styled.div`
   position: sticky;
   top: 0rem;
-  background-color: var(--color-bg-body);
-  border-bottom: solid 1px var(--color-border);
+  background-color: ${p => p.theme.colors.bgBody};
+  border-bottom: solid 1px ${props => props.theme.colors.bg2};
   padding: 0rem;
   align-items: center;
 `;
@@ -102,12 +102,12 @@ const FieldWrapper = styled.div`
 const ControlBar = styled.div`
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-3);
+  gap: ${p => p.theme.margin}rem;
+  margin-bottom: ${p => p.theme.margin}rem;
 `;
 
 const PreviewWrapper = styled.div`
-  background-color: var(--color-bg);
+  background-color: ${props => props.theme.colors.bg};
   flex: 1;
-  padding-bottom: var(--height-floating-search-bar);
+  padding-bottom: ${p => p.theme.heights.floatingSearchBarPadding};
 `;

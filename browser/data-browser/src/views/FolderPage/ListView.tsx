@@ -148,7 +148,7 @@ const TitleWrapper = styled.div`
   gap: var(--icon-title-spacing);
 
   svg {
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
   }
 `;
 
@@ -164,24 +164,24 @@ const AlignRight = styled.td`
 
 const LinkWrapper = styled.span`
   a {
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
   }
 `;
 
 const TableRow = styled.tr`
   &:nth-child(odd) {
     td {
-      background-color: var(--color-bg-subtle);
+      background-color: ${p => p.theme.colors.bg1};
     }
 
     td:first-child {
-      border-top-left-radius: var(--radius-md);
-      border-bottom-left-radius: var(--radius-md);
+      border-top-left-radius: ${p => p.theme.radius};
+      border-bottom-left-radius: ${p => p.theme.radius};
     }
 
     td:last-child {
-      border-top-right-radius: var(--radius-md);
-      border-bottom-right-radius: var(--radius-md);
+      border-top-right-radius: ${p => p.theme.radius};
+      border-bottom-right-radius: ${p => p.theme.radius};
     }
   }
 

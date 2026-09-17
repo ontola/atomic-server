@@ -92,12 +92,12 @@ const List = styled.div`
   flex-direction: column;
 
   > * + * {
-    border-top: solid 1px var(--color-border);
+    border-top: solid 1px ${p => p.theme.colors.bg2};
   }
 `;
 
 const NewRow = styled.div`
-  border-top: solid 1px var(--color-border);
+  border-top: solid 1px ${p => p.theme.colors.bg2};
   padding: 0.5rem 0.75rem;
 `;
 

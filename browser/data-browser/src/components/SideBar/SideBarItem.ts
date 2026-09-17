@@ -9,30 +9,28 @@ export interface SideBarItemProps {
 export const SideBarItem = styled('span')<SideBarItemProps>`
   box-sizing: border-box;
   display: flex;
-  min-height: var(--space-5);
+  min-height: ${props => props.theme.margin * 0.5 + 1}rem;
   align-items: center;
   justify-content: flex-start;
-  color: ${p =>
-    p.disabled ? 'var(--color-accent)' : 'var(--color-text-subtle)'};
+  color: ${p => (p.disabled ? p.theme.colors.main : p.theme.colors.textLight)};
   padding: 0.2rem;
   text-overflow: ellipsis;
   text-decoration: none;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   overflow: hidden;
   &:hover,
   &:focus {
-    background-color: var(--color-bg-subtle);
-    // color: ${p =>
-      p.disabled ? 'var(--color-accent)' : 'var(--color-text)'};
+    background-color: ${p => p.theme.colors.bg1};
+    // color: ${p => (p.disabled ? p.theme.colors.main : p.theme.colors.text)};
   }
   &:active {
-    background-color: var(--color-border);
+    background-color: ${p => p.theme.colors.bg2};
   }
 
   ${props =>
     props.current &&
     `
-    color: var(--color-accent);
+    color: ${props.theme.colors.main};
   `}
 
   svg {

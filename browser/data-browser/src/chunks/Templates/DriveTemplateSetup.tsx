@@ -345,12 +345,12 @@ const Gallery = styled.div`
   @media (max-width: 650px) {
     grid-template-columns: minmax(0, 1fr);
   }
-  gap: var(--space-2);
+  gap: ${p => p.theme.size(2)};
 `;
 const SidebarPreview = styled.div`
-  background: var(--color-bg-subtle);
-  border-radius: var(--radius-md);
-  padding: var(--space-2);
+  background: ${p => p.theme.colors.bg1};
+  border-radius: ${p => p.theme.radius};
+  padding: ${p => p.theme.size(2)};
   font-size: 0.9rem;
   line-height: 2;
 `;

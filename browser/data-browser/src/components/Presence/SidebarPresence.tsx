@@ -54,6 +54,6 @@ const Strip = styled.span`
 const More = styled.span`
   flex-shrink: 0;
   font-size: 0.65rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   margin-left: 0.1rem;
 `;

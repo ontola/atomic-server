@@ -24,10 +24,10 @@ const Badge = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 0.4ch;
-  background-color: var(--color-bg-subtle);
-  border: 1px solid var(--color-border);
+  background-color: ${p => p.theme.colors.bg1};
+  border: 1px solid ${p => p.theme.colors.bg2};
   border-radius: 0.25rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.8rem;
   padding-inline: 0.4rem;
   white-space: nowrap;

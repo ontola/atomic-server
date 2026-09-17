@@ -113,6 +113,6 @@ const H1 = styled.h1`
 `;
 
 const Explanation = styled.p`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   max-width: 60ch;
 `;

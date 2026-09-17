@@ -112,5 +112,5 @@ const EditButton = styled(Button)`
  *  used by MessageCard/MessagePage, where space-between is intentional. */
 const CompactDetails = styled(Details)`
   justify-content: flex-start;
-  gap: var(--space-4);
+  gap: ${p => p.theme.size(4)};
 `;

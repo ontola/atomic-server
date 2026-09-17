@@ -9,7 +9,7 @@ import {
   FaEllipsisVertical,
 } from 'react-icons/fa6';
 import type { AIAgent } from './types';
-import { styled } from 'styled-components';
+import { styled, useTheme } from 'styled-components';
 import { transition } from '@helpers/transition';
 import { useAIAgentConfig } from './AgentConfig';
 import { useAISettings } from '@components/AI/AISettingsContext';
@@ -47,6 +47,7 @@ export const AgentConfigItem: React.FC<AgentConfigItemProps> = ({
   const titleId = useId();
   const descriptionId = useId();
 
+  const theme = useTheme();
   const { defaultAgentId, setDefaultAgentId } = useAIAgentConfig();
   const { isProviderAvailable, defaultChatModel } = useAISettings();
 
@@ -111,9 +112,7 @@ export const AgentConfigItem: React.FC<AgentConfigItemProps> = ({
             title={isDefault ? 'Default agent' : `Set ${agent.name} as default`}
             edgeAlign='start'
           >
-            <FaStar
-              color={isDefault ? 'var(--color-accent)' : 'var(--color-border)'}
-            />
+            <FaStar color={isDefault ? theme.colors.main : theme.colors.bg2} />
           </IconButton>
           <Column gap='0'>
             <Row gap='1ch' center>
@@ -123,7 +122,7 @@ export const AgentConfigItem: React.FC<AgentConfigItemProps> = ({
               {providerDisabled && (
                 <FaTriangleExclamation
                   title='Provider not enabled'
-                  color={'var(--color-warning)'}
+                  color={theme.colors.warning}
                 />
               )}
             </Row>
@@ -143,15 +142,16 @@ export const AgentConfigItem: React.FC<AgentConfigItemProps> = ({
 };
 
 const AgentListItem = styled.li<{ selected: boolean }>`
-  padding: var(--space-3);
+  padding: ${p => p.theme.size(3)};
   margin: 0;
-  border-radius: var(--radius-md);
-  background-color: var(--color-bg-subtle);
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.bg1};
   cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: ${p => (p.selected ? `0 0 0 2px var(--color-accent)` : 'none')};
+  box-shadow: ${p =>
+    p.selected ? `0 0 0 2px ${p.theme.colors.main}` : 'none'};
   ${transition('box-shadow')}
 
   &:hover, &:has(input[type='radio']:focus) {
@@ -169,6 +169,6 @@ const AgentName = styled.label`
 
 const AgentDescription = styled.p`
   font-size: 0.875rem;
-  color: var(--color-text-subtle);
-  margin: var(--space-1) 0 0;
+  color: ${p => p.theme.colors.textLight};
+  margin: ${p => p.theme.size(1)} 0 0;
 `;

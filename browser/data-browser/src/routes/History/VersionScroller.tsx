@@ -78,9 +78,9 @@ export function VersionScroller({
 }
 
 const ScrollerSection = styled.section`
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background-color: var(--color-bg);
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.bg};
   min-width: 12rem;
   max-width: 20rem;
   display: grid;
@@ -106,13 +106,13 @@ const Scroller = styled.div`
 `;
 
 const ScrollerTitle = styled.h2`
-  padding: var(--space-3);
+  padding: ${p => p.theme.margin}rem;
   margin-bottom: 0;
   text-align: center;
 `;
 
 const ButtonWrapper = styled.div`
-  padding: var(--space-3);
+  padding: ${p => p.theme.margin}rem;
   display: flex;
   justify-content: space-between;
 `;
@@ -121,18 +121,18 @@ const GroupHeading = styled.h3`
     content: '';
     display: block;
     height: 1px;
-    background-color: var(--color-border);
+    background-color: ${p => p.theme.colors.bg2};
   }
   &::after {
     content: '';
     display: block;
     height: 1px;
-    background-color: var(--color-border);
+    background-color: ${p => p.theme.colors.bg2};
   }
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 0.5rem;
   text-align: center;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;

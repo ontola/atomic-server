@@ -5,12 +5,12 @@ export const SkeletonButton = styled.button`
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: var(--space-1);
-  color: var(--color-text-subtle);
+  gap: ${p => p.theme.size(1)};
+  color: ${p => p.theme.colors.textLight};
   background: none;
   appearance: none;
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-md);
+  border: 1px dashed ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
 
   cursor: pointer;
   ${transition('color', 'border')}
@@ -20,8 +20,8 @@ export const SkeletonButton = styled.button`
   }
   &:hover,
   &:focus-visible {
-    color: var(--color-accent);
-    border: 1px solid var(--color-accent);
+    color: ${p => p.theme.colors.main};
+    border: 1px solid ${p => p.theme.colors.main};
 
     & svg {
       transform: scale(1.3);
@@ -29,6 +29,6 @@ export const SkeletonButton = styled.button`
   }
 
   &:active {
-    background-color: var(--color-bg-subtle);
+    background-color: ${p => p.theme.colors.bg1};
   }
 `;

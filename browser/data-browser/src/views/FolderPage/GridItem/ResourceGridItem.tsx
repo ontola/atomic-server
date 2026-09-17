@@ -112,16 +112,16 @@ const CornerBadge = styled(CommentCountBadge)`
 
 const ClassBanner = styled.div`
   display: flex;
-  background-color: var(--color-bg);
-  border-top-left-radius: var(--radius-md);
-  border-top-right-radius: var(--radius-md);
+  background-color: ${p => p.theme.colors.bg};
+  border-top-left-radius: ${p => p.theme.radius};
+  border-top-right-radius: ${p => p.theme.radius};
   align-items: center;
   gap: 0.5rem;
   justify-content: center;
   padding-block: var(--card-banner-padding);
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
   span {
     text-transform: capitalize;
   }
@@ -130,11 +130,11 @@ const ClassBanner = styled.div`
 const FolderIcon = styled(FaFolder)`
   height: 100%;
   width: 100%;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   transition: color 0.1s ease-in-out;
 
   ${GridItemWrapper}:hover & {
-    color: var(--color-accent);
+    color: ${p => p.theme.colors.main};
   }
 `;
 
@@ -147,12 +147,12 @@ const GridItemError: React.FC<GridItemErrorProps> = ({ error }) => {
 };
 
 const GridItemErrorWrapper = styled.div`
-  color: var(--color-alert);
+  color: ${p => p.theme.colors.alert};
   text-align: center;
 `;
 
 const Loader = styled(LoaderBlock)`
-  --loader-bg-to: var(--color-bg-body);
+  --loader-bg-to: ${p => p.theme.colors.bgBody};
   height: unset;
   aspect-ratio: 1/1;
 `;

@@ -45,5 +45,5 @@ export function GeneratingIndicator({ text }: GeneratingIndicatorProps) {
 
 const Wrapper = styled(Row)`
   font-size: 12px;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;

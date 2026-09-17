@@ -391,9 +391,9 @@ function isReadSkillReferenceArgs(
 }
 
 const StyledPre = styled.pre`
-  background-color: var(--color-bg);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
+  background-color: ${p => p.theme.colors.bg};
+  padding: ${p => p.theme.size()};
+  border-radius: ${p => p.theme.radius};
   overflow-x: auto;
   code {
     font-family: Monaco, monospace;
@@ -402,5 +402,5 @@ const StyledPre = styled.pre`
 `;
 
 const Name = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;

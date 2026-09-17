@@ -145,5 +145,6 @@ const Value = styled.div<{ $live: boolean }>`
   padding-inline: var(--table-inner-padding);
   font-variant-numeric: tabular-nums;
   font-weight: ${p => (p.$live ? 'bold' : 'normal')};
-  color: ${p => (p.$live ? 'var(--color-accent-text)' : 'var(--color-text)')};
+  color: ${p =>
+    p.$live ? p.theme.colors.mainSelectedFg : p.theme.colors.text};
 `;

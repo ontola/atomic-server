@@ -147,8 +147,8 @@ const MarkdownWrapper = styled.div`
   blockquote {
     margin-inline-start: 0rem;
     padding-inline-start: 1rem;
-    border-inline-start: solid 3px var(--color-border);
-    color: var(--color-text-subtle);
+    border-inline-start: solid 3px ${props => props.theme.colors.bg2};
+    color: ${props => props.theme.colors.textLight};
   }
 
   code {
@@ -157,7 +157,7 @@ const MarkdownWrapper = styled.div`
   }
 
   :not(pre) > code {
-    background-color: var(--color-bg-subtle);
+    background-color: ${props => props.theme.colors.bg1};
     padding: 0rem 0.2rem;
     font-family: Monaco, monospace;
     display: inline-flex;
@@ -167,9 +167,9 @@ const MarkdownWrapper = styled.div`
   }
 
   pre {
-    background-color: var(--color-bg-subtle);
-    padding: 0.5rem var(--space-3);
-    border-radius: var(--radius-md);
+    background-color: ${p => p.theme.colors.bg1};
+    padding: 0.5rem ${p => p.theme.margin}rem;
+    border-radius: ${p => p.theme.radius};
     white-space: pre;
     overflow-x: auto;
   }
@@ -187,7 +187,7 @@ const MarkdownWrapper = styled.div`
     border-collapse: collapse;
     padding: 0.5rem;
 
-    border: 1px solid var(--color-border);
+    border: 1px solid ${props => props.theme.colors.bg2};
   }
 
   a {

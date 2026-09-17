@@ -1458,7 +1458,7 @@ const WelcomeStack = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-9);
+  gap: ${p => p.theme.size(9)};
   width: 100%;
   max-width: 22rem;
   margin-inline: auto;
@@ -1511,7 +1511,7 @@ const OwnedElsewhere = styled.p`
   /* pretty, not balance: balancing squeezed this to half the available
      width and split a link across two lines. */
   text-wrap: pretty;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.85rem;
 `;
 
@@ -1536,7 +1536,7 @@ function PasskeyOnlyHint(): React.JSX.Element {
 }
 
 const PlainExternalLink = styled.a`
-  color: var(--color-accent);
+  color: ${p => p.theme.colors.main};
   text-decoration: underline;
   /* A link that reads as one thing should wrap as one thing. */
   white-space: nowrap;
@@ -1546,14 +1546,14 @@ const OtherWaysLabel = styled.span`
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.85rem;
 
   &::before,
   &::after {
     content: '';
     flex: 1;
-    border-top: 1px solid var(--color-border);
+    border-top: 1px solid ${p => p.theme.colors.bg2};
   }
 `;
 

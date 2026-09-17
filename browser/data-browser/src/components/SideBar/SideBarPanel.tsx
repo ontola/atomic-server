@@ -42,7 +42,7 @@ const PanelTitle = styled.span`
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   text-align: start;
   white-space: nowrap;
 `;
@@ -56,21 +56,21 @@ const HeaderButton = styled.button`
   align-items: center;
   justify-content: flex-start;
   cursor: pointer;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   box-sizing: border-box;
   width: 100%;
   text-align: start;
 
   &:hover {
-    background-color: var(--color-bg-subtle);
+    background-color: ${p => p.theme.colors.bg1};
   }
 
   &:hover ${PanelTitle} {
-    color: var(--color-text);
+    color: ${p => p.theme.colors.text};
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid ${p => p.theme.colors.main};
     outline-offset: 2px;
   }
 `;

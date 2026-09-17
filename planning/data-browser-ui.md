@@ -1,7 +1,8 @@
 # Data browser UI
 
-**Status:** Phases 1 and 2 shipped on `claude/data-browser-ui-refactor-0ps7ge`
-(2026-09-16); Phases 3-5 are still proposals. This is an audit of
+**Status:** Phase 1 shipped on `claude/data-browser-ui-refactor-0ps7ge`
+(2026-09-17); Phases 2-5 are still proposals. A CSS-custom-property variant of
+Phase 1 was built and reverted — see the decision note under Phase 1. This is an audit of
 `browser/data-browser/src` plus a recommended order of work. Numbers are
 measured against `develop` at `3b9f7e4`, before the change.
 
@@ -129,179 +130,88 @@ CSS, from the RTE, from the canvas, and from any future non-React surface.
 Ordered. Each phase is independently shippable and leaves the app working.
 Phases 1-3 are the ones that matter; 4-5 are follow-on.
 
-### Phase 1 — Tokens as CSS custom properties — **shipped**
+### Phase 1 — Unify the palette and the scales — **shipped**
 
 Landed in `browser/data-browser/src/styles/`:
 
 | File | What it is |
 | --- | --- |
-| `tokens.css` | The static layer: two 12-step ramps, a 7-step type scale, the existing space ratio as `--space-1..15`, radius, one elevation ladder, motion. Light plus a `[data-theme='dark']` block. |
+| `ramps.ts` | The palette and the scales: two 12-step ramps, a 7-step type scale, radius steps, one elevation ladder, motion, status and diff colours. Authored in OKLCH, emitted as hex. |
 | `oklch.ts` | Oklab/OKLCH ↔ sRGB and WCAG contrast. No dependency; the inverse is needed for the gate. |
-| `accentRamp.ts` | The one ramp that cannot be static, derived from the user's main colour and written to `:root`. Also the colourful-mode chrome tones. |
-| `withAlpha.ts` | `color-mix()` in place of polished's `transparentize`, which cannot parse a `var()`. |
-| `resolveTokens.ts` | Resolves `var()` for the plugin iframe, the one place a token value leaves the document that defines it. |
-| `tokens.contrast.test.ts` | The gate: 104 assertions, reading the shipped CSS. |
+| `theme.ts` | `buildTheme`, mapping the palette onto the names components read. Pure data, separate from `styling.tsx` so a contrast test does not have to load `AppSettings` and half the app. |
+| `theme.contrast.test.ts` | The accessibility gate: 108 assertions over the built theme, every preset, both themes. |
 
-`styling.tsx` keeps the `DefaultTheme` shape so all 415 files compile
-unchanged, but every value it carries is now a `var(--token)` reference. Two
-consequences worth stating:
+**The theme object stays the single source, and stays typed.** Every existing
+member keeps its name, so none of the ~1750 `p.theme` call sites changed. What
+changed is what they point at, and that the theme now carries a whole palette
+and a whole set of scales rather than three greys and a radius:
 
-- The theme object no longer depends on the main colour, so there are exactly
-  two of them. Changing the accent re-renders nothing; it writes thirteen
-  custom properties. Changing theme writes one attribute.
-- Nothing can do arithmetic on a theme colour any more. That was 25 call sites,
-  19 of them `transparentize`; they moved to `color-mix()`, or to a token that
-  should always have existed (`alertLight`, `complementary`). The polished
-  helpers remain only where the colour comes from data — a tag colour, a Kanban
-  tint — which is the only place they were ever right.
+- `colors.neutral` and `colors.accent`, twelve steps each with fixed roles in
+  the shape Radix Colors established. Twelve sounds like a lot until you count
+  the 107 stray `rgba()`/hex literals a three-step ramp produced.
+- `fontSize` (7 steps), `lineHeight`, `fontWeight`, `radii`, `elevation`,
+  `duration`, `easing`. `radius`, `boxShadow*` and `animation.duration` remain
+  as aliases onto them.
+- `colors.onAccent`, `colors.accentText`, `colors.borderSubtle`,
+  `colors.borderStrong`, `colors.warningLight`, `colors.success`.
 
-What the gate caught on its first run, all of it pre-existing:
+Authored in OKLCH because it is perceptually uniform; the old ramp used
+polished's `lighten`/`darken` on HSL lightness, where the same delta is a big
+jump in blue and a small one in yellow, so the ramp drifted as the user changed
+their main colour. **Emitted as hex**, because the theme's colours are handed
+to polished and to call sites that append an 8-bit alpha suffix, and neither
+speaks `oklch()`.
+
+What the gate caught on its first run, all pre-existing:
 
 - **A primary button below AA on six of the nine main-colour presets.** The
   theme used one value for both the button fill and the label on it, the label
   being the page background. The mustard preset was 2.5:1. The fill now picks
-  the label it can carry and only moves when neither white nor near-black
-  works — six of the nine come through as the exact hex the user picked.
+  the label it can carry (`colors.onAccent`) and only moves when neither white
+  nor near-black works, so six of the nine come through as the exact hex the
+  user picked.
 - **`textLight2` at 1.61:1**, in eight places, with a doc comment admitting it.
-  Now aliased to `textLight` and deprecated.
+  Now the same value as `textLight` and deprecated.
 - **Accent-as-text using the fill step**, so a light main colour produced links
-  at ~2.2:1. Links now use `--color-accent-text` (step 11).
+  at ~2.2:1. Links now use `colors.accentText` (accent step 11).
 - **Dark-mode surfaces indistinguishable from the page** — `bg` and `bgBody`
   were both `#000000`, so a card could only be found by its border.
 
-Demonstrated on `Button`, `Card`, `cardSurface`, `AllProps` and `PropVal` —
-the default resource page and the shared surfaces. A specimen of the ramps,
-the type scale and the before/after is published as an artifact.
+Two further bugs, found while auditing custom properties and fixed here
+because they were live: `SearchOverlay` set `var(--color-bg1)` on the selected
+row and no such property has ever existed, so the selected search result had no
+highlight; and `Tag` read `var(--dark-color)` for its hover shadow while
+declaring `--tag-dark-color` twenty lines above.
 
-The original plan for this phase, for reference:
+Demonstrated on `Button`, `cardSurface`, `AllProps` and `PropVal`.
 
-- **Colour**: author in OKLCH. Two ramps (neutral, accent) of 12 steps each,
-  in the Radix-colors shape: app background, subtle background, component
-  background / hover / active, borders subtle / normal / strong, solid /
-  solid-hover, text low-contrast / high-contrast. Twelve steps sounds like a
-  lot; it is exactly the number that stops people reaching for `rgba()`. Derive
-  dark mode as its own ramp, not as `lighten()` of the light one.
-- **Type**: 7 steps, one named role each (`--font-size-xs` … `--font-size-3xl`)
-  and line-heights to match. Seven, so that "slightly smaller" has exactly one
-  answer.
-- **Space**: keep the existing `size()` ratio, expose it as
-  `--space-1 … --space-15`.
-- **Radius, elevation, duration, easing**: 3-4 steps each. One shadow ladder,
-  not 39.
-- Accessibility gate: every text-on-background pairing the ramp permits must
-  clear 4.5:1. Delete `textLight2` rather than re-tune it.
+#### Decision: the theme object, not CSS custom properties
 
-Ship the ramps with a contrast unit test so the gate cannot silently regress.
+An earlier version of this slice moved the whole thing to CSS custom
+properties and retired the theme facade, taking ~1750 `p.theme` reads down to
+18. It was reverted. The reasons, recorded because they will come up again:
 
-### Phase 2 — Retire the facade — **shipped**
+- **It removes the typecheck.** A custom property is a string wherever it
+  appears, so `var(--color-bgg)` typechecks, lints, renders and silently does
+  nothing. An oxlint plugin can close that (`jsPlugins` takes local paths, and
+  it worked), but `tsc` is the feedback signal everything already runs, and an
+  agent iterating on this repo gets nothing from a rule its loop does not
+  invoke. Autocomplete goes too.
+- **The performance case was not there.** Two full builds, same
+  `node_modules`: gzipped JS plus CSS went from 2,280,128 to 2,278,972 bytes.
+  A 0.05% difference, which is noise. The bundle win belongs to Phase 5, not
+  here. What CSS variables do buy is a themewissel with no React re-render and
+  scoping through the cascade rather than nested providers; neither was worth
+  the typecheck at this point.
+- **It is not a prerequisite for the unification.** The ramps, the scales and
+  the gate are what fix the drift, and all three work just as well inside a
+  typed theme object. That is what shipped.
 
-Phase 1 deliberately kept a theme facade so it would not have to touch 415
-files. That left two systems live: `tokens.css` as the source of truth and
-1752 `p.theme` interpolations reading it through a React context. This removes
-the second one.
+The cost kept: the theme is a function of `(darkMode, mainColor, colorful)`
+again, so changing either still invalidates the tree through context. And
+`ChromeTheme` stays a nested `ThemeProvider`.
 
-| | before | after |
-| --- | --- | --- |
-| `p.theme` interpolations | 1752 | 18 |
-| files reading the theme | 326 | 21 |
-| distinct theme members in use | 57 | 1 |
-| `styling.tsx` | 552 lines | 326 |
-
-What is left is `theme.darkMode`, in 30 places, and it stays: those pass it to
-something that is not CSS — a CodeMirror theme object, emoji-mart's `theme`
-prop, ReactFlow. `DefaultTheme` is now that one boolean.
-
-The substitution itself is safe by construction — the facade returned exactly
-the strings the codemod wrote, so `p.theme.colors.bg` → `var(--color-bg)`
-cannot change a rendered value. The work was in the cases that were *not* that:
-
-- **`ChromeTheme` became a cascade scope.** It was a nested `ThemeProvider`
-  that swapped the surface colours for the sidebar and navbar; it is now a
-  `.chrome-scope` class those two elements put on themselves. One less context,
-  no wrapper element, and it composes with anything else that scopes a token.
-- **Arithmetic on theme numbers.** `theme.margin / 2`, `* 2`, `* 0.5 + 1`,
-  `-theme.margin`, `zIndex.sidebar - 1`. Each resolved to a step on the scale.
-  Two of them (`-theme.margin`) would have rendered `NaN`.
-- **Hex-alpha suffixes on a colour** — `${theme.colors.main}0a`, `1c`, `22`,
-  `33`, `55`, `1a`, `14`, `0d` — 16 sites across 9 files. These only work on a
-  literal, so they became `color-mix()` at the same ratio. They were invisible
-  to the typechecker, and the audit below is what found them.
-- **`theme.colors[p.color]`**, a lookup by name in `IconButton`'s public prop
-  API. That one keeps a four-entry map in `styles/colorTokens.ts`.
-- Layout constants the theme held as plain values (bar heights, container and
-  sidebar widths) and the z-index scale became tokens, so CSS can reach them.
-
-**The feedback loop that replaces the typecheck.** A custom property is a
-string wherever it appears, so `var(--color-bgg)` typechecks, lints, renders
-and silently does nothing. That is the real cost of this phase, and it is paid
-back by `oxlint-plugins/tokenVars.js`, a local oxlint JS plugin
-(`token-vars/no-unknown-custom-property`): it collects every `--x` declared
-anywhere in `src/` and errors on any `var()` without a fallback that names
-something else, at the exact line and column. A `var(--x, 0)` is skipped
-because a fallback states what to do when the property is absent.
-
-A lint rule rather than a test, because this wants to be a squiggle while you
-type and a pre-commit failure. It reads the whole tree once per run (2.2s for
-the package, unchanged) rather than working per file, because a
-component-local property is legitimately declared in one file and read in
-another: `--template-color-bg1` is set in `TemplateListItem` and read by the
-SVG in `websiteImage`.
-
-It found two live bugs on its first run, both predating any of this work:
-`SearchOverlay` set `var(--color-bg1)` on the selected row (the token is
-`--color-bg-subtle`, so there was no highlight), and `Tag` read
-`var(--dark-color)` for its hover shadow while declaring `--tag-dark-color`
-twenty lines above. Neither is a hole the theme object covered: the theme only
-type-checked its own member names, and both of these lived in an inline style
-and in component-local properties. The rule covers all 164 properties the app
-references.
-
-Note that oxlint's `jsPlugins` API is marked alpha and not subject to semver.
-If that becomes a problem, the same check exists as a vitest suite in the
-history at `d07001f` and can be restored.
-
-**How the rest was verified.** Typecheck, 1047 unit tests, and zero lint errors
-are necessary but not sufficient: invalid *CSS* is valid TypeScript. Two
-further checks did the real work.
-
-1. **A re-derivation audit.** Re-run the safe passes over every file's HEAD
-   content and diff against what is on disk; whitespace-normalised, what
-   remains is exactly the set of hand edits. That is what surfaced the
-   hex-alpha sites and a `var(--space-3) rem` left behind where a destructured
-   `({ theme })` parameter defeated the unit-stripping regex.
-2. **A real browser.** Every element on the rendered page, both themes, checked
-   for a computed style still containing `var(`, `NaN` or `undefined`. Zero, on
-   216 elements.
-
-Worth recording as a caution: a blunt regex pass over `$`-sigil code corrupted
-Svelte 5 runes (`$state`, `$derived`, `$effect`, `$props`) inside the code
-generators in `views/CodeUsage/`, which emit code as template strings. Those
-files hold no theme reads and were reverted. Any future sweep of this kind
-should exclude code that generates code.
-
-**Still open from the original Phase 2 plan:** the literals themselves. This
-moved every *theme* read onto a token; it did not collapse the 56 font sizes,
-53 gaps and 108 paddings that were never in the theme to begin with. That is
-the per-property codemod plus the lint rule, and it is the next slice:
-
-### Phase 2b — Codemod the remaining literals — **next**
-
-The token set is worthless until the 1155 styled components use it. This is
-mechanical and should be done with a script plus review, not by hand and not
-all at once:
-
-1. `font-size` — 56 values collapse to 7. This is the single highest-visual-
-   impact change in the whole plan and it is almost entirely find-and-replace.
-2. `gap` / `padding` / `margin` — snap to the nearest space step.
-3. `box-shadow` → elevation steps. `border-radius` → radius steps.
-4. Durations → `--duration-*`.
-5. Stray hex / `rgba()` → the nearest ramp step; anything that genuinely has no
-   home is a missing token, so add it rather than keeping the literal.
-
-Add an Oxlint rule (or a stylelint pass over the tagged templates) banning raw
-colour literals, raw `font-size`, and raw durations in `src/`, so the drift
-cannot come back. That rule is the actual deliverable of this phase; the
-codemod just gets the tree to a state where it can be turned on.
+### Phase 2 — Codemod the literals away — **next**
 
 ### Phase 3 — Consolidate the surface vocabulary
 
@@ -388,9 +298,3 @@ sizes in a different syntax.
   covered the shell, the token bridge and every element it rendered, but the
   data-browser proper needs a WASM build and a running server. A human should
   click through a resource page, a table and the sidebar before this merges.
-- **`PAGE_LIGHT` / `PAGE_DARK` in `accentRamp.ts` mirror `--color-bg`
-  numerically**, because the legibility search needs the page colour as a
-  number. The contrast gate reads the real value out of the CSS, so a drift
-  between the two fails the test rather than shipping an invisible button —
-  but it is a duplication, and relative colour syntax would remove it.
-- **`theme.colorful` is gone** along with the rest of the facade.

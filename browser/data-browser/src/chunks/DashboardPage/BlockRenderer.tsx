@@ -95,6 +95,6 @@ export function BlockRenderer({ subject }: { subject: string }): JSX.Element {
 }
 
 const Unknown = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-style: italic;
 `;

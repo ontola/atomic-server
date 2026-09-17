@@ -22,7 +22,7 @@ const randomId = () => Math.random().toString(36).substring(2, 15);
  * ```tsx
  * const LargeContainerWidth = new CSSVar('large-container-width');
  * const StyledDiv = styled.div`
- *   ${LargeContainerWidth.define(p => 'var(--container-width-wide)')};
+ *   ${LargeContainerWidth.define(p => p.theme.containerWidthWide)};
  * `;
  * ```
  */

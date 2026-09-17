@@ -67,9 +67,9 @@ const Overflow = styled.div`
   min-width: 1.6rem;
   height: 1.6rem;
   border-radius: 50%;
-  background-color: var(--color-border);
-  border: 2px solid var(--color-bg);
-  color: var(--color-text-subtle);
+  background-color: ${p => p.theme.colors.bg2};
+  border: 2px solid ${p => p.theme.colors.bg};
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.7rem;
   user-select: none;
 `;

@@ -624,8 +624,8 @@ const CoverImage = styled(Image)`
 
 const CoverActions = styled(Row)`
   position: absolute;
-  top: var(--space-3);
-  right: var(--space-3);
+  top: ${p => p.theme.size()};
+  right: ${p => p.theme.size()};
   opacity: 0;
   transition: opacity 0.1s ease-in-out;
 
@@ -635,7 +635,7 @@ const CoverActions = styled(Row)`
   }
 
   & button {
-    background-color: var(--color-bg);
+    background-color: ${p => p.theme.colors.bg};
   }
 `;
 
@@ -667,7 +667,7 @@ const GlyphTrigger = styled(RadixPopover.Trigger)`
   background: transparent;
   padding: 0;
   cursor: pointer;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   transition: transform 0.1s ease-in-out;
 
   &:hover,

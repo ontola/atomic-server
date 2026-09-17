@@ -1,3 +1,4 @@
+import { transparentize } from 'polished';
 import {
   forwardRef,
   useState,
@@ -10,7 +11,6 @@ import { ScrollArea } from '../../../components/ScrollArea';
 import type { SuggestionItem } from '../types';
 import { useOnValueChange } from '@helpers/useOnValueChange';
 import { Column } from '@components/Row';
-import { withAlpha } from '../../../styles/withAlpha';
 
 export type CommandListRefType = {
   onKeyDown: (event: KeyboardEvent) => boolean;
@@ -111,9 +111,9 @@ export const CommandList = forwardRef<CommandListRefType, CommandListProps>(
 CommandList.displayName = 'CommandList';
 
 const ScrollingList = styled(ScrollArea)`
-  background-color: var(--color-bg);
-  border-radius: var(--radius-md);
-  box-shadow: var(--elevation-2);
+  background-color: ${p => p.theme.colors.bg};
+  border-radius: ${p => p.theme.radius};
+  box-shadow: ${p => p.theme.boxShadowSoft};
   padding: 1rem;
   max-height: min(50dvh, 20rem);
   overflow-y: auto;
@@ -122,21 +122,21 @@ const ScrollingList = styled(ScrollArea)`
   gap: 0.5rem;
   align-items: flex-start;
   @supports (backdrop-filter: blur(5px)) {
-    background-color: ${withAlpha('var(--color-bg)', 0.85)};
+    background-color: ${p => transparentize(0.15, p.theme.colors.bg)};
     backdrop-filter: blur(5px);
   }
 `;
 
 const ListItemButton = styled.button<{ active: boolean }>`
   appearance: none;
-  background: ${p => (p.active ? 'var(--color-accent)' : 'transparent')};
-  color: ${p => (p.active ? 'var(--color-bg)' : 'var(--color-text)')};
+  background: ${p => (p.active ? p.theme.colors.main : 'transparent')};
+  color: ${p => (p.active ? p.theme.colors.bg : p.theme.colors.text)};
   border: none;
   display: flex;
   align-items: center;
   gap: 1ch;
   padding: 0.5rem;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   max-width: 60ch;
   overflow: hidden;
 

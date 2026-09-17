@@ -56,8 +56,8 @@ export const CompactSeparatorWidget: React.FC<CompactSeparatorWidgetProps> = ({
 const CompactSeparatorContainer = styled.div`
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  padding-block: var(--space-2);
+  gap: ${p => p.theme.size(1)};
+  padding-block: ${p => p.theme.size(2)};
 `;
 
 const CompactSeparatorRow = styled.button<{ clickable: boolean }>`
@@ -66,27 +66,27 @@ const CompactSeparatorRow = styled.button<{ clickable: boolean }>`
   align-items: center;
   border: none;
   background: none;
-  gap: var(--space-2);
+  gap: ${p => p.theme.size(2)};
   cursor: ${p => (p.clickable ? 'pointer' : 'default')};
 
   &:hover > span {
     color: ${p =>
-      p.clickable ? 'var(--color-text)' : 'var(--color-text-subtle)'};
+      p.clickable ? p.theme.colors.text : p.theme.colors.textLight};
   }
 `;
 
 const CompactSeparatorLine = styled.div`
   flex: 1;
   height: 1px;
-  background-color: var(--color-border);
+  background-color: ${p => p.theme.colors.bg2};
 `;
 
 const CompactSeparatorLabel = styled.span`
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: ${p => p.theme.size(1)};
   font-size: 0.75rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   white-space: nowrap;
   transition: color 0.1s;
 `;
@@ -100,10 +100,10 @@ const ChevronIcon = styled.span<{ expanded: boolean }>`
 
 const SummaryText = styled.p`
   font-size: 0.8rem;
-  color: var(--color-text-subtle);
-  padding: var(--space-2);
-  background-color: var(--color-bg-subtle);
-  border-radius: var(--radius-md);
+  color: ${p => p.theme.colors.textLight};
+  padding: ${p => p.theme.size(2)};
+  background-color: ${p => p.theme.colors.bg1};
+  border-radius: ${p => p.theme.radius};
   margin: 0;
   line-height: 1.5;
   white-space: pre-wrap;

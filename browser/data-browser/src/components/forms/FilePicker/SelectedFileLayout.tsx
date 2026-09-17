@@ -40,8 +40,8 @@ const Title = styled.span`
 `;
 
 const Wrapper = styled.div`
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
   width: min(100%, 20rem);
   padding: 1rem;
   display: flex;
@@ -54,10 +54,10 @@ const PreviewWrapper = styled.div`
   width: 100%;
   display: grid;
   overflow: hidden;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
 `;
 
 const Helper = styled.p`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   margin: 0;
 `;

@@ -23,7 +23,6 @@ import {
   isPasskeySupported,
   PrfUnsupportedError,
 } from '../helpers/managed/recovery';
-import { withAlpha } from '../styles/withAlpha';
 
 type Step =
   | 'idle'
@@ -946,14 +945,14 @@ function RecoveryBackupStep({
 const SkipWarning = styled.p`
   margin: 0;
   padding: 0.9rem 1rem;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-alert);
-  background: ${withAlpha('var(--color-alert)', 0.08)};
-  color: var(--color-text);
+  border-radius: ${p => p.theme.radius};
+  border: 1px solid ${p => p.theme.colors.alert};
+  background: ${p => p.theme.colors.alert}14;
+  color: ${p => p.theme.colors.text};
   line-height: 1.5;
 
   strong {
-    color: var(--color-alert);
+    color: ${p => p.theme.colors.alert};
   }
 `;
 
@@ -966,13 +965,13 @@ const StyledCodeBlock = styled(CodeBlock)`
   word-break: break-word;
 
   & button {
-    top: var(--space-1);
-    right: var(--space-1);
+    top: ${p => p.theme.size(1)};
+    right: ${p => p.theme.size(1)};
   }
 `;
 
 const ErrorText = styled.p`
-  color: var(--color-alert);
+  color: ${p => p.theme.colors.alert};
   margin: 0;
 `;
 

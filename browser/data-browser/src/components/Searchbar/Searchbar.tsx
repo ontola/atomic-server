@@ -1,4 +1,5 @@
 import { Client, useResource, useTitle } from '@tomic/react';
+import { transparentize } from 'polished';
 import { useEffect, useRef, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { constructOpenURL } from '../../helpers/navigation';
@@ -8,7 +9,6 @@ import { FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { SearchbarFakeInput, SearchbarInput } from './SearchbarInput';
 import { useSearchOverlay } from './SearchOverlayContext';
-import { withAlpha } from '../../styles/withAlpha';
 
 export function Searchbar(): JSX.Element {
   const [currentSubject] = useCurrentSubject();
@@ -102,22 +102,22 @@ const Wrapper = styled.div`
   gap: 1ch;
   display: flex;
   align-items: center;
-  padding-inline: var(--space-2);
+  padding-inline: ${p => p.theme.size(2)};
   overflow: hidden;
   border-radius: 999px;
   display: flex;
 
   :hover {
-    ${withAlpha('var(--color-accent)', 0.4)};
+    ${props => transparentize(0.6, props.theme.colors.main)};
     ${SearchbarFakeInput} {
-      color: var(--color-text);
+      color: ${p => p.theme.colors.text};
     }
   }
 `;
 
 const Tag = styled.span`
-  background-color: var(--color-bg-subtle);
-  border-radius: var(--radius-md);
+  background-color: ${p => p.theme.colors.bg1};
+  border-radius: ${p => p.theme.radius};
   padding: 0.2rem 0.5rem;
   display: flex;
   flex-direction: row;

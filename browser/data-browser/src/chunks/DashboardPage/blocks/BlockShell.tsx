@@ -54,18 +54,18 @@ const Card = styled.div`
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  padding: var(--space-2);
-  gap: var(--space-1);
-  background-color: var(--color-bg-subtle);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  padding: ${p => p.theme.size(2)};
+  gap: ${p => p.theme.size(1)};
+  background-color: ${p => p.theme.colors.bg1};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
 `;
 
 const Header = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-1);
+  gap: ${p => p.theme.size(1)};
   min-width: 0;
 `;
 
@@ -73,7 +73,7 @@ const Heading = styled.h2`
   margin: 0;
   font-size: 0.9rem;
   font-weight: bold;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

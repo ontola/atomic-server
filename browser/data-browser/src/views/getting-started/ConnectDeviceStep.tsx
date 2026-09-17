@@ -34,7 +34,6 @@ import {
   OnboardingWrap,
   FooterBar,
 } from './chrome';
-import { withAlpha } from '../../styles/withAlpha';
 
 /**
  * `/iroh-sync` answers as soon as the peer's push is imported, which is not the
@@ -570,8 +569,8 @@ const Badge = styled.div`
   align-items: center;
   justify-content: center;
   font-size: 1.3rem;
-  color: var(--color-accent);
-  background: ${withAlpha('var(--color-accent)', 0.11)};
+  color: ${p => p.theme.colors.main};
+  background: ${p => p.theme.colors.main}1c;
 `;
 
 const Section = styled.section`
@@ -585,7 +584,7 @@ const SectionTitle = styled.h3`
 `;
 
 const Explainer = styled.p`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.85rem;
   margin: 0 0 0.6rem;
 `;
@@ -606,17 +605,17 @@ const TextButton = styled.button`
   border: none;
   padding: 0;
   cursor: pointer;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.85rem;
   text-decoration: underline;
 
   &:hover {
-    color: var(--color-text);
+    color: ${p => p.theme.colors.text};
   }
 `;
 
 const ErrorText = styled.p`
-  color: var(--color-alert);
+  color: ${p => p.theme.colors.alert};
   font-size: 0.85rem;
   margin: 0 0 0.6rem;
 `;
@@ -635,14 +634,14 @@ const OtherRoutes = styled.details`
 
 const OtherRoutesSummary = styled.summary`
   cursor: pointer;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.85rem;
   text-align: center;
   padding: 0.4rem 0;
   margin-bottom: 0.4rem;
 
   &:hover {
-    color: var(--color-text);
+    color: ${p => p.theme.colors.text};
   }
 `;
 

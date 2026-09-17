@@ -37,6 +37,6 @@ const TableTitle = styled(AtomicLink)`
   display: flex;
   align-items: center;
   gap: 1ch;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   padding-inline-start: 0.5rem;
 `;

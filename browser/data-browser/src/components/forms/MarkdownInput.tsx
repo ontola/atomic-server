@@ -15,10 +15,10 @@ export function MarkdownInput(
 }
 
 const DummyEditor = styled.div`
-  background-color: var(--color-bg);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  box-shadow: 0 0 0 1px var(--color-border);
+  background-color: ${p => p.theme.colors.bg};
+  padding: ${p => p.theme.margin}rem;
+  border-radius: ${p => p.theme.radius};
+  box-shadow: 0 0 0 1px ${p => p.theme.colors.bg2};
   width: min(100%, 75ch);
   min-height: 10rem;
 `;

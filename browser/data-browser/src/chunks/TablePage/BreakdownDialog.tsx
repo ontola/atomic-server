@@ -146,6 +146,6 @@ const Row = styled.div`
 `;
 
 const Explainer = styled.p`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   margin-top: 0;
 `;

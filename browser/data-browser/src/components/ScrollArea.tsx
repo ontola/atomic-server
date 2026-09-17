@@ -1,7 +1,7 @@
 import * as RadixScrollArea from '@radix-ui/react-scroll-area';
 import { styled } from 'styled-components';
+import { transparentize } from 'polished';
 import { forwardRef, type JSX } from 'react';
-import { withAlpha } from '../styles/withAlpha';
 
 const SIZE = '0.8rem';
 
@@ -38,7 +38,7 @@ const ScrollBar = styled(RadixScrollArea.Scrollbar)`
   touch-action: none;
   padding: 2px;
   background-color: transparent;
-  transition: background-color var(--duration-fast) ease-out;
+  transition: background-color ${p => p.theme.animation.duration} ease-out;
   &[data-orientation='horizontal'] {
     flex-direction: column;
     height: ${() => SIZE};
@@ -52,7 +52,7 @@ const Thumb = styled(RadixScrollArea.Thumb)`
   position: relative;
   bottom: 1px;
   flex: 1;
-  background-color: ${withAlpha('var(--color-border)', 0.75)};
+  background-color: ${p => transparentize(0.25, p.theme.colors.bg2)};
   border-radius: ${() => SIZE};
   backdrop-filter: blur(10px);
   z-index: 2;

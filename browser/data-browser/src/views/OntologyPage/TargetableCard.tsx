@@ -48,9 +48,9 @@ const targetHighlight = keyframes`
 `;
 
 const styles = css`
-  --target-animation-color: var(--color-accent);
-  --target-animation-base-shadow: var(--elevation-1);
-  padding-bottom: var(--space-3);
+  --target-animation-color: ${p => p.theme.colors.main};
+  --target-animation-base-shadow: ${p => p.theme.boxShadow};
+  padding-bottom: ${p => p.theme.size()};
 
   &:target {
     box-shadow:

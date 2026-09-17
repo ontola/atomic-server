@@ -619,7 +619,7 @@ export function MenuItem({
 
 const StyledShortcut = styled(Shortcut)`
   margin-left: 0.3rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const StyledLabel = styled.span`
@@ -635,11 +635,11 @@ const MenuItemHeader = styled.div`
   text-transform: uppercase;
   font-weight: bold;
   letter-spacing: 0.05rem;
-  color: var(--color-accent);
+  color: ${p => p.theme.colors.main};
   opacity: 0.8;
 
   & svg {
-    color: var(--color-accent);
+    color: ${p => p.theme.colors.main};
   }
 `;
 
@@ -650,9 +650,9 @@ interface MenuItemStyledProps {
 const MenuItemStyled = styled(Button)<MenuItemStyledProps>`
   /* Transparent so the menu's frosted surface shows through. */
   --menu-item-bg: ${p =>
-    p.selected ? 'var(--color-accent-subtle)' : 'transparent'};
+    p.selected ? p.theme.colors.mainSelectedBg : 'transparent'};
   --menu-item-fg: ${p =>
-    p.selected ? 'var(--color-accent-text)' : 'var(--color-text)'};
+    p.selected ? p.theme.colors.mainSelectedFg : p.theme.colors.text};
   align-items: center;
   display: flex;
   gap: 0.5rem;
@@ -669,8 +669,8 @@ const MenuItemStyled = styled(Button)<MenuItemStyledProps>`
   }
 
   &:hover {
-    --menu-item-bg: var(--color-accent-subtle);
-    --menu-item-fg: var(--color-accent-text);
+    --menu-item-bg: ${p => p.theme.colors.mainSelectedBg};
+    --menu-item-fg: ${p => p.theme.colors.mainSelectedFg};
 
     @media (prefers-contrast: more) {
       --menu-item-bg: ${p => (p.theme.darkMode ? 'white' : 'black')};
@@ -681,24 +681,24 @@ const MenuItemStyled = styled(Button)<MenuItemStyledProps>`
     filter: brightness(0.9);
   }
   &:disabled {
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight2};
     cursor: default;
     background-color: transparent;
 
     & svg {
-      color: var(--color-text-subtle);
+      color: ${p => p.theme.colors.textLight2};
     }
   }
 `;
 
 const ItemDivider = styled.div`
   width: 100%;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
 `;
 
 const SearchInputWrapper = styled.div`
   padding: 0 0.5rem 0.4rem 0.5rem;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
   margin-bottom: 0.4rem;
 `;
 
@@ -707,18 +707,18 @@ const SearchInput = styled.input`
   border: none;
   outline: none;
   background: transparent;
-  color: var(--color-text);
+  color: ${p => p.theme.colors.text};
   font-size: inherit;
   padding: 0.2rem 0.5rem;
 
   &::placeholder {
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
   }
 `;
 
 const NoResults = styled.div`
   padding: 0.4rem 1rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const Menu = styled.div<{
@@ -735,7 +735,7 @@ const Menu = styled.div<{
   /* Focused programmatically on open for keyboard nav; items show selection. */
   outline: none;
   position: ${p => p.position || 'fixed'};
-  z-index: var(--z-dropdown);
+  z-index: ${p => p.theme.zIndex.dropdown};
   width: auto;
   min-width: ${p => (p.searchable ? '15rem' : 'auto')};
   /* Entrance runs when data-positioned is set — one frame after the menu is

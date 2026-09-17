@@ -205,7 +205,7 @@ export function AgentProfileHeader({ subject }: { subject: string }) {
 const Header = styled.div`
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: ${p => p.theme.size(4)};
   flex-wrap: wrap;
 `;
 
@@ -217,7 +217,7 @@ const AvatarButton = styled.button`
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: var(--color-bg-subtle);
+  background: ${p => p.theme.colors.bg1};
   cursor: pointer;
   overflow: hidden;
   display: grid;
@@ -229,7 +229,7 @@ const AvatarButton = styled.button`
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid ${p => p.theme.colors.main};
     outline-offset: 2px;
   }
 `;
@@ -244,7 +244,7 @@ const PlaceholderAvatar = styled.span`
   place-items: center;
   width: 100%;
   height: 100%;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 2.5rem;
 `;
 
@@ -273,13 +273,13 @@ const NameField = styled.div`
 
 const NameLabel = styled.label`
   font-size: 0.8rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const NameInput = styled.input`
   font-size: 1.75rem;
   font-weight: bold;
-  color: var(--color-text);
+  color: ${p => p.theme.colors.text};
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -288,23 +288,23 @@ const NameInput = styled.input`
   width: 100%;
 
   &:hover {
-    border-bottom-color: var(--color-border);
+    border-bottom-color: ${p => p.theme.colors.bg2};
   }
 
   &:focus {
     outline: none;
-    border-bottom-color: var(--color-accent);
+    border-bottom-color: ${p => p.theme.colors.main};
   }
 
   &::placeholder {
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
     font-weight: normal;
   }
 `;
 
 const NameHint = styled.span`
   font-size: 0.8rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const AccountLink = styled.a`
@@ -314,14 +314,14 @@ const AccountLink = styled.a`
   margin-top: 0.35rem;
   width: fit-content;
   font-size: 0.9rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 
   svg {
     font-size: 0.75em;
   }
 
   &:hover {
-    color: var(--color-accent);
+    color: ${p => p.theme.colors.main};
   }
 `;
 

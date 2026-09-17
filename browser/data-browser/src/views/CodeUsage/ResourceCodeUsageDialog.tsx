@@ -56,5 +56,5 @@ const StyledDialogContent = styled(DialogContent)`
 `;
 
 const Name = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;

@@ -150,7 +150,7 @@ const OverlayRoot = styled.div`
 
 const ProgressPill = styled.div`
   position: absolute;
-  bottom: calc(var(--space-2) + 64px);
+  bottom: calc(${p => p.theme.size(2)} + 64px);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -158,12 +158,12 @@ const ProgressPill = styled.div`
   gap: 6px;
   align-items: center;
   padding: 8px 16px;
-  border-radius: var(--radius-md);
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg};
+  border: 1px solid ${p => p.theme.colors.bg2};
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
   font-size: 0.85rem;
-  color: var(--color-text);
+  color: ${p => p.theme.colors.text};
   white-space: nowrap;
 `;
 
@@ -171,19 +171,19 @@ const ProgressTrack = styled.div`
   width: 180px;
   height: 4px;
   border-radius: 2px;
-  background: var(--color-border);
+  background: ${p => p.theme.colors.bg2};
   overflow: hidden;
 `;
 
 const ProgressFill = styled.div`
   height: 100%;
-  background: var(--color-accent);
+  background: ${p => p.theme.colors.main};
   transition: width 60ms linear;
 `;
 
 const BranchPanel = styled.div<{ $interactive: boolean }>`
   position: absolute;
-  right: var(--space-2);
+  right: ${p => p.theme.size(2)};
   top: 50%;
   transform: translateY(-50%);
   display: flex;
@@ -196,7 +196,7 @@ const BranchPanel = styled.div<{ $interactive: boolean }>`
 
 const BranchPanelTitle = styled.span`
   font-size: 0.75rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   text-align: center;
 `;
 
@@ -206,14 +206,14 @@ const BranchTile = styled.button<{ $highlighted: boolean }>`
   padding: 1px;
   border-radius: 14px;
   cursor: pointer;
-  background: var(--color-bg);
+  background: ${p => p.theme.colors.bg};
   border: ${p =>
     p.$highlighted
-      ? `2.5px solid var(--color-accent)`
-      : `1px solid var(--color-border)`};
+      ? `2.5px solid ${p.theme.colors.main}`
+      : `1px solid ${p.theme.colors.bg2}`};
   box-shadow: ${p =>
     p.$highlighted
-      ? `0 0 8px var(--color-accent)`
+      ? `0 0 8px ${p.theme.colors.main}`
       : '0 2px 8px rgba(0, 0, 0, 0.15)'};
   /* Tiles must be hit-testable via elementsFromPoint while the undo
      button owns the pointer capture, even though real events only arrive

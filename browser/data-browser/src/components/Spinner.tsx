@@ -28,7 +28,7 @@ const StyledSpinner = styled.svg<{ size?: string; inheritColor?: boolean }>`
 
   & .path {
     stroke: ${props =>
-      props.inheritColor ? 'currentColor' : 'var(--color-accent)'};
+      props.inheritColor ? 'currentColor' : props.theme.colors.main};
     stroke-linecap: round;
     animation: dash 1.5s ease-in-out infinite;
   }

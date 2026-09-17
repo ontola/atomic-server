@@ -19,11 +19,11 @@ export const ErrorChip = styled.span<{
   --error-chip-start: calc(var(--error-chip-end) - 0.5rem);
   position: relative;
   top: var(--error-chip-end);
-  background-color: var(--color-alert);
+  background-color: ${p => p.theme.colors.alert};
   color: white;
   padding: 0.25rem 0.5rem;
-  border-radius: var(--radius-md);
-  box-shadow: var(--elevation-2);
+  border-radius: ${p => p.theme.radius};
+  box-shadow: ${p => p.theme.boxShadowSoft};
 
   ${p =>
     !p.noMovement
@@ -40,7 +40,7 @@ export const ErrorChip = styled.span<{
     left: 1rem;
     width: var(--triangle-size);
     aspect-ratio: 1/1;
-    background-color: var(--color-alert);
+    background-color: ${p => p.theme.colors.alert};
     clip-path: polygon(0% 100%, 100% 100%, 50% 0%);
   }
 `;

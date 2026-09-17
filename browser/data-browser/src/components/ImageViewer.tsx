@@ -67,16 +67,16 @@ const WrapperButton = styled.button<WrapperProps>`
   width: fit-content;
   height: fit-content;
   user-select: none;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   background-color: transparent;
 
   &:hover,
   &:focus {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid ${p => p.theme.colors.main};
   }
 
   & img {
-    border-radius: var(--radius-md);
+    border-radius: ${p => p.theme.radius};
     vertical-align: sub;
   }
 `;
@@ -90,7 +90,7 @@ const Viewer = styled.div`
   max-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: var(--space-3);
+  padding: ${p => p.theme.margin}rem;
   z-index: 200;
   background-color: rgba(0, 0, 0, 0.85);
   cursor: zoom-out;
@@ -101,6 +101,6 @@ const Viewer = styled.div`
     max-width: 100%;
     max-height: 100vh;
     object-fit: contain;
-    border-radius: var(--radius-md);
+    border-radius: ${p => p.theme.radius};
   }
 `;

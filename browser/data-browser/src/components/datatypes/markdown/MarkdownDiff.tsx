@@ -352,8 +352,8 @@ function truncateEnd(text: string): string {
 }
 
 const Deletion = styled.del`
-  background-color: var(--color-diff-removed-bg);
-  color: var(--color-diff-removed-text);
+  background-color: ${p => p.theme.colors.diff.removedBg};
+  color: ${p => p.theme.colors.diff.removedFg};
   text-decoration: line-through;
   color: inherit;
   white-space: pre-wrap;
@@ -370,8 +370,8 @@ const Deletion = styled.del`
 `;
 
 const Insertion = styled.ins`
-  background-color: var(--color-diff-added-bg);
-  color: var(--color-diff-added-text);
+  background-color: ${p => p.theme.colors.diff.addedBg};
+  color: ${p => p.theme.colors.diff.addedFg};
   text-decoration: none;
   color: inherit;
   white-space: pre-wrap;

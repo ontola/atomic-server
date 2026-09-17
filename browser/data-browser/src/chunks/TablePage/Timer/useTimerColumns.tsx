@@ -343,5 +343,5 @@ const Actions = styled.div`
 `;
 
 const StopButton = styled(IconButton)`
-  color: var(--color-alert);
+  color: ${p => p.theme.colors.alert};
 `;

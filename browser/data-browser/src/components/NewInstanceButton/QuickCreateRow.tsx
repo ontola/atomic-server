@@ -140,21 +140,21 @@ const NewResourceTrigger = styled.button`
   background: transparent;
   margin: 0;
   padding: 0.2rem;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   cursor: pointer;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font: inherit;
 
   &:hover {
-    background-color: var(--color-bg-subtle);
+    background-color: ${p => p.theme.colors.bg1};
   }
 
   &:active {
-    background-color: var(--color-border);
+    background-color: ${p => p.theme.colors.bg2};
   }
 
   &:focus-visible {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid ${p => p.theme.colors.main};
     outline-offset: 1px;
   }
 `;

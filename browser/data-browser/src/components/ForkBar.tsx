@@ -184,10 +184,10 @@ export function ForkBar({ resource }: ForkBarProps): React.JSX.Element | null {
 }
 
 const ReviewPanel = styled.div`
-  margin-top: var(--space-2);
-  padding: var(--space-2);
-  border-radius: var(--radius-md);
-  background-color: var(--color-bg);
+  margin-top: ${p => p.theme.size(2)};
+  padding: ${p => p.theme.size(2)};
+  border-radius: ${p => p.theme.radius};
+  background-color: ${p => p.theme.colors.bg};
 `;
 
 const ConflictNote = styled.div`
@@ -195,8 +195,8 @@ const ConflictNote = styled.div`
   flex-wrap: wrap;
   gap: 1ch;
   align-items: center;
-  margin-top: var(--space-2);
-  color: var(--color-alert);
+  margin-top: ${p => p.theme.size(2)};
+  color: ${p => p.theme.colors.alert};
 `;
 
 const ConflictProp = styled.span`
@@ -204,18 +204,18 @@ const ConflictProp = styled.span`
 `;
 
 const Subtle = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const Conflict = styled.span`
-  color: var(--color-alert);
+  color: ${p => p.theme.colors.alert};
   font-weight: bold;
 `;
 
 /** A bar, not a card: it spans the view it sits above rather than floating in it. */
 const Wrapper = styled.aside`
-  background-color: var(--color-bg-subtle);
-  border-bottom: 1px solid var(--color-border);
-  padding: var(--space-2) 0;
-  margin-bottom: var(--space-2);
+  background-color: ${p => p.theme.colors.bg1};
+  border-bottom: 1px solid ${p => p.theme.colors.bg2};
+  padding: ${p => p.theme.size(2)} 0;
+  margin-bottom: ${p => p.theme.size(2)};
 `;

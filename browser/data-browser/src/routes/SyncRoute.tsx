@@ -43,7 +43,7 @@ import {
   truncateUrl,
   Datatype,
 } from '@tomic/react';
-import { styled, keyframes, css } from 'styled-components';
+import { styled, keyframes, css, type DefaultTheme } from 'styled-components';
 import {
   cardSurface,
   CardIcon,
@@ -133,7 +133,6 @@ import { appRoute } from './RootRoutes';
 import { pathNames, paths } from './paths';
 import { useSettings } from '../helpers/AppSettings';
 import { serverURLStorage } from '../helpers/serverURLStorage';
-import { withAlpha } from '../styles/withAlpha';
 
 export const SyncRoute = createRoute({
   path: pathNames.sync,
@@ -2433,7 +2432,7 @@ function formatValue(value: unknown): string {
 // --- Styled components ---
 
 const Lead = styled.p`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   margin-bottom: 2rem;
 `;
 
@@ -2446,18 +2445,18 @@ const Lead = styled.p`
  * involves your account".
  */
 const ProviderCard = styled(ServiceGroup)`
-  --service-accent: var(--color-accent);
-  --service-muted: var(--color-text-subtle);
-  --service-text: var(--color-text);
-  --service-neutral: var(--color-bg-subtle);
+  --service-accent: ${p => p.theme.colors.main};
+  --service-muted: ${p => p.theme.colors.textLight};
+  --service-text: ${p => p.theme.colors.text};
+  --service-neutral: ${p => p.theme.colors.bg1};
   ${cardSurface}
   flex-direction: column;
   align-items: stretch;
   gap: 0;
   padding: 0;
   margin-bottom: 2rem;
-  border-color: var(--color-accent);
-  background: ${withAlpha('var(--color-accent)', 0.04)};
+  border-color: ${p => p.theme.colors.main};
+  background: ${p => `${p.theme.colors.main}0a`};
 `;
 
 const ProviderHeader = styled.div`
@@ -2479,7 +2478,7 @@ const ProviderService = styled(ServiceSection)`
   align-items: flex-start;
   gap: 0.9rem;
   padding: 0.9rem 1rem;
-  border-top: 1px solid ${withAlpha('var(--color-accent)', 0.2)};
+  border-top: 1px solid ${p => `${p.theme.colors.main}33`};
   min-width: 0;
 
   /* A connection row is one ellipsised line because a server origin has no
@@ -2507,7 +2506,7 @@ const AccountLabel = styled.span`
 `;
 
 const AccountEmail = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: ${CARD_SUB_FONT};
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2526,7 +2525,7 @@ const SectionTitle = styled.h2`
 const NodeAction = styled.button`
   background: none;
   border: none;
-  color: var(--color-accent);
+  color: ${p => p.theme.colors.main};
   cursor: pointer;
   font-size: 0.8rem;
   padding: 0.2rem 0;
@@ -2536,7 +2535,7 @@ const NodeAction = styled.button`
   }
 
   &:disabled {
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
     cursor: default;
     text-decoration: none;
   }
@@ -2545,15 +2544,15 @@ const NodeAction = styled.button`
 /** Secondary / destructive actions (Remove). Muted so the card's primary
  *  action — the one beside the status pill — stays the obvious thing to click. */
 const NodeActionSubtle = styled(NodeAction)`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 
   &:hover {
-    color: var(--color-alert);
+    color: ${p => p.theme.colors.alert};
   }
 `;
 
 const ManagedLink = styled.a`
-  color: var(--color-accent);
+  color: ${p => p.theme.colors.main};
   font-size: 0.8rem;
   text-decoration: none;
   margin-top: 0.15rem;
@@ -2564,21 +2563,21 @@ const ManagedLink = styled.a`
 `;
 
 const Muted = styled.p`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
-const statusColor = (status: NodeStatus) => {
+const statusColor = (status: NodeStatus, theme: DefaultTheme) => {
   switch (status) {
     case 'synced':
-      return 'var(--color-accent)';
+      return theme.colors.main;
     case 'syncing':
-      return 'var(--color-accent)';
+      return theme.colors.main;
     case 'unsynced':
-      return 'var(--color-warning)';
+      return theme.colors.warning;
     case 'offline':
-      return 'var(--color-alert)';
+      return theme.colors.alert;
     case 'unknown':
-      return 'var(--color-text-subtle)';
+      return theme.colors.textLight;
   }
 };
 
@@ -2590,7 +2589,7 @@ const spin = keyframes`
 const PendingCount = styled.span`
   font-size: 0.8rem;
   font-weight: 600;
-  color: var(--color-warning);
+  color: ${p => p.theme.colors.warning};
   margin-left: 0.5rem;
 `;
 
@@ -2609,14 +2608,14 @@ const NodeIdRow = styled.div`
 `;
 
 const NodeIdLabel = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   flex-shrink: 0;
 `;
 
 const NodeIdValue = styled.button`
   font-family: monospace;
   font-size: 0.75rem;
-  color: var(--color-text);
+  color: ${p => p.theme.colors.text};
   background: none;
   border: none;
   padding: 0;
@@ -2627,7 +2626,7 @@ const NodeIdValue = styled.button`
   min-width: 0;
 
   &:hover {
-    color: var(--color-accent);
+    color: ${p => p.theme.colors.main};
     text-decoration: underline;
   }
 `;
@@ -2654,12 +2653,11 @@ const ConnCard = styled.div<{
   margin-bottom: ${p => (p.$spacious ? '1.5rem' : '0.6rem')};
   border-color: ${p =>
     p.$provider
-      ? 'var(--color-accent)'
+      ? p.theme.colors.main
       : p.$active
-        ? 'var(--color-text-subtle)'
+        ? p.theme.colors.textLight
         : undefined};
-  background: ${p =>
-    p.$provider ? withAlpha('var(--color-accent)', 0.04) : undefined};
+  background: ${p => (p.$provider ? `${p.theme.colors.main}0a` : undefined)};
   ${p =>
     p.$embedded &&
     css`
@@ -2681,7 +2679,7 @@ const LocalDriveNotice = styled.div`
 
 const ConnNote = styled.p`
   margin: 0 0 0.6rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.82rem;
 `;
 
@@ -2720,7 +2718,7 @@ const PairDivider = styled.div`
   flex-shrink: 0;
   align-self: stretch;
   width: 1px;
-  background: var(--color-border);
+  background: ${p => p.theme.colors.bg2};
 
   @media (max-width: 40rem) {
     width: auto;
@@ -2732,7 +2730,7 @@ const PairLabel = styled.span`
   align-self: flex-start;
   font-size: 0.82rem;
   font-weight: 600;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const ConnBody = styled.div`
@@ -2771,7 +2769,7 @@ const ConnTitle = styled.span`
 `;
 
 const ConnSub = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.82rem;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2779,7 +2777,7 @@ const ConnSub = styled.span`
 `;
 
 const ConnMeta = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.8rem;
   margin-top: 0.3rem;
 `;
@@ -2789,7 +2787,7 @@ const ConnError = styled.div`
   align-items: flex-start;
   gap: 0.35rem;
   margin-top: 0.3rem;
-  color: var(--color-alert);
+  color: ${p => p.theme.colors.alert};
   font-size: 0.8rem;
   line-height: 1.25;
 
@@ -2809,13 +2807,13 @@ const ConnActions = styled.div`
 
 /** A link, styled as one. The primary action next to it is the button. */
 const learnMoreLook = css`
-  color: var(--color-accent);
+  color: ${p => p.theme.colors.main};
   font-size: ${CARD_SUB_FONT};
   text-decoration: underline;
 
   &:hover,
   &:focus-visible {
-    color: var(--color-accent-text);
+    color: ${p => p.theme.colors.mainDark};
   }
 `;
 
@@ -2835,12 +2833,10 @@ const StatusPill = styled.span<{ $status: NodeStatus }>`
   gap: 0.3rem;
   font-size: 0.75rem;
   font-weight: 600;
-  color: ${p => statusColor(p.$status)};
+  color: ${p => statusColor(p.$status, p.theme)};
   padding: 0.15rem 0.55rem;
   border-radius: 1rem;
-  /* Was a hex-alpha suffix (1c) on the colour, which only works on a literal.
-     11% is the same wash, and it works on a token. */
-  background: ${p => withAlpha(statusColor(p.$status), 0.11)};
+  background: ${p => statusColor(p.$status, p.theme)}1c;
 
   svg {
     font-size: 0.65rem;
@@ -2856,26 +2852,26 @@ const UsageBar = styled.div`
   margin-top: 0.5rem;
   height: 6px;
   border-radius: 3px;
-  background: var(--color-border);
+  background: ${p => p.theme.colors.bg2};
   overflow: hidden;
 `;
 
 const UsageFill = styled.div`
   height: 100%;
   border-radius: 3px;
-  background: var(--color-accent);
+  background: ${p => p.theme.colors.main};
   transition: width 0.3s ease;
 `;
 
 const EmptyConnections = styled.div`
   padding: 1rem 1.1rem;
-  border-radius: var(--radius-md);
-  background: var(--color-bg-subtle);
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg1};
   margin-bottom: 0.8rem;
 
   p {
     margin: 0;
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
     font-size: 0.88rem;
   }
 
@@ -2895,10 +2891,10 @@ const AddButton = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  border: 1px dashed var(--color-border);
+  border: 1px dashed ${p => p.theme.colors.bg2};
   background: none;
-  color: var(--color-accent);
-  border-radius: var(--radius-md);
+  color: ${p => p.theme.colors.main};
+  border-radius: ${p => p.theme.radius};
   padding: 0.5rem 0.9rem;
   font-size: 0.85rem;
   font-weight: 500;
@@ -2909,8 +2905,8 @@ const AddButton = styled.button`
   }
 
   &:hover {
-    border-color: var(--color-accent);
-    background: ${withAlpha('var(--color-accent)', 0.05)};
+    border-color: ${p => p.theme.colors.main};
+    background: ${p => p.theme.colors.main}0d;
   }
 `;
 
@@ -2922,7 +2918,7 @@ const AddServerForm = styled.form`
 `;
 
 const AddServerExplainer = styled.p`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.8rem;
   margin: 0;
 `;
@@ -2935,19 +2931,19 @@ const ServerInputRow = styled.div`
 `;
 
 const ServerInput = styled.input`
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border: 1px solid ${p => p.theme.colors.bg2};
+  border-radius: ${p => p.theme.radius};
   padding: 0.45rem 0.6rem;
   font-size: 0.85rem;
-  background: var(--color-bg);
-  color: var(--color-text);
+  background: ${p => p.theme.colors.bg};
+  color: ${p => p.theme.colors.text};
   flex: 1;
   min-width: 12rem;
 `;
 
 const DocsLink = styled.a`
   font-size: 0.8rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   display: inline-block;
 `;
 
@@ -2955,19 +2951,19 @@ const DocsLink = styled.a`
 
 const DevDetails = styled.details`
   margin-top: 2.5rem;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid ${p => p.theme.colors.bg2};
   padding-top: 1rem;
 `;
 
 const DevSummary = styled.summary`
   cursor: pointer;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.9rem;
   font-weight: 600;
   user-select: none;
 
   &:hover {
-    color: var(--color-text);
+    color: ${p => p.theme.colors.text};
   }
 `;
 
@@ -2983,8 +2979,8 @@ const DevRow = styled.div`
   gap: 0.8rem;
   align-items: center;
   padding: 0.5rem 0.8rem;
-  border-radius: var(--radius-md);
-  background: var(--color-bg-subtle);
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg1};
   min-width: 0;
 `;
 
@@ -2994,7 +2990,7 @@ const DevActivityTitle = styled.h3`
 `;
 
 const DetailLabel = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.9rem;
 `;
 
@@ -3039,43 +3035,41 @@ const StatusBadge = styled.span<{ $status: CommitLogEntry['status'] }>`
   text-transform: uppercase;
   letter-spacing: 0.03em;
   padding: 0.15rem 0.4rem;
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   background: ${p => {
     switch (p.$status) {
-      // `22` and `44` were hex-alpha suffixes on a literal colour; as
-      // fractions they work on a token, and pending can use the warning
-      // token rather than its own hardcoded amber.
       case 'failed':
-        return withAlpha('var(--color-warning)', 0.13);
+        return p.theme.colors.warning + '22';
       case 'sent':
-        return withAlpha('var(--color-accent)', 0.13);
+        return p.theme.colors.main + '22';
       case 'pending':
-        return withAlpha('var(--color-warning)', 0.27);
+        // Same amber tone the previous PendingCount used.
+        return '#d4960044';
       default:
-        return 'var(--color-border)';
+        return p.theme.colors.bg2;
     }
   }};
   color: ${p => {
     switch (p.$status) {
       case 'failed':
-        return 'var(--color-warning)';
+        return p.theme.colors.warning;
       case 'sent':
-        return 'var(--color-accent)';
+        return p.theme.colors.main;
       case 'pending':
         return '#d49600';
       default:
-        return 'var(--color-text-subtle)';
+        return p.theme.colors.textLight;
     }
   }};
 `;
 
 const Direction = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.85rem;
 `;
 
 const TimeText = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-family: 'IBM Plex Mono', monospace;
   font-size: 0.8rem;
 `;
@@ -3096,7 +3090,7 @@ const LogSubject = styled.div`
 `;
 
 const LogSummaryText = styled.span`
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
   font-size: 0.85rem;
   white-space: nowrap;
   flex-shrink: 0;
@@ -3106,8 +3100,8 @@ const PropertyList = styled.div`
   display: grid;
   gap: 0.3rem;
   padding: 0.5rem;
-  border-radius: var(--radius-md);
-  background: var(--color-bg-subtle);
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg1};
 `;
 
 const PropertyRow = styled.div`
@@ -3127,20 +3121,20 @@ const PropertyRow = styled.div`
   }
   &[data-change-type='removed'] {
     text-decoration: line-through;
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
   }
   &[data-change-type='changed'] > span[aria-hidden='true']:first-child {
-    color: var(--color-accent);
+    color: ${p => p.theme.colors.main};
   }
   &[data-change-type='removed'] > span[aria-hidden='true']:first-child {
-    color: var(--color-alert);
+    color: ${p => p.theme.colors.alert};
   }
 `;
 
 const PropLabel = styled.span`
   font-weight: 600;
   font-size: 0.85rem;
-  color: var(--color-text-subtle);
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const PropertyValue = styled.span`
@@ -3157,13 +3151,13 @@ const DestroyBadge = styled.span`
   text-transform: uppercase;
   letter-spacing: 0.03em;
   padding: 0.15rem 0.4rem;
-  border-radius: var(--radius-md);
-  background: ${withAlpha('var(--color-warning)', 0.13)};
-  color: var(--color-warning);
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.warning}22;
+  color: ${p => p.theme.colors.warning};
 `;
 
 const ErrorText = styled.div`
-  color: var(--color-warning);
+  color: ${p => p.theme.colors.warning};
   white-space: pre-wrap;
   font-size: 0.9rem;
 `;
@@ -3195,7 +3189,7 @@ const LocalDbLabel = styled.span`
 `;
 
 const LocalDbError = styled.span`
-  color: var(--color-warning);
+  color: ${p => p.theme.colors.warning};
   white-space: pre-wrap;
   font-size: 0.85rem;
   display: block;
@@ -3210,14 +3204,14 @@ const StatusDot = styled.span<{ $state: LocalDbStatus }>`
   background: ${p => {
     switch (p.$state) {
       case 'ready':
-        return 'var(--color-accent)';
+        return p.theme.colors.main;
       case 'error':
-        return 'var(--color-warning)';
+        return p.theme.colors.warning;
       case 'initializing':
-        return 'var(--color-text-subtle)';
+        return p.theme.colors.textLight;
       case 'disabled':
       default:
-        return 'var(--color-border)';
+        return p.theme.colors.bg2;
     }
   }};
   flex-shrink: 0;
@@ -3226,5 +3220,5 @@ const StatusDot = styled.span<{ $state: LocalDbStatus }>`
 const PeerSyncResult = styled.div<{ $error: boolean }>`
   font-size: 0.8rem;
   margin-top: 0.3rem;
-  color: ${p => (p.$error ? 'var(--color-warning)' : 'var(--color-accent)')};
+  color: ${p => (p.$error ? p.theme.colors.warning : p.theme.colors.main)};
 `;

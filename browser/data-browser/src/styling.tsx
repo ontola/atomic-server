@@ -1,14 +1,14 @@
 import {
   createGlobalStyle,
-  type DefaultTheme,
+  DefaultTheme,
   ThemeProvider,
 } from 'styled-components';
+import { setLightness, setSaturation } from 'polished';
 import './reset.css';
-import './styles/tokens.css';
-import { useContext, useLayoutEffect, type JSX } from 'react';
+import { useContext, type JSX } from 'react';
 import { SettingsContext } from './helpers/AppSettings';
 import { CurrentBackgroundColor } from './globalCssVars';
-import { applyAccentRamp } from './styles/accentRamp';
+import { buildTheme } from './styles/theme';
 import {
   BREADCRUMB_BAR_TRANSITION_TAG,
   MEETING_PANEL_TITLE_TRANSITION_TAG,
@@ -16,94 +16,73 @@ import {
   RESOURCE_PAGE_TRANSITION_TAG,
 } from './helpers/transitionName';
 
-export { presetColors } from './styles/presetColors';
-
 interface ThemeWrapperProps {
   children: React.ReactNode;
 }
 
 /**
  * Provides the theme for all components below. Make sure to wrap this inside
- * SettingsContext.
- *
- * The theme carries one thing: whether dark mode is on. Every design value
- * lives in `styles/tokens.css` and is read from CSS directly, so this context
- * changing no longer means the tree restyles — and a main-colour change does
- * not touch React at all. It writes custom properties onto `:root` and the
- * cascade does the rest.
+ * SettingsContext
  */
 export const ThemeWrapper = ({ children }: ThemeWrapperProps): JSX.Element => {
   const { mainColor, darkMode, colorfulMode } = useContext(SettingsContext);
 
-  // Layout effect, not effect: the ramp has to be on `:root` before the first
-  // paint of a theme change, or the page flashes the previous accent.
-  useLayoutEffect(() => {
-    const root = document.documentElement;
-
-    root.dataset.theme = darkMode ? 'dark' : 'light';
-    applyAccentRamp(root, { mainColor, darkMode, colorful: colorfulMode });
-  }, [mainColor, darkMode, colorfulMode]);
-
   return (
-    <ThemeProvider theme={darkMode ? darkTheme : lightTheme}>
-      {children}
-    </ThemeProvider>
+    <>
+      <ThemeProvider theme={buildTheme(darkMode, mainColor, colorfulMode)}>
+        {children}
+      </ThemeProvider>
+    </>
   );
 };
 
-/**
- * The class the app chrome (navbar, sidebar) puts on itself to re-point the
- * surface tokens at the chrome ramp — see `.chrome-scope` in `tokens.css`.
- *
- * This was a nested `ThemeProvider` wrapping each of them. As a cascade scope
- * it needs no context and no wrapper element, and it nests correctly with
- * anything else that scopes a token.
- */
-export const CHROME_SCOPE = 'chrome-scope';
+export { presetColors } from './styles/presetColors';
+export { animationDuration, zIndex } from './styles/theme';
 
 /**
- * Adjust the z-index order here. The values live in `tokens.css` as `--z-*`;
- * this mirrors them for the rare consumer that needs the number in JS (the
- * toast library takes one as a prop).
+ * Wraps the app chrome (sidebar, navbar). In colorful mode it swaps the
+ * neutral ramp for tones of the main color, so no grey ever sits on a colored
+ * surface. Outside colorful mode it changes nothing.
  */
-export const zIndex = {
-  sidebar: 10,
-  searchOverlay: 9,
-  dialog: 100,
-  dropdown: 200,
-  networkIndicator: 300,
-  toast: 400,
+export const ChromeTheme = ({ children }: ThemeWrapperProps): JSX.Element => (
+  <ThemeProvider theme={chromeTheme}>{children}</ThemeProvider>
+);
+
+const chromeTheme = (outer: DefaultTheme | undefined): DefaultTheme => {
+  // ChromeTheme is always nested inside ThemeWrapper, so outer is never
+  // actually undefined.
+  if (!outer || !outer.colorful) {
+    return outer!;
+  }
+
+  const tone = (lightness: number, saturation: number) =>
+    setLightness(lightness, setSaturation(saturation, outer.colors.main));
+
+  const colors = outer.darkMode
+    ? {
+        bg: tone(0.12, 0.35),
+        bg1: tone(0.18, 0.35),
+        bg2: tone(0.28, 0.3),
+        text: tone(0.92, 0.3),
+        text1: tone(0.85, 0.3),
+        textLight: tone(0.72, 0.25),
+        textLight2: tone(0.5, 0.25),
+      }
+    : {
+        bg: tone(0.93, 0.55),
+        bg1: tone(0.88, 0.5),
+        bg2: tone(0.8, 0.4),
+        text: tone(0.13, 0.4),
+        text1: tone(0.18, 0.4),
+        textLight: tone(0.35, 0.3),
+        textLight2: tone(0.55, 0.25),
+      };
+
+  return { ...outer, colors: { ...outer.colors, ...colors } };
 };
 
-/** Default animation duration in ms. Mirrors `--duration-fast`. */
-export const animationDuration = 100;
-
-const lightTheme: DefaultTheme = { darkMode: false };
-const darkTheme: DefaultTheme = { darkMode: true };
-
-// Styled-components requires overwriting the default theme.
-declare module 'styled-components' {
-  export interface DefaultTheme {
-    /**
-     * Whether dark mode is on.
-     *
-     * The only thing left on the theme. It is here rather than in CSS because
-     * roughly thirty components pass it to something that is not CSS — a
-     * CodeMirror theme object, emoji-mart's `theme` prop, ReactFlow. Anything
-     * that ends up as a style belongs in `styles/tokens.css` instead.
-     */
-    darkMode: boolean;
-  }
-}
-
-/**
- * Adds basic styles for the entire app.
- *
- * Explicitly generic over `object`: with the colours now coming from tokens
- * there are no function interpolations left for styled-components to infer the
- * props from, and its fallback inference makes `theme` a *required* prop.
- */
-export const GlobalStyle = createGlobalStyle<object>`
+/** Adds basic styles for the entire app */
+export const GlobalStyle = createGlobalStyle`
 
   :root {
     --view-transition-duration: 150ms;
@@ -118,7 +97,7 @@ export const GlobalStyle = createGlobalStyle<object>`
 
   * {
     box-sizing: border-box;
-    scrollbar-color: var(--color-border) transparent;
+    scrollbar-color: ${p => p.theme.colors.bg2} transparent;
     @media print {
       scrollbar-color: transparent transparent;
     }
@@ -132,21 +111,22 @@ export const GlobalStyle = createGlobalStyle<object>`
     &::-webkit-scrollbar-thumb {
       width: 8px;
       margin: auto;
-      background-color: var(--color-border); /* color of the tracking area */
-      border-radius: var(--radius-md);
+      background-color: ${p =>
+        p.theme.colors.bg2}; /* color of the tracking area */
+      border-radius: ${p => p.theme.radius};
 
       &:hover {
-        background-color: var(--color-border-strong);
+        background-color: ${p => p.theme.colors.borderStrong};
       }
     }
   }
 
   body {
-    ${CurrentBackgroundColor.define('var(--color-bg-body)')}
+    ${CurrentBackgroundColor.define(p => p.theme.colors.bgBody)}
     background-color: ${CurrentBackgroundColor.var()};
-    color: var(--color-text);
-    font-family: var(--font-family);
-    line-height: var(--line-height-base);
+    color: ${props => props.theme.colors.text};
+    font-family: ${props => props.theme.fontFamily};
+    line-height: ${p => p.theme.lineHeight.base};
     word-wrap: break-word;
     overflow-wrap: anywhere;
     // Prevents weird scrollbars appearing for a split second when opening a dialog
@@ -155,7 +135,7 @@ export const GlobalStyle = createGlobalStyle<object>`
     margin: 0;
     /** Pretty dark mode transition */
     transition: background-color .2s ease, border-color .2s ease, color .2s ease;
-    font-size: var(--font-size-base);
+    font-size: 1rem;
   }
 
   input, button, body {
@@ -163,34 +143,34 @@ export const GlobalStyle = createGlobalStyle<object>`
     overflow-wrap: normal;
   }
 
-  /* Links are accent-coloured *text*, so they use the accent step that is
+  /* Links are accent-coloured *text*, so they take the accent step that is
      readable rather than the one meant to be filled. With the fill, a light
      main colour (the mustard preset, say) produced links at 2.2:1. */
   a {
-    color: var(--color-accent-text);
+    color: ${props => props.theme.colors.accentText};
   }
 
   h1 {
-    font-size: var(--font-size-3xl);
+    font-size: ${p => p.theme.fontSize.xl3};
   }
 
   h2 {
-    font-size: var(--font-size-2xl);
+    font-size: ${p => p.theme.fontSize.xl2};
   }
 
   h3 {
-    font-size: var(--font-size-xl);
+    font-size: ${p => p.theme.fontSize.xl};
   }
 
   h4 {
-    font-size: var(--font-size-lg);
+    font-size: ${p => p.theme.fontSize.lg};
   }
 
   h1,h2,h3,h4,h5,h6 {
-    margin-bottom: var(--space-3);
-    font-weight: var(--font-weight-bold);
-    font-family: var(--font-family-heading);
-    line-height: var(--line-height-tight);
+    margin-bottom: ${props => props.theme.size()};
+    font-weight: ${p => p.theme.fontWeight.bold};
+    font-family: ${p => p.theme.fontFamilyHeader};
+    line-height: ${p => p.theme.lineHeight.tight};
     margin-top: 0;
     word-break: break-word;
   }
@@ -201,23 +181,23 @@ export const GlobalStyle = createGlobalStyle<object>`
 
   p {
     margin-top: 0;
-    margin-bottom: var(--space-3);
+    margin-bottom: ${props => props.theme.size()};
   }
 
   ul {
     margin-top: 0;
-    margin-bottom: var(--space-3);
+    margin-bottom: ${props => props.theme.size()};
     padding: 0;
 
     li {
       list-style-type: disc;
-      margin-left: var(--space-7);
-      margin-bottom: var(--space-2);
+      margin-left: ${props => props.theme.size(7)};
+      margin-bottom: ${props => props.theme.size(2)};
     }
   }
 
   b {
-    font-weight: var(--font-weight-bold);
+    font-weight: bold;
   }
 
   /* —— View transitions ——

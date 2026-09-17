@@ -71,15 +71,15 @@ function FilePreviewThumbnailInner({
 const TextWrapper = styled(InnerWrapper)<{ error?: boolean }>`
   display: grid;
   place-items: center;
-  color: ${p => (p.error ? 'var(--color-alert)' : 'var(--color-text-subtle)')};
+  color: ${p => (p.error ? p.theme.colors.alert : p.theme.colors.textLight)};
 `;
 
 const StyledTextPreview = styled(TextPreview)`
-  padding: var(--space-3);
-  color: var(--color-text-subtle);
+  padding: ${p => p.theme.size()};
+  color: ${p => p.theme.colors.textLight};
 
   &:is(pre) {
     padding: 0;
-    padding-inline: var(--space-3);
+    padding-inline: ${p => p.theme.size()};
   }
 `;

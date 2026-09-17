@@ -37,10 +37,10 @@ export const JsonDiff = ({ oldValue, newValue, className }: JsonDiffProps) => {
 
 const StyledHighlightedCodeBlock = styled(HighlightedCodeBlock)`
   width: 100%;
-  background-color: var(--color-bg-body);
+  background-color: ${p => p.theme.colors.bgBody};
   max-height: 40rem;
 
   pre {
-    background-color: var(--color-bg-body) !important;
+    background-color: ${p => p.theme.colors.bgBody} !important;
   }
 `;

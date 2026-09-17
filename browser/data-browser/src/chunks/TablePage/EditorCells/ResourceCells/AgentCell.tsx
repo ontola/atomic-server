@@ -17,20 +17,20 @@ export function AgentCell({ subject }: ResourceCellProps) {
 }
 
 const StyledLink = styled(SimpleResourceLink)`
-  background-color: ${p => bg('var(--color-accent)', p.theme.darkMode)};
+  background-color: ${p => bg(p.theme.colors.main, p.theme.darkMode)};
   padding-inline: 8px;
   padding-block: 1px;
   border-radius: 40px;
-  color: ${p => fg('var(--color-accent)', p.theme.darkMode)};
+  color: ${p => fg(p.theme.colors.main, p.theme.darkMode)};
   text-decoration: none;
 
   span {
-    color: var(--color-text-subtle);
+    color: ${p => p.theme.colors.textLight};
   }
 
   :hover {
     box-shadow: 0px 0px 0px 1px
-      ${p => fg('var(--color-accent)', p.theme.darkMode)};
+      ${p => fg(p.theme.colors.main, p.theme.darkMode)};
   }
 `;
 

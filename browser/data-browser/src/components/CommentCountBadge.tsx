@@ -46,15 +46,15 @@ const Badge = styled.span`
   font-size: 0.75rem;
   padding: 0.1rem 0.5rem;
   border-radius: 1em;
-  background: var(--color-bg-subtle);
-  color: var(--color-text-subtle);
+  background: ${p => p.theme.colors.bg1};
+  color: ${p => p.theme.colors.textLight};
 
   & > svg {
     font-size: 0.65rem;
   }
 
   &[data-unseen] {
-    background: var(--color-accent);
-    color: var(--color-bg);
+    background: ${p => p.theme.colors.main};
+    color: ${p => p.theme.colors.bg};
   }
 `;

@@ -107,11 +107,11 @@ const SpinningIcon = styled.span`
 `;
 
 const WarningIcon = styled.span`
-  color: var(--color-warning);
+  color: ${p => p.theme.colors.warning};
   display: inline-flex;
 `;
 
 const OfflineIcon = styled.span`
-  color: var(--color-alert);
+  color: ${p => p.theme.colors.alert};
   display: inline-flex;
 `;

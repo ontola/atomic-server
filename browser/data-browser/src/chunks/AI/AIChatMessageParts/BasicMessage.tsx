@@ -2,9 +2,9 @@ import Markdown from '@components/datatypes/Markdown';
 import styled from 'styled-components';
 
 const MessageWrapper = styled.div`
-  border-radius: var(--radius-md);
+  border-radius: ${p => p.theme.radius};
   width: 90%;
-  padding-block: var(--space-3);
+  padding-block: ${p => p.theme.size()};
 `;
 
 export const BasicMessage = ({ text }: { text: string }) => {
