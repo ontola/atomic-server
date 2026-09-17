@@ -11,7 +11,8 @@
       "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
     ],
     "https://atomicdata.dev/properties/properties": [
-      "https://atomicdata.dev/integrations/properties/experimental"
+      "https://atomicdata.dev/integrations/properties/experimental",
+      "https://atomicdata.dev/integrations/properties/pluginUrl"
     ]
   },
   {
@@ -38,6 +39,16 @@
     "https://atomicdata.dev/properties/description": "True until this integration's advertised capabilities have current live evidence. An experimental entry is hidden from the Integrations page unless the visitor turns on 'Show experimental plugins'."
   },
   {
+    "@id": "https://atomicdata.dev/integrations/properties/pluginUrl",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/integrations/ontology/catalog",
+    "https://atomicdata.dev/properties/shortname": "plugin-url",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Where this integration's source can be fetched from, for entries not bundled as a local package.json in this folder. Optional — omitted for integrations developed in this repo."
+  },
+  {
     "@id": "https://atomicdata.dev/integrations/catalog/pets",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
@@ -46,11 +57,12 @@
     "https://atomicdata.dev/integrations/properties/experimental": true
   },
   {
-    "@id": "https://atomicdata.dev/integrations/catalog/devonian-google-calendar",
+    "@id": "did:ad:devonian-google-calendar",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
     ],
     "https://atomicdata.dev/properties/shortname": "devonian-google-calendar",
-    "https://atomicdata.dev/integrations/properties/experimental": true
+    "https://atomicdata.dev/integrations/properties/experimental": true,
+    "https://atomicdata.dev/integrations/properties/pluginUrl": "https://github.com/localthought/devonian"
   }
 ]
