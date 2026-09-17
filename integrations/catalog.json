@@ -183,7 +183,7 @@
     ],
     "https://atomicdata.dev/properties/shortname": "mt940",
     "https://atomicdata.dev/integrations/properties/experimental": true,
-    "https://atomicdata.dev/integrations/properties/enabled": false,
+    "https://atomicdata.dev/integrations/properties/enabled": true,
     "https://atomicdata.dev/properties/name": "Bank statements",
     "https://atomicdata.dev/properties/emoji": "🏦",
     "https://atomicdata.dev/properties/description": "Import bank transactions from bunq and other MT940 exports.",
