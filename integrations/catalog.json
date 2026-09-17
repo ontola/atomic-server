@@ -38,43 +38,11 @@
     "https://atomicdata.dev/properties/description": "True until this integration's advertised capabilities have current live evidence. An experimental entry is hidden from the Integrations page unless the visitor turns on 'Show experimental plugins'."
   },
   {
-    "@id": "https://atomicdata.dev/integrations/catalog/devonian-github-issues",
+    "@id": "https://atomicdata.dev/integrations/catalog/pets",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
     ],
-    "https://atomicdata.dev/properties/shortname": "devonian-github-issues",
-    "https://atomicdata.dev/integrations/properties/experimental": true
-  },
-  {
-    "@id": "https://atomicdata.dev/integrations/catalog/devonian-google-calendar",
-    "https://atomicdata.dev/properties/isA": [
-      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
-    ],
-    "https://atomicdata.dev/properties/shortname": "devonian-google-calendar",
-    "https://atomicdata.dev/integrations/properties/experimental": true
-  },
-  {
-    "@id": "https://atomicdata.dev/integrations/catalog/mt940",
-    "https://atomicdata.dev/properties/isA": [
-      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
-    ],
-    "https://atomicdata.dev/properties/shortname": "mt940",
-    "https://atomicdata.dev/integrations/properties/experimental": true
-  },
-  {
-    "@id": "https://atomicdata.dev/integrations/catalog/clockify",
-    "https://atomicdata.dev/properties/isA": [
-      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
-    ],
-    "https://atomicdata.dev/properties/shortname": "clockify",
-    "https://atomicdata.dev/integrations/properties/experimental": true
-  },
-  {
-    "@id": "https://atomicdata.dev/integrations/catalog/notion",
-    "https://atomicdata.dev/properties/isA": [
-      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
-    ],
-    "https://atomicdata.dev/properties/shortname": "notion",
+    "https://atomicdata.dev/properties/shortname": "pets",
     "https://atomicdata.dev/integrations/properties/experimental": true
   }
 ]
