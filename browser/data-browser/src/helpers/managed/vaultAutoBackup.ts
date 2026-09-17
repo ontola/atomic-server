@@ -494,6 +494,7 @@ export async function restoreFromVault(
       drivePseudonym: enrollment.drive_pseudonym,
       devicePubkey: lane,
       driveKey,
+      keyEpoch,
     });
 
     // Restoring a vault copy does not upload it to the node. Preserve a
