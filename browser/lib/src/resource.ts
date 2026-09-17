@@ -181,6 +181,28 @@ export function normalizeLoroChangeTimestampMs(timestamp: number): number {
  *
  * Create new resources using `store.createResource()`.
  */
+/**
+ * Server-managed / genesis-immutable properties, preserved in the propval
+ * cache by `rebuildCacheFromLoro` when a rebuild from a delta-only doc would
+ * otherwise drop them. Set once (at genesis or by the server) and NOT
+ * necessarily re-encoded into any Loro delta. `drive` and `parent` matter
+ * especially for a GUEST who loaded a shared resource: losing the parent's
+ * `drive` leaves a reply unstamped, so the drive-scoped commit fan-out never
+ * delivers it to the owner. See planning/commit-fanout-drive-isolation.md.
+ */
+const SERVER_MANAGED_PROPS = [
+  properties.commit.lastCommit,
+  commits.properties.createdAt,
+  'https://atomicdata.dev/properties/drive',
+  // The inline genesis certificate: set once at creation, immutable, and
+  // what verifies the resource's DID.
+  'https://atomicdata.dev/properties/genesis',
+  core.properties.parent,
+  // Derived from the genesis certificate's signing key on the server; only
+  // legacy resources ever carried it as a real propval.
+  'https://atomicdata.dev/properties/createdBy',
+];
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export class Resource<C extends OptionalClass = any> {
   // WARNING: WHEN ADDING A PROPERTY, ALSO ADD IT TO THE CLONE METHOD
@@ -506,6 +528,9 @@ export class Resource<C extends OptionalClass = any> {
       // behaviour is unchanged.
       if (initializedFromSnapshot && this._loroMap) {
         for (const [key, value] of Object.entries(this.#cache)) {
+          // Derived props are never doc ops — absent-from-doc is their
+          // normal state, and healing one in mints a spurious commit (see
+          // DERIVED_BY_SERVER).
           if (!isDerivedByServer(key) && this._loroMap.get(key) === undefined) {
             this.loroSetProperty(key, value);
           }
@@ -794,26 +819,7 @@ export class Resource<C extends OptionalClass = any> {
       }
     }
 
-    // Preserve server-managed / genesis-immutable properties in the cache.
-    // These are set once (at genesis or by the server) and are NOT necessarily
-    // re-encoded into a later Loro delta — so a rebuild from a delta-only doc
-    // would otherwise drop them. `drive` and `parent` matter especially for a
-    // GUEST who loaded a shared resource: losing the parent's `drive` here
-    // leaves a reply unstamped, so the drive-scoped commit fan-out never
-    // delivers it to the owner. See planning/commit-fanout-drive-isolation.md.
-    const serverManaged = [
-      properties.commit.lastCommit,
-      commits.properties.createdAt,
-      properties.createdBy,
-      'https://atomicdata.dev/properties/drive',
-      // The inline genesis certificate: set once at creation, immutable, and
-      // must not be dropped when the cache is rebuilt from a delta-only doc —
-      // it's what verifies the resource's DID.
-      'https://atomicdata.dev/properties/genesis',
-      core.properties.parent,
-    ];
-
-    for (const key of serverManaged) {
+    for (const key of SERVER_MANAGED_PROPS) {
       if (this.#cache[key] !== undefined && nextCache[key] === undefined) {
         nextCache[key] = this.#cache[key];
       }
@@ -918,9 +924,38 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     if (value === undefined || value === null) {
+      // Deleting what isn't there is a real op to Loro — skip it like any
+      // other no-change write (see below).
+      if (map.get(prop) === undefined) return;
+
       map.delete(prop);
 
       return;
+    }
+
+    // Skip writes that change nothing. Loro's LWW registers create an op on
+    // EVERY set, equal value or not — and hydration re-applies a resource's
+    // full JSON-AD on every collection re-query, several times per page load.
+    // Each redundant op lands past the save cursor, so the subject went
+    // dirty, the drain re-signed and re-POSTed the resource's whole state on
+    // every reload (the post-reload "re-drain storm"), and the re-encoded
+    // values carried fresh timestamps that could beat a genuinely newer
+    // concurrent edit from another device in LWW. A stringify compare is
+    // false-negative-safe: key-order mismatches just fall through to the
+    // old behaviour.
+    const current = map.get(prop);
+
+    if (current !== undefined) {
+      const currentPlain =
+        typeof (current as { toJSON?: () => unknown })?.toJSON === 'function'
+          ? (current as { toJSON: () => unknown }).toJSON()
+          : current;
+
+      try {
+        if (JSON.stringify(currentPlain) === JSON.stringify(value)) return;
+      } catch {
+        // Not comparable (cyclic, bigint…) — write as before.
+      }
     }
 
     // Loro accepts primitives and containers directly
