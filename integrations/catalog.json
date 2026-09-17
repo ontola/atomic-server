@@ -199,7 +199,7 @@
     ],
     "https://atomicdata.dev/properties/shortname": "clockify",
     "https://atomicdata.dev/integrations/properties/experimental": true,
-    "https://atomicdata.dev/integrations/properties/enabled": false,
+    "https://atomicdata.dev/integrations/properties/enabled": true,
     "https://atomicdata.dev/properties/name": "Clockify",
     "https://atomicdata.dev/properties/emoji": "⏱️",
     "https://atomicdata.dev/properties/description": "Bring your completed work into the Time Tracker.",
