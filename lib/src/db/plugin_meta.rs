@@ -85,18 +85,7 @@ impl PluginManifest {
     }
 
     pub fn validate(&self) -> Result<(), AtomicError> {
-        let forbidden = ['/', '.'];
-
-        for field_name in [("name", &self.name), ("namespace", &self.namespace)] {
-            if field_name.1.contains(forbidden) {
-                return Err(AtomicError::from(format!(
-                    "{} cannot contain '/' or '.'",
-                    field_name.0
-                )));
-            }
-        }
-
-        Ok(())
+        validate_plugin_identifiers(&self.namespace, &self.name)
     }
 
     pub fn has_permission(&self, permission: PermissionType) -> bool {
@@ -104,5 +93,77 @@ impl PluginManifest {
             return permissions.iter().any(|p| p.permission == permission);
         }
         false
+    }
+}
+
+/// Checks that a plugin `namespace` and `name` are safe to use as path components.
+///
+/// Both values end up in filesystem paths (`{namespace}.{name}.wasm`, `{namespace}/assets`),
+/// so they must be a single, non-empty path segment: only ASCII alphanumerics, `-` and `_`.
+/// This rejects path separators, `.` / `..` traversal, absolute paths and control characters.
+///
+/// Call this on every code path that turns user-controlled namespace/name values into paths,
+/// not only when parsing a manifest.
+pub fn validate_plugin_identifiers(namespace: &str, name: &str) -> Result<(), AtomicError> {
+    for (field, value) in [("namespace", namespace), ("name", name)] {
+        validate_plugin_identifier(field, value)?;
+    }
+    Ok(())
+}
+
+pub fn validate_plugin_identifier(field: &str, value: &str) -> Result<(), AtomicError> {
+    const MAX_LEN: usize = 128;
+
+    if value.is_empty() {
+        return Err(AtomicError::from(format!("plugin {field} cannot be empty")));
+    }
+    if value.len() > MAX_LEN {
+        return Err(AtomicError::from(format!(
+            "plugin {field} cannot be longer than {MAX_LEN} characters"
+        )));
+    }
+    if !value
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err(AtomicError::from(format!(
+            "plugin {field} '{value}' is invalid: only ASCII letters, digits, '-' and '_' are allowed"
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_simple_identifiers() {
+        validate_plugin_identifiers("my-namespace", "my_plugin1").unwrap();
+    }
+
+    #[test]
+    fn rejects_traversal_and_separators() {
+        for bad in [
+            "../../tmp",
+            "..",
+            ".",
+            "a/b",
+            "a\\b",
+            "/tmp",
+            "a.b",
+            "",
+            "with space",
+            "nul\0byte",
+        ] {
+            assert!(
+                validate_plugin_identifiers(bad, "ok").is_err(),
+                "namespace {bad:?} should be rejected"
+            );
+            assert!(
+                validate_plugin_identifiers("ok", bad).is_err(),
+                "name {bad:?} should be rejected"
+            );
+        }
     }
 }
