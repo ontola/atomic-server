@@ -9,7 +9,7 @@ import { ErrMessage } from '@components/forms/InputStyles';
 import { ConnectLocalThought } from './ConnectLocalThought';
 import { browserIntegrations, platformName } from './localThought';
 import { useLocalThoughtCompletedPlatform } from './localThoughtCallback';
-import { isExperimental } from './pluginCatalog';
+import { isCatalogVisible } from './pluginCatalog';
 
 export function LocalThoughtCatalog({
   drive,
@@ -41,7 +41,7 @@ export function LocalThoughtCatalog({
     return () => controller.abort();
   }, [origin]);
   const visible = localThoughtCatalogEntries(platforms)
-    .filter(id => showExperimentalPlugins || !isExperimental(id))
+    .filter(id => isCatalogVisible(id, showExperimentalPlugins))
     .filter(id =>
       `${id} ${platformName(id)}`.toLowerCase().includes(search.toLowerCase()),
     );

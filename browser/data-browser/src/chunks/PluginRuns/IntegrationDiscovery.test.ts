@@ -29,18 +29,11 @@ it('keeps every bundled integration discoverable without a proxy catalog', () =>
 it.each([
   [false, false, []],
   [false, true, []],
-  [true, false, ['mt940', 'clockify']],
-  [
-    true,
-    true,
-    [
-      'devonian-github-issues',
-      'devonian-google-calendar',
-      'mt940',
-      'clockify',
-      'notion',
-    ],
-  ],
+  // None of the bundled ids currently have a catalog.json entry (only
+  // 'pets', a raw LocalThought platform, does), so they stay dark matter —
+  // shipped in the bundle but unreachable — regardless of either toggle.
+  [true, false, []],
+  [true, true, []],
 ])(
   'gates proxy-backed bundled cards for experimental=%s api=%s',
   (experimental, api, expected) => {

@@ -8,7 +8,7 @@ import { IntegrationEvidence } from './IntegrationEvidence';
 import { googleCalendarIntegration } from '@localthought/atomic-integrations/ui/GoogleCalendar';
 import { useIntegrationProxy } from '@helpers/integrationProxy';
 import { useLocalThoughtCompletedPlatform } from './localThoughtCallback';
-import { isExperimental } from './pluginCatalog';
+import { isCatalogVisible } from './pluginCatalog';
 
 const NotionSetup = lazy(() =>
   import('./ConnectNotion').then(m => ({ default: m.ConnectNotion })),
@@ -124,7 +124,7 @@ export function visibleBundledIntegrations(
   showApiPlugins: boolean,
 ) {
   return bundledIntegrations()
-    .filter(entry => showExperimentalPlugins || !isExperimental(entry.id))
+    .filter(entry => isCatalogVisible(entry.id, showExperimentalPlugins))
     .filter(entry => !entry.requiresApiPlugins || showApiPlugins);
 }
 
