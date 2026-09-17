@@ -2149,3 +2149,13 @@ and upload hook, then delivers multiple files through the drop callback. It
 verifies the upload targets the displayed drive even when the current drive
 setting differs. Native drag events, overlay geometry and the refreshed child
 list are not covered by this component test.
+
+## Staging idle requests and first Cloud Server upload
+
+- `helpers/managed/reconcile.test.ts`: a compound identity check uses one account request; catalog before/after identity checks remain intact.
+- `helpers/managed/session.test.ts`: concurrent account checks share only in-flight work; subsequent reads remain fresh, and logout/provider/token changes discard old responses.
+- `helpers/visiblePolling.test.ts`: hidden tabs pause refresh, focus/online resume it, slow requests do not overlap, failures retry, and cleanup prevents restart.
+- `e2e/tests/sync-devices.spec.ts`: two real node polls do not refetch enrollment; returning focus still refreshes account hosting for the same email.
+- `lib/src/sync/tests.rs::sync_probe_bootstraps_admitted_missing_drive_without_exposing_private_data`: hash probe and RBSR accept an empty admitted destination, signed import stores document content, and anonymous/unadmitted/existing-private reads remain denied.
+
+Live staging request counts were measured before these fixes. Deployment and post-deployment request measurement remain outstanding; the local browser test mocks the SaaS control plane and uses a real AtomicServer.
