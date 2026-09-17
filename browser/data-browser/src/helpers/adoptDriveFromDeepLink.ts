@@ -70,27 +70,7 @@ export async function adoptDriveFromDeepLink(store: Store): Promise<void> {
 
     await enableLoro();
 
-    let resource = await store.getResource(subject);
-
-    // A 401 here is usually not a verdict. `waitForServerConnected` above
-    // returns once the socket is up, but authentication is a separate
-    // handshake: a page opened straight after signing in can read the drive
-    // before the connection carries the new agent, and the fetch comes back
-    // "not publicly readable". Giving up then leaves the session driveless
-    // for good — no sidebar drive, and no presence, because the presence
-    // manager is keyed on the session drive and never gets one.
-    // Ask again while that is still the plausible explanation.
-    for (
-      let attempt = 0;
-      attempt < 10 &&
-      resource.error &&
-      isUnauthorized(resource.error) &&
-      store.getAgent();
-      attempt++
-    ) {
-      await new Promise(resolve => setTimeout(resolve, 300));
-      resource = await store.fetchResourceFromServer(subject);
-    }
+    const resource = await store.getResource(subject);
 
     if (resource.error) {
       return;
