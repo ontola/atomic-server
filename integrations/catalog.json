@@ -44,5 +44,13 @@
     ],
     "https://atomicdata.dev/properties/shortname": "pets",
     "https://atomicdata.dev/integrations/properties/experimental": true
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/catalog/devonian-google-calendar",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/shortname": "devonian-google-calendar",
+    "https://atomicdata.dev/integrations/properties/experimental": true
   }
 ]
