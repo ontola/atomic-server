@@ -230,6 +230,13 @@
     ],
     "https://atomicdata.dev/properties/shortname": "pets",
     "https://atomicdata.dev/integrations/properties/experimental": true,
-    "https://atomicdata.dev/integrations/properties/enabled": true
+    "https://atomicdata.dev/integrations/properties/enabled": true,
+    "https://atomicdata.dev/properties/name": "Pets",
+    "https://atomicdata.dev/properties/emoji": "🐾",
+    "https://atomicdata.dev/properties/description": "A trivial demo collection, useful for trying plugins out.",
+    "https://atomicdata.dev/integrations/properties/capabilities": "Imports five static demo pets into a Pets table with a small ontology (species, breed, age, mood).",
+    "https://atomicdata.dev/integrations/properties/events": "A one-off, on-demand import. Nothing runs in the background.",
+    "https://atomicdata.dev/integrations/properties/limitation": "No external account, API key or network call. Static sample data only, not a live provider.",
+    "https://atomicdata.dev/integrations/properties/keywords": "pets demo example sample ontology test touch points"
   }
 ]
