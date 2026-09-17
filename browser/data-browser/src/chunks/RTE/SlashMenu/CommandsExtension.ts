@@ -49,7 +49,20 @@ export const SlashCommands = Extension.create({
 export const createRenderFunction =
   <ItemType>(container: HTMLElement): SuggestionOptions<ItemType>['render'] =>
   () => {
-    let component: ReactRenderer<CommandListRefType, CommandListProps>;
+    let component:
+      | ReactRenderer<CommandListRefType, CommandListProps>
+      | undefined;
+
+    // Escape and `onExit` both end the popup, and either can run first — the
+    // list is dismissed with Escape and @tiptap/suggestion then exits the
+    // same suggestion. Dropping the reference as it is destroyed keeps the
+    // later call from unmounting an already-unmounted renderer, and keeps
+    // `onUpdate`/`onKeyDown` from addressing one: both bail on a missing
+    // `component`, but neither could tell a live renderer from a dead one.
+    const destroyComponent = () => {
+      component?.destroy();
+      component = undefined;
+    };
 
     const updatePosition = (props: SuggestionProps<ItemType, ItemType>) => {
       if (!props.decorationNode) {
@@ -103,7 +116,7 @@ export const createRenderFunction =
         }
 
         if (props.event.key === 'Escape') {
-          component.destroy();
+          destroyComponent();
 
           return true;
         }
@@ -120,11 +133,7 @@ export const createRenderFunction =
         // `await` in @tiptap/suggestion's plugin view update. If the editor
         // is destroyed in that window, `onExit` can fire before `onStart`
         // ever ran.
-        if (!component) {
-          return;
-        }
-
-        component.destroy();
+        destroyComponent();
       },
     };
   };
