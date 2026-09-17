@@ -135,11 +135,11 @@ test('local diagnostics require explicit inclusion and exclude private context',
   await expect(
     dialog.getByRole('button', { name: 'Stop and clear' }),
   ).toBeVisible();
-  const preview = dialog.getByRole('textbox', {
-    name: 'Diagnostic report preview',
-  });
-  await expect(preview).toHaveValue(/save-started/);
-  const previewText = await preview.inputValue();
+  const preview = dialog
+    .getByRole('region', { name: 'Diagnostic report preview' })
+    .locator('[data-code-text]');
+  await expect(preview).toContainText(/save-started/);
+  const previewText = (await preview.textContent())!;
   const report = JSON.parse(previewText);
   expect(report.schema).toBe(3);
   expect(report.events.map((event: { code: string }) => event.code)).toContain(
@@ -229,11 +229,11 @@ test('diagnostics survive reload and disabling clears IndexedDB across tabs', as
   await page.getByRole('button', { name: 'Feedback', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByText('Diagnostic data', { exact: true }).click();
-  await dialog.getByRole('button', { name: 'Review report' }).click();
-  const preview = dialog.getByRole('textbox', {
-    name: 'Diagnostic report preview',
-  });
-  const report = JSON.parse(await preview.inputValue());
+  const preview = dialog
+    .getByRole('region', { name: 'Diagnostic report preview' })
+    .locator('[data-code-text]');
+  await expect(preview).toBeVisible();
+  const report = JSON.parse((await preview.textContent())!);
   expect(
     report.previousSessions.some((s: { events: Array<{ code: string }> }) =>
       s.events.some(e => e.code === 'save-error'),
