@@ -5,6 +5,17 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 ## UNRELEASED
 
 - Local Thought connections install a folder after one access check and import in the browser without a preview dialog. Opening the folder or a table refreshes automatically, with five-minute refreshes while open, visible sync status, and local-edit preservation.
+- Fix: the fork bar no longer fetches the server root on every resource page.
+  It renders above every resource and only returns `null` for a non-fork after
+  its hooks have run, so `useResource(originalSubject ?? '')` fired for all of
+  them; an empty subject resolves against the page origin, which serves no
+  resource (no Drive is created at `/`), so each page load spent a request on a
+  404 and logged a console error. It asks for `unknownSubject` instead, which
+  the store answers from memory without touching the network. This is what made
+  the `offline-persistence` and `offline-tables` e2e specs fail: they assert on
+  unexpected browser console errors, and with the WebSocket disconnected the
+  miss surfaced over HTTP as a logged 404 rather than a silent protocol answer.
+
 - The "All versions" link is gone from the version scroller. It pointed at the
   server's `/all-versions` endpoint, which rendered the same history the
   scroller was already showing, paginated and without attribution. Both
