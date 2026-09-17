@@ -81,7 +81,7 @@ export function FeedbackDiagnostics({
             onSelect(selected);
           }}
         />
-        Include diagnostic data
+        <span>Include diagnostic data</span>
       </label>
       {children}
       <Details

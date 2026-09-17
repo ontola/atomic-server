@@ -104,3 +104,20 @@ Return:
 Do not claim data loss, successful recovery or a root cause solely from the
 diagnostic event pattern. Establish those claims with a reproducer or independent
 recovery evidence.
+
+## Feedback transport
+
+The user message is limited to 4096 UTF-16 code units in the UI and submission
+helper. Explicitly included diagnostics are sent intact as a per-event
+`diagnostics.json` attachment, not appended to the message or added to the shared
+Sentry scope. Download report remains available without sending feedback.
+
+On 2026-09-17, the updated helper and installed Sentry SDK sent a synthetic
+500-event report to development. Sentry issue
+[ATOMIC-BROWSER-T](https://ontola.sentry.io/issues/ATOMIC-BROWSER-T), event
+`a4a00f0d70e44cb7b1b5ba0b80dda765`, contains attachment `24534428318`.
+The attachment was downloaded through MCP and matched all 20,419 bytes exactly
+(SHA-1 `43990240907aa6d01bc76157e8b4c402eff2793e`). This verifies the helper/SDK
+transport and retrieval, not production retention or email notification delivery.
+Direct MCP event-ID lookup failed for earlier stored feedback; search feedback
+issues and read their event IDs before interpreting a lookup miss as lost data.

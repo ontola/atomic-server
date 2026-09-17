@@ -225,7 +225,11 @@ GPT-5.6 Luna synthetic triage pilot is recorded in
 late results after clear, actual save rejection, account reset and failing UI
 listeners. `diagnostic-report.test.ts`, `feedback.test.ts`, and
 `feedback-privacy.test.ts` cover frozen previews, expired-session refusal, explicit
-inclusion, build identity and stripping inherited private Sentry context.
+inclusion, complete per-submission JSON attachments (including reports over 4096
+characters), message length boundaries, build identity and stripping inherited
+private Sentry context while retaining browser/OS name and version, User-Agent,
+platform and severity. `feedback-envelope.test.ts` verifies the real SDK envelope
+and attachment isolation.
 `feedback.spec.ts` checks preview/checkbox controls, intercepted report delivery,
 private text/URL exclusion, schema-3 export, recording/history surviving reload,
 and disabling/clearing across tabs in real IndexedDB.
