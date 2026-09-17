@@ -195,41 +195,21 @@ export function useChildren(parentSubject: string | undefined): {
 
       if (!current.includes(resource.subject)) {
         // A resource that names this parent but is not in the list means the
-        // query was answered before the server's index held it — a child
-        // created moments ago, or a device that loaded the drive while the
-        // commit was still landing. The collection has no reason of its own to
-        // ask again, so the child stayed missing until a reload
-        // (`server-only-fallback.spec.ts`). Ask again now.
+        // query was answered before it existed — a child created moments ago,
+        // or a device that loaded the drive while the commit was still
+        // landing. The collection has no reason of its own to ask again, so
+        // the child stayed missing until a reload
+        // (`server-only-fallback.spec.ts`).
+        //
+        // Add it here rather than re-reading the query: the server's index
+        // lags a fresh commit, so a re-read can answer without the very
+        // resource that prompted it and drop what the sidebar had already
+        // shown.
         if (
           parentSubject &&
           resource.get(core.properties.parent) === parentSubject
         ) {
-          await collection.refresh();
-          if (cancelled) return;
-
-          const total = collection.totalMembers;
-          const members = await Promise.all(
-            Array.from({ length: total }, (_, i) =>
-              collection.getMemberWithIndex(i),
-            ),
-          );
-          if (cancelled) return;
-
-          const seen = new Set<string>();
-          const candidates: string[] = [];
-
-          for (const member of members) {
-            if (
-              member &&
-              !member.startsWith('did:ad:commit:') &&
-              !seen.has(member)
-            ) {
-              seen.add(member);
-              candidates.push(member);
-            }
-          }
-
-          const sorted = await sortMembers(candidates);
+          const sorted = await sortMembers([...current, resource.subject]);
           if (cancelled) return;
 
           setSubjects(prev =>

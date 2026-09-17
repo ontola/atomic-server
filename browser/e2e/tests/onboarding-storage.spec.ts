@@ -12,6 +12,12 @@ test('onboarding checks storage before showing account controls and keeps feedba
     window.store!.getClientDb = () =>
       ({
         waitForInit: async () => false,
+        // A denied database is still a database: code that reads from it
+        // (collections fall back to the local index first) calls these, and a
+        // stub without them threw a TypeError out of the read path instead of
+        // taking the "no local db" branch this test is about.
+        isReady: false,
+        waitForReady: async () => false,
         initError: new Error('Storage denied'),
       }) as ReturnType<NonNullable<typeof window.store>['getClientDb']>;
     window.history.pushState({}, '', '/app/welcome');
