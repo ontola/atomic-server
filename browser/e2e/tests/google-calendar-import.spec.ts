@@ -55,8 +55,17 @@ for (const keepSeries of [false, true]) {
     await new Promise<void>(resolve => proxy.listen(0, '127.0.0.1', resolve));
     const port = (proxy.address() as { port: number }).port;
     const proxyOrigin = `http://127.0.0.1:${port}`;
-    const configuredProxy =
-      process.env.VITE_INTEGRATION_PROXY_URL || 'https://localthought.io';
+    // The app's proxy default is baked in at build time
+    // (`VITE_INTEGRATION_PROXY_URL`, which CI's e2e build sets), and this
+    // process never sees it — so reading the same env here guessed, and
+    // guessed wrong wherever the build set it: the routes below matched an
+    // origin the app never called and no provider request was ever counted.
+    // Pin it instead. `integration-proxy-url` is what
+    // `integrations/localthought/settings.ts` reads, ahead of that default.
+    const configuredProxy = 'https://localthought.io';
+    await page.addInitScript(origin => {
+      localStorage.setItem('integration-proxy-url', origin);
+    }, configuredProxy);
     // Before anything is intercepted. Turning on API-plugin discovery writes a
     // preference to the private drive, and the routes below cut the server
     // off — with the write blocked the toggle never sticks and the Calendar
