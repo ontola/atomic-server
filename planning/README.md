@@ -63,6 +63,7 @@ browser flow; standalone recovery remains self-managed.
 
 | Document | Status |
 | --- | --- |
+| [`atomic-flutter-sdk.md`](./atomic-flutter-sdk.md) | **In progress:** publish `atomic_lib` Flutter SDK (path A: Cargokit precompiled binaries + GitHub Releases); canvas is first consumer. |
 | [`production-readiness.md`](./production-readiness.md) | **Gate list.** What stands between `develop` and production: npm publishing, rate limiting, library-owned durability, desktop CSP, managed-node abuse gate, source maps, SaaS billing checks. |
 | [`security-audit-2026-09.md`](./security-audit-2026-09.md) | **Mostly fixed** (beta.6, plus B7 CSP, C18 and rate limits on 2026-09-15). Open: C16 process-global import flags, C17 DID watched-query leak, C20, C24 loopback NFS, permissive CORS, client errors as 500, section F, transitive advisories via actix-http and iroh 0.35. |
 | [`drive-sharing-state.md`](./drive-sharing-state.md) | **In progress.** Verified transition for unenrolled drives shipped (#1466). Remaining: authoritative per-drive editor usage from the backend, root cause of the retained remote routing, staging acceptance. |

@@ -7,6 +7,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- [`atomic_lib`](/dart/atomic_lib) — reusable Dart/Flutter Atomic SDK (pub.dev name; matches Rust `atomic_lib` / JS `@tomic/lib`): auth, local store, workspaces, WS/Iroh sync, and shared UI for login, QR pairing, sync settings, and drive switching. Precompiled native binaries via Cargokit + GitHub Releases (workflow `atomic_lib`). See `planning/atomic-flutter-sdk.md`.
 - The outbox drains over a live Iroh link too (`sync::peer::LivePeerCommitTransport`):
   a device with no hub in reach delivers its queued writes to a paired peer as
   signed `COMMIT` frames, which the peer validates and applies like a hub

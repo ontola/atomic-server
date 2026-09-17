@@ -1,0 +1,9 @@
+# Keep the published archive small; consumers use precompiled binaries.
+rust/target/
+**/target/
+.dart_tool/
+build/
+example/.dart_tool/
+example/build/
+**/*.log
+.secrets/
