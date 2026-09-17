@@ -22,6 +22,29 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 BREAKING: [#1107](https://github.com/atomicdata-dev/atomic-server/issues/1107) Named nested resources are no longer supported. Value::Resource and SubResource::Resource have been removed. If you need to include multiple resources in a response use an array.
 BREAKING: `store.get_resource_extended()` now returns a `ResourceResponse` instead of a `Resource` due to the removal of named nested resources. Use `.into()` or `.to_single()` to convert to a `Resource`.
 
+## [v0.40.4]
+
+Security patch release for the 0.40 line. Both fixes concern the WASM plugin
+installer, which is built by default (`wasm-plugins` is in the default feature
+set) and reachable by any agent with ordinary write access to a Drive — no
+admin rights required.
+
+- Reject path traversal in plugin zip asset entries. A zip entry named
+  `assets/../../..` was joined onto the plugin directory using the raw,
+  attacker-controlled entry name, allowing arbitrary file write with
+  attacker-controlled content anywhere the server process could write
+  (GHSA-g2q9-fjm7-cmm3). Entry names under `assets/` must now be plain
+  relative paths of normal components. Reported by @T4ran24.
+- Reject path traversal in plugin `namespace`/`name` on uninstall. Both values
+  were read straight off the Plugin resource and joined into filesystem paths,
+  so a `../` payload could delete arbitrary files or recursively delete a
+  directory (GHSA-vr56-vwrw-w2vg). Both are now validated as a single path
+  segment on every path that reaches the filesystem, with a direct-child check
+  as defense in depth.
+
+Version bumps: atomic_lib 0.40.1 -> 0.40.2, atomic-server 0.40.3 -> 0.40.4
+(cli untouched). server's atomic_lib dep pinned to 0.40.2.
+
 ## [v0.40.3]
 
 Security patch release. All four fixes below are included.
