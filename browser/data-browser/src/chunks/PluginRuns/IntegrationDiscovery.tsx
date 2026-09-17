@@ -8,7 +8,7 @@ import { IntegrationEvidence } from './IntegrationEvidence';
 import { googleCalendarIntegration } from '@localthought/atomic-integrations/ui/GoogleCalendar';
 import { useIntegrationProxy } from '@helpers/integrationProxy';
 import { useLocalThoughtCompletedPlatform } from './localThoughtCallback';
-import { isExperimental } from './pluginCatalog';
+import { isCatalogVisible, type CatalogEntry } from './pluginCatalog';
 
 const NotionSetup = lazy(() =>
   import('./ConnectNotion').then(m => ({ default: m.ConnectNotion })),
@@ -28,6 +28,10 @@ const LocalThoughtSetup = lazy(() =>
   })),
 );
 
+const PetsSetup = lazy(() =>
+  import('./ConnectPets').then(m => ({ default: m.ConnectPets })),
+);
+
 type BundledIntegration = {
   id: string;
   name: string;
@@ -43,88 +47,57 @@ type BundledIntegration = {
   extension?: typeof googleCalendarIntegration;
 };
 
-export function bundledIntegrations(): BundledIntegration[] {
-  return [
-    {
-      id: 'devonian-github-issues' as const,
-      name: 'GitHub issues and comments (Devonian)',
-      icon: '🐙',
-      description: 'Connect a GitHub repository to a local issue tracker.',
-      capabilities:
-        'Sync issues and comments in both directions, including closing and reopening issues.',
-      events:
-        'Connect through LocalThought, then use Sync now to exchange changes.',
-      limitation:
-        'Creates a separate local drive. Keep the browser open to sync. Sync writes changes to your GitHub repository.',
-      keywords: 'devonian github issues comments lens local tracker',
-      requiresApiPlugins: true,
-    },
-    {
-      id: 'devonian-google-calendar',
-      name: 'Google Calendar (Devonian)',
-      icon: '🗓️',
-      description: 'Import Google Calendar events into calendar views.',
-      capabilities:
-        'Preserves recurring series and previews supported edits to send back to Google.',
-      events:
-        'Connect through LocalThought, then use Sync now to exchange changes.',
-      limitation:
-        'Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google.',
-      keywords: 'google calendar devonian events recurring lens local tracker',
-      requiresApiPlugins: true,
-      platform: 'google-calendar',
-      extension: googleCalendarIntegration,
-    },
-    {
-      id: 'mt940' as const,
-      name: 'Bank statements',
-      icon: '🏦',
-      description:
-        'Import bank transactions from bunq and other MT940 exports.',
-      capabilities:
-        'Preview exact amounts, dates, account references and original descriptions in a Bank transactions table.',
-      events: 'Upload a statement when you need it. No bank token required.',
-      limitation:
-        'MT940 files only, up to 500 transactions and 512 KB. No payment initiation or live bank sync. Bank-specific formats may need additional support.',
-      keywords:
-        'bank bunq banking finance accounting statement mt940 import swift',
-    },
-    {
-      id: 'clockify' as const,
-      name: 'Clockify',
-      icon: '⏱️',
-      description: 'Bring your completed work into the Time Tracker.',
-      capabilities:
-        'Import completed entries with project and person links, start/end times and billable flags.',
-      events:
-        'Review imports before applying them. This first version does not sync changes back.',
-      limitation:
-        'Your entries only; up to 31 days. No active timers, updates, deletions, tags, task links, rates or custom fields.',
-      keywords: 'clockify time tracking timesheet projects billable import',
-    },
-    {
-      id: 'notion' as const,
-      name: 'Notion',
-      icon: '📓',
-      description: 'Work with your Notion database in Atomic.',
-      capabilities:
-        'Sync supported row fields, property names and table or board views.',
-      events: 'Start automations from newly discovered rows.',
-      limitation:
-        'Formatted text, relations, formulas and filtered views need additional mappings.',
-      keywords: 'notion database table board rows knowledge tasks automation',
-      requiresApiPlugins: true,
-      callbackPlatform: 'notion',
-    },
-  ];
+// The one field a catalog.json entry can't hold: a live reference to the
+// LocalThought extension module that customizes that platform's setup lens.
+// Everything else about a bundled integration's card is data, sourced from
+// catalog.json; this is code, so it stays here, keyed by the same shortname.
+const EXTENSIONS: Partial<Record<string, typeof googleCalendarIntegration>> = {
+  'devonian-google-calendar': googleCalendarIntegration,
+};
+
+function toBundledIntegration(
+  entry: CatalogEntry,
+): BundledIntegration | undefined {
+  const { shortname, name, icon, description, capabilities, events } = entry;
+  const { limitation, keywords } = entry;
+
+  if (
+    !name ||
+    !icon ||
+    !description ||
+    !capabilities ||
+    !events ||
+    !limitation ||
+    !keywords
+  ) {
+    return undefined;
+  }
+
+  return {
+    id: shortname,
+    name,
+    icon,
+    description,
+    capabilities,
+    events,
+    limitation,
+    keywords,
+    requiresApiPlugins: entry.requiresApiPlugins,
+    platform: entry.platform,
+    callbackPlatform: entry.callbackPlatform,
+    extension: EXTENSIONS[shortname],
+  };
 }
 
 export function visibleBundledIntegrations(
+  entries: CatalogEntry[],
   showExperimentalPlugins: boolean,
   showApiPlugins: boolean,
-) {
-  return bundledIntegrations()
-    .filter(entry => showExperimentalPlugins || !isExperimental(entry.id))
+): BundledIntegration[] {
+  return entries
+    .filter(entry => isCatalogVisible(entry, showExperimentalPlugins))
+    .map(toBundledIntegration)
+    .filter((entry): entry is BundledIntegration => entry !== undefined)
     .filter(entry => !entry.requiresApiPlugins || showApiPlugins);
 }
 
@@ -175,7 +148,7 @@ export function IntegrationDiscovery({
           <>
             {!entry.platform && (
               <IntegrationEvidence
-                id={entry.id as 'mt940' | 'clockify' | 'notion'}
+                id={entry.id as 'mt940' | 'clockify' | 'notion' | 'pets'}
               />
             )}
             <Button disabled={!drive} onClick={show}>
@@ -201,6 +174,8 @@ export function IntegrationDiscovery({
                   extension={entry.extension}
                   entry={entry.id}
                 />
+              ) : entry.id === 'pets' ? (
+                <PetsSetup drive={drive} />
               ) : entry.id === 'mt940' ? (
                 <MT940Setup drive={drive} />
               ) : entry.id === 'clockify' ? (

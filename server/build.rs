@@ -622,19 +622,25 @@ fn is_newer_than_dist(dir_entry: &walkdir::DirEntry, dist_time: Duration) -> boo
 }
 
 /// Embeds the integration plugins' `plugin.js` bundles (checked-in build
-/// artifacts, not sources compiled by this build) as a second, separate
-/// static-files resource map, served at `/integrations` (see `routes.rs`).
+/// artifacts, not sources compiled by this build), plus the root
+/// `catalog.json` gate file, as a second, separate static-files resource
+/// map, served at `/integrations` (see `routes.rs`).
 ///
-/// These used to be pulled into the data-browser's own JS bundle via Vite
-/// `?raw` imports, which meant every plugin's source lived twice: once here
-/// in the monorepo, once inlined into the SPA bundle. Embedding them
-/// directly and serving them over HTTP lets the browser `fetch()` a plugin's
-/// source at install time instead, and keeps the SPA bundle from growing
-/// with every new integration.
+/// The `plugin.js` bundles used to be pulled into the data-browser's own JS
+/// bundle via Vite `?raw` imports, which meant every plugin's source lived
+/// twice: once here in the monorepo, once inlined into the SPA bundle.
+/// Embedding them directly and serving them over HTTP lets the browser
+/// `fetch()` a plugin's source at install time instead, and keeps the SPA
+/// bundle from growing with every new integration. `catalog.json` is
+/// embedded and served the same way, at `/integrations/catalog.json`, so a
+/// Tauri build (whose frontend is bundled separately and may talk to any
+/// paired server) can fetch it from whichever server it's actually
+/// connected to instead of a copy baked into the SPA at build time.
 ///
-/// Only `plugin.js` files are collected — not the surrounding TypeScript
-/// sources, tests, fixtures or tooling, which remain source code compiled
-/// into the data-browser bundle like any other application logic.
+/// Only `plugin.js` files and the top-level `catalog.json` are collected —
+/// not the surrounding TypeScript sources, tests, fixtures or tooling, which
+/// remain source code compiled into the data-browser bundle like any other
+/// application logic.
 fn embed_integrations(dirs: &Dirs) -> std::io::Result<()> {
     if dirs.integrations_source.exists() {
         let _ = fs::remove_dir_all(&dirs.integrations_tmp);
@@ -642,7 +648,9 @@ fn embed_integrations(dirs: &Dirs) -> std::io::Result<()> {
             .into_iter()
             .filter_map(|e| e.ok())
         {
-            if entry.file_name() != "plugin.js" {
+            let is_plugin_bundle = entry.file_name() == "plugin.js";
+            let is_root_catalog = entry.file_name() == "catalog.json" && entry.depth() == 1;
+            if !is_plugin_bundle && !is_root_catalog {
                 continue;
             }
             let relative = entry

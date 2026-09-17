@@ -7,6 +7,7 @@ import {
   visibleBundledIntegrations,
 } from '../chunks/PluginRuns/IntegrationDiscovery';
 import { ConnectedIntegration } from '../chunks/PluginRuns/ConnectedIntegration';
+import { useIntegrationCatalog } from '../chunks/PluginRuns/pluginCatalog';
 import { useIntegrationVisibility } from '@hooks/useIntegrationVisibility';
 import { createRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
@@ -69,6 +70,11 @@ function IntegrationStore(): React.JSX.Element {
     saving: visibilitySaving,
     setVisibility,
   } = useIntegrationVisibility();
+  const {
+    entries: catalogEntries,
+    ready: catalogReady,
+    error: catalogEntriesError,
+  } = useIntegrationCatalog();
   // The ontology can hydrate after this page mounts on a full navigation.
   const pluginClass = usePluginClass(drive);
   const navigate = useNavigateWithTransition();
@@ -187,6 +193,7 @@ function IntegrationStore(): React.JSX.Element {
 
   const query = search.trim().toLocaleLowerCase();
   const bundled = visibleBundledIntegrations(
+    catalogEntries,
     showExperimentalPlugins,
     showApiPlugins,
   ).filter(entry =>
@@ -195,7 +202,9 @@ function IntegrationStore(): React.JSX.Element {
       .includes(query),
   );
   const nothingToDiscover =
-    bundled.length === 0 && (!showApiPlugins || !apiCatalogHasResults);
+    catalogReady &&
+    bundled.length === 0 &&
+    (!showApiPlugins || !apiCatalogHasResults);
   const visible = (showExperimentalPlugins ? listings : [])?.filter(
     ({ metadata: entry }) =>
       [entry.name, entry.description, ...entry.domains, ...entry.standards]
@@ -257,6 +266,12 @@ function IntegrationStore(): React.JSX.Element {
             onChange={event => setSearch(event.target.value)}
           />
           {error && <Card role='alert'>{error}</Card>}
+          {catalogEntriesError && (
+            <Card role='alert'>{catalogEntriesError}</Card>
+          )}
+          {!catalogReady && !catalogEntriesError && (
+            <p>Loading integrations…</p>
+          )}
           {showExperimentalPlugins && catalogError && (
             <Card role='alert'>{catalogError}</Card>
           )}
