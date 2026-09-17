@@ -78,6 +78,7 @@
     "@id": "https://atomicdata.dev/properties/name",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
     "https://atomicdata.dev/properties/description": "The name of a thing or person.",
+    "https://atomicdata.dev/properties/name": "Name",
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Property"
