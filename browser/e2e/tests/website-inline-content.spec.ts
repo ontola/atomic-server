@@ -89,23 +89,40 @@ test('inline website editing saves rich documents and typed prices to Atomic', a
     )
     .toBe(5.75);
   const editor = frame.getByLabel('Rich Text Editor', { exact: true });
+
+  // Emptying the editor commits; the server echo of that commit rebuilds the
+  // ProseMirror document and can swallow the keystrokes typed right after.
+  const clear = async () => {
+    await expect(async () => {
+      // Not `fill('')`: Playwright's fill leaves atom nodes (mention cards)
+      // and formatted blocks behind in ProseMirror. The editor's own keys
+      // delete whatever the selection covers.
+      await editor.press('ControlOrMeta+a');
+      await editor.press('Backspace');
+      await waitForSynced(page);
+      // The echo can rebuild the document with the old text still in it;
+      // only an editor that is empty after the sync is really cleared.
+      await expect(editor).toHaveText('');
+    }).toPass({ timeout: 20_000 });
+  };
+
   await expect(editor).toContainText('Fresh bread every morning.');
   await expect(editor.locator('..').locator('..')).toHaveCSS(
     'background-color',
     'rgba(0, 0, 0, 0)',
   );
-  await editor.fill('');
+  await clear();
   await editor.pressSequentially('/heading');
   await expect(frame.getByText('Heading 1', { exact: true })).toBeVisible();
   await editor.press('Enter');
   await editor.pressSequentially('A heading');
   await expect(editor.locator('h1')).toHaveText('A heading');
-  await editor.fill('');
+  await clear();
   await editor.press('ControlOrMeta+Alt+0');
   await editor.pressSequentially('# ');
   await editor.pressSequentially('Markdown heading');
   await expect(editor.locator('h1')).toHaveText('Markdown heading');
-  await editor.fill('');
+  await clear();
   await editor.pressSequentially('@');
   await expect(
     frame.getByText('Products', { exact: true }).last(),

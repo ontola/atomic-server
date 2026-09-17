@@ -90,5 +90,24 @@ export async function createBakery(page: Page) {
   const editor = frame.getByLabel('Rich Text Editor', { exact: true });
   await expect(editor).toContainText('Fresh bread every morning.');
 
-  return { frame, editor };
+  // Emptying the editor commits, and the server echoes that commit back into
+  // the live Loro doc. loro-prosemirror rebuilds the whole ProseMirror document
+  // on any import, which closes whatever popup the next keystroke just opened
+  // (mention list, slash menu, image picker) and can swallow a markdown input
+  // rule. Let the echo land before typing into the cleared editor.
+  const clear = async () => {
+    await expect(async () => {
+      // Not `fill('')`: Playwright's fill leaves atom nodes (mention cards)
+      // and formatted blocks behind in ProseMirror. The editor's own keys
+      // delete whatever the selection covers.
+      await editor.press('ControlOrMeta+a');
+      await editor.press('Backspace');
+      await waitForSynced(page);
+      // The echo can rebuild the document with the old text still in it;
+      // only an editor that is empty after the sync is really cleared.
+      await expect(editor).toHaveText('');
+    }).toPass({ timeout: 20_000 });
+  };
+
+  return { frame, editor, clear };
 }

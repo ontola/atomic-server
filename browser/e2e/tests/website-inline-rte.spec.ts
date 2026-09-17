@@ -16,7 +16,7 @@ test('rich text menus, popovers and handles work inside the website preview', as
   page,
 }) => {
   await before({ page });
-  const { frame, editor } = await createBakery(page);
+  const { frame, editor, clear } = await createBakery(page);
 
   // Bubble menu: select text and toggle bold from the toolbar.
   await editor.fill('Bold me');
@@ -53,7 +53,7 @@ test('rich text menus, popovers and handles work inside the website preview', as
   await expect(editor.locator('a[href="https://example.com"]')).toHaveCount(1);
 
   // Mention: arrow navigation, escape, reopen and select.
-  await editor.fill('');
+  await clear();
   await editor.pressSequentially('@', { delay: 40 });
   await expect(frame.getByTestId('rte-command-list')).toBeVisible();
   await editor.pressSequentially('Sour', { delay: 40 });
@@ -72,7 +72,7 @@ test('rich text menus, popovers and handles work inside the website preview', as
   await expect(editor.getByText('Sourdough', { exact: true })).toBeVisible();
 
   // Slash menu escapes and reopens too.
-  await editor.fill('');
+  await clear();
   await editor.pressSequentially('/quo', { delay: 40 });
   const quote = frame.locator('[id^="command-list-"]', { hasText: 'Quote' });
   await expect(quote).toBeVisible();
@@ -86,15 +86,22 @@ test('rich text menus, popovers and handles work inside the website preview', as
   await expect(editor.locator('blockquote')).toContainText('Quoted');
 
   // Image insertion shows the picker inside the iframe.
-  await editor.fill('');
+  await clear();
   await editor.pressSequentially('/image', { delay: 40 });
+  // Confirm the slash menu shows the entry before accepting it, as the quote
+  // step above does; Enter on a menu that has not (re)opened yet is a no-op.
+  await expect(
+    frame.locator('[id^="command-list-"]', { hasText: 'Image' }),
+  ).toBeVisible();
   await editor.press('Enter');
   await expect(frame.getByPlaceholder('Enter a URL...')).toBeVisible();
   await editor.press('ControlOrMeta+z');
   await expect(frame.getByPlaceholder('Enter a URL...')).toBeHidden();
 
   // Drag handle appears next to the hovered block.
-  await editor.fill('Drag me');
+  await clear();
+  await editor.pressSequentially('Drag me', { delay: 40 });
+  await expect(editor).toHaveText('Drag me');
   await editor.locator('p').first().hover();
   await expect(frame.locator('.drag-handle')).toBeVisible();
 
