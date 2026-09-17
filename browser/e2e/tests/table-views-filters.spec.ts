@@ -208,7 +208,7 @@ test.describe('table filtering + views', () => {
     await createPeopleTable(page);
 
     // name starts_with "A" → only Alice.
-    await addFilter(page, 'name', 'starts_with', 'A');
+    await addFilter(page, 'Name', 'starts_with', 'A');
     await expect(page.getByRole('gridcell', { name: 'Alice' })).toBeVisible();
     await expect(page.getByRole('gridcell', { name: 'Bob' })).not.toBeVisible();
     await expect(
@@ -216,7 +216,7 @@ test.describe('table filtering + views', () => {
     ).not.toBeVisible();
 
     // Switch the same filter to contains "li" → Alice + Charlie (both contain "li").
-    await filterChip(page, 'name').click();
+    await filterChip(page, 'Name').click();
     await page
       .locator('select[aria-label="Filter operator"]')
       .selectOption('contains');
@@ -267,7 +267,7 @@ test.describe('table filtering + views', () => {
     const { table } = await createPeopleTable(page);
 
     // Filter the (auto-created) default view: name starts_with "A" → Alice.
-    await addFilter(page, 'name', 'starts_with', 'A');
+    await addFilter(page, 'Name', 'starts_with', 'A');
     await expect(page.getByRole('gridcell', { name: 'Alice' })).toBeVisible();
     await expect(page.getByRole('gridcell', { name: 'Bob' })).not.toBeVisible();
 
