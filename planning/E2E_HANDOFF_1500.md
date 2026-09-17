@@ -312,3 +312,54 @@ missing from the Playwright cache (`pnpm exec playwright install firefox`);
 
 Nothing in the remaining list is a regression this branch introduces, and the
 `@smoke` gate CI runs is green apart from the `second-device-load` flake above.
+
+## Later the same night — 41 → 11, and three more real fixes
+
+Full suite, dev topology, 2 workers: **268 passed / 11 failed / 7 skipped**.
+
+- `f0de176c6` **A children page older than its own count.**
+  `getMemberWithIndex` returns undefined when the page it reads does not hold
+  the index the count implies; `useChildren` dropped that slot and never looked
+  again, so a child could be missing for the life of the view.
+  `second-device-load @smoke` went from ~1 pass in 3 to 6 in 7. The retry only
+  runs while the hook has never produced a list — after a delete the count runs
+  ahead of the page too, and refreshing there would pull the destroyed resource
+  back into the store.
+- `993ad653b` **A child that did not exist when the query was answered.**
+  The collection has no reason to ask again, so a folder created moments
+  earlier stayed missing from the drive's list until a reload —
+  `server-only-fallback.spec.ts`, failing about half the time. `useChildren`
+  already listens for `ResourceUpdated` to re-sort; it now also re-reads the
+  query when the changed resource names this parent and is absent from the
+  list. That spec: 4/4. `e2e.spec.ts` "delete resource" @smoke, which had been
+  ~50/50 in this environment, also went 4/4.
+- `8183a3bc6` **`google-calendar-import` (both tests) now pass.** They enabled
+  API-plugin discovery *after* cutting the server off, and that preference is a
+  write whose `/commit` the spec aborts. Set it up first, read the card back so
+  the preference and schema are in the local DB, flush, then go offline. The
+  offline phase must also open the drive by subject — `/app/dev-drive`
+  bootstraps the drive and, with no server, rebuilds the ontology empty.
+
+### What is left, honestly
+
+`vault-backup-restore` (2) needs its own control plane: `atomic-saas`
+hardcodes port 3030, where Joep already runs one, and `vault-stack.sh` points
+enrolled drives at the node in `.env.development` (9885 — the real dev server).
+Not something to start from a session that must not disturb that stack.
+
+`table-create-perf` (3), `opfs-init-perf` and `recovery-option` (2) were
+called "dev-topology only" above. That is right for `recovery-option` (the
+service-worker warning it declares only happens in a production build), but a
+production build made in this environment fails the other two *differently*
+(`/app/dev-drive` never reaches a drive), so the prod topology here is not
+clean enough to prove them either way. Treat them as unexplained rather than
+explained.
+
+The rest is flake that passes when run alone: `offline-chatroom`,
+`tables.spec.ts` Shift+Enter, `website-inline-rte` (the known dropped-character
+flake in the preview editor).
+
+**CI is red for an unrelated reason.** Every Mancave run in the repo since
+10:34 on 2026-09-16 fails in `Log in to Docker Hub` with `Error: spawn EIO`,
+before any build step — `develop`, `feat/plugin-catalog` and three other
+branches alike. The runner host needs attention; re-running does not help.
