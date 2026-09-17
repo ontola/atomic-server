@@ -62,6 +62,7 @@ import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
 import { withDeadline } from './withDeadline.js';
 import { BLOB, endpoints, INTERNAL_ID } from './urls.js';
+import { SERVER_MANAGED_PROPS } from './server-managed-props.js';
 import { initOntologies } from './ontologies/index.js';
 import { decodeB64, encodeB64Url } from './base64.js';
 import {
@@ -404,22 +405,6 @@ const GET_MANY_CHUNK = 200;
  * was actually announced (see `Store.expectClientDb`).
  */
 const CLIENT_DB_ATTACH_GRACE = 5000;
-
-/**
- * The server-managed props that `Resource.rebuildCacheFromLoro` preserves even
- * when a Loro doc carries no delta for them (drive/parent/lastCommit/createdAt).
- * A resource that has ONLY these — no class, no user content — is a skeleton,
- * not a renderable resource. Used by the OPFS cold-load guard to decide whether
- * a local hit is authoritative. Keep in sync with the `serverManaged` list in
- * resource.ts.
- */
-const SERVER_MANAGED_SKELETON_PROPS: ReadonlySet<string> = new Set([
-  commits.properties.lastCommit,
-  commits.properties.createdAt,
-  'https://atomicdata.dev/properties/createdBy',
-  'https://atomicdata.dev/properties/drive',
-  core.properties.parent,
-]);
 
 /**
  * Cheap equality for commit-log property values. Strict `===` would always
@@ -2180,7 +2165,7 @@ export class Store {
       !emitResource.get(core.properties.incomplete)
     ) {
       try {
-        const jsonAd = resourceToJsonAd(emitResource);
+        const jsonAd = emitResource.toClientDbJsonAd();
 
         if (jsonAd) {
           const doc = emitResource.getLoroDoc?.();
@@ -3043,8 +3028,8 @@ export class Store {
   /**
    * True when the resource carries enough state to stand on its own: a
    * class, or any property beyond the server-managed skeleton
-   * (drive/parent/lastCommit/createdAt) that `rebuildCacheFromLoro`
-   * preserves. A resource that passes this is worth more than a failed
+   * (`SERVER_MANAGED_PROPS`) that `rebuildCacheFromLoro` preserves. A
+   * resource that passes this is worth more than a failed
    * fetch — it renders, and the alternative is showing the user nothing.
    */
   private hasRenderableContent(resource: Resource | undefined): boolean {
@@ -3054,7 +3039,7 @@ export class Store {
 
     return resource
       .getEntries()
-      .some(([prop]) => !SERVER_MANAGED_SKELETON_PROPS.has(prop));
+      .some(([prop]) => !SERVER_MANAGED_PROPS.has(prop));
   }
 
   private async hydrateFromLocalDb(
@@ -6232,6 +6217,24 @@ export class Store {
    *  dropped by `removeResource` and by a failed write. */
   private lastPersistedStamp = new Map<string, number>();
 
+  /**
+   * Record that `jsonAd` + `snapshot` is what the local DB now holds for
+   * `subject`, so `addResource` skips re-writing that same state. Called by
+   * `Resource.persistToClientDb` after its durable write lands — without it
+   * the dedup cache only knew about writes `addResource` itself made, and
+   * rewrote the row on the next ingress.
+   *
+   * @internal
+   */
+  public recordPersistedState(
+    subject: string,
+    jsonAd: string,
+    snapshot?: Uint8Array,
+  ): void {
+    // Keyed like `addResource` keys it: by the resource's own subject.
+    this.lastPersistedStamp.set(subject, hashPersistedState(jsonAd, snapshot));
+  }
+
   private snapshotReadDepth = 0;
 
   public getResourceSnapshot(
@@ -6376,13 +6379,6 @@ export interface FetchOpts {
    * local resource.
    */
   newResource?: boolean;
-}
-
-/** Convert a Resource to a JSON-AD string for storage in the WASM DB. */
-function resourceToJsonAd(resource: Resource): string | null {
-  const obj = resource.toObject({ includeBinary: false });
-
-  return obj ? JSON.stringify(obj) : null;
 }
 
 /**
