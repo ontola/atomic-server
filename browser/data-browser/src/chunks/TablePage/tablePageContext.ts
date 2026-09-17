@@ -2,6 +2,7 @@ import {
   unknownSubject,
   type AggregateFunction,
   type AggregateOutcome,
+  type Collection,
   type Property,
 } from '@tomic/react';
 import { createContext } from 'react';
@@ -89,7 +90,25 @@ export interface TablePageContextType {
   /** Drop a row action from the active view. */
   removeRowAction: (id: string) => void;
   addItemsToHistoryStack: AddItemToHistoryStack;
+  /**
+   * How the grid's row at `index` reaches its resource, mirroring what the grid
+   * renders there (see `TablePage/TableRow.tsx`): a collection member, resolved
+   * by index through the collection's pages, or a row added this session, which
+   * keeps its local `_new:` key even after it materializes. `undefined` for an
+   * index the grid draws nothing for.
+   *
+   * Row-scoped affordances rendered by the grid — the comment bubble in the
+   * gutter — are handed nothing but an index, so this is how they reach the row
+   * itself. The two cases need different hooks, so this reports which one it is
+   * rather than resolving to a subject: a session row has no subject at all
+   * until it materializes.
+   */
+  rowSource: (index: number) => RowSource | undefined;
 }
+
+export type RowSource =
+  | { kind: 'member'; collection: Collection; index: number }
+  | { kind: 'session'; key: string };
 
 export const TablePageContext = createContext<TablePageContextType>({
   tableSubject: unknownSubject,
@@ -126,4 +145,5 @@ export const TablePageContext = createContext<TablePageContextType>({
   updateRowAction: () => undefined,
   removeRowAction: () => undefined,
   addItemsToHistoryStack: () => undefined,
+  rowSource: () => undefined,
 });
