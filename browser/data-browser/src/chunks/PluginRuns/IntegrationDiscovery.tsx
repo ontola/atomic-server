@@ -28,6 +28,10 @@ const LocalThoughtSetup = lazy(() =>
   })),
 );
 
+const PetsSetup = lazy(() =>
+  import('./ConnectPets').then(m => ({ default: m.ConnectPets })),
+);
+
 type BundledIntegration = {
   id: string;
   name: string;
@@ -144,7 +148,7 @@ export function IntegrationDiscovery({
           <>
             {!entry.platform && (
               <IntegrationEvidence
-                id={entry.id as 'mt940' | 'clockify' | 'notion'}
+                id={entry.id as 'mt940' | 'clockify' | 'notion' | 'pets'}
               />
             )}
             <Button disabled={!drive} onClick={show}>
@@ -170,6 +174,8 @@ export function IntegrationDiscovery({
                   extension={entry.extension}
                   entry={entry.id}
                 />
+              ) : entry.id === 'pets' ? (
+                <PetsSetup drive={drive} />
               ) : entry.id === 'mt940' ? (
                 <MT940Setup drive={drive} />
               ) : entry.id === 'clockify' ? (
