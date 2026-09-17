@@ -30,6 +30,13 @@ test('opening Edit with AI preserves the preview document', async ({
       frame.contentDocument!.body.setAttribute('data-preserved-preview', 'yes');
     });
   await page.getByRole('button', { name: 'More', exact: true }).click();
+  // The menu opens with the generic resource actions and prepends the
+  // website ones a frame later, once the website class has resolved.
+  // `evaluateAll` reads the DOM once with no auto-waiting, so snapshotting
+  // straight after the click caught whichever half had rendered. Wait for
+  // both ends to be present before reading the order.
+  await expect(page.getByTestId('menu-item-website-download')).toBeVisible();
+  await expect(page.getByTestId('menu-item-delete')).toBeVisible();
   const actionIds = await page
     .getByRole('menuitem')
     .evaluateAll(items => items.map(item => item.getAttribute('data-testid')));
