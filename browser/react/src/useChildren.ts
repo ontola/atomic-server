@@ -193,7 +193,57 @@ export function useChildren(parentSubject: string | undefined): {
     const unsub = store.on(StoreEvents.ResourceUpdated, async resource => {
       const current = subjectsRef.current;
 
-      if (current.length === 0 || !current.includes(resource.subject)) {
+      if (!current.includes(resource.subject)) {
+        // A resource that names this parent but is not in the list means the
+        // query was answered before the server's index held it — a child
+        // created moments ago, or a device that loaded the drive while the
+        // commit was still landing. The collection has no reason of its own to
+        // ask again, so the child stayed missing until a reload
+        // (`server-only-fallback.spec.ts`). Ask again now.
+        if (
+          parentSubject &&
+          resource.get(core.properties.parent) === parentSubject
+        ) {
+          await collection.refresh();
+          if (cancelled) return;
+
+          const total = collection.totalMembers;
+          const members = await Promise.all(
+            Array.from({ length: total }, (_, i) =>
+              collection.getMemberWithIndex(i),
+            ),
+          );
+          if (cancelled) return;
+
+          const seen = new Set<string>();
+          const candidates: string[] = [];
+
+          for (const member of members) {
+            if (
+              member &&
+              !member.startsWith('did:ad:commit:') &&
+              !seen.has(member)
+            ) {
+              seen.add(member);
+              candidates.push(member);
+            }
+          }
+
+          const sorted = await sortMembers(candidates);
+          if (cancelled) return;
+
+          setSubjects(prev =>
+            prev.length === sorted.length &&
+            prev.every((sub, i) => sub === sorted[i])
+              ? prev
+              : sorted,
+          );
+        }
+
+        return;
+      }
+
+      if (current.length === 0) {
         return;
       }
 
@@ -212,7 +262,7 @@ export function useChildren(parentSubject: string | undefined): {
       cancelled = true;
       unsub();
     };
-  }, [disabled, sortMembers, store]);
+  }, [collection, disabled, parentSubject, sortMembers, store]);
 
   // `useCollection` listens for `ResourceManuallyCreated` and routes
   // it through `applyResourceChange` for an optimistic add — no full
