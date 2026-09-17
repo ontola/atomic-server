@@ -49,7 +49,7 @@
     "https://atomicdata.dev/properties/description": "Where this integration's source can be fetched from, for entries not bundled as a local package.json in this folder. Optional — omitted for integrations developed in this repo."
   },
   {
-    "@id": "https://atomicdata.dev/integrations/catalog/pets",
+    "https://atomicdata.dev/properties/localId": "pets",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
     ],
