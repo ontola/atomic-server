@@ -169,7 +169,20 @@ test('local diagnostics require explicit inclusion and exclude private context',
     .click();
   await expect(dialog.getByRole('status')).toContainText('has been received');
   expect(reports).toHaveLength(1);
-  expect(reports[0]).toContain(JSON.stringify(previewText).slice(1, -1));
+  const lines = reports[0].split('\n');
+  const event = JSON.parse(lines[2]);
+  expect(event.platform).toBe('javascript');
+  expect(event.level).toBe('info');
+  expect(event.request).toEqual({
+    headers: { 'User-Agent': await page.evaluate(() => navigator.userAgent) },
+  });
+  expect(event.contexts.feedback.message).toBe('Synthetic diagnostic feedback');
+  expect(JSON.parse(lines[3])).toMatchObject({
+    type: 'attachment',
+    filename: 'diagnostics.json',
+    content_type: 'application/json',
+  });
+  expect(lines.slice(4).join('\n')).toBe(previewText);
   expect(reports[0]).not.toContain('PRIVATE_DIAGNOSTIC');
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
   await page.reload();

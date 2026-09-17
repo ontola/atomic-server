@@ -26,7 +26,10 @@ import {
   SideBarMenuRowIcon,
   SideBarMenuRowLabel,
 } from './SideBarMenuItem';
-import { submitFeedback } from '../../helpers/feedback';
+import {
+  FEEDBACK_MESSAGE_MAX_LENGTH,
+  submitFeedback,
+} from '../../helpers/feedback';
 
 export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
   const store = useStore();
@@ -121,7 +124,7 @@ export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
                   <TextAreaStyled
                     id={messageId}
                     rows={5}
-                    maxLength={10000}
+                    maxLength={FEEDBACK_MESSAGE_MAX_LENGTH}
                     value={message}
                     onChange={event => setMessage(event.target.value)}
                     disabled={busy}

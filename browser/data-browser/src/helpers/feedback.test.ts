@@ -40,13 +40,41 @@ it('includes diagnostics only when explicitly supplied', async () => {
   await submitFeedback('Problem', '', '{"events":[]}');
   expect(Sentry.sendFeedback).toHaveBeenLastCalledWith(
     expect.objectContaining({
-      message: expect.stringContaining('{"events":[]}'),
+      message: 'Problem',
     }),
-    { includeReplay: false },
+    {
+      includeReplay: false,
+      attachments: [
+        {
+          filename: 'diagnostics.json',
+          contentType: 'application/json',
+          data: '{"events":[]}',
+        },
+      ],
+    },
   );
   await submitFeedback('Problem', '');
   expect(Sentry.sendFeedback).toHaveBeenLastCalledWith(
     expect.objectContaining({ message: 'Problem' }),
     { includeReplay: false },
   );
+});
+
+it('keeps large diagnostics intact outside the message', async () => {
+  vi.mocked(Sentry.isEnabled).mockReturnValue(true);
+  const diagnostics = JSON.stringify({
+    events: Array(500).fill({ code: 'save-persisted' }),
+  });
+  await submitFeedback('Problem', '', diagnostics);
+  const [feedback, hint] = vi.mocked(Sentry.sendFeedback).mock.calls.at(-1)!;
+  expect(feedback.message).toBe('Problem');
+  expect(hint?.attachments?.[0]?.data).toBe(diagnostics);
+});
+
+it('accepts the message boundary and rejects oversized text before sending', async () => {
+  vi.mocked(Sentry.isEnabled).mockReturnValue(true);
+  await submitFeedback('a'.repeat(4096), '');
+  vi.mocked(Sentry.sendFeedback).mockClear();
+  await expect(submitFeedback('a'.repeat(4097), '')).rejects.toThrow('4096');
+  expect(Sentry.sendFeedback).not.toHaveBeenCalled();
 });
