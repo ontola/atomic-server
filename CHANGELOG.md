@@ -7,6 +7,17 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Error-handling hygiene on the commit and read paths. The legacy
+  `set`/`push`/`remove` rejection in `sync::engine::ingest_commit` now checks
+  the parsed commit's properties instead of substring-matching the raw body,
+  so a commit whose subject is one of those Property resources (or whose
+  values quote their URLs) is no longer refused. `Db::get_resource` warns
+  (with the subject and error) when a stored Loro snapshot cannot be read or
+  applied instead of silently serving the stale propvals. The sled
+  `Db::init` wraps a migration failure in its error message (`.map_err`, not
+  `.map`). `AppState::init` drops its own core-models bootstrap branch: its
+  "store did not exist" check ran after the store directory had been
+  created, and `Db::init_redb_file` already seeds a fresh store on open.
 - The outbox drains over a live Iroh link too (`sync::peer::LivePeerCommitTransport`):
   a device with no hub in reach delivers its queued writes to a paired peer as
   signed `COMMIT` frames, which the peer validates and applies like a hub

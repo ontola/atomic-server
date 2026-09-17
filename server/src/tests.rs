@@ -328,6 +328,53 @@ async fn server_tests() {
     );
 }
 
+/// A brand-new store gets the core models without `--initialize`. Opening
+/// the `Db` seeds them (`populate::bootstrap` in `Db::init_redb_file`);
+/// `AppState::init` no longer has a bootstrap branch of its own, whose
+/// "store did not exist yet" condition ran after the store directory had
+/// already been created and so never fired.
+#[actix_rt::test]
+async fn fresh_store_gets_core_models_without_initialize() {
+    use clap::Parser;
+    let unique_string = atomic_lib::utils::random_string(10);
+    let data_dir = format!("./.temp/{}/db", unique_string);
+    assert!(!std::path::Path::new(&data_dir).exists());
+    let opts = Opts::parse_from([
+        "atomic-server",
+        "--data-dir",
+        &data_dir,
+        "--config-dir",
+        &format!("./.temp/{}/config", unique_string),
+    ]);
+    let mut config = config::build_config(opts).expect("failed init config");
+    config.search_index_path = format!("./.temp/{}/search_index", unique_string).into();
+    config.vector_search_index_path =
+        format!("./.temp/{}/vector_search_index", unique_string).into();
+
+    let appstate = crate::appstate::AppState::init(config)
+        .await
+        .expect("failed init appstate");
+    let store = &appstate.store;
+
+    for core in [
+        urls::SHORTNAME,
+        urls::DESCRIPTION,
+        urls::CLASS,
+        urls::PROPERTY,
+    ] {
+        assert!(
+            store.has_stored_resource(&core.into()),
+            "fresh store must have core model {core}"
+        );
+    }
+    let class = store.get_resource(&urls::CLASS.into()).await.unwrap();
+    assert_eq!(
+        class.get(urls::SHORTNAME).unwrap().to_string(),
+        "class",
+        "core Class resource must be materialized"
+    );
+}
+
 #[actix_rt::test]
 async fn test_did_agent_edit() {
     use atomic_lib::{agents::Agent, commit::CommitBuilder, urls, Resource, Value};

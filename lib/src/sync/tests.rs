@@ -1969,43 +1969,136 @@ mod peer_sync_tests {
         );
     }
 
-    /// The legacy `set`/`push`/`remove`-field rejection is a naive
-    /// string-contains check on the raw commit body, applied before parsing.
-    /// It must run identically under hub policy (server) and peer policy
-    /// (P2P) — `ingest_commit_json` is a single implementation, so there's no
+    /// Hub (server) and peer (P2P) ingest policies, as `ingest_commit` sees
+    /// them. The legacy-field rejection below must behave identically under
+    /// both — `ingest_commit_json` is a single implementation, so there's no
     /// second place this could silently be skipped.
+    fn legacy_field_policies() -> [crate::sync::engine::CommitIngestOpts; 2] {
+        use crate::sync::engine::CommitIngestOpts;
+        [
+            CommitIngestOpts {
+                source_id: None,
+                validate_loro_causality: true,
+                enforce_subject_ownership: true,
+                suppress_live_echo: false,
+                response_origin: None,
+            },
+            CommitIngestOpts {
+                source_id: None,
+                validate_loro_causality: false,
+                enforce_subject_ownership: false,
+                suppress_live_echo: true,
+                response_origin: None,
+            },
+        ]
+    }
+
+    /// A signed Loro commit by `agent` that sets `description` on `subject`,
+    /// as the wire JSON a client would POST.
+    async fn signed_description_commit_json(
+        db: &Db,
+        agent: &crate::agents::Agent,
+        subject: &str,
+        description: &str,
+    ) -> String {
+        use crate::client::commit_to_wire_json;
+        use crate::commit::CommitBuilder;
+
+        let current = db.get_resource(&subject.into()).await.unwrap();
+        let mut builder = CommitBuilder::new(subject.into());
+        builder.set(
+            crate::urls::DESCRIPTION.into(),
+            crate::Value::String(description.into()),
+        );
+        let commit = builder.sign(agent, db, &current).await.unwrap();
+        commit_to_wire_json(&commit, db).await.unwrap()
+    }
+
+    const LEGACY_FIELDS_ERR: &str = "no longer accepted";
+
+    /// A commit resource that actually carries the deprecated `set` property
+    /// is refused with the legacy-fields message, under every policy, even
+    /// though it is otherwise a well-formed signed commit.
     #[tokio::test]
     async fn ingest_commit_rejects_legacy_field_commits() {
-        use crate::sync::engine::{ingest_commit_json, CommitIngestOpts};
+        use crate::sync::engine::ingest_commit_json;
 
         let db = Db::init_temp("ingest_commit_legacy_fields").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let doc = db
+            .create_resource(crate::urls::FOLDER, &drive, "Doc", None)
+            .await
+            .unwrap();
 
-        let commit_json = r#"{"https://atomicdata.dev/properties/set": {"https://atomicdata.dev/properties/name": "x"}}"#;
+        for opts in legacy_field_policies() {
+            let valid = signed_description_commit_json(&db, &alice, &doc, "plain").await;
+            let mut json: serde_json::Value = serde_json::from_str(&valid).unwrap();
+            json.as_object_mut().unwrap().insert(
+                crate::urls::SET.to_string(),
+                serde_json::json!({ crate::urls::NAME: "x" }),
+            );
+            let commit_json = serde_json::to_string(&json).unwrap();
 
-        let hub_opts = CommitIngestOpts {
-            source_id: None,
-            validate_loro_causality: true,
-            enforce_subject_ownership: true,
-            suppress_live_echo: false,
-            response_origin: None,
-        };
-        let peer_opts = CommitIngestOpts {
-            source_id: None,
-            validate_loro_causality: false,
-            enforce_subject_ownership: false,
-            suppress_live_echo: true,
-            response_origin: None,
-        };
-
-        for opts in [&hub_opts, &peer_opts] {
-            let err = ingest_commit_json(&db, commit_json, opts)
+            let err = ingest_commit_json(&db, &commit_json, &opts)
                 .await
                 .expect_err("legacy `set`-field commits must be rejected under every policy");
             assert!(
-                err.to_string().contains("no longer accepted"),
+                err.to_string().contains(LEGACY_FIELDS_ERR),
                 "expected the legacy-fields rejection message, got: {err}"
             );
         }
+    }
+
+    /// The legacy-field check inspects the parsed commit's properties, not
+    /// the raw body. A value that merely quotes one of the deprecated
+    /// Property URLs is applied like any other, and a commit whose *subject*
+    /// is one of those Property resources (editing `set`'s own description
+    /// on atomicdata.dev, say) gets past the check to the regular gates.
+    #[tokio::test]
+    async fn ingest_commit_accepts_values_that_mention_legacy_fields() {
+        use crate::sync::engine::ingest_commit_json;
+
+        let db = Db::init_temp("ingest_commit_legacy_mention").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let doc = db
+            .create_resource(crate::urls::FOLDER, &drive, "Doc", None)
+            .await
+            .unwrap();
+
+        let mention = format!(
+            "Deprecated: \"{}\", \"{}\" and \"{}\".",
+            crate::urls::SET,
+            crate::urls::PUSH,
+            crate::urls::REMOVE
+        );
+        for opts in legacy_field_policies() {
+            let commit_json = signed_description_commit_json(&db, &alice, &doc, &mention).await;
+            ingest_commit_json(&db, &commit_json, &opts)
+                .await
+                .expect("a value quoting the deprecated Property URLs is an ordinary value");
+            let stored = db.get_resource(&doc.as_str().into()).await.unwrap();
+            assert_eq!(
+                stored.get(crate::urls::DESCRIPTION).unwrap().to_string(),
+                mention
+            );
+        }
+
+        // The `set` Property resource itself, seeded from `lib/defaults`.
+        // Under hub policy this node does not own atomicdata.dev, so the
+        // commit is refused by the ownership gate that follows the legacy
+        // check — proving the legacy check let it through.
+        let hub_opts = legacy_field_policies().into_iter().next().unwrap();
+        assert!(hub_opts.enforce_subject_ownership);
+        let commit_json =
+            signed_description_commit_json(&db, &alice, crate::urls::SET, "edited").await;
+        let err = ingest_commit_json(&db, &commit_json, &hub_opts)
+            .await
+            .expect_err("this node does not own atomicdata.dev");
+        assert_eq!(
+            err.to_string(),
+            "Subject of commit should be sent to other domain - this store can not own this resource.",
+            "a commit *on* the `set` Property must reach the ownership gate, not trip the legacy-fields check"
+        );
     }
 
     /// `enforce_subject_ownership` is the only thing standing between "hub
