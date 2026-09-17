@@ -123,6 +123,7 @@ function IntegrationStore(): React.JSX.Element {
     };
   }, [store, drive, pluginClass]);
   const [search, setSearch] = useState('');
+  const [apiCatalogHasResults, setApiCatalogHasResults] = useState(true);
   const [creating, setCreating] = useState<string>();
   const server = store.getServerUrl();
   useEffect(() => {
@@ -193,6 +194,8 @@ function IntegrationStore(): React.JSX.Element {
       .toLocaleLowerCase()
       .includes(query),
   );
+  const nothingToDiscover =
+    bundled.length === 0 && (!showApiPlugins || !apiCatalogHasResults);
   const visible = (showExperimentalPlugins ? listings : [])?.filter(
     ({ metadata: entry }) =>
       [entry.name, entry.description, ...entry.domains, ...entry.standards]
@@ -284,7 +287,12 @@ function IntegrationStore(): React.JSX.Element {
           </Column>
           <Grid>
             {showApiPlugins && (
-              <LocalThoughtCatalog drive={drive} search={search} />
+              <LocalThoughtCatalog
+                drive={drive}
+                search={search}
+                showExperimentalPlugins={showExperimentalPlugins}
+                onVisibilityChange={setApiCatalogHasResults}
+              />
             )}
             {bundled.map(entry => (
               <IntegrationDiscovery
@@ -295,6 +303,7 @@ function IntegrationStore(): React.JSX.Element {
               />
             ))}
           </Grid>
+          {nothingToDiscover && <DiscoverEmptyState searching={!!query} />}
           <Column gap='0.75rem'>
             {visible && visible.length > 0 && (
               <>
@@ -427,6 +436,16 @@ function AutomationEmptyState() {
     <p>
       No automations yet. Create one to respond to events from your connected
       apps.
+    </p>
+  );
+}
+
+function DiscoverEmptyState({ searching }: { searching: boolean }) {
+  return (
+    <p>
+      {searching
+        ? 'No integrations match your search.'
+        : 'No integrations are available right now.'}
     </p>
   );
 }
