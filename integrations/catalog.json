@@ -57,7 +57,7 @@
     "https://atomicdata.dev/integrations/properties/experimental": true
   },
   {
-    "@id": "did:ad:devonian-google-calendar",
+    "https://atomicdata.dev/properties/localId": "devonian-google-calendar",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
     ],
