@@ -250,93 +250,27 @@ async function ensureAll<T extends { shortname: string; subject?: string }>(
     existing,
     new Set(specs.map(spec => spec.shortname)),
   );
+
+  // One spec's term has nothing to do with another's: they are looked up,
+  // recovered or created independently, and only the ontology list they end up
+  // in is shared. Doing them one at a time cost a round trip per property, so a
+  // seven-term schema spent fourteen sequential hops before anything appeared.
+  // Resolved together, with the list write still happening once at the end.
+  const resolved = await inParallel(specs, spec =>
+    ensureOne(store, ontology, drive, listProperty, spec, found, build),
+  );
+
   const result: Record<string, string> = {};
   const added: string[] = [];
 
-  // Recovering an orphan is one server round-trip per term, and on a drive
-  // that has no schema yet every term takes it. Awaited inside the loop below
-  // that was ~19 sequential queries of ~700ms — 13 of the 14 seconds it took
-  // to create an app, before anything was written. The lookups are
-  // independent reads of different localIds, so make them together and let
-  // the loop consume the answers; creation stays ordered.
-  const orphans = new Map<string, SchemaResource | undefined>();
-  await Promise.all(
-    specs
-      .filter(spec => !spec.subject && !found.has(spec.shortname))
-      .map(async spec => {
-        orphans.set(
-          spec.shortname,
-          await store.findByLocalId(
-            drive,
-            ontology.subject,
-            localIdFor(listProperty, spec.shortname),
-          ),
-        );
-      }),
-  );
+  // Assembled in spec order, so what lands in the ontology does not depend on
+  // which create happened to finish first.
+  for (const [index, spec] of specs.entries()) {
+    const subject = resolved[index];
+    result[spec.shortname] = subject;
 
-  for (const spec of specs) {
-    if (spec.subject) {
-      const shared = await store.getResource(spec.subject);
-      const desired = build(spec);
-      const classes = asList(shared.get(core.properties.isA));
-
-      if (!desired.isA.every(klass => classes.includes(klass))) {
-        throw new Error(`incompatible schema binding: ${spec.subject}`);
-      }
-
-      const datatype = desired.propVals[core.properties.datatype];
-
-      if (datatype && shared.get(core.properties.datatype) !== datatype) {
-        throw new Error(`incompatible property datatype: ${spec.subject}`);
-      }
-
-      result[spec.shortname] = spec.subject;
-      if (!existing.includes(spec.subject) && !added.includes(spec.subject))
-        added.push(spec.subject);
-      continue;
-    }
-
-    const localId = localIdFor(listProperty, spec.shortname);
-    const hit =
-      found.get(spec.shortname) ?? orphans.get(spec.shortname)?.subject;
-
-    if (hit) {
-      result[spec.shortname] = hit;
-      const resource = await store.getResource(hit);
-      const desired = build(spec);
-      const datatype = desired.propVals[core.properties.datatype];
-      if (datatype && resource.get(core.properties.datatype) !== datatype)
-        throw new Error(
-          `incompatible recovered schema datatype: ${spec.shortname}`,
-        );
-      await reconcile(store, hit, desired.propVals);
-      if (!existing.includes(hit)) added.push(hit);
-      continue;
-    }
-
-    const { isA, propVals } = build(spec);
-    const created = await store.newResource({
-      parent: ontology.subject,
-      isA,
-      propVals: { ...propVals, [core.properties.localId]: localId },
-    });
-    let saved = created;
-
-    try {
-      await created.save();
-    } catch (error) {
-      const recovered = await store.findByLocalId(
-        drive,
-        ontology.subject,
-        localId,
-      );
-      if (!recovered) throw error;
-      saved = recovered;
-    }
-
-    result[spec.shortname] = saved.subject;
-    added.push(saved.subject);
+    if (!existing.includes(subject) && !added.includes(subject))
+      added.push(subject);
   }
 
   if (added.length > 0) {
@@ -356,6 +290,109 @@ async function ensureAll<T extends { shortname: string; subject?: string }>(
   }
 
   return result;
+}
+
+/** Binds one spec to a subject: shared term, recovered term, or a new one. */
+async function ensureOne<T extends { shortname: string; subject?: string }>(
+  store: SchemaStore,
+  ontology: SchemaResource,
+  drive: string,
+  listProperty: string,
+  spec: T,
+  /** Resolved once for the whole spec by {@link ensureAll}. */
+  found: Map<string, string>,
+  build: (spec: T) => { isA: string[]; propVals: Record<string, JSONValue> },
+): Promise<string> {
+  if (spec.subject) {
+    const shared = await store.getResource(spec.subject);
+    const desired = build(spec);
+    const classes = asList(shared.get(core.properties.isA));
+
+    if (!desired.isA.every(klass => classes.includes(klass))) {
+      throw new Error(`incompatible schema binding: ${spec.subject}`);
+    }
+
+    const datatype = desired.propVals[core.properties.datatype];
+
+    if (datatype && shared.get(core.properties.datatype) !== datatype) {
+      throw new Error(`incompatible property datatype: ${spec.subject}`);
+    }
+
+    return spec.subject;
+  }
+
+  const localId = localIdFor(listProperty, spec.shortname);
+  const orphan = found.has(spec.shortname)
+    ? undefined
+    : await store.findByLocalId(drive, ontology.subject, localId);
+  const hit = found.get(spec.shortname) ?? orphan?.subject;
+
+  if (hit) {
+    const resource = await store.getResource(hit);
+    const desired = build(spec);
+    const datatype = desired.propVals[core.properties.datatype];
+
+    if (datatype && resource.get(core.properties.datatype) !== datatype)
+      throw new Error(
+        `incompatible recovered schema datatype: ${spec.shortname}`,
+      );
+
+    await reconcile(store, hit, desired.propVals);
+
+    return hit;
+  }
+
+  const { isA, propVals } = build(spec);
+  const created = await store.newResource({
+    parent: ontology.subject,
+    isA,
+    propVals: { ...propVals, [core.properties.localId]: localId },
+  });
+
+  try {
+    await created.save();
+  } catch (error) {
+    const recovered = await store.findByLocalId(
+      drive,
+      ontology.subject,
+      localId,
+    );
+
+    if (!recovered) throw error;
+
+    return recovered.subject;
+  }
+
+  return created.subject;
+}
+
+/**
+ * Maps with at most `limit` in flight, preserving input order.
+ *
+ * A schema is a handful of terms, but a drive's own ontology can hold far more
+ * than a browser should have in flight at once.
+ */
+async function inParallel<In, Out>(
+  items: In[],
+  work: (item: In) => Promise<Out>,
+  limit = 8,
+): Promise<Out[]> {
+  const results = new Array<Out>(items.length);
+  let next = 0;
+
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      while (next < items.length) {
+        const index = next++;
+        results[index] = await work(items[index]);
+      }
+    },
+  );
+
+  await Promise.all(workers);
+
+  return results;
 }
 
 /**
