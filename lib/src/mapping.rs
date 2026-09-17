@@ -100,10 +100,9 @@ impl Mapping {
     }
 }
 
-/// Check if something is a URL
+/// True when `string` looks like an HTTP(S) URL rather than a mapping shortname.
 pub fn is_url(string: &str) -> bool {
-    // TODO: Probably delete this second one, might break some tests though.
-    string.starts_with("http") || string.starts_with("_:")
+    string.starts_with("http://") || string.starts_with("https://")
 }
 
 impl IntoIterator for Mapping {

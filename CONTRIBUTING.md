@@ -39,7 +39,6 @@ Check out the [Roadmap](https://docs.atomicdata.dev/roadmap.html) if you want to
     - [Publishing to Cargo](#publishing-to-cargo)
     - [Publishing server to Docker](#publishing-server-to-docker)
     - [Deploying to atomicdata.dev](#deploying-to-atomicdatadev)
-    - [Publishing atomic-cli to WAPM](#publishing-atomic-cli-to-wapm)
 
 ## Translation & Internationalization
 
@@ -470,10 +469,3 @@ journalctl -u atomic.service
 # logs, since one hour, follow
 journalctl -u atomic.service --since "1 hour ago" -f
 ```
-
-#### Publishing atomic-cli to WAPM
-
-1. Install `wasmer` and `cargo-wasi`.
-1. `cd cli`
-1. run `cargo wasi build --release --no-default-features` (note: this fails, as ring does not compile to WASI [at this moment](https://github.com/briansmith/ring/issues/1043))
-1. `wapm publish`

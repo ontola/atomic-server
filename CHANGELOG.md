@@ -7,6 +7,9 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Cleanup: `atomic-cli validate` no longer prints every resource, overflow `u8` counters, or skip missing required properties. The unused v1 `QueryFilter` type, WAPM/Earthly leftovers, and the stale 2020 desktop updater manifest are gone.
+- `@tomic/lib` exports `stringToSlug` (the data-browser copy that does not produce `meat--fish`). `@tomic/react` exports `useDebounce`. Unused e2e address-bar aliases and unused `generateNonce`/`randomSubject` helpers are removed.
+
 - The outbox drains over a live Iroh link too (`sync::peer::LivePeerCommitTransport`):
   a device with no hub in reach delivers its queued writes to a paired peer as
   signed `COMMIT` frames, which the peer validates and applies like a hub

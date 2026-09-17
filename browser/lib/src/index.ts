@@ -63,6 +63,7 @@ export * from './subject.js';
 export * from './value.js';
 export * from './urls.js';
 export * from './truncate.js';
+export { stringToSlug } from './stringToSlug.js';
 export * from './collection.js';
 export * from './collectionBuilder.js';
 export * from './ontology.js';

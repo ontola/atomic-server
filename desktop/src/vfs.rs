@@ -326,11 +326,6 @@ pub struct AtomicNfsFs {
   staging: Arc<Staging>,
   dir_cache: Mutex<HashMap<fileid3, DirListing>>,
   read_cache: Mutex<Option<ReadCache>>,
-  /// Echo-suppression identity for the commits this mount signs. Threaded into
-  /// the commit path so the VFS doesn't read its own writes back as change
-  /// notifications once cache invalidation subscribes to them.
-  #[allow(dead_code)]
-  source_id: String,
 }
 
 impl AtomicNfsFs {
@@ -341,7 +336,6 @@ impl AtomicNfsFs {
       staging: Arc::new(Staging::default()),
       dir_cache: Mutex::new(HashMap::new()),
       read_cache: Mutex::new(None),
-      source_id: format!("vfs-{}", std::process::id()),
     }
   }
 

@@ -203,24 +203,7 @@ export async function searchAndOpen(
   }).toPass({ timeout: 15000 });
 }
 
-/**
- * Deprecated alias — old tests called this. Forwards to the new `typeInSearch`
- * which opens the overlay. Kept so we can migrate tests incrementally.
- * @deprecated use `typeInSearch` or `searchAndOpen`
- */
-export async function typeInAddressBar(page: Page, text: string) {
-  await typeInSearch(page, text);
-}
-
-/**
- * Deprecated alias — old tests used `addressBar(page).fill(...)`. Returns the
- * new search input after opening the overlay. Prefer `typeInSearch`.
- * @deprecated use `searchInput` (and open the overlay first)
- */
-export const addressBar = (page: Page) => searchInput(page);
-export const newDriveMenuItem = '[data-test="menu-item-new-drive"]';
 export const sidebarDriveButtonId = 'sidebar-drive-open';
-export const defaultDevServer = 'http://localhost:9883';
 export const currentDialogOkButton = 'dialog[open] >> footer >> text=Ok';
 // Fallback wait for the search index to catch up, for callers that can't
 // supply a probe to `waitForSearchIndex`. Prefer the probe form, which
