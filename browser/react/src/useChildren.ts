@@ -40,6 +40,16 @@ export function useChildren(parentSubject: string | undefined): {
   const subjectsRef = useRef<string[]>([]);
   subjectsRef.current = subjects;
 
+  /**
+   * Subjects this client has seen destroyed.
+   *
+   * A destroyed child can still come back in an answer to the `parent=` query
+   * — the server's index takes a moment — and rendering it again is not
+   * cosmetic: the row asks the store for the resource, which re-creates the
+   * entry the destroy had just removed. Keep it out of the list instead.
+   */
+  const removedRef = useRef<Set<string>>(new Set());
+
   const { collection, ready } = useCollection(
     {
       property: core.properties.parent,
@@ -153,7 +163,8 @@ export function useChildren(parentSubject: string | undefined): {
         if (
           member &&
           !member.startsWith('did:ad:commit:') &&
-          !seen.has(member)
+          !seen.has(member) &&
+          !removedRef.current.has(member)
         ) {
           seen.add(member);
           candidates.push(member);
@@ -189,6 +200,13 @@ export function useChildren(parentSubject: string | undefined): {
     if (disabled) return;
 
     let cancelled = false;
+
+    const unsubRemoved = store.on(StoreEvents.ResourceRemoved, subject => {
+      removedRef.current.add(subject);
+      setSubjects(prev =>
+        prev.includes(subject) ? prev.filter(s2 => s2 !== subject) : prev,
+      );
+    });
 
     const unsub = store.on(StoreEvents.ResourceUpdated, async resource => {
       const current = subjectsRef.current;
@@ -241,6 +259,7 @@ export function useChildren(parentSubject: string | undefined): {
     return () => {
       cancelled = true;
       unsub();
+      unsubRemoved();
     };
   }, [collection, disabled, parentSubject, sortMembers, store]);
 
