@@ -115,3 +115,40 @@ Still open:
 - Current fix direction: table context owns a shared `exitEditMode()` command;
   popover editor close paths call it, and table-level document key handling
   routes arrows while visual mode still owns a selected cell.
+
+## 2026-09-17 Esc follow-up closed
+
+Implemented, with regression coverage in
+`browser/data-browser/src/chunks/TableEditor/TableEditor.keyboard.test.tsx`
+(the first jsdom test in this package — see the note below on why nothing
+caught this):
+
+- `TableEditorContext` owns `exitEditMode()`. `MarkdownCell`, `JSONCell` and
+  `AtomicURLCell` close through it instead of poking `tableRef.focus()`.
+- The grid leaves Edit mode by itself when an editor's
+  `KeyboardInteraction.ExitEditMode` opt-out clears — the opt-out only exists
+  while that editor's surface is open, so its disappearance means the surface
+  is gone however it was dismissed. Without this the grid sat in Edit mode with
+  nothing to edit and swallowed every arrow key until a second Escape.
+- Arrow keys are routed from `document` while the grid owns a selected cell and
+  focus has fallen to `<body>`, and focus is handed back to the grid. Arrow
+  keys only: a stray character must not start an edit from off-grid.
+
+Two render bugs surfaced while writing the test, both fixed:
+
+- `onRowExpand` / `onCellResize` defaulted to inline arrows, so the `Row`
+  component handed to react-window had a new identity every render and every
+  row unmounted and remounted. That resets the list's scroll position (the
+  hazard already described in `TableEditor.tsx`) and re-runs each cell's mount
+  effects.
+- `useCellOptions` published a fresh `Set` on every mount. Combined with the
+  above, publishing re-rendered the table, which remounted the cell, which
+  published again — an endless loop. It now keeps the existing Set when the
+  contents match.
+
+Why the tests missed it: this package's vitest runs in the node environment, so
+the only grid test rendered static markup and could not press a key. The e2e
+suite does press Escape, but only on cells whose Escape the table itself
+handles (plain string cells, the tag picker), and `tables.spec.ts` navigates by
+clicking cells rather than by arrowing after an Escape — it worked around the
+broken state instead of asserting it.
