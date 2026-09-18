@@ -20,7 +20,8 @@ import { DashedButton } from '@views/OntologyPage/DashedButton';
 import { styled } from 'styled-components';
 
 interface AssignRightsProps {
-  plugin: Resource<Server.Plugin>;
+  /** A legacy `Plugin` or an `Installation`; both carry the server-set plugin agent. */
+  plugin: Resource<Server.Plugin> | Resource<Server.Installation>;
   disabled?: boolean;
 }
 
@@ -29,6 +30,7 @@ const shouldRender = (resource: Resource) => {
     commits.classes.commit,
     dataBrowser.classes.tag,
     server.classes.plugin,
+    server.classes.installation,
   ].every(c => !resource.hasClasses(c));
 };
 

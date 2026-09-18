@@ -54,6 +54,7 @@ const iconMap = new Map<string, IconType>([
   [server.classes.file, FaFile],
   [server.classes.drive, FaHardDrive],
   [server.classes.plugin, FaPuzzlePiece],
+  [server.classes.installation, FaPuzzlePiece],
   [commits.classes.commit, FaClock],
   [dataBrowser.classes.importer, FaFileImport],
   [server.classes.invite, FaShareFromSquare],

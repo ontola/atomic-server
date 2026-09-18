@@ -1,0 +1,338 @@
+import { Button } from '@components/Button';
+import {
+  ConfirmationDialog,
+  ConfirmationDialogTheme,
+} from '@components/ConfirmationDialog';
+import { ContainerNarrow } from '@components/Containers';
+import Markdown from '@components/datatypes/Markdown';
+import { JSONEditor } from '@components/JSONEditor';
+import { Column, Row } from '@components/Row';
+import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
+import {
+  core,
+  server,
+  useCanWrite,
+  useSaveState,
+  useString,
+  useValue,
+  type InstallationStatus,
+  type Server,
+} from '@tomic/react';
+import type { ResourcePageProps } from '@views/ResourcePage';
+import type { JSONSchema7 } from 'ai';
+import { constructOpenURL } from '@helpers/navigation';
+import { useId, useState } from 'react';
+import {
+  FaFloppyDisk,
+  FaGear,
+  FaPause,
+  FaPlay,
+  FaBan,
+  FaTrash,
+} from 'react-icons/fa6';
+import { styled } from 'styled-components';
+import toast from 'react-hot-toast';
+import { ConfigReference } from '@views/Plugin/ConfigReference';
+import { AssignRights } from '@views/Plugin/AssignRights';
+import { PluginPermissions } from '@views/Plugin/PluginPermissions';
+import { hasPermission, isPluginPermissions } from '@views/Plugin/pluginUtils';
+import { ResourceInline } from '@views/ResourceInline/ResourceInline';
+import { useCustomViews } from '@components/CustomViewProvider';
+
+/**
+ * One installed release on a drive, for either runtime. Status changes are
+ * commits the server's Installation hook acts on: `active` installs,
+ * `paused` keeps it but stops it, `revoked` or destroying uninstalls.
+ */
+export const InstallationPage: React.FC<
+  ResourcePageProps<Server.Installation>
+> = ({ resource }) => {
+  const configLabelId = useId();
+  const canWrite = useCanWrite(resource);
+  const navigate = useNavigateWithTransition();
+  const { refresh: refreshCustomViews } = useCustomViews();
+  const [confirm, setConfirm] = useState<'revoke' | 'uninstall'>();
+  const [name] = useString(resource, core.properties.name);
+  const [namespace] = useString(resource, server.properties.namespace);
+  const [version] = useString(resource, server.properties.version);
+  const [description] = useString(resource, core.properties.description);
+  const [release] = useString(resource, server.properties.release);
+  const [releaseId] = useString(resource, server.properties.releaseId);
+  const [status, setStatus] = useValue(
+    resource,
+    server.properties.installationStatus,
+  );
+  const [grants] = useValue(resource, server.properties.grants);
+  const [config, setConfig] = useValue(resource, server.properties.config);
+  const [schema] = useValue(resource, server.properties.jsonSchema);
+  const [permissions] = useValue(resource, server.properties.pluginPermissions);
+  const [pluginAgent] = useString(resource, server.properties.pluginAgent);
+  const [configValid, setConfigValid] = useState(true);
+  const [configSyntaxValid, setConfigSyntaxValid] = useState(true);
+  const [configEdited, setConfigEdited] = useState(false);
+  const saveState = useSaveState(resource);
+  const [changing, setChanging] = useState(false);
+
+  const title = `${namespace ? `${namespace}/` : ''}${name ?? ''}`;
+  const currentStatus = (status as InstallationStatus | undefined) ?? 'draft';
+  const grantNames = Array.isArray(grants)
+    ? grants.map(String)
+    : grants && typeof grants === 'object'
+      ? Object.keys(grants)
+      : [];
+
+  const changeStatus = async (next: InstallationStatus) => {
+    setChanging(true);
+
+    try {
+      await setStatus(next);
+      await resource.save();
+      await refreshCustomViews();
+      toast.success(`Installation ${next}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setChanging(false);
+    }
+  };
+
+  return (
+    <ContainerNarrow>
+      <Column gap='2rem'>
+        <div>
+          <Row justify='space-between' center>
+            <Row center gap='1ch'>
+              <PluginName>{title}</PluginName>
+              <StatusBadge
+                data-status={currentStatus}
+                aria-label={`Status: ${currentStatus}`}
+              >
+                {currentStatus}
+              </StatusBadge>
+            </Row>
+            {version && <span>v{version}</span>}
+          </Row>
+        </div>
+        <Column>
+          {canWrite && (
+            <Row justify='flex-end' wrapItems>
+              {currentStatus === 'active' && (
+                <Button
+                  subtle
+                  disabled={changing}
+                  onClick={() => changeStatus('paused')}
+                >
+                  <FaPause />
+                  <span>Pause</span>
+                </Button>
+              )}
+              {(currentStatus === 'paused' || currentStatus === 'draft') && (
+                <Button
+                  disabled={changing}
+                  onClick={() => changeStatus('active')}
+                >
+                  <FaPlay />
+                  <span>
+                    {currentStatus === 'draft' ? 'Install' : 'Resume'}
+                  </span>
+                </Button>
+              )}
+              {currentStatus !== 'revoked' && (
+                <Button
+                  subtle
+                  disabled={changing}
+                  onClick={() => setConfirm('revoke')}
+                >
+                  <FaBan />
+                  <span>Revoke</span>
+                </Button>
+              )}
+              <Button
+                alert
+                disabled={changing}
+                onClick={() => setConfirm('uninstall')}
+              >
+                <FaTrash />
+                <span>Uninstall</span>
+              </Button>
+            </Row>
+          )}
+          {description && (
+            <DescriptionWrapper aria-label='Plugin Description'>
+              <Markdown text={description} />
+            </DescriptionWrapper>
+          )}
+        </Column>
+        <Column as='section' aria-label='Release'>
+          <h3>Release</h3>
+          <Identity>
+            Pinned to <code>{releaseId}</code>
+            {release && release !== releaseId && (
+              <>
+                <br />
+                from{' '}
+                {/^https?:\/\//.test(release) ? (
+                  <a href={release} target='_blank' rel='noreferrer'>
+                    {release}
+                  </a>
+                ) : (
+                  release
+                )}
+              </>
+            )}
+          </Identity>
+        </Column>
+        <Column as='section' aria-label='Grants'>
+          <h3>Grants</h3>
+          {grantNames.length === 0 ? (
+            <Muted>No capabilities were granted.</Muted>
+          ) : (
+            <Row wrapItems gap='0.4rem'>
+              {grantNames.map(grant => (
+                <Tag key={grant}>{grant}</Tag>
+              ))}
+            </Row>
+          )}
+        </Column>
+        {pluginAgent && (
+          <Column as='section' aria-label='Plugin agent'>
+            <h3>Plugin agent</h3>
+            <ResourceInline subject={pluginAgent} />
+          </Column>
+        )}
+        {canWrite && pluginAgent && (
+          <AssignRights
+            plugin={resource}
+            disabled={hasPermission(permissions, 'full-drive-access')}
+          />
+        )}
+        <Column>
+          <Row center justify='space-between'>
+            <h3 id={configLabelId}>
+              <Row gap='0.5ch' center>
+                <FaGear />
+                <span>Config</span>
+              </Row>
+            </h3>
+            {canWrite && (
+              <Button
+                disabled={
+                  !configValid ||
+                  !configSyntaxValid ||
+                  saveState.kind === 'saving' ||
+                  saveState.kind === 'scheduled' ||
+                  (!configEdited && saveState.kind !== 'dirty')
+                }
+                onClick={() => {
+                  setConfigEdited(false);
+
+                  return resource.save();
+                }}
+              >
+                <FaFloppyDisk />
+                <span>Save</span>
+              </Button>
+            )}
+          </Row>
+          <JSONEditor
+            labelId={configLabelId}
+            initialValue={JSON.stringify(config ?? {}, null, 2)}
+            onChange={v => {
+              try {
+                setConfig(JSON.parse(v));
+                setConfigEdited(true);
+                setConfigSyntaxValid(true);
+              } catch {
+                setConfigSyntaxValid(false);
+              }
+            }}
+            schema={schema as JSONSchema7 | undefined}
+            showErrorStyling={!configValid}
+            onValidationChange={setConfigValid}
+          />
+        </Column>
+        {schema && <ConfigReference schema={schema as JSONSchema7} />}
+        {isPluginPermissions(permissions) && (
+          <PluginPermissions permissions={permissions} />
+        )}
+      </Column>
+      <ConfirmationDialog
+        title='Revoke installation'
+        show={confirm === 'revoke'}
+        theme={ConfirmationDialogTheme.Alert}
+        confirmLabel='Revoke'
+        bindShow={open => !open && setConfirm(undefined)}
+        onConfirm={() => changeStatus('revoked')}
+        onCancel={() => setConfirm(undefined)}
+      >
+        Revoking uninstalls the plugin and retires its agent. The Installation
+        record stays, so you can see what was installed; installing again needs
+        a new Installation.
+      </ConfirmationDialog>
+      <ConfirmationDialog
+        title='Uninstall plugin'
+        show={confirm === 'uninstall'}
+        theme={ConfirmationDialogTheme.Alert}
+        confirmLabel='Uninstall'
+        bindShow={open => !open && setConfirm(undefined)}
+        onConfirm={async () => {
+          const parent = resource.props.parent;
+          await resource.destroy();
+          await refreshCustomViews();
+          navigate(constructOpenURL(parent));
+          toast.success('Plugin uninstalled');
+        }}
+        onCancel={() => setConfirm(undefined)}
+      >
+        Are you sure you want to uninstall this plugin? This removes the
+        Installation record.
+      </ConfirmationDialog>
+    </ContainerNarrow>
+  );
+};
+
+const PluginName = styled.span`
+  font-weight: bold;
+  font-size: 1.2rem;
+`;
+
+const StatusBadge = styled.span`
+  font-size: 0.8rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: ${p => p.theme.radius};
+  border: 1px solid ${p => p.theme.colors.bg2};
+  color: ${p => p.theme.colors.textLight};
+  text-transform: capitalize;
+
+  &[data-status='active'] {
+    color: ${p => p.theme.colors.main};
+    border-color: ${p => p.theme.colors.main};
+  }
+`;
+
+const DescriptionWrapper = styled.section`
+  background-color: ${p => p.theme.colors.bg1};
+  padding: ${p => p.theme.size()};
+  border-radius: ${p => p.theme.radius};
+  max-height: 33rem;
+  overflow-y: auto;
+`;
+
+const Identity = styled.p`
+  overflow-wrap: anywhere;
+  font-size: 0.9rem;
+  color: ${p => p.theme.colors.textLight};
+  margin: 0;
+`;
+
+const Muted = styled.p`
+  color: ${p => p.theme.colors.textLight};
+  margin: 0;
+`;
+
+const Tag = styled.span`
+  border: 1px solid ${p => p.theme.colors.bg2};
+  padding: 0.2rem 0.5rem;
+  border-radius: ${p => p.theme.radius};
+  font-size: 0.85rem;
+`;
