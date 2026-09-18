@@ -1,10 +1,38 @@
 import { CollectionBuilder, type Resource } from "@tomic/lib";
 import { driveFilter, getStore } from "./getStore";
 import { findTranslation, parseLocalizedPath } from "./i18n";
+import { isListedCmsResource } from "./publicContent";
 import { website } from "$lib/ontologies/website";
-import { PUBLIC_ATOMIC_DRIVE } from "$env/static/public";
+import {
+  PUBLIC_ATOMIC_DRIVE,
+  PUBLIC_WEBSITE_RESOURCE,
+} from "$env/static/public";
 
 type Fetch = typeof fetch;
+
+/** The Website resource's `homepage` is what `/` (and `/nl`) serve. */
+async function getWebsiteHomepage(): Promise<Resource | undefined> {
+  const store = getStore();
+  const site = await store.fetchResourceFromServer(PUBLIC_WEBSITE_RESOURCE, {
+    noWebSocket: true,
+  });
+
+  if (site.error) {
+    return undefined;
+  }
+
+  const homepageSubject = site.get(website.properties.homepage);
+
+  if (typeof homepageSubject !== "string") {
+    return undefined;
+  }
+
+  const homepage = await store.fetchResourceFromServer(homepageSubject, {
+    noWebSocket: true,
+  });
+
+  return isListedCmsResource(homepage) ? homepage : undefined;
+}
 
 /**
  * Queries the server for a resource with a href property that matches the given url pathname.
@@ -24,6 +52,14 @@ export async function getCurrentResource(
   // The path may start with a language prefix, e.g. /nl/blog/some-post.
   const { lang, path, prefixed } = await parseLocalizedPath(url.pathname);
 
+  if (path === "/" || path === "") {
+    const homepage = await getWebsiteHomepage();
+
+    if (homepage) {
+      return prefixed ? findTranslation(homepage, lang) : homepage;
+    }
+  }
+
   // Find the resource with the current path as href.
   const collection = await new CollectionBuilder(store)
     .setDrive(PUBLIC_ATOMIC_DRIVE)
@@ -36,13 +72,16 @@ export async function getCurrentResource(
     return undefined;
   }
 
-  const currentResourceSubject = await collection.getMemberWithIndex(0);
+  const subjects = await collection.getAllMembers();
+  const candidates = (
+    await Promise.all(subjects.map((subject) => store.getResource(subject)))
+  ).filter((resource) => isListedCmsResource(resource));
 
-  if (currentResourceSubject === undefined) {
+  if (candidates.length === 0) {
     return undefined;
   }
 
-  const resource = await store.getResource(currentResourceSubject);
+  const resource = candidates[0];
 
   if (!prefixed) {
     // Without an explicit language in the URL, the resource's own href wins:

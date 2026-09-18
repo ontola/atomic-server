@@ -1,0 +1,15 @@
+.link {
+  appearance: none;
+  background: none;
+  border: none;
+  color: inherit;
+  padding: 1rem;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+  font: inherit;
+}
+
+.link:hover {
+  color: var(--theme-color-text);
+}

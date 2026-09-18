@@ -2,14 +2,59 @@
 	import { core } from '@tomic/lib';
 	import { getResource } from '@tomic/svelte';
 	import { appState } from '$lib/stores/appstate.svelte';
+	import { cmsEditUrl } from '$lib/atomic/cmsEditUrl';
+	import { PUBLIC_ATOMIC_CMS_URL } from '$env/static/public';
+	import { onMount } from 'svelte';
 	import '../../styles/reset.css';
 
 	let page = getResource(() => appState.currentSubject);
+
+	function isTypingTarget(target: EventTarget | null): boolean {
+		if (!(target instanceof HTMLElement)) {
+			return false;
+		}
+
+		if (target.isContentEditable) {
+			return true;
+		}
+
+		const tag = target.tagName;
+
+		return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+	}
+
+	function onKeyDown(event: KeyboardEvent) {
+		if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'e') {
+			return;
+		}
+
+		if (event.altKey || event.shiftKey || isTypingTarget(event.target)) {
+			return;
+		}
+
+		if (!appState.currentSubject) {
+			return;
+		}
+
+		event.preventDefault();
+		window.open(
+			cmsEditUrl(PUBLIC_ATOMIC_CMS_URL, appState.currentSubject),
+			'_blank',
+			'noopener,noreferrer'
+		);
+	}
+
+	onMount(() => {
+		window.addEventListener('keydown', onKeyDown);
+
+		return () => window.removeEventListener('keydown', onKeyDown);
+	});
 </script>
 
 <svelte:head>
 	<title>{page.title}</title>
 	<meta content={page.get(core.properties.description)} name="description" />
+	<link rel="alternate" type="application/rss+xml" title="RSS" href="/rss.xml" />
 </svelte:head>
 <slot />
 

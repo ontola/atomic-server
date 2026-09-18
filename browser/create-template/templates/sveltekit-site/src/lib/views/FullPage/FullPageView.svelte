@@ -12,9 +12,10 @@
 
 	interface Props {
 		subject: string;
+		lang?: string;
 	}
 
-	const { subject }: Props = $props();
+	const { subject, lang }: Props = $props();
 
 	let resource = getResource(() => subject);
 
@@ -30,4 +31,8 @@
 	);
 </script>
 
-<View {resource} />
+{#if View === BlogIndexPageFullPage}
+	<BlogIndexPageFullPage {resource} {lang} />
+{:else}
+	<View {resource} />
+{/if}

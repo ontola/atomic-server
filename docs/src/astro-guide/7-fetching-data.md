@@ -10,12 +10,16 @@ Most of the time, like in the case of this portfolio example, you share one glob
 Let's first create a `.env` file at the root of the project in which we specify some info like the URL of our Atomic server.
 We also add an environment variable with the subject of our homepage resource.
 
-The server URL is the subject of your Drive, you can find this by clicking on the name of the drive at the top and copying the URL in the address bar.
+The **server URL** is the HTTP origin of AtomicServer (for example `http://localhost:9883`). It is **not** the Drive's `did:ad:` identifier. After the DID migration those are different values: `Store` needs an `http(s):` origin to fetch and open a WebSocket.
+
+You can copy the origin from the address bar when you first open the app (before any `?subject=` query), or from the server logs at startup.
+
+The homepage **subject** is the `did:ad:…` identifier of the homepage resource. Open the homepage in the Data Browser and copy `subject` from the query string, or from the bottom navigation bar.
 
 ```env
-// .env
-ATOMIC_SERVER_URL=<REPLACE WITH URL TO YOUR ATOMIC SERVER>
-ATOMIC_HOMEPAGE_SUBJECT=<REPLACE WITH SUBJECT OF THE HOMEPAGE RESOURCE>
+# .env
+ATOMIC_SERVER_URL=<REPLACE WITH HTTP ORIGIN, e.g. http://localhost:9883>
+ATOMIC_HOMEPAGE_SUBJECT=<REPLACE WITH did:ad:… OF THE HOMEPAGE RESOURCE>
 ```
 
 Next, we'll create a folder called `helpers` and in it a file called `getStore.ts`.

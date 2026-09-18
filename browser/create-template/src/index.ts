@@ -20,6 +20,9 @@ const args = parseArgs({
     drive: {
       type: 'string',
     },
+    'cms-url': {
+      type: 'string',
+    },
   },
   allowPositionals: true,
 });
@@ -65,6 +68,7 @@ await postProcess({
   template: args.values.template,
   serverUrl: args.values['server-url'],
   drive: args.values.drive,
+  cmsUrl: args.values['cms-url'] ?? args.values['server-url'],
 });
 
 log('');

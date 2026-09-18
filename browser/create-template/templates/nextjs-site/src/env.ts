@@ -9,6 +9,7 @@ export const env = createEnv({
     NEXT_PUBLIC_ATOMIC_SERVER_URL: z.string().url(),
     NEXT_PUBLIC_ATOMIC_DRIVE: z.string().min(1),
     NEXT_PUBLIC_WEBSITE_RESOURCE: z.string().url(),
+    NEXT_PUBLIC_ATOMIC_CMS_URL: z.string().url(),
   },
 
   // For Next.js >= 13.4.4, you only need to destructure client variables:
@@ -16,5 +17,6 @@ export const env = createEnv({
     NEXT_PUBLIC_ATOMIC_SERVER_URL: process.env.NEXT_PUBLIC_ATOMIC_SERVER_URL,
     NEXT_PUBLIC_ATOMIC_DRIVE: process.env.NEXT_PUBLIC_ATOMIC_DRIVE,
     NEXT_PUBLIC_WEBSITE_RESOURCE: process.env.NEXT_PUBLIC_WEBSITE_RESOURCE,
+    NEXT_PUBLIC_ATOMIC_CMS_URL: process.env.NEXT_PUBLIC_ATOMIC_CMS_URL,
   },
 });

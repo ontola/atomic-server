@@ -7,18 +7,36 @@ bun create @tomic/template my-project --template <TEMPLATE> --server-url <SERVER
 yarn create @tomic/template my-project --template <TEMPLATE> --server-url <SERVER_URL> --drive <DRIVE_SUBJECT>
 ```
 
-`@tomic/template` is a tool that helps you kickstart a new project using AtomicServer using a variaty of pre build templates that you can further customize to your needs.
+Full walkthrough: [Using Atomic as a headless CMS](../headless-cms.md).
 
-`SERVER_URL` is the HTTP(S) API origin. `DRIVE_SUBJECT` is the `did:ad:`
-identity of the drive where the template data was installed.
+`@tomic/template` scaffolds a Next.js or SvelteKit site that reads content from an AtomicServer Drive.
 
-In order to use these templates you need the coresponding template data on your AtomicServer.
-To get this data go to the new resource page and click on the template you want.
-A dialog will open with a description of the template and a button to add the data to your server.
+`SERVER_URL` is the HTTP(S) API origin (`http://localhost:9883`). `DRIVE_SUBJECT` is the `did:ad:` identity of the Drive where the Website template data was installed. Those are not interchangeable.
+
+Optional `--cms-url` is the Data Browser origin used for Cmd/Ctrl+Shift+E / **Open in Data Browser**. It defaults to `SERVER_URL` (AtomicServer serves the GUI on the same origin). Set it when the editor runs elsewhere, for example Vite on `http://localhost:6747`.
+
+## Before you generate
+
+1. Create a Drive and grant it public read.
+2. Open **New resource → Templates → website → Apply template**.
+3. Copy the server origin and the Drive's `did:ad:` subject.
+
+If you skip the Website template, the CLI exits with an error telling you to apply it.
+
+Then:
+
+```sh
+cd my-project
+pnpm install
+pnpm update-ontologies
+pnpm dev
+```
+
+From the running site, Cmd/Ctrl+E on a Next.js template enters in-place WYSIWYG editing (`@tomic/edit-mode`); Cmd/Ctrl+Shift+E opens the Data Browser. SvelteKit's **Edit this page** still opens the Data Browser. `/` is the Website resource's `homepage` property, not whichever page happens to have path `/`. A blog post with `published-at` in the future is not listed or routed. Forks of pages and posts are excluded too. Nav on `/nl/...` keeps the language prefix. Generated sites expose `/sitemap.xml`, `/robots.txt`, and `/rss.xml` from the same public-content filter. Pages are prerendered and sent with `Cache-Control: public, s-maxage=60, stale-while-revalidate=86400` so a CDN can serve the correct language and content on the first byte.
 
 The following templates are available:
 
 | Name             | Description                                                          | AtomicServer Template |
 | ---------------- | -------------------------------------------------------------------- | --------------------- |
-| `sveltekit-site` | A sveltekit website with dynamically rendered content and blog posts | Website               |
-| `nextjs-site`    | A nextjs website with dynamically rendered content and blog posts    | Website               |
+| `sveltekit-site` | A SvelteKit website with CDN-cacheable SSR pages and blog posts | Website               |
+| `nextjs-site`    | A Next.js website with ISR/prerendered, CDN-cacheable pages and blog posts | Website               |
