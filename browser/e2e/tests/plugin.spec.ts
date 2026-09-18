@@ -49,9 +49,11 @@ test.describe('Plugins', () => {
 
     await fileChooser.setFiles(testFilePath('test-plugin.zip'));
 
+    // The upload publishes a private Release, then the same Installation
+    // review screen the Store uses opens for it.
     await inDialog(page, async (dialog, closeWith) => {
       await expect(
-        dialog.getByRole('heading', { name: 'Add Plugin' }),
+        dialog.getByRole('heading', { name: 'Install plugin' }),
       ).toBeVisible();
       await expect(
         dialog.getByText('ontola/test-plugin', { exact: true }),
@@ -75,9 +77,12 @@ test.describe('Plugins', () => {
       await closeWith('Install');
     });
 
+    // Installing navigates to the new Installation, which the server has
+    // activated by the time the commit round-trips.
     await expect(
-      page.getByRole('link', { name: 'ontola/test-plugin' }),
+      page.getByText('ontola/test-plugin', { exact: true }),
     ).toBeVisible();
+    await expect(page.getByLabel('Status: active')).toBeVisible();
 
     // Now create the folder. The plugin's `after_commit` fires on the
     // folder's first commit and emits a follow-up commit setting the
