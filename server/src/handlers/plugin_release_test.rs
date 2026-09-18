@@ -1,8 +1,8 @@
 //! `/plugin-package/{id}` and `/plugin-package/{id}/zip` against a real store.
 //!
-//! A catalogued release is public. A private one is served to whoever can
-//! read its `Release` resource, which lives under the publisher's drive, and
-//! to nobody else.
+//! A listed release is public. A private one is served to whoever can read
+//! its `Release` resource, which lives under the publisher's drive, and to
+//! nobody else. `/plugin-catalog` is the query over this server's Listings.
 
 use actix_web::{
     body::MessageBody,
@@ -135,7 +135,7 @@ async fn a_private_release_is_served_to_a_reader_of_its_drive_only() {
 }
 
 #[actix_rt::test]
-async fn a_catalogued_release_is_public_and_a_js_release_has_no_zip() {
+async fn a_listed_release_is_public_and_a_js_release_has_no_zip() {
     let f = fixture("plugin_package_public").await;
     let db = &f.appstate.store;
     let origin = f.appstate.config.get_origin();
@@ -144,20 +144,66 @@ async fn a_catalogued_release_is_public_and_a_js_release_has_no_zip() {
         serde_json::json!({"schemaVersion": 1}),
         Default::default(),
     );
-    let id = db.publish_plugin_release(&js).unwrap();
-    release::record_release(db, &id, &js, &f.drive, None, &origin)
+    // A private release first: nothing is listed.
+    let private = release::publish_release(db, &js, &f.drive, None, &origin, None)
         .await
         .unwrap();
-    db.publish_plugin_catalog_entry(&atomic_lib::db::plugin_release::CatalogEntry {
-        release: id.clone(),
-        name: "Example".into(),
-        emoji: None,
-        description: String::new(),
-        publisher: "publisher".into(),
-        domains: vec![],
-        standards: vec![],
-    })
+    assert!(private.listing.is_none());
+    assert!(!release::is_listed(db, &private.id).await);
+
+    // Publishing it publicly lists it; the drive itself stays private.
+    let published = release::publish_release(
+        db,
+        &js,
+        &f.drive,
+        Some("did:ad:publisher"),
+        &origin,
+        Some(release::ListingInput {
+            name: "Example".into(),
+            emoji: Some("🧪".into()),
+            description: "An example".into(),
+            domains: vec!["education".into()],
+            standards: vec!["https://example.com/standard".into()],
+        }),
+    )
+    .await
     .unwrap();
+    let id = published.id.clone();
+    assert_eq!(id, private.id);
+    let listing = published.listing.clone().expect("a Listing");
+    assert_eq!(listing.resolve(&origin), format!("{origin}/listings/{id}"));
+    assert!(release::is_listed(db, &id).await);
+    // Listing again is a no-op.
+    assert_eq!(
+        release::publish_release(
+            db,
+            &js,
+            &f.drive,
+            None,
+            &origin,
+            Some(release::ListingInput::default())
+        )
+        .await
+        .unwrap()
+        .listing,
+        Some(listing)
+    );
+    // A standard that is not an HTTP link is refused.
+    let mut other = js.clone();
+    other.source = Some("export function run() { return {}; }".into());
+    assert!(release::publish_release(
+        db,
+        &other,
+        &f.drive,
+        None,
+        &origin,
+        Some(release::ListingInput {
+            standards: vec!["ftp://nope".into()],
+            ..Default::default()
+        })
+    )
+    .await
+    .is_err());
 
     let service = test::init_service(
         App::new()
@@ -165,6 +211,32 @@ async fn a_catalogued_release_is_public_and_a_js_release_has_no_zip() {
             .configure(crate::routes::config_routes),
     )
     .await;
+
+    // The marketplace is a class query over Listings, readable unsigned.
+    let catalog = test::call_service(
+        &service,
+        with_host(TestRequest::with_uri("/plugin-catalog"), &origin).to_request(),
+    )
+    .await;
+    assert_eq!(catalog.status(), 200);
+    let entries: Vec<serde_json::Value> = serde_json::from_slice(&body_of(catalog)).unwrap();
+    assert_eq!(entries.len(), 1, "{entries:?}");
+    let entry = &entries[0];
+    assert_eq!(entry["name"], "Example");
+    assert_eq!(entry["emoji"], "🧪");
+    assert_eq!(entry["description"], "An example");
+    assert_eq!(entry["publisher"], "did:ad:publisher");
+    assert_eq!(entry["domains"], serde_json::json!(["education"]));
+    assert_eq!(
+        entry["standards"],
+        serde_json::json!(["https://example.com/standard"])
+    );
+    assert_eq!(entry["releaseId"], id);
+    assert_eq!(entry["release"], format!("{origin}/releases/{id}"));
+    assert_eq!(entry["subject"], format!("{origin}/listings/{id}"));
+    assert_eq!(entry["runtime"], "atomic-js/1");
+    assert_eq!(entry["world"], "extension");
+
     let served = test::call_service(
         &service,
         with_host(

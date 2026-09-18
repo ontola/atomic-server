@@ -238,6 +238,9 @@ fn sort_objects(value: &mut serde_json::Value) {
     }
 }
 
+/// The KV release cache: every release this node published or fetched, under
+/// its id. Marketplace visibility is not recorded here; that is a `Listing`
+/// resource, created by the server when a release is published publicly.
 impl Db {
     pub fn publish_plugin_release(&self, release: &PluginRelease) -> AtomicResult<String> {
         release.validate()?;
@@ -386,21 +389,6 @@ mod tests {
         assert_ne!(first, second);
         assert_eq!(db.get_plugin_release(&first).unwrap(), release());
         assert_eq!(db.get_plugin_release(&second).unwrap(), draft);
-        assert!(
-            db.plugin_catalog().unwrap().is_empty(),
-            "an approval package is not automatically public"
-        );
-        db.publish_plugin_catalog_entry(&CatalogEntry {
-            release: first.clone(),
-            name: "Example".into(),
-            emoji: None,
-            description: String::new(),
-            publisher: "publisher".into(),
-            domains: vec!["education".into()],
-            standards: vec![],
-        })
-        .unwrap();
-        assert_eq!(db.plugin_catalog().unwrap().len(), 1);
         let key = format!("plugin-release/v1/{first}");
         db.kv
             .insert(
@@ -413,44 +401,5 @@ mod tests {
             db.get_plugin_release(&first).is_err(),
             "corrupt package content must not execute"
         );
-    }
-}
-
-/// Public catalog metadata is written only by explicit publication, never by
-/// unattended approval. Publication does not imply provider verification.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CatalogEntry {
-    pub release: String,
-    pub name: String,
-    #[serde(default)]
-    pub emoji: Option<String>,
-    pub description: String,
-    pub publisher: String,
-    pub domains: Vec<String>,
-    pub standards: Vec<String>,
-}
-impl Db {
-    pub fn publish_plugin_catalog_entry(&self, entry: &CatalogEntry) -> AtomicResult<()> {
-        self.get_plugin_release(&entry.release)?;
-        let key = format!(
-            "plugin-catalog/v1/{}",
-            serde_json::json!([entry.release, entry.publisher])
-        );
-        self.kv.insert(
-            Tree::PluginMeta,
-            key.as_bytes(),
-            &serde_json::to_vec(entry)?,
-        )?;
-        Ok(())
-    }
-    pub fn plugin_catalog(&self) -> AtomicResult<Vec<CatalogEntry>> {
-        self.kv
-            .scan_prefix(Tree::PluginMeta, b"plugin-catalog/v1/")
-            .map(|entry| {
-                let (_, bytes) = entry?;
-                serde_json::from_slice(&bytes).map_err(Into::into)
-            })
-            .collect()
     }
 }

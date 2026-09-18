@@ -294,6 +294,186 @@ async fn ensure_package_file(
     Ok(subject.to_string())
 }
 
+/// The subject of the `Listing` resource that lists release `id` in this
+/// server's marketplace: `<server>/listings/<id>`, next to `/releases/<id>`.
+pub fn listing_subject(id: &str) -> Subject {
+    Subject::new_local(&format!("/listings/{id}"), None)
+}
+
+/// What a publisher says about a release when listing it in the marketplace.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ListingInput {
+    pub name: String,
+    pub emoji: Option<String>,
+    pub description: String,
+    pub domains: Vec<String>,
+    /// Links to the documentation of the standards the release implements.
+    pub standards: Vec<String>,
+}
+
+impl ListingInput {
+    /// Name and description from a manifest, for a package that is listed
+    /// as it describes itself.
+    pub fn from_manifest(manifest: &Manifest) -> Self {
+        Self {
+            name: manifest.name.clone().unwrap_or_else(|| "Plugin".into()),
+            emoji: None,
+            description: manifest.description.clone().unwrap_or_default(),
+            domains: Vec::new(),
+            standards: Vec::new(),
+        }
+    }
+
+    fn validate(&self) -> AtomicResult<()> {
+        for standard in &self.standards {
+            let url = url::Url::parse(standard)
+                .map_err(|e| AtomicError::from(format!("standard {standard}: {e}")))?;
+            if !matches!(url.scheme(), "http" | "https") {
+                return Err(AtomicError::from(
+                    "Standards must link to HTTP documentation",
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// A release recorded on this node, and where.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Published {
+    pub id: String,
+    /// The `Release` resource.
+    pub subject: Subject,
+    /// The `Listing` resource, when the release was published publicly.
+    pub listing: Option<Subject>,
+}
+
+/// Publishes a release on this node: caches it under its id, records it as a
+/// `Release` resource under `drive` and, when `listing` is given, lists it
+/// publicly. This is the one path behind publishing a JS draft, uploading a
+/// zip and pinning a private release; the handlers only differ in how they
+/// build the release.
+pub async fn publish_release(
+    db: &Db,
+    release: &PluginRelease,
+    drive: &str,
+    publisher: Option<&str>,
+    origin: &str,
+    listing: Option<ListingInput>,
+) -> AtomicResult<Published> {
+    if let Some(listing) = &listing {
+        listing.validate()?;
+    }
+    let id = db.publish_plugin_release(release)?;
+    let subject = record_release(db, &id, release, drive, publisher, origin).await?;
+    let listing = match listing {
+        Some(listing) => Some(
+            record_listing(
+                db,
+                &id,
+                &subject.resolve(origin),
+                drive,
+                publisher,
+                &listing,
+            )
+            .await?,
+        ),
+        None => None,
+    };
+    Ok(Published {
+        id,
+        subject,
+        listing,
+    })
+}
+
+/// Records a `Listing` for release `id`, readable by everyone: a public
+/// publish is a marketplace entry, whatever the drive's own rights say.
+/// Idempotent: an existing Listing is left as it is.
+async fn record_listing(
+    db: &Db,
+    id: &str,
+    release_url: &str,
+    drive: &str,
+    publisher: Option<&str>,
+    listing: &ListingInput,
+) -> AtomicResult<Subject> {
+    let subject = listing_subject(id);
+    if db.get_resource(&subject).await.is_ok() {
+        return Ok(subject);
+    }
+    let mut resource = Resource::new(subject.to_string());
+    resource.set_unsafe(
+        urls::IS_A.into(),
+        Value::ResourceArray(vec![urls::LISTING.into()]),
+    )?;
+    resource.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))?;
+    resource.set_unsafe(
+        urls::READ.into(),
+        Value::ResourceArray(vec![urls::PUBLIC_AGENT.into()]),
+    )?;
+    resource.set_unsafe(urls::NAME.into(), Value::String(listing.name.clone()))?;
+    resource.set_unsafe(
+        urls::DESCRIPTION.into(),
+        Value::Markdown(listing.description.clone()),
+    )?;
+    if let Some(emoji) = &listing.emoji {
+        resource.set_unsafe(urls::EMOJI.into(), Value::String(emoji.clone()))?;
+    }
+    if let Some(publisher) = publisher {
+        resource.set_unsafe(urls::PUBLISHER.into(), Value::AtomicUrl(publisher.into()))?;
+    }
+    resource.set_unsafe(
+        urls::RELEASE_PROP.into(),
+        Value::AtomicUrl(release_url.into()),
+    )?;
+    resource.set_unsafe(urls::RELEASE_ID.into(), Value::String(id.to_string()))?;
+    resource.set_unsafe(
+        urls::DOMAINS.into(),
+        Value::Json(serde_json::json!(listing.domains)),
+    )?;
+    resource.set_unsafe(
+        urls::STANDARDS.into(),
+        Value::ResourceArray(
+            listing
+                .standards
+                .iter()
+                .map(|s| s.as_str().into())
+                .collect(),
+        ),
+    )?;
+    resource.save_locally(db).await?;
+    Ok(subject)
+}
+
+/// Whether release `id` is listed in this server's marketplace, that is,
+/// whether it has a Listing the public can read.
+pub async fn is_listed(db: &Db, id: &str) -> bool {
+    match db.get_resource(&listing_subject(id)).await {
+        Ok(listing) => atomic_lib::hierarchy::check_read(db, &listing, &ForAgent::Public)
+            .await
+            .is_ok(),
+        Err(_) => false,
+    }
+}
+
+/// Refuses a publish whose caller believes the package is one world when the
+/// component says another, rather than mislabeling it.
+pub fn expect_world(
+    release: &PluginRelease,
+    manifest: &Manifest,
+    claimed: Option<&str>,
+) -> AtomicResult<()> {
+    match claimed {
+        Some(claimed) if claimed != release.world => Err(AtomicError::from(format!(
+            "the package is a {} (its component extends {} classes), not a {claimed}",
+            release.world,
+            manifest.entrypoints.class_urls().len()
+        ))),
+        _ => Ok(()),
+    }
+}
+
 /// The release record's spelling of a manifest world.
 pub fn world_name(world: World) -> &'static str {
     use atomic_lib::db::plugin_release::{WORLD_EXTENSION, WORLD_SERVER_EXTENSION};
