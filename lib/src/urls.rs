@@ -231,7 +231,6 @@ pub const PLUGIN_FILE: &str = "https://atomicdata.dev/properties/pluginFile";
 pub const VERSION: &str = "https://atomicdata.dev/properties/version";
 pub const CONFIG: &str = "https://atomicdata.dev/properties/config";
 pub const NAMESPACE: &str = "https://atomicdata.dev/properties/namespace";
-pub const PLUGINS: &str = "https://atomicdata.dev/properties/plugins";
 pub const JSON_SCHEMA: &str = "https://atomicdata.dev/properties/jsonSchema";
 pub const PLUGIN_AUTHOR: &str = "https://atomicdata.dev/properties/pluginAuthor";
 pub const PLUGIN_AGENT: &str = "https://atomicdata.dev/properties/pluginAgent";

@@ -165,7 +165,7 @@ pub async fn publish_package(
     use atomic_lib::db::plugin_release::RUNTIME_WASIP2;
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes.to_vec()))
         .map_err(|e| AtomicError::from(format!("Body is not a zip archive: {e}")))?;
-    let (plugin_json, manifest) = crate::plugins::wasm::describe_package(db, &mut zip).await?;
+    let manifest = crate::plugins::wasm::describe_package(db, &mut zip).await?;
     let package = store_package(db, bytes).await?;
     let release = PluginRelease {
         source: None,
@@ -174,11 +174,29 @@ pub async fn publish_package(
         runtime: RUNTIME_WASIP2.into(),
         world: world_name(manifest.world).into(),
         schemas: Default::default(),
-        version: Some(plugin_json.version.clone()),
+        version: manifest.version.clone(),
         previous_release: None,
     };
     let id = db.publish_plugin_release(&release)?;
     Ok((id, release, manifest))
+}
+
+/// The bytes of a `File` resource on this node: its content-addressed blob,
+/// or, for a File that only has a `downloadURL`, a capped SSRF-guarded fetch.
+pub async fn file_bytes(db: &Db, file_subject: &str) -> AtomicResult<Vec<u8>> {
+    let file = db
+        .get_resource_extended(&file_subject.into(), false, &ForAgent::Sudo)
+        .await?
+        .to_single();
+    if let Some(internal_id) = string_value(&file, urls::INTERNAL_ID) {
+        return package_bytes(db, &internal_id).await;
+    }
+    let download_url = string_value(&file, urls::DOWNLOAD_URL).ok_or_else(|| {
+        AtomicError::from(format!(
+            "File {file_subject} has no internalId and no downloadURL"
+        ))
+    })?;
+    fetch_bytes_untrusted(&download_url, PACKAGE_MAX_BYTES).await
 }
 
 /// The subject of the `Release` resource that records release `id` on this

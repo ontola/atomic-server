@@ -23,7 +23,7 @@
     "@id": "https://atomicdata.dev/properties/pluginFile",
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/File",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-    "https://atomicdata.dev/properties/description": "A Wasm file containing AtomicServer Plugin code",
+    "https://atomicdata.dev/properties/description": "Deprecated: the zip File of a legacy Plugin resource. Migrated at startup into an Installation pinned to a Release.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Property"
     ],
@@ -98,7 +98,7 @@
   },
   {
     "@id": "https://atomicdata.dev/classes/Plugin",
-    "https://atomicdata.dev/properties/description": "A Wasm plugin for AtomicServer",
+    "https://atomicdata.dev/properties/description": "Deprecated: a legacy Wasm plugin resource. The server migrates it at startup into an Installation of a Release; new installs use Installation.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Class"
     ],

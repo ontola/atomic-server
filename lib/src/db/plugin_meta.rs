@@ -4,17 +4,70 @@ use std::io::Read;
 
 use crate::AtomicError;
 
-#[derive(Serialize, Deserialize)]
+/// What the server keeps about one installed plugin on one drive: which
+/// resource it is, the agent it acts as, and the manifest it was installed with.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PluginMeta {
     pub subject: String,
     pub agent_secret: String,
-    /// The legacy `plugin.json` shape, which the on-disk loader still reads.
+    /// The version-two manifest of the installed release.
+    ///
+    /// A record written before manifests were unified may still hold the
+    /// untranslated `plugin.json` (no `schemaVersion`); the server translates
+    /// it the first time it loads the plugin and writes the record back.
+    pub manifest: serde_json::Value,
+}
+
+impl PluginMeta {
+    /// Whether the manifest is the unified form, or still a legacy `plugin.json`.
+    pub fn has_v2_manifest(&self) -> bool {
+        self.manifest.get("schemaVersion").is_some()
+    }
+
+    /// The origins the manifest allows the plugin to reach. Same path in both
+    /// manifest forms.
+    pub fn network_origins(&self) -> Vec<String> {
+        self.manifest
+            .pointer("/network/origins")
+            .and_then(|v| v.as_array())
+            .map(|origins| {
+                origins
+                    .iter()
+                    .filter_map(|o| o.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// The version recorded in the manifest, if any.
+    pub fn version(&self) -> Option<&str> {
+        self.manifest.get("version").and_then(|v| v.as_str())
+    }
+}
+
+/// The record shape before the manifest was unified: the `plugin.json` as a
+/// struct, plus the version-two manifest an Installation had written beside it.
+/// Only read, never written; [`PluginMeta::from_bytes`] upgrades it.
+#[derive(Deserialize)]
+pub(crate) struct LegacyPluginMeta {
+    pub subject: String,
+    pub agent_secret: String,
     pub manifest: PluginManifest,
-    /// The version-two manifest of the Release an Installation pinned, kept
-    /// beside the legacy shape so existing records stay readable. Absent for
-    /// plugins installed through the legacy `Plugin` + `pluginFile` path.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub manifest_v2: Option<serde_json::Value>,
+}
+
+impl From<LegacyPluginMeta> for PluginMeta {
+    fn from(legacy: LegacyPluginMeta) -> Self {
+        let manifest = legacy.manifest_v2.unwrap_or_else(|| {
+            serde_json::to_value(&legacy.manifest).unwrap_or(serde_json::Value::Null)
+        });
+        Self {
+            subject: legacy.subject,
+            agent_secret: legacy.agent_secret,
+            manifest,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,36 +132,11 @@ pub enum PermissionType {
 }
 
 impl PluginManifest {
-    /// Whether this plugin declared the origin it is trying to reach.
-    pub fn allows_origin(&self, origin: &str) -> bool {
-        self.network
-            .as_ref()
-            .is_some_and(|n| n.origins.iter().any(|o| o == origin))
-    }
-
-    pub fn from_string(string: &str) -> Result<Self, AtomicError> {
-        let manifest: Self = serde_json::from_str(string)
-            .map_err(|e| AtomicError::from(format!("Failed to parse plugin manifest: {}", e)))?;
-        manifest.validate()?;
-        Ok(manifest)
-    }
-
     pub fn from_reader(reader: impl Read) -> Result<Self, AtomicError> {
         let manifest: Self = serde_json::from_reader(reader)
             .map_err(|e| AtomicError::from(format!("Failed to parse plugin manifest: {}", e)))?;
         manifest.validate()?;
         Ok(manifest)
-    }
-
-    pub fn option_has_permission(
-        manifest: Option<&PluginManifest>,
-        permission: PermissionType,
-    ) -> bool {
-        let Some(manifest) = manifest else {
-            return false;
-        };
-
-        manifest.has_permission(permission)
     }
 
     pub fn validate(&self) -> Result<(), AtomicError> {

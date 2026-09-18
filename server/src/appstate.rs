@@ -96,11 +96,6 @@ impl AppState {
         store.add_class_extender(plugins::chatroom::build_chatroom_extender())?;
         store.add_class_extender(plugins::chatroom::build_message_extender())?;
         store.add_endpoint(plugins::invite::invite_endpoint())?;
-        store.add_class_extender(plugins::plugin::build_plugin_extender(
-            config.plugin_path.clone(),
-            config.plugin_cache_path.clone(),
-            config.uploads_path.clone(),
-        ))?;
         store.add_class_extender(plugins::plugin::build_installation_extender(
             config.plugin_path.clone(),
             config.plugin_cache_path.clone(),
@@ -182,6 +177,14 @@ impl AppState {
             atomic_lib::populate::repopulate_defaults(&store)
                 .await
                 .map_err(|e| format!("Failed to repopulate defaults. {}", e))?;
+        }
+
+        // Legacy `Plugin` + `pluginFile` resources become Installations, once.
+        // After the extenders above are loaded (so their meta is current) and
+        // after the default agent is set (the migration commits as the server).
+        #[cfg(feature = "wasm-plugins")]
+        if let Err(e) = plugins::plugin::migrate_legacy_plugins(&store).await {
+            tracing::warn!("legacy plugin migration failed: {e}");
         }
 
         // Who may put a *new* Drive here. Installed after populate so the scan

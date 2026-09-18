@@ -18,7 +18,7 @@ use atomic_lib::{
     errors::{AtomicError, AtomicResult},
     parse::{parse_json_ad_resource, ParseOpts, SaveOpts},
     storelike::ResourceResponse,
-    urls, Db, Resource, Storelike, Value,
+    urls, Db, Resource, Storelike,
 };
 use atomic_lib::{
     class_extender::{self, ClassExtenderScope},
@@ -40,6 +40,7 @@ use wasmtime_wasi_http::{
 use atomic_lib::db::plugin_meta::PluginMetaKey;
 
 use super::host_core::{self, FetchRequest, HostCore, ResourceGrants, Runtime};
+use super::manifest::{CapabilityName, Manifest};
 
 mod bindings {
     wasmtime::component::bindgen!({
@@ -251,7 +252,15 @@ struct WasmPluginInner {
     core: HostCore,
     plugin_subject: Option<String>,
     agent: Option<Agent>,
-    manifest: Option<PluginManifest>,
+    /// The unified manifest the plugin was installed with. `None` for an
+    /// operator-installed global extension, which declares nothing.
+    manifest: Option<Manifest>,
+}
+
+/// Whether a class extender's manifest gives it network access: it declares
+/// origins, not operations, so declaring at least one is the switch.
+fn has_network(manifest: Option<&Manifest>) -> bool {
+    manifest.is_some_and(|m| !m.network.origins.is_empty())
 }
 
 impl WasmPlugin {
@@ -266,7 +275,7 @@ impl WasmPlugin {
         scope: ClassExtenderScope,
         plugin_subject: Option<String>,
         agent: Option<Agent>,
-        manifest: Option<PluginManifest>,
+        manifest: Option<Manifest>,
     ) -> AtomicResult<Self> {
         let core = HostCore::for_class_extender(
             Arc::new(db.clone()),
@@ -450,7 +459,7 @@ impl WasmPlugin {
     async fn instantiate(&self) -> AtomicResult<(bindings::ClassExtender, Store<PluginHostState>)> {
         let limits = host_core::limits(
             Runtime::ClassExtender,
-            ResourceGrants::from_manifest(self.inner.manifest.as_ref()),
+            ResourceGrants::from_v2(self.inner.manifest.as_ref()),
         );
 
         let mut store = Store::new(
@@ -469,10 +478,7 @@ impl WasmPlugin {
         let mut linker = Linker::new(&self.inner.engine);
         p2::add_to_linker_async(&mut linker).map_err(|err| AtomicError::from(err.to_string()))?;
 
-        if PluginManifest::option_has_permission(
-            self.inner.manifest.as_ref(),
-            PermissionType::Network,
-        ) {
+        if has_network(self.inner.manifest.as_ref()) {
             add_only_http_to_linker_async(&mut linker)
                 .map_err(|err| AtomicError::from(err.to_string()))?;
         }
@@ -583,7 +589,7 @@ impl PluginHostState {
     fn new(
         core: HostCore,
         owned_folder_path: &Option<PathBuf>,
-        manifest: Option<&PluginManifest>,
+        manifest: Option<&Manifest>,
         limits: StoreLimits,
     ) -> AtomicResult<Self> {
         let mut builder = WasiCtxBuilder::new();
@@ -594,7 +600,7 @@ impl PluginHostState {
         //     .inherit_stderr()
         //     .inherit_stdin()
 
-        if PluginManifest::option_has_permission(manifest, PermissionType::Network) {
+        if has_network(manifest) {
             // Not `inherit_network()`, which is `socket_addr_check(|_, _| true)`
             // and hands the plugin loopback, the private ranges and any cloud
             // metadata endpoint the host can reach. The check runs on the
@@ -619,8 +625,7 @@ impl PluginHostState {
         }
 
         if let Some(owned_folder_path) = owned_folder_path {
-            let has_storage =
-                PluginManifest::option_has_permission(manifest, PermissionType::Storage);
+            let has_storage = manifest.is_some_and(|m| m.has_capability(CapabilityName::Storage));
 
             let dir_perms = if has_storage {
                 DirPerms::READ | DirPerms::MUTATE
@@ -874,13 +879,34 @@ pub async fn read_class_urls(db: &Db, wasm_bytes: &[u8]) -> AtomicResult<Vec<Str
 pub async fn describe_package(
     db: &Db,
     zip: &mut ZipArchive<std::io::Cursor<Vec<u8>>>,
-) -> AtomicResult<(PluginManifest, super::manifest::Manifest)> {
+) -> AtomicResult<Manifest> {
     let plugin_json = validate_plugin_zip(zip)?;
     let wasm_bytes = wasm_bytes_from_zip(zip)?;
     let class_urls = read_class_urls(db, &wasm_bytes).await?;
-    let manifest = super::manifest::translate_plugin_json(&plugin_json, &class_urls)
-        .map_err(|e| AtomicError::from(format!("plugin.json does not translate: {e}")))?;
-    Ok((plugin_json, manifest))
+    translate_plugin_json(&plugin_json, &class_urls)
+}
+
+fn translate_plugin_json(
+    plugin_json: &PluginManifest,
+    class_urls: &[String],
+) -> AtomicResult<Manifest> {
+    super::manifest::translate_plugin_json(plugin_json, class_urls)
+        .map_err(|e| AtomicError::from(format!("plugin.json does not translate: {e}")))
+}
+
+/// The namespace and name a wasip2 manifest carries; translation always sets
+/// them, so a manifest without them did not come from a package.
+fn manifest_identifiers(manifest: &Manifest) -> AtomicResult<(&str, &str)> {
+    let namespace = manifest
+        .namespace
+        .as_deref()
+        .ok_or("a wasip2 manifest needs a namespace")?;
+    let name = manifest
+        .name
+        .as_deref()
+        .ok_or("a wasip2 manifest needs a name")?;
+    validate_plugin_identifiers(namespace, name)?;
+    Ok((namespace, name))
 }
 
 fn extract_plugin_to_disk(
@@ -1202,25 +1228,26 @@ pub async fn uninstall_plugin(
     Ok(())
 }
 
+/// Materializes a wasip2 package on this drive: extracts the zip into
+/// `scoped/<drive>/`, records the plugin's identity and `manifest` (the
+/// unified manifest the Installation reviewed, which names the package's
+/// namespace and name) and loads the class extender. An update of an already
+/// installed package is rolled back to the previous files when any step fails.
 pub async fn install_or_update_plugin(
     zip_file: &mut ZipArchive<std::io::Cursor<Vec<u8>>>,
     drive_subject: &str,
     plugin_subject: &str,
+    manifest: &Manifest,
     store: &Db,
     plugins_dir: &Path,
     plugin_cache_dir: &Path,
 ) -> AtomicResult<()> {
     // 1. Validation
-    let manifest = validate_plugin_zip(zip_file)?;
+    validate_plugin_zip(zip_file)?;
+    let (namespace, name) = manifest_identifiers(manifest)?;
 
-    if !compare_manifest_to_resource(&manifest, plugin_subject, store).await? {
-        return Err(AtomicError::from(
-            "Manifest namespace + name does match that of the resource",
-        ));
-    }
-
-    let wasm_target_name = format!("{}.{}.wasm", manifest.namespace, manifest.name);
-    let json_target_name = format!("{}.{}.json", manifest.namespace, manifest.name);
+    let wasm_target_name = format!("{namespace}.{name}.wasm");
+    let json_target_name = format!("{namespace}.{name}.json");
     let encoded_subject = general_purpose::URL_SAFE.encode(drive_subject);
 
     // Compute target paths for rollback tracking
@@ -1230,11 +1257,11 @@ pub async fn install_or_update_plugin(
         .join(&encoded_subject);
     let wasm_path = target_dir.join(&wasm_target_name);
     let json_path = target_dir.join(&json_target_name);
-    let ui_js_path = target_dir.join(format!("{}.{}.ui.js", manifest.namespace, manifest.name));
-    let ui_css_path = target_dir.join(format!("{}.{}.ui.css", manifest.namespace, manifest.name));
+    let ui_js_path = target_dir.join(format!("{namespace}.{name}.ui.js"));
+    let ui_css_path = target_dir.join(format!("{namespace}.{name}.ui.css"));
 
     // Determine if this is a fresh install or an update by saving the old metadata
-    let meta_key = PluginMetaKey::new(drive_subject, &manifest.namespace, &manifest.name);
+    let meta_key = PluginMetaKey::new(drive_subject, namespace, name);
     let old_plugin_meta = store.get_plugin_meta(&meta_key)?;
     let is_update = old_plugin_meta.is_some();
 
@@ -1270,16 +1297,11 @@ pub async fn install_or_update_plugin(
     // Run the installation steps. If any step fails, we roll back all side effects.
     let result: AtomicResult<()> = async {
         // 2. Extract plugin files to disk
-        let target_dir = extract_plugin_to_disk(
-            zip_file,
-            plugins_dir,
-            &encoded_subject,
-            &manifest.namespace,
-            &manifest.name,
-        )?;
+        let target_dir =
+            extract_plugin_to_disk(zip_file, plugins_dir, &encoded_subject, namespace, name)?;
 
         // 3. Create a new agent for the plugin if needed
-        create_plugin_meta(store, drive_subject, &manifest, plugin_subject).await?;
+        create_plugin_meta(store, drive_subject, manifest, plugin_subject).await?;
 
         // 4. Load Plugin
         let engine = host_core::engine().map_err(AtomicError::from)?;
@@ -1328,8 +1350,8 @@ pub async fn install_or_update_plugin(
             rollback_plugin_install(
                 store,
                 drive_subject,
-                &manifest.namespace,
-                &manifest.name,
+                namespace,
+                name,
                 &meta_key,
                 old_plugin_meta,
                 &wasm_path,
@@ -1418,17 +1440,15 @@ async fn rollback_plugin_install(
 async fn create_plugin_meta(
     store: &Db,
     drive_subject: &str,
-    manifest: &PluginManifest,
+    manifest: &Manifest,
     plugin_subject: &str,
 ) -> AtomicResult<()> {
-    let namespace = &manifest.namespace;
-    let name = &manifest.name;
+    let (namespace, name) = manifest_identifiers(manifest)?;
 
     let key = PluginMetaKey::new(drive_subject, namespace, name);
     let plugin_meta = store.get_plugin_meta(&key)?;
 
-    // An update keeps the identity and the v2 manifest its Installation wrote.
-    let manifest_v2 = plugin_meta.as_ref().and_then(|m| m.manifest_v2.clone());
+    // An update keeps the identity.
     let agent: Agent = if let Some(plugin_meta) = plugin_meta {
         Agent::from_secret(&plugin_meta.agent_secret)?
     } else {
@@ -1449,7 +1469,7 @@ async fn create_plugin_meta(
         new_agent
     };
 
-    if manifest.has_permission(PermissionType::FullDriveAccess) {
+    if manifest.has_capability(CapabilityName::FullDriveAccess) {
         let mut drive = store.get_resource(&drive_subject.into()).await?;
         drive.push(
             urls::WRITE,
@@ -1469,8 +1489,7 @@ async fn create_plugin_meta(
         &PluginMeta {
             subject: plugin_subject.to_string(),
             agent_secret: agent.build_secret()?.clone(),
-            manifest: manifest.clone(),
-            manifest_v2,
+            manifest: serde_json::to_value(manifest)?,
         },
     )?;
 
@@ -1511,6 +1530,14 @@ async fn load_plugin_from_disk(
 ) -> AtomicResult<(Option<ClassExtender>, PathBuf)> {
     let owned_folder_path = setup_plugin_data_dir(path, plugin_dir);
 
+    let wasm_bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            error!("Failed to read Wasm file at {}: {}", path.display(), e);
+            return Ok((None, PathBuf::new())); // Or return Error? Original code returned None.
+        }
+    };
+
     // Attempt to find the plugin subject from the store metadata
     let (plugin_subject, agent, manifest) = match &scope {
         ClassExtenderScope::Drive(drive_subject) => {
@@ -1539,18 +1566,11 @@ async fn load_plugin_from_disk(
             };
 
             let agent = Agent::from_secret(&m.agent_secret)?;
+            let manifest = unified_manifest(db, &key, m, &wasm_bytes).await?;
 
-            (Some(m.subject), Some(agent), Some(m.manifest))
+            (Some(manifest.0), Some(agent), Some(manifest.1))
         }
         ClassExtenderScope::Global => (None, None, None),
-    };
-
-    let wasm_bytes = match std::fs::read(path) {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            error!("Failed to read Wasm file at {}: {}", path.display(), e);
-            return Ok((None, PathBuf::new())); // Or return Error? Original code returned None.
-        }
     };
 
     let hash = digest(&SHA256, &wasm_bytes);
@@ -1659,24 +1679,51 @@ fn decode_subject(b64_subject: &str) -> AtomicResult<String> {
     Ok(subject)
 }
 
-async fn compare_manifest_to_resource(
-    manifest: &PluginManifest,
-    subject: &str,
+/// The installed plugin's unified manifest, and its resource subject.
+///
+/// A record written before manifests were unified holds the untranslated
+/// `plugin.json`. It is translated once, with the classes the component itself
+/// exports (the only thing `plugin.json` does not say), and written back, so
+/// every later read finds the unified form.
+async fn unified_manifest(
     db: &Db,
-) -> AtomicResult<bool> {
-    let resource = db.get_resource(&subject.into()).await?;
-    let name = resource.get(urls::NAME)?;
-    let namespace = resource.get(urls::NAMESPACE)?;
-
-    if !name.contains_value(&Value::String(manifest.name.clone())) {
-        return Ok(false);
+    key: &PluginMetaKey,
+    meta: PluginMeta,
+    wasm_bytes: &[u8],
+) -> AtomicResult<(String, Manifest)> {
+    if meta.has_v2_manifest() {
+        let manifest = Manifest::parse(meta.manifest).map_err(|e| {
+            AtomicError::from(format!(
+                "stored manifest of {}.{} is invalid: {e}",
+                key.namespace, key.name
+            ))
+        })?;
+        return Ok((
+            meta.subject,
+            manifest.expect("a manifest with a schemaVersion"),
+        ));
     }
-
-    if !namespace.contains_value(&Value::String(manifest.namespace.clone())) {
-        return Ok(false);
-    }
-
-    Ok(true)
+    let plugin_json: PluginManifest = serde_json::from_value(meta.manifest).map_err(|e| {
+        AtomicError::from(format!(
+            "stored plugin.json of {}.{} is invalid: {e}",
+            key.namespace, key.name
+        ))
+    })?;
+    let class_urls = read_class_urls(db, wasm_bytes).await?;
+    let manifest = translate_plugin_json(&plugin_json, &class_urls)?;
+    info!(
+        "translated the stored plugin.json of {}.{} into the unified manifest",
+        key.namespace, key.name
+    );
+    db.set_plugin_meta(
+        key,
+        &PluginMeta {
+            subject: meta.subject.clone(),
+            agent_secret: meta.agent_secret,
+            manifest: serde_json::to_value(&manifest)?,
+        },
+    )?;
+    Ok((meta.subject, manifest))
 }
 
 #[cfg(test)]

@@ -18,7 +18,6 @@ use atomic_lib::{
     agents::{Agent, ForAgent},
     class_extender::ClassExtenderScope,
     commit::{CommitBuilder, CommitOpts},
-    db::plugin_meta::{PermissionType, PluginManifest},
     hierarchy,
     storelike::{Query, ResourceResponse},
     urls, Commit, Db, Resource, Storelike, Subject, Value,
@@ -87,20 +86,16 @@ impl ResourceGrants {
         grants
     }
 
-    /// A legacy `plugin.json`: its permissions translated to capabilities.
-    pub fn from_manifest(manifest: Option<&PluginManifest>) -> Self {
+    /// A manifest's declared capabilities, for a plugin that has no
+    /// Installation to read approved grants from (a global extension, or a
+    /// class extender whose grants equal its declaration by construction).
+    pub fn from_v2(manifest: Option<&Manifest>) -> Self {
         Self::from_capabilities(
             manifest
                 .into_iter()
-                .flat_map(super::manifest::plugin_json_capabilities)
-                .map(|capability| capability.name),
+                .flat_map(|m| m.capabilities.iter())
+                .map(|c| c.name),
         )
-    }
-
-    /// A version-two manifest's declared capabilities, for a plugin that has
-    /// no Installation to read approved grants from.
-    pub fn from_v2(manifest: &Manifest) -> Self {
-        Self::from_capabilities(manifest.capabilities.iter().map(|c| c.name))
     }
 
     /// The `grants` an Installation stores: a JSON array of capability names
@@ -227,7 +222,7 @@ pub async fn installation_grants(
     plugin: &str,
     manifest: Option<&Manifest>,
 ) -> ResourceGrants {
-    let declared = manifest.map(ResourceGrants::from_v2).unwrap_or_default();
+    let declared = ResourceGrants::from_v2(manifest);
     let Ok(installation) = super::installation::resolve(db, drive, plugin).await else {
         return declared;
     };
@@ -400,7 +395,7 @@ impl HostCore {
         scope: &ClassExtenderScope,
         plugin: Option<String>,
         agent: Option<Agent>,
-        manifest: Option<&PluginManifest>,
+        manifest: Option<&Manifest>,
     ) -> Result<Self, String> {
         let caller = agent
             .as_ref()
@@ -410,9 +405,11 @@ impl HostCore {
             ClassExtenderScope::Drive(drive) => Some(drive.clone()),
             ClassExtenderScope::Global => None,
         };
+        // A class extender declares origins, not operations. Declaring at
+        // least one is what network access means for it: the legacy `network`
+        // permission translated into `network.origins` and nothing else.
         let origins = manifest
-            .and_then(|m| m.network.as_ref())
-            .map(|n| n.origins.clone())
+            .map(|m| m.network.origins.clone())
             .unwrap_or_default();
 
         Ok(Self {
@@ -422,8 +419,8 @@ impl HostCore {
             agent,
             grant: Grant::new(caller, None)?,
             world: World::ServerExtension,
+            remote_reads: !origins.is_empty(),
             fetch_policy: FetchPolicy::Origins(origins),
-            remote_reads: PluginManifest::option_has_permission(manifest, PermissionType::Network),
             query_scope: None,
             query_limit: None,
         })
@@ -942,7 +939,10 @@ fn commit_changes_plugin(commit: &Commit, resource: &Resource) -> Result<bool, S
     if let Ok(is_a) = resource.get(urls::IS_A) {
         let resource_classes = is_a.to_subjects(None).map_err(|e| e.to_string())?;
 
-        if resource_classes.contains(&urls::PLUGIN.to_string()) {
+        if resource_classes
+            .iter()
+            .any(|class| class == urls::INSTALLATION || class == urls::PLUGIN)
+        {
             return Ok(true);
         }
     }
@@ -951,7 +951,7 @@ fn commit_changes_plugin(commit: &Commit, resource: &Resource) -> Result<bool, S
         let doc = atomic_lib::loro::AtomicLoroDoc::new();
         let _ = doc.import_update(loro_bytes);
         if let Some(is_a_str) = doc.get_string_property(urls::IS_A) {
-            if is_a_str.contains(urls::PLUGIN) {
+            if is_a_str.contains(urls::INSTALLATION) || is_a_str.contains(urls::PLUGIN) {
                 return Ok(true);
             }
         }
@@ -963,23 +963,20 @@ fn commit_changes_plugin(commit: &Commit, resource: &Resource) -> Result<bool, S
 #[cfg(test)]
 mod tests {
     use super::*;
-    use atomic_lib::db::plugin_meta::NetworkPermission;
     use atomic_lib::db::plugin_secret::{PluginSecret, PluginSecretKey};
 
-    fn class_extender_manifest(origins: &[&str]) -> PluginManifest {
-        PluginManifest {
-            name: "probe".into(),
-            namespace: "test".into(),
-            version: "0.0.1".into(),
-            description: None,
-            author: None,
-            permissions: None,
-            default_config: None,
-            config_schema: None,
-            network: Some(NetworkPermission {
-                origins: origins.iter().map(|o| o.to_string()).collect(),
-            }),
-        }
+    fn class_extender_manifest(origins: &[&str]) -> Manifest {
+        Manifest::parse(serde_json::json!({
+            "schemaVersion": 2,
+            "runtime": "wasip2/1",
+            "world": "server-extension",
+            "name": "probe",
+            "namespace": "test",
+            "version": "0.0.1",
+            "network": {"origins": origins},
+        }))
+        .unwrap()
+        .unwrap()
     }
 
     fn js_manifest(origin: &str) -> Manifest {
