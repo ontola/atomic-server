@@ -1,0 +1,372 @@
+[
+  {
+    "name": "v1 public read",
+    "file": "v1-public-read.json",
+    "serialized": {
+      "schemaVersion": 1,
+      "secrets": [],
+      "operations": [
+        {
+          "id": "list",
+          "method": "GET",
+          "url": "https://api.test/items",
+          "effect": "read"
+        }
+      ]
+    }
+  },
+  {
+    "name": "v1 post query",
+    "file": "v1-post-query.json"
+  },
+  {
+    "name": "v1 github issues with actions",
+    "file": "v1-github-issues.json"
+  },
+  {
+    "name": "v2 js extension",
+    "file": "v2-js-extension.json",
+    "serialized": {
+      "schemaVersion": 2,
+      "capabilities": [
+        "storage",
+        {
+          "name": "extended-fuel",
+          "reason": "Syncs whole calendars"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "google",
+          "origin": "https://www.googleapis.com",
+          "description": "Calendar token"
+        }
+      ],
+      "operations": [
+        {
+          "id": "events",
+          "method": "GET",
+          "url": "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+          "effect": "read"
+        }
+      ],
+      "network": {
+        "origins": [
+          "https://www.googleapis.com"
+        ],
+        "reason": "Reads calendars"
+      },
+      "configSchema": {
+        "type": "object",
+        "properties": {
+          "calendar": {
+            "type": "string"
+          }
+        }
+      },
+      "defaultConfig": {
+        "calendar": "primary"
+      },
+      "name": "google-calendar",
+      "namespace": "atomic",
+      "version": "1.0.0",
+      "description": "Mirrors a calendar",
+      "author": "Ontola"
+    }
+  },
+  {
+    "name": "v2 wasm server extension",
+    "file": "v2-wasm-server-extension.json",
+    "serialized": {
+      "schemaVersion": 2,
+      "runtime": "wasip2/1",
+      "world": "server-extension",
+      "entrypoints": {
+        "classExtender": [
+          "https://atomicdata.dev/classes/Folder"
+        ],
+        "view": "ui.js"
+      },
+      "capabilities": [
+        {
+          "name": "full-drive-access",
+          "reason": "Indexes every folder"
+        },
+        "custom-view"
+      ],
+      "network": {
+        "origins": [
+          "https://api.notion.com"
+        ]
+      },
+      "name": "folder-index",
+      "namespace": "example",
+      "version": "0.3.1",
+      "secrets": [],
+      "operations": []
+    }
+  },
+  {
+    "name": "v2 wasm extension exporting run",
+    "file": "v2-wasm-extension-run.json",
+    "serialized": {
+      "schemaVersion": 2,
+      "runtime": "wasip2/1",
+      "secrets": [],
+      "operations": [
+        {
+          "id": "list",
+          "method": "GET",
+          "url": "https://api.test/items",
+          "effect": "read"
+        }
+      ]
+    }
+  },
+  {
+    "name": "v2 js server extension with explicit classes",
+    "file": "v2-js-server-extension.json",
+    "serialized": {
+      "schemaVersion": 2,
+      "world": "server-extension",
+      "entrypoints": {
+        "classExtender": [
+          "https://atomicdata.dev/classes/Folder"
+        ]
+      },
+      "secrets": [],
+      "operations": []
+    }
+  },
+  {
+    "name": "v2 minimal",
+    "file": "v2-minimal.json",
+    "serialized": {
+      "schemaVersion": 2,
+      "secrets": [],
+      "operations": []
+    }
+  },
+  {
+    "name": "unknown version",
+    "file": "unknown-version.json",
+    "error": "unsupported manifest schemaVersion"
+  },
+  {
+    "name": "v1 unknown field",
+    "file": "v1-unknown-field.json",
+    "error": "unknown field"
+  },
+  {
+    "name": "v1 may not use v2 fields",
+    "file": "v1-with-v2-field.json",
+    "error": "unknown field"
+  },
+  {
+    "name": "v1 bad secret origin",
+    "file": "v1-bad-secret-origin.json",
+    "error": "secret origin must be"
+  },
+  {
+    "name": "v1 secret description not text",
+    "file": "v1-secret-description.json",
+    "error": "secret description must be text"
+  },
+  {
+    "name": "v1 duplicate operation",
+    "file": "v1-duplicate-operation.json",
+    "error": "operation IDs must be"
+  },
+  {
+    "name": "v1 unknown effect",
+    "file": "v1-unknown-effect.json",
+    "error": "operation effect must be"
+  },
+  {
+    "name": "v1 credentials URL",
+    "file": "v1-credentials-url.json",
+    "error": "operation URLs must be"
+  },
+  {
+    "name": "v2 unknown field",
+    "file": "v2-unknown-field.json",
+    "error": "unknown field"
+  },
+  {
+    "name": "v2 unknown runtime",
+    "file": "v2-unknown-runtime.json",
+    "error": "unknown variant"
+  },
+  {
+    "name": "v2 unknown world",
+    "file": "v2-unknown-world.json",
+    "error": "unknown variant"
+  },
+  {
+    "name": "v2 unknown capability",
+    "file": "v2-unknown-capability.json",
+    "error": "capability must be"
+  },
+  {
+    "name": "v2 capability with unknown field",
+    "file": "v2-capability-unknown-field.json",
+    "error": "capability must be"
+  },
+  {
+    "name": "v2 duplicate capability",
+    "file": "v2-duplicate-capability.json",
+    "error": "capabilities must be unique"
+  },
+  {
+    "name": "v2 extension may not declare classExtender",
+    "file": "v2-extension-with-classes.json",
+    "error": "world extension may not declare classExtender"
+  },
+  {
+    "name": "v2 js server extension needs classes",
+    "file": "v2-js-server-extension-no-classes.json",
+    "error": "world server-extension requires"
+  },
+  {
+    "name": "v2 empty classExtender",
+    "file": "v2-empty-classes.json",
+    "error": "classExtender must list"
+  },
+  {
+    "name": "v2 classExtender not a URL",
+    "file": "v2-classes-not-url.json",
+    "error": "classExtender entries must be class URLs"
+  },
+  {
+    "name": "v2 duplicate classExtender",
+    "file": "v2-duplicate-classes.json",
+    "error": "classExtender entries must be unique"
+  },
+  {
+    "name": "v2 view needs custom-view",
+    "file": "v2-view-without-capability.json",
+    "error": "view entrypoint requires the custom-view capability"
+  },
+  {
+    "name": "v2 view must stay in the package",
+    "file": "v2-view-traversal.json",
+    "error": "view entrypoint must be"
+  },
+  {
+    "name": "v2 entrypoints unknown field",
+    "file": "v2-entrypoints-unknown-field.json",
+    "error": "unknown field"
+  },
+  {
+    "name": "v2 network origin not exact",
+    "file": "v2-network-origin-path.json",
+    "error": "network origin must be"
+  },
+  {
+    "name": "v2 network origin with trailing slash",
+    "file": "v2-network-origin-slash.json",
+    "error": "network origin must be"
+  },
+  {
+    "name": "v2 duplicate network origin",
+    "file": "v2-network-origin-duplicate.json",
+    "error": "network origins must be unique"
+  },
+  {
+    "name": "v2 network unknown field",
+    "file": "v2-network-unknown-field.json",
+    "error": "unknown field"
+  },
+  {
+    "name": "v2 secret origin not exact",
+    "file": "v2-secret-origin-path.json",
+    "error": "secret origin must be"
+  },
+  {
+    "name": "v2 configSchema not an object",
+    "file": "v2-config-schema-not-object.json",
+    "error": "expected a map"
+  },
+  {
+    "name": "v2 defaultConfig not an object",
+    "file": "v2-default-config-not-object.json",
+    "error": "expected a map"
+  },
+  {
+    "name": "v2 name unsafe as a path",
+    "file": "v2-bad-name.json",
+    "error": "plugin name"
+  },
+  {
+    "name": "v2 namespace unsafe as a path",
+    "file": "v2-bad-namespace.json",
+    "error": "plugin namespace"
+  },
+  {
+    "name": "v2 action references undeclared operation",
+    "file": "v2-action-undeclared-operation.json",
+    "error": "action references an undeclared operation"
+  },
+  {
+    "name": "translated plugin.json (server extension)",
+    "file": "translated-notion-sync.json",
+    "serialized": {
+      "schemaVersion": 2,
+      "runtime": "wasip2/1",
+      "world": "server-extension",
+      "entrypoints": {
+        "classExtender": [
+          "https://atomicdata.dev/classes/Folder"
+        ]
+      },
+      "capabilities": [
+        {
+          "name": "storage",
+          "reason": "Caches page bodies"
+        },
+        "custom-view"
+      ],
+      "secrets": [],
+      "operations": [],
+      "network": {
+        "origins": [
+          "https://api.notion.com"
+        ],
+        "reason": "Reads pages from Notion"
+      },
+      "configSchema": {
+        "properties": {
+          "interval": {
+            "type": "integer"
+          },
+          "workspace": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "defaultConfig": {
+        "interval": 60,
+        "workspace": ""
+      },
+      "name": "notion-sync",
+      "namespace": "example",
+      "version": "2.1.0",
+      "description": "Mirrors Notion pages",
+      "author": "Ontola"
+    }
+  },
+  {
+    "name": "translated plugin.json (extension exporting run)",
+    "file": "translated-no-classes.json",
+    "serialized": {
+      "schemaVersion": 2,
+      "runtime": "wasip2/1",
+      "secrets": [],
+      "operations": [],
+      "name": "hello",
+      "namespace": "example",
+      "version": "0.1.0"
+    }
+  }
+]

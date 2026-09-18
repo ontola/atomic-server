@@ -192,12 +192,22 @@ export {
 } from './plugin-app.js';
 export {
   parseManifest,
+  resolveManifest,
   validateManifest,
+  type CapabilityName,
+  type DeclaredAction,
+  type DeclaredCapability,
+  type DeclaredEntrypoints,
+  type DeclaredNetwork,
   type DeclaredOperation,
   secretsMentionedIn,
   originsMentionedIn,
   type DeclaredSecret,
+  type ManifestRuntime,
+  type ManifestWorld,
   type PluginManifest,
+  type PluginManifestV2,
+  type ResolvedManifest,
 } from './plugin-manifest.js';
 export { describePlugin } from './plugin-runner.js';
 

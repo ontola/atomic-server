@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "operations": [
+    {
+      "id": "list",
+      "method": "GET",
+      "url": "https://api.test/items",
+      "effect": "read"
+    }
+  ]
+}

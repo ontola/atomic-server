@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   originsMentionedIn,
   parseManifest,
+  resolveManifest,
   secretsMentionedIn,
 } from './plugin-manifest.js';
 
@@ -131,20 +132,56 @@ describe('originsMentionedIn', () => {
 });
 
 describe('versioned manifest conformance', () => {
-  const cases = JSON.parse(
-    readFileSync(
-      new URL('../../../testdata/plugin-manifests.json', import.meta.url),
-      'utf8',
-    ),
-  );
+  // Shared with server/src/plugins/manifest.rs; both sides must agree on
+  // acceptance, the error and the canonical serialized form.
+  const fixture = (name: string) =>
+    JSON.parse(
+      readFileSync(
+        new URL(`../../../testdata/plugin-manifest/${name}`, import.meta.url),
+        'utf8',
+      ),
+    );
+  const cases: {
+    name: string;
+    file: string;
+    error?: string;
+    serialized?: unknown;
+  }[] = fixture('index.json');
 
-  for (const fixture of cases) {
-    it(fixture.name, () => {
-      if (fixture.valid)
-        expect(() => validateManifest(fixture.manifest)).not.toThrow();
-      else expect(() => validateManifest(fixture.manifest)).toThrow();
+  for (const entry of cases) {
+    it(entry.name, () => {
+      const raw = fixture(entry.file);
+      if (entry.error !== undefined) {
+        expect(() => validateManifest(raw)).toThrow(entry.error);
+      } else {
+        const manifest = validateManifest(raw);
+        if (entry.serialized !== undefined)
+          expect(manifest).toEqual(entry.serialized);
+      }
     });
   }
+
+  it('upgrades a version-one manifest with the JS runtime and a run entrypoint', () => {
+    expect(
+      resolveManifest(validateManifest(fixture('v1-public-read.json'))),
+    ).toEqual({
+      runtime: 'atomic-js/1',
+      world: 'extension',
+      entrypoints: { run: true },
+      capabilities: [],
+      network: { origins: [] },
+    });
+    const wasm = resolveManifest(
+      validateManifest(fixture('v2-wasm-server-extension.json')),
+    );
+    expect(wasm.runtime).toBe('wasip2/1');
+    expect(wasm.world).toBe('server-extension');
+    expect(wasm.entrypoints.run).toBe(false);
+    expect(wasm.capabilities.map(c => c.name)).toEqual([
+      'full-drive-access',
+      'custom-view',
+    ]);
+  });
 });
 
 it('validates action schemas and operation references without extending capabilities', () => {

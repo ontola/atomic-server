@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 2,
+  "runtime": "wasip2/1",
+  "world": "server-extension",
+  "entrypoints": {
+    "classExtender": [
+      "https://atomicdata.dev/classes/Folder"
+    ]
+  },
+  "capabilities": [
+    {
+      "name": "storage",
+      "reason": "Caches page bodies"
+    },
+    "custom-view"
+  ],
+  "secrets": [],
+  "operations": [],
+  "network": {
+    "origins": [
+      "https://api.notion.com"
+    ],
+    "reason": "Reads pages from Notion"
+  },
+  "configSchema": {
+    "properties": {
+      "interval": {
+        "type": "integer"
+      },
+      "workspace": {
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "defaultConfig": {
+    "interval": 60,
+    "workspace": ""
+  },
+  "name": "notion-sync",
+  "namespace": "example",
+  "version": "2.1.0",
+  "description": "Mirrors Notion pages",
+  "author": "Ontola"
+}
