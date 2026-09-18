@@ -13,6 +13,7 @@ import ValueComp from '@components/ValueComp';
 import { InputStyled } from '@components/forms/InputStyles';
 import { useResourceContextMenu } from '@components/ResourceContextMenu/ResourceContextMenuContext';
 import { RemoteCellPresence, TablePresenceContext } from '../TablePresence';
+import { columnLabel } from '../helpers/columnLabel';
 import { useCardFlip } from './cardFlip';
 
 interface KanbanCardProps {
@@ -199,6 +200,12 @@ function CardField({
   resource: ReturnType<typeof useResource>;
 }): JSX.Element | null {
   const property = useProperty(field.subject);
+  // The property's own resource, for the name someone gave it. `useProperty`
+  // reads the same resource but carries only the shortname, so a card used to
+  // label a field `pet-species` while the table's heading for it said
+  // `Species` — and, before the property had loaded, `loading`.
+  const propResource = useResource(field.subject);
+  const [title] = useTitle(propResource);
   const value = resource.get(field.subject);
 
   if (value === undefined || value === null || value === '') {
@@ -207,7 +214,9 @@ function CardField({
 
   return (
     <FieldRow>
-      <FieldLabel>{property.shortname ?? field.subject}</FieldLabel>
+      <FieldLabel>
+        {columnLabel(title, property.shortname ?? field.subject)}
+      </FieldLabel>
       <FieldValue>
         <ValueComp datatype={property.datatype} value={value} />
       </FieldValue>
