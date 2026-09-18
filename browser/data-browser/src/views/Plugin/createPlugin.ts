@@ -1,6 +1,5 @@
 import type { PluginMetadata } from '@chunks/Plugins/plugins';
 import {
-  core,
   server,
   useStore,
   type JSONValue,
@@ -10,56 +9,15 @@ import {
 import toast from 'react-hot-toast';
 import { useCustomViews } from '@components/CustomViewProvider';
 
-interface CreatePluginProps {
-  metadata: PluginMetadata;
-  config: JSONValue;
-  file: File;
-  drive: Resource<Server.Drive>;
-}
-
+/**
+ * Maintenance of `Plugin` resources that were installed by zip upload before
+ * releases existed. New installs go through `installRelease` (an
+ * `Installation` pinned to a published release); see
+ * `chunks/Plugins/NewPluginButton.tsx`.
+ */
 export function useCreatePlugin() {
   const store = useStore();
   const { refresh: refreshCustomViews } = useCustomViews();
-
-  const createPluginResource = async ({
-    metadata,
-    file,
-    drive,
-    config,
-  }: CreatePluginProps): Promise<Resource<Server.Plugin>> => {
-    const plugin = await store.newResource({
-      isA: server.classes.plugin,
-      parent: drive.subject,
-      propVals: {
-        [core.properties.name]: metadata.name,
-        [server.properties.namespace]: metadata.namespace,
-        [server.properties.version]: metadata.version,
-        [server.properties.config]: config,
-      },
-    });
-
-    await plugin.save();
-
-    const [fileSubject] = await store.uploadFiles([file], plugin.subject);
-
-    // Setting the file triggers the installation on the server.
-    await plugin.set(server.properties.pluginFile, fileSubject);
-
-    await plugin.save();
-    await plugin.refresh();
-
-    // We refresh the resource so we can see the dynamic plugin-agent property that was added by the server.
-
-    return plugin;
-  };
-
-  const addPluginToDrive = async (
-    plugin: Resource<Server.Plugin>,
-    drive: Resource<Server.Drive>,
-  ): Promise<void> => {
-    drive.push(server.properties.plugins, [plugin.subject], true);
-    await drive.save();
-  };
 
   const uninstallPlugin = async (
     plugin: Resource<Server.Plugin>,
@@ -110,8 +68,6 @@ export function useCreatePlugin() {
   };
 
   return {
-    createPluginResource,
-    addPluginToDrive,
     uninstallPlugin,
     updatePlugin,
   };
