@@ -394,6 +394,17 @@ export interface IncomingChange {
 const supportsWebSockets = () => typeof WebSocket !== 'undefined';
 /** Subjects per GET_MANY frame; keeps one answer well under a single large frame. */
 const GET_MANY_CHUNK = 200;
+/** Subjects per local-database read. The worker walks the list serially and a
+ *  follower tab's read also crosses a BroadcastChannel hop with a fixed
+ *  timeout, so one very large batch is split instead of sent whole. */
+const LOCAL_HYDRATION_CHUNK = GET_MANY_CHUNK;
+
+/** One caller's pending local-database read; see `Store.hydrateFromLocalDb`. */
+interface LocalHydrationRequest {
+  promise: Promise<boolean | undefined>;
+  resolve: (hydrated: boolean | undefined) => void;
+  reject: (error: unknown) => void;
+}
 
 /**
  * How long resource fallback and collection reads wait for the app's
@@ -3032,15 +3043,6 @@ export class Store {
   }
 
   /**
-   * Try the local WASM DB (OPFS) for a persisted copy of `subject` and hydrate
-   * the store from it.
-   *
-   * @returns `true` when a local copy hydrated into something renderable,
-   *   `false` when the database was asked and does not have it, and
-   *   `undefined` when there was no database to ask — callers must not read
-   *   that silence as "not stored locally".
-   */
-  /**
    * True when the resource carries enough state to stand on its own: a
    * class, or any property beyond the server-managed skeleton
    * (drive/parent/lastCommit/createdAt) that `rebuildCacheFromLoro`
@@ -3057,10 +3059,118 @@ export class Store {
       .some(([prop]) => !SERVER_MANAGED_SKELETON_PROPS.has(prop));
   }
 
-  private async hydrateFromLocalDb(
-    subject: string,
-  ): Promise<boolean | undefined> {
-    return (await this.hydrateManyFromLocalDb([subject]))?.[0];
+  /** Local-database reads asked for since the last flush, one entry per
+   *  subject. A subject asked for twice before the flush shares the entry. */
+  private _pendingLocalHydration = new Map<string, LocalHydrationRequest>();
+
+  /** Subject → promise of a flushed read that still awaits the worker. */
+  private _inFlightLocalHydration = new Map<
+    string,
+    Promise<boolean | undefined>
+  >();
+
+  /** Set from the first request of a batch until that batch is handed to the
+   *  worker, so one flush is queued per batch and no more. */
+  private _localHydrationFlushQueued = false;
+
+  /**
+   * Try the local WASM DB (OPFS) for a persisted copy of `subject` and hydrate
+   * the store from it.
+   *
+   * Every `useResource` that misses the in-memory cache lands here, from
+   * inside React's render. One worker round trip per subject made a cold page
+   * with many resources slow: each `postMessage` costs milliseconds, queues
+   * behind sync traffic, and in a follower tab crosses a BroadcastChannel
+   * hop as well. So a call does not read at once. It joins the pending batch
+   * and the batch is read in one {@link hydrateManyFromLocalDb} call from a
+   * microtask — after the synchronous render pass that issued it. React
+   * renders a default-lane update in one task, so a whole cold mount is one
+   * round trip; a time-sliced (transition) render becomes one round trip per
+   * slice rather than per resource. A microtask beats `setTimeout(0)` here:
+   * that would put a timer clamp on every cold read, and `notify` already
+   * relies on a microtask being enough to leave the render phase.
+   *
+   * A subject that is pending or in flight reuses the existing read.
+   *
+   * @returns `true` when a local copy hydrated into something renderable,
+   *   `false` when the database was asked and does not have it, and
+   *   `undefined` when there was no database to ask — callers must not read
+   *   that silence as "not stored locally".
+   */
+  private hydrateFromLocalDb(subject: string): Promise<boolean | undefined> {
+    const inFlight = this._inFlightLocalHydration.get(subject);
+    if (inFlight) return inFlight;
+
+    const pending = this._pendingLocalHydration.get(subject);
+    if (pending) return pending.promise;
+
+    let resolve!: LocalHydrationRequest['resolve'];
+    let reject!: LocalHydrationRequest['reject'];
+    const promise = new Promise<boolean | undefined>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    this._pendingLocalHydration.set(subject, { promise, resolve, reject });
+
+    if (!this._localHydrationFlushQueued) {
+      this._localHydrationFlushQueued = true;
+      queueMicrotask(() => void this.flushLocalHydration());
+    }
+
+    return promise;
+  }
+
+  /**
+   * Hand the pending batch to the worker and settle each caller's promise
+   * with its own answer. A worker failure resolves every subject of the
+   * chunk to `false` inside `hydrateManyFromLocalDb`, exactly as the
+   * single-subject read did; only an unexpected throw rejects the callers.
+   */
+  private async flushLocalHydration(): Promise<void> {
+    // Hold the batch open while the database initializes. A reload mounts its
+    // resources before the worker is ready, and everything asked for in that
+    // window should ride the one round trip that follows.
+    if (this.clientDb) await this.clientDb.waitForInit();
+
+    const batch = this._pendingLocalHydration;
+    this._pendingLocalHydration = new Map();
+    this._localHydrationFlushQueued = false;
+
+    for (const [subject, request] of batch) {
+      this._inFlightLocalHydration.set(subject, request.promise);
+    }
+
+    const subjects = [...batch.keys()];
+    const chunks: string[][] = [];
+
+    for (let i = 0; i < subjects.length; i += LOCAL_HYDRATION_CHUNK) {
+      chunks.push(subjects.slice(i, i + LOCAL_HYDRATION_CHUNK));
+    }
+
+    await Promise.all(
+      chunks.map(async chunk => {
+        try {
+          const hydrated = await this.hydrateManyFromLocalDb(chunk);
+
+          chunk.forEach((subject, index) =>
+            batch.get(subject)!.resolve(hydrated?.[index]),
+          );
+        } catch (e) {
+          for (const subject of chunk) batch.get(subject)!.reject(e);
+        } finally {
+          // Before any caller resumes (their continuations are microtasks),
+          // so a re-ask after this answer is a fresh read, not this one.
+          for (const subject of chunk) {
+            if (
+              this._inFlightLocalHydration.get(subject) ===
+              batch.get(subject)!.promise
+            ) {
+              this._inFlightLocalHydration.delete(subject);
+            }
+          }
+        }
+      }),
+    );
   }
 
   /**
