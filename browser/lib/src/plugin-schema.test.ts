@@ -144,4 +144,80 @@ describe('ensureSchema', () => {
     const second = await ensureSchema(store, DRIVE, pluginLikeSpec);
     expect(second).toEqual(first);
   });
+
+  it('creates independent terms together rather than one round trip each', async () => {
+    const store = makeStore();
+
+    let inFlight = 0;
+    let peak = 0;
+
+    const slow = async () => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise(resolve => setTimeout(resolve, 5));
+      inFlight--;
+    };
+
+    const create = store.newResource;
+    store.newResource = vi.fn(async opts => {
+      await slow();
+
+      return create(opts);
+    });
+    store.findByLocalId = vi.fn(async () => {
+      await slow();
+
+      return undefined;
+    });
+
+    const spec: SchemaSpec = {
+      properties: Array.from({ length: 6 }, (_, i) => ({
+        shortname: `field-${i}`,
+        name: `Field ${i}`,
+        description: 'A field.',
+        datatype: Datatype.STRING,
+      })),
+      classes: [],
+    };
+
+    const terms = await ensureSchema(store, DRIVE, spec);
+
+    expect(Object.keys(terms.properties)).toHaveLength(6);
+    // Sequentially this never rises above one, and a six-property schema costs
+    // twelve round trips before the user sees anything.
+    expect(peak).toBe(6);
+  });
+
+  it('keeps the ontology list in spec order however the creates finish', async () => {
+    const store = makeStore();
+    const create = store.newResource;
+    store.newResource = vi.fn(async opts => {
+      // Later specs finish first: the last one waits the least.
+      const shortname = String(opts.propVals[core.properties.shortname]);
+      const delay = 20 - Number(shortname.split('-')[1]) * 5;
+      await new Promise(resolve => setTimeout(resolve, delay));
+
+      return create(opts);
+    });
+
+    const spec: SchemaSpec = {
+      properties: Array.from({ length: 4 }, (_, i) => ({
+        shortname: `field-${i}`,
+        name: `Field ${i}`,
+        description: 'A field.',
+        datatype: Datatype.STRING,
+      })),
+      classes: [],
+    };
+
+    const terms = await ensureSchema(store, DRIVE, spec);
+    const listed = store.world[ONTOLOGY].props[core.properties.properties];
+
+    expect(listed).toEqual([
+      terms.properties['field-0'],
+      terms.properties['field-1'],
+      terms.properties['field-2'],
+      terms.properties['field-3'],
+    ]);
+  });
 });

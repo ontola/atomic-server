@@ -74,8 +74,8 @@ silently take over the old plugin tables.
   are isolated by proxy origin; switching back restores that proxy’s connections.
   HTTPS or loopback HTTP origins only. **Reset to default** uses the deployment’s
   `VITE_INTEGRATION_PROXY_URL`, or `https://localthought.io` when unset.
-- Existing bundled GitHub, Notion, Clockify and MT940 plugins remain available
-  independently. Proxy cards have an accent border and a “Via integration proxy” label.
+- Existing bundled GitHub, Notion and MT940 plugins remain available
+  independently. Clockify is a LocalThought lens (`integrations/clockify/`). Proxy cards have an accent border and a “Via integration proxy” label.
 - Deploy the companion integration-proxy CORS change. It handles preflights for
   explicit Authorization headers and exposes `X-Connection-Code`, `Link`,
   pagination/count headers, `ETag` and `Retry-After`. Cookie credentials are not
@@ -198,6 +198,30 @@ test checks conditional headers alongside rotating credentials.
 `calendar.test.ts` exercises mixed dates, offset boundaries, exclusive ends,
 recurrence/attendee notes, cancellations, malformed starts, cross-calendar
 identity and repeated imports with private local fields.
+
+## Todoist tasks lens
+
+The `devonian-todoist` catalog entry connects the proxy's `todoist` platform
+through the same generic flow, with a read-only Devonian lens
+(`todoist.ts`) on the way in. The proxy's Todoist catalog only grants
+`data:read`, so the lens has no write direction and the folder's Sync panel
+has no "preview edits" step: closing, editing or creating an issue locally
+is never sent to Todoist.
+
+Syncables names a record after `title`, `summary` or `name`; a Todoist task
+has none of those, so the lens names each row after its `content`. It adds
+three projected columns beside the provider's own fields: `done` (from
+`checked`), `due-day` (from `due.date` or the day of `due.datetime`) and
+`priority-label` (Normal / Medium / High / Urgent). The tasks table opens in
+the Issues view, split open/closed by `done`, with the plain table one tab
+over; the same `due-day` column also works as a Calendar view's date.
+
+Installation records the lens as `extension: 'tasks'` and identity suffix
+`:devonian-tasks`. A Todoist folder installed from the raw proxy card
+(`proxy:todoist`, `extension: 'none'`) stays a plain import; the lens is
+never implied for an existing installation. `todoist.test.ts` covers the
+projection; the OAuth connection itself is checked manually against the live
+proxy, as for the other platforms.
 
 ## Browser-only Calendar regression
 

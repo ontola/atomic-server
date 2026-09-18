@@ -8,5 +8,5 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["model.ts", "plugin.ts"]
+  "include": ["localthought.ts"]
 }

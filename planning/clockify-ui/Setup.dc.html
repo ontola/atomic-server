@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Connect Clockify setup</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Open Sans','Helvetica Neue','Segoe UI',sans-serif;background:#ffffff;color:#111111}
+a{color:#1b50d8}a:hover{color:#143d9f}
+button,input,select{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 720px; height: 800px; box-sizing: border-box; display: flex; flex-direction: column; background: #ffffff; border: 1px solid #e3e3e3; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.12); overflow: hidden; font-size: 14px;">
+
+  <!-- Header -->
+  <div style="display: flex; align-items: center; gap: 12px; padding: 24px 28px 0 28px;">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1b50d8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6"/><path d="M12 2v3"/></svg>
+    <h1 style="margin: 0; flex-grow: 1; font-family: 'Montserrat', sans-serif; font-size: 20px; font-weight: 700;">Connect Clockify</h1>
+    <button aria-label="Close" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #5c5c5c; cursor: pointer;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6 6 18"/></svg>
+    </button>
+  </div>
+
+  <!-- Stepper -->
+  <div style="display: flex; align-items: center; gap: 0; padding: 20px 28px 0 28px;">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: #2e9e5b; color: #ffffff;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg></span>
+      <span style="font-size: 13px; font-weight: 600; color: #1d6b3a;">API key</span>
+    </div>
+    <span style="flex-grow: 1; height: 2px; margin: 0 12px; background: #2e9e5b;"></span>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: #1b50d8; color: #ffffff; font-size: 13px; font-weight: 700;">2</span>
+      <span style="font-size: 13px; font-weight: 700; color: #1b50d8;">Choose what to sync</span>
+    </div>
+    <span style="flex-grow: 1; height: 2px; margin: 0 12px; background: #e3e3e3;"></span>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: #f2f2f2; color: #5c5c5c; font-size: 13px; font-weight: 700;">3</span>
+      <span style="font-size: 13px; font-weight: 600; color: #5c5c5c;">Review import</span>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div style="display: flex; flex-direction: column; gap: 20px; padding: 24px 28px; flex-grow: 1;">
+
+    <!-- Connected account -->
+    <div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 9px; background: #edf8f0;">
+      <span style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: #1d6b3a; color: #ffffff; font-size: 13px; font-weight: 700;">MJ</span>
+      <div style="display: flex; flex-direction: column; flex-grow: 1;">
+        <span style="font-weight: 700; color: #111111;">Michiel de Jong</span>
+        <span style="font-size: 12px; color: #4a7a5a;">Connected · key stored on your AtomicServer, read access only</span>
+      </div>
+      <button style="height: 32px; padding: 0 12px; border: 1px solid #b9dcc5; border-radius: 6px; background: #ffffff; color: #1d6b3a; font-size: 12px; font-weight: 600; cursor: pointer;">Change key</button>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px;">
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <label for="setup-workspace" style="font-size: 12px; font-weight: 600; color: #5c5c5c;">Workspace</label>
+        <select id="setup-workspace" style="height: 40px; padding: 0 12px; border: 1px solid #cccccc; border-radius: 9px; background: #ffffff; font-size: 14px; color: #111111;">
+          <option>Ontola</option>
+          <option>Personal</option>
+        </select>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <label for="setup-table" style="font-size: 12px; font-weight: 600; color: #5c5c5c;">Sync into</label>
+        <select id="setup-table" style="height: 40px; padding: 0 12px; border: 1px solid #cccccc; border-radius: 9px; background: #ffffff; font-size: 14px; color: #111111;">
+          <option>New Time Tracker table</option>
+          <option>Hours 2026 (existing table)</option>
+        </select>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <label for="setup-range" style="font-size: 12px; font-weight: 600; color: #5c5c5c;">Entries from</label>
+        <select id="setup-range" style="height: 40px; padding: 0 12px; border: 1px solid #cccccc; border-radius: 9px; background: #ffffff; font-size: 14px; color: #111111;">
+          <option>Past 7 days</option>
+          <option>Past 30 days</option>
+          <option>Custom range…</option>
+        </select>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <label for="setup-projects" style="font-size: 12px; font-weight: 600; color: #5c5c5c;">Projects</label>
+        <select id="setup-projects" style="height: 40px; padding: 0 12px; border: 1px solid #cccccc; border-radius: 9px; background: #ffffff; font-size: 14px; color: #111111;">
+          <option>All projects (4)</option>
+          <option>Choose…</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Direction -->
+    <fieldset style="margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 8px;">
+      <legend style="padding: 0; margin-bottom: 8px; font-size: 12px; font-weight: 600; color: #5c5c5c;">Direction</legend>
+      <label style="display: flex; gap: 12px; padding: 12px 14px; border: 1px solid #cccccc; border-radius: 9px; cursor: pointer;">
+        <input type="radio" name="direction" style="margin: 3px 0 0 0; accent-color: #1b50d8;">
+        <span style="display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-weight: 700;">Import only</span>
+          <span style="font-size: 13px; color: #5c5c5c;">Clockify is the source of truth. Entries here update when Clockify changes; local edits are kept but never sent back.</span>
+        </span>
+      </label>
+      <label style="display: flex; gap: 12px; padding: 12px 14px; border: 2px solid #1b50d8; border-radius: 9px; background: #f0f4fd; cursor: pointer;">
+        <input type="radio" name="direction" checked style="margin: 3px 0 0 0; accent-color: #1b50d8;">
+        <span style="display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-weight: 700;">Two-way sync</span>
+          <span style="font-size: 13px; color: #3f3f3f;">Timers you start and edits you make here are pushed to Clockify on each run. Changes on both sides are shown as conflicts for you to resolve. Nothing is deleted without asking.</span>
+        </span>
+      </label>
+    </fieldset>
+
+    <p style="margin: 0; font-size: 13px; color: #5c5c5c;">Description, start/end, project, billable and tags are synced. Tasks, hourly rates and custom fields are not. Every run runs hourly and shows you the proposed changes before they are applied. <a href="#mapping">See field mapping</a></p>
+  </div>
+
+  <!-- Footer -->
+  <div style="display: flex; align-items: center; gap: 8px; padding: 14px 28px; border-top: 1px solid #e3e3e3; background: #fafafa;">
+    <button style="height: 36px; padding: 0 14px; border: 1px solid #cccccc; border-radius: 9px; background: #ffffff; color: #111111; font-size: 13px; font-weight: 600; cursor: pointer;">Back</button>
+    <div style="flex-grow: 1;"></div>
+    <button style="height: 36px; padding: 0 16px; border: 0; border-radius: 9px; background: #1b50d8; color: #ffffff; font-size: 13px; font-weight: 600; cursor: pointer;">Preview import (23 entries)</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":720,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

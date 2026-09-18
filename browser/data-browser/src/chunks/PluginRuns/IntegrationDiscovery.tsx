@@ -5,17 +5,18 @@ import { Column } from '@components/Row';
 import { Button } from '@components/Button';
 import { Dialog, useDialog } from '@components/Dialog';
 import { IntegrationEvidence } from './IntegrationEvidence';
-import { googleCalendarIntegration } from '@localthought/atomic-integrations/ui/GoogleCalendar';
+import { clockifyIntegration } from './ClockifyLocalThought';
 import { useIntegrationProxy } from '@helpers/integrationProxy';
 import { useLocalThoughtCompletedPlatform } from './localThoughtCallback';
 import { isCatalogVisible, type CatalogEntry } from './pluginCatalog';
+import {
+  googleCalendarLens,
+  todoistIntegration,
+  type LocalThoughtExtension,
+} from './localThoughtExtension';
 
 const NotionSetup = lazy(() =>
   import('./ConnectNotion').then(m => ({ default: m.ConnectNotion })),
-);
-
-const ClockifySetup = lazy(() =>
-  import('./ConnectClockify').then(m => ({ default: m.ConnectClockify })),
 );
 
 const MT940Setup = lazy(() =>
@@ -44,15 +45,17 @@ type BundledIntegration = {
   requiresApiPlugins?: boolean;
   platform?: string;
   callbackPlatform?: string;
-  extension?: typeof googleCalendarIntegration;
+  extension?: LocalThoughtExtension;
 };
 
 // The one field a catalog.json entry can't hold: a live reference to the
 // LocalThought extension module that customizes that platform's setup lens.
 // Everything else about a bundled integration's card is data, sourced from
 // catalog.json; this is code, so it stays here, keyed by the same shortname.
-const EXTENSIONS: Partial<Record<string, typeof googleCalendarIntegration>> = {
-  'devonian-google-calendar': googleCalendarIntegration,
+const EXTENSIONS: Partial<Record<string, LocalThoughtExtension>> = {
+  'devonian-google-calendar': googleCalendarLens,
+  'devonian-todoist': todoistIntegration,
+  clockify: clockifyIntegration,
 };
 
 function toBundledIntegration(
@@ -148,7 +151,7 @@ export function IntegrationDiscovery({
           <>
             {!entry.platform && (
               <IntegrationEvidence
-                id={entry.id as 'mt940' | 'clockify' | 'notion' | 'pets'}
+                id={entry.id as 'mt940' | 'notion' | 'pets'}
               />
             )}
             <Button disabled={!drive} onClick={show}>
@@ -178,8 +181,6 @@ export function IntegrationDiscovery({
                 <PetsSetup drive={drive} />
               ) : entry.id === 'mt940' ? (
                 <MT940Setup drive={drive} />
-              ) : entry.id === 'clockify' ? (
-                <ClockifySetup drive={drive} workspace={workspace} />
               ) : (
                 <NotionSetup drive={drive} />
               ))}

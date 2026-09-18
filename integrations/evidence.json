@@ -1,53 +1,12 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-18T12:38:38.722Z",
+  "generatedAt": "2026-09-18T15:02:13.946Z",
   "layer": "all",
   "live": {
     "status": "not-run",
     "reason": "Offline certification never authorizes or runs provider writes"
   },
   "integrations": [
-    {
-      "id": "clockify",
-      "version": "0.1.0",
-      "owner": "Ontola",
-      "support": "experimental",
-      "apiVersion": "v1",
-      "declaredCapabilities": [
-        "completed-entries:import",
-        "projects:import",
-        "person:import"
-      ],
-      "bundleSha256": "e669e6c3bd3f2b2f67eda7d6b1be62ab0cf70ca3fe82e00f90caa1f194b2f50d",
-      "checks": [
-        {
-          "name": "reproducible-bundle",
-          "status": "passed"
-        },
-        {
-          "name": "typecheck",
-          "status": "passed"
-        },
-        {
-          "name": "fixtures",
-          "status": "passed"
-        },
-        {
-          "name": "plugins::clockify_tests::completed_entries_are_proposals_in_the_real_sandbox",
-          "status": "passed"
-        },
-        {
-          "name": "plugins::clockify_tests::discovery_runs_in_the_real_sandbox_and_minimizes_output",
-          "status": "passed"
-        }
-      ],
-      "status": "passed",
-      "fixtureCounts": {
-        "passed": 18,
-        "skipped": 0,
-        "failed": 0
-      }
-    },
     {
       "id": "github-issues",
       "version": "0.1.0",
@@ -139,11 +98,11 @@
       "version": "0.1.0",
       "owner": "Ontola",
       "support": "experimental",
-      "apiVersion": "MT940 subset",
+      "apiVersion": "MT940 subset, camt.053 subset",
       "declaredCapabilities": [
         "bank-statements:import"
       ],
-      "bundleSha256": "39c76cd8b536e4a7e1eb170483a47a99fea1d75ba755548befe96d8d5e9c231a",
+      "bundleSha256": "2182af61007960de073434407a0e683b8c43473c8a85e3a939a545550d16419d",
       "checks": [
         {
           "name": "reproducible-bundle",
@@ -160,11 +119,15 @@
         {
           "name": "plugins::bank_statement_tests::bank_statement_proposes_exact_nested_transactions",
           "status": "passed"
+        },
+        {
+          "name": "plugins::bank_statement_tests::camt_statement_proposes_the_same_nested_transactions",
+          "status": "passed"
         }
       ],
       "status": "passed",
       "fixtureCounts": {
-        "passed": 9,
+        "passed": 15,
         "skipped": 0,
         "failed": 0
       }

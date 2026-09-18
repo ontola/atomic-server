@@ -147,7 +147,7 @@
     ],
     "https://atomicdata.dev/properties/shortname": "devonian-github-issues",
     "https://atomicdata.dev/integrations/properties/experimental": true,
-    "https://atomicdata.dev/integrations/properties/enabled": false,
+    "https://atomicdata.dev/integrations/properties/enabled": true,
     "https://atomicdata.dev/properties/name": "GitHub issues and comments (Devonian)",
     "https://atomicdata.dev/properties/emoji": "🐙",
     "https://atomicdata.dev/properties/description": "Connect a GitHub repository to a local issue tracker.",
@@ -164,7 +164,7 @@
     ],
     "https://atomicdata.dev/properties/shortname": "devonian-google-calendar",
     "https://atomicdata.dev/integrations/properties/experimental": true,
-    "https://atomicdata.dev/integrations/properties/enabled": false,
+    "https://atomicdata.dev/integrations/properties/enabled": true,
     "https://atomicdata.dev/properties/name": "Google Calendar (Devonian)",
     "https://atomicdata.dev/properties/emoji": "🗓️",
     "https://atomicdata.dev/properties/description": "Import Google Calendar events into calendar views.",
@@ -177,36 +177,73 @@
     "https://atomicdata.dev/integrations/properties/pluginUrl": "https://github.com/localthought/devonian"
   },
   {
+    "https://atomicdata.dev/properties/localId": "devonian-todoist",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/shortname": "devonian-todoist",
+    "https://atomicdata.dev/integrations/properties/experimental": true,
+    "https://atomicdata.dev/integrations/properties/enabled": true,
+    "https://atomicdata.dev/properties/name": "Todoist (Devonian)",
+    "https://atomicdata.dev/properties/emoji": "✅",
+    "https://atomicdata.dev/properties/description": "Bring your Todoist projects and tasks into a local issue tracker.",
+    "https://atomicdata.dev/integrations/properties/capabilities": "Imports active tasks and projects. Tasks open in the Issues view with their title, due day and priority; checked tasks show as closed.",
+    "https://atomicdata.dev/integrations/properties/events": "Connect through LocalThought, then Sync now (and every five minutes while the folder is open) to pull the latest tasks.",
+    "https://atomicdata.dev/integrations/properties/limitation": "Read only: the proxy's Todoist access is data:read, so closing, editing or creating a task here is not sent to Todoist. Completed tasks are only included while Todoist still returns them as active.",
+    "https://atomicdata.dev/integrations/properties/keywords": "todoist tasks todo projects devonian lens local tracker issues",
+    "https://atomicdata.dev/integrations/properties/requires-api-plugins": true,
+    "https://atomicdata.dev/integrations/properties/platform": "todoist"
+  },
+  {
     "@id": "https://atomicdata.dev/integrations/catalog/mt940",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
     ],
     "https://atomicdata.dev/properties/shortname": "mt940",
     "https://atomicdata.dev/integrations/properties/experimental": true,
-    "https://atomicdata.dev/integrations/properties/enabled": false,
+    "https://atomicdata.dev/integrations/properties/enabled": true,
     "https://atomicdata.dev/properties/name": "Bank statements",
     "https://atomicdata.dev/properties/emoji": "🏦",
-    "https://atomicdata.dev/properties/description": "Import bank transactions from bunq and other MT940 exports.",
+    "https://atomicdata.dev/properties/description": "Import bank transactions from MT940 and camt.053 statement exports.",
     "https://atomicdata.dev/integrations/properties/capabilities": "Preview exact amounts, dates, account references and original descriptions in a Bank transactions table.",
-    "https://atomicdata.dev/integrations/properties/events": "Upload a statement when you need it. No bank token required.",
-    "https://atomicdata.dev/integrations/properties/limitation": "MT940 files only, up to 500 transactions and 512 KB. No payment initiation or live bank sync. Bank-specific formats may need additional support.",
-    "https://atomicdata.dev/integrations/properties/keywords": "bank bunq banking finance accounting statement mt940 import swift"
+    "https://atomicdata.dev/integrations/properties/events": "Upload an MT940 or camt.053 statement when you need it. No bank token required.",
+    "https://atomicdata.dev/integrations/properties/limitation": "MT940 (up to 512 KB) and camt.053 XML (up to 5 MB) files only, up to 500 transactions. No payment initiation or live bank sync. Bank-specific formats may need additional support.",
+    "https://atomicdata.dev/integrations/properties/keywords": "bank bunq banking finance accounting statement mt940 camt camt.053 iso20022 xml sepa import swift"
   },
   {
-    "@id": "https://atomicdata.dev/integrations/catalog/clockify",
+    "https://atomicdata.dev/properties/localId": "moneybird",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/shortname": "moneybird",
+    "https://atomicdata.dev/integrations/properties/experimental": true,
+    "https://atomicdata.dev/integrations/properties/enabled": true,
+    "https://atomicdata.dev/properties/name": "Moneybird",
+    "https://atomicdata.dev/properties/emoji": "🐦",
+    "https://atomicdata.dev/properties/description": "Import your Moneybird administration's bookkeeping records.",
+    "https://atomicdata.dev/integrations/properties/capabilities": "Imports contacts, sales invoices, purchase invoices, financial mutations and the other collections Moneybird publishes for an administration into typed tables.",
+    "https://atomicdata.dev/integrations/properties/events": "Connect through LocalThought, pick an administration, then records refresh whenever the folder is open.",
+    "https://atomicdata.dev/integrations/properties/limitation": "Read-only: nothing is written back to Moneybird. One administration per installation. Keep the browser open to sync.",
+    "https://atomicdata.dev/integrations/properties/keywords": "moneybird bookkeeping accounting invoices contacts ledger finance administration localthought",
+    "https://atomicdata.dev/integrations/properties/requires-api-plugins": true,
+    "https://atomicdata.dev/integrations/properties/platform": "moneybird"
+  },
+  {
+    "https://atomicdata.dev/properties/localId": "clockify",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
     ],
     "https://atomicdata.dev/properties/shortname": "clockify",
     "https://atomicdata.dev/integrations/properties/experimental": true,
-    "https://atomicdata.dev/integrations/properties/enabled": false,
+    "https://atomicdata.dev/integrations/properties/enabled": true,
     "https://atomicdata.dev/properties/name": "Clockify",
     "https://atomicdata.dev/properties/emoji": "⏱️",
-    "https://atomicdata.dev/properties/description": "Bring your completed work into the Time Tracker.",
-    "https://atomicdata.dev/integrations/properties/capabilities": "Import completed entries with project and person links, start/end times and billable flags.",
-    "https://atomicdata.dev/integrations/properties/events": "Review imports before applying them. This first version does not sync changes back.",
-    "https://atomicdata.dev/integrations/properties/limitation": "Your entries only; up to 31 days. No active timers, updates, deletions, tags, task links, rates or custom fields.",
-    "https://atomicdata.dev/integrations/properties/keywords": "clockify time tracking timesheet projects billable import"
+    "https://atomicdata.dev/properties/description": "Bring your completed work into a Time Tracker.",
+    "https://atomicdata.dev/integrations/properties/capabilities": "Imports your completed entries with start/end times, description and billable flag into a timer view with daily totals.",
+    "https://atomicdata.dev/integrations/properties/events": "Connect through LocalThought with a personal API key, then the table refreshes while it is open.",
+    "https://atomicdata.dev/integrations/properties/limitation": "Your entries only, past 7 or 30 days. Import only: no active timers, tags, tasks, rates or custom fields, and nothing is written back to Clockify.",
+    "https://atomicdata.dev/integrations/properties/keywords": "clockify time tracking timesheet timer billable import localthought",
+    "https://atomicdata.dev/integrations/properties/platform": "clockify"
   },
   {
     "@id": "https://atomicdata.dev/integrations/catalog/notion",

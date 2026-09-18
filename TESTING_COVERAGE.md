@@ -340,31 +340,14 @@ public deployment, and interactive rich-text editor/cursor acceptance.
 
 ## How to read this
 
-Clockify: `integrations/clockify/plugin.test.ts` covers linked proposals, time
-instants, repeat imports, pagination and failure handling.
-`plugins::clockify_tests::completed_entries_are_proposals_in_the_real_sandbox`
-runs the shipped bundle in the real Rust sandbox with a fixture provider. A second
-Clockify sandbox test verifies discovery and minimized response fields.
-`plugins.spec.ts` covers named workspace discovery, date selection, schema/table
-creation and visible preview transport failures. All offline certification layers
-pass. `clockify-import.integration.test.ts` applies proposals through the real TS Store
-with mocked HTTP, verifies signed Loro updates, final Project/Person DID links,
-and skips records on repeat import. Planner regressions cover temporary in-plan
-links, class constraints and rejection of unrelated temporary subjects. The shared
-`plugin-server.test.ts` covers signed execution, malformed responses and errors.
-A second Clockify browser test runs discovery/mapping inside the real sandbox,
-approves three linked resources into the local server and reruns against its DB
-with no duplicate proposals. It reuses an existing Time Tracker, preserves its
-views and customized property name, and opens it through the completed setup.
-The same browser flow asserts that supporting records are children of the app,
-then previews/applies a legacy root-level project's move back into it and verifies
-a no-op repeat. Fixture tests reject moving manually organized or unrelated data.
-Live installed-source upgrade and cleanup of the user's earlier root records have
-not been performed.
-`integrations/clockify/atomic.test.ts` checks read-only table compatibility by
-identity, datatype, required fields and related-class constraints. Only provider HTTP is replaced with synthetic data;
-this does not certify actual Clockify access or the host HTTP permission layer.
-Live provider reads, regional origins and two-way sync remain unverified or
+Clockify (2026-09-18): the server-side plugin, its sandbox tests, the TS Store
+integration test and the browser setup/upgrade flows were retired (#1534).
+Clockify is now a LocalThought lens: `integrations/clockify/localthought.test.ts`
+covers the Time Tracker projection (start/end instants, skipped running timers
+and breaks, invalid intervals) and the rolling look-back query overrides;
+`parameterOptions.test.ts` covers the workspace/account picker parsing. The
+generic LocalThought suites cover fetch, refresh and table creation. Live
+provider reads through the proxy and two-way sync remain unverified or
 unimplemented.
 
 Integration maintenance: `node integrations/tooling/certify.mjs` automatically
@@ -1246,7 +1229,7 @@ New automation and integration shortcuts open a fresh assistant chat with resour
 context, requesting user intent before draft creation. Browser acceptance of
 these entry points and assistant-led creation remains open.
 
-## MT940 bank statement importer
+## MT940 and camt.053 bank statement importer
 
 `integrations/mt940/parser.test.ts` has nine scenarios covering signed exact
 amounts, reversals, balance reconciliation, invalid/truncated input, multiple
@@ -1257,6 +1240,17 @@ JSON-shaped narratives are rejected until legacy text materialization is fixed.
 runs the shipped JS in real QuickJS/WASM and verifies balance failures and
 network-free proposals. Offline certification passes and is recorded in the
 integration store's bundle-matched evidence.
+
+`integrations/mt940/camt053.test.ts` has six scenarios for the camt.053 path:
+the sandbox-safe XML reader (namespaces, prefixes, entities, CDATA, malformed
+input), booked-entry mapping to exact amounts/dates/codes/references/narratives,
+v08 status codes, `DtTm` dates, `PRCD` openings and `Othr` account ids,
+reconciliation/currency/date/balance-type/size failures, the 500-entry bound,
+format detection and per-format identities.
+`plugins::bank_statement_tests::camt_statement_proposes_the_same_nested_transactions`
+runs the same bundle on the camt.053 fixture in QuickJS/WASM. The MT940 E2E
+below ends by uploading the camt.053 fixture into the same importer and
+expecting two new rows. No real bank camt.053 export has been validated yet.
 
 `browser/e2e/tests/mt940.spec.ts` uses a synthetic statement with the real Worker,
 server runtime, planner and signed persistence. It verifies invalid-file errors,

@@ -81,6 +81,19 @@ pub struct SyncReport {
     pub errors: Vec<String>,
 }
 
+impl SyncReport {
+    /// Records a non-fatal problem, collapsing repeats of the same message.
+    ///
+    /// A capacity limit or a systemic storage failure surfaces identically
+    /// for every remaining record in a collection; without this, one large
+    /// import turns into thousands of copies of the same line.
+    fn push_error(&mut self, message: String) {
+        if !self.errors.contains(&message) {
+            self.errors.push(message);
+        }
+    }
+}
+
 /// Errors the engine itself raises.
 #[derive(Debug)]
 pub enum SyncError {
@@ -267,39 +280,13 @@ impl SyncClient {
                 };
                 for invocation in invocations {
                     match self
-                        .walk_collection(document, base, collection, &invocation)
+                        .walk_collection(document, base, collection, &invocation, storage, report)
                         .await
                     {
-                        Ok(records) => {
-                            let namespace = collection
-                                .context_params
-                                .iter()
-                                .map(|param| {
-                                    invocation.path.get(param).cloned().unwrap_or_default()
-                                })
-                                .collect::<Vec<_>>()
-                                .join("/");
-                            for record in &records {
-                                let id = record
-                                    .value
-                                    .get(&collection.id_field)
-                                    .map(json_to_string)
-                                    .unwrap_or_default();
-                                let stored = Record {
-                                    namespace: namespace.clone(),
-                                    resource: collection.resource.clone(),
-                                    id,
-                                    value: record.value.clone(),
-                                };
-                                if let Err(error) = storage.put(&stored).await {
-                                    report.errors.push(format!("{}: {error}", collection.name));
-                                }
-                            }
-                            collection_records.extend(records);
+                        Ok(records) => collection_records.extend(records),
+                        Err(message) => {
+                            report.push_error(format!("{}: {message}", collection.name))
                         }
-                        Err(message) => report
-                            .errors
-                            .push(format!("{}: {message}", collection.name)),
                     }
                 }
 
@@ -316,7 +303,7 @@ impl SyncClient {
                 // the same model, but never spin: report and stop rather
                 // than loop forever if it somehow is.
                 for collection in still_pending {
-                    report.errors.push(format!(
+                    report.push_error(format!(
                         "{}: could not resolve its context parameters",
                         collection.name
                     ));
@@ -359,7 +346,7 @@ impl SyncClient {
                         let bound_path = match bind_url(&read.url, &invocation.path) {
                             Ok(path) => path,
                             Err(error) => {
-                                report.errors.push(format!("{}: {error}", read.name));
+                                report.push_error(format!("{}: {error}", read.name));
                                 continue;
                             }
                         };
@@ -380,12 +367,12 @@ impl SyncClient {
                             value,
                         };
                         if let Err(error) = storage.put(&stored).await {
-                            report.errors.push(format!("{}: {error}", read.name));
+                            report.push_error(format!("{}: {error}", read.name));
                         } else {
                             *report.read.entry(read.resource.clone()).or_insert(0) += 1;
                         }
                     }
-                    Err(message) => report.errors.push(format!("{}: {message}", read.name)),
+                    Err(message) => report.push_error(format!("{}: {message}", read.name)),
                 }
             }
         }
@@ -439,20 +426,36 @@ impl SyncClient {
             .ok_or_else(|| "read response was not an object".to_string())
     }
 
-    /// Fetches every item of one managed collection under `values`,
-    /// walking every page per its resolved pagination scheme.
+    /// Fetches every item of one managed collection under `values`, walking
+    /// every page per its resolved pagination scheme and writing each
+    /// record to `storage` as its page arrives. A `storage` failure (for
+    /// example a host-imposed capacity limit) stops pagination at that
+    /// point rather than after every page has already been fetched, and is
+    /// recorded on `report` — it does not fail the whole invocation, and
+    /// records already written are still returned.
     async fn walk_collection(
         &self,
         document: &OpenApiDocument,
         base: &str,
         collection: &ManagedCollection,
         invocation: &Invocation,
+        storage: &dyn Storage,
+        report: &mut SyncReport,
     ) -> std::result::Result<Vec<OriginRecord>, String> {
         let operation = document
             .paths
             .get(&collection.collection_url)
             .and_then(|item| item.get.as_ref())
             .ok_or_else(|| format!("{} declares no GET operation", collection.collection_url))?;
+
+        // Computed once: every page's records share this invocation's
+        // context-parameter values, not anything the page itself carries.
+        let namespace = collection
+            .context_params
+            .iter()
+            .map(|param| invocation.path.get(param).cloned().unwrap_or_default())
+            .collect::<Vec<_>>()
+            .join("/");
 
         let effective = resolve_effective_scheme(document, operation);
         let response_schema = operation
@@ -520,12 +523,32 @@ impl SyncClient {
                 &body,
             )?;
             let page_count = u64::try_from(page_items.len()).unwrap_or(u64::MAX);
-            items.extend(page_items.into_iter().map(|value| OriginRecord {
-                value,
-                path: invocation.path.clone(),
-                query: originating_query.clone(),
-                response_body: body.clone(),
-            }));
+            // Written to storage as each page lands, not buffered until the
+            // whole collection has paginated to its end: a host-imposed
+            // capacity limit then stops the fetch itself instead of being
+            // discovered only after every page has already been pulled.
+            for value in page_items {
+                let id = value
+                    .get(&collection.id_field)
+                    .map(json_to_string)
+                    .unwrap_or_default();
+                let stored = Record {
+                    namespace: namespace.clone(),
+                    resource: collection.resource.clone(),
+                    id,
+                    value: value.clone(),
+                };
+                if let Err(error) = storage.put(&stored).await {
+                    report.push_error(format!("{}: {error}", collection.name));
+                    return Ok(items);
+                }
+                items.push(OriginRecord {
+                    value,
+                    path: invocation.path.clone(),
+                    query: originating_query.clone(),
+                    response_body: body.clone(),
+                });
+            }
             pages_fetched += 1;
 
             let Some(effective) = &effective else { break };

@@ -16,6 +16,7 @@ import { prepareFromVerdict } from './runScript';
 import {
   localThoughtExtension,
   schemaNamespace,
+  type LocalThoughtExtensionMode,
 } from './localThoughtExtension';
 
 export const REFRESH_INTERVAL = 5 * 60 * 1000;
@@ -34,13 +35,32 @@ export interface LocalThoughtInstallation {
   selection?: {
     query_overrides: { path: string; values: Record<string, unknown> }[];
   };
+  /** The extension's own setup choice, so `selection` can be recomputed on
+   * every refresh (a rolling look-back window) instead of frozen at install. */
+  selectionValue?: unknown;
+  /** Display names for `constants` picked from a list (a workspace's name
+   * for its id), so the folder can say where it syncs from. */
+  labels?: Record<string, string>;
+  /** The most recent refreshes, newest first, for the management panel. */
+  runs?: SyncRun[];
   /** Explicit setup mode. Missing is the pre-category Calendar installation. */
-  extension?: 'calendar' | 'none';
+  extension?: LocalThoughtExtensionMode;
   config?: Config;
   syncing?: boolean;
   lastSuccess?: number;
   error?: string;
+  /** Set alongside `lastSuccess`: the sync completed, but not with everything. */
+  warning?: string;
 }
+export interface SyncRun {
+  at: number;
+  /** Records the provider returned, after the lens projected them. */
+  fetched?: number;
+  /** Local records the run created or updated. */
+  applied?: number;
+  error?: string;
+}
+const RUN_LOG = 8;
 const key = (entry: LocalThoughtInstallation) =>
   prefix + JSON.stringify([entry.drive, entry.actor, entry.folder]);
 
@@ -133,8 +153,22 @@ export async function refreshLocalThought(
 
         try {
           assertOwner(store, entry);
-          entry = { ...entry, syncing: true, error: undefined };
+          entry = {
+            ...entry,
+            syncing: true,
+            error: undefined,
+            warning: undefined,
+          };
           saveInstallation(entry);
+          const extension = localThoughtExtension(
+            entry.platform,
+            entry.extension,
+          );
+          if (extension && entry.selectionValue !== undefined)
+            entry = {
+              ...entry,
+              selection: extension.selection(entry.selectionValue),
+            };
           const response: FetchedPlatform = await browserIntegrations(
             entry.origin,
           ).fetchRecords(
@@ -146,10 +180,9 @@ export async function refreshLocalThought(
           );
           if (response.platform !== entry.platform)
             throw new Error('Imported platform did not match this connection');
-          const extension = localThoughtExtension(
-            entry.platform,
-            entry.extension,
-          );
+          const incomplete = response.errors?.length
+            ? response.errors.join('; ')
+            : undefined;
           const fetched = extension ? extension.project(response) : response;
           assertOwner(store, entry);
           const folder = await store.getLocalResource(entry.folder);
@@ -191,9 +224,25 @@ export async function refreshLocalThought(
             throw new Error(
               'Some records could not be synced. Open the folder again to retry.',
             );
-          entry = { ...entry, lastSuccess: Date.now() };
+          const at = Date.now();
+          entry = {
+            ...entry,
+            lastSuccess: at,
+            warning: incomplete,
+            runs: [
+              { at, fetched: fetched.records.length, applied: report.applied },
+              ...(entry.runs ?? []),
+            ].slice(0, RUN_LOG),
+          };
         } catch (error) {
-          entry = { ...entry, error: String(error) };
+          entry = {
+            ...entry,
+            error: String(error),
+            runs: [
+              { at: Date.now(), error: String(error) },
+              ...(entry.runs ?? []),
+            ].slice(0, RUN_LOG),
+          };
         } finally {
           saveInstallation({ ...entry, syncing: false });
         }

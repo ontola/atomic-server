@@ -109,7 +109,8 @@ export interface TableViewSpec {
    * The column this view arranges rows by: for `kanban` the `select` column
    * whose tags become the board columns, for `calendar` the date column that
    * places rows on days, for `timer` the datetime column holding each entry's
-   * start.
+   * start, for `issues` the `select` status column whose Done/Closed option
+   * marks an issue closed.
    */
   groupByColumn?: string;
   /** For `timer` views: the datetime column holding each entry's end. */

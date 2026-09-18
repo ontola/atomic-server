@@ -4,16 +4,24 @@
  * `/integrations` static route (see server/build.rs::embed_integrations and
  * server/src/routes.rs), instead of inlining the source into this bundle at
  * build time via a Vite `?raw` import.
+ *
+ * `server` is the store's server URL, not the frontend's own origin: the
+ * vite dev server and a Tauri build serve the SPA from somewhere else, and
+ * their origin answers this path with index.html rather than a 404.
  */
 const cache = new Map<string, Promise<string>>();
 
-export function fetchIntegrationSource(id: string): Promise<string> {
-  let promise = cache.get(id);
+export function fetchIntegrationSource(
+  server: string,
+  id: string,
+): Promise<string> {
+  const key = `${server}/integrations/${id}/plugin.js`;
+  let promise = cache.get(key);
 
   if (!promise) {
-    promise = fetch(`/integrations/${id}/plugin.js`).then(response => {
+    promise = fetch(key).then(response => {
       if (!response.ok) {
-        cache.delete(id);
+        cache.delete(key);
         throw new Error(
           `Could not load the ${id} integration (${response.status}).`,
         );
@@ -21,7 +29,7 @@ export function fetchIntegrationSource(id: string): Promise<string> {
 
       return response.text();
     });
-    cache.set(id, promise);
+    cache.set(key, promise);
   }
 
   return promise;

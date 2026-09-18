@@ -246,7 +246,7 @@ async function waitForCardStatus(page: Page, title: string, col: Locator) {
 // Regression test for #1505: the demo's own "Close/Reopen Atomic issue"
 // buttons (covered above) write the same status property a real kanban drag
 // does, but only a drag through the actual native Kanban view (reached via
-// "Open Atomic kanban", as a user would) proves the UI component itself
+// "Open Atomic issue tracker", as a user would) proves the UI component itself
 // wires status changes correctly. Sample mode needs no proxy: the GitHub side
 // is an in-browser fixture (see `fixtureTransport` in proxy.mjs).
 test('Dragging a card in the real Atomic kanban board closes and reopens the linked GitHub issue', async ({
@@ -263,7 +263,7 @@ test('Dragging a card in the real Atomic kanban board closes and reopens the lin
   await tryAgain();
 
   const openKanban = page.getByRole('link', {
-    name: 'Open Atomic kanban',
+    name: 'Open Atomic issue tracker',
     exact: true,
   });
   await expect(openKanban).toBeVisible();
@@ -271,8 +271,14 @@ test('Dragging a card in the real Atomic kanban board closes and reopens the lin
   await expect(demoIssue).toContainText('Todo');
   await expect(page.getByRole('alert')).toHaveCount(0);
 
-  // Drag the card from Todo to Done in the real, native kanban board.
+  // The tracker opens on its GitHub-style issue list; the board is one tab
+  // over. Drag the card from Todo to Done in the real, native kanban board.
   await openKanban.click();
+  await expect(page.getByTestId('issues-view')).toBeVisible();
+  await expect(
+    page.getByTestId('issue-row').filter({ hasText: title }),
+  ).toBeVisible();
+  await page.getByRole('tab', { name: 'Board' }).click();
   await expect(page.getByTestId('kanban-board')).toBeVisible();
   const todo = column(page, 'todo');
   const doneColumn = column(page, 'done');
@@ -299,6 +305,7 @@ test('Dragging a card in the real Atomic kanban board closes and reopens the lin
 
   // Drag it back to Todo — the fixture issue must reopen.
   await openKanban.click();
+  await page.getByRole('tab', { name: 'Board' }).click();
   await expect(page.getByTestId('kanban-board')).toBeVisible();
   await dndDrag(
     page,
