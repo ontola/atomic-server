@@ -10,7 +10,7 @@ import {
   type Transaction,
 } from './parser.js';
 
-export const CAMT053_MAX_BYTES = 1_000_000;
+export const CAMT053_MAX_BYTES = 5_000_000;
 
 interface Node {
   name: string;
@@ -218,7 +218,7 @@ function transaction(entry: Node, currency: string): Transaction {
 
 export function parseCamt053(text: string): Statement[] {
   if (typeof text !== 'string' || text.length > CAMT053_MAX_BYTES)
-    throw new Error('Choose a camt.053 file smaller than 1 MB');
+    throw new Error('Choose a camt.053 file smaller than 5 MB');
   const root = parseXml(text.replace(/^﻿/, ''));
   const report = one(root, 'Document', 'BkToCstmrStmt');
   if (!report)

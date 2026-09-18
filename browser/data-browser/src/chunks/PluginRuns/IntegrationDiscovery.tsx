@@ -6,13 +6,14 @@ import { Button } from '@components/Button';
 import { Dialog, useDialog } from '@components/Dialog';
 import { IntegrationEvidence } from './IntegrationEvidence';
 import { clockifyIntegration } from './ClockifyLocalThought';
-import {
-  localThoughtExtension,
-  type LocalThoughtExtension,
-} from './localThoughtExtension';
 import { useIntegrationProxy } from '@helpers/integrationProxy';
 import { useLocalThoughtCompletedPlatform } from './localThoughtCallback';
 import { isCatalogVisible, type CatalogEntry } from './pluginCatalog';
+import {
+  googleCalendarLens,
+  todoistIntegration,
+  type LocalThoughtExtension,
+} from './localThoughtExtension';
 
 const NotionSetup = lazy(() =>
   import('./ConnectNotion').then(m => ({ default: m.ConnectNotion })),
@@ -52,10 +53,8 @@ type BundledIntegration = {
 // Everything else about a bundled integration's card is data, sourced from
 // catalog.json; this is code, so it stays here, keyed by the same shortname.
 const EXTENSIONS: Partial<Record<string, LocalThoughtExtension>> = {
-  'devonian-google-calendar': localThoughtExtension(
-    'google-calendar',
-    'calendar',
-  ),
+  'devonian-google-calendar': googleCalendarLens,
+  'devonian-todoist': todoistIntegration,
   clockify: clockifyIntegration,
 };
 

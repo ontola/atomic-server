@@ -43,7 +43,7 @@ offline peers still need collision resolution after synchronization.
 ## Supported scope and gaps
 
 - Up to 500 entries; MT940 up to 512 KB (UTF-8 or Windows-1252 text), camt.053
-  up to 1 MB (UTF-8 XML, which is what ISO 20022 mandates).
+  up to 5 MB (UTF-8 XML, which is what ISO 20022 mandates).
 - MT940: :20:, :21:, :25:, :28:/28C:, :60F:/60M:, :61:, :86:, :62F:/62M:, :64:, :65:.
 - camt.053 (.001.02 through .001.08 element names): one or more `Stmt` per
   `BkToCstmrStmt`; `Acct/Id` IBAN or `Othr/Id`; `OPBD` (or `PRCD`) and `CLBD`

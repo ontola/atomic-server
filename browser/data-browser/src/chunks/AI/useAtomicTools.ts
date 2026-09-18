@@ -357,16 +357,16 @@ const blockSpecSchema = z.object({
  */
 const viewConfigShape = {
   kind: z
-    .enum(['table', 'kanban', 'calendar', 'timer'])
+    .enum(['table', 'kanban', 'calendar', 'timer', 'issues'])
     .optional()
     .describe(
-      "How the rows are laid out. 'table' is a grid, 'kanban' a board of columns, 'calendar' a month grid, 'timer' a time tracker (a grid plus a start/stop button and a live duration per row).",
+      "How the rows are laid out. 'table' is a grid, 'kanban' a board of columns, 'calendar' a month grid, 'timer' a time tracker (a grid plus a start/stop button and a live duration per row), 'issues' a GitHub-style issue list (Open/Closed split by a 'select' status column, newest first, with a New issue box).",
     ),
   groupByColumn: z
     .string()
     .optional()
     .describe(
-      "The column this view arranges rows by. For 'kanban': the 'select' column whose tags become the board columns. For 'calendar': the 'date' or 'datetime' column placing rows on days. For 'timer': the 'datetime' column holding each entry's start.",
+      "The column this view arranges rows by. For 'kanban': the 'select' column whose tags become the board columns. For 'calendar': the 'date' or 'datetime' column placing rows on days. For 'timer': the 'datetime' column holding each entry's start. For 'issues': the 'select' status column whose Done/Closed option marks an issue closed.",
     ),
   endColumn: z
     .string()

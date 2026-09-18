@@ -116,7 +116,7 @@ describe('camt.053 parser and import proposals', () => {
       ],
       [fixture.replace('<Cd>CLBD</Cd>', '<Cd>ITBD</Cd>'), 'CLBD'],
       ['<Document><BkToCstmrAcctRpt/></Document>', 'BkToCstmrStmt'],
-      ['<'.padEnd(1_000_001, ' '), '1 MB'],
+      ['<'.padEnd(5_000_001, ' '), '5 MB'],
     ] as const)
       expect(() => parseCamt053(invalid)).toThrow(message);
   });

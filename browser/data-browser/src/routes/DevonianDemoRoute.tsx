@@ -164,7 +164,7 @@ function DevonianDemo() {
                   Connect another tracker
                 </Button>
                 <AtomicLink subject={demo.state.config.connection.table}>
-                  Open Atomic kanban
+                  Open Atomic issue tracker
                 </AtomicLink>
               </Horizontal>
               <Field fieldId='devonian-text' label='New issue title or comment'>

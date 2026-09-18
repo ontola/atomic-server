@@ -236,7 +236,7 @@ function importRecords(host, records) {
 // integrations/localthought/plugin.ts
 var manifest = { schemaVersion: 1, operations: [], secrets: [] };
 function run(ctx) {
-  const c = ctx.config;
+  const c = ctx.config ?? {};
   if (!c.destinations || !c.properties || !Array.isArray(c.records))
     throw new Error("Fetch records from the connection before previewing this import");
   const identities = /* @__PURE__ */ new Set();

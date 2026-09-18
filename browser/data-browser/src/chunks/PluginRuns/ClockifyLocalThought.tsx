@@ -49,11 +49,11 @@ export function ClockifyImportControls({
  * import lands in the same timer the built-in template offers: a Timer view
  * with a derived Duration and per-day totals, and a plain list.
  */
-export const clockifyIntegration: LocalThoughtExtension<ClockifySelection> = {
+const clockifyLens: LocalThoughtExtension<ClockifySelection> = {
   id: CLOCKIFY_PLATFORM,
   label: 'Clockify',
   mode: 'clockify',
-  identityPrefix: ':clockify',
+  defaultConstants: {},
   defaultSelection: defaultClockifySelection,
   selection: clockifyImportQuery,
   identitySuffix: () => '',
@@ -90,3 +90,7 @@ export const clockifyIntegration: LocalThoughtExtension<ClockifySelection> = {
   },
   ImportControls: ClockifyImportControls,
 };
+
+// Consumers forget the selection type, as with the other lenses: the setup
+// dialog only hands back what `defaultSelection` produced.
+export const clockifyIntegration = clockifyLens as LocalThoughtExtension;

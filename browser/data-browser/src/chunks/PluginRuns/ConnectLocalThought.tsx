@@ -3,7 +3,6 @@ import {
   importInstallationIdentity,
   readSavedConnection,
 } from '../../../../../integrations/localthought/settings';
-import type { LocalThoughtExtension } from './localThoughtExtension';
 import { useEffect, useState } from 'react';
 import { useStore } from '@tomic/react';
 import { Button } from '@components/Button';
@@ -17,6 +16,7 @@ import {
   proxyRequest,
   type SavedConnection,
 } from './localThought';
+import type { LocalThoughtExtension } from './localThoughtExtension';
 import { installLocalThought, refreshLocalThought } from './localThoughtSync';
 import {
   PARAMETER_OPTION_LOOKUPS,
@@ -215,7 +215,7 @@ function GenericConnection({
         identity: importInstallationIdentity(
           connection,
           constants,
-          `${extension?.identityPrefix ?? ':api'}${extension && selection ? extension.identitySuffix(selection) : ''}`,
+          `${extension ? `:devonian-${extension.mode}` : ':api'}${extension && selection ? extension.identitySuffix(selection) : ''}`,
         ),
         extension: extension?.mode ?? 'none',
       });
@@ -299,7 +299,7 @@ function GenericConnection({
             />
           )}
           <p>{collections.join(', ')}</p>
-          <ImportScopeHelp writable={!!extension} />
+          <ImportScopeHelp writable={!!extension?.Sync} />
           <Button
             disabled={
               busy || !collections.length || parameters.some(p => !constants[p])

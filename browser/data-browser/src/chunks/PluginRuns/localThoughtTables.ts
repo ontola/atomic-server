@@ -73,8 +73,8 @@ export async function ensureImportTables(
     const specs = extension?.views?.[term.shortname];
 
     if (specs?.length) {
-      // The extension owns this class's views: build them from the same spec
-      // vocabulary as table templates, with term shortnames as column names.
+      // The lens owns this class's views: built from the same spec vocabulary
+      // as table templates, with term shortnames as column names.
       const views: string[] = [];
       let defaultView: string | undefined;
 
@@ -115,18 +115,23 @@ export async function ensureImportTables(
         [dataBrowser.properties.viewColumns]: columns,
       },
     });
-    const calendarView = extension?.view;
+    // The lens's own view of this class — a calendar of events, an issue
+    // list of tasks — beside the plain table. Its localId keeps the first
+    // lens's `calendar` spelling so existing Calendar folders resolve to the
+    // view they already have.
+    const projectedView = extension?.view;
+    const projectedKind = projectedView?.kind ?? 'calendar';
     const calendar =
-      calendarView?.classShortname === term.shortname
+      projectedView?.classShortname === term.shortname
         ? await ensureInstallationResource(store, drive, {
             parent: destination.subject,
-            localId: `${identity}:calendar:${term.shortname}`,
+            localId: `${identity}:${projectedKind}:${term.shortname}`,
             isA: [dataBrowser.classes.view],
             propVals: {
               [core.properties.name]: tableName,
-              [dataBrowser.properties.viewKind]: 'calendar',
+              [dataBrowser.properties.viewKind]: projectedKind,
               [dataBrowser.properties.viewGroupBy]:
-                properties[calendarView.groupByShortname],
+                properties[projectedView.groupByShortname],
               [dataBrowser.properties.viewColumns]: columns,
             },
           })
