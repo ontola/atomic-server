@@ -1,10 +1,7 @@
-import { Datatype, useNumber, validateDatatype } from '@tomic/react';
+import { Datatype, useNumber } from '@tomic/react';
 import { InputProps } from './ResourceField';
 import { InputStyled, InputWrapper } from './InputStyles';
-import {
-  checkForInitialRequiredValue,
-  useValidation,
-} from './formValidation/useValidation';
+import { useValidatedInput } from './formValidation/useValidatedInput';
 import { ErrorChipInput } from './ErrorChip';
 import { styled } from 'styled-components';
 
@@ -14,39 +11,23 @@ export default function InputNumber({
   resource,
   property,
   commit,
+  commitDebounceInterval,
+  required,
   ...props
 }: InputProps): JSX.Element {
   const [value, setValue] = useNumber(resource, property.subject, {
     validate: false,
     commit,
+    commitDebounce: commitDebounceInterval,
   });
 
-  const { error, setError, setTouched } = useValidation(
-    checkForInitialRequiredValue(value, props.required),
-  );
+  const { error, setTouched, update } = useValidatedInput(value, setValue, {
+    datatype: property.datatype,
+    required,
+  });
 
   function handleUpdate(e: React.ChangeEvent<HTMLInputElement>) {
-    setError(undefined);
-
-    if (e.target.value === '') {
-      if (props.required) {
-        setError('Required');
-      }
-
-      setValue(undefined);
-    } else {
-      try {
-        const newVal = +e.target.value;
-        validateDatatype(newVal, property.datatype);
-        setValue(newVal);
-      } catch (_err) {
-        setError('Invalid Number');
-      }
-    }
-
-    if (props.required && e.target.value === '') {
-      setError('Required');
-    }
+    update(e.target.value === '' ? undefined : +e.target.value);
   }
 
   return (
@@ -59,6 +40,7 @@ export default function InputNumber({
           step={property.datatype === Datatype.INTEGER ? 1 : 'any'}
           onChange={handleUpdate}
           onBlur={setTouched}
+          required={required}
           {...props}
         />
       </InputWrapper>

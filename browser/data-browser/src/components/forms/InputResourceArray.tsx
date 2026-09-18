@@ -29,6 +29,7 @@ export default function InputResourceArray({
   resource,
   property,
   commit,
+  commitDebounceInterval,
   required,
   id: _id,
   // Pulled out of `...props` on purpose so it never reaches the rows below:
@@ -47,6 +48,7 @@ export default function InputResourceArray({
     {
       validate: false,
       commit,
+      commitDebounce: commitDebounceInterval,
     },
   );
 
@@ -92,7 +94,7 @@ export default function InputResourceArray({
             pushArray([value]);
             setError(undefined);
           } catch (e) {
-            setError(e.message);
+            setError(e instanceof Error ? e.message : String(e));
 
             return;
           }
@@ -104,7 +106,7 @@ export default function InputResourceArray({
             setArray(newArray);
             setError(undefined);
           } catch (e) {
-            setError(e.message);
+            setError(e instanceof Error ? e.message : String(e));
 
             return;
           }

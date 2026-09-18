@@ -603,7 +603,7 @@ impl Db {
 
         // Run migrations before wrapping in Arc (migrations need direct sled access)
         migrations::migrate_maybe(&sled_store, base_domain.as_deref())
-            .map(|e| format!("Error during migration of database: {:?}", e))?;
+            .map_err(|e| format!("Error during migration of database: {:?}", e))?;
 
         let store = Db {
             path: path.into(),
@@ -4038,14 +4038,31 @@ impl Storelike for Db {
                 crate::db::trees::Tree::LoroSnapshots,
                 subject_str.as_bytes(),
             ) {
-                if let Ok(doc) = crate::loro::AtomicLoroDoc::from_snapshot(&snapshot) {
+                // A snapshot that cannot be read or applied is not fatal: the
+                // read falls back to the (possibly stale) propval projection
+                // stored beside it. It is still worth a warning, because a
+                // silent fallback would hide corruption behind stale data.
+                match crate::loro::AtomicLoroDoc::from_snapshot(&snapshot) {
                     // We already hold the exact bytes `doc` was just imported
                     // from — reuse them instead of having `apply_state_doc`
                     // re-export an equivalent snapshot. This is the hot path
                     // for every resource read (including once per member of
                     // a collection query), so the saved export is per-read,
                     // not one-off.
-                    let _ = resource.apply_state_doc_with_snapshot(doc, snapshot);
+                    Ok(doc) => {
+                        if let Err(e) = resource.apply_state_doc_with_snapshot(doc, snapshot) {
+                            tracing::warn!(
+                                subject = %subject_str,
+                                error = %e,
+                                "Failed to apply stored Loro snapshot; serving the stored propvals instead"
+                            );
+                        }
+                    }
+                    Err(e) => tracing::warn!(
+                        subject = %subject_str,
+                        error = %e,
+                        "Failed to read stored Loro snapshot; serving the stored propvals instead"
+                    ),
                 }
             }
             Ok(resource)

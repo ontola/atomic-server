@@ -342,6 +342,13 @@ pnpm --filter @tomic/data-browser build:wasm
 
 Only re-run this when the `wasm/` or `lib/` Rust changes; it is not part of `pnpm start`.
 
+This does *not* apply to `cargo run` in `server/`: `server/build.rs` also watches
+`wasm/src` and `lib/src` (in addition to `browser/data-browser/src`, `browser/lib/src`,
+`browser/react/src`, and a few config files) and reruns the JS/WASM build when any of
+them are newer than `dist`. It's only the Vite dev server (`pnpm start`) that skips the
+WASM build entirely, so a `wasm/` or `lib/` change there still needs
+`pnpm --filter @tomic/data-browser build:wasm` run by hand.
+
 ### Running the frontend
 
 `cd browser && pnpm start` runs `@tomic/lib` + `@tomic/react` (tsup watch) and the Vite dev
