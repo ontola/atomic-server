@@ -3,7 +3,7 @@ import {
   importRecords,
   type ImportRecord,
 } from '../../browser/lib/src/import-records.js';
-import { parseMT940 } from './parser.js';
+import { parseBankStatement } from './statement.js';
 export const manifest = { schemaVersion: 1, operations: [], secrets: [] };
 export interface Config {
   table: string;
@@ -21,9 +21,9 @@ export function run(ctx: Host) {
   const text = ctx.text ?? ctx.trigger?.payload?.text;
   if (!text)
     throw new Error(
-      'Open Bank statements in Integrations and choose an MT940 file',
+      'Open Bank statements in Integrations and choose an MT940 or camt.053 file',
     );
-  const statements = parseMT940(text);
+  const { format, statements } = parseBankStatement(text);
   if (ctx.trigger?.payload?.validate) return { intents: [], problems: [] };
   const { table, rowClass, properties: p } = ctx.config;
   const records: ImportRecord[] = [];
@@ -38,8 +38,11 @@ export function run(ctx: Host) {
       statement.closing,
     ]);
     for (const [index, row] of statement.transactions.entries()) {
+      // Identities are per export format: the same booking exported twice as
+      // MT940 and camt.053 carries different narratives, which would otherwise
+      // surface as a conflict instead of a second row.
       const fingerprint =
-        'mt940-content:' +
+        `${format}-content:` +
         JSON.stringify([
           statement.account,
           statement.currency,
@@ -55,7 +58,7 @@ export function run(ctx: Host) {
           ? row.bankReference
           : '';
       const identity = JSON.stringify([
-        'mt940',
+        format,
         statement.account,
         statement.currency,
         reference ? ['bank', reference] : ['statement', statementKey, index],

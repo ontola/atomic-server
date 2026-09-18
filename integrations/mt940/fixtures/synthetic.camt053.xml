@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02">
+  <BkToCstmrStmt>
+    <GrpHdr>
+      <MsgId>SYNTHETIC-CAMT</MsgId>
+      <CreDtTm>2026-09-04T06:00:00</CreDtTm>
+    </GrpHdr>
+    <Stmt>
+      <Id>SYNTHETIC-1</Id>
+      <ElctrncSeqNb>1</ElctrncSeqNb>
+      <CreDtTm>2026-09-04T06:00:00</CreDtTm>
+      <Acct>
+        <Id><IBAN>NL00BUNQ0000000000</IBAN></Id>
+        <Ccy>EUR</Ccy>
+      </Acct>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="EUR">100.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-09-01</Dt></Dt>
+      </Bal>
+      <Bal>
+        <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
+        <Amt Ccy="EUR">107.66</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Dt><Dt>2026-09-03</Dt></Dt>
+      </Bal>
+      <Ntry>
+        <NtryRef>1</NtryRef>
+        <Amt Ccy="EUR">12.34</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <Sts>BOOK</Sts>
+        <BookgDt><Dt>2026-09-02</Dt></BookgDt>
+        <ValDt><Dt>2026-09-02</Dt></ValDt>
+        <AcctSvcrRef>TEST-1</AcctSvcrRef>
+        <BkTxCd>
+          <Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>ESCT</SubFmlyCd></Fmly></Domn>
+        </BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Refs><EndToEndId>NOTPROVIDED</EndToEndId></Refs>
+            <RltdPties>
+              <Cdtr><Nm>Fixture Caf&#233; &amp; Bar</Nm></Cdtr>
+              <CdtrAcct><Id><IBAN>NL00TEST0000000001</IBAN></Id></CdtrAcct>
+            </RltdPties>
+            <RmtInf><Ustrd>Fixture lunch</Ustrd><Ustrd>Second line</Ustrd></RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+      <Ntry>
+        <NtryRef>2</NtryRef>
+        <Amt Ccy="EUR">20.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Sts>BOOK</Sts>
+        <BookgDt><Dt>2026-09-03</Dt></BookgDt>
+        <ValDt><Dt>2026-09-03</Dt></ValDt>
+        <AcctSvcrRef>TEST-2</AcctSvcrRef>
+        <BkTxCd><Prtry><Cd>REFUND</Cd></Prtry></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Refs><EndToEndId>E2E-2</EndToEndId></Refs>
+            <RltdPties>
+              <Dbtr><Nm>Fixture Shop</Nm></Dbtr>
+            </RltdPties>
+            <RmtInf><Ustrd>Refund</Ustrd></RmtInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Booked refund</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="EUR">999.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <Sts>PDNG</Sts>
+        <ValDt><Dt>2026-09-04</Dt></ValDt>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>
