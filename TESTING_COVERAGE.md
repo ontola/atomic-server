@@ -490,6 +490,7 @@ Two things worth knowing about the runners:
 | RBSR reconciliation, drive hashing | `lib/src/sync/rbsr.rs`, `tests.rs` |
 | RBSR finds a remote-only subject sorting below every local one | `lib/src/sync/rbsr.rs` **and** `browser/lib/src/rbsr.test.ts` (regression, see below) |
 | Remote update merge, drive-spoof rejection, tombstones | `lib/src/sync/ws_apply.rs`, `tombstones.rs` |
+| Replica WS commit ingest skips write-rights; hub/peer still enforce | `ws_apply.rs` `replica_commit_ingest_tests`, `engine_commit_from_unauthorized_signer_is_rejected` |
 | Pairing envelope encode/decode | `browser/lib/src/pairing.test.ts` |
 
 ### Cross-process — covered since 2026-07
@@ -519,6 +520,8 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Bridge known-peer bookkeeping (add / rename / dedupe / forget) | `flutter/rust/src/api/simple/peer_tests.rs` | |
 | Bridge `peer_sync` to an unreachable node errors rather than hanging | `flutter/rust/src/api/simple/peer_tests.rs` | |
 | **`POST /iroh-sync` request shape, both sides** | `testdata/pairing-request.json` + `pairing.test.ts` + `iroh_pairing.rs` | shared fixture binds them |
+| **`/search` URL shape** | `testdata/search-query.json` + `search.test.ts` + `client/search.rs` | bind-twins |
+| **`normalizeServerUrl` / `isLocalAddress`** | `testdata/server-url.json` + `serverUrl.test.ts` + `server_url_test.dart` | empty input still disagrees (TS `https://`, Dart `''`) |
 | Dart pairing-code parser, peer-sync result formatting | `flutter/test/atomic/` | pure parsers |
 | Rotation does not treat a metrics-change pop as "back to gallery" | `flutter/test/canvas/rotation_pop_test.dart` | |
 | `AtomicNode`: `mutate` on one node, `apply_commit(IngestPolicy::Peer)` on another, query + `DbEvent` reflect it | `lib/src/runtime/node.rs` | in-process, no transport; `LocalCache` skips signature check, `Peer` does not |
@@ -601,6 +604,9 @@ discovery in `atomic_lib`, but not through the bridge.
 `POST /iroh-sync` is now bound by a shared fixture
 (`testdata/pairing-request.json`): the browser test asserts it *sends* that
 body, the server test asserts it *accepts* it, and renaming a field fails both.
+
+The `/search` URL shape and `normalizeServerUrl` (except empty input) are
+bound the same way: `testdata/search-query.json` and `testdata/server-url.json`.
 
 `/forget-peer` is covered on both sides now — `iroh_pairing.rs` for the handler
 (unsigned refused, full pair → listed → forget → gone lifecycle) and

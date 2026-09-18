@@ -56,6 +56,13 @@ After touching anything that renders text, read the `.po` diff by hand: a
 guarded element can silently drop sibling strings, and entries re-key when an
 icon moves into a message.
 
+## Consolidation changes
+
+A change that claims to remove duplication must follow
+[`planning/consolidation-contract.md`](./planning/consolidation-contract.md):
+characterization tests on the old code first, then
+`scripts/consolidation-measure.py` so production lines in scope go down.
+
 ## Quick Dev Setup
 
 Use the Charlotte MCP server and navigate to `http://localhost:6747/app/dev-drive` to instantly create a fresh agent.

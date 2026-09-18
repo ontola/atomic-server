@@ -33,9 +33,17 @@ The Kotlin app stores Loro snapshots as local files. The Flutter app uses **atom
 - Rust source lives in `/rust/src/`
 - `atomic_lib` is referenced as a local path dependency: `../../../atomicdata-dev/atomic-server/lib`
 
-### Loro CRDT: Not Yet Integrated in Flutter
+### Loro CRDT: canvas strokes are Loro-backed
 
-The Kotlin app has full Loro CRDT integration (via JNI). The Flutter app currently stores strokes as plain JSON strings to atomic-server. Loro integration is the biggest remaining gap — it needs to be added as a Rust dependency and exposed through `flutter_rust_bridge` for proper offline-first CRDT sync and persistent history.
+Phase A of [`canvas-undo-consolidation.md`](../planning/canvas-undo-consolidation.md)
+landed. Strokes live in a `LoroList<LoroMap>`; tap-undo / tap-redo go through
+`AtomicClient.undoCanvas()` → Rust `resource.undo()` (Loro `UndoManager`);
+scrub uses `warmResourceHistory` / version checkout. This is **not** the
+biggest remaining gap — do not add a second Loro integration.
+
+Phase B is still open: the Dart `_allActions` stack exists to snapshot
+discarded branches and the eraser path. Until that lands, do not delete
+`HistoryAction` / `_replayActions`.
 
 ### Canvas Coordinate System
 
@@ -50,7 +58,11 @@ The Kotlin app has full Loro CRDT integration (via JNI). The Flutter app current
 
 ### History System
 
-Uses sealed `HistoryAction` classes (`StrokeAdded`, `StrokesDeleted`, `StrokesReplaced`). Undo/redo works by reversing/replaying actions. The Kotlin app also has `DiscardedBranch` — when you undo and then draw, the discarded future is preserved as a branch you can restore. This is partially ported (model exists) but not fully wired up.
+Tap-undo / redo and the undo-button scrub gesture are Loro. The sealed
+`HistoryAction` classes (`StrokeAdded`, `StrokesDeleted`, `StrokesReplaced`)
+and `_allActions` still exist for discarded-branch snapshots (Phase B of
+the canvas-undo plan). Do not merge that stack with the browser's
+`localStorage` discarded-branches UI — they are twins, not copies.
 
 ## File Structure
 
@@ -83,40 +95,38 @@ lib/
 └── src/rust/                    # Auto-generated flutter_rust_bridge
 ```
 
-## What's Done (~35%)
+## What's Done
 
 - Core canvas with drawing, pan, zoom
 - Stroke rendering with bezier smoothing (CustomPainter)
 - Pen tool with color fan (8 hues x 4 shades) and 7 width options
-- In-memory undo/redo with action replay
-- Gallery with folder organization (local only)
+- Loro-backed strokes, tap-undo/redo, and history scrub
+- Eraser, gallery thumbnails, pairing / QR, server URL handling
+- Gallery with folder organization
 - atomic-server integration (agents, drives, canvas CRUD)
 - flutter_rust_bridge setup with atomic_lib bindings
 - Login/auth screen
 - Theme system (Material 3)
 
-## What's Missing (~65%)
+## What's Missing
 
 ### Critical (must-have for parity)
-1. **Loro CRDT integration** — add loro crate to Rust, expose through bridge. Needed for offline-first sync, persistent history, and conflict resolution
+1. **Phase B canvas undo** — drop the Dart action stack; keep discarded branches (see the canvas-undo plan)
 2. **Selection + Transform tools** — lasso selection, bounding box handles, scale/rotate/translate strokes
-3. **Eraser tool** — stroke deletion by tap/drag
-4. **Image import** — background images on canvas
-5. **Auto-save** — periodic + on-background save
-6. **Thumbnail generation** — PNG thumbnails for gallery (use `dart:ui` Picture recorder)
+3. **Image import** — background images on canvas
+4. **Auto-save** — periodic + on-background save
 
 ### Important (UX parity)
-7. **Multi-finger gestures** — 2-finger tap undo, 3-finger tap redo
-8. **Stylus hover preview** — show cursor/brush preview on hover
-9. **Zoom scrubber** — fine-grained zoom control widget
-10. **Fit content** — zoom to fit all strokes with padding
-11. **Discarded branches UI** — show/restore abandoned history branches
-12. **History persistence** — save/restore undo history across sessions
+5. **Multi-finger gestures** — 2-finger tap undo, 3-finger tap redo
+6. **Stylus hover preview** — show cursor/brush preview on hover
+7. **Zoom scrubber** — fine-grained zoom control widget
+8. **Fit content** — zoom to fit all strokes with padding
+9. **History persistence** — save/restore undo history across sessions
 
 ### Nice-to-have
-13. **Folder sync** to atomic-server (currently local-only)
-14. **Pressure sensitivity** — vary stroke width by pressure
-15. **Tests** — port GeometryTest and CanvasUiTest
+10. **Folder sync** to atomic-server (currently local-only)
+11. **Pressure sensitivity** — vary stroke width by pressure
+12. **Tests** — port GeometryTest and CanvasUiTest
 
 ## Reference: Kotlin Source
 

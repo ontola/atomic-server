@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, it, vi } from 'vitest';
 import {
   buildSearchSubject,
@@ -7,22 +9,40 @@ import {
 import { Store } from './store.js';
 import { Resource } from './resource.js';
 
+/**
+ * Shared with `lib/src/client/search.rs`. Renaming an expected value here
+ * without the Rust suite is how the two search-URL builders drift.
+ */
+const fixture = JSON.parse(
+  readFileSync(
+    fileURLToPath(
+      new URL('../../../testdata/search-query.json', import.meta.url),
+    ),
+    'utf-8',
+  ),
+) as {
+  searchSubject: {
+    serverUrl: string;
+    query: string;
+    include: boolean;
+    limit: number;
+    parents: string;
+    filters: Record<string, string>;
+    expected: string;
+  };
+};
+
 describe('search.ts', () => {
   it('Builds a good search URL', ({ expect }) => {
-    const serverURL = 'https://test.com';
-    const query = 'test';
+    const { serverUrl, query, include, limit, parents, filters, expected } =
+      fixture.searchSubject;
     const searchOpts: SearchOpts = {
-      include: true,
-      limit: 30,
-      parents: 'https://test.com/parent',
-      filters: {
-        age: '10',
-      },
+      include,
+      limit,
+      parents,
+      filters,
     };
-    const built = buildSearchSubject(serverURL, query, searchOpts);
-    expect(built).toBe(
-      'https://test.com/search?q=test&include=true&limit=30&filters=age%3A%2210%22&parents=https%3A%2F%2Ftest.com%2Fparent',
-    );
+    expect(buildSearchSubject(serverUrl, query, searchOpts)).toBe(expected);
   });
 
   it('Puts property URLs in filters without escaping', ({ expect }) => {

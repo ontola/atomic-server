@@ -1,0 +1,16 @@
+{
+  "_comment": [
+    "Shared search-query contract: the /search URL shape. browser/lib/src/",
+    "search.ts and lib/src/client/search.rs must both reproduce the",
+    "`expected` value. Keys beginning with an underscore are documentation."
+  ],
+  "searchSubject": {
+    "serverUrl": "https://test.com",
+    "query": "test",
+    "include": true,
+    "limit": 30,
+    "parents": "https://test.com/parent",
+    "filters": { "age": "10" },
+    "expected": "https://test.com/search?q=test&include=true&limit=30&filters=age%3A%2210%22&parents=https%3A%2F%2Ftest.com%2Fparent"
+  }
+}
