@@ -8,8 +8,9 @@ test('selected private image renders in a published gallery', async ({
   test.skip(!process.env.WEBSITE_HOSTING_E2E, 'Needs isolated hosting server');
   await before({ page });
   const subject = await page.evaluate(async () => {
-    const { createWebsite, starterWebsite } =
-      await import('/src/chunks/Website/websiteModel.ts');
+    const { createWebsite, starterWebsite } = await window.__atomicTestModules(
+      'data-browser/src/chunks/Website/websiteModel.ts',
+    );
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = 1;
     canvas.getContext('2d')!.fillRect(0, 0, 1, 1);
@@ -84,8 +85,9 @@ test('large original photos are optimized in the browser without changing the so
 }) => {
   await before({ page });
   const result = await page.evaluate(async () => {
-    const { optimizeWebsiteImage } =
-      await import('/src/chunks/Website/optimizeWebsiteImage.ts');
+    const { optimizeWebsiteImage } = await window.__atomicTestModules(
+      'data-browser/src/chunks/Website/optimizeWebsiteImage.ts',
+    );
     const canvas = document.createElement('canvas');
     canvas.width = 3200;
     canvas.height = 2400;

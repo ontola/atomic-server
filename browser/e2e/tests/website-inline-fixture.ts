@@ -22,8 +22,9 @@ export async function createBakery(page: Page) {
         name => [name, 'https://atomicdata.dev/properties/' + name],
       ),
     );
-    const { createWebsite, starterWebsite } =
-      await import('/src/chunks/Website/websiteModel.ts');
+    const { createWebsite, starterWebsite } = await window.__atomicTestModules(
+      'data-browser/src/chunks/Website/websiteModel.ts',
+    );
     const price = await store.newResource({
       parent: store.getDrive(),
       isA: ['https://atomicdata.dev/classes/Property'],

@@ -7,9 +7,13 @@ test('website versions deduplicate without creating sidebar resources', async ({
   await before({ page });
   const saved = await page.evaluate(async () => {
     const { createWebsite, starterWebsite, readWebsite } =
-      await import('/src/chunks/Website/websiteModel.ts');
+      await window.__atomicTestModules(
+        'data-browser/src/chunks/Website/websiteModel.ts',
+      );
     const { buildWebsiteArtifact, saveWebsiteRelease } =
-      await import('/src/chunks/Website/websiteExport.ts');
+      await window.__atomicTestModules(
+        'data-browser/src/chunks/Website/websiteExport.ts',
+      );
     const store = window.store;
     const drive = store.getDrive()!;
     const config = starterWebsite('Version navigation');

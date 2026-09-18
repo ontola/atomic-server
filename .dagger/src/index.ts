@@ -1174,9 +1174,17 @@ export class AtomicServer {
       // data-browser/src/config.ts.
       buildContainer = buildContainer
         .withEnvVariable('VITE_E2E', 'true')
+        // This one is read by the *browser* (`helpers/integrationProxy.ts`),
+        // which runs in the Playwright container — nothing listens on its
+        // loopback, so every integration call failed with `TypeError: Failed
+        // to fetch`. The mock proxy runs beside atomic-server and is exposed
+        // on the same service, so the browser reaches it at the host chromium
+        // already maps to that service. The server's own
+        // `ATOMIC_INTEGRATION_PROXY_URL` stays on loopback — the server really
+        // does share a container with the proxy.
         .withEnvVariable(
           'VITE_INTEGRATION_PROXY_URL',
-          'http://127.0.0.1:19090',
+          'http://atomic.localhost:19090',
         );
     }
 
@@ -1858,6 +1866,14 @@ export class AtomicServer {
         // devonian-issue-sync.spec.mts) reach into ../../../integrations
         // relative to /app/e2e/tests, resolving to /integrations here.
         .withDirectory('/integrations', this.source.directory('integrations'))
+        // Same reach for `apps.spec.ts`, which reads this checkout's embedded
+        // app SDK off disk and serves it as the `v1 fixture` client. Without
+        // it the spec fails on ENOENT for /server/src/plugins/assets, which
+        // reads like a product bug rather than a missing mount.
+        .withDirectory(
+          '/server/src/plugins/assets',
+          this.source.directory('server/src/plugins/assets'),
+        )
         .withWorkdir('/app/e2e')
         .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
         .withExec(['pnpm', 'config', 'set', 'store-dir', '/app/.pnpm-store'])

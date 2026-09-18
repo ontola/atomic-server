@@ -7,6 +7,18 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- CI: three ways the e2e suite depended on a Vite dev server, which develop's
+  pipeline does not run — it builds the SPA and serves it from the server
+  binary, so these specs were green on a dev box and red on every pipeline run.
+  Specs reached app internals through `import('/src/chunks/…')`, a dev-server
+  URL; they now ask a registry the data-browser exposes in dev and
+  `VITE_E2E=true` builds (`data-browser/src/helpers/e2eModules.ts`), which
+  resolves to the same module either way. `apps.spec.ts` read this checkout's
+  embedded app SDK off disk, which the e2e container never mounted. And the
+  E2E bundle pointed the browser at the mock integration proxy on `127.0.0.1`,
+  where nothing listens in the Playwright container; it now uses the host that
+  resolves to the atomic service, which is where the proxy runs.
+
 - Error-handling hygiene on the commit and read paths. The legacy
   `set`/`push`/`remove` rejection in `sync::engine::ingest_commit` now checks
   the parsed commit's properties instead of substring-matching the raw body,

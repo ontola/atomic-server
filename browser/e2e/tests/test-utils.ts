@@ -2077,3 +2077,15 @@ export async function acceptInvite(page: Page) {
     40000,
   );
 }
+
+/**
+ * How long a `New app` / `New plugin` action may take to reach its page.
+ *
+ * Both create the drive's plugin schema on first use — about twenty signed
+ * commits — and only navigate once that resolves. Every spec starts on a fresh
+ * drive (see {@link before}), so every one pays the full bootstrap. On CI that
+ * server is an `e2e`-profile binary with two browsers on it, where the round
+ * trips add up past the 10s default `expect` budget; on a dev box they do not,
+ * which is why these specs only ever failed on the pipeline.
+ */
+export const CREATE_FROM_SCHEMA_TIMEOUT = 30_000;

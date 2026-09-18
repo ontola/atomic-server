@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { test, expect } from '@playwright/test';
-import { before } from './test-utils';
+import { before, CREATE_FROM_SCHEMA_TIMEOUT } from './test-utils';
 
 /**
  * The one thing about apps that only a browser can answer.
@@ -59,7 +59,9 @@ test.describe('apps', () => {
       await page.locator('[data-testid="menu-item-new-app"]').click();
 
       // An app page is the app: no chrome of its own, just the frame.
-      await expect(main.locator('iframe[title="App"]')).toBeVisible();
+      await expect(main.locator('iframe[title="App"]')).toBeVisible({
+        timeout: CREATE_FROM_SCHEMA_TIMEOUT,
+      });
 
       // And the frame is the page. An iframe never grows to fit its document,
       // so a box shorter than the page does not scroll — it clips the app and
@@ -102,7 +104,9 @@ test.describe('apps', () => {
     await page.getByRole('button', { name: 'More' }).click();
     await page.getByPlaceholder(/filter/i).fill('app');
     await page.locator('[data-testid="menu-item-new-app"]').click();
-    await expect(main.locator('iframe[title="App"]')).toBeVisible();
+    await expect(main.locator('iframe[title="App"]')).toBeVisible({
+      timeout: CREATE_FROM_SCHEMA_TIMEOUT,
+    });
 
     const app = page.frameLocator('iframe[title="App"]');
     await app.getByRole('button', { name: 'Add an item' }).click();
@@ -134,7 +138,9 @@ test.describe('apps', () => {
     await page.getByRole('button', { name: 'More' }).click();
     await page.getByPlaceholder(/filter/i).fill('app');
     await page.locator('[data-testid="menu-item-new-app"]').click();
-    await expect(main.locator('iframe[title="App"]')).toBeVisible();
+    await expect(main.locator('iframe[title="App"]')).toBeVisible({
+      timeout: CREATE_FROM_SCHEMA_TIMEOUT,
+    });
 
     // Open the app's own table and add the app as a second way to see it.
     const sidebar = page.getByRole('navigation').last();
@@ -152,7 +158,9 @@ test.describe('apps', () => {
     await page.getByRole('menuitem', { name: 'New app' }).click();
 
     // The app now renders these rows, in a tab of its own...
-    await expect(main.locator('iframe[title="App"]')).toBeVisible();
+    await expect(main.locator('iframe[title="App"]')).toBeVisible({
+      timeout: CREATE_FROM_SCHEMA_TIMEOUT,
+    });
 
     // ...and the table is still right there. Adding a way to look at rows
     // must never take one away.
@@ -168,7 +176,9 @@ test.describe('apps', () => {
     await page.getByRole('button', { name: 'More' }).click();
     await page.getByPlaceholder(/filter/i).fill('app');
     await page.locator('[data-testid="menu-item-new-app"]').click();
-    await expect(main.locator('iframe[title="App"]')).toBeVisible();
+    await expect(main.locator('iframe[title="App"]')).toBeVisible({
+      timeout: CREATE_FROM_SCHEMA_TIMEOUT,
+    });
 
     const app = page.frameLocator('iframe[title="App"]');
     await app.getByRole('button', { name: 'Add an item' }).click();
@@ -189,7 +199,9 @@ test.describe('apps', () => {
     await page.getByRole('button', { name: 'More' }).click();
     await page.getByPlaceholder(/filter/i).fill('app');
     await page.locator('[data-testid="menu-item-new-app"]').click();
-    await expect(main.locator('iframe[title="App"]')).toBeVisible();
+    await expect(main.locator('iframe[title="App"]')).toBeVisible({
+      timeout: CREATE_FROM_SCHEMA_TIMEOUT,
+    });
 
     // Break it. The frame is null-origin, so its console belongs to nobody —
     // without a report crossing the boundary this is a blank panel and the

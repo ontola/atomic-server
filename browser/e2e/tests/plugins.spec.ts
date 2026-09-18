@@ -3,6 +3,7 @@ import { openLegacyGithubSetup } from './legacy-github-setup';
 import { test, expect } from '@playwright/test';
 import {
   before,
+  CREATE_FROM_SCHEMA_TIMEOUT,
   createTableFromDialog,
   getDevDriveSecret,
   SERVER_URL,
@@ -1591,7 +1592,7 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
 
     await expect(
       main.getByRole('heading', { name: 'New plugin', level: 1 }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: CREATE_FROM_SCHEMA_TIMEOUT });
 
     // The starter source is what an author (or an LLM) reads first.
     await page.getByRole('tab', { name: 'Code', exact: true }).click();
@@ -1647,7 +1648,7 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
     await page.locator('[data-testid="menu-item-new-plugin"]').click();
     await expect(
       main.getByRole('heading', { name: 'New plugin', level: 1 }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: CREATE_FROM_SCHEMA_TIMEOUT });
 
     // Point the plugin at a resource that is not there. The source property is
     // drive-local, so it is found by its value rather than by a subject the
@@ -1776,7 +1777,7 @@ async function newPlugin(page: import('@playwright/test').Page) {
       name: 'New plugin',
       level: 1,
     }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: CREATE_FROM_SCHEMA_TIMEOUT });
 }
 
 /**

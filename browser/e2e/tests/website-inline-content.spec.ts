@@ -25,8 +25,9 @@ test('inline website editing saves rich documents and typed prices to Atomic', a
       ),
     };
     const Datatype = { FLOAT: 'https://atomicdata.dev/datatypes/float' };
-    const { createWebsite, starterWebsite } =
-      await import('/src/chunks/Website/websiteModel.ts');
+    const { createWebsite, starterWebsite } = await window.__atomicTestModules(
+      'data-browser/src/chunks/Website/websiteModel.ts',
+    );
     const price = await store.newResource({
       parent: store.getDrive(),
       isA: [core.classes.property],

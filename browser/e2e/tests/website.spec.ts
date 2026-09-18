@@ -74,8 +74,9 @@ test('website document preview, frozen release and reload', async ({
     fullPage: true,
   });
   const versionURL = await page.evaluate(async () => {
-    const { hostingRequest } =
-      await import('/src/chunks/Website/hostingClient.ts');
+    const { hostingRequest } = await window.__atomicTestModules(
+      'data-browser/src/chunks/Website/hostingClient.ts',
+    );
     const subject = new URL(location.href).searchParams.get('subject')!;
     const status = await hostingRequest(window.store, subject);
 

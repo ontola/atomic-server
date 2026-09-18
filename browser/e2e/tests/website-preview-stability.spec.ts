@@ -6,8 +6,9 @@ test('opening Edit with AI preserves the preview document', async ({
 }) => {
   await before({ page });
   const subject = await page.evaluate(async () => {
-    const { createWebsite, starterWebsite } =
-      await import('/src/chunks/Website/websiteModel.ts');
+    const { createWebsite, starterWebsite } = await window.__atomicTestModules(
+      'data-browser/src/chunks/Website/websiteModel.ts',
+    );
 
     return (
       await createWebsite(

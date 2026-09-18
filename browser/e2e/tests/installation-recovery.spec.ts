@@ -1,4 +1,3 @@
-import { resolve } from 'node:path';
 import { test, expect } from '@playwright/test';
 import type { Resource } from '@tomic/lib';
 import { before } from './test-utils';
@@ -7,10 +6,10 @@ test('table installation reuses saved class after a lost receipt', async ({
   page,
 }) => {
   const result = await page.evaluate(async () => {
-    const path = '/src/chunks/TablePage/createTableFromSpec.ts';
-    const { buildTableFromSpec, resolveOntologyParent } = await import(
-      /* @vite-ignore */ path
-    );
+    const { buildTableFromSpec, resolveOntologyParent } =
+      await window.__atomicTestModules(
+        'data-browser/src/chunks/TablePage/createTableFromSpec.ts',
+      );
     const store = window.store!;
     const driveSubject = store.getDrive()!;
     const ontology = await store.getResource(
@@ -99,8 +98,7 @@ test('table installation reuses saved class after a lost receipt', async ({
 test('duplicate import review links both copies and blocks apply', async ({
   page,
 }) => {
-  const protocolModule = '/@fs' + resolve(__dirname, '../../lib/src/ws-v2.ts');
-  const fixture = await page.evaluate(async protocolPath => {
+  const fixture = await page.evaluate(async () => {
     const store = window.store!;
     const drive = store.getDrive()!;
     const copies = [];
@@ -116,7 +114,8 @@ test('duplicate import review links both copies and blocks apply', async ({
 
     // Simulate two previously independent replica histories over the real,
     // authenticated transport. Authoring another duplicate would correctly fail.
-    const { encodeSyncPush } = await import(/* @vite-ignore */ protocolPath);
+    const { encodeSyncPush } =
+      await window.__atomicTestModules('lib/src/ws-v2.ts');
     const entries = [];
 
     for (const subject of copies) {
@@ -164,8 +163,9 @@ test('duplicate import review links both copies and blocks apply', async ({
       },
     });
     await edited.save();
-    const path = '/src/chunks/PluginRuns/runScript.ts';
-    const { createPlugin } = await import(/* @vite-ignore */ path);
+    const { createPlugin } = await window.__atomicTestModules(
+      'data-browser/src/chunks/PluginRuns/runScript.ts',
+    );
     const plugin = await createPlugin(
       store,
       { drive, parent: drive },
@@ -181,7 +181,7 @@ test('duplicate import review links both copies and blocks apply', async ({
       edited: edited.subject,
       property: property.subject,
     };
-  }, protocolModule);
+  });
   await expect
     .poll(() =>
       page.evaluate(async () => {

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { before } from './test-utils';
+import { before, CREATE_FROM_SCHEMA_TIMEOUT } from './test-utils';
 
 test.beforeEach(before);
 
@@ -126,7 +126,7 @@ test('existing connections remain visible while both discovery categories are hi
     page
       .getByRole('main')
       .getByRole('heading', { name: 'New plugin', level: 1 }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: CREATE_FROM_SCHEMA_TIMEOUT });
   await page.goto(new URL('/app/integrations', page.url()).href);
   await expect(
     page

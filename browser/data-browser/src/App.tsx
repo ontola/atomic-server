@@ -1,6 +1,6 @@
 import { StoreContext, Store, enableLoro, Client } from '@tomic/react';
 
-import { isDev } from './config';
+import { devRoutesEnabled, isDev } from './config';
 import { registerHandlers } from './handlers';
 import { getAgentFromIDB, saveAgentToIDB } from './helpers/agentStorage';
 import { shouldLock } from './helpers/deviceLock';
@@ -238,6 +238,13 @@ attachStoreToProfiler(store);
 if (isDev()) {
   const { attachDevtools } = await import('./helpers/devtools');
   attachDevtools(store);
+}
+
+// Lets the e2e suite drive app modules the same way whether the SPA came from
+// Vite or from the server binary. Same gate as the dev-only routes.
+if (devRoutesEnabled()) {
+  const { registerTestModules } = await import('./helpers/e2eModules');
+  registerTestModules();
 }
 
 /** Entrypoint of the application. This is where providers go. */

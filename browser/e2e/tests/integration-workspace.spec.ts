@@ -6,21 +6,14 @@ test('workspace owns its views and links to separate connection settings', async
   page,
 }) => {
   const installed = await page.evaluate(async () => {
-    // `ConnectGitHub.tsx` is a thin compatibility wrapper around the
-    // schema-driven AppSetupForm and no longer imports the installer;
-    // `githubInstaller.ts` is the module that still names its path.
-    const setupPath = '/src/chunks/PluginRuns/githubInstaller.ts';
-    await import(/* @vite-ignore */ setupPath);
-    // Vite serves the installer after loading its owning UI module.
-    const ui = await fetch(setupPath).then(r => r.text());
-    const path = ui.match(
-      /"([^"]*integrations\/github-issues\/atomic[^"]*)"/,
-    )![1];
-    const { install } = await import(path);
-    const sourceModule = await import(
-      path.replace(/atomic\.ts.*$/, 'plugin.js?raw')
+    // The provider and its bundled source, as
+    // `chunks/PluginRuns/githubInstaller.ts` imports them.
+    const { install } = await window.__atomicTestModules(
+      'integrations/github-issues/atomic.ts',
     );
-    const source = sourceModule.default;
+    const { default: source } = await window.__atomicTestModules(
+      'integrations/github-issues/plugin.js',
+    );
     const store = window.store!;
     const connection = await install(
       store,
@@ -29,12 +22,8 @@ test('workspace owns its views and links to separate connection settings', async
       source,
     );
     // Existing installations retain their JSON binding, without a write-on-read migration.
-    const { findSchema, pluginSchema } = await import(
-      path.replace(
-        /integrations\/github-issues\/atomic\.ts.*$/,
-        'browser/lib/src/index.ts',
-      )
-    );
+    const { findSchema, pluginSchema } =
+      await window.__atomicTestModules('lib/src/index.ts');
     const schema = await findSchema(store, store.getDrive(), pluginSchema());
     const legacy = await store.getResource(connection.plugin);
     await legacy.remove(schema.properties['plugin-workspace']);
@@ -195,8 +184,9 @@ test('workspace starts automation chat without requiring a connection', async ({
     page.getByRole('dialog').getByText('No automations yet.', { exact: true }),
   ).not.toBeVisible();
   const automation = await page.evaluate(async workspace => {
-    const scriptPath = '/src/chunks/PluginRuns/runScript.ts';
-    const { createPlugin } = await import(/* @vite-ignore */ scriptPath);
+    const { createPlugin } = await window.__atomicTestModules(
+      'data-browser/src/chunks/PluginRuns/runScript.ts',
+    );
 
     return createPlugin(
       window.store!,
