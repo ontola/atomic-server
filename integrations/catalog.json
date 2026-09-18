@@ -186,11 +186,29 @@
     "https://atomicdata.dev/integrations/properties/enabled": true,
     "https://atomicdata.dev/properties/name": "Bank statements",
     "https://atomicdata.dev/properties/emoji": "🏦",
-    "https://atomicdata.dev/properties/description": "Import bank transactions from bunq and other MT940 exports.",
+    "https://atomicdata.dev/properties/description": "Import bank transactions from MT940 and camt.053 statement exports.",
     "https://atomicdata.dev/integrations/properties/capabilities": "Preview exact amounts, dates, account references and original descriptions in a Bank transactions table.",
-    "https://atomicdata.dev/integrations/properties/events": "Upload a statement when you need it. No bank token required.",
-    "https://atomicdata.dev/integrations/properties/limitation": "MT940 files only, up to 500 transactions and 512 KB. No payment initiation or live bank sync. Bank-specific formats may need additional support.",
-    "https://atomicdata.dev/integrations/properties/keywords": "bank bunq banking finance accounting statement mt940 import swift"
+    "https://atomicdata.dev/integrations/properties/events": "Upload an MT940 or camt.053 statement when you need it. No bank token required.",
+    "https://atomicdata.dev/integrations/properties/limitation": "MT940 (up to 512 KB) and camt.053 XML (up to 1 MB) files only, up to 500 transactions. No payment initiation or live bank sync. Bank-specific formats may need additional support.",
+    "https://atomicdata.dev/integrations/properties/keywords": "bank bunq banking finance accounting statement mt940 camt camt.053 iso20022 xml sepa import swift"
+  },
+  {
+    "https://atomicdata.dev/properties/localId": "moneybird",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/shortname": "moneybird",
+    "https://atomicdata.dev/integrations/properties/experimental": true,
+    "https://atomicdata.dev/integrations/properties/enabled": true,
+    "https://atomicdata.dev/properties/name": "Moneybird",
+    "https://atomicdata.dev/properties/emoji": "🐦",
+    "https://atomicdata.dev/properties/description": "Import your Moneybird administration's bookkeeping records.",
+    "https://atomicdata.dev/integrations/properties/capabilities": "Imports contacts, sales invoices, purchase invoices, financial mutations and the other collections Moneybird publishes for an administration into typed tables.",
+    "https://atomicdata.dev/integrations/properties/events": "Connect through LocalThought, pick an administration, then records refresh whenever the folder is open.",
+    "https://atomicdata.dev/integrations/properties/limitation": "Read-only: nothing is written back to Moneybird. One administration per installation. Keep the browser open to sync.",
+    "https://atomicdata.dev/integrations/properties/keywords": "moneybird bookkeeping accounting invoices contacts ledger finance administration localthought",
+    "https://atomicdata.dev/integrations/properties/requires-api-plugins": true,
+    "https://atomicdata.dev/integrations/properties/platform": "moneybird"
   },
   {
     "@id": "https://atomicdata.dev/integrations/catalog/clockify",

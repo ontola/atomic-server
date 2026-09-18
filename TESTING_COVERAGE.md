@@ -1244,7 +1244,7 @@ New automation and integration shortcuts open a fresh assistant chat with resour
 context, requesting user intent before draft creation. Browser acceptance of
 these entry points and assistant-led creation remains open.
 
-## MT940 bank statement importer
+## MT940 and camt.053 bank statement importer
 
 `integrations/mt940/parser.test.ts` has nine scenarios covering signed exact
 amounts, reversals, balance reconciliation, invalid/truncated input, multiple
@@ -1255,6 +1255,17 @@ JSON-shaped narratives are rejected until legacy text materialization is fixed.
 runs the shipped JS in real QuickJS/WASM and verifies balance failures and
 network-free proposals. Offline certification passes and is recorded in the
 integration store's bundle-matched evidence.
+
+`integrations/mt940/camt053.test.ts` has six scenarios for the camt.053 path:
+the sandbox-safe XML reader (namespaces, prefixes, entities, CDATA, malformed
+input), booked-entry mapping to exact amounts/dates/codes/references/narratives,
+v08 status codes, `DtTm` dates, `PRCD` openings and `Othr` account ids,
+reconciliation/currency/date/balance-type/size failures, the 500-entry bound,
+format detection and per-format identities.
+`plugins::bank_statement_tests::camt_statement_proposes_the_same_nested_transactions`
+runs the same bundle on the camt.053 fixture in QuickJS/WASM. The MT940 E2E
+below ends by uploading the camt.053 fixture into the same importer and
+expecting two new rows. No real bank camt.053 export has been validated yet.
 
 `browser/e2e/tests/mt940.spec.ts` uses a synthetic statement with the real Worker,
 server runtime, planner and signed persistence. It verifies invalid-file errors,

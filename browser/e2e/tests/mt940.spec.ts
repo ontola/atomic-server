@@ -8,6 +8,10 @@ const statementPath = resolve(
   '../../../integrations/mt940/fixtures/synthetic.mt940',
 );
 const statement = readFileSync(statementPath, 'utf8');
+const camtPath = resolve(
+  __dirname,
+  '../../../integrations/mt940/fixtures/synthetic.camt053.xml',
+);
 
 test.beforeEach(before);
 test.beforeEach(async ({ page }) => {
@@ -82,4 +86,16 @@ test('MT940 rejects unbalanced files, previews in sandbox and skips repeat impor
     path: '/tmp/mt940-repeat-preview.png',
     fullPage: true,
   });
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  // The same importer recognises a camt.053 export of the same period. Its
+  // identities are per format, so the two bookings arrive as new rows rather
+  // than as conflicts with the MT940 ones.
+  await page.locator('#mt940-file').setInputFiles(camtPath);
+  await page
+    .getByRole('button', { name: 'Preview import', exact: true })
+    .click();
+  await expect(
+    page.getByRole('button', { name: /Apply 2 changes/ }),
+  ).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText(/1 statements reconciled/)).toBeVisible();
 });

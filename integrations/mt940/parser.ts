@@ -25,7 +25,7 @@ export function decimal(raw: string, negative = false): string {
   const value = `${whole.replace(/^0+(?=\d)/, '')}${fraction.replace(/0+$/, '') ? '.' + fraction.replace(/0+$/, '') : ''}`;
   return negative && value !== '0' ? '-' + value : value;
 }
-function units(value: string): bigint {
+export function units(value: string): bigint {
   const negative = value.startsWith('-');
   const [whole, fraction = ''] = value.replace(/^-/, '').split('.');
   return BigInt(whole + fraction.padEnd(5, '0')) * (negative ? -1n : 1n);
@@ -202,8 +202,12 @@ export function parseMT940(text: string): Statement[] {
     throw new Error(
       'Incomplete MT940 statement: opening and closing balances are required',
     );
-  // Current Atomic legacy materialization interprets JSON-shaped strings as
-  // resources. Refuse these rare narratives instead of corrupting bank text.
+  rejectJsonNarratives(statements);
+  return statements;
+}
+// Current Atomic legacy materialization interprets JSON-shaped strings as
+// resources. Refuse these rare narratives instead of corrupting bank text.
+export function rejectJsonNarratives(statements: Statement[]): void {
   for (const statement of statements)
     for (const row of statement.transactions) {
       const narrative = row.description.trim();
@@ -220,5 +224,4 @@ export function parseMT940(text: string): Statement[] {
           );
       }
     }
-  return statements;
 }

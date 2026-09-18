@@ -8,5 +8,5 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["parser.ts", "plugin.ts"]
+  "include": ["parser.ts", "camt053.ts", "statement.ts", "plugin.ts"]
 }
