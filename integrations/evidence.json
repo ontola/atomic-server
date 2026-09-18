@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-08T10:56:37.644Z",
+  "generatedAt": "2026-09-18T12:38:38.722Z",
   "layer": "all",
   "live": {
     "status": "not-run",
@@ -60,7 +60,7 @@
         "issues.status:two-way",
         "issues.create:two-way"
       ],
-      "bundleSha256": "aa016fe662616b57241d5685e3dca237243631a1e6719bbe46281a26bb1dac67",
+      "bundleSha256": "eb9516c869db95525da8c94ab4616ec9b03c347c3ca7d74c9fe9b5bee5496381",
       "checks": [
         {
           "name": "reproducible-bundle",
@@ -143,7 +143,7 @@
       "declaredCapabilities": [
         "bank-statements:import"
       ],
-      "bundleSha256": "e9df730295936a019b6429b40eecb4fd0c456311467a690a0456b691b37af7a6",
+      "bundleSha256": "39c76cd8b536e4a7e1eb170483a47a99fea1d75ba755548befe96d8d5e9c231a",
       "checks": [
         {
           "name": "reproducible-bundle",
@@ -205,6 +205,41 @@
       "fixtureCounts": {
         "passed": 20,
         "skipped": 1,
+        "failed": 0
+      }
+    },
+    {
+      "id": "pets",
+      "version": "0.1.0",
+      "owner": "Ontola",
+      "support": "experimental",
+      "apiVersion": "demo-v1",
+      "declaredCapabilities": [
+        "demo-pets:import"
+      ],
+      "bundleSha256": "bf9a687dda16d1ba2d8bae4b80a26d2c7e011a102d6c15b55b83132685fb7a4f",
+      "checks": [
+        {
+          "name": "reproducible-bundle",
+          "status": "passed"
+        },
+        {
+          "name": "typecheck",
+          "status": "passed"
+        },
+        {
+          "name": "fixtures",
+          "status": "passed"
+        },
+        {
+          "name": "plugins::pets_tests::demo_pets_are_proposed_in_the_real_sandbox",
+          "status": "passed"
+        }
+      ],
+      "status": "passed",
+      "fixtureCounts": {
+        "passed": 5,
+        "skipped": 0,
         "failed": 0
       }
     }

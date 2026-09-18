@@ -12,6 +12,11 @@ pub struct Manifest {
     pub operations: Vec<Operation>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub actions: Vec<super::actions::Action>,
+    /// What the plugin's user-editable config looks like. The host validates
+    /// the stored config against it before a run; nothing here grants access,
+    /// so it is carried rather than interpreted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]

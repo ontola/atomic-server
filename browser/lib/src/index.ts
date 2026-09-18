@@ -197,8 +197,15 @@ export {
   secretsMentionedIn,
   originsMentionedIn,
   type DeclaredSecret,
+  type DeclaredConfig,
+  type DeclaredConfigField,
   type PluginManifest,
 } from './plugin-manifest.js';
+export {
+  pluginConfigFor,
+  pluginConfigProblems,
+  type StoredPluginConfig,
+} from './plugin-config.js';
 export { describePlugin } from './plugin-runner.js';
 
 export {

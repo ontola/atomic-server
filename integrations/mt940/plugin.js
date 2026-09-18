@@ -398,6 +398,10 @@ function parseMT940(text) {
     throw new Error(
       "Incomplete MT940 statement: opening and closing balances are required"
     );
+  rejectJsonNarratives(statements);
+  return statements;
+}
+function rejectJsonNarratives(statements) {
   for (const statement of statements)
     for (const row of statement.transactions) {
       const narrative = row.description.trim();
@@ -414,20 +418,284 @@ function parseMT940(text) {
           );
       }
     }
+}
+
+// integrations/mt940/camt053.ts
+var CAMT053_MAX_BYTES = 1e6;
+var local = (name) => name.replace(/^[^:]*:/, "");
+function decode(text) {
+  return text.replace(
+    /&(amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);/g,
+    (_, entity) => {
+      switch (entity) {
+        case "amp":
+          return "&";
+        case "lt":
+          return "<";
+        case "gt":
+          return ">";
+        case "quot":
+          return '"';
+        case "apos":
+          return "'";
+        default:
+          return String.fromCodePoint(
+            entity[1] === "x" ? parseInt(entity.slice(2), 16) : Number(entity.slice(1))
+          );
+      }
+    }
+  );
+}
+function attributes(raw) {
+  const attrs = {};
+  for (const match of raw.matchAll(
+    /([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g
+  ))
+    attrs[local(match[1])] = decode(match[2] ?? match[3] ?? "");
+  return attrs;
+}
+function parseXml(source) {
+  const root = { name: "", attrs: {}, children: [], text: "" };
+  const stack = [root];
+  const token = /<!--[\s\S]*?-->|<!\[CDATA\[([\s\S]*?)\]\]>|<\?[\s\S]*?\?>|<!DOCTYPE[^>]*>|<\/([^\s>]+)\s*>|<([^\s/>]+)((?:\s+[^\s=/>]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(\/?)>|([^<]+)/y;
+  let position = 0;
+  while (position < source.length) {
+    token.lastIndex = position;
+    const match = token.exec(source);
+    if (!match) throw new Error("Malformed camt.053 XML");
+    position = token.lastIndex;
+    const current = stack[stack.length - 1];
+    if (match[1] !== void 0) current.text += match[1];
+    else if (match[2] !== void 0) {
+      if (stack.length < 2 || local(match[2]) !== current.name)
+        throw new Error("Malformed camt.053 XML: mismatched closing tag");
+      stack.pop();
+    } else if (match[3] !== void 0) {
+      const node = {
+        name: local(match[3]),
+        attrs: attributes(match[4]),
+        children: [],
+        text: ""
+      };
+      current.children.push(node);
+      if (!match[5]) stack.push(node);
+    } else if (match[6] !== void 0) current.text += decode(match[6]);
+  }
+  if (stack.length !== 1)
+    throw new Error("Malformed camt.053 XML: unclosed element");
+  return root;
+}
+var all = (node, name) => node?.children.filter((child) => child.name === name) ?? [];
+function one(node, ...path) {
+  let current = node;
+  for (const name of path) current = all(current, name)[0];
+  return current;
+}
+var textOf = (node, ...path) => one(node, ...path)?.text.trim() ?? "";
+function isoDate(raw) {
+  const result = raw.slice(0, 10);
+  const parsed = /* @__PURE__ */ new Date(result + "T00:00:00Z");
+  if (!/^\d{4}-\d{2}-\d{2}(?:$|T)/.test(raw) || !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== result)
+    throw new Error("Invalid camt.053 date");
+  return result;
+}
+function amount(node, currency, negative) {
+  const raw = node?.text.trim() ?? "";
+  if (!node || !/^\d{1,15}(?:\.\d{0,5})?$/.test(raw))
+    throw new Error("Invalid camt.053 amount");
+  if (node.attrs.Ccy && node.attrs.Ccy !== currency)
+    throw new Error(
+      "camt.053 entry currency differs from the account currency"
+    );
+  return decimal(
+    raw.includes(".") ? raw.replace(".", ",") : raw + ",",
+    negative
+  );
+}
+function direction(node) {
+  const indicator = textOf(node, "CdtDbtInd");
+  if (indicator !== "CRDT" && indicator !== "DBIT")
+    throw new Error("Invalid camt.053 credit/debit indicator");
+  return indicator === "DBIT";
+}
+var dateOf = (node, ...path) => textOf(node, ...path, "Dt") || textOf(node, ...path, "DtTm");
+function balance2(node, currency) {
+  const type = textOf(node, "Tp", "CdOrPrtry", "Cd");
+  const raw = dateOf(node, "Dt");
+  if (!raw) throw new Error("camt.053 balance is missing its date");
+  return {
+    type,
+    date: isoDate(raw),
+    amount: amount(one(node, "Amt"), currency, direction(node))
+  };
+}
+var partyName = (party) => textOf(party, "Nm") || textOf(party, "Pty", "Nm");
+var accountId = (account) => textOf(account, "Id", "IBAN") || textOf(account, "Id", "Othr", "Id");
+function transactionCode(entry) {
+  const domain = one(entry, "BkTxCd", "Domn");
+  const structured = [
+    textOf(domain, "Cd"),
+    textOf(domain, "Fmly", "Cd"),
+    textOf(domain, "Fmly", "SubFmlyCd")
+  ].filter(Boolean);
+  return structured.length ? structured.join("/") : textOf(entry, "BkTxCd", "Prtry", "Cd");
+}
+function transaction2(entry, currency) {
+  const negative = direction(entry);
+  const bookingRaw = dateOf(entry, "BookgDt");
+  const valueRaw = dateOf(entry, "ValDt");
+  if (!bookingRaw && !valueRaw)
+    throw new Error("camt.053 entry has no booking or value date");
+  const details = all(one(entry, "NtryDtls"), "TxDtls");
+  const references = details.map((detail) => one(detail, "Refs"));
+  const endToEnd = references.map((refs) => textOf(refs, "EndToEndId")).find((value) => value && value !== "NOTPROVIDED");
+  const lines = [];
+  const add = (line) => {
+    if (line && !lines.includes(line)) lines.push(line);
+  };
+  for (const detail of details) {
+    const parties = one(detail, "RltdPties");
+    const counterparty = negative ? "Cdtr" : "Dbtr";
+    add(
+      [
+        partyName(one(parties, counterparty)),
+        accountId(one(parties, `${counterparty}Acct`))
+      ].filter(Boolean).join(" ")
+    );
+    const remittance = one(detail, "RmtInf");
+    for (const unstructured of all(remittance, "Ustrd"))
+      add(unstructured.text.trim());
+    for (const structured of all(remittance, "Strd"))
+      add(textOf(structured, "CdtrRefInf", "Ref"));
+    add(textOf(detail, "AddtlTxInf"));
+  }
+  add(textOf(entry, "AddtlNtryInf"));
+  return {
+    date: isoDate(valueRaw || bookingRaw),
+    bookingDate: isoDate(bookingRaw || valueRaw),
+    amount: amount(one(entry, "Amt"), currency, negative),
+    code: transactionCode(entry),
+    reference: endToEnd || textOf(entry, "NtryRef") || "NONREF",
+    bankReference: textOf(entry, "AcctSvcrRef") || references.map((refs) => textOf(refs, "AcctSvcrRef")).find(Boolean) || "",
+    description: lines.join("\n")
+  };
+}
+function parseCamt053(text) {
+  if (typeof text !== "string" || text.length > CAMT053_MAX_BYTES)
+    throw new Error("Choose a camt.053 file smaller than 1 MB");
+  const root = parseXml(text.replace(/^﻿/, ""));
+  const report = one(root, "Document", "BkToCstmrStmt");
+  if (!report)
+    throw new Error(
+      "Not a camt.053 bank statement: expected a Document with BkToCstmrStmt"
+    );
+  const statements = [];
+  let count = 0;
+  for (const stmt of all(report, "Stmt")) {
+    const acct = one(stmt, "Acct");
+    const account = accountId(acct);
+    if (!account) throw new Error("Missing bank account");
+    const balanceNodes = all(stmt, "Bal");
+    const currency = textOf(acct, "Ccy") || balanceNodes.map((node) => one(node, "Amt")?.attrs.Ccy).find(Boolean) || "";
+    if (!/^[A-Z]{3}$/.test(currency))
+      throw new Error("Missing camt.053 account currency");
+    const balances = balanceNodes.map((node) => balance2(node, currency));
+    const opening = balances.find((b) => b.type === "OPBD") ?? balances.find((b) => b.type === "PRCD");
+    const closing = balances.find((b) => b.type === "CLBD");
+    if (!opening || !closing)
+      throw new Error(
+        "camt.053 statement needs an opening (OPBD) and closing (CLBD) booked balance"
+      );
+    if (closing.date < opening.date)
+      throw new Error("Statement currency or date range is inconsistent");
+    const transactions = [];
+    for (const entry of all(stmt, "Ntry")) {
+      const status = textOf(entry, "Sts") || textOf(entry, "Sts", "Cd");
+      if (status && status !== "BOOK") continue;
+      if (++count > 500)
+        throw new Error(
+          "Import at most 500 transactions at a time; export a shorter period"
+        );
+      transactions.push(transaction2(entry, currency));
+    }
+    if (units(opening.amount) + transactions.reduce((sum, row) => sum + units(row.amount), 0n) !== units(closing.amount))
+      throw new Error(
+        "Statement balance does not reconcile; no transactions will be imported"
+      );
+    statements.push({
+      account,
+      number: textOf(stmt, "Id") || textOf(stmt, "ElctrncSeqNb"),
+      currency,
+      opening: opening.amount,
+      closing: closing.amount,
+      start: opening.date,
+      end: closing.date,
+      transactions
+    });
+  }
+  if (!statements.length)
+    throw new Error("camt.053 file contains no statements");
+  rejectJsonNarratives(statements);
   return statements;
 }
 
+// integrations/mt940/statement.ts
+function detectStatementFormat(text) {
+  return text.replace(/^﻿/, "").trimStart().startsWith("<") ? "camt053" : "mt940";
+}
+function parseBankStatement(text) {
+  if (typeof text !== "string") throw new Error("Choose a bank statement file");
+  const format = detectStatementFormat(text);
+  return {
+    format,
+    statements: format === "camt053" ? parseCamt053(text) : parseMT940(text)
+  };
+}
+
 // integrations/mt940/plugin.ts
-var manifest = { schemaVersion: 1, operations: [], secrets: [] };
+var manifest = {
+  schemaVersion: 1,
+  operations: [],
+  secrets: [],
+  // The host checks this before starting the sandbox, so an importer installed
+  // without a destination pauses on the field to set.
+  config: {
+    key: "mt940",
+    properties: {
+      table: {
+        type: "string",
+        description: "Table the transactions are written to"
+      },
+      rowClass: {
+        type: "string",
+        description: "Class each imported transaction gets"
+      },
+      properties: {
+        type: "object",
+        description: "Banking ontology properties, by shortname"
+      }
+    },
+    required: ["table", "rowClass", "properties"]
+  }
+};
 function run(ctx) {
   const text = ctx.text ?? ctx.trigger?.payload?.text;
   if (!text)
     throw new Error(
-      "Open Bank statements in Integrations and choose an MT940 file"
+      "Open Bank statements in Integrations and choose an MT940 or camt.053 file"
     );
-  const statements = parseMT940(text);
+  const { format, statements } = parseBankStatement(text);
   if (ctx.trigger?.payload?.validate) return { intents: [], problems: [] };
-  const { table, rowClass, properties: p } = ctx.config;
+  const { table, rowClass, properties: p } = ctx.config ?? {};
+  const missing = [
+    ["table", table],
+    ["rowClass", rowClass],
+    ["properties", p]
+  ].filter(([, value]) => !value).map(([name]) => name);
+  if (missing.length)
+    throw new Error(
+      `Configure this importer before running it: missing ${missing.join(", ")}`
+    );
   const records = [];
   const seen = /* @__PURE__ */ new Map();
   let fallback = 0;
@@ -440,7 +708,7 @@ function run(ctx) {
       statement.closing
     ]);
     for (const [index, row] of statement.transactions.entries()) {
-      const fingerprint = "mt940-content:" + JSON.stringify([
+      const fingerprint = `${format}-content:` + JSON.stringify([
         statement.account,
         statement.currency,
         row.date,
@@ -452,7 +720,7 @@ function run(ctx) {
       ]);
       const reference = row.bankReference && row.bankReference !== "NONREF" ? row.bankReference : "";
       const identity = JSON.stringify([
-        "mt940",
+        format,
         statement.account,
         statement.currency,
         reference ? ["bank", reference] : ["statement", statementKey, index]

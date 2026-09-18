@@ -46,7 +46,10 @@ export function LocalThoughtCatalog({
 
     return () => controller.abort();
   }, [origin]);
-  const visible = localThoughtCatalogEntries(platforms)
+  const visible = localThoughtCatalogEntries(
+    platforms,
+    catalogEntries.flatMap(entry => entry.platform ?? []),
+  )
     .filter(id =>
       isCatalogVisible(
         catalogEntriesByShortname.get(id),

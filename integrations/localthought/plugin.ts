@@ -15,11 +15,13 @@ export interface Config {
   }[];
 }
 export function run(ctx: {
-  config: Config;
+  config?: Config;
   query(p: string, v: string): string[];
   read(s: string): Record<string, unknown>;
 }) {
-  const c = ctx.config;
+  // A connection whose config never reached the run has the same remedy as an
+  // incomplete one, and must read like it rather than throw a TypeError.
+  const c = ctx.config ?? ({} as Config);
   if (!c.destinations || !c.properties || !Array.isArray(c.records))
     throw new Error("Fetch records from the connection before previewing this import");
   const identities = new Set<string>();
