@@ -3,7 +3,6 @@ import {
   importInstallationIdentity,
   readSavedConnection,
 } from '../../../../../integrations/localthought/settings';
-import type { googleCalendarIntegration } from '@localthought/atomic-integrations/ui/GoogleCalendar';
 import { useEffect, useState } from 'react';
 import { useStore } from '@tomic/react';
 import { Button } from '@components/Button';
@@ -17,6 +16,7 @@ import {
   proxyRequest,
   type SavedConnection,
 } from './localThought';
+import type { LocalThoughtExtension } from './localThoughtExtension';
 import { installLocalThought, refreshLocalThought } from './localThoughtSync';
 import {
   PARAMETER_OPTION_LOOKUPS,
@@ -34,7 +34,7 @@ export function ConnectLocalThought({
   drive: string;
   platform: string;
   origin?: string;
-  extension?: typeof googleCalendarIntegration;
+  extension?: LocalThoughtExtension;
   entry?: string;
 }) {
   return (
@@ -58,7 +58,7 @@ function GenericConnection({
   drive: string;
   platform: string;
   origin: string;
-  extension?: typeof googleCalendarIntegration;
+  extension?: LocalThoughtExtension;
   entry?: string;
 }) {
   const ImportControls = extension?.ImportControls;
@@ -206,9 +206,9 @@ function GenericConnection({
         identity: importInstallationIdentity(
           connection,
           constants,
-          `${extension ? ':devonian-calendar' : ':api'}${extension && selection ? extension.identitySuffix(selection) : ''}`,
+          `${extension ? `:devonian-${extension.mode}` : ':api'}${extension && selection ? extension.identitySuffix(selection) : ''}`,
         ),
-        extension: extension ? 'calendar' : 'none',
+        extension: extension?.mode ?? 'none',
       });
       sessionStorage.removeItem('localthought-completed');
       setFolder(installed.folder);
@@ -290,7 +290,7 @@ function GenericConnection({
             />
           )}
           <p>{collections.join(', ')}</p>
-          <ImportScopeHelp writable={!!extension} />
+          <ImportScopeHelp writable={!!extension?.Sync} />
           <Button
             disabled={
               busy || !collections.length || parameters.some(p => !constants[p])

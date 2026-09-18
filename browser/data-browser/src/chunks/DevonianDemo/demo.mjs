@@ -63,11 +63,12 @@ export async function openDemo(store, options) {
           ],
           views: [
             {
-              name: 'Board',
-              kind: 'kanban',
+              name: 'Issues',
+              kind: 'issues',
               groupByColumn: 'Status',
               default: true,
             },
+            { name: 'Board', kind: 'kanban', groupByColumn: 'Status' },
             { name: 'All issues', kind: 'table' },
           ],
         },

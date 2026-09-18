@@ -20,6 +20,7 @@ import { platformName } from './localThought';
 import {
   localThoughtExtension,
   schemaNamespace,
+  type LocalThoughtExtensionMode,
 } from './localThoughtExtension';
 
 export async function ensureImportTables(
@@ -28,7 +29,7 @@ export async function ensureImportTables(
   resource: Resource,
   identity: string,
   fetched: FetchedPlatform,
-  extensionId?: 'calendar' | 'none',
+  extensionId?: LocalThoughtExtensionMode,
   schemaPlatform?: string,
 ): Promise<Config> {
   const { platform } = fetched;
@@ -77,15 +78,20 @@ export async function ensureImportTables(
         [dataBrowser.properties.viewColumns]: columns,
       },
     });
+    // The lens's own view of this class — a calendar of events, an issue
+    // list of tasks — beside the plain table. Its localId keeps the first
+    // lens's `calendar` spelling so existing Calendar folders resolve to the
+    // view they already have.
+    const projectedKind = extension?.view.kind ?? 'calendar';
     const calendar =
       extension?.view.classShortname === term.shortname
         ? await ensureInstallationResource(store, drive, {
             parent: destination.subject,
-            localId: `${identity}:calendar:${term.shortname}`,
+            localId: `${identity}:${projectedKind}:${term.shortname}`,
             isA: [dataBrowser.classes.view],
             propVals: {
               [core.properties.name]: tableName,
-              [dataBrowser.properties.viewKind]: 'calendar',
+              [dataBrowser.properties.viewKind]: projectedKind,
               [dataBrowser.properties.viewGroupBy]:
                 properties[extension.view.groupByShortname],
               [dataBrowser.properties.viewColumns]: columns,
