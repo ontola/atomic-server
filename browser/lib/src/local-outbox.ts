@@ -259,6 +259,7 @@ const KNOWN_ERROR_CODES: ReadonlySet<number> = new Set([
   ErrorCode.UNAUTHORIZED_WRITE,
   ErrorCode.MISSING_CLASS,
   ErrorCode.SYNC_REJECTED,
+  ErrorCode.IMMUTABLE_COMMIT,
 ]);
 
 /**
@@ -273,11 +274,46 @@ export function isTerminalCommitError(message: string, code?: number): boolean {
   if (code !== undefined && KNOWN_ERROR_CODES.has(code)) {
     return (
       code === ErrorCode.GENESIS_COLLISION ||
-      code === ErrorCode.MISSING_REQUIRED_PROPERTY
+      code === ErrorCode.MISSING_REQUIRED_PROPERTY ||
+      code === ErrorCode.IMMUTABLE_COMMIT
     );
   }
 
   return isTerminalCommitErrorMessage(message);
+}
+
+/**
+ * Whether a terminal refusal is bookkeeping rather than a lost write: the
+ * user's data is already where it should be, so the drop should be logged,
+ * not surfaced as an error toast.
+ *
+ * - A redundant genesis (`GENESIS_COLLISION`): the resource already exists on
+ *   the server; only the never-applied diff in this one commit is gone. These
+ *   arrive in bulk when local state lost its `lastCommit` chain (e.g. after
+ *   switching servers), so a toast per commit is pure noise.
+ * - A write aimed at a Commit (`IMMUTABLE_COMMIT`): a Commit is whatever was
+ *   signed; no local edit to it could ever have applied.
+ *
+ * Same code-first / string-fallback shape as {@link isTerminalCommitError}:
+ * a recognized `code` is authoritative (so a server wording change cannot
+ * turn a benign drop into a scary one, or vice versa), and only an absent or
+ * unrecognized code falls back to the legacy message text.
+ */
+export function isBenignTerminalCommitError(
+  message: string,
+  code?: number,
+): boolean {
+  if (code !== undefined && KNOWN_ERROR_CODES.has(code)) {
+    return (
+      code === ErrorCode.GENESIS_COLLISION ||
+      code === ErrorCode.IMMUTABLE_COMMIT
+    );
+  }
+
+  return (
+    message.includes('is_genesis: true, but the resource already exists') ||
+    message.includes('Commits cannot be edited')
+  );
 }
 
 /** Blocking-error check the outbox should actually call — see

@@ -85,6 +85,7 @@ export {
   isUnrecoverableCommitErrorMessage,
   isTerminalCommitError,
   isUnrecoverableCommitError,
+  isBenignTerminalCommitError,
   type OutboxEntry,
   type OutboxDrainContext,
 } from './local-outbox.js';

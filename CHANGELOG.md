@@ -7,6 +7,11 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- `classify_commit_error` classifies "Commits cannot be edited." (a write whose
+  subject is itself a Commit) as the new `IMMUTABLE_COMMIT` (10) error code, on
+  the WS `ERROR` frame and the HTTP `/commit` error body's `errorCode` alike.
+  It was going out as `UNKNOWN`, leaving clients to match the message text to
+  know the refusal is terminal. The Rust outbox drops such entries as terminal.
 - CI: the `:develop` docker image is published by its own job instead of a
   step tacked onto the end of the CI job. As a step it inherited whatever the
   CI step had already spent (a wedged Dagger engine on the runner burned the
