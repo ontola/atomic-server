@@ -9,7 +9,9 @@ owning plan where one exists. Verification logs stay out of this file.
 - [ ] **Publish `@tomic/*` to npm on a `v*` tag.** The registry still serves
       `0.41.0-beta.0` (2025-06) for `lib`, `react`, `svelte` and `cli`;
       `plugin` and `edit-mode` were never published; seven betas have shipped
-      since. The `npm` job now exists in `release.yml` (2026-09-15). Remaining:
+      since (the workspace is at `0.41.0-beta.7`). The `npm` job exists in
+      `release.yml` since 2026-09-15; #1355 (merged 2026-09-18) fixed its
+      build order (`@tomic/lib` first) and publishes with `--ignore-scripts`. Remaining:
       trusted-publisher entries on npmjs.com for `@tomic/plugin` and
       `@tomic/edit-mode` (the other five are configured), then the next tag.
 - [ ] Green full CI on the release commit including the atomic-saas
@@ -25,7 +27,7 @@ owning plan where one exists. Verification logs stay out of this file.
 - [x] Library-owned durable flush so the Flutter binding stops losing writes
       on app kill ([`atomic-lib-runtime.md`](./atomic-lib-runtime.md), 2026-09-15).
 - [x] Desktop CSP (audit B7) set 2026-09-15; needs one packaged-build smoke test before a release.
-- [x] npm publish job in `release.yml` (2026-09-15, ported from #1355). First tag after merge publishes seven `@tomic/*` packages through Trusted Publishing; `plugin` and `edit-mode` need their npmjs.com trusted-publisher entries first.
+- [x] npm publish job in `release.yml` (2026-09-15, ported from #1355; #1355 itself merged 2026-09-18). First tag after merge publishes seven `@tomic/*` packages through Trusted Publishing; `plugin` and `edit-mode` need their npmjs.com trusted-publisher entries first.
 - [ ] Managed-node paid-abuse gate: the bootstrap grace admits any drive for
       ten minutes with no reaper
       ([`cloud-sync-managed-node.md`](./cloud-sync-managed-node.md) item 4).

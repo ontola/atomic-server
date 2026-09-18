@@ -1,6 +1,7 @@
 # Disk Storage & Persistence Optimization
 
-> **Status:** Proposal (2026-06-04). Diagnoses why server boot time and overall
+> **Status:** Proposal (2026-06-04); fix 1 and fix 2 have a PR in flight
+> (2026-09-18). Diagnoses why server boot time and overall
 > performance degrade as the store grows, and proposes fixes. Builds on
 > [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md)
 > (history retention is node policy) and
@@ -64,10 +65,11 @@ scales with the file, for two reasons the code already documents:
 Three compounding behaviors, all in code:
 
 1. **Full Loro snapshots on every commit — not deltas.** `sign_at`
-   (`lib/src/commit.rs:1121`) calls `doc.export_snapshot()`, serializing the
+   (`lib/src/commit.rs`, `fn sign_at` near line 1493 on 2026-09-18) calls
+   `doc.export_snapshot()`, serializing the
    resource's **entire** CRDT document after applying the change. A 1-character
    title edit re-stores the whole resource's Loro state. **NB:** the docstring
-   at `commit.rs:1088` says *"an incremental update is exported"*, but the call
+   just above it says *"an incremental update is exported"*, but the call
    is `export_snapshot()` (full). This mismatch looks **unintended** and is the
    single biggest growth lever.
 2. **History retention.** Each commit is retained (the `previousCommit` audit
@@ -106,7 +108,7 @@ what the `commit.rs:1088` docstring already intended.
 - The materialized "current state" snapshot per resource (`TABLE_LORO_SNAPSHOTS`)
   can stay full for fast reads; it's the **per-commit `loroUpdate`** that should
   be a delta — that's the part multiplied by history.
-- **First step:** confirm `export_snapshot()` at `commit.rs:1121` is an
+- **First step:** confirm `export_snapshot()` in `sign_at` is an
   unintended full-write (vs. a deliberate choice for import-merge correctness),
   and that `from` (the prior version vector) is available at sign time.
 - **Downstream wins:** the per-commit `loroUpdate` is also the payload that gets
@@ -161,7 +163,7 @@ change, but it's the fastest path to a non-flaky suite and isolates real bugs
 
 ## Open questions
 
-- Is `export_snapshot()` at `commit.rs:1121` load-bearing for import-merge
+- Is `export_snapshot()` in `sign_at` load-bearing for import-merge
   correctness, or safe to switch to an incremental export? (Determines fix #1.)
 - What's the dead-page ratio of a real aged store? Run `atomic-server compact`
   on a production-like store and compare before/after size to size the win.
@@ -174,7 +176,7 @@ change, but it's the fastest path to a non-flaky suite and isolates real bugs
 
 - `lib/src/db/redb_store.rs:93-160` — open path, fsync/repair cost notes,
   `compact_file`, `set_quick_repair`.
-- `lib/src/commit.rs:1085-1124` — `sign_at`; `export_snapshot()` at line 1121
-  (full snapshot despite "incremental" docstring at 1088).
-- `server/src/bin.rs:119` — manual `compact` subcommand wiring.
+- `lib/src/commit.rs` — `sign_at` (about line 1490 on 2026-09-18);
+  `export_snapshot()` at its end, full snapshot despite the "incremental" docstring.
+- `server/src/bin.rs` — manual `compact` subcommand wiring (`Command::Compact`).
 - `TABLE_LORO_SNAPSHOTS`, `TABLE_BLOBS` — per-resource snapshot + blob storage.
