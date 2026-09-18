@@ -4,7 +4,31 @@ import {
   type ImportRecord,
 } from '../../browser/lib/src/import-records.js';
 import { parseBankStatement } from './statement.js';
-export const manifest = { schemaVersion: 1, operations: [], secrets: [] };
+export const manifest = {
+  schemaVersion: 1,
+  operations: [],
+  secrets: [],
+  // The host checks this before starting the sandbox, so an importer installed
+  // without a destination pauses on the field to set.
+  config: {
+    key: 'mt940',
+    properties: {
+      table: {
+        type: 'string',
+        description: 'Table the transactions are written to',
+      },
+      rowClass: {
+        type: 'string',
+        description: 'Class each imported transaction gets',
+      },
+      properties: {
+        type: 'object',
+        description: 'Banking ontology properties, by shortname',
+      },
+    },
+    required: ['table', 'rowClass', 'properties'],
+  },
+};
 export interface Config {
   table: string;
   rowClass: string;
@@ -13,7 +37,7 @@ export interface Config {
 interface Host {
   text?: string;
   trigger?: { payload?: { text?: string; validate?: boolean } };
-  config: Config;
+  config?: Config;
   query(property: string, value: string): string[];
   read(subject: string): Record<string, unknown>;
 }
@@ -25,7 +49,20 @@ export function run(ctx: Host) {
     );
   const { format, statements } = parseBankStatement(text);
   if (ctx.trigger?.payload?.validate) return { intents: [], problems: [] };
-  const { table, rowClass, properties: p } = ctx.config;
+  // Absent config reads as a configuration problem, never a TypeError.
+  const { table, rowClass, properties: p } = ctx.config ?? ({} as Config);
+  const missing = [
+    ['table', table],
+    ['rowClass', rowClass],
+    ['properties', p],
+  ]
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+
+  if (missing.length)
+    throw new Error(
+      `Configure this importer before running it: missing ${missing.join(', ')}`,
+    );
   const records: ImportRecord[] = [];
   const seen = new Map<string, string>();
   let fallback = 0;

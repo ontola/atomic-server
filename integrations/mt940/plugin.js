@@ -653,7 +653,31 @@ function parseBankStatement(text) {
 }
 
 // integrations/mt940/plugin.ts
-var manifest = { schemaVersion: 1, operations: [], secrets: [] };
+var manifest = {
+  schemaVersion: 1,
+  operations: [],
+  secrets: [],
+  // The host checks this before starting the sandbox, so an importer installed
+  // without a destination pauses on the field to set.
+  config: {
+    key: "mt940",
+    properties: {
+      table: {
+        type: "string",
+        description: "Table the transactions are written to"
+      },
+      rowClass: {
+        type: "string",
+        description: "Class each imported transaction gets"
+      },
+      properties: {
+        type: "object",
+        description: "Banking ontology properties, by shortname"
+      }
+    },
+    required: ["table", "rowClass", "properties"]
+  }
+};
 function run(ctx) {
   const text = ctx.text ?? ctx.trigger?.payload?.text;
   if (!text)
@@ -662,7 +686,16 @@ function run(ctx) {
     );
   const { format, statements } = parseBankStatement(text);
   if (ctx.trigger?.payload?.validate) return { intents: [], problems: [] };
-  const { table, rowClass, properties: p } = ctx.config;
+  const { table, rowClass, properties: p } = ctx.config ?? {};
+  const missing = [
+    ["table", table],
+    ["rowClass", rowClass],
+    ["properties", p]
+  ].filter(([, value]) => !value).map(([name]) => name);
+  if (missing.length)
+    throw new Error(
+      `Configure this importer before running it: missing ${missing.join(", ")}`
+    );
   const records = [];
   const seen = /* @__PURE__ */ new Map();
   let fallback = 0;

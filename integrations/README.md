@@ -40,6 +40,36 @@ fixtures. `dagger call integration-certification-report export --path ./report`
 exports the JS-layer evidence. The full local command includes sandbox evidence;
 CI's exported JS report deliberately does not claim its separate Rust gate ran.
 
+## Declaring config
+
+A plugin that reads `ctx.config` declares the shape it needs in its `manifest`,
+beside the code that destructures it:
+
+```js
+export const manifest = {
+  schemaVersion: 1,
+  operations: [],
+  secrets: [],
+  config: {
+    // Key this plugin's config sits under in the installation's stored config.
+    // Omit it when the config is stored flat.
+    key: 'pets',
+    properties: {
+      table: { type: 'string', description: 'Table the pets are written to' },
+      properties: { type: 'object' },
+    },
+    required: ['table'],
+  },
+};
+```
+
+The host builds `ctx.config` once for preview, manual runs and scheduled runs
+alike, and checks it against this declaration before starting the sandbox. An
+installation that never stored its config then pauses on a problem naming the
+field to set, instead of on whatever `run()` throws when it destructures
+`undefined`. The declaration is optional: a plugin that omits it is run exactly
+as before, so guard `ctx.config` in `run()` too.
+
 ## Adding or changing an integration
 
 1. Supply `plugin.ts`, reproducible `plugin.js`, `tsconfig.json`,

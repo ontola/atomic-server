@@ -34,11 +34,37 @@ export interface DeclaredOperation {
   effect: 'read' | 'write';
 }
 
+/**
+ * One field of the user-editable config a plugin reads from `input.config`.
+ *
+ * Declared beside the code that destructures it, for the same reason secrets
+ * are: an import whose config never made it into the resource then fails as a
+ * readable problem naming the field, instead of as a `TypeError` thrown out of
+ * `run()` that only the plugin's author can decode.
+ */
+export interface DeclaredConfigField {
+  type: 'string' | 'object';
+  description?: string;
+}
+
+export interface DeclaredConfig {
+  /**
+   * Key this plugin's config sits under in the installation's stored config.
+   * Omitted when the config is stored flat, which is what a plugin written
+   * against one destination does.
+   */
+  key?: string;
+  properties: Record<string, DeclaredConfigField>;
+  /** Fields `run()` cannot work without. Checked before the plugin is called. */
+  required?: string[];
+}
+
 export interface PluginManifest {
   actions?: DeclaredAction[];
   schemaVersion?: 1;
   operations?: DeclaredOperation[];
   secrets: DeclaredSecret[];
+  config?: DeclaredConfig;
 }
 
 export interface DeclaredAction {
@@ -175,7 +201,7 @@ export function validateManifest(raw: unknown): PluginManifest {
   };
 
   const entry = object(raw);
-  known(entry, ['schemaVersion', 'secrets', 'operations', 'actions']);
+  known(entry, ['schemaVersion', 'secrets', 'operations', 'actions', 'config']);
   if (entry.schemaVersion !== 1)
     throw new Error('unsupported manifest schemaVersion');
 
@@ -278,11 +304,48 @@ export function validateManifest(raw: unknown): PluginManifest {
     return action as unknown as DeclaredAction;
   });
   if (actions.length > 64) throw new Error('at most 64 actions per release');
+  const declared =
+    entry.config === undefined ? undefined : object(entry.config);
+
+  if (declared) {
+    known(declared, ['key', 'properties', 'required']);
+    if (
+      declared.key !== undefined &&
+      (typeof declared.key !== 'string' ||
+        !/^[A-Za-z0-9_.-]{1,128}$/.test(declared.key))
+    )
+      throw new Error('invalid config key');
+
+    const fields = object(declared.properties);
+    if (Object.keys(fields).length > 64)
+      throw new Error('unsupported config schema');
+
+    for (const rawField of Object.values(fields)) {
+      const field = object(rawField);
+      known(field, ['type', 'description']);
+      if (
+        !['string', 'object'].includes(String(field.type)) ||
+        (field.description !== undefined &&
+          typeof field.description !== 'string')
+      )
+        throw new Error('unsupported config field');
+    }
+
+    // Required fields the declaration does not describe could not be reported
+    // in the plugin's own words, which is the whole point of declaring them.
+    if (
+      list(declared.required).some(
+        key => typeof key !== 'string' || !(key in fields),
+      )
+    )
+      throw new Error('unsupported config schema');
+  }
 
   return {
     schemaVersion: 1,
     secrets,
     operations,
     ...(actions.length ? { actions } : {}),
+    ...(declared ? { config: declared as unknown as DeclaredConfig } : {}),
   };
 }

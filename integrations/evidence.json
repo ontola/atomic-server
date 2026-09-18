@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-17T14:09:44.824Z",
+  "generatedAt": "2026-09-18T12:38:38.722Z",
   "layer": "all",
   "live": {
     "status": "not-run",
@@ -139,11 +139,11 @@
       "version": "0.1.0",
       "owner": "Ontola",
       "support": "experimental",
-      "apiVersion": "MT940 subset, camt.053 subset",
+      "apiVersion": "MT940 subset",
       "declaredCapabilities": [
         "bank-statements:import"
       ],
-      "bundleSha256": "59c218ea0885d101ac55838f9d79e7fedbb8a0efc004e44b0e5754a70bce93f1",
+      "bundleSha256": "39c76cd8b536e4a7e1eb170483a47a99fea1d75ba755548befe96d8d5e9c231a",
       "checks": [
         {
           "name": "reproducible-bundle",
@@ -160,15 +160,11 @@
         {
           "name": "plugins::bank_statement_tests::bank_statement_proposes_exact_nested_transactions",
           "status": "passed"
-        },
-        {
-          "name": "plugins::bank_statement_tests::camt_statement_proposes_the_same_nested_transactions",
-          "status": "passed"
         }
       ],
       "status": "passed",
       "fixtureCounts": {
-        "passed": 15,
+        "passed": 9,
         "skipped": 0,
         "failed": 0
       }
@@ -221,7 +217,7 @@
       "declaredCapabilities": [
         "demo-pets:import"
       ],
-      "bundleSha256": "53e3707a72b8b590ba4e85b19b56e289629615b863b5b189ee1e49a31371f8d4",
+      "bundleSha256": "bf9a687dda16d1ba2d8bae4b80a26d2c7e011a102d6c15b55b83132685fb7a4f",
       "checks": [
         {
           "name": "reproducible-bundle",
@@ -242,7 +238,7 @@
       ],
       "status": "passed",
       "fixtureCounts": {
-        "passed": 3,
+        "passed": 5,
         "skipped": 0,
         "failed": 0
       }
