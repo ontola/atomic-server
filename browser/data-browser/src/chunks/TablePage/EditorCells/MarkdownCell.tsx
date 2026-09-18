@@ -18,16 +18,19 @@ function MarkdownCellEdit({
   resource,
 }: EditCellProps<JSONValue>): JSX.Element {
   const [dialogProps, show, _close, isOpen] = useDialog({
+    // Closing the dialog — confirmed or cancelled — ends edit mode. That
+    // both restores focus to the grid (TableEditor's Edit -> Visual layout
+    // effect) and makes the arrow keys work again on the first Escape.
     onSuccess: () => {
-      tableRef.current?.focus();
+      exitEditMode();
     },
     onCancel: () => {
-      tableRef.current?.focus();
+      exitEditMode();
     },
   });
   const prop = useProperty(property);
 
-  const { tableRef } = useTableEditorContext();
+  const { exitEditMode } = useTableEditorContext();
 
   const options = useMemo(
     () => ({
