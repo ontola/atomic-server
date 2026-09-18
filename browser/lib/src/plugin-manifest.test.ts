@@ -151,6 +151,7 @@ describe('versioned manifest conformance', () => {
   for (const entry of cases) {
     it(entry.name, () => {
       const raw = fixture(entry.file);
+
       if (entry.error !== undefined) {
         expect(() => validateManifest(raw)).toThrow(entry.error);
       } else {

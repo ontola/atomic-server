@@ -445,10 +445,12 @@ export function validateManifest(raw: unknown): PluginManifest {
 
     return value as T;
   };
+
   const runtime = variant(entry.runtime, RUNTIMES, 'atomic-js/1');
   const world = variant(entry.world, WORLDS, 'extension');
 
   const network = { origins: [] as string[], reason: undefined as unknown };
+
   if (entry.network !== undefined) {
     const declared = object(entry.network, 'network');
     known(declared, ['origins', 'reason']);
@@ -465,6 +467,7 @@ export function validateManifest(raw: unknown): PluginManifest {
   const capabilities = list(entry.capabilities, 'capabilities').map(value => {
     let name: unknown;
     let reason: unknown;
+
     if (typeof value === 'string') name = value;
     else if (value && typeof value === 'object' && !Array.isArray(value)) {
       const declared = value as Record<string, unknown>;
@@ -473,6 +476,7 @@ export function validateManifest(raw: unknown): PluginManifest {
       name = declared.name;
       reason = declared.reason;
     }
+
     if (
       typeof name !== 'string' ||
       !CAPABILITIES.includes(name as CapabilityName) ||
@@ -493,14 +497,17 @@ export function validateManifest(raw: unknown): PluginManifest {
     view: undefined as unknown as string,
     classExtender: undefined as unknown as string[],
   };
+
   if (entry.entrypoints !== undefined) {
     const declared = object(entry.entrypoints, 'entrypoints');
     known(declared, ['run', 'view', 'classExtender']);
+
     if (declared.run !== undefined) {
       if (typeof declared.run !== 'boolean')
         throw new Error('entrypoints.run: invalid type, expected a boolean');
       entrypoints.run = declared.run;
     }
+
     if (declared.view !== undefined)
       entrypoints.view = text(declared.view, 'entrypoints.view');
     if (declared.classExtender !== undefined)
@@ -509,10 +516,12 @@ export function validateManifest(raw: unknown): PluginManifest {
         'entrypoints.classExtender',
       ).map(url => text(url, 'entrypoints.classExtender'));
   }
+
   const classUrls = entrypoints.classExtender ?? [];
   if (entrypoints.classExtender !== undefined && classUrls.length === 0)
     throw new Error('classExtender must list at least one class URL');
   names.clear();
+
   for (const cls of classUrls) {
     const url = new URL(cls);
     if (!['http:', 'https:'].includes(url.protocol) || !url.hostname)
@@ -520,6 +529,7 @@ export function validateManifest(raw: unknown): PluginManifest {
     if (names.has(cls)) throw new Error('classExtender entries must be unique');
     names.add(cls);
   }
+
   if (world === 'extension' && classUrls.length > 0)
     throw new Error('world extension may not declare classExtender');
   if (
@@ -530,6 +540,7 @@ export function validateManifest(raw: unknown): PluginManifest {
     throw new Error(
       'world server-extension requires runtime wasip2/1 or entrypoints.classExtender',
     );
+
   if (entrypoints.view !== undefined) {
     const view = entrypoints.view;
     if (
@@ -549,6 +560,7 @@ export function validateManifest(raw: unknown): PluginManifest {
       'name' | 'namespace' | 'version' | 'description' | 'author'
     >
   > = {};
+
   for (const key of [
     'name',
     'namespace',
@@ -558,6 +570,7 @@ export function validateManifest(raw: unknown): PluginManifest {
   ] as const) {
     if (entry[key] !== undefined) metadata[key] = text(entry[key], key);
   }
+
   for (const key of ['namespace', 'name'] as const) {
     const value = metadata[key];
     if (value !== undefined && !IDENTIFIER.test(value))
