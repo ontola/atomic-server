@@ -646,6 +646,26 @@ impl CommitIngestOpts {
     }
 }
 
+/// Parse a JSON-AD commit and verify its signature, returning the signer it
+/// proves. This is the identity check alone: no schema, timestamp, rights,
+/// ownership or Loro checks run, and nothing is stored.
+///
+/// Until the Ed25519 signature over the body checks out, the `signer` field
+/// is just a string anyone can put there, so nothing keyed on the signer
+/// (the per-agent write budget, for one) may trust it before this returns
+/// `Ok`. A hub calls this before spending any budget on a `/commit` request;
+/// [`ingest_commit`] verifies again when it applies the commit, which keeps
+/// that path self-contained at the cost of one cheap re-check.
+pub async fn verify_commit_signer(
+    store: &impl crate::Storelike,
+    commit_json: &str,
+) -> crate::errors::AtomicResult<crate::Subject> {
+    let resource = crate::parse::parse_json_ad_commit_resource(commit_json, store).await?;
+    let commit = crate::commit::Commit::from_resource(resource)?;
+    commit.validate_signature(store).await?;
+    Ok(commit.signer)
+}
+
 /// Ingest a signed JSON-AD `COMMIT`, returning the server-created commit
 /// resource as JSON-AD. This is the single implementation shared by the
 /// server's HTTP/WS commit application and peer-transport `COMMIT` frames
