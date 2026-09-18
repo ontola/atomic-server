@@ -86,7 +86,7 @@ test('MT940 rejects unbalanced files, previews in sandbox and skips repeat impor
     path: '/tmp/mt940-repeat-preview.png',
     fullPage: true,
   });
-  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
   // The same importer recognises a camt.053 export of the same period. Its
   // identities are per format, so the two bookings arrive as new rows rather
   // than as conflicts with the MT940 ones.
