@@ -340,6 +340,56 @@ systemctl restart atomic
 journalctl -u atomic.service --since "1 hour ago" -f
 ```
 
+## Store size and automatic compaction
+
+The store is one [redb](https://github.com/cberner/redb) file,
+`<data-dir>/store/atomic.redb`. redb never gives pages back to the filesystem
+on its own: an overwrite or delete frees pages that later writes may reuse,
+but the file only shrinks when its *tail* happens to be free. A store that has
+churned through many resources (long editing sessions, imports that were
+deleted again, test data) stays as large as its high-water mark, and opening
+a large file is slow: the open-time `fsync` scales with file size, so a
+multi-GB store can take a minute to open where a fresh one takes
+milliseconds.
+
+Every boot logs the file's size and open time, and how much of it is dead:
+
+```
+Store /var/lib/atomic/store/atomic.redb is 1843.2 MiB on disk (2048.0 MiB long), opened in 21.4s
+Store pages: 224511 allocated (...) = 877.0 MiB live; ... 966.2 MiB (52%) reclaimable by compaction
+```
+
+"On disk" is what the file costs; the length also includes headroom redb
+reserves ahead of writes, which is sparse and costs nothing until used.
+Reclaimable space is what is on disk minus the pages still in use. Above
+1 GiB on disk the first line is a warning. When both of these hold, the
+server compacts the file **before** it starts listening:
+
+- the file is at least `--auto-compact-min-mb` on disk
+  (`ATOMIC_AUTO_COMPACT_MIN_MB`, default `256`): a small file opens fast
+  whatever its layout, so a startup pause is not worth it;
+- at least `--auto-compact-min-reclaimable-percent`
+  (`ATOMIC_AUTO_COMPACT_MIN_RECLAIMABLE_PERCENT`, default `30`) of what is on
+  disk is reclaimable: compaction reads and rewrites the whole file, and a
+  store with steady churn always carries some free pages that the next writes
+  reuse.
+
+Compaction logs the before/after sizes and how long it took. It is
+`O(file size)`, seconds per GB on an SSD, and it runs while the server holds
+the store's exclusive lock, so the server is not reachable until it is done.
+If it fails for any reason the store opens as it was and the failure is a
+warning, never a refused start. Set `--auto-compact false`
+(`ATOMIC_AUTO_COMPACT=false`) to turn it off, for example on a node where
+every second of downtime matters and you would rather schedule it. That also
+skips the reclaimable-space measurement, which walks every page of the file.
+The size and open-time line is logged either way.
+
+`atomic-server compact` does the same by hand, with the server stopped. Use
+it after a large clean-up, or when the boot log says a store below the size
+floor has a lot to reclaim.
+
+Neither applies to the browser (OPFS) store or to a legacy sled store.
+
 ## AtomicServer CLI options / ENV vars
 
 (run `atomic-server --help` to see the latest options)
@@ -360,6 +410,8 @@ Commands:
           Returns the currently selected options, based on the passed flags and parsed environment variables
   reset
           Danger! Removes all data from the store
+  compact
+          Compact the on-disk redb file (rebuilds page layout, truncates dead-page tail). Slow — typically minutes on a multi-GB store — but makes future boots dramatically faster because the open-time `fsync` cost scales with file size. Server MUST be stopped: redb takes an exclusive file lock and will fail otherwise
   help
           Print this message or the help of the given subcommand(s)
 
@@ -385,6 +437,25 @@ Options:
 
           [env: ATOMIC_ENVELOPE_RETENTION=]
           [default: latest]
+
+      --auto-compact <AUTO_COMPACT>
+          Compact the store file at startup when it is at least `--auto-compact-min-mb` and at least `--auto-compact-min-reclaimable-percent` of it is dead space (pages freed by overwrites and deletes that redb never returns to the filesystem). The server listens only when the compaction is done: expect seconds per GB. `false` skips the check; `atomic-server compact` does the same by hand while the server is stopped
+
+          [env: ATOMIC_AUTO_COMPACT=]
+          [default: true]
+          [possible values: true, false]
+
+      --auto-compact-min-mb <AUTO_COMPACT_MIN_MB>
+          Store files smaller than this many MiB are never compacted at startup: they open fast whatever their layout
+
+          [env: ATOMIC_AUTO_COMPACT_MIN_MB=]
+          [default: 256]
+
+      --auto-compact-min-reclaimable-percent <AUTO_COMPACT_MIN_RECLAIMABLE_PERCENT>
+          Startup compaction runs only when at least this percentage of the store file is reclaimable (0-100)
+
+          [env: ATOMIC_AUTO_COMPACT_MIN_RECLAIMABLE_PERCENT=]
+          [default: 30]
 
       --write-rate-limit <WRITE_RATE_LIMIT>
           How many write requests per minute one signed agent may make (commits over HTTP or WebSocket, uploads, blob puts, peer sync pushes, resource posts) before the server answers `429 Too Many Requests`. The budget refills continuously, so a burst up to this size is fine. `0` disables the limit

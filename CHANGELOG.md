@@ -90,6 +90,22 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   longer enter a drive's watched query on commit or build: the `Db` resolves
   each watched filter's `drive` subject to its drive root and compares
   stamps (security audit C17; the filter's identity is unchanged).
+- Startup store-size diagnostics and automatic redb compaction. Opening the
+  store now logs the file's size and open duration (a warning above 1 GiB,
+  naming `atomic-server compact`) and, from redb's `DatabaseStats`, how much
+  of the file is live, fragmented and reclaimable (bytes on disk minus pages
+  in use; redb's sparse growth headroom does not count). When the file is at
+  least 256 MiB on disk and at least 30% of that is dead, `Db::init_redb_file`
+  compacts it before the server listens and logs the before/after sizes and
+  duration; the outcome is kept in the store and readable through
+  `Db::last_compaction`. A compaction failure is a warning, never a refused
+  start. New options `--auto-compact` (`ATOMIC_AUTO_COMPACT`, default
+  `true`), `--auto-compact-min-mb` (`ATOMIC_AUTO_COMPACT_MIN_MB`, `256`) and
+  `--auto-compact-min-reclaimable-percent`
+  (`ATOMIC_AUTO_COMPACT_MIN_RECLAIMABLE_PERCENT`, `30`); `atomic_lib` callers
+  pass a `db::compaction::CompactionPolicy` to
+  `Db::init_redb_file_with_policy`. Not applied to the OPFS (browser) or sled
+  backends. See `planning/disk-storage-and-persistence-optimization.md`.
 
 - CI: the `:develop` docker image is published by its own job instead of a
   step tacked onto the end of the CI job. As a step it inherited whatever the

@@ -4,6 +4,8 @@
 pub mod app_agent;
 pub mod blob_backend;
 pub mod btreemap_store;
+#[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+pub mod compaction;
 mod encoding;
 #[cfg(feature = "db-redb")]
 pub mod encrypted_backend;
@@ -810,11 +812,36 @@ impl Db {
 
     /// Creates a Db backed by redb with file-based persistent storage.
     /// Works on all native targets (not WASM — use init_redb_opfs for that).
+    ///
+    /// Runs the default [`compaction::CompactionPolicy`] on the file before
+    /// serving it; `init_redb_file_with_policy` takes another.
     #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
     pub async fn init_redb_file(
         path: &std::path::Path,
         base_domain: Option<String>,
         uploads_path: &std::path::Path,
+    ) -> AtomicResult<Db> {
+        Self::init_redb_file_with_policy(
+            path,
+            base_domain,
+            uploads_path,
+            &compaction::CompactionPolicy::default(),
+        )
+        .await
+    }
+
+    /// `init_redb_file` with an explicit startup compaction policy. The
+    /// file's size and open duration are logged either way; with the policy
+    /// enabled the reclaimable space is measured and, past both thresholds,
+    /// compacted before any table is read. A compaction failure (including
+    /// redb refusing because of a live transaction) is logged and the store
+    /// opens as it was; it never fails startup.
+    #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+    pub async fn init_redb_file_with_policy(
+        path: &std::path::Path,
+        base_domain: Option<String>,
+        uploads_path: &std::path::Path,
+        policy: &compaction::CompactionPolicy,
     ) -> AtomicResult<Db> {
         tracing::info!("Opening ReDB database at {:?}", path);
 
@@ -874,7 +901,8 @@ impl Db {
         #[cfg(not(feature = "db-sled"))]
         let _ = uploads_path;
 
-        let redb_store = redb_store::RedbStore::new_file(&redb_path)?;
+        let (redb_store, compaction) =
+            redb_store::RedbStore::new_file_with_policy(&redb_path, policy)?;
 
         let store = Db {
             path: path.to_path_buf(),
@@ -900,6 +928,14 @@ impl Db {
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
 
+        // Bookkeeping only: the compaction itself already happened, and
+        // failing to note it must not refuse the start.
+        if let Ok(record) = compaction {
+            if let Err(e) = store.record_compaction(&record) {
+                tracing::warn!("Could not record the startup compaction: {e}");
+            }
+        }
+
         store.populate_watched_queries_cache()?;
         crate::populate::bootstrap(&store)
             .await
@@ -907,6 +943,32 @@ impl Db {
         crate::search::maybe_rebuild_search_index(&store)?;
         store.spawn_durable_flush(DURABLE_FLUSH_INTERVAL);
         Ok(store)
+    }
+
+    /// Persist the outcome of a startup compaction so `last_compaction`
+    /// can report it after the log line is gone. Durable at once: the
+    /// compaction it describes already cost seconds, a 100 ms flush
+    /// window is nothing next to it.
+    #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+    fn record_compaction(&self, record: &compaction::CompactionRecord) -> AtomicResult<()> {
+        let bytes = serde_json::to_vec(record)
+            .map_err(|e| format!("Could not serialize the compaction record: {e}"))?;
+        self.kv
+            .insert(trees::Tree::PluginMeta, compaction::RECORD_KEY, &bytes)?;
+        self.kv.flush()
+    }
+
+    /// The most recent automatic startup compaction of this store's file,
+    /// if one ever ran. `None` on a store that was never compacted at
+    /// startup, and on the in-memory, OPFS and sled backends.
+    #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+    pub fn last_compaction(&self) -> Option<compaction::CompactionRecord> {
+        let bytes = self
+            .kv
+            .get(trees::Tree::PluginMeta, compaction::RECORD_KEY)
+            .ok()
+            .flatten()?;
+        serde_json::from_slice(&bytes).ok()
     }
 
     /// Make `Durability::None` commits durable on a fixed cadence.

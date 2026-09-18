@@ -960,6 +960,18 @@ mounts without resetting or re-registering the global parser.
 - `client-db.worker.test.ts` requires vault cursor commits to flush before the
   worker acknowledges backup completion, and propagates flush failures. The
   SaaS `vault-refresh.spec.ts` checks stored objects and bytes across reloads.
+- `db::compaction::tests::startup_compaction_shrinks_a_bloated_store_and_keeps_every_resource`
+  (`cargo test -p atomic_lib --features db-redb --lib`) churns a real redb
+  file through `Db::init_redb_file_with_policy` — overwrites that double in
+  size plus throwaway resources deleted mid-file, so the buddy allocator
+  cannot reuse the holes — and reopens it: the policy compacts, the file
+  gives back most of the measured free space, every kept resource reads its
+  last value, the record survives the next open, and a disabled policy leaves
+  the file byte-for-byte alone. Overwrites *alone* leave only ~20% dead
+  (freed blocks coalesce and get reused), which is why the test deletes.
+  `server::config::tests` cover the `--auto-compact*` flags. Not covered:
+  compaction of a store another process holds open (the open itself fails
+  first, as before), and the cost of `DatabaseStats` on a multi-GB file.
 - `synthetic_agent_reads_have_stable_history_without_persisting` checks that
   fallback agent lookups neither invent creation timestamps nor generate new
   CRDT history or persist a resource merely by reading it.
