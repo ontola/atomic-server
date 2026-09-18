@@ -325,7 +325,7 @@ pub enum FetchPolicy {
     Origins(Vec<String>),
     /// Declared operations from a versioned JS manifest: id, method, endpoint
     /// and effect must all match.
-    Operations(Manifest),
+    Operations(Box<Manifest>),
     /// A JS draft without a manifest: `GET`/`HEAD` only, to the origins its
     /// secrets are scoped to. "Can reach" and "has a credential for" are the
     /// same thing here, which is wrong for a public API and why versioned
@@ -463,7 +463,7 @@ impl HostCore {
             grant: Grant::new(caller, installation)?,
             world: World::Extension,
             fetch_policy: match manifest {
-                Some(manifest) => FetchPolicy::Operations(manifest),
+                Some(manifest) => FetchPolicy::Operations(Box::new(manifest)),
                 None => FetchPolicy::SecretOrigins,
             },
             remote_reads: false,
