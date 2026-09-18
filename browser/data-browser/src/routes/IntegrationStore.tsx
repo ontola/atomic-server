@@ -15,12 +15,22 @@ import { FaPlug } from 'react-icons/fa6';
 import {
   useStore,
   core,
+  server,
   findSchema,
   pluginSchema,
   readConnectionSubjects,
-  type PluginRelease,
+  installRelease,
+  installationIdentifier,
+  readInstallationReview,
+  DEFAULT_INSTALLATION_NAMESPACE,
+  type JSONValue,
+  type PublishedRelease,
 } from '@tomic/react';
 import { ResourceInline } from '../views/ResourceInline/ResourceInline';
+import {
+  InstallationReviewDialog,
+  type PendingInstallation,
+} from '../chunks/Plugins/InstallationReviewDialog';
 import toast from 'react-hot-toast';
 import { appRoute } from './RootRoutes';
 import { pathNames } from './paths';
@@ -75,6 +85,7 @@ function IntegrationStore(): React.JSX.Element {
   const navigate = useNavigateWithTransition();
   const [listings, setListings] = useState<Listing[]>();
   const [installed, setInstalled] = useState<string[]>([]);
+  const [installations, setInstallations] = useState<string[]>([]);
   const [automations, setAutomations] = useState<string[]>([]);
   const [error, setError] = useState<string>();
   const [catalogError, setCatalogError] = useState<string>();
@@ -123,9 +134,40 @@ function IntegrationStore(): React.JSX.Element {
       active = false;
     };
   }, [store, drive, pluginClass]);
+  useEffect(() => {
+    let active = true;
+
+    if (!drive) {
+      setInstallations([]);
+
+      return;
+    }
+
+    // Installations are the installed form for both runtimes; connections
+    // above are the drafts and the legacy plugin-script installs.
+    void readConnectionSubjects(
+      store,
+      drive,
+      core.properties.isA,
+      server.classes.installation,
+    )
+      .then(subjects => {
+        if (active) setInstallations(subjects);
+      })
+      .catch(reason => {
+        if (active) setError(String(reason));
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [store, drive]);
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState<string>();
-  const server = store.getServerUrl();
+  const [pending, setPending] = useState<
+    PendingInstallation & { entry: Listing['metadata'] }
+  >();
+  const serverUrl = store.getServerUrl();
   useEffect(() => {
     setCatalogError(undefined);
 
@@ -136,7 +178,7 @@ function IntegrationStore(): React.JSX.Element {
     }
 
     const controller = new AbortController();
-    void fetch(`${server}/plugin-catalog`, { signal: controller.signal })
+    void fetch(`${serverUrl}/plugin-catalog`, { signal: controller.signal })
       .then(async response => {
         if (!response.ok) throw new Error(await response.text());
         const entries = await response.json();
@@ -147,42 +189,87 @@ function IntegrationStore(): React.JSX.Element {
       });
 
     return () => controller.abort();
-  }, [server, showExperimentalPlugins]);
+  }, [serverUrl, showExperimentalPlugins]);
 
-  const createDraft = async (entry: Listing['metadata']) => {
+  const fetchRelease = async (id: string): Promise<PublishedRelease> => {
+    const response = await fetch(
+      `${serverUrl}/plugin-package/${encodeURIComponent(id)}`,
+    );
+    if (!response.ok) throw new Error(await response.text());
+
+    return (await response.json()) as PublishedRelease;
+  };
+
+  /** Opening a Listing: fetch its release and review it before installing. */
+  const openReview = async (entry: Listing['metadata']) => {
     if (!drive) return;
     setCreating(entry.release);
 
     try {
-      const response = await fetch(
-        `${server}/plugin-package/${encodeURIComponent(entry.release)}`,
-      );
-      if (!response.ok) throw new Error(await response.text());
-      const release = (await response.json()) as PluginRelease;
-      const { createPlugin } = await import('../chunks/PluginRuns/runScript');
-      const subject = await createPlugin(
-        store,
-        { drive, parent: drive },
-        entry.name,
-        release.source,
-        release.schemas,
-      );
-
-      if (entry.emoji) {
-        const resource = await store.getResource(subject);
-        await resource.set(
-          'https://atomicdata.dev/properties/emoji',
-          entry.emoji,
-        );
-        await resource.save();
-      }
-
-      navigate(constructOpenURL(subject));
+      const release = await fetchRelease(entry.release);
+      setPending({
+        entry,
+        review: readInstallationReview({ ...release, id: entry.release }),
+        // The catalog serves releases by id, not as Release resources yet.
+        release: { url: entry.release, id: entry.release },
+        title: entry.name,
+        description: entry.description,
+        emoji: entry.emoji,
+      });
     } catch (reason) {
       toast.error(String(reason));
     } finally {
       setCreating(undefined);
     }
+  };
+
+  const install = async (
+    p: PendingInstallation,
+    config: JSONValue | undefined,
+    grants: string[],
+  ) => {
+    if (!drive) return;
+    const subject = await installRelease(store, {
+      drive,
+      release: p.release,
+      name: p.review.name ?? installationIdentifier(p.title ?? 'plugin'),
+      namespace: p.review.namespace ?? DEFAULT_INSTALLATION_NAMESPACE,
+      description: p.review.description ?? p.description,
+      version: p.review.version,
+      config,
+      grants,
+    });
+    navigate(constructOpenURL(subject));
+  };
+
+  /** Drafts remain the authoring form: a copy of the source you can edit. */
+  const createDraft = async (entry: Listing['metadata']) => {
+    if (!drive) return;
+    const release = await fetchRelease(entry.release);
+
+    if (!release.source) {
+      throw new Error('Only JS releases can be opened as an editable draft');
+    }
+
+    const { createPlugin } = await import('../chunks/PluginRuns/runScript');
+    const subject = await createPlugin(
+      store,
+      { drive, parent: drive },
+      entry.name,
+      release.source,
+      release.schemas ?? {},
+    );
+
+    if (entry.emoji) {
+      const resource = await store.getResource(subject);
+      await resource.set(
+        'https://atomicdata.dev/properties/emoji',
+        entry.emoji,
+      );
+      await resource.save();
+    }
+
+    navigate(constructOpenURL(subject));
   };
 
   const query = search.trim().toLocaleLowerCase();
@@ -216,7 +303,7 @@ function IntegrationStore(): React.JSX.Element {
               you need them.
             </p>
           </Header>
-          {installed.length > 0 && (
+          {(installed.length > 0 || installations.length > 0) && (
             <section aria-label='Your integrations'>
               <h2>Your connections</h2>
               <Grid>
@@ -226,6 +313,11 @@ function IntegrationStore(): React.JSX.Element {
                     subject={subject}
                     drive={drive!}
                   />
+                ))}
+                {installations.map(subject => (
+                  <Card key={subject} data-installation={subject}>
+                    <ResourceInline subject={subject} />
+                  </Card>
                 ))}
               </Grid>
             </section>
@@ -297,8 +389,9 @@ function IntegrationStore(): React.JSX.Element {
               <>
                 <h2>Community plugins</h2>
                 <p>
-                  Published code you can adapt. Creating a draft does not
-                  connect an app or enable sync.
+                  Published releases. Open one to review what it can do before
+                  installing it into this drive, or create a draft to adapt its
+                  code.
                 </p>
               </>
             )}
@@ -353,11 +446,9 @@ function IntegrationStore(): React.JSX.Element {
                   </details>
                   <Button
                     disabled={!drive || creating !== undefined}
-                    onClick={() => createDraft(entry)}
+                    onClick={() => openReview(entry)}
                   >
-                    {creating === entry.release
-                      ? 'Creating draft…'
-                      : 'Create draft'}
+                    {creating === entry.release ? 'Opening…' : 'Open'}
                   </Button>
                 </Column>
               </Card>
@@ -365,6 +456,19 @@ function IntegrationStore(): React.JSX.Element {
           </Grid>
         </Column>
       </ContainerWide>
+      <InstallationReviewDialog
+        pending={pending}
+        onClose={() => setPending(undefined)}
+        onInstall={install}
+        secondary={
+          pending && pending.review.runtime === 'atomic-js/1'
+            ? {
+                label: 'Create draft',
+                onClick: () => createDraft(pending.entry),
+              }
+            : undefined
+        }
+      />
     </Main>
   );
 }
