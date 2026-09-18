@@ -7,6 +7,18 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- CI: the `:develop` docker image is published by its own job instead of a
+  step tacked onto the end of the CI job. As a step it inherited whatever the
+  CI step had already spent (a wedged Dagger engine on the runner burned the
+  ten minute connect timeout and the publish was skipped without trying), and
+  it could not be re-run on its own, so recovering a missed image meant
+  re-running a pipeline that takes hours. `develop` went 2026-09-15 to
+  2026-09-18 without an image that way. The gate is unchanged: `needs: ci`,
+  so a red pipeline still publishes nothing. A new manual
+  "Publish :develop image" workflow covers the case where the pipeline cannot
+  go green for reasons unrelated to whether the binary builds; it refuses
+  `latest` and `v*` tags, which release.yml owns.
+
 - Error-handling hygiene on the commit and read paths. The legacy
   `set`/`push`/`remove` rejection in `sync::engine::ingest_commit` now checks
   the parsed commit's properties instead of substring-matching the raw body,
