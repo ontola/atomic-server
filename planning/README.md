@@ -63,6 +63,7 @@ browser flow; standalone recovery remains self-managed.
 
 | Document | Status |
 | --- | --- |
+| [`contacts.md`](./contacts.md) | **Active:** Address Book + Contact ontology, query-backed UI, VCF import (Google/iCloud/Microsoft export), optional `contactAgent` link. Scopes suite Milestones 1–2 for contacts. |
 | [`production-readiness.md`](./production-readiness.md) | **Gate list.** What stands between `develop` and production: npm publishing, rate limiting, library-owned durability, desktop CSP, managed-node abuse gate, source maps, SaaS billing checks. |
 | [`security-audit-2026-09.md`](./security-audit-2026-09.md) | **Mostly fixed** (beta.6, plus B7 CSP, C18 and rate limits on 2026-09-15). Open: C16 process-global import flags, C17 DID watched-query leak, C20, C24 loopback NFS, permissive CORS, client errors as 500, section F, transitive advisories via actix-http and iroh 0.35. |
 | [`drive-sharing-state.md`](./drive-sharing-state.md) | **In progress.** Verified transition for unenrolled drives shipped (#1466). Remaining: authoritative per-drive editor usage from the backend, root cause of the retained remote routing, staging acceptance. |
@@ -126,7 +127,7 @@ Design intent, kept for direction. None has a line of code behind it.
 | --- | --- |
 | [`reticulum-sync.md`](./reticulum-sync.md) | Atomic sync protocol over Reticulum. |
 | [`nextgraph-interop.md`](./nextgraph-interop.md) | `did:ng:` via a scheme-routed Store backend. PR #1360 (optional NextGraph mirror) is open. |
-| [`personal-information-suite.md`](./personal-information-suite.md) | Contacts, calendar, email. |
+| [`personal-information-suite.md`](./personal-information-suite.md) | Contacts, calendar, email. Contacts MVP tracked in `contacts.md`. |
 | [`social-apps.md`](./social-apps.md) | Requirements for social-network-shaped apps. Companion to `zones.md`. |
 | [`atomic-assistant-browser-extension.md`](./atomic-assistant-browser-extension.md) | Local-first Chromium extension. |
 | [`tours.md`](./tours.md) | Recorded tours; `unified-templates.md` defers them. |

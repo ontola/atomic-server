@@ -36,6 +36,8 @@ import { HideInPrint } from '@components/HideInPrint';
 import { useOnValueChange } from '@helpers/useOnValueChange';
 import { FolderCard } from './FolderCard';
 import { PluginCard } from '@views/Plugin/PluginCard';
+import { ContactCard } from '../Contacts/ContactCard';
+import { AddressBookCard } from '../Contacts/AddressBookCard';
 
 interface ResourceCardProps extends CardViewPropsBase {
   /** The subject URL - the identifier of the resource. */
@@ -128,6 +130,10 @@ function ResourceCardInner(props: ResourceCardProps): JSX.Element {
       return <DocumentV2Card resource={resource} {...props} />;
     case dataBrowser.classes.meeting:
       return <MeetingCard resource={resource} {...props} />;
+    case dataBrowser.classes.contact:
+      return <ContactCard resource={resource} {...props} />;
+    case dataBrowser.classes.addressBook:
+      return <AddressBookCard resource={resource} {...props} />;
     case dataBrowser.classes.folder:
       return <FolderCard resource={resource} {...props} />;
     case server.classes.plugin:
