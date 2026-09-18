@@ -16,17 +16,9 @@ import type { Store } from './store.js';
 import type { JSONValue } from './value.js';
 
 export const RUNTIME_JS = 'atomic-js/1';
-export const RUNTIME_WASIP2 = 'wasip2/1';
-export const WORLD_EXTENSION = 'extension';
-export const WORLD_SERVER_EXTENSION = 'server-extension';
+const WORLD_EXTENSION = 'extension';
 
 export type InstallationStatus = 'draft' | 'active' | 'paused' | 'revoked';
-export const INSTALLATION_STATUSES: readonly InstallationStatus[] = [
-  'draft',
-  'active',
-  'paused',
-  'revoked',
-];
 
 /** The release record the server publishes and serves (`lib/src/db/plugin_release.rs`). */
 export interface PublishedRelease {
@@ -56,7 +48,7 @@ export interface ReleaseReference {
   id: string;
 }
 
-export type CapabilityKind =
+type CapabilityKind =
   | 'permission'
   | 'secret'
   | 'operation'
@@ -70,9 +62,9 @@ export interface ReviewCapability {
   reason?: string;
   /**
    * The grant name written to `Installation.grants` when the installer
-   * approves. Absent for entries the server does not accept as grants yet
-   * (secrets and operations are declared, not granted, until the unified
-   * manifest carries them as capabilities).
+   * approves; `check_grants` on the server requires exactly the declared
+   * set. Absent for secrets, operations and network, which are declared,
+   * not granted.
    */
   grant?: string;
 }
@@ -107,8 +99,7 @@ function asArray(value: unknown): unknown[] {
 
 /**
  * Turns a release's manifest into what the review screen shows before the
- * installer approves. Understands both manifest forms that exist today and
- * drops anything malformed instead of trusting it.
+ * installer approves. Drops anything malformed instead of trusting it.
  */
 export function readInstallationReview(
   release: Pick<PublishedRelease, 'manifest'> &
@@ -117,8 +108,9 @@ export function readInstallationReview(
   const manifest = asObject(release.manifest) ?? {};
   const capabilities: ReviewCapability[] = [];
 
-  // plugin.json style (wasip2): `permissions: [{ permission, reason }]`,
-  // or bare permission names.
+  // A release published before plugin.json was translated at the boundary
+  // still stores `permissions: [{ permission, reason }]`; the server's
+  // `declared_capabilities` reads those the same way.
   for (const entry of asArray(manifest.permissions)) {
     const name = asString(entry) ?? asString(asObject(entry)?.permission);
     if (!name) continue;
@@ -130,7 +122,7 @@ export function readInstallationReview(
     });
   }
 
-  // Versioned JS manifest (`plugin-manifest.ts`): secrets and operations.
+  // Secrets and operations (`plugin-manifest.ts`).
   for (const entry of asArray(manifest.secrets)) {
     const secret = asObject(entry);
     const name = asString(secret?.name);
@@ -160,9 +152,8 @@ export function readInstallationReview(
     });
   }
 
-  // Manifest v2 (`DeclaredCapability` in plugin-manifest.ts): a bare name or
-  // `{ name, reason }`. These are what `Installation.grants` records and what
-  // the server's `check_grants` accepts.
+  // `DeclaredCapability`: a bare name or `{ name, reason }`. These are what
+  // `Installation.grants` records.
   for (const entry of asArray(manifest.capabilities)) {
     const object = asObject(entry);
     const name = asString(entry) ?? asString(object?.name);
@@ -175,8 +166,7 @@ export function readInstallationReview(
     });
   }
 
-  // Manifest v2 `network`: coarse egress for host `fetch` without an
-  // operation id. Declared, not granted.
+  // `network`: coarse egress for host `fetch` without an operation id.
   const network = asObject(manifest.network);
   const origins = asArray(network?.origins).flatMap(o => asString(o) ?? []);
 
@@ -286,7 +276,7 @@ export async function installRelease(
   return installation.subject;
 }
 
-export type InstallStore = Pick<Store, 'getAgent' | 'getServerUrl'>;
+type InstallStore = Pick<Store, 'getAgent' | 'getServerUrl'>;
 
 /**
  * Publishes a wasip2 zip as a private release on the store's server and

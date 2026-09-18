@@ -23,6 +23,7 @@ import {
   installationIdentifier,
   readInstallationReview,
   DEFAULT_INSTALLATION_NAMESPACE,
+  RUNTIME_JS,
   type JSONValue,
   type PublishedRelease,
 } from '@tomic/react';
@@ -461,7 +462,7 @@ function IntegrationStore(): React.JSX.Element {
         onClose={() => setPending(undefined)}
         onInstall={install}
         secondary={
-          pending && pending.review.runtime === 'atomic-js/1'
+          pending && pending.review.runtime === RUNTIME_JS
             ? {
                 label: 'Create draft',
                 onClick: () => createDraft(pending.entry),

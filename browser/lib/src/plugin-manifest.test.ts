@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import {
   originsMentionedIn,
   parseManifest,
-  resolveManifest,
   secretsMentionedIn,
 } from './plugin-manifest.js';
 
@@ -161,28 +160,6 @@ describe('versioned manifest conformance', () => {
       }
     });
   }
-
-  it('upgrades a version-one manifest with the JS runtime and a run entrypoint', () => {
-    expect(
-      resolveManifest(validateManifest(fixture('v1-public-read.json'))),
-    ).toEqual({
-      runtime: 'atomic-js/1',
-      world: 'extension',
-      entrypoints: { run: true },
-      capabilities: [],
-      network: { origins: [] },
-    });
-    const wasm = resolveManifest(
-      validateManifest(fixture('v2-wasm-server-extension.json')),
-    );
-    expect(wasm.runtime).toBe('wasip2/1');
-    expect(wasm.world).toBe('server-extension');
-    expect(wasm.entrypoints.run).toBe(false);
-    expect(wasm.capabilities.map(c => c.name)).toEqual([
-      'full-drive-access',
-      'custom-view',
-    ]);
-  });
 });
 
 it('validates action schemas and operation references without extending capabilities', () => {

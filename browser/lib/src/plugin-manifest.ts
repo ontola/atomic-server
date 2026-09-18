@@ -205,34 +205,6 @@ export function originsMentionedIn(source: string): string[] {
   return [...found].sort();
 }
 
-/** The values a manifest is read with once its defaults are filled in. */
-export interface ResolvedManifest {
-  runtime: ManifestRuntime;
-  world: ManifestWorld;
-  entrypoints: Required<Pick<DeclaredEntrypoints, 'run'>> &
-    Omit<DeclaredEntrypoints, 'run'>;
-  capabilities: { name: CapabilityName; reason?: string }[];
-  network: { origins: string[]; reason?: string };
-}
-
-/**
- * Fills the defaults a version-one manifest is upgraded with: the JS runtime,
- * the `extension` world and a `run` entrypoint.
- */
-export function resolveManifest(manifest: PluginManifest): ResolvedManifest {
-  const entrypoints = manifest.entrypoints ?? { run: true };
-
-  return {
-    runtime: manifest.runtime ?? 'atomic-js/1',
-    world: manifest.world ?? 'extension',
-    entrypoints: { ...entrypoints, run: entrypoints.run ?? false },
-    capabilities: (manifest.capabilities ?? []).map(capability =>
-      typeof capability === 'string' ? { name: capability } : capability,
-    ),
-    network: { ...manifest.network, origins: manifest.network?.origins ?? [] },
-  };
-}
-
 const RUNTIMES: ManifestRuntime[] = ['atomic-js/1', 'wasip2/1'];
 const WORLDS: ManifestWorld[] = ['extension', 'server-extension'];
 const CAPABILITIES: CapabilityName[] = [

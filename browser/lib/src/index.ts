@@ -192,7 +192,6 @@ export {
 } from './plugin-app.js';
 export {
   parseManifest,
-  resolveManifest,
   validateManifest,
   type CapabilityName,
   type DeclaredAction,
@@ -207,7 +206,6 @@ export {
   type ManifestWorld,
   type PluginManifest,
   type PluginManifestV2,
-  type ResolvedManifest,
 } from './plugin-manifest.js';
 export { describePlugin } from './plugin-runner.js';
 
@@ -255,11 +253,7 @@ export {
   grantsFor,
   installationIdentifier,
   DEFAULT_INSTALLATION_NAMESPACE,
-  INSTALLATION_STATUSES,
   RUNTIME_JS,
-  RUNTIME_WASIP2,
-  WORLD_EXTENSION,
-  WORLD_SERVER_EXTENSION,
   type InstallationStatus,
   type InstallationReview,
   type InstallReleaseOptions,
