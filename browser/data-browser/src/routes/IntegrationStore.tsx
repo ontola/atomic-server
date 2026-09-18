@@ -196,6 +196,14 @@ function IntegrationStore(): React.JSX.Element {
       .toLocaleLowerCase()
       .includes(query),
   );
+  // Only offer a toggle when the catalog has something behind it: a checkbox
+  // that reveals nothing reads as broken.
+  const hasApiPlugins = catalogEntries.some(
+    entry => entry.enabled && entry.requiresApiPlugins,
+  );
+  const hasExperimentalPlugins = catalogEntries.some(
+    entry => entry.enabled && entry.experimental,
+  );
   const nothingToDiscover =
     catalogReady &&
     bundled.length === 0 &&
@@ -273,24 +281,30 @@ function IntegrationStore(): React.JSX.Element {
           {showExperimentalPlugins && !listings && !catalogError && (
             <p>Loading integrations…</p>
           )}
-          <Column gap='0.5rem'>
-            <CheckboxLabel>
-              <Checkbox
-                checked={showApiPlugins}
-                onChange={value => setVisibility('show-api-plugins', value)}
-              />
-              Show API plugins
-            </CheckboxLabel>
-            <CheckboxLabel>
-              <Checkbox
-                checked={showExperimentalPlugins}
-                onChange={value =>
-                  setVisibility('show-experimental-plugins', value)
-                }
-              />
-              Show experimental plugins
-            </CheckboxLabel>
-          </Column>
+          {(hasApiPlugins || hasExperimentalPlugins) && (
+            <Column gap='0.5rem'>
+              {hasApiPlugins && (
+                <CheckboxLabel>
+                  <Checkbox
+                    checked={showApiPlugins}
+                    onChange={value => setVisibility('show-api-plugins', value)}
+                  />
+                  Show API plugins
+                </CheckboxLabel>
+              )}
+              {hasExperimentalPlugins && (
+                <CheckboxLabel>
+                  <Checkbox
+                    checked={showExperimentalPlugins}
+                    onChange={value =>
+                      setVisibility('show-experimental-plugins', value)
+                    }
+                  />
+                  Show experimental plugins
+                </CheckboxLabel>
+              )}
+            </Column>
+          )}
           <Grid>
             {showApiPlugins && (
               <LocalThoughtCatalog
@@ -451,7 +465,7 @@ function DiscoverEmptyState({ searching }: { searching: boolean }) {
     <p>
       {searching
         ? 'No integrations match your search.'
-        : 'No integrations are available right now.'}
+        : 'No plugins to show here.'}
     </p>
   );
 }
