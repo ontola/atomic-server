@@ -3,22 +3,21 @@ import { execFileSync } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
+  rmdirSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve, sep } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 
 const root = execFileSync('git', ['rev-parse', '--show-toplevel'], {
   encoding: 'utf8',
 }).trim();
-const changed = execFileSync('git', ['diff', '--cached', '--name-only', '-z'], {
-  cwd: root,
-  encoding: 'utf8',
-})
+const git = (args, options = {}) =>
+  execFileSync('git', args, { cwd: root, encoding: 'utf8', ...options });
+const changed = git(['diff', '--cached', '--name-only', '-z'])
   .split('\0')
   .filter(Boolean);
 const browser = changed.some(file => file.startsWith('browser/'));
@@ -35,29 +34,87 @@ const rust = changed.some(
 
 if (!browser && !rust) process.exit(0);
 
-const snapshot = mkdtempSync(join(tmpdir(), 'atomic-pre-commit-'));
+// Git exports these during a commit. They must not make subprocesses inspect
+// the original checkout instead of the staged snapshot.
+const env = { ...process.env };
+for (const key of git(['rev-parse', '--local-env-vars']).trim().split('\n'))
+  delete env[key];
+
+const targetDir = resolve(root, env.CARGO_TARGET_DIR || 'target');
+// The snapshot of the index lives at a FIXED path and persists between
+// commits. Cargo keys its fingerprints on the package path and decides
+// staleness by source mtimes, so a fresh temp dir per commit meant every
+// workspace crate was rebuilt from scratch, every time. Keeping the path and
+// touching only the files that changed since the last sync makes the Clippy
+// run as incremental as a normal `cargo clippy` in the checkout.
+// Reset with `rm -rf target/pre-commit` if the snapshot ever looks wrong.
+const snapshot = join(targetDir, 'pre-commit', 'snapshot');
+// The index tree the snapshot currently holds (`git write-tree` OID).
+const stamp = join(targetDir, 'pre-commit', 'tree');
+
+// Check exactly what Git will commit, including partially staged files.
+// No stash/reset: the user's index and working tree are never modified.
+function syncSnapshot() {
+  const tree = git(['write-tree']).trim();
+  const previous =
+    existsSync(stamp) && existsSync(snapshot)
+      ? readFileSync(stamp, 'utf8').trim()
+      : null;
+
+  if (previous === tree) return;
+
+  if (!previous) {
+    rmSync(snapshot, { recursive: true, force: true });
+    mkdirSync(snapshot, { recursive: true });
+    git(['checkout-index', '--all', `--prefix=${snapshot}${sep}`], {
+      stdio: 'inherit',
+    });
+  } else {
+    const records = git([
+      'diff-tree',
+      '-r',
+      '-z',
+      '--no-renames',
+      '--name-status',
+      previous,
+      tree,
+    ]).split('\0');
+    const stale = [];
+
+    for (let i = 0; i + 1 < records.length; i += 2) {
+      const [status, file] = [records[i], records[i + 1]];
+
+      if (status === 'D') {
+        rmSync(join(snapshot, file), { recursive: true, force: true });
+        // Leave no empty directories behind.
+        for (
+          let dir = dirname(join(snapshot, file));
+          dir !== snapshot && readdirSync(dir).length === 0;
+          dir = dirname(dir)
+        )
+          rmdirSync(dir);
+      } else {
+        stale.push(file);
+      }
+    }
+
+    if (stale.length > 0) {
+      // `-f` also replaces a file with a directory and vice versa.
+      git(
+        ['checkout-index', '-f', '-z', '--stdin', `--prefix=${snapshot}${sep}`],
+        {
+          input: stale.join('\0') + '\0',
+          stdio: ['pipe', 'inherit', 'inherit'],
+        },
+      );
+    }
+  }
+
+  writeFileSync(stamp, `${tree}\n`);
+}
 
 try {
-  // Check exactly what Git will commit, including partially staged files.
-  // No stash/reset: the user's index and working tree are never modified.
-  execFileSync(
-    'git',
-    ['checkout-index', '--all', `--prefix=${snapshot}${sep}`],
-    {
-      cwd: root,
-      stdio: 'inherit',
-    },
-  );
-  // Git exports these during a commit. They must not make subprocesses inspect
-  // the original checkout instead of the staged snapshot.
-  const env = { ...process.env };
-  for (const key of execFileSync('git', ['rev-parse', '--local-env-vars'], {
-    cwd: root,
-    encoding: 'utf8',
-  })
-    .trim()
-    .split('\n'))
-    delete env[key];
+  syncSnapshot();
 
   if (browser) {
     const browserRoot = join(root, 'browser');
@@ -80,13 +137,10 @@ try {
 
     for (const directory of directories) {
       const modules = join(browserRoot, directory, 'node_modules');
+      const link = join(snapshot, 'browser', directory, 'node_modules');
 
-      if (existsSync(modules)) {
-        symlinkSync(
-          modules,
-          join(snapshot, 'browser', directory, 'node_modules'),
-          'dir',
-        );
+      if (existsSync(modules) && !existsSync(link)) {
+        symlinkSync(modules, link, 'dir');
       }
     }
 
@@ -106,14 +160,20 @@ try {
   }
 
   if (rust) {
-    // Like CI's Rust checks, Clippy needs an embed input but does not serve it.
-    // Generated frontend assets are absent from the staged source snapshot.
-    const assets = join(snapshot, 'server/assets_tmp');
-    mkdirSync(assets, { recursive: true });
-    writeFileSync(
-      join(assets, 'index.html'),
-      '<html><body>checks stub</body></html>',
-    );
+    // Clippy does not need the embedded frontend or plugin runtime, but
+    // server/build.rs builds both unless told otherwise: without these the
+    // snapshot (no `dist`, no `assets_tmp`) ran `pnpm install`, vite AND
+    // wasm-pack on every commit. Same stub as CI's rustChecksContainer.
+    const assets = join(snapshot, 'server', 'assets_tmp');
+
+    if (!existsSync(assets)) {
+      mkdirSync(assets, { recursive: true });
+      writeFileSync(
+        join(assets, 'index.html'),
+        '<html><body>pre-commit stub</body></html>\n',
+      );
+    }
+
     console.log('pre-commit: checking staged Rust snapshot with Clippy');
     execFileSync(
       'cargo',
@@ -135,8 +195,9 @@ try {
         cwd: snapshot,
         env: {
           ...env,
-          CARGO_TARGET_DIR: resolve(root, env.CARGO_TARGET_DIR || 'target'),
+          CARGO_TARGET_DIR: targetDir,
           ATOMICSERVER_SKIP_JS_BUILD: 'true',
+          ATOMICSERVER_SKIP_PLUGIN_RUNTIME: 'true',
         },
         stdio: 'inherit',
       },
@@ -145,6 +206,4 @@ try {
 } catch (error) {
   console.error(`pre-commit: commit blocked. ${error.message}`);
   process.exitCode = 1;
-} finally {
-  rmSync(snapshot, { recursive: true, force: true });
 }
