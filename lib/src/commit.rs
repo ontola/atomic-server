@@ -1440,11 +1440,10 @@ impl CommitBuilder {
         // server starts from empty on first save and can only apply a full
         // snapshot (or a delta against state it already has). See
         // `resources::test::push_propval`.
-        let persisted_snapshot: Option<Vec<u8>> =
-            match resource.get(urls::LORO_UPDATE) {
-                Ok(Value::LoroDoc(snapshot)) => Some(snapshot.clone()),
-                _ => None,
-            };
+        let persisted_snapshot: Option<Vec<u8>> = match resource.get(urls::LORO_UPDATE) {
+            Ok(Value::LoroDoc(snapshot)) => Some(snapshot.clone()),
+            _ => None,
+        };
         // Working-doc fallback when there is no live doc and no persisted
         // snapshot (legacy / shallow / first save via CommitBuilder.set only).
         // Passed separately so sign_at still exports a *full* snapshot.
@@ -2538,10 +2537,7 @@ mod test {
 
         // Grow the resource so a full snapshot is clearly larger than a delta.
         for h in 0..8 {
-            let mut resource = store
-                .get_resource(&did.clone().into())
-                .await
-                .unwrap();
+            let mut resource = store.get_resource(&did.clone().into()).await.unwrap();
             resource
                 .set(
                     urls::DESCRIPTION.into(),

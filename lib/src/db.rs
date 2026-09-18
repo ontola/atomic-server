@@ -1119,10 +1119,8 @@ impl Db {
 
         // Per-process dir so parallel `cargo test` processes don't share a
         // half-written template.
-        let template_dir = std::env::temp_dir().join(format!(
-            "atomic_init_temp_template_{}",
-            std::process::id()
-        ));
+        let template_dir =
+            std::env::temp_dir().join(format!("atomic_init_temp_template_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&template_dir);
         let uploads = template_dir.join("uploads");
         std::fs::create_dir_all(&uploads)

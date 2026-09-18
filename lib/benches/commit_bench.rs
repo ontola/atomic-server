@@ -56,10 +56,7 @@ fn bench_commit_stages(c: &mut Criterion) {
                     .create_resource(BENCH_CLASS, &drive, "item", bench_props(0))
                     .await
                     .unwrap();
-                let resource = store
-                    .get_resource(&Subject::from(did))
-                    .await
-                    .unwrap();
+                let resource = store.get_resource(&Subject::from(did)).await.unwrap();
 
                 let start = std::time::Instant::now();
                 for _ in 0..iters {
@@ -80,8 +77,9 @@ fn bench_commit_stages(c: &mut Criterion) {
                     rt.block_on(async {
                         let mut total = std::time::Duration::ZERO;
                         for i in 0..iters {
-                            let store =
-                                Db::init_temp(&format!("cb_edit_{history}_{i}")).await.unwrap();
+                            let store = Db::init_temp(&format!("cb_edit_{history}_{i}"))
+                                .await
+                                .unwrap();
                             let (_agent, drive) = store.setup("Bench").await.unwrap();
                             let did = store
                                 .create_resource(BENCH_CLASS, &drive, "item", bench_props(0))
@@ -105,10 +103,8 @@ fn bench_commit_stages(c: &mut Criterion) {
                                 resource.save_locally(&store).await.unwrap();
                             }
 
-                            let mut resource = store
-                                .get_resource(&Subject::from(did))
-                                .await
-                                .unwrap();
+                            let mut resource =
+                                store.get_resource(&Subject::from(did)).await.unwrap();
                             resource
                                 .set(
                                     urls::DESCRIPTION.into(),
