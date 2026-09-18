@@ -4,6 +4,8 @@
 
 - [Atomic Data Overview](atomic-data-overview.md)
   - [Motivation](motivation.md)
+  - [Local-first and data ownership](local-first.md)
+  - [URLs and identifiers](urls.md)
   - [Strategy, history and roadmap](roadmap.md)
   - [When (not) to use it](when-to-use.md)
 
@@ -12,7 +14,6 @@
 - [AtomicServer](atomic-server.md)
   - [When (not) to use it](atomicserver/when-to-use.md)
   - [Installation](atomicserver/installation.md)
-  - [Browser peer sync](browser-peer-sync.md)
   - [Using the GUI](atomicserver/gui.md)
     - [Tables](atomicserver/gui/tables.md)
     - [AI and Atomic Assistant](atomicserver/gui/ai-and-atomic-assistant.md)
@@ -47,6 +48,7 @@
   - [Rust](rust.md)
     - [CLI](rust-cli.md)
     - [Lib](rust-lib.md)
+  - [Flutter / Dart (native apps)](flutter.md)
 
 # Guides
 
@@ -76,15 +78,17 @@
     - [FAQ](schema/faq.md)
 
 - [Atomic Data Extended](extended.md)
-  - [Agents](agents.md)
   - [Decentralized Identifiers (DIDs)](did.md)
+  - [Agents](agents.md)
   - [Hierarchy and authorization](hierarchy.md)
   - [Authentication](authentication.md)
   - [Invitations and sharing](invitations.md)
-  - [Commits (writing data)](commits/intro.md)
+  - [Atomic Sync](sync.md)
+    - [Wire protocol: WebSocket and Iroh](websockets.md)
+    - [Browser peer sync (WebRTC)](browser-peer-sync.md)
+  - [Commits (signed writes)](commits/intro.md)
     - [Concepts](commits/concepts.md)
     - [Compared to](commits/compare.md)
-  - [WebSockets](websockets.md)
   - [Endpoints](endpoints.md)
   - [Collections, filtering, sorting](schema/collections.md)
   - [Uploading and downloading files](files.md)

@@ -28,7 +28,7 @@ This should help you understand how and where you may be able to contribute.
 - **[Endpoints](endpoints.md)** (2021-03). Machine readable API endpoints (think Swagger / OpenAPI spec) for things like versioning, path traversal and more.
 - **Classes and Properties editable from the browser** (2021-04). The data-browser is now powerful enough to use for managing the core ontological data of the project.
 - **[Hierarchies](hierarchy.md) & [Invitations](invitations.md)** (2021-06). Users can set rights, structure Resources and invite new people to collaborate.
-- **[Websockets](websockets.md)** (2021-08). Live synchronization between client and server.
+- **[Websockets](websockets.md)** (2021-08). Live synchronization between client and server; the start of what is now [Atomic Sync](sync.md).
 - **Use case: Document Editor** (2021-09). Notion-like editor with real-time synchronization.
 - **Full-text search** (2021-11). Powered by Tantivy.
 - **Authentication for read access** (2021-11). Allows for private data.

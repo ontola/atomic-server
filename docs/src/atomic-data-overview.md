@@ -7,10 +7,13 @@
 
 Atomic Data uses links to connect pieces of data, and therefore makes it easier to connect datasets to each other - even when these datasets exist on separate machines.
 
+It is also [local-first](local-first.md): your identity is a key you hold, your data lives on your own devices, every edit is signed by you, and devices [sync](sync.md) with each other whenever they can. A server is optional, useful as an always-on replica rather than as the place your data has to live.
+
 ## AtomicServer
 
 [AtomicServer](atomic-server.md) is an open source, powerful graph database + headless CMS.
 It's the reference implementation for the Atomic Data specification, written in Rust.
+The same library, `atomic_lib`, runs in the browser (as WASM), in [Flutter apps](flutter.md) and in the CLI, so every client keeps a full local copy of its data and does its own signing and syncing.
 
 ## Atomic Data Core
 
@@ -31,17 +34,19 @@ These Properties are responsible for setting the `datatype` (to ensure type-safe
 
 ## Atomic Data Extended
 
-Atomic Data Extended is a set of extra modules (on top of Atomic Data Core) that deal with data that changes over time, authentication, and authorization.
+Atomic Data Extended is a set of extra modules (on top of Atomic Data Core) that deal with identity, data that changes over time, authentication, authorization and synchronization between devices.
+If you are new here, read [URLs and identifiers](urls.md) first: it explains the `did:ad:` identifiers that show up everywhere in Extended.
 
 {{#include extended-table.md}}
 
 ## Tools & libraries
 
-- Browser app [atomic-data-browser](https://github.com/atomicdata-dev/atomic-data-browser) ([demo on atomicdata.dev](https://atomicdata.dev))
-- Build a react app using [typescript & react libraries](https://github.com/atomicdata-dev/atomic-data-browser). Start with the [react template on codesandbox](https://codesandbox.io/s/atomic-data-react-template-4y9qu?file=/src/MyResource.tsx)
-- Host your own [atomic-server](https://github.com/atomicdata-dev/atomic-server) (powers [atomicdata.dev](https://atomicdata.dev), run with `docker run -p 80:80 -v atomic-storage:/atomic-storage ghcr.io/ontola/atomic-server`)
-- Discover the command line tool: [atomic-cli](https://github.com/atomicdata-dev/atomic-server) (`cargo install atomic-cli`)
-- Use the Rust library: [atomic-lib](https://github.com/atomicdata-dev/atomic-server)
+- The web app ([demo on atomicdata.dev](https://atomicdata.dev)): documents, tables, chat, files and an ontology editor, working offline in the browser
+- Build a web app with [@tomic/lib](js.md), [@tomic/react](usecases/react.md) or [@tomic/svelte](svelte.md)
+- Build a native app with [Flutter / Dart](flutter.md), on top of the same Rust core
+- Host your own always-on [atomic-server](atomicserver/installation.md) (powers [atomicdata.dev](https://atomicdata.dev), run with `docker run -p 80:80 -v atomic-storage:/atomic-storage ghcr.io/ontola/atomic-server`), or use [Atomic Cloud](https://atomicserver.eu)
+- Discover the command line tool: [atomic-cli](rust-cli.md) (`cargo install atomic-cli`)
+- Use the Rust library: [atomic_lib](rust-lib.md)
 
 ## Get involved
 

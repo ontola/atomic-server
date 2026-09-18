@@ -5,6 +5,7 @@
 It was developed parallel to this specification, and it served as a testing ground for various ideas (some of which didn't work, and some of which ended up in the spec).
 
 AtomicServer is a real-time headless CMS, graph database server for storing and sharing typed linked data.
+In a [local-first](local-first.md) setup it is the always-on device: the replica that a browser tab can reach, that stays online while your phone and laptop sleep, and that serves the same data over HTTP.
 It's free, open source (MIT license), and has a ton of features:
 
 <!-- Copied from root README -->
@@ -23,7 +24,7 @@ It's free, open source (MIT license), and has a ton of features:
 - 💬  **Group chat**, performant and flexible message channels with attachments, search and replies.
 - 📂  **File management**: Upload, download and preview attachments.
 - 💾  **Versioning** / history from the Loro oplog, with writes authorized by [Atomic Commits](https://docs.atomicdata.dev/commits/intro.html)
-- 🔄  **Real-time synchronization**: instantly communicates state changes with a client. Build dynamic, collaborative apps using [websockets](https://docs.atomicdata.dev/websockets) (using a [single one-liner in react](https://docs.atomicdata.dev/usecases/react) or [svelte](https://docs.atomicdata.dev/svelte)).
+- 🔄  **Real-time synchronization**: instantly communicates state changes with a client. Build dynamic, collaborative apps using [Atomic Sync](https://docs.atomicdata.dev/sync) over WebSocket, Iroh or WebRTC (using a [single one-liner in react](https://docs.atomicdata.dev/usecases/react) or [svelte](https://docs.atomicdata.dev/svelte)).
 - 🧰  **Many serialization options**: to JSON, [JSON-AD](https://docs.atomicdata.dev/core/json-ad.html), and various Linked Data / RDF formats (RDF/XML, N-Triples / Turtle / JSON-LD).
 - 📖  **Pagination, sorting and filtering** queries using [Atomic Collections](https://docs.atomicdata.dev/schema/collections.html).
 - 🔐  **Authorization** (read / write permissions) and Hierarchical structures powered by [Atomic Hierarchy](https://docs.atomicdata.dev/hierarchy.html)
