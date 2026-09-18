@@ -890,7 +890,9 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                           options={combinedModelOptions}
                           onSelect={value => {
                             if (!value) return;
-                            const newModel = { id: normalizeModelIdValue(value) };
+                            const newModel = {
+                              id: normalizeModelIdValue(value),
+                            };
                             setActiveModel(newModel);
 
                             // Persist the choice to whichever source the chat reads
