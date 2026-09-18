@@ -29,6 +29,7 @@ export default function InputResourceArray({
   resource,
   property,
   commit,
+  commitDebounceInterval,
   required,
   id: _id,
   // Pulled out of `...props` on purpose so it never reaches the rows below:
@@ -44,6 +45,7 @@ export default function InputResourceArray({
   const [array, setArray] = useArray(resource, property.subject, {
     validate: false,
     commit,
+    commitDebounce: commitDebounceInterval,
   });
 
   const { error, setError, setTouched } = useValidation(
@@ -85,7 +87,7 @@ export default function InputResourceArray({
           setArray(newArray);
           setError(undefined);
         } catch (e) {
-          setError(e.message);
+          setError(e instanceof Error ? e.message : String(e));
 
           return;
         }
