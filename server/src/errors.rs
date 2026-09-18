@@ -126,7 +126,10 @@ impl From<atomic_lib::errors::AtomicError> for AtomicServerError {
             atomic_lib::AtomicErrorType::NotFoundError => AppErrorType::NotFound,
             atomic_lib::AtomicErrorType::UnauthorizedError => AppErrorType::Unauthorized,
             atomic_lib::AtomicErrorType::MethodNotAllowed => AppErrorType::MethodNotAllowed,
-            atomic_lib::AtomicErrorType::ParseError => AppErrorType::Other,
+            // A body the lib could not parse is the client's mistake, not a
+            // fault here: 400, so it neither reads as a crash to the caller
+            // nor reaches Sentry as one.
+            atomic_lib::AtomicErrorType::ParseError => AppErrorType::BadRequest,
             atomic_lib::AtomicErrorType::OtherError => AppErrorType::Other,
         };
         let subject = error

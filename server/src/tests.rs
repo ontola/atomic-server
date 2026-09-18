@@ -579,6 +579,209 @@ async fn self_signed_agent_commit_keeps_name() {
     );
 }
 
+/// A fresh, initialized `AppState` on its own temporary directories, with
+/// `extra_args` appended to the command line (`["--domain", "x"]`).
+pub(crate) async fn init_test_appstate(extra_args: &[&str]) -> AppState {
+    let unique_string = atomic_lib::utils::random_string(10);
+    use clap::Parser;
+    let data_dir = format!("./.temp/{}/db", unique_string);
+    let config_dir = format!("./.temp/{}/config", unique_string);
+    let mut args = vec![
+        "atomic-server",
+        "--initialize",
+        "--data-dir",
+        &data_dir,
+        "--config-dir",
+        &config_dir,
+    ];
+    args.extend_from_slice(extra_args);
+    let opts = Opts::parse_from(args);
+
+    let mut config = config::build_config(opts).expect("failed init config");
+    // Every test gets its own index directories: parallel runs sharing the
+    // default ones trip Tantivy's `LockBusy`.
+    config.search_index_path = format!("./.temp/{}/search_index", unique_string).into();
+    config.vector_search_index_path =
+        format!("./.temp/{}/vector_search_index", unique_string).into();
+
+    crate::appstate::AppState::init(config)
+        .await
+        .expect("failed init appstate")
+}
+
+/// A client's mistake is answered as a client error, not as 500 (security
+/// audit D: auth failures and malformed bodies used to report themselves as
+/// crashes and fill Sentry). Real handlers, real bodies.
+#[actix_rt::test]
+async fn client_errors_are_not_server_errors() {
+    let appstate = init_test_appstate(&[]).await;
+    atomic_lib::test_utils::setup_test_env(&appstate.store)
+        .await
+        .unwrap();
+    let app = test::init_service(
+        App::new()
+            .app_data(Data::new(appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    let post_commit = |body: String| {
+        TestRequest::post()
+            .uri("/commit")
+            .insert_header(("Content-Type", "application/ad+json"))
+            .set_payload(body)
+            .to_request()
+    };
+
+    // A body that is not JSON.
+    let resp = test::call_service(&app, post_commit("{\"not json".into())).await;
+    assert_eq!(
+        resp.status(),
+        actix_web::http::StatusCode::BAD_REQUEST,
+        "{}",
+        get_body(resp)
+    );
+
+    // JSON, but not a commit: no signature.
+    let signer = atomic_lib::agents::Agent::new(None).unwrap();
+    let unsigned = serde_json::json!({
+        urls::SUBJECT: "did:ad:something",
+        urls::SIGNER: signer.subject.to_string(),
+        urls::CREATED_AT: atomic_lib::utils::now(),
+    })
+    .to_string();
+    let resp = test::call_service(&app, post_commit(unsigned)).await;
+    assert_eq!(
+        resp.status(),
+        actix_web::http::StatusCode::BAD_REQUEST,
+        "a commit without a signature is malformed"
+    );
+    let body = get_body(resp);
+    assert!(body.contains("No signature field in Commit"), "{body}");
+
+    // A real commit whose signature was tampered with.
+    let agent = atomic_lib::agents::Agent::new(None).unwrap();
+    let agent_did = agent.subject.pure_id();
+    let empty = atomic_lib::Resource::new(agent_did.clone());
+    let mut builder = atomic_lib::commit::CommitBuilder::new(agent_did.clone().into());
+    builder.is_genesis = true;
+    builder.set(
+        urls::IS_A.into(),
+        atomic_lib::Value::ResourceArray(vec![urls::AGENT.to_string().into()]),
+    );
+    let commit = builder.sign(&agent, &appstate.store, &empty).await.unwrap();
+    let mut json: serde_json::Value = serde_json::from_str(
+        &commit
+            .into_resource(&appstate.store)
+            .await
+            .unwrap()
+            .to_json_ad(Some(&appstate.config.get_origin()))
+            .unwrap(),
+    )
+    .unwrap();
+    json[urls::SIGNATURE] = serde_json::Value::String("AAAA".into());
+    let resp = test::call_service(&app, post_commit(json.to_string())).await;
+    assert_eq!(
+        resp.status(),
+        actix_web::http::StatusCode::UNAUTHORIZED,
+        "a signature that does not verify is an authentication failure"
+    );
+
+    // A read with authentication headers that do not parse, and one whose
+    // signature is garbage.
+    let drive_did = appstate
+        .store
+        .get_drive_did("localhost")
+        .await
+        .unwrap()
+        .unwrap();
+    let path = format!("/did?subject={}", urlencoding::encode(drive_did.as_str()));
+    let resp = test::call_service(
+        &app,
+        TestRequest::get()
+            .uri(&path)
+            .insert_header(("Accept", "application/ad+json"))
+            .insert_header(("x-atomic-public-key", "AAAA"))
+            .insert_header(("x-atomic-signature", "AAAA"))
+            .insert_header(("x-atomic-agent", "did:ad:agent:AAAA"))
+            .insert_header(("x-atomic-timestamp", "not-a-number"))
+            .to_request(),
+    )
+    .await;
+    assert_eq!(
+        resp.status(),
+        actix_web::http::StatusCode::UNAUTHORIZED,
+        "malformed auth headers"
+    );
+
+    let req = build_request_authenticated(&path, &appstate)
+        .insert_header(("x-atomic-signature", "AAAA"))
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        actix_web::http::StatusCode::UNAUTHORIZED,
+        "an auth signature that does not verify"
+    );
+    let body = get_body(resp);
+    assert!(body.contains("Authentication failed"), "{body}");
+}
+
+/// A multipart body that cannot be read is an error, not a shorter list of
+/// files: `/upload` used to end its loop quietly on a multipart error and
+/// answer 200 with whatever had been stored so far.
+#[actix_rt::test]
+async fn upload_reports_a_broken_multipart_body() {
+    let appstate = init_test_appstate(&[]).await;
+    let app = test::init_service(
+        App::new()
+            .app_data(Data::new(appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+    let drive_did = atomic_lib::test_utils::create_test_drive(&appstate.store)
+        .await
+        .unwrap();
+    let path = format!("/upload?parent={}", urlencoding::encode(drive_did.as_str()));
+
+    // `multipart/form-data` without a boundary: nothing can be parsed.
+    let req = build_request_authenticated(&path, &appstate)
+        .method(actix_web::http::Method::POST)
+        .insert_header(("Content-Type", "multipart/form-data"))
+        .set_payload("--boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.txt\"\r\n\r\nhello\r\n--boundary--\r\n")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        actix_web::http::StatusCode::BAD_REQUEST,
+        "no boundary: {}",
+        get_body(resp)
+    );
+
+    // A body that ends in the middle of a part.
+    let req = build_request_authenticated(&path, &appstate)
+        .method(actix_web::http::Method::POST)
+        .insert_header(("Content-Type", "multipart/form-data; boundary=boundary"))
+        .set_payload("--boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.txt\"\r\n\r\nhel")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        actix_web::http::StatusCode::BAD_REQUEST,
+        "truncated: {}",
+        get_body(resp)
+    );
+    assert_eq!(
+        appstate
+            .store
+            .kv
+            .len(atomic_lib::db::trees::Tree::Blobs)
+            .unwrap(),
+        0,
+        "nothing from a broken body is stored"
+    );
+}
+
 /// Gets the body from the response as a String. Why doen't actix provide this?
 fn get_body(resp: ServiceResponse) -> String {
     let boxbody = resp.into_body();

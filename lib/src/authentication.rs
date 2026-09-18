@@ -2,7 +2,7 @@
 
 use crate::{
     agents::{decode_base64, ForAgent},
-    errors::AtomicResult,
+    errors::{AtomicError, AtomicResult},
     urls,
     utils::check_timestamp_fresh,
     Storelike,
@@ -103,89 +103,99 @@ pub async fn get_agent_from_auth_values_and_check(
     auth_header_values: Option<AuthValues>,
     store: &impl Storelike,
 ) -> AtomicResult<ForAgent> {
-    if let Some(auth_vals) = auth_header_values {
-        // If there are auth headers, check 'em, make sure they are valid.
-        check_auth_signature(&auth_vals.requested_subject, &auth_vals)
-            .map_err(|e| format!("Error checking authentication headers. {}", e))?;
-        // check if the timestamp is valid: not in the future, and not so old
-        // that a captured proof could be replayed indefinitely.
-        check_timestamp_fresh(
-            auth_vals.timestamp,
-            ACCEPTABLE_TIME_DIFFERENCE,
-            AUTH_MAX_AGE_MS,
-        )
-        .map_err(|e| format!("Authentication timestamp rejected. {}", e))?;
-        // check if the public key belongs to the agent
-        // For DID subjects, we need to fetch the agent resource locally
-        // unless it's a DID based on the public key, in which case we can verify it directly.
-        let agent_subject = crate::Subject::from_raw(auth_vals.agent_subject.trim(), None);
-        let public_key_trimmed = auth_vals.public_key.trim();
+    match auth_header_values {
+        // Every failure below means the caller is not who the headers say
+        // (a server answers 401), whichever check tripped.
+        Some(auth_vals) => check_auth_values(auth_vals, store)
+            .await
+            .map_err(AtomicError::into_unauthorized),
+        None => Ok(ForAgent::Public),
+    }
+}
 
-        if agent_subject.is_did() {
-            // The DID subject embeds the agent's public key
-            // (`did:ad:agent:{pubkey}`) and the auth header carries the same
-            // key. The two may use different base64 alphabets — the url-safe
-            // alphabet (the new default) vs the legacy standard alphabet
-            // (`+` `/` `=`) — so a raw-string `ends_with` wrongly rejects a key
-            // whose decoded BYTES are identical. Compare the decoded bytes.
-            let did_pubkey = agent_subject
-                .as_str()
-                .strip_prefix(crate::subject::DID_AD_AGENT_PREFIX)
-                .unwrap_or_else(|| agent_subject.as_str());
-            if public_keys_match(did_pubkey, public_key_trimmed) {
-                return Ok(ForAgent::AgentSubject(agent_subject));
-            } else {
-                return Err(format!(
-                    "The public key in the auth headers '{}' does not match the DID subject '{}'",
-                    public_key_trimmed, auth_vals.agent_subject
-                )
-                .into());
-            }
-        }
+async fn check_auth_values(
+    auth_vals: AuthValues,
+    store: &impl Storelike,
+) -> AtomicResult<ForAgent> {
+    // If there are auth headers, check 'em, make sure they are valid.
+    check_auth_signature(&auth_vals.requested_subject, &auth_vals)
+        .map_err(|e| format!("Error checking authentication headers. {}", e))?;
+    // check if the timestamp is valid: not in the future, and not so old
+    // that a captured proof could be replayed indefinitely.
+    check_timestamp_fresh(
+        auth_vals.timestamp,
+        ACCEPTABLE_TIME_DIFFERENCE,
+        AUTH_MAX_AGE_MS,
+    )
+    .map_err(|e| format!("Authentication timestamp rejected. {}", e))?;
+    // check if the public key belongs to the agent
+    // For DID subjects, we need to fetch the agent resource locally
+    // unless it's a DID based on the public key, in which case we can verify it directly.
+    let agent_subject = crate::Subject::from_raw(auth_vals.agent_subject.trim(), None);
+    let public_key_trimmed = auth_vals.public_key.trim();
 
-        // Legacy `https://host/agents/{pubkey}` subjects are treated as
-        // `did:ad:agent:{pubkey}` by every rights check, so the key in the
-        // path is the identity being claimed: bind it to the signing key.
-        // Looking the key up in a resource at that URL instead would let
-        // anyone host `https://theirs/agents/<victim key>` carrying their own
-        // key and be authorized as the victim (including as the server's own
-        // root agent, whose key is public).
-        if let Some(path_key) = crate::agents::legacy_agent_pubkey(agent_subject.as_str()) {
-            if public_keys_match(&path_key, public_key_trimmed) {
-                return Ok(ForAgent::AgentSubject(agent_subject));
-            }
+    if agent_subject.is_did() {
+        // The DID subject embeds the agent's public key
+        // (`did:ad:agent:{pubkey}`) and the auth header carries the same
+        // key. The two may use different base64 alphabets — the url-safe
+        // alphabet (the new default) vs the legacy standard alphabet
+        // (`+` `/` `=`) — so a raw-string `ends_with` wrongly rejects a key
+        // whose decoded BYTES are identical. Compare the decoded bytes.
+        let did_pubkey = agent_subject
+            .as_str()
+            .strip_prefix(crate::subject::DID_AD_AGENT_PREFIX)
+            .unwrap_or_else(|| agent_subject.as_str());
+        if public_keys_match(did_pubkey, public_key_trimmed) {
+            return Ok(ForAgent::AgentSubject(agent_subject));
+        } else {
             return Err(format!(
-                "The public key in the auth headers '{}' does not match the agent subject '{}'",
+                "The public key in the auth headers '{}' does not match the DID subject '{}'",
                 public_key_trimmed, auth_vals.agent_subject
             )
             .into());
         }
+    }
 
-        // Any other agent subject must be a resource this store already
-        // holds. Never fetch it over the network during authentication: that
-        // is an unauthenticated SSRF, and the fetched body would be written
-        // into the store as a trusted resource.
-        let normalized_agent = store.normalize_subject(&agent_subject);
-        if !normalized_agent.is_local() {
-            return Err(format!(
+    // Legacy `https://host/agents/{pubkey}` subjects are treated as
+    // `did:ad:agent:{pubkey}` by every rights check, so the key in the
+    // path is the identity being claimed: bind it to the signing key.
+    // Looking the key up in a resource at that URL instead would let
+    // anyone host `https://theirs/agents/<victim key>` carrying their own
+    // key and be authorized as the victim (including as the server's own
+    // root agent, whose key is public).
+    if let Some(path_key) = crate::agents::legacy_agent_pubkey(agent_subject.as_str()) {
+        if public_keys_match(&path_key, public_key_trimmed) {
+            return Ok(ForAgent::AgentSubject(agent_subject));
+        }
+        return Err(format!(
+            "The public key in the auth headers '{}' does not match the agent subject '{}'",
+            public_key_trimmed, auth_vals.agent_subject
+        )
+        .into());
+    }
+
+    // Any other agent subject must be a resource this store already
+    // holds. Never fetch it over the network during authentication: that
+    // is an unauthenticated SSRF, and the fetched body would be written
+    // into the store as a trusted resource.
+    let normalized_agent = store.normalize_subject(&agent_subject);
+    if !normalized_agent.is_local() {
+        return Err(format!(
                 "Agent subject '{}' is hosted elsewhere and cannot be used to authenticate here; sign in with a did:ad:agent identity",
                 auth_vals.agent_subject
             )
             .into());
-        }
-        let agent_resource = store.get_resource(&normalized_agent).await?;
-        let found_public_key = agent_resource.get(urls::PUBLIC_KEY)?;
-        if !public_keys_match(found_public_key.to_string().trim(), public_key_trimmed) {
-            Err(
-                "The public key in the auth headers does not match the public key in the agent"
-                    .to_string()
-                    .into(),
-            )
-        } else {
-            Ok(ForAgent::AgentSubject(agent_subject))
-        }
+    }
+    let agent_resource = store.get_resource(&normalized_agent).await?;
+    let found_public_key = agent_resource.get(urls::PUBLIC_KEY)?;
+    if !public_keys_match(found_public_key.to_string().trim(), public_key_trimmed) {
+        Err(
+            "The public key in the auth headers does not match the public key in the agent"
+                .to_string()
+                .into(),
+        )
     } else {
-        Ok(ForAgent::Public)
+        Ok(ForAgent::AgentSubject(agent_subject))
     }
 }
 

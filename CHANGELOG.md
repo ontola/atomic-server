@@ -7,6 +7,45 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Security hygiene, from the September 2026 audit (`planning/security-audit-2026-09.md`
+  D, C16, F):
+  - CORS: any origin may still read (Atomic is a headless CMS), but
+    `Access-Control-Allow-Credentials` is now sent only to origins this
+    server answers for — the configured domain, a subdomain of the base
+    domain, loopback, and the desktop webview origins (`tauri://localhost`,
+    `http://tauri.localhost`) — by the same rule `RequestContext` uses for
+    trusting `Host`. Before, every origin was told it could attach the
+    session cookie; `SameSite=Lax` was the only thing stopping it
+    (`server/src/cors.rs`).
+  - Client errors are answered as client errors instead of 500: a request
+    body that does not parse is 400 (`AtomicErrorType::ParseError` maps to
+    `BadRequest`; malformed commits are parse errors), a signature that does
+    not verify, an unknown signer, or authentication headers that do not
+    parse are 401 (`Commit::validate_signature` and
+    `get_agent_from_auth_values_and_check` type every failure as
+    unauthorized, and `get_client_agent` no longer flattens the type into a
+    string). These no longer reach Sentry as crashes.
+  - `/upload` returns 400 when the multipart body cannot be read (no
+    boundary, truncated part) instead of ending its loop quietly and
+    answering 200 for the files that made it through.
+  - `atomic_lib`: the "importing from a peer" flag and the import source are
+    a tokio task-local scope (`sync::ws_apply::import_scope`) instead of
+    process-wide statics, so two peer connections importing at once no
+    longer clear each other's flag or stamp each other's peer id on their
+    writes (audit C16). The live push loop no longer consults a global mute;
+    it skips the one peer a change came from, via the `source_id` the scope
+    stamps on the `DbEvent`, which now also covers `COMMIT` frames applied
+    for a live peer. `CommitIngestOpts::suppress_live_echo` is gone: a peer
+    commit is attributed to the connection's import scope instead.
+    `sync::peer::is_importing()` is now per task; a listener on another
+    task should read the event's `source_id` (the Flutter binding does).
+  - `collections::sort_resources` is a total order (missing values last in
+    both directions, numbers compared numerically with `NaN` in a fixed
+    place, numbers before strings), so a collection sorted through the
+    `sort_by` query parameter can no longer panic `sort_by` on Rust 1.81+.
+  - `sync::peer`: the live peer map recovers from a poisoned lock instead of
+    unwrapping it, so one panic no longer stops live broadcast for the rest
+    of the process.
 - CI: the `:develop` docker image is published by its own job instead of a
   step tacked onto the end of the CI job. As a step it inherited whatever the
   CI step had already spent (a wedged Dagger engine on the runner burned the

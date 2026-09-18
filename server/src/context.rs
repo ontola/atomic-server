@@ -50,7 +50,7 @@ impl RequestContext {
 /// default domain (`localhost`) has not told us its public name, so it trusts
 /// the header as before; that is the unconfigured dev/desktop case, which is
 /// reached over the network only when the operator chose to.
-fn host_is_served_here(host: &str, opts: &crate::config::Opts) -> bool {
+pub(crate) fn host_is_served_here(host: &str, opts: &crate::config::Opts) -> bool {
     let hostname = strip_port(host).to_ascii_lowercase();
     if hostname.is_empty()
         || hostname
