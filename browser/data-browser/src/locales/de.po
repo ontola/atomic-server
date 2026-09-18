@@ -10665,3 +10665,8 @@ msgstr ""
 #: src/chunks/PluginRuns/ConnectClockify.tsx
 msgid "Open{0} <0>app.clockify.me/manage-api-keys</0>{1} and choose <1>Generate new</1>. Paste the generated key above. It is stored on your AtomicServer and only used for read requests."
 msgstr ""
+
+#. 0: ' '
+#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
+msgid "Entries from{0} <0></0>"
+msgstr ""

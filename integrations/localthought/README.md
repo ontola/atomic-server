@@ -74,8 +74,8 @@ silently take over the old plugin tables.
   are isolated by proxy origin; switching back restores that proxy’s connections.
   HTTPS or loopback HTTP origins only. **Reset to default** uses the deployment’s
   `VITE_INTEGRATION_PROXY_URL`, or `https://localthought.io` when unset.
-- Existing bundled GitHub, Notion, Clockify and MT940 plugins remain available
-  independently. Proxy cards have an accent border and a “Via integration proxy” label.
+- Existing bundled GitHub, Notion and MT940 plugins remain available
+  independently. Clockify is a LocalThought lens (`integrations/clockify/`). Proxy cards have an accent border and a “Via integration proxy” label.
 - Deploy the companion integration-proxy CORS change. It handles preflights for
   explicit Authorization headers and exposes `X-Connection-Code`, `Link`,
   pagination/count headers, `ETag` and `Retry-After`. Cookie credentials are not

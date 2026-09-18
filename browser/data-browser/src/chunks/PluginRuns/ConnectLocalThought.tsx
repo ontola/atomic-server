@@ -3,7 +3,7 @@ import {
   importInstallationIdentity,
   readSavedConnection,
 } from '../../../../../integrations/localthought/settings';
-import type { googleCalendarIntegration } from '@localthought/atomic-integrations/ui/GoogleCalendar';
+import type { LocalThoughtExtension } from './localThoughtExtension';
 import { useEffect, useState } from 'react';
 import { useStore } from '@tomic/react';
 import { Button } from '@components/Button';
@@ -20,6 +20,7 @@ import {
 import { installLocalThought, refreshLocalThought } from './localThoughtSync';
 import {
   PARAMETER_OPTION_LOOKUPS,
+  parameterLabel,
   parseParameterOptions,
   type ParameterOption,
 } from './parameterOptions';
@@ -34,7 +35,7 @@ export function ConnectLocalThought({
   drive: string;
   platform: string;
   origin?: string;
-  extension?: typeof googleCalendarIntegration;
+  extension?: LocalThoughtExtension;
   entry?: string;
 }) {
   return (
@@ -58,7 +59,7 @@ function GenericConnection({
   drive: string;
   platform: string;
   origin: string;
-  extension?: typeof googleCalendarIntegration;
+  extension?: LocalThoughtExtension;
   entry?: string;
 }) {
   const ImportControls = extension?.ImportControls;
@@ -86,7 +87,7 @@ function GenericConnection({
     Record<string, ParameterOption[]>
   >({});
   const [collections, setCollections] = useState<string[]>([]);
-  const [selection, setSelection] = useState(() =>
+  const [selection, setSelection] = useState<unknown>(() =>
     extension?.defaultSelection(),
   );
   const [busy, setBusy] = useState(false);
@@ -144,6 +145,13 @@ function GenericConnection({
           const options = parseParameterOptions(body, lookup);
           if (options.length)
             setParameterOptions(prev => ({ ...prev, [parameter]: options }));
+          // One choice is no choice: fill it in (an account id, say).
+          if (options.length === 1)
+            setConstants(prev =>
+              prev[parameter]
+                ? prev
+                : { ...prev, [parameter]: options[0].value },
+            );
         } catch {
           // Manual entry remains available when the lookup fails.
         }
@@ -203,12 +211,13 @@ function GenericConnection({
         constants,
         selection:
           extension && selection ? extension.selection(selection) : undefined,
+        selectionValue: extension ? selection : undefined,
         identity: importInstallationIdentity(
           connection,
           constants,
-          `${extension ? ':devonian-calendar' : ':api'}${extension && selection ? extension.identitySuffix(selection) : ''}`,
+          `${extension?.identityPrefix ?? ':api'}${extension && selection ? extension.identitySuffix(selection) : ''}`,
         ),
-        extension: extension ? 'calendar' : 'none',
+        extension: extension?.mode ?? 'none',
       });
       sessionStorage.removeItem('localthought-completed');
       setFolder(installed.folder);
@@ -243,7 +252,7 @@ function GenericConnection({
               <Field
                 key={parameter}
                 fieldId={`proxy-${parameter}`}
-                label={parameter}
+                label={parameterLabel(platform, parameter)}
               >
                 {options ? (
                   <BasicSelect
@@ -282,7 +291,7 @@ function GenericConnection({
               </Field>
             );
           })}
-          {ImportControls && selection && (
+          {ImportControls && selection !== undefined && (
             <ImportControls
               value={selection}
               disabled={busy}

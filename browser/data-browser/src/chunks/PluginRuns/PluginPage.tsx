@@ -7,7 +7,6 @@ import { AtomicLink } from '@components/AtomicLink';
 import { pluginWorkspace } from '@tomic/react';
 import { Tabs } from '@components/Tabs';
 import { IntegrationDefaultView } from './IntegrationDataView';
-import { ClockifyUpgrade } from './ClockifyUpgrade';
 import { AutomationIntegrations } from './AutomationIntegrations';
 import {
   AutomationWorkspace,
@@ -168,13 +167,6 @@ export function PluginPage({
                 <Button onClick={run}>
                   <FaPlay aria-hidden /> Run
                 </Button>
-              )}
-              {source && (
-                <ClockifyUpgrade
-                  source={source}
-                  drive={drive}
-                  plugin={resource.subject}
-                />
               )}
               {automation && (
                 <AutomationWorkspace

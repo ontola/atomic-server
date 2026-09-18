@@ -8,47 +8,6 @@
   },
   "integrations": [
     {
-      "id": "clockify",
-      "version": "0.1.0",
-      "owner": "Ontola",
-      "support": "experimental",
-      "apiVersion": "v1",
-      "declaredCapabilities": [
-        "completed-entries:import",
-        "projects:import",
-        "person:import"
-      ],
-      "bundleSha256": "e669e6c3bd3f2b2f67eda7d6b1be62ab0cf70ca3fe82e00f90caa1f194b2f50d",
-      "checks": [
-        {
-          "name": "reproducible-bundle",
-          "status": "passed"
-        },
-        {
-          "name": "typecheck",
-          "status": "passed"
-        },
-        {
-          "name": "fixtures",
-          "status": "passed"
-        },
-        {
-          "name": "plugins::clockify_tests::completed_entries_are_proposals_in_the_real_sandbox",
-          "status": "passed"
-        },
-        {
-          "name": "plugins::clockify_tests::discovery_runs_in_the_real_sandbox_and_minimizes_output",
-          "status": "passed"
-        }
-      ],
-      "status": "passed",
-      "fixtureCounts": {
-        "passed": 18,
-        "skipped": 0,
-        "failed": 0
-      }
-    },
-    {
       "id": "github-issues",
       "version": "0.1.0",
       "owner": "Ontola",

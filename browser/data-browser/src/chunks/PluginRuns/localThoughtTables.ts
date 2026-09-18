@@ -20,7 +20,10 @@ import { platformName } from './localThought';
 import {
   localThoughtExtension,
   schemaNamespace,
+  type LocalThoughtExtensionMode,
 } from './localThoughtExtension';
+import { buildViewPropVals } from '@chunks/TablePage/createTableFromSpec';
+import { stringToSlug } from '@helpers/stringToSlug';
 
 export async function ensureImportTables(
   store: Store,
@@ -28,7 +31,7 @@ export async function ensureImportTables(
   resource: Resource,
   identity: string,
   fetched: FetchedPlatform,
-  extensionId?: 'calendar' | 'none',
+  extensionId?: LocalThoughtExtensionMode,
   schemaPlatform?: string,
 ): Promise<Config> {
   const { platform } = fetched;
@@ -67,6 +70,41 @@ export async function ensureImportTables(
         .filter(t => t !== undefined)
         .map(t => properties[t.shortname]),
     ];
+    const specs = extension?.views?.[term.shortname];
+
+    if (specs?.length) {
+      // The extension owns this class's views: build them from the same spec
+      // vocabulary as table templates, with term shortnames as column names.
+      const views: string[] = [];
+      let defaultView: string | undefined;
+
+      for (const spec of specs) {
+        const created = await ensureInstallationResource(store, drive, {
+          parent: destination.subject,
+          localId: `${identity}:view:${term.shortname}:${stringToSlug(spec.name)}`,
+          isA: [dataBrowser.classes.view],
+          propVals: buildViewPropVals(spec, properties),
+        });
+        views.push(created.subject);
+        if (spec.default || !defaultView) defaultView = created.subject;
+      }
+
+      const existingViews = destination.get(
+        dataBrowser.properties.tableViews,
+      ) as string[] | undefined;
+      await destination.set(dataBrowser.properties.tableViews, [
+        ...new Set([...(existingViews ?? []), ...views]),
+      ]);
+      if (!destination.get(dataBrowser.properties.tableDefaultView))
+        await destination.set(
+          dataBrowser.properties.tableDefaultView,
+          defaultView!,
+        );
+      await destination.save();
+      destinations[term.shortname] = { table: destination.subject, rowClass };
+      continue;
+    }
+
     const view = await ensureInstallationResource(store, drive, {
       parent: destination.subject,
       localId: `${identity}:view:${term.shortname}`,
@@ -77,8 +115,9 @@ export async function ensureImportTables(
         [dataBrowser.properties.viewColumns]: columns,
       },
     });
+    const calendarView = extension?.view;
     const calendar =
-      extension?.view.classShortname === term.shortname
+      calendarView?.classShortname === term.shortname
         ? await ensureInstallationResource(store, drive, {
             parent: destination.subject,
             localId: `${identity}:calendar:${term.shortname}`,
@@ -87,7 +126,7 @@ export async function ensureImportTables(
               [core.properties.name]: tableName,
               [dataBrowser.properties.viewKind]: 'calendar',
               [dataBrowser.properties.viewGroupBy]:
-                properties[extension.view.groupByShortname],
+                properties[calendarView.groupByShortname],
               [dataBrowser.properties.viewColumns]: columns,
             },
           })

@@ -24,12 +24,22 @@ it('falls back to the id as the label when a name is missing', () => {
   ]);
 });
 
-it('skips entries without a usable id and non-array bodies', () => {
+it('skips entries without a usable id and scalar bodies', () => {
   expect(
     parseParameterOptions(
       JSON.stringify([{ name: 'no id' }, null, 'oops']),
       lookup,
     ),
   ).toEqual([]);
-  expect(parseParameterOptions(JSON.stringify({ id: 1 }), lookup)).toEqual([]);
+  expect(parseParameterOptions(JSON.stringify(null), lookup)).toEqual([]);
+  expect(parseParameterOptions(JSON.stringify('oops'), lookup)).toEqual([]);
+});
+
+it('treats a single object as a one-item list, as Clockify returns its user', () => {
+  expect(
+    parseParameterOptions(
+      JSON.stringify({ id: 'u1', name: 'Michiel' }),
+      lookup,
+    ),
+  ).toEqual([{ value: 'u1', label: 'Michiel' }]);
 });

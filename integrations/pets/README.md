@@ -18,7 +18,7 @@ reconciles: unchanged pets are skipped, same as every other importer here.
 the same sandboxed server host as every other integration
 (`server/src/plugins/js_runtime.rs`). It never calls `ctx.http`.
 `schema.ts` defines the ontology with `ensureSchema`, the same code-first
-mechanism `mt940` and `clockify` use.
+mechanism `mt940` uses.
 
 ## Why this exists
 

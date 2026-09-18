@@ -193,7 +193,7 @@
     "https://atomicdata.dev/integrations/properties/keywords": "bank bunq banking finance accounting statement mt940 import swift"
   },
   {
-    "@id": "https://atomicdata.dev/integrations/catalog/clockify",
+    "https://atomicdata.dev/properties/localId": "clockify",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
     ],
@@ -202,11 +202,12 @@
     "https://atomicdata.dev/integrations/properties/enabled": true,
     "https://atomicdata.dev/properties/name": "Clockify",
     "https://atomicdata.dev/properties/emoji": "⏱️",
-    "https://atomicdata.dev/properties/description": "Bring your completed work into the Time Tracker.",
-    "https://atomicdata.dev/integrations/properties/capabilities": "Import completed entries with project and person links, start/end times and billable flags.",
-    "https://atomicdata.dev/integrations/properties/events": "Review imports before applying them. This first version does not sync changes back.",
-    "https://atomicdata.dev/integrations/properties/limitation": "Your entries only; up to 31 days. No active timers, updates, deletions, tags, task links, rates or custom fields.",
-    "https://atomicdata.dev/integrations/properties/keywords": "clockify time tracking timesheet projects billable import"
+    "https://atomicdata.dev/properties/description": "Bring your completed work into a Time Tracker.",
+    "https://atomicdata.dev/integrations/properties/capabilities": "Imports your completed entries with start/end times, description and billable flag into a timer view with daily totals.",
+    "https://atomicdata.dev/integrations/properties/events": "Connect through LocalThought with a personal API key, then the table refreshes while it is open.",
+    "https://atomicdata.dev/integrations/properties/limitation": "Your entries only, past 7 or 30 days. Import only: no active timers, tags, tasks, rates or custom fields, and nothing is written back to Clockify.",
+    "https://atomicdata.dev/integrations/properties/keywords": "clockify time tracking timesheet timer billable import localthought",
+    "https://atomicdata.dev/integrations/properties/platform": "clockify"
   },
   {
     "@id": "https://atomicdata.dev/integrations/catalog/notion",

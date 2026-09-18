@@ -16,6 +16,7 @@ import { prepareFromVerdict } from './runScript';
 import {
   localThoughtExtension,
   schemaNamespace,
+  type LocalThoughtExtensionMode,
 } from './localThoughtExtension';
 
 export const REFRESH_INTERVAL = 5 * 60 * 1000;
@@ -34,8 +35,11 @@ export interface LocalThoughtInstallation {
   selection?: {
     query_overrides: { path: string; values: Record<string, unknown> }[];
   };
+  /** The extension's own setup choice, so `selection` can be recomputed on
+   * every refresh (a rolling look-back window) instead of frozen at install. */
+  selectionValue?: unknown;
   /** Explicit setup mode. Missing is the pre-category Calendar installation. */
-  extension?: 'calendar' | 'none';
+  extension?: LocalThoughtExtensionMode;
   config?: Config;
   syncing?: boolean;
   lastSuccess?: number;
@@ -142,6 +146,15 @@ export async function refreshLocalThought(
             warning: undefined,
           };
           saveInstallation(entry);
+          const extension = localThoughtExtension(
+            entry.platform,
+            entry.extension,
+          );
+          if (extension && entry.selectionValue !== undefined)
+            entry = {
+              ...entry,
+              selection: extension.selection(entry.selectionValue),
+            };
           const response: FetchedPlatform = await browserIntegrations(
             entry.origin,
           ).fetchRecords(
@@ -156,10 +169,6 @@ export async function refreshLocalThought(
           const incomplete = response.errors?.length
             ? response.errors.join('; ')
             : undefined;
-          const extension = localThoughtExtension(
-            entry.platform,
-            entry.extension,
-          );
           const fetched = extension ? extension.project(response) : response;
           assertOwner(store, entry);
           const folder = await store.getLocalResource(entry.folder);

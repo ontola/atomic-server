@@ -98,9 +98,6 @@ pub mod sync_worker;
 mod notion_sync_tests;
 
 #[cfg(all(test, feature = "wasm-plugins"))]
-mod clockify_tests;
-
-#[cfg(all(test, feature = "wasm-plugins"))]
 #[path = "mt940_tests.rs"]
 mod bank_statement_tests;
 

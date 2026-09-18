@@ -3,12 +3,7 @@ import report from '../../../../../integrations/evidence.json';
 import { assessEvidence } from '../../../../../integrations/tooling/evidence.mjs';
 import { fetchIntegrationSource } from '@helpers/integrationSource';
 
-export type BundledEvidenceId =
-  | 'github-issues'
-  | 'notion'
-  | 'clockify'
-  | 'mt940'
-  | 'pets';
+export type BundledEvidenceId = 'github-issues' | 'notion' | 'mt940' | 'pets';
 
 export async function loadEvidence(server: string, id: BundledEvidenceId) {
   const source = await fetchIntegrationSource(server, id);
