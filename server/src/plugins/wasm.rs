@@ -772,7 +772,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
     }
 }
 
-fn validate_plugin_zip(
+pub fn validate_plugin_zip(
     zip: &mut ZipArchive<std::io::Cursor<Vec<u8>>>,
 ) -> AtomicResult<PluginManifest> {
     // Check for plugin.wasm

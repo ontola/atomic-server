@@ -436,6 +436,366 @@ fn on_resource_get(context: GetExtenderContext) -> BoxFuture<AtomicResult<Resour
     })
 }
 
+// ---------------------------------------------------------------------------
+// Installation: one install path for both runtimes.
+//
+// Committing an `Installation` with `installationStatus: active` resolves the
+// pinned Release, verifies its id, refuses the server-extension world, checks
+// the grants and then materializes by runtime: a wasip2 package goes through
+// the same `install_or_update_plugin` a zip upload uses; a JS release only
+// needs its installation identity. `revoked` or destroy undoes both.
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "wasm-plugins")]
+mod installation_hook {
+    use super::*;
+    use crate::plugins::release;
+    use atomic_lib::db::{
+        app_agent::{AppAgent, AppAgentKey, AppAgentState},
+        plugin_meta::{PluginManifest, PluginMeta},
+        plugin_release::{PluginRelease, WORLD_SERVER_EXTENSION},
+    };
+
+    pub const STATUS_DRAFT: &str = "draft";
+    pub const STATUS_ACTIVE: &str = "active";
+    pub const STATUS_PAUSED: &str = "paused";
+    pub const STATUS_REVOKED: &str = "revoked";
+
+    fn string_value(resource: &Resource, prop: &str) -> Option<String> {
+        match resource.get(prop) {
+            Ok(Value::AtomicUrl(s)) => Some(s.to_string()),
+            Ok(Value::String(s)) => Some(s.clone()),
+            Ok(other) => Some(other.to_string()),
+            Err(_) => None,
+        }
+    }
+
+    fn json_value(resource: &Resource, prop: &str) -> AtomicResult<serde_json::Value> {
+        match resource.get(prop) {
+            Ok(Value::Json(v)) => Ok(v.clone()),
+            Ok(Value::String(s)) => Ok(serde_json::from_str(s)?),
+            Ok(other) => Ok(serde_json::from_str(&other.to_string())?),
+            Err(_) => Ok(serde_json::Value::Null),
+        }
+    }
+
+    /// Namespace and name identify the installation on the drive. They come
+    /// from the resource, or from the manifest when the resource has none.
+    fn identifiers(
+        resource: &Resource,
+        manifest: &serde_json::Value,
+    ) -> AtomicResult<(String, String)> {
+        let pick = |prop: &str, key: &str| -> Option<String> {
+            string_value(resource, prop).or_else(|| {
+                manifest
+                    .get(key)
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string)
+            })
+        };
+        let namespace = pick(urls::NAMESPACE, "namespace")
+            .ok_or("an Installation needs a namespace, on the resource or in the manifest")?;
+        let name = pick(urls::NAME, "name")
+            .ok_or("an Installation needs a name, on the resource or in the manifest")?;
+        validate_plugin_identifiers(&namespace, &name)?;
+        Ok((namespace, name))
+    }
+
+    pub async fn activate(
+        resource: &Resource,
+        drive: &str,
+        store: &Db,
+        signer: &str,
+        plugins_dir: &Path,
+        plugin_cache_dir: &Path,
+    ) -> AtomicResult<()> {
+        let subject = resource.get_subject().to_string();
+        let reference = string_value(resource, urls::RELEASE_PROP)
+            .ok_or("an active Installation needs a release")?;
+        let pinned = string_value(resource, urls::RELEASE_ID)
+            .ok_or("an active Installation needs a releaseId")?;
+
+        // 1. Resolve and verify. The pinned id is what the installer reviewed;
+        //    whatever the reference resolves to must hash to exactly that.
+        let for_agent = ForAgent::AgentSubject(signer.to_string().into());
+        let release = release::resolve(store, &reference, &for_agent).await?;
+        let actual = release.id()?;
+        if actual != pinned {
+            return Err(AtomicError::from(format!(
+                "Installation {subject} pins release {pinned} but {reference} resolves to {actual}; refusing to install"
+            )));
+        }
+        if release.world == WORLD_SERVER_EXTENSION {
+            return Err(AtomicError::from(
+                "a server-extension release cannot be installed through an Installation; operators configure it on the server",
+            ));
+        }
+
+        // 2. Grants against what the manifest declares.
+        release::check_grants(&release.manifest, &json_value(resource, urls::GRANTS)?)?;
+
+        let (namespace, name) = identifiers(resource, &release.manifest)?;
+        let key = PluginMetaKey::new(drive, &namespace, &name);
+        if let Some(meta) = store.get_plugin_meta(&key)? {
+            if meta.subject != subject {
+                return Err(AtomicError::from(format!(
+                    "'{namespace}/{name}' is already installed on this drive by {}",
+                    meta.subject
+                )));
+            }
+        }
+
+        // 3. Materialize by runtime.
+        if release.is_wasip2() {
+            let package = release
+                .package
+                .as_deref()
+                .ok_or("a wasip2 release without a package")?;
+            let bytes = release::package_bytes(store, package).await?;
+            let mut zip = ZipArchive::new(std::io::Cursor::new(bytes))
+                .map_err(|e| AtomicError::from(format!("package is not a zip archive: {e}")))?;
+            install_or_update_plugin(
+                &mut zip,
+                drive,
+                &subject,
+                store,
+                plugins_dir,
+                plugin_cache_dir,
+            )
+            .await?;
+        } else {
+            ensure_js_identity(store, drive, &subject, &namespace, &name, &release).await?;
+        }
+        info!(
+            "activated installation {subject} ({namespace}/{name}, {})",
+            release.runtime
+        );
+        Ok(())
+    }
+
+    /// A JS installation writes nothing to disk. Its identity is the app
+    /// agent `installation::resolve` looks up, mirrored into `PluginMeta` so
+    /// both runtimes are listed in one place.
+    async fn ensure_js_identity(
+        store: &Db,
+        drive: &str,
+        subject: &str,
+        namespace: &str,
+        name: &str,
+        release: &PluginRelease,
+    ) -> AtomicResult<()> {
+        let app_key = AppAgentKey::new(drive, subject);
+        let secret = match store.get_app_agent_state(&app_key)? {
+            AppAgentState::Revoked => {
+                return Err(AtomicError::from(
+                    "this installation's identity was revoked; create a new Installation",
+                ))
+            }
+            AppAgentState::Active(_) => store
+                .with_app_agent(&app_key, |agent| agent.build_secret())?
+                .ok_or("installation identity vanished")??,
+            AppAgentState::Legacy => {
+                let agent = Agent::new(Some(name))?;
+                let mut agent_resource = agent.to_resource()?;
+                agent_resource
+                    .set(
+                        urls::NAME.into(),
+                        Value::String(format!("{namespace}/{name}")),
+                        store,
+                    )
+                    .await?;
+                agent_resource.save_locally(store).await?;
+                let secret = agent.build_secret()?;
+                store.set_app_agent(
+                    &app_key,
+                    &AppAgent::new(
+                        agent.subject.to_string(),
+                        secret.clone(),
+                        atomic_lib::utils::now(),
+                    ),
+                )?;
+                secret
+            }
+        };
+        let version = release
+            .version
+            .clone()
+            .or_else(|| {
+                release
+                    .manifest
+                    .get("version")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string)
+            })
+            .unwrap_or_else(|| "0".into());
+        let manifest = PluginManifest {
+            name: name.to_string(),
+            namespace: namespace.to_string(),
+            version,
+            description: release
+                .manifest
+                .get("description")
+                .and_then(|v| v.as_str())
+                .map(str::to_string),
+            author: None,
+            permissions: None,
+            default_config: None,
+            config_schema: None,
+            network: None,
+        };
+        store.set_plugin_meta(
+            &PluginMetaKey::new(drive, namespace, name),
+            &PluginMeta {
+                subject: subject.to_string(),
+                agent_secret: secret,
+                manifest,
+            },
+        )?;
+        Ok(())
+    }
+
+    /// Undo an activation. Best effort on every step, so a half-installed
+    /// plugin can still be revoked or destroyed.
+    pub async fn deactivate(
+        resource: &Resource,
+        drive: &str,
+        store: &Db,
+        plugins_dir: &Path,
+    ) -> AtomicResult<()> {
+        let subject = resource.get_subject().to_string();
+        // Identifiers live on the resource, or in the manifest of the pinned
+        // release, which is in this node's cache once it was ever activated.
+        let identifiers = match get_namespace_and_name(resource) {
+            Ok(found) => Some(found),
+            Err(_) => match string_value(resource, urls::RELEASE_ID) {
+                Some(id) => store
+                    .get_plugin_release(&id)
+                    .ok()
+                    .and_then(|release| identifiers(resource, &release.manifest).ok()),
+                None => None,
+            },
+        };
+        if let Some((namespace, name)) = identifiers {
+            let key = PluginMetaKey::new(drive, &namespace, &name);
+            if let Some(meta) = store.get_plugin_meta(&key)? {
+                if meta.subject == subject {
+                    // The wasm path removes the files and the meta; a JS
+                    // installation has no files, so only the meta is left.
+                    if let Err(e) =
+                        uninstall_plugin(&name, &namespace, drive, store, plugins_dir).await
+                    {
+                        tracing::debug!("no wasm files to remove for {subject}: {e}");
+                    }
+                    store.delete_plugin_meta(&key)?;
+                }
+            }
+        }
+        let app_key = AppAgentKey::new(drive, &subject);
+        if let AppAgentState::Active(_) = store.get_app_agent_state(&app_key)? {
+            // Leaves the revocation tombstone `installation::resolve` honours.
+            store.delete_app_agent(&app_key)?;
+        }
+        info!("deactivated installation {subject}");
+        Ok(())
+    }
+
+    pub fn status(resource: &Resource) -> String {
+        string_value(resource, urls::INSTALLATION_STATUS).unwrap_or_else(|| STATUS_DRAFT.into())
+    }
+}
+
+#[allow(unused_variables)]
+fn on_installation_before_commit(
+    context: CommitExtenderContext,
+    plugins_dir: PathBuf,
+    plugin_cache_dir: PathBuf,
+) -> BoxFuture<AtomicResult<()>> {
+    Box::pin(async move {
+        let CommitExtenderContext {
+            store,
+            commit,
+            resource,
+            is_new,
+            changed_props,
+        } = context;
+
+        let drive = get_parent_drive(resource, store).await?;
+
+        if commit.destroy == Some(true) {
+            #[cfg(feature = "wasm-plugins")]
+            installation_hook::deactivate(resource, &drive, store, &plugins_dir).await?;
+            return Ok(());
+        }
+
+        if !is_new {
+            for prop in [urls::NAME, urls::NAMESPACE, urls::PARENT] {
+                if changed_props.contains(prop) {
+                    return Err(AtomicError::from(
+                        "Cannot change an Installation's name, namespace or parent after it was created",
+                    ));
+                }
+            }
+        }
+
+        #[cfg(feature = "wasm-plugins")]
+        {
+            use installation_hook::*;
+            let status = status(resource);
+            let activation_changed = is_new
+                || [
+                    urls::INSTALLATION_STATUS,
+                    urls::RELEASE_PROP,
+                    urls::RELEASE_ID,
+                    urls::GRANTS,
+                    urls::CONFIG,
+                ]
+                .iter()
+                .any(|prop| changed_props.contains(*prop));
+            match status.as_str() {
+                STATUS_ACTIVE if activation_changed => {
+                    activate(
+                        resource,
+                        &drive,
+                        store,
+                        commit.signer.as_str(),
+                        &plugins_dir,
+                        &plugin_cache_dir,
+                    )
+                    .await?
+                }
+                STATUS_ACTIVE => {}
+                STATUS_REVOKED if changed_props.contains(urls::INSTALLATION_STATUS) => {
+                    deactivate(resource, &drive, store, &plugins_dir).await?
+                }
+                STATUS_REVOKED | STATUS_DRAFT | STATUS_PAUSED => {}
+                other => {
+                    return Err(AtomicError::from(format!(
+                        "unknown installationStatus '{other}'; expected draft, active, paused or revoked"
+                    )))
+                }
+            }
+        }
+
+        Ok(())
+    })
+}
+
+pub fn build_installation_extender(
+    plugins_dir: PathBuf,
+    plugin_cache_dir: PathBuf,
+) -> ClassExtender {
+    ClassExtender::builder()
+        .id("installation".to_string())
+        .classes(vec![urls::INSTALLATION.to_string()])
+        .on_resource_get(ClassExtender::wrap_get_handler(move |context| {
+            on_resource_get(context)
+        }))
+        .before_commit(ClassExtender::wrap_commit_handler(move |context| {
+            on_installation_before_commit(context, plugins_dir.clone(), plugin_cache_dir.clone())
+        }))
+        .build()
+}
+
 pub fn build_plugin_extender(
     plugins_dir: PathBuf,
     plugin_cache_dir: PathBuf,
@@ -456,4 +816,284 @@ pub fn build_plugin_extender(
             )
         }))
         .build()
+}
+
+#[cfg(all(test, feature = "wasm-plugins"))]
+mod installation_tests {
+    use super::*;
+    use crate::plugins::{
+        installation, release,
+        test_fixture::{fixture, genesis},
+    };
+    use atomic_lib::db::{
+        app_agent::AppAgentKey,
+        plugin_release::{PluginRelease, RUNTIME_WASIP2, WORLD_EXTENSION, WORLD_SERVER_EXTENSION},
+    };
+    use serde_json::json;
+
+    const TEST_PLUGIN_ZIP: &[u8] =
+        include_bytes!("../../../browser/e2e/tests/fixtures/test-plugin.zip");
+
+    fn js_release(world: &str) -> PluginRelease {
+        let mut release = PluginRelease::js(
+            "export function run() { return { intents: [] }; }".into(),
+            json!({"schemaVersion":1,"permissions":[{"permission":"storage","reason":"keeps a cursor"}]}),
+            Default::default(),
+        );
+        release.world = world.into();
+        release
+    }
+
+    fn installation_props<'a>(
+        drive: &'a str,
+        namespace: &'a str,
+        name: &'a str,
+        release: &'a str,
+        pinned: &'a str,
+        status: &'a str,
+    ) -> Vec<(&'a str, Value)> {
+        vec![
+            (
+                urls::IS_A,
+                Value::ResourceArray(vec![urls::INSTALLATION.into()]),
+            ),
+            (urls::PARENT, Value::AtomicUrl(drive.into())),
+            (urls::NAME, Value::String(name.into())),
+            (urls::NAMESPACE, Value::String(namespace.into())),
+            (urls::RELEASE_PROP, Value::String(release.into())),
+            (urls::RELEASE_ID, Value::String(pinned.into())),
+            (urls::INSTALLATION_STATUS, Value::String(status.into())),
+            (urls::GRANTS, Value::Json(json!(["storage"]))),
+        ]
+    }
+
+    /// Like `genesis`, but returns the commit error instead of panicking.
+    async fn try_genesis(store: &Db, propvals: Vec<(&str, Value)>) -> AtomicResult<String> {
+        let mut resource = Resource::new("did:ad:placeholder".into());
+        for (property, value) in propvals {
+            resource.set_unsafe(property.into(), value)?;
+        }
+        resource.save_as_genesis(store).await?;
+        Ok(resource.get_subject().to_string())
+    }
+
+    #[actix_rt::test]
+    async fn an_active_js_installation_mints_its_identity_and_revocation_tombstones_it() {
+        let f = fixture("installation_js").await;
+        let db = &f.appstate.store;
+        let id = db
+            .publish_plugin_release(&js_release(WORLD_EXTENSION))
+            .unwrap();
+        let installation = genesis(
+            db,
+            installation_props(&f.drive, "acme", "importer", &id, &id, "active"),
+        )
+        .await;
+
+        let key = PluginMetaKey::new(&f.drive, "acme", "importer");
+        let meta = db
+            .get_plugin_meta(&key)
+            .unwrap()
+            .expect("a PluginMeta record");
+        assert_eq!(meta.subject, installation);
+        assert_eq!(meta.manifest.namespace, "acme");
+        let app_key = AppAgentKey::new(&f.drive, &installation);
+        assert_eq!(
+            installation::resolve(db, &f.drive, &installation)
+                .await
+                .unwrap()
+                .signing_as,
+            Some(app_key.clone())
+        );
+        let agent = db.get_app_agent_info(&app_key).unwrap().unwrap().agent;
+        assert_eq!(
+            Agent::from_secret(&meta.agent_secret)
+                .unwrap()
+                .subject
+                .to_string(),
+            agent
+        );
+
+        // The same identifiers cannot be claimed by a second installation.
+        let clash = try_genesis(
+            db,
+            installation_props(&f.drive, "acme", "importer", &id, &id, "active"),
+        )
+        .await
+        .unwrap_err();
+        assert!(clash.to_string().contains("already installed"), "{clash}");
+
+        let mut r = db
+            .get_resource(&installation.as_str().into())
+            .await
+            .unwrap();
+        r.set_unsafe(
+            urls::INSTALLATION_STATUS.into(),
+            Value::String("revoked".into()),
+        )
+        .unwrap();
+        r.save(db).await.unwrap();
+        assert!(db.get_plugin_meta(&key).unwrap().is_none());
+        let err = installation::resolve(db, &f.drive, &installation)
+            .await
+            .err()
+            .expect("a revoked identity no longer resolves");
+        assert!(err.contains("revoked"), "{err}");
+        assert!(db.app_agent_was_revoked(&app_key).unwrap());
+    }
+
+    #[actix_rt::test]
+    async fn a_tampered_or_server_extension_release_is_refused() {
+        let f = fixture("installation_refused").await;
+        let db = &f.appstate.store;
+        let id = db
+            .publish_plugin_release(&js_release(WORLD_EXTENSION))
+            .unwrap();
+
+        let forged = format!("blake3:{}", "0".repeat(64));
+        let err = try_genesis(
+            db,
+            installation_props(&f.drive, "acme", "forged", &id, &forged, "active"),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.to_string().contains("refusing to install"), "{err}");
+        assert!(db
+            .get_plugin_meta(&PluginMetaKey::new(&f.drive, "acme", "forged"))
+            .unwrap()
+            .is_none());
+
+        let server_only = db
+            .publish_plugin_release(&js_release(WORLD_SERVER_EXTENSION))
+            .unwrap();
+        let err = try_genesis(
+            db,
+            installation_props(
+                &f.drive,
+                "acme",
+                "hooks",
+                &server_only,
+                &server_only,
+                "active",
+            ),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.to_string().contains("server-extension"), "{err}");
+
+        let err = try_genesis(
+            db,
+            vec![
+                (
+                    urls::IS_A,
+                    Value::ResourceArray(vec![urls::INSTALLATION.into()]),
+                ),
+                (urls::PARENT, Value::AtomicUrl(f.drive.as_str().into())),
+                (urls::NAME, Value::String("greedy".into())),
+                (urls::NAMESPACE, Value::String("acme".into())),
+                (urls::RELEASE_PROP, Value::String(id.clone())),
+                (urls::RELEASE_ID, Value::String(id.clone())),
+                (urls::INSTALLATION_STATUS, Value::String("active".into())),
+                (urls::GRANTS, Value::Json(json!(["full-drive-access"]))),
+            ],
+        )
+        .await
+        .unwrap_err();
+        assert!(err.to_string().contains("not declared"), "{err}");
+
+        // A draft does nothing, and can be created for any release.
+        let draft = genesis(
+            db,
+            installation_props(&f.drive, "acme", "later", &id, &forged, "draft"),
+        )
+        .await;
+        assert!(db.get_resource(&draft.as_str().into()).await.is_ok());
+    }
+
+    #[actix_rt::test]
+    async fn a_wasip2_installation_goes_through_the_zip_install_path() {
+        let f = fixture("installation_wasm").await;
+        let db = &f.appstate.store;
+        let package = release::store_package(db, TEST_PLUGIN_ZIP).await.unwrap();
+        let mut zip = ZipArchive::new(std::io::Cursor::new(TEST_PLUGIN_ZIP.to_vec())).unwrap();
+        let manifest = crate::plugins::wasm::validate_plugin_zip(&mut zip).unwrap();
+        let id = db
+            .publish_plugin_release(&PluginRelease {
+                source: None,
+                package: Some(package),
+                manifest: serde_json::to_value(&manifest).unwrap(),
+                runtime: RUNTIME_WASIP2.into(),
+                world: WORLD_EXTENSION.into(),
+                schemas: Default::default(),
+                version: Some(manifest.version.clone()),
+                previous_release: None,
+            })
+            .unwrap();
+
+        // The zip path checks the manifest against the stored resource, so the
+        // installation is created as a draft and activated in a second commit.
+        let installation = genesis(
+            db,
+            installation_props(&f.drive, "ontola", "test-plugin", &id, &id, "draft"),
+        )
+        .await;
+        let key = PluginMetaKey::new(&f.drive, "ontola", "test-plugin");
+        assert!(db.get_plugin_meta(&key).unwrap().is_none());
+        assert!(db.get_class_extenders_on_drive(&f.drive).is_empty());
+
+        let mut r = db
+            .get_resource(&installation.as_str().into())
+            .await
+            .unwrap();
+        r.set_unsafe(
+            urls::INSTALLATION_STATUS.into(),
+            Value::String("active".into()),
+        )
+        .unwrap();
+        r.save(db).await.unwrap();
+
+        let meta = db.get_plugin_meta(&key).unwrap().expect("installed");
+        assert_eq!(meta.subject, installation);
+        assert_eq!(meta.manifest.version, "1.0.0");
+        assert_eq!(db.get_class_extenders_on_drive(&f.drive).len(), 1);
+        // The dynamic properties a Plugin gets are served for an Installation too.
+        let shown = db
+            .get_resource_extended(&installation.as_str().into(), false, &ForAgent::Sudo)
+            .await
+            .unwrap()
+            .to_single();
+        assert!(shown.get(urls::PLUGIN_AGENT).is_ok());
+
+        let mut r = db
+            .get_resource(&installation.as_str().into())
+            .await
+            .unwrap();
+        r.destroy(db).await.unwrap();
+        assert!(db.get_plugin_meta(&key).unwrap().is_none());
+    }
+
+    #[actix_rt::test]
+    async fn a_package_that_is_not_on_this_node_cannot_be_installed() {
+        let f = fixture("installation_missing_package").await;
+        let db = &f.appstate.store;
+        let id = db
+            .publish_plugin_release(&PluginRelease {
+                source: None,
+                package: Some("ab".repeat(32)),
+                manifest: json!({"name":"ghost","namespace":"acme","version":"0.1.0"}),
+                runtime: RUNTIME_WASIP2.into(),
+                world: WORLD_EXTENSION.into(),
+                schemas: Default::default(),
+                version: None,
+                previous_release: None,
+            })
+            .unwrap();
+        let err = try_genesis(
+            db,
+            installation_props(&f.drive, "acme", "ghost", &id, &id, "active"),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.to_string().contains("not on this node"), "{err}");
+    }
 }

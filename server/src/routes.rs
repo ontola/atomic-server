@@ -314,6 +314,10 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
                 .route(web::post().to(handlers::plugin_release::publish)),
         )
         .service(
+            web::resource("/plugin-release-package")
+                .route(web::post().to(handlers::plugin_release::publish_package)),
+        )
+        .service(
             web::resource("/plugin-run")
                 .route(web::post().to(handlers::plugin_run::handle_plugin_run)),
         )

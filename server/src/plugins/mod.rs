@@ -67,6 +67,8 @@ pub mod plugin;
 pub mod prunetests;
 pub mod query;
 #[cfg(feature = "wasm-plugins")]
+pub mod release;
+#[cfg(feature = "wasm-plugins")]
 pub mod release_binding;
 pub mod replicate;
 #[cfg(feature = "wasm-plugins")]
