@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Clockify time entries</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Open Sans','Helvetica Neue','Segoe UI',sans-serif;background:#ffffff;color:#111111}
+a{color:#1b50d8}a:hover{color:#143d9f}
+button{font-family:inherit}
+.row:hover{background:#f7f8fb}
+.row:hover .hover{opacity:1}
+</style>
+</helmet>
+<div style="width: 1280px; height: 980px; box-sizing: border-box; padding: 24px 32px; display: flex; flex-direction: column; gap: 16px; background: #ffffff; font-size: 14px;">
+
+  <!-- Header: title + sync status -->
+  <div style="display: flex; align-items: center; gap: 16px;">
+    <div style="display: flex; align-items: center; gap: 10px; flex-grow: 1;">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1b50d8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6"/><path d="M12 2v3"/></svg>
+      <h1 style="margin: 0; font-family: 'Montserrat', sans-serif; font-size: 22px; font-weight: 700; color: #111111;">Clockify: Ontola</h1>
+      <span style="font-size: 13px; color: #5c5c5c;">Time entries · Michiel de Jong</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: #edf8f0; color: #1d6b3a; font-size: 13px; font-weight: 600;">
+      <span style="width: 8px; height: 8px; border-radius: 50%; background: #2e9e5b;"></span>
+      <span>Synced 4 min ago</span>
+      <span style="font-weight: 400; color: #4a7a5a;">· next run 15:00</span>
+    </div>
+    <button style="display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border: 1px solid #cccccc; border-radius: 9px; background: #ffffff; color: #111111; font-size: 13px; font-weight: 600; cursor: pointer;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+      Sync now
+    </button>
+    <a href="https://app.clockify.me/tracker" style="display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border: 1px solid #cccccc; border-radius: 9px; background: #ffffff; color: #111111; font-size: 13px; font-weight: 600; text-decoration: none;">
+      Open in Clockify
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M18 13v7H4V6h7"/></svg>
+    </a>
+    <button aria-label="Import settings" style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 1px solid #cccccc; border-radius: 9px; background: #ffffff; color: #111111; cursor: pointer;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </div>
+
+  <!-- View tabs -->
+  <div style="display: flex; align-items: center; gap: 4px; border-bottom: 1px solid #e3e3e3;">
+    <button style="height: 36px; padding: 0 14px; border: 0; border-bottom: 2px solid #1b50d8; background: transparent; color: #1b50d8; font-size: 14px; font-weight: 600; cursor: pointer;">Timer</button>
+    <button style="height: 36px; padding: 0 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #5c5c5c; font-size: 14px; font-weight: 600; cursor: pointer;">Calendar</button>
+    <button style="height: 36px; padding: 0 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #5c5c5c; font-size: 14px; font-weight: 600; cursor: pointer;">By project</button>
+    <button style="height: 36px; padding: 0 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #5c5c5c; font-size: 14px; font-weight: 600; cursor: pointer;">All entries</button>
+    <div style="flex-grow: 1;"></div>
+    <button style="display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 0; background: transparent; color: #5c5c5c; font-size: 13px; cursor: pointer;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18"/><path d="M6 12h12"/><path d="M10 19h4"/></svg>
+      Filter
+    </button>
+  </div>
+
+  <!-- Tracker bar (running state) -->
+  <div style="display: flex; align-items: center; gap: 12px; height: 64px; box-sizing: border-box; padding: 0 12px 0 16px; border: 1px solid #cccccc; border-radius: 9px; background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+    <label for="tracker-desc" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);">What are you working on?</label>
+    <input id="tracker-desc" value="Design time entries view" placeholder="What are you working on?" style="flex-grow: 1; min-width: 200px; height: 40px; border: 0; background: transparent; font-family: inherit; font-size: 15px; color: #111111; outline: none;">
+    <button style="display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border: 0; border-radius: 9px; background: #f0f4fd; color: #1b50d8; font-size: 13px; font-weight: 600; cursor: pointer;">
+      <span style="width: 9px; height: 9px; border-radius: 50%; background: #1b50d8;"></span>
+      AtomicServer
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <button aria-label="Add tags" style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 0; border-radius: 9px; background: transparent; color: #5c5c5c; cursor: pointer;">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2" fill="currentColor"/></svg>
+    </button>
+    <button aria-label="Billable" aria-pressed="false" style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 0; border-radius: 9px; background: transparent; color: #8a8a8a; font-size: 18px; font-weight: 700; cursor: pointer;">$</button>
+    <span style="width: 1px; height: 32px; background: #e3e3e3;"></span>
+    <span style="min-width: 88px; text-align: center; font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 700; color: #111111;">0:41:12</span>
+    <button style="height: 40px; padding: 0 22px; border: 0; border-radius: 9px; background: #cf5b5b; color: #ffffff; font-size: 14px; font-weight: 700; letter-spacing: 0.04em; cursor: pointer;">STOP</button>
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <button aria-label="Timer mode" aria-pressed="true" style="display: flex; align-items: center; justify-content: center; width: 28px; height: 20px; border: 0; border-radius: 5px; background: #f0f4fd; color: #1b50d8; cursor: pointer;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      </button>
+      <button aria-label="Manual mode" style="display: flex; align-items: center; justify-content: center; width: 28px; height: 20px; border: 0; border-radius: 5px; background: transparent; color: #8a8a8a; cursor: pointer;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h10"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Week summary -->
+  <div style="display: flex; align-items: center; gap: 12px; padding: 0 4px;">
+    <button aria-label="Previous week" style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid #e3e3e3; border-radius: 6px; background: #ffffff; color: #5c5c5c; cursor: pointer;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>
+    </button>
+    <button aria-label="Next week" style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid #e3e3e3; border-radius: 6px; background: #ffffff; color: #5c5c5c; cursor: pointer;">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+    </button>
+    <span style="font-family: 'Montserrat', sans-serif; font-size: 15px; font-weight: 600; color: #111111;">This week</span>
+    <span style="font-size: 13px; color: #5c5c5c;">Mon 14 – Sun 20 Sep</span>
+    <div style="flex-grow: 1;"></div>
+    <span style="font-size: 13px; color: #5c5c5c;">Billable <strong style="color: #111111;">9:32</strong></span>
+    <span style="font-size: 13px; color: #5c5c5c;">Week total <strong style="font-size: 16px; color: #111111; font-variant-numeric: tabular-nums;">27:40</strong></span>
+  </div>
+
+  <!-- Day groups -->
+  <div style="display: flex; flex-direction: column; gap: 12px; flex-grow: 1;">
+
+    <!-- Today -->
+    <div style="display: flex; flex-direction: column; border: 1px solid #e3e3e3; border-radius: 9px; overflow: hidden;">
+      <div style="display: flex; align-items: center; height: 36px; padding: 0 16px; background: #f2f2f2; font-size: 13px;">
+        <span style="font-weight: 700; color: #111111;">Today</span>
+        <span style="margin-left: 8px; color: #5c5c5c;">Fri 18 Sep</span>
+        <div style="flex-grow: 1;"></div>
+        <span style="color: #5c5c5c;">Total <strong style="color: #111111; font-variant-numeric: tabular-nums;">5:12</strong></span>
+      </div>
+
+      <div class="row" style="display: grid; grid-template-columns: minmax(0, 1fr) 190px 160px 32px 130px 72px 28px 32px 32px; align-items: center; gap: 12px; height: 56px; padding: 0 12px 0 16px; border-top: 1px solid #ededed;">
+        <span style="font-size: 14px; color: #111111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Fix plugin source loading</span>
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; overflow: hidden;"><span style="width: 9px; height: 9px; border-radius: 50%; background: #1b50d8; flex-shrink: 0;"></span><span style="color: #1b50d8; font-weight: 600;">AtomicServer</span><span style="color: #8a8a8a;">· Ontola</span></span>
+        <span style="display: flex; gap: 4px; overflow: hidden;"><span style="padding: 2px 8px; border-radius: 999px; background: #f2f2f2; color: #5c5c5c; font-size: 12px;">dev</span></span>
+        <span style="font-size: 15px; font-weight: 700; color: #cccccc; text-align: center;">$</span>
+        <span style="font-size: 13px; color: #5c5c5c; font-variant-numeric: tabular-nums; text-align: right;">09:04 – 11:34</span>
+        <span style="font-size: 14px; font-weight: 700; color: #111111; font-variant-numeric: tabular-nums; text-align: right;">2:30:00</span>
+        <span title="Synced with Clockify" style="display: flex; justify-content: center; color: #2e9e5b;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.5 19a4.5 4.5 0 0 0 .4-9A7 7 0 0 0 4.3 12 4 4 0 0 0 6 19z"/><path d="m9 15 2 2 4-4"/></svg></span>
+        <button aria-label="Continue this entry" class="hover" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #1b50d8; cursor: pointer; opacity: 0.35;"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4v16l14-8z"/></svg></button>
+        <button aria-label="More actions" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #5c5c5c; cursor: pointer;"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
+      </div>
+
+      <div class="row" style="display: grid; grid-template-columns: minmax(0, 1fr) 190px 160px 32px 130px 72px 28px 32px 32px; align-items: center; gap: 12px; height: 56px; padding: 0 12px 0 16px; border-top: 1px solid #ededed;">
+        <span style="font-size: 14px; color: #111111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Weekly sync</span>
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; overflow: hidden;"><span style="width: 9px; height: 9px; border-radius: 50%; background: #0f9d8a; flex-shrink: 0;"></span><span style="color: #0b7a6b; font-weight: 600;">Internal</span></span>
+        <span style="display: flex; gap: 4px; overflow: hidden;"><span style="padding: 2px 8px; border-radius: 999px; background: #f2f2f2; color: #5c5c5c; font-size: 12px;">meeting</span></span>
+        <span style="font-size: 15px; font-weight: 700; color: #cccccc; text-align: center;">$</span>
+        <span style="font-size: 13px; color: #5c5c5c; font-variant-numeric: tabular-nums; text-align: right;">11:45 – 12:15</span>
+        <span style="font-size: 14px; font-weight: 700; color: #111111; font-variant-numeric: tabular-nums; text-align: right;">0:30:00</span>
+        <span title="Synced with Clockify" style="display: flex; justify-content: center; color: #2e9e5b;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.5 19a4.5 4.5 0 0 0 .4-9A7 7 0 0 0 4.3 12 4 4 0 0 0 6 19z"/><path d="m9 15 2 2 4-4"/></svg></span>
+        <button aria-label="Continue this entry" class="hover" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #1b50d8; cursor: pointer; opacity: 0.35;"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4v16l14-8z"/></svg></button>
+        <button aria-label="More actions" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #5c5c5c; cursor: pointer;"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
+      </div>
+
+      <div class="row" style="display: grid; grid-template-columns: minmax(0, 1fr) 190px 160px 32px 130px 72px 28px 32px 32px; align-items: center; gap: 12px; height: 56px; padding: 0 12px 0 16px; border-top: 1px solid #ededed; background: #fffaf0;">
+        <span style="font-size: 14px; color: #111111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Review Clockify PR</span>
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; overflow: hidden;"><span style="width: 9px; height: 9px; border-radius: 50%; background: #1b50d8; flex-shrink: 0;"></span><span style="color: #1b50d8; font-weight: 600;">AtomicServer</span><span style="color: #8a8a8a;">· Ontola</span></span>
+        <span style="display: flex; gap: 4px; overflow: hidden;"><span style="padding: 2px 8px; border-radius: 999px; background: #f2f2f2; color: #5c5c5c; font-size: 12px;">review</span></span>
+        <span style="font-size: 15px; font-weight: 700; color: #cccccc; text-align: center;">$</span>
+        <span style="font-size: 13px; color: #5c5c5c; font-variant-numeric: tabular-nums; text-align: right;">13:00 – 15:12</span>
+        <span style="font-size: 14px; font-weight: 700; color: #111111; font-variant-numeric: tabular-nums; text-align: right;">2:12:00</span>
+        <span title="Edited here, not yet pushed to Clockify" style="display: flex; justify-content: center; color: #b26a00;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.5 19a4.5 4.5 0 0 0 .4-9A7 7 0 0 0 4.3 12 4 4 0 0 0 6 19z"/><path d="M12 17v-6"/><path d="m9 14 3-3 3 3"/></svg></span>
+        <button aria-label="Continue this entry" class="hover" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #1b50d8; cursor: pointer; opacity: 0.35;"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4v16l14-8z"/></svg></button>
+        <button aria-label="More actions" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #5c5c5c; cursor: pointer;"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
+      </div>
+    </div>
+
+    <!-- Yesterday -->
+    <div style="display: flex; flex-direction: column; border: 1px solid #e3e3e3; border-radius: 9px; overflow: hidden;">
+      <div style="display: flex; align-items: center; height: 36px; padding: 0 16px; background: #f2f2f2; font-size: 13px;">
+        <span style="font-weight: 700; color: #111111;">Yesterday</span>
+        <span style="margin-left: 8px; color: #5c5c5c;">Thu 17 Sep</span>
+        <div style="flex-grow: 1;"></div>
+        <span style="color: #5c5c5c;">Total <strong style="color: #111111; font-variant-numeric: tabular-nums;">7:02</strong></span>
+      </div>
+
+      <div class="row" style="display: grid; grid-template-columns: minmax(0, 1fr) 190px 160px 32px 130px 72px 28px 32px 32px; align-items: center; gap: 12px; height: 56px; padding: 0 12px 0 16px; border-top: 1px solid #ededed;">
+        <span style="display: flex; align-items: center; gap: 10px; overflow: hidden;"><button aria-label="Show 2 entries" style="display: flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 6px; border: 1px solid #cccccc; border-radius: 6px; background: #ffffff; color: #111111; font-size: 12px; font-weight: 700; cursor: pointer;">2</button><span style="font-size: 14px; color: #111111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Calendar integration</span></span>
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; overflow: hidden;"><span style="width: 9px; height: 9px; border-radius: 50%; background: #f5a623; flex-shrink: 0;"></span><span style="color: #9a5b00; font-weight: 600;">Calendar app</span><span style="color: #8a8a8a;">· Acme</span></span>
+        <span style="display: flex; gap: 4px; overflow: hidden;"><span style="padding: 2px 8px; border-radius: 999px; background: #f2f2f2; color: #5c5c5c; font-size: 12px;">dev</span></span>
+        <span style="font-size: 15px; font-weight: 700; color: #1b50d8; text-align: center;">$</span>
+        <span style="font-size: 13px; color: #5c5c5c; font-variant-numeric: tabular-nums; text-align: right;">09:00 – 16:02</span>
+        <span style="font-size: 14px; font-weight: 700; color: #111111; font-variant-numeric: tabular-nums; text-align: right;">6:02:00</span>
+        <span title="Synced with Clockify" style="display: flex; justify-content: center; color: #2e9e5b;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.5 19a4.5 4.5 0 0 0 .4-9A7 7 0 0 0 4.3 12 4 4 0 0 0 6 19z"/><path d="m9 15 2 2 4-4"/></svg></span>
+        <button aria-label="Continue this entry" class="hover" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #1b50d8; cursor: pointer; opacity: 0.35;"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4v16l14-8z"/></svg></button>
+        <button aria-label="More actions" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #5c5c5c; cursor: pointer;"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
+      </div>
+
+      <div class="row" style="display: grid; grid-template-columns: minmax(0, 1fr) 190px 160px 32px 130px 72px 28px 32px 32px; align-items: center; gap: 12px; height: 56px; padding: 0 12px 0 16px; border-top: 1px solid #ededed; background: #fdf3f3;">
+        <span style="display: flex; align-items: center; gap: 10px; overflow: hidden;"><span style="font-size: 14px; color: #111111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Support tickets</span><a href="Entry.dc.html" style="font-size: 12px; font-weight: 600; color: #b3403f; white-space: nowrap;">Changed in both places · Resolve</a></span>
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; overflow: hidden;"><span style="width: 9px; height: 9px; border-radius: 50%; background: #0f9d8a; flex-shrink: 0;"></span><span style="color: #0b7a6b; font-weight: 600;">Internal</span></span>
+        <span style="display: flex; gap: 4px; overflow: hidden;"></span>
+        <span style="font-size: 15px; font-weight: 700; color: #cccccc; text-align: center;">$</span>
+        <span style="font-size: 13px; color: #5c5c5c; font-variant-numeric: tabular-nums; text-align: right;">16:10 – 17:10</span>
+        <span style="font-size: 14px; font-weight: 700; color: #111111; font-variant-numeric: tabular-nums; text-align: right;">1:00:00</span>
+        <span title="Conflict: changed here and in Clockify" style="display: flex; justify-content: center; color: #cf5b5b;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
+        <button aria-label="Continue this entry" class="hover" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #1b50d8; cursor: pointer; opacity: 0.35;"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4v16l14-8z"/></svg></button>
+        <button aria-label="More actions" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #5c5c5c; cursor: pointer;"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
+      </div>
+    </div>
+
+    <!-- Wednesday -->
+    <div style="display: flex; flex-direction: column; border: 1px solid #e3e3e3; border-radius: 9px; overflow: hidden;">
+      <div style="display: flex; align-items: center; height: 36px; padding: 0 16px; background: #f2f2f2; font-size: 13px;">
+        <span style="font-weight: 700; color: #111111;">Wed 16 Sep</span>
+        <div style="flex-grow: 1;"></div>
+        <span style="color: #5c5c5c;">Total <strong style="color: #111111; font-variant-numeric: tabular-nums;">6:20</strong></span>
+      </div>
+
+      <div class="row" style="display: grid; grid-template-columns: minmax(0, 1fr) 190px 160px 32px 130px 72px 28px 32px 32px; align-items: center; gap: 12px; height: 56px; padding: 0 12px 0 16px; border-top: 1px solid #ededed;">
+        <span style="font-size: 14px; color: #111111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Plugin catalog evidence</span>
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; overflow: hidden;"><span style="width: 9px; height: 9px; border-radius: 50%; background: #1b50d8; flex-shrink: 0;"></span><span style="color: #1b50d8; font-weight: 600;">AtomicServer</span><span style="color: #8a8a8a;">· Ontola</span></span>
+        <span style="display: flex; gap: 4px; overflow: hidden;"><span style="padding: 2px 8px; border-radius: 999px; background: #f2f2f2; color: #5c5c5c; font-size: 12px;">dev</span><span style="padding: 2px 8px; border-radius: 999px; background: #f2f2f2; color: #5c5c5c; font-size: 12px;">docs</span></span>
+        <span style="font-size: 15px; font-weight: 700; color: #cccccc; text-align: center;">$</span>
+        <span style="font-size: 13px; color: #5c5c5c; font-variant-numeric: tabular-nums; text-align: right;">09:30 – 13:20</span>
+        <span style="font-size: 14px; font-weight: 700; color: #111111; font-variant-numeric: tabular-nums; text-align: right;">3:50:00</span>
+        <span title="Synced with Clockify" style="display: flex; justify-content: center; color: #2e9e5b;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.5 19a4.5 4.5 0 0 0 .4-9A7 7 0 0 0 4.3 12 4 4 0 0 0 6 19z"/><path d="m9 15 2 2 4-4"/></svg></span>
+        <button aria-label="Continue this entry" class="hover" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #1b50d8; cursor: pointer; opacity: 0.35;"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4v16l14-8z"/></svg></button>
+        <button aria-label="More actions" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #5c5c5c; cursor: pointer;"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
+      </div>
+
+      <div class="row" style="display: grid; grid-template-columns: minmax(0, 1fr) 190px 160px 32px 130px 72px 28px 32px 32px; align-items: center; gap: 12px; height: 56px; padding: 0 12px 0 16px; border-top: 1px solid #ededed;">
+        <span style="display: flex; align-items: center; gap: 10px; overflow: hidden;"><span style="font-size: 14px; color: #111111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Timer test from this table</span><span style="padding: 2px 8px; border-radius: 999px; background: #f0f4fd; color: #1b50d8; font-size: 11px; font-weight: 600; white-space: nowrap;">Only here</span></span>
+        <span style="display: flex; align-items: center; gap: 8px; font-size: 13px; white-space: nowrap; overflow: hidden;"><span style="width: 9px; height: 9px; border-radius: 50%; border: 1.5px dashed #8a8a8a; box-sizing: border-box; flex-shrink: 0;"></span><span style="color: #8a8a8a;">No project</span></span>
+        <span style="display: flex; gap: 4px; overflow: hidden;"></span>
+        <span style="font-size: 15px; font-weight: 700; color: #cccccc; text-align: center;">$</span>
+        <span style="font-size: 13px; color: #5c5c5c; font-variant-numeric: tabular-nums; text-align: right;">14:00 – 16:30</span>
+        <span style="font-size: 14px; font-weight: 700; color: #111111; font-variant-numeric: tabular-nums; text-align: right;">2:30:00</span>
+        <span title="Not in Clockify. Push it from the row menu." style="display: flex; justify-content: center; color: #8a8a8a;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 2" aria-hidden="true"><path d="M17.5 19a4.5 4.5 0 0 0 .4-9A7 7 0 0 0 4.3 12 4 4 0 0 0 6 19z"/></svg></span>
+        <button aria-label="Continue this entry" class="hover" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #1b50d8; cursor: pointer; opacity: 0.35;"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4v16l14-8z"/></svg></button>
+        <button aria-label="More actions" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; color: #5c5c5c; cursor: pointer;"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer: legend + range -->
+  <div style="display: flex; align-items: center; gap: 20px; padding-top: 4px; font-size: 12px; color: #5c5c5c;">
+    <span style="display: flex; align-items: center; gap: 6px;"><span style="color: #2e9e5b; display: flex;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.5 19a4.5 4.5 0 0 0 .4-9A7 7 0 0 0 4.3 12 4 4 0 0 0 6 19z"/><path d="m9 15 2 2 4-4"/></svg></span>Synced</span>
+    <span style="display: flex; align-items: center; gap: 6px;"><span style="color: #b26a00; display: flex;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.5 19a4.5 4.5 0 0 0 .4-9A7 7 0 0 0 4.3 12 4 4 0 0 0 6 19z"/><path d="M12 17v-6"/><path d="m9 14 3-3 3 3"/></svg></span>Edited here, pushes on next run</span>
+    <span style="display: flex; align-items: center; gap: 6px;"><span style="color: #cf5b5b; display: flex;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>Conflict, needs review</span>
+    <span style="display: flex; align-items: center; gap: 6px;"><span style="color: #8a8a8a; display: flex;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 2" aria-hidden="true"><path d="M17.5 19a4.5 4.5 0 0 0 .4-9A7 7 0 0 0 4.3 12 4 4 0 0 0 6 19z"/></svg></span>Only here</span>
+    <div style="flex-grow: 1;"></div>
+    <span>Showing the past 7 days · <a href="Manage.dc.html" style="font-weight: 600;">Import older entries</a></span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":980}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

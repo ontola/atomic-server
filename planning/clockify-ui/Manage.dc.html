@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Manage Clockify sync</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Open Sans','Helvetica Neue','Segoe UI',sans-serif;background:#ffffff;color:#111111}
+a{color:#1b50d8}a:hover{color:#143d9f}
+button,select{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 1280px; height: 900px; box-sizing: border-box; padding: 24px 32px; display: flex; flex-direction: column; gap: 20px; background: #ffffff; font-size: 14px;">
+
+  <!-- Header -->
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <a href="Main.dc.html" style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; text-decoration: none;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>
+      Time entries
+    </a>
+    <span style="color: #cccccc;">/</span>
+    <h1 style="margin: 0; flex-grow: 1; font-family: 'Montserrat', sans-serif; font-size: 22px; font-weight: 700;">Clockify sync</h1>
+    <button style="display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border: 1px solid #cccccc; border-radius: 9px; background: #ffffff; color: #111111; font-size: 13px; font-weight: 600; cursor: pointer;">Preview changes</button>
+    <button style="display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 14px; border: 0; border-radius: 9px; background: #1b50d8; color: #ffffff; font-size: 13px; font-weight: 600; cursor: pointer;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+      Sync now
+    </button>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 24px; flex-grow: 1; align-items: start;">
+
+    <!-- Left column -->
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+
+      <!-- Status cards -->
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+        <div style="display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border: 1px solid #e3e3e3; border-radius: 9px;">
+          <span style="font-size: 12px; font-weight: 600; color: #5c5c5c;">Status</span>
+          <span style="display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: #1d6b3a;"><span style="width: 9px; height: 9px; border-radius: 50%; background: #2e9e5b;"></span>Up to date</span>
+          <span style="font-size: 12px; color: #5c5c5c;">Last run today 14:56 · next 15:00</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border: 1px solid #e3e3e3; border-radius: 9px;">
+          <span style="font-size: 12px; font-weight: 600; color: #5c5c5c;">Waiting to push</span>
+          <span style="font-size: 16px; font-weight: 700; color: #b26a00;">1 entry</span>
+          <span style="font-size: 12px; color: #5c5c5c;">Edited here since last run</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border: 1px solid #f1c9c9; border-radius: 9px; background: #fdf3f3;">
+          <span style="font-size: 12px; font-weight: 600; color: #8f2f2f;">Conflicts</span>
+          <span style="font-size: 16px; font-weight: 700; color: #cf5b5b;">1 entry</span>
+          <a href="Entry.dc.html" style="font-size: 12px; font-weight: 600;">Review now</a>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div style="display: flex; flex-direction: column; border: 1px solid #e3e3e3; border-radius: 9px; overflow: hidden;">
+        <div style="padding: 12px 16px; background: #f2f2f2; font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 700;">Settings</div>
+        <div style="display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 0; align-items: center;">
+          <label for="mg-direction" style="padding: 14px 16px; font-size: 13px; font-weight: 600; color: #5c5c5c; border-top: 1px solid #ededed;">Direction</label>
+          <div style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid #ededed;">
+            <select id="mg-direction" style="height: 36px; padding: 0 12px; border: 1px solid #cccccc; border-radius: 9px; background: #ffffff; font-size: 14px; color: #111111;">
+              <option>Two-way sync</option>
+              <option>Import only</option>
+            </select>
+            <span style="font-size: 12px; color: #5c5c5c;">Timers and edits here are pushed to Clockify each run.</span>
+          </div>
+          <label for="mg-schedule" style="padding: 14px 16px; font-size: 13px; font-weight: 600; color: #5c5c5c; border-top: 1px solid #ededed;">Schedule</label>
+          <div style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid #ededed;">
+            <select id="mg-schedule" style="height: 36px; padding: 0 12px; border: 1px solid #cccccc; border-radius: 9px; background: #ffffff; font-size: 14px; color: #111111;">
+              <option>Every hour</option>
+              <option>Every 15 minutes</option>
+              <option>Daily at 06:00</option>
+              <option>Manual only</option>
+            </select>
+            <span style="font-size: 12px; color: #5c5c5c;">Changes are always shown for review before they apply.</span>
+          </div>
+          <label for="mg-window" style="padding: 14px 16px; font-size: 13px; font-weight: 600; color: #5c5c5c; border-top: 1px solid #ededed;">Look back</label>
+          <div style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid #ededed;">
+            <select id="mg-window" style="height: 36px; padding: 0 12px; border: 1px solid #cccccc; border-radius: 9px; background: #ffffff; font-size: 14px; color: #111111;">
+              <option>Past 7 days</option>
+              <option>Past 30 days</option>
+            </select>
+            <button style="height: 32px; padding: 0 12px; border: 1px solid #cccccc; border-radius: 6px; background: #ffffff; color: #111111; font-size: 12px; font-weight: 600; cursor: pointer;">Import older entries…</button>
+          </div>
+          <span style="padding: 14px 16px; font-size: 13px; font-weight: 600; color: #5c5c5c; border-top: 1px solid #ededed;">Projects</span>
+          <div style="display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid #ededed; flex-wrap: wrap;">
+            <span style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #f2f2f2; font-size: 12px;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #1b50d8;"></span>AtomicServer</span>
+            <span style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #f2f2f2; font-size: 12px;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #f5a623;"></span>Calendar app</span>
+            <span style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #f2f2f2; font-size: 12px;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #0f9d8a;"></span>Internal</span>
+            <span style="display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: #f2f2f2; font-size: 12px;"><span style="width: 8px; height: 8px; border-radius: 50%; background: #9b59b6;"></span>Support</span>
+            <button style="height: 28px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: #1b50d8; font-size: 12px; font-weight: 600; cursor: pointer;">All projects · change</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Field mapping -->
+      <div id="mapping" style="display: flex; flex-direction: column; border: 1px solid #e3e3e3; border-radius: 9px; overflow: hidden;">
+        <div style="display: flex; align-items: center; padding: 12px 16px; background: #f2f2f2; font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 700;">
+          Field mapping
+          <span style="margin-left: auto; font-family: 'Open Sans', sans-serif; font-size: 12px; font-weight: 400; color: #5c5c5c;">Table: Clockify time entries</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 180px 24px minmax(0, 1fr) 120px; align-items: center; gap: 0 12px; padding: 0 16px; font-size: 13px;">
+          <span style="padding: 10px 0; border-top: 1px solid #ededed;">Description</span><span style="color: #8a8a8a; border-top: 1px solid #ededed; padding: 10px 0;">→</span><span style="padding: 10px 0; border-top: 1px solid #ededed; font-weight: 600;">Name</span><span style="padding: 10px 0; border-top: 1px solid #ededed; color: #1d6b3a; font-weight: 600;">Two-way</span>
+          <span style="padding: 10px 0; border-top: 1px solid #ededed;">Start · End</span><span style="color: #8a8a8a; border-top: 1px solid #ededed; padding: 10px 0;">→</span><span style="padding: 10px 0; border-top: 1px solid #ededed; font-weight: 600;">Start · End <span style="font-weight: 400; color: #5c5c5c;">(Duration derived)</span></span><span style="padding: 10px 0; border-top: 1px solid #ededed; color: #1d6b3a; font-weight: 600;">Two-way</span>
+          <span style="padding: 10px 0; border-top: 1px solid #ededed;">Project · Client</span><span style="color: #8a8a8a; border-top: 1px solid #ededed; padding: 10px 0;">→</span><span style="padding: 10px 0; border-top: 1px solid #ededed; font-weight: 600;">Project <span style="font-weight: 400; color: #5c5c5c;">(linked record with color and client)</span></span><span style="padding: 10px 0; border-top: 1px solid #ededed; color: #1d6b3a; font-weight: 600;">Two-way</span>
+          <span style="padding: 10px 0; border-top: 1px solid #ededed;">Billable</span><span style="color: #8a8a8a; border-top: 1px solid #ededed; padding: 10px 0;">→</span><span style="padding: 10px 0; border-top: 1px solid #ededed; font-weight: 600;">Billable</span><span style="padding: 10px 0; border-top: 1px solid #ededed; color: #1d6b3a; font-weight: 600;">Two-way</span>
+          <span style="padding: 10px 0; border-top: 1px solid #ededed;">Tags</span><span style="color: #8a8a8a; border-top: 1px solid #ededed; padding: 10px 0;">→</span><span style="padding: 10px 0; border-top: 1px solid #ededed; font-weight: 600;">Tags <span style="font-weight: 400; color: #5c5c5c;">(multi-select)</span></span><span style="padding: 10px 0; border-top: 1px solid #ededed; color: #1d6b3a; font-weight: 600;">Two-way</span>
+          <span style="padding: 10px 0; border-top: 1px solid #ededed;">User</span><span style="color: #8a8a8a; border-top: 1px solid #ededed; padding: 10px 0;">→</span><span style="padding: 10px 0; border-top: 1px solid #ededed; font-weight: 600;">Person</span><span style="padding: 10px 0; border-top: 1px solid #ededed; color: #5c5c5c; font-weight: 600;">Import</span>
+          <span style="padding: 10px 0; border-top: 1px solid #ededed; color: #5c5c5c;">Task</span><span style="color: #8a8a8a; border-top: 1px solid #ededed; padding: 10px 0;">→</span><span style="padding: 10px 0; border-top: 1px solid #ededed; color: #8a8a8a;">Not mapped · <a href="#mapping">add column</a></span><span style="padding: 10px 0; border-top: 1px solid #ededed; color: #8a8a8a;">—</span>
+          <span style="padding: 10px 0; border-top: 1px solid #ededed; color: #5c5c5c;">Hourly rate · Custom fields</span><span style="color: #8a8a8a; border-top: 1px solid #ededed; padding: 10px 0;">→</span><span style="padding: 10px 0; border-top: 1px solid #ededed; color: #8a8a8a;">Not mapped</span><span style="padding: 10px 0; border-top: 1px solid #ededed; color: #8a8a8a;">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right column -->
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+
+      <!-- Connection -->
+      <div style="display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid #e3e3e3; border-radius: 9px;">
+        <div style="font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 700;">Connection</div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; background: #1d6b3a; color: #ffffff; font-size: 13px; font-weight: 700;">MJ</span>
+          <div style="display: flex; flex-direction: column;">
+            <span style="font-weight: 700;">Michiel de Jong</span>
+            <span style="font-size: 12px; color: #5c5c5c;">Workspace Ontola · api.clockify.me</span>
+          </div>
+        </div>
+        <div style="font-size: 12px; color: #5c5c5c;">API key stored on this server. Used for reading your entries and, in two-way mode, writing the ones you change here.</div>
+        <div style="display: flex; gap: 8px;">
+          <button style="height: 32px; padding: 0 12px; border: 1px solid #cccccc; border-radius: 6px; background: #ffffff; color: #111111; font-size: 12px; font-weight: 600; cursor: pointer;">Replace key</button>
+          <button style="height: 32px; padding: 0 12px; border: 1px solid #cccccc; border-radius: 6px; background: #ffffff; color: #cf5b5b; font-size: 12px; font-weight: 600; cursor: pointer;">Disconnect</button>
+        </div>
+        <div style="font-size: 12px; color: #8a8a8a;">Disconnecting keeps every entry in the table.</div>
+      </div>
+
+      <!-- Recent runs -->
+      <div style="display: flex; flex-direction: column; border: 1px solid #e3e3e3; border-radius: 9px; overflow: hidden;">
+        <div style="display: flex; align-items: center; padding: 12px 16px; background: #f2f2f2; font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 700;">
+          Recent runs
+          <a href="#runs" style="margin-left: auto; font-family: 'Open Sans', sans-serif; font-size: 12px; font-weight: 600;">All runs</a>
+        </div>
+        <div style="display: flex; flex-direction: column; font-size: 13px;">
+          <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid #ededed;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: #cf5b5b; flex-shrink: 0;"></span>
+            <div style="display: flex; flex-direction: column; flex-grow: 1; min-width: 0;">
+              <span style="font-weight: 600;">Today 14:56</span>
+              <span style="font-size: 12px; color: #5c5c5c;">2 pulled · 1 pushed · 1 conflict</span>
+            </div>
+            <a href="Entry.dc.html" style="font-size: 12px; font-weight: 600;">Resolve</a>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid #ededed;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: #2e9e5b; flex-shrink: 0;"></span>
+            <div style="display: flex; flex-direction: column; flex-grow: 1; min-width: 0;">
+              <span style="font-weight: 600;">Today 13:56</span>
+              <span style="font-size: 12px; color: #5c5c5c;">No changes</span>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid #ededed;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: #2e9e5b; flex-shrink: 0;"></span>
+            <div style="display: flex; flex-direction: column; flex-grow: 1; min-width: 0;">
+              <span style="font-weight: 600;">Today 12:56</span>
+              <span style="font-size: 12px; color: #5c5c5c;">3 pulled · 0 pushed</span>
+            </div>
+            <a href="#runs" style="font-size: 12px; font-weight: 600;">Details</a>
+          </div>
+          <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid #ededed;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: #f5a623; flex-shrink: 0;"></span>
+            <div style="display: flex; flex-direction: column; flex-grow: 1; min-width: 0;">
+              <span style="font-weight: 600;">Yesterday 17:56</span>
+              <span style="font-size: 12px; color: #5c5c5c;">Clockify returned 429 · retried 18:11, ok</span>
+            </div>
+            <a href="#runs" style="font-size: 12px; font-weight: 600;">Details</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Totals -->
+      <div style="display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid #e3e3e3; border-radius: 9px;">
+        <div style="font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 700;">In this table</div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; text-align: center;">
+          <div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums;">312</span><span style="font-size: 12px; color: #5c5c5c;">entries</span></div>
+          <div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums;">4</span><span style="font-size: 12px; color: #5c5c5c;">projects</span></div>
+          <div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums;">1</span><span style="font-size: 12px; color: #5c5c5c;">only here</span></div>
+        </div>
+        <div style="font-size: 12px; color: #5c5c5c;">Totals match Clockify for the past 7 days (checked at the last run).</div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
