@@ -8,7 +8,13 @@ use crate::AtomicError;
 pub struct PluginMeta {
     pub subject: String,
     pub agent_secret: String,
+    /// The legacy `plugin.json` shape, which the on-disk loader still reads.
     pub manifest: PluginManifest,
+    /// The version-two manifest of the Release an Installation pinned, kept
+    /// beside the legacy shape so existing records stay readable. Absent for
+    /// plugins installed through the legacy `Plugin` + `pluginFile` path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manifest_v2: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

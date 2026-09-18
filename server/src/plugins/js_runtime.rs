@@ -149,8 +149,10 @@ impl JsRuntime {
 
         // A plugin gets one run's worth of resources, then the instance is
         // dropped. Nothing survives to the next run — not a timer, not a
-        // global, not a leak.
-        let limits = host_core::limits(Runtime::Js, ResourceGrants::default());
+        // global, not a leak. How much it gets is decided by the capabilities
+        // its installation was granted.
+        let mut host = host;
+        let limits = host_core::limits(Runtime::Js, host.resource_grants().await);
 
         let mut store = Store::new(
             &self.engine,
@@ -367,6 +369,11 @@ impl PluginHost for StoreHost {
             .map(|resource| resource.get_subject().to_string())
             .collect();
         serde_json::to_string(&subjects).map_err(|e| e.to_string())
+    }
+
+    async fn resource_grants(&mut self) -> ResourceGrants {
+        host_core::installation_grants(&self.db, &self.drive, &self.plugin, self.manifest.as_ref())
+            .await
     }
 }
 

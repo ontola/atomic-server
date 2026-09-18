@@ -525,13 +525,20 @@ mod installation_hook {
                 "Installation {subject} pins release {pinned} but {reference} resolves to {actual}; refusing to install"
             )));
         }
-        if release.world == WORLD_SERVER_EXTENSION {
+        // A wasip2 server-extension is a class extender; an Installation
+        // materializes it drive-scoped (`scoped/<drive>/`), exactly as the
+        // legacy zip upload does, so its hooks only see this drive. A JS
+        // server-extension has no runtime that serves its hooks yet, and a
+        // server-scoped extension is configured by the operator on disk,
+        // never through a commit.
+        if release.world == WORLD_SERVER_EXTENSION && !release.is_wasip2() {
             return Err(AtomicError::from(
                 "a server-extension release cannot be installed through an Installation; operators configure it on the server",
             ));
         }
 
-        // 2. Grants against what the manifest declares.
+        // 2. Grants against what the manifest declares. The grants on the
+        //    Installation are the approved set the host reads back.
         release::check_grants(&release.manifest, &json_value(resource, urls::GRANTS)?)?;
 
         let (namespace, name) = identifiers(resource, &release.manifest)?;
@@ -563,6 +570,12 @@ mod installation_hook {
                 plugin_cache_dir,
             )
             .await?;
+            // The loader reads the legacy `plugin.json` from disk; the v2
+            // manifest the installer reviewed is kept beside it.
+            if let Some(mut meta) = store.get_plugin_meta(&key)? {
+                meta.manifest_v2 = Some(release.manifest.clone());
+                store.set_plugin_meta(&key, &meta)?;
+            }
         } else {
             ensure_js_identity(store, drive, &subject, &namespace, &name, &release).await?;
         }
@@ -649,6 +662,7 @@ mod installation_hook {
                 subject: subject.to_string(),
                 agent_secret: secret,
                 manifest,
+                manifest_v2: Some(release.manifest.clone()),
             },
         )?;
         Ok(())
@@ -837,7 +851,7 @@ mod installation_tests {
     fn js_release(world: &str) -> PluginRelease {
         let mut release = PluginRelease::js(
             "export function run() { return { intents: [] }; }".into(),
-            json!({"schemaVersion":1,"permissions":[{"permission":"storage","reason":"keeps a cursor"}]}),
+            json!({"schemaVersion":2,"capabilities":[{"name":"storage","reason":"keeps a cursor"}]}),
             Default::default(),
         );
         release.world = world.into();
@@ -897,6 +911,7 @@ mod installation_tests {
             .expect("a PluginMeta record");
         assert_eq!(meta.subject, installation);
         assert_eq!(meta.manifest.namespace, "acme");
+        assert_eq!(meta.manifest_v2, Some(js_release(WORLD_EXTENSION).manifest));
         let app_key = AppAgentKey::new(&f.drive, &installation);
         assert_eq!(
             installation::resolve(db, &f.drive, &installation)
@@ -1001,6 +1016,31 @@ mod installation_tests {
         .unwrap_err();
         assert!(err.to_string().contains("not declared"), "{err}");
 
+        // Granting less than the manifest declares is refused too, naming the
+        // capability and its reason.
+        let err = try_genesis(
+            db,
+            vec![
+                (
+                    urls::IS_A,
+                    Value::ResourceArray(vec![urls::INSTALLATION.into()]),
+                ),
+                (urls::PARENT, Value::AtomicUrl(f.drive.as_str().into())),
+                (urls::NAME, Value::String("stingy".into())),
+                (urls::NAMESPACE, Value::String("acme".into())),
+                (urls::RELEASE_PROP, Value::String(id.clone())),
+                (urls::RELEASE_ID, Value::String(id.clone())),
+                (urls::INSTALLATION_STATUS, Value::String("active".into())),
+                (urls::GRANTS, Value::Json(json!([]))),
+            ],
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("storage (keeps a cursor)"),
+            "{err}"
+        );
+
         // A draft does nothing, and can be created for any release.
         let draft = genesis(
             db,
@@ -1010,34 +1050,70 @@ mod installation_tests {
         assert!(db.get_resource(&draft.as_str().into()).await.is_ok());
     }
 
+    /// The capabilities `test-plugin.zip` declares in its `plugin.json`.
+    const TEST_PLUGIN_GRANTS: [&str; 3] = ["storage", "custom-view", "full-drive-access"];
+
+    #[actix_rt::test]
+    async fn a_wasip2_release_carries_a_v2_manifest_read_from_the_component() {
+        let f = fixture("wasm_release_manifest").await;
+        let db = &f.appstate.store;
+        let (id, release, manifest) = release::publish_package(db, TEST_PLUGIN_ZIP).await.unwrap();
+        assert_eq!(release.runtime, RUNTIME_WASIP2);
+        assert_eq!(release.package.as_deref().map(str::len), Some(64));
+        assert_eq!(release.version.as_deref(), Some("1.0.0"));
+        // The component extends Folder (and a test class), so the package is
+        // a server-extension with those classes as its entrypoints.
+        assert_eq!(release.world, WORLD_SERVER_EXTENSION);
+        let classes = manifest.entrypoints.class_urls();
+        assert_eq!(classes.len(), 2, "{classes:?}");
+        assert!(
+            classes.contains(&"https://atomicdata.dev/classes/Folder".to_string()),
+            "{classes:?}"
+        );
+        assert!(!manifest.entrypoints.run);
+        assert_eq!(release.manifest["schemaVersion"], 2);
+        assert_eq!(release.manifest["runtime"], "wasip2/1");
+        assert_eq!(release.manifest["world"], "server-extension");
+        assert_eq!(release.manifest["namespace"], "ontola");
+        assert_eq!(release.manifest["name"], "test-plugin");
+        let declared: Vec<&str> = manifest
+            .capabilities
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect();
+        assert_eq!(declared, TEST_PLUGIN_GRANTS);
+        assert!(manifest.capabilities.iter().all(|c| c.reason.is_some()));
+        // The stored manifest parses back as the same version-two manifest.
+        crate::plugins::manifest::Manifest::parse(release.manifest.clone())
+            .unwrap()
+            .unwrap();
+        // Content-addressed: the same bytes publish to the same id.
+        let (again, _, _) = release::publish_package(db, TEST_PLUGIN_ZIP).await.unwrap();
+        assert_eq!(again, id);
+        assert_eq!(db.get_plugin_release(&id).unwrap(), release);
+    }
+
     #[actix_rt::test]
     async fn a_wasip2_installation_goes_through_the_zip_install_path() {
         let f = fixture("installation_wasm").await;
         let db = &f.appstate.store;
-        let package = release::store_package(db, TEST_PLUGIN_ZIP).await.unwrap();
-        let mut zip = ZipArchive::new(std::io::Cursor::new(TEST_PLUGIN_ZIP.to_vec())).unwrap();
-        let manifest = crate::plugins::wasm::validate_plugin_zip(&mut zip).unwrap();
-        let id = db
-            .publish_plugin_release(&PluginRelease {
-                source: None,
-                package: Some(package),
-                manifest: serde_json::to_value(&manifest).unwrap(),
-                runtime: RUNTIME_WASIP2.into(),
-                world: WORLD_EXTENSION.into(),
-                schemas: Default::default(),
-                version: Some(manifest.version.clone()),
-                previous_release: None,
-            })
-            .unwrap();
+        let (id, release, _) = release::publish_package(db, TEST_PLUGIN_ZIP).await.unwrap();
+
+        // Grants must cover every capability the package declares.
+        let mut props = installation_props(&f.drive, "ontola", "test-plugin", &id, &id, "active");
+        props.retain(|(prop, _)| *prop != urls::GRANTS);
+        props.push((urls::GRANTS, Value::Json(json!(["storage", "custom-view"]))));
+        let err = try_genesis(db, props).await.unwrap_err();
+        assert!(err.to_string().contains("full-drive-access ("), "{err}");
+        let key = PluginMetaKey::new(&f.drive, "ontola", "test-plugin");
+        assert!(db.get_plugin_meta(&key).unwrap().is_none());
 
         // The zip path checks the manifest against the stored resource, so the
         // installation is created as a draft and activated in a second commit.
-        let installation = genesis(
-            db,
-            installation_props(&f.drive, "ontola", "test-plugin", &id, &id, "draft"),
-        )
-        .await;
-        let key = PluginMetaKey::new(&f.drive, "ontola", "test-plugin");
+        let mut props = installation_props(&f.drive, "ontola", "test-plugin", &id, &id, "draft");
+        props.retain(|(prop, _)| *prop != urls::GRANTS);
+        props.push((urls::GRANTS, Value::Json(json!(TEST_PLUGIN_GRANTS))));
+        let installation = genesis(db, props).await;
         assert!(db.get_plugin_meta(&key).unwrap().is_none());
         assert!(db.get_class_extenders_on_drive(&f.drive).is_empty());
 
@@ -1055,6 +1131,9 @@ mod installation_tests {
         let meta = db.get_plugin_meta(&key).unwrap().expect("installed");
         assert_eq!(meta.subject, installation);
         assert_eq!(meta.manifest.version, "1.0.0");
+        assert_eq!(meta.manifest_v2, Some(release.manifest.clone()));
+        // Drive-scoped: the class extender is registered on this drive only
+        // (`get_class_extenders_on_drive` filters on `ClassExtenderScope::Drive`).
         assert_eq!(db.get_class_extenders_on_drive(&f.drive).len(), 1);
         // The dynamic properties a Plugin gets are served for an Installation too.
         let shown = db
@@ -1088,12 +1167,76 @@ mod installation_tests {
                 previous_release: None,
             })
             .unwrap();
-        let err = try_genesis(
-            db,
-            installation_props(&f.drive, "acme", "ghost", &id, &id, "active"),
-        )
-        .await
-        .unwrap_err();
+        // A legacy plugin.json manifest without permissions declares nothing.
+        let mut props = installation_props(&f.drive, "acme", "ghost", &id, &id, "active");
+        props.retain(|(prop, _)| *prop != urls::GRANTS);
+        let err = try_genesis(db, props).await.unwrap_err();
         assert!(err.to_string().contains("not on this node"), "{err}");
+    }
+
+    #[actix_rt::test]
+    async fn an_installation_can_pin_a_release_by_its_resource_url() {
+        let f = fixture("installation_release_url").await;
+        let db = &f.appstate.store;
+        let origin = db.get_server_url();
+        let (id, published, _) = release::publish_package(db, TEST_PLUGIN_ZIP).await.unwrap();
+        let subject = release::record_release(db, &id, &published, &f.drive, None, &origin)
+            .await
+            .unwrap();
+        let url = subject.resolve(&origin);
+        assert!(url.ends_with(&format!("/releases/{id}")), "{url}");
+        // Recording twice is a no-op, and the resource round-trips the release.
+        assert_eq!(
+            release::record_release(db, &id, &published, &f.drive, None, &origin)
+                .await
+                .unwrap(),
+            subject
+        );
+        let resource = db.get_resource(&subject).await.unwrap();
+        assert_eq!(
+            resource.get(urls::RELEASE_ID).unwrap().to_string(),
+            id,
+            "the resource records the id"
+        );
+        let file = resource.get(urls::PACKAGE).unwrap().to_string();
+        let file = db.get_resource(&file.as_str().into()).await.unwrap();
+        assert_eq!(
+            file.get(urls::INTERNAL_ID).unwrap().to_string(),
+            published.package.clone().unwrap()
+        );
+        // The URL resolves to the same release as the bare id.
+        let signer = ForAgent::AgentSubject(db.get_default_agent().unwrap().subject);
+        let resolved = release::resolve(db, &url, &signer).await.unwrap();
+        assert_eq!(resolved, published);
+        assert_eq!(resolved.id().unwrap(), id);
+
+        // And an Installation can point at it instead of the bare id.
+        let mut props = installation_props(&f.drive, "ontola", "test-plugin", &url, &id, "draft");
+        props.retain(|(prop, _)| *prop != urls::GRANTS);
+        props.push((urls::GRANTS, Value::Json(json!(TEST_PLUGIN_GRANTS))));
+        let installation = genesis(db, props).await;
+        let mut r = db
+            .get_resource(&installation.as_str().into())
+            .await
+            .unwrap();
+        r.set_unsafe(
+            urls::INSTALLATION_STATUS.into(),
+            Value::String("active".into()),
+        )
+        .unwrap();
+        r.save(db).await.unwrap();
+        let key = PluginMetaKey::new(&f.drive, "ontola", "test-plugin");
+        let meta = db.get_plugin_meta(&key).unwrap().expect("installed by URL");
+        assert_eq!(meta.subject, installation);
+        assert_eq!(meta.manifest_v2, Some(published.manifest.clone()));
+
+        // A JS release records without a File.
+        let js = js_release(WORLD_EXTENSION);
+        let js_id = db.publish_plugin_release(&js).unwrap();
+        let js_subject = release::record_release(db, &js_id, &js, &f.drive, None, &origin)
+            .await
+            .unwrap();
+        let js_url = js_subject.resolve(&origin);
+        assert_eq!(release::resolve(db, &js_url, &signer).await.unwrap(), js);
     }
 }

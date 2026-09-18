@@ -26,7 +26,10 @@ use atomic_lib::{
 use futures::{Stream, StreamExt};
 use wasmtime::{Engine, Store, StoreLimits, StoreLimitsBuilder};
 
-use super::{egress, manifest::Manifest};
+use super::{
+    egress,
+    manifest::{CapabilityName, Manifest},
+};
 
 // ---------------------------------------------------------------------------
 // Engine and resource limits
@@ -70,17 +73,46 @@ pub struct ResourceGrants {
 }
 
 impl ResourceGrants {
-    pub fn from_manifest(manifest: Option<&PluginManifest>) -> Self {
-        Self {
-            extended_fuel: PluginManifest::option_has_permission(
-                manifest,
-                PermissionType::ExtendedFuel,
-            ),
-            extended_memory: PluginManifest::option_has_permission(
-                manifest,
-                PermissionType::ExtendedMemory,
-            ),
+    /// The one derivation: which of the version-two capabilities are present.
+    /// Every other constructor maps its input onto capability names first.
+    pub fn from_capabilities(names: impl IntoIterator<Item = CapabilityName>) -> Self {
+        let mut grants = Self::default();
+        for name in names {
+            match name {
+                CapabilityName::ExtendedFuel => grants.extended_fuel = true,
+                CapabilityName::ExtendedMemory => grants.extended_memory = true,
+                _ => {}
+            }
         }
+        grants
+    }
+
+    /// A legacy `plugin.json`: its permissions translated to capabilities.
+    pub fn from_manifest(manifest: Option<&PluginManifest>) -> Self {
+        Self::from_capabilities(
+            manifest
+                .into_iter()
+                .flat_map(super::manifest::plugin_json_capabilities)
+                .map(|capability| capability.name),
+        )
+    }
+
+    /// A version-two manifest's declared capabilities, for a plugin that has
+    /// no Installation to read approved grants from.
+    pub fn from_v2(manifest: &Manifest) -> Self {
+        Self::from_capabilities(manifest.capabilities.iter().map(|c| c.name))
+    }
+
+    /// The `grants` an Installation stores: a JSON array of capability names
+    /// (or an object keyed by them). Names that are not capabilities grant
+    /// nothing; `check_grants` already refused them at install time.
+    pub fn from_grants(grants: &serde_json::Value) -> Self {
+        let names: Vec<&str> = match grants {
+            serde_json::Value::Array(items) => items.iter().filter_map(|v| v.as_str()).collect(),
+            serde_json::Value::Object(map) => map.keys().map(String::as_str).collect(),
+            _ => Vec::new(),
+        };
+        Self::from_capabilities(names.into_iter().filter_map(CapabilityName::parse))
     }
 }
 
@@ -99,9 +131,9 @@ const MIB: usize = 1024 * 1024;
 /// The fuel and memory policy, keyed by runtime and capability.
 ///
 /// Class extenders: 100M instructions and 50 MiB, or 1G and 2000 MiB with the
-/// `extended-fuel` / `extended-memory` permissions. JS runs: 20G instructions
-/// and 256 MiB. No JS manifest can declare the extended capabilities yet; the
-/// unified manifest will, and the table already says what they mean.
+/// `extended-fuel` / `extended-memory` capabilities. JS runs: 20G instructions
+/// and 256 MiB, or 200G and 2000 MiB with the same capabilities, which reach a
+/// JS run through its Installation's grants ([`PluginHost::resource_grants`]).
 pub fn limits(runtime: Runtime, grants: ResourceGrants) -> Limits {
     match runtime {
         Runtime::ClassExtender => Limits {
@@ -177,6 +209,49 @@ pub trait PluginHost: Send + 'static {
     async fn fetch(&mut self, request: String) -> Result<String, String>;
     async fn get_resource(&mut self, subject: String) -> Result<String, String>;
     async fn query(&mut self, property: String, value: String) -> Result<String, String>;
+    /// The capabilities that widen this run's fuel and memory. Read before the
+    /// store is built, so they can come from the Installation the plugin runs
+    /// under. A host without one gets the baseline.
+    async fn resource_grants(&mut self) -> ResourceGrants {
+        ResourceGrants::default()
+    }
+}
+
+/// The resource grants of a JS plugin: the approved `grants` of the
+/// Installation it runs under, or, for a legacy draft that has none, what its
+/// own manifest declares. A lookup that fails yields the baseline rather than
+/// an error; the run's reads are guarded separately by [`Grant`].
+pub async fn installation_grants(
+    db: &Db,
+    drive: &str,
+    plugin: &str,
+    manifest: Option<&Manifest>,
+) -> ResourceGrants {
+    let declared = manifest.map(ResourceGrants::from_v2).unwrap_or_default();
+    let Ok(installation) = super::installation::resolve(db, drive, plugin).await else {
+        return declared;
+    };
+    let Some(key) = installation.signing_as else {
+        return declared;
+    };
+    let Ok(resource) = db.get_resource(&key.app.as_str().into()).await else {
+        return declared;
+    };
+    let is_installation = resource
+        .get(urls::IS_A)
+        .ok()
+        .and_then(|v| v.to_subjects(None).ok())
+        .is_some_and(|classes| classes.contains(&urls::INSTALLATION.to_string()));
+    if !is_installation {
+        return declared;
+    }
+    match resource.get(urls::GRANTS) {
+        Ok(Value::Json(grants)) => ResourceGrants::from_grants(grants),
+        Ok(Value::String(s)) => serde_json::from_str(s)
+            .map(|grants| ResourceGrants::from_grants(&grants))
+            .unwrap_or_default(),
+        _ => ResourceGrants::default(),
+    }
 }
 
 // ---------------------------------------------------------------------------

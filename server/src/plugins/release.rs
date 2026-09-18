@@ -11,11 +11,13 @@
 use atomic_lib::{
     agents::ForAgent,
     client::helpers::{fetch_body_untrusted, fetch_bytes_untrusted},
-    db::plugin_release::PluginRelease,
+    db::{plugin_meta::PluginManifest, plugin_release::PluginRelease},
     errors::AtomicResult,
     parse::{parse_json_ad_resource, ParseOpts, SaveOpts},
     urls, AtomicError, Db, Resource, Storelike, Subject, Value,
 };
+
+use super::manifest::{plugin_json_capabilities, Capability, CapabilityName, Manifest, World};
 
 /// Largest package (zip) fetched from another server.
 pub const PACKAGE_MAX_BYTES: usize = 50 * 1024 * 1024;
@@ -151,34 +153,174 @@ async fn remote_package(db: &Db, release: &Resource) -> AtomicResult<Option<Stri
     Ok(Some(internal_id))
 }
 
-/// TODO(manifest v2): validate `grants` against the unified manifest's
-/// capability list with its reasons, once `manifest.rs` carries it. Until then
-/// this only rejects a grant the manifest never asked for, and accepts
-/// anything when the manifest declares no `permissions` or `capabilities`.
-pub fn check_grants(manifest: &serde_json::Value, grants: &serde_json::Value) -> AtomicResult<()> {
-    let mut declared: Vec<String> = Vec::new();
-    if let Some(permissions) = manifest.get("permissions").and_then(|p| p.as_array()) {
-        for entry in permissions {
-            match entry {
-                serde_json::Value::String(s) => declared.push(s.clone()),
-                serde_json::Value::Object(o) => {
-                    if let Some(s) = o.get("permission").and_then(|p| p.as_str()) {
-                        declared.push(s.to_string());
-                    }
-                }
-                _ => {}
-            }
+/// Publishes a wasip2 release from zip bytes: validated like an upload, its
+/// `plugin.json` translated into the version-two manifest (with `world` and
+/// the extended classes read from the component itself), the bytes stored
+/// content-addressed. Returns the release id, the release and the manifest.
+/// Publishing identical bytes twice yields the same id.
+pub async fn publish_package(
+    db: &Db,
+    bytes: &[u8],
+) -> AtomicResult<(String, PluginRelease, Manifest)> {
+    use atomic_lib::db::plugin_release::RUNTIME_WASIP2;
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes.to_vec()))
+        .map_err(|e| AtomicError::from(format!("Body is not a zip archive: {e}")))?;
+    let (plugin_json, manifest) = crate::plugins::wasm::describe_package(db, &mut zip).await?;
+    let package = store_package(db, bytes).await?;
+    let release = PluginRelease {
+        source: None,
+        package: Some(package),
+        manifest: serde_json::to_value(&manifest)?,
+        runtime: RUNTIME_WASIP2.into(),
+        world: world_name(manifest.world).into(),
+        schemas: Default::default(),
+        version: Some(plugin_json.version.clone()),
+        previous_release: None,
+    };
+    let id = db.publish_plugin_release(&release)?;
+    Ok((id, release, manifest))
+}
+
+/// The subject of the `Release` resource that records release `id` on this
+/// node: `<server>/releases/<id>`, stable and derivable from the id alone.
+pub fn release_subject(id: &str) -> Subject {
+    Subject::new_local(&format!("/releases/{id}"), None)
+}
+
+/// The subject of the `File` resource holding a package's zip, the same one
+/// an upload of the same bytes would have created.
+fn package_file_subject(package: &str) -> Subject {
+    Subject::new_local(&format!("/files/{package}"), None)
+}
+
+/// Records a published release as a `Release` resource under `drive`, so an
+/// Installation's `release` can point at a URL (and another server can fetch
+/// it) instead of a bare id. A wasip2 release's zip gets a `File` resource
+/// under the same drive, reused when the same bytes were uploaded before.
+/// Idempotent: a release that is already recorded is left as it is, including
+/// its publisher. Returns the resource's subject.
+pub async fn record_release(
+    db: &Db,
+    id: &str,
+    release: &PluginRelease,
+    drive: &str,
+    publisher: Option<&str>,
+    origin: &str,
+) -> AtomicResult<Subject> {
+    let subject = release_subject(id);
+    if db.get_resource(&subject).await.is_ok() {
+        return Ok(subject);
+    }
+    let package_file = match &release.package {
+        Some(package) => Some(ensure_package_file(db, package, drive, origin).await?),
+        None => None,
+    };
+    let mut resource = Resource::new(subject.to_string());
+    release.write_to_resource(&mut resource, package_file.as_deref())?;
+    resource.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))?;
+    if let Some(publisher) = publisher {
+        resource.set_unsafe(urls::PUBLISHER.into(), Value::AtomicUrl(publisher.into()))?;
+    }
+    if let Some(name) = release.manifest.get("name").and_then(|v| v.as_str()) {
+        resource.set_unsafe(urls::NAME.into(), Value::String(name.to_string()))?;
+    }
+    if let Some(description) = release.manifest.get("description").and_then(|v| v.as_str()) {
+        resource.set_unsafe(
+            urls::DESCRIPTION.into(),
+            Value::Markdown(description.to_string()),
+        )?;
+    }
+    resource.save_locally(db).await?;
+    Ok(subject)
+}
+
+/// The `File` resource for a stored package blob, created when missing.
+async fn ensure_package_file(
+    db: &Db,
+    package: &str,
+    drive: &str,
+    origin: &str,
+) -> AtomicResult<String> {
+    let subject = package_file_subject(package);
+    if let Ok(existing) = db.get_resource(&subject).await {
+        if string_value(&existing, urls::INTERNAL_ID).as_deref() == Some(package) {
+            return Ok(subject.to_string());
         }
     }
-    if let Some(capabilities) = manifest.get("capabilities").and_then(|c| c.as_array()) {
-        declared.extend(
-            capabilities
-                .iter()
-                .filter_map(|c| c.as_str().map(String::from)),
-        );
+    let size = package_bytes(db, package).await?.len() as i64;
+    let mut file = Resource::new(subject.to_string());
+    file.set_unsafe(
+        urls::IS_A.into(),
+        Value::ResourceArray(vec![urls::FILE.into()]),
+    )?;
+    file.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))?;
+    file.set_unsafe(urls::INTERNAL_ID.into(), Value::String(package.into()))?;
+    file.set_unsafe(
+        urls::BLOB.into(),
+        Value::AtomicUrl(format!("did:ad:blob:{package}").into()),
+    )?;
+    file.set_unsafe(urls::FILESIZE.into(), Value::Integer(size))?;
+    file.set_unsafe(
+        urls::MIMETYPE.into(),
+        Value::String("application/zip".into()),
+    )?;
+    file.set_unsafe(
+        urls::FILENAME.into(),
+        Value::String(format!("{package}.zip")),
+    )?;
+    file.set_unsafe(
+        urls::DOWNLOAD_URL.into(),
+        Value::String(format!("{origin}/download/files/{package}")),
+    )?;
+    file.save_locally(db).await?;
+    Ok(subject.to_string())
+}
+
+/// The release record's spelling of a manifest world.
+pub fn world_name(world: World) -> &'static str {
+    use atomic_lib::db::plugin_release::{WORLD_EXTENSION, WORLD_SERVER_EXTENSION};
+    match world {
+        World::Extension => WORLD_EXTENSION,
+        World::ServerExtension => WORLD_SERVER_EXTENSION,
     }
-    let has_declaration =
-        manifest.get("permissions").is_some() || manifest.get("capabilities").is_some();
+}
+
+/// The capabilities a release manifest declares, with their reasons.
+///
+/// A release manifest is the version-two form, or a version-one JS manifest
+/// (which declares none). A manifest without `schemaVersion` is a legacy
+/// `plugin.json` stored by an earlier publish; its permissions are read the
+/// way translation reads them, so old releases keep installing.
+pub fn declared_capabilities(manifest: &serde_json::Value) -> AtomicResult<Vec<Capability>> {
+    match Manifest::parse(manifest.clone()) {
+        Ok(Some(parsed)) => Ok(parsed.capabilities),
+        Ok(None) => {
+            let plugin_json: PluginManifest =
+                serde_json::from_value(manifest.clone()).map_err(|e| {
+                    AtomicError::from(format!("release manifest is not a plugin manifest: {e}"))
+                })?;
+            Ok(plugin_json_capabilities(&plugin_json))
+        }
+        Err(e) => Err(AtomicError::from(format!(
+            "release manifest is invalid: {e}"
+        ))),
+    }
+}
+
+/// The set of capabilities an Installation grants must be exactly the set its
+/// release declares.
+///
+/// A grant the manifest never asked for is refused, since nothing would use
+/// it. A declared capability that was not granted is refused too, naming each
+/// missing capability with the reason the manifest gives for it: the review
+/// UI shows the reasons, the server enforces the set. `network.origins` and
+/// `secrets` are shown at review but not granted here; the host enforces them
+/// from the manifest at every fetch.
+///
+/// `grants` is a JSON array of capability names, an object keyed by them, or
+/// null (no grants). The Installation stores them as the approved set.
+pub fn check_grants(manifest: &serde_json::Value, grants: &serde_json::Value) -> AtomicResult<()> {
+    let declared = declared_capabilities(manifest)?;
     let granted: Vec<String> = match grants {
         serde_json::Value::Null => Vec::new(),
         serde_json::Value::Array(items) => items
@@ -197,15 +339,27 @@ pub fn check_grants(manifest: &serde_json::Value, grants: &serde_json::Value) ->
             )))
         }
     };
-    if !has_declaration {
-        return Ok(());
-    }
-    for grant in granted {
-        if !declared.contains(&grant) {
+    for grant in &granted {
+        let known = CapabilityName::parse(grant);
+        if !known.is_some_and(|name| declared.iter().any(|c| c.name == name)) {
             return Err(AtomicError::from(format!(
                 "grant '{grant}' is not declared by the plugin manifest"
             )));
         }
+    }
+    let missing: Vec<String> = declared
+        .iter()
+        .filter(|c| !granted.iter().any(|g| g == c.name.as_str()))
+        .map(|c| match &c.reason {
+            Some(reason) => format!("{} ({reason})", c.name.as_str()),
+            None => c.name.as_str().to_string(),
+        })
+        .collect();
+    if !missing.is_empty() {
+        return Err(AtomicError::from(format!(
+            "the Installation does not grant every capability the plugin declares; missing: {}",
+            missing.join(", ")
+        )));
     }
     Ok(())
 }
@@ -215,16 +369,112 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    fn v2() -> serde_json::Value {
+        json!({
+            "schemaVersion": 2,
+            "capabilities": [
+                {"name": "storage", "reason": "keeps a cursor"},
+                "extended-fuel"
+            ]
+        })
+    }
+
     #[test]
-    fn grants_must_be_declared_when_the_manifest_declares_anything() {
-        let manifest = json!({"permissions":[{"permission":"storage","reason":"r"}],"capabilities":["network"]});
-        check_grants(&manifest, &json!(["storage", "network"])).unwrap();
-        check_grants(&manifest, &json!({"storage": true})).unwrap();
-        check_grants(&manifest, &json!(null)).unwrap();
-        assert!(check_grants(&manifest, &json!(["full-drive-access"])).is_err());
-        assert!(check_grants(&manifest, &json!("storage")).is_err());
-        // No declaration at all: nothing to check against yet.
-        check_grants(&json!({"schemaVersion":1}), &json!(["anything"])).unwrap();
+    fn the_granted_set_must_equal_the_declared_set() {
+        check_grants(&v2(), &json!(["storage", "extended-fuel"])).unwrap();
+        check_grants(&v2(), &json!({"storage": true, "extended-fuel": true})).unwrap();
+        // Order does not matter.
+        check_grants(&v2(), &json!(["extended-fuel", "storage"])).unwrap();
+    }
+
+    #[test]
+    fn a_missing_grant_is_refused_with_its_reason() {
+        let err = check_grants(&v2(), &json!(["extended-fuel"]))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("missing: storage (keeps a cursor)"), "{err}");
+        let err = check_grants(&v2(), &json!(null)).unwrap_err().to_string();
+        assert!(err.contains("storage (keeps a cursor)"), "{err}");
+        assert!(err.contains("extended-fuel"), "{err}");
+    }
+
+    #[test]
+    fn an_undeclared_or_unknown_grant_is_refused() {
+        let err = check_grants(
+            &v2(),
+            &json!(["storage", "extended-fuel", "full-drive-access"]),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("'full-drive-access' is not declared"), "{err}");
+        assert!(check_grants(&v2(), &json!(["storage", "extended-fuel", "root"])).is_err());
+        assert!(check_grants(&v2(), &json!("storage")).is_err());
+        assert!(check_grants(&v2(), &json!([1])).is_err());
+    }
+
+    #[test]
+    fn a_manifest_declaring_nothing_accepts_only_no_grants() {
+        check_grants(&json!({"schemaVersion": 1}), &json!(null)).unwrap();
+        check_grants(&json!({"schemaVersion": 1}), &json!([])).unwrap();
+        check_grants(&json!({"schemaVersion": 2}), &json!({})).unwrap();
+        assert!(check_grants(&json!({"schemaVersion": 1}), &json!(["storage"])).is_err());
+        // A version-one manifest has no capability field at all.
+        assert!(check_grants(
+            &json!({"schemaVersion": 1, "capabilities": ["storage"]}),
+            &json!(["storage"])
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn a_legacy_plugin_json_release_reads_its_permissions() {
+        let plugin_json = json!({
+            "name": "legacy", "namespace": "acme", "version": "1.0.0",
+            "permissions": [
+                {"permission": "storage", "reason": "state"},
+                {"permission": "network", "reason": "not a capability"}
+            ],
+            "network": {"origins": ["https://api.test"]}
+        });
+        check_grants(&plugin_json, &json!(["storage"])).unwrap();
+        let err = check_grants(&plugin_json, &json!([]))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("storage (state)"), "{err}");
+        assert!(check_grants(&plugin_json, &json!(["storage", "network"])).is_err());
+        assert!(check_grants(&json!({"not": "a manifest"}), &json!(null)).is_err());
+    }
+
+    #[test]
+    fn an_upgraded_v1_manifest_keeps_the_release_id() {
+        // A JS release published from a version-one draft stored the struct's
+        // serialization: `schemaVersion`, `secrets` and `operations`, nothing
+        // else. Parsing it into the version-two model and serializing again
+        // must give the same bytes, or every existing release id would move.
+        let raw = json!({"schemaVersion": 1});
+        let upgraded = serde_json::json!(Manifest::parse(raw).unwrap().unwrap());
+        assert_eq!(
+            upgraded,
+            json!({"schemaVersion": 1, "secrets": [], "operations": []})
+        );
+        let source = "export function run() { return {}; }".to_string();
+        let before = PluginRelease::js(
+            source.clone(),
+            json!({"schemaVersion": 1, "secrets": [], "operations": []}),
+            Default::default(),
+        );
+        let after = PluginRelease::js(source, upgraded, Default::default());
+        assert_eq!(before.id().unwrap(), after.id().unwrap());
+
+        let full = json!({
+            "schemaVersion": 1,
+            "secrets": [{"name": "token", "origin": "https://api.test"}],
+            "operations": [
+                {"id": "list", "method": "GET", "url": "https://api.test/items", "effect": "read"}
+            ]
+        });
+        let again = serde_json::json!(Manifest::parse(full.clone()).unwrap().unwrap());
+        assert_eq!(again, full);
     }
 
     #[test]

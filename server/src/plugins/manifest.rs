@@ -163,6 +163,61 @@ pub enum CapabilityName {
     CustomView,
 }
 
+impl CapabilityName {
+    pub const ALL: [CapabilityName; 5] = [
+        Self::Storage,
+        Self::FullDriveAccess,
+        Self::ExtendedFuel,
+        Self::ExtendedMemory,
+        Self::CustomView,
+    ];
+
+    /// The kebab-case name, as it appears in manifests and grants.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Storage => "storage",
+            Self::FullDriveAccess => "full-drive-access",
+            Self::ExtendedFuel => "extended-fuel",
+            Self::ExtendedMemory => "extended-memory",
+            Self::CustomView => "custom-view",
+        }
+    }
+
+    pub fn parse(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|c| c.as_str() == name)
+    }
+}
+
+/// The capability a `plugin.json` permission translates to. `network` is not
+/// a capability: it becomes `network.origins`.
+pub fn permission_capability(permission: PermissionType) -> Option<CapabilityName> {
+    Some(match permission {
+        PermissionType::Network => return None,
+        PermissionType::Storage => CapabilityName::Storage,
+        PermissionType::FullDriveAccess => CapabilityName::FullDriveAccess,
+        PermissionType::ExtendedFuel => CapabilityName::ExtendedFuel,
+        PermissionType::ExtendedMemory => CapabilityName::ExtendedMemory,
+        PermissionType::CustomView => CapabilityName::CustomView,
+    })
+}
+
+/// The capabilities a `plugin.json` declares, with their reasons, without
+/// translating the whole manifest. This is what a legacy zip's permissions
+/// mean in version-two terms; [`translate_plugin_json`] uses the same mapping.
+pub fn plugin_json_capabilities(plugin_json: &PluginManifest) -> Vec<Capability> {
+    plugin_json
+        .permissions
+        .iter()
+        .flatten()
+        .filter_map(|entry| {
+            permission_capability(entry.permission).map(|name| Capability {
+                name,
+                reason: Some(entry.reason.clone()).filter(|r| !r.is_empty()),
+            })
+        })
+        .collect()
+}
+
 /// A capability, written either as `"storage"` or as
 /// `{"name": "storage", "reason": "..."}`. The reason is the review text.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -426,19 +481,12 @@ pub fn translate_plugin_json(
     let mut network_reason = None;
     for entry in permissions {
         let reason = Some(entry.reason.clone()).filter(|r| !r.is_empty());
-        let name = match entry.permission {
-            PermissionType::Network => {
-                if origins.is_empty() {
-                    return Err("network permission requires network.origins".into());
-                }
-                network_reason = reason;
-                continue;
+        let Some(name) = permission_capability(entry.permission) else {
+            if origins.is_empty() {
+                return Err("network permission requires network.origins".into());
             }
-            PermissionType::Storage => CapabilityName::Storage,
-            PermissionType::FullDriveAccess => CapabilityName::FullDriveAccess,
-            PermissionType::ExtendedFuel => CapabilityName::ExtendedFuel,
-            PermissionType::ExtendedMemory => CapabilityName::ExtendedMemory,
-            PermissionType::CustomView => CapabilityName::CustomView,
+            network_reason = reason;
+            continue;
         };
         capabilities.push(Capability { name, reason });
     }
