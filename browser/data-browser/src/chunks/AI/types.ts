@@ -1,5 +1,4 @@
 import type { UIMessage } from 'ai';
-import { AIProvider } from '@components/AI/aiContstants';
 
 export interface MCPServer {
   name: string;
@@ -87,7 +86,7 @@ export function isSkillContext(
   return context.type === 'skill';
 }
 
+/** Model id on the single configured OpenAI-compatible endpoint. */
 export type AIModelIdentifier = {
   id: string;
-  provider: AIProvider;
 };

@@ -4,7 +4,6 @@ import {
   optionalGeneratedData,
   selectGenerativeFeaturesModel,
 } from './useGenerativeData';
-import { AIProvider } from '@components/AI/aiContstants';
 
 describe('optionalGeneratedData', () => {
   afterEach(() => {
@@ -54,34 +53,18 @@ describe('cleanGeneratedTextLine', () => {
 });
 
 describe('selectGenerativeFeaturesModel', () => {
-  const openRouterModel = {
-    id: 'google/gemma-3-4b-it',
-    provider: AIProvider.OpenRouter,
-  };
-  const ollamaModel = {
-    id: 'qwen3:6b',
-    provider: AIProvider.Ollama,
-  };
+  const genModel = { id: 'google/gemma-3-4b-it' };
+  const chatModel = { id: 'qwen3:6b' };
 
-  it('uses the configured generative features model when available', () => {
-    expect(
-      selectGenerativeFeaturesModel(openRouterModel, ollamaModel, () => true),
-    ).toBe(openRouterModel);
+  it('uses the generative features model when the endpoint is available', () => {
+    expect(selectGenerativeFeaturesModel(genModel, chatModel, true)).toBe(
+      genModel,
+    );
   });
 
-  it('falls back to the default chat model when the generative features provider is unavailable', () => {
+  it('returns undefined when the endpoint is unavailable', () => {
     expect(
-      selectGenerativeFeaturesModel(
-        openRouterModel,
-        ollamaModel,
-        provider => provider === AIProvider.Ollama,
-      ),
-    ).toBe(ollamaModel);
-  });
-
-  it('returns undefined when neither provider is available', () => {
-    expect(
-      selectGenerativeFeaturesModel(openRouterModel, ollamaModel, () => false),
+      selectGenerativeFeaturesModel(genModel, chatModel, false),
     ).toBeUndefined();
   });
 });

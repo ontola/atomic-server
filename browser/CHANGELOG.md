@@ -4,6 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- **One AI endpoint.** Chat and generative features use a single OpenAI-compatible base URL + API key. Presets cover OpenRouter, Ollama, OrcaRouter, Groq and OpenAI; anything else that speaks `/v1/chat/completions` works the same way. The old OpenRouter / Ollama provider split (and their separate SDKs) is gone.
 - Local Thought connections install a folder after one access check and import in the browser without a preview dialog. Opening the folder or a table refreshes automatically, with five-minute refreshes while open, visible sync status, and local-edit preservation.
 - Fix: form inputs validate before writing. `InputString` and `InputURI` no longer put an invalid value into the resource while showing an error; all inputs share one validate-then-set hook (`useValidatedInput`) and surface the datatype's actual error message (e.g. "Not an integer") instead of a generic "Invalid value". `ResourceField` now accepts and forwards `commit` / `commitDebounceInterval`, and every input honours `commitDebounceInterval` (Markdown, Number, Boolean, Date, Timestamp, Resource, ResourceArray and FilePicker previously fell back to the 100 ms default). A required field whose value loads after the first render is now flagged correctly.
 - Fork bar: "Review changes" opens the per-property diff (the original's current value against the fork's) and names the properties the original also changed since the fork, so a reviewer sees what a merge writes over instead of a count.

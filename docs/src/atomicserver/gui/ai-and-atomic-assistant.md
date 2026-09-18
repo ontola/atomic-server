@@ -6,39 +6,17 @@ And if you want nothing to do with AI, you can disable it completely in the sett
 
 ![AI Sidebar](../../assets/ui-guide/ai_sidebar_example.avif)
 
-AtomicServer integrates with large language models (LLMs) via two main providers:
-
-- **OpenRouter**: A cloud-based API that gives access to a wide range of commercial and open-source models (e.g., GPT-4, Claude, Mixtral, etc.).
-- **Ollama**: A self-hosted, local LLM server that runs models on your own hardware for privacy and offline use.
+AtomicServer talks to models through a single **OpenAI-compatible** endpoint: a base URL (usually ending in `/v1`) and an optional API key. Presets fill the URL for common gateways such as OpenRouter, Ollama (`http://localhost:11434/v1`), OrcaRouter, Groq and OpenAI — or paste any other compatible base URL.
 
 ## Configuring AI
 
-Before you start using the AI features you will need to configure an AI provider. This is straightforward and can be done on the settings page.
+Before you start using the AI features, open settings → **Model endpoint**:
 
-### OpenRouter
+1. Pick a preset or paste your own base URL.
+2. Add an API key when the gateway requires one (Ollama usually does not). For OpenRouter you can click **Login with OpenRouter** instead of pasting a key.
+3. Choose a model in the chat input or agent settings.
 
-If you want to use OpenRouter, you will need an OpenRouter account with some credits. You can link it to AtomicServer by clicking the "Login with OpenRouter" button or pasting your API key in the text field.
-
-### Ollama
-
-Download and install [Ollama](https://ollama.ai/download) for your desired OS.
-Download some models from the terminal by entering.
-
-```bash
-ollama pull <model-name>
-```
-
-Next start the server:
-
-```bash
-ollama serve
-```
-
-Now in your AtomicServer go to the settings page, scroll down to the AI settings and under "AI Providers" click on Ollama.
-There you can enter the URL of your Ollama server.
-If you are running this server on the same machine as your browser, you can use `http://localhost:11434/api` as the URL.
-Next you need to configure an agent to use the model. To do this go to an AI chat or open the AI sidebar and click on the agent in the chat input.
-Click on the edit button and change the model to your desired Ollama model.
+For local Ollama, install it from [ollama.com](https://ollama.com/), pull a model (`ollama pull <name>`), run `ollama serve`, then select the Ollama preset.
 
 ## Using AI
 
