@@ -268,8 +268,8 @@ drill -b benchmark.yml --stats
 ## Responsible disclosure / Coordinated Vulnerability Disclosure
 
 If you encounter serious security risks, please refrain from posting these publicly in the issue tracker.
-We could minimize the impact by first patching the issue, publishing the patch, and then (after 30 days) disclose the bug.
-So please first send an e-mail to <joep@ontola.io> describing the issue, and then we will work on fixing it as soon as possible.
+Report them privately instead, through GitHub's private vulnerability reporting or by e-mail to <joep@ontola.io>.
+[`SECURITY.md`](./SECURITY.md) describes how to report, what happens next, which versions receive fixes and what is in scope.
 
 ## AI-assisted contributions
 
