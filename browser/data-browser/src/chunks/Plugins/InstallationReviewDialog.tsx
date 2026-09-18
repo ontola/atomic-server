@@ -3,25 +3,16 @@ import { Dialog, useDialog } from '@components/Dialog';
 import { JSONEditor } from '@components/JSONEditor';
 import Markdown from '@components/datatypes/Markdown';
 import { Column, Row } from '@components/Row';
-import { ConfigReference } from '@views/Plugin/ConfigReference';
+import { ConfigReference } from '@views/Installation/ConfigReference';
+import { CapabilityList } from './CapabilityList';
 import {
   grantsFor,
   type InstallationReview,
   type JSONValue,
   type ReleaseReference,
-  type ReviewCapability,
 } from '@tomic/react';
 import type { JSONSchema7 } from 'ai';
 import { useEffect, useId, useState } from 'react';
-import {
-  FaDesktop,
-  FaFire,
-  FaGlobe,
-  FaHardDrive,
-  FaKey,
-  FaMemory,
-  FaShield,
-} from 'react-icons/fa6';
 import toast from 'react-hot-toast';
 import { styled } from 'styled-components';
 
@@ -195,62 +186,6 @@ export const InstallationReviewDialog: React.FC<
   );
 };
 
-const LABELS: Record<string, string> = {
-  network: 'Network',
-  storage: 'Storage',
-  'full-drive-access': 'Full Drive Access',
-  'extended-fuel': 'Extended Fuel',
-  'extended-memory': 'Extended Memory',
-  'custom-view': 'Custom View',
-};
-
-const ICONS: Record<string, React.ReactNode> = {
-  network: <FaGlobe />,
-  storage: <FaHardDrive />,
-  'full-drive-access': <FaShield />,
-  'extended-fuel': <FaFire />,
-  'extended-memory': <FaMemory />,
-  'custom-view': <FaDesktop />,
-};
-
-function iconFor(capability: ReviewCapability): React.ReactNode {
-  if (ICONS[capability.title]) return ICONS[capability.title];
-
-  switch (capability.kind) {
-    case 'secret':
-      return <FaKey />;
-    case 'operation':
-    case 'network':
-      return <FaGlobe />;
-    default:
-      return <FaShield />;
-  }
-}
-
-export const CapabilityList: React.FC<{
-  capabilities: ReviewCapability[];
-  title?: string;
-}> = ({ capabilities, title = 'What it can do' }) => (
-  <Column>
-    <h3>{title}</h3>
-    <List>
-      {capabilities.length === 0 && (
-        <li>
-          <p>No permissions required</p>
-        </li>
-      )}
-      {capabilities.map(capability => (
-        <li key={`${capability.kind}:${capability.title}`}>
-          <CapabilityTitle center gap='0.5ch'>
-            {iconFor(capability)} {LABELS[capability.title] ?? capability.title}
-          </CapabilityTitle>
-          <p>{capability.reason || 'No reason provided'}</p>
-        </li>
-      ))}
-    </List>
-  </Column>
-);
-
 const PluginName = styled.span`
   font-weight: bold;
 `;
@@ -273,31 +208,5 @@ const Label = styled.label`
 const Identity = styled.p`
   overflow-wrap: anywhere;
   font-size: 0.8rem;
-  color: ${p => p.theme.colors.textLight};
-`;
-
-const List = styled.ul`
-  display: flex;
-  flex-direction: column;
-  gap: ${p => p.theme.size()};
-  padding: 0;
-  margin: 0;
-
-  li {
-    background-color: ${p => p.theme.colors.bg1};
-    border-radius: ${p => p.theme.radius};
-    list-style: none;
-    padding: ${p => p.theme.size()};
-    margin: 0;
-
-    p {
-      margin: 0;
-    }
-  }
-`;
-
-const CapabilityTitle = styled(Row)`
-  font-weight: bold;
-  font-size: 0.9rem;
   color: ${p => p.theme.colors.textLight};
 `;

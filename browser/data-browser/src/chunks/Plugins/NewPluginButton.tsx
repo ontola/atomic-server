@@ -10,7 +10,6 @@ import {
 } from '@tomic/react';
 import { useRef, useState } from 'react';
 import { FaPlus } from 'react-icons/fa6';
-import { readZip } from './plugins';
 import { useCustomViews } from '@components/CustomViewProvider';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
@@ -46,9 +45,8 @@ const NewPluginButton: React.FC<NewPluginButtonProps> = ({ drive }) => {
     setError(undefined);
 
     try {
-      // Fails fast on a malformed zip before any bytes leave the browser;
-      // the server validates the package again before publishing.
-      await readZip(file);
+      // The server validates the zip and translates its plugin.json into the
+      // manifest the review shows; nothing is inspected client-side.
       const { id, release } = await publishZipRelease(
         store,
         drive.subject,

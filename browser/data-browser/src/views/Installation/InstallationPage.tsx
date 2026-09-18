@@ -32,10 +32,12 @@ import {
 } from 'react-icons/fa6';
 import { styled } from 'styled-components';
 import toast from 'react-hot-toast';
-import { ConfigReference } from '@views/Plugin/ConfigReference';
-import { AssignRights } from '@views/Plugin/AssignRights';
-import { PluginPermissions } from '@views/Plugin/PluginPermissions';
-import { hasPermission, isPluginPermissions } from '@views/Plugin/pluginUtils';
+import {
+  CapabilityList,
+  capabilitiesFromPermissions,
+} from '@chunks/Plugins/CapabilityList';
+import { ConfigReference } from './ConfigReference';
+import { AssignRights } from './AssignRights';
 import { ResourceInline } from '@views/ResourceInline/ResourceInline';
 import { useCustomViews } from '@components/CustomViewProvider';
 
@@ -56,6 +58,7 @@ export const InstallationPage: React.FC<
   const [namespace] = useString(resource, server.properties.namespace);
   const [version] = useString(resource, server.properties.version);
   const [description] = useString(resource, core.properties.description);
+  const [author] = useString(resource, server.properties.pluginAuthor);
   const [release] = useString(resource, server.properties.release);
   const [releaseId] = useString(resource, server.properties.releaseId);
   const [status, setStatus] = useValue(
@@ -75,6 +78,10 @@ export const InstallationPage: React.FC<
 
   const title = `${namespace ? `${namespace}/` : ''}${name ?? ''}`;
   const currentStatus = (status as InstallationStatus | undefined) ?? 'draft';
+  const declared = capabilitiesFromPermissions(permissions);
+  const hasFullDriveAccess = declared.some(
+    c => c.title === 'full-drive-access',
+  );
   const grantNames = Array.isArray(grants)
     ? grants.map(String)
     : grants && typeof grants === 'object'
@@ -112,6 +119,7 @@ export const InstallationPage: React.FC<
             </Row>
             {version && <span>v{version}</span>}
           </Row>
+          {author && <PluginAuthor>by {author}</PluginAuthor>}
         </div>
         <Column>
           {canWrite && (
@@ -201,10 +209,7 @@ export const InstallationPage: React.FC<
           </Column>
         )}
         {canWrite && pluginAgent && (
-          <AssignRights
-            plugin={resource}
-            disabled={hasPermission(permissions, 'full-drive-access')}
-          />
+          <AssignRights installation={resource} disabled={hasFullDriveAccess} />
         )}
         <Column>
           <Row center justify='space-between'>
@@ -252,8 +257,8 @@ export const InstallationPage: React.FC<
           />
         </Column>
         {schema && <ConfigReference schema={schema as JSONSchema7} />}
-        {isPluginPermissions(permissions) && (
-          <PluginPermissions permissions={permissions} />
+        {declared.length > 0 && (
+          <CapabilityList capabilities={declared} title='Permissions' />
         )}
       </Column>
       <ConfirmationDialog
@@ -294,6 +299,10 @@ export const InstallationPage: React.FC<
 const PluginName = styled.span`
   font-weight: bold;
   font-size: 1.2rem;
+`;
+
+const PluginAuthor = styled.span`
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const StatusBadge = styled.span`

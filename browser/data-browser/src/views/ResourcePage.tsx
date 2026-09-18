@@ -41,7 +41,6 @@ import { AIChatPage } from '@views/AIChat/AIChatPage';
 import { DocumentV2FullPage } from './Document/DocumentV2FullPage';
 import { CanvasPage } from './Canvas/CanvasPage';
 import { canvas } from '@tomic/lib';
-import { PluginPage } from '@views/Plugin/PluginPage';
 import { InstallationPage } from '@views/Installation/InstallationPage';
 import { useCustomViews } from '@components/CustomViewProvider';
 import { PluginView } from './PluginView/PluginView';
@@ -319,8 +318,6 @@ function selectComponent(klass: string | undefined) {
       return MeetingPage;
     case canvas.classes.canvas:
       return CanvasPage;
-    case server.classes.plugin:
-      return PluginPage;
     case server.classes.installation:
       return InstallationPage;
     default:

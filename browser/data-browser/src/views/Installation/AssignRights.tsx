@@ -20,8 +20,8 @@ import { DashedButton } from '@views/OntologyPage/DashedButton';
 import { styled } from 'styled-components';
 
 interface AssignRightsProps {
-  /** A legacy `Plugin` or an `Installation`; both carry the server-set plugin agent. */
-  plugin: Resource<Server.Plugin> | Resource<Server.Installation>;
+  /** Carries the server-set plugin agent the rights are assigned to. */
+  installation: Resource<Server.Installation>;
   disabled?: boolean;
 }
 
@@ -29,19 +29,18 @@ const shouldRender = (resource: Resource) => {
   return [
     commits.classes.commit,
     dataBrowser.classes.tag,
-    server.classes.plugin,
     server.classes.installation,
   ].every(c => !resource.hasClasses(c));
 };
 
 export const AssignRights: React.FC<AssignRightsProps> = ({
-  plugin,
+  installation,
   disabled,
 }) => {
   const store = useStore();
   const [selectedResource, setSelectedResource] = useState<string>();
 
-  const pluginAgent = plugin.props.pluginAgent;
+  const pluginAgent = installation.props.pluginAgent;
 
   const { invalidateCollection, mapAll } = useCollection({
     property: core.properties.read,
@@ -91,7 +90,7 @@ export const AssignRights: React.FC<AssignRightsProps> = ({
               key={index}
               collection={collection}
               index={index}
-              pluginAgent={plugin.props.pluginAgent ?? ''}
+              pluginAgent={pluginAgent}
               onReadUpdate={invalidateCollection}
             />
           ))}
