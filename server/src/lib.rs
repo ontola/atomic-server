@@ -5,6 +5,7 @@ See https://github.com/atomicdata-dev/atomic-server/tree/master/src-tauri
 */
 mod actor_messages;
 pub mod appstate;
+pub mod backup;
 pub mod blob_storage;
 mod commit_monitor;
 pub mod config;

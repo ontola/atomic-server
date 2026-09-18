@@ -18,6 +18,7 @@ use crate::plugins::wasm;
 // A good option here is to use Actors for things that can change (e.g. commit_monitor)
 #[derive(Clone)]
 pub struct AppState {
+    pub backup: Arc<crate::backup::BackupService>,
     /// Contains all the data
     pub store: atomic_lib::Db,
     /// App Configuration
@@ -50,6 +51,7 @@ impl AppState {
     /// Initializes or opens a store on disk.
     /// Creates a new agent, if necessary.
     pub async fn init(config: Config) -> AtomicServerResult<AppState> {
+        crate::backup::check_restore_activation(&config)?;
         tracing::info!("Initializing AppState");
 
         // We warn over here because tracing needs to be initialized first.
@@ -235,7 +237,9 @@ impl AppState {
             config.opts.write_rate_limit,
             config.opts.anonymous_write_rate_limit,
         ));
+        let backup = crate::backup::BackupService::new(&config)?;
         Ok(AppState {
+            backup,
             store,
             config,
             write_rate_limiter,
