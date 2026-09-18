@@ -6,11 +6,7 @@ use crate::{
     plugins::js_runtime,
 };
 use actix_web::{web, HttpResponse};
-use atomic_lib::{
-    db::plugin_release::{PluginRelease, RUNTIME},
-    hierarchy::check_read,
-    Storelike,
-};
+use atomic_lib::{db::plugin_release::PluginRelease, hierarchy::check_read, Storelike};
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -85,12 +81,7 @@ async fn create(
             .await?;
         check_read(&appstate.store, &resource, &agent).await?;
     }
-    let release = PluginRelease {
-        source,
-        manifest: serde_json::json!(manifest),
-        runtime: RUNTIME.into(),
-        schemas,
-    };
+    let release = PluginRelease::js(source, serde_json::json!(manifest), schemas);
     for standard in &body.standards {
         let url =
             url::Url::parse(standard).map_err(|e| AtomicServerError::bad_request(e.to_string()))?;

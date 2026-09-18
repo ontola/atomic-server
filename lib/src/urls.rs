@@ -26,6 +26,9 @@ pub const ENDPOINT_RESPONSE: &str =
     "https://atomicdata.dev/ontology/server/class/endpoint-response";
 pub const TABLE: &str = "https://atomicdata.dev/classes/Table";
 pub const PLUGIN: &str = "https://atomicdata.dev/classes/Plugin";
+pub const RELEASE: &str = "https://atomicdata.dev/classes/Release";
+pub const INSTALLATION: &str = "https://atomicdata.dev/classes/Installation";
+pub const LISTING: &str = "https://atomicdata.dev/classes/Listing";
 pub const TAG: &str = "https://atomicdata.dev/classes/Tag";
 pub const PEER: &str = "https://atomicdata.dev/classes/Peer";
 pub const PLAIN_TEXT: &str = "https://atomicdata.dev/classes/PlainText";
@@ -233,6 +236,24 @@ pub const JSON_SCHEMA: &str = "https://atomicdata.dev/properties/jsonSchema";
 pub const PLUGIN_AUTHOR: &str = "https://atomicdata.dev/properties/pluginAuthor";
 pub const PLUGIN_AGENT: &str = "https://atomicdata.dev/properties/pluginAgent";
 pub const PLUGIN_PERMISSIONS: &str = "https://atomicdata.dev/properties/pluginPermissions";
+// ... for Release / Installation / Listing
+pub const RUNTIME: &str = "https://atomicdata.dev/properties/runtime";
+pub const WORLD: &str = "https://atomicdata.dev/properties/world";
+pub const MANIFEST: &str = "https://atomicdata.dev/properties/manifest";
+pub const SOURCE: &str = "https://atomicdata.dev/properties/source";
+pub const PACKAGE: &str = "https://atomicdata.dev/properties/package";
+pub const SCHEMAS: &str = "https://atomicdata.dev/properties/schemas";
+pub const RELEASE_ID: &str = "https://atomicdata.dev/properties/releaseId";
+pub const PREVIOUS_RELEASE: &str = "https://atomicdata.dev/properties/previousRelease";
+pub const PUBLISHER: &str = "https://atomicdata.dev/properties/publisher";
+pub const RELEASE_PROP: &str = "https://atomicdata.dev/properties/release";
+pub const GRANTS: &str = "https://atomicdata.dev/properties/grants";
+pub const INSTALLATION_STATUS: &str = "https://atomicdata.dev/properties/installationStatus";
+pub const DOMAINS: &str = "https://atomicdata.dev/properties/domains";
+pub const STANDARDS: &str = "https://atomicdata.dev/properties/standards";
+pub const EVIDENCE: &str = "https://atomicdata.dev/properties/evidence";
+pub const SUPPORT_TIER: &str = "https://atomicdata.dev/properties/supportTier";
+pub const EMOJI: &str = "https://atomicdata.dev/properties/emoji";
 // AI
 pub const TEXT_PART: &str = "https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/class/text-part";
 pub const REASONING_PART: &str =
