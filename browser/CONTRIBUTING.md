@@ -19,8 +19,11 @@ CI publishes `@tomic/*` to npm when a `v*` tag is pushed (`release.yml`
 - make sure `atomic-server` is running on `localhost`.
 - `pnpm test`
 - `pnpm test-e2e`
-- Update the `package.json` files for all published `@tomic/*` packages with the same version number as the Rust release. This includes beta versions such as `0.41.0-beta.0`.
-- Update starter template dependencies that point to `@tomic/*`.
+- Bump versions with `node scripts/bump-version.mjs` from the repo root — do
+  not edit `package.json` files by hand. Versions must match the Rust release,
+  including beta versions such as `0.41.0-beta.0`.
+- Update starter template dependencies that point to `@tomic/*` (the bump
+  script does this).
 - Run `pnpm install --lockfile-only` from `/browser` after version changes.
 - Check the [changelog](changelog.md), make sure the headers are correct
 - Now do the rust libraries
