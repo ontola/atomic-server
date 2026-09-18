@@ -61,7 +61,7 @@ function Field({
   return (
     <FieldStyled as={multiInput ? 'fieldset' : undefined} className={className}>
       <LabelWrapper>
-        <Row gap="0.4rem" center>
+        <Row gap='0.4rem' center>
           {labelPrefix}
           <FieldLabel
             data-test={`field-label-${label}`}
@@ -70,16 +70,16 @@ function Field({
             as={multiInput ? 'legend' : undefined}
           >
             {label}
-            {required && <Astrisk title="Required field" size="0.6em" />}
+            {required && <Astrisk title='Required field' size='0.6em' />}
           </FieldLabel>
           {!!helper && !helperAlwaysVisible && (
             <IconButton
               variant={IconButtonVariant.Outline}
-              color="textLight"
-              type="button"
-              size="0.7rem"
+              color='textLight'
+              type='button'
+              size='0.7rem'
               onClick={() => setCollapsed(!collapsedHelper)}
-              title="Show helper"
+              title='Show helper'
             >
               <FaInfo />
             </IconButton>
@@ -87,10 +87,10 @@ function Field({
           {!disabled && handleDelete && (
             <IconButton
               variant={IconButtonVariant.Outline}
-              title="Delete this property"
-              color="textLight"
-              type="button"
-              size="0.7rem"
+              title='Delete this property'
+              color='textLight'
+              type='button'
+              size='0.7rem'
               onClick={() => handleDelete('test')}
             >
               <FaTrash />

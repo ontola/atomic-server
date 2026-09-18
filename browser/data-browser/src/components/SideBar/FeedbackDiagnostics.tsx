@@ -228,4 +228,3 @@ const DiagnosticCodeBlock = styled(CodeBlock)`
   padding-right: 3rem;
   background: ${({ theme }) => theme.colors.bg};
 `;
-

@@ -40,7 +40,7 @@ function ResourceField({
         <InputWrapper>
           <InputStyled
             disabled={disabled}
-            placeholder="loading property..."
+            placeholder='loading property...'
             id={fieldId}
           />
         </InputWrapper>
@@ -73,7 +73,7 @@ function ResourceField({
           commitDebounceInterval={commitDebounceInterval}
           disabled
         />
-        <Extra center gap="1ch">
+        <Extra center gap='1ch'>
           <FaServer />
           <span>This field is calculated server-side.</span>
         </Extra>
