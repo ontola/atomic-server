@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { run } from './plugin';
+import { manifest, run } from './plugin';
 import { demoPets } from './data';
 
 const p = {
@@ -46,6 +46,28 @@ describe('pets plugin', () => {
       read: () => ({}),
     };
     expect(() => run(host)).toThrow(/Configure the connection/);
+  });
+
+  it('names the missing fields when no config was stored at all', () => {
+    // An import created before its config was written used to die here with
+    // "Cannot destructure property 'table' of 'ctx.config' as it is undefined",
+    // which said nothing about what to do next.
+    const host = { query: () => [] as string[], read: () => ({}) };
+    expect(() => run(host)).toThrow(
+      /Configure the connection before running it: missing table, rowClass, properties/,
+    );
+  });
+
+  it('declares the config the host checks before running it', () => {
+    expect(manifest.config.key).toBe('pets');
+    expect(manifest.config.required).toEqual([
+      'table',
+      'rowClass',
+      'properties',
+    ]);
+    expect(Object.keys(manifest.config.properties)).toEqual(
+      manifest.config.required,
+    );
   });
 
   it('is idempotent: reimporting unchanged pets proposes nothing new', () => {
