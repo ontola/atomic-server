@@ -91,21 +91,63 @@ bodies, not the index walk, dominate. Aggregates are a second full pass
 JSON-AD of 30 nested bodies is 131 KB / 0.3 ms at every N. JSON-AD of
 *all* matches is 4.3 KB/row (measured at 1k and 10k).
 
-### 3. UI — not the 100k problem
+### 3. Browser (Playwright, N=1000) — same query, plus the worker
 
-`react-window` only renders the viewport. `aria-rowcount` can be 100k while
-the DOM holds ~20–40 rows. Scroll stays cheap **if** the collection does
-not dump every member onto the main thread first. That dump is step 2.
+`TABLE_STRESS=1` against the Vite app + a real AtomicServer. One signed
+`save()` per row. Full log: `table_stress_e2e_n1000_wait_rows.log`.
+
+| Leg | N=1000 |
+| --- | --- |
+| insert | **99.1 s (99 ms/row)** |
+| `resource.persistToClientDb` | 40 ms/row |
+| `ws.COMMIT` (server POST) | 55 ms/row |
+| collection-open, same session (all bodies) | **307 ms**, 3.75 MB JSON-AD |
+| nested page of 30 | **3 ms**, 113 KB |
+| subjects-only unpaged | 2 ms |
+| remount `queryLocalDb` (empty JS store) | **639 ms**, still 1000 bodies |
+| open grid to `aria-rowcount=1001` | **4.1 s** |
+| ClientDb init + election + `allSubjects` | 418 ms |
+| WS auth + drive version-vectors | ~1.3 s |
+| rendered rows after open / after scroll | **18 / 18** |
+| heap after open | ~199 MB |
+| scroll bottom→top | 335 ms |
+
+Browser create is ~40× native (2.4 ms/row at 1k): each `save()` waits on
+an OPFS worker put **and** a WS commit. Signing is 0.2 ms. 100k
+interactive creates at this rate are ~2.8 hours, not a session.
+
+Same-session unpaged bodies are ~100× a page of 30 — the same cliff as
+native, plus JSON-AD across the worker (`3.8 KB/row`, matches the 4.3
+KB/row native figure). Remount is slower (639 ms) because
+`store.resources` is empty and every body is parsed again. The 4.1 s
+"open grid" wall clock is ClientDb re-init + auth + drive sync **plus**
+that hydrate, not the list widget.
+
+`FancyTable` is not passed `busy`. The empty entry row paints with
+`aria-rowcount=1` before the collection answers. Tests (and users) can
+see a settled-looking empty grid while 1000 bodies are still crossing
+the worker. That is a loading-state gap, not the scale cliff.
+
+### 4. UI — not the 100k problem
+
+`react-window` only renders the viewport. At 1000 rows the DOM held **18
+rows** after open and after a bottom→top scroll, with `aria-rowcount=1001`.
+Scroll stays cheap **if** the collection does not dump every member onto
+the main thread first. That dump is step 2.
 
 ## Ranked bottlenecks
 
 1. **Collection local fetch hydrates every row** — `browser/lib/src/collection.ts`
    `fetchPageFromLocalDb`: no `limit`/`offset`, `includeResources: true`,
    client-side sort. **4.6 s store-only at 100k**, plus ~430 MB of JSON-AD
-   across the worker boundary. This is the table-open cliff. Not
-   OPFS-the-filesystem; it is the query the client asks OPFS to run.
-2. **Write amplification / store growth** — 6.9 ms/row by 100k, 4 GB file.
-   Dominates *creating* a huge table. Opening an already-written one is (1).
+   across the worker boundary (3.75 MB already at 1k in the browser).
+   Remount in Chromium at 1k: **639 ms** for the same query. This is the
+   table-open cliff. Not OPFS-the-filesystem; it is the query the client
+   asks OPFS to run.
+2. **Write amplification / store growth** — 6.9 ms/row by 100k native,
+   4 GB file. Browser `save()` is **99 ms/row** at 1k (40 ms OPFS + 55 ms
+   WS). Dominates *creating* a huge table. Opening an already-written one
+   is (1).
 3. **Aggregates re-walk every match** — 1.0 s extra at 100k. Fine on a
    small table; another full pass at this N.
 4. **Exact `totalMembers` walks the whole index** — 21–33 ms even for a
@@ -113,7 +155,9 @@ not dump every member onto the main thread first. That dump is step 2.
    `index-performance.md`. Not built.
 5. **WASM cannot sort DID-scoped queries**, so (1) exists. Fixing sort in
    the local query index would let the worker return the right 30 rows.
-6. **The grid (react-window)** — not the limiter, provided (1) is fixed.
+6. **The grid (react-window)** — 18 DOM rows at 1000 members. Not the
+   limiter, provided (1) is fixed. The empty-row paint-before-ready is a
+   separate loading-state issue, not the 100k cliff.
 
 ## What not to do
 
