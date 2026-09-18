@@ -18,16 +18,17 @@ test('a Listing opens the Installation review before anything is installed', asy
     route.fulfill({
       json: [
         {
-          metadata: {
-            release: 'blake3:fixture',
-            name: 'Calendar sync',
-            emoji: '📅',
-            description: 'Keeps a calendar in sync',
-            publisher: 'https://example.com/agents/test',
-            domains: ['calendar'],
-            standards: [],
-          },
-          verification: 'unverified',
+          subject: 'https://example.com/listings/fixture',
+          name: 'Calendar sync',
+          emoji: '📅',
+          description: 'Keeps a calendar in sync',
+          publisher: 'https://example.com/agents/test',
+          domains: ['calendar'],
+          standards: [],
+          release: 'https://example.com/releases/fixture',
+          releaseId: 'blake3:fixture',
+          runtime: 'atomic-js/1',
+          world: 'extension',
         },
       ],
     }),

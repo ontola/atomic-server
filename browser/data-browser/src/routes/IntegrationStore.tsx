@@ -47,17 +47,21 @@ import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
 import type { IntegrationVisibilityKey } from '@helpers/integrationVisibility';
 
+/** One entry of `/plugin-catalog`: a public Listing resource on this server. */
 interface Listing {
-  metadata: {
-    release: string;
-    emoji?: string;
-    name: string;
-    description: string;
-    publisher: string;
-    domains: string[];
-    standards: string[];
-  };
-  verification: 'unverified';
+  subject: string;
+  name: string;
+  emoji: string | null;
+  description: string;
+  publisher: string | null;
+  domains: string[];
+  standards: string[];
+  /** The Release resource URL an Installation pins. */
+  release: string;
+  /** The `blake3:` id, which `/plugin-package/{id}` takes. */
+  releaseId: string;
+  runtime: string | null;
+  world: string | null;
 }
 
 export const IntegrationStoreRoute = createRoute({
@@ -166,7 +170,7 @@ function IntegrationStore(): React.JSX.Element {
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState<string>();
   const [pending, setPending] = useState<
-    PendingInstallation & { entry: Listing['metadata'] }
+    PendingInstallation & { entry: Listing }
   >();
   const serverUrl = store.getServerUrl();
   useEffect(() => {
@@ -202,20 +206,19 @@ function IntegrationStore(): React.JSX.Element {
   };
 
   /** Opening a Listing: fetch its release and review it before installing. */
-  const openReview = async (entry: Listing['metadata']) => {
+  const openReview = async (entry: Listing) => {
     if (!drive) return;
-    setCreating(entry.release);
+    setCreating(entry.releaseId);
 
     try {
-      const release = await fetchRelease(entry.release);
+      const release = await fetchRelease(entry.releaseId);
       setPending({
         entry,
-        review: readInstallationReview({ ...release, id: entry.release }),
-        // The catalog serves releases by id, not as Release resources yet.
-        release: { url: entry.release, id: entry.release },
+        review: readInstallationReview({ ...release, id: entry.releaseId }),
+        release: { url: entry.release, id: entry.releaseId },
         title: entry.name,
         description: entry.description,
-        emoji: entry.emoji,
+        emoji: entry.emoji ?? undefined,
       });
     } catch (reason) {
       toast.error(String(reason));
@@ -244,9 +247,9 @@ function IntegrationStore(): React.JSX.Element {
   };
 
   /** Drafts remain the authoring form: a copy of the source you can edit. */
-  const createDraft = async (entry: Listing['metadata']) => {
+  const createDraft = async (entry: Listing) => {
     if (!drive) return;
-    const release = await fetchRelease(entry.release);
+    const release = await fetchRelease(entry.releaseId);
 
     if (!release.source) {
       throw new Error('Only JS releases can be opened as an editable draft');
@@ -282,12 +285,11 @@ function IntegrationStore(): React.JSX.Element {
       .toLocaleLowerCase()
       .includes(query),
   );
-  const visible = (showExperimentalPlugins ? listings : [])?.filter(
-    ({ metadata: entry }) =>
-      [entry.name, entry.description, ...entry.domains, ...entry.standards]
-        .join(' ')
-        .toLocaleLowerCase()
-        .includes(query),
+  const visible = (showExperimentalPlugins ? listings : [])?.filter(entry =>
+    [entry.name, entry.description, ...entry.domains, ...entry.standards]
+      .join(' ')
+      .toLocaleLowerCase()
+      .includes(query),
   );
 
   return (
@@ -398,11 +400,8 @@ function IntegrationStore(): React.JSX.Element {
             )}
           </Column>
           <Grid>
-            {visible?.map(({ metadata: entry }) => (
-              <Card
-                key={`${entry.release}:${entry.publisher}`}
-                data-release={entry.release}
-              >
+            {visible?.map(entry => (
+              <Card key={entry.subject} data-release={entry.releaseId}>
                 <Column gap='1rem'>
                   <Row justify='space-between' center>
                     <Avatar aria-hidden>{entry.emoji || <FaPlug />}</Avatar>
@@ -449,7 +448,7 @@ function IntegrationStore(): React.JSX.Element {
                     disabled={!drive || creating !== undefined}
                     onClick={() => openReview(entry)}
                   >
-                    {creating === entry.release ? 'Opening…' : 'Open'}
+                    {creating === entry.releaseId ? 'Opening…' : 'Open'}
                   </Button>
                 </Column>
               </Card>
