@@ -7,6 +7,29 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- CI: the `:develop` docker image is published by its own job instead of a
+  step tacked onto the end of the CI job. As a step it inherited whatever the
+  CI step had already spent (a wedged Dagger engine on the runner burned the
+  ten minute connect timeout and the publish was skipped without trying), and
+  it could not be re-run on its own, so recovering a missed image meant
+  re-running a pipeline that takes hours. `develop` went 2026-09-15 to
+  2026-09-18 without an image that way. The gate is unchanged: `needs: ci`,
+  so a red pipeline still publishes nothing. A new manual
+  "Publish :develop image" workflow covers the case where the pipeline cannot
+  go green for reasons unrelated to whether the binary builds; it refuses
+  `latest` and `v*` tags, which release.yml owns.
+
+- Error-handling hygiene on the commit and read paths. The legacy
+  `set`/`push`/`remove` rejection in `sync::engine::ingest_commit` now checks
+  the parsed commit's properties instead of substring-matching the raw body,
+  so a commit whose subject is one of those Property resources (or whose
+  values quote their URLs) is no longer refused. `Db::get_resource` warns
+  (with the subject and error) when a stored Loro snapshot cannot be read or
+  applied instead of silently serving the stale propvals. The sled
+  `Db::init` wraps a migration failure in its error message (`.map_err`, not
+  `.map`). `AppState::init` drops its own core-models bootstrap branch: its
+  "store did not exist" check ran after the store directory had been
+  created, and `Db::init_redb_file` already seeds a fresh store on open.
 - The outbox drains over a live Iroh link too (`sync::peer::LivePeerCommitTransport`):
   a device with no hub in reach delivers its queued writes to a paired peer as
   signed `COMMIT` frames, which the peer validates and applies like a hub
@@ -302,6 +325,10 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   - Integration tests bind the test server to `127.0.0.1` and fall back to an
     OS-assigned port when `portpicker` finds none (hosts without IPv6).
 - Tauri Android: ship `arm64-v8a` only. The sideloadable universal APK was ~369 MB because it bundled four copies of `libatomic_server_tauri.so` (armeabi-v7a / x86 / x86_64 as well). Phones and tablets we install on are arm64; override with `cargo tauri android build --target …` for an Intel emulator.
+- CI: tag releases publish `@tomic/*` to npm. They previously only published
+  crates.io and GitHub assets, which is why npm `latest` stayed on 0.40.0 and
+  `beta` on 0.41.0-beta.0 through v0.41.0-beta.4. Pre-releases use the `beta`
+  (or `rc`, …) dist-tag, not `latest`.
 
 - Docs / planning: Atomic as an MCP server — local stdio signs writes as the
   user's Agent; remote Streamable HTTP is read-only until issued-agent

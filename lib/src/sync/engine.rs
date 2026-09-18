@@ -697,10 +697,16 @@ pub async fn ingest_commit(
     commit_json: &str,
     opts: &CommitIngestOpts,
 ) -> crate::errors::AtomicResult<crate::commit::CommitResponse> {
+    let incoming_commit_resource =
+        crate::parse::parse_json_ad_commit_resource(commit_json, store).await?;
+
     // Reject commits with deprecated set/push/remove fields — use loroUpdate instead.
-    if commit_json.contains("\"https://atomicdata.dev/properties/set\"")
-        || commit_json.contains("\"https://atomicdata.dev/properties/push\"")
-        || commit_json.contains("\"https://atomicdata.dev/properties/remove\"")
+    // Checked on the parsed commit's properties, not by substring-matching
+    // the raw body: a commit whose subject *is* one of these Property
+    // resources, or whose values merely mention them, must not be refused.
+    if [crate::urls::SET, crate::urls::PUSH, crate::urls::REMOVE]
+        .iter()
+        .any(|legacy| incoming_commit_resource.get(legacy).is_ok())
     {
         return Err(
             "Commits with `set`, `push`, or `remove` fields are no longer accepted. Use `loroUpdate` instead."
@@ -708,8 +714,6 @@ pub async fn ingest_commit(
         );
     }
 
-    let incoming_commit_resource =
-        crate::parse::parse_json_ad_commit_resource(commit_json, store).await?;
     let incoming_commit = crate::commit::Commit::from_resource(incoming_commit_resource)?;
 
     // Log incoming commit details for debugging
@@ -840,7 +844,6 @@ async fn apply_peer_commit(store: &Db, commit_json: &str) -> crate::errors::Atom
     ingest_commit_json(store, commit_json, &CommitIngestOpts::peer()).await
 }
 
-/// Collects all resource subjects belonging to a drive via BFS on parent relationships.
 /// Collects all resource subjects belonging to a drive via BFS on parent relationships.
 /// Returns pure_id() strings (no query params/drive hints) to match LoroSnapshot keys.
 pub async fn collect_drive_subjects(
