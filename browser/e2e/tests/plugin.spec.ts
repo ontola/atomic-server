@@ -207,7 +207,9 @@ test.describe('Plugins', () => {
     await page.getByRole('main').getByText('Plugins', { exact: true }).click();
     await page.getByRole('link', { name: 'ontola/test-plugin' }).click();
 
-    // Keep the mounted resource identity while changing metadata and saving config.
+    // Keep the mounted resource identity while changing metadata and saving
+    // config. The server's Installation extender fills version, author and
+    // description from the manifest, so these read as plain properties.
     const saveConfig = page.getByRole('button', { name: 'Save', exact: true });
     await expect(saveConfig).toBeDisabled();
     await page
@@ -298,7 +300,7 @@ test.describe('Plugins', () => {
 
     await inDialog(page, async (dialog, closeWith) => {
       await expect(
-        dialog.getByRole('heading', { name: 'Uninstall Plugin' }),
+        dialog.getByRole('heading', { name: 'Uninstall plugin' }),
       ).toBeVisible();
       await closeWith('Uninstall');
     });
