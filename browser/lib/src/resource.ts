@@ -2510,9 +2510,34 @@ export class Resource<C extends OptionalClass = any> {
     return !!this.error && isUnauthorized(this.error);
   }
 
-  /** Removes the resource form both the server and locally */
+  /**
+   * Removes the resource both locally and from the server.
+   *
+   * The delete is durable the moment this is called: the signed destroy
+   * commit goes into the store's `LocalOutbox` (localStorage-backed, survives a
+   * reload) and the resource is removed from the store and tombstoned in
+   * OPFS right away. The outbox drain POSTs the envelope with the same
+   * backoff and reconnect replay as any other write.
+   *
+   * Resolution semantics mirror {@link save}:
+   *  - **online**: resolves once the server has acknowledged the destroy;
+   *    rejects with the server's error on a real refusal (e.g. no write
+   *    right). The entry then stays queued and is retried / parked by the
+   *    outbox like any other refused write.
+   *  - **offline** (or the POST fails with a transport error): resolves
+   *    with the delete queued; the reconnect drain sends it.
+   *  - a resource that never reached the server (`new`) is dropped locally
+   *    along with any unposted genesis for it — nothing is POSTed.
+   *  - a local-only drive materializes the commit locally, as before.
+   */
   public async destroy(agent?: Agent): Promise<void> {
-    if (this.new) {
+    if (this.new || this._pendingGenesis) {
+      // Never synced (a `_new:` placeholder, or a `store.newResource` whose
+      // genesis is still parked on the resource because `save()` never
+      // ran): no server-side tombstone needed. Also forget any queued
+      // genesis, or the next drain would create what we just deleted.
+      this._pendingGenesis = undefined;
+      this.store.outbox.discard(this.subject);
       this.store.removeResource(this.subject);
 
       return;
@@ -2545,8 +2570,41 @@ export class Resource<C extends OptionalClass = any> {
       return;
     }
 
-    await this.store.postCommit(commit, this.getCommitEndpoint());
+    // Queue first, then remove: `hasPendingDestroy` must already answer
+    // true when the `ResourceRemoved` listeners run, so nothing they
+    // trigger (a refetch, a SUB push) can bring the resource back.
+    this.store.outbox.setDestroyCommit(this.subject, commit);
     this.store.removeResource(this.subject);
+
+    if (!this.store.serverConnected) {
+      // Queued; the reconnect drain POSTs it.
+      return;
+    }
+
+    // Await the drain so a real refusal surfaces to the caller. Read the
+    // entry BEFORE draining: a terminal refusal removes it from the queue,
+    // and that must never be mistaken for an acknowledgement.
+    const entry = this.store.outbox.getEntry(this.subject);
+    await this.store.syncDirtyResources();
+
+    if (entry?.lastAttemptFailure) {
+      const cause = entry.lastAttemptFailure.cause;
+
+      if (isNetworkError(cause)) {
+        // Transport, not refusal: the delete stays queued for reconnect.
+        this.store.setServerConnected(false);
+
+        return;
+      }
+
+      throw cause;
+    }
+
+    if (this.store.hasPendingDestroy(this.subject)) {
+      throw new Error(
+        'Delete is still queued; the server has not acknowledged it.',
+      );
+    }
   }
 
   /** Appends a Resource to a ResourceArray */
@@ -3854,39 +3912,6 @@ export class Resource<C extends OptionalClass = any> {
     await this.store.fetchResourceFromServer(this.subject, {
       noWebSocket: true,
     });
-  }
-
-  /** Resolves the `/commit` endpoint for this resource. */
-  private getCommitEndpoint(): string {
-    const serverUrl = this.store.getServerUrl();
-
-    if (!serverUrl || serverUrl === 'null') {
-      console.warn(
-        `Resource ${this.subject} has an invalid server URL: ${serverUrl}. Falling back to origin.`,
-      );
-    }
-
-    const base = !serverUrl || serverUrl === 'null' ? '' : serverUrl;
-    const fallbackBase = base || window.location.origin;
-
-    if (
-      this.subject.startsWith('did:') ||
-      this.subject.startsWith('internal:')
-    ) {
-      return new URL('/commit', fallbackBase).toString();
-    }
-
-    try {
-      const url = new URL(this.subject);
-
-      if (url.origin && url.origin !== 'null') {
-        return url.origin + `/commit`;
-      }
-    } catch {
-      // ignore
-    }
-
-    return new URL('/commit', fallbackBase).toString();
   }
 
   private isParentNew() {
