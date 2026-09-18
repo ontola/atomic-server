@@ -1162,7 +1162,7 @@ test.describe('form publish and anonymous submit', () => {
    * assertion ever fails while the others pass, the layering broke, not the
    * plumbing.
    */
-  test('a published form carries the owner\'s custom CSS', async ({
+  test("a published form carries the owner's custom CSS", async ({
     page,
     browser,
   }) => {
@@ -1254,9 +1254,10 @@ test.describe('form publish and anonymous submit', () => {
 
     // `:scope` reached the form root, so the accent variable re-themed the
     // submit button the renderer paints with it.
-    await expect(
-      visitorPage.getByRole('button', { name: 'Submit' }),
-    ).toHaveCSS('background-color', 'rgb(0, 200, 100)');
+    await expect(visitorPage.getByRole('button', { name: 'Submit' })).toHaveCSS(
+      'background-color',
+      'rgb(0, 200, 100)',
+    );
 
     // `@scope` contained it: the `body` rule matched nothing.
     await expect(visitorPage.locator('body')).not.toHaveCSS(
