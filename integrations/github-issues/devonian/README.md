@@ -2,8 +2,10 @@
 
 Open `/app/devonian-demo` in the Atomic web app. Choose **Try sample data**,
 create issues or comments on either side, close/reopen an issue, and press
-**Sync now**. **Open Atomic kanban** opens the real native tracker, whose issue
-pages also have the normal Comments panel. Reload and choose the same mode to
+**Sync now**. **Open Atomic issue tracker** opens the real native tracker: a
+GitHub-style Issues list (open/closed split, filter by title or `#number`,
+New issue, Close/Reopen per row) with the kanban Board and a plain table one
+tab over. Issue pages have the normal Comments panel. Reload and choose the same mode to
 resume saved resources and mappings without importing duplicates.
 
 The JavaScript runs in the browser. Devonian's native resource lenses run there;

@@ -76,8 +76,8 @@ node browser/lib/dist/github-issues-pilot.mjs apply connection.json preview.json
 ```
 
 Installation prints the table subject. Open it in Atomic to use the existing
-kanban UI. Add a titled card without an issue number to create an issue on the
-next approved sync. Edit either side, generate a new preview file, review it,
+tracker UI (an Issues list, a kanban Board and a table). Add a titled issue or
+card without an issue number to create an issue on the next approved sync. Edit either side, generate a new preview file, review it,
 and apply. Connection/preview files may contain private issue data but no tokens.
 Existing files are not overwritten by install/preview.
 

@@ -4,6 +4,7 @@ import {
   FaTableColumns,
   FaCalendarDays,
   FaStopwatch,
+  FaRegCircleDot,
 } from 'react-icons/fa6';
 
 /**
@@ -12,7 +13,13 @@ import {
  * kinds can be added without a schema migration; this union is the frontend's
  * source of truth for the ones we actually render.
  */
-export const VIEW_KINDS = ['table', 'kanban', 'calendar', 'timer'] as const;
+export const VIEW_KINDS = [
+  'table',
+  'kanban',
+  'calendar',
+  'timer',
+  'issues',
+] as const;
 
 export type ViewKind = (typeof VIEW_KINDS)[number];
 
@@ -48,6 +55,7 @@ export const VIEW_KIND_LABELS: Record<ViewKind, string> = {
   kanban: 'Kanban',
   calendar: 'Calendar',
   timer: 'Timer',
+  issues: 'Issues',
 };
 
 export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {
@@ -55,4 +63,5 @@ export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {
   kanban: FaTableColumns,
   calendar: FaCalendarDays,
   timer: FaStopwatch,
+  issues: FaRegCircleDot,
 };

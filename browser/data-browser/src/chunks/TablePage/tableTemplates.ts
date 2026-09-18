@@ -55,7 +55,8 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
   {
     id: 'issue-tracker',
     title: 'Issue Tracker',
-    description: 'Status, Assignee and Priority, plus a kanban board.',
+    description:
+      'Status, Assignee and Priority, plus a kanban board and an issue list.',
     rowName: 'Issue',
     icon: FaBug,
     spec: {
@@ -89,6 +90,7 @@ export const TABLE_TEMPLATES: TableTemplate[] = [
           groupByColumn: 'Status',
           default: true,
         },
+        { name: 'Issues', kind: 'issues', groupByColumn: 'Status' },
         { name: 'All issues', kind: 'table' },
       ],
     },

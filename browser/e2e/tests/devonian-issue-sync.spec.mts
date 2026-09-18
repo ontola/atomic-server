@@ -191,15 +191,19 @@ const cardIn = (col: Locator, title: string) =>
  */
 async function dndDrag(page: Page, source: Locator, target: Locator) {
   const s = await source.boundingBox();
-  const t = await target.boundingBox();
-  if (!s || !t) throw new Error('drag source/target has no bounding box');
+  if (!s) throw new Error('drag source has no bounding box');
   const sx = s.x + s.width / 2;
   const sy = s.y + s.height / 2;
-  const tx = t.x + t.width / 2;
-  const ty = t.y + t.height / 2;
   await page.mouse.move(sx, sy);
   await page.mouse.down();
   await page.mouse.move(sx + 15, sy, { steps: 5 });
+  // Measure the target only once the drag is live: the board shows its
+  // "No status" column for the duration of a drag, which narrows the other
+  // columns, so a centre taken before the drag can land one column over.
+  const t = await target.boundingBox();
+  if (!t) throw new Error('drag target has no bounding box');
+  const tx = t.x + t.width / 2;
+  const ty = t.y + t.height / 2;
   await page.mouse.move(tx, ty, { steps: 10 });
   await page.mouse.move(tx, ty + 1, { steps: 2 });
   await page.mouse.up();
@@ -241,7 +245,7 @@ async function waitForCardStatus(page: Page, title: string, col: Locator) {
 // Regression test for #1505: the demo's own "Close/Reopen Atomic issue"
 // buttons (covered above) write the same status property a real kanban drag
 // does, but only a drag through the actual native Kanban view (reached via
-// "Open Atomic kanban", as a user would) proves the UI component itself
+// "Open Atomic issue tracker", as a user would) proves the UI component itself
 // wires status changes correctly. Sample mode needs no proxy: the GitHub side
 // is an in-browser fixture (see `fixtureTransport` in proxy.mjs).
 test('Dragging a card in the real Atomic kanban board closes and reopens the linked GitHub issue', async ({
@@ -258,7 +262,7 @@ test('Dragging a card in the real Atomic kanban board closes and reopens the lin
   await tryAgain();
 
   const openKanban = page.getByRole('link', {
-    name: 'Open Atomic kanban',
+    name: 'Open Atomic issue tracker',
     exact: true,
   });
   await expect(openKanban).toBeVisible();
@@ -266,8 +270,14 @@ test('Dragging a card in the real Atomic kanban board closes and reopens the lin
   await expect(demoIssue).toContainText('Todo');
   await expect(page.getByRole('alert')).toHaveCount(0);
 
-  // Drag the card from Todo to Done in the real, native kanban board.
+  // The tracker opens on its GitHub-style issue list; the board is one tab
+  // over. Drag the card from Todo to Done in the real, native kanban board.
   await openKanban.click();
+  await expect(page.getByTestId('issues-view')).toBeVisible();
+  await expect(
+    page.getByTestId('issue-row').filter({ hasText: title }),
+  ).toBeVisible();
+  await page.getByRole('tab', { name: 'Board' }).click();
   await expect(page.getByTestId('kanban-board')).toBeVisible();
   const todo = column(page, 'todo');
   const doneColumn = column(page, 'done');
@@ -294,6 +304,7 @@ test('Dragging a card in the real Atomic kanban board closes and reopens the lin
 
   // Drag it back to Todo — the fixture issue must reopen.
   await openKanban.click();
+  await page.getByRole('tab', { name: 'Board' }).click();
   await expect(page.getByTestId('kanban-board')).toBeVisible();
   await dndDrag(
     page,

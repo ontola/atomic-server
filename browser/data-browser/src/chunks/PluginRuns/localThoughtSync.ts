@@ -16,6 +16,7 @@ import { prepareFromVerdict } from './runScript';
 import {
   localThoughtExtension,
   schemaNamespace,
+  type LocalThoughtExtensionMode,
 } from './localThoughtExtension';
 
 export const REFRESH_INTERVAL = 5 * 60 * 1000;
@@ -35,7 +36,7 @@ export interface LocalThoughtInstallation {
     query_overrides: { path: string; values: Record<string, unknown> }[];
   };
   /** Explicit setup mode. Missing is the pre-category Calendar installation. */
-  extension?: 'calendar' | 'none';
+  extension?: LocalThoughtExtensionMode;
   config?: Config;
   syncing?: boolean;
   lastSuccess?: number;

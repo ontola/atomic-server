@@ -177,6 +177,24 @@
     "https://atomicdata.dev/integrations/properties/pluginUrl": "https://github.com/localthought/devonian"
   },
   {
+    "https://atomicdata.dev/properties/localId": "devonian-todoist",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/shortname": "devonian-todoist",
+    "https://atomicdata.dev/integrations/properties/experimental": true,
+    "https://atomicdata.dev/integrations/properties/enabled": true,
+    "https://atomicdata.dev/properties/name": "Todoist (Devonian)",
+    "https://atomicdata.dev/properties/emoji": "✅",
+    "https://atomicdata.dev/properties/description": "Bring your Todoist projects and tasks into a local issue tracker.",
+    "https://atomicdata.dev/integrations/properties/capabilities": "Imports active tasks and projects. Tasks open in the Issues view with their title, due day and priority; checked tasks show as closed.",
+    "https://atomicdata.dev/integrations/properties/events": "Connect through LocalThought, then Sync now (and every five minutes while the folder is open) to pull the latest tasks.",
+    "https://atomicdata.dev/integrations/properties/limitation": "Read only: the proxy's Todoist access is data:read, so closing, editing or creating a task here is not sent to Todoist. Completed tasks are only included while Todoist still returns them as active.",
+    "https://atomicdata.dev/integrations/properties/keywords": "todoist tasks todo projects devonian lens local tracker issues",
+    "https://atomicdata.dev/integrations/properties/requires-api-plugins": true,
+    "https://atomicdata.dev/integrations/properties/platform": "todoist"
+  },
+  {
     "@id": "https://atomicdata.dev/integrations/catalog/mt940",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
