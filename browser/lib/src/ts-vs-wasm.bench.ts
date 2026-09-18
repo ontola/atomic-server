@@ -179,6 +179,8 @@ describe('FFI cost model (why Resource.get cannot live in a Worker)', () => {
   });
 
   bench('base64 decode 64-byte signature', () => {
-    decodeB64('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
+    decodeB64(
+      'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    );
   });
 });
