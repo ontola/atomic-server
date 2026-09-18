@@ -18,6 +18,11 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   "Publish :develop image" workflow covers the case where the pipeline cannot
   go green for reasons unrelated to whether the binary builds; it refuses
   `latest` and `v*` tags, which release.yml owns.
+- CI: `[hosted-ci]` standing alone in a commit message runs Main on
+  GitHub-hosted runners (same opt-in shape as the full Playwright token).
+  A mention inside a sentence does not count. The pick job treats a
+  self-hosted runner as available whenever it is online, so a box whose
+  Dagger engine cannot start still never falls back.
 
 - Error-handling hygiene on the commit and read paths. The legacy
   `set`/`push`/`remove` rejection in `sync::engine::ingest_commit` now checks
@@ -363,6 +368,8 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   `ingest_commit_json` serializes; `sync::ws_apply::apply_commit_json` now
   returns the `CommitResponse` instead of `()`. See
   `planning/runtime-boundary-decision.md`.
+- **Python SDK** (`python/`, import `atomic_data`): bindings over `atomic_lib` via PyO3. Local redb plus Iroh P2P (`start_peer`, `sync_with`, live push on save). HTTP GET of `https://` subjects (schema / external resources); optional `server=` for `/search` and `save_remote()`. GitHub Actions uploads Linux/Windows abi3 wheels (no PyPI yet).
+- **Kotlin SDK** (`ffi/`, package `dev.atomicdata`): UniFFI bindings over `atomic_lib`. Same local redb + Iroh + HTTP surface as Python (`startPeer`, `syncWith`, `search`, `saveRemote`). JVM tests included; Android AAR is later.
 
 ## [v0.41.0-beta.2] - 2026-08-01
 

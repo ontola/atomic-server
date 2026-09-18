@@ -167,7 +167,7 @@ next release reintroduces the bug.
 - We try to test at every level, unit tests, integration tests, e2e tests (playwright).
 - When tests fail, first make sure the unit tests are green, then do integration tests, then to e2e.
 - If e2e tests fail, try walking through the steps 1 by 1 either with the playwright debugger, or by simply reproducing the steps in your browser of choice.
-- Feature-branch CI runs Playwright **light** (`@smoke`). `develop` and `v*` tags run the **full** suite. Opt in to full on a branch with a `full-e2e` PR label, `[full-e2e]` in the commit message, or `workflow_dispatch` `e2e_mode=full`. See `planning/e2e-light-heavy.md`.
+- Feature-branch CI runs Playwright **light** (`@smoke`). `develop` and `v*` tags run the **full** suite. Opt in to full on a branch with a `full-e2e` PR label, `[full-e2e]` in the commit message, or `workflow_dispatch` `e2e_mode=full`. See `planning/e2e-light-heavy.md`. Put `[hosted-ci]` in a commit message to run Main on GitHub-hosted runners when the self-hosted Dagger engine cannot start.
 
 Feature-specific browser journeys belong in `browser/e2e/tests/` and run through
 the shared CI pipeline. For a focused run with CI's service setup, use Dagger
@@ -393,6 +393,8 @@ Two consequences worth knowing:
   with a `full-e2e` PR label, `[full-e2e]` in the commit message, or
   `workflow_dispatch` `e2e_mode=full`. (Do not name the Dagger flag
   `--e2e-mode`: the CLI camelCases it to `e2EMode` and the call fails.)
+  `[hosted-ci]` in the commit message is a GitHub Actions pick-job flag
+  (Main on ubuntu-latest); it is not a Dagger argument.
 
 Every deploy then has to prove itself: the job polls `/server` on the target
 until it answers `200` (with enough patience for a store migration). A deploy
