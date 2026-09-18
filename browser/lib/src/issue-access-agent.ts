@@ -2,7 +2,12 @@ import { Agent } from './agent.js';
 import { core } from './ontologies/core.js';
 import { dataBrowser } from './ontologies/dataBrowser.js';
 import type { Store } from './store.js';
-import { instances } from './urls.js';
+import { classes, instances } from './urls.js';
+import {
+  encodeCapabilityLink,
+  encodeCapabilityWebLink,
+  type CapabilityLink,
+} from './capability.js';
 
 /**
  * Grant-target cache on an issued agent. The live ACL on each target is still
@@ -364,4 +369,101 @@ async function removeFromRights(
     property,
     current.filter(subject => subject !== agentSubject),
   );
+}
+
+export type CapabilityMode = 'read' | 'write';
+
+export interface IssueCapabilityLinkOpts {
+  /** The resource the link opens. Children inherit the right. */
+  target: string;
+  /** Shown as the key's name in App keys, so a link can be found and revoked. */
+  name: string;
+  mode: CapabilityMode;
+  /**
+   * Where a client without the resource can fetch it from: an http(s)
+   * origin. Routing only; the node still checks the link's rights.
+   */
+  url?: string;
+  /**
+   * The drive the target lives in, so a client can find a node for it
+   * through pkarr when `url` is absent or stale. Read from the target when
+   * not given.
+   */
+  drive?: string;
+  /** App keys folder, or any private parent to own the key's registry row. */
+  parent?: string;
+}
+
+export interface IssuedCapabilityLink {
+  /** The `atomic:open?…` form. */
+  link: string;
+  /** The same link under an app origin, when one was given. */
+  webLink?: string;
+  /** The agent that carries the right. Revoke it to revoke the link. */
+  agentSubject: string;
+}
+
+/**
+ * Mint a link that opens one resource for whoever holds it.
+ *
+ * Built from an issued access agent: a fresh agent granted `read` (or `read`
+ * and `write`) on the target, whose secret is the link's capability. Revoking
+ * is `revokeAccessAgent`; the key is listed in App keys under `name`.
+ *
+ * The secret is in the returned link and nowhere else. Anyone who has the
+ * link has the right, until it is revoked.
+ */
+export async function issueCapabilityLink(
+  store: Store,
+  opts: IssueCapabilityLinkOpts,
+  appOrigin?: string,
+): Promise<IssuedCapabilityLink> {
+  const issued = await issueAccessAgent(store, {
+    name: opts.name,
+    write: opts.mode === 'write',
+    targets: [opts.target],
+    parent: opts.parent,
+  });
+
+  const link: CapabilityLink = {
+    v: 1,
+    subject: opts.target,
+    cap: issued.secret,
+    drive: opts.drive ?? (await driveOf(store, opts.target)),
+    url: opts.url,
+  };
+
+  return {
+    link: encodeCapabilityLink(link),
+    webLink:
+      appOrigin === undefined
+        ? undefined
+        : encodeCapabilityWebLink(link, appOrigin),
+    agentSubject: issued.subject,
+  };
+}
+
+const DRIVE_PROP = 'https://atomicdata.dev/properties/drive';
+
+/** The drive a resource lives in, or the resource itself when it is a drive. */
+async function driveOf(
+  store: Store,
+  subject: string,
+): Promise<string | undefined> {
+  try {
+    const resource = await store.getResource(subject);
+    const drive = resource.get(DRIVE_PROP);
+
+    if (typeof drive === 'string' && drive.startsWith('did:ad:')) {
+      return drive;
+    }
+
+    if (resource.hasClasses(classes.drive)) {
+      return subject.startsWith('did:ad:') ? subject : undefined;
+    }
+  } catch {
+    // No drive is only a lost routing hint; the link still carries the right.
+  }
+
+  return undefined;
 }
