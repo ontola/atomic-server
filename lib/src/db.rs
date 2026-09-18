@@ -112,6 +112,16 @@ pub struct EphemeralEvent {
     pub from_peer: String,
 }
 
+/// A subject `Db::recursive_remove` queued for deletion, kept until its
+/// transaction has been applied so the caller can tombstone and announce it.
+#[derive(Debug, Clone)]
+struct RemovedSubject {
+    /// The subject without query params, as [`DbEvent::Destroyed`] names it.
+    subject: Subject,
+    /// See [`DbEvent::Destroyed::drive`]: read before the resource was gone.
+    drive: Option<Subject>,
+}
+
 /// Event emitted when a resource is created, updated, or deleted.
 #[derive(Debug, Clone)]
 pub enum DbEvent {
@@ -2096,6 +2106,27 @@ impl Db {
         self.on_commit = Some(Arc::new(on_commit));
     }
 
+    /// Removes `subject` and its children in one transaction and tombstones
+    /// them, returning what was removed so the caller can announce it once it
+    /// has decided how: `remove_resource` sends a plain `DbEvent::Destroyed`
+    /// for each, `apply_commit` wraps the destroyed subject in its signed
+    /// destroy commit and announces only the children this way.
+    async fn remove_applied(&self, subject: &Subject) -> AtomicResult<Vec<RemovedSubject>> {
+        let mut transaction = Transaction::new();
+        let mut removed = Vec::new();
+        self.recursive_remove(subject, &mut transaction, &mut removed, None)
+            .await?;
+        self.apply_transaction(&mut transaction)?;
+        // Tombstone every removed subject so bulk sync (Iroh / WS `SYNC`)
+        // does not resurrect them from a peer that still holds a stale copy.
+        // Only after the apply succeeded: a tombstone for a resource that is
+        // still present would suppress it forever.
+        for r in &removed {
+            crate::sync::tombstones::record_tombstone(self, &r.subject.pure_id());
+        }
+        Ok(removed)
+    }
+
     /// Subscribe to all DB events (changes, deletions).
     pub fn subscribe_events(&self) -> tokio::sync::broadcast::Receiver<DbEvent> {
         self.db_events.subscribe()
@@ -3375,8 +3406,9 @@ impl Db {
     }
 
     /// Recursively removes a resource and its children from the database.
-    /// `removed` collects the `pure_id()` of every deleted subject so the
-    /// caller can tombstone them after the transaction is applied.
+    /// `removed` collects every deleted subject so the caller can tombstone
+    /// and announce them after the transaction is applied — nothing is sent on
+    /// `db_events` from here, since the removal has not happened yet.
     /// `inherited_drive` is the drive of the resource whose cascade brought us
     /// here. A child that carries no `drive` of its own — anything created
     /// before the server stamped it — is still in its parent's drive, and the
@@ -3385,7 +3417,7 @@ impl Db {
         &self,
         subject: &Subject,
         transaction: &mut Transaction,
-        removed: &mut Vec<String>,
+        removed: &mut Vec<RemovedSubject>,
         inherited_drive: Option<Subject>,
     ) -> AtomicResult<()> {
         // Key by `pure_id()` — that is how resources and Loro snapshots are
@@ -3400,22 +3432,15 @@ impl Db {
             // the snapshot is orphaned in `Tree::LoroSnapshots` and leaks
             // forever — only the WS/Iroh DESTROY path cleaned it before.
             transaction.push(Operation::remove_loro_snapshot(&subject_str));
-            removed.push(subject_str.clone());
+            // Read the drive now, while the resource still exists: a listener
+            // reacting to the removal cannot look it up any more.
             let drive = resource.get_drive().or(inherited_drive);
+            removed.push(RemovedSubject {
+                subject: subject.without_params(),
+                drive: drive.clone(),
+            });
             let mut children = resource.get_children(self).await?;
             for child in children.iter_mut() {
-                // Notify subscribers so clients evict the cascade-deleted
-                // child from their cache. The signed destroy commit only
-                // fires DbEvent::Destroyed for the top-level subject; without
-                // this, children remain in WASM-DB / store and the UI keeps
-                // rendering them.
-                let _ = self.db_events.send(DbEvent::Destroyed {
-                    subject: child.get_subject().without_params(),
-                    drive: child.get_drive().or_else(|| drive.clone()),
-                    source_id: None,
-                    from_commit: false,
-                    commit_json: None,
-                });
                 // Because the function is async we need to box it to use recursion.
                 Box::pin(self.recursive_remove(
                     child.get_subject(),
@@ -3438,6 +3463,25 @@ impl Db {
             .into());
         }
         Ok(())
+    }
+
+    /// Announces subjects `recursive_remove` collected, once the transaction
+    /// holding their removal has been applied. Any earlier and a listener
+    /// (the WS fan-out in `atomic-server`'s `CommitMonitor`, a peer
+    /// transport) would tell clients about a deletion that can still fail or
+    /// roll back, and hear of a child before the parent whose destroy caused
+    /// it. Removals no commit authorises carry no `commit_json`, so they are
+    /// not propagated live to peers; see [`DbEvent::Destroyed`].
+    fn emit_destroyed<'a>(&self, removed: impl IntoIterator<Item = &'a RemovedSubject>) {
+        for r in removed {
+            let _ = self.db_events.send(DbEvent::Destroyed {
+                subject: r.subject.clone(),
+                drive: r.drive.clone(),
+                source_id: None,
+                from_commit: false,
+                commit_json: None,
+            });
+        }
     }
 
     fn is_endpoint(&self, url: &url::Url) -> bool {
@@ -3810,6 +3854,11 @@ impl Storelike for Db {
         // signed it, independent of the commit rows above.
         crate::envelopes::record_ops(store, &commit_response, &mut transaction)?;
 
+        // Every subject a destroy removes below (the resource and its
+        // cascade-deleted children), announced once the transaction has
+        // landed; empty for anything but a destroy.
+        let mut removed: Vec<RemovedSubject> = Vec::new();
+
         match (&commit_response.resource_old, &commit_response.resource_new) {
             (None, None) if !commit_response.commit.destroy.unwrap_or(false) => {
                 return Err("Neither an old nor a new resource is returned from the commit - something went wrong.".into());
@@ -3827,10 +3876,10 @@ impl Storelike for Db {
                     .destroy
                     .expect("Resource was removed but `commit.destroy` was not set!"));
                 let subject: Subject = commit_response.commit.subject.clone();
-                // `remove_resource` records the tombstone; the signed destroy
+                // `remove_applied` records the tombstones; the signed destroy
                 // is the envelope row `record_ops` queued above, which is what
                 // `SYNC_DIFF.removeCommits` carries.
-                self.remove_resource(&subject).await?;
+                removed = self.remove_applied(&subject).await?;
             }
             _ => {}
         };
@@ -3900,6 +3949,12 @@ impl Storelike for Db {
         {
             store.flush()?;
         }
+
+        // Announce the cascade-deleted children now that the removal has
+        // landed. The destroyed subject itself is announced below, wrapped in
+        // the signed destroy commit, so it is left out here.
+        let top_level = commit_response.commit.subject.pure_id();
+        store.emit_destroyed(removed.iter().filter(|r| r.subject.pure_id() != top_level));
 
         // Notify subscribers
         let subject = commit_response.commit.subject.without_params();
@@ -4450,16 +4505,10 @@ impl Storelike for Db {
 
     #[instrument(skip_all)]
     async fn remove_resource(&self, subject: &Subject) -> AtomicResult<()> {
-        let mut transaction = Transaction::new();
-        let mut removed = Vec::new();
-        self.recursive_remove(subject, &mut transaction, &mut removed, None)
-            .await?;
-        self.apply_transaction(&mut transaction)?;
-        // Tombstone every removed subject so bulk sync (Iroh / WS `SYNC`)
-        // does not resurrect them from a peer that still holds a stale copy.
-        for s in &removed {
-            crate::sync::tombstones::record_tombstone(self, s);
-        }
+        let removed = self.remove_applied(subject).await?;
+        // Only now, with the removal on disk: a listener that hears of it
+        // earlier evicts a resource the store may still hold.
+        self.emit_destroyed(&removed);
         // TODO: deletion sync — should create a signed destroy commit
         // and push it through the normal commit pipeline, not a raw DESTROY frame.
         Ok(())
