@@ -1,3 +1,4 @@
+// @wc-ignore-file
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

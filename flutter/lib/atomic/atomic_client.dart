@@ -70,6 +70,12 @@ class AtomicClient {
           String subject, String property, String value) =>
       ffi.setProperty(subject: subject, property: property, value: value);
 
+  static Future<String> createResource({
+    required String parentSubject,
+    required String name,
+  }) =>
+      ffi.createResource(parentSubject: parentSubject, name: name);
+
   // ── 5. Canvas CRUD ───────────────────────────────────────────────────────
 
   static Future<String> createCanvas(String name, {String? folderId}) =>

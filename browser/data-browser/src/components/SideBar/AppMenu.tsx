@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
-import { FaGear, FaInfo, FaCirclePlus, FaUser, FaPlug } from 'react-icons/fa6';
+import {
+  FaBell,
+  FaGear,
+  FaInfo,
+  FaCirclePlus,
+  FaUser,
+  FaPlug,
+} from 'react-icons/fa6';
 import { constructOpenURL } from '../../helpers/navigation';
 import { useCurrentSubject } from '../../helpers/useCurrentSubject';
 import { SideBarMenuItem } from './SideBarMenuItem';
@@ -14,6 +21,7 @@ import {
 import { FeedbackMenuItem } from './FeedbackMenuItem';
 import { SyncMenuItem } from './SyncMenuItem';
 import { ResourceGlyph } from '../ResourceGlyph';
+import { useUnreadNotificationCount } from '../../hooks/useNotificationEngine';
 
 // Non standard event type so we have to type it ourselfs for now.
 type BeforeInstallPromptEvent = {
@@ -31,6 +39,7 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
   const [showInstallButton, setShowInstallButton] = useState(false);
   const [agent] = useCurrentAgent();
   const agentResource = useResource(agent?.subject ?? unknownSubject);
+  const unreadNotifications = useUnreadNotificationCount();
   const install = useCallback(() => {
     if (!event.current) {
       return;
@@ -79,6 +88,17 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
         path={paths.agentSettings}
         onClick={onItemClick}
       />
+      {agent && (
+        <SideBarMenuItem
+          icon={<FaBell />}
+          label='Notifications'
+          helper='Mentions and watched tables'
+          path={paths.notifications}
+          badge={unreadNotifications}
+          onClick={onItemClick}
+          data-testid='sidebar-notifications'
+        />
+      )}
       <SideBarMenuItem
         icon={<FaGear />}
         label='Settings'

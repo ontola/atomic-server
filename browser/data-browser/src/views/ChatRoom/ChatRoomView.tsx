@@ -3,6 +3,8 @@ import {
   commits,
   core,
   dataBrowser,
+  extractAgentMentionsFromText,
+  notifications,
   Resource,
   Store,
   useArray,
@@ -274,6 +276,8 @@ export async function sendChatMessage(
   store: Store,
   { parent, text, about, replyTo, extraClasses }: SendChatMessageOptions,
 ) {
+  const mentioned = extractAgentMentionsFromText(text);
+
   const msgResource = await store.newResource({
     parent,
     isA: [dataBrowser.classes.message, ...(extraClasses ?? [])],
@@ -287,6 +291,9 @@ export async function sendChatMessage(
       }),
       ...(replyTo && {
         [dataBrowser.properties.replyTo]: replyTo,
+      }),
+      ...(mentioned.length > 0 && {
+        [notifications.properties.mentions]: mentioned,
       }),
     },
   });

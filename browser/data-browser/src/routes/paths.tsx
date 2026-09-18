@@ -4,6 +4,7 @@ export const pathNames = {
   // sub routes
   welcome: '/welcome',
   agentSettings: '/agent',
+  notifications: '/notifications',
   appSettings: '/settings',
   integrations: '/integrations',
   sync: '/sync',
@@ -33,6 +34,7 @@ export const pathNames = {
 export const paths = {
   welcome: `${pathNames.app}${pathNames.welcome}`,
   agentSettings: `${pathNames.app}${pathNames.agentSettings}`,
+  notifications: `${pathNames.app}${pathNames.notifications}`,
   appSettings: `${pathNames.app}${pathNames.appSettings}`,
   integrations: `${pathNames.app}${pathNames.integrations}`,
   sync: `${pathNames.app}${pathNames.sync}`,
