@@ -2,7 +2,6 @@ import {
   core,
   readConnectionSubjects,
   server,
-  useArray,
   useResource,
   useStore,
   useString,
@@ -19,37 +18,29 @@ interface PluginListProps {
   drive: Resource<Server.Drive>;
 }
 
+/**
+ * Every plugin on a drive is an `Installation` (the server migrates legacy
+ * `Plugin` resources at startup), found by class under the drive like the
+ * Store does for connections.
+ */
 export const PluginList: React.FC<PluginListProps> = ({ drive }) => {
-  // Read via `useArray` (not `drive.props.plugins`) so the component
-  // re-renders when the array changes. Reading `.props.X` directly inside
-  // render is memoized by the React Compiler on the stable `drive` proxy
-  // ref — an internal `push()` mutation doesn't change that ref, so a
-  // direct read would never invalidate and the list would stay stuck on
-  // "No plugins installed" after a fresh install.
-  const [plugins] = useArray(drive, server.properties.plugins);
   const installations = useInstallations(drive.subject);
-  const all = [...plugins, ...installations.filter(s => !plugins.includes(s))];
 
-  if (all.length === 0) {
+  if (installations.length === 0) {
     return <NoPluginsInstalled>No plugins installed</NoPluginsInstalled>;
   }
 
   return (
     <TableList>
       <tbody>
-        {all.map(plugin => (
-          <PluginItem key={plugin} subject={plugin} />
+        {installations.map(subject => (
+          <PluginItem key={subject} subject={subject} />
         ))}
       </tbody>
     </TableList>
   );
 };
 
-/**
- * Installations are not listed on the drive's `plugins` property (that is the
- * legacy `Plugin` list); they are found by class under the drive, like the
- * Store does for connections.
- */
 function useInstallations(drive: string): string[] {
   const store = useStore();
   const [subjects, setSubjects] = useState<string[]>([]);
@@ -66,8 +57,8 @@ function useInstallations(drive: string): string[] {
         if (active) setSubjects(found);
       })
       .catch(() => {
-        // The legacy list still renders; the drive may not be on a server
-        // that knows the Installation class yet.
+        // Shown as empty; the drive may be on a server without the
+        // Installation class.
       });
 
     return () => {
@@ -79,9 +70,10 @@ function useInstallations(drive: string): string[] {
 }
 
 const PluginItem: React.FC<{ subject: string }> = ({ subject }) => {
-  // Subscribe to each field so the row re-renders when the plugin resource
-  // finishes loading — same React Compiler reasoning as above.
-  const resource = useResource<Server.Plugin | Server.Installation>(subject);
+  // Subscribe to each field so the row re-renders when the resource finishes
+  // loading; the React Compiler memoizes direct `.props` reads on the stable
+  // proxy ref.
+  const resource = useResource<Server.Installation>(subject);
   const [namespace] = useString(resource, server.properties.namespace);
   const [name] = useString(resource, core.properties.name);
   const [version] = useString(resource, server.properties.version);
