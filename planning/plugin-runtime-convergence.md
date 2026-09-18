@@ -287,3 +287,35 @@ Steps 1 to 3 of the runtime convergence above, in particular the unified
 manifest, since the install review renders capabilities from it. The
 marketplace drive itself needs nothing new from the runtime work; Listing and
 Release can be added as classes first and the old paths adapted one at a time.
+
+## Implementation checkpoint (2026-09-18)
+
+Branch `feat/plugin-convergence`, built from four parallel tracks off develop
+`ec22e345b`. All Rust suites and the browser lib suites pass; the Playwright
+specs added for the Store were written but not run.
+
+- [x] One host: `server/src/plugins/host_core.rs` backs both the wasm and JS
+  hosts. Reads are authorized as the installation's agent (never Sudo), fetch is
+  address-pinned with a streamed byte cap, secret substitution happens once,
+  `commit` is refused for proposal-only installations. WIT interfaces unchanged.
+- [x] One manifest: schemaVersion 2 in `server/src/plugins/manifest.rs`, mirrored
+  in `@tomic/lib`, 41 shared fixtures under `testdata/plugin-manifest/`. v1
+  upgrades and serializes byte-identically, so release ids are stable.
+  `plugin.json` translates at the boundary using the component's class URLs.
+- [x] One record: `PluginRelease` for both runtimes; Release, Installation and
+  Listing classes in `lib/defaults/plugins.json`. An Installation commit installs
+  either runtime; publishing records a Release resource at
+  `<server>/releases/<id>`. `check_grants` requires the exact declared set.
+  Legacy Plugin + pluginFile still works.
+- [x] Store UI installs through one review dialog from a Listing or a zip upload;
+  Installation page with pause, resume, revoke, uninstall.
+- [ ] Listing resources are not yet read by `/plugin-catalog` (still KV).
+- [ ] Bundled integrations still come from the hardcoded browser list.
+- [ ] Global server extensions do not yet accept Release URLs.
+- [ ] Steps 4 and 5 (JS class extenders, wasm `run`) not started.
+
+Decision recorded: a wasip2 release whose component exports class URLs is
+`world: server-extension` and may still be installed through an Installation,
+where it runs drive-scoped exactly as legacy zips did. Only the operator's
+`global/` directory is server-scoped. A JS `server-extension` release is
+refused through an Installation until step 4 exists.
