@@ -59,6 +59,15 @@ read_spa_server_url() {
 DEV_NODE_ORIGIN="${ATOMIC_VAULT_E2E_NODE_ORIGIN:-$(read_spa_server_url)}"
 DEV_NODE_ORIGIN="${DEV_NODE_ORIGIN:-localhost:9885}"
 
+# The app calls the control plane's `/api/*` from its own origin, and the CORS
+# allow-list is built from `ATOMIC_APP_HOST`. Without it every such call is
+# blocked by the browser, which surfaces as the vault UI never leaving its
+# loading state (and, in specs that gate on console errors, as a wall of CORS
+# failures). Defaults to the suite's own `FRONTEND_URL`, so a stack started
+# beside a dev server on another port works without extra configuration.
+APP_HOST="${ATOMIC_VAULT_E2E_APP_HOST:-${FRONTEND_URL#*://}}"
+APP_HOST="${APP_HOST:-localhost:6747}"
+
 stop() {
   docker rm -f atomic-vault-e2e-minio >/dev/null 2>&1 || true
 
@@ -130,7 +139,8 @@ rm -f "$SAAS_DB"
 # Must happen before `cargo run`, since the assets are compiled in.
 if [[ ! -f "$SAAS_DIR/portal/dist/index.html" ]] || \
    [[ ! -f "$SAAS_DIR/portal/.env.production.local" ]] || \
-   grep -rqs "app.atomicserver.eu" "$SAAS_DIR/portal/dist/assets"; then
+   grep -rqs "app.atomicserver.eu" "$SAAS_DIR/portal/dist/assets" || \
+   ! grep -rqs "http://$APP_HOST" "$SAAS_DIR/portal/dist/assets"; then
   # The portal links to @tomic/lib and @tomic/edit-mode by `file:` path into
   # the sibling atomic-server checkout, so those have to be built first. A
   # fresh worktree has no build outputs and the failure surfaces as
@@ -157,6 +167,7 @@ if [[ ! -f "$SAAS_DIR/portal/dist/index.html" ]] || \
 
   echo "building the portal for local use..."
   (
+    export APP_HOST
     cd "$SAAS_DIR/portal"
     [[ -d node_modules ]] || npm ci --silent
     # `npm run build` runs vite in production mode, which loads
@@ -165,7 +176,7 @@ if [[ ! -f "$SAAS_DIR/portal/dist/index.html" ]] || \
     # variable does nothing about a file. `.env.production.local` takes
     # precedence over it and is gitignored, so the committed default stays
     # correct for real deploys while a local build points at the local app.
-    printf 'VITE_ATOMIC_APP_URL=http://localhost:6747\n' > .env.production.local
+    printf 'VITE_ATOMIC_APP_URL=http://%s\n' "$APP_HOST" > .env.production.local
     npm run build --silent
   ) || { echo "portal build failed" >&2; exit 1; }
 fi
@@ -200,6 +211,7 @@ fi
     ATOMIC_SAAS_SKIP_NODE_HEALTH_CHECKS=true \
     ATOMIC_SAAS_NODE_PROVIDER=local-process \
     ATOMIC_SAAS_DEV_NODE_ORIGIN="$DEV_NODE_ORIGIN" \
+    ATOMIC_APP_HOST="$APP_HOST" \
     ATOMIC_SAAS_SIGNUP_PER_IP_CAP="${ATOMIC_SAAS_SIGNUP_PER_IP_CAP:-10000}" \
     ATOMIC_SAAS_SIGNUP_EMAIL_COOLDOWN_SECS="${ATOMIC_SAAS_SIGNUP_EMAIL_COOLDOWN_SECS:-0}" \
     DB_PATH="$SAAS_DB" \

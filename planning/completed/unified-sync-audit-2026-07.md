@@ -807,7 +807,7 @@ work in that plan's Phase P0, not a decision-gated maybe.
 - [ ] Genesis + first delta in one pipelined pair.
 - [ ] Shrink `COMMIT_OK` to `[request_id] [commit_id]`.
 - [ ] Flag cleanups: `HAS_COMMIT_ID` always, drop `PUSH`, fold `SYNC_OK` into
-  empty `SYNC_DIFF` (see [`sign-at-drain.md`](../sign-at-drain.md)).
+  empty `SYNC_DIFF` (see [`sign-at-drain.md`](./sign-at-drain.md)).
 
 ### Phase 3 — Layer 2 provenance
 

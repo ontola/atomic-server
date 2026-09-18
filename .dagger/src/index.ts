@@ -33,6 +33,22 @@ const TOUCH_WORKSPACE_SOURCES = [
     '-type f -exec touch {} +',
 ];
 
+/**
+ * Runs the touch above on every pipeline run. A `withExec` is a cached layer
+ * keyed on its inputs, and the Rust sources are the same bytes across many
+ * commits, so the touch was replayed from cache with its old mtimes. Any
+ * artifact another pipeline wrote to the shared target volume in the meantime
+ * was then newer than the sources, and cargo kept it: `atomic-server` failed
+ * to compile against an `atomic_lib` from a different branch (2026-09-15).
+ * The changing variable makes the layer unique per run without touching the
+ * command itself.
+ */
+function touchWorkspaceSources(container: Container): Container {
+  return container
+    .withEnvVariable('ATOMIC_TOUCH_RUN', new Date().toISOString())
+    .withExec(TOUCH_WORKSPACE_SOURCES);
+}
+
 const NODE_IMAGE = 'node:22';
 const RUST_IMAGE = 'rust:bookworm';
 
@@ -201,10 +217,14 @@ const HOST_PROFILES: Record<HostProfile, HostKnobs> = {
     // headroom, and `ci()` still runs these browsers alongside clippy,
     // nextest, flutter and two vitest suites.
     e2ePlaywrightRetries: '2',
-    nextestTestThreads: '6',
+    // Measured 2026-09-15 on a 15-minute smoke run (24 threads, 31 GiB): the
+    // engine sat at 14 to 20 cores while compiling, but only 7 to 13 cores for
+    // the 7.5-minute nextest phase and the e2e phase (idle 45 to 70%). Memory
+    // peaked at 8 GiB. The test widths below are where the headroom was.
+    nextestTestThreads: '12',
     nextestRetries: '1',
-    nextestBuildJobs: '4',
-    cargoBuildJobs: '8',
+    nextestBuildJobs: '8',
+    cargoBuildJobs: '12',
   },
   // Sized for GitHub's standard hosted runner. The widths below said 2 for
   // every knob, which matched the 2-vCPU runner this profile was written
@@ -704,7 +724,7 @@ export class AtomicServer {
           '/code/target',
           dag.cacheVolume('rust-wasm-target-v3'),
         )
-        .withExec(TOUCH_WORKSPACE_SOURCES)
+        .with(touchWorkspaceSources)
         .withWorkdir('/code/wasm')
         // The encoded-rustflags separator applies only to the WASM build.
         .withExec([
@@ -763,11 +783,8 @@ export class AtomicServer {
           this.source.directory('atomic-plugin'),
         )
         .withDirectory('/code/tools', this.source.directory('tools'))
-        .withMountedCache(
-          '/code/target',
-          dag.cacheVolume('rust-slim-target-v3'),
-        )
-        .withExec(TOUCH_WORKSPACE_SOURCES)
+        .withMountedCache('/code/target', dag.cacheVolume('rust-slim-target-v3'))
+        .with(touchWorkspaceSources)
         .withWorkdir('/code')
         .withEnvVariable('ATOMICSERVER_SKIP_JS_BUILD', 'true')
         // build.rs still wants to bundle the data-browser dist as embedded
@@ -1225,18 +1242,8 @@ export class AtomicServer {
       )
       .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
       .withDirectory('/code/tools', source.directory('tools'))
-      // v3 -> v4: `atomic-server`'s build.rs only declares
-      // `rerun-if-changed` on `plugin-runtime/{src,wit}` and
-      // `ATOMICSERVER_SKIP_PLUGIN_RUNTIME` — it has no way to know "the
-      // wasm32-wasip2 target just became installed". Adding the `rustup
-      // target add` step above changed the container, but every prior CI
-      // run had already fingerprinted build.rs's output (an empty embedded
-      // runtime, from before that target existed) into this cache volume,
-      // so cargo kept trusting the stale fingerprint and never re-ran
-      // build_plugin_runtime() to notice the target was now there. Bumping
-      // the volume forces one full rebuild that actually re-evaluates it.
-      .withMountedCache('/code/target', dag.cacheVolume('rust-target-v4'))
-      .withExec(TOUCH_WORKSPACE_SOURCES)
+      .withMountedCache('/code/target', dag.cacheVolume('rust-target-v3'))
+      .with(touchWorkspaceSources)
       .withWorkdir('/code')
       .withExec(['cargo', 'fetch']);
 
@@ -1430,11 +1437,8 @@ export class AtomicServer {
         )
         .withDirectory('/code/atomic-plugin', source.directory('atomic-plugin'))
         .withDirectory('/code/tools', source.directory('tools'))
-        .withMountedCache(
-          '/code/target',
-          dag.cacheVolume('rust-checks-target-v3'),
-        )
-        .withExec(TOUCH_WORKSPACE_SOURCES)
+        .withMountedCache('/code/target', dag.cacheVolume('rust-checks-target-v3'))
+        .with(touchWorkspaceSources)
         .withWorkdir('/code')
         // build.rs in atomic-server wants to bundle a JS dist. Skip it —
         // fmt/clippy/test don't need it and including the bundle would
@@ -1842,6 +1846,10 @@ export class AtomicServer {
           browserContainer.directory('/app/create-template'),
         )
         .withDirectory('/app/lib', browserContainer.directory('/app/lib'))
+        // Several specs import fixtures and mocks from the repo's integrations
+        // tree (`../../../integrations/...` from /app/e2e/tests), and Playwright
+        // loads every spec file even when a grep selects a subset.
+        .withDirectory('/integrations', this.source.directory('integrations'))
         .withDirectory(
           '/app/node_modules',
           browserContainer.directory('/app/node_modules'),

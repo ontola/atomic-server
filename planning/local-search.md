@@ -68,3 +68,15 @@ once (`PluginMeta` key `search_index_v1`). New writes index incrementally.
 
 - Table `contains` through this engine (`planning/table-view-filters.md`).
 - Flutter `AtomicNode::search` wiring in the bridge.
+
+## Result excerpts
+
+- [x] Derive a bounded title/description/document excerpt for visible results.
+- [x] Show the matched field and emphasize the matching text in the search overlay.
+- [x] Cover exact, prefix, and one-edit fuzzy excerpt selection in Vitest.
+- [x] Regressions: prefer exact/prefix tokens over fuzzy tokens, preserve
+      Unicode source offsets, require token boundaries, and cap long matches.
+
+Excerpts are browser-derived context, not engine-provided match positions or
+proof that every query term matches this field. Exact paragraph navigation is
+not implemented. Keep matching semantics aligned with the KV tokenizer.

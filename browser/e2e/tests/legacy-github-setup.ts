@@ -1,5 +1,9 @@
 import { expect, type Page } from '@playwright/test';
-import { enableAIForTesting, setupScriptedToolCallMocks } from './ai-mock';
+import {
+  enableAIForTesting,
+  sendChatMessage,
+  setupScriptedToolCallMocks,
+} from './ai-mock';
 
 /** Open the legacy GitHub connection dialog through the assistant tool. */
 export async function openLegacyGithubSetup(
@@ -23,13 +27,10 @@ export async function openLegacyGithubSetup(
   await enableAIForTesting(page);
   await page.reload();
 
-  const sidebar = page.locator('[data-open]');
-  const input = sidebar.locator('[contenteditable="true"]');
-  await expect(input).toBeVisible();
-  await input.fill('Connect our GitHub repository');
-  const send = sidebar.getByTitle('Send');
-  await expect(send).toBeEnabled({ timeout: 30000 });
-  await send.click();
+  // The right panel is transient state and is never restored from storage
+  // (#1475), so the panel has to be opened before the chat input exists.
+  // `sendChatMessage` does that, and waits out vector indexing and toasts.
+  await sendChatMessage(page, 'Connect our GitHub repository');
 
   const dialog = page.locator('dialog[open]');
   await expect(dialog.getByLabel('Repository', { exact: true })).toBeVisible({

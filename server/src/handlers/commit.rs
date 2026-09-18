@@ -21,6 +21,30 @@ pub async fn post_commit(
         tokio::time::sleep(tokio::time::Duration::from_millis(random_number)).await;
     }
     let store = &appstate.store;
+    // Spend the write budget of the identity the commit *proves*, not the
+    // one it claims. The `signer` field is attacker-controlled until the
+    // signature over the body checks out, and keying the limiter on the
+    // claimed signer let anyone who knew a victim's public DID drain the
+    // victim's budget with forged commits and lock them out of writing. A
+    // body that proves no signer (junk, no signature, a signature that does
+    // not verify) spends the peer address's anonymous budget instead, like
+    // every other unsigned write. That budget is charged after the check
+    // rather than gating it: behind a reverse proxy every client shares one
+    // peer address, and refusing to even look at signed commits once that
+    // shared budget is spent would turn the same flood into an outage for
+    // everyone.
+    let for_agent = match atomic_lib::sync::engine::verify_commit_signer(store, &body).await {
+        Ok(signer) => atomic_lib::agents::ForAgent::AgentSubject(signer),
+        Err(refused) => {
+            crate::helpers::enforce_write_rate_limit(
+                &appstate,
+                &req,
+                &atomic_lib::agents::ForAgent::Public,
+            )?;
+            return Err(refused.into());
+        }
+    };
+    crate::helpers::enforce_write_rate_limit(&appstate, &req, &for_agent)?;
     let message = apply_commit_json(store, &context.origin, &body, None).await?;
 
     Ok(HttpResponse::Ok()

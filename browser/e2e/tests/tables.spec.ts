@@ -436,44 +436,48 @@ test.describe('tables', async () => {
     ).toBeVisible({ timeout: 30000 });
   });
 
-  test('sorting reorders freshly-entered (virtual) rows', async ({ page }) => {
-    test.slow();
-    await createBlankTable(page, 'Sort Test');
+  test(
+    'sorting reorders freshly-entered (virtual) rows',
+    smoke,
+    async ({ page }) => {
+      test.slow();
+      await createBlankTable(page, 'Sort Test');
 
-    const firstCell = page.getByRole('gridcell').first();
-    await focusCell(page, firstCell);
+      const firstCell = page.getByRole('gridcell').first();
+      await focusCell(page, firstCell);
 
-    // Enter rows whose names are NOT in alphabetical order.
-    for (const name of ['gamma', 'alpha', 'beta']) {
-      await enterGridEdit(page);
-      await typeInActiveGridCell(page, name);
-    }
+      // Enter rows whose names are NOT in alphabetical order.
+      for (const name of ['gamma', 'alpha', 'beta']) {
+        await enterGridEdit(page);
+        await typeInActiveGridCell(page, name);
+      }
 
-    await page.keyboard.press('Escape');
-    await waitForSynced(page);
+      await page.keyboard.press('Escape');
+      await waitForSynced(page);
 
-    // Default sort is by creation time → insertion order: gamma is row 1.
-    await expect(
-      page
-        .locator('[aria-rowindex="2"]')
-        .getByRole('gridcell', { name: 'gamma', exact: true }),
-      'Before sort, first row should be the first-entered ("gamma")',
-    ).toBeVisible();
+      // Default sort is by creation time → insertion order: gamma is row 1.
+      await expect(
+        page
+          .locator('[aria-rowindex="2"]')
+          .getByRole('gridcell', { name: 'gamma', exact: true }),
+        'Before sort, first row should be the first-entered ("gamma")',
+      ).toBeVisible();
 
-    // Click the "name" column header to sort by name (ascending).
-    await page
-      .getByRole('button', { name: 'name', exact: true })
-      .first()
-      .click();
+      // Click the "Name" column header to sort by name (ascending).
+      await page
+        .getByRole('button', { name: 'Name', exact: true })
+        .first()
+        .click();
 
-    // After sort, the freshly-entered virtual rows must reorder: "alpha" first.
-    await expect(
-      page
-        .locator('[aria-rowindex="2"]')
-        .getByRole('gridcell', { name: 'alpha', exact: true }),
-      'After sorting by name, first row should be "alpha"',
-    ).toBeVisible();
-  });
+      // After sort, the freshly-entered virtual rows must reorder: "alpha" first.
+      await expect(
+        page
+          .locator('[aria-rowindex="2"]')
+          .getByRole('gridcell', { name: 'alpha', exact: true }),
+        'After sorting by name, first row should be "alpha"',
+      ).toBeVisible();
+    },
+  );
 
   test('Shift+Enter inserts a row below the current row', async ({ page }) => {
     test.slow();

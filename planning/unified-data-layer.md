@@ -33,7 +33,7 @@ unimplemented atomicity fix.
 
 `LocalOutbox` holds dirty subjects and signs at drain time, with pre-signed genesis
 and destroy exceptions. It does **not** hold an ordered list of signed commits per
-resource. See [sign-at-drain.md](./sign-at-drain.md) for that decision. Do not restore
+resource. See [sign-at-drain.md](./completed/sign-at-drain.md) for that decision. Do not restore
 the superseded signed-at-every-save queue design.
 
 Only user-origin local edits enqueue work. Imports, history checkouts and runtime

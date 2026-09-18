@@ -215,8 +215,8 @@ test('duplicate import review links both copies and blocks apply', async ({
     page.getByRole('link', { name: 'Offline copy B', exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole('button', { name: 'Apply 0 changes', exact: true }),
-  ).toBeDisabled();
+    page.getByRole('button', { name: /^Apply \d+ changes$/ }),
+  ).toHaveCount(0);
   await page
     .getByRole('button', { name: 'Review copies', exact: true })
     .click();

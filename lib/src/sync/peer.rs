@@ -398,6 +398,154 @@ pub fn live_peer_ids() -> Vec<String> {
         .unwrap_or_default()
 }
 
+type CommitWaiter =
+    tokio::sync::oneshot::Sender<Result<String, crate::sync::outbox::CommitRefused>>;
+
+/// `COMMIT`s sent over a live link and not yet answered, keyed by
+/// `(peer, request id)`. The peer's read loop resolves one when the
+/// matching `COMMIT_OK` or `ERROR` arrives on that link.
+static COMMIT_WAITERS: LazyLock<Mutex<HashMap<(String, u16), CommitWaiter>>> =
+    LazyLock::new(Default::default);
+
+/// Request ids for live-link commits. Per process, not per drain pass, so
+/// two drains over one link cannot collide.
+static LIVE_COMMIT_REQUEST_ID: std::sync::atomic::AtomicU16 = std::sync::atomic::AtomicU16::new(1);
+
+fn resolve_commit_waiter(
+    peer_key: &str,
+    request_id: u16,
+    result: Result<String, crate::sync::outbox::CommitRefused>,
+) -> bool {
+    let waiter = COMMIT_WAITERS
+        .lock()
+        .ok()
+        .and_then(|mut map| map.remove(&(normalize_node_id(peer_key), request_id)));
+    match waiter {
+        Some(tx) => {
+            let _ = tx.send(result);
+            true
+        }
+        None => false,
+    }
+}
+
+/// The outbox transport for a live Iroh link: one signed `COMMIT` per call
+/// through the peer's write loop, answered by its engine with `COMMIT_OK`
+/// or `ERROR` on the same stream. This is the sending half of
+/// `planning/serverless-p2p.md` P4: a device with no hub in reach delivers
+/// its writes to a paired peer, which validates them like a hub would.
+pub struct LivePeerCommitTransport {
+    peer: String,
+}
+
+impl LivePeerCommitTransport {
+    pub fn new(peer_id: &str) -> Self {
+        Self {
+            peer: normalize_node_id(peer_id),
+        }
+    }
+
+    /// Whether the peer currently has a live link.
+    pub fn is_live(&self) -> bool {
+        LIVE_PEERS
+            .lock()
+            .map(|m| m.contains_key(&self.peer))
+            .unwrap_or(false)
+    }
+}
+
+impl crate::sync::outbox::CommitTransport for LivePeerCommitTransport {
+    async fn post_commit(
+        &mut self,
+        _request_id: u16,
+        commit_json: &str,
+    ) -> Result<String, crate::sync::outbox::CommitRefused> {
+        use crate::sync::outbox::CommitRefused;
+        use crate::sync::protocol::error_code;
+
+        let transport_error = |message: String| CommitRefused {
+            code: error_code::UNKNOWN,
+            message,
+        };
+        let rid = LIVE_COMMIT_REQUEST_ID
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            .max(1);
+        let (tx_wait, rx_wait) = tokio::sync::oneshot::channel();
+        if let Ok(mut map) = COMMIT_WAITERS.lock() {
+            map.insert((self.peer.clone(), rid), tx_wait);
+        }
+        let forget = || {
+            if let Ok(mut map) = COMMIT_WAITERS.lock() {
+                map.remove(&(self.peer.clone(), rid));
+            }
+        };
+
+        let Some(tx) = LIVE_PEERS
+            .lock()
+            .ok()
+            .and_then(|m| m.get(&self.peer).map(|p| p.tx.clone()))
+        else {
+            forget();
+            return Err(transport_error(format!(
+                "peer {} is not live",
+                &self.peer[..self.peer.len().min(12)]
+            )));
+        };
+        let frame = frame_with_len(&super::protocol::encode_commit(rid, commit_json));
+        if tx.send(frame).await.is_err() {
+            forget();
+            return Err(transport_error(
+                "live link closed before COMMIT was sent".into(),
+            ));
+        }
+
+        match tokio::time::timeout(std::time::Duration::from_secs(30), rx_wait).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => Err(transport_error(
+                "live link closed while waiting for COMMIT_OK".into(),
+            )),
+            Err(_) => {
+                forget();
+                Err(transport_error(
+                    "COMMIT over the live link timed out".into(),
+                ))
+            }
+        }
+    }
+}
+
+/// Drain the store's outbox to one live peer. `Err` only for a store or
+/// link failure; refusals become outbox state.
+pub async fn drain_outbox_to_live_peer(
+    store: &Db,
+    peer_id: &str,
+) -> crate::errors::AtomicResult<crate::sync::outbox::DrainReport> {
+    let mut transport = LivePeerCommitTransport::new(peer_id);
+    crate::sync::outbox::Outbox::new(store.clone())
+        .drain(&mut transport)
+        .await
+}
+
+/// Drain the outbox to the first live peer, if any. `None` when there is
+/// no live link or nothing to send.
+pub async fn drain_outbox_to_any_live_peer(store: &Db) -> Option<crate::sync::outbox::DrainReport> {
+    let outbox = crate::sync::outbox::Outbox::new(store.clone());
+    if outbox.entries().ok()?.is_empty() {
+        return None;
+    }
+    let peer = live_peer_ids().into_iter().next()?;
+    match drain_outbox_to_live_peer(store, &peer).await {
+        Ok(report) => Some(report),
+        Err(e) => {
+            tracing::warn!(
+                "[live] outbox drain to {} failed: {e}",
+                &peer[..peer.len().min(12)]
+            );
+            None
+        }
+    }
+}
+
 /// Drop a live peer entry (dead write loop, closed channel, or reconnect).
 ///
 /// `generation` is the connection doing the removing: a stale connection must
@@ -851,6 +999,38 @@ fn register_live_peer(
     // Always notify so both sides refresh UI (replacing a dead channel still counts).
     push_event(&key, 0, "connected");
 
+    // Whatever this device wrote while no link was up goes to the peer now,
+    // as signed commits it validates like a hub would. Best effort: a
+    // refusal lands in the outbox, a dead link is retried on the next one.
+    {
+        let store_drain = store.clone();
+        let peer_drain = key.clone();
+        tokio::spawn(async move {
+            // Let the HELLO and agent frames below go first.
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            if let Ok(entries) = crate::sync::outbox::Outbox::new(store_drain.clone()).entries() {
+                if entries.is_empty() {
+                    return;
+                }
+            }
+            match drain_outbox_to_live_peer(&store_drain, &peer_drain).await {
+                Ok(report) => tracing::info!(
+                    "[live] outbox drain to {}: {} sent, {} deferred, {} blocked, {} dropped, {} remaining",
+                    &peer_drain[..peer_drain.len().min(12)],
+                    report.sent,
+                    report.deferred,
+                    report.blocked,
+                    report.dropped,
+                    report.remaining
+                ),
+                Err(e) => tracing::warn!(
+                    "[live] outbox drain to {} failed: {e}",
+                    &peer_drain[..peer_drain.len().min(12)]
+                ),
+            }
+        });
+    }
+
     // Hand the peer our own agent resource on connect. It lives outside every
     // drive's subtree, so drive sync never carries it (see
     // `own_agent_update_frame`) — and yet it is the resource that says who owns
@@ -1039,11 +1219,33 @@ fn register_live_peer(
             // BLOB_REQUEST it couldn't serve) with an ERROR. Nothing to apply;
             // say so and keep the link — an ERROR is a verdict, not a fault.
             if buf[0] == super::protocol::tag::ERROR {
+                // A refusal of one of our outbox COMMITs: the drain is
+                // waiting for exactly this verdict.
+                if let Some(err) = super::protocol::decode_error(&buf[1..]) {
+                    if resolve_commit_waiter(
+                        &read_peer_id,
+                        err.request_id,
+                        Err(crate::sync::outbox::CommitRefused {
+                            code: err.code,
+                            message: err.message,
+                        }),
+                    ) {
+                        continue;
+                    }
+                }
                 let msg = std::str::from_utf8(buf.get(5..).unwrap_or(&[])).unwrap_or("(non-utf8)");
                 tracing::warn!(
                     "[live] {} answered with an error: {msg}",
                     &read_peer_id[..read_peer_id.len().min(12)]
                 );
+                continue;
+            }
+
+            // The peer applied one of our outbox COMMITs.
+            if buf[0] == super::protocol::tag::COMMIT_OK {
+                if let Some(ok) = super::protocol::decode_commit_ok(&buf[1..]) {
+                    resolve_commit_waiter(&read_peer_id, ok.request_id, Ok(ok.commit_id));
+                }
                 continue;
             }
 
@@ -1733,8 +1935,14 @@ pub async fn sync_drive_with_peer_using_outcome(
                                     .iter()
                                     .map(|(s, b)| (s.as_str(), b.as_slice()))
                                     .collect();
-                                for chunk in super::protocol::encode_sync_push_chunks(drive, &refs)
-                                {
+                                for chunk in super::protocol::encode_sync_push_chunks_with_envelopes(
+                                    drive,
+                                    &refs,
+                                    &crate::envelopes::for_subjects(
+                                        store,
+                                        entries.iter().map(|(s, _)| s.as_str()),
+                                    ),
+                                ) {
                                     send.write_u32(chunk.len() as u32).await.map_err(io_err)?;
                                     send.write_all(&chunk).await.map_err(io_err)?;
                                 }
@@ -1820,7 +2028,14 @@ pub async fn sync_drive_with_peer_using_outcome(
                             .iter()
                             .map(|(s, b)| (s.as_str(), b.as_slice()))
                             .collect();
-                        for chunk in super::protocol::encode_sync_push_chunks(drive, &refs) {
+                        for chunk in super::protocol::encode_sync_push_chunks_with_envelopes(
+                            drive,
+                            &refs,
+                            &crate::envelopes::for_subjects(
+                                store,
+                                entries.iter().map(|(s, _)| s.as_str()),
+                            ),
+                        ) {
                             send.write_u32(chunk.len() as u32).await.map_err(io_err)?;
                             send.write_all(&chunk).await.map_err(io_err)?;
                         }

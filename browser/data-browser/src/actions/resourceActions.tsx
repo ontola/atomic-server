@@ -1,4 +1,5 @@
 import toast from 'react-hot-toast';
+import { createWebsite, starterWebsite } from '@chunks/Website/websiteModel';
 import { canvas, core, dataBrowser, forks, server } from '@tomic/react';
 import {
   FaArrowUpRightFromSquare,
@@ -51,23 +52,29 @@ export const resourceActions: ActionDefinition[] = [
   {
     id: 'view',
     scope: 'resource',
-    section: 'view',
+    section: 'action',
     label: () => 'Normal View',
     helper: () => 'Open the regular, default View.',
     keywords: ['show', 'open'],
-    disabled: ctx => ctx.pathname.startsWith(paths.show),
+    icon: () => <FaWindowMaximize />,
+    available: ctx =>
+      ctx.subject !== ctx.currentSubject ||
+      !ctx.pathname.startsWith(paths.show),
     run: ctx => ctx.navigate(constructOpenURL(ctx.subject)),
   },
   {
     id: 'data',
     scope: 'resource',
-    section: 'view',
+    section: 'action',
     label: () => 'Data View',
     helper: () => 'View the resource and its properties in the Data View.',
     keywords: ['json', 'raw', 'properties'],
     shortcut: shortcuts.data,
     shortcutLabel: () => 'Show data view',
-    disabled: ctx => ctx.pathname.startsWith(paths.data),
+    icon: () => <FaCode />,
+    available: ctx =>
+      ctx.subject !== ctx.currentSubject ||
+      !ctx.pathname.startsWith(paths.data),
     run: ctx => ctx.navigate(dataURL(ctx.subject)),
   },
   {
@@ -88,6 +95,29 @@ export const resourceActions: ActionDefinition[] = [
       });
 
       ctx.navigate(constructOpenURL(subject));
+    },
+  },
+  {
+    id: 'new-website',
+    scope: 'resource',
+    section: 'action',
+    label: () => 'New website',
+    helper: () =>
+      'Design a website with Assistant, using Atomic documents and tables.',
+    keywords: ['website', 'site', 'publish', 'webpage'],
+    icon: () => <FaWindowMaximize />,
+    searchOnly: true,
+    available: ctx => ctx.canWrite && ctx.drive !== undefined,
+    run: async ctx => {
+      const doc = ctx.resource.hasClasses(dataBrowser.classes.documentV2)
+        ? ctx.subject
+        : undefined;
+      const resource = await createWebsite(
+        ctx.store,
+        ctx.drive!,
+        starterWebsite(doc ? ctx.resource.title : 'My website', doc),
+      );
+      ctx.navigate(constructOpenURL(resource.subject));
     },
   },
   {

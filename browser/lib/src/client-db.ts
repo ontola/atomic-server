@@ -637,6 +637,19 @@ export class ClientDbWorker {
     return r ?? { jsonAd: null, snapshot: null };
   }
 
+  /** Every subject in one worker round trip, in order; see the worker. */
+  async getResourcesWithSnapshots(
+    subjects: string[],
+  ): Promise<Array<{ jsonAd: string | null; snapshot: Uint8Array | null }>> {
+    if (subjects.length === 0) return [];
+    const rows = (await this.send({
+      type: 'getResourcesWithSnapshots',
+      subjects,
+    })) as Array<{ jsonAd: string | null; snapshot: Uint8Array | null }> | null;
+
+    return rows ?? subjects.map(() => ({ jsonAd: null, snapshot: null }));
+  }
+
   async putResource(jsonAd: string): Promise<void> {
     await this.send({ type: 'putResource', jsonAd });
   }
@@ -782,6 +795,39 @@ export class ClientDbWorker {
     const r = await this.send({ type: 'getLoroSnapshot', subject });
 
     return (r as Uint8Array | null) ?? null;
+  }
+
+  /** The retained signed envelopes (commit JSON-AD) per subject, to ride
+   *  along a `SYNC_PUSH`. Empty when the WASM build predates the accessor. */
+  async envelopesFor(subjects: string[]): Promise<Record<string, string[]>> {
+    if (subjects.length === 0) return {};
+
+    try {
+      const r = await this.send({ type: 'envelopesFor', subjects });
+
+      return JSON.parse(r as string) as Record<string, string[]>;
+    } catch {
+      return {};
+    }
+  }
+
+  /** Keep envelopes that arrived with a `SYNC_PUSH`; each is verified in
+   *  WASM before it is stored. Resolves to how many were kept. */
+  async importEnvelopes(
+    envelopes: Array<{ subject: string; json: string }>,
+  ): Promise<number> {
+    if (envelopes.length === 0) return 0;
+
+    try {
+      const r = await this.send({
+        type: 'importEnvelopes',
+        envelopes: JSON.stringify(envelopes),
+      });
+
+      return typeof r === 'number' ? r : 0;
+    } catch {
+      return 0;
+    }
   }
 
   /** Who signed `subject`'s history, from the envelopes this client applied

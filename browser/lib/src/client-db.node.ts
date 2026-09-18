@@ -151,6 +151,12 @@ export class NodeClientDb {
     return { jsonAd: jsonAd ?? null, snapshot: snapshot ?? null };
   }
 
+  async getResourcesWithSnapshots(
+    subjects: string[],
+  ): Promise<Array<{ jsonAd: string | null; snapshot: Uint8Array | null }>> {
+    return Promise.all(subjects.map(s => this.getResourceWithSnapshot(s)));
+  }
+
   /** Match the worker persistence barrier for headless Store clients. */
   async flush(): Promise<void> {
     this.requireDb().flush();
@@ -245,6 +251,31 @@ export class NodeClientDb {
     const r = this.requireDb().getLoroSnapshot(subject);
 
     return (r as Uint8Array | null) ?? null;
+  }
+
+  async envelopesFor(subjects: string[]): Promise<Record<string, string[]>> {
+    const db = this.requireDb();
+
+    if (subjects.length === 0 || typeof db.envelopesFor !== 'function') {
+      return {};
+    }
+
+    return JSON.parse(db.envelopesFor(JSON.stringify(subjects))) as Record<
+      string,
+      string[]
+    >;
+  }
+
+  async importEnvelopes(
+    envelopes: Array<{ subject: string; json: string }>,
+  ): Promise<number> {
+    const db = this.requireDb();
+
+    if (envelopes.length === 0 || typeof db.importEnvelopes !== 'function') {
+      return 0;
+    }
+
+    return (await db.importEnvelopes(JSON.stringify(envelopes))) as number;
   }
 
   async historyAttribution(

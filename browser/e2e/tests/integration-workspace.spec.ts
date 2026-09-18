@@ -6,12 +6,13 @@ test('workspace owns its views and links to separate connection settings', async
   page,
 }) => {
   const installed = await page.evaluate(async () => {
-    const setupPath = '/src/chunks/PluginRuns/ConnectGitHub.tsx';
+    // `ConnectGitHub.tsx` is a thin compatibility wrapper around the
+    // schema-driven AppSetupForm and no longer imports the installer;
+    // `githubInstaller.ts` is the module that still names its path.
+    const setupPath = '/src/chunks/PluginRuns/githubInstaller.ts';
     await import(/* @vite-ignore */ setupPath);
     // Vite serves the installer after loading its owning UI module.
-    const ui = await fetch('/src/chunks/PluginRuns/ConnectGitHub.tsx').then(r =>
-      r.text(),
-    );
+    const ui = await fetch(setupPath).then(r => r.text());
     const path = ui.match(
       /"([^"]*integrations\/github-issues\/atomic[^"]*)"/,
     )![1];
@@ -187,7 +188,12 @@ test('workspace starts automation chat without requiring a connection', async ({
       .getByText('Help me create a new automation.', { exact: false })
       .first(),
   ).toBeVisible();
-  await expect(page.getByRole('dialog')).not.toBeVisible();
+  // The workspace dialog must be gone — but not "no dialog at all": with no AI
+  // provider configured, `askAI` legitimately raises the model-setup dialog
+  // (`AISetupPanel`), and that is what this used to catch.
+  await expect(
+    page.getByRole('dialog').getByText('No automations yet.', { exact: true }),
+  ).not.toBeVisible();
   const automation = await page.evaluate(async workspace => {
     const scriptPath = '/src/chunks/PluginRuns/runScript.ts';
     const { createPlugin } = await import(/* @vite-ignore */ scriptPath);

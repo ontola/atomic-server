@@ -29,6 +29,9 @@ import {
   encodeAuth,
   encodeCommit,
   encodeGet,
+  encodeGetMany,
+  decodeGetManyResult,
+  CAP_GET_MANY,
   encodeHello,
   encodeSub,
   encodeUnsub,
@@ -70,6 +73,21 @@ import { perfMark, perfSpan } from './perf-trace.js';
 // (auth race + drive sub + several parallel GETs queue up). Above ~10s, the
 // failure mode is a real server hang or stuck WS, not transient slowness.
 const REQUEST_TIMEOUT = 10000;
+
+/** The typed error a GET (or one GET_MANY entry) is refused with. Legacy GET
+ *  errors carry UNKNOWN plus the typed Rust error prefix; preserving the
+ *  read result lets callers tell missing data from a server failure (and
+ *  avoid subscribing to an absent drive). */
+function getError(msg: { message: string; code: number }): AtomicError {
+  const type = msg.message.startsWith('Resource not found.')
+    ? ErrorType.NotFound
+    : msg.message.startsWith('Unauthorized.')
+      ? ErrorType.Unauthorized
+      : ErrorType.Server;
+
+  return new AtomicError(msg.message, type, msg.code);
+}
+
 /** How long `authenticate` waits for the server's `CHALLENGE` before signing
  *  a timestamp-only proof (a server that predates the frame never sends it). */
 const CHALLENGE_WAIT_MS = 300;
@@ -246,6 +264,17 @@ export class WSClient {
       timer: ReturnType<typeof setTimeout>;
     }
   >();
+  /** Pending GET_MANY batches awaiting their `GET_MANY_RESULT`, keyed by
+   *  request_id. One resolver per batch; entries come back in request order. */
+  private pendingGetManys = new Map<
+    number,
+    {
+      subjects: string[];
+      resolve: (results: Array<Resource | Error>) => void;
+      reject: (e: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
   /** Pending COMMIT requests awaiting a `COMMIT_OK` (or `ERROR`),
    *  keyed by request_id. */
   private pendingCommits = new Map<
@@ -321,6 +350,16 @@ export class WSClient {
     if (this.pendingCommits.size > 0) {
       const entries = [...this.pendingCommits.values()];
       this.pendingCommits.clear();
+
+      for (const p of entries) {
+        clearTimeout(p.timer);
+        p.reject(err);
+      }
+    }
+
+    if (this.pendingGetManys.size > 0) {
+      const entries = [...this.pendingGetManys.values()];
+      this.pendingGetManys.clear();
 
       for (const p of entries) {
         clearTimeout(p.timer);
@@ -806,6 +845,72 @@ export class WSClient {
     });
   }
 
+  /** Whether the server understands `GET_MANY` (advertised on `AUTH_OK`). */
+  public get supportsGetMany(): boolean {
+    return this._serverCaps.includes(CAP_GET_MANY);
+  }
+
+  /**
+   * Fetch a list of subjects in one round trip. Returns one entry per
+   * subject, in order: the hydrated Resource, or the Error a single GET
+   * would have rejected with. Falls back to individual GETs on a server
+   * without the `get-many` capability, so callers need not care.
+   */
+  public async fetchMany(subjects: string[]): Promise<Array<Resource | Error>> {
+    if (subjects.length === 0) return [];
+    await this.authenticate();
+
+    if (this.readyState !== WebSocket.OPEN) {
+      throw new AtomicError(
+        `WebSocket not open, cannot fetch ${subjects.length} subjects`,
+        ErrorType.Server,
+      );
+    }
+
+    if (!this.supportsGetMany) {
+      return Promise.all(
+        subjects.map(subject =>
+          this.fetch(subject).catch((e: unknown) =>
+            e instanceof Error ? e : new Error(String(e)),
+          ),
+        ),
+      );
+    }
+
+    const requestId = this.nextRequestId++;
+
+    if (this.nextRequestId > 0xffff) {
+      this.nextRequestId = 1;
+    }
+
+    return new Promise((resolve, reject) => {
+      const close = perfSpan('ws.GET_MANY', { count: subjects.length });
+      const timer = setTimeout(() => {
+        this.pendingGetManys.delete(requestId);
+        close({ err: 'timeout' });
+        reject(
+          new Error(
+            `GET_MANY of ${subjects.length} subjects timed out after ${REQUEST_TIMEOUT}ms.`,
+          ),
+        );
+      }, REQUEST_TIMEOUT);
+
+      this.pendingGetManys.set(requestId, {
+        subjects,
+        resolve: results => {
+          close('ok');
+          resolve(results);
+        },
+        reject: (e: Error) => {
+          close({ err: e.message });
+          reject(e);
+        },
+        timer,
+      });
+      this.sendBinary(encodeGetMany(requestId, subjects));
+    });
+  }
+
   /**
    * Send a signed commit over the WebSocket. Resolves with the
    * server's created commit resource (same shape as HTTP `/commit`
@@ -1005,15 +1110,7 @@ export class WSClient {
           const pendingGet = this.takePending(msg.requestId);
 
           if (pendingGet) {
-            // Legacy GET errors carry UNKNOWN plus the typed Rust error prefix.
-            // Preserve the read result so callers can distinguish missing data
-            // from a server failure (and avoid subscribing to an absent drive).
-            const type = msg.message.startsWith('Resource not found.')
-              ? ErrorType.NotFound
-              : msg.message.startsWith('Unauthorized.')
-                ? ErrorType.Unauthorized
-                : ErrorType.Server;
-            pendingGet.reject(new AtomicError(msg.message, type, msg.code));
+            pendingGet.reject(getError(msg));
           } else {
             this.takePendingCommit(msg.requestId)?.reject(err);
           }
@@ -1173,6 +1270,68 @@ export class WSClient {
         break;
       }
 
+      case Tag.GET_MANY_RESULT: {
+        const msg = decodeGetManyResult(payload);
+        if (!msg) break;
+        const pending = this.pendingGetManys.get(msg.requestId);
+        if (!pending) break;
+        clearTimeout(pending.timer);
+        this.pendingGetManys.delete(msg.requestId);
+
+        // Each entry is the frame a single GET would have been answered
+        // with, so it takes the same path: hydrate through `applyIncoming`,
+        // or classify the ERROR. Positional: the server keeps request order.
+        const results = pending.subjects.map((subject, index) => {
+          const frame = msg.frames[index];
+
+          if (!frame) {
+            return new AtomicError(
+              `GET_MANY answered nothing for ${subject}`,
+              ErrorType.Server,
+            );
+          }
+
+          const inner = frame.subarray(1);
+
+          if (frame[0] === Tag.UPDATE) {
+            const update = decodeUpdate(inner);
+
+            if (!update) {
+              return new AtomicError(
+                `Malformed UPDATE for ${subject}`,
+                ErrorType.Server,
+              );
+            }
+
+            this.store.applyIncoming({
+              subject: update.subject,
+              loroBytes: update.loroBytes,
+              commitId: update.commitId,
+              source: 'ws-pending-get',
+              replaceLoroDocsFromRemote: !!(update.flags & Flags.SNAPSHOT),
+            });
+            const hydrated = this.store.resources.get(update.subject);
+
+            return (
+              hydrated ??
+              new AtomicError(`Could not store ${subject}`, ErrorType.Server)
+            );
+          }
+
+          const error = frame[0] === Tag.ERROR ? decodeError(inner) : undefined;
+
+          return error
+            ? getError(error)
+            : new AtomicError(
+                `Unexpected ${tagName(frame[0])} entry for ${subject}`,
+                ErrorType.Server,
+              );
+        });
+        pending.resolve(results);
+
+        break;
+      }
+
       case Tag.DESTROY: {
         const subject = decodeSubject(payload.subarray(2));
 
@@ -1223,6 +1382,21 @@ export class WSClient {
             });
             const resource = this.store.resources.get(subject);
             if (resource) this.checkForMissingBlobs(resource);
+          }
+
+          // The signed envelopes of what was just applied, so History can
+          // attribute it locally. Verified in WASM before being kept; a
+          // client without a database simply asks the server later.
+          if (msg.envelopes.length > 0) {
+            const clientDb = this.store.getClientDb();
+
+            // Not every client-db implementation carries envelope import;
+            // one that doesn't simply asks the server for attribution later.
+            if (typeof clientDb?.importEnvelopes === 'function') {
+              clientDb
+                .importEnvelopes(msg.envelopes)
+                .catch(e => console.warn('[WS] envelope import failed:', e));
+            }
           }
 
           // Only mark the drive sync as finished on the final chunk —
@@ -1858,12 +2032,23 @@ export class WSClient {
     if (!current()) return;
 
     if (entries.length > 0) {
+      // Our retained envelopes ride with the snapshots, so the server can
+      // attribute history it never saw applied live.
+      const envelopes = clientDb
+        ? await clientDb.envelopesFor(entries.map(e => e.subject))
+        : {};
+      if (!current()) return;
+
       if (this.readyState !== WebSocket.OPEN) {
         return;
       }
 
       try {
-        for (const frame of encodeSyncPushChunks(diff.drive, entries)) {
+        for (const frame of encodeSyncPushChunks(
+          diff.drive,
+          entries,
+          envelopes,
+        )) {
           this.sendBinary(frame);
         }
       } catch (e) {

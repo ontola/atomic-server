@@ -71,6 +71,11 @@
 
 ## CMS product concerns
 
+> The draft/publication items below are owned by
+> [`drafts-and-suggestions.md`](./drafts-and-suggestions.md) and the locale
+> items by [`content-i18n.md`](./content-i18n.md); this list is the
+> website-specific view of them, not a second backlog.
+
 ### Drafts and concepts
 
 - [ ] Define publication visibility independently from write permission.
@@ -113,7 +118,8 @@
 - [ ] Decide locale-aware path uniqueness, routing, and fallback rules, for
       example `/en/about` and `/nl/over` within one website.
 - [ ] Separate translated content resources from translated template chrome.
-- [ ] Add E2E coverage for at least two locales before claiming i18n support.
+- [x] Add E2E coverage for at least two locales before claiming i18n support
+      (`browser/e2e/tests/template.spec.ts`, `assertTwoLocaleSite`).
 
 ## Decisions still open
 

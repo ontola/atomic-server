@@ -15,12 +15,13 @@
 
 use crate::{
     agents::Agent,
-    commit::CommitResponse,
+    commit::{Commit, CommitOpts, CommitResponse},
     db::Db,
     errors::AtomicResult,
     storelike::{Query, QueryResult},
     sync::engine::{ingest_commit, CommitIngestOpts},
-    Storelike,
+    sync::outbox::{CommitTransport, DrainReport, Outbox},
+    Resource, Storelike,
 };
 
 /// The trust role under which a signed commit is ingested. `Hub` and `Peer`
@@ -100,6 +101,44 @@ impl AtomicNode {
         self.db.search_hits(query, opts)
     }
 
+    /// The durable outbox of the node's signing agent
+    /// (`crate::sync::outbox`): what this node wrote and no hub has
+    /// acknowledged yet.
+    pub fn outbox(&self) -> Outbox {
+        Outbox::new(self.db.clone())
+    }
+
+    /// Save a locally edited resource: sign with the node's agent, apply,
+    /// and queue the subject for the hub (`Resource::save_locally` then
+    /// `Outbox::mark_dirty`). The one write path a binding should use for
+    /// its own edits; a save that skips the queue is an edit that never
+    /// leaves the device.
+    pub async fn save_locally(&self, resource: &mut Resource) -> AtomicResult<CommitResponse> {
+        let response = resource.save_locally(&self.db).await?;
+        self.outbox().mark_dirty(&response).await?;
+        Ok(response)
+    }
+
+    /// Apply a commit this node signed itself (a destroy, an undo built
+    /// from history) and queue it like `save_locally` does.
+    pub async fn apply_local_commit(
+        &self,
+        commit: Commit,
+        opts: &CommitOpts,
+    ) -> AtomicResult<CommitResponse> {
+        let response = self.db.apply_commit(commit, opts).await?;
+        self.outbox().mark_dirty(&response).await?;
+        Ok(response)
+    }
+
+    /// Deliver queued writes over `transport` (`Outbox::drain`).
+    pub async fn drain_outbox<T: CommitTransport>(
+        &self,
+        transport: &mut T,
+    ) -> AtomicResult<DrainReport> {
+        self.outbox().drain(transport).await
+    }
+
     /// Ingest a signed JSON-AD commit under `policy`.
     ///
     /// - `Hub` / `Peer`: `sync::engine::ingest_commit` with the matching
@@ -164,6 +203,58 @@ mod tests {
             .unwrap_or_else(|e| panic!("{label}: open failed: {e}"));
         db.populate().await.unwrap();
         AtomicNode::from_db(db)
+    }
+
+    /// A local save through the node is queued for the hub; the same save
+    /// straight on the store is not, which is why bindings go through here.
+    #[tokio::test]
+    async fn save_locally_queues_the_subject_for_the_hub() {
+        let node = open_test_node("outbox").await;
+        let (_alice, drive) = node.db().setup("Alice").await.unwrap();
+        let subject = node
+            .db()
+            .create_resource(urls::FOLDER, &drive, "note", None)
+            .await
+            .unwrap();
+        let mut resource = node
+            .db()
+            .get_resource(&subject.as_str().into())
+            .await
+            .unwrap();
+        resource
+            .set(
+                urls::NAME.into(),
+                Value::String("renamed".into()),
+                node.db(),
+            )
+            .await
+            .unwrap();
+        node.save_locally(&mut resource).await.unwrap();
+        assert!(node.outbox().has_pending(&subject));
+
+        let mut destroy = crate::commit::CommitBuilder::new(subject.as_str().into());
+        destroy.destroy(true);
+        let agent = node.agent().unwrap();
+        let resource = node
+            .db()
+            .get_resource(&subject.as_str().into())
+            .await
+            .unwrap();
+        let commit = destroy.sign(&agent, node.db(), &resource).await.unwrap();
+        let opts = CommitOpts {
+            validate_signature: true,
+            update_index: true,
+            ..CommitOpts::no_validations_no_index()
+        };
+        node.apply_local_commit(commit, &opts).await.unwrap();
+        let entry = node
+            .outbox()
+            .entries()
+            .unwrap()
+            .into_iter()
+            .find(|e| e.subject == crate::Subject::from_raw(&subject, None).pure_id())
+            .expect("entry");
+        assert!(entry.destroy && entry.envelope_json.is_some());
     }
 
     /// Two nodes in one process, no Actix: a genesis commit minted on one is

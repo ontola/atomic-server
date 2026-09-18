@@ -70,8 +70,22 @@ async fn resolve_blob_write_admission(store: &Db, hash_hex: &str) -> Result<(), 
 pub async fn put_blob(
     path: web::Path<String>,
     appstate: web::Data<AppState>,
+    req: actix_web::HttpRequest,
     body: web::Bytes,
 ) -> AtomicServerResult<HttpResponse> {
+    // A blob put carries no signature (admission is the referencing commit),
+    // so the peer address stands in for the agent, on the agent-sized budget:
+    // one browser draining a folder of images must not trip the anonymous one.
+    if let Err(limited) = appstate
+        .write_rate_limiter
+        .check(&crate::helpers::peer_ip(&req), false)
+    {
+        return Err(AtomicServerError {
+            message: limited.to_string(),
+            error_type: AppErrorType::TooManyRequests,
+            error_resource: None,
+        });
+    }
     let hash_hex = path.into_inner();
     if hash_hex.len() != 64 {
         return Err("Hash must be 64 hex chars (BLAKE3)".into());

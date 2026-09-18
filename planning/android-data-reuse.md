@@ -341,6 +341,6 @@ transport abstraction across them.
 - Reuses commits-as-write-certificates
   ([`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md)),
   rights-based enforcement ([`authorization-sync.md`](./authorization-sync.md)),
-  and host-side signing ([`sign-at-drain.md`](./sign-at-drain.md)).
+  and host-side signing ([`sign-at-drain.md`](./completed/sign-at-drain.md)).
 - The drive replication used for handover is the one canvas already ships in
   `sync_drive_to_server` (`flutter/rust/src/api/simple.rs`).

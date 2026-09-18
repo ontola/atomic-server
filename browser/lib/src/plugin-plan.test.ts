@@ -492,3 +492,54 @@ describe('temporary references from the real Store', () => {
     ).toBe(true);
   });
 });
+
+describe('fetching', () => {
+  it('fetches every property and subject it needs at once', async () => {
+    const host = makeHost({
+      resources: { 'https://x/1': { [NAME]: 'old' } },
+    });
+
+    let inFlight = 0;
+    let peak = 0;
+
+    const observe = async <T>(work: () => Promise<T>): Promise<T> => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise(resolve => setTimeout(resolve, 5));
+
+      try {
+        return await work();
+      } finally {
+        inFlight--;
+      }
+    };
+
+    const getProperty = host.getProperty;
+    const readResource = host.readResource;
+    host.getProperty = vi.fn(subject => observe(() => getProperty(subject)));
+    host.readResource = vi.fn(subject => observe(() => readResource(subject)));
+
+    const plan = await planVerdict(
+      verdict({
+        intents: [
+          {
+            op: 'create',
+            localId: 'a',
+            parent: 'https://x/drive',
+            isA: [],
+            set: { [NAME]: 'A', [AGE]: 1 },
+          },
+          { op: 'set', subject: 'https://x/1', set: { [NAME]: 'B' } },
+        ],
+      }),
+      host,
+    );
+
+    expect(plan.changes).toHaveLength(2);
+    // Two properties and one resource read. In series that is three waits in a
+    // row in front of the approval dialog; a distinct property is still only
+    // ever fetched once.
+    expect(peak).toBe(3);
+    expect(host.getProperty).toHaveBeenCalledTimes(2);
+  });
+});

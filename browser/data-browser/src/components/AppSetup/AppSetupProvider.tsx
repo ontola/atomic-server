@@ -52,7 +52,13 @@ export function AppSetupProvider({ children }: PropsWithChildren) {
       {children}
       <Dialog
         {...dialog}
-        show={isOpen && request?.identity === identity}
+        // Not `isOpen`: that stays true until the close animation has
+        // finished, which is only ever reached because the Dialog saw
+        // `show` go false. Deriving the prop from it deadlocked the close —
+        // `close()` set `dialog.show` to false, this prop stayed true, and
+        // the modal sat over the page swallowing every click, including the
+        // one on its own close button.
+        show={dialog.show && request?.identity === identity}
         width='38rem'
       >
         <Dialog.Title>

@@ -385,6 +385,8 @@ pub async fn approve(mut host: StoreHost, id: &str) -> Result<Receipt, String> {
             .map_err(|e| e.to_string())?
             .unwrap_or_default();
         let mut all_abandoned = !runs.is_empty();
+        // `p.origin` was checked in the enclosing condition.
+        #[allow(clippy::unnecessary_unwrap)]
         for run in runs {
             if super::journal::Journal::new(
                 &host.db,

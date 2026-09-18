@@ -506,6 +506,10 @@ pub async fn export_vault_segment(
                 entries.push(PackEntry {
                     subject: subject_str.clone(),
                     update,
+                    envelopes: crate::envelopes::envelopes(store, subject_str)
+                        .into_iter()
+                        .map(|e| e.json)
+                        .collect(),
                 });
                 cursors.insert(subject_str.clone(), reached);
             }
@@ -842,6 +846,18 @@ pub async fn import_vault_batch(
                 .add_resource_opts(&resource, false, true, true)
                 .await?;
 
+            // The envelopes that signed this history, verified before they
+            // are kept, so the restored device attributes its own past.
+            for json in &entry.envelopes {
+                if let Err(e) = crate::envelopes::import_envelope(store, &entry.subject, json).await
+                {
+                    tracing::warn!(
+                        "Cloud Vault restore: envelope for {} rejected: {e}",
+                        entry.subject
+                    );
+                }
+            }
+
             // A subject this device had destroyed is being re-created by the
             // backup. Leaving the tombstone in place would keep `is_tombstoned`
             // suppressing it from every future bulk sync, so the restored
@@ -1100,6 +1116,7 @@ mod tests {
             vec![PackEntry {
                 subject: "did:ad:drive/secret-resource".into(),
                 update: vec![1, 2, 3],
+                envelopes: Vec::new(),
             }],
             vec![],
         );
@@ -1520,6 +1537,40 @@ mod tests {
         assert_eq!(partial.packs_read, 1);
     }
 
+    /// A restore carries the signed envelopes with the history, so the
+    /// restored device can say who signed what instead of "Unattributed".
+    #[tokio::test]
+    async fn restored_history_is_attributed_to_its_signer() {
+        let source = Db::init_temp("vault_envelopes_source").await.unwrap();
+        let (_agent, drive) = source.setup("alice").await.unwrap();
+        let note = source
+            .create_resource(FOLDER, &drive, "note", None)
+            .await
+            .unwrap();
+        let drive_subject = Subject::from_raw(&drive, source.get_base_domain().as_deref());
+        let signer = crate::envelopes::latest_envelope(&source, &note)
+            .expect("create_resource signs a genesis")
+            .json;
+        let key = key();
+        let vault = MemoryVaultStore::new();
+        backup(&source, &drive_subject, &key, &vault, DEVICE)
+            .await
+            .unwrap();
+
+        let restored = Db::init_temp("vault_envelopes_restored").await.unwrap();
+        restore(&restored, &key, &vault).await;
+        let kept = crate::envelopes::envelopes(&restored, &note);
+        assert_eq!(kept.len(), 1, "the pack carried the genesis envelope");
+        assert_eq!(kept[0].json, signer);
+        let report = crate::envelopes::attribute_history(&restored, &note)
+            .await
+            .unwrap();
+        assert!(
+            report.attributions.iter().any(|a| a.verified && a.genesis),
+            "{report:?}"
+        );
+    }
+
     /// A subject that disappears without a tombstone is not claimed as deleted.
     /// Inventing a tombstone would delete real data on restore — a far worse
     /// failure than carrying a stale resource for another cycle.
@@ -1875,6 +1926,7 @@ mod tests {
             vec![PackEntry {
                 subject: "s".into(),
                 update: vec![9, 9, 9],
+                envelopes: Vec::new(),
             }],
             vec!["gone".into()],
         );

@@ -39,7 +39,7 @@ This document might not be entirely up to date. If you need anything that is not
 These components help with rendering resources in different contexts.
 
 - `src/views/ResourceInline/ResourceInline.tsx` - Compact inline link for any resource subject, with loading/error handling and class-specific inline renderers.
-- `src/views/ResourceLine.tsx` - Small non-card line item for a resource title and truncated description, useful in dropdowns and dense lists.
+- `src/views/ResourceRow.tsx` - Compact resource row with class icon, title, truncated description, loading/error states, and optional navigation.
 - `src/views/Card/ResourceCard.tsx` - Generic card renderer for any resource subject; dispatches to class-specific cards when available and falls back to `ResourceCardDefault`.
   - `src/views/Card/ResourceCardTitle.tsx` - Shared card title row with class icon, resource link, title transition, and optional actions.
 - `src/views/ResourcePage.tsx` - Full-page resource view dispatcher that picks the best page component for a resource class and falls back to `ResourcePageDefault`.

@@ -196,8 +196,10 @@ unblocked:
   envelopes; the receiver applies them as a peer `COMMIT` and does not
   fall back to the unsigned path on a bad signature. Unsigned entries
   stay admission-gated for senders that never stored the envelope.
-  Requiring an envelope on every `remove[]` still waits on
-  `Tree::Envelopes` (commit-retention floor).
+  `Tree::Envelopes` shipped (`lib/src/envelopes.rs`, #1313) and envelopes
+  now travel with `SYNC_PUSH` (2026-09-15), so requiring an envelope on
+  every `remove[]` no longer waits on anything; it is unfinished work, not a
+  blocked item.
 - [x] Pre-auth frame budget in the live read loop (the `matches!(agent,
   Public)` gate exists in `handle_stream`; mirror it in
   `register_live_peer`). (2026-09-01: the live loop now refuses every
@@ -253,10 +255,12 @@ now load-bearing rather than hygiene:
   `handle_frame_full`). `IrohTransport` / `WsTransport` wrappers are not
   wired; `handle_stream` / `register_live_peer` still own the Iroh
   lifecycle.
-- [ ] **Port `LocalOutbox` semantics into `atomic_lib`** (`AtomicNode`
-  outbox): dirty bit, genesis envelope, `baseVersion`, backoff, blocked
-  states, structured-error classification. Android needs durable offline
-  queuing exactly like the browser; Flutter's `try_push_commit` is not it.
+- [x] **Port `LocalOutbox` semantics into `atomic_lib`** (2026-09-16,
+  `lib/src/sync/outbox.rs`): dirty bit, genesis/destroy envelope,
+  `base_version`, backoff, blocked states, structured-error classification,
+  per signing agent in `Tree::Outbox`. Flutter's `try_push_commit` records
+  into it and drains over the WS client. Draining over an Iroh session (P4)
+  needs a `CommitTransport` for the live peer stream.
 - [ ] **`SyncSession` state machine** beyond the responder loop: connect →
   mutual AUTH (fail closed) → VV reconcile → live → drain-on-dirty;
   reconnect with backoff; emits `NodeEvent`s. Replaces `handle_stream` +
@@ -299,9 +303,14 @@ Same-agent pairing needs no consent dialog — the key is the consent
   previous-commit checks off for concurrent peer writes, but timestamps ARE
   validated (replay bounding). Tests:
   `engine_commit_from_authorized_signer_is_applied` /
-  `..._unauthorized_signer_is_rejected` (rights gate revert-proven). **Still
-  to do:** the *sending* half — the outbox actually draining `COMMIT` frames
-  over an Iroh `SyncSession` (needs P2's outbox port + session).
+  `..._unauthorized_signer_is_rejected` (rights gate revert-proven).
+  **Sending half shipped 2026-09-16:** `peer::LivePeerCommitTransport` sends
+  a `COMMIT` through the live write loop and the read loop resolves the
+  matching `COMMIT_OK` / `ERROR` (`COMMIT_WAITERS`); `register_live_peer`
+  drains the outbox on connect and Flutter falls back to
+  `drain_outbox_to_any_live_peer` when no WS session is open. Test:
+  `iroh_e2e::e2e_outbox_drains_over_the_live_link`. Not a `SyncSession`
+  yet: the live loop still owns the link.
 - [ ] `SYNC_PUSH` fast-path kept for initial reconcile between the two
   same-agent devices (permitted by Principle 3's exception; both sides have
   proven the same key).
@@ -326,7 +335,7 @@ Same-agent pairing needs no consent dialog — the key is the consent
 - Multi-peer topologies (>2 devices, mesh gossip), Reticulum/LoRa transport
   ([`reticulum-sync.md`](./reticulum-sync.md)), NAT-hostile relay policy.
 - High-audit per-change signatures
-  ([`sign-at-drain.md`](./sign-at-drain.md) § profiles).
+  ([`sign-at-drain.md`](./completed/sign-at-drain.md) § profiles).
 
 ## What gets deleted (yes, deleted — B is not "keep everything")
 

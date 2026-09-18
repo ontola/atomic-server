@@ -7,7 +7,7 @@
 > This doc keeps the direction and the open work.
 >
 > Builds on the WS `COMMIT` work in [`sync.md`](./sync.md), sign-at-drain in
-> [`sign-at-drain.md`](./sign-at-drain.md), and the runtime boundary in
+> [`sign-at-drain.md`](./completed/sign-at-drain.md), and the runtime boundary in
 > [`atomic-lib-runtime.md`](./atomic-lib-runtime.md).
 >
 > **Decision (accepted 2026-09-01):** the node that owns the URL is trusted with
@@ -49,7 +49,7 @@ protocol). Encoding lives in `lib/src/sync/protocol.rs`; semantics in
 | Piece | Browser | Flutter native |
 | --- | --- | --- |
 | Local store | OPFS (`ClientDb`) | redb (`Db` in FRB) |
-| Outbox shape | **Dirty-bit + sign-at-drain** (`local-outbox.ts`) — one signed commit per subject per drain pass; genesis envelope + offline `baseVersion` are the only stored artifacts; identity-scoped localStorage | Partial (`try_push_commit` when session open); no durable dirty queue, no backoff/blocked states |
+| Outbox shape | **Dirty-bit + sign-at-drain** (`local-outbox.ts`) — one signed commit per subject per drain pass; genesis envelope + offline `baseVersion` are the only stored artifacts; identity-scoped localStorage | **Ported (2026-09-16)**: `lib/src/sync/outbox.rs`, durable in `Tree::Outbox`, per agent, with backoff and blocked states; Flutter drains it over the WS client. Sequential per subject; no Iroh drain yet |
 | Persist commits | **WS `COMMIT` preferred**, HTTP `/commit` fallback (`Store.sendCommit`) ✅ | WS `COMMIT` when session open; else local only |
 | Live updates | WS `SUB` → `UPDATE`/`DESTROY` (QUERY_UPDATE retired) | WS session + `pollDbEvent` |
 | Bulk reconcile | binary `SYNC` on reconnect (hash-first probe, then filtered to the differing subjects), after outbox drain, narrowed by an RBSR range exchange (`RBSR_FP`/`RBSR_ITEMS`, full-VV fallback); `SYNC_DIFF.remove` applied ✅ | Iroh `SYNC`/`SYNC_PUSH` (peer.rs) |
@@ -173,15 +173,15 @@ that turned out to be already done, or blocked by a finding, say so inline.
   `WsClient::post_commit` settles only on its own `request_id`
   (`WsMessage::Error` now carries `request_id` and `code`), and a client
   that lists `commit-ok-slim` in its `HELLO` gets `[request_id] [commit_id]`
-  back (this doc, [`sign-at-drain.md`](./sign-at-drain.md)).
+  back (this doc, [`sign-at-drain.md`](./completed/sign-at-drain.md)).
 - [ ] Genesis + first delta in one pipelined pair. **Blocked on canonical
   commit ids (2026-09-04 finding):** the delta's `previousCommit` must name
   the genesis id the *server* minted, which on an HTTP-subject drive is
   `https://host/commits/<sig>` rather than the `did:ad:commit:<sig>` the
   client could derive locally. Make the server always mint `did:ad:commit:`
-  first (this doc, [`sign-at-drain.md`](./sign-at-drain.md) § contract).
+  first (this doc, [`sign-at-drain.md`](./completed/sign-at-drain.md) § contract).
 - [ ] Flag cleanups. **Re-scoped by the 2026-09-04 findings** in
-  [`sign-at-drain.md`](./sign-at-drain.md) § protocol cleanups:
+  [`sign-at-drain.md`](./completed/sign-at-drain.md) § protocol cleanups:
   `HAS_COMMIT_ID` cannot be unconditional while push-imported state has no
   commit id; `SYNC_OK` doubles as the `SYNC_PUSH` chunk ack and four Rust
   call sites depend on it; dropping `PUSH` is safe but worth little.
@@ -231,7 +231,7 @@ that turned out to be already done, or blocked by a finding, say so inline.
 
 ### Architecture
 
-- [ ] Port `LocalOutbox` semantics (dirty bit, genesis envelope, `baseVersion`,
+- [x] (2026-09-16) Port `LocalOutbox` semantics (dirty bit, genesis envelope, `baseVersion`,
   backoff, blocked) into `atomic_lib` as the `AtomicNode` outbox — one
   implementation for browser-wasm and Flutter (this doc,
   [`serverless-p2p.md`](./serverless-p2p.md)).
@@ -299,7 +299,7 @@ that turned out to be already done, or blocked by a finding, say so inline.
 - [x] (2026-09-03) — `docs/src/websockets.md` rewritten from the code, so
   the wire reference matches what the codec actually does.
 - [x] (2026-09-04) — the sign-at-drain commit-granularity contract is
-  written down in [`sign-at-drain.md`](./sign-at-drain.md) § "Commit-granularity
+  written down in [`sign-at-drain.md`](./completed/sign-at-drain.md) § "Commit-granularity
   contract" (one incremental commit per subject per pass that reached the
   server, plus at most one genesis; tiered concurrency across subjects).
 
@@ -352,7 +352,7 @@ plumbing around it, which still carries HTTP-era shapes:
      per-commit results. Only if pipelining measurably isn't enough.
 3. **Fat `COMMIT_OK`.** The full server commit JSON comes back; the client only needs
    the commit id for `lastCommit`. Shrink to `[request_id] [commit_id]`
-   (already listed in [`sign-at-drain.md`](./sign-at-drain.md) § protocol cleanups).
+   (already listed in [`sign-at-drain.md`](./completed/sign-at-drain.md) § protocol cleanups).
 4. **Genesis + first-delta = two round trips.** A new resource POSTs its pre-signed
    genesis envelope, then signs and POSTs the accumulated delta separately. Allow the
    drain to send both in one pipelined pair (genesis first; server applies in order).
@@ -363,9 +363,22 @@ plumbing around it, which still carries HTTP-era shapes:
    re-exports one bigger delta and signs one fresh commit. Document this as the
    contract; the commit *chain* granularity is "one commit per drain pass that reached
    the server", which is the right audit granularity.
-6. **Rust/mobile parity.** Port `LocalOutbox` semantics (dirty bit, genesis envelope,
-   `baseVersion`, backoff, blocked) into `atomic_lib` as the `AtomicNode` outbox so
-   Flutter stops maintaining a partial reimplementation (`try_push_commit`).
+6. ~~**Rust/mobile parity.**~~ Shipped 2026-09-16: `lib/src/sync/outbox.rs`
+   (`Outbox`, `OutboxEntry`, `CommitTransport`, `Tree::Outbox`) ports the dirty
+   bit, verbatim genesis/destroy envelope, `base_version`, exponential backoff,
+   blocked-after-eight and terminal-drop classification (`error_code` first,
+   `classify_commit_error` fallback). Entries are keyed per signing agent.
+   Flutter's `try_push_commit` now records into it and drains over the
+   `WsClient` (`impl CommitTransport for Arc<WsClient>`); `open_ws_sync`
+   drains on connect, and `peer::LivePeerCommitTransport` drains over a live
+   Iroh link. The interim guard in "State-first wire" below (skip
+   `Outbox::pending_subjects()` in bulk pushes) was tried and reverted the
+   same day: `collect_readable_snapshots` also serves a same-agent replica's
+   first sync, and withholding a pending subject there left the second
+   device waiting on a live-link drain (`peer_tests::a_canvas_syncs_to_a_second_device_through_the_bridge`
+   failed in CI). The guard needs a hub-versus-replica distinction the
+   collector does not have. Sequential per subject for now: pipelining
+   (item 2) is the next slice.
 
 ## State-first wire: commit as provenance envelope
 
@@ -375,7 +388,7 @@ default" is where the protocol is already heading — make it explicit:
 - **Server → client is state-first today.** Subscribers get one `UPDATE` frame carrying
   the subject's Loro state (snapshot or delta) + `commit_id` — not a commit-by-commit
   replay. Keep that. Finish the flag cleanups that cement it
-  ([`sign-at-drain.md`](./sign-at-drain.md)): `HAS_COMMIT_ID` always set, drop `PUSH`
+  ([`sign-at-drain.md`](./completed/sign-at-drain.md)): `HAS_COMMIT_ID` always set, drop `PUSH`
   (redundant with `request_id == 0`), collapse `SYNC_OK` into an empty `SYNC_DIFF`.
 - **Client → server: state accumulates locally, ONE signed commit per subject certifies
   it at drain time.** The commit is not the unit of editing; it's the signed envelope
@@ -467,7 +480,7 @@ envelope + `baseVersion` + backoff/blocked), not a signed-commit queue.
 | Doc | Relationship |
 | --- | --- |
 | [`atomic-lib-runtime.md`](./atomic-lib-runtime.md) | Owns `AtomicNode`, `NodeEvent`, `AtomicTransport`. |
-| [`sign-at-drain.md`](./sign-at-drain.md) | Outbox dirty-bit model (shipped); protocol cleanups this doc schedules. |
+| [`sign-at-drain.md`](./completed/sign-at-drain.md) | Outbox dirty-bit model (shipped); protocol cleanups this doc schedules. |
 | [`commit-retention-and-state-certificates.md`](./commit-retention-and-state-certificates.md) | Commit-as-state-certificate; idempotent replay that makes re-drain safe. |
 | [`sync.md`](./sync.md) | WS `COMMIT` / echo suppression — done; test coverage gaps. |
 | [`unified-data-layer.md`](./unified-data-layer.md) | Browser cache on top of node API. |
@@ -488,7 +501,7 @@ Findings referenced by number (F1–F12) are written up in
    (same-agent AUTH proof *is* the pairing).
 3. **Layer 2 provenance depth** — is `lastCommit`-id-only enough for same-agent
    replicas, or must `SYNC_PUSH` carry verifiable signed envelopes end-to-end
-   (overlaps the high-audit profile in [`sign-at-drain.md`](./sign-at-drain.md))?
+   (overlaps the high-audit profile in [`sign-at-drain.md`](./completed/sign-at-drain.md))?
 4. **P2P `remove` policy** — ✅ **Resolved 2026-07-02 with OQ2**: destroys
    become signed commits on the wire (see
    [`serverless-p2p.md`](./serverless-p2p.md) § Destroys). Decision closed;

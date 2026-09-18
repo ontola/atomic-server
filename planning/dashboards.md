@@ -465,6 +465,15 @@ Either way the Dashboard resource is unchanged; what is added is a way to *reach
 it. Do this before anything else on this list — a feature nobody can find has no
 users to tell you what is wrong with it.
 
+**Shipped 2026-09-16, the first way:** `view-kind: 'dashboard'` plus
+`view-dashboard` (`lib/defaults/table.json`, `tableViewKinds.ts`). "Add view →
+Dashboard" and "View type → Dashboard" create an empty Dashboard as a child of
+the table and point the view at it (`useTableView.ts`
+`createDashboardResource`); `TableResource` renders `DashboardView`, the same
+page the resource has on its own. `table-dashboard` is not added: the view
+already names it. E2E: `dashboard.spec.ts` "a table reaches its dashboard as a
+tab".
+
 #### 2. Templates that ship a dashboard
 
 "A dashboard per template" above already says what each of the thirteen would

@@ -519,6 +519,58 @@ impl WsClient {
     }
 }
 
+/// The WebSocket client is an outbox transport: one `COMMIT` per call,
+/// answered by the matching `COMMIT_OK` or `ERROR`. Transport failures
+/// (closed socket, timeout) come back as an `UNKNOWN`-coded refusal so the
+/// entry is retried later rather than dropped or parked.
+impl crate::sync::outbox::CommitTransport for std::sync::Arc<WsClient> {
+    async fn post_commit(
+        &mut self,
+        request_id: u16,
+        commit_json: &str,
+    ) -> Result<String, crate::sync::outbox::CommitRefused> {
+        use crate::sync::outbox::CommitRefused;
+        use crate::sync::protocol::error_code;
+
+        let mut rx = self.subscribe();
+        self.send_binary(protocol::encode_commit(request_id, commit_json))
+            .await
+            .map_err(|e| CommitRefused {
+                code: error_code::UNKNOWN,
+                message: format!("transport: {e}"),
+            })?;
+
+        let wait = tokio::time::timeout(std::time::Duration::from_secs(30), async {
+            while let Ok(msg) = rx.recv().await {
+                match msg {
+                    WsMessage::CommitOk {
+                        request_id: rid,
+                        commit_id,
+                        ..
+                    } if rid == request_id => return Ok(commit_id),
+                    WsMessage::Error {
+                        request_id: rid,
+                        code,
+                        message,
+                    } if rid == request_id => return Err(CommitRefused { code, message }),
+                    _ => continue,
+                }
+            }
+            Err(CommitRefused {
+                code: error_code::UNKNOWN,
+                message: "WebSocket closed while waiting for COMMIT_OK".into(),
+            })
+        });
+        match wait.await {
+            Ok(result) => result,
+            Err(_) => Err(CommitRefused {
+                code: error_code::UNKNOWN,
+                message: "COMMIT timed out".into(),
+            }),
+        }
+    }
+}
+
 /// Parse a text frame into a typed `WsMessage`.
 ///
 /// The server's remaining text frames (`docs/src/websockets.md`, "Text

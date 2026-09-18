@@ -81,7 +81,8 @@ interface RealAIChatProps {
    * as the chat's title.
    */
   autoSubmitMessage?: string;
-  onNewMessage: (message: AtomicUIMessage) => void;
+  onNewMessage: (message: AtomicUIMessage) => void | Promise<void>;
+  prepareToLeave?: { current: (() => Promise<void>) | undefined };
   /**
    * Called after compaction. All prior messages move to historical UI state;
    * only the summary is kept for LLM context.
@@ -122,6 +123,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   chatSubject,
   setExternalContextItems,
   onNewMessage,
+  prepareToLeave,
   onCompacted,
   onSummaryDeleted,
   onDeleteMessage,
@@ -266,6 +268,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const [userInput, setUserInput] = useState('');
   const [handoffDraft, setHandoffDraft] = useState<string>();
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [draggingFiles, setDraggingFiles] = useState(false);
+  const fileDragDepth = useRef(0);
   const { defaultChatModel, setDefaultChatModel } = useAISettings();
   const [selectedAgent, setSelectedAgent] = useState<AIAgent>(
     getInitialAgent(!chatSubject, chatSubject),
@@ -407,10 +411,25 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
   // Save streamed progress even when a tool or provider keeps the run open.
   // The persistence layer updates one message and serializes partial/final saves.
-  const checkpointRef = useRef({ messages, onNewMessage });
+  const checkpointRef = useRef({ messages, onNewMessage, status });
   useEffect(() => {
-    checkpointRef.current = { messages, onNewMessage };
-  }, [messages, onNewMessage]);
+    checkpointRef.current = { messages, onNewMessage, status };
+  }, [messages, onNewMessage, status]);
+  useEffect(() => {
+    if (!prepareToLeave) return;
+
+    prepareToLeave.current = async () => {
+      // An idle chat already persisted its last message in onFinish; only a
+      // run still in flight has unsaved progress. Saving again anyway made
+      // every switch to another chat wait on a needless write.
+      if (['ready', 'error'].includes(checkpointRef.current.status)) return;
+      const latest = checkpointRef.current.messages.at(-1);
+      await stop();
+      if (latest)
+        await checkpointRef.current.onNewMessage(structuredClone(latest));
+    };
+  }, [prepareToLeave, stop]);
+
   useEffect(() => {
     if (status !== 'streaming') return;
     let lastSaved = '';
@@ -794,7 +813,67 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                 </Button>
               </ProviderNotice>
             )}
-            <ChatInputWrapper>
+            <ChatInputWrapper
+              data-testid='assistant-file-dropzone'
+              onDragEnterCapture={event => {
+                if (
+                  !event.dataTransfer.types.includes(/* @wc-ignore */ 'Files')
+                )
+                  return;
+                event.preventDefault();
+                fileDragDepth.current += 1;
+                setDraggingFiles(true);
+              }}
+              onDragOverCapture={event => {
+                if (
+                  !event.dataTransfer.types.includes(/* @wc-ignore */ 'Files')
+                )
+                  return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = checkModelSupportsImageInput(
+                  activeModel,
+                )
+                  ? 'copy'
+                  : 'none';
+              }}
+              onDragLeaveCapture={event => {
+                if (
+                  !event.dataTransfer.types.includes(/* @wc-ignore */ 'Files')
+                )
+                  return;
+                fileDragDepth.current = Math.max(0, fileDragDepth.current - 1);
+                if (!fileDragDepth.current) setDraggingFiles(false);
+              }}
+              onDropCapture={event => {
+                if (
+                  !event.dataTransfer.types.includes(/* @wc-ignore */ 'Files')
+                )
+                  return;
+                event.preventDefault();
+                event.stopPropagation();
+                fileDragDepth.current = 0;
+                setDraggingFiles(false);
+
+                if (!checkModelSupportsImageInput(activeModel)) {
+                  store.notifyError(
+                    new Error(
+                      'Choose a model that supports attachments first.',
+                    ),
+                  );
+
+                  return;
+                }
+
+                handleFileUpload(Array.from(event.dataTransfer.files));
+              }}
+            >
+              {draggingFiles && (
+                <FileDropOverlay role='status'>
+                  {checkModelSupportsImageInput(activeModel)
+                    ? 'Drop files to attach'
+                    : 'Choose a model that supports attachments first.'}
+                </FileDropOverlay>
+              )}
               <Column
                 fullWidth
                 gap='none'
@@ -849,124 +928,128 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     ))}
                   </ContextItemRow>
                 )}
-                <AIChatInput
-                  prefill={handoffDraft}
-                  large={isEmptyChat && fullView}
-                  focusSignal={inputFocusSignal}
-                  // Never block typing — only the SEND is gated on an available
-                  // provider (the notice above the input explains why).
-                  disabled={false}
-                  disableSubmit={!canUseInput}
-                  hasFiles={!!attachedFiles}
-                  onMentionUpdate={handleMentionUpdate}
-                  onChange={setUserInput}
-                  onSubmit={handleSubmit}
-                  onCompact={compact}
-                  onEditModel={() => {
-                    const input =
-                      modelSelectContainerRef.current?.querySelector('input');
-
-                    if (input) {
-                      input.focus();
-                      input.select();
-                    }
-                  }}
-                  onEditAgent={() => setAgentConfigOpen(true)}
-                  onFileAdded={
-                    checkModelSupportsImageInput(activeModel)
-                      ? handleFileUpload
-                      : undefined
-                  }
-                  rightAlignedChildren={
-                    vectorIndexing && (
-                      <IndexingIndicator center gap='0.5rem'>
-                        <Spinner size='1.1rem' inheritColor />
-                        <span>Indexing</span>
-                      </IndexingIndicator>
-                    )
-                  }
+                <React.Suspense
+                  fallback={<InputFallback $large={isEmptyChat && fullView} />}
                 >
-                  <Row
-                    gap='0.5rem'
-                    style={{
-                      minWidth: 0,
-                      overflow: 'hidden',
-                      flexWrap: 'nowrap',
-                      flex: 1,
-                    }}
-                  >
-                    <SubtleButton onClick={() => setAgentConfigOpen(true)}>
-                      {selectedAgent.name}
-                    </SubtleButton>
-                    <ModelSelectWrapper ref={modelSelectContainerRef}>
-                      <ComboBox
-                        subtle
-                        selectedItem={`${activeModel.provider}:${activeModel.id}`}
-                        options={combinedModelOptions}
-                        onSelect={value => {
-                          if (!value) return;
-                          const [providerStr, ...idParts] = value.split(':');
-                          const id = idParts.join(':');
-                          const provider =
-                            providerStr === 'openrouter'
-                              ? AIProvider.OpenRouter
-                              : AIProvider.Ollama;
-                          const newModel = { id, provider };
-                          setActiveModel(newModel);
+                  <AIChatInput
+                    prefill={handoffDraft}
+                    large={isEmptyChat && fullView}
+                    focusSignal={inputFocusSignal}
+                    // Never block typing — only the SEND is gated on an available
+                    // provider (the notice above the input explains why).
+                    disabled={false}
+                    disableSubmit={!canUseInput}
+                    hasFiles={attachedFiles.length > 0}
+                    onMentionUpdate={handleMentionUpdate}
+                    onChange={setUserInput}
+                    onSubmit={handleSubmit}
+                    onCompact={compact}
+                    onEditModel={() => {
+                      const input =
+                        modelSelectContainerRef.current?.querySelector('input');
 
-                          // Persist the choice to whichever source the chat reads
-                          // on open (`agent.model ?? defaultChatModel`), so it
-                          // survives refreshes and new chats.
-                          if (selectedAgent.model) {
-                            const updatedAgent = {
-                              ...selectedAgent,
-                              model: newModel,
-                            };
-                            setSelectedAgent(updatedAgent);
-                            saveAgents(
-                              agents.map(a =>
-                                a.id === updatedAgent.id ? updatedAgent : a,
+                      if (input) {
+                        input.focus();
+                        input.select();
+                      }
+                    }}
+                    onEditAgent={() => setAgentConfigOpen(true)}
+                    onFileAdded={
+                      checkModelSupportsImageInput(activeModel)
+                        ? handleFileUpload
+                        : undefined
+                    }
+                    rightAlignedChildren={
+                      vectorIndexing && (
+                        <IndexingIndicator center gap='0.5rem'>
+                          <Spinner size='1.1rem' inheritColor />
+                          <span>Indexing</span>
+                        </IndexingIndicator>
+                      )
+                    }
+                  >
+                    <Row
+                      gap='0.5rem'
+                      style={{
+                        minWidth: 0,
+                        overflow: 'hidden',
+                        flexWrap: 'nowrap',
+                        flex: 1,
+                      }}
+                    >
+                      <SubtleButton onClick={() => setAgentConfigOpen(true)}>
+                        {selectedAgent.name}
+                      </SubtleButton>
+                      <ModelSelectWrapper ref={modelSelectContainerRef}>
+                        <ComboBox
+                          subtle
+                          selectedItem={`${activeModel.provider}:${activeModel.id}`}
+                          options={combinedModelOptions}
+                          onSelect={value => {
+                            if (!value) return;
+                            const [providerStr, ...idParts] = value.split(':');
+                            const id = idParts.join(':');
+                            const provider =
+                              providerStr === 'openrouter'
+                                ? AIProvider.OpenRouter
+                                : AIProvider.Ollama;
+                            const newModel = { id, provider };
+                            setActiveModel(newModel);
+
+                            // Persist the choice to whichever source the chat reads
+                            // on open (`agent.model ?? defaultChatModel`), so it
+                            // survives refreshes and new chats.
+                            if (selectedAgent.model) {
+                              const updatedAgent = {
+                                ...selectedAgent,
+                                model: newModel,
+                              };
+                              setSelectedAgent(updatedAgent);
+                              saveAgents(
+                                agents.map(a =>
+                                  a.id === updatedAgent.id ? updatedAgent : a,
+                                ),
+                              );
+                            } else {
+                              setDefaultChatModel(newModel);
+                            }
+
+                            // Remember this model so it surfaces at the top next time.
+                            setRecentModelValues(prev =>
+                              [value, ...prev.filter(v => v !== value)].slice(
+                                0,
+                                5,
                               ),
                             );
-                          } else {
-                            setDefaultChatModel(newModel);
-                          }
-
-                          // Remember this model so it surfaces at the top next time.
-                          setRecentModelValues(prev =>
-                            [value, ...prev.filter(v => v !== value)].slice(
-                              0,
-                              5,
-                            ),
-                          );
-                          // Move focus to the chat input so the user can type right away.
-                          setInputFocusSignal(n => n + 1);
-                        }}
-                      />
-                    </ModelSelectWrapper>
-                    {checkModelSupportsImageInput(activeModel) && (
-                      <>
-                        <input
-                          multiple
-                          type='file'
-                          ref={fileInputRef}
-                          onChange={e => {
-                            if (!e.target.files) return;
-
-                            handleFileUpload(Array.from(e.target.files));
+                            // Move focus to the chat input so the user can type right away.
+                            setInputFocusSignal(n => n + 1);
                           }}
-                          style={{ display: 'none' }}
                         />
-                        <IconButton
-                          title='Attach file'
-                          onClick={() => fileInputRef.current?.click()}
-                        >
-                          <FaPaperclip />
-                        </IconButton>
-                      </>
-                    )}
-                  </Row>
-                </AIChatInput>
+                      </ModelSelectWrapper>
+                      {checkModelSupportsImageInput(activeModel) && (
+                        <>
+                          <input
+                            multiple
+                            type='file'
+                            ref={fileInputRef}
+                            onChange={e => {
+                              if (!e.target.files) return;
+
+                              handleFileUpload(Array.from(e.target.files));
+                            }}
+                            style={{ display: 'none' }}
+                          />
+                          <IconButton
+                            title='Attach file'
+                            onClick={() => fileInputRef.current?.click()}
+                          >
+                            <FaPaperclip />
+                          </IconButton>
+                        </>
+                      )}
+                    </Row>
+                  </AIChatInput>
+                </React.Suspense>
               </Column>
               {messages.length === 0 && <div></div>}
             </ChatInputWrapper>
@@ -1017,6 +1100,21 @@ const filesToFileParts = (files: File[]): Promise<FileUIPart[]> =>
         }),
     ),
   );
+
+const FileDropOverlay = styled.div`
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  text-align: center;
+  border: 2px dashed ${p => p.theme.colors.main};
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg};
+  color: ${p => p.theme.colors.text};
+`;
 
 const ChatInputWrapper = styled.div`
   background-color: ${p => p.theme.colors.bg};
@@ -1170,4 +1268,13 @@ const ModelSelectWrapper = styled.div`
   & > div {
     width: 100%;
   }
+`;
+
+/**
+ * Holds the input's place while its editor chunk streams in. Without a
+ * boundary here the lazy import suspended the whole chat, so opening a
+ * conversation waited on the editor before showing any message.
+ */
+const InputFallback = styled.div<{ $large: boolean }>`
+  min-height: ${p => (p.$large ? '8rem' : '3.5rem')};
 `;

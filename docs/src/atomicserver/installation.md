@@ -386,6 +386,18 @@ Options:
           [env: ATOMIC_ENVELOPE_RETENTION=]
           [default: latest]
 
+      --write-rate-limit <WRITE_RATE_LIMIT>
+          How many write requests per minute one signed agent may make (commits over HTTP or WebSocket, uploads, blob puts, peer sync pushes, resource posts) before the server answers `429 Too Many Requests`. The budget refills continuously, so a burst up to this size is fine. `0` disables the limit
+
+          [env: ATOMIC_WRITE_RATE_LIMIT=]
+          [default: 6000]
+
+      --anonymous-write-rate-limit <ANONYMOUS_WRITE_RATE_LIMIT>
+          The same budget for write requests that carry no signed agent, keyed by the connecting peer address. `0` disables the limit
+
+          [env: ATOMIC_ANONYMOUS_WRITE_RATE_LIMIT=]
+          [default: 60]
+
       --domain <DOMAIN>
           The origin domain where the app is hosted, without the port and schema values
 

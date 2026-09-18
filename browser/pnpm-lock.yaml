@@ -251,6 +251,9 @@ importers:
       '@tiptap/suggestion':
         specifier: ^3.30.4
         version: 3.31.3(@floating-ui/dom@1.7.6)(@tiptap/core@3.31.3(@tiptap/pm@3.31.3))(@tiptap/pm@3.31.3)
+      '@tomic/edit-mode':
+        specifier: workspace:*
+        version: link:../edit-mode
       '@tomic/lib':
         specifier: workspace:*
         version: link:../lib

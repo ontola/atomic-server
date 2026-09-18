@@ -516,7 +516,10 @@ export async function signIn(page: Page, secret?: string) {
   await expect(
     input.or(signInButton).or(settings).or(login).first(),
   ).toBeVisible();
-  if (await settings.isVisible()) return;
+  // Not "is the settings link visible": the signed-in layout renders from
+  // stored state and can be up before the agent is in the store, so that
+  // check returned for sessions that had no agent at all. Ask the store.
+  if (await page.evaluate(() => !!window.store?.getAgent())) return;
 
   if (!(await input.isVisible())) {
     // Navigate directly: the sidebar login link opens a new tab and may
@@ -528,6 +531,15 @@ export async function signIn(page: Page, secret?: string) {
 
   await enterSecret(page, secret ?? (await getDevDriveSecret(page)));
   await expect(settings).toBeVisible({ timeout: 20000 });
+  // The settings link appears from the signed-in layout, which can render
+  // before the agent is actually in the store. Callers navigate straight
+  // afterwards, and a page that loads without an agent reads its drive
+  // unauthenticated, never adopts one, and so never gets a presence manager
+  // — the facepile assertions in `presence-follow` and `meetings` then fail
+  // with no sign of why. Wait for the agent itself.
+  await page.waitForFunction(() => !!window.store?.getAgent(), undefined, {
+    timeout: 20000,
+  });
 }
 
 /**

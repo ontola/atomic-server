@@ -15,6 +15,8 @@ pub enum AppErrorType {
     /// refusal reports itself as a crash, and a caller cannot tell "you may
     /// not do that yet" from "something here is broken".
     BadRequest,
+    /// A write refused by `crate::rate_limit`; rendered as `429` with `Retry-After`.
+    TooManyRequests,
     Other,
 }
 
@@ -61,6 +63,7 @@ impl ResponseError for AtomicServerError {
             AppErrorType::BadRequest => StatusCode::BAD_REQUEST,
             AppErrorType::Other => StatusCode::INTERNAL_SERVER_ERROR,
             AppErrorType::Unauthorized => StatusCode::UNAUTHORIZED,
+            AppErrorType::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
         }
     }
     fn error_response(&self) -> HttpResponse {
@@ -100,9 +103,11 @@ impl ResponseError for AtomicServerError {
 
         let body = r.to_json_ad_with_url("").unwrap();
         tracing::info!("Error response: {}", self.message);
-        HttpResponse::build(self.status_code())
-            .content_type(JSON_AD_MIME)
-            .body(body)
+        let mut response = HttpResponse::build(self.status_code());
+        if let Some(secs) = crate::rate_limit::retry_after_from_message(&self.message) {
+            response.insert_header(("Retry-After", secs.to_string()));
+        }
+        response.content_type(JSON_AD_MIME).body(body)
     }
 }
 

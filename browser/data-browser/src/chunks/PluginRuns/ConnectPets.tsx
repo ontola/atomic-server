@@ -3,7 +3,6 @@ import {
   core,
   dataBrowser,
   ensureSchema,
-  pluginSchema,
   executeServerPlugin,
   useStore,
   type Resource,
@@ -42,23 +41,34 @@ export function ConnectPets({ drive }: { drive: string }) {
     setImported(false);
 
     try {
-      const source = await fetchIntegrationSource(store.getServerUrl(), 'pets');
-      const pluginTerms = await pluginClassesFor(store, drive);
-      const resource = await ensureInstallationResource(store, drive, {
-        parent: drive,
-        localId: 'atomic:pets:installation',
-        isA: [pluginTerms.classes['plugin-script']],
-        propVals: {
-          [core.properties.name]: 'Pets',
-          [pluginTerms.properties['plugin-source']]: source,
-          [pluginTerms.properties['plugin-schemas']]: {},
-          [pluginTerms.properties.trigger]: 'manual',
-        },
-      });
+      // The bundle and the drive's plugin ontology have nothing to do with each
+      // other, so fetching one while the other resolves costs nothing and saves
+      // a round trip in front of a spinner.
+      const [source, pluginTerms] = await Promise.all([
+        fetchIntegrationSource(store.getServerUrl(), 'pets'),
+        pluginClassesFor(store, drive),
+      ]);
+      // Installation resources and the Pets ontology are independent too: the
+      // plugin resource lives in the drive, the terms in its ontology. Only the
+      // table below needs both. Two `ensureSchema` calls must not overlap — they
+      // write the same ontology list — which is why this one waits for
+      // `pluginClassesFor` above but not for the installation resource.
+      const [resource, terms] = await Promise.all([
+        ensureInstallationResource(store, drive, {
+          parent: drive,
+          localId: 'atomic:pets:installation',
+          isA: [pluginTerms.classes['plugin-script']],
+          propVals: {
+            [core.properties.name]: 'Pets',
+            [dataBrowser.properties.emoji]: '🐾',
+            [pluginTerms.properties['plugin-source']]: source,
+            [pluginTerms.properties['plugin-schemas']]: {},
+            [pluginTerms.properties.trigger]: 'manual',
+          },
+        }),
+        ensureSchema(store, drive, petsSchema()),
+      ]);
       const subject = resource.subject;
-      await resource.set(dataBrowser.properties.emoji, '🐾');
-      await resource.save();
-      const terms = await ensureSchema(store, drive, petsSchema());
       const table = await ensureInstallationResource(store, drive, {
         parent: subject,
         localId: 'atomic:pets:table',
@@ -68,7 +78,6 @@ export function ConnectPets({ drive }: { drive: string }) {
           [core.properties.classtype]: terms.classes.pet,
         },
       });
-      await table.save();
       const view = await ensureInstallationResource(store, drive, {
         parent: table.subject,
         localId: 'atomic:pets:default-view',
@@ -84,7 +93,6 @@ export function ConnectPets({ drive }: { drive: string }) {
           ],
         },
       });
-      await view.save();
       await table.set(dataBrowser.properties.tableViews, [view.subject]);
       await table.set(dataBrowser.properties.tableDefaultView, view.subject);
       await table.save();
@@ -93,8 +101,7 @@ export function ConnectPets({ drive }: { drive: string }) {
         rowClass: terms.classes.pet,
         properties: terms.properties,
       };
-      const schema = await ensureSchema(store, drive, pluginSchema());
-      await resource.set(schema.properties['plugin-schemas'], {
+      await resource.set(pluginTerms.properties['plugin-schemas'], {
         pets: config,
       });
       await resource.save();

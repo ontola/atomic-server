@@ -25,6 +25,14 @@ pub mod tag {
     pub const DESTROY: u8 = 0x12;
     pub const COMMIT: u8 = 0x13;
     pub const COMMIT_OK: u8 = 0x14;
+    /// Fetch many subjects in one request: `[0x15] [request_id: u16]
+    /// [count: u16] ([subject_len: u16] [subject_utf8])*`. Answered by one
+    /// `GET_MANY_RESULT`. Advertised by the `get-many` capability.
+    pub const GET_MANY: u8 = 0x15;
+    /// The answer to a `GET_MANY`: `[0x16] [request_id: u16] [count: u16]
+    /// ([frame_len: u32] [frame])*`, one complete `UPDATE` or `ERROR` frame
+    /// per requested subject, in request order.
+    pub const GET_MANY_RESULT: u8 = 0x16;
     pub const SUB: u8 = 0x20;
     pub const UNSUB: u8 = 0x21;
     pub const SYNC: u8 = 0x30;
@@ -100,6 +108,8 @@ pub mod tag {
 /// - `ephemeral`: reads and writes `EPHEMERAL` (0x40) over WebSocket for
 ///   edits in progress, cursors and drive presence, in place of the text
 ///   frames `LORO_SYNC_UPDATE` / `LORO_EPHEMERAL_UPDATE` / `PRESENCE_UPDATE`.
+/// - `get-many`: answers `GET_MANY` (0x15) with one `GET_MANY_RESULT` (0x16),
+///   so a client can fetch a whole list of subjects in one round trip.
 pub const CAPABILITIES: &[&str] = &[
     "auth-max-age",
     "keepalive",
@@ -113,6 +123,7 @@ pub const CAPABILITIES: &[&str] = &[
     "rebind-on-auth",
     "sync-probe",
     "ephemeral",
+    "get-many",
 ];
 
 /// Capability names a *client* may list in the `HELLO` it sends a responder
@@ -342,6 +353,11 @@ pub mod sync_push_flags {
     /// This is the final chunk of a SYNC_PUSH run. Receivers loop reading
     /// SYNC_PUSH frames until they see one with this bit set.
     pub const LAST: u8 = 0b0001;
+    /// The frame carries a trailing envelope section after its entries:
+    /// `[env_count: u16] ([subject_len: u16] [subject] [json_len: u32] [json]) × env_count`,
+    /// the retained signed commits of the pushed subjects. A decoder that
+    /// predates the section stops after `count` entries and never reads it.
+    pub const ENVELOPES: u8 = 0b0010;
 }
 
 /// Chunking thresholds for `encode_sync_push_chunks`. A chunk closes when
@@ -659,11 +675,15 @@ pub fn encode_sync_diff(
     remove_commits: &std::collections::HashMap<String, String>,
 ) -> Vec<u8> {
     let drive_bytes = drive.as_bytes();
+    // Keys in alphabetical order: `serde_json` sorts map keys unless the
+    // `preserve_order` feature is on, and a workspace build turns it on for
+    // every crate. Alphabetical insertion is the one order both agree on, so
+    // the golden `sync_diff` vector holds in either build.
     let mut diff = serde_json::json!({
         "pull": pull,
+        "pullFrom": pull_from,
         "push": push,
         "remove": remove,
-        "pullFrom": pull_from,
     });
     // Keep the golden `sync_diff` vector byte-identical when there is no
     // signed destroy to attach; older decoders ignore unknown fields anyway.
@@ -689,14 +709,42 @@ pub fn encode_sync_diff(
 /// `encode_sync_push_chunks` for the common case where you have a flat
 /// `entries` list and want it split + flagged automatically.
 pub fn encode_sync_push(drive: &str, entries: &[(&str, &[u8])], last: bool) -> Vec<u8> {
+    encode_sync_push_with_envelopes(drive, entries, &[], last)
+}
+
+/// [`encode_sync_push`] with the retained signed envelopes of the pushed
+/// subjects appended as `(subject, commit JSON-AD)` pairs, flagged
+/// [`sync_push_flags::ENVELOPES`], so the receiver can attribute the history
+/// it is about to import. With no envelopes the bytes are identical to
+/// `encode_sync_push`.
+pub fn encode_sync_push_with_envelopes(
+    drive: &str,
+    entries: &[(&str, &[u8])],
+    envelopes: &[(&str, &str)],
+    last: bool,
+) -> Vec<u8> {
     let drive_bytes = drive.as_bytes();
     let total_entry_size: usize = entries.iter().map(|(s, b)| 2 + s.len() + 4 + b.len()).sum();
+    let total_envelope_size: usize = if envelopes.is_empty() {
+        0
+    } else {
+        2 + envelopes
+            .iter()
+            .map(|(s, j)| 2 + s.len() + 4 + j.len())
+            .sum::<usize>()
+    };
 
-    let mut buf = Vec::with_capacity(1 + 2 + drive_bytes.len() + 1 + 2 + total_entry_size);
+    let mut buf = Vec::with_capacity(
+        1 + 2 + drive_bytes.len() + 1 + 2 + total_entry_size + total_envelope_size,
+    );
     buf.push(tag::SYNC_PUSH);
     buf.extend_from_slice(&(drive_bytes.len() as u16).to_be_bytes());
     buf.extend_from_slice(drive_bytes);
-    buf.push(if last { sync_push_flags::LAST } else { 0 });
+    let mut flags = if last { sync_push_flags::LAST } else { 0 };
+    if !envelopes.is_empty() {
+        flags |= sync_push_flags::ENVELOPES;
+    }
+    buf.push(flags);
     buf.extend_from_slice(&(entries.len() as u16).to_be_bytes());
 
     for (subject, loro_bytes) in entries {
@@ -705,6 +753,18 @@ pub fn encode_sync_push(drive: &str, entries: &[(&str, &[u8])], last: bool) -> V
         buf.extend_from_slice(s);
         buf.extend_from_slice(&(loro_bytes.len() as u32).to_be_bytes());
         buf.extend_from_slice(loro_bytes);
+    }
+
+    if !envelopes.is_empty() {
+        buf.extend_from_slice(&(envelopes.len() as u16).to_be_bytes());
+        for (subject, json) in envelopes {
+            let s = subject.as_bytes();
+            buf.extend_from_slice(&(s.len() as u16).to_be_bytes());
+            buf.extend_from_slice(s);
+            let j = json.as_bytes();
+            buf.extend_from_slice(&(j.len() as u32).to_be_bytes());
+            buf.extend_from_slice(j);
+        }
     }
 
     buf
@@ -719,9 +779,28 @@ pub fn encode_sync_push(drive: &str, entries: &[(&str, &[u8])], last: bool) -> V
 /// — otherwise they'll terminate the read early or hang waiting for data
 /// that's not coming.
 pub fn encode_sync_push_chunks(drive: &str, entries: &[(&str, &[u8])]) -> Vec<Vec<u8>> {
+    encode_sync_push_chunks_with_envelopes(drive, entries, &std::collections::HashMap::new())
+}
+
+/// [`encode_sync_push_chunks`] where each chunk also carries the retained
+/// envelopes (`subject → commit JSON-AD list`) of the subjects in that chunk,
+/// counted against the same byte budget. Subjects without envelopes are
+/// pushed as before.
+pub fn encode_sync_push_chunks_with_envelopes(
+    drive: &str,
+    entries: &[(&str, &[u8])],
+    envelopes: &std::collections::HashMap<String, Vec<String>>,
+) -> Vec<Vec<u8>> {
     if entries.is_empty() {
         return vec![encode_sync_push(drive, &[], true)];
     }
+
+    let envelope_size = |subject: &str| -> usize {
+        envelopes
+            .get(subject)
+            .map(|list| list.iter().map(|j| 2 + subject.len() + 4 + j.len()).sum())
+            .unwrap_or(0)
+    };
 
     let mut chunks: Vec<Vec<u8>> = Vec::new();
     let mut start = 0;
@@ -730,7 +809,7 @@ pub fn encode_sync_push_chunks(drive: &str, entries: &[(&str, &[u8])]) -> Vec<Ve
         let mut bytes_acc: usize = 0;
         while end < entries.len() && end - start < SYNC_PUSH_MAX_ENTRIES {
             let (s, b) = entries[end];
-            let entry_size = 2 + s.len() + 4 + b.len();
+            let entry_size = 2 + s.len() + 4 + b.len() + envelope_size(s);
             // Always include at least one entry per chunk, even if it alone
             // exceeds the byte budget — chunking past a single oversized
             // entry isn't possible without subdividing the loro_bytes.
@@ -741,7 +820,21 @@ pub fn encode_sync_push_chunks(drive: &str, entries: &[(&str, &[u8])]) -> Vec<Ve
             end += 1;
         }
         let last = end == entries.len();
-        chunks.push(encode_sync_push(drive, &entries[start..end], last));
+        let chunk_envelopes: Vec<(&str, &str)> = entries[start..end]
+            .iter()
+            .flat_map(|(s, _)| {
+                envelopes
+                    .get(*s)
+                    .into_iter()
+                    .flat_map(move |list| list.iter().map(move |j| (*s, j.as_str())))
+            })
+            .collect();
+        chunks.push(encode_sync_push_with_envelopes(
+            drive,
+            &entries[start..end],
+            &chunk_envelopes,
+            last,
+        ));
         start = end;
     }
     chunks
@@ -1039,6 +1132,111 @@ pub fn decode_get(data: &[u8]) -> Option<DecodedGet<'_>> {
     })
 }
 
+/// The name of the responder capability that says `GET_MANY` is understood.
+pub const CAP_GET_MANY: &str = "get-many";
+
+/// Encode a GET_MANY message: one request for a whole list of subjects.
+///
+/// Format: `[0x15] [request_id: u16] [count: u16] ([subject_len: u16] [subject_utf8])*`.
+pub fn encode_get_many(request_id: u16, subjects: &[&str]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(5 + subjects.iter().map(|s| 2 + s.len()).sum::<usize>());
+    buf.push(tag::GET_MANY);
+    buf.extend_from_slice(&request_id.to_be_bytes());
+    buf.extend_from_slice(&(subjects.len() as u16).to_be_bytes());
+    for subject in subjects {
+        buf.extend_from_slice(&(subject.len() as u16).to_be_bytes());
+        buf.extend_from_slice(subject.as_bytes());
+    }
+    buf
+}
+
+/// Decoded GET_MANY message.
+pub struct DecodedGetMany<'a> {
+    pub request_id: u16,
+    pub subjects: Vec<&'a str>,
+}
+
+/// Decode a GET_MANY message (after the type tag).
+pub fn decode_get_many(data: &[u8]) -> Option<DecodedGetMany<'_>> {
+    if data.len() < 4 {
+        return None;
+    }
+    let request_id = u16::from_be_bytes([data[0], data[1]]);
+    let count = u16::from_be_bytes([data[2], data[3]]) as usize;
+    let mut cursor = 4;
+    let mut subjects = Vec::with_capacity(count);
+    for _ in 0..count {
+        if data.len() < cursor + 2 {
+            return None;
+        }
+        let len = u16::from_be_bytes([data[cursor], data[cursor + 1]]) as usize;
+        cursor += 2;
+        if data.len() < cursor + len {
+            return None;
+        }
+        subjects.push(std::str::from_utf8(&data[cursor..cursor + len]).ok()?);
+        cursor += len;
+    }
+    Some(DecodedGetMany {
+        request_id,
+        subjects,
+    })
+}
+
+/// Encode a GET_MANY_RESULT: the per-subject answers, each a complete
+/// `UPDATE` (found) or `ERROR` (missing, refused, failed) frame, in the
+/// order the subjects were asked for. Reusing the single-fetch frames means
+/// both codecs decode an entry with the code they already have.
+///
+/// Format: `[0x16] [request_id: u16] [count: u16] ([frame_len: u32] [frame])*`.
+pub fn encode_get_many_result(request_id: u16, frames: &[Vec<u8>]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(5 + frames.iter().map(|f| 4 + f.len()).sum::<usize>());
+    buf.push(tag::GET_MANY_RESULT);
+    buf.extend_from_slice(&request_id.to_be_bytes());
+    buf.extend_from_slice(&(frames.len() as u16).to_be_bytes());
+    for frame in frames {
+        buf.extend_from_slice(&(frame.len() as u32).to_be_bytes());
+        buf.extend_from_slice(frame);
+    }
+    buf
+}
+
+/// Decoded GET_MANY_RESULT message.
+pub struct DecodedGetManyResult<'a> {
+    pub request_id: u16,
+    /// Complete `UPDATE` / `ERROR` frames (tag byte included), request order.
+    pub frames: Vec<&'a [u8]>,
+}
+
+/// Decode a GET_MANY_RESULT message (after the type tag).
+pub fn decode_get_many_result(data: &[u8]) -> Option<DecodedGetManyResult<'_>> {
+    if data.len() < 4 {
+        return None;
+    }
+    let request_id = u16::from_be_bytes([data[0], data[1]]);
+    let count = u16::from_be_bytes([data[2], data[3]]) as usize;
+    let mut cursor = 4;
+    let mut frames = Vec::with_capacity(count);
+    for _ in 0..count {
+        if data.len() < cursor + 4 {
+            return None;
+        }
+        let len = u32::from_be_bytes([
+            data[cursor],
+            data[cursor + 1],
+            data[cursor + 2],
+            data[cursor + 3],
+        ]) as usize;
+        cursor += 4;
+        if data.len() < cursor + len {
+            return None;
+        }
+        frames.push(&data[cursor..cursor + len]);
+        cursor += len;
+    }
+    Some(DecodedGetManyResult { request_id, frames })
+}
+
 /// Decode a COMMIT or COMMIT_OK message (after the type tag).
 pub fn decode_commit(data: &[u8]) -> Option<DecodedCommit<'_>> {
     if data.len() < 2 {
@@ -1097,12 +1295,13 @@ pub fn encode_sync(
 /// A hash-first `SYNC` probe: the drive and its hash, no version vectors.
 /// The responder answers `SYNC_OK` when its hash over what this session may
 /// read matches, `SYNC_RESEND` when not, and `ERROR UNAUTHORIZED_READ` for
-/// a drive the session may not read. Payload: `{"peers":[],"resources":{},"probe":true}`.
+/// a drive the session may not read. Payload: `{"peers":[],"probe":true,"resources":{}}`
+/// (keys alphabetical, see `encode_sync_diff`).
 pub fn encode_sync_probe(drive: &str, drive_hash: &str) -> Vec<u8> {
     encode_sync_json(
         drive,
         drive_hash,
-        serde_json::json!({ "peers": [], "resources": {}, "probe": true }),
+        serde_json::json!({ "peers": [], "probe": true, "resources": {} }),
     )
 }
 
@@ -1263,6 +1462,13 @@ pub struct SyncPushEntry {
     pub loro_bytes: Vec<u8>,
 }
 
+/// A retained signed envelope that travelled with a SYNC_PUSH: the commit
+/// JSON-AD of `subject`, to be verified before it is kept.
+pub struct SyncPushEnvelope {
+    pub subject: String,
+    pub json: String,
+}
+
 /// Decoded SYNC_PUSH message.
 pub struct DecodedSyncPush {
     pub drive: String,
@@ -1270,6 +1476,8 @@ pub struct DecodedSyncPush {
     /// True iff this is the final chunk of a SYNC_PUSH run. Receivers loop
     /// reading SYNC_PUSH frames until they see one with `last == true`.
     pub last: bool,
+    /// The [`sync_push_flags::ENVELOPES`] section, empty when absent.
+    pub envelopes: Vec<SyncPushEnvelope>,
 }
 
 /// Decode a SYNC_PUSH message (after the type tag).
@@ -1315,16 +1523,93 @@ pub fn decode_sync_push(data: &[u8]) -> Option<DecodedSyncPush> {
         });
     }
 
+    let mut envelopes = Vec::new();
+    if flag_bits & sync_push_flags::ENVELOPES != 0 && pos + 2 <= rest.len() {
+        let env_count = u16::from_be_bytes([rest[pos], rest[pos + 1]]) as usize;
+        pos += 2;
+        for _ in 0..env_count {
+            if pos + 2 > rest.len() {
+                break;
+            }
+            let subj_len = u16::from_be_bytes([rest[pos], rest[pos + 1]]) as usize;
+            pos += 2;
+            let subject = std::str::from_utf8(rest.get(pos..pos + subj_len)?).ok()?;
+            pos += subj_len;
+            if pos + 4 > rest.len() {
+                break;
+            }
+            let json_len =
+                u32::from_be_bytes([rest[pos], rest[pos + 1], rest[pos + 2], rest[pos + 3]])
+                    as usize;
+            pos += 4;
+            let json = std::str::from_utf8(rest.get(pos..pos + json_len)?).ok()?;
+            pos += json_len;
+            envelopes.push(SyncPushEnvelope {
+                subject: subject.to_string(),
+                json: json.to_string(),
+            });
+        }
+    }
+
     Some(DecodedSyncPush {
         drive: drive.to_string(),
         entries,
         last,
+        envelopes,
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sync_push_envelopes_round_trip_and_stay_invisible_without_the_flag() {
+        let entries: [(&str, &[u8]); 2] = [("did:ad:x", &[1, 2]), ("did:ad:y", &[3])];
+        let envelopes = [("did:ad:x", "{\"a\":1}"), ("did:ad:x", "{\"b\":2}")];
+        let frame = encode_sync_push_with_envelopes("did:ad:d", &entries, &envelopes, true);
+        let flags_at = 3 + "did:ad:d".len();
+        assert!(frame[flags_at] & sync_push_flags::ENVELOPES != 0);
+        let decoded = decode_sync_push(&frame[1..]).unwrap();
+        assert!(decoded.last);
+        assert_eq!(decoded.entries.len(), 2);
+        let got: Vec<(&str, &str)> = decoded
+            .envelopes
+            .iter()
+            .map(|e| (e.subject.as_str(), e.json.as_str()))
+            .collect();
+        assert_eq!(got, envelopes);
+
+        // No envelopes: byte-identical to the plain encoder (golden vectors).
+        assert_eq!(
+            encode_sync_push_with_envelopes("did:ad:d", &entries, &[], false),
+            encode_sync_push("did:ad:d", &entries, false)
+        );
+
+        // A pre-envelope decoder stops after the entries. Simulate it by
+        // clearing the flag: the trailing bytes must be ignored, not parsed.
+        let mut unflagged = frame.clone();
+        unflagged[flags_at] &= !sync_push_flags::ENVELOPES;
+        let old = decode_sync_push(&unflagged[1..]).unwrap();
+        assert_eq!(old.entries.len(), 2);
+        assert!(old.envelopes.is_empty());
+    }
+
+    #[test]
+    fn sync_push_chunks_carry_each_subjects_envelopes() {
+        let big = vec![0u8; SYNC_PUSH_MAX_BYTES];
+        let entries: [(&str, &[u8]); 2] = [("did:ad:x", &big), ("did:ad:y", &[3])];
+        let mut envelopes = std::collections::HashMap::new();
+        envelopes.insert("did:ad:y".to_string(), vec!["{\"y\":1}".to_string()]);
+        let chunks = encode_sync_push_chunks_with_envelopes("did:ad:d", &entries, &envelopes);
+        assert_eq!(chunks.len(), 2, "the byte budget splits the two entries");
+        let first = decode_sync_push(&chunks[0][1..]).unwrap();
+        assert!(first.envelopes.is_empty());
+        let second = decode_sync_push(&chunks[1][1..]).unwrap();
+        assert!(second.last);
+        assert_eq!(second.envelopes.len(), 1);
+        assert_eq!(second.envelopes[0].subject, "did:ad:y");
+    }
 
     #[test]
     fn update_round_trip() {
@@ -1381,6 +1666,31 @@ mod tests {
         let decoded = decode_get(&encoded[1..]).unwrap();
         assert_eq!(decoded.request_id, 7);
         assert_eq!(decoded.subject, "did:ad:agent:alice");
+    }
+
+    #[test]
+    fn get_many_round_trip() {
+        let encoded = encode_get_many(8, &["did:ad:a", "did:ad:b"]);
+        assert_eq!(encoded[0], tag::GET_MANY);
+        let decoded = decode_get_many(&encoded[1..]).unwrap();
+        assert_eq!(decoded.request_id, 8);
+        assert_eq!(decoded.subjects, vec!["did:ad:a", "did:ad:b"]);
+        assert!(decode_get_many(&encoded[1..encoded.len() - 1]).is_none());
+        assert!(decode_get_many_result(&[0, 8, 0, 1, 0, 0, 0]).is_none());
+    }
+
+    #[test]
+    fn get_many_result_round_trip() {
+        let update = encode_update(flags::SNAPSHOT, 8, "did:ad:a", None, &[1, 2]);
+        let error = encode_error(8, error_code::UNKNOWN, "Resource not found. did:ad:b");
+        let encoded = encode_get_many_result(8, &[update.clone(), error.clone()]);
+        assert_eq!(encoded[0], tag::GET_MANY_RESULT);
+        let decoded = decode_get_many_result(&encoded[1..]).unwrap();
+        assert_eq!(decoded.request_id, 8);
+        assert_eq!(decoded.frames, vec![update.as_slice(), error.as_slice()]);
+        let inner = decode_update(&decoded.frames[0][1..]).unwrap();
+        assert_eq!(inner.subject, "did:ad:a");
+        assert_eq!(inner.loro_bytes, vec![1, 2]);
     }
 
     #[test]
@@ -1733,6 +2043,17 @@ mod wire_vectors {
                 ),
             ),
             ("get", encode_get(1, "did:ad:x")),
+            ("get_many", encode_get_many(2, &["did:ad:x", "did:ad:y"])),
+            (
+                "get_many_result",
+                encode_get_many_result(
+                    2,
+                    &[
+                        encode_update(flags::SNAPSHOT, 2, "did:ad:x", None, &[0xff]),
+                        encode_error(2, error_code::UNKNOWN, "Resource not found. did:ad:y"),
+                    ],
+                ),
+            ),
             (
                 "update_delta_push",
                 encode_update(

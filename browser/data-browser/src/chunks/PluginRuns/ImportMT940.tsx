@@ -91,16 +91,17 @@ export function ImportMT940({
     setImported(false);
 
     try {
-      if (file.size > 512_000)
+      if (file.size > 1_000_000)
         throw new Error(
-          'Choose a statement smaller than 512 KB. Export a shorter period if needed.',
+          'Choose a statement smaller than 1 MB. Export a shorter period if needed.',
         );
       const source = await fetchIntegrationSource(
         store.getServerUrl(),
         'mt940',
       );
       const bytes = await file.arrayBuffer();
-      // Prefer UTF-8, but older MT940 bank exports often use Windows-1252.
+      // Prefer UTF-8 (camt.053 XML always is), but older MT940 bank exports
+      // often use Windows-1252.
       let text: string;
 
       try {
@@ -237,8 +238,8 @@ export function ImportMT940({
   return (
     <Column gap='0.75rem'>
       <p>
-        Import bank transactions from an MT940 statement. No bank connection or
-        token is needed.
+        Import bank transactions from an MT940 or camt.053 statement. No bank
+        connection or token is needed.
       </p>
       <p>
         In bunq: open your bank account, choose Settings, then Export statement
@@ -266,7 +267,7 @@ export function ImportMT940({
         <Input
           id='mt940-file'
           type='file'
-          accept='.mt940,.sta,.940,.txt'
+          accept='.mt940,.sta,.940,.txt,.xml,.camt,.053'
           disabled={busy}
           onChange={event => {
             setFile(event.target.files?.[0]);
@@ -276,8 +277,10 @@ export function ImportMT940({
         />
       </Field>
       <p>
-        Your file is processed in the plugin sandbox on your AtomicServer.
-        Review transactions before saving them. Up to 500 transactions per file.
+        MT940 (bunq, most banks) and camt.053 XML (ISO 20022) are recognised
+        automatically. Your file is processed in the plugin sandbox on your
+        AtomicServer. Review transactions before saving them. Up to 500
+        transactions per file.
       </p>
       <Button disabled={busy || !file} onClick={preview}>
         {busy ? 'Preparing preview…' : 'Preview import'}

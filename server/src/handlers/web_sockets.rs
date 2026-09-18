@@ -79,6 +79,8 @@ pub async fn web_socket_handler(
             connection_id: new_connection_id(),
             vector_search_state: appstate.vector_search_state.clone(),
             index_status_broadcast: appstate.index_status_broadcast.clone(),
+            write_rate_limiter: appstate.write_rate_limiter.clone(),
+            peer_ip: crate::helpers::peer_ip(&req),
             index_status_subscribed: std::collections::HashSet::new(),
         },
         &req,
@@ -126,6 +128,11 @@ pub struct WebSocketConnection {
     vector_search_state: VectorSearchState,
     index_status_broadcast: Arc<IndexStatusBroadcast>,
     index_status_subscribed: std::collections::HashSet<String>,
+    /// Shared with the HTTP handlers: a `COMMIT` frame spends the same
+    /// per-agent (or, before `AUTH`, per-peer) write token as `POST /commit`.
+    write_rate_limiter: Arc<crate::rate_limit::WriteRateLimiter>,
+    /// Socket peer address of the upgrade request; the anonymous rate key.
+    peer_ip: String,
 }
 
 #[derive(Message)]
@@ -371,6 +378,7 @@ impl WebSocketConnection {
             // subscription. The monitor still re-checks on `Subscribe` as
             // defence in depth.
             ws_v2::tag::GET
+            | ws_v2::tag::GET_MANY
             | ws_v2::tag::SYNC
             | ws_v2::tag::SYNC_PUSH
             | ws_v2::tag::BLOB_REQUEST
@@ -417,6 +425,19 @@ impl WebSocketConnection {
                     return;
                 };
                 let request_id = decoded.request_id;
+                let limited = match &self.agent {
+                    ForAgent::Sudo => Ok(()),
+                    ForAgent::AgentSubject(subject) => {
+                        self.write_rate_limiter.check(&subject.to_string(), false)
+                    }
+                    ForAgent::Public => self.write_rate_limiter.check(&self.peer_ip, true),
+                };
+                if let Err(limited) = limited {
+                    let msg = limited.to_string();
+                    let code = ws_v2::classify_commit_error(&msg);
+                    ctx.binary(ws_v2::encode_error(request_id, code, &msg));
+                    return;
+                }
                 let body = decoded.commit_json.to_string();
                 let store = self.store.clone();
                 let source_id = self.connection_id.clone();

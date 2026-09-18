@@ -2,10 +2,11 @@ import {
   Core,
   Datatype,
   Resource,
+  core,
   unknownSubject,
   useCanWrite,
   useResource,
-  useTitle,
+  useString,
 } from '@tomic/react';
 import type { TableColumn } from './useTableColumns';
 import { ColumnLanguageChip } from './ColumnLanguageChip';
@@ -19,6 +20,7 @@ import {
   FaGripVertical,
 } from 'react-icons/fa6';
 import { styled } from 'styled-components';
+import { columnLabel } from './helpers/columnLabel';
 import { TableHeadingMenu, TableHeadingMenuHandle } from './TableHeadingMenu';
 import { TablePageContext } from './tablePageContext';
 import { IconType } from 'react-icons';
@@ -55,7 +57,9 @@ export const TableHeading: TableHeadingComponent<TableColumn> = ({
   // Virtual columns have no property behind them, so `unknownSubject` keeps
   // the hooks unconditional; the render bails out below.
   const propResource = useResource(column.property?.subject ?? unknownSubject);
-  const [title] = useTitle(propResource);
+  // The property's own name, not its title: a title falls back to the shortname
+  // on its own, which is exactly the case `columnLabel` has to tell apart.
+  const [name] = useString(propResource, core.properties.name);
   const { setSortBy, sorting, tableClassSubject } =
     useContext(TablePageContext);
   const tableClass = useResource<Core.Class>(tableClassSubject);
@@ -123,7 +127,7 @@ export const TableHeading: TableHeadingComponent<TableColumn> = ({
     );
   }
 
-  const text = `${title || property.shortname}${isRequired ? '*' : ''}`;
+  const text = `${columnLabel(name, property.shortname)}${isRequired ? '*' : ''}`;
 
   return (
     <>

@@ -21,6 +21,7 @@ pub(crate) mod prop_val_sub_index;
 mod query_index;
 #[cfg(feature = "db-redb")]
 pub mod redb_store;
+pub mod website;
 // `PropVal` is half of `QueryFilter`'s public surface: without it a caller
 // outside this crate can read `filters` but cannot build one.
 pub use query_index::{drive_prefix_from_subject, query_id, PropVal, QueryFilter};
@@ -287,6 +288,13 @@ impl DriveFilters {
     }
 }
 
+/// Crash data-loss bound for file-backed stores: one fsync per interval,
+/// amortised across every commit in the window. See `Db::spawn_durable_flush`.
+#[cfg(not(target_arch = "wasm32"))]
+pub const DURABLE_FLUSH_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+
+type PendingBlobRequests = HashMap<[u8; 32], (String, web_time::Instant)>;
+
 /// The Db is a persistent on-disk Atomic Data store.
 /// It's an implementation of [Storelike].
 /// It uses a [KvStore] backend for key-value storage (sled, BTreeMap, etc.).
@@ -367,7 +375,7 @@ pub struct Db {
     /// peer that never responds would otherwise leak one entry per missing
     /// blob forever, so `note_pending_blob_request` also lazily prunes
     /// anything older than `PENDING_BLOB_REQUEST_TTL`.
-    pending_blob_requests: PendingBlobRequests,
+    pending_blob_requests: Arc<RwLock<PendingBlobRequests>>,
 }
 
 /// How long an unanswered `BLOB_REQUEST` stays in `pending_blob_requests`
@@ -375,7 +383,6 @@ pub struct Db {
 /// round trip (seconds) — this bounds a slow leak from peers that vanish
 /// mid-sync, not a normal-latency budget.
 const PENDING_BLOB_REQUEST_TTL: std::time::Duration = std::time::Duration::from_secs(300);
-type PendingBlobRequests = Arc<RwLock<HashMap<[u8; 32], (String, web_time::Instant)>>>;
 
 /// The default (permissive) sync policy reference used by every `Db` until a
 /// managed node installs one.
@@ -805,7 +812,34 @@ impl Db {
             .await
             .map_err(|e| format!("Failed to populate base models. {}", e))?;
         crate::search::maybe_rebuild_search_index(&store)?;
+        store.spawn_durable_flush(DURABLE_FLUSH_INTERVAL);
         Ok(store)
+    }
+
+    /// Make `Durability::None` commits durable on a fixed cadence.
+    ///
+    /// Every redb write skips the fsync for throughput and only becomes
+    /// durable at the next `flush`. This thread is that flush. It belongs to
+    /// the library, not the host, so that no binding can open a file store
+    /// and forget it: the Flutter app did exactly that and lost every edit
+    /// since the last drive switch on an app kill. The tick is cheap when
+    /// idle (`RedbStore::flush` returns early unless something was written)
+    /// and blocks on fsync when not, hence a dedicated OS thread rather than
+    /// a tokio task. It holds only a `Weak` to the store and exits once the
+    /// last `Db` clone is dropped.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn spawn_durable_flush(&self, interval: std::time::Duration) {
+        let kv: std::sync::Weak<dyn KvStore> = Arc::downgrade(&self.kv);
+        std::thread::Builder::new()
+            .name("durable-flush".into())
+            .spawn(move || loop {
+                std::thread::sleep(interval);
+                let Some(kv) = kv.upgrade() else { break };
+                if let Err(e) = kv.flush() {
+                    tracing::warn!("periodic durable flush failed: {e}");
+                }
+            })
+            .expect("spawn durable-flush thread");
     }
 
     #[cfg(all(feature = "db-redb", feature = "db-sled", not(target_arch = "wasm32")))]
@@ -3777,11 +3811,10 @@ impl Storelike for Db {
         crate::envelopes::record_ops(store, &commit_response, &mut transaction)?;
 
         match (&commit_response.resource_old, &commit_response.resource_new) {
-            (None, None) => {
-                if !commit_response.commit.destroy.unwrap_or(false) {
-                    return Err("Neither an old nor a new resource is returned from the commit - something went wrong.".into());
-                }
+            (None, None) if !commit_response.commit.destroy.unwrap_or(false) => {
+                return Err("Neither an old nor a new resource is returned from the commit - something went wrong.".into());
             }
+            (None, None) => {}
             (Some(_old), None) => {
                 let normalized_commit_subject =
                     self.normalize_subject(&commit_response.commit.subject.clone());

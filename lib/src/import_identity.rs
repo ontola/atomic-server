@@ -397,6 +397,7 @@ mod tests {
                 let push = DecodedSyncPush {
                     drive: parent.to_string(),
                     last: true,
+                    envelopes: Vec::new(),
                     entries: vec![SyncPushEntry {
                         subject: r.get_subject().to_string(),
                         loro_bytes: r.build_state_doc().unwrap().export_snapshot(),
@@ -515,6 +516,7 @@ mod tests {
             let push = DecodedSyncPush {
                 drive: parent.to_string(),
                 last: true,
+                envelopes: Vec::new(),
                 entries: vec![SyncPushEntry {
                     subject: copies[1].get_subject().to_string(),
                     loro_bytes: copies[1].build_state_doc().unwrap().export_snapshot(),
@@ -537,6 +539,7 @@ mod tests {
             let edited = DecodedSyncPush {
                 drive: parent.to_string(),
                 last: true,
+                envelopes: Vec::new(),
                 entries: vec![SyncPushEntry {
                     subject: offline.get_subject().to_string(),
                     loro_bytes: offline.build_state_doc().unwrap().export_snapshot(),

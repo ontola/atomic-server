@@ -41,6 +41,7 @@ export type WorkerRequest =
     }
   | { id: number; type: 'getResource'; subject: string }
   | { id: number; type: 'getResourceWithSnapshot'; subject: string }
+  | { id: number; type: 'getResourcesWithSnapshots'; subjects: string[] }
   | { id: number; type: 'putResource'; jsonAd: string }
   | { id: number; type: 'putResources'; jsonAds: string[] }
   | {
@@ -87,6 +88,8 @@ export type WorkerRequest =
   | { id: number; type: 'importAllResources'; jsonArray: string }
   | { id: number; type: 'getLoroSnapshot'; subject: string }
   | { id: number; type: 'historyAttribution'; subject: string }
+  | { id: number; type: 'envelopesFor'; subjects: string[] }
+  | { id: number; type: 'importEnvelopes'; envelopes: string }
   | { id: number; type: 'putBlob'; hash: Uint8Array; data: Uint8Array }
   | { id: number; type: 'getBlob'; hash: Uint8Array }
   | { id: number; type: 'blake3Hash'; data: Uint8Array }
@@ -171,6 +174,25 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       await ensureInit();
 
       return db!.getResource(msg.subject);
+    }
+
+    case 'getResourcesWithSnapshots': {
+      // One round trip for a whole list: opening a chat asks for every
+      // message and part at once, and a postMessage per subject queued
+      // behind boot-time sync traffic made that the slow part of the open.
+      await ensureInit();
+      const rows: Array<{
+        jsonAd: string | null;
+        snapshot: Uint8Array | null;
+      }> = [];
+
+      for (const subject of msg.subjects) {
+        const jsonAd = await db!.getResource(subject);
+        const snapshot = jsonAd ? await db!.getLoroSnapshot(subject) : null;
+        rows.push({ jsonAd: jsonAd ?? null, snapshot: snapshot ?? null });
+      }
+
+      return rows;
     }
 
     case 'getResourceWithSnapshot': {
@@ -343,6 +365,18 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
       await ensureInit();
 
       return (await db!.historyAttribution(msg.subject)) as string;
+    }
+
+    case 'envelopesFor': {
+      await ensureInit();
+
+      return db!.envelopesFor(JSON.stringify(msg.subjects)) as string;
+    }
+
+    case 'importEnvelopes': {
+      await ensureInit();
+
+      return (await db!.importEnvelopes(msg.envelopes)) as number;
     }
 
     case 'putBlob': {

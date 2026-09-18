@@ -272,12 +272,13 @@ read:   get_resource → Tree::Resources projection (fast path: query/display)
       tags active and stays green. The defensive `AtomicUrl || String` matches
       (`plugin.rs`, `parse.rs`) intentionally stay until the heuristic is gone.
 - [x] Update the `AGENTS.md` Loro-serialization note to the new convention.
-- [ ] **Remaining gate-completion step.** Add an explicit `string` tag (and
-      tags for the rest) so *every* value is tagged — only then is an untagged
-      string unambiguous. Then delete the `starts_with` heuristic, the
-      `value.to_string()` fallback and the no-tag fallback path, and simplify
-      the defensive `AtomicUrl || String` matches. Needs full Rust + TS tag
-      coverage first.
+- [ ] ~~Add an explicit `string` tag so every value is tagged~~ — superseded by
+      the 2026-06-16 amendment (sparse `datatypes` map; untagged means string).
+      What remains is Phase 2d/3 below: delete the `starts_with` heuristic
+      (`lib/src/loro.rs` `starts_with("did:")`/`("http")`), the no-tag
+      fallback and the 3-way `build_state_doc` fallback (`lib/src/resources.rs`),
+      then simplify the defensive `AtomicUrl || String` matches. Still open
+      2026-09-15.
 
 ### Phase 2 — the Loro doc is canonical; `PropVals` is a derived cache
 
@@ -433,7 +434,7 @@ derives from the definition.
 
 ### Blast radius (measured 2026-06-16)
 
-`Value::` references in non-test `lib/`+`server/`: **704**. Reshaping the enum to
+`Value::` references in non-test `lib/`+`server/`: **~966** (2026-09-15; was 704 in July). Reshaping the enum to
 ~7 primitive variants + `try_into` touches all of them mechanically. By variant:
 `String` 277, `ResourceArray` 101, `AtomicUrl` 88, `Json` 65 (load-bearing —
 gated by the retained tag); `Slug` 29, `Markdown` 26, `Uri`/`Date` 6 each
@@ -458,10 +459,10 @@ into `String`). Large, mechanical, low-conceptual-risk — but its own phase.
 - **Phase 1.6 (the reshape).** Introduce primitive-first `Value`; make
   cosmetic variants `try_into`-only at use sites; keep the 5 reference/shape
   tags as the sole stored type info. Retire the cosmetic tags added in 1.5.
-  Land behind the existing Rust + TS test suites; the 704 sites migrate
+  Land behind the existing Rust + TS test suites; the ~966 sites migrate
   mechanically, variant by variant.
 
-> Open: whether Phase 1.6 is worth the 704-site churn, or whether Phase 1.5
+> Open: whether Phase 1.6 is worth the ~966-site churn, or whether Phase 1.5
 > (faithful tags) is a sufficient steady state. 1.5 is strictly smaller and
 > unblocks the indexing bug regardless; 1.6 is the architecturally clean form
 > that makes "Loro is the source of truth" literally true of the type.

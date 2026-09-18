@@ -1,3 +1,77 @@
+Website exports open in a dedicated frozen preview. Browser coverage verifies the
+export resource shows original content after source edits and reload, with scripts
+disabled and no publication action.
+
+Website publication state: browser coverage verifies unchanged output after publishing
+and reload, pending document edits, and pending changes after rollback. Unit tests
+compare page bytes and image hashes, including removed files and entry ordering.
+
+Website error recovery: Chromium verifies an unreadable selected image emits the
+Store toast and console error, replaces the loading placeholder, disables publication,
+and recovers after repairing the selection. Explicit retry is available.
+
+AI sidebar navigation: browser coverage checks the default visible chat list,
+its header new-chat action while collapsed, and reopening saved replies without
+changing the main URL. Switching chats checkpoints the current message first.
+Successful reply persistence clears error descriptions using Resource.remove.
+
+Website media: a real browser test uploads a private PNG, renders it in the draft,
+publishes it, and checks decoded image dimensions and a separate HTTP asset as an
+anonymous visitor. A browser test optimizes a 6.55 MB JPEG without changing its
+source. The object-store adapter test checks blob storage, project isolation and
+publication gating; this is not a live S3 bucket test.
+Unit tests cover gallery/File-cell image packaging, unselected relationship
+exclusion, media limits, reference reload persistence and batch row save failures.
+
+Website publishing UX follow-up (2026-09-15): the Chromium publishing E2E now
+uses one-click Publish site / Update site, checks a single primary action and no
+manual status refresh control, and verifies a failed hosting request reaches the
+standard Store error pipeline (visible toast plus console error). Desktop/mobile
+screenshots exercise the preview-first layout. Existing document/export and
+Assistant design scenarios retain coverage behind the collapsed export controls.
+
+Self-hosted website publication (2026-09-15): `atomic_lib` website tests cover
+bounded packages, unsafe paths, content identity, private upload, activation,
+stale revisions, rollback and unpublish. The Actix website HTTP test uses a real
+DB and signed requests to check private preview, anonymous refusal, customer
+hosts excluding API routes, and drive-root publication authority. The opt-in
+`website-publishing.spec.ts` ran on an isolated node with WEBSITE_HOSTING_E2E=1:
+Chromium completed private document -> release -> upload/review -> publish,
+an independent signed-out browser read, draft isolation, republish, rollback
+and unpublish (1 passed, 7.7s). No model API or cloud service is mocked into this
+publication path. `hostingClient.test.ts` checks trusted-origin signing, no key
+in the payload and conflict refusal without retry. SaaS deployment, production
+TLS/DNS, load testing and full-suite/CI validation remain outside these checks.
+
+Website composition and snapshot views: the focused website/FrameBridge set has
+16 passing tests, including invalid layout references and a host that refuses
+non-snapshot operations and foreign frames. `website.spec.ts` exercises a two-page
+Assistant-authored document/table site, real FrameBridge search, no-results state,
+navigation, source inline edits and frozen release persistence (2 passed, 19.2s).
+`website-export.spec.ts` takes WEBSITE_EXPORT_URL pointing at the actual extracted
+archive; navigation, search and mobile width pass with non-site requests blocked
+and Atomic stopped (1 passed, 807ms). It skips without that explicit fixture.
+The model is scripted. Third-party plugin loading, production build and public
+SaaS activation are not covered. Runtime assets regenerate via build/dev/start.
+
+Inline website editing (2026-09-13): `websiteInlineEditing.test.ts` adds four
+passing boundary tests (12 website unit tests total): current selection, source
+rights/private ancestry, text type, changed source value and pending-save failure.
+The website Assistant E2E now uses the real shared `@tomic/edit-mode` controls,
+checks original-record writes, field clearing, reload and frozen release output.
+The model is scripted; rich-text inline editing and arbitrary plugin HTML are
+outside this coverage. Source stale-value detection is optimistic client-side.
+
+Website prototype (2026-09-12): `chunks/Website/renderWebsite.test.ts` has eight
+focused passing tests for rich-text escaping, rejected media/active links,
+path/CSS validation, portable HTML, grid output, deterministic hashes, inherited
+private permissions and pending-save refusal. `e2e/tests/website.spec.ts` has two
+passing Chromium cases (1 worker, 16.6s): document-to-website preview, release
+review/download, independent drafts and reload; actual Assistant tools with a
+scripted model, existing table binding, design updates and omitted private data.
+This is private authoring/static export coverage, not public SaaS publication or
+live-model quality. See `planning/assistant-websites.md` for limits.
+
 App runner production regression (2026-09-12): `plugins.spec.ts` exercises
 manual preview/apply, missing-target refusal, manifest credential discovery,
 publishing, and integration sync against the embedded production frontend.
@@ -442,8 +516,9 @@ Both matter because `iroh_transport` holds the router and node identity in
 | Tokenizer + prefix-Levenshtein | protocol | `lib/src/search/tokenize.rs`, `fuzzy.rs` |
 | Query latency vs N (1k / 10k / 50k) | protocol | `lib/benches/search_bench.rs` (`--features db-redb`) |
 | `Store.search` offline hits `ClientDb.search` | JS | `browser/lib/src/store.test.ts` |
+| Search-result excerpts: document preference, exact/prefix before fuzzy, Unicode source offsets, token boundaries, bounded context including long matches | JS | `browser/data-browser/src/helpers/searchResultHint.test.ts` |
 
-Not covered: table `contains`; Playwright search overlay on the KV path; Flutter bridge `search`. Hosted `/search` is `atomic_lib::search` (Tantivy and MiniSearch are gone). Offline E2E polls `ClientDb.search`. Filters (`isA`, tags) are covered by `lib/src/search/tests.rs` and `server/tests/it/file_search_repro.rs`.
+Not covered: table `contains`; Playwright search overlay on the KV path and assertion for the search-result excerpt; Flutter bridge `search`. Hosted `/search` is `atomic_lib::search` (Tantivy and MiniSearch are gone). Offline E2E polls `ClientDb.search`. Filters (`isA`, tags) are covered by `lib/src/search/tests.rs` and `server/tests/it/file_search_repro.rs`.
 
 ### Flow — the thin layer
 
@@ -1152,7 +1227,7 @@ New automation and integration shortcuts open a fresh assistant chat with resour
 context, requesting user intent before draft creation. Browser acceptance of
 these entry points and assistant-led creation remains open.
 
-## MT940 bank statement importer
+## MT940 and camt.053 bank statement importer
 
 `integrations/mt940/parser.test.ts` has nine scenarios covering signed exact
 amounts, reversals, balance reconciliation, invalid/truncated input, multiple
@@ -1163,6 +1238,17 @@ JSON-shaped narratives are rejected until legacy text materialization is fixed.
 runs the shipped JS in real QuickJS/WASM and verifies balance failures and
 network-free proposals. Offline certification passes and is recorded in the
 integration store's bundle-matched evidence.
+
+`integrations/mt940/camt053.test.ts` has six scenarios for the camt.053 path:
+the sandbox-safe XML reader (namespaces, prefixes, entities, CDATA, malformed
+input), booked-entry mapping to exact amounts/dates/codes/references/narratives,
+v08 status codes, `DtTm` dates, `PRCD` openings and `Othr` account ids,
+reconciliation/currency/date/balance-type/size failures, the 500-entry bound,
+format detection and per-format identities.
+`plugins::bank_statement_tests::camt_statement_proposes_the_same_nested_transactions`
+runs the same bundle on the camt.053 fixture in QuickJS/WASM. The MT940 E2E
+below ends by uploading the camt.053 fixture into the same importer and
+expecting two new rows. No real bank camt.053 export has been validated yet.
 
 `browser/e2e/tests/mt940.spec.ts` uses a synthetic statement with the real Worker,
 server runtime, planner and signed persistence. It verifies invalid-file errors,
@@ -1858,6 +1944,7 @@ checks the reasoning remains visible and that reopening the chat restores both
 the reasoning and the provider error. Error replies do not launch follow-up
 question generation or automatic compaction.
 
+`prepareDriveSharing.test.ts` covers verified local transition before peer invitation, rejection on failed verification, preservation of an enrolled drive connection, and isolation from another drive enrollment. `local-drive-copy.test.ts` covers missing history, incomplete inventory, and missing or corrupt attachments. Full sharing UI acceptance remains pending.
 ## Signed-out local drive opened from the portal
 
 `browser/data-browser/src/helpers/isDriveSignInError.test.ts` covers a local-only missing-resource error with no app agent, including origins with a configured node. It also covers signed-out DID resources absent from the current node: their copy may be in the account vault, so they offer unlock. Signed-in users, ordinary HTTP 404s, and unrelated transport failures retain their error handling.
@@ -1889,6 +1976,29 @@ responses open to verify concurrent downloads are bounded at four and that
 reverse completion preserves listing order at import. Existing progress and
 failure checks also pass. Actual staging phone restore latency remains unmeasured.
 
+## Right-panel lifecycle
+
+`components/RightPanel/panelState.test.ts` covers session-local initial state, exclusive panels, cleared meeting selection, account/drive scoping, stale callbacks, and missing/unauthorized versus temporarily unavailable targets.
+
+`e2e/tests/right-panel-lifecycle.spec.ts` asserts visible panel state with legacy localStorage values for meeting/comments/AI, SPA navigation away from commentable resources, deletion of an explicitly opened meeting, and switching drives and back without resurrecting the panel. Existing `meetings.spec.ts` agenda/start/end coverage verifies that minutes and explicitly opened meeting chat still work. AI chat E2E (`ai.spec.ts`, `table-tools.spec.ts`) opens the assistant with the navbar button rather than `atomic.rightPanel.active`, because that key is no longer restored.
+
+## Replication completion and CI tool installation
+
+`lib/src/sync/replicate.rs` has five scripted WebSocket peer tests covering
+resource-only completion without the idle timeout, acknowledgement of every
+chunk, unrelated-drive acknowledgements, an independently mismatching hash,
+trailing blob requests and asynchronous storage errors, and the fallback for
+peers without keepalive support. They exercise the real Rust WebSocket client
+and snapshot/chunk encoding with an isolated in-memory source; the peer scripts
+simulate replies and do not validate authentication or remote import policy.
+The real-server `server/tests/it/replicate.rs` tests retain destination-data,
+repeat-push, boot-reconcile and export-authorization assertions.
+
+The pinned wasm-pack installer was executed in Dagger's `rust:bookworm` image
+on Linux x86_64, including a cached install followed by changed downstream
+source input and execution of the retained binary. Its aarch64 archive digest
+is pinned to the upstream release; native aarch64 execution is not covered by
+that check. Full CI wall-time savings require a completed hosted run.
 ## External cache access and authentication origins (#170)
 
 Paired SaaS `portal/e2e/recovery-passkey.spec.ts` uses Chromium virtual PRF authenticators with the real control plane to verify app enrollment followed by portal login using one credential, reuse of a portal-created credential, and account-settings migration without replacing ciphertext or old wrappers. Physical Safari/iCloud, Android/password-manager and native-shell behavior remain device acceptance checks.

@@ -69,6 +69,9 @@ import {
   encodeError,
   encodeHello,
   decodeGet,
+  decodeGetMany,
+  decodeGetManyResult,
+  encodeGetMany,
   decodeSubject,
   decodeSyncDiff,
   decodeSyncOk,
@@ -89,6 +92,7 @@ import {
   encodeSub,
   encodeSync,
   encodeSyncPush,
+  encodeSyncPushChunks,
   encodeUnsub,
   Flags,
 } from './ws-v2.js';
@@ -123,6 +127,8 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
       'auth_ok_caps',
       'error',
       'get',
+      'get_many',
+      'get_many_result',
       'update_delta_push',
       'destroy',
       'commit',
@@ -151,6 +157,9 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
 
   it('encodes byte-identically to Rust', ({ expect }) => {
     expect(toHex(encodeGet(1, 'did:ad:x'))).toBe(toHex(vectors.get));
+    expect(toHex(encodeGetMany(2, ['did:ad:x', 'did:ad:y']))).toBe(
+      toHex(vectors.get_many),
+    );
     expect(toHex(encodeCommit(9, '{"a":1}'))).toBe(toHex(vectors.commit));
     expect(toHex(encodeSub('did:ad:d'))).toBe(toHex(vectors.sub));
     expect(toHex(encodeUnsub('did:ad:d'))).toBe(toHex(vectors.unsub));
@@ -203,6 +212,48 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
         ),
       ),
     ).toBe(toHex(vectors.sync_push_last));
+  });
+
+  it('carries SYNC_PUSH envelopes in a trailer old decoders never read', ({
+    expect,
+  }) => {
+    const entries = [
+      { subject: 'did:ad:x', loroBytes: new Uint8Array([1, 2]) },
+      { subject: 'did:ad:y', loroBytes: new Uint8Array([3]) },
+    ];
+    const envelopes = [
+      { subject: 'did:ad:x', json: '{"a":1}' },
+      { subject: 'did:ad:x', json: '{"b":2}' },
+    ];
+    const pushFrame = encodeSyncPush('did:ad:d', entries, true, envelopes);
+    const decoded = decodeSyncPush(pushFrame.subarray(1));
+    expect(decoded?.entries.map(e => e.subject)).toEqual([
+      'did:ad:x',
+      'did:ad:y',
+    ]);
+    expect(decoded?.envelopes).toEqual(envelopes);
+
+    // Without envelopes the bytes are the plain frame.
+    expect(toHex(encodeSyncPush('did:ad:d', entries, true, []))).toBe(
+      toHex(encodeSyncPush('did:ad:d', entries, true)),
+    );
+
+    // Clearing the flag is what a pre-envelope decoder sees: entries only.
+    const flagsAt = 3 + new TextEncoder().encode('did:ad:d').length;
+    const unflagged = new Uint8Array(pushFrame);
+    unflagged[flagsAt] &= ~0b0010;
+    const old = decodeSyncPush(unflagged.subarray(1));
+    expect(old?.entries.length).toBe(2);
+    expect(old?.envelopes).toEqual([]);
+
+    // The chunker attaches each subject's envelopes to its own chunk.
+    const chunks = encodeSyncPushChunks('did:ad:d', entries, {
+      'did:ad:y': ['{"y":1}'],
+    });
+    const lastChunk = decodeSyncPush(chunks[chunks.length - 1].subarray(1));
+    expect(lastChunk?.envelopes).toEqual([
+      { subject: 'did:ad:y', json: '{"y":1}' },
+    ]);
   });
 
   it('encodes SYNC with the length-prefixed hex hash Rust decodes', ({
@@ -258,6 +309,22 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
     expect(decodeGet(payload('get'))).toEqual({
       requestId: 1,
       subject: 'did:ad:x',
+    });
+    expect(decodeGetMany(payload('get_many'))).toEqual({
+      requestId: 2,
+      subjects: ['did:ad:x', 'did:ad:y'],
+    });
+    const many = decodeGetManyResult(payload('get_many_result'))!;
+    expect(many.requestId).toBe(2);
+    expect(many.frames.map(f => f[0])).toEqual([Tag.UPDATE, Tag.ERROR]);
+    expect(decodeUpdate(many.frames[0].subarray(1))).toMatchObject({
+      requestId: 2,
+      subject: 'did:ad:x',
+      flags: Flags.SNAPSHOT,
+    });
+    expect(decodeError(many.frames[1].subarray(1))).toMatchObject({
+      requestId: 2,
+      message: 'Resource not found. did:ad:y',
     });
 
     const update = decodeUpdate(payload('update_delta_push'));
@@ -316,6 +383,7 @@ describe('wire vectors shared with lib/src/sync/protocol.rs', () => {
     expect(push?.drive).toBe('did:ad:d');
     expect(push?.last).toBe(true);
     expect(push?.entries.map(e => e.subject)).toEqual(['did:ad:x']);
+    expect(push?.envelopes).toEqual([]);
 
     expect([...(decodeBlobRequest(payload('blob_request')) ?? [])]).toEqual(
       new Array(32).fill(0xab),

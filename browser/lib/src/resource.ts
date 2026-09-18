@@ -3241,7 +3241,31 @@ export class Resource<C extends OptionalClass = any> {
     dst.commit();
   }
 
+  /** The save currently running, so a concurrent `save()` waits for it. */
+  private _inflightSave?: Promise<SaveResult>;
+
   public async save(): Promise<SaveResult> {
+    // Two saves running at once each sign their own commit from the same
+    // state. For a draft that is two genesis certificates, so two subjects
+    // for one resource: the second rename evicts the first, and every alias
+    // that pointed at it dangles. Queue behind the running save instead; the
+    // second pass finds nothing left to sign and reports `noop`.
+    if (this._inflightSave) {
+      await this._inflightSave.catch(() => undefined);
+
+      return this.save();
+    }
+
+    this._inflightSave = this.saveOnce();
+
+    try {
+      return await this._inflightSave;
+    } finally {
+      this._inflightSave = undefined;
+    }
+  }
+
+  private async saveOnce(): Promise<SaveResult> {
     const hasChanges = this.hasUnsavedChanges();
 
     if (

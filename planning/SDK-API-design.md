@@ -35,3 +35,5 @@ In the "old" HTTP based Atomic(Server) UX, an app developer had to:
 - [ ] Make tutorial describing the future situation (I think this is where we should start, so we design from the perspective of a developer)
 - [ ] Schema creation in-code. See [`json-schema-code-first.md`](./json-schema-code-first.md).
 - [ ] Update APIs
+- [ ] MCP server so external agents (Cursor, Claude, …) speak the same
+      compact tools as the in-app assistant. See [`mcp-endpoint.md`](./mcp-endpoint.md).

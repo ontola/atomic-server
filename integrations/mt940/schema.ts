@@ -5,7 +5,7 @@ export function bankingSchema(): SchemaSpec {
     [
       'bank-account',
       'Account',
-      'Statement account identifier (MT940 field 25); not necessarily an IBAN.',
+      'Statement account identifier (MT940 field 25 or camt.053 Acct/Id); not necessarily an IBAN.',
     ],
     [
       'bank-currency',
@@ -30,7 +30,7 @@ export function bankingSchema(): SchemaSpec {
     [
       'bank-description',
       'Description',
-      'Original bank narrative, including structured MT940 field 86 codes.',
+      'Original bank narrative: MT940 field 86 including its structured codes, or camt.053 counterparty and remittance information.',
     ],
     [
       'bank-reference',
@@ -40,7 +40,7 @@ export function bankingSchema(): SchemaSpec {
     [
       'bank-transaction-code',
       'Transaction code',
-      'Original MT940 transaction type code.',
+      'Original transaction type code: the MT940 :61: code, or the camt.053 bank transaction code (domain/family/sub-family, or proprietary).',
     ],
     ['bank-statement', 'Statement', 'Source statement number and sequence.'],
     [
@@ -66,7 +66,7 @@ export function bankingSchema(): SchemaSpec {
         shortname: 'bank-transaction',
         name: 'Bank transaction',
         description:
-          'A booked bank statement entry. MT940 is the initial source format.',
+          'A booked bank statement entry imported from an MT940 or camt.053 statement.',
         requires: [
           'bank-account',
           'bank-currency',

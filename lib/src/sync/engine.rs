@@ -193,6 +193,64 @@ pub async fn handle_frame(
     handle_frame_full(frame, store, agent).await.frames
 }
 
+/// The answer to one fetched subject: an `UPDATE` carrying the full snapshot,
+/// or an `ERROR` when it is missing, unreadable or has no state. Shared by
+/// `GET` (one subject) and `GET_MANY` (one entry per subject).
+async fn answer_get(
+    store: &Db,
+    agent: &crate::agents::ForAgent,
+    request_id: u16,
+    raw_subject: &str,
+) -> Vec<u8> {
+    let subject = crate::Subject::from_raw(raw_subject, store.get_base_domain().as_deref());
+
+    match store.get_resource_extended(&subject, false, agent).await {
+        Ok(r) => {
+            let resource = r.to_single();
+            let snapshot = resource.materialized_state().unwrap_or_else(|| {
+                resource
+                    .build_state_doc()
+                    .map(|doc| doc.export_snapshot())
+                    .unwrap_or_default()
+            });
+
+            if snapshot.is_empty() {
+                protocol::encode_error(request_id, protocol::error_code::UNKNOWN, "No state")
+            } else {
+                // Resolve `internal:/…` to this node's origin —
+                // `internal:` is a node-local concept and must not
+                // cross the wire; the recipient keys its resource
+                // cache on whatever subject we emit. A no-op for
+                // normal (External/DID) subjects, so it's safe on
+                // every transport, not just the server's origin.
+                let origin = store
+                    .get_base_domain()
+                    .unwrap_or_else(|| "http://localhost".to_string());
+                let subject_resolved = resource.get_subject().resolve(&origin);
+                // Include `lastCommit` so the recipient can stamp
+                // `_lastCommit` and not mis-detect genesis on save.
+                let last_commit = resource
+                    .get(crate::urls::LAST_COMMIT)
+                    .ok()
+                    .map(|v| v.to_string())
+                    .filter(|s| !s.is_empty());
+                let mut flags = protocol::flags::SNAPSHOT;
+                if last_commit.is_some() {
+                    flags |= protocol::flags::HAS_COMMIT_ID;
+                }
+                protocol::encode_update(
+                    flags,
+                    request_id,
+                    &subject_resolved,
+                    last_commit.as_deref(),
+                    &snapshot,
+                )
+            }
+        }
+        Err(e) => protocol::encode_error(request_id, protocol::error_code::UNKNOWN, &e.to_string()),
+    }
+}
+
 /// Like [`handle_frame`], plus the `SUB`/`UNSUB` session commands a hub
 /// applies to its commit monitor.
 pub async fn handle_frame_full(
@@ -227,69 +285,39 @@ pub async fn handle_frame_full(
 
         protocol::tag::GET => {
             if let Some(decoded) = protocol::decode_get(payload) {
-                let subject =
-                    crate::Subject::from_raw(decoded.subject, store.get_base_domain().as_deref());
-
-                match store.get_resource_extended(&subject, false, agent).await {
-                    Ok(r) => {
-                        let resource = r.to_single();
-                        let snapshot = resource.materialized_state().unwrap_or_else(|| {
-                            resource
-                                .build_state_doc()
-                                .map(|doc| doc.export_snapshot())
-                                .unwrap_or_default()
-                        });
-
-                        if snapshot.is_empty() {
-                            vec![protocol::encode_error(
-                                decoded.request_id,
-                                protocol::error_code::UNKNOWN,
-                                "No state",
-                            )]
-                        } else {
-                            // Resolve `internal:/…` to this node's origin —
-                            // `internal:` is a node-local concept and must not
-                            // cross the wire; the recipient keys its resource
-                            // cache on whatever subject we emit. A no-op for
-                            // normal (External/DID) subjects, so it's safe on
-                            // every transport, not just the server's origin.
-                            let origin = store
-                                .get_base_domain()
-                                .unwrap_or_else(|| "http://localhost".to_string());
-                            let subject_resolved = resource.get_subject().resolve(&origin);
-                            // Include `lastCommit` so the recipient can stamp
-                            // `_lastCommit` and not mis-detect genesis on save.
-                            let last_commit = resource
-                                .get(crate::urls::LAST_COMMIT)
-                                .ok()
-                                .map(|v| v.to_string())
-                                .filter(|s| !s.is_empty());
-                            let mut flags = protocol::flags::SNAPSHOT;
-                            if last_commit.is_some() {
-                                flags |= protocol::flags::HAS_COMMIT_ID;
-                            }
-                            vec![protocol::encode_update(
-                                flags,
-                                decoded.request_id,
-                                &subject_resolved,
-                                last_commit.as_deref(),
-                                &snapshot,
-                            )]
-                        }
-                    }
-                    Err(e) => {
-                        vec![protocol::encode_error(
-                            decoded.request_id,
-                            protocol::error_code::UNKNOWN,
-                            &e.to_string(),
-                        )]
-                    }
-                }
+                vec![answer_get(store, agent, decoded.request_id, decoded.subject).await]
             } else {
                 vec![protocol::encode_error(
                     0,
                     protocol::error_code::UNKNOWN,
                     "Invalid GET frame",
+                )]
+            }
+        }
+
+        protocol::tag::GET_MANY => {
+            if let Some(decoded) = protocol::decode_get_many(payload) {
+                // One answer per subject, in request order (join_all keeps it), so
+                // the client can pair an `ERROR` (which names no subject) with what
+                // it asked. Evaluated concurrently: the batch is only worth its
+                // frame if it is not slower than the single GETs it replaces.
+                let agent: &crate::agents::ForAgent = agent;
+                let answers = futures::future::join_all(
+                    decoded
+                        .subjects
+                        .iter()
+                        .map(|subject| answer_get(store, agent, decoded.request_id, subject)),
+                )
+                .await;
+                vec![protocol::encode_get_many_result(
+                    decoded.request_id,
+                    &answers,
+                )]
+            } else {
+                vec![protocol::encode_error(
+                    0,
+                    protocol::error_code::UNKNOWN,
+                    "Invalid GET_MANY frame",
                 )]
             }
         }
@@ -616,6 +644,26 @@ impl CommitIngestOpts {
             response_origin: None,
         }
     }
+}
+
+/// Parse a JSON-AD commit and verify its signature, returning the signer it
+/// proves. This is the identity check alone: no schema, timestamp, rights,
+/// ownership or Loro checks run, and nothing is stored.
+///
+/// Until the Ed25519 signature over the body checks out, the `signer` field
+/// is just a string anyone can put there, so nothing keyed on the signer
+/// (the per-agent write budget, for one) may trust it before this returns
+/// `Ok`. A hub calls this before spending any budget on a `/commit` request;
+/// [`ingest_commit`] verifies again when it applies the commit, which keeps
+/// that path self-contained at the cost of one cheap re-check.
+pub async fn verify_commit_signer(
+    store: &impl crate::Storelike,
+    commit_json: &str,
+) -> crate::errors::AtomicResult<crate::Subject> {
+    let resource = crate::parse::parse_json_ad_commit_resource(commit_json, store).await?;
+    let commit = crate::commit::Commit::from_resource(resource)?;
+    commit.validate_signature(store).await?;
+    Ok(commit.signer)
 }
 
 /// Ingest a signed JSON-AD `COMMIT`, returning the server-created commit
@@ -1258,8 +1306,12 @@ pub async fn handle_sync_vv_filtered(
             .collect();
         // `encode_sync_push_chunks` splits by entry count + byte budget and
         // marks the final frame LAST. Each frame is independent on the wire;
-        // the receiver loops reading SYNC_PUSH until it sees LAST.
-        for chunk in protocol::encode_sync_push_chunks(drive, &entries) {
+        // the receiver loops reading SYNC_PUSH until it sees LAST. Each
+        // subject's retained envelopes ride in its chunk so the receiver can
+        // attribute what it imports (`envelopes::import_envelope`).
+        let envelopes =
+            crate::envelopes::for_subjects(store, push_subjects.iter().map(String::as_str));
+        for chunk in protocol::encode_sync_push_chunks_with_envelopes(drive, &entries, &envelopes) {
             frames.push(chunk);
         }
     }
@@ -1456,6 +1508,7 @@ pub async fn import_sync_push(
 
     let mut count = 0;
     let mut blob_requests = Vec::new();
+    let mut imported: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     let base_domain = store.get_base_domain();
     let normalize = |s: &str| crate::Subject::from_raw(s, base_domain.as_deref()).pure_id();
@@ -1623,6 +1676,7 @@ pub async fn import_sync_push(
                 reason: format!("Failed to persist {}: {error}", entry.subject),
             })?;
         count += 1;
+        imported.insert(snapshot_key.clone());
 
         // Check for missing blobs
         if let Ok(blob_val) = resource.get(crate::urls::BLOB) {
@@ -1644,6 +1698,23 @@ pub async fn import_sync_push(
                     }
                 }
             }
+        }
+    }
+
+    // Envelopes ride with the entries they sign. Only a subject imported
+    // above may receive one (same admission as its entry), and each is
+    // verified before it is kept; a bad one is dropped, never the push.
+    for envelope in &push.envelopes {
+        if !imported.contains(&normalize(&envelope.subject)) {
+            continue;
+        }
+        if let Err(e) =
+            crate::envelopes::import_envelope(store, &envelope.subject, &envelope.json).await
+        {
+            tracing::warn!(
+                "import_sync_push: envelope for {} rejected: {e}",
+                &envelope.subject[..envelope.subject.len().min(30)]
+            );
         }
     }
 
@@ -1712,6 +1783,13 @@ pub async fn collect_readable_snapshots(
         None
     };
 
+    // Subjects with a pending outbox entry are NOT skipped here, unlike the
+    // browser's handleSyncDiff. This collector also serves a same-agent
+    // replica that may hold none of the drive yet (a second device's first
+    // sync), and that replica is allowed the raw state by the Principle 3
+    // exception in planning/serverless-p2p.md; withholding it left the
+    // device waiting on a live-link drain that may never come. The signed
+    // delta follows from the outbox and applies on top idempotently.
     let mut entries = Vec::new();
     for subject in subjects {
         let subj = crate::Subject::from_raw(subject, store.get_base_domain().as_deref());
@@ -1768,6 +1846,67 @@ mod bootstrap_and_sub_tests {
     fn empty_push(drive: &str) -> protocol::DecodedSyncPush {
         let frame = protocol::encode_sync_push(drive, &[], true);
         protocol::decode_sync_push(&frame[1..]).unwrap()
+    }
+
+    /// A pushed envelope is kept only when it is verified and names a subject
+    /// imported from the same push; one for a subject the push did not carry
+    /// (or that was rejected) is dropped without failing the push.
+    #[tokio::test]
+    async fn push_envelopes_are_kept_only_for_imported_subjects() {
+        let source = Db::init_temp("push_envelopes_source").await.unwrap();
+        let (alice, drive) = source.setup("Alice").await.unwrap();
+        let note = source
+            .create_resource(crate::urls::FOLDER, &drive, "note", None)
+            .await
+            .unwrap();
+        let drive_snapshot = source
+            .kv
+            .get(Tree::LoroSnapshots, drive.as_bytes())
+            .unwrap()
+            .unwrap();
+        let note_snapshot = source
+            .kv
+            .get(Tree::LoroSnapshots, note.as_bytes())
+            .unwrap()
+            .unwrap();
+        let note_envelope = crate::envelopes::latest_envelope(&source, &note)
+            .unwrap()
+            .json;
+        let drive_envelope = crate::envelopes::latest_envelope(&source, &drive)
+            .unwrap()
+            .json;
+
+        // Bootstrap the drive on a second node; the note's envelope rides
+        // with it, the drive's own envelope names a subject that is not in
+        // this frame's entries.
+        let entries: [(&str, &[u8]); 2] = [(&drive, &drive_snapshot), (&note, &note_snapshot)];
+        let envelopes = [
+            (note.as_str(), note_envelope.as_str()),
+            ("did:ad:not-in-this-push", drive_envelope.as_str()),
+        ];
+        let frame = protocol::encode_sync_push_with_envelopes(&drive, &entries, &envelopes, true);
+        let push = protocol::decode_sync_push(&frame[1..]).unwrap();
+
+        let sink = Db::init_temp("push_envelopes_sink").await.unwrap();
+        let (count, _) = import_sync_push(&push, &sink, &ForAgent::from(alice), false)
+            .await
+            .unwrap();
+        assert_eq!(count, 2);
+        let kept = crate::envelopes::envelopes(&sink, &note);
+        assert_eq!(kept.len(), 1, "the imported note keeps its envelope");
+        assert_eq!(kept[0].json, note_envelope);
+        assert!(
+            crate::envelopes::envelopes(&sink, "did:ad:not-in-this-push").is_empty(),
+            "an envelope for a subject the push did not import is dropped"
+        );
+        assert!(
+            crate::envelopes::envelopes(&sink, &drive).is_empty(),
+            "nothing is stored under the envelope's own subject either"
+        );
+        let report = crate::envelopes::attribute_history(&sink, &note)
+            .await
+            .unwrap();
+        assert!(report.attributions.iter().any(|a| a.verified && a.genesis));
     }
 
     #[tokio::test]
@@ -1968,6 +2107,42 @@ mod bootstrap_and_sub_tests {
             db.sync_policy().admit_drive_write(drive),
             "the owner's new drive must be enrolled so later writes land"
         );
+    }
+
+    #[tokio::test]
+    async fn get_many_answers_every_subject_in_order() {
+        let db = Db::init_temp("get_many").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let alice_subject = alice.subject.to_string();
+        let frame = protocol::encode_get_many(21, &[&drive, "did:ad:missing", &alice_subject]);
+        let mut agent = ForAgent::from(alice.clone());
+        let out = handle_frame_full(&frame, &db, &mut agent).await;
+        assert_eq!(out.frames.len(), 1, "one result frame for the whole batch");
+        assert_eq!(out.frames[0][0], tag::GET_MANY_RESULT);
+        let result = protocol::decode_get_many_result(&out.frames[0][1..]).unwrap();
+        assert_eq!(result.request_id, 21);
+        assert_eq!(result.frames.len(), 3);
+
+        let first = protocol::decode_update(&result.frames[0][1..]).unwrap();
+        assert_eq!(result.frames[0][0], tag::UPDATE);
+        assert_eq!(first.subject, drive);
+        assert_eq!(first.request_id, 21);
+        assert!(!first.loro_bytes.is_empty());
+
+        assert_eq!(
+            result.frames[1][0],
+            tag::ERROR,
+            "a missing subject is an ERROR entry"
+        );
+        let missing = protocol::decode_error(&result.frames[1][1..]).unwrap();
+        assert!(
+            missing.message.contains("did:ad:missing"),
+            "{}",
+            missing.message
+        );
+
+        let third = protocol::decode_update(&result.frames[2][1..]).unwrap();
+        assert_eq!(third.subject, alice_subject);
     }
 
     #[tokio::test]

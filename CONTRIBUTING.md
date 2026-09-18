@@ -307,8 +307,9 @@ We believe AI can be useful for improving software while also recognizing that i
    for a version you are actually about to tag — a section for a release that
    never shipped is worse than no section, see the `[v0.40.2]` entry for how
    confusing that gets.
-1. Publish to cargo: `cargo publish`. First `lib`, then `cli` and `server`.
-1. Publish to `npm` (see `browser/CONTRIBUTING.md`)
+1. Tag `v<version>` and push it. CI publishes crates.io, npm, GitHub release
+   assets, and (on a stable tag) production. Publish crates or npm by hand
+   only when CI failed (see [Publishing manually](#publishing-manually---doing-the-cis-work)).
 
 The following should be triggered automatically:
 
@@ -323,7 +324,7 @@ Note:
 ### CI/CD pipeline
 
 - Github Action for `push`: builds + tests + docker (using `dagger`, see `.dagger` and the `.github` folders)
-- Github Action for `tag`: create release + publish binaries
+- Github Action for `tag`: create release + publish binaries + crates.io + npm
 - Docker tags should include immutable release tags such as `0.41.0-beta.0`. `latest` is useful as a convenience tag, but downstream consumers such as Home Assistant add-ons need a changing version tag to reliably detect updates.
 
 ### Deployments
@@ -427,6 +428,17 @@ If the CI scripts for some reason do not do their job (buildin releases, docker 
 OR
 
 1. Install `cargo install cargo-release` and run `cargo release patch`
+
+#### Publishing to npm
+
+CI does this on a `v*` tag (`release.yml` `npm` job) through npm Trusted
+Publishing, so no token is stored. Pre-releases go to the `beta` / `rc`
+dist-tag, never `latest`. By hand:
+
+1. `cd browser && pnpm install --frozen-lockfile`
+1. `pnpm --filter @tomic/lib run build`, then the same for `@tomic/react`, `@tomic/cli`, `@tomic/svelte`, `@tomic/create-template`, `@tomic/plugin` and `@tomic/edit-mode`
+1. `pnpm publish -r --no-git-checks --ignore-scripts --access public --tag <latest|beta>`
+   - Never `pnpm npm publish`: it skips the `workspace:*` rewrite and publishes a package that cannot resolve `@tomic/lib`.
 
 #### Publishing server to Docker
 

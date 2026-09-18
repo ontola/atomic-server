@@ -159,13 +159,16 @@ async fn destroy_resource_and_check_collection() {
     // (peer-id allocation differs per run) — the logical state is what matters.
     // Using the full to_json_ad here would compare the base64 of those snapshots
     // and flake even when the logical state is identical.
-    fn json_ad_without_loro(r: &crate::Resource) -> String {
+    // Compared as values, not strings: with serde_json's `preserve_order`
+    // feature on (any dependency can switch it on), key order follows the
+    // resource's property map, which is not stable between runs.
+    fn json_ad_without_loro(r: &crate::Resource) -> serde_json::Value {
         let mut json: serde_json::Value =
             serde_json::from_str(&r.to_json_ad(None).unwrap()).unwrap();
         if let Some(obj) = json.as_object_mut() {
             obj.remove(crate::urls::LORO_UPDATE);
         }
-        serde_json::to_string(&json).unwrap()
+        json
     }
     assert_eq!(
         json_ad_without_loro(resp.resource_old.as_ref().unwrap()),
@@ -2570,4 +2573,43 @@ async fn cached_external_resources_keep_read_permissions() {
         .get_resource_extended(&subject, true, &ForAgent::AgentSubject(agent.subject))
         .await
         .is_ok());
+}
+
+/// `Db::init_redb_file` must make writes durable on its own: the Flutter
+/// binding opens a file store this way and never calls `flush`, and before
+/// the library owned the tick every edit since the last drive switch was
+/// rolled back on an app kill. Write, wait longer than the interval without
+/// flushing, drop, reopen.
+#[cfg(not(target_arch = "wasm32"))]
+#[tokio::test]
+async fn file_store_writes_survive_reopen_without_an_explicit_flush() {
+    let dir = std::env::temp_dir().join(format!(
+        "atomic-durable-flush-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let uploads = dir.join("uploads");
+    std::fs::create_dir_all(&uploads).unwrap();
+
+    let db = Db::init_redb_file(&dir, Some("https://localhost".into()), &uploads)
+        .await
+        .unwrap();
+    db.kv
+        .insert(trees::Tree::PluginMeta, b"survives", b"yes")
+        .unwrap();
+    tokio::time::sleep(DURABLE_FLUSH_INTERVAL * 4).await;
+    drop(db);
+
+    let db = Db::init_redb_file(&dir, Some("https://localhost".into()), &uploads)
+        .await
+        .unwrap();
+    assert_eq!(
+        db.kv.get(trees::Tree::PluginMeta, b"survives").unwrap(),
+        Some(b"yes".to_vec())
+    );
+    drop(db);
+    std::fs::remove_dir_all(&dir).ok();
 }

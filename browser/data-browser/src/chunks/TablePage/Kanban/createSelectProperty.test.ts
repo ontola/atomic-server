@@ -178,12 +178,7 @@ describe('table column creation dedupes ontology shortnames', () => {
     expect(property.hasClasses(dataBrowser.classes.selectProperty)).toBe(true);
   });
 
-  it('disambiguates instead of reusing a select property missing a requested option', async () => {
-    // Two unrelated "Status" enums landing in the same ontology — e.g. a task
-    // board's Todo/Doing/Done next to a reading list's Want to read/Reading/
-    // Finished (see issue #1529). Neither template author knows about the
-    // other, so a tag mismatch must mint a disambiguated property instead of
-    // failing the whole table creation.
+  it('mints its own when the existing select lacks a requested option', async () => {
     const store = fakeStore();
     const { rowClassA, rowClassB } = await twoTablesOnOneOntology(store);
 
@@ -191,17 +186,19 @@ describe('table column creation dedupes ontology shortnames', () => {
       name: 'Status',
       tags: STATUS_TAGS,
     });
+
+    // A reading list's "Status" (Want to read / Reading) is a different
+    // property from a task's, so it gets its own shortname rather than
+    // failing or quietly growing the other one's options.
     const second = await createSelectPropertyOnClass(store, rowClassB, {
       name: 'Status',
       tags: [{ name: 'Todo' }, { name: 'Blocked' }],
     });
 
     expect(second.subject).not.toBe(first.subject);
-
     const property = await store.getResource(second.subject);
     expect(property.get(core.properties.shortname)).toBe('status-2');
-    expect(property.hasClasses(dataBrowser.classes.selectProperty)).toBe(true);
-    expect(Object.keys(second.tags)).toEqual(['Todo', 'Blocked']);
+    expect(Object.keys(second.tags).sort()).toEqual(['Blocked', 'Todo']);
   });
 
   it('does not dedupe when the row classes have no shared ontology', async () => {

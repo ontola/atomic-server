@@ -60,22 +60,35 @@ async function waitForCardStatus(page: Page, title: string, col: Locator) {
  * release.
  */
 async function dndDrag(page: Page, source: Locator, target: Locator) {
+  // Wait for the card to stop moving: after a previous drop the board runs a
+  // FLIP animation, and a press aimed at where the card was lands on nothing.
+  await source.hover();
   const s = await source.boundingBox();
-  const t = await target.boundingBox();
 
-  if (!s || !t) {
-    throw new Error('drag source/target has no bounding box');
+  if (!s) {
+    throw new Error('drag source has no bounding box');
   }
 
   const sx = s.x + s.width / 2;
   const sy = s.y + s.height / 2;
-  const tx = t.x + t.width / 2;
-  const ty = t.y + t.height / 2;
 
   await page.mouse.move(sx, sy);
   await page.mouse.down();
   // Exceed the 10px activation distance to start the drag.
   await page.mouse.move(sx + 15, sy, { steps: 5 });
+
+  // Measure the target only now: activating a drag changes the board's
+  // layout (the "No status" column mounts, the dragged card leaves the
+  // flow), so a box read before the drag can point at empty space.
+  const t = await target.boundingBox();
+
+  if (!t) {
+    throw new Error('drag target has no bounding box');
+  }
+
+  const tx = t.x + t.width / 2;
+  const ty = t.y + t.height / 2;
+
   await page.mouse.move(tx, ty, { steps: 10 });
   // A tiny extra move ensures the final `onDragOver` lands on the target.
   await page.mouse.move(tx, ty + 1, { steps: 2 });

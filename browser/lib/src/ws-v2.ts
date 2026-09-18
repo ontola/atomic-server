@@ -20,6 +20,11 @@ export const Tag = {
   DESTROY: 0x12,
   COMMIT: 0x13,
   COMMIT_OK: 0x14,
+  /** One request for a list of subjects; answered by GET_MANY_RESULT.
+   *  Only sent to a server whose AUTH_OK lists `get-many`. */
+  GET_MANY: 0x15,
+  /** One complete UPDATE or ERROR frame per requested subject, in order. */
+  GET_MANY_RESULT: 0x16,
   SUB: 0x20,
   UNSUB: 0x21,
   SYNC: 0x30,
@@ -74,7 +79,18 @@ export const Flags = {
  *  frames until they see this bit. */
 export const SyncPushFlags = {
   LAST: 0b0001,
+  /** The frame carries a trailing envelope section after its entries: the
+   *  retained signed commits (JSON-AD) of the pushed subjects. A decoder that
+   *  predates the section stops after `count` entries and never reads it. */
+  ENVELOPES: 0b0010,
 } as const;
+
+/** A signed envelope travelling with a SYNC_PUSH: the commit JSON-AD of
+ *  `subject`. Verified by the receiver before it is kept. */
+export interface SyncPushEnvelope {
+  subject: string;
+  json: string;
+}
 
 /**
  * Structured error codes on `ERROR` frames (mirrors `lib/src/sync/protocol.rs`
@@ -321,6 +337,89 @@ export function encodeGet(requestId: number, subject: string): Uint8Array {
   return buf;
 }
 
+/** The AUTH_OK capability that says the server answers GET_MANY. */
+export const CAP_GET_MANY = 'get-many';
+
+/**
+ * GET_MANY: `[0x15] [request_id: u16] [count: u16] ([subject_len: u16]
+ * [subject_utf8])*`. Mirrors `protocol::encode_get_many`.
+ */
+export function encodeGetMany(
+  requestId: number,
+  subjects: readonly string[],
+): Uint8Array {
+  const encoded = subjects.map(s => encoder.encode(s));
+  const buf = new Uint8Array(
+    5 + encoded.reduce((sum, bytes) => sum + 2 + bytes.length, 0),
+  );
+  buf[0] = Tag.GET_MANY;
+  let off = writeU16(buf, 1, requestId);
+  off = writeU16(buf, off, subjects.length);
+
+  for (const bytes of encoded) {
+    off = writeU16(buf, off, bytes.length);
+    buf.set(bytes, off);
+    off += bytes.length;
+  }
+
+  return buf;
+}
+
+export interface DecodedGetMany {
+  requestId: number;
+  subjects: string[];
+}
+
+export interface DecodedGetManyResult {
+  requestId: number;
+  /** Complete UPDATE / ERROR frames (tag byte included), request order. */
+  frames: Uint8Array[];
+}
+
+export function decodeGetMany(data: Uint8Array): DecodedGetMany | undefined {
+  if (data.length < 4) return undefined;
+  const [requestId, off1] = readU16(data, 0);
+  const [count, off2] = readU16(data, off1);
+  const subjects: string[] = [];
+  let off = off2;
+
+  for (let i = 0; i < count; i++) {
+    if (data.length < off + 2) return undefined;
+    const [len] = readU16(data, off);
+    if (data.length < off + 2 + len) return undefined;
+    let subject: string;
+    [subject, off] = readStr16(data, off);
+    subjects.push(subject);
+  }
+
+  return { requestId, subjects };
+}
+
+/**
+ * GET_MANY_RESULT: `[0x16] [request_id: u16] [count: u16] ([frame_len: u32]
+ * [frame])*`. Each inner frame is decoded with `decodeUpdate` /
+ * `decodeError` after its own tag byte.
+ */
+export function decodeGetManyResult(
+  data: Uint8Array,
+): DecodedGetManyResult | undefined {
+  if (data.length < 4) return undefined;
+  const [requestId, off1] = readU16(data, 0);
+  const [count, off2] = readU16(data, off1);
+  const frames: Uint8Array[] = [];
+  let off = off2;
+
+  for (let i = 0; i < count; i++) {
+    if (data.length < off + 4) return undefined;
+    const [len, dataOff] = readU32(data, off);
+    if (data.length < dataOff + len) return undefined;
+    frames.push(data.subarray(dataOff, dataOff + len));
+    off = dataOff + len;
+  }
+
+  return { requestId, frames };
+}
+
 export function encodeCommit(
   requestId: number,
   commitJson: string,
@@ -411,6 +510,7 @@ export function encodeSyncPush(
   driveSubject: string,
   entries: Array<{ subject: string; loroBytes: Uint8Array }>,
   last = true,
+  envelopes: SyncPushEnvelope[] = [],
 ): Uint8Array {
   const driveBytes = encoder.encode(driveSubject);
   const encodedEntries = entries.map(e => ({
@@ -421,14 +521,30 @@ export function encodeSyncPush(
     (sum, e) => sum + 2 + e.subjectBytes.length + 4 + e.loroBytes.length,
     0,
   );
+  const encodedEnvelopes = envelopes.map(e => ({
+    subjectBytes: encoder.encode(e.subject),
+    jsonBytes: encoder.encode(e.json),
+  }));
+  const envelopeSize =
+    encodedEnvelopes.length === 0
+      ? 0
+      : 2 +
+        encodedEnvelopes.reduce(
+          (sum, e) => sum + 2 + e.subjectBytes.length + 4 + e.jsonBytes.length,
+          0,
+        );
 
-  const buf = new Uint8Array(1 + 2 + driveBytes.length + 1 + 2 + entrySize);
+  const buf = new Uint8Array(
+    1 + 2 + driveBytes.length + 1 + 2 + entrySize + envelopeSize,
+  );
   let off = 0;
   buf[off++] = Tag.SYNC_PUSH;
   off = writeU16(buf, off, driveBytes.length);
   buf.set(driveBytes, off);
   off += driveBytes.length;
-  buf[off++] = last ? SyncPushFlags.LAST : 0;
+  let flags = last ? SyncPushFlags.LAST : 0;
+  if (encodedEnvelopes.length > 0) flags |= SyncPushFlags.ENVELOPES;
+  buf[off++] = flags;
   off = writeU16(buf, off, entries.length);
 
   for (const e of encodedEntries) {
@@ -438,6 +554,19 @@ export function encodeSyncPush(
     off = writeU32(buf, off, e.loroBytes.length);
     buf.set(e.loroBytes, off);
     off += e.loroBytes.length;
+  }
+
+  if (encodedEnvelopes.length > 0) {
+    off = writeU16(buf, off, encodedEnvelopes.length);
+
+    for (const e of encodedEnvelopes) {
+      off = writeU16(buf, off, e.subjectBytes.length);
+      buf.set(e.subjectBytes, off);
+      off += e.subjectBytes.length;
+      off = writeU32(buf, off, e.jsonBytes.length);
+      buf.set(e.jsonBytes, off);
+      off += e.jsonBytes.length;
+    }
   }
 
   return buf;
@@ -517,6 +646,8 @@ export interface DecodedSyncPush {
   /** True iff this is the final chunk of a SYNC_PUSH run. Receivers
    *  loop reading SYNC_PUSH frames until they see `last === true`. */
   last: boolean;
+  /** The `SyncPushFlags.ENVELOPES` section; empty when absent. */
+  envelopes: SyncPushEnvelope[];
 }
 
 export interface DecodedBlobResponse {
@@ -650,14 +781,29 @@ export function decodeSyncDiff(data: Uint8Array): DecodedSyncDiff | undefined {
 const SYNC_PUSH_MAX_ENTRIES = 100;
 const SYNC_PUSH_MAX_BYTES = 48 * 1024;
 
-/** Split entries into multiple SYNC_PUSH frames (last chunk flagged). */
+/** Split entries into multiple SYNC_PUSH frames (last chunk flagged).
+ *  `envelopes` maps a subject to its retained signed commits (JSON-AD); each
+ *  chunk carries the envelopes of the subjects in it, counted against the
+ *  same byte budget. */
 export function encodeSyncPushChunks(
   driveSubject: string,
   entries: Array<{ subject: string; loroBytes: Uint8Array }>,
+  envelopes: Record<string, string[]> = {},
 ): Uint8Array[] {
   if (entries.length === 0) {
     return [encodeSyncPush(driveSubject, [], true)];
   }
+
+  const envelopeBytes = (subject: string): number =>
+    (envelopes[subject] ?? []).reduce(
+      (sum, json) =>
+        sum +
+        2 +
+        encoder.encode(subject).length +
+        4 +
+        encoder.encode(json).length,
+      0,
+    );
 
   const chunks: Uint8Array[] = [];
   let start = 0;
@@ -669,7 +815,11 @@ export function encodeSyncPushChunks(
     while (end < entries.length && end - start < SYNC_PUSH_MAX_ENTRIES) {
       const e = entries[end];
       const entryBytes =
-        2 + encoder.encode(e.subject).length + 4 + e.loroBytes.length;
+        2 +
+        encoder.encode(e.subject).length +
+        4 +
+        e.loroBytes.length +
+        envelopeBytes(e.subject);
 
       if (end > start && bytesAcc + entryBytes > SYNC_PUSH_MAX_BYTES) {
         break;
@@ -680,7 +830,14 @@ export function encodeSyncPushChunks(
     }
 
     const last = end >= entries.length;
-    chunks.push(encodeSyncPush(driveSubject, entries.slice(start, end), last));
+    const slice = entries.slice(start, end);
+    const chunkEnvelopes: SyncPushEnvelope[] = slice.flatMap(e =>
+      (envelopes[e.subject] ?? []).map(json => ({
+        subject: e.subject,
+        json,
+      })),
+    );
+    chunks.push(encodeSyncPush(driveSubject, slice, last, chunkEnvelopes));
     start = end;
   }
 
@@ -704,7 +861,24 @@ export function decodeSyncPush(data: Uint8Array): DecodedSyncPush | undefined {
     off = bOff + bytesLen;
   }
 
-  return { drive, entries, last };
+  const envelopes: SyncPushEnvelope[] = [];
+
+  if ((flags & SyncPushFlags.ENVELOPES) !== 0 && off + 2 <= data.length) {
+    const [envCount, eOff] = readU16(data, off);
+    off = eOff;
+
+    for (let i = 0; i < envCount; i++) {
+      if (off + 2 > data.length) break;
+      const [subject, sOff] = readStr16(data, off);
+      if (sOff + 4 > data.length) break;
+      const [jsonLen, jOff] = readU32(data, sOff);
+      const json = decoder.decode(data.subarray(jOff, jOff + jsonLen));
+      envelopes.push({ subject, json });
+      off = jOff + jsonLen;
+    }
+  }
+
+  return { drive, entries, last, envelopes };
 }
 
 export function decodeBlobRequest(data: Uint8Array): Uint8Array | undefined {
@@ -825,6 +999,8 @@ const TAG_NAMES: Record<number, string> = {
   [Tag.DESTROY]: 'DESTROY',
   [Tag.COMMIT]: 'COMMIT',
   [Tag.COMMIT_OK]: 'COMMIT_OK',
+  [Tag.GET_MANY]: 'GET_MANY',
+  [Tag.GET_MANY_RESULT]: 'GET_MANY_RESULT',
   [Tag.SUB]: 'SUB',
   [Tag.UNSUB]: 'UNSUB',
   [Tag.SYNC]: 'SYNC',
@@ -912,6 +1088,34 @@ export function debugFrameInfo(
           ? `${direction} GET #${msg.requestId} ${msg.subject}`
           : `${direction} GET (${formatBytes(payload.length)})`,
         details: () => msg ?? { rawBytes: payload.length },
+      };
+    }
+
+    case Tag.GET_MANY: {
+      const msg = decodeGetMany(payload);
+
+      return {
+        headline: msg
+          ? `${direction} GET_MANY #${msg.requestId} (${msg.subjects.length} subjects)`
+          : `${direction} GET_MANY (${formatBytes(payload.length)})`,
+        details: () => msg ?? { rawBytes: payload.length },
+      };
+    }
+
+    case Tag.GET_MANY_RESULT: {
+      const msg = decodeGetManyResult(payload);
+
+      return {
+        headline: msg
+          ? `${direction} GET_MANY_RESULT #${msg.requestId} (${msg.frames.length} entries, ${formatBytes(payload.length)})`
+          : `${direction} GET_MANY_RESULT (${formatBytes(payload.length)})`,
+        details: () =>
+          msg
+            ? {
+                requestId: msg.requestId,
+                entries: msg.frames.map(f => TAG_NAMES[f[0]] ?? f[0]),
+              }
+            : { rawBytes: payload.length },
       };
     }
 

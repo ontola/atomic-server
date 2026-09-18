@@ -142,6 +142,7 @@ pub async fn resolve_update(
             .map(|v| v.to_string())
             .unwrap_or_else(|_| existing.get_subject().to_string())
     });
+
     let mut resource = existing.unwrap_or_else(|| crate::Resource::new(subject.to_string()));
     if resource.apply_state_doc(doc).is_err() {
         return None;

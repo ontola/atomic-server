@@ -341,11 +341,27 @@ export function run() { return { intents: [] }; }
           property: 'https://atomicdata.dev/properties/parent',
           value: config.table,
         });
-        const row = await window.store!.getLocalResource(result!.subjects[0]);
-        await row.set(
-          'https://atomicdata.dev/properties/name',
-          'Edited locally',
-        );
+        // Not `subjects[0]`: a table also holds draft placeholder rows, which
+        // carry the same parent and can come back first. Editing one of those
+        // left the imported row untouched, the sync had nothing to push, and
+        // Notion still read "Proxy task" — about half the time.
+        const NAME = 'https://atomicdata.dev/properties/name';
+        let row:
+          | Awaited<ReturnType<typeof window.store.getLocalResource>>
+          | undefined;
+
+        for (const subject of result!.subjects) {
+          const candidate = await window.store!.getLocalResource(subject);
+
+          if (candidate.get(NAME) === 'Proxy task') {
+            row = candidate;
+            break;
+          }
+        }
+
+        if (!row) throw new Error('imported Notion row not found in the table');
+
+        await row.set(NAME, 'Edited locally');
         await row.save();
 
         return row.subject;

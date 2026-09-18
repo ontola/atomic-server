@@ -25,6 +25,7 @@ import {
   isAtomicResourceContext,
 } from './types';
 import { restoreToolPart, toolPartValues } from './toolHistory';
+import { userTiming } from '@helpers/userTiming';
 
 const TAG_TO_ROLE_MAPPING = {
   'https://atomicdata.dev/01jtjxtsa9syxmfca2zx5gcnmj/tag/user': 'user',
@@ -101,10 +102,14 @@ export const uiMessageToResource = async (
     message.metadata &&
     'error' in message.metadata
   ) {
-    await messageResource.set(
-      core.properties.description,
-      message.metadata?.error,
-    );
+    if (message.metadata?.error === undefined) {
+      messageResource.remove(core.properties.description);
+    } else {
+      await messageResource.set(
+        core.properties.description,
+        message.metadata.error,
+      );
+    }
   }
 
   const context = message.metadata?.userContext;
@@ -317,12 +322,32 @@ const contextToResource = async (
   return contextResource.subject;
 };
 
+/**
+ * Loads a chat's messages in two network rounds, however long the chat is:
+ * every message resource at once, then every part and context item of every
+ * message at once. Loading them message by message made opening a chat cost
+ * one round trip per message, which is why long chats felt slow to open.
+ */
 export const messageResourcesToDisplayMessages = async (
   subjects: string[],
   store: Store,
 ): Promise<Map<AtomicUIMessage, Resource<Ai.AiMessage>>> => {
-  const resources = await Promise.all(
-    subjects.map(s => store.getResource<Ai.AiMessage>(s)),
+  const timing = userTiming('chat:load');
+  const resources = await store.getResources<Ai.AiMessage>(subjects);
+  timing.step('messages');
+  const loaded = resources.filter(r => !r.error);
+  const partSubjects = loaded.flatMap(r => r.props.parts ?? []);
+  const contextSubjects = loaded.flatMap(r => r.props.providedContext ?? []);
+  const [parts, contexts] = await Promise.all([
+    store.getResources(partSubjects),
+    Promise.allSettled(
+      contextSubjects.map(s => resourceToAIMessageContext(s, store)),
+    ),
+  ]);
+  timing.step('parts');
+  const partBySubject = new Map(partSubjects.map((s, i) => [s, parts[i]]));
+  const contextBySubject = new Map(
+    contextSubjects.map((s, i) => [s, contexts[i]]),
   );
 
   const messages = new Map<AtomicUIMessage, Resource<Ai.AiMessage>>();
@@ -346,8 +371,8 @@ export const messageResourcesToDisplayMessages = async (
 
     const role = tagToRole(resource.props.role);
 
-    const partResources = await Promise.all(
-      resource.props.parts.map(s => store.getResource(s)),
+    const partResources = (resource.props.parts ?? []).map(
+      s => partBySubject.get(s)!,
     );
 
     let message: AtomicUIMessage | undefined;
@@ -372,14 +397,12 @@ export const messageResourcesToDisplayMessages = async (
       };
 
       if (resource.props.providedContext) {
-        const context = (
-          await Promise.allSettled(
-            resource.props.providedContext.map(c =>
-              resourceToAIMessageContext(c, store),
-            ),
+        const context = resource.props.providedContext
+          .map(c => contextBySubject.get(c))
+          .filter(
+            (c): c is PromiseFulfilledResult<AIMessageContext> =>
+              c?.status === 'fulfilled',
           )
-        )
-          .filter(c => c.status === 'fulfilled')
           .map(c => c.value);
 
         message.metadata = {
@@ -472,6 +495,8 @@ export const messageResourcesToDisplayMessages = async (
       messages.set(message, resource);
     }
   }
+
+  timing.step('convert');
 
   return messages;
 };

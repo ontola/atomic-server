@@ -320,24 +320,9 @@ where
         });
     }
 
-    // Durable-flush tick. Per-commit writes use Durability::None (no fsync)
-    // for throughput; this background flush makes them durable on a fixed
-    // cadence (100ms), bounding crash data-loss to the interval while
-    // amortizing a single fsync across every commit in the window. Runs on a
-    // dedicated OS thread because the flush blocks on fsync, which would stall
-    // a tokio worker.
-    {
-        let store = appstate.store.clone();
-        std::thread::Builder::new()
-            .name("durable-flush".into())
-            .spawn(move || loop {
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                if let Err(e) = store.flush() {
-                    tracing::warn!("periodic durable flush failed: {e}");
-                }
-            })
-            .expect("spawn durable-flush thread");
-    }
+    // The durable-flush tick that makes Durability::None commits survive a
+    // crash is owned by `atomic_lib` (`Db::init_redb_file` spawns it), so the
+    // desktop and Flutter bindings get it without remembering to.
 
     // Start Iroh peer-to-peer transport
     let _iroh_router = {
@@ -410,6 +395,7 @@ where
             .wrap(middleware::DefaultHeaders::new().add((SERVER_VERSION_HEADER, SERVER_VERSION)))
             .wrap(tracing_actix_web::TracingLogger::<AtomicRootSpanBuilder>::new())
             .wrap(middleware::Compress::default())
+            .configure(crate::handlers::website::content_routes)
             // Here are the actual handlers / endpoints
             .configure(crate::routes::config_routes)
             // Anything no route claims: a wrong method on a known path, a

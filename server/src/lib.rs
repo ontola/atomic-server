@@ -21,6 +21,7 @@ mod jsonerrors;
 mod metrics;
 pub mod node_key;
 pub mod plugins;
+pub mod rate_limit;
 pub mod routes;
 pub mod serve;
 pub mod vector_search;

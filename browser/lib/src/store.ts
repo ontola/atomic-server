@@ -392,6 +392,8 @@ export interface IncomingChange {
 
 /** Returns True if the client has WebSocket support */
 const supportsWebSockets = () => typeof WebSocket !== 'undefined';
+/** Subjects per GET_MANY frame; keeps one answer well under a single large frame. */
+const GET_MANY_CHUNK = 200;
 
 /**
  * How long resource fallback and collection reads wait for the app's
@@ -3058,8 +3060,18 @@ export class Store {
   private async hydrateFromLocalDb(
     subject: string,
   ): Promise<boolean | undefined> {
-    let hasLocalData = false;
+    return (await this.hydrateManyFromLocalDb([subject]))?.[0];
+  }
 
+  /**
+   * Hydrate a list of subjects from the embedded database in one worker round
+   * trip. One boolean per subject: `true` when a renderable copy is now in
+   * memory. `undefined` when there is no database to ask, which is a different
+   * answer from "not there" (offline they lead to opposite conclusions).
+   */
+  private async hydrateManyFromLocalDb(
+    subjects: string[],
+  ): Promise<boolean[] | undefined> {
     // Wait for the WASM DB to initialize (if one is set).
     // This is important on page reload: the DB may still be loading
     // but it has data from a previous session that we need.
@@ -3080,47 +3092,64 @@ export class Store {
     // lead to opposite conclusions when offline.
     if (!this.clientDb?.isInitialized) return undefined;
 
-    // Try the WASM DB (OPFS) for persisted resources. One combined
-    // round-trip instead of `getResource` + `getLoroSnapshot`: every
-    // mounted useResource takes this path on cold-load, and each
-    // worker postMessage costs ~ms; halving the round-trips visibly
-    // reduces time-to-first-paint on a populated drive.
-    {
-      try {
-        const { jsonAd, snapshot } =
-          await this.clientDb.getResourceWithSnapshot(subject);
+    // JSON-AD and Loro snapshot for every subject in a single worker
+    // round trip. Each postMessage costs milliseconds and queues behind
+    // whatever sync traffic the worker is busy with, so per-subject calls
+    // were what made a cold page with many resources slow.
+    let rows: Array<{ jsonAd: string | null; snapshot: Uint8Array | null }>;
 
-        if (jsonAd) {
-          hasLocalData = this.hydrateResourceFromJson(
-            subject,
-            JSON.parse(jsonAd),
-            snapshot ?? undefined,
+    try {
+      // Older database adapters (and test fakes) only have the single read.
+      rows = this.clientDb.getResourcesWithSnapshots
+        ? await this.clientDb.getResourcesWithSnapshots(subjects)
+        : await Promise.all(
+            subjects.map(s => this.clientDb!.getResourceWithSnapshot(s)),
           );
-        }
+    } catch (e) {
+      console.warn(`[ClientDb] OPFS lookup failed:`, e);
 
-        // Hydration publishes JSON and causal state together. A skeleton-only
-        // record still needs a server fetch; commit-detail resources may carry
-        // a partial delta but remain renderable from their class metadata.
-        if (hasLocalData) {
-          const resource = this.resources.get(subject);
-          const hasClass = !!resource?.get(core.properties.isA);
-          const renderable =
-            !!resource && (hasClass || this.hasRenderableContent(resource));
-
-          if (!renderable) {
-            hasLocalData = false;
-
-            if (resource) {
-              resource.loading = true;
-            }
-          }
-        }
-      } catch (e) {
-        console.warn(`[ClientDb] OPFS lookup failed for "${subject}":`, e);
-      }
+      return subjects.map(() => false);
     }
 
-    return hasLocalData;
+    return subjects.map((subject, index) => {
+      const { jsonAd, snapshot } = rows[index] ?? {};
+
+      if (!jsonAd) return false;
+
+      let hasLocalData = false;
+
+      try {
+        hasLocalData = this.hydrateResourceFromJson(
+          subject,
+          JSON.parse(jsonAd),
+          snapshot ?? undefined,
+        );
+      } catch (e) {
+        console.warn(`[ClientDb] OPFS lookup failed for "${subject}":`, e);
+
+        return false;
+      }
+
+      // Hydration publishes JSON and causal state together. A skeleton-only
+      // record still needs a server fetch; commit-detail resources may carry
+      // a partial delta but remain renderable from their class metadata.
+      if (hasLocalData) {
+        const resource = this.resources.get(subject);
+        const hasClass = !!resource?.get(core.properties.isA);
+        const renderable =
+          !!resource && (hasClass || this.hasRenderableContent(resource));
+
+        if (!renderable) {
+          hasLocalData = false;
+
+          if (resource) {
+            resource.loading = true;
+          }
+        }
+      }
+
+      return hasLocalData;
+    });
   }
 
   /**
@@ -3184,7 +3213,14 @@ export class Store {
     // Try the server if connected. Skip if we have local data and are offline
     // to avoid overwriting good data with error responses.
     try {
-      if (!this._serverConnected) {
+      // Disconnected. Wait for the socket only where one is coming: a DID
+      // subject needs it, and a browser opening its socket at boot should not
+      // fall back to an HTTP 404 in the meantime. A store that never opened a
+      // socket (a Node client, a unit test) fetches over HTTP right away.
+      if (
+        !this._serverConnected &&
+        (subject.startsWith('did:') || this.getWebSocketForSubject(subject))
+      ) {
         // Offline — use whatever local data we found. If there IS no local
         // data, surface the offline state to the caller rather than leaving
         // the resource stuck in `loading`.
@@ -3260,7 +3296,9 @@ export class Store {
         await this.fetchResourceFromServer(subject, opts);
       }
     } catch (e) {
-      if (e instanceof RequestCancelledError) return;
+      // A cancelled fetch (the page is leaving) settles nothing: the caller
+      // awaiting it must see the cancellation, a fire-and-forget one ignores it.
+      if (e instanceof RequestCancelledError) throw e;
 
       // Server fetch failed with no local data. Surface the actual server
       // error (e.g. 401 Unauthorized) so callers (ErrorPage, GettingStartedFlow)
@@ -3730,7 +3768,16 @@ export class Store {
     // re-renders / getSnapshot should be cached" infinite render hang
     // any caller that passes `undefined` (e.g. `useResource(drive)`
     // before the drive setting hydrates) used to trigger.
-    if (subjectRaw === unknownSubject || subjectRaw === null) {
+    // The empty string is the same class of non-subject: `useResource(x ?? '')`
+    // and `useResource(drive)` before the drive setting hydrates both land
+    // here, and `normalizeSubject('')` resolves them to the server's root —
+    // a URL that holds no resource on a DID drive, so every such render fired
+    // a fetch that 404s and logs two console errors.
+    if (
+      subjectRaw === unknownSubject ||
+      subjectRaw === null ||
+      subjectRaw === ''
+    ) {
       let resource = this.resources.get(unknownSubject) as
         | Resource<C>
         | undefined;
@@ -3764,7 +3811,10 @@ export class Store {
       resource = new Resource<C>(normalized, isNew);
       if (!isNew) resource.loading = true;
       this.addResource(resource, { alias: normalized });
-      if (!isNew) this.fetchResourceWithLocalFallback(normalized, opts);
+      if (!isNew)
+        this.fetchResourceWithLocalFallback(normalized, opts).catch(
+          () => undefined,
+        );
 
       return resource;
     }
@@ -3795,7 +3845,9 @@ export class Store {
         // which is how an unreachable one turned `/app/show?subject=<your DID>`
         // into "Error loading resource" while `/app/agent` rendered you fine.
         if (resolved.startsWith('did:ad:agent:')) {
-          this.fetchResourceWithLocalFallback(resolved, opts);
+          this.fetchResourceWithLocalFallback(resolved, opts).catch(
+            () => undefined,
+          );
         } else {
           this.fetchResourceFromServer(resolved, opts).catch(error => {
             if (!(error instanceof RequestCancelledError)) {
@@ -3810,98 +3862,200 @@ export class Store {
   }
 
   /**
-   * Gets a resource by URL. Fetches and parses it if it's not available in the
-   * store. Not recommended to use this for rendering, because it might cause
-   * resources to be fetched multiple times.
+   * Gets many resources at once, in the order asked. Nearest source first:
+   * whatever is already in memory (or in flight) is reused, then the embedded
+   * database is asked for the rest in parallel, and only what neither has
+   * goes to the server, as one `GET_MANY` per chunk over the WebSocket (or as
+   * parallel single fetches where that is impossible: no socket, local-only
+   * subjects). Each entry is what `getResource` would have produced, so a
+   * missing subject comes back as a resource carrying `error` rather than as
+   * an exception.
+   */
+  public async getResources<C extends OptionalClass = UnknownClass>(
+    subjects: string[],
+  ): Promise<Resource<C>[]> {
+    const close = perfSpan('store.getResources', { count: subjects.length });
+    const pending = new Map<string, Promise<Resource<C>>>();
+    const batches = new Map<WSClient, string[]>();
+    const misses: string[] = [];
+
+    for (const subject of new Set(subjects)) {
+      const resolved = this.resolveSubject(subject);
+      const found = this.resources.get(resolved);
+
+      if (found && (found.isReady() || found.error)) {
+        pending.set(subject, Promise.resolve(found as Resource<C>));
+        continue;
+      }
+
+      const inflight = this._inFlightFetches.get(
+        this.normalizeSubject(subject),
+      );
+
+      if (inflight) {
+        pending.set(subject, inflight as Promise<Resource<C>>);
+        continue;
+      }
+
+      misses.push(subject);
+    }
+
+    // The embedded database holds everything this device has synced; one
+    // worker round trip hydrates every hit into memory without the server.
+    const hits =
+      (await this.hydrateManyFromLocalDb(
+        misses.map(subject => this.resolveSubject(subject)),
+      )) ?? [];
+    const local = misses.map((subject, index) => {
+      const resource = this.resources.get(this.resolveSubject(subject));
+
+      return hits[index] && resource?.isReady()
+        ? (resource as Resource<C>)
+        : undefined;
+    });
+
+    for (const [index, subject] of misses.entries()) {
+      const resolved = this.resolveSubject(subject);
+      const fromDb = local[index];
+
+      if (fromDb) {
+        pending.set(subject, Promise.resolve(fromDb));
+        continue;
+      }
+
+      const ws =
+        supportsWebSockets() &&
+        !this.isLocalOnlySubject(resolved) &&
+        !resolved.startsWith('_new:') &&
+        !resolved.startsWith('_local:')
+          ? this.getWebSocketForSubject(resolved)
+          : undefined;
+
+      if (ws?.readyState !== WebSocket.OPEN) {
+        pending.set(subject, this.getResource<C>(subject));
+        continue;
+      }
+
+      batches.set(ws, [...(batches.get(ws) ?? []), subject]);
+    }
+
+    for (const [ws, wanted] of batches) {
+      for (let i = 0; i < wanted.length; i += GET_MANY_CHUNK) {
+        const chunk = wanted.slice(i, i + GET_MANY_CHUNK);
+        const batch = ws.fetchMany(chunk);
+
+        chunk.forEach((subject, index) => {
+          const normalized = this.normalizeSubject(subject);
+          const one = batch.then(entries => {
+            const entry = entries[index];
+
+            if (!(entry instanceof Error)) return entry as Resource<C>;
+
+            // Same shape as a failed single fetch: the placeholder (created
+            // here if nothing asked for it yet) carries the error.
+            const existing = this.getResolved(subject);
+
+            if (!existing) {
+              const placeholder = new Resource<C>(this.resolveSubject(subject));
+              this.addResource(placeholder, { skipCommitCompare: true });
+            }
+
+            this.failResource(subject, entry);
+
+            return this.getResolved(subject) as Resource<C>;
+          });
+          const tracked = one.finally(() => {
+            if (this._inFlightFetches.get(normalized) === tracked) {
+              this._inFlightFetches.delete(normalized);
+            }
+          });
+          this._inFlightFetches.set(normalized, tracked);
+          pending.set(subject, tracked);
+        });
+      }
+    }
+
+    const results = await Promise.all(
+      subjects.map(subject => pending.get(subject)!),
+    );
+    close({ misses: misses.length });
+
+    return results;
+  }
+
+  /**
+   * Gets a resource by URL, waiting until it is loaded. The read policy is the
+   * one `useResource` follows (`getResourceLoading`): memory, then the
+   * embedded database, then the server. A subject that cannot be loaded
+   * resolves to a resource carrying `error` rather than throwing.
    */
   public async getResource<C extends OptionalClass = UnknownClass>(
     subjectRaw: string,
   ): Promise<Resource<C>> {
+    const normalized = this.normalizeSubject(subjectRaw);
     const resolved = this.resolveSubject(subjectRaw);
-    const found = this.resources.get(resolved);
+    let found = this.resources.get(resolved) as Resource<C> | undefined;
 
-    if (found && (found.isReady() || found.error)) {
+    if (!found) {
+      // Temporary subjects are never fetched; `getResourceLoading` knows.
+      // Neither is the empty string, which normalization would otherwise turn
+      // into the server's root.
+      if (
+        subjectRaw === '' ||
+        normalized.startsWith('_new:') ||
+        normalized.startsWith('_local:')
+      ) {
+        return this.getResourceLoading<C>(subjectRaw);
+      }
+
+      found = new Resource<C>(normalized);
+      found.loading = true;
+      this.addResource(found, { alias: normalized });
+      // Awaited here so a cancelled fetch rejects instead of hanging.
+      await this.fetchResourceWithLocalFallback(normalized);
+      found =
+        (this.resources.get(resolved) as Resource<C> | undefined) ?? found;
+    }
+
+    if (found.isReady() || found.error) {
       return found;
     }
 
-    /** Fix the case where a resource was previously requested but still not ready */
-    if (found && !found.isReady()) {
-      return new Promise((resolve, reject) => {
-        const defaultTimeout = 10000;
-        let timer: ReturnType<typeof setTimeout> | undefined;
+    // Someone else is loading it, or recovery of missing history is still in
+    // flight: wait for the resource to settle.
+    const resource = await new Promise<Resource<C>>((resolve, reject) => {
+      const defaultTimeout = 10000;
+      let timer: ReturnType<typeof setTimeout> | undefined;
 
-        const cb: ResourceCallback<C> = res => {
-          // Snapshot notifications can precede hydration. Keep waiting for
-          // data, but let terminal errors reach the caller.
-          if (res.loading && !res.error) return;
-          if (timer) clearTimeout(timer);
-          this.unsubscribe(subjectRaw, cb);
-          resolve(res);
-        };
+      const cb: ResourceCallback<C> = res => {
+        // Snapshot notifications can precede hydration. Keep waiting for
+        // data, but let terminal errors reach the caller.
+        if (res.loading && !res.error) return;
+        if (timer) clearTimeout(timer);
+        this.unsubscribe(subjectRaw, cb);
+        resolve(res);
+      };
 
-        this.subscribe(subjectRaw, cb);
+      this.subscribe(subjectRaw, cb);
 
-        timer = setTimeout(() => {
-          timer = undefined;
-          this.unsubscribe(subjectRaw, cb);
-          reject(
-            new Error(
-              `Async Request for subject "${subjectRaw}" timed out after ${defaultTimeout}ms.`,
-            ),
-          );
-        }, defaultTimeout);
-      });
+      timer = setTimeout(() => {
+        timer = undefined;
+        this.unsubscribe(subjectRaw, cb);
+        reject(
+          new Error(
+            `Async Request for subject "${subjectRaw}" timed out after ${defaultTimeout}ms.`,
+          ),
+        );
+      }, defaultTimeout);
+    });
+
+    // Follow live changes so a later read is not stale. Commits are
+    // immutable, so they need no subscription.
+    if (!resource.error && !resource.hasClasses(commits.classes.commit)) {
+      this.subscribeWebSocket(resource.subject);
     }
 
-    // Local-only subjects never exist on any server, but on a cold load
-    // the subject's drive isn't known yet — the `drive` prop lives in
-    // the resource. When local-only drives exist, consult OPFS first:
-    // hydrating restores the drive prop, and if the resource turns out
-    // to be local-only, the local copy is authoritative. Without this,
-    // the online path below GETs the subject from the server — a
-    // guaranteed "not found" (plus a leaked local subject).
-    if (resolved.startsWith('did:') && this.localOnlyDrives.size > 0) {
-      const fromDb = await this.fetchResourceFromClientDb(resolved);
-
-      if (fromDb && this.isLocalOnlySubject(resolved)) {
-        return fromDb;
-      }
-    }
-
-    // If offline and the resource can't be fetched via HTTP (DID subjects),
-    // check in-memory store first, then try the WASM DB (OPFS).
-    if (!this._serverConnected && resolved.startsWith('did:')) {
-      const local = this.resources.get(resolved);
-
-      if (local) {
-        return local;
-      }
-
-      // Try the WASM DB — the resource may have been persisted to OPFS.
-      const fromDb = await this.fetchResourceFromClientDb(resolved);
-
-      if (fromDb) {
-        return fromDb;
-      }
-
-      throw new Error(
-        `Resource ${subjectRaw} not found locally and server is offline`,
-      );
-    }
-
-    const result = await this.fetchResourceFromServer(resolved);
-
-    // A delta response may have started recovery of missing base history.
-    // Do not return its empty placeholder while the full snapshot is pending.
-    if (result.loading && !result.error) return this.getResource(resolved);
-
-    // If the resource was not in the store yet, subscribe to changes so we don't return stale results when the resource is updated.
-    // Commits are immutable — no need to subscribe for push updates.
-    if (!result.hasClasses(commits.classes.commit)) {
-      this.subscribeWebSocket(resolved);
-    }
-
-    return result;
+    return resource;
   }
 
   /**
@@ -4049,7 +4203,9 @@ export class Store {
       this.notify(resource);
     }
 
-    await this.fetchResourceWithLocalFallback(resolved);
+    await this.fetchResourceWithLocalFallback(resolved).catch(e => {
+      if (!(e instanceof RequestCancelledError)) throw e;
+    });
   }
 
   /**
