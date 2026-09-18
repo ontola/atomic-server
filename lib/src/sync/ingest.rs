@@ -163,8 +163,6 @@ pub async fn ingest_commit(
         validate_signature: true,
         validate_timestamp: opts.validate_timestamp,
         validate_rights: opts.validate_rights,
-        // https://github.com/atomicdata-dev/atomic-server/issues/412
-        validate_previous_commit: false,
         validate_loro_causality: opts.validate_loro_causality,
         validate_for_agent: Some(signer.to_string()),
         update_index: true,
