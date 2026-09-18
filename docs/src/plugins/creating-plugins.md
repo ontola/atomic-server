@@ -32,35 +32,37 @@ A plugin is identified by a namespace and a name.
 The namespace is used to group plugins together and the name is used to identify the plugin within its namespace.
 Plugins with the same namespace will share the same assets folder.
 
-## Permissions
+## Capabilities
 
-Plugins can request permissions to enable certain features.
-These permissions are specified in the plugin manifest.
-You need to provide a reason for each permission so the user can understand why the plugin needs it.
+Plugins declare capabilities to enable certain features.
+They are listed in the manifest (`capabilities` in manifest v2, `permissions` in a legacy `plugin.json`), each with a reason so the person installing understands why the plugin needs it.
+The Installation review shows every capability with its reason, and the server only activates an Installation whose `grants` are exactly the declared set.
 
-The following permissions are available:
+The following capabilities are available:
 
-- `network`: Allows the plugin to make network requests and fetch resources from remote AtomicServers.
 - `storage`: Allows the plugin to read and write to the assets folder.
 - `full-drive-access`: Allows the plugin access to all resources on the drive.
 - `extended-fuel`: Allows the plugin to use extended fuel.
 - `extended-memory`: Allows the plugin to use extended memory.
 - `custom-view`: Allows the plugin to display a custom view in the Data Browser.
 
+Network access is not a capability: declare the exact origins the plugin may reach in `network.origins` (a legacy `network` permission translates into that, and is refused without any origin).
+A class extender that declares at least one origin gets `wasi-http` and the host `fetch`, limited to those origins.
+
 > [!NOTE]
-> If your Wasm component imports the `wasi-http` feature without requesting the `network` permission, installation of the plugin will fail.
+> If your Wasm component imports the `wasi-http` feature without declaring any `network.origins`, the plugin fails to instantiate.
 
 ## Access Rights
 
-Each plugin gets its own [agent](../agents.md) that can be used to fetch resources and sign commits.
-By default the plugin agent does not have access to any resources.
-The user can grant access to specific resources on the plugin page.
+Each Installation gets its own [agent](../agents.md) that the plugin uses to fetch resources and sign commits.
+By default that agent does not have access to any resources.
+The user can grant access to specific resources on the Installation page.
 
-Alternatively you can specify the `full-drive-access` permission in the plugin manifest to give the plugin agent full access to the drive.
+Alternatively you can declare the `full-drive-access` capability in the manifest to give the agent full access to the drive.
 
 ## The plugin package
 
-A plugin should be packaged as a zip file containing the following files:
+A WASM plugin is packaged as a zip file containing the following files:
 
 - `plugin.wasm`: The compiled Wasm binary of the plugin.
 - `plugin.json`: The plugin manifest.
@@ -81,6 +83,20 @@ Next run it and point it to your files:
 ```bash
 atomic-plugin --wasm <path-to-wasm-file> --assets <path-to-assets-folder> --out <output-path>
 ```
+
+## Publishing and installing
+
+A package becomes installable by being published as a **Release**.
+Every way of publishing ends in the same record and the same install:
+
+- **Upload the zip** in the Data Browser. The server publishes it as a private Release on that server and opens the Installation review.
+- **`POST /plugin-release-package?drive=<drive>[&public=true][&world=<world>]`** with the zip as the body, signed by an agent that may write to `drive`. The response carries the `releaseId`, the Release URL (`<server>/releases/<id>`) and, with `public=true`, the Listing URL (`<server>/listings/<id>`) that puts it in the server's Store. Passing `world` is a check, not a choice: the world is read from the component, and a mismatch is refused.
+- **JS plugins** are drafts (`plugin-script` resources) until published with `POST /plugin-release` (public, creates a Listing) or `POST /plugin-release-pin` (private).
+
+The Release's manifest is what the installer reviews; for a zip it is the `plugin.json` translated to manifest v2, with `world` and the extended classes read from the component itself.
+A package that extends classes is a `server-extension`; through an Installation it runs drive-scoped, seeing only the drive it was installed on.
+
+Committing an **Installation** with `installationStatus: active`, a `release` (the Release URL or its id), the pinned `releaseId` and `grants` equal to the manifest's capabilities installs the plugin. Publishing the same bytes again yields the same id, so re-publishing is idempotent.
 
 ## Manifest v2
 
@@ -162,7 +178,7 @@ Array<{
 }>
 ```
 
-A list of permissions the plugin requires.
+A list of permissions the plugin requires, translated to `capabilities` (and, for `network`, to `network.origins`) at publish.
 You also need to specify a reason for each permission so the user can understand why the plugin needs it.
 
 ### defaultConfig

@@ -306,13 +306,32 @@ specs added for the Store were written but not run.
   Listing classes in `lib/defaults/plugins.json`. An Installation commit installs
   either runtime; publishing records a Release resource at
   `<server>/releases/<id>`. `check_grants` requires the exact declared set.
-  Legacy Plugin + pluginFile still works.
 - [x] Store UI installs through one review dialog from a Listing or a zip upload;
   Installation page with pause, resume, revoke, uninstall.
-- [ ] Listing resources are not yet read by `/plugin-catalog` (still KV).
+- [x] One install path (cleanup, 2026-09-18): the legacy `Plugin` + `pluginFile`
+  hook is gone. `migrate_legacy_plugins` runs at startup: each legacy resource's
+  zip is published as a Release, recorded at `/releases/<id>`, and the same
+  resource is rewritten in place as an active Installation (grants = declared
+  capabilities, config kept), signed by the server agent. The on-disk install
+  is untouched: an Installation whose `PluginMeta` already holds the release's
+  manifest is treated as materialized, which also makes pause/resume and config
+  changes free. `Plugin` and `pluginFile` stay in the defaults, marked
+  deprecated, because the migration query needs the class URL.
+- [x] One manifest per installed plugin: `PluginMeta.manifest` is the unified
+  v2 manifest (JSON-encoded records; legacy MessagePack records upgrade on read
+  and an untranslated `plugin.json` is translated the first time the plugin
+  loads, with the class URLs read from the component, then written back).
+- [x] Listings are resources: a public publish writes a publicly readable
+  `Listing` at `<server>/listings/<id>` (parent: the publisher's drive) and
+  `/plugin-catalog` is a class query over Listings. The KV catalog
+  (`CatalogEntry`, `plugin-catalog/v1`) is deleted; `plugin-release/v1` stays
+  as the release cache. The three publish handlers share
+  `release::publish_release`.
 - [ ] Bundled integrations still come from the hardcoded browser list.
 - [ ] Global server extensions do not yet accept Release URLs.
 - [ ] Steps 4 and 5 (JS class extenders, wasm `run`) not started.
+- [ ] The `plugin-script` drafts created from the old catalog are not yet
+  migrated to Installations (second bullet of "Migration" above).
 
 Decision recorded: a wasip2 release whose component exports class URLs is
 `world: server-extension` and may still be installed through an Installation,

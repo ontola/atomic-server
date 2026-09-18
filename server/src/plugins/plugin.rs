@@ -125,7 +125,7 @@ fn permissions_view(manifest: &serde_json::Value) -> Option<serde_json::Value> {
             .unwrap_or_default();
         permissions.push(serde_json::json!({"permission": "network", "reason": reason}));
     }
-    (!permissions.is_empty()).then(|| serde_json::Value::Array(permissions))
+    (!permissions.is_empty()).then_some(serde_json::Value::Array(permissions))
 }
 
 /// Serves an Installation with what the server knows about it: the agent it

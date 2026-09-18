@@ -136,76 +136,6 @@ impl crate::db::plugin_meta::PluginMeta {
     }
 }
 
-#[cfg(test)]
-mod plugin_meta_encoding_tests {
-    use super::*;
-    use serde::Serialize;
-
-    /// The shape the server wrote before the manifest was unified.
-    #[derive(Serialize)]
-    struct OldPluginMeta {
-        subject: String,
-        agent_secret: String,
-        manifest: crate::db::plugin_meta::PluginManifest,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        manifest_v2: Option<serde_json::Value>,
-    }
-
-    fn plugin_json() -> crate::db::plugin_meta::PluginManifest {
-        serde_json::from_value(serde_json::json!({
-            "name": "test-plugin", "namespace": "ontola", "version": "1.0.0",
-            "permissions": [{"permission": "storage", "reason": "state"}],
-            "network": {"origins": ["https://api.test"]}
-        }))
-        .unwrap()
-    }
-
-    fn old_bytes(manifest_v2: Option<serde_json::Value>) -> Vec<u8> {
-        let mut buf = Vec::new();
-        OldPluginMeta {
-            subject: "did:ad:plugin".into(),
-            agent_secret: "secret".into(),
-            manifest: plugin_json(),
-            manifest_v2,
-        }
-        .serialize(&mut Serializer::new(&mut buf))
-        .unwrap();
-        buf
-    }
-
-    #[test]
-    fn a_legacy_record_without_a_v2_manifest_keeps_its_plugin_json() {
-        let meta = PluginMeta::from_bytes(&old_bytes(None)).unwrap();
-        assert_eq!(meta.subject, "did:ad:plugin");
-        assert_eq!(meta.agent_secret, "secret");
-        assert!(!meta.has_v2_manifest());
-        assert_eq!(meta.manifest["name"], "test-plugin");
-        assert_eq!(meta.network_origins(), vec!["https://api.test".to_string()]);
-        assert_eq!(meta.version(), Some("1.0.0"));
-    }
-
-    #[test]
-    fn a_legacy_record_with_a_v2_manifest_uses_it() {
-        let v2 =
-            serde_json::json!({"schemaVersion": 2, "runtime": "wasip2/1", "name": "test-plugin"});
-        let meta = PluginMeta::from_bytes(&old_bytes(Some(v2.clone()))).unwrap();
-        assert!(meta.has_v2_manifest());
-        assert_eq!(meta.manifest, v2);
-    }
-
-    #[test]
-    fn the_current_encoding_round_trips() {
-        let meta = PluginMeta {
-            subject: "did:ad:installation".into(),
-            agent_secret: "secret".into(),
-            manifest: serde_json::json!({"schemaVersion": 2, "network": {"origins": ["https://a.test"]}}),
-        };
-        let bytes = meta.encode().unwrap();
-        assert_eq!(bytes.first(), Some(&b'{'));
-        assert_eq!(PluginMeta::from_bytes(&bytes).unwrap(), meta);
-    }
-}
-
 impl crate::db::plugin_secret::PluginSecret {
     pub fn encode(&self) -> AtomicResult<Vec<u8>> {
         let mut buf = Vec::new();
@@ -364,5 +294,75 @@ impl crate::db::plugin_meta::PluginMetaKey {
         let plugin_meta_key: PluginMetaKey = rmp_serde::from_slice(bytes)
             .map_err(|e| format!("Failed to decode PluginMetaKey: {}", e))?;
         Ok(plugin_meta_key)
+    }
+}
+
+#[cfg(test)]
+mod plugin_meta_encoding_tests {
+    use super::*;
+    use serde::Serialize;
+
+    /// The shape the server wrote before the manifest was unified.
+    #[derive(Serialize)]
+    struct OldPluginMeta {
+        subject: String,
+        agent_secret: String,
+        manifest: crate::db::plugin_meta::PluginManifest,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        manifest_v2: Option<serde_json::Value>,
+    }
+
+    fn plugin_json() -> crate::db::plugin_meta::PluginManifest {
+        serde_json::from_value(serde_json::json!({
+            "name": "test-plugin", "namespace": "ontola", "version": "1.0.0",
+            "permissions": [{"permission": "storage", "reason": "state"}],
+            "network": {"origins": ["https://api.test"]}
+        }))
+        .unwrap()
+    }
+
+    fn old_bytes(manifest_v2: Option<serde_json::Value>) -> Vec<u8> {
+        let mut buf = Vec::new();
+        OldPluginMeta {
+            subject: "did:ad:plugin".into(),
+            agent_secret: "secret".into(),
+            manifest: plugin_json(),
+            manifest_v2,
+        }
+        .serialize(&mut Serializer::new(&mut buf))
+        .unwrap();
+        buf
+    }
+
+    #[test]
+    fn a_legacy_record_without_a_v2_manifest_keeps_its_plugin_json() {
+        let meta = PluginMeta::from_bytes(&old_bytes(None)).unwrap();
+        assert_eq!(meta.subject, "did:ad:plugin");
+        assert_eq!(meta.agent_secret, "secret");
+        assert!(!meta.has_v2_manifest());
+        assert_eq!(meta.manifest["name"], "test-plugin");
+        assert_eq!(meta.network_origins(), vec!["https://api.test".to_string()]);
+        assert_eq!(meta.version(), Some("1.0.0"));
+    }
+
+    #[test]
+    fn a_legacy_record_with_a_v2_manifest_uses_it() {
+        let v2 =
+            serde_json::json!({"schemaVersion": 2, "runtime": "wasip2/1", "name": "test-plugin"});
+        let meta = PluginMeta::from_bytes(&old_bytes(Some(v2.clone()))).unwrap();
+        assert!(meta.has_v2_manifest());
+        assert_eq!(meta.manifest, v2);
+    }
+
+    #[test]
+    fn the_current_encoding_round_trips() {
+        let meta = PluginMeta {
+            subject: "did:ad:installation".into(),
+            agent_secret: "secret".into(),
+            manifest: serde_json::json!({"schemaVersion": 2, "network": {"origins": ["https://a.test"]}}),
+        };
+        let bytes = meta.encode().unwrap();
+        assert_eq!(bytes.first(), Some(&b'{'));
+        assert_eq!(PluginMeta::from_bytes(&bytes).unwrap(), meta);
     }
 }
