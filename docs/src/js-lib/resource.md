@@ -108,7 +108,7 @@ By default, `.set` validates the value against the properties datatype.
 You should await the method when validation is enabled because the property's resource might not be in the store yet and has to be fetched.
 
 > [!NOTE]
-> Setting validate to false only disables validation on the client. The server will always validate the data and respond with an error if the data is invalid.
+> Setting `validate` to false only disables the client-side datatype check. If a Property resource exists (locally or on the server), its datatype and `allowsOnly` are still enforced when that Property can be resolved. Unknown Property URLs are accepted: schema is recommended, not required. A Class's `requires` is checked only when the resource has a resolvable `isA`.
 
 **Parameters**
 
