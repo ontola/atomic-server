@@ -151,6 +151,7 @@
     "start": "node scripts/build-website-runtime.mjs && vite",
     "test": "vitest run --exclude scripts/integration-mcp.test.mjs && node --test scripts/integration-mcp.test.mjs",
     "typecheck": "pnpm exec tsc --noEmit -p tsconfig.json",
+    "check:react-compiler": "node scripts/check-react-compiler.mjs",
     "clean-translations": "pnpm exec wuchale --clean"
   }
 }

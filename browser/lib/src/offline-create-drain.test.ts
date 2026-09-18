@@ -1,6 +1,6 @@
 import { describe, it, vi, expect as assert } from 'vitest';
 import { server } from './ontologies/server.js';
-import { testStore } from './test-store.js';
+import { testStore, attachTestDb } from './test-store.js';
 import type { ClientDbWorker } from './client-db.js';
 
 /**
@@ -16,6 +16,7 @@ describe('offline create drain', () => {
     expect,
   }) => {
     const { store } = await testStore();
+    attachTestDb(store);
     await store.createDrive('Home', { personal: true });
     store.setServerConnected(false);
 
@@ -38,6 +39,7 @@ describe('offline create drain', () => {
     expect,
   }) => {
     const { store } = await testStore();
+    attachTestDb(store);
     await store.createDrive('Home', { personal: true });
     store.setServerConnected(false);
 
@@ -59,6 +61,7 @@ describe('offline create drain', () => {
     expect,
   }) => {
     const { store } = await testStore();
+    attachTestDb(store);
     await store.createDrive('Home', { personal: true });
     store.setServerConnected(false);
 
@@ -87,6 +90,7 @@ describe('offline create drain', () => {
     'only clears an unchanged offline baseline with a complete local snapshot (available: %s)',
     async available => {
       const { store, agentDID, postCommitSpy } = await testStore();
+      attachTestDb(store);
       await store.createDrive('Home', { personal: true });
       const agent = store.resources.get(agentDID)!;
       agent.setLastCommitValue('did:ad:commit:previous');

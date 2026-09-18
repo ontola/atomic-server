@@ -1029,6 +1029,7 @@ export class Collection {
     result: {
       subjects: string[];
       resources?: string[];
+      snapshots?: Array<Uint8Array | null>;
       count: number;
       aggregates?: AggregateOutcome[];
     },
@@ -1083,6 +1084,7 @@ export class Collection {
         this.store.hydrateResourceFromJsonAd(
           result.subjects[i]!,
           result.resources[i]!,
+          result.snapshots?.[i] ?? undefined,
         );
       }
     }

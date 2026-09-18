@@ -1,12 +1,15 @@
 import { Resource } from './resource.js';
 import { AtomicError, ErrorType } from './error.js';
 import { describe, it, vi, afterEach, expect as assert } from 'vitest';
+import { LoroLoader } from './loro-loader.js';
 import { testStore } from './test-store.js';
 import { WSClient } from './websockets.js';
 import {
   Tag,
   ErrorCode,
   CLIENT_CAPABILITIES,
+  encodeSyncPush,
+  decodeSyncPush,
   decodeCommit,
   decodeHelloCaps,
   encodeChallenge,
@@ -20,7 +23,6 @@ import {
   encodeAuthOk,
   Flags,
 } from './ws-v2.js';
-import { LoroLoader } from './loro-loader.js';
 import type { Commit } from './commit.js';
 import { serializeDeterministically } from './commit.js';
 
@@ -821,12 +823,435 @@ describe('WSClient.postCommit', () => {
   });
 });
 
+// Server-only frames use the same length-prefixed drive as the wire protocol.
+function syncFrame(tag: number, drive: string, payload = '') {
+  const id = new TextEncoder().encode(drive);
+
+  return new Uint8Array([
+    tag,
+    id.length >> 8,
+    id.length & 255,
+    ...id,
+    ...new TextEncoder().encode(payload),
+  ]);
+}
+
 describe('WSClient SYNC_DIFF and the outbox', () => {
   const original = globalThis.WebSocket;
 
   afterEach(() => {
     globalThis.WebSocket = original;
     vi.restoreAllMocks();
+  });
+
+  it('verifies accepted chunks and retries only resources the server skipped', async () => {
+    const { client, socket, store } = await connectedClient();
+    const finish = vi.spyOn(store, 'finishDriveSync');
+    const subjects = ['did:ad:accepted', 'did:ad:skipped'];
+    vi.spyOn(store, 'getClientDb').mockReturnValue({
+      getLoroSnapshot: async () => null,
+      envelopesFor: async () => ({ [subjects[1]]: ['signed-envelope'] }),
+    } as unknown as NonNullable<ReturnType<typeof store.getClientDb>>);
+    const expected = subjects.map(subject => {
+      const resource = new Resource(subject);
+      resource.getLoroDoc()!.getMap('properties').set('name', subject);
+      resource.getLoroDoc()!.commit();
+      store.resources.set(subject, resource);
+
+      return {
+        subject,
+        vv: Object.fromEntries(resource.getLoroDoc()!.oplogVersion().toJSON()),
+      };
+    });
+    const verify = vi
+      .spyOn(client, 'rbsrItems')
+      .mockResolvedValueOnce([expected[0]])
+      .mockResolvedValueOnce(expected);
+    socket.receive(
+      syncFrame(
+        Tag.SYNC_DIFF,
+        'did:ad:drive',
+        JSON.stringify({ pull: subjects, push: [] }),
+      ),
+    );
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(1),
+    );
+    socket.receive(syncFrame(Tag.SYNC_OK, 'did:ad:drive'));
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(2),
+    );
+    assert(finish).not.toHaveBeenCalled();
+    const retry = decodeSyncPush(
+      framesWithTag(socket, Tag.SYNC_PUSH)[1].subarray(1),
+    )!;
+    assert(retry.entries.map(entry => entry.subject)).toEqual([subjects[1]]);
+    assert(retry.envelopes).toEqual([
+      { subject: subjects[1], json: 'signed-envelope' },
+    ]);
+    socket.receive(syncFrame(Tag.SYNC_OK, 'did:ad:drive'));
+    await vi.waitFor(() => assert(finish).toHaveBeenCalledTimes(1));
+    assert(verify).toHaveBeenCalledTimes(2);
+    client.close();
+  });
+
+  it('retains local data and fails after two unsuccessful retries', async () => {
+    const { client, socket, store } = await connectedClient();
+    const resource = new Resource('did:ad:missing');
+    resource.getLoroDoc()!.getMap('properties').set('name', 'keep me');
+    resource.getLoroDoc()!.commit();
+    store.resources.set(resource.subject, resource);
+    const finish = vi.spyOn(store, 'finishDriveSync');
+    const fail = vi.spyOn(store, 'failDriveSync');
+    vi.spyOn(client, 'rbsrItems').mockResolvedValue([]);
+    socket.receive(
+      syncFrame(
+        Tag.SYNC_DIFF,
+        'did:ad:drive',
+        JSON.stringify({ pull: [resource.subject], push: [] }),
+      ),
+    );
+
+    for (let count = 1; count <= 3; count++) {
+      await vi.waitFor(() =>
+        assert(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(count),
+      );
+      socket.receive(syncFrame(Tag.SYNC_OK, 'did:ad:drive'));
+    }
+
+    await vi.waitFor(() => assert(fail).toHaveBeenCalledTimes(1));
+    assert(finish).not.toHaveBeenCalled();
+    assert(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(3);
+    assert(store.resources.get(resource.subject)).toBe(resource);
+    assert(resource.getLoroDoc()!.getMap('properties').get('name')).toBe(
+      'keep me',
+    );
+    client.close();
+  });
+
+  it.each([false, true])(
+    'fences verification from later edits and disconnects (disconnect=%s)',
+    async disconnect => {
+      const { client, socket, store } = await connectedClient();
+      const resource = new Resource('did:ad:editing');
+      resource.getLoroDoc()!.getMap('properties').set('name', 'sent');
+      resource.getLoroDoc()!.commit();
+      store.resources.set(resource.subject, resource);
+      const vv = Object.fromEntries(
+        resource.getLoroDoc()!.oplogVersion().toJSON(),
+      );
+      const finish = vi.spyOn(store, 'finishDriveSync');
+      let resolve!: (
+        items: Array<{ subject: string; vv: Record<string, number> }>,
+      ) => void;
+      const verify = vi.spyOn(client, 'rbsrItems').mockImplementation(
+        () =>
+          new Promise(done => {
+            resolve = done;
+          }),
+      );
+      socket.receive(
+        syncFrame(
+          Tag.SYNC_DIFF,
+          'did:ad:drive',
+          JSON.stringify({ pull: [resource.subject], push: [] }),
+        ),
+      );
+      await vi.waitFor(() =>
+        assert(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(1),
+      );
+      socket.receive(syncFrame(Tag.SYNC_OK, 'did:ad:drive'));
+      await vi.waitFor(() => assert(verify).toHaveBeenCalledTimes(1));
+      resource.getLoroDoc()!.getMap('properties').set('name', 'later');
+      resource.getLoroDoc()!.commit();
+      if (disconnect) client.close();
+      resolve([{ subject: resource.subject, vv }]);
+
+      if (disconnect) {
+        await new Promise(done => setTimeout(done, 0));
+        assert(finish).not.toHaveBeenCalled();
+      } else {
+        await vi.waitFor(() => assert(finish).toHaveBeenCalledTimes(1));
+        client.close();
+      }
+
+      assert(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(1);
+    },
+  );
+
+  it('accepts a hash acknowledgement after sending the full-vector fallback', async () => {
+    const { client, socket, store } = await connectedClient();
+    const finish = vi.spyOn(store, 'finishDriveSync');
+    vi.spyOn(store, 'getAgent').mockReturnValue(undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(store, 'computeDriveSyncState').mockResolvedValue({
+      drive: 'did:ad:drive',
+      driveHash: 'hash',
+      peers: [],
+      resources: {},
+    });
+    vi.spyOn(
+      client as unknown as { rbsrFingerprints: () => Promise<string[]> },
+      'rbsrFingerprints',
+    ).mockRejectedValue(new Error('range query failed'));
+    await client.resyncDrive('did:ad:drive');
+    socket.receive(encodeSyncResend('did:ad:drive'));
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.SYNC)).toHaveLength(2),
+    );
+    socket.receive(syncFrame(Tag.SYNC_OK, 'did:ad:drive'));
+    await vi.waitFor(() => assert(finish).toHaveBeenCalledTimes(1));
+    client.close();
+  });
+
+  it('coalesces overlapping probes and ignores an unsolicited acknowledgement', async () => {
+    const { client, socket, store } = await connectedClient();
+    const finish = vi.spyOn(store, 'finishDriveSync');
+    vi.spyOn(store, 'computeDriveSyncState').mockResolvedValue({
+      drive: 'did:ad:drive',
+      driveHash: 'hash',
+      peers: [],
+      resources: {},
+    });
+    await client.resyncDrive('did:ad:drive');
+    await client.resyncDrive('did:ad:drive');
+    assert(framesWithTag(socket, Tag.SYNC)).toHaveLength(1);
+    socket.receive(syncFrame(Tag.SYNC_OK, 'did:ad:other'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert(finish).not.toHaveBeenCalled();
+    socket.receive(syncFrame(Tag.SYNC_OK, 'did:ad:drive'));
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.SYNC)).toHaveLength(2),
+    );
+    socket.receive(syncFrame(Tag.SYNC_OK, 'did:ad:drive'));
+    await vi.waitFor(() => assert(finish).toHaveBeenCalledTimes(2));
+    client.close();
+  });
+
+  it('a rejection cannot be cleared by a late chunk acknowledgement', async () => {
+    const { client, socket, store } = await connectedClient();
+    const finish = vi.spyOn(store, 'finishDriveSync');
+    const fail = vi.spyOn(store, 'failDriveSync');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(store.resources, 'get').mockReturnValue({
+      getLoroDoc: () => ({
+        oplogVersion: () => ({ toJSON: () => [['1', 1]] }),
+      }),
+    } as unknown as Resource);
+    vi.spyOn(Resource, 'exportLoroBytesForSync').mockReturnValue(
+      new Uint8Array([1]),
+    );
+    socket.receive(
+      syncFrame(
+        Tag.SYNC_DIFF,
+        'did:ad:drive',
+        JSON.stringify({ pull: ['did:ad:ours'], push: [] }),
+      ),
+    );
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(1),
+    );
+    socket.receive(
+      encodeError(
+        0,
+        ErrorCode.SYNC_REJECTED,
+        'SYNC_PUSH rejected for drive did:ad:drive: denied',
+      ),
+    );
+    socket.receive(syncFrame(Tag.SYNC_OK, 'did:ad:drive'));
+    await vi.waitFor(() => assert(fail).toHaveBeenCalled());
+    assert(finish).not.toHaveBeenCalled();
+    client.close();
+  });
+
+  it('waits for every outbound chunk acknowledgement', async () => {
+    const { client, socket, store } = await connectedClient();
+    const finish = vi.spyOn(store, 'finishDriveSync');
+    const subjects = Array.from({ length: 101 }, (_, i) => `did:ad:${i}`);
+    vi.spyOn(client, 'rbsrItems').mockResolvedValue(
+      subjects.map(subject => ({ subject, vv: { '1': 1 } })),
+    );
+    vi.spyOn(store.resources, 'get').mockReturnValue({
+      getLoroDoc: () => ({
+        oplogVersion: () => ({ toJSON: () => [['1', 1]] }),
+      }),
+    } as unknown as Resource);
+    vi.spyOn(Resource, 'exportLoroBytesForSync').mockReturnValue(
+      new Uint8Array([1]),
+    );
+    socket.receive(
+      syncFrame(
+        Tag.SYNC_DIFF,
+        'did:ad:drive',
+        JSON.stringify({ pull: subjects, push: [] }),
+      ),
+    );
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(2),
+    );
+    assert(finish).not.toHaveBeenCalled();
+    socket.receive(syncFrame(Tag.SYNC_OK, 'did:ad:drive'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert(finish).not.toHaveBeenCalled();
+    socket.receive(syncFrame(Tag.SYNC_OK, 'did:ad:drive'));
+    await vi.waitFor(() => assert(finish).toHaveBeenCalledTimes(1));
+    client.close();
+  });
+
+  it('does not finish a bidirectional sync until the server acknowledges our push', async () => {
+    const { client, socket, store } = await connectedClient();
+    vi.spyOn(client, 'rbsrItems').mockResolvedValue([
+      { subject: 'did:ad:ours', vv: { '1': 2 } },
+    ]);
+    const finish = vi.spyOn(store, 'finishDriveSync');
+    vi.spyOn(store.resources, 'get').mockReturnValue({
+      getLoroDoc: () => ({
+        oplogVersion: () => ({ toJSON: () => [['1', 1]] }),
+      }),
+    } as unknown as Resource);
+    vi.spyOn(Resource, 'exportLoroBytesForSync').mockReturnValue(
+      new Uint8Array([1]),
+    );
+    socket.receive(
+      syncFrame(
+        Tag.SYNC_DIFF,
+        'did:ad:drive',
+        JSON.stringify({ pull: ['did:ad:ours'], push: ['did:ad:theirs'] }),
+      ),
+    );
+    socket.receive(encodeSyncPush('did:ad:drive', [], true));
+    await vi.waitFor(() =>
+      assert(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(1),
+    );
+    assert(finish).not.toHaveBeenCalled();
+    socket.receive(syncFrame(Tag.SYNC_OK, 'did:ad:drive'));
+    await vi.waitFor(() => assert(finish).toHaveBeenCalledTimes(1));
+    client.close();
+  });
+
+  it('does not complete when an incoming update is invalid', async () => {
+    const { client, socket, store } = await connectedClient();
+    const finish = vi.spyOn(store, 'finishDriveSync');
+    const fail = vi.spyOn(store, 'failDriveSync');
+    vi.spyOn(store, 'applyRemoteIncoming').mockResolvedValue('invalid');
+    socket.receive(
+      encodeSyncPush(
+        'did:ad:drive',
+        [{ subject: 'did:ad:one', loroBytes: new Uint8Array([1]) }],
+        true,
+      ),
+    );
+    await vi.waitFor(() => assert(fail).toHaveBeenCalled());
+    assert(finish).not.toHaveBeenCalled();
+    client.close();
+  });
+
+  it('ignores queued completion after disconnect during incoming persistence', async () => {
+    const { client, socket, store } = await connectedClient();
+    const finish = vi.spyOn(store, 'finishDriveSync');
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const apply = vi
+      .spyOn(store, 'applyRemoteIncoming')
+      .mockImplementation(async () => {
+        await gate;
+
+        return 'applied';
+      });
+    socket.receive(
+      encodeSyncPush(
+        'did:ad:drive',
+        [{ subject: 'did:ad:one', loroBytes: new Uint8Array([1]) }],
+        true,
+      ),
+    );
+    socket.receive(syncFrame(Tag.SYNC_OK, 'did:ad:drive'));
+    await vi.waitFor(() => assert(apply).toHaveBeenCalled());
+    client.close();
+    release();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert(finish).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])(
+    'waits for earlier incoming chunks and local persistence (fails: %s)',
+    async fails => {
+      const { client, socket, store } = await connectedClient();
+      const finish = vi.spyOn(store, 'finishDriveSync');
+      const fail = vi.spyOn(store, 'failDriveSync');
+      let release!: () => void;
+      const gate = new Promise<void>(resolve => {
+        release = resolve;
+      });
+      vi.spyOn(store, 'applyRemoteIncoming').mockImplementation(async () => {
+        await gate;
+        if (fails) throw new Error('local persistence failed');
+
+        return 'applied';
+      });
+      socket.receive(
+        syncFrame(
+          Tag.SYNC_DIFF,
+          'did:ad:drive',
+          JSON.stringify({ pull: [], push: ['did:ad:one'] }),
+        ),
+      );
+      socket.receive(
+        encodeSyncPush(
+          'did:ad:drive',
+          [{ subject: 'did:ad:one', loroBytes: new Uint8Array([1]) }],
+          false,
+        ),
+      );
+      socket.receive(encodeSyncPush('did:ad:drive', [], true));
+      await new Promise(resolve => setTimeout(resolve, 0));
+      assert(finish).not.toHaveBeenCalled();
+      release();
+
+      if (fails) {
+        await vi.waitFor(() => assert(fail).toHaveBeenCalled());
+        assert(finish).not.toHaveBeenCalled();
+      } else {
+        await vi.waitFor(() => assert(finish).toHaveBeenCalledTimes(1));
+      }
+
+      client.close();
+    },
+  );
+
+  it('includes durable operations when the mounted resource is behind OPFS', async () => {
+    const { client, socket, store } = await connectedClient();
+    const subject = 'did:ad:durable';
+    const resource = new Resource(subject);
+    const doc = resource.getLoroDoc()!;
+    doc.getMap('properties').set('name', 'before');
+    const base = doc.export({ mode: 'snapshot' });
+    store.resources.set(subject, resource);
+    const durable = new LoroLoader.Loro.LoroDoc();
+    durable.import(base);
+    durable.getMap('properties').set('name', 'acknowledged offline');
+    const snapshot = durable.export({ mode: 'snapshot' });
+    vi.spyOn(store, 'getClientDb').mockReturnValue({
+      getLoroSnapshot: async () => snapshot,
+      envelopesFor: async () => ({}),
+    } as unknown as NonNullable<ReturnType<typeof store.getClientDb>>);
+    await (
+      client as unknown as {
+        handleSyncDiff: (d: unknown) => Promise<void>;
+      }
+    ).handleSyncDiff({ drive: 'did:ad:drive', pull: [subject], push: [] });
+    const frames = framesWithTag(socket, Tag.SYNC_PUSH);
+    assert(frames).toHaveLength(1);
+    const pushed = decodeSyncPush(frames[0]!.subarray(1))!;
+    const server = new LoroLoader.Loro.LoroDoc();
+    server.import(base);
+    server.import(pushed.entries[0]!.loroBytes);
+    assert(server.getMap('properties').get('name')).toBe(
+      'acknowledged offline',
+    );
+    client.close();
   });
 
   it('does not push a subject the outbox still owns', async ({ expect }) => {
@@ -838,7 +1263,10 @@ describe('WSClient SYNC_DIFF and the outbox', () => {
     vi.spyOn(store.resources, 'get').mockImplementation(
       (subject: string) =>
         ({
-          getLoroDoc: () => ({ subject }),
+          getLoroDoc: () => ({
+            subject,
+            oplogVersion: () => ({ toJSON: () => [['1', 1]] }),
+          }),
         }) as unknown as ReturnType<typeof store.resources.get>,
     );
     vi.spyOn(Resource, 'exportLoroBytesForSync').mockImplementation(

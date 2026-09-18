@@ -1,3 +1,9 @@
+import { useStore } from '@tomic/react';
+import { FeedbackDiagnostics } from './FeedbackDiagnostics';
+import {
+  currentDiagnosticText,
+  type DiagnosticPreview,
+} from '../../helpers/diagnostic-report';
 import { useId, useRef, useState } from 'react';
 import { FaComment } from 'react-icons/fa6';
 import * as Sentry from '@sentry/react';
@@ -14,15 +20,22 @@ import {
   TextAreaStyled,
 } from '../forms/InputStyles';
 import { Button } from '../Button';
+import Field from '../forms/Field';
 import { Column } from '../Row';
 import {
   SideBarMenuRow,
   SideBarMenuRowIcon,
   SideBarMenuRowLabel,
 } from './SideBarMenuItem';
-import { submitFeedback } from '../../helpers/feedback';
+import {
+  FEEDBACK_MESSAGE_MAX_LENGTH,
+  submitFeedback,
+} from '../../helpers/feedback';
 
 export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
+  const store = useStore();
+  const [diagnosticPreview, setDiagnosticPreview] =
+    useState<DiagnosticPreview>();
   const feedbackTitle = 'Send feedback';
   const messageId = useId();
   const emailId = useId();
@@ -42,14 +55,19 @@ export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
     setFailed(false);
 
     try {
-      await submitFeedback(message, email);
+      await submitFeedback(
+        message,
+        email,
+        currentDiagnosticText(store.diagnostics, diagnosticPreview),
+      );
+      setDiagnosticPreview(undefined);
       setSent(true);
       setMessage('');
     } catch {
       setFailed(true);
-    } finally {
-      setBusy(false);
     }
+
+    setBusy(false);
   }
 
   return (
@@ -101,33 +119,42 @@ export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
                 optional email go to the Atomic team through Sentry. Please
                 leave out private workspace content.
               </p>
-              <label htmlFor={messageId}>
-                Feedback
+              <Field label='Feedback' fieldId={messageId} disabled={busy}>
                 <InputWrapper>
                   <TextAreaStyled
                     id={messageId}
                     rows={5}
-                    maxLength={10000}
+                    maxLength={FEEDBACK_MESSAGE_MAX_LENGTH}
                     value={message}
                     onChange={event => setMessage(event.target.value)}
                     disabled={busy}
                     style={{ width: '100%', boxSizing: 'border-box' }}
                   />
                 </InputWrapper>
-              </label>
-              <label htmlFor={emailId}>
-                Email for a reply (optional)
-                <InputWrapper>
-                  <InputStyled
-                    id={emailId}
-                    type='email'
-                    ref={emailRef}
-                    value={email}
-                    onChange={event => setEmail(event.target.value)}
+              </Field>
+              {dialogProps.show && (
+                <FeedbackDiagnostics
+                  onSelect={setDiagnosticPreview}
+                  disabled={busy}
+                >
+                  <Field
+                    label='Email for a reply (optional)'
+                    fieldId={emailId}
                     disabled={busy}
-                  />
-                </InputWrapper>
-              </label>
+                  >
+                    <InputWrapper>
+                      <InputStyled
+                        id={emailId}
+                        type='email'
+                        ref={emailRef}
+                        value={email}
+                        onChange={event => setEmail(event.target.value)}
+                        disabled={busy}
+                      />
+                    </InputWrapper>
+                  </Field>
+                </FeedbackDiagnostics>
+              )}
               {!enabled && (
                 <p role='status'>
                   Feedback reporting is unavailable on this installation. Email{' '}

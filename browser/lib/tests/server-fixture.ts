@@ -4,7 +4,7 @@
  * server-written `config.toml` so tests can authenticate as the root agent.
  */
 
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -95,7 +95,13 @@ function parseConfigToml(text: string): MinimalConfigToml {
 }
 
 export async function startServer(): Promise<ServerHandle> {
-  const binPath = path.join(REPO_ROOT, 'target/debug/atomic-server');
+  const target = JSON.parse(
+    execFileSync('cargo', ['metadata', '--format-version=1', '--no-deps'], {
+      cwd: REPO_ROOT,
+      encoding: 'utf8',
+    }),
+  ).target_directory;
+  const binPath = path.join(target, 'debug/atomic-server');
 
   if (!existsSync(binPath)) {
     throw new Error(

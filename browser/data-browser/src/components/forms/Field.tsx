@@ -132,7 +132,6 @@ const FieldStyled = styled.div`
 `;
 
 export const FieldLabel = styled.label`
-  text-transform: capitalize;
   display: inline-flex;
   gap: 0.2rem;
   align-items: center;

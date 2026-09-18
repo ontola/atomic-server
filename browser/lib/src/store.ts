@@ -1,3 +1,4 @@
+import { DiagnosticRecorder } from './diagnostics.js';
 import type { ScheduledSave, ResourceSaveState } from './scheduled-save.js';
 import { SaveStatusCoordinator } from './save-status-coordinator.js';
 import { verifyLocalDriveCopy } from './local-drive-copy.js';
@@ -512,6 +513,9 @@ export class Store {
   private clientDbExpected = false;
   /** Callbacks parked in {@link waitForClientDb} until the attach happens. */
   private clientDbWaiters = new Set<() => void>();
+  /** Opt-in local diagnostics, independent of durable application storage. */
+  public readonly diagnostics = new DiagnosticRecorder();
+
   /**
    * Single durable queue replacing the old `dirtyForSync` Set +
    * `atomic.dirtyForSync` + `atomic.offline.<subject>` quartet.
@@ -1051,7 +1055,19 @@ export class Store {
       await this.outbox.drain({
         sort: this.sortOutboxEntries,
         tierOf: this.outboxTierOf,
-        drainSubject: this.drainOutboxSubject,
+        drainSubject: async subject => {
+          const finish = this.diagnostics.beginDrain(
+            this.resources.get(subject)?.__internalObject,
+          );
+
+          try {
+            await this.drainOutboxSubject(subject);
+            finish(false);
+          } catch (error) {
+            finish(true);
+            throw error;
+          }
+        },
         isTerminalError: (_entry, e) => {
           const msg = e instanceof Error ? e.message : String(e);
           const code = e instanceof AtomicError ? e.code : undefined;
@@ -1911,6 +1927,116 @@ export class Store {
       });
   }
 
+  private resourcePersistence = new Map<string, Promise<void>>();
+
+  private remoteIngress = new Map<
+    string,
+    { tail: Promise<unknown>; cancelled: boolean }
+  >();
+
+  /**
+   * Remote state must merge with the durable local snapshot even when the
+   * resource is unmounted and a process crash lost its localStorage outbox.
+   * Serialize per subject so two remote arrivals cannot both read an old
+   * snapshot and overwrite each other's newly imported state.
+   */
+  public applyRemoteIncoming(
+    change: IncomingChange,
+    current: () => boolean = () => true,
+  ): Promise<'applied' | 'deduped' | 'invalid'> {
+    const subject = this.normalizeSubject(
+      change.resource?.subject ?? change.subject,
+    );
+    const identity = this.agent;
+    const previous = this.remoteIngress.get(subject);
+    const queue = previous ?? { tail: Promise.resolve(), cancelled: false };
+    const valid = () =>
+      current() && this.agent === identity && !queue.cancelled;
+
+    const apply = async () => {
+      if (!valid()) throw new RequestCancelledError('Remote ingress cancelled');
+      await this.waitForClientDb(10_000);
+      const db = this.clientDb;
+      let hasCompleteLocalState = false;
+
+      if (db && !db.unsupportedEnvironment && !db.initError) {
+        await db.waitForInit();
+
+        if (!valid() || this.clientDb !== db) {
+          throw new RequestCancelledError('Remote ingress database changed');
+        }
+
+        const { jsonAd, snapshot } = await db.getResourceWithSnapshot(subject);
+
+        if (!valid() || this.clientDb !== db) {
+          throw new RequestCancelledError('Remote ingress database changed');
+        }
+
+        if (jsonAd && snapshot?.length) {
+          const local = new Resource(subject);
+          local.applyHydratedValues(
+            Object.entries(JSON.parse(jsonAd)).filter(
+              ([key]) => key !== '@id',
+            ) as [string, JSONValue][],
+          );
+          hasCompleteLocalState = local.importLoroUpdate(
+            snapshot,
+            true,
+          ).complete;
+
+          if (hasCompleteLocalState) {
+            local.loading = false;
+            this.applyIncoming({
+              subject,
+              resource: local,
+              source: 'offline-replay',
+            });
+          }
+        }
+      }
+
+      if (!valid()) throw new RequestCancelledError('Remote ingress cancelled');
+
+      const result = this.applyIncoming({
+        ...change,
+        // A full server snapshot is not authority to discard local operations.
+        // Incomplete local seeds still use the existing full-state repair path.
+        replaceLoroDocsFromRemote: hasCompleteLocalState
+          ? false
+          : change.replaceLoroDocsFromRemote,
+      });
+      // addResource queues the canonical merged snapshot before notifying.
+      // Await that write, including its failure, before acknowledging ingress.
+      await this.resourcePersistence.get(subject);
+      if (!valid()) throw new RequestCancelledError('Remote ingress cancelled');
+
+      return result;
+    };
+
+    // Keep the no-storage path synchronous for non-browser consumers.
+    if (!previous && !this.clientDb && !this.clientDbExpected) {
+      if (!valid())
+        return Promise.reject(
+          new RequestCancelledError('Remote ingress cancelled'),
+        );
+
+      return Promise.resolve(this.applyIncoming(change));
+    }
+
+    const work = queue.tail.catch(() => undefined).then(apply);
+    queue.tail = work;
+    this.remoteIngress.set(subject, queue);
+
+    const clear = () => {
+      if (this.remoteIngress.get(subject) === queue && queue.tail === work)
+        this.remoteIngress.delete(subject);
+    };
+
+    void work.then(clear, clear);
+
+    return work;
+  }
+
   /**
    * Single ingress for resource state from any source: subject
    * normalisation, commit-id dedup, Loro hydration, atomic OPFS
@@ -2205,17 +2331,31 @@ export class Store {
 
           if (this.lastPersistedStamp.get(emitResource.subject) !== stamp) {
             this.lastPersistedStamp.set(emitResource.subject, stamp);
-            this.clientDb
-              .putResourceWithSnapshot(emitResource.subject, jsonAd, snapshot)
-              .catch(e => {
-                // Failed write: drop the stamp so the next attempt is not
-                // skipped as a duplicate of a write that never landed.
-                this.lastPersistedStamp.delete(emitResource.subject);
-                console.error(
-                  `[ClientDb] put failed for ${emitResource.subject.slice(0, 60)}:`,
-                  e,
-                );
-              });
+            const persistence = this.clientDb.putResourceWithSnapshot(
+              emitResource.subject,
+              jsonAd,
+              snapshot,
+            );
+            this.resourcePersistence.set(emitResource.subject, persistence);
+
+            const clear = () => {
+              if (
+                this.resourcePersistence.get(emitResource.subject) ===
+                persistence
+              )
+                this.resourcePersistence.delete(emitResource.subject);
+            };
+
+            void persistence.then(clear, clear);
+            void persistence.catch(e => {
+              // Failed write: drop the stamp so the next attempt is not
+              // skipped as a duplicate of a write that never landed.
+              this.lastPersistedStamp.delete(emitResource.subject);
+              console.error(
+                `[ClientDb] put failed for ${emitResource.subject.slice(0, 60)}:`,
+                e,
+              );
+            });
           }
         }
       } catch (e) {
@@ -3326,11 +3466,15 @@ export class Store {
    * Used by collection page loads so members have their propvals available
    * for client-side sorting before the consumer's individual fetches happen.
    */
-  public hydrateResourceFromJsonAd(subject: string, jsonAd: string): boolean {
+  public hydrateResourceFromJsonAd(
+    subject: string,
+    jsonAd: string,
+    snapshot?: Uint8Array,
+  ): boolean {
     try {
       const parsed = JSON.parse(jsonAd) as Record<string, unknown>;
 
-      return this.hydrateResourceFromJson(subject, parsed);
+      return this.hydrateResourceFromJson(subject, parsed, snapshot);
     } catch {
       return false;
     }
@@ -3616,7 +3760,7 @@ export class Store {
       // The `subject` arg becomes the alias if it differs from the
       // resolved subject (e.g. POST endpoint that returns the
       // canonical resource).
-      this.applyIncoming({
+      await this.applyRemoteIncoming({
         subject,
         resource,
         source: 'http-fetch',
@@ -3624,16 +3768,17 @@ export class Store {
       });
 
       const primarySubject = this.normalizeSubject(resource.subject);
-      createdResources.forEach(r => {
+
+      for (const r of createdResources) {
         if (this.normalizeSubject(r.subject) !== primarySubject) {
-          this.applyIncoming({
+          await this.applyRemoteIncoming({
             subject: r.subject,
             resource: r,
             source: 'http-fetch',
             replaceLoroDocsFromRemote: !!opts.forceOverride,
           });
         }
-      });
+      }
     }
 
     // Resolve HTTP aliases of a DID (`https://host/did:ad:…` → `did:ad:…`)
@@ -4163,10 +4308,13 @@ export class Store {
       return;
     }
 
+    this.diagnostics.connection(connected);
     this._serverConnected = connected;
     this._serverConnectionError = nextError;
 
     if (!connected) {
+      this.finishDiagnosticSync?.('cancelled');
+      this.finishDiagnosticSync = undefined;
       this._driveSyncInProgress = false;
     }
 
@@ -4289,7 +4437,13 @@ export class Store {
     return this.saveStatus.subscribe(resource, callback);
   }
 
+  private finishDiagnosticSync?: (
+    outcome: 'ok' | 'error' | 'cancelled',
+  ) => void;
+
   public startDriveSync(): void {
+    this.finishDiagnosticSync?.('cancelled');
+    this.finishDiagnosticSync = this.diagnostics.beginBoundary('reconcile');
     this._driveSyncInProgress = true;
     this.emitSyncStatus();
   }
@@ -4319,6 +4473,8 @@ export class Store {
     timestamp: number,
   ): void {
     this._driveSyncInProgress = false;
+    this.finishDiagnosticSync?.('ok');
+    this.finishDiagnosticSync = undefined;
     this._lastDriveSync = { drive, count, timestamp };
 
     if (drive) {
@@ -4342,6 +4498,8 @@ export class Store {
    * refused" instead of a green check.
    */
   public failDriveSync(drive: string, message: string): void {
+    this.finishDiagnosticSync?.('error');
+    this.finishDiagnosticSync = undefined;
     this._driveSyncInProgress = false;
     this._lastDriveSyncError = { drive, message, timestamp: Date.now() };
 
@@ -4515,6 +4673,13 @@ export class Store {
   /** Removes resource from this store, does not delete it from the server, use `resource.destroy()` to delete it from the server. */
   public removeResource(subjectRaw: string, shouldNotify = true): void {
     const resolved = this.resolveSubject(subjectRaw);
+    const ingress = this.remoteIngress.get(resolved);
+
+    if (ingress) {
+      // A late read started before deletion must not recreate the resource.
+      ingress.cancelled = true;
+      this.remoteIngress.delete(resolved);
+    }
 
     // Tombstone in ClientDb (OPFS) so the resource doesn't reappear after a
     // page reload. The in-memory `resources` map is wiped on reload, but the
@@ -4584,6 +4749,7 @@ export class Store {
    * might have security implications for your application.
    */
   public setAgent(agent: Agent | undefined): void {
+    if (this.agent?.subject !== agent?.subject) this.diagnostics.clear();
     // The current drive is an account context, not a server preference. Clear
     // it before reauthenticating, so the next identity never subscribes or
     // reconciles the previous identity's private workspace.
@@ -5463,7 +5629,13 @@ export class Store {
   }
 
   private emitSyncStatus(): void {
-    this.eventManager.emit(StoreEvents.SyncStatusChanged, this.getSyncStatus());
+    const status = this.getSyncStatus();
+    this.diagnostics.queue(
+      status.pendingDirtyCount,
+      status.blockedCount,
+      status.serverConnected,
+    );
+    this.eventManager.emit(StoreEvents.SyncStatusChanged, status);
   }
 
   private pushCommitLog(entry: Omit<CommitLogEntry, 'id'>): void {
@@ -5945,12 +6117,17 @@ export class Store {
 
   /** Posts a Commit to some endpoint. Returns the Commit created by the server. */
   public async postCommit(commit: Commit, endpoint: string): Promise<Commit> {
+    const finish = this.diagnostics.beginBoundary(
+      'server',
+      this.resources.get(commit.subject)?.__internalObject,
+    );
     const close = perfSpan('store.postCommit', {
       genesis: !!commit.isGenesis,
     });
 
     try {
       const created = await this.sendCommit(commit, endpoint);
+      finish('ok');
       close('ok');
       this.pushCommitLog(
         this.buildCommitLogEntry(commit, 'outgoing', 'sent', {
@@ -5960,6 +6137,7 @@ export class Store {
 
       return created;
     } catch (e) {
+      finish(e instanceof RequestCancelledError ? 'cancelled' : 'error');
       const errMsg = e instanceof Error ? e.message : String(e);
       close({ err: errMsg });
       // Pass the error through `extras.error`; the derived commitId in
