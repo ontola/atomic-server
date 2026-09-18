@@ -111,32 +111,40 @@ describe('plainTextToTiptapJson', () => {
 });
 
 describe('fileContentsToTiptapJson', () => {
-  it('uses the collaborative Markdown schema so Markdown formatting becomes document nodes', async () => {
-    const json = await fileContentsToTiptapJson(
-      '# Heading\n\nThis is **bold**.',
-      'markdown',
-      new Store(),
-    );
+  it(
+    'uses the collaborative Markdown schema so Markdown formatting becomes document nodes',
+    async () => {
+      const json = await fileContentsToTiptapJson(
+        '# Heading\n\nThis is **bold**.',
+        'markdown',
+        new Store(),
+      );
 
-    expect(json).toMatchObject({
-      type: 'doc',
-      content: [
-        {
-          type: 'heading',
-          attrs: { level: 1 },
-          content: [{ text: 'Heading' }],
-        },
-        {
-          type: 'paragraph',
-          content: [
-            { text: 'This is ' },
-            { text: 'bold', marks: [{ type: 'bold' }] },
-            { text: '.' },
-          ],
-        },
-      ],
-    });
-  });
+      expect(json).toMatchObject({
+        type: 'doc',
+        content: [
+          {
+            type: 'heading',
+            attrs: { level: 1 },
+            content: [{ text: 'Heading' }],
+          },
+          {
+            type: 'paragraph',
+            content: [
+              { text: 'This is ' },
+              { text: 'bold', marks: [{ type: 'bold' }] },
+              { text: '.' },
+            ],
+          },
+        ],
+      });
+    },
+    // First test in this file to load @tiptap/markdown and the full
+    // collaborative editor schema graph; that cold module transform can
+    // exceed the default 5s under CI load (see vitest.integration.config.ts
+    // for the same reasoning applied elsewhere).
+    15000,
+  );
 
   it('keeps blank Markdown and an unpaired marker as document text', async () => {
     await expect(
