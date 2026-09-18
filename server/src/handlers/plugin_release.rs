@@ -126,7 +126,10 @@ async fn create(
 pub struct PublishPackage {
     /// The drive the publisher must be able to write to.
     pub drive: String,
-    /// `extension` (default) or `server-extension`.
+    /// What the publisher believes the world is. The world is read from the
+    /// component (a package extending classes is a `server-extension`); when
+    /// this is given and disagrees, the publish is refused rather than
+    /// mislabeled.
     #[serde(default)]
     pub world: Option<String>,
     /// Also list the release in this server's catalog.
@@ -135,9 +138,10 @@ pub struct PublishPackage {
 }
 
 /// Publish a wasip2 release from zip bytes: the body is the zip, validated
-/// like an upload, stored content-addressed, and wrapped in a release whose id
-/// covers the package hash and manifest. `atomic-plugin` can publish with one
-/// POST instead of producing a file to upload.
+/// like an upload, its `plugin.json` translated into the version-two manifest,
+/// stored content-addressed, and wrapped in a release whose id covers the
+/// package hash and manifest. `atomic-plugin` can publish with one POST
+/// instead of producing a file to upload.
 pub async fn publish_package(
     appstate: web::Data<AppState>,
     query: web::Query<PublishPackage>,
@@ -145,37 +149,25 @@ pub async fn publish_package(
     req: actix_web::HttpRequest,
     context: RequestContext,
 ) -> AtomicServerResult<HttpResponse> {
-    use atomic_lib::db::plugin_release::{RUNTIME_WASIP2, WORLD_EXTENSION};
     let agent = super::plugin_schedule::authorize(&appstate, &req, &context, &query.drive).await?;
-    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(body.to_vec()))
-        .map_err(|e| AtomicServerError::bad_request(format!("Body is not a zip archive: {e}")))?;
-    let manifest = crate::plugins::wasm::validate_plugin_zip(&mut zip)
+    let (id, release, manifest) = crate::plugins::release::publish_package(&appstate.store, &body)
+        .await
         .map_err(|e| AtomicServerError::bad_request(e.to_string()))?;
-    let package = crate::plugins::release::store_package(&appstate.store, &body).await?;
-    let release = PluginRelease {
-        source: None,
-        package: Some(package),
-        manifest: serde_json::to_value(&manifest)
-            .map_err(|e| AtomicServerError::bad_request(e.to_string()))?,
-        runtime: RUNTIME_WASIP2.into(),
-        world: query
-            .world
-            .clone()
-            .unwrap_or_else(|| WORLD_EXTENSION.into()),
-        schemas: Default::default(),
-        version: Some(manifest.version.clone()),
-        previous_release: None,
-    };
-    let id = appstate
-        .store
-        .publish_plugin_release(&release)
-        .map_err(|e| AtomicServerError::bad_request(e.to_string()))?;
+    if let Some(claimed) = &query.world {
+        if claimed != &release.world {
+            return Err(AtomicServerError::bad_request(format!(
+                "the package is a {} (its component extends {} classes), not a {claimed}",
+                release.world,
+                manifest.entrypoints.class_urls().len()
+            )));
+        }
+    }
     if query.public {
         appstate.store.publish_plugin_catalog_entry(
             &atomic_lib::db::plugin_release::CatalogEntry {
                 release: id.clone(),
                 emoji: None,
-                name: manifest.name.clone(),
+                name: manifest.name.clone().unwrap_or_else(|| "Plugin".into()),
                 description: manifest.description.clone().unwrap_or_default(),
                 publisher: agent.to_string(),
                 domains: vec![],
@@ -199,11 +191,9 @@ pub async fn catalog(appstate: web::Data<AppState>) -> AtomicServerResult<HttpRe
     Ok(HttpResponse::Ok().json(entries))
 }
 
-pub async fn package(
-    appstate: web::Data<AppState>,
-    id: web::Path<String>,
-) -> AtomicServerResult<HttpResponse> {
-    let id = id.into_inner();
+/// A release that is listed in this server's catalog. Private releases are
+/// only reachable through an Installation that pins them.
+fn published_release(appstate: &AppState, id: &str) -> AtomicServerResult<PluginRelease> {
     if !appstate
         .store
         .plugin_catalog()?
@@ -214,5 +204,33 @@ pub async fn package(
             "This package has not been published",
         ));
     }
-    Ok(HttpResponse::Ok().json(appstate.store.get_plugin_release(&id)?))
+    Ok(appstate.store.get_plugin_release(id)?)
+}
+
+/// The release record: source for JS releases, the `package` hash (never the
+/// bytes) for wasip2 releases, which `GET /plugin-package/{id}/zip` serves.
+pub async fn package(
+    appstate: web::Data<AppState>,
+    id: web::Path<String>,
+) -> AtomicServerResult<HttpResponse> {
+    Ok(HttpResponse::Ok().json(published_release(&appstate, &id)?))
+}
+
+/// The zip of a published wasip2 release, byte for byte what was published,
+/// so a client can verify it against the release's `package` hash.
+pub async fn package_zip(
+    appstate: web::Data<AppState>,
+    id: web::Path<String>,
+) -> AtomicServerResult<HttpResponse> {
+    let release = published_release(&appstate, &id)?;
+    let Some(package) = release.package.as_deref() else {
+        return Err(AtomicServerError::bad_request(
+            "This release is a JS release; it has no package",
+        ));
+    };
+    let bytes = crate::plugins::release::package_bytes(&appstate.store, package).await?;
+    Ok(HttpResponse::Ok()
+        .content_type("application/zip")
+        .insert_header(("Cache-Control", "public, max-age=31536000, immutable"))
+        .body(bytes))
 }

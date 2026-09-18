@@ -306,6 +306,10 @@ fn configure_wasm_plugin_routes(app: &mut actix_web::web::ServiceConfig) {
                 .route(web::get().to(handlers::plugin_release::package)),
         )
         .service(
+            web::resource("/plugin-package/{id}/zip")
+                .route(web::get().to(handlers::plugin_release::package_zip)),
+        )
+        .service(
             web::resource("/plugin-catalog")
                 .route(web::get().to(handlers::plugin_release::catalog)),
         )
