@@ -16,7 +16,18 @@ export enum IconButtonVariant {
   Magic,
 }
 
-type ColorProp = keyof DefaultTheme['colors'] | 'inherit';
+/**
+ * The theme colours that are a single value, so `theme.colors[color]` yields
+ * something interpolable. Excludes the `neutral` / `accent` ramps and the
+ * `diff` group, which are containers rather than colours.
+ */
+type SingleColorKey = {
+  [K in keyof DefaultTheme['colors']]: DefaultTheme['colors'][K] extends string
+    ? K
+    : never;
+}[keyof DefaultTheme['colors']];
+
+type ColorProp = SingleColorKey | 'inherit';
 
 type BaseProps = {
   className?: string;

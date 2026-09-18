@@ -117,7 +117,7 @@ export const ButtonBase = styled(ButtonClean)<ButtonPropsStyled>`
   /* A floor, not a fixed height: a label that wraps needs room for the extra
      line. With a fixed height the second line was simply clipped. Variants
      that set their own exact size (ButtonIcon) opt out with min-height: 0. */
-  min-height: 2rem;
+  min-height: ${p => p.theme.size(7)};
   display: flex;
   align-items: center;
   gap: 1ch;
@@ -170,9 +170,9 @@ interface ButtonBarProps {
 
 /** Button inside the navigation bar */
 export const ButtonBar = styled(ButtonClean)<ButtonBarProps>`
-  padding-right: 0.5rem;
-  padding-left: 0.5rem;
-  color: ${p => p.theme.colors.main};
+  padding-right: ${p => p.theme.size(2)};
+  padding-left: ${p => p.theme.size(2)};
+  color: ${p => p.theme.colors.accentText};
   background-color: ${p =>
     p.selected ? p.theme.colors.bg2 : p.theme.colors.bg};
   height: 100%;
@@ -199,12 +199,17 @@ export const ButtonDefault = styled(ButtonBase)<ButtonPropsStyled>`
   --button-bg-color-hover: ${p => p.theme.colors.mainLight};
   --button-border-color: ${p => p.theme.colors.main};
   --button-border-color-hover: ${p => p.theme.colors.mainLight};
-  --button-text-color: ${p => p.theme.colors.bg};
-  --button-text-color-hover: ${p => p.theme.colors.bg};
+  /* The label of a filled accent surface, not the page background. Those used
+     to be the same value, which is how six of the nine main-colour presets
+     shipped a primary button below 4.5:1 -- see styles/ramps.ts. */
+  --button-text-color: ${p => p.theme.colors.onAccent};
+  --button-text-color-hover: ${p => p.theme.colors.onAccent};
 
-  border-radius: ${p => p.theme.radius};
-  padding-block: 0.4rem;
-  padding-inline: ${p => p.theme.margin}rem;
+  border-radius: ${p => p.theme.radii.md};
+  /* Was 0.4rem, which is not on any scale. The nearest step is roomier, and
+     with the 2rem floor it lands on a 2.5rem control -- a real touch target. */
+  padding-block: ${p => p.theme.size(2)};
+  padding-inline: ${p => p.theme.size(3)};
   display: inline-flex;
   background-color: var(--button-bg-color);
   color: var(--button-text-color);
@@ -253,10 +258,10 @@ export const ghostButtonStyles = css`
   gap: 0.5ch;
   border: none;
   background-color: transparent;
-  padding: 0.3rem 0.5rem;
-  border-radius: ${p => p.theme.radius};
+  padding: ${p => p.theme.size(1)} ${p => p.theme.size(2)};
+  border-radius: ${p => p.theme.radii.md};
   color: ${p => p.theme.colors.textLight};
-  font-size: 0.9rem;
+  font-size: ${p => p.theme.fontSize.sm};
   cursor: pointer;
   ${transition('background-color', 'color')};
 
@@ -280,8 +285,8 @@ export const ButtonGhost = styled(ButtonClean)<ButtonPropsStyled>`
 export const ButtonIcon = styled(ButtonDefault)`
   box-shadow: none;
   border-color: transparent;
-  border-radius: 999px;
-  font-size: 0.8rem;
+  border-radius: ${p => p.theme.radii.full};
+  font-size: ${p => p.theme.fontSize.xs};
   width: 1.3rem;
   height: 1.3rem;
   /* This variant is exactly sized and holds no text, so the base's wrapping

@@ -1,4 +1,5 @@
 import { css, styled } from 'styled-components';
+import { fontSizes } from '../styles/ramps';
 
 /**
  * The one card surface the Sync page and its panels share.
@@ -16,8 +17,8 @@ import { css, styled } from 'styled-components';
 export const cardSurface = css`
   display: flex;
   align-items: flex-start;
-  gap: 0.9rem;
-  padding: 0.9rem 1rem;
+  gap: ${p => p.theme.size(3)};
+  padding: ${p => p.theme.size(3)};
   border-radius: ${p => p.theme.radius};
   border: 1px solid ${p => p.theme.colors.bg2};
   background: ${p => p.theme.colors.bg};
@@ -31,12 +32,17 @@ export const cardSurface = css`
  * legitimately differ — a connection row is one ellipsised line, a panel's
  * description is a paragraph — while the sizes should not.
  */
-export const CARD_ICON_SIZE = '2.4rem';
-export const CARD_ICON_FONT = '1.1rem';
-export const CARD_TITLE_FONT = '0.95rem';
-export const CARD_SUB_FONT = '0.82rem';
+export const CARD_ICON_SIZE = '2.5rem';
+/**
+ * Type and spacing for a card, as steps rather than the seven hand-picked
+ * values this used to freeze. Still constants rather than theme reads because
+ * several call sites use them in `width`/`height` as well as in CSS.
+ */
+export const CARD_ICON_FONT = fontSizes.lg;
+export const CARD_TITLE_FONT = fontSizes.base;
+export const CARD_SUB_FONT = fontSizes.sm;
 /** Between title and subtitle: they read as one block. */
-export const CARD_BODY_GAP = '0.15rem';
+export const CARD_BODY_GAP = '0.25rem';
 export const CARD_ACTIONS_GAP = '0.5rem';
 
 /**
@@ -67,9 +73,10 @@ export const CardIcon = styled.div<{ $tone?: 'neutral' | 'provider' }>`
   place-items: center;
   width: ${CARD_ICON_SIZE};
   height: ${CARD_ICON_SIZE};
-  border-radius: 50%;
+  border-radius: ${p => p.theme.radii.full};
   font-size: ${CARD_ICON_FONT};
-  color: ${p => (p.$tone === 'provider' ? 'white' : p.theme.colors.text)};
+  color: ${p =>
+    p.$tone === 'provider' ? p.theme.colors.onAccent : p.theme.colors.text};
   background: ${p =>
     p.$tone === 'provider' ? p.theme.colors.main : p.theme.colors.bg2};
 `;

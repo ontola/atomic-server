@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
-import { styled } from 'styled-components';
+import { styled, useTheme } from 'styled-components';
 import { constructOpenURL } from '../../helpers/navigation';
 import ResourceCard from '../../views/Card/ResourceCard';
 import { dataBrowser, useServerSearch } from '@tomic/react';
@@ -407,6 +407,9 @@ const SelectableResult: React.FC<SelectableResultProps> = ({
   onClick,
 }) => {
   const ref = useRef<HTMLDivElement | null>(null);
+  // `var(--color-bg1)` was here, and no such custom property has ever been
+  // declared, so the selected row had no highlight at all.
+  const theme = useTheme();
 
   return (
     <div
@@ -414,7 +417,7 @@ const SelectableResult: React.FC<SelectableResultProps> = ({
       data-index={index}
       style={{
         borderRadius: '0.375rem',
-        background: selected ? 'var(--color-bg1)' : 'transparent',
+        background: selected ? theme.colors.bg1 : 'transparent',
         cursor: 'pointer',
         transition: 'background 80ms',
       }}

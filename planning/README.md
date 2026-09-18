@@ -63,6 +63,7 @@ browser flow; standalone recovery remains self-managed.
 
 | Document | Status |
 | --- | --- |
+| [`data-browser-ui.md`](./data-browser-ui.md) | **Phase 1 shipped, 2-5 proposed.** The theme now carries two 12-step OKLCH ramps and the type/radius/elevation/motion scales, with a 108-assertion contrast gate that caught a primary button failing AA on six of nine colour presets. A CSS-custom-property variant was built and reverted (it removes the typecheck and the bundle case measured as noise); the plan records why. Next: the per-property codemod for the literals that were never in the theme. |
 | [`production-readiness.md`](./production-readiness.md) | **Gate list.** What stands between `develop` and production: npm publishing, rate limiting, library-owned durability, desktop CSP, managed-node abuse gate, source maps, SaaS billing checks. |
 | [`security-audit-2026-09.md`](./security-audit-2026-09.md) | **Mostly fixed** (beta.6, plus B7 CSP, C18 and rate limits on 2026-09-15). Open: C16 process-global import flags, C17 DID watched-query leak, C20, C24 loopback NFS, permissive CORS, client errors as 500, section F, transitive advisories via actix-http and iroh 0.35. |
 | [`drive-sharing-state.md`](./drive-sharing-state.md) | **In progress.** Verified transition for unenrolled drives shipped (#1466). Remaining: authoritative per-drive editor usage from the backend, root cause of the retained remote routing, staging acceptance. |

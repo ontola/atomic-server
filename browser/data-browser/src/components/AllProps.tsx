@@ -107,8 +107,8 @@ const StyledPropVal = styled(PropVal)<{ basic: boolean | undefined }>`
   ${p =>
     !p.basic &&
     css`
-      padding: 0.5rem;
-      border-top: solid 1px ${p.theme.colors.bg1};
+      padding: ${p.theme.size(2)} ${p.theme.size(3)};
+      border-top: solid 1px ${p.theme.colors.borderSubtle};
 
       &:nth-child(1) {
         border-top-left-radius: ${p.theme.radius};

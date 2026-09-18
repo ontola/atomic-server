@@ -93,8 +93,11 @@ export const PropValRow = styled.div<PropValRowProps>`
   }
 `;
 
+/** The label column of a property row: secondary to the value it introduces. */
 export const PropertyLabel = styled.span`
-  font-weight: bold;
+  font-weight: ${p => p.theme.fontWeight.medium};
+  font-size: ${p => p.theme.fontSize.sm};
+  color: ${p => p.theme.colors.textLight};
 `;
 
 const StyledLoader = styled(LoaderInline)`
