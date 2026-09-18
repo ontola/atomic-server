@@ -39,7 +39,7 @@ This document might not be entirely up to date. If you need anything that is not
 These components help with rendering resources in different contexts.
 
 - `src/views/ResourceInline/ResourceInline.tsx` - Compact inline link for any resource subject, with loading/error handling and class-specific inline renderers.
-- `src/views/ResourceLine.tsx` - Small non-card line item for a resource title and truncated description, useful in dropdowns and dense lists.
+- `src/views/ResourceRow.tsx` - Compact resource row with class icon, title, truncated description, loading/error states, and optional navigation.
 - `src/views/Card/ResourceCard.tsx` - Generic card renderer for any resource subject; dispatches to class-specific cards when available and falls back to `ResourceCardDefault`.
   - `src/views/Card/ResourceCardTitle.tsx` - Shared card title row with class icon, resource link, title transition, and optional actions.
 - `src/views/ResourcePage.tsx` - Full-page resource view dispatcher that picks the best page component for a resource class and falls back to `ResourcePageDefault`.
@@ -107,3 +107,8 @@ These components help with rendering resources in different contexts.
 - `src/components/TeamProfileStep.tsx` — shared collaboration profile review for senders and invitees. Saves full name and optional cropped avatar to the existing Atomic agent before continuing; requires no SaaS account.
 
 - `src/components/OnboardingFeedback.tsx` - Shared bottom-right subtle feedback control; the onboarding Shell reserves bottom space for it.
+
+## App setup
+
+- `src/components/AppSetup/AppSetupForm.tsx` — Renders a registered setup action's typed fields with Atomic controls, dynamic choices and host-owned credential input.
+- `src/components/AppSetup/AppSetupProvider.tsx` — Opens the same form from assistant tools with non-secret arguments. Setup adapters are trusted bundled code; this is not an arbitrary-source execution API.

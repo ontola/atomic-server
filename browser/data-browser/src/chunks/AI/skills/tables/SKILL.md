@@ -6,7 +6,7 @@ If the table is already attached to this chat (an `<atomic-context>` block
 with `Row schema:`, `Row class:` and a row sample), you have EVERYTHING needed
 to add or edit rows. Do NOT read the table, its class, its properties, its
 tags, or its rows again — go straight to ONE `create_resource` /
-`edit_atomic_resource` call using the refs and shortnames from that block.
+`update_table_rows` call (or `edit_atomic_resource` for a single cell) using the refs and shortnames from that block.
 
 ## Architecture Overview
 
@@ -185,6 +185,11 @@ rows with ONE batched `create_resource` call — an array of compact objects:
 - `createdAt` is added automatically when the parent is a table (rows only
   appear in the table once it is set; it drives the default sort order).
 - Edit a single cell with `edit_atomic_resource` (shortname + tag name work).
+- For several existing rows, use `update_table_rows` once with `table` and
+  `rows: [{subject, values: {shortname: value}}]`. File subjects/refs work as
+  values for File columns. If a column is missing, call `add_table_columns`
+  once before the batch. The result lists completed rows; saves are per row,
+  so inspect a failing row and do not repeat already completed edits.
 
 To list rows use `query` with the row class:
 `{"class": "<row class ref or shortname>", "where": [...]}` — filters accept

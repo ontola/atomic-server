@@ -116,7 +116,7 @@ try {
         '--all-targets',
         '--no-default-features',
         '--features',
-        'light',
+        'light,wasm-plugins',
         '--',
         '-D',
         'warnings',

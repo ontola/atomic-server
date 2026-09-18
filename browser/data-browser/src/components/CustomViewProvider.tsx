@@ -7,6 +7,7 @@ import {
 } from 'react';
 import { signRequest, type Store, useStore } from '@tomic/react';
 import { useSettings } from '@helpers/AppSettings';
+import { useRegisterAppCreation } from '@chunks/AppPage/useRegisterAppCreation';
 
 interface UIPluginManifest {
   css: boolean;
@@ -85,6 +86,11 @@ const fetchPluginList = async (
 export function CustomViewProvider({ children }: PropsWithChildren) {
   const store = useStore();
   const { drive } = useSettings();
+
+  // Choosing "App" in the New menu has to build a whole app, not one empty
+  // resource. Registered here because this provider is always mounted and
+  // already knows the drive, and the App class is minted per drive.
+  useRegisterAppCreation(drive);
   const [customViews, setCustomViews] = useState<Map<string, string>>(
     new Map(),
   );
@@ -96,6 +102,8 @@ export function CustomViewProvider({ children }: PropsWithChildren) {
   const serverUrl = store.getServerUrl();
 
   const refresh = async () => {
+    if (!drive) return;
+
     const [list, newManifests] = await fetchPluginList(store, drive);
     setCustomViews(list);
     setUIPluginDataMap(newManifests);
@@ -110,7 +118,15 @@ export function CustomViewProvider({ children }: PropsWithChildren) {
   };
 
   useEffect(() => {
-    fetchPluginList(store, drive)
+    // Before a drive is chosen — a share link, the first seconds of
+    // onboarding — there is nothing to scope the list to. Asking anyway sent
+    // `?drive=`, which the server answers with an error carrying no CORS
+    // headers, so the browser logged a blocked fetch on every such page.
+    const request: Promise<PluginListResult> = drive
+      ? fetchPluginList(store, drive)
+      : Promise.resolve([new Map(), new Map()]);
+
+    request
       .then(([views, manifests]) => {
         setCustomViews(views);
         setUIPluginDataMap(manifests);

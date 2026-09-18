@@ -18,6 +18,8 @@ type Expected = {
   count: number;
   seen: number;
   url?: RegExp;
+  /** Allowed, but not required — see {@link DiagnosticCollector.expect}. */
+  optional?: boolean;
 };
 
 /** Per-test expectations, with no global allowlist. Disposal preserves evidence. */
@@ -26,12 +28,23 @@ export class DiagnosticCollector {
   private expected: Expected[] = [];
   private contexts = new Map<BrowserContext, () => void>();
 
+  /**
+   * Declare a diagnostic this test causes.
+   *
+   * Exact by default: seeing it fewer times than declared fails, because a
+   * disappeared diagnostic usually means the test stopped exercising what it
+   * was written for. `optional` relaxes that to "allowed, up to `count`" —
+   * for a diagnostic that depends on how the app is served rather than on
+   * what the test does, where requiring it would fail the test on one
+   * topology and allowing anything would stop policing it on the other.
+   */
   expect(
     kind: DiagnosticKind,
     message: RegExp,
     reason: string,
     count = 1,
     url?: RegExp,
+    options: { optional?: boolean } = {},
   ): void {
     if (!reason.trim() || !Number.isInteger(count) || count < 1) {
       throw new Error(
@@ -39,7 +52,15 @@ export class DiagnosticCollector {
       );
     }
 
-    this.expected.push({ kind, message, reason, count, url, seen: 0 });
+    this.expected.push({
+      kind,
+      message,
+      reason,
+      count,
+      url,
+      seen: 0,
+      optional: options.optional,
+    });
   }
 
   start(context: BrowserContext): void {
@@ -101,7 +122,9 @@ export class DiagnosticCollector {
       entries,
       expectations,
       unexpected: entries.filter(entry => !entry.expected),
-      missing: expectations.filter(rule => rule.seen !== rule.count),
+      missing: expectations.filter(
+        rule => !rule.optional && rule.seen !== rule.count,
+      ),
     };
   }
 

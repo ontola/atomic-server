@@ -18,19 +18,24 @@ export type CommandListRefType = {
 
 export interface CommandListProps {
   items: SuggestionItem[];
+  ownerDocument?: Document;
   command: (item: SuggestionItem) => void;
 }
 
 const buildItemId = (compId: string, index: number) =>
   `command-list-${compId}-item-${index}`;
 
-const scrollToSelectedItem = (compId: string, index: number) =>
-  document
+const scrollToSelectedItem = (
+  ownerDocument: Document,
+  compId: string,
+  index: number,
+) =>
+  ownerDocument
     .getElementById(buildItemId(compId, index))
     ?.scrollIntoView({ block: 'nearest' });
 
 export const CommandList = forwardRef<CommandListRefType, CommandListProps>(
-  ({ items, command }, ref) => {
+  ({ items, command, ownerDocument = document }, ref) => {
     const compId = useId();
 
     const [selectedIndex, setSelectedIndex] = useState(0);
@@ -56,7 +61,7 @@ export const CommandList = forwardRef<CommandListRefType, CommandListProps>(
             const index = (selectedIndex + items.length - 1) % items.length;
             setSelectedIndex(index);
 
-            scrollToSelectedItem(compId, index);
+            scrollToSelectedItem(ownerDocument, compId, index);
 
             return true;
           }
@@ -65,7 +70,7 @@ export const CommandList = forwardRef<CommandListRefType, CommandListProps>(
             const index = (selectedIndex + 1) % items.length;
             setSelectedIndex(index);
 
-            scrollToSelectedItem(compId, index);
+            scrollToSelectedItem(ownerDocument, compId, index);
 
             return true;
           }
@@ -79,7 +84,7 @@ export const CommandList = forwardRef<CommandListRefType, CommandListProps>(
           return false;
         },
       }),
-      [selectedIndex, items, compId, selectItem],
+      [selectedIndex, items, compId, selectItem, ownerDocument],
     );
 
     return (

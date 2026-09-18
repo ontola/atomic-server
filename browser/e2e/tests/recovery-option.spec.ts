@@ -9,6 +9,13 @@ test.beforeEach(({ browserDiagnostics }) => {
     'warning',
     /^Service Worker registration blocked by Playwright$/,
     'This spec disables the app worker so mocked portal navigation is intercepted.',
+    1,
+    undefined,
+    // Only a production build ships a service worker for Playwright to block:
+    // `VitePWA` does not register one in dev, so against a vite dev server
+    // this warning never happens and requiring it failed the test for a
+    // difference in how the app was served.
+    { optional: true },
   );
 });
 

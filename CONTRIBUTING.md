@@ -37,6 +37,7 @@ Check out the [Roadmap](https://docs.atomicdata.dev/roadmap.html) if you want to
   - [Publishing manually - doing the CI's work](#publishing-manually---doing-the-cis-work)
     - [Building and publishing binaries](#building-and-publishing-binaries)
     - [Publishing to Cargo](#publishing-to-cargo)
+    - [Publishing to npm](#publishing-to-npm)
     - [Publishing server to Docker](#publishing-server-to-docker)
     - [Deploying to atomicdata.dev](#deploying-to-atomicdatadev)
     - [Publishing atomic-cli to WAPM](#publishing-atomic-cli-to-wapm)
@@ -167,6 +168,19 @@ next release reintroduces the bug.
 - When tests fail, first make sure the unit tests are green, then do integration tests, then to e2e.
 - If e2e tests fail, try walking through the steps 1 by 1 either with the playwright debugger, or by simply reproducing the steps in your browser of choice.
 - Feature-branch CI runs Playwright **light** (`@smoke`). `develop` and `v*` tags run the **full** suite. Opt in to full on a branch with a `full-e2e` PR label, `[full-e2e]` in the commit message, or `workflow_dispatch` `e2e_mode=full`. See `planning/e2e-light-heavy.md`.
+
+Feature-specific browser journeys belong in `browser/e2e/tests/` and run through
+the shared CI pipeline. For a focused run with CI's service setup, use Dagger
+from the repository root (with `NETLIFY_TOKEN` set):
+
+```sh
+dagger call end-to-end --netlify-auth-token env://NETLIFY_TOKEN \
+  --playwright-mode full --playwright-grep 'Pets'
+```
+
+Replace the grep expression with any test title or regular expression; a focused
+run uses one shard. Use this for feature iteration instead of adding a
+branch-specific workflow under `.github/workflows/`.
 
 ```sh
 # Make sure nextest is installed
@@ -301,6 +315,7 @@ We believe AI can be useful for improving software while also recognizing that i
 The following should be triggered automatically:
 
 - Push the `v*` tag, a Release will automatically be created on Github with the binaries. This will read `CHANGELOG.md`, so make sure to add the changes from there.
+- The same tag publishes Rust crates to crates.io and `@tomic/*` packages to npm (`latest` for a stable tag, the pre-release identifier — `beta`, `rc`, … — otherwise).
 - The main action required on this repo, is to _update the changelog_ and _tag releases_. The tags trigger the build and publish processes in the CI.
 
 Note:
@@ -400,7 +415,7 @@ environment is already declared, so no workflow change is needed.
 
 ### Publishing manually - doing the CI's work
 
-If the CI scripts for some reason do not do their job (buildin releases, docker file, publishing to cargo), you can follow these instructions:
+If the CI scripts for some reason do not do their job (building releases, docker file, publishing to cargo or npm), you can follow these instructions:
 
 #### Building and publishing binaries
 
@@ -425,6 +440,8 @@ dist-tag, never `latest`. By hand:
 1. `cd browser && pnpm install --frozen-lockfile`
 1. `pnpm --filter @tomic/lib run build`, then the same for `@tomic/react`, `@tomic/cli`, `@tomic/svelte`, `@tomic/create-template`, `@tomic/plugin` and `@tomic/edit-mode`
 1. `pnpm publish -r --no-git-checks --ignore-scripts --access public --tag <latest|beta>`
+   - `--ignore-scripts` skips `prepublishOnly`. Build first (step 2);
+     `@tomic/lib`'s `attw` currently crashes and would fail the publish.
    - Never `pnpm npm publish`: it skips the `workspace:*` rewrite and publishes a package that cannot resolve `@tomic/lib`.
 
 #### Publishing server to Docker

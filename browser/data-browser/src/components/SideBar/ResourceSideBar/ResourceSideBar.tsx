@@ -1,3 +1,4 @@
+import { useWebsiteClass } from '@chunks/Website/useWebsiteClass';
 import {
   Fragment,
   memo,
@@ -75,7 +76,9 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
     // into the tree, then hides them when the class arrives — the sidebar
     // flash on open.
     const classes = resource.getClasses();
+    const websiteClass = useWebsiteClass(classes.join('|'));
     const hideChildren =
+      !!websiteClass ||
       classes.length === 0 ||
       classes.includes(dataBrowser.classes.table) ||
       classes.includes(dataBrowser.classes.chatroom) ||
@@ -235,12 +238,14 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
         >
           {hasSubResources && (
             <>
-              <DropEdge
-                parentHierarchy={hierarchyWithItself}
-                index={0}
-                prevSubject={undefined}
-                nextSubject={subResources[0]}
-              />
+              {!websiteClass && (
+                <DropEdge
+                  parentHierarchy={hierarchyWithItself}
+                  index={0}
+                  prevSubject={undefined}
+                  nextSubject={subResources[0]}
+                />
+              )}
               {subResources.map((child, idx) => (
                 <Fragment key={child}>
                   <ResourceSideBar
@@ -249,12 +254,14 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
                     ancestry={ancestry}
                     onClick={onClick}
                   />
-                  <DropEdge
-                    parentHierarchy={hierarchyWithItself}
-                    index={idx + 1}
-                    prevSubject={child}
-                    nextSubject={subResources[idx + 1]}
-                  />
+                  {!websiteClass && (
+                    <DropEdge
+                      parentHierarchy={hierarchyWithItself}
+                      index={idx + 1}
+                      prevSubject={child}
+                      nextSubject={subResources[idx + 1]}
+                    />
+                  )}
                 </Fragment>
               ))}
             </>

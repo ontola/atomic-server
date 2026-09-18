@@ -10,6 +10,11 @@ pub enum AppErrorType {
     NotFound,
     Unauthorized,
     MethodNotAllowed,
+    /// The request was understood and refused on its merits — a precondition
+    /// the caller can satisfy, not a fault on this side. Without this, a
+    /// refusal reports itself as a crash, and a caller cannot tell "you may
+    /// not do that yet" from "something here is broken".
+    BadRequest,
     /// A write refused by `crate::rate_limit`; rendered as `429` with `Retry-After`.
     TooManyRequests,
     Other,
@@ -23,7 +28,16 @@ pub struct AtomicServerError {
     pub error_resource: Option<Box<Resource>>,
 }
 
-impl AtomicServerError {}
+impl AtomicServerError {
+    /// A refusal the caller can act on, answered as 400 rather than 500.
+    pub fn bad_request(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            error_type: AppErrorType::BadRequest,
+            error_resource: None,
+        }
+    }
+}
 
 impl std::fmt::Debug for AtomicServerError {
     // The derive impl is too verbose, as it includes the full `error_resource`.
@@ -46,6 +60,7 @@ impl ResponseError for AtomicServerError {
         match self.error_type {
             AppErrorType::NotFound => StatusCode::NOT_FOUND,
             AppErrorType::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
+            AppErrorType::BadRequest => StatusCode::BAD_REQUEST,
             AppErrorType::Other => StatusCode::INTERNAL_SERVER_ERROR,
             AppErrorType::Unauthorized => StatusCode::UNAUTHORIZED,
             AppErrorType::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
@@ -98,7 +113,7 @@ impl ResponseError for AtomicServerError {
 
 impl std::fmt::Display for AtomicServerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", &self.message)
+        write!(f, "{}", self.message)
     }
 }
 

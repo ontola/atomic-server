@@ -87,6 +87,7 @@ pub mod expression;
 pub mod genesis;
 pub mod hierarchy;
 pub mod history;
+pub mod import_identity;
 #[doc(hidden)]
 pub mod loro;
 pub mod mapping;
@@ -94,6 +95,7 @@ pub mod metrics;
 pub mod parse;
 #[cfg(feature = "db")]
 pub mod plugins;
+pub mod website;
 
 pub mod populate;
 pub mod resources;

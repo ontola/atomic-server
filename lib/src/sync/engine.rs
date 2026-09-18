@@ -646,6 +646,26 @@ impl CommitIngestOpts {
     }
 }
 
+/// Parse a JSON-AD commit and verify its signature, returning the signer it
+/// proves. This is the identity check alone: no schema, timestamp, rights,
+/// ownership or Loro checks run, and nothing is stored.
+///
+/// Until the Ed25519 signature over the body checks out, the `signer` field
+/// is just a string anyone can put there, so nothing keyed on the signer
+/// (the per-agent write budget, for one) may trust it before this returns
+/// `Ok`. A hub calls this before spending any budget on a `/commit` request;
+/// [`ingest_commit`] verifies again when it applies the commit, which keeps
+/// that path self-contained at the cost of one cheap re-check.
+pub async fn verify_commit_signer(
+    store: &impl crate::Storelike,
+    commit_json: &str,
+) -> crate::errors::AtomicResult<crate::Subject> {
+    let resource = crate::parse::parse_json_ad_commit_resource(commit_json, store).await?;
+    let commit = crate::commit::Commit::from_resource(resource)?;
+    commit.validate_signature(store).await?;
+    Ok(commit.signer)
+}
+
 /// Ingest a signed JSON-AD `COMMIT`, returning the server-created commit
 /// resource as JSON-AD. This is the single implementation shared by the
 /// server's HTTP/WS commit application and peer-transport `COMMIT` frames
@@ -677,10 +697,16 @@ pub async fn ingest_commit(
     commit_json: &str,
     opts: &CommitIngestOpts,
 ) -> crate::errors::AtomicResult<crate::commit::CommitResponse> {
+    let incoming_commit_resource =
+        crate::parse::parse_json_ad_commit_resource(commit_json, store).await?;
+
     // Reject commits with deprecated set/push/remove fields — use loroUpdate instead.
-    if commit_json.contains("\"https://atomicdata.dev/properties/set\"")
-        || commit_json.contains("\"https://atomicdata.dev/properties/push\"")
-        || commit_json.contains("\"https://atomicdata.dev/properties/remove\"")
+    // Checked on the parsed commit's properties, not by substring-matching
+    // the raw body: a commit whose subject *is* one of these Property
+    // resources, or whose values merely mention them, must not be refused.
+    if [crate::urls::SET, crate::urls::PUSH, crate::urls::REMOVE]
+        .iter()
+        .any(|legacy| incoming_commit_resource.get(legacy).is_ok())
     {
         return Err(
             "Commits with `set`, `push`, or `remove` fields are no longer accepted. Use `loroUpdate` instead."
@@ -688,8 +714,6 @@ pub async fn ingest_commit(
         );
     }
 
-    let incoming_commit_resource =
-        crate::parse::parse_json_ad_commit_resource(commit_json, store).await?;
     let incoming_commit = crate::commit::Commit::from_resource(incoming_commit_resource)?;
 
     // Log incoming commit details for debugging
@@ -820,7 +844,6 @@ async fn apply_peer_commit(store: &Db, commit_json: &str) -> crate::errors::Atom
     ingest_commit_json(store, commit_json, &CommitIngestOpts::peer()).await
 }
 
-/// Collects all resource subjects belonging to a drive via BFS on parent relationships.
 /// Collects all resource subjects belonging to a drive via BFS on parent relationships.
 /// Returns pure_id() strings (no query params/drive hints) to match LoroSnapshot keys.
 pub async fn collect_drive_subjects(
@@ -1527,10 +1550,21 @@ pub async fn import_sync_push(
             .await
             .ok();
         if let Some(existing) = &existing_resource {
-            let stored_drive = existing
-                .get(crate::urls::DRIVE_PROP)
-                .map(|v| v.to_string())
-                .unwrap_or_else(|_| existing.get_subject().to_string());
+            let stored_drive = if let Ok(drive) = existing.get(crate::urls::DRIVE_PROP) {
+                drive.to_string()
+            } else if let Ok(parent) = existing.get(crate::urls::PARENT) {
+                let parent_subject = crate::Subject::from(parent.to_string());
+                if let Ok(parent_resource) = store.get_resource(&parent_subject).await {
+                    parent_resource
+                        .get(crate::urls::DRIVE_PROP)
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|_| parent_subject.to_string())
+                } else {
+                    existing.get_subject().to_string()
+                }
+            } else {
+                existing.get_subject().to_string()
+            };
             if normalize(&stored_drive) != admitted_drive {
                 tracing::warn!(
                     "import_sync_push: {} belongs to drive {}, not to {} this push was admitted for; skipped",
@@ -1548,7 +1582,8 @@ pub async fn import_sync_push(
         {
             match AtomicLoroDoc::from_snapshot(&existing) {
                 Ok(d) => {
-                    // Import as delta
+                    // A SYNC_PUSH may carry either an incremental update or a
+                    // complete snapshot; Loro accepts both and merges them.
                     if d.import_update(&entry.loro_bytes).is_err() {
                         tracing::warn!(
                             "import_sync_push: delta import failed for {}",
@@ -1636,13 +1671,13 @@ pub async fn import_sync_push(
             has_strokes,
         );
 
-        if store
-            .add_resource_opts(&resource, false, true, true)
+        store
+            .persist_replicated_resource(&resource)
             .await
-            .is_err()
-        {
-            continue;
-        }
+            .map_err(|error| SyncPushRejected {
+                drive: push.drive.clone(),
+                reason: format!("Failed to persist {}: {error}", entry.subject),
+            })?;
         count += 1;
         imported.insert(snapshot_key.clone());
 
@@ -1933,6 +1968,61 @@ mod bootstrap_and_sub_tests {
             .get(Tree::LoroSnapshots, subject.as_bytes())
             .unwrap()
             .is_some());
+    }
+
+    #[tokio::test]
+    async fn parent_only_existing_resource_cannot_be_pushed_through_another_drive() {
+        let db = Db::init_temp("parent_only_existing_cross_drive")
+            .await
+            .unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let other_drive = "https://localhost/other-drive";
+        db.add_resource_opts(&crate::Resource::new(other_drive.into()), false, true, true)
+            .await
+            .unwrap();
+
+        let subject = "https://localhost/parent-only-child";
+        let mut child = crate::Resource::new(subject.into());
+        child
+            .set_unsafe(
+                crate::urls::PARENT.into(),
+                crate::Value::AtomicUrl(drive.clone().into()),
+            )
+            .unwrap();
+        child
+            .set_unsafe(
+                crate::urls::NAME.into(),
+                crate::Value::String("Original".into()),
+            )
+            .unwrap();
+        db.add_resource_opts(&child, false, true, true)
+            .await
+            .unwrap();
+
+        let mut incoming = db.get_resource(&subject.into()).await.unwrap();
+        incoming
+            .set_unsafe(
+                crate::urls::NAME.into(),
+                crate::Value::String("Must not land".into()),
+            )
+            .unwrap();
+        let bytes = incoming.build_state_doc().unwrap().export_snapshot();
+        let frame = protocol::encode_sync_push(other_drive, &[(subject, bytes.as_slice())], true);
+        let push = protocol::decode_sync_push(&frame[1..]).unwrap();
+
+        let (count, _) = import_sync_push(&push, &db, &ForAgent::Sudo, false)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+        assert_eq!(
+            db.get_resource(&subject.into())
+                .await
+                .unwrap()
+                .get(crate::urls::NAME)
+                .unwrap()
+                .to_string(),
+            "Original"
+        );
     }
 
     #[tokio::test]

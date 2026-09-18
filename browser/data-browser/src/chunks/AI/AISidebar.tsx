@@ -37,6 +37,7 @@ import { useAISettings } from '@components/AI/AISettingsContext';
 import { DEFAULT_AICHAT_NAME } from '@components/AI/aiContstants';
 import { usePrivateDrive } from '@hooks/usePrivateDrive';
 import toast from 'react-hot-toast';
+import { userTiming } from '@helpers/userTiming';
 
 const handleSidebarMessageSaveError = (error: unknown) => {
   console.error(error);
@@ -52,9 +53,15 @@ const AISidebar: React.FC = () => {
     contextItems,
     setContextItems,
     setIsOpen,
+    openChat,
+    pendingChat,
+    clearPendingChat,
     pendingAsk,
     clearPendingAsk,
   } = useAISidebar();
+  const prepareToLeaveRef = useRef<(() => Promise<void>) | undefined>(
+    undefined,
+  );
   const [autoSubmitMessage, setAutoSubmitMessage] = useState<string>();
   const { privateDrive } = usePrivateDrive();
 
@@ -67,6 +74,9 @@ const AISidebar: React.FC = () => {
   const messagesRef = useRef<AtomicUIMessage[]>([]);
   const [chatResource, setChatResource] = useState<Resource<Ai.AiChat>>();
   const chatResourceRef = useRef<Resource<Ai.AiChat> | undefined>(undefined);
+  const chatEmoji = chatResource?.get(dataBrowser.properties.emoji) as
+    | string
+    | undefined;
   const [isChatSaved, setIsChatSaved] = useState(false);
   const isChatSavedRef = useRef(false);
   // Draft creation starts on the first message; store the in-flight promise so
@@ -215,12 +225,14 @@ const AISidebar: React.FC = () => {
   };
 
   const addNewMessage = (message: AtomicUIMessage) => {
-    const newMessages = [...messagesRef.current, message];
+    const newMessages = messagesRef.current.some(m => m.id === message.id)
+      ? messagesRef.current.map(m => (m.id === message.id ? message : m))
+      : [...messagesRef.current, message];
 
     messagesRef.current = newMessages;
     setMessages(newMessages);
 
-    persistSidebarMessage({
+    return persistSidebarMessage({
       message,
       newMessages,
       store,
@@ -315,6 +327,27 @@ const AISidebar: React.FC = () => {
     // Consume the handoff once, including when the panel was initially closed.
     clearPendingAsk();
   }, [pendingAsk, startNewChat, setContextItems, clearPendingAsk]);
+
+  useEffect(() => {
+    if (!pendingChat) return;
+    // Consume the request before doing the work. `startNewChat` clears the
+    // context items, which hands this effect new callback identities while
+    // the chat is still loading; with the request still pending, that re-ran
+    // the effect and loaded the same chat a second time.
+    clearPendingChat();
+    void (async () => {
+      const timing = userTiming('chat:sidebar');
+      await prepareToLeaveRef.current?.();
+      timing.step('leave');
+      startNewChat();
+      timing.step('reset');
+      if (pendingChat.subject) await loadExistingChat(pendingChat.subject);
+      timing.step('load');
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => timing.step('render')),
+      );
+    })().catch(error => store.notifyError(error));
+  }, [pendingChat, clearPendingChat, startNewChat, loadExistingChat, store]);
 
   const onRegenerateMessage = async (message: AtomicUIMessage) => {
     const isHistorical = compactedMessages.some(m => m.id === message.id);
@@ -470,6 +503,7 @@ const AISidebar: React.FC = () => {
         initialMessages={messages}
         historicalMessages={compactedMessages}
         onNewMessage={addNewMessage}
+        prepareToLeave={prepareToLeaveRef}
         onCompacted={handleCompacted}
         onSummaryDeleted={handleSummaryDeleted}
         externalContextItems={contextItems}
@@ -482,13 +516,16 @@ const AISidebar: React.FC = () => {
           <Row center gap='0.5ch'>
             <IconButton
               title='New Chat'
-              onClick={startNewChat}
+              onClick={() => openChat()}
               color='textLight'
               style={{ alignSelf: 'flex-end' }}
             >
               <FaPlus />
             </IconButton>
-            <Heading>Atomic Assistant</Heading>
+            <Heading>
+              {chatEmoji && <span aria-hidden>{chatEmoji} </span>}
+              {chatResource?.title || 'Atomic Assistant'}
+            </Heading>
           </Row>
           <Row center gap='0.5ch'>
             <IconButton

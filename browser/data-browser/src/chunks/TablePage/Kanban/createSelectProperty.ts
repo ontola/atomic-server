@@ -242,16 +242,20 @@ export async function createPropertyOnClass(
 
 /**
  * Attaches an already-existing select property to a new table instead of
- * minting a duplicate that would share its shortname. The caller's requested
- * options must already exist among the property's tags — silently adding new
- * options to a property shared by other tables/columns would surprise them.
+ * minting a duplicate that would share its shortname.
+ *
+ * Only when it can answer for every option the caller asked for: silently
+ * adding options to a property other tables/columns already use would
+ * surprise them, and a "Status" of Want to read / Reading / Finished is not
+ * the same property as a "Status" of Todo / Doing / Done. Returns undefined
+ * for that case so the caller mints its own under a disambiguated shortname.
  */
 async function reuseSelectProperty(
   store: Store,
   tableClass: Resource,
   existing: Resource,
   opts: { name: string; tags: TagSeed[]; deferAttach?: boolean },
-): Promise<CreatedSelectProperty> {
+): Promise<CreatedSelectProperty | undefined> {
   const optionSubjects = (existing.get(core.properties.allowsOnly) ??
     []) as string[];
   // Tags are created with only a shortname (see below) — no `core:name` — so
@@ -274,9 +278,7 @@ async function reuseSelectProperty(
     const subject = subjectByShortname[stringToSlug(seed.name)];
 
     if (!subject) {
-      throw new Error(
-        `Shared property "${opts.name}" has no option "${seed.name}"`,
-      );
+      return undefined;
     }
 
     tagsByName[seed.name] = subject;
@@ -322,7 +324,14 @@ export async function createSelectPropertyOnClass(
 
     if (existing) {
       if (isCompatibleSelectProperty(existing)) {
-        return reuseSelectProperty(store, tableClass, existing, opts);
+        const reused = await reuseSelectProperty(
+          store,
+          tableClass,
+          existing,
+          opts,
+        );
+
+        if (reused) return reused;
       }
 
       // A different, incompatible property already owns this shortname —

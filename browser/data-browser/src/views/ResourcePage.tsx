@@ -1,6 +1,10 @@
+import { LocalThoughtSync } from '@chunks/PluginRuns/LocalThoughtSyncPanel';
+import { useWebsiteClass } from '@chunks/Website/useWebsiteClass';
+import { ImportResolutionNotice } from '@chunks/PluginRuns/ImportResolutionNotice';
 import { useEffect, useState, lazy, Suspense } from 'react';
 import {
   useResource,
+  useStore,
   Resource,
   type OptionalClass,
   dataBrowser,
@@ -41,6 +45,9 @@ import { PluginPage } from '@views/Plugin/PluginPage';
 import { useCustomViews } from '@components/CustomViewProvider';
 import { PluginView } from './PluginView/PluginView';
 import { MeetingPage } from './Meeting/MeetingPage';
+import { PluginPage as AtomicPluginPage } from '@chunks/PluginRuns/PluginPage';
+import { useIsPlugin } from '@chunks/PluginRuns/PluginSection';
+import { useAppClass } from '@chunks/PluginRuns/runScript';
 
 const TablePage = lazy(() =>
   import('../chunks/TablePage').then(m => ({ default: m.TablePage })),
@@ -50,6 +57,19 @@ const DashboardPage = lazy(() =>
   import('../chunks/DashboardPage').then(m => ({ default: m.DashboardPage })),
 );
 
+const WebsiteExportPage = lazy(() =>
+  import('@chunks/Website/WebsiteExportPage').then(m => ({
+    default: m.WebsiteExportPage,
+  })),
+);
+const WebsitePage = lazy(() =>
+  import('@chunks/Website/WebsitePage').then(m => ({ default: m.WebsitePage })),
+);
+
+const AppPage = lazy(() =>
+  import('../chunks/AppPage').then(m => ({ default: m.AppPage })),
+);
+
 /** These properties are passed to every View at Page level */
 export type ResourcePageProps<Subject extends OptionalClass = never> = {
   resource: Resource<Subject>;
@@ -57,6 +77,7 @@ export type ResourcePageProps<Subject extends OptionalClass = never> = {
 
 type Props = {
   subject: string;
+  websiteVersion?: string;
 };
 
 /**
@@ -64,11 +85,20 @@ type Props = {
  * is rendered prominently at the top. If the Resource has a
  * particular Class, it will render a different Component.
  */
-const ResourcePage: React.FC<Props> = ({ subject }) => {
+const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
   const resource = useResource(subject);
   const { getPluginForClass, loading } = useCustomViews();
   const [isAList] = useArray(resource, core.properties.isA);
   const isA = isAList[0];
+  const isPlugin = useIsPlugin(resource);
+  const store = useStore();
+  const drive = store.getDrive();
+  const appClass = useAppClass(drive);
+  const websiteClass = useWebsiteClass(isAList.join('|'));
+  const websiteExportClass = useWebsiteClass(
+    isAList.join('|'),
+    'website-export',
+  );
 
   // The body can have an inert attribute when the user navigated from an open dialog.
   // we remove it to make the page interactive again.
@@ -154,6 +184,62 @@ const ResourcePage: React.FC<Props> = ({ subject }) => {
   if (ReturnComponent === ResourcePageDefault) {
     if (loading) return null;
 
+    if (
+      (websiteClass && resource.hasClasses(websiteClass)) ||
+      (websiteExportClass && resource.hasClasses(websiteExportClass))
+    ) {
+      return (
+        <Main subject={subject}>
+          <ErrorBoundary>
+            <Suspense fallback={<Spinner />}>
+              {websiteExportClass ? (
+                <WebsiteExportPage resource={resource} />
+              ) : (
+                <>
+                  {websiteVersion ? (
+                    <WebsiteExportPage
+                      resource={resource}
+                      deployment={websiteVersion}
+                    />
+                  ) : (
+                    <WebsitePage resource={resource} />
+                  )}
+                </>
+              )}
+            </Suspense>
+          </ErrorBoundary>
+        </Main>
+      );
+    }
+
+    // Like a plugin's, an app's class is minted per drive, so it cannot be a
+    // case in `selectComponent`. An app opens to its own view.
+    if (appClass !== undefined && resource.hasClasses(appClass)) {
+      return (
+        <Main subject={subject}>
+          <ErrorBoundary>
+            <Suspense fallback={<Spinner />}>
+              <AppPage resource={resource} />
+            </Suspense>
+          </ErrorBoundary>
+        </Main>
+      );
+    }
+
+    // A plugin's class is minted per drive, so it has no fixed subject and
+    // cannot be a case in `selectComponent`. It gets a real page all the same.
+    if (isPlugin) {
+      return (
+        <Main subject={subject}>
+          <ErrorBoundary>
+            <Suspense fallback={<Spinner />}>
+              <AtomicPluginPage resource={resource} drive={drive!} />
+            </Suspense>
+          </ErrorBoundary>
+        </Main>
+      );
+    }
+
     const plugin = getPluginForClass(isA);
 
     if (plugin) {
@@ -178,6 +264,8 @@ const ResourcePage: React.FC<Props> = ({ subject }) => {
           <ForkBar resource={resource} />
           {/* And on the original: the forks proposing changes to it. */}
           <PendingForks resource={resource} />
+          <ImportResolutionNotice resource={resource} />
+          <LocalThoughtSync resource={resource} />
           <ReturnComponent resource={resource} />
         </Suspense>
       </ErrorBoundary>

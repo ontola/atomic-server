@@ -42,7 +42,12 @@ export const AssistantMessage: React.FC<AssistantMessageProps> = ({
 
         if (part.type === 'reasoning') {
           return (
-            <ReasoningMessage key={index} text={part.text} state={part.state} />
+            <ReasoningMessage
+              key={index}
+              text={part.text}
+              state={part.state}
+              interrupted={!!message.metadata?.error}
+            />
           );
         }
 

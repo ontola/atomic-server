@@ -5,7 +5,6 @@ import {
   type SuggestionProps,
 } from '@tiptap/suggestion';
 import { computePosition, flip, inline, shift } from '@floating-ui/dom';
-import styles from '../floatingMenu.module.css';
 
 import {
   CommandList,
@@ -50,29 +49,48 @@ export const SlashCommands = Extension.create({
 export const createRenderFunction =
   <ItemType>(container: HTMLElement): SuggestionOptions<ItemType>['render'] =>
   () => {
-    let component: ReactRenderer<CommandListRefType, CommandListProps>;
+    let component:
+      | ReactRenderer<CommandListRefType, CommandListProps>
+      | undefined;
+
+    // Escape and `onExit` both end the popup, and either can run first — the
+    // list is dismissed with Escape and @tiptap/suggestion then exits the
+    // same suggestion. Dropping the reference as it is destroyed keeps the
+    // later call from unmounting an already-unmounted renderer, and keeps
+    // `onUpdate`/`onKeyDown` from addressing one: both bail on a missing
+    // `component`, but neither could tell a live renderer from a dead one.
+    const destroyComponent = () => {
+      component?.destroy();
+      component = undefined;
+    };
 
     const updatePosition = (props: SuggestionProps<ItemType, ItemType>) => {
       if (!props.decorationNode) {
         return;
       }
 
-      computePosition(props.decorationNode, component.element, {
+      const element = component.element;
+      // Adopt into the editor document before measuring iframe coordinates.
+      container.appendChild(element);
+      Object.assign(element.style, {
+        position: 'absolute',
+        width: 'max-content',
+        zIndex: '1000',
+      });
+      computePosition(props.decorationNode, element, {
         placement: 'bottom-start',
         middleware: [flip(), shift(), inline()],
       }).then(({ x, y }) => {
-        component.element.style.setProperty('--left', `${x}px`);
-        component.element.style.setProperty('--top', `${y}px`);
-        container.appendChild(component.element);
+        element.style.left = `${x}px`;
+        element.style.top = `${y}px`;
       });
     };
 
     return {
       onStart(props) {
         component = new ReactRenderer(CommandList, {
-          props,
+          props: { ...props, ownerDocument: container.ownerDocument },
           editor: props.editor,
-          className: styles.renderer,
         });
 
         // Set the initial position, this position might be obstructed so we update the position again after we render the elements.
@@ -98,7 +116,7 @@ export const createRenderFunction =
         }
 
         if (props.event.key === 'Escape') {
-          component.destroy();
+          destroyComponent();
 
           return true;
         }
@@ -115,11 +133,7 @@ export const createRenderFunction =
         // `await` in @tiptap/suggestion's plugin view update. If the editor
         // is destroyed in that window, `onExit` can fire before `onStart`
         // ever ran.
-        if (!component) {
-          return;
-        }
-
-        component.destroy();
+        destroyComponent();
       },
     };
   };

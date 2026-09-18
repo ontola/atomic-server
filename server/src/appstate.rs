@@ -36,6 +36,9 @@ pub struct AppState {
     /// manifest endpoint so the welcome screen can route account creation to the
     /// dashboard.
     pub managed_dashboard_url: Arc<std::sync::RwLock<Option<String>>>,
+    /// Short-lived capabilities that let a null-origin plugin iframe read the
+    /// one plugin's source it was opened for. See `plugins::view_token`.
+    pub view_tokens: Arc<crate::plugins::view_token::ViewTokens>,
     /// Per-agent and per-peer budgets for the write endpoints; see
     /// `crate::rate_limit`. Sized from `--write-rate-limit` and
     /// `--anonymous-write-rate-limit`.
@@ -65,6 +68,17 @@ impl AppState {
         .await?;
 
         crate::blob_storage::configure(&mut store).await?;
+        // Before anything reads or writes a secret, so nothing is stored in
+        // the clear during startup and then silently left that way.
+        store.set_node_key(crate::node_key::load_or_create(&config.config_dir)?);
+
+        // `config.toml` holds this server's agent secret and was created
+        // world-readable by every version before this one. Narrowed on every
+        // boot rather than at setup, so an existing installation is fixed by
+        // upgrading rather than by someone reading a release note.
+        if let Err(e) = crate::node_key::restrict(&config.config_file_path) {
+            tracing::warn!("could not restrict the config file: {e}");
+        }
 
         // Drop the persisted watched-query registry on startup. Every
         // entry was registered by a now-dead WS connection; live
@@ -145,15 +159,12 @@ impl AppState {
 
         set_default_agent(&config, &store).await?;
 
-        let should_init = !&config.store_path.exists() || config.initialize;
-        // If the store is empty, populate the core models (classes, properties, etc.).
-        // We don't create a Drive here anymore; that's handled in the data-browser (new identity flow).
-        if should_init {
-            tracing::info!("Initialize: bootstrapping core models...");
-            atomic_lib::populate::bootstrap(&store)
-                .await
-                .map_err(|e| format!("Failed to bootstrap store. {}", e))?;
-        } else if config.repopulate_defaults {
+        // The core models (classes, properties, default ontologies) are seeded
+        // by `Db::init_redb_file` above: `populate::bootstrap` runs on every
+        // open and seeds a fresh store, or adds what a newer build brought.
+        // We don't create a Drive here; that's handled in the data-browser
+        // (new identity flow).
+        if config.repopulate_defaults {
             // Forced re-seed of the built-in base models + `lib/defaults/*.json`
             // into an already-seeded store, ignoring the defaults fingerprint.
             // Normally unnecessary: `Db` open (`bootstrap`) already re-seeds
@@ -211,7 +222,10 @@ impl AppState {
         };
         store.set_handle_commit(Box::new(send_commit));
 
-        if should_init && vector_search_state.is_enabled() {
+        // `config.initialize` is `--initialize`, or "the store did not exist
+        // when the config was built" — decided before `Db::init_redb_file`
+        // created the store directory above.
+        if config.initialize && vector_search_state.is_enabled() {
             tracing::info!("Adding all resources to vector search index");
             if let Err(e) = vector_search_state.add_all_resources(&store).await {
                 tracing::error!("Failed to add all resources to vector search index: {}", e);
@@ -230,6 +244,7 @@ impl AppState {
             index_status_broadcast,
             managed: server_info.managed,
             managed_dashboard_url: server_info.managed_dashboard_url,
+            view_tokens: Arc::new(Default::default()),
         })
     }
 

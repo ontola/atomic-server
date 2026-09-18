@@ -178,21 +178,27 @@ describe('table column creation dedupes ontology shortnames', () => {
     expect(property.hasClasses(dataBrowser.classes.selectProperty)).toBe(true);
   });
 
-  it('rejects requesting an option the reused select property does not have', async () => {
+  it('mints its own when the existing select lacks a requested option', async () => {
     const store = fakeStore();
     const { rowClassA, rowClassB } = await twoTablesOnOneOntology(store);
 
-    await createSelectPropertyOnClass(store, rowClassA, {
+    const first = await createSelectPropertyOnClass(store, rowClassA, {
       name: 'Status',
       tags: STATUS_TAGS,
     });
 
-    await expect(
-      createSelectPropertyOnClass(store, rowClassB, {
-        name: 'Status',
-        tags: [{ name: 'Todo' }, { name: 'Blocked' }],
-      }),
-    ).rejects.toThrow('has no option "Blocked"');
+    // A reading list's "Status" (Want to read / Reading) is a different
+    // property from a task's, so it gets its own shortname rather than
+    // failing or quietly growing the other one's options.
+    const second = await createSelectPropertyOnClass(store, rowClassB, {
+      name: 'Status',
+      tags: [{ name: 'Todo' }, { name: 'Blocked' }],
+    });
+
+    expect(second.subject).not.toBe(first.subject);
+    const property = await store.getResource(second.subject);
+    expect(property.get(core.properties.shortname)).toBe('status-2');
+    expect(Object.keys(second.tags).sort()).toEqual(['Blocked', 'Todo']);
   });
 
   it('does not dedupe when the row classes have no shared ontology', async () => {

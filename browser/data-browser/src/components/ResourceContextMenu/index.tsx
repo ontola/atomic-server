@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Client } from '@tomic/react';
+import { Client, useDrive } from '@tomic/react';
 import { DIVIDER, DropdownMenu, isItem, DropdownItem } from '../Dropdown';
 import { AutoOpenTrigger } from '../Dropdown/AutoOpenTrigger';
 import { DropdownTriggerComponent } from '../Dropdown/DropdownTrigger';
@@ -15,6 +15,8 @@ import { resourceActions } from '../../actions/resourceActions';
 import { useActionContext } from '../../actions/useActionContext';
 import { runAction } from '../../actions/runAction';
 import type { ActionDefinition } from '../../actions/types';
+import { RunPluginDialog } from '@chunks/PluginRuns/RunPluginDialog';
+import { usePluginClass } from '@chunks/PluginRuns/runScript';
 import { useCustomContextItemsContext } from './CustomContextItemsContext';
 import { CoverPickerDialog, EmojiPickerDialog } from '../ResourceDecorations';
 import { ResourceInline } from '../../views/ResourceInline';
@@ -116,6 +118,10 @@ export function ResourceContextMenu({
   // undefined = never opened (dialog not mounted), boolean = mounted.
   const [emojiPickerOpen, setEmojiPickerOpen] = useState<boolean>();
   const [coverPickerOpen, setCoverPickerOpen] = useState<boolean>();
+  const [pluginRunOpen, setPluginRunOpen] = useState<boolean>();
+  const openPluginRun = useCallback(() => setPluginRunOpen(true), []);
+  const [currentDrive] = useDrive();
+  const pluginClass = usePluginClass(currentDrive);
   const openEmojiPicker = useCallback(() => setEmojiPickerOpen(true), []);
   const openCoverPicker = useCallback(() => setCoverPickerOpen(true), []);
   const ctx = useActionContext(subject, {
@@ -124,6 +130,8 @@ export function ResourceContextMenu({
     showCodeUsageDialog: openCodeUsageDialog,
     openEmojiPicker,
     openCoverPicker,
+    openPluginRun,
+    pluginClass,
   });
   const { items: customItems } = useCustomContextItemsContext();
   // Try to not have a useResource hook in here, as that will lead to many costly fetches when the user enters a new subject
@@ -211,10 +219,15 @@ export function ResourceContextMenu({
     });
   }
 
-  // Add custom items from context (if any) before filtering
+  // Page-specific actions lead; the menu owns their boundary with generic actions.
+  // Older callers include a leading/trailing divider, which must not leak here.
+  const pageItems = subject === ctx.currentSubject ? [...customItems] : [];
+  while (pageItems[0] === DIVIDER) pageItems.shift();
+  while (pageItems.at(-1) === DIVIDER) pageItems.pop();
   const allItems = [
+    ...pageItems,
+    ...addIf(pageItems.length > 0 && items.length > 0, DIVIDER),
     ...items,
-    ...addIf(subject === ctx.currentSubject, ...customItems),
   ];
 
   const filteredItems = showOnly
@@ -292,6 +305,14 @@ export function ResourceContextMenu({
           resource={ctx.resource}
           show={coverPickerOpen}
           onShowChange={setCoverPickerOpen}
+        />
+      )}
+      {pluginRunOpen !== undefined && ctx.drive !== undefined && (
+        <RunPluginDialog
+          resource={ctx.resource}
+          drive={ctx.drive}
+          show={pluginRunOpen}
+          onShowChange={setPluginRunOpen}
         />
       )}
     </>

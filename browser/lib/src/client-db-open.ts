@@ -31,11 +31,15 @@ export const WRONG_KEY_MARKER = 'ATOMIC_DB_WRONG_KEY';
 /** The subset of the generated WASM module that opening a database needs. */
 export interface ClientDbWasm {
   ClientDb: {
-    open: (
+    /**
+     * wasm-bindgen renders this async factory as a static method rather than
+     * a `new`-able constructor — async constructors produce invalid TS.
+     */
+    open(
       baseUrl?: string,
       dbName?: string,
       dbKey?: Uint8Array,
-    ) => Promise<unknown>;
+    ): Promise<unknown>;
   };
   /** Added alongside the self-heal; absent in older WASM builds. */
   deleteClientDb?: (dbName: string) => Promise<boolean>;

@@ -21,7 +21,7 @@ import { Panel, usePanelList } from './usePanelList';
 import { SIDEBAR_WIDTH_PROP } from './SidebarCSSVars';
 import { useRef, type JSX } from 'react';
 import { CalculatedPageHeight } from '../../globalCssVars';
-import { AIChatsPanel } from './AIPanel';
+import { AIChatsPanel, NewSidebarChatButton } from './AIPanel';
 import { ChromeTheme } from '../../styling';
 
 /** Amount of pixels where the sidebar automatically shows */
@@ -97,7 +97,12 @@ export function SideBar(): JSX.Element {
             <Column gap='0.5rem' align='stretch'>
               <SideBarHomePanels onItemClick={closeSideBar} />
               {enabledPanels.has(Panel.AIChats) && (
-                <SideBarPanel title='AI Chats' key={drive}>
+                <SideBarPanel
+                  title='AI Chats'
+                  data-testid='ai-chats-panel'
+                  key={drive}
+                  actions={<NewSidebarChatButton />}
+                >
                   <AIChatsPanel />
                 </SideBarPanel>
               )}

@@ -9,11 +9,44 @@ import { AIProvider } from '@components/AI/aiContstants';
 const titleSystemPrompt = `You are a specialized AI system that generates titles for AI conversations.
 You will be given the first part of a conversation between the user and an AI assistant.
 Think of a short title that fits the given conversation. This title will be shown in the UI as the title of the conversation.
+Also pick ONE emoji that represents the topic of the conversation; it is shown next to the title.
 
 ALWAYS write the title in the same natural language as the user's own message text.
 Do NOT use the language of quoted text, existing titles, URLs, resource names, or language names mentioned by the user.
-Respond with only the title text. Do not wrap it in JSON, quotes, markdown, or commentary.
+Respond with exactly one line: the emoji, a single space, then the title text. Do not wrap it in JSON, quotes, markdown, or commentary.
+Example: 🥐 Bakery website
 `;
+
+export interface ChatTitle {
+  title: string;
+  emoji?: string;
+}
+
+// A leading emoji (including skin tones, variation selectors and ZWJ
+// sequences) followed by whitespace and the title.
+const emojiTitlePattern =
+  /^((?:\p{Extended_Pictographic}|\p{Emoji_Presentation})(?:\uFE0F|\p{Emoji_Modifier}|\u200D(?:\p{Extended_Pictographic}|\p{Emoji_Presentation}))*)\s+(.+)$/u;
+const trailingEmojiPattern =
+  /(?:\s*(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})(?:\uFE0F|\p{Emoji_Modifier}|\u200D(?:\p{Extended_Pictographic}|\p{Emoji_Presentation}))*)+$/u;
+
+/** Splits "🥐 Bakery website" into emoji and title; a bare title keeps no emoji. */
+export function parseChatTitle(
+  line: string | undefined,
+): ChatTitle | undefined {
+  const text = line?.trim();
+
+  if (!text) return undefined;
+
+  const match = text.match(emojiTitlePattern);
+
+  // Some models decorate both ends; the title itself should carry no emoji.
+  const strip = (title: string) =>
+    title.replace(trailingEmojiPattern, '').trim();
+
+  return match
+    ? { emoji: match[1], title: strip(match[2]) }
+    : { title: strip(text) };
+}
 
 const generateFollowUpQuestionsSystemPrompt = (
   conversation: string,
@@ -82,7 +115,7 @@ ${convoString}
 `,
         });
 
-        return cleanGeneratedTextLine(text);
+        return parseChatTitle(cleanGeneratedTextLine(text));
       },
     );
   };

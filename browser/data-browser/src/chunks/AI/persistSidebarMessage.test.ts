@@ -56,7 +56,7 @@ function args(
     messageToResourceMapRef: { current: new Map() },
     setIsChatSaved: () => undefined,
     shouldGenerateTitles: true,
-    generateTitle: async () => 'A good title',
+    generateTitle: async () => ({ title: 'A good title', emoji: '\u{1F4A1}' }),
     ...overrides,
   } as unknown as PersistSidebarMessageArgs;
 }
@@ -90,6 +90,8 @@ describe('persistSidebarMessage', () => {
     // Before any reply exists. This is the whole fix: the model may take
     // minutes, and until now that was minutes of holding the only copy in a
     // JavaScript variable.
+    // The React setter is deliberately deferred/no-op in this fixture.
+    expect(serverPersisted).toContain('message-user');
     expect(saved).toContain('chat-1');
     expect(isChatSavedRef.current).toBe(true);
   });
@@ -125,6 +127,23 @@ describe('persistSidebarMessage', () => {
     });
 
     expect(chat.get(NAME)).toBe('A good title');
+  });
+
+  it('names the chat as soon as the question is asked, with an emoji', async () => {
+    // Chats whose reply never arrived used to stay "Untitled Chat" for ever,
+    // which filled the sidebar with anonymous entries.
+    const chat = fakeChat();
+
+    await persistSidebarMessage({
+      ...args(chat),
+      message: message('user'),
+      newMessages: [message('user')],
+    });
+
+    await vi.waitFor(() => expect(chat.get(NAME)).toBe('A good title'));
+    expect(chat.get('https://atomicdata.dev/properties/emoji')).toBe(
+      '\u{1F4A1}',
+    );
   });
 
   it('leaves a chat that already has a name alone', async () => {

@@ -1,0 +1,113 @@
+# Publishes the floating `:develop` docker image on demand, without waiting
+# for the main pipeline.
+#
+# The pipeline is still the normal way `:develop` moves (main-ci.yml's
+# `images` job, gated on a green `ci`). This exists for the case that job
+# cannot reach: the pipeline is red or wedged for reasons that have nothing
+# to do with whether the binary builds, and `:develop` is meanwhile sitting
+# days behind the branch it is supposed to track. That happened between
+# 2026-09-15 and 2026-09-18, and there was no way to ship an image short of
+# running `dagger call` by hand on the runner.
+#
+# Deliberately manual. Nothing triggers this on a push, so publishing an
+# unvalidated image is always someone's decision, on a named commit.
+#
+# Versioned tags are not this workflow's business — release.yml publishes
+# those from a `v*` tag, and the guard below refuses `latest` outright.
+
+name: Publish :develop image
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit or branch to build the image from.
+        required: false
+        default: develop
+        type: string
+      tags:
+        description: >-
+          Comma-separated image references. Bare names are prefixed with
+          `joepmeneer/atomic-server:` by the Dagger function.
+        required: false
+        default: joepmeneer/atomic-server:develop,ghcr.io/ontola/atomic-server:develop
+        type: string
+
+# Mancave, for the same reason the pipeline prefers it: three musl targets
+# are built here, and a cold cross-compile of all of them on a hosted runner
+# is hours of work Dagger would otherwise have cached.
+jobs:
+  publish:
+    name: Build and publish
+    runs-on: ${{ fromJSON(vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]') }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Refuse to move a release tag
+        env:
+          TAGS: ${{ inputs.tags }}
+        run: |
+          set -euo pipefail
+          IFS=',' read -ra refs <<< "$TAGS"
+          for ref in "${refs[@]}"; do
+            ref="${ref#"${ref%%[![:space:]]*}"}"
+            ref="${ref%"${ref##*[![:space:]]}"}"
+            [ -n "$ref" ] || continue
+            # Everything after the last colon that is not part of a registry
+            # host:port — i.e. the tag component.
+            tag="${ref##*:}"
+            case "$tag" in
+              latest|v[0-9]*)
+                echo "::error::Refusing to publish '$ref'. Release tags are published by release.yml from a v* git tag."
+                exit 1
+                ;;
+            esac
+          done
+          echo "Publishing: $TAGS"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Isolate Docker credentials for this job
+        shell: bash
+        run: |
+          docker_config=$(mktemp -d "$RUNNER_TEMP/docker-config.XXXXXX")
+          echo "DOCKER_CONFIG=$docker_config" >> "$GITHUB_ENV"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: joepmeneer
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Dagger docker images (build images & publish)
+        uses: dagger/dagger-for-github@8.0.0
+        with:
+          version: "latest"
+          cloud-token: ${{ secrets.DAGGER_CLOUD_TOKEN }}
+          verb: call
+          args: create-docker-images --tags ${{ inputs.tags }}
+
+      - name: Say what shipped
+        run: |
+          {
+            echo "### Published"
+            echo
+            echo "Built from \`${{ inputs.ref }}\` and pushed:"
+            echo
+            echo '```'
+            echo "${{ inputs.tags }}" | tr ',' '\n'
+            echo '```'
+            echo
+            echo "This image did **not** go through the main pipeline."
+          } >> "$GITHUB_STEP_SUMMARY"

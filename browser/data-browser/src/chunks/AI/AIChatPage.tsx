@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Ai,
   ai,
+  dataBrowser,
   useArray,
   useCanWrite,
   useStore,
@@ -26,6 +27,7 @@ import { RealAIChat } from './RealAIChat';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { styled } from 'styled-components';
 import { consumePendingFirstMessage } from './pendingFirstMessage';
+import { userTiming } from '@helpers/userTiming';
 
 const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   const store = useStore();
@@ -47,19 +49,29 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   const { generateTitleFromConversation } = useGenerativeData();
 
   const addNewMessage = async (message: AtomicUIMessage) => {
-    setMessages(prev => [...prev, message]);
+    setMessages(prev =>
+      prev.some(m => m.id === message.id)
+        ? prev.map(m => (m.id === message.id ? message : m))
+        : [...prev, message],
+    );
 
     const newMessages = [...messages, message];
 
-    // When there are only two messages and the title is still the default name, generate a title from the conversation.
+    // Name the chat from the first question so it never stays "Untitled Chat"
+    // when the reply fails to land. The reply retries if that produced nothing.
     if (
-      newMessages.length === 2 &&
+      newMessages.length <= 2 &&
       title === DEFAULT_AICHAT_NAME &&
       shouldGenerateTitles
     ) {
-      generateTitleFromConversation(newMessages).then(generatedTitle => {
-        if (generatedTitle) {
-          setTitle(generatedTitle);
+      generateTitleFromConversation(newMessages).then(generated => {
+        if (!generated) return;
+        setTitle(generated.title);
+
+        if (generated.emoji) {
+          void resource
+            .set(dataBrowser.properties.emoji, generated.emoji)
+            .then(() => resource.save());
         }
       });
     }
@@ -73,6 +85,11 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
 
       setMessageToResourceMap(prev => {
         const next = new Map(prev);
+
+        for (const key of next.keys()) {
+          if (key.id === message.id) next.delete(key);
+        }
+
         next.set(message, messageResource);
 
         return next;
@@ -176,7 +193,9 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
 
   // On load create AIChatDisplayMessages from the resource's messages.
   useEffect(() => {
+    const timing = userTiming('chat:page');
     messageResourcesToDisplayMessages(messageSubjects, store).then(map => {
+      timing.step('load');
       const allMessages = Array.from(map.keys());
       const lastSummaryIndex = allMessages.findLastIndex(
         m => m.metadata?.isSummary,
@@ -191,6 +210,10 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
 
       setMessageToResourceMap(map);
       setLoading(false);
+      // Two frames later the list is on screen: that is the render cost.
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => timing.step('render')),
+      );
 
       // A brand-new chat (e.g. from the search overlay's "Start AI Chat
       // with ..." action) may have a first message waiting to be sent.

@@ -40,6 +40,16 @@ export function useChildren(parentSubject: string | undefined): {
   const subjectsRef = useRef<string[]>([]);
   subjectsRef.current = subjects;
 
+  /**
+   * Subjects this client has seen destroyed.
+   *
+   * A destroyed child can still come back in an answer to the `parent=` query
+   * — the server's index takes a moment — and rendering it again is not
+   * cosmetic: the row asks the store for the resource, which re-creates the
+   * entry the destroy had just removed. Keep it out of the list instead.
+   */
+  const removedRef = useRef<Set<string>>(new Set());
+
   const { collection, ready } = useCollection(
     {
       property: core.properties.parent,
@@ -104,7 +114,7 @@ export function useChildren(parentSubject: string | undefined): {
     // the late writer used to overwrite the new data with the old.
     let cancelled = false;
 
-    const extractMembers = async () => {
+    const extractMembers = async (attempt = 0) => {
       await collection.waitForReady();
       if (cancelled) return;
 
@@ -120,6 +130,28 @@ export function useChildren(parentSubject: string | undefined): {
       );
       if (cancelled) return;
 
+      // A slot that comes back undefined means the cached page is older than
+      // the member count it is being read against — `getMemberWithIndex` asks
+      // page N for an index the server has since added and that page does not
+      // hold. Accepting the short list silently loses a child forever (the
+      // second device that unlocks a drive shows an empty sidebar until a
+      // reload, `second-device-load.spec.ts`), so re-read the page instead.
+      //
+      // Only while this hook has never produced a list. Once children are on
+      // screen, an undefined slot is far more likely to be one that just went
+      // away — a delete leaves the count ahead of the page for a moment — and
+      // re-fetching then pulls the deleted resource back into the store.
+      if (
+        subjectsRef.current.length === 0 &&
+        resolved.some(member => member === undefined) &&
+        attempt < 3
+      ) {
+        await collection.refresh();
+        if (cancelled) return;
+
+        return extractMembers(attempt + 1);
+      }
+
       // Drop commit subjects: they leak into parent= queries when a resource
       // is created/updated, but they're never tree-children. Also dedupe —
       // collection refreshes can race, leaving the same subject indexed
@@ -131,7 +163,8 @@ export function useChildren(parentSubject: string | undefined): {
         if (
           member &&
           !member.startsWith('did:ad:commit:') &&
-          !seen.has(member)
+          !seen.has(member) &&
+          !removedRef.current.has(member)
         ) {
           seen.add(member);
           candidates.push(member);
@@ -168,10 +201,47 @@ export function useChildren(parentSubject: string | undefined): {
 
     let cancelled = false;
 
+    const unsubRemoved = store.on(StoreEvents.ResourceRemoved, subject => {
+      removedRef.current.add(subject);
+      setSubjects(prev =>
+        prev.includes(subject) ? prev.filter(s2 => s2 !== subject) : prev,
+      );
+    });
+
     const unsub = store.on(StoreEvents.ResourceUpdated, async resource => {
       const current = subjectsRef.current;
 
-      if (current.length === 0 || !current.includes(resource.subject)) {
+      if (!current.includes(resource.subject)) {
+        // A resource that names this parent but is not in the list means the
+        // query was answered before it existed — a child created moments ago,
+        // or a device that loaded the drive while the commit was still
+        // landing. The collection has no reason of its own to ask again, so
+        // the child stayed missing until a reload
+        // (`server-only-fallback.spec.ts`).
+        //
+        // Add it here rather than re-reading the query: the server's index
+        // lags a fresh commit, so a re-read can answer without the very
+        // resource that prompted it and drop what the sidebar had already
+        // shown.
+        if (
+          parentSubject &&
+          resource.get(core.properties.parent) === parentSubject
+        ) {
+          const sorted = await sortMembers([...current, resource.subject]);
+          if (cancelled) return;
+
+          setSubjects(prev =>
+            prev.length === sorted.length &&
+            prev.every((sub, i) => sub === sorted[i])
+              ? prev
+              : sorted,
+          );
+        }
+
+        return;
+      }
+
+      if (current.length === 0) {
         return;
       }
 
@@ -189,8 +259,9 @@ export function useChildren(parentSubject: string | undefined): {
     return () => {
       cancelled = true;
       unsub();
+      unsubRemoved();
     };
-  }, [disabled, sortMembers, store]);
+  }, [collection, disabled, parentSubject, sortMembers, store]);
 
   // `useCollection` listens for `ResourceManuallyCreated` and routes
   // it through `applyResourceChange` for an optimistic add — no full

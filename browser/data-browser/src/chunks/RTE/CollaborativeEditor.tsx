@@ -70,6 +70,9 @@ import {
 
 export type CollaborativeEditorProps = {
   placeholder?: string;
+  /** Host document for menus when editing inside a preview iframe. */
+  menuContainer?: HTMLElement;
+  embedded?: boolean;
   doc: LoroDoc;
   resource: Resource;
   property: string;
@@ -83,6 +86,8 @@ const REDO_WINDOWS_KEYS = 'Mod-y';
 
 export default function CollaborativeEditor({
   placeholder,
+  menuContainer = document.body,
+  embedded = false,
   doc,
   id,
   resource,
@@ -148,7 +153,7 @@ export default function CollaborativeEditor({
           classRemovedNode: 'diff-removed-node',
         }),
         SlashCommands.configure({
-          suggestion: buildSuggestion(document.body, [
+          suggestion: buildSuggestion(menuContainer, [
             {
               title: 'Note',
               id: 'note',
@@ -195,7 +200,7 @@ export default function CollaborativeEditor({
           ]),
         }),
         ResourceCommands.configure({
-          suggestion: buildResourceSuggestion(document.body, store, drive),
+          suggestion: buildResourceSuggestion(menuContainer, store, drive),
         }),
         ResourceNode.configure({
           store,
@@ -328,7 +333,7 @@ export default function CollaborativeEditor({
     // passed at editor construction time. If the Resource hydrates a newer doc
     // instance after mount, keeping the editor alive would make remote sync
     // import into one doc while ProseMirror renders another.
-    [store, drive, doc, undoSessionGeneration],
+    [store, drive, doc, undoSessionGeneration, menuContainer],
   );
 
   // Tiptap fires `create` from inside a `window.setTimeout(0)` in
@@ -430,7 +435,7 @@ export default function CollaborativeEditor({
   return (
     <IsInRTEContex value={true}>
       <TiptapContextProvider editor={editor}>
-        <StyledEditorWrapper hideEditor={false}>
+        <StyledEditorWrapper hideEditor={false} $embedded={embedded}>
           <DragHandle editor={editor}>
             <FaGripVertical />
           </DragHandle>
@@ -457,7 +462,10 @@ const ClickUnderHandler = styled.div`
   min-height: 10rem;
 `;
 
-export const StyledEditorWrapper = styled(EditorWrapperBase)`
+export const StyledEditorWrapper = styled(EditorWrapperBase)<{
+  $embedded?: boolean;
+}>`
+  background-color: ${p => (p.$embedded ? 'transparent' : p.theme.colors.bg)};
   box-shadow: none;
   min-height: 100%;
   border-radius: ${p => p.theme.radius};

@@ -142,7 +142,7 @@ impl Storelike for Store {
                 }
             }
         }
-        for (_subject, resource) in map.iter() {
+        for resource in map.values() {
             self.add_resource(resource).await?
         }
         Ok(())
