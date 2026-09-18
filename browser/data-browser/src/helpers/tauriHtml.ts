@@ -1,10 +1,10 @@
 /**
  * Drop fetches the Tauri app never uses from the HTML shell.
  *
- * The OPFS ClientDb is off under Tauri, so the ~6MB atomic-wasm preloads
- * on the critical path are wasted work that delays first paint. The
- * atomicdata.dev preconnect is the same: the embed talks to localhost.
- * Called from `vite.config.ts` when `TAURI=1`.
+ * Document-level WASM preloads are already gone from `index.html` (the
+ * ClientDb worker does not consume them). This still strips any leftover
+ * `/wasm/` links, plus the atomicdata.dev preconnect — the embed talks to
+ * localhost. Called from `vite.config.ts` when `TAURI=1`.
  */
 export function stripUnusedTauriPreloads(html: string): string {
   return html

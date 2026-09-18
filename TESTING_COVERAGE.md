@@ -627,7 +627,8 @@ a browser, hides when `node_status` is ready, falls back to HTTP HEAD when
 invoke is missing (the e2e fake-Tauri case), skips HTTP when IPC already
 answered `{ready:false}`, and surfaces a startup error instead of spinning
 forever. `hideBootSplash` keeps a failed splash up. The Tauri HTML transform
-(`stripUnusedTauriPreloads`) is tested against `index.html`. The Tauri
+(`stripUnusedTauriPreloads`) is tested against a fixture plus `index.html`.
+The Tauri
 command itself (`node_status` in `desktop/src/lib.rs`) is not covered by a
 harness.
 

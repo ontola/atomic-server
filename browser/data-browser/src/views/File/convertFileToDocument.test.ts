@@ -111,6 +111,8 @@ describe('plainTextToTiptapJson', () => {
 });
 
 describe('fileContentsToTiptapJson', () => {
+  // First call pays for the Node WASM + collaborative schema import; CI
+  // regularly misses the default 5s when the suite is already warm-transforming.
   it('uses the collaborative Markdown schema so Markdown formatting becomes document nodes', async () => {
     const json = await fileContentsToTiptapJson(
       '# Heading\n\nThis is **bold**.',
@@ -136,7 +138,7 @@ describe('fileContentsToTiptapJson', () => {
         },
       ],
     });
-  });
+  }, 15_000);
 
   it('keeps blank Markdown and an unpaired marker as document text', async () => {
     await expect(
