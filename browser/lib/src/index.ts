@@ -248,6 +248,25 @@ export {
   pluginSyncSchedule,
   type PluginSyncSchedule,
 } from './plugin-connection.js';
+export {
+  installRelease,
+  publishZipRelease,
+  readInstallationReview,
+  grantsFor,
+  installationIdentifier,
+  DEFAULT_INSTALLATION_NAMESPACE,
+  INSTALLATION_STATUSES,
+  RUNTIME_JS,
+  RUNTIME_WASIP2,
+  WORLD_EXTENSION,
+  WORLD_SERVER_EXTENSION,
+  type InstallationStatus,
+  type InstallationReview,
+  type InstallReleaseOptions,
+  type PublishedRelease,
+  type ReleaseReference,
+  type ReviewCapability,
+} from './plugin-install.js';
 export * from './integration-actions.js';
 
 export { taskSchema } from './task-schema.js';
