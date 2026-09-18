@@ -207,7 +207,7 @@
     "https://atomicdata.dev/properties/description": "Import bank transactions from MT940 and camt.053 statement exports.",
     "https://atomicdata.dev/integrations/properties/capabilities": "Preview exact amounts, dates, account references and original descriptions in a Bank transactions table.",
     "https://atomicdata.dev/integrations/properties/events": "Upload an MT940 or camt.053 statement when you need it. No bank token required.",
-    "https://atomicdata.dev/integrations/properties/limitation": "MT940 (up to 512 KB) and camt.053 XML (up to 1 MB) files only, up to 500 transactions. No payment initiation or live bank sync. Bank-specific formats may need additional support.",
+    "https://atomicdata.dev/integrations/properties/limitation": "MT940 (up to 512 KB) and camt.053 XML (up to 5 MB) files only, up to 500 transactions. No payment initiation or live bank sync. Bank-specific formats may need additional support.",
     "https://atomicdata.dev/integrations/properties/keywords": "bank bunq banking finance accounting statement mt940 camt camt.053 iso20022 xml sepa import swift"
   },
   {

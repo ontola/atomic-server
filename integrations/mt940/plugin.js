@@ -421,7 +421,7 @@ function rejectJsonNarratives(statements) {
 }
 
 // integrations/mt940/camt053.ts
-var CAMT053_MAX_BYTES = 1e6;
+var CAMT053_MAX_BYTES = 5e6;
 var local = (name) => name.replace(/^[^:]*:/, "");
 function decode(text) {
   return text.replace(
@@ -582,7 +582,7 @@ function transaction2(entry, currency) {
 }
 function parseCamt053(text) {
   if (typeof text !== "string" || text.length > CAMT053_MAX_BYTES)
-    throw new Error("Choose a camt.053 file smaller than 1 MB");
+    throw new Error("Choose a camt.053 file smaller than 5 MB");
   const root = parseXml(text.replace(/^﻿/, ""));
   const report = one(root, "Document", "BkToCstmrStmt");
   if (!report)

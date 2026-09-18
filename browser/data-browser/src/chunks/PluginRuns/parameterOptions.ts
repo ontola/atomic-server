@@ -14,7 +14,7 @@ export const PARAMETER_OPTION_LOOKUPS: Record<
 > = {
   moneybird: {
     administration_id: {
-      path: '/administrations.json',
+      path: '/api/v2/administrations.json',
       itemValue: 'id',
       itemLabel: 'name',
     },

@@ -91,9 +91,9 @@ export function ImportMT940({
     setImported(false);
 
     try {
-      if (file.size > 1_000_000)
+      if (file.size > 5_000_000)
         throw new Error(
-          'Choose a statement smaller than 1 MB. Export a shorter period if needed.',
+          'Choose a statement smaller than 5 MB. Export a shorter period if needed.',
         );
       const source = await fetchIntegrationSource('mt940');
       const bytes = await file.arrayBuffer();
