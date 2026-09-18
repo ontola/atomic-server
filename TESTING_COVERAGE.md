@@ -2069,6 +2069,27 @@ on Linux x86_64, including a cached install followed by changed downstream
 source input and execution of the retained binary. Its aarch64 archive digest
 is pinned to the upstream release; native aarch64 execution is not covered by
 that check. Full CI wall-time savings require a completed hosted run.
+## Query index consistency (2026-09-18)
+
+`db::test::is_a_encodings_all_match_the_class_constraint` (formerly
+`#[ignore]`d as an open bug) writes four rows whose `isA` names one class in
+four encodings and asserts a drive-scoped, sorted, class-filtered query lists
+all of them and that `Db::check_query_index` finds index and store in
+agreement. `replicated_rows_reach_a_watched_scoped_sorted_query` watches that
+query shape with 5 rows and then replicates 17 more through
+`persist_replicated_resource` (the sync import path, propvals materialized
+from a Loro doc), asserting the sorted, unsorted and differently scoped shapes
+all answer 22. `first_build_cross_checks_the_unscanned_constraint` removes one
+row's `isA` entry from `PropValSub` and asserts the first build still files
+the row through the `parent` constraint.
+`check_query_index_names_missing_and_stale_members` corrupts a member index in
+both directions and asserts the report names each subject.
+`did_rows_stamped_into_another_drive_stay_out_of_a_watched_query` covers the
+audit's C17 on both the build and the commit path, including the unstamped
+row that is deliberately not excluded. Not covered: the runtime `warn!` text
+itself, and a UI-level comparison of a client's local answer with the
+server's (see `planning/silent-failures.md`).
+
 ## External cache access and authentication origins (#170)
 
 Paired SaaS `portal/e2e/recovery-passkey.spec.ts` uses Chromium virtual PRF authenticators with the real control plane to verify app enrollment followed by portal login using one credential, reuse of a portal-created credential, and account-settings migration without replacing ciphertext or old wrappers. Physical Safari/iCloud, Android/password-manager and native-shell behavior remain device acceptance checks.

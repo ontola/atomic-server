@@ -291,6 +291,34 @@ fn replication_key(drive: &str) -> String {
     format!("{REPLICATION_PREFIX}{drive}")
 }
 
+/// Upper bound on the `PropValSub` entries the planner counts per constraint
+/// when ranking them, and on what the first-build cross-check will walk.
+const PLANNER_SCAN_CAP: usize = 512;
+
+/// What [`Db::check_query_index`] found when it compared a query's member
+/// index with a scan of the store.
+#[derive(Debug, Clone)]
+pub struct QueryIndexReport {
+    /// The filter whose index was checked.
+    pub filter: query_index::QueryFilter,
+    /// Whether the filter is watched (its index is maintained on commit).
+    pub watched: bool,
+    /// Members the index holds.
+    pub indexed: usize,
+    /// Resources in the store that match the filter.
+    pub expected: usize,
+    /// Matching subjects the index does not list.
+    pub missing: Vec<String>,
+    /// Indexed subjects that no longer match (or no longer exist).
+    pub stale: Vec<String>,
+}
+
+impl QueryIndexReport {
+    pub fn is_consistent(&self) -> bool {
+        self.missing.is_empty() && self.stale.is_empty()
+    }
+}
+
 /// One drive's watched query filters, routed by the properties they touch so
 /// a changed atom only evaluates filters that could care about it.
 #[derive(Default, Debug)]
@@ -395,6 +423,15 @@ pub struct Db {
     /// `check_if_atom_matches_watched_query_filters` reads from here and
     /// never touches msgpack on a commit.
     watched_queries_by_drive: Arc<RwLock<HashMap<String, DriveFilters>>>,
+    /// The drive root each watched filter's `drive` resolves to, keyed by the
+    /// filter's `drive` string. For a `did:` query, `QueryFilter::drive` is
+    /// the queried subject (a table, a folder), not the drive it lives in;
+    /// its stored `drive` stamp names the root. Resolved when a filter is
+    /// registered and looked up per DID atom on the commit path, so that a
+    /// DID resource stamped into another drive never enters this drive's
+    /// members (security audit C17). `None` records that the subject could
+    /// not be resolved here, in which case the filter is not drive-checked.
+    filter_drive_roots: Arc<RwLock<HashMap<String, Option<Subject>>>>,
     /// Serialises writers that read-modify-write the same subject's state, so
     /// a commit and a sync apply cannot replace each other's snapshot. Per
     /// store, not global — see [`crate::subject_lock`].
@@ -670,6 +707,7 @@ impl Db {
             db_events: tokio::sync::broadcast::channel(64).0,
             ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
+            filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             plugin_locks: Default::default(),
             base_domain,
@@ -712,6 +750,7 @@ impl Db {
             db_events: tokio::sync::broadcast::channel(64).0,
             ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
+            filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             plugin_locks: Default::default(),
             base_domain,
@@ -750,6 +789,7 @@ impl Db {
             db_events: tokio::sync::broadcast::channel(64).0,
             ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
+            filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             plugin_locks: Default::default(),
             base_domain,
@@ -849,6 +889,7 @@ impl Db {
             db_events: tokio::sync::broadcast::channel(64).0,
             ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
+            filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             plugin_locks: Default::default(),
             base_domain,
@@ -1031,6 +1072,7 @@ impl Db {
             db_events: tokio::sync::broadcast::channel(64).0,
             ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
+            filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             plugin_locks: Default::default(),
             base_domain,
@@ -2863,11 +2905,17 @@ impl Db {
     /// starting set — the estimate only decides how few resources get row-
     /// checked. Constraints with non-equality operators can't be point-
     /// scanned; they contribute a whole-property scan as their candidate set.
-    fn plan_candidate_iterator(&self, q: &Query, q_filter: &QueryFilter) -> IndexIterator {
-        const PLANNER_SCAN_CAP: usize = 512;
-
-        let mut best: Option<(usize, &crate::storelike::PropVal)> = None;
-        for constraint in &q_filter.filters {
+    ///
+    /// Also returns the position of the chosen constraint in
+    /// `q_filter.filters`, so the build can cross-check its result against
+    /// the constraints it did not scan (see `cross_check_first_build`).
+    fn plan_candidate_iterator(
+        &self,
+        q: &Query,
+        q_filter: &QueryFilter,
+    ) -> (IndexIterator, Option<usize>) {
+        let mut best: Option<(usize, usize, &crate::storelike::PropVal)> = None;
+        for (position, constraint) in q_filter.filters.iter().enumerate() {
             let Some(prop) = &constraint.property else {
                 continue;
             };
@@ -2876,13 +2924,13 @@ impl Db {
                 _ => None,
             };
             let estimate = self.estimate_prop_val_count(prop, scan_val, PLANNER_SCAN_CAP);
-            if best.is_none_or(|(current, _)| estimate < current) {
-                best = Some((estimate, constraint));
+            if best.is_none_or(|(current, _, _)| estimate < current) {
+                best = Some((estimate, position, constraint));
             }
         }
 
         match best {
-            Some((_, constraint)) => {
+            Some((_, position, constraint)) => {
                 let prop = constraint
                     .property
                     .as_ref()
@@ -2891,12 +2939,113 @@ impl Db {
                     crate::storelike::FilterOperator::Equal => constraint.value.as_ref(),
                     _ => None,
                 };
-                find_in_prop_val_sub_index(self, prop, val)
+                (find_in_prop_val_sub_index(self, prop, val), Some(position))
             }
             // No property-bearing constraint (value-only filters): fall back
             // to the query's own iterator (value index or full scan).
-            None => self.get_index_iterator_for_query(q),
+            None => (self.get_index_iterator_for_query(q), None),
         }
+    }
+
+    /// The members a first build missed, found by walking the small
+    /// equality constraints the planner did *not* scan.
+    ///
+    /// The planner trusts that any one constraint's `PropValSub` entries are a
+    /// superset of the members. That held only as long as every encoding of a
+    /// value produced the same index key; when one did not, the cheapest
+    /// constraint had fewer candidates than rows, the build filed a partial
+    /// member list, and the filter was watched — so the partial list was
+    /// trusted for good and every count it produced looked plausible
+    /// (planning/silent-failures.md). This walks each other equality
+    /// constraint whose entries fit under the planner's scan cap (so at most
+    /// `PLANNER_SCAN_CAP` extra key reads per constraint, once per first
+    /// build), and returns every matching resource that is not in `built`.
+    /// Constraints beyond the cap are not walked here; the full comparison is
+    /// [`Db::check_query_index`].
+    fn cross_check_first_build(
+        &self,
+        q_filter: &QueryFilter,
+        chosen: Option<usize>,
+        built: &HashSet<String>,
+    ) -> Vec<Resource> {
+        let mut missing = Vec::new();
+        let mut seen: HashSet<String> = HashSet::new();
+        for (position, constraint) in q_filter.filters.iter().enumerate() {
+            if Some(position) == chosen {
+                continue;
+            }
+            let (Some(prop), Some(val)) = (&constraint.property, &constraint.value) else {
+                continue;
+            };
+            if constraint.operator != crate::storelike::FilterOperator::Equal {
+                continue;
+            }
+            if self.estimate_prop_val_count(prop, Some(val), PLANNER_SCAN_CAP) >= PLANNER_SCAN_CAP {
+                continue;
+            }
+            for atom in find_in_prop_val_sub_index(self, prop, Some(val)).flatten() {
+                let subject = atom.subject.as_str().to_string();
+                if built.contains(&subject) || !seen.insert(subject) {
+                    continue;
+                }
+                let Ok(resource) = self.get_resource_shallow(&atom.subject) else {
+                    continue;
+                };
+                if query_index::resource_matches_filter(&resource, q_filter)
+                    && self.filter_accepts_resource_drive(q_filter, &resource)
+                {
+                    missing.push(resource);
+                }
+            }
+        }
+        missing
+    }
+
+    /// Compare a query's member index with the resources it claims to index.
+    ///
+    /// Walks every stored resource, applies the query's filter to it the way
+    /// the index maintenance does (`resource_matches_filter` plus the drive
+    /// check), and reports which matching subjects the index lacks and which
+    /// indexed subjects no longer match. Reading a row set out of the index
+    /// is fast because it trusts the index; this is the check that trust is
+    /// deserved. It is a full scan, so it is for tests, diagnostics and
+    /// one-off repairs, not for the query path.
+    pub fn check_query_index(&self, q: &Query) -> AtomicResult<QueryIndexReport> {
+        let q_filter = QueryFilter::try_from_query(q)?;
+        let id = query_index::query_id(&q_filter)?;
+        // Index keys hold the subject as the writer spelled it; rows come
+        // back under the store's normalized spelling. Compare one form.
+        let base_domain = self.get_base_domain();
+        let canonical = |s: &str| Subject::from_raw(s, base_domain.as_deref()).pure_id();
+
+        let mut indexed: HashSet<String> = HashSet::new();
+        for kv in self.kv.scan_prefix(Tree::QueryMembers, &id) {
+            let (key, _) = kv?;
+            let (_id, _sort, subject) = query_index::parse_members_key(&key)?;
+            indexed.insert(canonical(subject));
+        }
+
+        let mut expected: HashSet<String> = HashSet::new();
+        for resource in self.all_resources(true) {
+            if query_index::resource_matches_filter(&resource, &q_filter)
+                && self.filter_accepts_resource_drive(&q_filter, &resource)
+            {
+                expected.insert(canonical(resource.get_subject().as_str()));
+            }
+        }
+
+        let mut missing: Vec<String> = expected.difference(&indexed).cloned().collect();
+        let mut stale: Vec<String> = indexed.difference(&expected).cloned().collect();
+        missing.sort();
+        stale.sort();
+        Ok(QueryIndexReport {
+            watched: q_filter.is_watched(self),
+            filter: q_filter,
+            indexed: indexed.len(),
+            expected: expected.len(),
+            missing,
+            stale,
+        })
     }
 
     /// Register a filter to be watched. Persists to `Tree::WatchedQueries`
@@ -2909,6 +3058,9 @@ impl Db {
         &self,
         filter: query_index::QueryFilter,
     ) -> AtomicResult<()> {
+        // Before the persisted short-circuit: a client re-watching after the
+        // queried subject arrived here gets its drive root resolved now.
+        self.cache_filter_drive_root(&filter.drive);
         let filter_bytes = filter.encode()?;
         // Skip if already persisted — avoids growing the in-memory Vec on
         // re-watches. The KV is authoritative for "what filters exist"; the
@@ -2953,6 +3105,7 @@ impl Db {
                     continue;
                 }
             };
+            self.cache_filter_drive_root(&qf.drive);
             let drive_key = qf.drive.as_str().to_string();
             new_map.entry(drive_key).or_default().insert(Arc::new(qf));
         }
@@ -2960,6 +3113,57 @@ impl Db {
             *map = new_map;
         }
         Ok(())
+    }
+
+    /// Resolve the drive root a filter's `drive` subject lives in and remember
+    /// it. A subject that is not stored here (an `https://host` prefix, a DID
+    /// that has not arrived yet) records `None`; the next `watch()` retries.
+    fn cache_filter_drive_root(&self, drive: &Subject) {
+        let key = drive.as_str().to_string();
+        let known = self
+            .filter_drive_roots
+            .read()
+            .ok()
+            .and_then(|m| m.get(&key).cloned());
+        if matches!(known, Some(Some(_))) {
+            return;
+        }
+        let root = self
+            .get_resource_shallow(drive)
+            .ok()
+            .and_then(|resource| resource.get_drive());
+        if let Ok(mut map) = self.filter_drive_roots.write() {
+            map.insert(key, root);
+        }
+    }
+
+    /// The drive root a watched filter was resolved to, if known.
+    pub(crate) fn filter_drive_root(&self, filter: &query_index::QueryFilter) -> Option<Subject> {
+        self.filter_drive_roots
+            .read()
+            .ok()
+            .and_then(|m| m.get(filter.drive.as_str()).cloned().flatten())
+    }
+
+    /// Whether a resource may be a member of `filter` as far as drive scope
+    /// goes. HTTP and `internal:` subjects are already routed to their drive
+    /// by prefix. A DID subject has no prefix, so the only evidence is its
+    /// `drive` stamp: when both it and the filter's root are known, they
+    /// must agree. A row without a stamp, or a filter whose root could not be
+    /// resolved, is not excluded — a missing stamp is not proof of a leak,
+    /// and read rights still apply at query time.
+    pub(crate) fn filter_accepts_resource_drive(
+        &self,
+        filter: &query_index::QueryFilter,
+        resource: &Resource,
+    ) -> bool {
+        if !resource.get_subject().as_str().starts_with("did:") {
+            return true;
+        }
+        match (resource.get_drive(), self.filter_drive_root(filter)) {
+            (Some(stamp), Some(root)) => stamp.pure_id() == root.pure_id(),
+            _ => true,
+        }
     }
 
     /// The watched filters a changed atom in `drive_key` with `property` must
@@ -3157,6 +3361,13 @@ impl Db {
             Ok(guard) => guard.clone(),
             Err(_) => return None,
         };
+        // An extender that cannot decide whether it applies is skipped, not
+        // treated as a reason to hide the row. The row exists and the reader
+        // may see it; the only thing at stake here is the `incomplete`
+        // marker. Returning `None` from here used to drop every row whose
+        // `isA` the built-in collection extender could not parse, silently,
+        // from every collection listing and count (planning/silent-failures.md,
+        // "A query index silently disagreed with the data it indexes").
         for extender in extenders.iter() {
             if !extender.can_extend(&resource) {
                 continue;
@@ -3164,7 +3375,14 @@ impl Db {
             match extender.resource_has_extender(&resource) {
                 Ok(true) => {}
                 Ok(false) => continue,
-                Err(_) => return None,
+                Err(e) => {
+                    tracing::warn!(
+                        subject = %resource.get_subject(),
+                        extender = extender.id.as_deref().unwrap_or("<unnamed>"),
+                        "query member listed without its extender check: {e}"
+                    );
+                    continue;
+                }
             }
             match extender.check_scope(&resource, self, None).await {
                 Ok((true, _)) => {
@@ -3173,7 +3391,14 @@ impl Db {
                     break;
                 }
                 Ok((false, _)) => continue,
-                Err(_) => return None,
+                Err(e) => {
+                    tracing::warn!(
+                        subject = %resource.get_subject(),
+                        extender = extender.id.as_deref().unwrap_or("<unnamed>"),
+                        "query member listed without its extender scope check: {e}"
+                    );
+                    continue;
+                }
             }
         }
 
@@ -3488,7 +3713,7 @@ impl Db {
         if !q_filter.is_watched(self) {
             info!(filter = ?q_filter, "Building query index");
             crate::metrics::query_indexed();
-            let atoms = self.plan_candidate_iterator(q, &q_filter);
+            let (atoms, chosen) = self.plan_candidate_iterator(q, &q_filter);
             q_filter.watch(self)?;
 
             let mut transaction = Transaction::new();
@@ -3511,13 +3736,16 @@ impl Db {
             // constraints on its materialized row (no Loro decode), so the
             // member index only holds true AND-matches — including for
             // non-equality operators, whose candidate sets are supersets.
+            let mut built: HashSet<String> = HashSet::new();
             for atom in atoms.flatten() {
                 let Ok(resource) = self.get_resource_shallow(&atom.subject) else {
                     // No row to verify against (external/never-stored) —
                     // don't index what we can't confirm.
                     continue;
                 };
-                if !query_index::resource_matches_filter(&resource, &q_filter) {
+                if !query_index::resource_matches_filter(&resource, &q_filter)
+                    || !self.filter_accepts_resource_drive(&q_filter, &resource)
+                {
                     continue;
                 }
                 let prop = query_index::index_key_property(&q_filter, &atom);
@@ -3529,6 +3757,37 @@ impl Db {
                     false,
                     &mut transaction,
                 )?;
+                built.insert(atom.subject.as_str().to_string());
+            }
+            // A member the scanned constraint's index does not know about is
+            // a member the filter would have listed forever without. Say so,
+            // and file it.
+            let missed = self.cross_check_first_build(&q_filter, chosen, &built);
+            if !missed.is_empty() {
+                let subjects: Vec<String> = missed
+                    .iter()
+                    .map(|r| r.get_subject().as_str().to_string())
+                    .collect();
+                tracing::warn!(
+                    filter = ?q_filter,
+                    missing = ?subjects,
+                    "query index build missed members its candidate index did not list; added"
+                );
+                for resource in &missed {
+                    // The cross-check only walks property-bearing
+                    // constraints, so the filter always has a key property.
+                    let prop = query_index::filter_key_property(&q_filter)
+                        .cloned()
+                        .unwrap_or_default();
+                    let sort_key = query_index::sort_key_for(resource, &prop);
+                    update_indexed_member(
+                        &q_filter,
+                        resource.get_subject().as_str(),
+                        &sort_key,
+                        false,
+                        &mut transaction,
+                    )?;
+                }
             }
             self.apply_transaction(&mut transaction)?;
 

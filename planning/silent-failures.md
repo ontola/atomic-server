@@ -171,7 +171,7 @@ errored.
 that, a rejected write should surface where the person who caused it is looking.
 *Fixed 2026-08-18 (ecaa4a63).*
 
-**A client renders a stale row set and never reconciles with its server.** *(open)*
+**A client renders a stale row set and never reconciles with its server.** *(fixed, see below)*
 The Houseplants table showed 22+ rows on desktop and 15 in the browser against
 Home Assistant. It looked exactly like a sync failure, and the peer log
 supported that reading: `SYNC_DIFF: server pushes 0, server pulls 1` — "I have
@@ -195,13 +195,22 @@ with `lastCommit` the peer "did not have". All three were consistent with the
 wrong conclusion. What settled it was querying both servers directly and getting
 24 = 24. Measure the thing itself before believing a story that explains the
 symptoms.
+*Fixed 2026-09-18 (`claude/technical-debt-analysis-b4ifz2-query-index`, see
+the next entry for the mechanism).* The browser answers collections from the
+same `atomic_lib` `Db` the server runs, so this was the same index: rows the
+index held but the read hid. `Db::check_query_index` now compares a query's
+member index with a scan of the store and names the missing and stale
+subjects; the index build cross-checks the constraints it did not scan and
+warns when its candidate index came up short. The UI does not yet compare its
+local answer with the server's — a disagreement between two nodes still needs
+the check run on each.
 
 **`fetchResourceHTTP(url, {agent})` silently ignores the option.**
 Returns `Unauthorized` rather than either signing the request or rejecting an
 unknown option. Reads as a permissions problem, is actually a typo-shaped API
 gap.
 
-**A query index silently disagreed with the data it indexes.** *(open)*
+**A query index silently disagreed with the data it indexes.** *(fixed)*
 The Houseplants table rendered 5 rows on the desktop node and 22 on Home
 Assistant. Every resource was present on both, and every probe said they were
 converged — because the probes were reconstructions of the table's query rather
@@ -226,6 +235,25 @@ the real query in exactly the parameters that break. Capture what the
 application actually sends (patch the fetch, read the server's access log)
 before comparing anything. "Both servers agree" is worthless if the question is
 not the one the product asks.
+*Fixed 2026-09-18 (`claude/technical-debt-analysis-b4ifz2-query-index`).* Two
+causes, both in the read that only this query shape takes. (1) Rows whose
+`isA` read back as a plain `String` (one of four encodings that name the same
+class) were *in* the index and *were* read, then hidden: the built-in
+collection class extender did `to_subjects()?` on the value, and
+`resolve_query_member` treated any extender error as "drop the row" — from the
+page and from `totalMembers`. An extender that cannot decide now logs a
+warning and is skipped; the row is listed. (2) Rows whose `isA` was a `String`
+holding the JSON array were never candidates, because the index keyed them by
+the literal `["…"]`, and the matcher rejected them for the same reason; both
+now read the array's elements, from one helper, so they cannot disagree. What
+should have shouted now does: `Db::check_query_index(query)` reports the
+difference between an index and the store, and a first build that finds
+members through a constraint the planner did not scan says so in the log and
+files them (`lib/src/db.rs`, `cross_check_first_build`). Regression tests:
+`is_a_encodings_all_match_the_class_constraint`,
+`replicated_rows_reach_a_watched_scoped_sorted_query`,
+`first_build_cross_checks_the_unscanned_constraint`,
+`check_query_index_names_missing_and_stale_members` in `lib/src/db/test.rs`.
 
 ## Environment and deployment
 
