@@ -12,7 +12,7 @@ On Android and iOS it goes through `dart:ffi`; on the web the same Rust is compi
 
 The Dart SDK lives in the repository under [`flutter/lib/atomic`](https://github.com/atomicdata-dev/atomic-server/tree/develop/flutter/lib/atomic), inside **Atomic Canvas**, a collaborative infinite drawing canvas that ships as the reference app.
 It is not yet published on pub.dev.
-The API is still moving, so expect to vendor it or depend on the git path for now.
+The API is still moving, so expect to vendor it or depend on the git path for now; the extraction into a package is planned in `planning/dart-sdk-package.md`.
 The canvas-specific calls (strokes, folders, thumbnails) sit next to the general ones; only the general ones are described here.
 
 ## What the SDK gives you

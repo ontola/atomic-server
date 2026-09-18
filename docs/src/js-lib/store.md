@@ -14,8 +14,9 @@ It takes an object with the following options
 
 | Name      | Type                | Description                                                                                                                              |
 |-----------|---------------------|------------------------------------------------------------------------------------------------------------------------------------------|
-| serverUrl | string              | URL of your atomic server                                                                                                                |
+| serverUrl | string              | **(optional)** URL of the always-on device to sync with. Without it the store works locally; set one later with `setServerUrl()` |
 | agent     | [Agent](./agent.md) | **(optional)** The agent the store should use to fetch resources and to sign commits when editing resources, defaults to a public agent |
+| connect   | boolean             | **(optional)** Open a WebSocket to `serverUrl` right away. Defaults to `true` |
 
 ```typescript
 const store = new Store({
@@ -26,6 +27,21 @@ const store = new Store({
 
 > [!NOTE]
 > You can always change or set both the serverUrl and agent at a later time using `store.setServerUrl()` and `store.setAgent()` respectively.
+
+### A store without a server
+
+A store with an Agent and no `serverUrl` is a complete [local-first](../local-first.md) client: it mints `did:ad:` identifiers, creates Drives, signs edits and keeps them in an outbox.
+
+```typescript
+const store = new Store({ agent });
+
+const drive = await store.createDrive('Notes', { localOnly: true });
+store.setDrive(drive.subject);
+```
+
+`localOnly` keeps the sync engine from offering the Drive to a server you connect later; lift it with `store.promoteLocalDrive(drive.subject)` once you want it replicated.
+To keep data across reloads attach the WASM client database with `store.setClientDb()`; the [local-first guide](../local-first-guide/4-persist.md) shows the setup.
+Sync status (connected, pending edits, last drive sync) is on `store.getSyncStatus()` and the `StoreEvents.SyncStatusChanged` event.
 
 ### One vs Many Stores
 
@@ -45,12 +61,13 @@ const resource = await store.getResource('https://my-resource-subject');
 ```
 
 `getResource` takes the [subject](../core/concepts.md#subject-field) of the resource as a parameter and returns a promise that resolves to the requested resource.
-The store will cache the resource in memory and subscribe to the server for changes to the resource, subsequent requests for the resource will not fetch over the network but return the cached version.
+The subject can be an `https://` URL or a `did:ad:` identifier; see [URLs and identifiers](../urls.md).
+The store answers from memory, then from the local database if one is attached, and only then fetches from the server. It subscribes to changes, so subsequent requests return the cached version and updates arrive through the sync connection.
 
 ## Subscribe to changes
 
 Atomic makes it easy to build real-time applications.
-When you subscribe to a subject you get notified every time the resource changes on the server.
+When you subscribe to a subject you get notified every time the resource changes: by your own code, or by another device whose edit arrived through sync.
 
 ```typescript
 store.subscribe('https://my-resource-subject', myResource => {
@@ -92,8 +109,8 @@ It takes an options object with the following properties:
 
 | Name     | Type                      | Description                                                                                                                       |
 |----------|---------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
-| subject  | string                    | **(optional)** The subject the new resource should have, by default a random subject is generated                                 |
-| parent   | string                    | **(optional)** The parent of the new resource, defaults to the store's `serverUrl`                                                |
+| subject  | string                    | **(optional)** The subject the new resource should have. By default a `did:ad:` identifier is minted from a genesis certificate signed by the store's Agent |
+| parent   | string                    | **(optional)** The parent of the new resource, defaults to the store's `serverUrl`. Pass the Drive or folder it belongs in       |
 | isA      | string \| string[]        | **(optional)** The 'type' of the resource. determines what class it is. Supports multiple classes.                                |
 | propVals | Record<string, JSONValue> | **(optional)** Any additional properties you want to set on the resource. Should be an object with subjects of properties as keys |
 

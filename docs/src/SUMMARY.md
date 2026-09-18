@@ -52,6 +52,12 @@
 
 # Guides
 
+- [Build a local-first app with @tomic/lib](local-first-guide/1-index.md)
+  - [Step 1: an identity that is a key](local-first-guide/2-identity.md)
+  - [Step 2: a Store and a Drive, no server](local-first-guide/3-store-and-drive.md)
+  - [Step 3: persist across reloads](local-first-guide/4-persist.md)
+  - [Step 4: sync to an always-on device](local-first-guide/5-sync-server.md)
+  - [Step 5: the same Drive on a phone](local-first-guide/6-phone.md)
 - [Build a portfolio using Astro and Atomic Server](astro-guide/1-index.md)
   - [Setup](astro-guide/2-setup.md)
   - [Frontend setup](astro-guide/3-frontend-setup.md)
