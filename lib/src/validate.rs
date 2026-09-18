@@ -57,8 +57,25 @@ pub async fn validate_store(
                 }
             };
 
-            // Maybe this is no longer needed, because no store uses strings anymore
-            match crate::Value::new(&value.to_string(), &property.data_type) {
+            // `value` is already a parsed, typed `Value`. To check it against the Property's
+            // declared datatype we round-trip it through `Value::new`, because some
+            // "cosmetic" datatypes (e.g. Markdown/Slug/Date/Uri/Timestamp) are not preserved as
+            // their own `Value` variant once materialized (they collapse to String/Integer) -
+            // the Property's datatype stays authoritative and Value::new re-applies its
+            // format rules (e.g. the Slug/Date regexes) to the underlying value.
+            //
+            // `Value`'s `Display` impl is for human-readable output, not a re-parseable raw
+            // form: in particular `ResourceArray` joins subjects with commas rather than
+            // producing a Json array, so it needs its own raw string here.
+            let raw = match &value {
+                crate::Value::ResourceArray(subresources) => {
+                    let subjects: Vec<String> =
+                        subresources.iter().map(|s| s.to_string()).collect();
+                    serde_json::to_string(&subjects).unwrap_or_else(|_| value.to_string())
+                }
+                other => other.to_string(),
+            };
+            match crate::Value::new(&raw, &property.data_type) {
                 Ok(_) => {}
                 Err(e) => invalid_value.push((
                     crate::Atom::new(subject.clone(), prop_url.clone(), value.clone()),
