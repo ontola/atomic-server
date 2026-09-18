@@ -50,8 +50,8 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   agent and lock them out of writing with `429`s. The signature is now
   verified first and the budget is charged to the signer it proves; a body
   that proves no signer spends the peer address's anonymous budget, like any
-  other unsigned write. Reported by [hackchang](https://github.com/hackchang)
-  through private vulnerability reporting.
+  other unsigned write. GHSA-f9rw-g3gr-3jw5, reported by
+  [hackchang](https://github.com/hackchang).
 - Rate-limit the write endpoints. `POST /commit` (HTTP and the WebSocket
   `COMMIT` frame), `/upload`, `PUT /blob`, `/iroh-sync`, `/forget-peer` and
   resource posts spend a per-agent token (`--write-rate-limit`, default 6000
