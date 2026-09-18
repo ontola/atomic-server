@@ -121,7 +121,75 @@ async fn create(
     Ok(HttpResponse::Ok().json(serde_json::json!({"id":id,"release":release})))
 }
 
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PublishPackage {
+    /// The drive the publisher must be able to write to.
+    pub drive: String,
+    /// `extension` (default) or `server-extension`.
+    #[serde(default)]
+    pub world: Option<String>,
+    /// Also list the release in this server's catalog.
+    #[serde(default)]
+    pub public: bool,
+}
+
+/// Publish a wasip2 release from zip bytes: the body is the zip, validated
+/// like an upload, stored content-addressed, and wrapped in a release whose id
+/// covers the package hash and manifest. `atomic-plugin` can publish with one
+/// POST instead of producing a file to upload.
+pub async fn publish_package(
+    appstate: web::Data<AppState>,
+    query: web::Query<PublishPackage>,
+    body: web::Bytes,
+    req: actix_web::HttpRequest,
+    context: RequestContext,
+) -> AtomicServerResult<HttpResponse> {
+    use atomic_lib::db::plugin_release::{RUNTIME_WASIP2, WORLD_EXTENSION};
+    let agent = super::plugin_schedule::authorize(&appstate, &req, &context, &query.drive).await?;
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(body.to_vec()))
+        .map_err(|e| AtomicServerError::bad_request(format!("Body is not a zip archive: {e}")))?;
+    let manifest = crate::plugins::wasm::validate_plugin_zip(&mut zip)
+        .map_err(|e| AtomicServerError::bad_request(e.to_string()))?;
+    let package = crate::plugins::release::store_package(&appstate.store, &body).await?;
+    let release = PluginRelease {
+        source: None,
+        package: Some(package),
+        manifest: serde_json::to_value(&manifest)
+            .map_err(|e| AtomicServerError::bad_request(e.to_string()))?,
+        runtime: RUNTIME_WASIP2.into(),
+        world: query
+            .world
+            .clone()
+            .unwrap_or_else(|| WORLD_EXTENSION.into()),
+        schemas: Default::default(),
+        version: Some(manifest.version.clone()),
+        previous_release: None,
+    };
+    let id = appstate
+        .store
+        .publish_plugin_release(&release)
+        .map_err(|e| AtomicServerError::bad_request(e.to_string()))?;
+    if query.public {
+        appstate.store.publish_plugin_catalog_entry(
+            &atomic_lib::db::plugin_release::CatalogEntry {
+                release: id.clone(),
+                emoji: None,
+                name: manifest.name.clone(),
+                description: manifest.description.clone().unwrap_or_default(),
+                publisher: agent.to_string(),
+                domains: vec![],
+                standards: vec![],
+            },
+        )?;
+    }
+    Ok(HttpResponse::Ok().json(serde_json::json!({"id":id,"release":release})))
+}
+
 /// Catalog entries are explicitly public; private approval-only packages are absent.
+///
+/// Still the KV catalog: `Listing` resources exist as a class, but a marketplace
+/// container is not configured on the server yet, so they are not merged here.
 pub async fn catalog(appstate: web::Data<AppState>) -> AtomicServerResult<HttpResponse> {
     let entries = appstate.store.plugin_catalog()?;
     let entries: Vec<_> = entries

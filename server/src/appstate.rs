@@ -101,6 +101,10 @@ impl AppState {
             config.plugin_cache_path.clone(),
             config.uploads_path.clone(),
         ))?;
+        store.add_class_extender(plugins::plugin::build_installation_extender(
+            config.plugin_path.clone(),
+            config.plugin_cache_path.clone(),
+        ))?;
         store.add_class_extender(plugins::files::build_file_extender(
             config.uploads_path.clone(),
         ))?;
