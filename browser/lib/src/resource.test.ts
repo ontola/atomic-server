@@ -266,7 +266,9 @@ describe('resource.ts', () => {
     expect(resource.get(prop)).toBe('Hello world');
   });
 
-  it('markdown concurrent edits to different ends merge', async ({ expect }) => {
+  it('markdown concurrent edits to different ends merge', async ({
+    expect,
+  }) => {
     const prop = core.properties.description;
     const base = new Resource('https://example.com/md');
     await base.set(prop, 'middle', false);
