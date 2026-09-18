@@ -11,7 +11,7 @@ catalog document; `localthought.ts` here is the only Clockify-specific code.
 ## What the lens does
 
 - **Workspace and account picker.** The catalog document only lists time
-  entries, so setup reads `/v1/workspaces` and `/v1/user` through the same
+  entries, so setup reads `/api/v1/workspaces` and `/api/v1/user` through the same
   proxy (`parameterOptions.ts`) and offers them as dropdowns; the account is
   filled in automatically since there is only one.
 - **Rolling look-back.** Setup offers the past 7 or 30 days. The window is

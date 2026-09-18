@@ -46,6 +46,23 @@ interface CalendarFixture {
     query: Record<string, string>;
   }>;
 }
+interface ClockifyFixture {
+  state: {
+    entries: Array<{
+      id: string;
+      description: string;
+      type: 'REGULAR' | 'BREAK';
+      billable: boolean;
+      timeInterval: { start: string; end: string | null; duration: string | null };
+    }>;
+    /** Every provider request, as `METHOD /path?query`. */
+    requests: string[];
+  };
+}
 export function mockProxy(options?: {
   frontendOrigin?: string;
-}): Server & { github: GitHubTracker; calendar: CalendarFixture };
+}): Server & {
+  github: GitHubTracker;
+  calendar: CalendarFixture;
+  clockify: ClockifyFixture;
+};

@@ -8,6 +8,7 @@ import {
   todoistProjection,
 } from '../../../../../integrations/localthought/todoist';
 import type { TableViewSpec } from '@chunks/TablePage/createTableFromSpec';
+import type { LocalThoughtInstallation } from './localThoughtSync';
 import { clockifyIntegration } from './ClockifyLocalThought';
 
 /**
@@ -54,10 +55,27 @@ export interface LocalThoughtExtension<Selection = unknown> {
    * table-template spec vocabulary: column references are term shortnames
    * (or `name`). The first, or the one marked `default`, opens first. */
   views?: Record<string, TableViewSpec[]>;
+  /** Setup dialog step labels: connect, choose, done. Shown as a stepper. */
+  steps?: [string, string, string];
+  /** One line under the connected-account card, e.g. how the key is held. */
+  connectionNote?: string;
   ImportControls?: ComponentType<{
     value: Selection;
     disabled: boolean;
     onChange(value: Selection): void;
+  }>;
+  /** Where the imported records live on the provider's side. */
+  providerLink?(installation: LocalThoughtInstallation): {
+    href: string;
+    label: string;
+  };
+  /** A management panel on the installed folder and its tables, below the
+   * generic sync status line. */
+  Manage?: ComponentType<{
+    installation: LocalThoughtInstallation;
+    disabled: boolean;
+    /** Persist a change to the installation (a new look-back, say). */
+    update(patch: Partial<LocalThoughtInstallation>): void;
   }>;
   /** Present only for a lens with a write direction. */
   Sync?: ComponentType<{

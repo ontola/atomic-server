@@ -1,6 +1,7 @@
 /** Local-only integration-proxy fixture. Never deploy this service. */
 import { calendarDocument, calendarFixture } from './mock-calendar.mjs';
 import { githubTracker } from './mock-github.mjs';
+import { clockifyDocument, clockifyFixture } from './mock-clockify.mjs';
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
@@ -13,6 +14,7 @@ const equal = (a, b) =>
 const pkceChallenge = verifier =>
   createHash('sha256').update(verifier).digest('base64url');
 const platforms = {
+  clockify: 'Clockify',
   'github-issues': 'GitHub Issues',
   'google-calendar': 'Google Calendar',
   pets: 'Pets',
@@ -33,6 +35,7 @@ export function mockProxy({
 } = {}) {
   const github = githubTracker();
   const calendar = calendarFixture();
+  const clockify = clockifyFixture();
   const codes = new Map();
   const handoffs = new Map();
   const issueCode = platform => {
@@ -62,9 +65,11 @@ export function mockProxy({
       res.end(JSON.stringify(value));
     };
     if (url.pathname === '/catalog')
-      return json(200, ['github-issues', 'google-calendar', 'pets']);
-    if (/^\/catalog\/(pets|google-calendar|github-issues)\.selection\.json$/.test(url.pathname))
+      return json(200, ['clockify', 'github-issues', 'google-calendar', 'pets']);
+    if (/^\/catalog\/(pets|google-calendar|github-issues|clockify)\.selection\.json$/.test(url.pathname))
       return json(200, { query_overrides: [] });
+    if (url.pathname === '/catalog/clockify.yaml')
+      return json(200, clockifyDocument);
     if (url.pathname === '/catalog/pets.yaml') {
       res.writeHead(200, { 'Content-Type': 'application/yaml' });
       return res.end(
@@ -171,6 +176,10 @@ export function mockProxy({
         const result = calendar.request(req.method, url);
         return json(result.status, result.body, headers);
       }
+      if (platform === 'clockify') {
+        const result = clockify.request(req.method, url);
+        return json(result.status, result.body, headers);
+      }
       if (req.method !== 'GET') return json(403, {}, headers);
       const data =
         platform === 'pets'
@@ -189,6 +198,7 @@ export function mockProxy({
   });
   server.github = github;
   server.calendar = calendar;
+  server.clockify = clockify;
   return server;
 }
 if (

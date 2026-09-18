@@ -4,6 +4,7 @@ import {
   readSavedConnection,
 } from '../../../../../integrations/localthought/settings';
 import { useEffect, useState } from 'react';
+import { styled } from 'styled-components';
 import { useStore } from '@tomic/react';
 import { Button } from '@components/Button';
 import { Column } from '@components/Row';
@@ -99,7 +100,24 @@ function GenericConnection({
       .describe(platform)
       .then(data => {
         if (controller.signal.aborted) return;
-        setParameters(data.parameters);
+        // Parameters with a lookup come first, in the lookup's order: the
+        // platform's own order is alphabetical and says nothing about the
+        // user's (a workspace before the account inside it).
+        const lookupOrder = Object.keys(
+          PARAMETER_OPTION_LOOKUPS[platform] ?? {},
+        );
+
+        const rank = (key: string) => {
+          const index = lookupOrder.indexOf(key);
+
+          return index === -1 ? lookupOrder.length : index;
+        };
+
+        setParameters(
+          [...data.parameters].sort(
+            (a: string, b: string) => rank(a) - rank(b),
+          ),
+        );
         setCollections(data.collections);
         setConstants(
           Object.fromEntries(
@@ -209,6 +227,15 @@ function GenericConnection({
         platform,
         connection: connection.connection,
         constants,
+        labels: Object.fromEntries(
+          Object.entries(constants).flatMap(([parameter, value]) => {
+            const label = parameterOptions[parameter]?.find(
+              option => option.value === value,
+            )?.label;
+
+            return label ? [[parameter, label]] : [];
+          }),
+        ),
         selection:
           extension && selection ? extension.selection(selection) : undefined,
         selectionValue: extension ? selection : undefined,
@@ -230,19 +257,38 @@ function GenericConnection({
     }
   };
 
+  const step = !connection ? 0 : !folder ? 1 : 2;
+
   return (
     <Column gap='0.75rem'>
-      <p>
-        Connect your personal account through LocalThought, then return here to
-        choose what to sync.
-      </p>
-      <p>
-        LocalThought will ask you to sign in and authorize this connection.
-        Connection credentials stay in this browser.
-      </p>
-      <Button disabled={busy} onClick={connect}>
-        {connection ? 'Reconnect account' : 'Install and connect'}
-      </Button>
+      {extension?.steps && <Stepper steps={extension.steps} current={step} />}
+      {!connection && (
+        <>
+          <p>
+            Connect your personal account through LocalThought, then return here
+            to choose what to sync.
+          </p>
+          <p>
+            LocalThought will ask you to sign in and authorize this connection.
+            Connection credentials stay in this browser.
+          </p>
+        </>
+      )}
+      {connection && extension?.connectionNote ? (
+        <Connected>
+          <span>
+            <strong>{extension.label}</strong>
+            <small>{extension.connectionNote}</small>
+          </span>
+          <Button subtle disabled={busy} onClick={connect}>
+            Change key
+          </Button>
+        </Connected>
+      ) : (
+        <Button disabled={busy} onClick={connect}>
+          {connection ? 'Reconnect account' : 'Install and connect'}
+        </Button>
+      )}
       {connection && !folder && (
         <>
           {parameters.map(parameter => {
@@ -320,6 +366,99 @@ function GenericConnection({
     </Column>
   );
 }
+
+/** The setup dialog's progress, for lenses that name their steps. */
+function Stepper({
+  steps,
+  current,
+}: {
+  steps: readonly string[];
+  current: number;
+}) {
+  return (
+    <Steps aria-label='Setup progress'>
+      {steps.map((label, index) => (
+        <li
+          key={label}
+          aria-current={index === current ? 'step' : undefined}
+          data-done={index < current ? '' : undefined}
+        >
+          <span aria-hidden>{index < current ? '✓' : index + 1}</span>
+          {label}
+        </li>
+      ))}
+    </Steps>
+  );
+}
+
+const Steps = styled.ol`
+  display: flex;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: ${p => p.theme.colors.textLight};
+  }
+
+  li[aria-current] {
+    color: ${p => p.theme.colors.main};
+    font-weight: 700;
+  }
+
+  li[data-done] {
+    color: ${p => p.theme.colors.text};
+  }
+
+  li span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    background: ${p => p.theme.colors.bg2};
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  li[aria-current] span {
+    background: ${p => p.theme.colors.main};
+    color: white;
+  }
+
+  li:not(:last-child)::after {
+    content: '';
+    flex-grow: 1;
+    min-width: 1rem;
+    height: 2px;
+    background: ${p => p.theme.colors.bg2};
+  }
+`;
+
+const Connected = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-radius: ${p => p.theme.radius};
+  background: ${p => p.theme.colors.bg1};
+
+  & > span {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+  }
+
+  small {
+    color: ${p => p.theme.colors.textLight};
+  }
+`;
 
 function ImportScopeHelp({ writable }: { writable: boolean }) {
   return (

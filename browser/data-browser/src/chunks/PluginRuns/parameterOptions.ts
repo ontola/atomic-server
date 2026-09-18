@@ -25,13 +25,13 @@ export const PARAMETER_OPTION_LOOKUPS: Record<
   // workspaces are read through the same proxy so nobody types a 24-hex id.
   clockify: {
     workspaceId: {
-      path: '/v1/workspaces',
+      path: '/api/v1/workspaces',
       itemValue: 'id',
       itemLabel: 'name',
       label: 'Workspace',
     },
     userId: {
-      path: '/v1/user',
+      path: '/api/v1/user',
       itemValue: 'id',
       itemLabel: 'name',
       label: 'Account',

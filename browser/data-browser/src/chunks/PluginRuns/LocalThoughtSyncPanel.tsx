@@ -9,6 +9,7 @@ import { localImportRows } from './localImportVerdict';
 import {
   findInstallation,
   refreshLocalThought,
+  saveInstallation,
   REFRESH_INTERVAL,
   SYNC_CHANGED,
   type LocalThoughtInstallation,
@@ -61,10 +62,13 @@ export function LocalThoughtSync({ resource }: { resource: Resource }) {
   )
     return null;
   const { config } = installation;
-  const Sync = localThoughtExtension(
+  const extension = localThoughtExtension(
     installation.platform,
     installation.extension,
-  )?.Sync;
+  );
+  const Sync = extension?.Sync;
+  const Manage = extension?.Manage;
+  const providerLink = extension?.providerLink?.(installation);
 
   return (
     <Column gap='0.5rem'>
@@ -88,6 +92,11 @@ export function LocalThoughtSync({ resource }: { resource: Resource }) {
         {subject !== installation.folder && (
           <AtomicLink subject={installation.folder}>Open folder</AtomicLink>
         )}
+        {providerLink && (
+          <a href={providerLink.href} target='_blank' rel='noreferrer'>
+            {providerLink.label}
+          </a>
+        )}
       </Row>
       <small>Refreshes every five minutes while open in this browser.</small>
       {installation.error && (
@@ -95,6 +104,16 @@ export function LocalThoughtSync({ resource }: { resource: Resource }) {
       )}
       {!installation.error && installation.warning && (
         <small role='status'>Synced with issues: {installation.warning}</small>
+      )}
+      {Manage && (
+        <details>
+          <summary>Manage sync</summary>
+          <Manage
+            installation={installation}
+            disabled={!!installation.syncing}
+            update={patch => saveInstallation({ ...installation, ...patch })}
+          />
+        </details>
       )}
       {Sync && config && (
         <Sync
