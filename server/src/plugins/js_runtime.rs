@@ -12,10 +12,13 @@ use std::sync::Arc;
 
 use atomic_lib::{agents::ForAgent, Db};
 use wasmtime::component::{Component, Linker, ResourceTable};
-use wasmtime::{Engine, Store, StoreLimits, StoreLimitsBuilder};
+use wasmtime::{Engine, Store, StoreLimits};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
 
 use crate::errors::AtomicServerResult;
+
+pub use super::host_core::PluginHost;
+use super::host_core::{self, FetchRequest, HostCore, ResourceGrants, Runtime};
 
 mod bindings {
     wasmtime::component::bindgen!({
@@ -24,31 +27,6 @@ mod bindings {
         imports: { default: async },
         exports: { default: async },
     });
-}
-
-/// A plugin gets one run's worth of resources, then the instance is dropped.
-/// Nothing survives to the next run — not a timer, not a global, not a leak.
-const FUEL: u64 = 20_000_000_000;
-const MEMORY_BYTES: usize = 256 * 1024 * 1024;
-
-/// What the host will do on a plugin's behalf.
-///
-/// A trait rather than a concrete type so the guards can be tested without a
-/// store, and so a future placement (a CLI, a test harness) can supply its own.
-#[async_trait::async_trait]
-pub trait PluginHost: Send + 'static {
-    async fn invoke_action(
-        &mut self,
-        _: String,
-        _: &str,
-        _: bool,
-        _: Option<&str>,
-    ) -> Result<String, String> {
-        Err("integration actions are not available in this context".into())
-    }
-    async fn fetch(&mut self, request: String) -> Result<String, String>;
-    async fn get_resource(&mut self, subject: String) -> Result<String, String>;
-    async fn query(&mut self, property: String, value: String) -> Result<String, String>;
 }
 
 // Captured from the host input before JS starts. Mutating ctx.trigger cannot
@@ -119,18 +97,13 @@ impl<H: PluginHost> bindings::atomic::plugin_runtime::host::Host for RuntimeStat
 /// Compiling the component is the expensive part; instantiating it is not, so
 /// this is built once and every run gets a fresh instance from it.
 pub struct JsRuntime {
-    engine: Engine,
+    engine: Arc<Engine>,
     component: Component,
 }
 
 impl JsRuntime {
     pub fn from_bytes(bytes: &[u8]) -> AtomicServerResult<Self> {
-        let mut config = wasmtime::Config::new();
-        config.wasm_component_model(true);
-        config.consume_fuel(true);
-
-        let engine =
-            Engine::new(&config).map_err(|e| format!("could not create a wasm engine: {e}"))?;
+        let engine = host_core::engine()?;
         let component = Component::from_binary(&engine, bytes)
             .map_err(|e| format!("plugin runtime is not a valid component: {e}"))?;
 
@@ -174,6 +147,11 @@ impl JsRuntime {
         )
         .map_err(|e| format!("could not link the plugin host: {e}"))?;
 
+        // A plugin gets one run's worth of resources, then the instance is
+        // dropped. Nothing survives to the next run — not a timer, not a
+        // global, not a leak.
+        let limits = host_core::limits(Runtime::Js, ResourceGrants::default());
+
         let mut store = Store::new(
             &self.engine,
             RuntimeState {
@@ -181,7 +159,7 @@ impl JsRuntime {
                 // No stdio, no filesystem, no sockets. Everything a plugin can
                 // reach is an import the host wrote.
                 ctx: WasiCtxBuilder::new().build(),
-                limits: StoreLimitsBuilder::new().memory_size(MEMORY_BYTES).build(),
+                limits: limits.store_limits(),
                 host,
                 source_hash: blake3::hash(source.as_bytes()).to_hex().to_string(),
                 allow_automatic: trusted_trigger
@@ -196,9 +174,7 @@ impl JsRuntime {
         );
 
         store.limiter(|state| &mut state.limits);
-        store
-            .set_fuel(FUEL)
-            .map_err(|e| format!("could not meter the plugin: {e}"))?;
+        limits.meter(&mut store)?;
 
         let instance =
             bindings::PluginRuntime::instantiate_async(&mut store, &self.component, &linker)
@@ -304,23 +280,20 @@ impl StoreHost {
             .map_err(|e| e.to_string())
     }
 
-    /// Origins this plugin may reach.
+    /// The shared host under this run's grant.
     ///
-    /// Taken from the origins its secrets are scoped to. That makes "can reach"
-    /// and "has a credential for" the same thing, which is right for an
-    /// importer and wrong for a public API needing no auth — the latter is not
-    /// reachable yet. A declared-origins field on the plugin belongs here once
-    /// there is a bootstrapped property to put it in.
-    fn allowed_origins(&self) -> Vec<String> {
-        self.db
-            .list_plugin_secrets(&self.drive, &self.plugin)
-            .map(|secrets| {
-                secrets
-                    .into_iter()
-                    .flat_map(|secret| secret.origins)
-                    .collect()
-            })
-            .unwrap_or_default()
+    /// Built per call rather than once: the installation is resolved each
+    /// time, so a revocation between two calls of one run takes effect on the
+    /// second.
+    pub(crate) async fn core(&self) -> Result<HostCore, String> {
+        HostCore::for_run(
+            self.db.clone(),
+            &self.drive,
+            &self.plugin,
+            self.for_agent.clone(),
+            self.manifest.clone(),
+        )
+        .await
     }
 }
 
@@ -339,6 +312,18 @@ struct JsRequest {
 
 fn default_method() -> String {
     "GET".to_string()
+}
+
+impl From<JsRequest> for FetchRequest {
+    fn from(request: JsRequest) -> Self {
+        FetchRequest {
+            operation: request.operation,
+            method: request.method,
+            url: request.url,
+            headers: request.headers.into_iter().collect(),
+            body: request.body,
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -364,150 +349,43 @@ impl PluginHost for StoreHost {
     }
 
     async fn get_resource(&mut self, subject: String) -> Result<String, String> {
-        use atomic_lib::Storelike;
-
-        let resource = self
-            .db
-            .get_resource(&subject.into())
-            .await
-            .map_err(|e| e.to_string())?;
-
-        let app =
-            super::store_host::app_signing_for(self.db.as_ref(), &self.drive, &self.plugin).await?;
-        super::store_host::check_effective_read(
-            self.db.as_ref(),
-            &resource,
-            &self.for_agent,
-            app.as_ref(),
-        )
-        .await?;
-        resource.to_json_ad(None).map_err(|e| e.to_string())
+        self.core()
+            .await?
+            .get_resource(&subject)
+            .await?
+            .to_json_ad(None)
+            .map_err(|e| e.to_string())
     }
 
     async fn query(&mut self, property: String, value: String) -> Result<String, String> {
-        use atomic_lib::Storelike;
-
-        let query = atomic_lib::storelike::Query {
-            property: Some(property),
-            value: Some(atomic_lib::Value::String(value)),
-            limit: Some(10_001),
-            drive: Some(self.drive.as_str().into()),
-            for_agent: self.for_agent.clone(),
-            ..Default::default()
-        };
-
-        let result = self.db.query(&query).await.map_err(|e| e.to_string())?;
-
-        if result.subjects.len() > 10_000 || result.count != result.subjects.len() {
-            return Err("sandbox query is incomplete or exceeds 10000 records".into());
-        }
-        let mut subjects = Vec::new();
-        for subject in result.subjects {
-            self.get_resource(subject.to_string()).await?;
-            subjects.push(subject);
-        }
+        let subjects: Vec<String> = self
+            .core()
+            .await?
+            .query(&property, &value)
+            .await?
+            .iter()
+            .map(|resource| resource.get_subject().to_string())
+            .collect();
         serde_json::to_string(&subjects).map_err(|e| e.to_string())
     }
 }
 
 impl StoreHost {
+    /// A fetch as the JS guest describes it: a JSON request in, a JSON
+    /// `{ status, body }` out. Every check in between is the shared host's.
     pub(crate) async fn request(
         &mut self,
         request: String,
         effect: &str,
     ) -> Result<String, String> {
-        use crate::plugins::egress;
-
         let request: JsRequest =
             serde_json::from_str(&request).map_err(|e| format!("not a request: {e}"))?;
 
-        if let Some(refusal) =
-            egress::refuse_misplaced_handles(&request.url, request.body.as_deref())
-        {
-            return Err(refusal);
-        }
-
-        let url = url::Url::parse(&request.url).map_err(|e| format!("not a URL: {e}"))?;
-        let origin = egress::origin_of(&url)?;
-
-        if let Some(manifest) = &self.manifest {
-            if !manifest.allows_effect(request.operation.as_deref(), &request.method, &url, effect)
-            {
-                return Err("preview fetch requires a declared read operation; external writes need an approved intent".into());
-            }
-        } else if effect != "read" || !matches!(request.method.as_str(), "GET" | "HEAD") {
-            return Err("legacy preview fetch permits only GET and HEAD; declare read operations in a versioned manifest".into());
-        } else if !self.allowed_origins().iter().any(|o| o == &origin) {
-            return Err(format!(
-                "this plugin has no secret scoped to {origin}, so it cannot reach it",
-            ));
-        }
-
-        let addresses = egress::checked_addresses(&url).await?;
-
-        let db = self.db.clone();
-        let drive = self.drive.clone();
-        let plugin = self.plugin.clone();
-        let now = atomic_lib::utils::now();
-
-        let headers = egress::substitute_headers(request.headers.into_iter().collect(), |name| {
-            if self.manifest.as_ref().is_some_and(|manifest| {
-                !manifest
-                    .secrets
-                    .iter()
-                    .any(|secret| secret.name == name && secret.origin == origin)
-            }) {
-                return None;
-            }
-            let key = atomic_lib::db::plugin_secret::PluginSecretKey::new(&drive, &plugin, name);
-
-            db.use_plugin_secret(&key, &origin, now, |value| value.to_string())
-                .ok()
-                .flatten()
-        })?;
-
-        let method = reqwest::Method::from_bytes(request.method.as_bytes())
-            .map_err(|e| format!("not an HTTP method: {e}"))?;
-
-        let client = reqwest::Client::builder()
-            .no_proxy()
-            .resolve_to_addrs(url.host_str().ok_or("URL has no host")?, &addresses)
-            .timeout(std::time::Duration::from_secs(egress::FETCH_TIMEOUT_SECS))
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|e| format!("could not build an HTTP client: {e}"))?;
-
-        let mut outgoing = client.request(method, url);
-
-        for (name, value) in headers {
-            outgoing = outgoing.header(name, value);
-        }
-
-        if let Some(body) = request.body {
-            outgoing = outgoing.body(body);
-        }
-
-        let mut response = outgoing
-            .send()
-            .await
-            .map_err(|e| format!("request to {origin} failed: {e}"))?;
-
-        let status = response.status().as_u16();
-        let mut bytes = Vec::new();
-        while let Some(chunk) = response
-            .chunk()
-            .await
-            .map_err(|e| format!("could not read the response from {origin}: {e}"))?
-        {
-            if chunk.len() > egress::FETCH_MAX_RESPONSE_BYTES.saturating_sub(bytes.len()) {
-                return Err(format!("{origin} response exceeds the byte limit"));
-            }
-            bytes.extend_from_slice(&chunk);
-        }
+        let response = self.core().await?.fetch(request.into(), effect).await?;
 
         serde_json::to_string(&serde_json::json!({
-            "status": status,
-            "body": String::from_utf8_lossy(&bytes),
+            "status": response.status,
+            "body": response.body,
         }))
         .map_err(|e| e.to_string())
     }
