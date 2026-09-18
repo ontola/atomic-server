@@ -13,8 +13,9 @@
 ## How to re-run
 
 ```
-# Store / query (native redb — the same engine as OPFS WASM)
-cargo test -p atomic_lib --features db-redb --test table_scale -- --ignored --nocapture
+# Store / query (native redb — the same engine as OPFS WASM). Release numbers
+# are the ones in this doc; debug is ~10× slower on create.
+cargo test -p atomic_lib --features db-redb --test table_scale --release -- --ignored --nocapture
 
 # Browser write + Collection + grid (default 1000 rows; 100k is hours)
 TABLE_STRESS=1 npx playwright test tests/table-stress.spec.ts --workers=1 --reporter=line
@@ -40,8 +41,8 @@ The grid itself is `react-window`. It only mounts the visible rows.
 
 ## Findings
 
-Numbers filled in from this session's run (native redb on the cloud agent VM,
-and Chromium against the local Vite + AtomicServer stack).
+Native redb, `--release`, cloud-agent VM, 2026-09-18. Same crate the WASM
+OPFS ClientDb compiles. Full log: `table_scale_n100000_release.log`.
 
 ### 1. Write path — one genesis commit per row
 
@@ -50,71 +51,69 @@ ValPropSub / search tokens / envelope. Native `Db::create_resource`:
 
 | N | create total | ms/row | redb file | bytes/row |
 | --- | --- | --- | --- | --- |
-| 1,000 | *(run)* | | | |
-| 10,000 | | | | |
-| 100,000 | | | | |
+| 1,000 | 2.4 s | 2.42 | 64 MB | 67 KB |
+| 10,000 | 39 s | 3.90 | 514 MB | 54 KB |
+| 100,000 | **686 s (11.4 min)** | **6.86** | **4.0 GB** | 43 KB |
 
-Browser `store.newResource` + `save()` is the same commit plus a worker
-postMessage, OPFS durability tick, and a server POST. At ~tens of ms/row,
-100k rows in the UI is not a realistic session.
+Create **slows as the store grows** (2.4 → 6.9 ms/row). The last 90k rows
+were 7.2 ms each. That is index + snapshot write amplification, not the
+table widget. A 100k-row table is a **4 GB** redb file before anyone opens
+it. Browser `save()` also pays a worker postMessage, OPFS tick, and a
+server POST — tens of ms/row, so 100k interactive creates are not a
+session.
 
-This is storage, not the table widget. See
-[`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md):
-every commit stores a **full Loro snapshot**, so size tracks `edits × resource
-size`.
+See [`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md):
+every commit stores a **full Loro snapshot**.
 
 ### 2. Query path — the open-table bottleneck
 
-`Collection.fetchPageFromLocalDb` is O(matches), not O(page). At 100k rows the
-store still has to:
+`Collection.fetchPageFromLocalDb` is O(matches), not O(page). At 100k it:
 
-1. Build or scan QueryMembers for `parent ∧ isA` (first open).
-2. Walk **every** member to produce `totalMembers` (`query_sorted_indexed`
-   documents this in-code; issue #290).
-3. Materialise a nested body (shallow row + raw Loro snapshot) for **every**
-   match, because `include_nested` is on and `limit` is missing.
-4. Serialise those bodies to JSON-AD, postMessage them to the main thread,
-   `JSON.parse` + hydrate.
-5. Sort 100k keys in JS, slice 30.
+1. Builds/scans QueryMembers for `parent ∧ isA`.
+2. Walks **every** member for `totalMembers` (issue #290).
+3. Materialises a nested body (shallow row + raw Loro snapshot) for **every**
+   match — `include_nested` on, `limit` missing.
+4. Serialises those bodies to JSON-AD (~4.3 KB/row with `loroUpdate` →
+   **~430 MB** at 100k), postMessages them, `JSON.parse`s + hydrates.
+5. Sorts 100k keys in JS, slices 30.
 
-A page-sized query (30 nested bodies, subjects-only for the rest) is the
-cost the grid actually needs. The gap between "unpaged nested" and "page of
-30" is the headroom.
-
-| N | nested unpaged (1st) | nested unpaged (2nd) | subjects unpaged | nested page 30 | subjects page 30 | aggregation |
+| N | nested unpaged 1st | nested unpaged 2nd | subjects unpaged | nested page 30 | subjects page 30 | aggregation |
 | --- | --- | --- | --- | --- | --- | --- |
-| 1,000 | | | | | | |
-| 10,000 | | | | | | |
-| 100,000 | | | | | | |
+| 1,000 | 30 ms | 15 ms | 1.3 ms | 0.7 ms | 0.2 ms | 10 ms |
+| 10,000 | 239 ms | 171 ms | 11 ms | 3.0 ms | 1.9 ms | 93 ms |
+| 100,000 | **4.6 s** | **2.3 s** | 156 ms | **33 ms** | 21 ms | **1.0 s** |
+
+Unpaged nested is ~linear and ~140× a page of 30 at 100k. The page is what
+the grid needs. Subjects-only unpaged is 30× cheaper than nested — the
+bodies, not the index walk, dominate. Aggregates are a second full pass
+(~1 s at 100k).
+
+JSON-AD of 30 nested bodies is 131 KB / 0.3 ms at every N. JSON-AD of
+*all* matches is 4.3 KB/row (measured at 1k and 10k).
 
 ### 3. UI — not the 100k problem
 
 `react-window` only renders the viewport. `aria-rowcount` can be 100k while
-the DOM holds ~20–40 rows. Scroll should stay cheap **if** the collection
-does not re-hydrate every member on each page fetch.
+the DOM holds ~20–40 rows. Scroll stays cheap **if** the collection does
+not dump every member onto the main thread first. That dump is step 2.
 
-The UI will still hitch if step 2 dumps 100k JSON-AD strings onto the main
-thread before the first paint.
-
-## Ranked bottlenecks (after numbers)
+## Ranked bottlenecks
 
 1. **Collection local fetch hydrates every row** — `browser/lib/src/collection.ts`
    `fetchPageFromLocalDb`: no `limit`/`offset`, `includeResources: true`,
-   client-side sort. This is the table-open cliff, and it is client-side, not
-   OPFS-the-filesystem.
-2. **Exact `totalMembers` walks the whole index** — `query_sorted_indexed` /
-   `query_basic`. Planned in `index-performance.md` as cursor pagination +
-   `hasMore`. Not built.
-3. **WASM cannot sort DID-scoped queries**, so (1) exists. Fixing sort in the
-   local query index would let the worker return a 30-row page.
-4. **Write amplification** — one signed Loro snapshot per row. Dominates
-   *creating* 100k rows; irrelevant to opening an already-written table.
-5. **Aggregates re-walk every match.** Fine for a totals row on a small
-   table; another full pass at 100k. Incremental / indexed sums are not built.
-6. **OPFS/redb file size** — scales with snapshots + envelopes + inverted
-   indexes, not with the 30 visible cells. Open/fsync cost is
-   `disk-storage-and-persistence-optimization.md`, layer 1.
-7. **The grid (react-window)** — not the limiter, provided (1) is fixed.
+   client-side sort. **4.6 s store-only at 100k**, plus ~430 MB of JSON-AD
+   across the worker boundary. This is the table-open cliff. Not
+   OPFS-the-filesystem; it is the query the client asks OPFS to run.
+2. **Write amplification / store growth** — 6.9 ms/row by 100k, 4 GB file.
+   Dominates *creating* a huge table. Opening an already-written one is (1).
+3. **Aggregates re-walk every match** — 1.0 s extra at 100k. Fine on a
+   small table; another full pass at this N.
+4. **Exact `totalMembers` walks the whole index** — 21–33 ms even for a
+   30-row page at 100k. Planned as cursor pagination + `hasMore` in
+   `index-performance.md`. Not built.
+5. **WASM cannot sort DID-scoped queries**, so (1) exists. Fixing sort in
+   the local query index would let the worker return the right 30 rows.
+6. **The grid (react-window)** — not the limiter, provided (1) is fixed.
 
 ## What not to do
 

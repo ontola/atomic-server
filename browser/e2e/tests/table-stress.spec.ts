@@ -40,8 +40,11 @@ const PREFIXES = [
 
 function stressN(): number {
   const raw = process.env.TABLE_STRESS_N;
+
   if (!raw) return 1_000;
+
   const n = Number(raw);
+
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 1_000;
 }
 
@@ -111,6 +114,7 @@ test.describe('table stress', () => {
 
     const tableSubject = await page.evaluate(() => {
       const url = new URL(window.location.href);
+
       return url.searchParams.get('subject') ?? '';
     });
     expect(tableSubject).toBeTruthy();
@@ -132,7 +136,7 @@ test.describe('table stress', () => {
 
     await resetPerfTrace(page);
     const insert = await page.evaluate(
-      async ({ table, count, parent, isA, name, classtype }) => {
+      async ({ table, count, name, classtype }) => {
         const store = window.store;
         const tableResource = await store.getResource(table);
         const rowClass = tableResource.get(classtype) as string;
@@ -150,6 +154,7 @@ test.describe('table stress', () => {
           if (i > 0 && i % 50 === 0) {
             await new Promise<void>(resolve => setTimeout(resolve, 0));
             const now = performance.now();
+
             if (now - lastYield > 2_000) {
               // eslint-disable-next-line no-console
               console.log(`[TABLE-STRESS] inserted ${i}/${count}`);
@@ -167,8 +172,6 @@ test.describe('table stress', () => {
       {
         table: tableSubject,
         count: n,
-        parent: PARENT,
-        isA: IS_A,
         name: NAME,
         classtype: CLASSTYPE,
       },
@@ -186,12 +189,14 @@ test.describe('table stress', () => {
     const queryTimings = await page.evaluate(
       async ({ table, parent, isA, rowClass, drive: driveSubject }) => {
         const store = window.store;
+
         const time = async (
           label: string,
           opts: Parameters<typeof store.queryLocalDb>[0],
         ) => {
           const t0 = performance.now();
           const result = await store.queryLocalDb(opts);
+
           return {
             label,
             ms: Math.round(performance.now() - t0),
@@ -213,10 +218,13 @@ test.describe('table stress', () => {
         };
 
         return {
-          currentOpen: await time('collection-open current (no limit, bodies)', {
-            ...base,
-            includeResources: true,
-          }),
+          currentOpen: await time(
+            'collection-open current (no limit, bodies)',
+            {
+              ...base,
+              includeResources: true,
+            },
+          ),
           pagedBodies: await time('nested page of 30', {
             ...base,
             includeResources: true,
@@ -264,6 +272,63 @@ test.describe('table stress', () => {
     await page.goto(
       `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(tableSubject)}`,
     );
+    // Full remount: wait until the same OPFS worker the collection will ask
+    // is actually up. `waitForGridMounted` is not enough — FancyTable is not
+    // passed `busy`, and the empty entry row is drawn before the collection
+    // answers, so a visible grid with `aria-rowcount=1` is the loading state.
+    await page.waitForFunction(
+      () => window.store?.getClientDb()?.isReady === true,
+      undefined,
+      { timeout: 30_000 },
+    );
+
+    const remountQuery = await page.evaluate(
+      async ({ table, parent, isA, rowClass, drive: driveSubject }) => {
+        const t0 = performance.now();
+        const result = await window.store.queryLocalDb({
+          property: parent,
+          value: table,
+          filters: [{ property: isA, value: rowClass }],
+          drive: driveSubject,
+          includeResources: true,
+        });
+
+        return {
+          ms: Math.round(performance.now() - t0),
+          count: result?.count ?? 0,
+          subjects: result?.subjects.length ?? 0,
+          resources: result?.resources?.length ?? 0,
+          jsonAdBytes: (result?.resources ?? []).reduce(
+            (sum, json) => sum + json.length,
+            0,
+          ),
+          jsStoreSize: window.store.resources.size,
+        };
+      },
+      {
+        table: tableSubject,
+        parent: PARENT,
+        isA: IS_A,
+        rowClass: insert.rowClass,
+        drive,
+      },
+    );
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `[TABLE-STRESS] remount queryLocalDb (bodies, no limit): ${remountQuery.ms}ms count=${remountQuery.count} bodies=${remountQuery.resources} jsonAd=${remountQuery.jsonAdBytes}b jsStore=${remountQuery.jsStoreSize}`,
+    );
+
+    await page.waitForFunction(
+      expected =>
+        Number(
+          document
+            .querySelector('[role="grid"]')
+            ?.getAttribute('aria-rowcount') ?? 0,
+        ) >= expected,
+      n,
+      { timeout: Math.max(60_000, n * 20) },
+    );
     await waitForGridMounted(page, Math.max(60_000, n * 20));
     const openMs = Date.now() - openStarted;
 
@@ -309,7 +374,9 @@ test.describe('table stress', () => {
 
     const scroller = page
       .locator('[role="grid"]')
-      .locator('xpath=ancestor::*[contains(@style,"overflow") or @data-radix-scroll-area-viewport][1]')
+      .locator(
+        'xpath=ancestor::*[contains(@style,"overflow") or @data-radix-scroll-area-viewport][1]',
+      )
       .first();
     const scrollTarget = (await scroller.count())
       ? scroller
