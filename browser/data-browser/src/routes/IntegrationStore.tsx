@@ -63,13 +63,8 @@ function IntegrationStore(): React.JSX.Element {
   const { workspace } = IntegrationStoreRoute.useSearch();
   const store = useStore();
   const { drive } = useSettings();
-  const {
-    showApiPlugins,
-    showExperimentalPlugins,
-    ready: visibilityReady,
-    saving: visibilitySaving,
-    setVisibility,
-  } = useIntegrationVisibility();
+  const { showApiPlugins, showExperimentalPlugins, setVisibility } =
+    useIntegrationVisibility();
   const {
     entries: catalogEntries,
     ready: catalogReady,
@@ -282,19 +277,15 @@ function IntegrationStore(): React.JSX.Element {
             <CheckboxLabel>
               <Checkbox
                 checked={showApiPlugins}
-                disabled={!visibilityReady || visibilitySaving}
-                onChange={value =>
-                  void setVisibility('show-api-plugins', value)
-                }
+                onChange={value => setVisibility('show-api-plugins', value)}
               />
               Show API plugins
             </CheckboxLabel>
             <CheckboxLabel>
               <Checkbox
                 checked={showExperimentalPlugins}
-                disabled={!visibilityReady || visibilitySaving}
                 onChange={value =>
-                  void setVisibility('show-experimental-plugins', value)
+                  setVisibility('show-experimental-plugins', value)
                 }
               />
               Show experimental plugins
