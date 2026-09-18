@@ -824,6 +824,65 @@ pub fn validate_plugin_zip(
     Ok(manifest)
 }
 
+/// The `plugin.wasm` inside a validated package.
+pub fn wasm_bytes_from_zip(
+    zip: &mut ZipArchive<std::io::Cursor<Vec<u8>>>,
+) -> AtomicResult<Vec<u8>> {
+    let mut file = zip
+        .by_name("plugin.wasm")
+        .map_err(|_| AtomicError::from("Missing plugin.wasm"))?;
+    let mut bytes = Vec::with_capacity(file.size() as usize);
+    std::io::Read::read_to_end(&mut file, &mut bytes)
+        .map_err(|e| AtomicError::from(format!("Could not read plugin.wasm: {e}")))?;
+    Ok(bytes)
+}
+
+/// Asks a component which classes it extends, by instantiating it once with
+/// no scope, no folder and no manifest, and calling its `class-url` export.
+/// `plugin.json` alone does not say; this is what decides the package's world.
+pub async fn read_class_urls(db: &Db, wasm_bytes: &[u8]) -> AtomicResult<Vec<String>> {
+    let engine = host_core::engine().map_err(AtomicError::from)?;
+    let component = Component::from_binary(&engine, wasm_bytes).map_err(to_atomic_error)?;
+    let core = HostCore::for_class_extender(
+        Arc::new(db.clone()),
+        &ClassExtenderScope::Global,
+        None,
+        None,
+        None,
+    )
+    .map_err(AtomicError::from)?;
+    let probe = WasmPlugin {
+        inner: Arc::new(WasmPluginInner {
+            engine,
+            component,
+            path: PathBuf::from("plugin.wasm"),
+            owned_folder_path: None,
+            scope: ClassExtenderScope::Global,
+            class_url: Vec::new(),
+            core,
+            plugin_subject: None,
+            agent: None,
+            manifest: None,
+        }),
+    };
+    probe.call_class_url().await
+}
+
+/// Validates a package and translates its `plugin.json` into the version-two
+/// manifest, with `world` and `entrypoints.classExtender` taken from the
+/// component itself. This is the manifest a wasip2 Release carries.
+pub async fn describe_package(
+    db: &Db,
+    zip: &mut ZipArchive<std::io::Cursor<Vec<u8>>>,
+) -> AtomicResult<(PluginManifest, super::manifest::Manifest)> {
+    let plugin_json = validate_plugin_zip(zip)?;
+    let wasm_bytes = wasm_bytes_from_zip(zip)?;
+    let class_urls = read_class_urls(db, &wasm_bytes).await?;
+    let manifest = super::manifest::translate_plugin_json(&plugin_json, &class_urls)
+        .map_err(|e| AtomicError::from(format!("plugin.json does not translate: {e}")))?;
+    Ok((plugin_json, manifest))
+}
+
 fn extract_plugin_to_disk(
     zip: &mut ZipArchive<std::io::Cursor<Vec<u8>>>,
     plugins_dir: &Path,
@@ -1368,6 +1427,8 @@ async fn create_plugin_meta(
     let key = PluginMetaKey::new(drive_subject, namespace, name);
     let plugin_meta = store.get_plugin_meta(&key)?;
 
+    // An update keeps the identity and the v2 manifest its Installation wrote.
+    let manifest_v2 = plugin_meta.as_ref().and_then(|m| m.manifest_v2.clone());
     let agent: Agent = if let Some(plugin_meta) = plugin_meta {
         Agent::from_secret(&plugin_meta.agent_secret)?
     } else {
@@ -1409,6 +1470,7 @@ async fn create_plugin_meta(
             subject: plugin_subject.to_string(),
             agent_secret: agent.build_secret()?.clone(),
             manifest: manifest.clone(),
+            manifest_v2,
         },
     )?;
 
