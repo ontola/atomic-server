@@ -446,7 +446,10 @@ export async function issueCapabilityLink(
 const DRIVE_PROP = 'https://atomicdata.dev/properties/drive';
 
 /** The drive a resource lives in, or the resource itself when it is a drive. */
-async function driveOf(store: Store, subject: string): Promise<string | undefined> {
+async function driveOf(
+  store: Store,
+  subject: string,
+): Promise<string | undefined> {
   try {
     const resource = await store.getResource(subject);
     const drive = resource.get(DRIVE_PROP);

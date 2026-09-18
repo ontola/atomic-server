@@ -108,7 +108,10 @@ describe('pkarr', () => {
       ...txtPacket('_atomic_nodes', '["node-a"]'),
     ]);
     // Two answers: splice the second record onto the first packet.
-    const second = txtPacket('_atomic_http', '["https://a.example.org","http://localhost:9883"]');
+    const second = txtPacket(
+      '_atomic_http',
+      '["https://a.example.org","http://localhost:9883"]',
+    );
     const combined = new Uint8Array(packet.length + second.length - 12);
     combined.set(packet);
     combined.set(second.slice(12), packet.length);
@@ -122,7 +125,9 @@ describe('pkarr', () => {
       return new Response(new Blob([payload as BlobPart]), { status: 200 });
     }) as typeof fetch;
 
-    expect(await resolveDriveRecord(drive, 'https://relay.test/pkarr/', fetchFn)).toEqual({
+    expect(
+      await resolveDriveRecord(drive, 'https://relay.test/pkarr/', fetchFn),
+    ).toEqual({
       nodeIds: ['node-a'],
       origins: ['https://a.example.org', 'http://localhost:9883'],
     });
@@ -135,6 +140,8 @@ describe('pkarr', () => {
     const fetchFn = (async () =>
       new Response(null, { status: 404 })) as typeof fetch;
 
-    expect(await resolveDriveOrigins(fakeDrive(1), undefined, fetchFn)).toEqual([]);
+    expect(await resolveDriveOrigins(fakeDrive(1), undefined, fetchFn)).toEqual(
+      [],
+    );
   });
 });

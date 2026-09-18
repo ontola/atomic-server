@@ -285,7 +285,9 @@ function readName(
       continue;
     }
 
-    labels.push(new TextDecoder().decode(packet.slice(cursor + 1, cursor + 1 + size)));
+    labels.push(
+      new TextDecoder().decode(packet.slice(cursor + 1, cursor + 1 + size)),
+    );
     cursor += 1 + size;
   }
 

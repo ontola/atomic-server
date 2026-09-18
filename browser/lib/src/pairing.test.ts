@@ -191,6 +191,8 @@ describe('the older double-slash form', () => {
     const legacy = modern.replace('atomic:pair?', 'atomic://pair?');
 
     expect(modern.startsWith('atomic:pair?')).toBe(true);
-    expect(decodePairingEnvelope(legacy)).toEqual(decodePairingEnvelope(modern));
+    expect(decodePairingEnvelope(legacy)).toEqual(
+      decodePairingEnvelope(modern),
+    );
   });
 });
