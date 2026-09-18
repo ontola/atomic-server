@@ -2144,6 +2144,17 @@ subject-only) and direct reads, while the authorized agent can still read it.
 changed ports/schemes, malformed URLs and non-HTTP URLs; normalized same-origin
 and localhost requests remain eligible for DID-agent authentication.
 
+## Table scale (100k rows)
+
+`lib/tests/table_scale.rs` is an ignored native redb probe
+(`cargo test -p atomic_lib --features db-redb --test table_scale -- --ignored --nocapture`).
+It creates 1k / 10k / 100k table-shaped children and times the query paths a
+table open uses (nested unpaged, subjects-only, page of 30, sort, aggregates,
+JSON-AD size, redb file). `browser/e2e/tests/table-stress.spec.ts` does the
+same through `window.store` + the grid, skipped unless `TABLE_STRESS=1`
+(default 1000 rows; 100k browser creates are not a realistic session).
+Findings: [`planning/table-scale.md`](./planning/table-scale.md).
+
 ## Drive root file drops
 
 `views/Drive/DrivePage.test.tsx` renders the drive page with its real dropzone
