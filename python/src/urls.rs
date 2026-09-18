@@ -44,7 +44,7 @@ pub(crate) fn urls_module(py: Python<'_>) -> PyResult<Bound<'_, PyModule>> {
     m.add("SUBJECT", urls::SUBJECT)?;
     m.add("SIGNER", urls::SIGNER)?;
     m.add("DRIVE_PROP", urls::DRIVE_PROP)?;
-    m.add("PERSONAL_DRIVE", urls::PERSONAL_DRIVE)?;
+    m.add("PERSONAL_DRIVE", urls::PRIVATE_DRIVE)?;
     m.add("LANGUAGE", urls::LANGUAGE)?;
 
     Ok(m)
