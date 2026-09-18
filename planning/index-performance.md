@@ -70,6 +70,8 @@ a derived, rebuildable projection:
 | Compact `query_id` keys in `QueryMembers` + id-keyed live `QUERY_UPDATE` routing | **built (this pass)** |
 | `(drive, property)`-routed watched-filter matching | **built (this pass)** |
 | Most-selective-constraint planner for AND filters (bounded cardinality estimates) | **built (this pass)** |
+| First-build cross-check of the constraints the planner did not scan (bounded by the scan cap) + `Db::check_query_index` full-scan diagnostic | **built (2026-09-18, finding 7)** |
+| Drive-stamp scoping of DID resources for watched filters (`filter_drive_roots`, audit C17) | **built (2026-09-18)** |
 | Typed sort keys in `PropValSub`/`ValPropSub` sort segment | not built (their sort segment is currently unused by ordering-sensitive paths) |
 | Cursor pagination / `hasMore` instead of exact counts | not built (wire + client change) |
 | Batched KV reads (one read txn per query) | not built (`KvStore` trait change; per-`get` redb txns remain) |
@@ -156,6 +158,33 @@ by id.
 filters for every indexable atom of every commit. The registry now routes by
 `(drive, property)`: a filter is registered under each constraint property and
 its `sort_by`; only value-only filters stay in a per-drive catch-all bucket.
+
+### Finding 7 — an index was trusted against evidence it could not have (fixed 2026-09-18)
+
+A drive-scoped, sorted, class-filtered table query returned 5 of 22 rows
+while the store, the unscoped shape and the unsorted shape all had 22
+(`planning/silent-failures.md`). Two things were wrong, neither of them
+visible: `resolve_query_member` hid any member whose class extender check
+errored (a `String`-encoded `isA` did that, for every row so encoded), and
+the planner's premise — that any one constraint's `PropValSub` entries are a
+superset of the members — failed for values whose encoding produced a
+different index key (a `String` holding the JSON array of a `ResourceArray`).
+A build from that constraint filed a partial list; being watched, the list
+was trusted from then on, and every count it produced looked plausible.
+
+Now: the reference strings a value is indexed under and the strings the
+matcher compares come from one helper (`Value::to_reference_index_strings`,
+`Value::contains_value`), so index and matcher cannot disagree; an extender
+that cannot decide is skipped with a warning, never a reason to drop a row;
+a first build walks each other equality constraint whose entries fit under
+`PLANNER_SCAN_CAP` (at most 512 extra key reads per constraint, once per
+filter registration — the hot path is untouched), warns with the filter and
+the missing subjects, and files them (`Db::cross_check_first_build`); and
+`Db::check_query_index(query)` compares a member index with a full scan of
+the store and reports the missing and stale subjects, for tests and
+diagnostics. The build and the commit path also compare a DID resource's
+`drive` stamp with the root its filter resolves to (`filter_drive_roots`),
+so a DID row in another drive no longer enters a filter it merely matches.
 
 ## Empirical numbers (pre-rework reference)
 

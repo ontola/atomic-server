@@ -2,7 +2,7 @@
 
 use crate::{
     agents::{decode_base64, ForAgent},
-    errors::AtomicResult,
+    errors::{AtomicError, AtomicResult},
     urls,
     utils::check_timestamp_fresh,
     Storelike,
@@ -95,97 +95,170 @@ const ACCEPTABLE_TIME_DIFFERENCE: i64 = 10000;
 /// skew and slow links without turning a capture into a permanent key.
 pub const AUTH_MAX_AGE_MS: i64 = 5 * 60 * 1000;
 
+/// What a set of [AuthValues] turned out to prove.
+#[derive(Debug)]
+enum Authenticated {
+    /// A proof that verifies and that this server still accepts.
+    Agent(ForAgent),
+    /// A proof that verifies, but whose timestamp this server will not take:
+    /// older than [`AUTH_MAX_AGE_MS`], or far enough in the future that the
+    /// signer's clock cannot be trusted. Carries the reason, for logging.
+    NotFresh(String),
+}
+
 /// Get the Agent's subject from [AuthValues]
 /// Checks if the auth headers are correct, whether signature matches the public key, whether the timestamp is valid.
 /// by default, returns the public agent
+///
+/// For a caller who asked to be authenticated and is owed an answer either
+/// way: the `AUTH` frame of a socket, a peer handshake. A proof that has aged
+/// out is refused here, because "you are signed in" would be a lie and the
+/// client can sign a fresh one. A request that merely *carried* a proof wants
+/// [`get_agent_from_auth_values_or_public`] instead.
 #[tracing::instrument(skip_all)]
 pub async fn get_agent_from_auth_values_and_check(
     auth_header_values: Option<AuthValues>,
     store: &impl Storelike,
 ) -> AtomicResult<ForAgent> {
-    if let Some(auth_vals) = auth_header_values {
-        // If there are auth headers, check 'em, make sure they are valid.
-        check_auth_signature(&auth_vals.requested_subject, &auth_vals)
-            .map_err(|e| format!("Error checking authentication headers. {}", e))?;
-        // check if the timestamp is valid: not in the future, and not so old
-        // that a captured proof could be replayed indefinitely.
-        check_timestamp_fresh(
-            auth_vals.timestamp,
-            ACCEPTABLE_TIME_DIFFERENCE,
-            AUTH_MAX_AGE_MS,
-        )
-        .map_err(|e| format!("Authentication timestamp rejected. {}", e))?;
-        // check if the public key belongs to the agent
-        // For DID subjects, we need to fetch the agent resource locally
-        // unless it's a DID based on the public key, in which case we can verify it directly.
-        let agent_subject = crate::Subject::from_raw(auth_vals.agent_subject.trim(), None);
-        let public_key_trimmed = auth_vals.public_key.trim();
+    match auth_header_values {
+        // Every failure below means the caller is not who the headers say
+        // (a server answers 401), whichever check tripped.
+        Some(auth_vals) => match check_auth_values(auth_vals, store)
+            .await
+            .map_err(AtomicError::into_unauthorized)?
+        {
+            Authenticated::Agent(for_agent) => Ok(for_agent),
+            Authenticated::NotFresh(reason) => Err(AtomicError::unauthorized(reason)),
+        },
+        None => Ok(ForAgent::Public),
+    }
+}
 
-        if agent_subject.is_did() {
-            // The DID subject embeds the agent's public key
-            // (`did:ad:agent:{pubkey}`) and the auth header carries the same
-            // key. The two may use different base64 alphabets — the url-safe
-            // alphabet (the new default) vs the legacy standard alphabet
-            // (`+` `/` `=`) — so a raw-string `ends_with` wrongly rejects a key
-            // whose decoded BYTES are identical. Compare the decoded bytes.
-            let did_pubkey = agent_subject
-                .as_str()
-                .strip_prefix(crate::subject::DID_AD_AGENT_PREFIX)
-                .unwrap_or_else(|| agent_subject.as_str());
-            if public_keys_match(did_pubkey, public_key_trimmed) {
-                return Ok(ForAgent::AgentSubject(agent_subject));
-            } else {
-                return Err(format!(
-                    "The public key in the auth headers '{}' does not match the DID subject '{}'",
-                    public_key_trimmed, auth_vals.agent_subject
-                )
-                .into());
+/// The same checks, for a request that did not have to be authenticated in the
+/// first place: an HTTP request, or the headers a socket was opened with. Here
+/// a proof that has aged out is treated as no proof at all.
+///
+/// A proof says who the caller is, and one that has expired says the caller
+/// *was* this agent and is no longer. That is a different thing from a caller
+/// pretending to be someone, and it is not by itself a reason to refuse a
+/// request: the rights check is the layer that knows whether being nobody is
+/// a problem for what was asked. Public data is served, anything that needs
+/// rights is refused there.
+///
+/// Refusing at this layer instead failed the request whatever it asked for. A
+/// browser keeps its proof in a cookie, and until 0.41 a proof never expired,
+/// so a stale one is the ordinary state of any tab left open. On staging that
+/// meant thousands of rejections a day, from tabs polling the public `/server`
+/// endpoint with a cookie nothing refreshed, for data anyone may read.
+#[tracing::instrument(skip_all)]
+pub async fn get_agent_from_auth_values_or_public(
+    auth_header_values: Option<AuthValues>,
+    store: &impl Storelike,
+) -> AtomicResult<ForAgent> {
+    match auth_header_values {
+        Some(auth_vals) => match check_auth_values(auth_vals, store)
+            .await
+            .map_err(AtomicError::into_unauthorized)?
+        {
+            Authenticated::Agent(for_agent) => Ok(for_agent),
+            Authenticated::NotFresh(reason) => {
+                tracing::debug!("Continuing as the public agent. {}", reason);
+                Ok(ForAgent::Public)
             }
-        }
+        },
+        None => Ok(ForAgent::Public),
+    }
+}
 
-        // Legacy `https://host/agents/{pubkey}` subjects are treated as
-        // `did:ad:agent:{pubkey}` by every rights check, so the key in the
-        // path is the identity being claimed: bind it to the signing key.
-        // Looking the key up in a resource at that URL instead would let
-        // anyone host `https://theirs/agents/<victim key>` carrying their own
-        // key and be authorized as the victim (including as the server's own
-        // root agent, whose key is public).
-        if let Some(path_key) = crate::agents::legacy_agent_pubkey(agent_subject.as_str()) {
-            if public_keys_match(&path_key, public_key_trimmed) {
-                return Ok(ForAgent::AgentSubject(agent_subject));
-            }
+async fn check_auth_values(
+    auth_vals: AuthValues,
+    store: &impl Storelike,
+) -> AtomicResult<Authenticated> {
+    // If there are auth headers, check 'em, make sure they are valid.
+    // The signature first: a proof that does not verify is a forgery whatever
+    // its timestamp says, and is refused outright.
+    check_auth_signature(&auth_vals.requested_subject, &auth_vals)
+        .map_err(|e| format!("Error checking authentication headers. {}", e))?;
+    // check if the timestamp is valid: not in the future, and not so old
+    // that a captured proof could be replayed indefinitely.
+    if let Err(e) = check_timestamp_fresh(
+        auth_vals.timestamp,
+        ACCEPTABLE_TIME_DIFFERENCE,
+        AUTH_MAX_AGE_MS,
+    ) {
+        return Ok(Authenticated::NotFresh(format!(
+            "Authentication timestamp rejected. {}",
+            e
+        )));
+    }
+    // check if the public key belongs to the agent
+    // For DID subjects, we need to fetch the agent resource locally
+    // unless it's a DID based on the public key, in which case we can verify it directly.
+    let agent_subject = crate::Subject::from_raw(auth_vals.agent_subject.trim(), None);
+    let public_key_trimmed = auth_vals.public_key.trim();
+
+    if agent_subject.is_did() {
+        // The DID subject embeds the agent's public key
+        // (`did:ad:agent:{pubkey}`) and the auth header carries the same
+        // key. The two may use different base64 alphabets — the url-safe
+        // alphabet (the new default) vs the legacy standard alphabet
+        // (`+` `/` `=`) — so a raw-string `ends_with` wrongly rejects a key
+        // whose decoded BYTES are identical. Compare the decoded bytes.
+        let did_pubkey = agent_subject
+            .as_str()
+            .strip_prefix(crate::subject::DID_AD_AGENT_PREFIX)
+            .unwrap_or_else(|| agent_subject.as_str());
+        if public_keys_match(did_pubkey, public_key_trimmed) {
+            return Ok(Authenticated::Agent(ForAgent::AgentSubject(agent_subject)));
+        } else {
             return Err(format!(
-                "The public key in the auth headers '{}' does not match the agent subject '{}'",
+                "The public key in the auth headers '{}' does not match the DID subject '{}'",
                 public_key_trimmed, auth_vals.agent_subject
             )
             .into());
         }
+    }
 
-        // Any other agent subject must be a resource this store already
-        // holds. Never fetch it over the network during authentication: that
-        // is an unauthenticated SSRF, and the fetched body would be written
-        // into the store as a trusted resource.
-        let normalized_agent = store.normalize_subject(&agent_subject);
-        if !normalized_agent.is_local() {
-            return Err(format!(
+    // Legacy `https://host/agents/{pubkey}` subjects are treated as
+    // `did:ad:agent:{pubkey}` by every rights check, so the key in the
+    // path is the identity being claimed: bind it to the signing key.
+    // Looking the key up in a resource at that URL instead would let
+    // anyone host `https://theirs/agents/<victim key>` carrying their own
+    // key and be authorized as the victim (including as the server's own
+    // root agent, whose key is public).
+    if let Some(path_key) = crate::agents::legacy_agent_pubkey(agent_subject.as_str()) {
+        if public_keys_match(&path_key, public_key_trimmed) {
+            return Ok(Authenticated::Agent(ForAgent::AgentSubject(agent_subject)));
+        }
+        return Err(format!(
+            "The public key in the auth headers '{}' does not match the agent subject '{}'",
+            public_key_trimmed, auth_vals.agent_subject
+        )
+        .into());
+    }
+
+    // Any other agent subject must be a resource this store already
+    // holds. Never fetch it over the network during authentication: that
+    // is an unauthenticated SSRF, and the fetched body would be written
+    // into the store as a trusted resource.
+    let normalized_agent = store.normalize_subject(&agent_subject);
+    if !normalized_agent.is_local() {
+        return Err(format!(
                 "Agent subject '{}' is hosted elsewhere and cannot be used to authenticate here; sign in with a did:ad:agent identity",
                 auth_vals.agent_subject
             )
             .into());
-        }
-        let agent_resource = store.get_resource(&normalized_agent).await?;
-        let found_public_key = agent_resource.get(urls::PUBLIC_KEY)?;
-        if !public_keys_match(found_public_key.to_string().trim(), public_key_trimmed) {
-            Err(
-                "The public key in the auth headers does not match the public key in the agent"
-                    .to_string()
-                    .into(),
-            )
-        } else {
-            Ok(ForAgent::AgentSubject(agent_subject))
-        }
+    }
+    let agent_resource = store.get_resource(&normalized_agent).await?;
+    let found_public_key = agent_resource.get(urls::PUBLIC_KEY)?;
+    if !public_keys_match(found_public_key.to_string().trim(), public_key_trimmed) {
+        Err(
+            "The public key in the auth headers does not match the public key in the agent"
+                .to_string()
+                .into(),
+        )
     } else {
-        Ok(ForAgent::Public)
+        Ok(Authenticated::Agent(ForAgent::AgentSubject(agent_subject)))
     }
 }
 
@@ -224,6 +297,103 @@ pub fn public_keys_match(a: &str, b: &str) -> bool {
 
 #[cfg(test)]
 mod test {
+    use super::*;
+    use crate::agents::{generate_public_key, sign_message};
+
+    /// A 32-byte ed25519 seed. Any 32 bytes are a valid one.
+    const PRIVATE_KEY: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    const REQUESTED: &str = "https://example.com/server";
+
+    fn signed_at(timestamp: i64) -> AuthValues {
+        let pair = generate_public_key(PRIVATE_KEY);
+        let signature = sign_message(
+            format!("{} {}", REQUESTED, timestamp).as_bytes(),
+            &pair.private,
+        )
+        .unwrap();
+        AuthValues {
+            agent_subject: format!("{}{}", crate::subject::DID_AD_AGENT_PREFIX, pair.public),
+            public_key: pair.public,
+            timestamp,
+            signature,
+            requested_subject: REQUESTED.to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_fresh_proof_authenticates() {
+        let store = crate::Store::init().await.unwrap();
+        let for_agent =
+            get_agent_from_auth_values_or_public(Some(signed_at(crate::utils::now())), &store)
+                .await
+                .unwrap();
+        assert!(
+            matches!(for_agent, ForAgent::AgentSubject(ref s) if s.is_did()),
+            "expected the signing agent, got {for_agent:?}"
+        );
+    }
+
+    /// The staging 401 flood. A browser's stored proof ages out while the tab
+    /// stays open, and every request it made after that was refused, including
+    /// requests for data that needs no credentials at all. An aged-out proof
+    /// now means "nobody", so the rights check decides what that is allowed to
+    /// see.
+    #[tokio::test]
+    async fn a_proof_that_has_aged_out_is_nobody_rather_than_a_refusal() {
+        let store = crate::Store::init().await.unwrap();
+        let stale = crate::utils::now() - AUTH_MAX_AGE_MS - 1;
+        let for_agent = get_agent_from_auth_values_or_public(Some(signed_at(stale)), &store)
+            .await
+            .expect("an expired proof is not an error on this path");
+        assert_eq!(for_agent, ForAgent::Public);
+
+        // The handshake path still refuses it, so a client that asked to be
+        // authenticated is told it is not.
+        get_agent_from_auth_values_and_check(Some(signed_at(stale)), &store)
+            .await
+            .expect_err("an AUTH frame with a stale proof is refused");
+    }
+
+    /// A clock far enough ahead that its timestamps cannot be trusted is the
+    /// same situation: not a credential, not a forgery.
+    #[tokio::test]
+    async fn a_proof_from_a_clock_too_far_ahead_is_nobody_too() {
+        let store = crate::Store::init().await.unwrap();
+        let ahead = crate::utils::now() + ACCEPTABLE_TIME_DIFFERENCE + 60_000;
+        let for_agent = get_agent_from_auth_values_or_public(Some(signed_at(ahead)), &store)
+            .await
+            .unwrap();
+        assert_eq!(for_agent, ForAgent::Public);
+    }
+
+    /// The leniency stops at the signature. Someone presenting a proof they
+    /// could not have signed is refused, however fresh they claim it is.
+    #[tokio::test]
+    async fn a_signature_that_does_not_verify_is_still_refused() {
+        let store = crate::Store::init().await.unwrap();
+        let mut forged = signed_at(crate::utils::now());
+        forged.requested_subject = "https://example.com/someone-elses-drive".to_string();
+        let error = get_agent_from_auth_values_or_public(Some(forged), &store)
+            .await
+            .expect_err("a forged proof must not authenticate");
+        assert_eq!(
+            error.error_type,
+            crate::errors::AtomicErrorType::UnauthorizedError
+        );
+    }
+
+    /// And a caller who presents nothing is simply the public agent, as before.
+    #[tokio::test]
+    async fn no_proof_at_all_is_the_public_agent() {
+        let store = crate::Store::init().await.unwrap();
+        assert_eq!(
+            get_agent_from_auth_values_or_public(None, &store)
+                .await
+                .unwrap(),
+            ForAgent::Public
+        );
+    }
+
     use super::public_keys_match;
 
     /// The same ed25519 key, encoded in the legacy standard base64 alphabet

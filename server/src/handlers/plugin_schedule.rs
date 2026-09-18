@@ -190,7 +190,7 @@ pub async fn handle_set_auto_apply(
         release: Some(
             appstate.store.publish_plugin_release(
                 &atomic_lib::db::plugin_release::PluginRelease {
-                    source: approved_source.clone(),
+                    source: Some(approved_source.clone()),
                     manifest: serde_json::json!(
                         crate::plugins::js_runtime::describe_manifest(&approved_source).await?
                     ),
@@ -201,6 +201,7 @@ pub async fn handle_set_auto_apply(
                         &body.plugin,
                     )
                     .await?,
+                    ..Default::default()
                 },
             )?,
         ),

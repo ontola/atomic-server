@@ -1505,6 +1505,38 @@ describe('agentVaultProof', () => {
       new Uint8Array(64).fill(3),
     );
   });
+
+  /**
+   * A signer that says nothing gets the same treatment as one that admits to
+   * randomizing. Silence used to be taken as a promise, which is the one way a
+   * non-reproducible signature could still have become a wrapper.
+   */
+  it('refuses a signer that randomizes without declaring it', async () => {
+    let n = 0;
+    const signer = {
+      signBytes: async () =>
+        btoa(String.fromCharCode(...new Uint8Array(64).fill(++n))),
+    };
+
+    await expect(agentVaultProof(signer, MESSAGE)).rejects.toThrow(
+      /signs differently every time/,
+    );
+  });
+
+  /** Only a positive declaration is taken on trust, and skips the second sign. */
+  it('takes a declared-deterministic signer at its word', async () => {
+    const signBytes = vi.fn(async () =>
+      btoa(String.fromCharCode(...new Uint8Array(64).fill(4))),
+    );
+
+    expect(
+      await agentVaultProof(
+        { signBytes, signsDeterministically: true },
+        MESSAGE,
+      ),
+    ).toEqual(new Uint8Array(64).fill(4));
+    expect(signBytes).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('vaultLaneId', () => {

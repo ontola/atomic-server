@@ -26,9 +26,10 @@ test.describe('offline tables', () => {
     await page.goto(`${FRONTEND_URL}/app/dev-drive`, {
       waitUntil: 'domcontentloaded',
     });
-    await page.waitForFunction(() => window.store.getClientDb()?.isReady, {
-      timeout: 30000,
-    });
+    await page.waitForFunction(
+      () => window.store?.getClientDb()?.isReady === true,
+      { timeout: 30000 },
+    );
     await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
     await expect(page.getByTestId('current-drive-title')).toBeVisible({
       timeout: 15000,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { decodeBrowserInvite } from '@tomic/lib';
 import { useStore } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
@@ -16,13 +16,21 @@ import {
   PEER_LINK_CHANGED,
 } from '../helpers/browserPeerSync';
 
+/** How long a join may sit without a peer before the page says so. Matches
+ * `WebRtcPeer`'s own pairing timeout in @tomic/lib: past this point the dialer
+ * has already given up once, and peer sync reports only "Waiting for a peer"
+ * either way. The attempt keeps running; this is the page admitting it. */
+const PAIRING_DEADLINE = 60_000;
+
 export function PeerInvitePage({ token }: { token: string }) {
   const store = useStore();
   const { agent, setDrive } = useSettings();
   const [status, setStatus] = useState('');
   const [ready, setReady] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [stalled, setStalled] = useState(false);
   const [error, setError] = useState<Error>();
+  const joinedAt = useRef<number>(undefined);
   let invite: ReturnType<typeof decodeBrowserInvite> | undefined;
 
   try {
@@ -35,11 +43,16 @@ export function PeerInvitePage({ token }: { token: string }) {
   useEffect(() => {
     const update = () => {
       const current = drive ? peerLinkStatus(drive) : '';
-      setStatus(current);
-      setReady(
+      const connected =
         !!drive &&
-          !!store.resources.get(drive)?.isReady() &&
-          current.startsWith(/* @wc-ignore */ 'Connected to'),
+        !!store.resources.get(drive)?.isReady() &&
+        current.startsWith(/* @wc-ignore */ 'Connected to');
+      setStatus(current);
+      setReady(connected);
+      setStalled(
+        !connected &&
+          !!joinedAt.current &&
+          Date.now() - joinedAt.current > PAIRING_DEADLINE,
       );
     };
 
@@ -73,7 +86,9 @@ export function PeerInvitePage({ token }: { token: string }) {
         invitation: token,
       });
       resumePeerLinks(store);
+      joinedAt.current = Date.now();
       setJoining(true);
+      setStalled(false);
       setError(undefined);
     } catch (e) {
       setError(
@@ -124,7 +139,9 @@ export function PeerInvitePage({ token }: { token: string }) {
             )}
             {joining && (
               <p role='status'>
-                {status || 'Looking for the inviter’s browser…'}
+                {stalled
+                  ? 'This is taking longer than it should. The person who invited you needs to have this drive open in their browser. Try again, or ask them for a new invitation.'
+                  : status || 'Looking for the inviter’s browser…'}
               </p>
             )}
             {joining && !ready && (

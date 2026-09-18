@@ -26,6 +26,7 @@ window.addEventListener('message', event => {
   if (!settle) return;
 
   pending.delete(message.id);
+  clearTimeout(settle.timer);
 
   if (message.error) {
     settle.reject(new Error(message.error));
@@ -38,16 +39,16 @@ function send(op, payload) {
   const id = ++nextId;
 
   return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject });
-    window.parent.postMessage({ type: 'atomic.view.request', version: 1, id, op, args: payload }, '*');
-
     // A host that never answers would otherwise leave the plugin waiting
-    // forever with no way to tell that from a slow query.
-    setTimeout(() => {
+    // forever. Allow the host's 30s database-leader / websocket recovery to
+    // finish before abandoning a cold-start query after a page reload.
+    const timer = setTimeout(() => {
       if (pending.delete(id)) {
         reject(new Error(`The host did not answer ${op} in time.`));
       }
-    }, 15000);
+    }, 60000);
+    pending.set(id, { resolve, reject, timer });
+    window.parent.postMessage({ type: 'atomic.view.request', version: 1, id, op, args: payload }, '*');
   });
 }
 

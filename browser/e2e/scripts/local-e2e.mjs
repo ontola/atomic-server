@@ -160,6 +160,7 @@ try {
     PLAYWRIGHT_HTML_OUTPUT_DIR: join(output, 'report'),
     PLAYWRIGHT_JSON_OUTPUT_FILE: join(output, 'report.json'),
     ATOMICSERVER_SKIP_JS_BUILD: 'true',
+    ATOMICSERVER_REQUIRE_PLUGIN_RUNTIME: 'true',
     SERVER_URL: serverURL,
     FRONTEND_URL: serverURL,
     ATOMIC_SERVICE_URL: `http://127.0.0.1:${serverPort}`,
@@ -169,6 +170,10 @@ try {
     ATOMIC_CACHE_DIR: join(output, 'cache'),
     ATOMIC_PORT: String(serverPort),
     ATOMIC_DOMAIN: sameOrigin ? 'atomic.localhost' : 'localhost',
+    // Release/export tests use the hosting API even without a public deploy.
+    ATOMIC_WEBSITE_ORIGIN:
+      process.env.ATOMIC_WEBSITE_ORIGIN ??
+      `http://sites.localhost:${serverPort}`,
     ATOMIC_INITIALIZE: 'true',
   };
   delete env.SKIP_WASM_BUILD;

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 2,
+  "world": "server-extension",
+  "entrypoints": {
+    "run": false,
+    "classExtender": [
+      "https://atomicdata.dev/classes/Folder"
+    ]
+  }
+}

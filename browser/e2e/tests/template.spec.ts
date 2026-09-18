@@ -2,7 +2,6 @@ import { expect, test as baseTest, type Page } from './fixtures';
 import {
   before,
   makeDrivePublic,
-  nodeReachableServerUrl,
   openNewResourcePage,
   waitForSynced,
 } from './test-utils';
@@ -193,14 +192,13 @@ async function setupTemplateSite(
   drive: string,
   siteType: string,
 ) {
-  const reachable = nodeReachableServerUrl(serverUrl);
   await runCommand(site, process.execPath, [
     CREATE_TEMPLATE_BIN,
     siteType,
     '--template',
     siteType,
     '--server-url',
-    reachable,
+    serverUrl,
     '--drive',
     drive,
   ]);

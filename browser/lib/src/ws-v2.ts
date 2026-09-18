@@ -131,6 +131,10 @@ export const ErrorCode = {
    *  that carries none). Terminal for that envelope: the client must sign
    *  again; re-sending the same bytes changes nothing. */
   INVALID_SIGNATURE: 9,
+  /** The commit's subject is itself a Commit (`did:ad:commit:<sig>` or the
+   *  legacy `<server>/commits/<sig>`), which can never be edited. Terminal:
+   *  drop the entry; nothing is lost, a Commit is whatever was signed. */
+  IMMUTABLE_COMMIT: 10,
 } as const;
 
 /** Capability names a server may advertise in its AUTH_OK payload (mirrors

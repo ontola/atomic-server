@@ -499,9 +499,23 @@ test.describe('tables', async () => {
     // persisted rows; this-session virtual rows always append at the bottom).
     await page.reload();
     // Cached rows can be visible in a different order while the collection
-    // reloads. Wait for aria-busy to clear before selecting a row position.
+    // reloads. Waiting for aria-busy to clear is not enough, and neither is
+    // waiting for rowA to be visible: both are satisfied while the rows are
+    // still in the cached order. Instrumented over six runs, the order right
+    // after the reload decided the outcome every time:
+    //
+    //     rowB at aria-rowindex 2, rowA at 3   4 runs, all failed
+    //     rowA at aria-rowindex 2, rowB at 3   2 runs, both passed
+    //
+    // In the reversed window the click lands on rowA at index 3, the insert
+    // goes in below it, and the collection then settles into the persisted
+    // order underneath — leaving the cursor on the row that is now rowB.
+    // So wait for the order this test is about to take positions in.
     await waitForGridMounted(page);
-    await expect(page.getByText('rowA', { exact: true })).toBeVisible({
+    await expect(page.locator('[aria-rowindex="2"]')).toContainText('rowA', {
+      timeout: 15000,
+    });
+    await expect(page.locator('[aria-rowindex="3"]')).toContainText('rowB', {
       timeout: 15000,
     });
 
@@ -516,7 +530,28 @@ test.describe('tables', async () => {
       'rowB should shift down after inserting below rowA',
     ).toContainText('rowB', { timeout: 15000 });
 
-    // The cursor moved to the inserted row; typing fills its name cell.
+    // The cursor moved to the inserted row; typing fills its name cell. Check
+    // that first: react-window keeps focus on a row's DOM node, and when the
+    // list re-orders underneath, that node belongs to a different row. In the
+    // reversed-order window above the cursor sat on rowB, and the typing
+    // below overwrote rowB's name instead of filling the new row — a failure
+    // that surfaced three assertions later as an empty row 3 rather than as
+    // the lost row it was.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              document.activeElement
+                ?.closest('[aria-rowindex]')
+                ?.getAttribute('aria-rowindex') ?? null,
+          ),
+        {
+          message: 'cursor should be on the inserted row, not on rowB',
+          timeout: 15000,
+        },
+      )
+      .toBe('3');
     await enterGridEdit(page);
     await typeInActiveGridCell(page, 'rowINSERTED');
     await page.keyboard.press('Escape');

@@ -36,10 +36,7 @@ import {
 } from './CellComponents';
 import { FaXmark } from 'react-icons/fa6';
 import { usePopover } from '@components/CustomPopover';
-import {
-  CursorMode,
-  useTableEditorContext,
-} from '@chunks/TableEditor/TableEditorContext';
+import { useTableEditorContext } from '@chunks/TableEditor/TableEditorContext';
 
 const useClassType = (subject: string) => {
   const property = useResource<Core.Property>(subject);
@@ -73,7 +70,7 @@ function AtomicURLCellEdit({
     autoFocusElement: inputRef,
   });
   const { isOpen } = popoverProps;
-  const { setCursorMode } = useTableEditorContext();
+  const { exitEditMode } = useTableEditorContext();
   const selectedElement = useRef<HTMLLIElement>(null);
 
   const [searchValue, setSearchValue] = useState('');
@@ -107,8 +104,8 @@ function AtomicURLCellEdit({
   // grid — matching how a single-value cell should behave.
   const finishEditing = useCallback(() => {
     closePopover();
-    setCursorMode(CursorMode.Visual);
-  }, [closePopover, setCursorMode]);
+    exitEditMode();
+  }, [closePopover, exitEditMode]);
 
   const handleResultClick = useCallback(
     (result: string) => {

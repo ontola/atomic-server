@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { before } from './test-utils';
+import { createFromCatalog, before } from './test-utils';
 
 test.beforeEach(before);
 
@@ -30,17 +30,25 @@ test('integration categories default off and independent Atomic preferences surv
   await page.route('**/plugin-catalog', async route => {
     catalogRequests.push(route.request().url());
     await route.fulfill({
+      // The shape `/plugin-catalog` actually answers with: one flat object per
+      // Listing, as `plugin_release::catalog` builds it. The nested
+      // `{ metadata, verification }` this used to send is the *publish*
+      // payload, and reading `entry.domains` off it threw
+      // "domains is not iterable" out of the store's filter, which took the
+      // whole page down with an error boundary instead of rendering anything.
       json: [
         {
-          metadata: {
-            release: 'fixture-release',
-            name: 'Community fixture',
-            description: 'Test listing',
-            publisher: 'test',
-            domains: [],
-            standards: [],
-          },
-          verification: 'unverified',
+          subject: 'https://example.com/listings/fixture',
+          name: 'Community fixture',
+          emoji: null,
+          description: 'Test listing',
+          publisher: 'test',
+          domains: [],
+          standards: [],
+          release: 'https://example.com/releases/fixture',
+          releaseId: 'fixture-release',
+          runtime: null,
+          world: null,
         },
       ],
     });
@@ -129,14 +137,21 @@ test('integration categories default off and independent Atomic preferences surv
 test('existing connections remain visible while both discovery categories are hidden', async ({
   page,
 }) => {
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByPlaceholder(/filter/i).fill('plugin');
-  await page.locator('[data-testid="menu-item-new-plugin"]').click();
+  // The Plugin starter awaits `createPlugin` before navigating,
+  // whose first line is `pluginClassesFor`, which creates the drive's whole
+  // plugin schema: every property and class saved before a subject exists to
+  // navigate to. Measured here at 3.6s idle and 6.8s under four local workers,
+  // an 89% inflation matching what `devonian-issue-sync` showed, and Mancave
+  // carries far more than four workers. The save and the render come after it,
+  // inside the same budget.
+  test.setTimeout(90_000);
+  const SCHEMA_CREATED = { timeout: 30_000 };
+  await createFromCatalog(page, 'Plugin');
   await expect(
     page
       .getByRole('main')
       .getByRole('heading', { name: 'New plugin', level: 1 }),
-  ).toBeVisible();
+  ).toBeVisible(SCHEMA_CREATED);
   await page.goto(new URL('/app/integrations', page.url()).href);
   await expect(
     page

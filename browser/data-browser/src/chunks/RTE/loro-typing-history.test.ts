@@ -136,6 +136,47 @@ afterEach(() => {
 });
 
 describe('LoroSyncPlugin typing history', () => {
+  it.each([true, false])(
+    'keeps the pending bold toggle (%s) when a remote update arrives before typing',
+    async enabled => {
+      vi.useFakeTimers();
+      const instance = await initialized();
+
+      try {
+        instance.view.dispatch(instance.view.state.tr.insertText('plain '));
+
+        if (!enabled) {
+          instance.view.dispatch(
+            instance.view.state.tr.addMark(1, 7, schema.mark('bold')),
+          );
+        }
+
+        const remote = new LoroDoc();
+        remote.import(instance.doc.export({ mode: 'snapshot' }));
+        instance.view.dispatch(
+          instance.view.state.tr.setStoredMarks(
+            enabled ? [schema.mark('bold')] : [],
+          ),
+        );
+
+        // Even a receipt/property import replaces the editor document. The
+        // local toolbar/keyboard choice must survive that replacement.
+        remote.getMap('properties').set('receipt', 'saved');
+        remote.commit();
+        instance.doc.import(remote.export({ mode: 'snapshot' }));
+        expect(instance.view.state.storedMarks).toEqual(
+          enabled ? [schema.mark('bold')] : [],
+        );
+        instance.view.dispatch(instance.view.state.tr.insertText('next'));
+        expect(instance.view.state.doc.lastChild?.lastChild?.marks).toEqual(
+          enabled ? [schema.mark('bold')] : [],
+        );
+      } finally {
+        destroy(instance);
+      }
+    },
+  );
+
   it('keeps imported legacy formatting history stable while typing a plain tail', async () => {
     vi.useFakeTimers();
     const instance = await initialized(await legacyHistoryFixture());

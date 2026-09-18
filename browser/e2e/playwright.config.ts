@@ -1,6 +1,24 @@
 import type { PlaywrightTestConfig } from '@playwright/test';
 import { devices } from '@playwright/test';
 import { workerBudget } from './scripts/concurrency.mjs';
+import './scripts/server-dns.cjs';
+import path from 'node:path';
+
+// Workers and generated Next/Svelte sites must use the same DNS mapping as the
+// test process, without baking the internal service hostname into their URLs.
+const serverDns = path.resolve(__dirname, 'scripts/server-dns.cjs');
+
+if (
+  process.env.ATOMIC_SERVICE_URL &&
+  !process.env.NODE_OPTIONS?.includes(serverDns)
+) {
+  process.env.NODE_OPTIONS = [
+    process.env.NODE_OPTIONS,
+    `--require=${JSON.stringify(serverDns)}`,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
 
 const config: PlaywrightTestConfig = {
   // Default `expect` timeout. Playwright's built-in is 5s; bump to 10s
@@ -25,33 +43,37 @@ const config: PlaywrightTestConfig = {
       origins: [
         // `FRONTEND_URL` / `SERVER_URL` are overridable, but this list was not,
         // so running the suite on any other port silently lost
-        // `viewTransitionsDisabled` — the flake-reducer below — for the origin
+        // `viewTransitionsEnabled` — the flake-reducer below — for the origin
         // actually under test. Derive those two first; the fixed entries stay
         // for the default and dagger setups.
+        //
+        // Transitions are off by default now, and `isAutomated()` disables
+        // them under webdriver anyway, so this is belt and braces: it keeps
+        // the suite deterministic if either of those ever changes.
         ...[process.env.FRONTEND_URL, process.env.SERVER_URL]
           .filter((url): url is string => !!url)
           .map(url => new URL(url).origin)
           .map(origin => ({
             origin,
-            localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],
+            localStorage: [{ name: 'viewTransitionsEnabled', value: 'false' }],
           })),
         {
           origin: 'http://localhost:6747',
-          localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],
+          localStorage: [{ name: 'viewTransitionsEnabled', value: 'false' }],
         },
         {
           origin: 'http://localhost:9883',
-          localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],
+          localStorage: [{ name: 'viewTransitionsEnabled', value: 'false' }],
         },
         {
           origin: 'http://atomic:9883',
-          localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],
+          localStorage: [{ name: 'viewTransitionsEnabled', value: 'false' }],
         },
         {
           // Dagger e2e FRONTEND_URL — chromium treats `*.localhost` as a
           // secure context (needed for WASM ClientDb / crypto.subtle).
           origin: 'http://atomic.localhost:9883',
-          localStorage: [{ name: 'viewTransitionsDisabled', value: 'true' }],
+          localStorage: [{ name: 'viewTransitionsEnabled', value: 'false' }],
         },
       ],
     },

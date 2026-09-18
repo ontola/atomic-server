@@ -97,15 +97,22 @@ function importLimits(value: unknown): ImportLimits {
     throw new Error('Invalid import limits');
   return result;
 }
+// RFC 6761 gives the whole `.localhost` TLD to loopback, and browsers treat
+// those names as secure origins for exactly that reason. The e2e bundle is
+// built against `http://atomic.localhost:19090`, because the browser runs in
+// its own container where `127.0.0.1` is the wrong machine, so a check that
+// only knew the bare name rejected a proxy that is loopback by definition.
+const isLoopbackHost = (host: string) =>
+  host === 'localhost' ||
+  host.endsWith('.localhost') ||
+  host === '127.0.0.1' ||
+  host === '[::1]';
 export function proxyOrigin(value = DEFAULT_PROXY): string {
   const u = new URL(value);
   if (
     u.origin !== value ||
     (u.protocol !== 'https:' &&
-      !(
-        u.protocol === 'http:' &&
-        ['localhost', '127.0.0.1'].includes(u.hostname)
-      ))
+      !(u.protocol === 'http:' && isLoopbackHost(u.hostname)))
   )
     throw new Error('Proxy must be an HTTPS origin or localhost');
   return value;
