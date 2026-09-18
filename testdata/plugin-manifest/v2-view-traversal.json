@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 2,
+  "capabilities": [
+    "custom-view"
+  ],
+  "entrypoints": {
+    "run": true,
+    "view": "../ui.js"
+  }
+}
