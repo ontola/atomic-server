@@ -1,4 +1,4 @@
-import { useResources, type Property } from '@tomic/react';
+import { core, useResources, type Property } from '@tomic/react';
 import { useMemo } from 'react';
 import { columnLabel } from './columnLabel';
 
@@ -27,7 +27,12 @@ export function usePropertyTitles(properties: Property[]): Map<string, string> {
       new Map(
         entries.map(([subject, shortname]) => [
           subject,
-          columnLabel(resources.get(subject)?.title, shortname),
+          columnLabel(
+            resources.get(subject)?.get(core.properties.name) as
+              | string
+              | undefined,
+            shortname,
+          ),
         ]),
       ),
     [entries, resources],

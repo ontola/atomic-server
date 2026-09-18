@@ -2,6 +2,7 @@ import {
   Property,
   core,
   useResource,
+  useString,
   useTitle,
   useProperty,
 } from '@tomic/react';
@@ -203,9 +204,11 @@ function CardField({
   // The property's own resource, for the name someone gave it. `useProperty`
   // reads the same resource but carries only the shortname, so a card used to
   // label a field `pet-species` while the table's heading for it said
-  // `Species` — and, before the property had loaded, `loading`.
+  // `Species` — and, before the property had loaded, `loading`, which is the
+  // placeholder shortname `useProperty` hands back. `field` is the view's own
+  // resolved column, so its shortname is the real one either way.
   const propResource = useResource(field.subject);
-  const [title] = useTitle(propResource);
+  const [name] = useString(propResource, core.properties.name);
   const value = resource.get(field.subject);
 
   if (value === undefined || value === null || value === '') {
@@ -215,7 +218,7 @@ function CardField({
   return (
     <FieldRow>
       <FieldLabel>
-        {columnLabel(title, property.shortname ?? field.subject)}
+        {columnLabel(name, field.shortname ?? field.subject)}
       </FieldLabel>
       <FieldValue>
         <ValueComp datatype={property.datatype} value={value} />
