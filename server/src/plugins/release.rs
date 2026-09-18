@@ -181,6 +181,101 @@ pub async fn publish_package(
     Ok((id, release, manifest))
 }
 
+/// The subject of the `Release` resource that records release `id` on this
+/// node: `<server>/releases/<id>`, stable and derivable from the id alone.
+pub fn release_subject(id: &str) -> Subject {
+    Subject::new_local(&format!("/releases/{id}"), None)
+}
+
+/// The subject of the `File` resource holding a package's zip, the same one
+/// an upload of the same bytes would have created.
+fn package_file_subject(package: &str) -> Subject {
+    Subject::new_local(&format!("/files/{package}"), None)
+}
+
+/// Records a published release as a `Release` resource under `drive`, so an
+/// Installation's `release` can point at a URL (and another server can fetch
+/// it) instead of a bare id. A wasip2 release's zip gets a `File` resource
+/// under the same drive, reused when the same bytes were uploaded before.
+/// Idempotent: a release that is already recorded is left as it is, including
+/// its publisher. Returns the resource's subject.
+pub async fn record_release(
+    db: &Db,
+    id: &str,
+    release: &PluginRelease,
+    drive: &str,
+    publisher: Option<&str>,
+    origin: &str,
+) -> AtomicResult<Subject> {
+    let subject = release_subject(id);
+    if db.get_resource(&subject).await.is_ok() {
+        return Ok(subject);
+    }
+    let package_file = match &release.package {
+        Some(package) => Some(ensure_package_file(db, package, drive, origin).await?),
+        None => None,
+    };
+    let mut resource = Resource::new(subject.to_string());
+    release.write_to_resource(&mut resource, package_file.as_deref())?;
+    resource.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))?;
+    if let Some(publisher) = publisher {
+        resource.set_unsafe(urls::PUBLISHER.into(), Value::AtomicUrl(publisher.into()))?;
+    }
+    if let Some(name) = release.manifest.get("name").and_then(|v| v.as_str()) {
+        resource.set_unsafe(urls::NAME.into(), Value::String(name.to_string()))?;
+    }
+    if let Some(description) = release.manifest.get("description").and_then(|v| v.as_str()) {
+        resource.set_unsafe(
+            urls::DESCRIPTION.into(),
+            Value::Markdown(description.to_string()),
+        )?;
+    }
+    resource.save_locally(db).await?;
+    Ok(subject)
+}
+
+/// The `File` resource for a stored package blob, created when missing.
+async fn ensure_package_file(
+    db: &Db,
+    package: &str,
+    drive: &str,
+    origin: &str,
+) -> AtomicResult<String> {
+    let subject = package_file_subject(package);
+    if let Ok(existing) = db.get_resource(&subject).await {
+        if string_value(&existing, urls::INTERNAL_ID).as_deref() == Some(package) {
+            return Ok(subject.to_string());
+        }
+    }
+    let size = package_bytes(db, package).await?.len() as i64;
+    let mut file = Resource::new(subject.to_string());
+    file.set_unsafe(
+        urls::IS_A.into(),
+        Value::ResourceArray(vec![urls::FILE.into()]),
+    )?;
+    file.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))?;
+    file.set_unsafe(urls::INTERNAL_ID.into(), Value::String(package.into()))?;
+    file.set_unsafe(
+        urls::BLOB.into(),
+        Value::AtomicUrl(format!("did:ad:blob:{package}").into()),
+    )?;
+    file.set_unsafe(urls::FILESIZE.into(), Value::Integer(size))?;
+    file.set_unsafe(
+        urls::MIMETYPE.into(),
+        Value::String("application/zip".into()),
+    )?;
+    file.set_unsafe(
+        urls::FILENAME.into(),
+        Value::String(format!("{package}.zip")),
+    )?;
+    file.set_unsafe(
+        urls::DOWNLOAD_URL.into(),
+        Value::String(format!("{origin}/download/files/{package}")),
+    )?;
+    file.save_locally(db).await?;
+    Ok(subject.to_string())
+}
+
 /// The release record's spelling of a manifest world.
 pub fn world_name(world: World) -> &'static str {
     use atomic_lib::db::plugin_release::{WORLD_EXTENSION, WORLD_SERVER_EXTENSION};

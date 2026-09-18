@@ -92,6 +92,7 @@ async fn create(
         }
     }
     let id = appstate.store.publish_plugin_release(&release)?;
+    let subject = record(&appstate, &id, &release, &body.drive, &agent, &context).await?;
     let resource = appstate
         .store
         .get_resource(&body.plugin.as_str().into())
@@ -118,7 +119,33 @@ async fn create(
             },
         )?;
     }
-    Ok(HttpResponse::Ok().json(serde_json::json!({"id":id,"release":release})))
+    Ok(HttpResponse::Ok().json(serde_json::json!({"id":id,"subject":subject,"release":release})))
+}
+
+/// Records the release as a `Release` resource under the publisher's drive
+/// and returns its URL, which an Installation's `release` can point at.
+async fn record(
+    appstate: &AppState,
+    id: &str,
+    release: &PluginRelease,
+    drive: &str,
+    agent: &atomic_lib::agents::ForAgent,
+    context: &RequestContext,
+) -> AtomicServerResult<String> {
+    let publisher = match agent {
+        atomic_lib::agents::ForAgent::AgentSubject(subject) => Some(subject.to_string()),
+        _ => None,
+    };
+    let subject = crate::plugins::release::record_release(
+        &appstate.store,
+        id,
+        release,
+        drive,
+        publisher.as_deref(),
+        &context.origin,
+    )
+    .await?;
+    Ok(subject.resolve(&context.origin))
 }
 
 #[derive(serde::Deserialize)]
@@ -162,6 +189,7 @@ pub async fn publish_package(
             )));
         }
     }
+    let subject = record(&appstate, &id, &release, &query.drive, &agent, &context).await?;
     if query.public {
         appstate.store.publish_plugin_catalog_entry(
             &atomic_lib::db::plugin_release::CatalogEntry {
@@ -175,7 +203,7 @@ pub async fn publish_package(
             },
         )?;
     }
-    Ok(HttpResponse::Ok().json(serde_json::json!({"id":id,"release":release})))
+    Ok(HttpResponse::Ok().json(serde_json::json!({"id":id,"subject":subject,"release":release})))
 }
 
 /// Catalog entries are explicitly public; private approval-only packages are absent.
@@ -191,20 +219,42 @@ pub async fn catalog(appstate: web::Data<AppState>) -> AtomicServerResult<HttpRe
     Ok(HttpResponse::Ok().json(entries))
 }
 
-/// A release that is listed in this server's catalog. Private releases are
-/// only reachable through an Installation that pins them.
-fn published_release(appstate: &AppState, id: &str) -> AtomicServerResult<PluginRelease> {
-    if !appstate
-        .store
+/// A release the caller may see: one listed in this server's catalog, or a
+/// private one whose `Release` resource the signing agent can read (its
+/// publisher's drive), so an Installation view can re-fetch the manifest and
+/// runtime it pinned. The read check is the resource's own; there is no
+/// separate rule for releases.
+async fn readable_release(
+    appstate: &AppState,
+    req: &actix_web::HttpRequest,
+    context: &RequestContext,
+    id: &str,
+) -> AtomicServerResult<PluginRelease> {
+    let store = &appstate.store;
+    if store
         .plugin_catalog()?
         .iter()
         .any(|entry| entry.release == id)
     {
+        return Ok(store.get_plugin_release(id)?);
+    }
+    let subject = crate::plugins::release::release_subject(id);
+    let Ok(resource) = store.get_resource(&subject).await else {
         return Err(AtomicServerError::bad_request(
             "This package has not been published",
         ));
-    }
-    Ok(appstate.store.get_plugin_release(id)?)
+    };
+    let path_and_query = req
+        .head()
+        .uri
+        .path_and_query()
+        .ok_or("Path must be given")?
+        .to_string();
+    let signed_subject =
+        atomic_lib::Subject::from_raw(&path_and_query, None).resolve(&context.origin);
+    let agent = crate::helpers::get_client_agent(req.headers(), appstate, &signed_subject).await?;
+    check_read(store, &resource, &agent).await?;
+    Ok(store.get_plugin_release(id)?)
 }
 
 /// The release record: source for JS releases, the `package` hash (never the
@@ -212,8 +262,10 @@ fn published_release(appstate: &AppState, id: &str) -> AtomicServerResult<Plugin
 pub async fn package(
     appstate: web::Data<AppState>,
     id: web::Path<String>,
+    req: actix_web::HttpRequest,
+    context: RequestContext,
 ) -> AtomicServerResult<HttpResponse> {
-    Ok(HttpResponse::Ok().json(published_release(&appstate, &id)?))
+    Ok(HttpResponse::Ok().json(readable_release(&appstate, &req, &context, &id).await?))
 }
 
 /// The zip of a published wasip2 release, byte for byte what was published,
@@ -221,8 +273,10 @@ pub async fn package(
 pub async fn package_zip(
     appstate: web::Data<AppState>,
     id: web::Path<String>,
+    req: actix_web::HttpRequest,
+    context: RequestContext,
 ) -> AtomicServerResult<HttpResponse> {
-    let release = published_release(&appstate, &id)?;
+    let release = readable_release(&appstate, &req, &context, &id).await?;
     let Some(package) = release.package.as_deref() else {
         return Err(AtomicServerError::bad_request(
             "This release is a JS release; it has no package",

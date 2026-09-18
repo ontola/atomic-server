@@ -1173,4 +1173,70 @@ mod installation_tests {
         let err = try_genesis(db, props).await.unwrap_err();
         assert!(err.to_string().contains("not on this node"), "{err}");
     }
+
+    #[actix_rt::test]
+    async fn an_installation_can_pin_a_release_by_its_resource_url() {
+        let f = fixture("installation_release_url").await;
+        let db = &f.appstate.store;
+        let origin = db.get_server_url();
+        let (id, published, _) = release::publish_package(db, TEST_PLUGIN_ZIP).await.unwrap();
+        let subject = release::record_release(db, &id, &published, &f.drive, None, &origin)
+            .await
+            .unwrap();
+        let url = subject.resolve(&origin);
+        assert!(url.ends_with(&format!("/releases/{id}")), "{url}");
+        // Recording twice is a no-op, and the resource round-trips the release.
+        assert_eq!(
+            release::record_release(db, &id, &published, &f.drive, None, &origin)
+                .await
+                .unwrap(),
+            subject
+        );
+        let resource = db.get_resource(&subject).await.unwrap();
+        assert_eq!(
+            resource.get(urls::RELEASE_ID).unwrap().to_string(),
+            id,
+            "the resource records the id"
+        );
+        let file = resource.get(urls::PACKAGE).unwrap().to_string();
+        let file = db.get_resource(&file.as_str().into()).await.unwrap();
+        assert_eq!(
+            file.get(urls::INTERNAL_ID).unwrap().to_string(),
+            published.package.clone().unwrap()
+        );
+        // The URL resolves to the same release as the bare id.
+        let signer = ForAgent::AgentSubject(db.get_default_agent().unwrap().subject);
+        let resolved = release::resolve(db, &url, &signer).await.unwrap();
+        assert_eq!(resolved, published);
+        assert_eq!(resolved.id().unwrap(), id);
+
+        // And an Installation can point at it instead of the bare id.
+        let mut props = installation_props(&f.drive, "ontola", "test-plugin", &url, &id, "draft");
+        props.retain(|(prop, _)| *prop != urls::GRANTS);
+        props.push((urls::GRANTS, Value::Json(json!(TEST_PLUGIN_GRANTS))));
+        let installation = genesis(db, props).await;
+        let mut r = db
+            .get_resource(&installation.as_str().into())
+            .await
+            .unwrap();
+        r.set_unsafe(
+            urls::INSTALLATION_STATUS.into(),
+            Value::String("active".into()),
+        )
+        .unwrap();
+        r.save(db).await.unwrap();
+        let key = PluginMetaKey::new(&f.drive, "ontola", "test-plugin");
+        let meta = db.get_plugin_meta(&key).unwrap().expect("installed by URL");
+        assert_eq!(meta.subject, installation);
+        assert_eq!(meta.manifest_v2, Some(published.manifest.clone()));
+
+        // A JS release records without a File.
+        let js = js_release(WORLD_EXTENSION);
+        let js_id = db.publish_plugin_release(&js).unwrap();
+        let js_subject = release::record_release(db, &js_id, &js, &f.drive, None, &origin)
+            .await
+            .unwrap();
+        let js_url = js_subject.resolve(&origin);
+        assert_eq!(release::resolve(db, &js_url, &signer).await.unwrap(), js);
+    }
 }
