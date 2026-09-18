@@ -138,7 +138,11 @@ async function createPeopleTable(page: Page): Promise<PeopleTable> {
 }
 
 /** A filter chip (in the filter toolbar) whose label starts with `prefix` —
- * scoped to the toolbar so it doesn't match the same-named column header. */
+ * scoped to the toolbar so it doesn't match the same-named column header.
+ *
+ * `prefix` is the column's LABEL, not its shortname: a property with no name of
+ * its own is labelled by a presentable form of its shortname (`age` → `Age`),
+ * and this regex is case-sensitive. */
 const filterChip = (page: Page, prefix: string) =>
   page
     .locator('[role="toolbar"][aria-label="Table filters"]')
@@ -170,34 +174,32 @@ const OPERATOR_LABEL: Record<string, string> = {
  */
 async function closeFilterEditor(
   page: Page,
-  columnShortname: string,
+  columnName: string,
   operator: string,
 ) {
-  await expect(filterChip(page, columnShortname)).toContainText(
+  await expect(filterChip(page, columnName)).toContainText(
     OPERATOR_LABEL[operator],
   );
   await page.keyboard.press('Escape');
 }
 
-/** Adds a filter for `columnShortname` via the view-row Filter button and sets
- * its operator + value in the auto-opened chip popover. */
+/** Adds a filter for the column labelled `columnName` via the view-row Filter
+ * button, and sets its operator + value in the auto-opened chip popover. */
 async function addFilter(
   page: Page,
-  columnShortname: string,
+  columnName: string,
   operator: string,
   value: string,
 ) {
   await page.getByTitle('Filter', { exact: true }).click();
-  await page
-    .getByRole('menuitem', { name: columnShortname, exact: true })
-    .click();
+  await page.getByRole('menuitem', { name: columnName, exact: true }).click();
 
   // The new chip's editor opens automatically (empty value).
   await page
     .locator('select[aria-label="Filter operator"]')
     .selectOption(operator);
   await page.getByPlaceholder('Value…').fill(value);
-  await closeFilterEditor(page, columnShortname, operator);
+  await closeFilterEditor(page, columnName, operator);
 }
 
 test.describe('table filtering + views', () => {
@@ -232,26 +234,26 @@ test.describe('table filtering + views', () => {
     await createPeopleTable(page);
 
     // age > 26 → Alice (30) + Charlie (35); not Bob (25).
-    await addFilter(page, 'age', 'gt', '26');
+    await addFilter(page, 'Age', 'gt', '26');
     await expect(page.getByRole('gridcell', { name: 'Alice' })).toBeVisible();
     await expect(page.getByRole('gridcell', { name: 'Charlie' })).toBeVisible();
     await expect(page.getByRole('gridcell', { name: 'Bob' })).not.toBeVisible();
 
     // Remove the age filter, then birthday < 1995-01-01 → Alice (1994) + Charlie (1989); not Bob (1999).
-    await filterChip(page, 'age').click();
+    await filterChip(page, 'Age').click();
     await page.getByTitle('Remove filter').click();
 
-    await addFilter(page, 'birthday', 'lt', '1995-01-01');
+    await addFilter(page, 'Birthday', 'lt', '1995-01-01');
     await expect(page.getByRole('gridcell', { name: 'Alice' })).toBeVisible();
     await expect(page.getByRole('gridcell', { name: 'Charlie' })).toBeVisible();
     await expect(page.getByRole('gridcell', { name: 'Bob' })).not.toBeVisible();
 
     // Flip the same date filter to `>` (born after 1995) → only Bob (1999).
-    await filterChip(page, 'birthday').click();
+    await filterChip(page, 'Birthday').click();
     await page
       .locator('select[aria-label="Filter operator"]')
       .selectOption('gt');
-    await closeFilterEditor(page, 'birthday', 'gt');
+    await closeFilterEditor(page, 'Birthday', 'gt');
     await expect(page.getByRole('gridcell', { name: 'Bob' })).toBeVisible();
     await expect(
       page.getByRole('gridcell', { name: 'Alice' }),

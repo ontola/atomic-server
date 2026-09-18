@@ -8,6 +8,7 @@ import { TablePageContext } from './tablePageContext';
 import { TableFilterChip } from './TableFilterChip';
 import { derivedFilterKey, filterKey } from './tableFiltering';
 import type { DerivedColumnSpec } from './derivedColumns';
+import { usePropertyTitles } from './helpers/usePropertyTitles';
 
 interface TableFilterBarProps {
   columns: Property[];
@@ -38,6 +39,8 @@ export function TableFilterBar({
     [derivedColumns],
   );
 
+  const titles = usePropertyTitles(columns);
+
   const addItems = useMemo((): DropdownItem[] => {
     const taken = new Set(filters.map(filterKey));
 
@@ -46,7 +49,7 @@ export function TableFilterBar({
         .filter(c => !taken.has(c.subject))
         .map(c => ({
           id: c.subject,
-          label: c.shortname,
+          label: titles.get(c.subject) ?? c.shortname,
           onClick: () => addFilter(c.subject),
         })),
       // A computed column is filterable too: the store evaluates it per row, so
@@ -59,7 +62,7 @@ export function TableFilterBar({
           onClick: () => addFilter(derivedFilterKey(spec.id)),
         })),
     ];
-  }, [columns, derivedColumns, filters, addFilter]);
+  }, [columns, derivedColumns, filters, addFilter, titles]);
 
   if (filters.length === 0) {
     return null;
