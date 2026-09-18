@@ -44,6 +44,14 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   subject before keeping it, honouring their own `--envelope-retention`. A
   restored or newly invited device therefore shows who signed each change
   instead of "Unattributed" (`planning/auditability-loro-history.md`).
+- Security: `POST /commit` charged the per-agent write budget to the signer
+  the body *named* before verifying the signature, so anyone who knew an
+  agent's public DID could flood the endpoint with forged commits naming that
+  agent and lock them out of writing with `429`s. The signature is now
+  verified first and the budget is charged to the signer it proves; a body
+  that proves no signer spends the peer address's anonymous budget, like any
+  other unsigned write. Reported by [hackchang](https://github.com/hackchang)
+  through private vulnerability reporting.
 - Rate-limit the write endpoints. `POST /commit` (HTTP and the WebSocket
   `COMMIT` frame), `/upload`, `PUT /blob`, `/iroh-sync`, `/forget-peer` and
   resource posts spend a per-agent token (`--write-rate-limit`, default 6000
