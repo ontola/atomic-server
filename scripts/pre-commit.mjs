@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
@@ -48,9 +49,56 @@ const targetDir = resolve(root, env.CARGO_TARGET_DIR || 'target');
 // touching only the files that changed since the last sync makes the Clippy
 // run as incremental as a normal `cargo clippy` in the checkout.
 // Reset with `rm -rf target/pre-commit` if the snapshot ever looks wrong.
-const snapshot = join(targetDir, 'pre-commit', 'snapshot');
+//
+// Keyed by checkout: worktrees commonly share one CARGO_TARGET_DIR, and two
+// of them committing at once would otherwise race on a single snapshot.
+const preCommitDir = join(
+  targetDir,
+  'pre-commit',
+  createHash('sha256').update(root).digest('hex').slice(0, 12),
+);
+const snapshot = join(preCommitDir, 'snapshot');
 // The index tree the snapshot currently holds (`git write-tree` OID).
-const stamp = join(targetDir, 'pre-commit', 'tree');
+const stamp = join(preCommitDir, 'tree');
+
+// Git does not hold index.lock while pre-commit runs, so two commits in the
+// same checkout can overlap. Cargo locks the target dir, but the sync below
+// is not covered by that; one hook at a time per snapshot.
+function lockSnapshot() {
+  const lock = join(preCommitDir, 'lock');
+  let waiting = false;
+
+  for (;;) {
+    try {
+      writeFileSync(lock, `${process.pid}\n`, { flag: 'wx' });
+
+      return () => rmSync(lock, { force: true });
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+    }
+
+    const holder = Number(readFileSync(lock, 'utf8'));
+    let alive = true;
+
+    try {
+      process.kill(holder, 0);
+    } catch (error) {
+      alive = error.code === 'EPERM';
+    }
+
+    if (!alive) {
+      rmSync(lock, { force: true });
+      continue;
+    }
+
+    if (!waiting) {
+      waiting = true;
+      console.log(`pre-commit: waiting for another pre-commit (pid ${holder})`);
+    }
+
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500);
+  }
+}
 
 // Check exactly what Git will commit, including partially staged files.
 // No stash/reset: the user's index and working tree are never modified.
@@ -112,6 +160,9 @@ function syncSnapshot() {
 
   writeFileSync(stamp, `${tree}\n`);
 }
+
+mkdirSync(preCommitDir, { recursive: true });
+const unlock = lockSnapshot();
 
 try {
   syncSnapshot();
@@ -206,4 +257,6 @@ try {
 } catch (error) {
   console.error(`pre-commit: commit blocked. ${error.message}`);
   process.exitCode = 1;
+} finally {
+  unlock();
 }
