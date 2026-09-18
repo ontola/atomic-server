@@ -40,11 +40,12 @@ This should help you understand how and where you may be able to contribute.
 - **[@tomic/svelte](https://github.com/atomicdata-dev/atomic-svelte)** (2022-12). Library for integrating Atomic Data with Svelte(Kit).
 - **[Atomic Tables](https://github.com/atomicdata-dev/atomic-data-browser/issues/25)** (2023-09). A powerful table editor with keyboard / copy / paste / sort support that makes it easier to model and edit data.
 - **Ontology Editor** (2023-10). Easily create & edit Classes, Properties and Ontologies.
-- **Local-First & did:ad Schema** (2026-06). Transitioned to a Local-First architecture using the `did:ad` schema. Instead of relying on a hosted HTTP origin, resources resolve over Mainline DHT. Agents are decentralized, relying solely on an Ed25519 private key.
+- **Local-First & did:ad Schema** (2026-06). Transitioned to a Local-First architecture using the `did:ad` schema. Agents are decentralized keypairs; resources get portable DIDs. Peer discovery uses pkarr; devices sync over WebSocket and Iroh.
 - **Collaborative Sync with Loro CRDT** (2026-06). Integrated Loro CRDTs for collaborative real-time sync across devices, making documents conflict-free.
 - **Drafts and Suggestions** (2026-07). Added CMS publishing, drafts, and user suggestions as a clean, fork-based squash-merge mechanism.
 - **Meetings & Follow-Me Tours** (2026-07). Shipped purpose-built meeting workspaces, collaborative live meeting notes, and follower follow-along live tours.
 - **P2P pairing & Zero-scan auto-sync** (2026-07). Built routing-only deep-link QR pairing and SaaS-assisted zero-scan device synchronization.
+- **Tables as apps** (2026-07). Kanban, calendar, and timer views; filters; computed columns; aggregates; templates.
 
 ## Where we're at
 

@@ -11,21 +11,23 @@ This approach has some issues regarding performance and flexibility that headles
 
 ## Atomic Server
 
-The [Atomic-Server](https://github.com/atomicdata-dev/atomic-server/blob/master/server/README.md) project may be the right choice for you if you're looking for a Headless CMS:
+The [Atomic-Server](https://github.com/atomicdata-dev/atomic-server/blob/master/server/README.md) project may be the right choice for you if you're looking for a Headless CMS.
+For the product model (drafts, forks, websites, publishing), see **[Headless CMS, drafts, and forks](../atomicserver/cms.md)**.
 
-<!-- List copied from https://github.com/atomicdata-dev/atomic-server/blob/master/README.md -->
 - **Free and open source**. MIT licensed, no strings attached.
+- **Local-first**. Editors can work offline; the browser runs the same store through WASM. See [Local-first](../atomicserver/local-first.md).
 - **Easy to use API**. Atomic-Server is built using the [Atomic Data specification](../atomic-data-overview.md). It is well-documented, and uses conventions that most web developers are already familiar with.
 - **Typescript & React libraries**. Use the existing react hooks to make your own fully editable, live-reloaded web application.
-- **Fast**. 1ms responses on my laptop. It's written in Rust, so it squeezes out every cycle of your server.
-- **Lightweight**. It's a single 8MB binary, no external dependencies needed.
+- **Fast**. Written in Rust; collection queries and search are tuned for interactive editing.
+- **Lightweight**. A single self-contained binary (~70MB) with server, web app, search, and database — no external runtime dependencies.
 - **Easy to setup**. Just run the binary and open the address. Even HTTPS support is built-in.
-- **Clean, powerful admin GUI**. The Atomic-Data-Browser front-end gives you a very easy interface to manage your content.
+- **Clean, powerful admin GUI**. Tables, documents, presence, and ontology editing in one app.
+- **Drafts & forks**. Unpublished content lives in a private folder; proposed edits are Forks you merge when ready.
 - **Share your data models**. Atomic Data is designed to achieve a more decentralized web. You can easily re-use existing data models, or share the ones you built.
 - **Files / Attachments**. Upload and preview files.
-- **Pagination / sorting / filtering**. Query your data.
-- **Versioning**. Built-in history, where each transaction is saved.
-- **Websockets**. If you need live updates and highly interactive apps (collaborative documents and chatrooms), we've got your back.
+- **Pagination / sorting / filtering**. Query your data; table views add aggregates and live filters.
+- **Versioning**. Built-in history, where each transaction is a signed commit.
+- **Websockets & sync**. Live updates, device pairing, and CRDT collaborative documents.
 - **Full-text search**. No need for a big elasticsearch server - atomic-server has one built-in.
 - **Translations / i18n**. Localize content per language — see below.
 

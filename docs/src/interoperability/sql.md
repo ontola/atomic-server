@@ -69,7 +69,7 @@ If you want to store arbitrary Atomic Data in a SQL database, you might be best 
 ### Is Atomic Data NOSQL or SQL?
 
 Generally, Atomic Data apps do not use SQL - so they are NOSQL.
-Atomic-server, for example, internally uses a key-value store (sled) for persistence.
+Atomic-server, for example, internally uses a key-value store (redb) for persistence.
 
 Like most NOSQL systems, Atomic Data does not limit data entries to a specific table shape, so you can add any property that you like to a resource.
 However, unlike most NOSQL systems, Atomic Data _does_ perform validations on each value.
