@@ -35,10 +35,10 @@ concurrency:
 # Escape hatch (force hosted, skip Mancave):
 #   Settings -> Secrets and variables -> Actions -> Variables
 #   CI_RUNNER = ["ubuntu-latest"]
-#   Or `[hosted-ci]` in the commit message (same opt-in shape as
-#   `[full-e2e]`). Use it when the self-hosted runner is online but the
-#   Dagger engine on it cannot start — pick still sees "online" and would
-#   otherwise never fall back.
+#   Or `[hosted-ci]` standing alone in the commit message (same opt-in
+#   shape as the full Playwright token). A mention inside a sentence does
+#   not count — pick greps the whole message. Use it when the self-hosted
+#   runner is online but the Dagger engine on it cannot start.
 #
 # Only this workflow uses the self-hosted runner. Releasing/deploying stay
 # on ubuntu-latest — a release must not depend on one PC being awake.
@@ -81,7 +81,7 @@ jobs:
             exit 0
           fi
 
-          if printf '%s' "${COMMIT_MSG:-}" | grep -q '\[hosted-ci\]'; then
+          if printf '%s' "${COMMIT_MSG:-}" | grep -qE '(^|[[:space:]])\[hosted-ci\]([[:space:]]|$)'; then
             echo "[hosted-ci] in commit message — forcing GitHub-hosted"
             echo "host=hosted" >> "$GITHUB_OUTPUT"
             exit 0
@@ -142,7 +142,7 @@ jobs:
             mode=full
           elif [[ "$REF" == refs/tags/v* ]]; then
             mode=full
-          elif printf '%s' "${COMMIT_MSG:-}" | grep -q '\[full-e2e\]'; then
+          elif printf '%s' "${COMMIT_MSG:-}" | grep -qE '(^|[[:space:]])\[full-e2e\]([[:space:]]|$)'; then
             mode=full
           elif prs=$(gh api "repos/$REPO/commits/$SHA/pulls" -H "Accept: application/vnd.github+json" 2>/dev/null); then
             if printf '%s' "$prs" | jq -e 'any(.[]; any(.labels[]; .name == "full-e2e"))' >/dev/null; then

@@ -18,10 +18,11 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   "Publish :develop image" workflow covers the case where the pipeline cannot
   go green for reasons unrelated to whether the binary builds; it refuses
   `latest` and `v*` tags, which release.yml owns.
-- CI: `[hosted-ci]` in a commit message runs Main on GitHub-hosted runners.
-  Same opt-in shape as `[full-e2e]`. The pick job treats a self-hosted
-  runner as available whenever it is online, so a box whose Dagger engine
-  cannot start still never falls back.
+- CI: `[hosted-ci]` standing alone in a commit message runs Main on
+  GitHub-hosted runners (same opt-in shape as the full Playwright token).
+  A mention inside a sentence does not count. The pick job treats a
+  self-hosted runner as available whenever it is online, so a box whose
+  Dagger engine cannot start still never falls back.
 
 - Error-handling hygiene on the commit and read paths. The legacy
   `set`/`push`/`remove` rejection in `sync::engine::ingest_commit` now checks
