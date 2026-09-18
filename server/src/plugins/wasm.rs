@@ -14,12 +14,11 @@ use std::{
 use atomic_lib::{
     agents::{Agent, ForAgent},
     class_extender::ClassExtender,
-    commit::{CommitBuilder, CommitOpts},
     db::plugin_meta::{validate_plugin_identifiers, PermissionType, PluginManifest, PluginMeta},
     errors::{AtomicError, AtomicResult},
     parse::{parse_json_ad_resource, ParseOpts, SaveOpts},
-    storelike::{Query, ResourceResponse},
-    urls, Commit, Db, Resource, Storelike, Value,
+    storelike::ResourceResponse,
+    urls, Db, Resource, Storelike, Value,
 };
 use atomic_lib::{
     class_extender::{self, ClassExtenderScope},
@@ -30,7 +29,7 @@ use ring::digest::{digest, SHA256};
 use tracing::{error, info, warn};
 use wasmtime::{
     component::{Component, Linker, ResourceTable},
-    Config, Engine, ResourceLimiter, Store, StoreLimits, StoreLimitsBuilder, Trap,
+    Engine, ResourceLimiter, Store, StoreLimits, Trap,
 };
 use wasmtime_wasi::{p2, DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{
@@ -39,6 +38,8 @@ use wasmtime_wasi_http::{
 };
 
 use atomic_lib::db::plugin_meta::PluginMetaKey;
+
+use super::host_core::{self, FetchRequest, HostCore, ResourceGrants, Runtime};
 
 mod bindings {
     wasmtime::component::bindgen!({
@@ -55,11 +56,6 @@ use bindings::atomic::class_extender::types::{
 };
 
 const CLASS_EXTENDER_DIR_NAME: &str = "class-extenders"; // Relative to the store path.
-const FUEL_LIMIT: u64 = 100_000_000;
-const FUEL_LIMIT_EXTENDED: u64 = 1_000_000_000;
-const FUEL_YIELD_INTERVAL: u64 = 10_000;
-const MEMORY_LIMIT_BYTES: usize = 50 * 1024 * 1024; // 50MB
-const MEMORY_LIMIT_BYTES_EXTENDED: usize = 2000 * 1024 * 1024; // 2GB
 
 struct WasmtimeErrorWrapper(wasmtime::Error);
 
@@ -75,10 +71,7 @@ impl From<WasmtimeErrorWrapper> for AtomicError {
         if let Some(trap) = error.downcast_ref::<Trap>() {
             if *trap == Trap::OutOfFuel {
                 return AtomicError {
-                    message: format!(
-                        "Wasm plugin exceeded fuel limit of {} instructions",
-                        FUEL_LIMIT
-                    ),
+                    message: "Wasm plugin exceeded its fuel limit".to_string(),
                     error_type: AtomicErrorType::OtherError,
                     subject: None,
                 };
@@ -153,8 +146,8 @@ pub async fn load_wasm_class_extenders(
         std::fs::create_dir_all(&scoped_cache).ok();
     }
 
-    let engine = match build_engine() {
-        Ok(engine) => Arc::new(engine),
+    let engine = match host_core::engine() {
+        Ok(engine) => engine,
         Err(err) => {
             error!(error = %err, "Failed to initialize Wasm engine. Skipping dynamic class extenders");
             return Ok(Vec::new());
@@ -242,14 +235,6 @@ pub async fn load_wasm_class_extenders(
     Ok(extenders)
 }
 
-fn build_engine() -> AtomicResult<Engine> {
-    let mut config = Config::new();
-    config.wasm_component_model(true);
-    config.consume_fuel(true);
-
-    Engine::new(&config).map_err(to_atomic_error)
-}
-
 #[derive(Clone)]
 struct WasmPlugin {
     inner: Arc<WasmPluginInner>,
@@ -262,7 +247,8 @@ struct WasmPluginInner {
     owned_folder_path: Option<PathBuf>,
     scope: ClassExtenderScope,
     class_url: Vec<String>,
-    db: Arc<Db>,
+    /// The shared host, under the plugin agent's grant. Cloned per instance.
+    core: HostCore,
     plugin_subject: Option<String>,
     agent: Option<Agent>,
     manifest: Option<PluginManifest>,
@@ -282,7 +268,14 @@ impl WasmPlugin {
         agent: Option<Agent>,
         manifest: Option<PluginManifest>,
     ) -> AtomicResult<Self> {
-        let db = Arc::new(db.clone());
+        let core = HostCore::for_class_extender(
+            Arc::new(db.clone()),
+            &scope,
+            plugin_subject.clone(),
+            agent.clone(),
+            manifest.as_ref(),
+        )
+        .map_err(AtomicError::from)?;
 
         let component = if cwasm_path.exists() {
             match std::fs::read(cwasm_path) {
@@ -317,7 +310,7 @@ impl WasmPlugin {
                 owned_folder_path,
                 class_url: Vec::new(),
                 scope: scope.clone(),
-                db: Arc::clone(&db),
+                core: core.clone(),
                 plugin_subject: plugin_subject.clone(),
                 agent: agent.clone(),
                 manifest: manifest.clone(),
@@ -333,7 +326,7 @@ impl WasmPlugin {
                 owned_folder_path: runtime.inner.owned_folder_path.clone(),
                 class_url,
                 scope,
-                db,
+                core,
                 plugin_subject,
                 agent,
                 manifest,
@@ -455,32 +448,22 @@ impl WasmPlugin {
     }
 
     async fn instantiate(&self) -> AtomicResult<(bindings::ClassExtender, Store<PluginHostState>)> {
+        let limits = host_core::limits(
+            Runtime::ClassExtender,
+            ResourceGrants::from_manifest(self.inner.manifest.as_ref()),
+        );
+
         let mut store = Store::new(
             &self.inner.engine,
             PluginHostState::new(
-                Arc::clone(&self.inner.db),
+                self.inner.core.clone(),
                 &self.inner.owned_folder_path,
-                self.inner.plugin_subject.clone(),
-                self.inner.agent.clone(),
-                self.inner.manifest.clone(),
+                self.inner.manifest.as_ref(),
+                limits.store_limits(),
             )?,
         );
 
-        let fuel_limit = if PluginManifest::option_has_permission(
-            self.inner.manifest.as_ref(),
-            PermissionType::ExtendedFuel,
-        ) {
-            FUEL_LIMIT_EXTENDED
-        } else {
-            FUEL_LIMIT
-        };
-
-        store.set_fuel(fuel_limit).map_err(to_atomic_error)?;
-
-        store
-            .fuel_async_yield_interval(Some(FUEL_YIELD_INTERVAL))
-            .map_err(to_atomic_error)?;
-
+        limits.meter(&mut store).map_err(AtomicError::from)?;
         store.limiter(|state| state);
 
         let mut linker = Linker::new(&self.inner.engine);
@@ -586,24 +569,22 @@ impl WasmPlugin {
     }
 }
 
+/// Everything a class-extender instance can reach: WASI, optionally HTTP and
+/// its own folder, and the shared host.
 struct PluginHostState {
     table: ResourceTable,
     ctx: WasiCtx,
     http: WasiHttpCtx,
-    db: Arc<Db>,
-    plugin_subject: Option<String>,
-    agent: Option<Agent>,
     limits: StoreLimits,
-    manifest: Option<PluginManifest>,
+    core: HostCore,
 }
 
 impl PluginHostState {
     fn new(
-        db: Arc<Db>,
+        core: HostCore,
         owned_folder_path: &Option<PathBuf>,
-        plugin_subject: Option<String>,
-        agent: Option<Agent>,
-        manifest: Option<PluginManifest>,
+        manifest: Option<&PluginManifest>,
+        limits: StoreLimits,
     ) -> AtomicResult<Self> {
         let mut builder = WasiCtxBuilder::new();
         // Plugins should not have access to the host's stdin, stdout and stderr.
@@ -613,7 +594,7 @@ impl PluginHostState {
         //     .inherit_stderr()
         //     .inherit_stdin()
 
-        if PluginManifest::option_has_permission(manifest.as_ref(), PermissionType::Network) {
+        if PluginManifest::option_has_permission(manifest, PermissionType::Network) {
             // Not `inherit_network()`, which is `socket_addr_check(|_, _| true)`
             // and hands the plugin loopback, the private ranges and any cloud
             // metadata endpoint the host can reach. The check runs on the
@@ -639,7 +620,7 @@ impl PluginHostState {
 
         if let Some(owned_folder_path) = owned_folder_path {
             let has_storage =
-                PluginManifest::option_has_permission(manifest.as_ref(), PermissionType::Storage);
+                PluginManifest::option_has_permission(manifest, PermissionType::Storage);
 
             let dir_perms = if has_storage {
                 DirPerms::READ | DirPerms::MUTATE
@@ -658,30 +639,12 @@ impl PluginHostState {
                 .map_err(|e| AtomicError::from(format!("Failed to preopen directory: {}", e)))?;
         }
 
-        let ctx = builder.build();
-
-        let memory_limit_bytes = if PluginManifest::option_has_permission(
-            manifest.as_ref(),
-            PermissionType::ExtendedMemory,
-        ) {
-            MEMORY_LIMIT_BYTES_EXTENDED
-        } else {
-            MEMORY_LIMIT_BYTES
-        };
-
-        let limits = StoreLimitsBuilder::new()
-            .memory_size(memory_limit_bytes)
-            .build();
-
         Ok(Self {
             table: ResourceTable::new(),
-            ctx,
+            ctx: builder.build(),
             http: WasiHttpCtx::new(),
-            db,
-            plugin_subject,
-            agent,
             limits,
-            manifest,
+            core,
         })
     }
 }
@@ -725,130 +688,52 @@ impl WasiHttpView for PluginHostState {
     }
 }
 
+fn encode(resource: &Resource) -> Result<WasmResourceJson, String> {
+    Ok(WasmResourceJson {
+        subject: resource.get_subject().to_string(),
+        json_ad: resource.to_json_ad(None).map_err(|e| e.to_string())?,
+    })
+}
+
+/// The guest's view of the shared host: types translated, nothing decided.
 impl bindings::atomic::class_extender::host::Host for PluginHostState {
-    /// The only way out of a plugin.
-    ///
-    /// Four things have to hold before a byte leaves: the manifest declared
-    /// this origin, the URL resolves to somewhere on the public internet, no
-    /// secret handle appears anywhere it would be logged, and every handle in a
-    /// header resolves to a secret this plugin owns and scoped to this origin.
     async fn fetch(
         &mut self,
         request: bindings::atomic::class_extender::types::HttpRequest,
     ) -> Result<bindings::atomic::class_extender::types::HttpResponse, String> {
-        use crate::plugins::egress;
-
-        let Some(plugin_subject) = self.plugin_subject.clone() else {
-            return Err("this plugin has no subject, so it has no secrets".to_string());
-        };
-
-        if let Some(refusal) =
-            egress::refuse_misplaced_handles(&request.url, request.body.as_deref())
-        {
-            return Err(refusal);
-        }
-
-        let url = url::Url::parse(&request.url).map_err(|e| format!("not a URL: {e}"))?;
-        let origin = egress::origin_of(&url)?;
-
-        if !self
-            .manifest
-            .as_ref()
-            .is_some_and(|m| m.allows_origin(&origin))
-        {
-            return Err(format!(
-                "this plugin does not declare {origin} in its manifest, so it cannot reach it",
-            ));
-        }
-
-        if let Some(refusal) = egress::refuse_url(&request.url).await {
-            tracing::warn!(url = %request.url, %refusal, "plugin fetch refused");
-
-            return Err(format!("cannot reach {origin}: {refusal}"));
-        }
-
-        let drive = self.db.get_active_drive();
-        let db = self.db.clone();
-        let now = atomic_lib::utils::now();
-
-        let headers = egress::substitute_headers(
-            request
-                .headers
-                .into_iter()
-                .map(|h| (h.name, h.value))
-                .collect(),
-            |name| {
-                let key = atomic_lib::db::plugin_secret::PluginSecretKey::new(
-                    drive.as_deref().unwrap_or_default(),
-                    &plugin_subject,
-                    name,
-                );
-
-                db.use_plugin_secret(&key, &origin, now, |value| value.to_string())
-                    .ok()
-                    .flatten()
-            },
-        )?;
-
-        let method = reqwest::Method::from_bytes(request.method.as_bytes())
-            .map_err(|e| format!("not an HTTP method: {e}"))?;
-
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(
-                crate::plugins::egress::FETCH_TIMEOUT_SECS,
-            ))
-            // Every redirect would need re-checking against the allowlist and
-            // the address rules, and credential headers would have to be
-            // dropped crossing origins. Refusing to follow them is the honest
-            // version until that exists: the plugin sees the 3xx and can decide.
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|e| format!("could not build an HTTP client: {e}"))?;
-
-        let mut outgoing = client.request(method, url);
-
-        for (name, value) in headers {
-            outgoing = outgoing.header(name, value);
-        }
-
-        if let Some(body) = request.body {
-            outgoing = outgoing.body(body);
-        }
-
-        let response = outgoing
-            .send()
-            .await
-            .map_err(|e| format!("request to {origin} failed: {e}"))?;
-
-        let status = response.status().as_u16();
-        let response_headers = response
-            .headers()
-            .iter()
-            .map(
-                |(name, value)| bindings::atomic::class_extender::types::HttpHeader {
-                    name: name.to_string(),
-                    value: value.to_str().unwrap_or_default().to_string(),
+        let response = self
+            .core
+            .fetch(
+                FetchRequest {
+                    operation: None,
+                    method: request.method,
+                    url: request.url,
+                    headers: request
+                        .headers
+                        .into_iter()
+                        .map(|h| (h.name, h.value))
+                        .collect(),
+                    body: request.body,
                 },
+                // A class extender declares origins, not operations, so the
+                // effect does not narrow anything here.
+                "write",
             )
-            .collect();
-
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| format!("could not read the response from {origin}: {e}"))?;
-
-        if bytes.len() > crate::plugins::egress::FETCH_MAX_RESPONSE_BYTES {
-            return Err(format!(
-                "{origin} returned {} bytes, over the limit of {}",
-                bytes.len(),
-                crate::plugins::egress::FETCH_MAX_RESPONSE_BYTES,
-            ));
-        }
+            .await?;
 
         Ok(bindings::atomic::class_extender::types::HttpResponse {
-            status,
-            headers: response_headers,
-            body: String::from_utf8_lossy(&bytes).into_owned(),
+            status: response.status,
+            headers: response
+                .headers
+                .into_iter()
+                .map(
+                    |(name, value)| bindings::atomic::class_extender::types::HttpHeader {
+                        name,
+                        value,
+                    },
+                )
+                .collect(),
+            body: response.body,
         })
     }
 
@@ -857,52 +742,7 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
         subject: String,
         _agent: Option<String>,
     ) -> Result<WasmResourceJson, String> {
-        let for_agent = self
-            .agent
-            .as_ref()
-            .map(ForAgent::from)
-            .unwrap_or(ForAgent::Public);
-
-        if !subject.starts_with(&self.db.get_server_url()) {
-            // If the plugin does not have network permissions we block the request since the plugin could send data to remote servers via these requests.
-            if !PluginManifest::option_has_permission(
-                self.manifest.as_ref(),
-                PermissionType::Network,
-            ) {
-                return Err("Plugin does not have network access".to_string());
-            }
-
-            // The host fetches this one, so the guest's socket check never sees
-            // it. Same rules, applied here.
-            if let Some(refusal) = crate::plugins::egress::refuse_url(&subject).await {
-                tracing::warn!(%subject, %refusal, "plugin refused a foreign subject fetch");
-
-                return Err(format!("cannot fetch {subject}: {refusal}"));
-            }
-
-            let resource = self
-                .db
-                .fetch_resource(&subject, self.agent.as_ref())
-                .await
-                .map_err(|e| e.to_string())?;
-
-            return Ok(WasmResourceJson {
-                subject: resource.get_subject().to_string(),
-                json_ad: resource.to_json_ad(None).map_err(|e| e.to_string())?,
-            });
-        }
-
-        let resource = self
-            .db
-            .get_resource_extended(&subject.into(), false, &for_agent)
-            .await
-            .map_err(|e| e.to_string())?
-            .to_single();
-
-        Ok(WasmResourceJson {
-            subject: resource.get_subject().to_string(),
-            json_ad: resource.to_json_ad(None).map_err(|e| e.to_string())?,
-        })
+        encode(&self.core.get_resource(&subject).await?)
     }
 
     async fn query(
@@ -911,154 +751,24 @@ impl bindings::atomic::class_extender::host::Host for PluginHostState {
         value: String,
         _agent: Option<String>,
     ) -> Result<Vec<WasmResourceJson>, String> {
-        let for_agent = self
-            .agent
-            .as_ref()
-            .map(ForAgent::from)
-            .unwrap_or(ForAgent::Public);
+        self.core
+            .query(&property, &value)
+            .await?
+            .iter()
+            .map(encode)
+            .collect()
+    }
 
-        let mut query = Query::new_prop_val(&property, &value);
-        query.for_agent = for_agent;
-
-        let result = self.db.query(&query).await.map_err(|e| e.to_string())?;
-
-        let mut resources = Vec::new();
-
-        for resource in result.resources {
-            resources.push(WasmResourceJson {
-                subject: resource.get_subject().to_string(),
-                json_ad: resource.to_json_ad(None).map_err(|e| e.to_string())?,
-            });
-        }
-
-        Ok(resources)
+    async fn get_plugin_agent(&mut self) -> String {
+        self.core.plugin_agent().unwrap_or_default()
     }
 
     async fn commit(&mut self, commit: String) -> Result<(), String> {
-        let Some(agent) = &self.agent else {
-            return Err("Plugin does not have an agent".to_string());
-        };
-
-        // The plugin SDK's `CommitBuilder` serializes with full set / remove
-        // payloads (HashMap<String, JsonValue> / HashSet<String>). The
-        // canonical `CommitBuilderJSON` only carries `loro_update`, so plugins
-        // that build a commit by accumulating `set` calls would otherwise
-        // arrive with no Loro update and get rejected. Parse the wire shape
-        // directly here and convert each JsonValue → typed `Value` via the
-        // property's datatype, then `sign_at` materializes the Loro update.
-        #[derive(serde::Deserialize)]
-        struct PluginCommitWire {
-            subject: String,
-            #[serde(default)]
-            set: std::collections::HashMap<String, serde_json::Value>,
-            #[serde(default)]
-            remove: HashSet<String>,
-            #[serde(default)]
-            destroy: bool,
-            #[serde(default)]
-            previous_commit: Option<String>,
-        }
-
-        let wire: PluginCommitWire =
-            serde_json::from_str(&commit).map_err(|e| format!("Invalid commit JSON: {e}"))?;
-
-        let mut commit_builder = CommitBuilder::new(wire.subject.into());
-        commit_builder.destroy(wire.destroy);
-        // `previous_commit` is intentionally ignored: `sign()` overrides it
-        // from the resource's `lastCommit` propval, so any value the plugin
-        // supplies would be discarded anyway.
-        let _ = wire.previous_commit;
-        for prop in wire.remove {
-            commit_builder.remove(prop);
-        }
-        let parse_opts = ParseOpts::default();
-        for (prop, json_val) in wire.set {
-            let (key, value) =
-                atomic_lib::parse::parse_propval(&prop, &json_val, None, &*self.db, &parse_opts)
-                    .await
-                    .map_err(|e| format!("Failed to convert plugin set value for {prop}: {e}"))?;
-            commit_builder.set(key.to_string(), value);
-        }
-
-        let resource = self
-            .db
-            .get_resource_extended(&commit_builder.subject, false, &agent.into())
-            .await
-            .map_err(|e| e.to_string())?
-            .to_single();
-
-        let commit = commit_builder
-            .sign(agent, &*self.db, &resource)
-            .await
-            .map_err(|e| e.to_string())?;
-
-        // We do not allow plugins to edit plugin resources as that would allow them to install or update code without the user's consent.
-        if check_if_commit_changes_plugin(&commit, &resource).map_err(|e| e.to_string())? {
-            return Err("Plugin cannot edit plugin resources".to_string());
-        }
-
-        let opts = CommitOpts {
-            validate_schema: true,
-            validate_signature: true,
-            validate_timestamp: false,
-            validate_rights: true,
-            validate_loro_causality: false,
-            update_index: true,
-            validate_for_agent: None,
-            source_id: None,
-        };
-
-        self.db
-            .apply_commit(commit, &opts)
-            .await
-            .map_err(|e| e.to_string())?;
-
-        Ok(())
+        self.core.commit(&commit).await
     }
 
     async fn get_config(&mut self) -> String {
-        let Some(subject) = &self.plugin_subject else {
-            return "{}".to_string();
-        };
-
-        let Ok(plugin_resource) = self
-            .db
-            .get_resource(&atomic_lib::Subject::from_raw(subject, None))
-            .await
-        else {
-            return "{}".to_string();
-        };
-
-        let Ok(val) = plugin_resource.get(urls::CONFIG) else {
-            return "{}".to_string();
-        };
-
-        // Loro stores Value::Json as a JSON string, and the loader heuristic
-        // in `loro_value_to_atomic_value` reinflates `{...}` strings as
-        // `Value::NestedResource`. So accept any shape that can be coerced
-        // back to a JSON object.
-        match val {
-            atomic_lib::Value::Json(json_val) => json_val.to_string(),
-            atomic_lib::Value::String(s) => match serde_json::from_str::<serde_json::Value>(s) {
-                Ok(parsed) if parsed.is_object() => s.clone(),
-                _ => "{}".to_string(),
-            },
-            atomic_lib::Value::NestedResource(atomic_lib::values::SubResource::Nested(
-                propvals,
-            )) => {
-                let map: serde_json::Map<String, serde_json::Value> = propvals
-                    .iter()
-                    .map(|(k, v)| {
-                        let s = v.to_string();
-                        let parsed = serde_json::from_str::<serde_json::Value>(&s)
-                            .unwrap_or(serde_json::Value::String(s));
-                        (k.clone(), parsed)
-                    })
-                    .collect();
-                serde_json::Value::Object(map).to_string()
-            }
-            _ => "{}".to_string(),
-        }
+        self.core.get_config().await
     }
 }
 
@@ -1513,7 +1223,7 @@ pub async fn install_or_update_plugin(
         create_plugin_meta(store, drive_subject, &manifest, plugin_subject).await?;
 
         // 4. Load Plugin
-        let engine = Arc::new(build_engine()?);
+        let engine = host_core::engine().map_err(AtomicError::from)?;
         let wasm_load_path = target_dir.join(&wasm_target_name);
 
         let scope = ClassExtenderScope::Drive(drive_subject.to_string());
@@ -1885,30 +1595,6 @@ fn decode_subject(b64_subject: &str) -> AtomicResult<String> {
     .map_err(|e| AtomicError::from(format!("Failed to decode subject: {}", e)))?;
 
     Ok(subject)
-}
-
-fn check_if_commit_changes_plugin(commit: &Commit, resource: &Resource) -> AtomicResult<bool> {
-    // Check if the resource it changes is currently a plugin.
-    if let Ok(is_a) = resource.get(urls::IS_A) {
-        let resource_classes = is_a.to_subjects(None)?;
-
-        if resource_classes.contains(&urls::PLUGIN.to_string()) {
-            return Ok(true);
-        }
-    }
-
-    // Check if the Loro update sets isA to include Plugin.
-    if let Some(loro_bytes) = &commit.loro_update {
-        let doc = atomic_lib::loro::AtomicLoroDoc::new();
-        let _ = doc.import_update(loro_bytes);
-        if let Some(is_a_str) = doc.get_string_property(urls::IS_A) {
-            if is_a_str.contains(urls::PLUGIN) {
-                return Ok(true);
-            }
-        }
-    }
-
-    Ok(false)
 }
 
 async fn compare_manifest_to_resource(
