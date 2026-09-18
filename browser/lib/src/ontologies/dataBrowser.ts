@@ -535,7 +535,10 @@ declare module '../index.js' {
     [dataBrowser.properties.meetingLeader]: string;
     [dataBrowser.properties.organization]: string;
     [dataBrowser.properties.telephone]: string;
-    [dataBrowser.properties.telephones]: Array<{ value: string; type?: string }>;
+    [dataBrowser.properties.telephones]: Array<{
+      value: string;
+      type?: string;
+    }>;
     [dataBrowser.properties.vcardUid]: string;
     [dataBrowser.properties.website]: string;
     [dataBrowser.properties.currency]: string;
