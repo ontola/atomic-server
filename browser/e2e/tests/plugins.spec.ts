@@ -1585,13 +1585,7 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
 
     // `New plugin` is search-only: it creates the drive's plugin schema on
     // first use, so it stays out of the default listing.
-    await page.getByRole('button', { name: 'More' }).click();
-    await page.getByPlaceholder(/filter/i).fill('plugin');
-    await page.locator('[data-testid="menu-item-new-plugin"]').click();
-
-    await expect(
-      main.getByRole('heading', { name: 'New plugin', level: 1 }),
-    ).toBeVisible();
+    await newPlugin(page);
 
     // The starter source is what an author (or an LLM) reads first.
     await page.getByRole('tab', { name: 'Code', exact: true }).click();
@@ -1642,12 +1636,7 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
   }) => {
     const main = page.getByRole('main');
 
-    await page.getByRole('button', { name: 'More' }).click();
-    await page.getByPlaceholder(/filter/i).fill('plugin');
-    await page.locator('[data-testid="menu-item-new-plugin"]').click();
-    await expect(
-      main.getByRole('heading', { name: 'New plugin', level: 1 }),
-    ).toBeVisible();
+    await newPlugin(page);
 
     // Point the plugin at a resource that is not there. The source property is
     // drive-local, so it is found by its value rather than by a subject the
@@ -1767,7 +1756,24 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
   });
 });
 
+/**
+ * Asks for a new plugin and waits for its page.
+ *
+ * The first plugin on a drive materializes that drive's plugin schema before
+ * anything can render: nineteen properties and classes, each its own resource.
+ * The browser sends those writes together, but the server applies commits one
+ * at a time, so the step costs what nineteen sequential writes cost. Measured
+ * against a debug build: 5.2s on a fresh store, and 11s once the suite's
+ * shared store holds a handful of drives, which is where this spec runs. The
+ * suite's 10s default was never a budget this step could meet on CI hardware,
+ * and it is what made these tests fail there while passing on a clean laptop.
+ *
+ * So the wait is widened here rather than for the whole suite, and the test
+ * gets room for the part that comes after it. The wait is the symptom; making
+ * the schema cheaper to create is its own change.
+ */
 async function newPlugin(page: import('@playwright/test').Page) {
+  test.setTimeout(120000);
   await page.getByRole('button', { name: 'More' }).click();
   await page.getByPlaceholder(/filter/i).fill('plugin');
   await page.locator('[data-testid="menu-item-new-plugin"]').click();
@@ -1776,7 +1782,7 @@ async function newPlugin(page: import('@playwright/test').Page) {
       name: 'New plugin',
       level: 1,
     }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 45000 });
 }
 
 /**
