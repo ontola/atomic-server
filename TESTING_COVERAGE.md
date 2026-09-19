@@ -845,6 +845,38 @@ Cloud Vault display metadata: `vaultAutoBackup.test.ts` verifies name/emoji enro
   authenticated read from the real managed node. Plan purchase alone creates
   no enrollment. Real Stripe-hosted test-card checkout remains a deployment check.
 
+## Host-to-Drive routing and hosted vanity subdomains
+
+`Tree::DriveMapping` is what makes one server answer for many hostnames. It
+backs `/bind-drive` for self-hosters and hosted vanity subdomains for
+`atomic-saas`, whose control plane reconciles it through
+`Db::sync_drive_mappings`.
+
+- `db::drive_mapping_tests`: the reconcile a managed node runs on every policy
+  poll — add, repoint, remove; idempotent on an unchanged list; scoped so a
+  binding it did not install (including the `localhost` / `127.0.0.1` entries
+  from `setup_test_env`, and anything bound by hand through `/bind-drive`) is
+  never removed; keys normalized so a mixed-case `Host` still resolves; empty
+  hosts and empty drives skipped.
+- `db::resolver_tests::a_bound_host_whose_drive_is_missing_does_not_serve_the_store_root`:
+  the multi-tenant leak. A host bound to a Drive this node does not hold (not
+  synced yet, or migrated away) must 404 rather than fall through to the store
+  root, which would answer one tenant's hostname with another namespace's
+  content. This is the property that lets the control plane authorize a
+  certificate on reservation instead of only after a node confirms.
+- `context::tests::a_served_domain_suffix_accepts_tenants_without_a_base_domain`:
+  `--served-domain-suffix` makes the request origin follow the hostname the
+  visitor used, without turning on `--base-domain` and with it the store's
+  subject normalization.
+- Paired `atomic-saas` coverage (registry, plan gating, `/caddy-ask`, the
+  heartbeat report) is listed in that repo's
+  `planning/TEST_COVERAGE_AND_CI.md`.
+
+**Not covered:** no test drives a real HTTP request against a vanity host
+end to end — the reconcile and the resolver are tested separately, and joining
+them needs the representative two-service environment. The multi-node gateway
+routing that a second node would require does not exist yet.
+
 ## Error reporting and feedback
 
 - `browser/data-browser/src/helpers/feedback.test.ts`: unavailable reporting, failed delivery, blank input and successful submission.

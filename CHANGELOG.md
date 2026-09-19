@@ -69,6 +69,25 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   `.map`). `AppState::init` drops its own core-models bootstrap branch: its
   "store did not exist" check ran after the store directory had been
   created, and `Db::init_redb_file` already seeds a fresh store on open.
+
+- `atomic_lib`: host-to-Drive mappings are reconcilable, so a control plane can
+  install hosted vanity subdomains without an agent that can sign on the
+  Drive's behalf. `Db::sync_drive_mappings` adds, repoints and removes a
+  desired set idempotently and scopes removal to the hosts it installed
+  itself (so `/bind-drive` bindings and the `localhost` entries from setup
+  survive); `Db::list_drive_mappings` and `Db::managed_alias_hosts` read the
+  table, which had no read path beyond a single-host lookup. Mapping keys are
+  now normalized, so a mixed-case `Host` header resolves the Drive it was
+  bound to instead of falling through to the store root.
+- A host bound to a Drive now serves that Drive or answers 404. It used to
+  fall through to the store root when the bound Drive was missing — not synced
+  yet, or moved to another node — which on a multi-tenant server answers one
+  tenant's hostname with another namespace's content.
+- New `--served-domain-suffix` / `ATOMIC_SERVED_DOMAIN_SUFFIX`: answer for
+  `*.<suffix>` so the request origin follows the hostname the visitor used,
+  without `--base-domain`'s other effect of also becoming the store's base
+  domain (which changes how subjects are normalized and migrated, and is not
+  something to switch on for a server that already holds data).
 - The outbox drains over a live Iroh link too (`sync::peer::LivePeerCommitTransport`):
   a device with no hub in reach delivers its queued writes to a paired peer as
   signed `COMMIT` frames, which the peer validates and applies like a hub

@@ -72,9 +72,15 @@ pub(crate) fn host_is_served_here(host: &str, opts: &crate::config::Opts) -> boo
     {
         return true;
     }
-    if let Some(base) = opts.base_domain.as_deref() {
-        let base = base.trim().trim_start_matches('.').to_ascii_lowercase();
-        if !base.is_empty() && (hostname == base || hostname.ends_with(&format!(".{base}"))) {
+    for suffix in [
+        opts.base_domain.as_deref(),
+        opts.served_domain_suffix.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        let suffix = suffix.trim().trim_start_matches('.').to_ascii_lowercase();
+        if !suffix.is_empty() && (hostname == suffix || hostname.ends_with(&format!(".{suffix}"))) {
             return true;
         }
     }
@@ -119,6 +125,36 @@ mod tests {
             args.push(b);
         }
         crate::config::Opts::parse_from(args)
+    }
+
+    fn opts_with_served_suffix(domain: &str, suffix: &str) -> crate::config::Opts {
+        crate::config::Opts::parse_from([
+            "atomic-server",
+            "--domain",
+            domain,
+            "--served-domain-suffix",
+            suffix,
+        ])
+    }
+
+    /// A managed node serving hosted vanity subdomains gets the suffix without
+    /// `--base-domain`, so the request origin follows the hostname the visitor
+    /// used while the store's subject normalization stays as it was.
+    #[test]
+    fn a_served_domain_suffix_accepts_tenants_without_a_base_domain() {
+        let o = opts_with_served_suffix("node1.atomicserver.eu", "atomicserver.eu");
+        assert!(o.base_domain.is_none());
+
+        assert!(host_is_served_here("acme.atomicserver.eu", &o));
+        assert!(host_is_served_here("ACME.AtomicServer.eu:443", &o));
+        // The node's own name and the apex are both names it answers for.
+        assert!(host_is_served_here("node1.atomicserver.eu", &o));
+        assert!(host_is_served_here("atomicserver.eu", &o));
+
+        // The same near-misses the base-domain path rejects.
+        assert!(!host_is_served_here("notatomicserver.eu", &o));
+        assert!(!host_is_served_here("atomicserver.eu.evil.example", &o));
+        assert!(!host_is_served_here("evil.example", &o));
     }
 
     #[test]
