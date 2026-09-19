@@ -28,7 +28,7 @@ A single resource's mergeable state exists in up to five representations:
 | # | Representation | Where | Notes |
 | --- | --- | --- | --- |
 | 1 | Loro oplog snapshot | `Tree::LoroSnapshots`, key `pure_id()` | The real merge truth. |
-| 2 | `loroUpdate` propval **inside** the `Tree::Resources` blob | `Tree::Resources` | **Removed in Phase 2c** for CRDT resources. Commits keep it (signed payload). |
+| 2 | `loroUpdate` propval **inside** the `Tree::Resources` blob | `Tree::Resources` | **Removed in Phase 2c** for CRDT resources. Commits also omit it (signed payload lives in `Tree::Envelopes`; GET hydrates). |
 | 3 | Flat queryable `PropVals` | `Tree::Resources` | The index/query projection. |
 | 4 | Live `Resource` (in-memory doc + undo stack) | Flutter `CANVAS_CACHE` static (`flutter/rust/src/api/simple.rs`) | Undo history persisted nowhere. |
 | 5 | Materialized display copies | Dart `CanvasEntry.strokes`, `InfiniteCanvas._strokes`, `_loroStrokeStates` | Two parallel undo trees. |

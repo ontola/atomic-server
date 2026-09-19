@@ -1215,6 +1215,11 @@ export const TableResource: React.FC<TableResourceProps> = ({
               // seconds with no row to type into. Members that arrive during
               // load shift the row's index, not its key (`itemKey` offsets by
               // `memberCount`), so nothing remounts.
+              //
+              // `busy` is the loading signal `useCollection` already tracks.
+              // Without it the grid paints `aria-rowcount=1` and looks
+              // settled while bodies are still crossing the worker.
+              busy={!ready || answeredQuery !== requestedQuery}
               itemCount={memberCount + newRowSubjects.length}
               itemKey={itemKey}
               columnToKey={columnToKey}

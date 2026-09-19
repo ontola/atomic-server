@@ -14,6 +14,30 @@
 > [`plugins.md`](./plugins.md) (app Loro payloads and blob checkpoints inherit
 > the same growth + retention concerns).
 
+## Shipped on the table-scale branch (2026-09-19)
+
+Genesis-heavy stores were paying **three copies** of every row's Loro snapshot:
+the `Tree::LoroSnapshots` row, the commit `Tree::Resources` blob (`loroUpdate`
+kept because it is the signed payload), and the envelope as JSON-AD with
+base64. That is why a 100k-row table landed at **4.0 GB / 43 KB/row**.
+
+Now:
+
+- Commit resource blobs strip `loroUpdate` like every other row. `get_resource`
+  hydrates the signed bytes from the matching envelope.
+- Envelopes store `AE01` + header propvals + raw `loroUpdate` (legacy JSON-AD
+  rows still read). Readers still see JSON-AD via `StoredEnvelope::json`.
+- Critical commit atoms other than `subject` are not indexed (commits are not
+  a queryable class). `Query` on `urls::SUBJECT` still finds them.
+
+At 100k rows, live key+value is **1.32 GB / 14 KB/row**. The redb *file*
+is still **4.0 GB** (exactly one 4 GiB region; same checkpoint as before
+the shrink) because each genesis is its own COW transaction. Create is
+20% faster (5.5 vs 6.9 ms/row). `compact_file` on the 10k store grew
+514→562 MB. Current-state snapshot + one signed copy remain.
+Incremental `loroUpdate` on non-genesis edits, batched import, and a
+compaction policy that actually reclaims are still the follow-ups below.
+
 ## Thesis
 
 Store size grows **much faster than the user's actual data**, and several costs

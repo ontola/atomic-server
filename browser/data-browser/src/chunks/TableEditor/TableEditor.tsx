@@ -445,18 +445,16 @@ function FancyTableInner<T>({
               scrollerRef={scrollerRef}
               setOnScroll={setOnScroll}
             />
+            {busy ? (
+              <LoadingOverlay>
+                <span role='status'>
+                  <Spinner size='20px' />
+                  Loading
+                </span>
+              </LoadingOverlay>
+            ) : null}
           </PercentageInsanityFix>
         </RelativeScrollArea>
-        {busy && (
-          <div role='row'>
-            <LoadingCell role='gridcell' aria-colspan={columns.length + 2}>
-              <span role='status'>
-                <Spinner size='20px' />
-                Loading
-              </span>
-            </LoadingCell>
-          </div>
-        )}
       </Table>
     </DndWrapper>
   );
@@ -505,8 +503,14 @@ const Table = styled.div.attrs<TableProps>(p => ({
   }
 `;
 
-const LoadingCell = styled.div`
-  padding: ${p => p.theme.size()};
+const LoadingOverlay = styled.div`
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: color-mix(in srgb, ${p => p.theme.colors.bg} 70%, transparent);
 
   > span {
     display: flex;
@@ -517,6 +521,7 @@ const LoadingCell = styled.div`
 `;
 
 const PercentageInsanityFix = styled.div`
+  position: relative;
   width: fit-content;
   min-width: 100%;
 `;

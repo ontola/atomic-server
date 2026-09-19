@@ -953,13 +953,11 @@ export class Collection {
       return 'no-db';
     }
 
-    // Query without sort — sorted queries with DID drives don't work in the
-    // WASM DB yet (drive-scoped index keys don't match DID subjects).
-    // We fetch all matching subjects with their JSON-AD payloads, hydrate
-    // them into the store, and sort client-side. Hydrating up front matters:
-    // immediately after a page reload `store.resources` is empty, so without
-    // it the sort key lookup returns `undefined` for every member and the
-    // sort silently degrades to the index's natural order.
+    // Indexed queries (AND filters or `sort_by`) go through `query_complex`,
+    // which REQUIRES a drive scope. Without one the worker can only answer
+    // "Indexed queries require a drive scope", so don't ask — fall back to
+    // the server `/query` instead of burning a worker round-trip on a
+    // guaranteed error.
     const hasExtraFilters =
       !!this.params.filters && this.params.filters.length > 0;
 
@@ -971,32 +969,34 @@ export class Collection {
     // known. Falling back to the store's current drive here is the same value
     // the builder would have captured a moment later.
     const drive = this.params.drive ?? this.store.getDrive();
+    const needsIndex = hasExtraFilters || !!this.params.sort_by;
 
-    // Extra AND constraints route through the indexed path
-    // (`query_complex`), which REQUIRES a drive scope: the query index is
-    // keyed by drive. Without one the worker can only answer with
-    // "Indexed queries require a drive scope", so don't ask — fall back to
-    // the server `/query` instead of burning a worker round-trip on a
-    // guaranteed error.
-    if (hasExtraFilters && !drive) {
+    if (needsIndex && !drive) {
       return 'no-db';
     }
 
-    const result = await this.store.queryLocalDb({
+    const pageSize = this.pageSize;
+    const queryBase = {
       property: this.params.property,
       value: this.params.value,
       filters: this.params.filters,
-      // Single property/value queries use the basic path and intentionally
-      // omit `drive` (see the sort note above). We still don't pass
-      // `sort_by`, so the indexed query stays drive-scoped without the
-      // DID-sort issue.
-      drive: hasExtraFilters ? drive : undefined,
-      includeResources: true,
-      // Aggregated in WASM over the whole matching set, exactly as the server
-      // would — the local DB is not a lesser source here.
+      drive: needsIndex ? drive : undefined,
       expressionFilters: this.params.expression_filters?.length
         ? this.params.expression_filters
         : undefined,
+    };
+
+    // Page in the worker. `Db::query` already supports `limit` / `offset` /
+    // `sort_by`; hydrating every match (the previous path) is the 100k-row
+    // table-open cliff. Bodies come back for this page only. Aggregates and
+    // `count` still cover the whole matching set.
+    const result = await this.store.queryLocalDb({
+      ...queryBase,
+      sortBy: this.params.sort_by,
+      sortDesc: this.params.sort_desc,
+      limit: pageSize,
+      offset: page * pageSize,
+      includeResources: true,
       aggregation: this.params.aggregation?.aggregates.length
         ? this.params.aggregation
         : undefined,
@@ -1010,13 +1010,27 @@ export class Collection {
       return 'no-db';
     }
 
+    // When the store already paged, `result.subjects` is only this page.
+    // `applyResourceChange` needs the full membership set so hydrating a
+    // later page (or another collection) does not inflate `totalMembers`.
+    // Subjects-only is cheap vs JSON-AD bodies (no Loro snapshots).
+    let allSubjects: string[] | undefined;
+
+    if (result.count > result.subjects.length) {
+      const membership = await this.store.queryLocalDb({
+        ...queryBase,
+        includeResources: false,
+      });
+      allSubjects = membership?.subjects;
+    }
+
     // Hydrate + sort + setPage must not optimistic-add via ResourceUpdated.
     // Set the flag only around this slice — not the `queryLocalDb` wait
     // above — so a locally created member during the query still lands.
     this._assemblingPage = true;
 
     try {
-      return this.finishLocalDbPage(page, result, drive);
+      return this.finishLocalDbPage(page, result, drive, allSubjects);
     } finally {
       this._assemblingPage = false;
     }
@@ -1033,6 +1047,7 @@ export class Collection {
       aggregates?: AggregateOutcome[];
     },
     drive: string | undefined,
+    allSubjects?: string[],
   ): 'ok' | 'no-db' {
     if (result.count === 0) {
       this._queriedMembers.clear();
@@ -1066,7 +1081,22 @@ export class Collection {
       return 'no-db';
     }
 
-    this._queriedMembers = new Set(filterIndexLeakage(result.subjects));
+    const pageSize = this.pageSize;
+    const rawSubjects = result.subjects;
+    // The store already paged when it returned fewer subjects than `count`.
+    // Stubs that ignore `limit` still return the full set (`count ===
+    // subjects.length`); those keep the client-side sort + slice fallback.
+    const storePaged =
+      result.count > rawSubjects.length && rawSubjects.length <= pageSize;
+
+    const pageSubjectsClean = filterIndexLeakage(rawSubjects).filter(
+      subject => !this._removedSubjects.has(subject),
+    );
+    const memberSubjects = filterIndexLeakage(
+      allSubjects ?? rawSubjects,
+    ).filter(subject => !this._removedSubjects.has(subject));
+
+    this._queriedMembers = new Set(memberSubjects);
 
     // Notifications may have arrived while the local query was pending.
     // Its full result already accounts for them, even outside page zero.
@@ -1087,16 +1117,15 @@ export class Collection {
       }
     }
 
-    // Strip commit subjects from BOTH the subjects array AND the count.
-    // Filtering only at iteration time (`getMemberWithIndex`) leaves the
-    // inflated count in `collection.totalMembers`, so consumers like
-    // `TableResource` and react-window render an empty `TableRow` slot
-    // for the missing index that gets stuck on a loading shimmer. Stripping
-    // here keeps the count and the addressable members consistent.
-    result.subjects = filterIndexLeakage(result.subjects).filter(
-      subject => !this._removedSubjects.has(subject),
-    );
-    result.count = result.subjects.length;
+    // Strip commit subjects from the page. When the store paged, keep
+    // `result.count` as the full match set (minus leaked members we know
+    // about). The old unpaged path overwrote count with the subject list
+    // length because that list *was* the full set — doing that after a
+    // paged fetch would make a 100k table look like 30 rows.
+    result.subjects = pageSubjectsClean;
+    result.count = storePaged
+      ? Math.max(memberSubjects.length, result.count)
+      : memberSubjects.length;
 
     if (result.subjects.length === 0) {
       this.setEmptyPage(page);
@@ -1105,10 +1134,14 @@ export class Collection {
       return 'ok';
     }
 
-    // Client-side sorting — pre-fetch sort keys to avoid repeated Map lookups.
+    // Client-side sorting — only when the worker did not already page.
+    // A paged result is already ordered by `sort_by` in the index; sorting
+    // just this page cannot reconstruct global order. Unpaged stubs (and
+    // the no-sort basic path) still need JS sort so tests and fallbacks
+    // match the server.
     const sortBy = this.params.sort_by;
 
-    if (sortBy) {
+    if (sortBy && !storePaged) {
       const sortDesc = !!this.params.sort_desc;
       const sortKeys = new Map<string, unknown>();
       // `sortOrder` (fractional sibling-order key) falls back to the creation
@@ -1179,10 +1212,10 @@ export class Collection {
       });
     }
 
-    // Client-side pagination
-    const pageSize = parseInt(this.params.page_size, 10);
     const offset = page * pageSize;
-    const pageSubjects = result.subjects.slice(offset, offset + pageSize);
+    const pageSubjects = storePaged
+      ? result.subjects
+      : result.subjects.slice(offset, offset + pageSize);
 
     // Build a synthetic collection resource from the query result
     const resource = new Resource<Collections.Collection>(

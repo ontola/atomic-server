@@ -7,6 +7,11 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Store shrink for genesis-heavy tables: commit resource blobs no longer
+  keep `loroUpdate` (GET hydrates it from `Tree::Envelopes`), envelopes are
+  stored as compact `AE01` instead of JSON-AD base64, and commit atoms other
+  than `subject` are not indexed. Live data at 10k rows is 14 KB/row; the
+  on-disk file is still COW-amplified until a batched import exists.
 - `atomic_lib`: a signed destroy commit now removes the resource (and its
   cascade-deleted children, Loro snapshot, index and search rows) in the same
   redb transaction that stores its envelope and commit row. `Db::apply_commit`

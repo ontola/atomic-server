@@ -4,6 +4,10 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Table collections fetch a page of local bodies (`limit` / `offset` /
+  `sort_by`) instead of hydrating every matching row. The grid stays
+  `aria-busy` until the collection answers, so the empty entry row no
+  longer looks settled while loading.
 - Toasts no longer cover the navbar's buttons when the navbar is at the bottom: the toast container is lifted by the navbar's height, so the sidebar toggle, search and context menu stay tappable while a toast is up. The sidebar's 3.8rem `OverlapSpacer`, beneath the App panel, is gone: it dated from the floating-navbar mode and guarded an overlap that cannot happen, since the sidebar's height already excludes the navbar ([#1565](https://github.com/ontola/atomic-server/issues/1565)).
 - The navbar sits at the bottom by default on phones and tablets, so the sidebar toggle, the search button and the context menu stay within thumb reach. The signal is a touch-primary pointer rather than viewport width, so a landscape tablet also gets the bottom bar and a narrow desktop window does not. Desktop keeps the top bar, and a position picked in Settings is untouched ([#1565](https://github.com/ontola/atomic-server/issues/1565)).
 - Fix: `@tomic/lib` writes the Loro `datatypes` tags in the export path shared by genesis and drain-time signing, after the user's pending ops are sealed into their own commit. The drain used to tag first, which folded a `set()` edit into the tag write's `atomic:system` commit — the canvas undo stack skips that origin, so the first edit of a `json`/reference property after a save could not be undone.
