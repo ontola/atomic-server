@@ -552,6 +552,7 @@ Not covered: table `contains`; Playwright search overlay on the KV path and asse
 | Offline edits persist and sync on reconnect | `sync.spec.ts` |
 | Second device cold-loads a drive from the server | `second-device-load.spec.ts` |
 | Property reads stay pending through loading-placeholder notifications until hydration completes | `browser/lib/src/store.test.ts` |
+| Cold-load local hydration: all `useResource` misses of one tick share one worker round trip, a duplicate subject is asked once, a miss during a flush lands in the next batch, a failed bulk read is a per-subject miss, batches chunk at 200 | `browser/lib/src/store.read-policy.test.ts` |
 
 ---
 
