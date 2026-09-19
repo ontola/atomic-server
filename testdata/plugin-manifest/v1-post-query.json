@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "operations": [
+    {
+      "id": "query",
+      "method": "POST",
+      "url": "https://api.test/query",
+      "effect": "read"
+    }
+  ]
+}

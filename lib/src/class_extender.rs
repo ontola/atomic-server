@@ -317,8 +317,11 @@ impl ClassExtender {
             return true;
         };
 
-        // Check if the resource is a plugin, if so return false.
-        !class_subjects(is_a).contains(&urls::PLUGIN.to_string())
+        // An Installation (or a not-yet-migrated legacy Plugin) is the plugin
+        // itself; a plugin must not extend the resource that installs it.
+        !class_subjects(is_a)
+            .iter()
+            .any(|class| class == urls::INSTALLATION || class == urls::PLUGIN)
     }
 }
 

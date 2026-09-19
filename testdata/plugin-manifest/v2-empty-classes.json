@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 2,
+  "world": "server-extension",
+  "entrypoints": {
+    "classExtender": []
+  }
+}

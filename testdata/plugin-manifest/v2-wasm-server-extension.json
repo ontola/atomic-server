@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 2,
+  "runtime": "wasip2/1",
+  "world": "server-extension",
+  "entrypoints": {
+    "classExtender": [
+      "https://atomicdata.dev/classes/Folder"
+    ],
+    "view": "ui.js"
+  },
+  "capabilities": [
+    {
+      "name": "full-drive-access",
+      "reason": "Indexes every folder"
+    },
+    "custom-view"
+  ],
+  "network": {
+    "origins": [
+      "https://api.notion.com"
+    ]
+  },
+  "name": "folder-index",
+  "namespace": "example",
+  "version": "0.3.1"
+}

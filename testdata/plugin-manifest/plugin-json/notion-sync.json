@@ -1,0 +1,41 @@
+{
+  "name": "notion-sync",
+  "namespace": "example",
+  "version": "2.1.0",
+  "description": "Mirrors Notion pages",
+  "author": "Ontola",
+  "permissions": [
+    {
+      "permission": "network",
+      "reason": "Reads pages from Notion"
+    },
+    {
+      "permission": "storage",
+      "reason": "Caches page bodies"
+    },
+    {
+      "permission": "custom-view",
+      "reason": ""
+    }
+  ],
+  "network": {
+    "origins": [
+      "https://api.notion.com"
+    ]
+  },
+  "defaultConfig": {
+    "workspace": "",
+    "interval": 60
+  },
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "workspace": {
+        "type": "string"
+      },
+      "interval": {
+        "type": "integer"
+      }
+    }
+  }
+}

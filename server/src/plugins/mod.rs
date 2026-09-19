@@ -48,6 +48,8 @@ pub mod export;
 #[cfg(feature = "wasm-plugins")]
 pub mod external;
 pub mod files;
+#[cfg(feature = "wasm-plugins")]
+pub mod host_core;
 pub mod importer;
 #[cfg(feature = "wasm-plugins")]
 pub mod installation;
@@ -64,6 +66,8 @@ pub mod plan;
 pub mod plugin;
 pub mod prunetests;
 pub mod query;
+#[cfg(feature = "wasm-plugins")]
+pub mod release;
 #[cfg(feature = "wasm-plugins")]
 pub mod release_binding;
 pub mod replicate;
