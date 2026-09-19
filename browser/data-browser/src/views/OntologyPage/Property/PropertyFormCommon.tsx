@@ -45,9 +45,13 @@ export function PropertyFormCommon({
     { commit: true },
   );
   const [datatype] = useString(resource, core.properties.datatype);
-  const [_, setAllowsOnly] = useArray(resource, core.properties.allowsOnly, {
-    commit: true,
-  });
+  const [allowsOnly, , , removeAllowsOnly] = useArray(
+    resource,
+    core.properties.allowsOnly,
+    {
+      commit: true,
+    },
+  );
 
   const [ontologySubject] = useCurrentSubject();
   const ontologyResource = useResource(ontologySubject);
@@ -75,9 +79,13 @@ export function PropertyFormCommon({
       }
 
       const filtered = await filterAllowsOnly(resource, newType, store);
-      setAllowsOnly(filtered);
+      const extra = allowsOnly.filter(s => !(filtered ?? []).includes(s));
+
+      if (extra.length > 0) {
+        removeAllowsOnly(extra);
+      }
     },
-    [store, resource, setAllowsOnly],
+    [store, resource, allowsOnly, removeAllowsOnly],
   );
 
   const handleClassTypeChange = useCallback(

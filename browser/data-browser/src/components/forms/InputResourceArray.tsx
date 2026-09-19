@@ -42,11 +42,15 @@ export default function InputResourceArray({
   const [draggingSubject, setDraggingSubject] = useState<string>();
   const [addingNewItem, setAddingNewItem] = useState(false);
 
-  const [array, setArray] = useArray(resource, property.subject, {
-    validate: false,
-    commit,
-    commitDebounce: commitDebounceInterval,
-  });
+  const [array, setArray, pushArray, removeArray] = useArray(
+    resource,
+    property.subject,
+    {
+      validate: false,
+      commit,
+      commitDebounce: commitDebounceInterval,
+    },
+  );
 
   const { error, setError, setTouched } = useValidation(
     required ? (array.length > 0 ? undefined : 'Required') : undefined,
@@ -63,16 +67,20 @@ export default function InputResourceArray({
 
   const handleRemoveRowList = useIndexDependantCallback(
     (index: number) => () => {
-      const newArray = [...array];
-      newArray.splice(index, 1);
-      setArray(newArray.length === 0 ? undefined : newArray);
+      const subject = array[index];
 
-      if (required && newArray.length === 0) {
+      if (subject !== undefined) {
+        removeArray([subject]);
+      }
+
+      const nextLength = array.length - (subject !== undefined ? 1 : 0);
+
+      if (required && nextLength === 0) {
         setError('Required');
       }
     },
     array,
-    [setArray, required, setError],
+    [removeArray, required, setError],
   );
 
   const handleSetSubject = useCallback(
@@ -80,24 +88,36 @@ export default function InputResourceArray({
       const newArray = [...array];
 
       if (value) {
-        newArray[index] = value;
+        if (index === array.length) {
+          try {
+            validateDatatype([...array, value], property.datatype);
+            pushArray([value]);
+            setError(undefined);
+          } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
 
-        try {
-          validateDatatype(newArray, property.datatype);
-          setArray(newArray);
-          setError(undefined);
-        } catch (e) {
-          setError(e instanceof Error ? e.message : String(e));
+            return;
+          }
+        } else {
+          newArray[index] = value;
 
-          return;
+          try {
+            validateDatatype(newArray, property.datatype);
+            setArray(newArray);
+            setError(undefined);
+          } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+
+            return;
+          }
         }
       }
 
-      if (required) {
+      if (required && !(value && index === array.length)) {
         setError(newArray.length === 0 ? 'Required' : undefined);
       }
     },
-    [property.datatype, setArray, setError, required, array],
+    [property.datatype, setArray, pushArray, setError, required, array],
   );
 
   const handleSetSubjectMemos = useMemo(() => {
@@ -115,10 +135,16 @@ export default function InputResourceArray({
 
     const oldPos = array.indexOf(active.id as string);
     const newPos = over.id as number;
-    const newArray = [...array];
-    const [removed] = newArray.splice(oldPos, 1);
-    newArray.splice(newPos > oldPos ? newPos - 1 : newPos, 0, removed);
-    setArray(newArray);
+
+    if (oldPos === -1) {
+      return;
+    }
+
+    resource.moveListItem(property.subject, oldPos, newPos);
+
+    if (commit) {
+      resource.save();
+    }
   };
 
   return (

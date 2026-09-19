@@ -26,10 +26,14 @@ export function ClassCardWrite({ subject }: ClassCardWriteProps): JSX.Element {
     ContextMenuOptions.History,
   ];
   const resource = useResource(subject);
-  const [requires, setRequires] = useArray(resource, urls.properties.requires, {
-    commit: true,
-  });
-  const [recommends, setRecommends] = useArray(
+  const [requires, , , removeRequires] = useArray(
+    resource,
+    urls.properties.requires,
+    {
+      commit: true,
+    },
+  );
+  const [recommends, , , removeRecommends] = useArray(
     resource,
     urls.properties.recommends,
     { commit: true },
@@ -44,9 +48,9 @@ export function ClassCardWrite({ subject }: ClassCardWriteProps): JSX.Element {
 
   const removeProperty = (type: 'requires' | 'recommends', prop: string) => {
     if (type === 'requires') {
-      setRequires(requires.filter(s => s !== prop));
+      removeRequires([prop]);
     } else {
-      setRecommends(recommends.filter(s => s !== prop));
+      removeRecommends([prop]);
     }
   };
 

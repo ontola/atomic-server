@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Ai,
   ai,
@@ -18,19 +18,22 @@ import { ResourceCoverImage } from '@components/ResourceDecorations';
 import { DEFAULT_AICHAT_NAME } from '@components/AI/aiContstants';
 import { useGenerativeData } from './useGenerativeData';
 import {
-  addMessageToChatResource,
+  findMessageResource,
   messageResourcesToDisplayMessages,
   removeFollowingMessagesFromChatResource,
   removeMessageFromChatResource,
+  upsertMessageInChat,
 } from './chatConversionUtils';
 import { RealAIChat } from './RealAIChat';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { styled } from 'styled-components';
 import { consumePendingFirstMessage } from './pendingFirstMessage';
 import { userTiming } from '@helpers/userTiming';
+import { useLoroDocSync, useLoroSyncForest } from '@hooks/useLoroDocSync';
 
 const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   const store = useStore();
+  useLoroDocSync(resource, resource.getLoroDoc());
   const { shouldGenerateTitles } = useAISettings();
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<AtomicUIMessage[]>([]);
@@ -42,6 +45,23 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
   const [messageToResourceMap, setMessageToResourceMap] = useState(
     new Map<AtomicUIMessage, Resource>(),
   );
+  const messageToResourceMapRef = useRef(messageToResourceMap);
+  messageToResourceMapRef.current = messageToResourceMap;
+  const forestSubjects = useMemo(() => {
+    const parts: string[] = [];
+
+    for (const r of messageToResourceMap.values()) {
+      const ps = r.get(ai.properties.parts);
+
+      if (Array.isArray(ps)) {
+        parts.push(...(ps as string[]));
+      }
+    }
+
+    return [...messageSubjects, ...parts];
+  }, [messageSubjects, messageToResourceMap]);
+
+  useLoroSyncForest(forestSubjects);
   const [title, setTitle] = useTitle(resource);
   const [autoSubmitMessage, setAutoSubmitMessage] = useState<string>();
 
@@ -77,10 +97,12 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
     }
 
     try {
-      const messageResource = await addMessageToChatResource(
+      const messageResource = await upsertMessageInChat(
         message,
         resource,
         store,
+        findMessageResource(messageToResourceMapRef.current, message),
+        { persistToServer: true },
       );
 
       setMessageToResourceMap(prev => {
@@ -91,6 +113,7 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
         }
 
         next.set(message, messageResource);
+        messageToResourceMapRef.current = next;
 
         return next;
       });
@@ -100,13 +123,46 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
     }
   };
 
+  const handleStreamMessage = async (message: AtomicUIMessage) => {
+    try {
+      const existing = findMessageResource(
+        messageToResourceMapRef.current,
+        message,
+      );
+      const messageResource = await upsertMessageInChat(
+        message,
+        resource,
+        store,
+        existing,
+        {
+          persistToServer: !existing,
+          saveChat: !existing,
+          commitLoro: !!existing,
+        },
+      );
+
+      setMessageToResourceMap(prev => {
+        const next = new Map(prev);
+        next.set(message, messageResource);
+        messageToResourceMapRef.current = next;
+
+        return next;
+      });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const handleSummaryDeleted = (restored: AtomicUIMessage[]) => {
     setCompactedMessages([]);
     setMessages(restored);
   };
 
   const handleDeleteMessage = async (message: AtomicUIMessage) => {
-    const messageResource = messageToResourceMap.get(message);
+    const messageResource = findMessageResource(
+      messageToResourceMapRef.current,
+      message,
+    );
 
     if (messageResource) {
       try {
@@ -119,7 +175,14 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
 
     setMessageToResourceMap(prev => {
       const next = new Map(prev);
-      next.delete(message);
+
+      for (const m of [...next.keys()]) {
+        if (m === message || m.id === message.id) {
+          next.delete(m);
+        }
+      }
+
+      messageToResourceMapRef.current = next;
 
       return next;
     });
@@ -139,10 +202,12 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
     setMessages([summaryMessage]);
 
     try {
-      const messageResource = await addMessageToChatResource(
+      const messageResource = await upsertMessageInChat(
         summaryMessage,
         resource,
         store,
+        findMessageResource(messageToResourceMapRef.current, summaryMessage),
+        { persistToServer: true },
       );
 
       setMessageToResourceMap(prev => {
@@ -239,6 +304,7 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
       chatSubject={resource.subject}
       autoSubmitMessage={autoSubmitMessage}
       onNewMessage={addNewMessage}
+      onStreamMessage={handleStreamMessage}
       onCompacted={handleCompacted}
       onSummaryDeleted={handleSummaryDeleted}
       onDeleteMessage={handleDeleteMessage}

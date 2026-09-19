@@ -8,8 +8,9 @@ import {
 import type { AtomicUIMessage } from './types';
 import type { ChatTitle } from './useGenerativeData';
 import {
-  addMessageToChatResource,
   persistMessageResourceToServer,
+  findMessageResource,
+  upsertMessageInChat,
 } from './chatConversionUtils';
 import { DEFAULT_AICHAT_NAME } from '@components/AI/aiContstants';
 
@@ -32,6 +33,8 @@ export type PersistSidebarMessageArgs = {
   setIsChatSaved: React.Dispatch<React.SetStateAction<boolean>>;
   shouldGenerateTitles: boolean;
   generateTitle: (messages: AtomicUIMessage[]) => TitlePromise;
+  /** Token stream: mint once, then splice LoroText without HTTP save. */
+  streaming?: boolean;
 };
 
 /**
@@ -72,6 +75,7 @@ export const persistSidebarMessage = async ({
   setIsChatSaved,
   shouldGenerateTitles,
   generateTitle,
+  streaming = false,
 }: PersistSidebarMessageArgs) => {
   const resource = await getOrCreateDraftChatResource();
 
@@ -79,13 +83,20 @@ export const persistSidebarMessage = async ({
     return;
   }
 
-  const messageResource = await addMessageToChatResource(
+  const existing = findMessageResource(
+    messageToResourceMapRef.current,
+    message,
+  );
+
+  const messageResource = await upsertMessageInChat(
     message,
     resource,
     store,
+    existing,
     {
-      saveChat: isChatSavedRef.current,
-      persistToServer: isChatSavedRef.current,
+      saveChat: isChatSavedRef.current && (!streaming || !existing),
+      persistToServer: isChatSavedRef.current && (!streaming || !existing),
+      commitLoro: streaming && !!existing,
     },
   );
 
@@ -121,11 +132,13 @@ export const persistSidebarMessage = async ({
   // "Untitled Chat" for ever. Decided here, where the resource is already in
   // hand, rather than in the component. The reply path still awaits a pending
   // title, and retries from both halves when the question alone produced none.
+  // The reply-based fallback is skipped mid-stream: a title generated from a
+  // partial assistant message is thrown away, so wait for it to finish.
   if (
     !titlePromiseRef.current &&
     shouldGenerateTitles &&
     needsTitle(resource) &&
-    (message.role === 'user' || newMessages.length >= 2)
+    (message.role === 'user' || (!streaming && newMessages.length >= 2))
   ) {
     titlePromiseRef.current = generateTitle(newMessages);
   }
