@@ -1312,9 +1312,6 @@ pub async fn install_or_update_plugin(
     drive_subject: &str,
     plugin_subject: &str,
     manifest: &Manifest,
-    // The release these bytes came from, recorded so a later activation can
-    // tell whether this exact code is already on disk.
-    release_id: Option<&str>,
     store: &Db,
     plugins_dir: &Path,
     plugin_cache_dir: &Path,
@@ -1378,7 +1375,7 @@ pub async fn install_or_update_plugin(
             extract_plugin_to_disk(zip_file, plugins_dir, &encoded_subject, namespace, name)?;
 
         // 3. Create a new agent for the plugin if needed
-        create_plugin_meta(store, drive_subject, manifest, plugin_subject, release_id).await?;
+        create_plugin_meta(store, drive_subject, manifest, plugin_subject).await?;
 
         // 4. Load Plugin
         let engine = host_core::engine().map_err(AtomicError::from)?;
@@ -1519,7 +1516,6 @@ async fn create_plugin_meta(
     drive_subject: &str,
     manifest: &Manifest,
     plugin_subject: &str,
-    release_id: Option<&str>,
 ) -> AtomicResult<()> {
     let (namespace, name) = manifest_identifiers(manifest)?;
 
@@ -1568,7 +1564,9 @@ async fn create_plugin_meta(
             subject: plugin_subject.to_string(),
             agent_secret: agent.build_secret()?.clone(),
             manifest: serde_json::to_value(manifest)?,
-            release_id: release_id.map(str::to_string),
+            // Which release these bytes are is the Installation's business;
+            // `installation_hook::activate` records it once the files are down.
+            release_id: None,
         },
     )?;
 

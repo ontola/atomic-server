@@ -364,12 +364,16 @@ mod installation_hook {
                     drive,
                     &subject,
                     &manifest,
-                    Some(actual.as_str()),
                     store,
                     plugins_dir,
                     plugin_cache_dir,
                 )
                 .await?;
+                // Now that this release's code is the code on disk, say so, so
+                // the next activation can tell. Written after the install
+                // rather than by it: a failed extraction leaves no id, and no
+                // id means materialize again.
+                record_materialized_release(store, &key, &actual)?;
             }
         } else {
             ensure_js_identity(store, drive, &subject, &namespace, &name, &release, &actual)
@@ -503,6 +507,26 @@ mod installation_hook {
 
     pub fn status(resource: &Resource) -> String {
         string_value(resource, urls::INSTALLATION_STATUS).unwrap_or_else(|| STATUS_DRAFT.into())
+    }
+
+    /// Records which release's code is now on disk for this plugin.
+    fn record_materialized_release(
+        store: &Db,
+        key: &PluginMetaKey,
+        release_id: &str,
+    ) -> AtomicResult<()> {
+        let Some(meta) = store.get_plugin_meta(key)? else {
+            return Err(AtomicError::from(
+                "the install wrote no plugin metadata to record a release on",
+            ));
+        };
+        store.set_plugin_meta(
+            key,
+            &PluginMeta {
+                release_id: Some(release_id.to_string()),
+                ..meta
+            },
+        )
     }
 
     /// The namespace and name a materialized installation was installed under.
@@ -1284,8 +1308,6 @@ mod installation_tests {
             &f.drive,
             &plugin,
             &manifest,
-            // The legacy install path recorded no release.
-            None,
             db,
             &f.appstate.config.plugin_path,
             &f.appstate.config.plugin_cache_path,

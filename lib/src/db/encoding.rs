@@ -360,9 +360,31 @@ mod plugin_meta_encoding_tests {
             subject: "did:ad:installation".into(),
             agent_secret: "secret".into(),
             manifest: serde_json::json!({"schemaVersion": 2, "network": {"origins": ["https://a.test"]}}),
+            release_id: Some("blake3:abc".into()),
         };
         let bytes = meta.encode().unwrap();
         assert_eq!(bytes.first(), Some(&b'{'));
         assert_eq!(PluginMeta::from_bytes(&bytes).unwrap(), meta);
+    }
+
+    /// A record written before the release id existed has to read back as
+    /// "unknown", not as some release. An activation treats `None` as code it
+    /// cannot vouch for and materializes again, which is the safe direction.
+    #[test]
+    fn a_record_without_a_release_id_reads_back_as_unknown() {
+        let legacy = PluginMeta::from_bytes(&old_bytes(None)).unwrap();
+        assert_eq!(legacy.release_id, None);
+
+        let without = serde_json::json!({
+            "subject": "did:ad:installation",
+            "agent_secret": "secret",
+            "manifest": {"schemaVersion": 2},
+        });
+        let meta = PluginMeta::from_bytes(&serde_json::to_vec(&without).unwrap()).unwrap();
+        assert_eq!(meta.release_id, None);
+        // And it is left out again rather than written as null.
+        assert!(!String::from_utf8(meta.encode().unwrap())
+            .unwrap()
+            .contains("release_id"));
     }
 }
