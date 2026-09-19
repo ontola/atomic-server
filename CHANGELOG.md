@@ -17,6 +17,24 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   `default_event_filter`, so background work reports as before and the stdout
   log line is unchanged (`server/src/trace.rs`).
 
+- Plugin install path, three fixes after the runtime convergence (#1571):
+  - A publish refused for claiming the wrong `world` used to have already
+    stored the package bytes and cached the release record. The claim is now
+    checked before the first write, so a refusal leaves nothing behind
+    (`POST /plugin-release-package`).
+  - A JS plugin whose Installation could not be read, or whose `grants` could
+    not be, ran with everything its own manifest declared. Only a legacy draft
+    with no Installation still reads the manifest; anything else grants nothing
+    and logs why. Reading which classes a resource has also went through
+    `Value::to_subjects`, which errors on the scalar `isA` encodings, so an
+    encoding alone could widen a plugin's grants. `Resource::class_subjects`
+    and `Resource::has_class` are the one encoding-tolerant reader, shared
+    with `ClassExtender`.
+  - An Installation's `release` is declared an `atomicURL` and now holds one.
+    The browser's two zip paths dropped the `Release` subject the publish
+    response carries and stored the bare `blake3:` id, which meant writing the
+    property with datatype validation switched off. `release::resolve` still
+    accepts a bare id, for Installations written before this.
 - `atomic_lib`: a signed destroy commit now removes the resource (and its
   cascade-deleted children, Loro snapshot, index and search rows) in the same
   redb transaction that stores its envelope and commit row. `Db::apply_commit`
