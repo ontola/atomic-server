@@ -59,6 +59,46 @@ one signed copy remain. Incremental `loroUpdate` on non-genesis edits,
 batched import, and a compaction policy that actually reclaims are still
 the follow-ups below.
 
+## Commit throughput: the wall is the connection's thread, not redb (2026-09-19)
+
+Creating a plugin writes nineteen schema terms, each its own resource and
+commit. The browser issues all of them at once; against a locally built
+**debug** server they complete 130 to 150 ms apart, in issue order, so client
+concurrency bought nothing. Three candidates: redb, which allows one write
+transaction at a time; the per-subject lock in `apply_commit`; or the server
+applying a connection's `COMMIT` frames on that connection's own thread.
+
+`lib/tests/commit_throughput.rs` settles the first two. It times the store
+alone, no server and no WebSocket, on distinct subjects, **release**, on a
+4-core container:
+
+| leg | total | per commit |
+| --- | --- | --- |
+| 200 sequential | 526 ms | **2.63 ms** |
+| 200 concurrent | 225 ms | **1.13 ms** |
+
+**2.34x on 4 cores.** So the store parallelises, and neither redb's single
+writer nor the per-subject lock is the wall — the sub-linear part is what
+redb write-transaction contention costs, which is real but small.
+
+Two things follow. First, **the 140 ms figure is a debug-build artifact**:
+the same work is 2.63 ms in release, about 50x cheaper, so nothing should be
+designed around it. Second, the serialisation is **above** the store.
+`web_sockets.rs` handles `COMMIT` with `ctx.spawn`, which runs the future in
+the actor's context, and an actix-web worker is a single-threaded runtime.
+Applying a commit is CPU-bound — Ed25519 verification, the Loro apply, the
+index writes — and there is no `spawn_blocking` or `web::block` anywhere in
+`server/`, so every commit on a connection is charged to one thread, one
+after another. Different connections use different workers and do
+parallelise; one client saving nineteen resources does not.
+
+The fix is to get that CPU work off the connection's thread, onto a pool
+that can use the other cores, keeping the per-subject lock as the ordering
+guarantee it already is. Not built. What is still unmeasured is the
+**server** path in release — the numbers above are the store, so they are a
+floor for what a release server would spend per commit, not a prediction of
+it.
+
 ## Thesis
 
 Store size grows **much faster than the user's actual data**, and several costs
