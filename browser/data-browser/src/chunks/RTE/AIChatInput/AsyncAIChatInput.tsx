@@ -275,7 +275,22 @@ const AsyncAIChatInput: React.FC<
   );
 
   useEffect(() => {
-    if (!prefill || !editor || prefilled.current === prefill) return;
+    // The editor is rebuilt whenever its extensions change, and this effect
+    // can still be holding the instance that was just torn down. Tiptap nulls
+    // its command manager on destroy and, unlike `chain()` and `can()`, the
+    // `commands` getter does not guard against that — reading it throws, and
+    // the throw escapes into React and blanks the whole panel. The prefill is
+    // deliberately not recorded as delivered here, so the run against the live
+    // editor still puts the request in the box.
+    if (
+      !prefill ||
+      !editor ||
+      editor.isDestroyed ||
+      prefilled.current === prefill
+    ) {
+      return;
+    }
+
     prefilled.current = prefill;
 
     if (editor.isEmpty) {
@@ -289,9 +304,9 @@ const AsyncAIChatInput: React.FC<
   // Lets the parent move focus into the editor on demand (e.g. right after the
   // user picks a model) by bumping `focusSignal`.
   useEffect(() => {
-    if (!focusSignal) return;
+    if (!focusSignal || !editor || editor.isDestroyed) return;
 
-    editor?.commands.focus('end');
+    editor.commands.focus('end');
   }, [focusSignal, editor]);
 
   const handleChange = () => {
