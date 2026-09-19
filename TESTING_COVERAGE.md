@@ -1382,7 +1382,12 @@ network transport, OS-process isolation or reviewed alias/reference repair.
 - Connection-state test verifies alias provenance, preserved baseline, incremented
   revision, idempotent reads and rejection of the earlier checkpoint revision.
 - `drain-datatype-tags.test.ts` reproduces and fixes newly added JSON values becoming
-  strings on incremental saves. The full client suite has 564 passing tests.
+  strings on incremental saves. It also drives the public `newResource → set → save`
+  flow through the real outbox drain and replays the posted `loroUpdate`s: the signed
+  incremental commit carries `json`/`resourceArray` tags for properties first set
+  after genesis, and the tag write runs after the user's ops are sealed, so the edit
+  keeps its own commit origin and stays on the undo stack. The full client suite has
+  564 passing tests.
 - Five Chromium flows pass against rebuilt native/WASM code. Duplicate review uses
   real authenticated SYNC_PUSH plus a signed primary decision and fresh lookup;
   the other flows cover setup recovery, MT940 and Clockify. It does not yet test
