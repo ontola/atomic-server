@@ -45,9 +45,11 @@ import type {
 } from '../../components/Template/template';
 import { creationAssistantAsk } from './creationAssistant';
 import {
+  AI_BUILD_SUGGESTIONS,
   BASIC_CREATIONS,
   CREATION_TABLE_TEMPLATES,
   CREATION_PAGE_TEMPLATES,
+  isUntouchedSuggestion,
   matchesCreationSearch,
 } from './creationCatalog';
 
@@ -96,10 +98,11 @@ function NewResourceSelector() {
   const navigate = useNavigateWithTransition();
   const showNewResourceUI = useNewResourceUI();
   const { askAI } = useAISidebar();
-  const { enableAI, setEnableAI } = useAISettings();
+  const { enableAI } = useAISettings();
   const catalogRef = useRef<HTMLDivElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
   const [query, setQuery] = useState('');
   const [prompt, setPrompt] = useState('');
   const [template, setTemplate] = useState<Template>();
@@ -164,10 +167,27 @@ function NewResourceSelector() {
     }
   };
 
+  /**
+   * Hands a half-written request to the composer rather than sending it.
+   *
+   * Focus moves with it, caret at the end, so the next thing the user does is
+   * finish the sentence. Sending it as it stands would only make the assistant
+   * ask what they wanted built.
+   */
+  const applySuggestion = (seed: string) => {
+    setPrompt(seed);
+    const input = promptRef.current;
+
+    if (!input) return;
+
+    input.focus();
+    input.setSelectionRange(seed.length, seed.length);
+  };
+
   const ask = (event: FormEvent) => {
     event.preventDefault();
     if (!prompt.trim()) return;
-    if (!enableAI) setEnableAI(true);
+
     askAI(creationAssistantAsk(prompt, destination));
   };
 
@@ -225,13 +245,10 @@ function NewResourceSelector() {
                 }
               }}
             />
-            {searching && (
+            {searching && enableAI && (
               <Button
                 subtle
-                onClick={() => {
-                  if (!enableAI) setEnableAI(true);
-                  askAI(creationAssistantAsk(query, destination));
-                }}
+                onClick={() => askAI(creationAssistantAsk(query, destination))}
               >
                 Ask AI
               </Button>
@@ -252,15 +269,20 @@ function NewResourceSelector() {
           </SearchInput>
           {noMatches && (
             <p role='status'>
-              No matches. Try another search or ask AI to build it.
+              {enableAI ? (
+                <>No matches. Try another search or ask AI to build it.</>
+              ) : (
+                <>No matches. Try another search.</>
+              )}
             </p>
           )}
         </Column>
-        {!searching && (
+        {!searching && enableAI && (
           <Column gap='0.5rem'>
             <SectionHeading>Build with AI</SectionHeading>
             <Composer onSubmit={ask}>
               <PromptInput
+                ref={promptRef}
                 id='creation-prompt'
                 aria-label='Describe what you want to create'
                 rows={2}
@@ -287,6 +309,33 @@ function NewResourceSelector() {
                 <FaArrowUp aria-hidden />
               </SendButton>
             </Composer>
+            {isUntouchedSuggestion(prompt) && (
+              <SuggestionRow
+                role='group'
+                aria-label='What the assistant can build'
+              >
+                {AI_BUILD_SUGGESTIONS.map(item => {
+                  const Icon = getIconForClass(
+                    item.subject,
+                    undefined,
+                    item.shortname,
+                  );
+
+                  return (
+                    <Suggestion
+                      key={item.id}
+                      subtle
+                      type='button'
+                      aria-pressed={prompt === item.seed}
+                      onClick={() => applySuggestion(item.seed)}
+                    >
+                      <Icon aria-hidden />
+                      {item.title}
+                    </Suggestion>
+                  );
+                })}
+              </SuggestionRow>
+            )}
           </Column>
         )}
         {basic.length > 0 && (
@@ -557,6 +606,46 @@ const BasicChoice = styled(Button)`
   gap: 0.55rem;
   svg {
     color: ${p => p.theme.colors.textLight};
+  }
+`;
+/**
+ * The same button as the blank ones, wearing a rainbow border.
+ *
+ * Same shape on purpose: these make the same kind of thing, they just ask the
+ * assistant to fill it in. The border is the only difference, and it is kept
+ * faint at rest so a row of four does not outshout the page.
+ */
+const SuggestionRow = styled(BasicGrid)``;
+const Suggestion = styled(BasicChoice)`
+  --button-border-color: transparent;
+  --button-border-color-hover: transparent;
+  --button-text-color: ${p => p.theme.colors.text};
+  --button-text-color-hover: ${p => p.theme.colors.text};
+  background-image:
+    linear-gradient(var(--button-bg-color), var(--button-bg-color)),
+    linear-gradient(
+      100deg,
+      rgb(255 138 76 / 45%),
+      rgb(248 87 166 / 45%) 30%,
+      rgb(123 92 255 / 45%) 55%,
+      rgb(59 178 246 / 45%) 80%,
+      rgb(47 212 167 / 45%)
+    );
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  &:hover:not([disabled]),
+  &:focus-visible:not([disabled]),
+  &[aria-pressed='true'] {
+    background-image:
+      linear-gradient(var(--button-bg-color), var(--button-bg-color)),
+      linear-gradient(
+        100deg,
+        #ff8a4c,
+        #f857a6 30%,
+        #7b5cff 55%,
+        #3bb2f6 80%,
+        #2fd4a7
+      );
   }
 `;
 const TemplateGrid = styled.div`
