@@ -2588,6 +2588,7 @@ export class Resource<C extends OptionalClass = any> {
     this.loroSetProperty(propUrl, newArray);
     this.#cacheDirty = true;
     this._dirty = true;
+    this.eventManager.emit(ResourceEvents.LocalChange, propUrl, newArray);
   }
 
   /**
@@ -2892,6 +2893,7 @@ export class Resource<C extends OptionalClass = any> {
   public remove(propertyUrl: string): void {
     this.removeUnsafe(propertyUrl);
     this._dirty = true;
+    this.eventManager.emit(ResourceEvents.LocalChange, propertyUrl, undefined);
   }
 
   /**
@@ -3687,8 +3689,8 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     if (value === undefined) {
+      // `remove` emits the `LocalChange` for this property.
       this.remove(prop);
-      this.eventManager.emit(ResourceEvents.LocalChange, prop, value);
 
       return;
     }
