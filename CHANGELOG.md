@@ -54,6 +54,18 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   - `sync::peer`: the live peer map recovers from a poisoned lock instead of
     unwrapping it, so one panic no longer stops live broadcast for the rest
     of the process.
+- `atomic_lib`: `DbEvent::Destroyed` for a cascade-deleted child is sent only
+  after the removal has been applied. `Db::recursive_remove` announced each
+  child while it was still queueing the deletes into a transaction the caller
+  had yet to apply, so a listener (`atomic-server`'s `CommitMonitor`, which
+  fans removals out to WebSocket subscribers; a peer transport) heard of a
+  deletion that could still fail or roll back, and heard of the children
+  before their parent. The callers (`remove_resource`, the destroy branch of
+  `apply_commit`) now announce every removed subject once the transaction has
+  landed; the destroyed subject itself is still announced exactly once, wrapped
+  in its signed destroy commit. `remove_resource` now also announces the
+  subject it was called for, which it never did. Follow-up to #1544.
+
 - CI: the `:develop` docker image is published by its own job instead of a
   step tacked onto the end of the CI job. As a step it inherited whatever the
   CI step had already spent (a wedged Dagger engine on the runner burned the
