@@ -48,6 +48,7 @@ export { decodeB64, encodeB64 } from './base64.js';
 export * from './authentication.js';
 export * from './client.js';
 export * from './genesis.js';
+export * from './session-cert.js';
 export * from './commit.js';
 export * from './error.js';
 export * from './withDeadline.js';

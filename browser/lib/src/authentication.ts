@@ -1,6 +1,7 @@
 import type { Agent } from './agent.js';
 import type { HeadersObject } from './client.js';
 import { getTimestampNow } from './commit.js';
+import { AUTH_SESSION_CERT_PROPERTY } from './session-cert.js';
 
 /** Returns a JSON-AD resource of an Authentication */
 export async function createAuthentication(subject: string, agent: Agent) {
@@ -10,7 +11,7 @@ export async function createAuthentication(subject: string, agent: Agent) {
     throw new Error('Agent has no subject, cannot authenticate');
   }
 
-  const object = {
+  const object: Record<string, string | number> = {
     'https://atomicdata.dev/properties/auth/agent': agent.subject,
     'https://atomicdata.dev/properties/auth/requestedSubject': subject,
     'https://atomicdata.dev/properties/auth/publicKey':
@@ -19,6 +20,13 @@ export async function createAuthentication(subject: string, agent: Agent) {
     'https://atomicdata.dev/properties/auth/signature':
       await agent.createSignature(subject, timestamp),
   };
+
+  // Carried here rather than as a separate header so the WebSocket AUTHENTICATE
+  // frame, the Iroh auth-back and the `atomic_session` cookie — all of which
+  // are this object, serialized — inherit it without their own plumbing.
+  if (agent.sessionCert) {
+    object[AUTH_SESSION_CERT_PROPERTY] = agent.sessionCert;
+  }
 
   return object;
 }
@@ -54,6 +62,10 @@ export async function signRequest(
 
     if (agent.subject) {
       newHeaders['x-atomic-agent'] = agent.subject;
+    }
+
+    if (agent.sessionCert) {
+      newHeaders['x-atomic-session-cert'] = agent.sessionCert;
     }
   }
 
