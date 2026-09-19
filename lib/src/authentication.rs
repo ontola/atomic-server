@@ -289,4 +289,139 @@ mod test {
         let b = "AAAAVTGPngaG3mSPA_e6LEewKixYpZtuUYQhNg-t7Y4";
         assert!(!public_keys_match(a, b));
     }
+
+    // --- Session certificates on AUTH ---------------------------------------
+    //
+    // The proof is still Ed25519 over `"{subject} {timestamp}"` by the key in
+    // the headers. What a certificate changes is only the answer to "whose
+    // rights are these".
+
+    use super::*;
+    use crate::agents::{decode_base64, Agent};
+
+    async fn store() -> crate::Store {
+        let store = crate::Store::init().await.unwrap();
+        store.set_base_url("http://localhost:9883");
+        store.populate().await.unwrap();
+        store
+    }
+
+    fn raw_pubkey(agent: &Agent) -> [u8; 32] {
+        decode_base64(&agent.public_key)
+            .unwrap()
+            .try_into()
+            .unwrap()
+    }
+
+    /// Auth values a client would send, signed by `signer`.
+    fn auth_for(
+        signer: &Agent,
+        subject: &str,
+        timestamp: i64,
+        session_cert: Option<String>,
+    ) -> AuthValues {
+        let message = format!("{subject} {timestamp}");
+        AuthValues {
+            public_key: signer.public_key.clone(),
+            timestamp,
+            signature: crate::agents::sign_message(
+                message.as_bytes(),
+                &signer.private_key.clone().unwrap(),
+            )
+            .unwrap(),
+            requested_subject: subject.to_string(),
+            agent_subject: signer.subject.to_string(),
+            session_cert,
+        }
+    }
+
+    fn session_for(root: &Agent, not_before: i64, not_after: i64) -> (Agent, String) {
+        let session = Agent::new(None).unwrap();
+        let cert = crate::session_cert::SessionCertClaims {
+            session_pubkey: raw_pubkey(&session),
+            not_before,
+            not_after,
+            root_pubkey: raw_pubkey(root),
+        }
+        .sign(&root.private_key.clone().unwrap())
+        .unwrap();
+        (session, cert.encode_b64())
+    }
+
+    #[tokio::test]
+    async fn without_a_certificate_auth_is_the_signer() {
+        let store = store().await;
+        let agent = Agent::new(None).unwrap();
+        let subject = "http://localhost:9883/thing";
+        let now = crate::utils::now();
+
+        let got = get_agent_from_auth_values_and_check(
+            Some(auth_for(&agent, subject, now, None)),
+            &store,
+        )
+        .await
+        .unwrap();
+        assert_eq!(got, ForAgent::AgentSubject(agent.subject));
+    }
+
+    #[tokio::test]
+    async fn with_a_certificate_auth_is_the_root() {
+        let store = store().await;
+        let root = Agent::new(None).unwrap();
+        let subject = "http://localhost:9883/thing";
+        let now = crate::utils::now();
+        let (session, cert) = session_for(&root, now - 1000, now + 86_400_000);
+
+        let got = get_agent_from_auth_values_and_check(
+            Some(auth_for(&session, subject, now, Some(cert))),
+            &store,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            got,
+            ForAgent::AgentSubject(root.subject),
+            "a request signed by the session key is the person's request"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_expired_certificate_does_not_authenticate() {
+        let store = store().await;
+        let root = Agent::new(None).unwrap();
+        let subject = "http://localhost:9883/thing";
+        let now = crate::utils::now();
+        // Already closed. Unlike a commit, the auth timestamp is separately
+        // bounded for freshness, so this cannot be backdated around.
+        let (session, cert) = session_for(&root, now - 86_400_000, now - 1000);
+
+        let err = get_agent_from_auth_values_and_check(
+            Some(auth_for(&session, subject, now, Some(cert))),
+            &store,
+        )
+        .await
+        .unwrap_err();
+        assert!(err.to_string().contains("expired"), "got: {err}");
+    }
+
+    #[tokio::test]
+    async fn a_certificate_for_another_key_does_not_authenticate() {
+        let store = store().await;
+        let root = Agent::new(None).unwrap();
+        let subject = "http://localhost:9883/thing";
+        let now = crate::utils::now();
+        let (_certified, cert) = session_for(&root, now - 1000, now + 86_400_000);
+        let impostor = Agent::new(None).unwrap();
+
+        let err = get_agent_from_auth_values_and_check(
+            Some(auth_for(&impostor, subject, now, Some(cert))),
+            &store,
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("issued for a different key"),
+            "got: {err}"
+        );
+    }
 }

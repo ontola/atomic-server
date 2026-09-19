@@ -1,8 +1,19 @@
 # OIDC / OAuth after DID and local-first
 
-> **Status:** Proposal (2026-08). Reconsiders
-> [#277](https://github.com/ontola/atomic-server/issues/277) (filed 2022-01
-> against HTTP-origin Agents). Nothing in this file is implemented.
+> **Status:** Step 2 implemented (2026-09); the rest is still a proposal.
+> Reconsiders [#277](https://github.com/ontola/atomic-server/issues/277)
+> (filed 2022-01 against HTTP-origin Agents).
+>
+> What exists on `develop`: `SessionCert` and `effective_agent`
+> (`lib/src/session_cert.rs`, mirrored in
+> `browser/lib/src/session-cert.ts` with shared golden vectors), the rights
+> remap on the commit and AUTH paths, the live-ingest `notAfter` bound, and
+> the client plumbing that carries a certificate on commits and auth proofs.
+> What does not: the relying party (`/oidc/*`, issuer config, `/server`
+> advertisement, wrapped roots), the browser sign-in flow, and export +
+> unlink. Nothing about OIDC is reachable yet; a node with no certificates in
+> play behaves exactly as it did before.
+>
 > Companion to
 > [`encrypted-vault-format.md`](./encrypted-vault-format.md) (recovery
 > envelope), [`device-pairing.md`](./device-pairing.md) (same key, many
@@ -273,9 +284,19 @@ little-endian integers, fixed layout, golden vectors shared across Rust /
 TS / WASM like `genesis_test_vectors.json`. Domain-separated by version so
 a genesis cert cannot be replayed as a session cert.
 
+**As built, the version byte is `0x53`, not `0x01`.** This draft said both
+"version 0x01" and "domain-separated by version", which cannot both hold:
+`GenesisCert` v1 also starts `0x01`, and a genesis certificate is a signed
+81-byte payload whenever `parent` and `drive` together come to 19 bytes —
+exactly a session certificate's signed length. The same signature would then
+verify under either reading, and the genesis signer's key would appear to
+have delegated to whatever bytes sat at the session-key offset. Distinct
+leading bytes make the two payload languages disjoint at byte zero, which is
+the cheapest domain separation available and the one the text asked for.
+
 ```text
 offset  size  field
-0       1     version        0x01
+0       1     version        0x53
 1       32    sessionPubKey  Ed25519 raw
 33      8     notBefore      i64 unix ms LE
 41      8     notAfter       i64 unix ms LE
@@ -513,18 +534,23 @@ ordinary Actix plus an OIDC crate; the costly part is SessionCert in the
 write path, comparable to genesis certs (new compact blob, dual-accept in
 `validate_signature`) plus a relying party. Not "add a login button".
 
-1. This decision.
-2. `SessionCert` + `effective_agent` in `validate_signature`,
+1. ~~This decision.~~ **Done.**
+2. ~~`SessionCert` + `effective_agent` in `validate_signature`,
    `apply_commit` (all three signer sites), and
    `get_agent_from_auth_values_and_check`. Live-ingest `notAfter` bound.
-   Golden vectors.
+   Golden vectors.~~ **Done (2026-09).** Plus the TS mirror and the client
+   plumbing from step 4's first half: an `Agent` carrying a certificate signs
+   it into the commit and onto every auth proof, so HTTP, the
+   `atomic_session` cookie, WebSocket and Iroh all inherit the remap.
+   `sync::engine` mints no Agent resource for a session DID.
 3. Relying party on the node: env, `/server` advertisement, `/oidc/start`,
    `/oidc/callback`, `POST /oidc/session` (mints root and personal drive on
    first visit, issues cert). Persist `(iss, sub) → wrapped root` in
    PluginMeta or a small tree.
 4. Browser: provider button in `GettingStartedFlow`; session key + cert +
-   root DID + personal drive in IDB; attach cert on drain; Settings export +
-   unlink. Sign-out drops the session key; the root was never there.
+   root DID + personal drive in IDB; Settings export + unlink. Sign-out drops
+   the session key; the root was never there. (Attaching the cert at drain is
+   already done — `Agent.sessionCert`.)
 5. **Export + unlink** (D6) ships with v1 so OIDC is reversible.
 6. Auth-checkpoint receipts for cert-signed commits, then Iroh catch-up for
    OIDC users. Flutter same session key + cert.

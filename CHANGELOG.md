@@ -446,12 +446,21 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   `ingest_commit_json` serializes; `sync::ws_apply::apply_commit_json` now
   returns the `CommitResponse` instead of `()`. See
   `planning/runtime-boundary-decision.md`.
-- Docs / planning: OIDC-only login is a root Agent as CA on the node plus
-  short-lived session Agents in the browser. Commits stay Ed25519; OIDC
-  tokens do not authorize writes. Verifiers check the session signature,
-  then the SessionCert, then rights for the **root** DID. Planning only,
-  nothing ships yet. See [`planning/oidc-oauth.md`](planning/oidc-oauth.md)
-  and [#277](https://github.com/ontola/atomic-server/issues/277).
+- Session certificates: a root Agent may certify a short-lived session key,
+  which then signs commits and authentication proofs while every rights check
+  is answered for the root. `SessionCert` is a 145-byte Ed25519-signed blob
+  (`lib/src/session_cert.rs`, mirrored in `@tomic/lib` as `session-cert.ts`
+  with shared golden vectors). Commits carry it as an optional `sessionCert`
+  propval inside the signed JSON-AD; requests carry it as
+  `x-atomic-session-cert` or as `auth/sessionCert` on the Authentication
+  resource, so HTTP, the `atomic_session` cookie, WebSocket and Iroh inherit
+  it from one function. `write` lists, `createdBy` and drive enrollment name
+  the root; the session DID gets no Agent resource. A path that validates
+  timestamps also requires the window to still be open in wall-clock time.
+  Absent a certificate every path is byte-identical to before, and OIDC login
+  itself is not implemented: no relying party, no browser flow. See
+  [`planning/oidc-oauth.md`](planning/oidc-oauth.md) and
+  [#277](https://github.com/ontola/atomic-server/issues/277).
 
 ## [v0.41.0-beta.2] - 2026-08-01
 
