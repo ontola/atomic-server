@@ -767,8 +767,9 @@ Not covered: derived AI tools invoked through a real model; MCP protocol project
 |---|---|---|
 | Hashed `view-transition-name` plus `view-transition-class` per tag | glue | `browser/data-browser/src/helpers/viewTransition.test.ts` |
 | `startViewTransition` throw / hung `finished` / rejected `ready` still navigates and skips the overlay | glue | `browser/data-browser/src/helpers/viewTransition.test.ts` |
+| Navigation skips `startViewTransition` unless the user opts in, and uses it once they do | glue | `browser/data-browser/src/hooks/useNavigateWithTransition.test.tsx` |
 
-Not covered: visual morph of a grid card into the resource page in Firefox (needs a headed Firefox run; Playwright's firefox project is locks-only and automation bypasses view transitions unless `forceViewTransitions` is set).
+Not covered: visual morph of a grid card into the resource page in Firefox (needs a headed Firefox run; Playwright's firefox project is locks-only and automation bypasses view transitions unless `forceViewTransitions` is set). Android Chrome is not covered at all, which is why transitions are off by default ([#1563](https://github.com/ontola/atomic-server/issues/1563)): re-enabling by default needs a per-browser check first.
 
 ## Documents
 
