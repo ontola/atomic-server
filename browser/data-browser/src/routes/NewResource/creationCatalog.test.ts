@@ -5,6 +5,8 @@ import {
   matchesCreationSearch,
   CREATION_TABLE_TEMPLATES,
 } from './creationCatalog';
+import { FaAtom } from 'react-icons/fa6';
+import { getIconForClass } from '../../helpers/iconMap';
 import { TABLE_TEMPLATES } from '../../chunks/TablePage/tableTemplates';
 import { creationAssistantAsk } from './creationAssistant';
 it('offers every configured table template and searches multiple words across its content', () => {
@@ -42,6 +44,11 @@ it('suggests the four things the blank list cannot show, each left unfinished', 
   for (const item of AI_BUILD_SUGGESTIONS) {
     expect(item.seed.endsWith(' ')).toBe(true);
     expect(item.seed.trim().split(' ').length).toBeGreaterThan(2);
+    // Each one wears its class's icon, so it has to name a class.
+    expect(item.subject ?? item.shortname).toBeTruthy();
+    expect(getIconForClass(item.subject, undefined, item.shortname)).not.toBe(
+      FaAtom,
+    );
   }
 });
 it("offers suggestions until there is something of the user's own to lose", () => {

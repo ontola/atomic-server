@@ -88,21 +88,25 @@ export const AI_BUILD_SUGGESTIONS: AIBuildSuggestion[] = [
     id: 'app',
     title: 'App',
     seed: 'Build an app that ',
+    shortname: 'app',
   },
   {
     id: 'website',
     title: 'Website',
     seed: 'Build a website for ',
+    shortname: 'website-project',
   },
   {
     id: 'dashboard',
     title: 'Dashboard',
     seed: 'Build a dashboard showing ',
+    subject: dataBrowser.classes.dashboard,
   },
   {
     id: 'table',
     title: 'Custom table',
     seed: 'Build a table for tracking ',
+    subject: dataBrowser.classes.table,
   },
 ];
 
@@ -110,6 +114,10 @@ export interface AIBuildSuggestion {
   id: string;
   title: string;
   seed: string;
+  /** The class whose icon this wears, for the ones with a fixed subject. */
+  subject?: string;
+  /** Used instead for App and Website, which are minted per drive. */
+  shortname?: string;
 }
 
 /**

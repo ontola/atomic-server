@@ -314,17 +314,26 @@ function NewResourceSelector() {
                 role='group'
                 aria-label='What the assistant can build'
               >
-                {AI_BUILD_SUGGESTIONS.map(item => (
-                  <Suggestion
-                    key={item.id}
-                    subtle
-                    type='button'
-                    aria-pressed={prompt === item.seed}
-                    onClick={() => applySuggestion(item.seed)}
-                  >
-                    {item.title}
-                  </Suggestion>
-                ))}
+                {AI_BUILD_SUGGESTIONS.map(item => {
+                  const Icon = getIconForClass(
+                    item.subject,
+                    undefined,
+                    item.shortname,
+                  );
+
+                  return (
+                    <Suggestion
+                      key={item.id}
+                      subtle
+                      type='button'
+                      aria-pressed={prompt === item.seed}
+                      onClick={() => applySuggestion(item.seed)}
+                    >
+                      <Icon aria-hidden />
+                      {item.title}
+                    </Suggestion>
+                  );
+                })}
               </SuggestionRow>
             )}
           </Column>
