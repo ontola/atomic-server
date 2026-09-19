@@ -1,10 +1,27 @@
-{{#title AtomicServer: An open-source, realtime, headless CMS}}
-# AtomicServer and its features
+{{#title AtomicServer: the always-on device for your Atomic Data}}
+# AtomicServer
 
-[`AtomicServer`](https://github.com/atomicdata-dev/atomic-server/blob/master/server/README.md) is the _reference implementation_ of the Atomic Data Core + Extended specification.
+[`AtomicServer`](https://github.com/atomicdata-dev/atomic-server) is the _reference implementation_ of the Atomic Data Core + Extended specification: a single binary that is a graph database, a real-time headless CMS and a web app.
 It was developed parallel to this specification, and it served as a testing ground for various ideas (some of which didn't work, and some of which ended up in the spec).
 
-AtomicServer is a real-time headless CMS, graph database server for storing and sharing typed linked data.
+## The always-on device
+
+In a [local-first](local-first.md) system every device holds its own copy of the data and does its own signing.
+What a phone or a browser tab cannot do is stay reachable.
+That is AtomicServer's job: it is the device that never sleeps.
+
+- A **browser tab** cannot accept connections, so it needs a server to reach any other device. AtomicServer is what the web app talks to.
+- **Collaborators** fetch a Drive from it while your own devices are off.
+- It holds a **backup** that survives a lost phone, without holding your key: every commit it stores is signed by the Agent that made it, so the server can replicate but never author.
+- It serves the same data over **HTTP**, for `curl`, static site generators and search engines, next to the sync connection the apps use.
+
+You can run one on a laptop, a Raspberry Pi, a VPS or a home NAS. [Atomic Cloud](https://atomicserver.eu) runs one for you.
+The same `atomic_lib` also runs inside the browser and in [Flutter apps](flutter.md), which is why a phone can act as an always-on device for another phone, but a server is the shape most people want for the role.
+
+If you are here to build an app, the [local-first guide](local-first-guide/1-index.md) starts without a server and adds one in step 4; the rest of this chapter is about running and using the server itself.
+
+## Features
+
 It's free, open source (MIT license), and has a ton of features:
 
 <!-- Copied from root README -->
@@ -23,7 +40,7 @@ It's free, open source (MIT license), and has a ton of features:
 - 💬  **Group chat**, performant and flexible message channels with attachments, search and replies.
 - 📂  **File management**: Upload, download and preview attachments.
 - 💾  **Versioning** / history from the Loro oplog, with writes authorized by [Atomic Commits](https://docs.atomicdata.dev/commits/intro.html)
-- 🔄  **Real-time synchronization**: instantly communicates state changes with a client. Build dynamic, collaborative apps using [websockets](https://docs.atomicdata.dev/websockets) (using a [single one-liner in react](https://docs.atomicdata.dev/usecases/react) or [svelte](https://docs.atomicdata.dev/svelte)).
+- 🔄  **Real-time synchronization**: instantly communicates state changes with a client. Build dynamic, collaborative apps using [Atomic Sync](https://docs.atomicdata.dev/sync) over WebSocket, Iroh or WebRTC (using a [single one-liner in react](https://docs.atomicdata.dev/usecases/react) or [svelte](https://docs.atomicdata.dev/svelte)).
 - 🧰  **Many serialization options**: to JSON, [JSON-AD](https://docs.atomicdata.dev/core/json-ad.html), and various Linked Data / RDF formats (RDF/XML, N-Triples / Turtle / JSON-LD).
 - 📖  **Pagination, sorting and filtering** queries using [Atomic Collections](https://docs.atomicdata.dev/schema/collections.html).
 - 🔐  **Authorization** (read / write permissions) and Hierarchical structures powered by [Atomic Hierarchy](https://docs.atomicdata.dev/hierarchy.html)

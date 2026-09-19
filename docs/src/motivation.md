@@ -37,6 +37,10 @@ If we want to have that, we need to standardize the _read-write web_, which incl
 I want all people to have a (virtual) private server that contains their own data, that they control.
 This [Personal Data Store](usecases/personal-data-store.md) could very well be an old smartphone with a broken screen that is always on, running next to your router.
 
+Since then the bar has moved: you should not even need that always-on box to own your data.
+Today an Atomic identity is a keypair on your device, your data is a database on that same device, and a server is one more device that syncs with the others.
+That is what we mean by [local-first](local-first.md), and it is the most direct form of ownership there is: the bytes are in your hand.
+
 Atomic Data is designed to be a standard that achieves this.
 But we need more than a standard to get adoption - we need implementations.
 That's why I've been working on a server, various libraries, a GUI and [more](tooling.md) - all MIT licensed.
@@ -86,6 +90,6 @@ A lot of time is essentially wasted on solving these issues time and time again.
 
 By having a more complete, strict standard, Atomic Data aims to decrease this burden.
 [Atomic Schema](schema/intro.md) enables developers to easily share their datamodels, and re-use those from others.
-[Atomic Commits](commits/intro.md) helps developers to deal with versioning, history, undo and audit logs.
+[Atomic Sync](sync.md) gives them a local store, offline editing and conflict-free collaboration, with versioning, history, undo and audit logs coming from the CRDT document underneath, and every write proven by a signed [Commit](commits/intro.md).
 [Atomic Hierarchies](hierarchy.md) provides an intuitive model for authorization and access control.
 And finally, the [existing open source Atomic Data software](tooling.md) (such as a server + database, a browser GUI, various libraries and React templates) help developers to have these features without having to do the heavy lifting themselves.
