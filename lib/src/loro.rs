@@ -2182,6 +2182,7 @@ mod test {
             destroy: None,
             previous_commit: None,
             is_genesis: None,
+            session_cert: None,
             signature: None,
             url: None,
         };

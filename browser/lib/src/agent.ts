@@ -56,6 +56,16 @@ export class Agent implements AgentInterface {
    * once from the raw key at sign-in and carried with the agent.
    */
   public vaultProof?: string;
+  /**
+   * A base64url `SessionCert`, when this Agent is a short-lived session key a
+   * root Agent certified rather than the person's own long-lived key.
+   *
+   * It changes nothing about how signing works — the key in this Agent still
+   * signs every commit and every auth proof. What it adds is the proof that
+   * travels alongside, so the server answers rights for the root instead of
+   * for this disposable key. An Agent without one behaves exactly as before.
+   */
+  public sessionCert?: string;
 
   #cryptoProvider: CryptoProvider;
 

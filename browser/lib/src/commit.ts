@@ -10,6 +10,7 @@ import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
 import type { Agent } from './agent.js';
 import { perfSpan } from './perf-trace.js';
+import { SESSION_CERT_PROPERTY } from './session-cert.js';
 
 /** A {@link Commit} without its signature, signer and timestamp */
 export interface CommitBuilderI {
@@ -255,6 +256,14 @@ export class CommitBuilder {
       signer: agent.subject,
     };
 
+    // A session key proves what it may do by carrying its certificate. Set
+    // before serialization: it is part of the signed bytes, which is what
+    // stops anyone stripping it and leaving the session DID looking like a
+    // stranger. An agent without one produces byte-identical output to before.
+    if (agent.sessionCert) {
+      commitPreSigned.sessionCert = agent.sessionCert;
+    }
+
     // Genesis must be set explicitly via CommitBuilder.setIsGenesis(true).
     // We never infer genesis from the subject pattern — that was the source of
     // accidental genesis commits when a stale `_new:` subject ended up on an
@@ -304,6 +313,13 @@ interface UnsignedCommit extends CommitBuilderI {
   signer: string;
   /** Unix timestamp in milliseconds, see https://atomicdata.dev/properties/createdAt */
   createdAt: number;
+  /**
+   * Optional base64url `SessionCert`: proof that `signer` is a short-lived
+   * session key a root Agent certified, and that rights belong to that root.
+   * Part of the signed payload, so it is bound to this mutation and cannot be
+   * stripped in transit without breaking the signature.
+   */
+  sessionCert?: string;
 }
 
 /**
@@ -329,6 +345,7 @@ const serializeMap = {
   destroy: commits.properties.destroy,
   previousCommit: commits.properties.previousCommit,
   isGenesis: commits.properties.isGenesis,
+  sessionCert: SESSION_CERT_PROPERTY,
   createdAt: commits.properties.createdAt,
   signer: commits.properties.signer,
   signature: commits.properties.signature,
@@ -466,6 +483,7 @@ export function parseCommitJSON(str: string): Commit {
       jsonAdObj[commits.properties.previousCommit];
     const isGenesis: undefined | boolean =
       jsonAdObj[commits.properties.isGenesis];
+    const sessionCert: undefined | string = jsonAdObj[SESSION_CERT_PROPERTY];
 
     if (!signature) {
       throw new Error(`Commit has no signature`);
@@ -484,6 +502,7 @@ export function parseCommitJSON(str: string): Commit {
       id,
       previousCommit,
       isGenesis,
+      sessionCert,
     };
   } catch (e) {
     throw new Error(`Could not parse commit: ${e}, Commit: ${str}`);

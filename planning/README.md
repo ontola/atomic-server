@@ -142,7 +142,8 @@ browser flow; standalone recovery remains self-managed.
 | [`android-data-reuse.md`](./android-data-reuse.md) | **Draft.** One store/agent/Iroh node per Android device. Nothing built. Supersedes `on-device-atomic-daemon.md`. |
 | [`SDK-API-design.md`](./SDK-API-design.md) | SDK / agent DX direction. |
 | [`api-plugins.md`](./api-plugins.md) | **Exploratory, off `develop`** — rebuilding PR #1383 (OpenAPI/OAuth imports) on the plugin model. LocalThought catalog/connect and Syncables typed imports are implemented on `codex/localthought-api-plugins`; live verification awaits proxy #25. |
-| [`mcp-endpoint.md`](./mcp-endpoint.md) | **Proposal.** Atomic as an MCP server. Local stdio signs as the user; remote HTTP is read-only until issued-agent writes. Does not wait on #1310; remote auth is the #1275 AS shape. |
+| [`mcp-endpoint.md`](./mcp-endpoint.md) | **Proposal.** Atomic as an MCP server. Local stdio signs as the user; remote HTTP is read-only until issued-agent writes. Remote auth is the #1275 AS shape. |
+| [`oidc-oauth.md`](./oidc-oauth.md) | **Partly implemented.** OIDC-only login: root Agent as CA on the node, short-lived session Agents in the browser. `SessionCert` and the rights remap are on `develop`; the relying party and the browser flow are not. Retargets [#277](https://github.com/ontola/atomic-server/issues/277). |
 
 ### Explorations with no code
 

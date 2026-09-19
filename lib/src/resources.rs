@@ -1162,6 +1162,7 @@ impl Resource {
                 created_at: crate::utils::now(),
                 previous_commit: None,
                 is_genesis: None,
+                session_cert: None,
                 signature: None,
                 url: None,
             },

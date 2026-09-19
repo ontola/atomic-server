@@ -95,6 +95,7 @@ pub mod metrics;
 pub mod parse;
 #[cfg(feature = "db")]
 pub mod plugins;
+pub mod session_cert;
 pub mod website;
 
 pub mod populate;

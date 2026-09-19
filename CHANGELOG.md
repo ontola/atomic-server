@@ -482,6 +482,24 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   `ingest_commit_json` serializes; `sync::ws_apply::apply_commit_json` now
   returns the `CommitResponse` instead of `()`. See
   `planning/runtime-boundary-decision.md`.
+- Session certificates: a root Agent may certify a short-lived session key,
+  which then signs commits and authentication proofs while every rights check
+  is answered for the root. `SessionCert` is a 145-byte Ed25519-signed blob
+  (`lib/src/session_cert.rs`, mirrored in `@tomic/lib` as `session-cert.ts`
+  with shared golden vectors). Commits carry it as an optional `sessionCert`
+  propval inside the signed JSON-AD; requests carry it as
+  `x-atomic-session-cert` or as `auth/sessionCert` on the Authentication
+  resource, so HTTP, the `atomic_session` cookie, WebSocket and Iroh inherit
+  it from one function. `write` lists, `createdBy` and drive enrollment name
+  the root; the session DID gets no Agent resource. A path that validates
+  timestamps also requires the window to still be open in wall-clock time.
+  Absent a certificate every path is byte-identical to before, and OIDC login
+  itself is not implemented: no relying party, no browser flow. `sessionCert`
+  and `auth/sessionCert` are declared Properties in the default store, so a
+  commit carrying one does not send the node fetching its definition from
+  atomicdata.dev. See
+  [`planning/oidc-oauth.md`](planning/oidc-oauth.md) and
+  [#277](https://github.com/ontola/atomic-server/issues/277).
 
 ## [v0.41.0-beta.2] - 2026-08-01
 

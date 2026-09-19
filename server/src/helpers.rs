@@ -31,6 +31,17 @@ pub fn get_auth_headers(
     let signature = map.get("x-atomic-signature");
     let timestamp = map.get("x-atomic-timestamp");
     let agent = map.get("x-atomic-agent");
+    // Optional, and deliberately outside the four-way match below: a request
+    // without it is an ordinary signed request, not a malformed one.
+    let session_cert = match map.get("x-atomic-session-cert") {
+        Some(value) => Some(
+            value
+                .to_str()
+                .map_err(|_e| "Only string headers allowed")?
+                .to_string(),
+        ),
+        None => None,
+    };
     match (public_key, signature, timestamp, agent) {
         (Some(pk), Some(sig), Some(ts), Some(a)) => Ok(Some(AuthValues {
             public_key: pk
@@ -51,6 +62,7 @@ pub fn get_auth_headers(
                 .parse::<i64>()
                 .map_err(|_e| "Timestamp must be a number (milliseconds since unix epoch)")?,
             requested_subject: requested_subject.to_string(),
+            session_cert,
         })),
         (None, None, None, None) => Ok(None),
         _missing => Err("Missing authentication headers. You need `x-atomic-public-key`, `x-atomic-signature`, `x-atomic-agent` and `x-atomic-timestamp` for authentication checks.".into()),

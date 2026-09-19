@@ -1,0 +1,48 @@
+{
+  "_comment": "Golden cross-language vectors for the v1 session certificate. Both the Rust SessionCert and the browser TS implementation MUST reproduce every field. Byte fields are hex; certBase64 / rootDid / sessionDid use base64url-no-pad. Seeds are [seedByte; 32] Ed25519 seeds — TEST KEYS ONLY. Regenerate via `cargo test -p atomic_lib session_cert::golden::generate_golden_vectors -- --ignored --nocapture`.",
+  "vectors": [
+    {
+      "certBase64": "U4E5dw6ofRdfVqNUZsNMfszLjYqRtO43ol32D1uPybOUAGjlz4sBAAAAxAvViwEAAIqI4910CfGV_VLbLTy6XXLKZwm_HZQSG_N0iAG0D29c_w3z5rETVabHwr5jLedcNUdKNOv3LVfzRMxBSImsWwWMXGZIaHtU8qcITbkymIsn09QBvIiB-HaoJT8OneUBBQ",
+      "certBytesHex": "538139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b3940068e5cf8b01000000c40bd58b0100008a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5cff0df3e6b11355a6c7c2be632de75c35474a34ebf72d57f344cc414889ac5b058c5c6648687b54f2a7084db932988b27d3d401bc8881f876a8253f0e9de50105",
+      "notAfter": 1700086400000,
+      "notBefore": 1700000000000,
+      "rootDid": "did:ad:agent:iojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1w",
+      "rootPrivateKeyBase64": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE",
+      "rootPubKeyHex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+      "rootSeedByte": 1,
+      "sessionDid": "did:ad:agent:gTl3Dqh9F19Wo1Rmw0x-zMuNipG07jeiXfYPW4_Js5Q",
+      "sessionPubKeyHex": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+      "sessionSeedByte": 2,
+      "signedBytesHex": "538139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b3940068e5cf8b01000000c40bd58b0100008a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+    },
+    {
+      "certBase64": "U8qTrBcFGHBx1nuDx_8O_oEI6OxFMFdddyaHkzPb2r58AAAAAAAAAAD__________-1JKMYo0cLG6ukDOJBZlWEpWSc6XGP5NjbBRhSshzfRrBerJk4em6PbQOxeEk0q-WNEy7Zd7f49kE2oolAT7R6c_WhT9iIn_7u79Px-g926_Rzv7ieVp6w0d-lc2QYeBw",
+      "certBytesHex": "53ca93ac1705187071d67b83c7ff0efe8108e8ec4530575d7726879333dbdabe7c0000000000000000ffffffffffffffffed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1ac17ab264e1e9ba3db40ec5e124d2af96344cbb65dedfe3d904da8a25013ed1e9cfd6853f62227ffbbbbf4fc7e83ddbafd1cefee2795a7ac3477e95cd9061e07",
+      "notAfter": -1,
+      "notBefore": 0,
+      "rootDid": "did:ad:agent:7UkoxijRwsbq6QM4kFmVYSlZJzpcY_k2NsFGFKyHN9E",
+      "rootPrivateKeyBase64": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM",
+      "rootPubKeyHex": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1",
+      "rootSeedByte": 3,
+      "sessionDid": "did:ad:agent:ypOsFwUYcHHWe4PH_w7-gQjo7EUwV113JoeTM9vavnw",
+      "sessionPubKeyHex": "ca93ac1705187071d67b83c7ff0efe8108e8ec4530575d7726879333dbdabe7c",
+      "sessionSeedByte": 4,
+      "signedBytesHex": "53ca93ac1705187071d67b83c7ff0efe8108e8ec4530575d7726879333dbdabe7c0000000000000000ffffffffffffffffed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1"
+    },
+    {
+      "certBase64": "U4qHX_8es4RRV3rNWv7kBUVlaN18ieCQhjoFV7x69J8XANjDLLsDAAAANOoxuwMAAG56HN0psLeP0Tr0xVmP7_TvKpcWbjym8uT7_M2AUFvxJ971coCFUWQg-OEMIYMV3zaX2sK5jFTbc5y5pdfRu7UCyM49VWEN0IAQaFAtl33IOdRHvoTBnEqeKLQj_7WNDA",
+      "certBytesHex": "538a875fff1eb38451577acd5afee405456568dd7c89e090863a0557bc7af49f1700d8c32cbb0300000034ea31bb0300006e7a1cdd29b0b78fd13af4c5598feff4ef2a97166e3ca6f2e4fbfccd80505bf127def5728085516420f8e10c218315df3697dac2b98c54db739cb9a5d7d1bbb502c8ce3d55610dd0801068502d977dc839d447be84c19c4a9e28b423ffb58d0c",
+      "notAfter": 4102531200000,
+      "notBefore": 4102444800000,
+      "rootDid": "did:ad:agent:bnoc3Smwt4_ROvTFWY_v9O8qlxZuPKby5Pv8zYBQW_E",
+      "rootPrivateKeyBase64": "BQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQU",
+      "rootPubKeyHex": "6e7a1cdd29b0b78fd13af4c5598feff4ef2a97166e3ca6f2e4fbfccd80505bf1",
+      "rootSeedByte": 5,
+      "sessionDid": "did:ad:agent:iodf_x6zhFFXes1a_uQFRWVo3XyJ4JCGOgVXvHr0nxc",
+      "sessionPubKeyHex": "8a875fff1eb38451577acd5afee405456568dd7c89e090863a0557bc7af49f17",
+      "sessionSeedByte": 6,
+      "signedBytesHex": "538a875fff1eb38451577acd5afee405456568dd7c89e090863a0557bc7af49f1700d8c32cbb0300000034ea31bb0300006e7a1cdd29b0b78fd13af4c5598feff4ef2a97166e3ca6f2e4fbfccd80505bf1"
+    }
+  ],
+  "version": 1
+}
