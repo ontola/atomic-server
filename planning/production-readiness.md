@@ -20,8 +20,9 @@ owning plan where one exists. Verification logs stay out of this file.
 
 - [x] Rate limiting on write endpoints (`/commit`, `/upload`, `/blob`,
       `/iroh-sync`, WS `COMMIT`): `server/src/rate_limit.rs`, 2026-09-15.
-      Still open from the same audit line: permissive CORS, client errors
-      answered as 500 ([`security-audit-2026-09.md`](./security-audit-2026-09.md) D).
+- [x] Credentialed CORS only for the server's own origins (`server/src/cors.rs`)
+      and client errors answered as 400/401 instead of 500, 2026-09-18
+      ([`security-audit-2026-09.md`](./security-audit-2026-09.md) D, H).
 - [x] Library-owned durable flush so the Flutter binding stops losing writes
       on app kill ([`atomic-lib-runtime.md`](./atomic-lib-runtime.md), 2026-09-15).
 - [x] Desktop CSP (audit B7) set 2026-09-15; needs one packaged-build smoke test before a release.

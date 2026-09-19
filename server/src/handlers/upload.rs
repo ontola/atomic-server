@@ -45,7 +45,17 @@ pub async fn upload_handler(
 
     let mut created_resources: Vec<Resource> = Vec::new();
 
-    while let Ok(Some(field)) = body.try_next().await {
+    // A multipart body that stops parsing (a truncated body, a missing
+    // boundary, a bad part header) is an error, not the end of the list:
+    // `while let Ok(Some(..))` used to end the loop quietly and answer 200
+    // for the files that made it through, so a client could not tell a
+    // failed upload from a finished one.
+    while let Some(field) = body.try_next().await.map_err(|e| {
+        crate::errors::AtomicServerError::bad_request(format!(
+            "Error while reading multipart data. {}",
+            e
+        ))
+    })? {
         let mut resource =
             save_file_and_create_resource(field, &appstate, &query.parent, store, &origin).await?;
         resource.save(store).await?;
@@ -82,7 +92,12 @@ async fn save_file_and_create_resource(
 
     // Field in turn is stream of *Bytes* object
     while let Some(chunk) = field.next().await {
-        let data = chunk.map_err(|e| format!("Error while reading multipart data. {}", e))?;
+        let data = chunk.map_err(|e| {
+            crate::errors::AtomicServerError::bad_request(format!(
+                "Error while reading multipart data. {}",
+                e
+            ))
+        })?;
         // `PayloadConfig` only bounds the `Bytes`/`String` extractors, not a
         // multipart stream read by hand, so bound it here.
         if buffer.len() + data.len() > crate::serve::PAYLOAD_MAX {

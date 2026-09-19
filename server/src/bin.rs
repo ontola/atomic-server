@@ -9,6 +9,7 @@ mod commit_monitor;
 pub mod config;
 mod content_types;
 mod context;
+mod cors;
 mod errors;
 mod handlers;
 mod helpers;

@@ -57,7 +57,7 @@ pub async fn post_commit(
 /// Loro-causality are enforced, the WS commit monitor's `source_id` is
 /// threaded through for echo suppression, and live-peer fanout is left
 /// unsuppressed (that suppression is per-`source_id`, handled by the commit
-/// monitor, not by the engine's importing flag).
+/// monitor).
 pub async fn apply_commit_json(
     store: &Db,
     origin: &str,
