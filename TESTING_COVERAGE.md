@@ -921,6 +921,19 @@ mounts without resetting or re-registering the global parser.
   drops), backoff, blocked entries and cancellation cannot report persistence.
   It also covers offline transport failures, successful retries, unrelated
   subjects and edits arriving during an acknowledged save (#1388).
+- `destroy-via-outbox.test.ts` exercises `Resource.destroy()` through the same
+  outbox: an online delete POSTs one destroy commit and removes the resource; a
+  delete while disconnected queues the pre-signed envelope, survives a simulated
+  reload (fresh `LocalOutbox` hydrating the same agent namespace) and is POSTed
+  exactly once on reconnect; create + delete while offline POSTs neither
+  envelope; a never-saved `newResource` is dropped without a POST; a server
+  refusal rejects `destroy()` and keeps the entry queued; a transport failure
+  resolves as queued and flips the store offline; "already gone" server answers
+  (`already applied here`, `predates the resource's genesis`, `does not exist
+  yet`) count as acknowledged; a pending destroy blocks resurrection through
+  `applyIncoming` / `hydrateResourceFromJsonAd` and is excluded from
+  `computeDriveSyncState`. Not covered: a real server round trip for the
+  reconnect drain (no `*.integration.test.ts` or Playwright variant yet).
 
 - `scripts/owned-process.node.mjs` exercises the template runner process lifecycle,
   including independent ephemeral ports and descendant cleanup. The superseded

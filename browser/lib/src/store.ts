@@ -80,6 +80,7 @@ import { DrivePresenceManager } from './presence.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 import {
   LocalOutbox,
+  isSettledDestroyErrorMessage,
   isTerminalCommitError,
   isUnrecoverableCommitError,
   type OutboxEntry,
@@ -1197,6 +1198,12 @@ export class Store {
   /**
    * Drain one subject's outbox entry under sign-at-drain. Steps:
    *
+   *  0. If a `signedDestroy` envelope is queued (`Resource.destroy()`
+   *     while the POST could not be made or acked), POST it verbatim and
+   *     drop the entry — there is no Loro delta to sign for a subject
+   *     that is going away, so steps 1-2 are skipped. If the entry ALSO
+   *     still holds an unposted `signedGenesis`, the resource never
+   *     existed on the server: nothing is POSTed and the entry is dropped.
    *  1. If a `signedGenesis` envelope is queued (DID-derived subject
    *     whose POST hadn't acked yet), POST it. Server idempotently
    *     applies. On success: clear genesis, run the wasNew pipeline
@@ -1237,6 +1244,17 @@ export class Store {
     }
 
     const endpoint = new URL('/commit', this.serverUrl).toString();
+
+    // Step 0: a queued destroy supersedes everything else for this subject.
+    // Handled BEFORE the cold-drain `getResource` below, which would refetch
+    // the (server-side still existing) resource and resurrect it locally.
+    if (entry.signedDestroy) {
+      await this.drainDestroy(subject, entry.signedDestroy, endpoint, {
+        neverSynced: !!entry.signedGenesis,
+      });
+
+      return;
+    }
 
     // Step 1: POST the pre-signed genesis if present. The genesis
     // commit's `loroUpdate` was captured in `signChanges` at sign
@@ -1519,6 +1537,58 @@ export class Store {
 
     this.emitSyncStatus();
   };
+
+  /**
+   * Drain a queued destroy (step 0 of {@link drainOutboxSubject}).
+   *
+   * `neverSynced`: the entry still carries an unposted `signedGenesis`, so
+   * the resource was created AND deleted before either write reached the
+   * server. A destroy of a subject the server has never seen would only be
+   * refused, and a never-synced resource needs no tombstone — POST neither,
+   * drop the entry, make sure the local copy is gone.
+   *
+   * A server answer that says the resource is already gone (see
+   * {@link isSettledDestroyErrorMessage}) counts as an ack: the goal of the
+   * delete is met. Every other failure is rethrown so the outbox applies
+   * its usual backoff / terminal / blocking classification and
+   * `Resource.destroy()` can surface it to the caller.
+   */
+  private async drainDestroy(
+    subject: string,
+    destroy: Commit,
+    endpoint: string,
+    opts: { neverSynced: boolean },
+  ): Promise<void> {
+    if (!opts.neverSynced) {
+      // Registered before the POST like every own commit: should the server
+      // echo anything for this subject before the ack, it is ours.
+      if (destroy.signature) {
+        this.resources
+          .get(subject)
+          ?.appliedCommitSignatures.add(destroy.signature);
+      }
+
+      try {
+        await this.postCommit(destroy, endpoint);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+
+        if (!isSettledDestroyErrorMessage(msg)) throw e;
+
+        console.debug(
+          `[Outbox] destroy of ${subject} already settled on the server: ${msg}`,
+        );
+      }
+    }
+
+    // Drops the whole entry: nothing else about this subject is worth
+    // syncing. Then make sure the resource is gone locally too — `destroy()`
+    // already removed it optimistically, but a cold drain after a reload
+    // (or a fetch that raced the delete) may have brought it back.
+    this.outbox.clearDestroy(subject);
+    this.removeResource(subject);
+    this.emitSyncStatus();
+  }
 
   /**
    * Compute the drive sync state: a hash summarizing all resources' Loro
@@ -1915,6 +1985,13 @@ export class Store {
   public applyIncoming(
     change: IncomingChange,
   ): 'applied' | 'deduped' | 'invalid' {
+    // A locally-destroyed resource whose destroy commit has not been acked
+    // yet must not come back: the server still holds it until the drain
+    // POSTs the envelope, so a SUB push, a reconnect SYNC or a fetch that
+    // raced the delete can all still deliver its state. Treat that state as
+    // already superseded — the pending destroy wins.
+    if (this.hasPendingDestroy(change.subject)) return 'deduped';
+
     // Resource-direct path: caller is the authoritative producer.
     if (change.resource) {
       if (
@@ -3436,6 +3513,13 @@ export class Store {
     parsed: Record<string, unknown>,
     snapshot?: Uint8Array,
   ): boolean {
+    // `removeResource` tombstoned this subject in OPFS, but the worker may
+    // not have processed that yet when a read races the delete. Whatever is
+    // still on disk is the pre-delete state; do not bring it back into
+    // memory. Report "handled" so the caller does not fall back to a server
+    // fetch that would resurrect it either.
+    if (this.hasPendingDestroy(subject)) return true;
+
     const existing = this.getResolved(subject);
 
     // Don't overwrite a resource that has a Loro snapshot with one that doesn't.
@@ -4605,6 +4689,17 @@ export class Store {
     url.searchParams.set('page_size', '999');
 
     return url.toString();
+  }
+
+  /** True while `Resource.destroy()` has removed `subject` locally but the
+   *  signed destroy commit is still queued in the outbox (offline, or the
+   *  POST has not acked yet). Incoming state for such a subject is stale by
+   *  definition and must not resurrect it. */
+  public hasPendingDestroy(subjectRaw: string): boolean {
+    const subject = this.normalizeSubject(subjectRaw);
+
+    return !!this.outbox.getEntry(this.aliases.get(subject) ?? subject)
+      ?.signedDestroy;
   }
 
   /** Removes resource from this store, does not delete it from the server, use `resource.destroy()` to delete it from the server. */
