@@ -85,6 +85,11 @@ pub const IS_GENESIS: &str = "https://atomicdata.dev/properties/isGenesis";
 /// `did:ad:<sign(cert)>`. Decoded for race-free, drive-first rights checks.
 /// See `lib/src/genesis.rs` + `planning/genesis-self-verifying.md`.
 pub const GENESIS: &str = "https://atomicdata.dev/properties/genesis";
+/// A base64url `SessionCert`: a root Agent's signed statement that the key
+/// which signed this commit may act for it until `notAfter`. Optional, and
+/// inside the signed JSON-AD so it is bound to this mutation.
+/// See `lib/src/session_cert.rs` + `planning/oidc-oauth.md`.
+pub const SESSION_CERT: &str = "https://atomicdata.dev/properties/sessionCert";
 /// The drive a resource belongs to, stamped at genesis (from the cert's
 /// `drive`). Lets `check_rights` consult the stable drive grant directly
 /// instead of walking a possibly-not-yet-materialized parent chain — the fix

@@ -161,6 +161,13 @@ pub struct Commit {
     /// Whether this is the first commit for a Resource.
     #[serde(rename = "https://atomicdata.dev/properties/isGenesis")]
     pub is_genesis: Option<bool>,
+    /// Optional base64url `SessionCert`: proof that `signer` is a short-lived
+    /// session key a root Agent certified, and that rights belong to that root.
+    /// Carried inside the signed JSON-AD, so it is bound to this mutation and
+    /// cannot be stripped without breaking the signature. Always inline: a
+    /// verifier replaying history years from now has no side store to consult.
+    #[serde(rename = "https://atomicdata.dev/properties/sessionCert")]
+    pub session_cert: Option<String>,
     /// The URL of the Commit
     pub url: Option<String>,
 }
@@ -182,6 +189,7 @@ impl std::fmt::Debug for Commit {
             .field("signature", &self.signature)
             .field("previous_commit", &self.previous_commit)
             .field("is_genesis", &self.is_genesis)
+            .field("session_cert", &self.session_cert)
             .field("url", &self.url)
             .finish()
     }
@@ -334,6 +342,7 @@ impl Commit {
             created_at: now,
             previous_commit: None,
             is_genesis: Some(true),
+            session_cert: commit_builder.session_cert.clone(),
             signature: None,
             url: None,
         };
@@ -431,6 +440,20 @@ impl Commit {
                     stringified_commit,
                 )
             })?;
+
+        // Step 3: a session certificate, when present, must be a live
+        // delegation from a root Agent to exactly the key that just signed.
+        // Verified against `created_at` so a commit stays valid after the
+        // window closes — history must not rot — and fail-closed, because a
+        // certificate that does not verify means the signer is a stranger,
+        // not that it is itself.
+        if commit.session_cert.is_some() {
+            crate::session_cert::effective_signer(
+                &commit.signer,
+                commit.session_cert.as_deref(),
+                commit.created_at,
+            )?;
+        }
 
         // For a genesis DID resource, identity is verified one of two ways
         // (dual-accept, during the migration to self-verifying certs):
@@ -874,7 +897,21 @@ impl Commit {
         }
 
         if opts.validate_rights {
-            let signer_str = commit.signer.to_string();
+            // Who this signature counts as. Without a session certificate it
+            // is the signer, byte for byte as before. With one it is the root
+            // Agent that certified the session key -- for the rights checks
+            // below, for the genesis `write`-list insert (otherwise every
+            // document a session browser creates would name a DID that is dead
+            // by tomorrow), and for the drive-enrollment gate.
+            //
+            // `commit.signer` itself is untouched: the stored Commit still
+            // records which device signed.
+            let signer_str = crate::session_cert::effective_signer(
+                &commit.signer,
+                commit.session_cert.as_deref(),
+                commit.created_at,
+            )?
+            .to_string();
             let validate_for = opts.validate_for_agent.as_ref().unwrap_or(&signer_str);
             if is_new {
                 crate::hierarchy::check_append(store, &applied.resource_new, &validate_for.into())
@@ -987,7 +1024,9 @@ impl Commit {
                             // all — it is initialization, a migration, or an
                             // import — so the writer is this node itself.
                             let writer = if opts.validate_signature {
-                                crate::agents::ForAgent::AgentSubject(commit.signer.clone())
+                                // `signer_str` above, so a session key enrolls
+                                // a drive as the person it acts for.
+                                crate::agents::ForAgent::AgentSubject(signer_str.clone().into())
                             } else {
                                 crate::agents::ForAgent::Sudo
                             };
@@ -1086,7 +1125,40 @@ impl Commit {
     /// Checks if the Commit has been created in the future or if it is expired.
     #[tracing::instrument(skip_all)]
     pub fn validate_timestamp(&self) -> AtomicResult<()> {
-        crate::utils::check_timestamp_in_past(self.created_at, ACCEPTABLE_TIME_DIFFERENCE)
+        crate::utils::check_timestamp_in_past(self.created_at, ACCEPTABLE_TIME_DIFFERENCE)?;
+
+        // Live-ingest bound on a session certificate.
+        //
+        // The certificate window is checked against `created_at`, which the
+        // signer chooses, and nothing anywhere rejects an OLD `created_at` --
+        // deliberately, because a bulk reconcile re-sends genuinely old
+        // commits. So without this, someone holding a session key a month
+        // after it expired could backdate `created_at` into the window and
+        // write as the root forever.
+        //
+        // Every path that runs this check has the sender online right now
+        // (HTTP `/commit`, WS `COMMIT`, Iroh `COMMIT`), so requiring the
+        // window to still be open in wall-clock time costs an honest client
+        // nothing and stops a stolen key at `notAfter`.
+        //
+        // Replica ingest and Iroh catch-up skip timestamp validation by
+        // design, so they do NOT get this bound; a backdated commit can still
+        // enter through a peer that accepts it. That gap closes with
+        // auth-checkpoint receipts, not here. See
+        // `planning/oidc-oauth.md` -- "Revocation and the createdAt problem".
+        if let Some(encoded) = &self.session_cert {
+            let cert = crate::session_cert::SessionCert::decode_b64(encoded)?;
+            let now = crate::utils::now();
+            if now > cert.not_after + ACCEPTABLE_TIME_DIFFERENCE {
+                return Err(format!(
+                    "Session certificate expired at {} and cannot be used for a live commit (now {})",
+                    cert.not_after, now
+                )
+                .into());
+            }
+        }
+
+        Ok(())
     }
 
     /// Applies the Loro CRDT update and/or destroy to the Resource.
@@ -1207,6 +1279,10 @@ impl Commit {
             Ok(found) => Some(found.to_bool()?),
             Err(_) => None,
         };
+        let session_cert = match resource.get(urls::SESSION_CERT) {
+            Ok(found) => Some(found.to_string()),
+            Err(_) => None,
+        };
         let signature = resource.get(urls::SIGNATURE)?.to_string();
         let url = Some(resource.get_subject().to_string());
 
@@ -1218,6 +1294,7 @@ impl Commit {
             destroy,
             previous_commit,
             is_genesis,
+            session_cert,
             signature: Some(signature),
             url,
         })
@@ -1269,6 +1346,9 @@ impl Commit {
         }
         if let Some(is_genesis) = self.is_genesis {
             resource.set_unsafe(urls::IS_GENESIS.into(), is_genesis.into())?;
+        }
+        if let Some(session_cert) = &self.session_cert {
+            resource.set_unsafe(urls::SESSION_CERT.into(), session_cert.clone().into())?;
         }
         if let Some(loro_update) = &self.loro_update {
             if !loro_update.is_empty() {
@@ -1360,6 +1440,9 @@ pub struct CommitBuilder {
     previous_commit: Option<String>,
     /// Whether this is a genesis commit (the first commit for a DID resource).
     pub is_genesis: bool,
+    /// Optional base64url `SessionCert`, when the signing agent is a session
+    /// key acting for a root Agent. Rides into the signed commit unchanged.
+    pub session_cert: Option<String>,
 }
 
 impl CommitBuilder {
@@ -1373,7 +1456,16 @@ impl CommitBuilder {
             destroy: false,
             previous_commit: None,
             is_genesis: false,
+            session_cert: None,
         }
+    }
+
+    /// Sign this commit as a session key certified by a root Agent. The
+    /// certificate is part of the signed payload, so it must be set before
+    /// signing.
+    pub fn set_session_cert(&mut self, session_cert: Option<String>) -> &mut Self {
+        self.session_cert = session_cert;
+        self
     }
 
     pub fn from_commit_builder_json(commit_builder_json: CommitBuilderJSON) -> AtomicResult<Self> {
@@ -1554,6 +1646,7 @@ async fn sign_at(
         } else {
             None
         },
+        session_cert: commitbuilder.session_cert.clone(),
         signature: None,
         url: None,
     };
@@ -1658,6 +1751,7 @@ mod test {
             previous_commit: None,
             is_genesis: None,
             destroy: None,
+            session_cert: None,
             signature: None,
             url: None,
         };
@@ -2146,6 +2240,252 @@ mod test {
         );
     }
 
+    // --- Session certificates ----------------------------------------------
+    //
+    // A session key signs; the root it was certified for holds the rights.
+    // See `lib/src/session_cert.rs` and `planning/oidc-oauth.md`.
+
+    fn raw_pubkey(agent: &Agent) -> [u8; 32] {
+        crate::agents::decode_base64(&agent.public_key)
+            .unwrap()
+            .try_into()
+            .unwrap()
+    }
+
+    /// A fresh session Agent plus a certificate from `root` over its key.
+    fn session_for(root: &Agent, not_before: i64, not_after: i64) -> (Agent, String) {
+        let session = Agent::new(None).unwrap();
+        let cert = crate::session_cert::SessionCertClaims {
+            session_pubkey: raw_pubkey(&session),
+            not_before,
+            not_after,
+            root_pubkey: raw_pubkey(root),
+        }
+        .sign(&root.private_key.clone().unwrap())
+        .unwrap();
+        (session, cert.encode_b64())
+    }
+
+    /// A resource created by `root`, whose `write` list therefore names it.
+    async fn resource_owned_by(store: &crate::Store, root: &Agent) -> Subject {
+        let mut builder = CommitBuilder::new("placeholder".into());
+        builder.set(crate::urls::NAME.into(), Value::String("owned".into()));
+        let genesis = Commit::create_did(builder, root, store).await.unwrap();
+        let subject = genesis.subject.clone();
+        store.apply_commit(genesis, &rights_opts()).await.unwrap();
+        subject
+    }
+
+    /// An edit of `subject`, signed by `signer`, optionally carrying `cert`.
+    ///
+    /// Built the way a client builds one — seeded from the stored state so the
+    /// new op is causally after it — then re-stamped and re-signed when the
+    /// test needs a `created_at` other than now.
+    async fn edit_signed_by(
+        store: &crate::Store,
+        subject: &Subject,
+        signer: &Agent,
+        cert: Option<String>,
+        created_at: i64,
+    ) -> Commit {
+        let resource = store.get_resource(subject).await.unwrap();
+        let mut builder = CommitBuilder::new(subject.clone());
+        builder.set(crate::urls::NAME.into(), Value::String("edited".into()));
+        builder.set_session_cert(cert);
+        let mut commit = builder.sign(signer, store, &resource).await.unwrap();
+
+        if commit.created_at != created_at {
+            commit.created_at = created_at;
+            let stringified = commit
+                .serialize_deterministically_json_ad(store)
+                .await
+                .unwrap();
+            commit.signature = Some(
+                sign_message(
+                    &stringified,
+                    &signer.private_key.clone().unwrap(),
+                    &signer.public_key,
+                )
+                .unwrap(),
+            );
+        }
+        commit
+    }
+
+    #[tokio::test]
+    async fn a_session_key_writes_with_the_roots_rights() {
+        let (store, root) = store_with_known_agent().await;
+        let subject = resource_owned_by(&store, &root).await;
+        let now = crate::utils::now();
+        let (session, cert) = session_for(&root, now - 1000, now + 86_400_000);
+
+        let commit = edit_signed_by(&store, &subject, &session, Some(cert), now).await;
+        store
+            .apply_commit(commit, &rights_opts())
+            .await
+            .expect("the certified session key acts for the root, which has write");
+
+        let resource = store.get_resource(&subject).await.unwrap();
+        assert_eq!(
+            resource.get(crate::urls::NAME).unwrap().to_string(),
+            "edited"
+        );
+    }
+
+    #[tokio::test]
+    async fn the_same_session_key_without_its_certificate_is_a_stranger() {
+        let (store, root) = store_with_known_agent().await;
+        let subject = resource_owned_by(&store, &root).await;
+        let now = crate::utils::now();
+        let (session, _cert) = session_for(&root, now - 1000, now + 86_400_000);
+
+        let commit = edit_signed_by(&store, &subject, &session, None, now).await;
+        let err = store
+            .apply_commit(commit, &rights_opts())
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(
+            !err.contains("signature"),
+            "should fail on rights, not on the signature: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_certificate_from_a_root_without_write_is_still_refused() {
+        let (store, root) = store_with_known_agent().await;
+        let subject = resource_owned_by(&store, &root).await;
+        let now = crate::utils::now();
+
+        // A different root: its certificate is perfectly valid, and it has no
+        // rights here. The certificate proves identity, never authority.
+        let stranger = Agent::new(None).unwrap();
+        let (session, cert) = session_for(&stranger, now - 1000, now + 86_400_000);
+
+        let commit = edit_signed_by(&store, &subject, &session, Some(cert), now).await;
+        let err = store
+            .apply_commit(commit, &rights_opts())
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(
+            !err.contains("signature"),
+            "should fail on rights, not on the signature: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_commit_stamped_outside_the_certificate_window_is_refused() {
+        let (store, root) = store_with_known_agent().await;
+        let subject = resource_owned_by(&store, &root).await;
+        let now = crate::utils::now();
+        let (session, cert) = session_for(&root, now - 86_400_000, now - 1000);
+
+        // `created_at` is what the window is checked against, so a commit
+        // stamped after `notAfter` is not this root's.
+        let commit = edit_signed_by(&store, &subject, &session, Some(cert), now).await;
+        let err = store
+            .apply_commit(commit, &rights_opts())
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("expired"), "unexpected error: {err}");
+    }
+
+    #[tokio::test]
+    async fn a_certificate_issued_for_another_key_is_refused() {
+        let (store, root) = store_with_known_agent().await;
+        let subject = resource_owned_by(&store, &root).await;
+        let now = crate::utils::now();
+        let (_certified, cert) = session_for(&root, now - 1000, now + 86_400_000);
+
+        // Somebody else's key, presenting a certificate that names the first.
+        let impostor = Agent::new(None).unwrap();
+        let commit = edit_signed_by(&store, &subject, &impostor, Some(cert), now).await;
+        let err = store
+            .apply_commit(commit, &rights_opts())
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("issued for a different key"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn genesis_puts_the_root_in_the_write_list_never_the_session_did() {
+        let (store, root) = store_with_known_agent().await;
+        let now = crate::utils::now();
+        let (session, cert) = session_for(&root, now - 1000, now + 86_400_000);
+
+        let mut builder = CommitBuilder::new("placeholder".into());
+        builder.set(crate::urls::NAME.into(), Value::String("made".into()));
+        builder.set_session_cert(Some(cert));
+        let genesis = Commit::create_did(builder, &session, &store).await.unwrap();
+        let subject = genesis.subject.clone();
+        store.apply_commit(genesis, &rights_opts()).await.unwrap();
+
+        let writers: Vec<String> = store
+            .get_resource(&subject)
+            .await
+            .unwrap()
+            .get(crate::urls::WRITE)
+            .unwrap()
+            .to_subjects(None)
+            .unwrap();
+        assert!(
+            writers.contains(&root.subject.to_string()),
+            "the person must own what their browser created: {writers:?}"
+        );
+        assert!(
+            !writers.contains(&session.subject.to_string()),
+            "a session DID in an ACL outlives its certificate: {writers:?}"
+        );
+    }
+
+    /// The backdating attack the live-ingest bound exists to stop: a key
+    /// stolen after `notAfter` stamps `created_at` inside the window, which
+    /// `validate_signature` alone would accept forever.
+    #[tokio::test]
+    async fn live_ingest_refuses_an_expired_certificate_however_it_is_stamped() {
+        let (store, root) = store_with_known_agent().await;
+        let subject = resource_owned_by(&store, &root).await;
+        let now = crate::utils::now();
+        let expired_at = now - 60 * 60 * 1000;
+        let (session, cert) = session_for(&root, expired_at - 86_400_000, expired_at);
+
+        // Stamped inside the window, which is exactly what makes it verify.
+        let backdated = edit_signed_by(
+            &store,
+            &subject,
+            &session,
+            Some(cert.clone()),
+            expired_at - 1000,
+        )
+        .await;
+
+        let mut opts = rights_opts();
+        opts.validate_timestamp = true;
+        let err = store
+            .apply_commit(backdated.clone(), &opts)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("cannot be used for a live commit"),
+            "unexpected error: {err}"
+        );
+
+        // Without the wall-clock bound the same commit verifies — which is
+        // why replica ingest and catch-up remain exposed, and why the plan
+        // carries auth-checkpoint receipts as the real fix.
+        store
+            .apply_commit(backdated, &rights_opts())
+            .await
+            .expect("history must stay verifiable after the window closes");
+    }
+
     /// A genesis retry without a verifiable cert still fails — only a
     /// same-signer, same-subject cert is treated as a merge.
     #[tokio::test]
@@ -2175,6 +2515,7 @@ mod test {
             created_at: crate::utils::now(),
             previous_commit: None,
             is_genesis: Some(true),
+            session_cert: None,
             signature: Some("not-checked".into()),
             url: None,
         };

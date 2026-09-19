@@ -26,6 +26,12 @@ pub struct AuthValues {
     pub requested_subject: String,
     #[serde(rename = "https://atomicdata.dev/properties/auth/agent")]
     pub agent_subject: String,
+    // x-atomic-session-cert
+    /// Optional base64url `SessionCert`. When present, `public_key` / `agent`
+    /// name a short-lived session key, and this proves a root Agent certified
+    /// it. Rights are then answered for that root.
+    #[serde(rename = "https://atomicdata.dev/properties/auth/sessionCert", default)]
+    pub session_cert: Option<String>,
 }
 
 /// Checks if the signature is valid for this timestamp.
@@ -113,10 +119,34 @@ pub async fn get_agent_from_auth_values_and_check(
     }
 }
 
+/// Check the proof, then answer for whoever it was made on behalf of.
+///
+/// Splitting this in two is the whole point: [`signing_agent_from_auth_values`]
+/// answers "which key signed, and is that key allowed to claim this subject",
+/// which is unchanged. The remap below answers "whose rights are these", which
+/// is the root Agent when a session certificate is present. Every transport --
+/// HTTP `GET`, the `atomic_session` cookie, the WebSocket `AUTHENTICATE` frame,
+/// `sync::engine::handle_frame` and the Iroh peer auth-back -- reaches this one
+/// function, so they all inherit it.
 async fn check_auth_values(
     auth_vals: AuthValues,
     store: &impl Storelike,
 ) -> AtomicResult<ForAgent> {
+    let timestamp = auth_vals.timestamp;
+    let session_cert = auth_vals.session_cert.clone();
+    let signer = signing_agent_from_auth_values(auth_vals, store).await?;
+
+    // The auth timestamp is separately bounded for freshness (AUTH_MAX_AGE_MS),
+    // so unlike a commit's `created_at` this cannot be backdated into a closed
+    // window: a session key really does stop working on live requests at
+    // `notAfter`.
+    crate::session_cert::effective_agent(&signer, session_cert.as_deref(), timestamp)
+}
+
+async fn signing_agent_from_auth_values(
+    auth_vals: AuthValues,
+    store: &impl Storelike,
+) -> AtomicResult<crate::Subject> {
     // If there are auth headers, check 'em, make sure they are valid.
     check_auth_signature(&auth_vals.requested_subject, &auth_vals)
         .map_err(|e| format!("Error checking authentication headers. {}", e))?;
@@ -146,7 +176,7 @@ async fn check_auth_values(
             .strip_prefix(crate::subject::DID_AD_AGENT_PREFIX)
             .unwrap_or_else(|| agent_subject.as_str());
         if public_keys_match(did_pubkey, public_key_trimmed) {
-            return Ok(ForAgent::AgentSubject(agent_subject));
+            return Ok(agent_subject);
         } else {
             return Err(format!(
                 "The public key in the auth headers '{}' does not match the DID subject '{}'",
@@ -165,7 +195,7 @@ async fn check_auth_values(
     // root agent, whose key is public).
     if let Some(path_key) = crate::agents::legacy_agent_pubkey(agent_subject.as_str()) {
         if public_keys_match(&path_key, public_key_trimmed) {
-            return Ok(ForAgent::AgentSubject(agent_subject));
+            return Ok(agent_subject);
         }
         return Err(format!(
             "The public key in the auth headers '{}' does not match the agent subject '{}'",
@@ -195,7 +225,7 @@ async fn check_auth_values(
                 .into(),
         )
     } else {
-        Ok(ForAgent::AgentSubject(agent_subject))
+        Ok(agent_subject)
     }
 }
 

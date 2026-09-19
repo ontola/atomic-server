@@ -769,8 +769,13 @@ pub async fn ingest_commit(
     // A commit that creates the agent itself needs no help; it is excluded.
     let is_self_creating_agent =
         incoming_commit.subject.is_agent_did() && incoming_commit.subject == signer;
+    // A session key is not a person and gets no Agent resource: it would be a
+    // public key with a lifetime of hours, published forever. The root it acts
+    // for already has one.
+    let signs_with_session_cert = incoming_commit.session_cert.is_some();
     let needs_agent_resource = signer.is_agent_did()
         && !is_self_creating_agent
+        && !signs_with_session_cert
         && store.get_resource(&signer).await.is_err();
 
     let commit_opts = crate::commit::CommitOpts {
@@ -789,7 +794,18 @@ pub async fn ingest_commit(
         // LWW silently drops the client's write. For P2P sync use a path that
         // leaves this off — concurrent writes are expected there.
         validate_loro_causality: opts.validate_loro_causality,
-        validate_for_agent: Some(signer.to_string()),
+        // The root Agent when the signer is a certified session key, the
+        // signer itself otherwise. `apply_commit` would derive the same value,
+        // but this override is explicit here and must not reintroduce the
+        // session DID.
+        validate_for_agent: Some(
+            crate::session_cert::effective_signer(
+                &signer,
+                incoming_commit.session_cert.as_deref(),
+                incoming_commit.created_at,
+            )?
+            .to_string(),
+        ),
         update_index: true,
         // A commit applied inside a peer's import scope is attributed to that
         // peer, so the live push loop does not send it straight back. Not a
