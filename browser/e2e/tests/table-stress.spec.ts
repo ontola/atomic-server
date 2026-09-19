@@ -273,9 +273,8 @@ test.describe('table stress', () => {
       `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(tableSubject)}`,
     );
     // Full remount: wait until the same OPFS worker the collection will ask
-    // is actually up. `waitForGridMounted` is not enough — FancyTable is not
-    // passed `busy`, and the empty entry row is drawn before the collection
-    // answers, so a visible grid with `aria-rowcount=1` is the loading state.
+    // is actually up. The empty entry row still paints before members land,
+    // so `aria-rowcount` is the signal that the collection answered.
     await page.waitForFunction(
       () => window.store?.getClientDb()?.isReady === true,
       undefined,

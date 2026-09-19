@@ -1,8 +1,10 @@
 # Table scale (100k rows)
 
-> **Status:** Measured 2026-09-18. Not a product change: a stress harness plus
-> findings. The write, query, and UI layers were timed separately so a "the
-> table is slow" report can name the actual leg.
+> **Status:** Measured 2026-09-18; table-open path fixed on this branch.
+> `Collection.fetchPageFromLocalDb` now passes `limit` / `offset` / `sort_by`
+> so WASM returns a page of bodies. Write amplification (4 GB / 99 ms/row)
+> is unchanged — see
+> [`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md).
 >
 > Related: [`index-performance.md`](./index-performance.md) (query planner,
 > exact counts, cursor pagination),
@@ -31,11 +33,11 @@ also serialises every nested body at the largest N.
 `pageSize: 30`. Extra AND filters force `query_complex` (the QueryMembers
 index). Default sort is `sortOrder`.
 
-`Collection.fetchPageFromLocalDb` then **does not pass `limit`, `offset`, or
-`sort_by`**. It asks the WASM DB for every matching subject **with JSON-AD
-bodies** (`includeResources: true`), hydrates all of them into the JS store,
-sorts in JS (WASM DID-drive sort is still broken), and **then** slices the
-page. Aggregates, when the view asks for them, walk every match a second time.
+`Collection.fetchPageFromLocalDb` now passes `limit`, `offset`, and `sort_by`.
+WASM returns **this page's bodies** plus a full-set `count` and aggregates.
+A subjects-only follow-up fills `_queriedMembers` so off-page hydrates do
+not inflate `totalMembers`. Stubs that ignore `limit` still take the old
+JS sort + slice fallback.
 
 The grid itself is `react-window`. It only mounts the visible rows.
 
@@ -43,6 +45,8 @@ The grid itself is `react-window`. It only mounts the visible rows.
 
 Native redb, `--release`, cloud-agent VM, 2026-09-18. Same crate the WASM
 OPFS ClientDb compiles. Full log: `table_scale_n100000_release.log`.
+Browser numbers (N=1000, Chromium) are in section 3;
+`table_stress_e2e_n1000_wait_rows.log`.
 
 ### 1. Write path — one genesis commit per row
 
@@ -123,10 +127,9 @@ KB/row native figure). Remount is slower (639 ms) because
 "open grid" wall clock is ClientDb re-init + auth + drive sync **plus**
 that hydrate, not the list widget.
 
-`FancyTable` is not passed `busy`. The empty entry row paints with
-`aria-rowcount=1` before the collection answers. Tests (and users) can
-see a settled-looking empty grid while 1000 bodies are still crossing
-the worker. That is a loading-state gap, not the scale cliff.
+`FancyTable` now gets `busy={!ready || answeredQuery !== requestedQuery}`.
+The empty entry row still paints (so a fresh table is typeable) but
+`aria-busy` is true until the collection answers.
 
 ### 4. UI — not the 100k problem
 
@@ -137,13 +140,10 @@ the main thread first. That dump is step 2.
 
 ## Ranked bottlenecks
 
-1. **Collection local fetch hydrates every row** — `browser/lib/src/collection.ts`
-   `fetchPageFromLocalDb`: no `limit`/`offset`, `includeResources: true`,
-   client-side sort. **4.6 s store-only at 100k**, plus ~430 MB of JSON-AD
-   across the worker boundary (3.75 MB already at 1k in the browser).
-   Remount in Chromium at 1k: **639 ms** for the same query. This is the
-   table-open cliff. Not OPFS-the-filesystem; it is the query the client
-   asks OPFS to run.
+1. **Collection local fetch hydrates every row** — **fixed.**
+   `fetchPageFromLocalDb` now passes `limit`/`offset`/`sort_by`. Pre-fix
+   cost: **4.6 s store-only at 100k**, plus ~430 MB of JSON-AD. A page of
+   30 was already 33 ms in the same store.
 2. **Write amplification / store growth** — 6.9 ms/row by 100k native,
    4 GB file. Browser `save()` is **99 ms/row** at 1k (40 ms OPFS + 55 ms
    WS). Dominates *creating* a huge table. Opening an already-written one
@@ -156,8 +156,8 @@ the main thread first. That dump is step 2.
 5. **WASM cannot sort DID-scoped queries**, so (1) exists. Fixing sort in
    the local query index would let the worker return the right 30 rows.
 6. **The grid (react-window)** — 18 DOM rows at 1000 members. Not the
-   limiter, provided (1) is fixed. The empty-row paint-before-ready is a
-   separate loading-state issue, not the 100k cliff.
+   limiter. `FancyTable` now sets `aria-busy` until the collection is
+   ready, so the empty entry row no longer looks settled while loading.
 
 ## What not to do
 
@@ -167,11 +167,13 @@ the main thread first. That dump is step 2.
 - Expect 100k interactive creates in the browser. Bulk import needs a
   batched, possibly unsigned-replica, write path that does not exist.
 
-## Next slices (not done here)
+## Next slices
 
-1. Pass `limit`/`offset` through `queryLocalDb` and stop hydrating off-page
-   bodies. Blocked on (or paired with) WASM DID-drive sort so the page is
-   the right 30 rows.
+1. ~~Pass `limit`/`offset`/`sort_by` through `queryLocalDb`.~~ Done — page
+   bodies only; JS fallback if the worker still returns the full set.
 2. Cursor / `hasMore` instead of exact `totalMembers` (`index-performance.md`).
-3. Optionally skip `include_nested` for members already in the JS store;
-   fetch the visible page's bodies only.
+   The count walk is still O(matches) (~33 ms at 100k) but no longer ships
+   430 MB of JSON-AD.
+3. Write path: batched / unsigned-replica import so 100k creates are not
+   one genesis commit each
+   ([`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md)).

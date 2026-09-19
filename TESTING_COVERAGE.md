@@ -2153,6 +2153,9 @@ table open uses (nested unpaged, subjects-only, page of 30, sort, aggregates,
 JSON-AD size, redb file). `browser/e2e/tests/table-stress.spec.ts` does the
 same through `window.store` + the grid, skipped unless `TABLE_STRESS=1`
 (default 1000 rows; 100k browser creates are not a realistic session).
+`browser/lib/src/collection-local-page.test.ts` checks that
+`fetchPageFromLocalDb` passes `limit`/`offset`/`sortBy`, keeps
+`totalMembers` as the full count, and hydrates only the page.
 Findings: [`planning/table-scale.md`](./planning/table-scale.md).
 
 ## Drive root file drops

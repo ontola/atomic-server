@@ -34,7 +34,10 @@ function fakeClientDb(): {
     query: async (opts: ClientDbQueryOpts): Promise<ClientDbQueryResult> => {
       calls.push(opts);
 
-      if (opts.filters && opts.filters.length > 0 && !opts.drive) {
+      if (
+        ((opts.filters && opts.filters.length > 0) || opts.sortBy) &&
+        !opts.drive
+      ) {
         throw new Error(
           'Indexed queries require a drive scope. Set Query::drive to the drive Subject.',
         );
@@ -102,5 +105,25 @@ describe('Collection local-DB drive scope', () => {
 
     expect(indexed).toHaveLength(1);
     expect(indexed[0]!.drive).toBe('did:ad:drive:test');
+  });
+
+  it('does not issue a drive-less sorted query when no drive is known', async ({
+    expect,
+  }) => {
+    const store = new Store({ serverUrl: 'https://example.com' });
+    const { clientDb, calls } = fakeClientDb();
+    store.setClientDb(clientDb);
+
+    const collection = new Collection(store, 'https://example.com', {
+      page_size: '30',
+      include_nested: false,
+      property: core.properties.parent,
+      value: 'did:ad:resource:table',
+      sort_by: core.properties.name,
+      drive: undefined,
+    });
+    await collection.waitForReady();
+
+    expect(calls.filter(c => c.sortBy && !c.drive)).toEqual([]);
   });
 });

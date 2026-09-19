@@ -71,7 +71,7 @@ a derived, rebuildable projection:
 | `(drive, property)`-routed watched-filter matching | **built (this pass)** |
 | Most-selective-constraint planner for AND filters (bounded cardinality estimates) | **built (this pass)** |
 | Typed sort keys in `PropValSub`/`ValPropSub` sort segment | not built (their sort segment is currently unused by ordering-sensitive paths) |
-| Cursor pagination / `hasMore` instead of exact counts | not built (wire + client change). Confirmed still the table-open cliff at 100k rows — see [`table-scale.md`](./table-scale.md). |
+| Cursor pagination / `hasMore` instead of exact counts | not built (wire + client change). Exact `totalMembers` still walks the index (~33 ms at 100k); the table-open body-hydrate cliff is fixed — see [`table-scale.md`](./table-scale.md). |
 | Batched KV reads (one read txn per query) | not built (`KvStore` trait change; per-`get` redb txns remain) |
 | Zones index (walk-free auth) | see [`zones.md`](./zones.md) |
 
