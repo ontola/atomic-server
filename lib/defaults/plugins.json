@@ -23,7 +23,7 @@
     "@id": "https://atomicdata.dev/properties/pluginFile",
     "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/File",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-    "https://atomicdata.dev/properties/description": "A Wasm file containing AtomicServer Plugin code",
+    "https://atomicdata.dev/properties/description": "Deprecated: the zip File of a legacy Plugin resource. Migrated at startup into an Installation pinned to a Release.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Property"
     ],
@@ -98,7 +98,7 @@
   },
   {
     "@id": "https://atomicdata.dev/classes/Plugin",
-    "https://atomicdata.dev/properties/description": "A Wasm plugin for AtomicServer",
+    "https://atomicdata.dev/properties/description": "Deprecated: a legacy Wasm plugin resource. The server migrates it at startup into an Installation of a Release; new installs use Installation.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Class"
     ],
@@ -118,6 +118,245 @@
       "https://atomicdata.dev/properties/version"
     ],
     "https://atomicdata.dev/properties/shortname": "plugin",
+    "https://atomicdata.dev/properties/subresources": []
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/runtime",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The plugin runtime a Release targets: `atomic-js/1` (JS source) or `wasip2/1` (WASI component zip).",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "runtime"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/world",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The trust world of a Release: `extension` (proposal-only, user-installable) or `server-extension` (class-extender hooks, operator-installed).",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "world"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/manifest",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The plugin manifest of a Release, as JSON.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "manifest"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/source",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "JS module source of a Release with runtime `atomic-js/1`.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "source"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/package",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The zip File of a Release with runtime `wasip2/1`. The File's blake3 hash is the package identity.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "package",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/File"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/schemas",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "Alias to exact schema identity, as a JSON object.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "schemas"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/releaseId",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Content-addressed identity of a Release: `blake3:` over every release field. Recomputed and verified on install.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "release-id"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/previousRelease",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The Release this one supersedes.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "previous-release",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Release"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/publisher",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The Agent that published a Release or Listing.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "publisher",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Agent"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/release",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
+    "https://atomicdata.dev/properties/description": "The Release an Installation or Listing points at.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "release",
+    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Release"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/grants",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "The capabilities the installer approved for an Installation, as JSON.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "grants"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/installationStatus",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Lifecycle of an Installation: `draft`, `active`, `paused` or `revoked`. Committing `active` installs; `revoked` or destroying uninstalls.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "installation-status"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/domains",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "Domains a Listing applies to, as a JSON array of strings.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "domains"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/standards",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
+    "https://atomicdata.dev/properties/description": "Standards a Listing implements, as links to their documentation.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "standards"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/evidence",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/json",
+    "https://atomicdata.dev/properties/description": "Evidence for a Listing's claims (tests, audits, references), as JSON.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "evidence"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/supportTier",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Support tier of a Listing, e.g. `community` or `maintained`.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "support-tier"
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Release",
+    "https://atomicdata.dev/properties/description": "An immutable, content-addressed plugin release. Lives wherever it was published; installed through an Installation.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/world",
+      "https://atomicdata.dev/properties/source",
+      "https://atomicdata.dev/properties/package",
+      "https://atomicdata.dev/properties/schemas",
+      "https://atomicdata.dev/properties/version",
+      "https://atomicdata.dev/properties/previousRelease",
+      "https://atomicdata.dev/properties/publisher",
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/description"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/runtime",
+      "https://atomicdata.dev/properties/manifest",
+      "https://atomicdata.dev/properties/releaseId"
+    ],
+    "https://atomicdata.dev/properties/shortname": "release",
+    "https://atomicdata.dev/properties/subresources": []
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Installation",
+    "https://atomicdata.dev/properties/description": "One installed plugin release on one Drive, for either runtime. Committing installationStatus `active` installs it.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/config",
+      "https://atomicdata.dev/properties/grants",
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/namespace",
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/properties/pluginAgent",
+      "https://atomicdata.dev/properties/pluginPermissions",
+      "https://atomicdata.dev/properties/jsonSchema",
+      "https://atomicdata.dev/properties/version"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/release",
+      "https://atomicdata.dev/properties/releaseId",
+      "https://atomicdata.dev/properties/installationStatus"
+    ],
+    "https://atomicdata.dev/properties/shortname": "installation",
+    "https://atomicdata.dev/properties/subresources": []
+  },
+  {
+    "@id": "https://atomicdata.dev/classes/Listing",
+    "https://atomicdata.dev/properties/description": "A marketplace entry pointing at a Release. Any Drive of Listings is a marketplace.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/emoji",
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/properties/publisher",
+      "https://atomicdata.dev/properties/domains",
+      "https://atomicdata.dev/properties/standards",
+      "https://atomicdata.dev/properties/evidence",
+      "https://atomicdata.dev/properties/supportTier"
+    ],
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/release"
+    ],
+    "https://atomicdata.dev/properties/shortname": "listing",
     "https://atomicdata.dev/properties/subresources": []
   }
 ]

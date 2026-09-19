@@ -194,11 +194,19 @@ export {
 export {
   parseManifest,
   validateManifest,
+  type CapabilityName,
+  type DeclaredAction,
+  type DeclaredCapability,
+  type DeclaredEntrypoints,
+  type DeclaredNetwork,
   type DeclaredOperation,
   secretsMentionedIn,
   originsMentionedIn,
   type DeclaredSecret,
+  type ManifestRuntime,
+  type ManifestWorld,
   type PluginManifest,
+  type PluginManifestV2,
 } from './plugin-manifest.js';
 export { describePlugin } from './plugin-runner.js';
 
@@ -239,6 +247,23 @@ export {
   pluginSyncSchedule,
   type PluginSyncSchedule,
 } from './plugin-connection.js';
+export {
+  installRelease,
+  updateInstallationRelease,
+  publishZipRelease,
+  readInstallationReview,
+  grantsFor,
+  installationIdentifier,
+  DEFAULT_INSTALLATION_NAMESPACE,
+  RUNTIME_JS,
+  type InstallationStatus,
+  type InstallationReview,
+  type InstallReleaseOptions,
+  type UpdateReleaseOptions,
+  type PublishedRelease,
+  type ReleaseReference,
+  type ReviewCapability,
+} from './plugin-install.js';
 export * from './integration-actions.js';
 
 export { taskSchema } from './task-schema.js';

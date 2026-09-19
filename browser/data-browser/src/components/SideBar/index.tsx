@@ -9,7 +9,6 @@ import {
   useResizable,
 } from '../../hooks/useResizable';
 import { useCombineRefs } from '../../hooks/useCombineRefs';
-import { OverlapSpacer } from './OverlapSpacer';
 import { AppMenu } from './AppMenu';
 import { SideBarHomePanels } from './SideBarHomePanels';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
@@ -118,7 +117,6 @@ export function SideBar(): JSX.Element {
               </SideBarPanel>
             </Column>
           </MenuWrapper>
-          <OverlapSpacer />
           {!isRearanging && (
             <SideBarDragArea
               ref={dragAreaRef}

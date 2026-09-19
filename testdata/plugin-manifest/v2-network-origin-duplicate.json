@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 2,
+  "network": {
+    "origins": [
+      "https://api.test",
+      "https://api.test"
+    ]
+  }
+}

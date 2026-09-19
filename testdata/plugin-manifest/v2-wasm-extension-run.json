@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 2,
+  "runtime": "wasip2/1",
+  "world": "extension",
+  "entrypoints": {
+    "run": true
+  },
+  "operations": [
+    {
+      "id": "list",
+      "method": "GET",
+      "url": "https://api.test/items",
+      "effect": "read"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+[
+  {
+    "name": "class extender with permissions",
+    "pluginJson": "plugin-json/notion-sync.json",
+    "classUrls": [
+      "https://atomicdata.dev/classes/Folder"
+    ],
+    "expected": "translated-notion-sync.json"
+  },
+  {
+    "name": "package extending no class exports run",
+    "pluginJson": "plugin-json/no-classes.json",
+    "classUrls": [],
+    "expected": "translated-no-classes.json"
+  },
+  {
+    "name": "network permission needs origins",
+    "pluginJson": "plugin-json/network-without-origins.json",
+    "classUrls": [
+      "https://atomicdata.dev/classes/Folder"
+    ],
+    "error": "network permission requires network.origins"
+  }
+]
