@@ -1,4 +1,5 @@
 import { RefObject, useCallback, useMemo, useRef, useState } from 'react';
+import { isTouchPrimary } from './pointer';
 
 type Listeners = {
   onMouseOver?: React.MouseEventHandler;
@@ -42,7 +43,7 @@ export function useHover<T extends HTMLElement>(): [
   );
 
   // don't hover on touch screen devices
-  if (window.matchMedia('(pointer: coarse)').matches) {
+  if (isTouchPrimary()) {
     return [ref, false, {}];
   }
 

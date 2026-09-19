@@ -53,7 +53,7 @@ const test = base.extend({
       timezoneId,
     });
     await persistent.addInitScript(() => {
-      localStorage.setItem('viewTransitionsDisabled', 'true');
+      localStorage.setItem('viewTransitionsEnabled', 'false');
     });
 
     try {
