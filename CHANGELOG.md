@@ -7,6 +7,14 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- `atomic_lib`: a signed destroy commit now removes the resource (and its
+  cascade-deleted children, Loro snapshot, index and search rows) in the same
+  redb transaction that stores its envelope and commit row. `Db::apply_commit`
+  used to call `remove_resource`, which applied a transaction of its own, so a
+  crash between the two left a deleted resource with no signed destroy for
+  `SYNC_DIFF.removeCommits` to carry; tombstones are now recorded once that
+  single transaction has landed. The destroy branch also returns an error on a
+  malformed commit instead of panicking the request.
 - Security hygiene, from the September 2026 audit (`planning/security-audit-2026-09.md`
   D, C16, F):
   - CORS: any origin may still read (Atomic is a headless CMS), but
@@ -46,6 +54,18 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   - `sync::peer`: the live peer map recovers from a poisoned lock instead of
     unwrapping it, so one panic no longer stops live broadcast for the rest
     of the process.
+- `atomic_lib`: `DbEvent::Destroyed` for a cascade-deleted child is sent only
+  after the removal has been applied. `Db::recursive_remove` announced each
+  child while it was still queueing the deletes into a transaction the caller
+  had yet to apply, so a listener (`atomic-server`'s `CommitMonitor`, which
+  fans removals out to WebSocket subscribers; a peer transport) heard of a
+  deletion that could still fail or roll back, and heard of the children
+  before their parent. The callers (`remove_resource`, the destroy branch of
+  `apply_commit`) now announce every removed subject once the transaction has
+  landed; the destroyed subject itself is still announced exactly once, wrapped
+  in its signed destroy commit. `remove_resource` now also announces the
+  subject it was called for, which it never did. Follow-up to #1544.
+
 - `classify_commit_error` classifies "Commits cannot be edited." (a write whose
   subject is itself a Commit) as the new `IMMUTABLE_COMMIT` (10) error code, on
   the WS `ERROR` frame and the HTTP `/commit` error body's `errorCode` alike.

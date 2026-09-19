@@ -492,6 +492,7 @@ Two things worth knowing about the runners:
 | RBSR reconciliation, drive hashing | `lib/src/sync/rbsr.rs`, `tests.rs` |
 | RBSR finds a remote-only subject sorting below every local one | `lib/src/sync/rbsr.rs` **and** `browser/lib/src/rbsr.test.ts` (regression, see below) |
 | Remote update merge, drive-spoof rejection, tombstones | `lib/src/sync/ws_apply.rs`, `tombstones.rs` |
+| `DbEvent::Destroyed` for a removed resource and its cascade-deleted children arrives only after the removal is applied (the store no longer holds them when a listener hears), each subject announced exactly once | `lib/src/db/test.rs` (`destroyed_events_follow_the_applied_removal`) |
 | Pairing envelope encode/decode | `browser/lib/src/pairing.test.ts` |
 
 ### Cross-process — covered since 2026-07
@@ -785,6 +786,7 @@ No automated end-to-end coverage: uploaded-file conversion through the full UI a
 |---|---|---|
 | `LoroDoc` values are not KV-index keys | protocol | `lib/src/values.rs::loro_doc_is_not_indexed` |
 | Content commits are not stored; genesis/ACL/destroy are | protocol | `lib/src/db/test.rs::content_commits_are_not_stored` |
+| Signed destroy removes the resource, keeps its envelope and tombstones the subject in one apply | protocol | `lib/src/db/test.rs::destroy_commit_removes_resource_and_keeps_envelope_atomically` |
 | Sequential saves do not chain `previousCommit`; commit DIDs are not store resources | glue | `browser/lib/src/commit.test.ts` |
 
 ## Personal drive identity
