@@ -24,6 +24,7 @@ import { errorHandler } from '../handlers/errorHandler';
 import { isDev } from '../config';
 import { getLocalServerOrigin, isRunningInTauri } from './tauri';
 import { fetchManagedInfo, isAtomicServer } from './managedServer';
+import { isTouchPrimary } from './pointer';
 
 interface ProviderProps {
   children: ReactNode;
@@ -53,7 +54,14 @@ export const AppSettingsContextProvider = (
     'sideBarOpen',
     window.innerWidth > SIDEBAR_TOGGLE_WIDTH,
   );
-  const [navbarTop, setNavbarTop] = useLocalStorage('navbarTop', true);
+  // Phones and tablets default to a bottom navbar: the sidebar toggle, the
+  // search button and the context menu matter more within thumb reach than a
+  // navbar that sits in the same place on every device. Only the default —
+  // an explicit choice in Settings is stored and wins.
+  const [navbarTop, setNavbarTop] = useLocalStorage(
+    'navbarTop',
+    !isTouchPrimary(),
+  );
 
   // == CONTENT LANGUAGE ==
   // The language localized *content* (LocalizedText values, translated
