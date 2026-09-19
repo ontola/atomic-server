@@ -10,16 +10,21 @@
 //! (F6 latest envelope, F7 every envelope).
 //!
 //! Layout ([`Tree::Envelopes`]): key
-//! `pure_id || 0x00 || createdAt (u64 BE) || 0x00 || signature`, value the
-//! commit JSON-AD exactly as `/commit` or the `COMMIT` frame accepted it. A
-//! prefix scan on the pure id lists a resource's envelopes in time order. The
-//! rows are not resources and not indexed: they never show up in queries,
-//! `all_resources`, search or collections, so nothing has to filter
-//! `did:ad:commit:` subjects by hand.
+//! `pure_id || 0x00 || createdAt (u64 BE) || 0x00 || signature`, value a
+//! compact `AE01` payload (header propvals + raw `loroUpdate`). Readers
+//! reconstruct JSON-AD. A prefix scan on the pure id lists a resource's
+//! envelopes in time order. The rows are not resources and not indexed: they
+//! never show up in queries, `all_resources`, search or collections, so
+//! nothing has to filter `did:ad:commit:` subjects by hand.
 //!
 //! How many rows survive is [`EnvelopeRetention`]: `Latest` keeps the one
 //! that produced the current state (the floor), `All` keeps every envelope
 //! and turns the oplog into a signed audit log ([`attribute_history`]).
+//!
+//! On disk the value is a compact binary (`AE01` + header + raw `loroUpdate`)
+//! so the snapshot is not stored again as JSON-AD base64. Readers still see
+//! JSON-AD via [`StoredEnvelope::json`]. Legacy rows that start with `{` are
+//! accepted as the old JSON-AD form.
 //!
 //! What is deliberately not here: envelopes inside the Loro doc (an envelope
 //! would then sign a document containing itself), and a retention schedule
@@ -28,7 +33,11 @@
 
 use crate::db::trees::{Method, Operation, Transaction, Tree};
 use crate::errors::AtomicResult;
-use crate::{commit::CommitResponse, Db};
+use crate::{commit::CommitResponse, urls, Db, Resource, Value};
+use base64::Engine;
+
+/// On-disk envelope magic: compact header + raw `loroUpdate` (not JSON+base64).
+const ENVELOPE_V1: &[u8] = b"AE01";
 
 /// Which envelopes a node keeps per resource.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -113,13 +122,75 @@ fn decode(key: &[u8], value: Vec<u8>) -> Option<StoredEnvelope> {
     }
     let created_at = u64::from_be_bytes(rest[..8].try_into().ok()?) as i64;
     let signature = std::str::from_utf8(&rest[9..]).ok()?.to_string();
-    let json = String::from_utf8(value).ok()?;
+    let json = envelope_value_to_json(&value, &signature)?;
     Some(StoredEnvelope {
         subject,
         created_at,
         signature,
         json,
     })
+}
+
+/// Persist the signed envelope as header propvals + raw `loroUpdate` bytes.
+/// JSON-AD with base64 is reconstructed on read so verification and History
+/// keep the same surface.
+fn encode_envelope(commit: &Resource) -> AtomicResult<Vec<u8>> {
+    let mut propvals = commit.get_propvals().clone();
+    let loro = match propvals.remove(urls::LORO_UPDATE) {
+        Some(Value::LoroDoc(bytes)) => bytes,
+        _ => Vec::new(),
+    };
+    let header = crate::db::encoding::encode_propvals(&propvals)?;
+    let header_len = u32::try_from(header.len()).map_err(|_| "envelope header exceeds u32::MAX")?;
+    let mut out = Vec::with_capacity(ENVELOPE_V1.len() + 4 + header.len() + loro.len());
+    out.extend_from_slice(ENVELOPE_V1);
+    out.extend_from_slice(&header_len.to_le_bytes());
+    out.extend_from_slice(&header);
+    out.extend_from_slice(&loro);
+    Ok(out)
+}
+
+fn envelope_value_to_json(value: &[u8], signature: &str) -> Option<String> {
+    if value.first() == Some(&b'{') {
+        return String::from_utf8(value.to_vec()).ok();
+    }
+    if value.len() < 8 || !value.starts_with(ENVELOPE_V1) {
+        return None;
+    }
+    let header_len = u32::from_le_bytes(value[4..8].try_into().ok()?) as usize;
+    let header_end = 8usize.checked_add(header_len)?;
+    if value.len() < header_end {
+        return None;
+    }
+    let mut propvals = crate::db::encoding::decode_propvals(&value[8..header_end]).ok()?;
+    let loro = value[header_end..].to_vec();
+    if !loro.is_empty() {
+        propvals.insert(urls::LORO_UPDATE.into(), Value::LoroDoc(loro));
+    }
+    let resource = Resource::from_propvals(propvals, format!("did:ad:commit:{signature}").into());
+    resource.to_json_ad(None).ok()
+}
+
+fn loro_update_from_json(json: &str) -> Option<Vec<u8>> {
+    let v: serde_json::Value = serde_json::from_str(json).ok()?;
+    let b64 = v.get(urls::LORO_UPDATE)?.as_str()?;
+    base64::engine::general_purpose::STANDARD.decode(b64).ok()
+}
+
+/// The signed `loroUpdate` for a stored commit row, read from its envelope
+/// when the resource blob no longer carries the payload.
+pub fn signed_loro_update(store: &Db, commit: &Resource) -> Option<Vec<u8>> {
+    if let Ok(Value::LoroDoc(bytes)) = commit.get(urls::LORO_UPDATE) {
+        if !bytes.is_empty() {
+            return Some(bytes.clone());
+        }
+    }
+    let target = commit.get(urls::SUBJECT).ok()?.to_string();
+    let signature = commit.get(urls::SIGNATURE).ok().map(|v| v.to_string())?;
+    envelopes(store, &target)
+        .into_iter()
+        .find(|e| e.signature == signature)
+        .and_then(|e| loro_update_from_json(&e.json))
 }
 
 /// Queue the writes that keep this commit's envelope, honouring the store's
@@ -135,7 +206,7 @@ pub fn record_ops(
         return Ok(());
     };
     let subject = response.commit.subject.as_str();
-    let json = response.commit_resource.to_json_ad(None)?;
+    let stored = encode_envelope(&response.commit_resource)?;
     let new_key = key(subject, response.commit.created_at, signature);
 
     if store.envelope_retention() == EnvelopeRetention::Latest {
@@ -156,7 +227,7 @@ pub fn record_ops(
         tree: Tree::Envelopes,
         method: Method::Insert,
         key: new_key,
-        val: Some(json.into_bytes()),
+        val: Some(stored),
     });
     Ok(())
 }
@@ -205,7 +276,7 @@ pub fn for_subjects<'a>(
 /// stored.
 pub async fn import_envelope(store: &Db, expected_subject: &str, json: &str) -> AtomicResult<()> {
     let resource = crate::parse::parse_json_ad_commit_resource(json, store).await?;
-    let commit = crate::commit::Commit::from_resource(resource)?;
+    let commit = crate::commit::Commit::from_resource(resource.clone())?;
     let expected = crate::Subject::from_raw(expected_subject, None).pure_id();
     let actual = commit.subject.pure_id();
     if actual != expected {
@@ -242,7 +313,7 @@ pub async fn import_envelope(store: &Db, expected_subject: &str, json: &str) -> 
         tree: Tree::Envelopes,
         method: Method::Insert,
         key: new_key,
-        val: Some(json.as_bytes().to_vec()),
+        val: Some(encode_envelope(&resource)?),
     });
     store.kv.apply_batch(&ops)
 }
@@ -550,6 +621,42 @@ mod tests {
                 .unwrap();
         }
         assert_eq!(envelopes(&all_sink, subject.as_str()).len(), 3);
+    }
+
+    #[tokio::test]
+    async fn envelope_is_stored_compact_not_json_ad() {
+        let db = Db::init_temp("envelopes_compact").await.unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let subject = child(&db, &drive).await;
+        let latest = latest_envelope(&db, subject.as_str()).unwrap();
+        assert!(
+            latest.json.starts_with('{'),
+            "readers still see reconstructed JSON-AD"
+        );
+        assert!(
+            latest.json.contains(urls::LORO_UPDATE),
+            "reconstructed JSON-AD still carries the signed update"
+        );
+
+        let mut prefix = subject.pure_id().as_bytes().to_vec();
+        prefix.push(0);
+        let stored = db
+            .kv
+            .scan_prefix(Tree::Envelopes, &prefix)
+            .filter_map(|item| item.ok())
+            .map(|(_, val)| val)
+            .next()
+            .expect("one envelope row");
+        assert!(
+            stored.starts_with(ENVELOPE_V1),
+            "on-disk envelope must be AE01, not JSON-AD"
+        );
+        assert!(
+            stored.len() < latest.json.len(),
+            "compact envelope ({}) must be smaller than reconstructed JSON-AD ({})",
+            stored.len(),
+            latest.json.len()
+        );
     }
 
     #[tokio::test]

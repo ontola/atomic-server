@@ -11,6 +11,24 @@
 > [`plugins.md`](./plugins.md) (app Loro payloads and blob checkpoints inherit
 > the same growth + retention concerns).
 
+## Shipped on the table-scale branch (2026-09-19)
+
+Genesis-heavy stores were paying **three copies** of every row's Loro snapshot:
+the `Tree::LoroSnapshots` row, the commit `Tree::Resources` blob (`loroUpdate`
+kept because it is the signed payload), and the envelope as JSON-AD with
+base64. That is why a 100k-row table landed at **4.0 GB / 43 KB/row**.
+
+Now:
+
+- Commit resource blobs strip `loroUpdate` like every other row. `get_resource`
+  hydrates the signed bytes from the matching envelope.
+- Envelopes store `AE01` + header propvals + raw `loroUpdate` (legacy JSON-AD
+  rows still read). Readers still see JSON-AD via `StoredEnvelope::json`.
+
+Current-state snapshot (`Tree::LoroSnapshots`) + one signed copy (envelope)
+remain. Incremental `loroUpdate` on non-genesis edits and auto-compact are
+still the follow-ups below.
+
 ## Thesis
 
 Store size grows **much faster than the user's actual data**, and several costs

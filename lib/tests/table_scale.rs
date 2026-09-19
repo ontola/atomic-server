@@ -108,24 +108,89 @@ fn json_ad_of_resources(resources: &[atomic_lib::Resource]) -> (Duration, usize)
     (start.elapsed(), bytes)
 }
 
-fn tree_counts(store: &Db) -> Vec<(&'static str, usize)> {
-    let trees = [
-        (Tree::Resources, "Resources"),
-        (Tree::PropValSub, "PropValSub"),
-        (Tree::ValPropSub, "ValPropSub"),
-        (Tree::QueryMembers, "QueryMembers"),
-        (Tree::WatchedQueries, "WatchedQueries"),
-        (Tree::LoroSnapshots, "LoroSnapshots"),
-        (Tree::Envelopes, "Envelopes"),
-        (Tree::SearchPostings, "SearchPostings"),
-        (Tree::SearchDocs, "SearchDocs"),
-        (Tree::SearchDocTokens, "SearchDocTokens"),
-        (Tree::SearchTrigrams, "SearchTrigrams"),
-    ];
-    trees
+fn trees() -> [(&'static str, Tree); 11] {
+    [
+        ("Resources", Tree::Resources),
+        ("PropValSub", Tree::PropValSub),
+        ("ValPropSub", Tree::ValPropSub),
+        ("QueryMembers", Tree::QueryMembers),
+        ("WatchedQueries", Tree::WatchedQueries),
+        ("LoroSnapshots", Tree::LoroSnapshots),
+        ("Envelopes", Tree::Envelopes),
+        ("SearchPostings", Tree::SearchPostings),
+        ("SearchDocs", Tree::SearchDocs),
+        ("SearchDocTokens", Tree::SearchDocTokens),
+        ("SearchTrigrams", Tree::SearchTrigrams),
+    ]
+}
+
+fn tree_stats(store: &Db) -> Vec<(&'static str, usize, u64)> {
+    trees()
         .into_iter()
-        .map(|(tree, name)| (name, store.kv.len(tree).unwrap_or(0)))
+        .map(|(name, tree)| {
+            let mut count = 0usize;
+            let mut bytes = 0u64;
+            for item in store.kv.iter_tree(tree) {
+                let Ok((key, val)) = item else {
+                    continue;
+                };
+                count += 1;
+                bytes += (key.len() + val.len()) as u64;
+            }
+            (name, count, bytes)
+        })
         .collect()
+}
+
+fn sample_row_payloads(store: &Db, table: &str) -> Option<String> {
+    let table_subject = Subject::from(table.to_string());
+    let children = store
+        .kv
+        .scan_prefix(Tree::Resources, b"did:ad:")
+        .filter_map(|item| item.ok())
+        .find(|(key, _)| {
+            let Ok(subject) = std::str::from_utf8(key) else {
+                return false;
+            };
+            if subject.starts_with("did:ad:commit:") {
+                return false;
+            }
+            store
+                .get_resource_shallow(&Subject::from(subject.to_string()))
+                .ok()
+                .and_then(|r| r.get(urls::PARENT).ok().map(|p| p.to_string()))
+                .is_some_and(|p| p == table_subject.as_str())
+        })?;
+    let (row_key, row_blob) = children;
+    let row_subject = std::str::from_utf8(&row_key).ok()?;
+    let snapshot = store
+        .kv
+        .get(Tree::LoroSnapshots, row_subject.as_bytes())
+        .ok()
+        .flatten();
+    let mut env_prefix = row_subject.as_bytes().to_vec();
+    env_prefix.push(0);
+    let envelope_len = store
+        .kv
+        .scan_prefix(Tree::Envelopes, &env_prefix)
+        .filter_map(|item| item.ok())
+        .map(|(_, val)| val.len())
+        .next()
+        .unwrap_or(0);
+    let last_commit = store
+        .get_resource_shallow(&Subject::from(row_subject.to_string()))
+        .ok()
+        .and_then(|r| r.get(urls::LAST_COMMIT).ok().map(|v| v.to_string()));
+    let commit_blob = last_commit
+        .as_ref()
+        .and_then(|id| store.kv.get(Tree::Resources, id.as_bytes()).ok().flatten());
+    Some(format!(
+        "row_blob={} snapshot={} envelope={} commit_blob={}",
+        row_blob.len(),
+        snapshot.as_ref().map(|s| s.len()).unwrap_or(0),
+        envelope_len,
+        commit_blob.as_ref().map(|b| b.len()).unwrap_or(0),
+    ))
 }
 
 fn file_bytes(id: &str) -> Option<u64> {
@@ -300,12 +365,27 @@ async fn measure_at(store: &Db, table: &str, class: &str, drive: &Subject, n: us
             bytes as f64 / n as f64
         );
     }
-    for (name, count) in tree_counts(store) {
+    if let Some(sample) = sample_row_payloads(store, table) {
+        println!("  sample payloads (one row)                          {sample}");
+    }
+    let mut live = 0u64;
+    for (name, count, bytes) in tree_stats(store) {
         if count == 0 {
             continue;
         }
-        println!("  tree {name:<16} {count:>10}");
+        live += bytes;
+        println!(
+            "  tree {name:<16} {count:>10}   {:>10} bytes ({:.1} KB/row)",
+            bytes,
+            bytes as f64 / n as f64 / 1024.0
+        );
     }
+    println!(
+        "  live key+value                                      {:>10} bytes ({:.1} MB, {:.0} bytes/row)",
+        live,
+        live as f64 / 1_048_576.0,
+        live as f64 / n as f64
+    );
 }
 
 #[tokio::test]

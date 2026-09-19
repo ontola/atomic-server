@@ -2520,6 +2520,60 @@ async fn content_commits_are_not_stored() {
     );
 }
 
+#[tokio::test]
+#[timeout(120000)]
+async fn commit_resource_blob_omits_loro_update() {
+    let store = Db::init_temp("thin_commit_blob").await.unwrap();
+
+    let mut resource = crate::Resource::new("did:ad:placeholder".into());
+    resource
+        .set(urls::NAME.into(), Value::String("row".into()), &store)
+        .await
+        .unwrap();
+    let genesis = resource.save_as_genesis(&store).await.unwrap();
+    let commit_id = genesis.commit_resource.get_subject().clone();
+    let Value::LoroDoc(signed) = genesis
+        .commit_resource
+        .get(urls::LORO_UPDATE)
+        .expect("signed genesis carries loroUpdate")
+        .clone()
+    else {
+        panic!("loroUpdate must be a LoroDoc");
+    };
+    assert!(!signed.is_empty());
+
+    let loaded = store.get_resource(&commit_id).await.unwrap();
+    let Value::LoroDoc(hydrated) = loaded
+        .get(urls::LORO_UPDATE)
+        .expect("GET hydrates the signed payload from the envelope")
+        .clone()
+    else {
+        panic!("hydrated loroUpdate must be a LoroDoc");
+    };
+    assert_eq!(
+        hydrated, signed,
+        "hydrated bytes must match the signed payload"
+    );
+
+    let blob = store
+        .kv
+        .get(
+            crate::db::trees::Tree::Resources,
+            commit_id.pure_id().as_bytes(),
+        )
+        .unwrap()
+        .expect("critical commits still have a Resources row");
+    let persisted = crate::db::encoding::decode_propvals(&blob).unwrap();
+    assert!(
+        !persisted.contains_key(urls::LORO_UPDATE),
+        "persisted commit row must not contain loroUpdate"
+    );
+    assert!(
+        persisted.contains_key(urls::SIGNATURE),
+        "thin commit row still carries the signature"
+    );
+}
+
 /// Cached external rows must keep their read grants in both query shapes.
 #[tokio::test]
 async fn cached_external_resources_keep_read_permissions() {

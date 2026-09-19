@@ -399,7 +399,7 @@ mod tests {
         let manifest = db.website_verified_blob(&deployment).await.unwrap();
         assert_eq!(manifest, serde_json::to_vec(&package.manifest()).unwrap());
         assert_eq!(
-            db.website_verified_blob(&blake3::hash(b"Hello").to_hex().to_string())
+            db.website_verified_blob(blake3::hash(b"Hello").to_hex().as_ref())
                 .await
                 .unwrap(),
             b"Hello"

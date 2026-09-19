@@ -1,9 +1,10 @@
 # Table scale (100k rows)
 
-> **Status:** Measured 2026-09-18; table-open path fixed on this branch.
-> `Collection.fetchPageFromLocalDb` now passes `limit` / `offset` / `sort_by`
-> so WASM returns a page of bodies. Write amplification (4 GB / 99 ms/row)
-> is unchanged — see
+> **Status:** Measured 2026-09-18; table-open path fixed. Store shrink
+> (thin commit rows + compact envelopes) landed 2026-09-19 — re-measure
+> with `table_scale` after this change. Write *latency* (99 ms/row in the
+> browser) is unchanged; file size is not.
+> See
 > [`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md).
 >
 > Related: [`index-performance.md`](./index-performance.md) (query planner,

@@ -147,7 +147,9 @@ is retention policy, and the Loro oplog — not commits — is the history.*
   `into_resource`), whose signature covers
   `serialize_deterministically_json_ad` (JCS, sorted keys, no `signature`, no
   `subject` for genesis). Verifying later = same code path as apply. v1 stores
-  the full body including `loroUpdate`; a header-only form is a later size win.
+  the full body including `loroUpdate`. Compact `AE01` (header + raw
+  `loroUpdate`, JSON-AD reconstructed on read) shipped on the table-scale
+  branch; legacy `{…}` JSON-AD rows still decode.
 - **Write.** One place: after `validate_and_build_response` in
   `Db::apply_commit` (`lib/src/db.rs` ~L3090) and `Storelike::apply_commit`
   (`storelike.rs` L288), in the same transaction as the snapshot write, then

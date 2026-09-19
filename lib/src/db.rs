@@ -4,7 +4,7 @@
 pub mod app_agent;
 pub mod blob_backend;
 pub mod btreemap_store;
-mod encoding;
+pub(crate) mod encoding;
 #[cfg(feature = "db-redb")]
 pub mod encrypted_backend;
 pub mod kv_store;
@@ -487,14 +487,15 @@ impl Db {
         // (The old code only wrote the snapshot when the propvals lacked a
         // `loroUpdate`, so any resource that had been through `apply_state_doc`
         // — i.e. every sync import — had its snapshot write silently skipped.)
-        // The `loroUpdate` propval is stripped from the `Tree::Resources`
-        // blob: that blob is a pure derived projection, not a second home for
-        // the CRDT state. Commits are native (immutable, not CRDT) — they get
-        // no snapshot and keep their `loroUpdate` payload in the blob.
+        // The `loroUpdate` propval is stripped from every `Tree::Resources`
+        // blob: that blob is a derived projection, not a second home for CRDT
+        // bytes. Commits are native (immutable, not CRDT) — they get no
+        // snapshot. Their signed `loroUpdate` lives in `Tree::Envelopes`;
+        // `get_resource` hydrates it on read.
         let mut propvals = resource.get_propvals().clone();
+        propvals.remove(crate::urls::LORO_UPDATE);
         if !subject.is_commit_did() {
             let snapshot = resource.build_state_doc()?.export_snapshot();
-            propvals.remove(crate::urls::LORO_UPDATE);
             transaction.push(Operation {
                 tree: Tree::LoroSnapshots,
                 method: Method::Insert,
@@ -2016,18 +2017,12 @@ impl Db {
             });
         }
 
-        // The `loroUpdate` propval is the resource's CRDT snapshot — it
-        // belongs in `Tree::LoroSnapshots`, not
-        // duplicated inside the resource blob, which is now a pure derived
-        // projection. Commit resources are the exception: a commit's
-        // `loroUpdate` is its signed payload and must stay in the blob.
-        let resource_bin = if subject.is_commit_did() {
-            encode_propvals(propvals)?
-        } else {
-            let mut projection = propvals.clone();
-            projection.remove(crate::urls::LORO_UPDATE);
-            encode_propvals(&projection)?
-        };
+        // Always strip `loroUpdate` from the resource blob. For CRDT
+        // resources the snapshot is in `Tree::LoroSnapshots`. For commits
+        // the signed payload is in `Tree::Envelopes` and is hydrated on GET.
+        let mut projection = propvals.clone();
+        projection.remove(crate::urls::LORO_UPDATE);
+        let resource_bin = encode_propvals(&projection)?;
 
         transaction.push(Operation {
             tree: Tree::Resources,
@@ -2946,9 +2941,12 @@ impl Db {
             return Some(None);
         }
 
-        // Commit rows keep their `loroUpdate` payload in the row itself;
-        // everything else gets the stored snapshot attached undecoded.
-        if !resource.get_subject().is_commit_did() {
+        // CRDT rows attach the stored snapshot undecoded. Commit rows keep
+        // only metadata in `Tree::Resources`; the signed `loroUpdate` is
+        // hydrated from the matching envelope.
+        if resource.get_subject().is_commit_did() {
+            hydrate_commit_loro_update(self, &mut resource);
+        } else {
             let pure_id = resource.get_subject().pure_id();
             if let Ok(Some(snapshot)) = self.kv.get(Tree::LoroSnapshots, pure_id.as_bytes()) {
                 resource
@@ -4032,6 +4030,7 @@ impl Storelike for Db {
             }
 
             let mut resource = Resource::from_propvals(propvals, res_subject);
+            hydrate_commit_loro_update(self, &mut resource);
             // Authoritative merged CRDT state (full oplog) lives in LoroSnapshots.
             // Propvals may carry a smaller incremental `loroUpdate` from the last commit.
             if let Ok(Some(snapshot)) = self.kv.get(
@@ -4475,6 +4474,20 @@ impl Storelike for Db {
 
     fn commit_batch(&self) -> AtomicResult<()> {
         self.kv.commit_batch()
+    }
+}
+
+/// Re-attach a commit's signed `loroUpdate` from `Tree::Envelopes`.
+/// Persisted commit rows store only metadata; the payload is the envelope.
+fn hydrate_commit_loro_update(store: &Db, resource: &mut Resource) {
+    if !resource.get_subject().is_commit_did() {
+        return;
+    }
+    if resource.get(crate::urls::LORO_UPDATE).is_ok() {
+        return;
+    }
+    if let Some(bytes) = crate::envelopes::signed_loro_update(store, resource) {
+        resource.insert_propval_raw(crate::urls::LORO_UPDATE.into(), Value::LoroDoc(bytes));
     }
 }
 
