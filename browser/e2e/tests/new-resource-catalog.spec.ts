@@ -216,15 +216,19 @@ test('build suggestions hand a half-written request to the composer', async ({
 
   // Apps and websites have no blank button, so this row is the only place the
   // page says they exist at all.
-  for (const name of ['An app', 'A website', 'A dashboard', 'A custom table']) {
-    await expect(suggestions.getByRole('button', { name })).toBeVisible();
+  for (const name of ['App', 'Website', 'Dashboard', 'Custom table']) {
+    await expect(
+      suggestions.getByRole('button', { name, exact: true }),
+    ).toBeVisible();
   }
 
-  await suggestions.getByRole('button', { name: 'An app' }).click();
+  await suggestions.getByRole('button', { name: 'App', exact: true }).click();
   await expect(composer).toHaveValue('Build an app that ');
   await expect(composer).toBeFocused();
   // Swapping is free while nothing of the user's own is in there.
-  await suggestions.getByRole('button', { name: 'A website' }).click();
+  await suggestions
+    .getByRole('button', { name: 'Website', exact: true })
+    .click();
   await expect(composer).toHaveValue('Build a website for ');
   // Once they write their own words the row gets out of the way, because a
   // second click would replace text the browser cannot undo.

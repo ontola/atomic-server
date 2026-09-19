@@ -86,22 +86,22 @@ export const CREATION_PAGE_TEMPLATES = templates;
 export const AI_BUILD_SUGGESTIONS: AIBuildSuggestion[] = [
   {
     id: 'app',
-    title: 'An app',
+    title: 'App',
     seed: 'Build an app that ',
   },
   {
     id: 'website',
-    title: 'A website',
+    title: 'Website',
     seed: 'Build a website for ',
   },
   {
     id: 'dashboard',
-    title: 'A dashboard',
+    title: 'Dashboard',
     seed: 'Build a dashboard showing ',
   },
   {
     id: 'table',
-    title: 'A custom table',
+    title: 'Custom table',
     seed: 'Build a table for tracking ',
   },
 ];

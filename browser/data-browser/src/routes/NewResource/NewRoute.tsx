@@ -36,7 +36,6 @@ import { ResourceInline } from '../../views/ResourceInline';
 import { constructOpenURL } from '../../helpers/navigation';
 import { getIconForClass } from '../../helpers/iconMap';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
-import { AIIcon } from '../../components/AI/AIIcon';
 import { useAISidebar } from '../../components/AI/AISidebarContext';
 import { useAISettings } from '../../components/AI/AISettingsContext';
 import { ApplyTemplateDialog } from '../../components/Template/ApplyTemplateDialog';
@@ -318,11 +317,11 @@ function NewResourceSelector() {
                 {AI_BUILD_SUGGESTIONS.map(item => (
                   <Suggestion
                     key={item.id}
+                    subtle
                     type='button'
                     aria-pressed={prompt === item.seed}
                     onClick={() => applySuggestion(item.seed)}
                   >
-                    <AIIcon aria-hidden />
                     {item.title}
                   </Suggestion>
                 ))}
@@ -540,65 +539,6 @@ const SendButton = styled(Button)`
   padding: 0;
   justify-content: center;
 `;
-/**
- * Rainbow because it is the one row on this page that hands work to the
- * assistant rather than opening a form; the blank buttons below are
- * deliberately plain so the two never read as the same kind of choice.
- */
-const SuggestionRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-`;
-const Suggestion = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.4rem 0.8rem;
-  font-size: 0.9rem;
-  font-family: inherit;
-  cursor: pointer;
-  color: ${p => p.theme.colors.text};
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background-image:
-    linear-gradient(${p => p.theme.colors.bg}, ${p => p.theme.colors.bg}),
-    linear-gradient(
-      100deg,
-      #ff8a4c,
-      #f857a6 30%,
-      #7b5cff 55%,
-      #3bb2f6 80%,
-      #2fd4a7
-    );
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
-  opacity: 0.85;
-  transition:
-    opacity 0.1s ease,
-    transform 0.1s ease;
-  svg {
-    font-size: 0.85em;
-    color: #7b5cff;
-  }
-  &:hover {
-    opacity: 1;
-    transform: translateY(-1px);
-  }
-  &[aria-pressed='true'] {
-    opacity: 1;
-  }
-  &:focus-visible {
-    outline: 2px solid ${p => p.theme.colors.main};
-    outline-offset: 2px;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-    &:hover {
-      transform: none;
-    }
-  }
-`;
 const ClearSearch = styled.button`
   display: flex;
   align-items: center;
@@ -657,6 +597,46 @@ const BasicChoice = styled(Button)`
   gap: 0.55rem;
   svg {
     color: ${p => p.theme.colors.textLight};
+  }
+`;
+/**
+ * The same button as the blank ones, wearing a rainbow border.
+ *
+ * Same shape on purpose: these make the same kind of thing, they just ask the
+ * assistant to fill it in. The border is the only difference, and it is kept
+ * faint at rest so a row of four does not outshout the page.
+ */
+const SuggestionRow = styled(BasicGrid)``;
+const Suggestion = styled(BasicChoice)`
+  --button-border-color: transparent;
+  --button-border-color-hover: transparent;
+  --button-text-color: ${p => p.theme.colors.text};
+  --button-text-color-hover: ${p => p.theme.colors.text};
+  background-image:
+    linear-gradient(var(--button-bg-color), var(--button-bg-color)),
+    linear-gradient(
+      100deg,
+      rgb(255 138 76 / 45%),
+      rgb(248 87 166 / 45%) 30%,
+      rgb(123 92 255 / 45%) 55%,
+      rgb(59 178 246 / 45%) 80%,
+      rgb(47 212 167 / 45%)
+    );
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  &:hover:not([disabled]),
+  &:focus-visible:not([disabled]),
+  &[aria-pressed='true'] {
+    background-image:
+      linear-gradient(var(--button-bg-color), var(--button-bg-color)),
+      linear-gradient(
+        100deg,
+        #ff8a4c,
+        #f857a6 30%,
+        #7b5cff 55%,
+        #3bb2f6 80%,
+        #2fd4a7
+      );
   }
 `;
 const TemplateGrid = styled.div`
