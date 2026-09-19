@@ -1431,6 +1431,16 @@ export class AtomicServer {
           '/code/testdata/pairing-request.json',
           source.file('testdata/pairing-request.json'),
         )
+        // server/src/plugins/plugin.rs and handlers/plugin_release_test.rs
+        // `include_bytes!` the Playwright suite's plugin zip, which is the one
+        // packaged plugin both sides test against. Nothing else from
+        // `browser/` belongs in this container, and mounting the tree would
+        // make every front-end edit invalidate the Rust layer, so mount the
+        // single file. Same reasoning as the pairing-contract fixture above.
+        .withFile(
+          '/code/browser/e2e/tests/fixtures/test-plugin.zip',
+          source.file('browser/e2e/tests/fixtures/test-plugin.zip'),
+        )
         .withDirectory('/code/server', source.directory('server'))
         .withDirectory('/code/integrations', source.directory('integrations'))
         .withDirectory('/code/testdata', source.directory('testdata'))

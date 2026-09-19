@@ -113,6 +113,28 @@ fn key(subject: &str, created_at: i64, signature: &str) -> Vec<u8> {
     key
 }
 
+/// The signature an envelope key ends in, without decoding its value.
+fn signature_in_key(key: &[u8]) -> Option<&str> {
+    let subject_end = key.iter().position(|b| *b == 0)?;
+    let rest = &key[subject_end + 1..];
+    if rest.len() < 9 || rest[8] != 0 {
+        return None;
+    }
+    std::str::from_utf8(&rest[9..]).ok()
+}
+
+/// A commit whose resource row this node kept — a critical one (genesis, a
+/// destroy, a rights change), which [`Db::add_resource_tx`] persists so the
+/// audit trail survives. That row holds only metadata; its signed
+/// `loroUpdate` is in the envelope, so evicting the envelope would leave a
+/// commit nobody can verify.
+fn commit_row_is_stored(store: &Db, signature: &str) -> bool {
+    store
+        .kv
+        .contains_key(Tree::Resources, format!("did:ad:commit:{signature}").as_bytes())
+        .unwrap_or(false)
+}
+
 fn decode(key: &[u8], value: Vec<u8>) -> Option<StoredEnvelope> {
     let subject_end = key.iter().position(|b| *b == 0)?;
     let subject = std::str::from_utf8(&key[..subject_end]).ok()?.to_string();
@@ -212,14 +234,22 @@ pub fn record_ops(
     if store.envelope_retention() == EnvelopeRetention::Latest {
         for existing in store.kv.scan_prefix(Tree::Envelopes, &prefix(subject)) {
             let (old_key, _) = existing?;
-            if old_key != new_key {
-                transaction.push(Operation {
-                    tree: Tree::Envelopes,
-                    method: Method::Delete,
-                    key: old_key,
-                    val: None,
-                });
+            if old_key == new_key {
+                continue;
             }
+            // `Latest` drops the envelopes that no longer produce the current
+            // state — but not one a stored commit row needs. Since the row
+            // stopped carrying its own `loroUpdate`, its envelope is the only
+            // copy of the payload its signature covers.
+            if signature_in_key(&old_key).is_some_and(|sig| commit_row_is_stored(store, sig)) {
+                continue;
+            }
+            transaction.push(Operation {
+                tree: Tree::Envelopes,
+                method: Method::Delete,
+                key: old_key,
+                val: None,
+            });
         }
     }
 
@@ -301,6 +331,11 @@ pub async fn import_envelope(store: &Db, expected_subject: &str, json: &str) -> 
             return Ok(());
         }
         for old in existing {
+            // Same exception as `record_ops`: an envelope a stored commit row
+            // depends on is not history this node chose to drop.
+            if commit_row_is_stored(store, &old.signature) {
+                continue;
+            }
             ops.push(Operation {
                 tree: Tree::Envelopes,
                 method: Method::Delete,
@@ -656,6 +691,38 @@ mod tests {
             "compact envelope ({}) must be smaller than reconstructed JSON-AD ({})",
             stored.len(),
             latest.json.len()
+        );
+    }
+
+    /// A critical commit (genesis, a rights change) is persisted as its own
+    /// resource so the audit trail survives. Its `loroUpdate` is the signed
+    /// payload: without it the row cannot be re-verified. Since the blob no
+    /// longer carries the payload, the envelope it hydrates from must still
+    /// be there after an ordinary later edit — and under the default
+    /// `Latest` retention that edit deletes the resource's older envelopes.
+    #[tokio::test]
+    async fn stored_genesis_commit_keeps_its_signed_payload_after_a_later_edit() {
+        let db = Db::init_temp("envelope_genesis_payload").await.unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        assert_eq!(db.envelope_retention(), EnvelopeRetention::Latest);
+
+        let subject = child(&db, &drive).await;
+        let genesis = latest_envelope(&db, subject.as_str()).unwrap();
+        let commit_subject =
+            crate::Subject::from_raw(&format!("did:ad:commit:{}", genesis.signature), None);
+
+        let before = db.get_resource(&commit_subject).await.unwrap();
+        assert!(
+            matches!(before.get(urls::LORO_UPDATE), Ok(Value::LoroDoc(b)) if !b.is_empty()),
+            "the genesis commit resource carries its signed payload"
+        );
+
+        signed_edit(&db, &subject, "renamed").await;
+
+        let after = db.get_resource(&commit_subject).await.unwrap();
+        assert!(
+            matches!(after.get(urls::LORO_UPDATE), Ok(Value::LoroDoc(b)) if !b.is_empty()),
+            "a later edit must not strip the stored genesis commit's payload"
         );
     }
 

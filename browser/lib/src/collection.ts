@@ -264,9 +264,18 @@ export class Collection {
    * that says "0 members" silently wipes the optimistic add and the
    * UI loses the just-created resource until the next reload. */
   private _optimisticAdds = new Set<string>();
-  /** Removals survive stale queries until a matching resource event admits
-   * the subject again. */
-  private _removedSubjects = new Set<string>();
+  /**
+   * True when the store has destroyed `subject`.
+   *
+   * This used to be a `_removedSubjects` Set on each Collection, which meant
+   * a Collection built after the delete — a second view on the same query, a
+   * folder re-expanded — had no memory of it and admitted the subject from
+   * the next stale answer. The store owns the fact now, so every Collection
+   * on the same store agrees regardless of when it was built.
+   */
+  private isDestroyed(subject: string): boolean {
+    return this.store.isDestroyed(subject);
+  }
   private server: string;
   private params: CollectionParams;
 
@@ -454,7 +463,7 @@ export class Collection {
     const incomingMembers = resource.getSubjects(
       collections.properties.members,
     );
-    const retained = incomingMembers.filter(s => !this._removedSubjects.has(s));
+    const retained = incomingMembers.filter(s => !this.isDestroyed(s));
 
     if (retained.length !== incomingMembers.length) {
       const total = resource.get(collections.properties.totalMembers);
@@ -598,6 +607,11 @@ export class Collection {
     // server-side `/query` does ("value-in-property").
     const matches =
       !!resource &&
+      // A destroyed subject is never a member, whatever state arrives for it.
+      // Answers and pushes that were produced before the destroy landed keep
+      // carrying its full body, and each one used to read as a member that
+      // matches the filter.
+      !this.isDestroyed(subject) &&
       constraintMatches(resource, fp, fv) &&
       // Every extra AND constraint must also hold (multi-property filtering).
       (this.params.filters ?? []).every(
@@ -608,14 +622,9 @@ export class Collection {
       );
 
     if (!resource) {
-      // refresh clears the index before awaiting its query. Remember deletion
-      // even when the subject is temporarily absent from that index.
-      this._removedSubjects.add(subject);
+      // The store recorded the tombstone before it notified, so there is
+      // nothing to remember here — only the optimistic add to retract.
       this._optimisticAdds.delete(subject);
-    } else if (matches && !resource.new && !this._assemblingPage) {
-      if (this._removedSubjects.delete(subject)) {
-        this._queriedMembers.delete(subject);
-      }
     }
 
     // O(1) lookup via the maintained subject→page index instead of
@@ -760,7 +769,6 @@ export class Collection {
     // so they should observe the same membership.
     collection._memberIndex = this._memberIndex;
     collection._queriedMembers = this._queriedMembers;
-    collection._removedSubjects = this._removedSubjects;
 
     return collection;
   }
@@ -1090,11 +1098,19 @@ export class Collection {
       result.count > rawSubjects.length && rawSubjects.length <= pageSize;
 
     const pageSubjectsClean = filterIndexLeakage(rawSubjects).filter(
-      subject => !this._removedSubjects.has(subject),
+      subject => !this.isDestroyed(subject),
     );
-    const memberSubjects = filterIndexLeakage(
-      allSubjects ?? rawSubjects,
-    ).filter(subject => !this._removedSubjects.has(subject));
+    // Destroyed subjects are dropped from the page below, so they must not
+    // count as "the query accounted for this one" either — that is what the
+    // add path reads to decide a matching subject is not new. Leaving them in
+    // would keep a subject unaddable after its tombstone is lifted. When the
+    // store paged, the membership query is the only thing that saw the whole
+    // set; without it the page is all we can speak for.
+    const memberSubjects = allSubjects
+      ? filterIndexLeakage(allSubjects).filter(
+          subject => !this.isDestroyed(subject),
+        )
+      : pageSubjectsClean;
 
     this._queriedMembers = new Set(memberSubjects);
 
@@ -1109,7 +1125,7 @@ export class Collection {
       result.resources.length === result.subjects.length
     ) {
       for (let i = 0; i < result.subjects.length; i++) {
-        if (this._removedSubjects.has(result.subjects[i]!)) continue;
+        if (this.isDestroyed(result.subjects[i]!)) continue;
         this.store.hydrateResourceFromJsonAd(
           result.subjects[i]!,
           result.resources[i]!,
@@ -1117,15 +1133,21 @@ export class Collection {
       }
     }
 
-    // Strip commit subjects from the page. When the store paged, keep
-    // `result.count` as the full match set (minus leaked members we know
-    // about). The old unpaged path overwrote count with the subject list
-    // length because that list *was* the full set — doing that after a
-    // paged fetch would make a 100k table look like 30 rows.
+    // Strip commit subjects from BOTH the page AND the count. Filtering only
+    // at iteration time (`getMemberWithIndex`) leaves the inflated count in
+    // `collection.totalMembers`, so consumers like `TableResource` and
+    // react-window render an empty `TableRow` slot for the missing index that
+    // gets stuck on a loading shimmer.
+    //
+    // `memberSubjects` is the whole matching set on the unpaged path, and the
+    // membership query's answer on the paged one, so it is the count either
+    // way. Only when the store paged and that follow-up query failed do we
+    // fall back to the worker's raw count: it over-counts leaked commit
+    // subjects, but reporting the page length would make a 100k table look
+    // like 30 rows.
     result.subjects = pageSubjectsClean;
-    result.count = storePaged
-      ? Math.max(memberSubjects.length, result.count)
-      : memberSubjects.length;
+    result.count =
+      storePaged && !allSubjects ? result.count : memberSubjects.length;
 
     if (result.subjects.length === 0) {
       this.setEmptyPage(page);

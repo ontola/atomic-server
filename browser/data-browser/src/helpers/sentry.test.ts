@@ -48,4 +48,20 @@ describe('Sentry configuration', () => {
       }),
     );
   });
+  it('stays silent on a dev server', () => {
+    vi.stubGlobal('window', {});
+    vi.stubEnv('VITE_SENTRY_ENVIRONMENT', '');
+    vi.stubEnv('DEV', true);
+    initSentry();
+    expect(Sentry.init).not.toHaveBeenCalled();
+  });
+  it('still reports from a local build that asks for it', () => {
+    vi.stubGlobal('window', {});
+    vi.stubEnv('DEV', true);
+    vi.stubEnv('VITE_SENTRY_ENVIRONMENT', 'staging');
+    initSentry();
+    expect(Sentry.init).toHaveBeenCalledWith(
+      expect.objectContaining({ environment: 'staging' }),
+    );
+  });
 });

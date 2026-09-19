@@ -12,6 +12,16 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   stored as compact `AE01` instead of JSON-AD base64, and commit atoms other
   than `subject` are not indexed. Live data at 10k rows is 14 KB/row; the
   on-disk file is still COW-amplified until a batched import exists.
+
+- Sentry no longer records every server error twice. `sentry_actix` captures a
+  handler's 5xx with the request attached, and `tracing_actix_web` separately
+  logs "Error encountered while processing the incoming HTTP request" at
+  `error!`, which the Sentry tracing layer turned into a second event; the two
+  staging floods of September arrived as paired issue groups of 6313 and 6312
+  events for the same incidents. The tracing layer now ignores the
+  `tracing_actix_web` target and delegates every other target to
+  `default_event_filter`, so background work reports as before and the stdout
+  log line is unchanged (`server/src/trace.rs`).
 - `atomic_lib`: a signed destroy commit now removes the resource (and its
   cascade-deleted children, Loro snapshot, index and search rows) in the same
   redb transaction that stores its envelope and commit row. `Db::apply_commit`
