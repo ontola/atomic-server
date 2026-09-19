@@ -828,6 +828,10 @@ export class Resource<C extends OptionalClass = any> {
    * of guessing. The map is sparse — only load-bearing datatypes get a tag;
    * see {@link datatypeTag}. Idempotent: re-signing rewrites nothing.
    *
+   * Called from `exportLoroDeltaInternal` after the user's ops are sealed —
+   * the shared path of genesis and drain-time signing — and, for a genesis
+   * sign, once more up front by `signChanges` (see the commit note below).
+   *
    * Cache-only — never triggers a fetch. A property whose definition is not
    * already cached is left untagged; the server then falls back to its
    * materialization heuristic, exactly as before this map existed. Properties
@@ -1137,9 +1141,9 @@ export class Resource<C extends OptionalClass = any> {
     isFirstCommit: boolean,
     commitMessage?: string,
   ): { bytes: Uint8Array; versionAfterExport: VersionVector } | undefined {
-    // Incremental saves bypass signChanges; they still need datatype tags for
-    // newly added JSON/reference fields before capturing the signed delta.
-    this.writeDatatypeTags();
+    // Incremental saves bypass `signChanges`; the datatype tags for newly
+    // added JSON/reference fields are written by `exportLoroDeltaInternal`,
+    // the path both signers share.
     const bytes = this.exportLoroDeltaInternal(isFirstCommit, commitMessage);
     if (!bytes) return undefined;
     if (!this._loroDoc) return undefined;
@@ -1378,6 +1382,26 @@ export class Resource<C extends OptionalClass = any> {
       ...(message ? { message } : {}),
     });
     this._stagedCommitToken = undefined;
+
+    // Stamp the sibling `datatypes` map for whatever the doc now holds, so
+    // the server materializes references/arrays/JSON exactly (see
+    // `writeDatatypeTags`). This is the shared path for BOTH signers:
+    // `signChanges` (genesis, local-only drives) and the store-level drain.
+    // It runs AFTER the user's ops were sealed above, on purpose. `set()`
+    // leaves its ops in an open transaction, and the first `commit()` seals
+    // everything pending — so tagging first would fold the user's edit into
+    // the tag write's `atomic:system` commit, where the UndoManager
+    // (`excludeOriginPrefixes`) never records it and the user's undo skips
+    // straight past their own change. It reuses this commit's message so
+    // history buckets the tags with the edit they belong to, and it is a
+    // no-op once every tag is present, so a clean resource stays clean.
+    // Genesis signs already tagged before calling in (the agent message has
+    // to ride on the doc's first change), and land here as that no-op.
+    this.writeDatatypeTags({
+      origin: SYSTEM_COMMIT_ORIGIN,
+      timestamp: Date.now(),
+      ...(message ? { message } : {}),
+    });
 
     // If it's the first commit, we must export a full snapshot.
     if (isFirstCommit || !this._loroVersionAtLastSave) {
@@ -3005,25 +3029,23 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     // Stamp the sibling `datatypes` map so the server materializes
-    // references/arrays exactly. Runs here — after
-    // every property is in the doc, before the snapshot export below — so it
-    // covers props set via `set()` and via cache hydration alike.
-    //
-    // On a genesis sign this is the FIRST commit on the doc, so it creates the
-    // genesis change — tag it with the signing agent's subject (→ `createdBy`)
-    // and a millisecond timestamp (→ `createdAt`). The oplog records only a
-    // random peer id, never the agent, so this commit message is what carries
-    // authorship inside the doc, readable without fetching the commit (which is
-    // no longer refetchable under sign-at-drain).
-    this.writeDatatypeTags(
-      isFirstCommit
-        ? {
-            origin: SYSTEM_COMMIT_ORIGIN,
-            timestamp: Date.now(),
-            message: agent.subject,
-          }
-        : undefined,
-    );
+    // references/arrays exactly. The export below does this for every sign
+    // (see `exportLoroDeltaInternal`), after the user's ops are sealed. A
+    // genesis sign tags up front as well: this is the FIRST commit on the
+    // doc, so it creates the genesis change — tag it with the signing agent's
+    // subject (→ `createdBy`) and a millisecond timestamp (→ `createdAt`). The
+    // oplog records only a random peer id, never the agent, so this commit
+    // message is what carries authorship inside the doc, readable without
+    // fetching the commit (which is no longer refetchable under
+    // sign-at-drain). Runs after every property is in the doc, so it covers
+    // props set via `set()` and via cache hydration alike.
+    if (isFirstCommit) {
+      this.writeDatatypeTags({
+        origin: SYSTEM_COMMIT_ORIGIN,
+        timestamp: Date.now(),
+        message: agent.subject,
+      });
+    }
 
     // Export Loro delta — the sole carrier of property changes. Pass the agent
     // again as a fallback: if `writeDatatypeTags` had nothing to commit, this

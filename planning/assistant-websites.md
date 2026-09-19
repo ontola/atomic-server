@@ -2,9 +2,11 @@
 
 # Assistant-authored websites: first implementation and abstraction review
 
-Status: first local prototype validated on `codex/assistant-website-publication`, based
-on `feat/plugin-model` at `d0e49b8b9`. The source worktree's staged and unstaged
-changes were preserved. No production deployment or domain integration.
+Status: prototype built on `codex/assistant-website-publication` (PR #1498, still
+an open draft against `feat/plugin-model`) and merged into `develop` with the
+self-hosted publishing PR #1500 that was stacked on it (2026-09-17). The
+validation notes below describe the prototype as it was validated on that
+branch. No production deployment or domain integration.
 
 ## Product decisions from the discussion
 

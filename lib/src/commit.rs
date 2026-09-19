@@ -362,7 +362,17 @@ impl Commit {
     }
 
     /// Check if the Commit's signature matches the signer's public key.
+    ///
+    /// Every failure is an authentication failure (a server answers 401):
+    /// there is no signature, the signer is unknown here, its key is not a
+    /// key, or the signature does not verify.
     pub async fn validate_signature(&self, store: &impl Storelike) -> AtomicResult<()> {
+        self.check_signature(store)
+            .await
+            .map_err(crate::errors::AtomicError::into_unauthorized)
+    }
+
+    async fn check_signature(&self, store: &impl Storelike) -> AtomicResult<()> {
         let commit = self;
         let signature = match commit.signature.as_ref() {
             Some(sig) => sig,
