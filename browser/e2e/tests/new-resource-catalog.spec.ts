@@ -203,6 +203,36 @@ test('search selection follows arrows, resets on edits, and clear restores the c
   ).toHaveCount(0);
 });
 
+test('build suggestions hand a half-written request to the composer', async ({
+  page,
+}) => {
+  await page.goto(new URL('/app/new', page.url()).href);
+  const composer = page.getByRole('textbox', {
+    name: 'Describe what you want to create',
+  });
+  const suggestions = page.getByRole('group', {
+    name: 'What the assistant can build',
+  });
+
+  // Apps and websites have no blank button, so this row is the only place the
+  // page says they exist at all.
+  for (const name of ['An app', 'A website', 'A dashboard', 'A custom table']) {
+    await expect(suggestions.getByRole('button', { name })).toBeVisible();
+  }
+
+  await suggestions.getByRole('button', { name: 'An app' }).click();
+  await expect(composer).toHaveValue('Build an app that ');
+  await expect(composer).toBeFocused();
+  // Swapping is free while nothing of the user's own is in there.
+  await suggestions.getByRole('button', { name: 'A website' }).click();
+  await expect(composer).toHaveValue('Build a website for ');
+  // Once they write their own words the row gets out of the way, because a
+  // second click would replace text the browser cannot undo.
+  await composer.pressSequentially('my pottery studio');
+  await expect(composer).toHaveValue('Build a website for my pottery studio');
+  await expect(suggestions).toHaveCount(0);
+});
+
 test('mobile search hands its query to the assistant without overflowing', async ({
   page,
 }) => {

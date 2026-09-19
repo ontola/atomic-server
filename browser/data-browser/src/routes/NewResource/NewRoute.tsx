@@ -36,6 +36,7 @@ import { ResourceInline } from '../../views/ResourceInline';
 import { constructOpenURL } from '../../helpers/navigation';
 import { getIconForClass } from '../../helpers/iconMap';
 import { useNavigateWithTransition } from '../../hooks/useNavigateWithTransition';
+import { AIIcon } from '../../components/AI/AIIcon';
 import { useAISidebar } from '../../components/AI/AISidebarContext';
 import { useAISettings } from '../../components/AI/AISettingsContext';
 import { ApplyTemplateDialog } from '../../components/Template/ApplyTemplateDialog';
@@ -45,9 +46,11 @@ import type {
 } from '../../components/Template/template';
 import { creationAssistantAsk } from './creationAssistant';
 import {
+  AI_BUILD_SUGGESTIONS,
   BASIC_CREATIONS,
   CREATION_TABLE_TEMPLATES,
   CREATION_PAGE_TEMPLATES,
+  isUntouchedSuggestion,
   matchesCreationSearch,
 } from './creationCatalog';
 
@@ -100,6 +103,7 @@ function NewResourceSelector() {
   const catalogRef = useRef<HTMLDivElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
   const [query, setQuery] = useState('');
   const [prompt, setPrompt] = useState('');
   const [template, setTemplate] = useState<Template>();
@@ -162,6 +166,23 @@ function NewResourceSelector() {
     } finally {
       setLoadingTemplate('');
     }
+  };
+
+  /**
+   * Hands a half-written request to the composer rather than sending it.
+   *
+   * Focus moves with it, caret at the end, so the next thing the user does is
+   * finish the sentence. Sending it as it stands would only make the assistant
+   * ask what they wanted built.
+   */
+  const applySuggestion = (seed: string) => {
+    setPrompt(seed);
+    const input = promptRef.current;
+
+    if (!input) return;
+
+    input.focus();
+    input.setSelectionRange(seed.length, seed.length);
   };
 
   const ask = (event: FormEvent) => {
@@ -261,6 +282,7 @@ function NewResourceSelector() {
             <SectionHeading>Build with AI</SectionHeading>
             <Composer onSubmit={ask}>
               <PromptInput
+                ref={promptRef}
                 id='creation-prompt'
                 aria-label='Describe what you want to create'
                 rows={2}
@@ -287,6 +309,24 @@ function NewResourceSelector() {
                 <FaArrowUp aria-hidden />
               </SendButton>
             </Composer>
+            {isUntouchedSuggestion(prompt) && (
+              <SuggestionRow
+                role='group'
+                aria-label='What the assistant can build'
+              >
+                {AI_BUILD_SUGGESTIONS.map(item => (
+                  <Suggestion
+                    key={item.id}
+                    type='button'
+                    aria-pressed={prompt === item.seed}
+                    onClick={() => applySuggestion(item.seed)}
+                  >
+                    <AIIcon aria-hidden />
+                    {item.title}
+                  </Suggestion>
+                ))}
+              </SuggestionRow>
+            )}
           </Column>
         )}
         {basic.length > 0 && (
@@ -498,6 +538,65 @@ const SendButton = styled(Button)`
   border-radius: 50%;
   padding: 0;
   justify-content: center;
+`;
+/**
+ * Rainbow because it is the one row on this page that hands work to the
+ * assistant rather than opening a form; the blank buttons below are
+ * deliberately plain so the two never read as the same kind of choice.
+ */
+const SuggestionRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+`;
+const Suggestion = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+  color: ${p => p.theme.colors.text};
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background-image:
+    linear-gradient(${p => p.theme.colors.bg}, ${p => p.theme.colors.bg}),
+    linear-gradient(
+      100deg,
+      #ff8a4c,
+      #f857a6 30%,
+      #7b5cff 55%,
+      #3bb2f6 80%,
+      #2fd4a7
+    );
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  opacity: 0.85;
+  transition:
+    opacity 0.1s ease,
+    transform 0.1s ease;
+  svg {
+    font-size: 0.85em;
+    color: #7b5cff;
+  }
+  &:hover {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+  &[aria-pressed='true'] {
+    opacity: 1;
+  }
+  &:focus-visible {
+    outline: 2px solid ${p => p.theme.colors.main};
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+    &:hover {
+      transform: none;
+    }
+  }
 `;
 const ClearSearch = styled.button`
   display: flex;
