@@ -4,6 +4,18 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: the authentication cookie is refreshed before the proof inside it
+  expires. `setCookieAuthentication` signed a proof once and stored it for a
+  day, and `checkAuthenticationCookie` only asked whether a cookie existed, so
+  a browser went on presenting the same proof for as long as the tab stayed
+  open. Since the server started refusing a proof older than five minutes, that
+  meant cookie-authenticated requests failed five minutes into every session,
+  with nothing re-signing. The cookie now lives no longer than the proof it
+  carries (`AUTH_PROOF_MAX_AGE_MS`), and the freshness check reads the signed
+  timestamp out of the cookie and reports an ageing proof as absent
+  (`AUTH_PROOF_REFRESH_MS`), which is what makes the request path install a
+  fresh one.
+
 - The data-browser no longer reports to Sentry from a dev server. Vite's hot
   reload legitimately throws while swapping modules ("_s is not a function",
   "Cannot access X before initialization", all with `@react-refresh` frames),
