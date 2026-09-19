@@ -3973,27 +3973,43 @@ impl Storelike for Db {
         // signed it, independent of the commit rows above.
         crate::envelopes::record_ops(store, &commit_response, &mut transaction)?;
 
+        // `pure_id()` of every subject a destroy removes below (the resource
+        // and its cascade-deleted children). Tombstoned once the transaction
+        // has landed; empty for anything but a destroy.
+        let mut removed: Vec<String> = Vec::new();
+
         match (&commit_response.resource_old, &commit_response.resource_new) {
             (None, None) if !commit_response.commit.destroy.unwrap_or(false) => {
                 return Err("Neither an old nor a new resource is returned from the commit - something went wrong.".into());
             }
             (None, None) => {}
-            (Some(_old), None) => {
+            (Some(old), None) => {
                 let normalized_commit_subject =
-                    self.normalize_subject(&commit_response.commit.subject.clone());
-                assert_eq!(
-                    _old.get_subject().to_string(),
-                    normalized_commit_subject.to_string()
-                );
-                assert!(&commit_response
-                    .commit
-                    .destroy
-                    .expect("Resource was removed but `commit.destroy` was not set!"));
+                    self.normalize_subject(&commit_response.commit.subject);
+                if old.get_subject().as_str() != normalized_commit_subject.as_str() {
+                    return Err(format!(
+                        "Commit for {} removed a different resource ({}) - refusing to apply.",
+                        normalized_commit_subject,
+                        old.get_subject()
+                    )
+                    .into());
+                }
+                if !commit_response.commit.destroy.unwrap_or(false) {
+                    return Err(format!(
+                        "Resource {} was removed but `commit.destroy` was not set.",
+                        normalized_commit_subject
+                    )
+                    .into());
+                }
                 let subject: Subject = commit_response.commit.subject.clone();
-                // `remove_resource` records the tombstone; the signed destroy
-                // is the envelope row `record_ops` queued above, which is what
-                // `SYNC_DIFF.removeCommits` carries.
-                self.remove_resource(&subject).await?;
+                // Queue the removal (resource, Loro snapshot, index and search
+                // rows, cascaded children) into the same transaction as the
+                // envelope row `record_ops` queued above, so the signed
+                // destroy — what `SYNC_DIFF.removeCommits` carries — lands
+                // with the deletion it signs, or not at all. Tombstones are
+                // recorded after the apply below.
+                self.recursive_remove(&subject, &mut transaction, &mut removed, None)
+                    .await?;
             }
             _ => {}
         };
@@ -4013,12 +4029,22 @@ impl Storelike for Db {
             }
         }
 
+        // A destroy's `recursive_remove` above already queued the index and
+        // search removals for every stored atom of the subject (and its
+        // children); queuing them again here would only duplicate the same
+        // deletes and re-run the watched-query checks.
+        let removal_queued = !removed.is_empty();
+
         if opts.update_index {
             if let Some(old) = &commit_response.resource_old {
-                for atom in &commit_response.remove_atoms {
-                    store
-                        .remove_atom_from_index(atom, old, &mut transaction)
-                        .map_err(|e| format!("Error removing atom from index: {e}  Atom: {e}"))?
+                if !removal_queued {
+                    for atom in &commit_response.remove_atoms {
+                        store
+                            .remove_atom_from_index(atom, old, &mut transaction)
+                            .map_err(|e| {
+                                format!("Error removing atom from index: {e}  Atom: {e}")
+                            })?
+                    }
                 }
             }
             if let Some(new) = &commit_response.resource_new {
@@ -4035,7 +4061,7 @@ impl Storelike for Db {
                 )?;
                 crate::search::index_resource(store, new, &mut transaction)?;
             }
-            if commit_response.resource_new.is_none() {
+            if commit_response.resource_new.is_none() && !removal_queued {
                 if let Some(old) = &commit_response.resource_old {
                     crate::search::unindex_subject(
                         store,
@@ -4062,6 +4088,14 @@ impl Storelike for Db {
             })
         {
             store.flush()?;
+        }
+
+        // Tombstone every subject the destroy removed, so bulk sync (Iroh /
+        // WS `SYNC`) does not resurrect them from a peer that still holds a
+        // stale copy. Only after the transaction above succeeded: a tombstone
+        // for a resource that is still present would suppress it forever.
+        for s in &removed {
+            crate::sync::tombstones::record_tombstone(store, s);
         }
 
         // Notify subscribers

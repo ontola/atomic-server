@@ -7,6 +7,14 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- `atomic_lib`: a signed destroy commit now removes the resource (and its
+  cascade-deleted children, Loro snapshot, index and search rows) in the same
+  redb transaction that stores its envelope and commit row. `Db::apply_commit`
+  used to call `remove_resource`, which applied a transaction of its own, so a
+  crash between the two left a deleted resource with no signed destroy for
+  `SYNC_DIFF.removeCommits` to carry; tombstones are now recorded once that
+  single transaction has landed. The destroy branch also returns an error on a
+  malformed commit instead of panicking the request.
 - Security hygiene, from the September 2026 audit (`planning/security-audit-2026-09.md`
   D, C16, F):
   - CORS: any origin may still read (Atomic is a headless CMS), but
