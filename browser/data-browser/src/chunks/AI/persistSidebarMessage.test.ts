@@ -27,19 +27,17 @@ vi.mock('./chatConversionUtils', () => ({
 
     return undefined;
   },
-  upsertMessageInChat: vi.fn(
-    async (added, chat, _store, existing, opts) => {
-      if (existing) {
-        upserted.push(added.id);
+  upsertMessageInChat: vi.fn(async (added, chat, _store, existing, opts) => {
+    if (existing) {
+      upserted.push(added.id);
 
-        return existing;
-      }
+      return existing;
+    }
 
-      if (opts?.saveChat) saved.push(chat.subject);
+    if (opts?.saveChat) saved.push(chat.subject);
 
-      return { subject: `message-${added.role}`, props: { parts: [] } };
-    },
-  ),
+    return { subject: `message-${added.role}`, props: { parts: [] } };
+  }),
 }));
 
 const { persistSidebarMessage } = await import('./persistSidebarMessage');
