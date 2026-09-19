@@ -1562,6 +1562,15 @@ setup currently fails opening OPFS before it can create its dev drive.
   structured `SYNC_REJECTED` classification are covered.
 - `store-commit-fallback.test.ts`: a WebSocket enrollment refusal is not
   duplicated over HTTP; a transport failure still falls back.
+- `local-outbox.test.ts` ("classification is code-first") and
+  `save-acknowledgement.test.ts` ("terminal drops are classified by error
+  code"): a recognized `AtomicError.code` (`GENESIS_COLLISION`,
+  `IMMUTABLE_COMMIT`, ...) decides terminal/benign/blocking regardless of
+  message wording, including one parsed off an HTTP `/commit` JSON-AD error
+  body's `errorCode`; a code-less legacy message still classifies; another
+  recognized code wins over a legacy phrase in the message. Rust:
+  `protocol::classify_commit_error_matches_known_patterns` covers
+  `IMMUTABLE_COMMIT`.
 - Server `errors::admission_error_tests`: enrollment/quota refusals carry a
   blocking code and HTTP 403 rather than an internal-error response.
 - Server `tests::content_addressed_image_download`: raw, WebP and AVIF downloads

@@ -83,6 +83,7 @@ import {
   isSettledDestroyErrorMessage,
   isTerminalCommitError,
   isUnrecoverableCommitError,
+  isBenignTerminalCommitError,
   type OutboxEntry,
 } from './local-outbox.js';
 
@@ -1057,22 +1058,14 @@ export class Store {
         },
         onTerminalDrop: (entry, e) => {
           const msg = e instanceof Error ? e.message : String(e);
-          // A redundant genesis commit (the resource already exists on the
-          // server) is a benign reconciliation drop, not a lost write — the
-          // data is already there. These can arrive in bulk when local state
-          // lost its `lastCommit` chain (e.g. after switching servers), so
-          // alarming the user with an error toast per commit is pure noise.
-          // Other terminal drops may mean a genuinely lost edit, so those still
-          // surface — silent discards are worse than visible recoveries there.
-          const isRedundantGenesis = msg.includes(
-            'is_genesis: true, but the resource already exists',
-          );
-          // Same reasoning for a Commit that was queued as an editable
-          // resource: no user write is lost (a Commit is immutable), so the
-          // drop is bookkeeping, not a recovery the user needs to know about.
-          const isCommitWrite = msg.includes('Commits cannot be edited');
+          const code = e instanceof AtomicError ? e.code : undefined;
 
-          if (isRedundantGenesis || isCommitWrite) {
+          // A redundant genesis (the resource already exists on the server)
+          // or a write aimed at an immutable Commit is a benign bookkeeping
+          // drop, not a lost write — see `isBenignTerminalCommitError`. Other
+          // terminal drops may mean a genuinely lost edit, so those still
+          // surface — silent discards are worse than visible recoveries there.
+          if (isBenignTerminalCommitError(msg, code)) {
             console.debug(
               `Dropped unsyncable commit for ${entry.subject}: ${msg}`,
             );
