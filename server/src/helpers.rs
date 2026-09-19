@@ -329,9 +329,10 @@ mod test {
         let server_url = appstate.store.get_server_url().to_string();
         let stale = atomic_lib::utils::now() - atomic_lib::authentication::AUTH_MAX_AGE_MS - 60_000;
 
-        let for_agent = get_client_agent(&cookie_header(&server_url, stale), &appstate, &server_url)
-            .await
-            .expect("a stale cookie does not fail the request");
+        let for_agent =
+            get_client_agent(&cookie_header(&server_url, stale), &appstate, &server_url)
+                .await
+                .expect("a stale cookie does not fail the request");
         assert_eq!(for_agent, ForAgent::Public);
     }
 
