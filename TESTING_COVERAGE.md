@@ -784,7 +784,7 @@ No automated end-to-end coverage: uploaded-file conversion through the full UI a
 |---|---|---|
 | `LoroDoc` values are not KV-index keys | protocol | `lib/src/values.rs::loro_doc_is_not_indexed` |
 | Content commits are not stored; genesis/ACL/destroy are | protocol | `lib/src/db/test.rs::content_commits_are_not_stored` |
-| Critical commit rows omit `loroUpdate`; GET hydrates it from the envelope | protocol | `lib/src/db/test.rs::commit_resource_blob_omits_loro_update` |
+| Critical commit rows omit `loroUpdate`; GET hydrates it from the envelope; only `subject` is indexed | protocol | `lib/src/db/test.rs::commit_resource_blob_omits_loro_update` |
 | Sequential saves do not chain `previousCommit`; commit DIDs are not store resources | glue | `browser/lib/src/commit.test.ts` |
 
 ## Personal drive identity

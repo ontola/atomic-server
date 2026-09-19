@@ -2572,6 +2572,30 @@ async fn commit_resource_blob_omits_loro_update() {
         persisted.contains_key(urls::SIGNATURE),
         "thin commit row still carries the signature"
     );
+
+    let target = genesis.resource_new.unwrap().get_subject().clone();
+    let by_subject = store
+        .query(&crate::storelike::Query::new_prop_val(
+            urls::SUBJECT,
+            target.as_str(),
+        ))
+        .await
+        .unwrap();
+    assert!(
+        by_subject.subjects.iter().any(|s| s == &commit_id),
+        "critical commits stay findable by the subject they signed"
+    );
+    let by_signer = store
+        .query(&crate::storelike::Query::new_prop_val(
+            urls::SIGNER,
+            loaded.get(urls::SIGNER).unwrap().to_string().as_str(),
+        ))
+        .await
+        .unwrap();
+    assert!(
+        !by_signer.subjects.iter().any(|s| s.is_commit_did()),
+        "commit signer/createdAt/isA must not be indexed"
+    );
 }
 
 /// Cached external rows must keep their read grants in both query shapes.

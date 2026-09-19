@@ -458,4 +458,25 @@ async fn table_scale_create_and_query() {
         ms(create_total),
         create_total.as_secs_f64() * 1000.0 / created as f64
     );
+
+    // Optional: `TABLE_STRESS_COMPACT=1` rewrites the file after drop.
+    // redb compact is not a guaranteed shrink (it grew 514→562 MB on a 10k
+    // run); live key+value is the size that matters.
+    if std::env::var("TABLE_STRESS_COMPACT").is_ok() {
+        drop(store);
+        let path = format!(".temp/db/{db_id}/atomic.redb");
+        match atomic_lib::db::redb_store::compact_file(std::path::Path::new(&path)) {
+            Ok((before, after, did)) => {
+                println!(
+                    "compact {}  {before} -> {after} ({:.1} MB -> {:.1} MB, {:.0} -> {:.0} bytes/row)",
+                    if did { "rewrote" } else { "no-op" },
+                    before as f64 / 1_048_576.0,
+                    after as f64 / 1_048_576.0,
+                    before as f64 / created as f64,
+                    after as f64 / created as f64
+                );
+            }
+            Err(e) => println!("compact skipped: {e}"),
+        }
+    }
 }

@@ -1,9 +1,11 @@
 # Table scale (100k rows)
 
 > **Status:** Measured 2026-09-18; table-open path fixed. Store shrink
-> (thin commit rows + compact envelopes) landed 2026-09-19 — re-measure
-> with `table_scale` after this change. Write *latency* (99 ms/row in the
-> browser) is unchanged; file size is not.
+> landed 2026-09-19: thin commit rows, compact `AE01` envelopes, commit
+> atoms other than `subject` no longer indexed. Live data at 10k is
+> **134 MB / 14 KB/row**; the redb *file* is still 514 MB because
+> per-commit COW does not shrink the file in place. Write *latency*
+> (99 ms/row in the browser) is unchanged.
 > See
 > [`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md).
 >
@@ -54,11 +56,19 @@ Browser numbers (N=1000, Chromium) are in section 3;
 Each row is a full resource: Ed25519 genesis, a Loro snapshot, PropValSub /
 ValPropSub / search tokens / envelope. Native `Db::create_resource`:
 
-| N | create total | ms/row | redb file | bytes/row |
-| --- | --- | --- | --- | --- |
-| 1,000 | 2.4 s | 2.42 | 64 MB | 67 KB |
-| 10,000 | 39 s | 3.90 | 514 MB | 54 KB |
-| 100,000 | **686 s (11.4 min)** | **6.86** | **4.0 GB** | 43 KB |
+| N | create total | ms/row | redb file | live key+value | bytes/row (file / live) |
+| --- | --- | --- | --- | --- | --- |
+| 1,000 | 2.1 s | 2.12 | 64 MB | **15 MB** | 67 KB / **16 KB** |
+| 10,000 | 35 s | 3.51 | 514 MB | **134 MB** | 54 KB / **14 KB** |
+| 100,000 (2026-09-18, before shrink) | **686 s** | **6.86** | **4.0 GB** | (not measured) | 43 KB / — |
+
+Per-row payload after shrink (N=10k sample): row blob 1.3 KB, Loro
+snapshot 2.2 KB, compact envelope 2.5 KB, thin commit row 0.6 KB.
+Indexes (PropValSub+ValPropSub) are 5.6 KB/row — the biggest live
+slice. The on-disk file is ~3–4× live because each genesis is its own
+COW transaction; `redb compact` rewrote 514→562 MB on this VM (not a
+win). `atomic-server compact` remains the admin tool; batched import
+is what would stop the file growing faster than live data.
 
 Create **slows as the store grows** (2.4 → 6.9 ms/row). The last 90k rows
 were 7.2 ms each. That is index + snapshot write amplification, not the
@@ -176,5 +186,7 @@ the main thread first. That dump is step 2.
    The count walk is still O(matches) (~33 ms at 100k) but no longer ships
    430 MB of JSON-AD.
 3. Write path: batched / unsigned-replica import so 100k creates are not
-   one genesis commit each
+   one genesis commit each. That is also what would stop the redb *file*
+   tracking COW write amplification (~54 KB/row) instead of live data
+   (~14 KB/row).
    ([`disk-storage-and-persistence-optimization.md`](./disk-storage-and-persistence-optimization.md)).

@@ -474,6 +474,9 @@ impl Db {
                 }
             }
             for a in resource.to_atoms() {
+                if !index_atom_for_resource(resource, &a) {
+                    continue;
+                }
                 self.add_atom_to_index(&a, resource, &mut transaction)
                     .map_err(|e| format!("Failed to add atom to index {}. {}", a, e))?;
             }
@@ -2055,6 +2058,9 @@ impl Db {
         for (count, r) in self.all_resources(include_external).enumerate() {
             let mut transaction = Transaction::new();
             for atom in r.to_atoms_iter() {
+                if !index_atom_for_resource(&r, &atom) {
+                    continue;
+                }
                 self.add_atom_to_index(&atom, &r, &mut transaction)
                     .map_err(|e| format!("Failed to add atom to index {}. {}", atom, e))?;
             }
@@ -3794,6 +3800,9 @@ impl Storelike for Db {
         if commit_response.auth_impact().is_critical() {
             store.add_resource_tx(&commit_response.commit_resource, &mut transaction)?;
             for atom in commit_response.commit_resource.to_atoms() {
+                if !index_atom_for_resource(&commit_response.commit_resource, &atom) {
+                    continue;
+                }
                 store.add_atom_to_index(
                     &atom,
                     &commit_response.commit_resource,
@@ -4475,6 +4484,17 @@ impl Storelike for Db {
     fn commit_batch(&self) -> AtomicResult<()> {
         self.kv.commit_batch()
     }
+}
+
+/// Commits are not a queryable class. Index only `subject` so a resource's
+/// critical envelopes can still be found (`Query` on `urls::SUBJECT`); skip
+/// signer / createdAt / signature / isA or every genesis doubles the
+/// PropValSub / ValPropSub trees.
+fn index_atom_for_resource(resource: &Resource, atom: &Atom) -> bool {
+    if !resource.get_subject().is_commit_did() {
+        return true;
+    }
+    atom.property == crate::urls::SUBJECT
 }
 
 /// Re-attach a commit's signed `loroUpdate` from `Tree::Envelopes`.

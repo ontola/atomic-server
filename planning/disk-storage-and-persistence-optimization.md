@@ -24,10 +24,16 @@ Now:
   hydrates the signed bytes from the matching envelope.
 - Envelopes store `AE01` + header propvals + raw `loroUpdate` (legacy JSON-AD
   rows still read). Readers still see JSON-AD via `StoredEnvelope::json`.
+- Critical commit atoms other than `subject` are not indexed (commits are not
+  a queryable class). `Query` on `urls::SUBJECT` still finds them.
 
-Current-state snapshot (`Tree::LoroSnapshots`) + one signed copy (envelope)
-remain. Incremental `loroUpdate` on non-genesis edits and auto-compact are
-still the follow-ups below.
+At 10k rows, live key+value is **134 MB / 14 KB/row** (row + snapshot +
+compact envelope + thin commit + indexes). The redb *file* is still 514 MB
+— same checkpoint as before the shrink — because each genesis is its own
+COW transaction and redb does not shrink in place. `compact_file` on that
+store grew 514→562 MB. Current-state snapshot + one signed copy remain.
+Incremental `loroUpdate` on non-genesis edits, batched import, and a
+compaction policy that actually reclaims are still the follow-ups below.
 
 ## Thesis
 
