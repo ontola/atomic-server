@@ -99,7 +99,7 @@ function NewResourceSelector() {
   const navigate = useNavigateWithTransition();
   const showNewResourceUI = useNewResourceUI();
   const { askAI } = useAISidebar();
-  const { enableAI, setEnableAI } = useAISettings();
+  const { enableAI } = useAISettings();
   const catalogRef = useRef<HTMLDivElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -188,7 +188,7 @@ function NewResourceSelector() {
   const ask = (event: FormEvent) => {
     event.preventDefault();
     if (!prompt.trim()) return;
-    if (!enableAI) setEnableAI(true);
+
     askAI(creationAssistantAsk(prompt, destination));
   };
 
@@ -246,13 +246,10 @@ function NewResourceSelector() {
                 }
               }}
             />
-            {searching && (
+            {searching && enableAI && (
               <Button
                 subtle
-                onClick={() => {
-                  if (!enableAI) setEnableAI(true);
-                  askAI(creationAssistantAsk(query, destination));
-                }}
+                onClick={() => askAI(creationAssistantAsk(query, destination))}
               >
                 Ask AI
               </Button>
@@ -273,11 +270,15 @@ function NewResourceSelector() {
           </SearchInput>
           {noMatches && (
             <p role='status'>
-              No matches. Try another search or ask AI to build it.
+              {enableAI ? (
+                <>No matches. Try another search or ask AI to build it.</>
+              ) : (
+                <>No matches. Try another search.</>
+              )}
             </p>
           )}
         </Column>
-        {!searching && (
+        {!searching && enableAI && (
           <Column gap='0.5rem'>
             <SectionHeading>Build with AI</SectionHeading>
             <Composer onSubmit={ask}>

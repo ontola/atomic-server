@@ -233,6 +233,33 @@ test('build suggestions hand a half-written request to the composer', async ({
   await expect(suggestions).toHaveCount(0);
 });
 
+test('turning AI features off takes the whole composer with it', async ({
+  page,
+}) => {
+  await page.goto(new URL('/app/new', page.url()).href);
+  await page.evaluate(() => localStorage.setItem('atomic.ai.enabled', 'false'));
+  await page.reload();
+  const search = page.getByRole('searchbox', {
+    name: 'Search templates and resource types',
+  });
+  await expect(search).toBeFocused();
+  await expect(
+    page.getByRole('heading', { name: 'Build with AI' }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('group', { name: 'What the assistant can build' }),
+  ).toHaveCount(0);
+  // The blank buttons and templates are not AI features, so they stay.
+  await expect(
+    page.getByRole('button', { name: 'Use Reading list template' }),
+  ).toBeVisible();
+  await search.fill('zz-no-such-template');
+  await expect(page.getByText('No matches. Try another search.')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Ask AI', exact: true }),
+  ).toHaveCount(0);
+});
+
 test('mobile search hands its query to the assistant without overflowing', async ({
   page,
 }) => {
