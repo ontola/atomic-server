@@ -21,22 +21,43 @@ the `Tree::LoroSnapshots` row, the commit `Tree::Resources` blob (`loroUpdate`
 kept because it is the signed payload), and the envelope as JSON-AD with
 base64. That is why a 100k-row table landed at **4.0 GB / 43 KB/row**.
 
-Now:
+Two of the three measures shipped:
 
-- Commit resource blobs strip `loroUpdate` like every other row. `get_resource`
-  hydrates the signed bytes from the matching envelope.
 - Envelopes store `AE01` + header propvals + raw `loroUpdate` (legacy JSON-AD
   rows still read). Readers still see JSON-AD via `StoredEnvelope::json`.
 - Critical commit atoms other than `subject` are not indexed (commits are not
   a queryable class). `Query` on `urls::SUBJECT` still finds them.
 
-At 100k rows, live key+value is **1.32 GB / 14 KB/row**. The redb *file*
+**The third was withdrawn.** Stripping `loroUpdate` from the commit
+`Tree::Resources` blob and hydrating it from the envelope on GET was measured
+and worked, but it is not sound: the two are deliberately independent. A
+critical commit's row is the *durable* audit record of a genesis, a destroy or
+a rights change; the envelope is retention-governed, and the default `Latest`
+deletes a resource's older envelopes on its next commit. So the first ordinary
+edit to a row left its stored genesis commit with no payload for its signature
+to cover. Keeping the envelope instead was tried and is worse: `Latest` meaning
+exactly one envelope per resource is what makes `attribute_history` report a
+single attribution and call itself `complete`. A commit row that is kept has to
+be self-contained. `stored_genesis_commit_keeps_its_signed_payload_after_a_later_edit`
+pins this.
+
+That copy could still be reclaimed lazily: when `Latest` evicts an envelope
+whose commit row is stored, fold the payload back into that row first. Rows
+that are written once and never edited — the bulk-import case this whole
+branch is about — would then never pay for the second copy, and only edited
+rows would. Not built; it puts machinery in the signing path, which is where
+the bug above came from, so it wants its own pass and its own measurements.
+
+Numbers below were measured with all three measures in place, so the
+per-row figures are a floor rather than what this branch ships; the
+commit blob carries its snapshot again (~2.3 KB/row at the 100k sample).
+At 100k rows, live key+value was **1.32 GB / 14 KB/row**. The redb *file*
 is still **4.0 GB** (exactly one 4 GiB region; same checkpoint as before
-the shrink) because each genesis is its own COW transaction. Create is
-20% faster (5.5 vs 6.9 ms/row). `compact_file` on the 10k store grew
-514→562 MB. Current-state snapshot + one signed copy remain.
-Incremental `loroUpdate` on non-genesis edits, batched import, and a
-compaction policy that actually reclaims are still the follow-ups below.
+the shrink) because each genesis is its own COW transaction.
+`compact_file` on the 10k store grew 514→562 MB. Current-state snapshot +
+one signed copy remain. Incremental `loroUpdate` on non-genesis edits,
+batched import, and a compaction policy that actually reclaims are still
+the follow-ups below.
 
 ## Thesis
 

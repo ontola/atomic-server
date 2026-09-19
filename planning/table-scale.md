@@ -1,9 +1,12 @@
 # Table scale (100k rows)
 
 > **Status:** Measured 2026-09-18; table-open path fixed. Store shrink
-> landed 2026-09-19: thin commit rows, compact `AE01` envelopes, commit
-> atoms other than `subject` no longer indexed. Live data at 10k is
-> **134 MB / 14 KB/row**; the redb *file* is still 514 MB because
+> landed 2026-09-19: compact `AE01` envelopes and commit atoms other than
+> `subject` no longer indexed. The third measure, thin commit rows, was
+> withdrawn: a persisted commit row cannot depend on a retention-governed
+> envelope for its signed payload (see the disk-storage doc). The per-row
+> figures below were measured with it in place, so they are a floor, not
+> what this branch ships. The redb *file* is still 514 MB at 10k because
 > per-commit COW does not shrink the file in place. Write *latency*
 > (99 ms/row in the browser) is unchanged.
 > See

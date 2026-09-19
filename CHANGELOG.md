@@ -7,15 +7,14 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
-- Store shrink for genesis-heavy tables: commit resource blobs no longer
-  keep `loroUpdate` (GET hydrates it from `Tree::Envelopes`), envelopes are
-  stored as compact `AE01` instead of JSON-AD base64, and commit atoms other
-  than `subject` are not indexed. Live data at 10k rows is 14 KB/row; the
-  on-disk file is still COW-amplified until a batched import exists. A commit
-  row the store persists as an audit record (a genesis, a destroy, a rights
-  change) keeps the envelope its signature covers: `latest` retention drops
-  the envelopes that no longer produce the current state, but not one that is
-  now the only copy of a stored commit's payload.
+- Store shrink for genesis-heavy tables: envelopes are stored as compact
+  `AE01` instead of JSON-AD with base64 (legacy rows still read), and commit
+  atoms other than `subject` are no longer indexed, since commits are not a
+  queryable class. The on-disk file is still COW-amplified until a batched
+  import exists. A commit row that the store persists as an audit record — a
+  genesis, a destroy, a rights change — keeps its own `loroUpdate`, because
+  `latest` retention deletes a resource's older envelopes on its next commit
+  and the row has to stay verifiable on its own.
 
 - Sentry no longer records every server error twice. `sentry_actix` captures a
   handler's 5xx with the request attached, and `tracing_actix_web` separately

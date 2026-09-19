@@ -3094,8 +3094,8 @@ async fn content_commits_are_not_stored() {
 
 #[tokio::test]
 #[timeout(120000)]
-async fn commit_resource_blob_omits_loro_update() {
-    let store = Db::init_temp("thin_commit_blob").await.unwrap();
+async fn commit_resource_blob_keeps_loro_update_and_indexes_only_subject() {
+    let store = Db::init_temp("commit_blob_payload").await.unwrap();
 
     let mut resource = crate::Resource::new("did:ad:placeholder".into());
     resource
@@ -3117,14 +3117,14 @@ async fn commit_resource_blob_omits_loro_update() {
     let loaded = store.get_resource(&commit_id).await.unwrap();
     let Value::LoroDoc(hydrated) = loaded
         .get(urls::LORO_UPDATE)
-        .expect("GET hydrates the signed payload from the envelope")
+        .expect("GET returns the signed payload")
         .clone()
     else {
         panic!("hydrated loroUpdate must be a LoroDoc");
     };
     assert_eq!(
         hydrated, signed,
-        "hydrated bytes must match the signed payload"
+        "the round-tripped bytes must match the signed payload"
     );
 
     let blob = store
@@ -3136,13 +3136,16 @@ async fn commit_resource_blob_omits_loro_update() {
         .unwrap()
         .expect("critical commits still have a Resources row");
     let persisted = crate::db::encoding::decode_propvals(&blob).unwrap();
+    // The row is the durable audit record; the envelope that also holds this
+    // payload is retention-governed and `Latest` drops it on the resource's
+    // next commit. So the payload has to be in the row itself.
     assert!(
-        !persisted.contains_key(urls::LORO_UPDATE),
-        "persisted commit row must not contain loroUpdate"
+        persisted.contains_key(urls::LORO_UPDATE),
+        "a persisted commit row keeps the payload its signature covers"
     );
     assert!(
         persisted.contains_key(urls::SIGNATURE),
-        "thin commit row still carries the signature"
+        "commit row still carries the signature"
     );
 
     let target = genesis.resource_new.unwrap().get_subject().clone();

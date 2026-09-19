@@ -485,7 +485,7 @@ Two things worth knowing about the runners:
 | Engine-owned `SUB`/`UNSUB`: granted `SUB` is a session command, unreadable `SUB` answers `ERROR UNAUTHORIZED_READ` | `lib/src/sync/engine.rs` (`bootstrap_and_sub_tests`) |
 | Signed `SYNC_DIFF.removeCommits`: envelope applies regardless of connection agent, tampered envelope does not delete, envelope only handed to drive readers, replay after re-creation refused | `lib/src/sync/peer.rs` (`initiator_trust_tests`), `engine.rs` (`bootstrap_and_sub_tests`), `tombstones.rs`, `protocol.rs` |
 | `SyncSession` over an in-process `AtomicTransport` holds `AUTH` across frames | `lib/src/sync/session.rs` |
-| Signed envelopes per resource: `latest`/`all` retention, time order, not indexed, verified attribution per Loro token, tampered envelope unverified, two writers, destroy fold, compact `AE01` on disk | `lib/src/envelopes.rs` |
+| Signed envelopes per resource: `latest`/`all` retention, time order, not indexed, verified attribution per Loro token, tampered envelope unverified, two writers, destroy fold, compact `AE01` on disk, a stored genesis commit keeps its payload when `latest` drops its envelope | `lib/src/envelopes.rs` |
 | `GET /history-attribution` names the verified signer and is read-gated | `server/tests/it/history_attribution.rs` |
 | Attribution parse / version lookup / server+local merge | `browser/lib/src/history-attribution.test.ts` |
 | Engine-level two-store sync, private drives, blobs, live push | `lib/src/sync/tests.rs` |
@@ -787,7 +787,7 @@ No automated end-to-end coverage: uploaded-file conversion through the full UI a
 |---|---|---|
 | `LoroDoc` values are not KV-index keys | protocol | `lib/src/values.rs::loro_doc_is_not_indexed` |
 | Content commits are not stored; genesis/ACL/destroy are | protocol | `lib/src/db/test.rs::content_commits_are_not_stored` |
-| Critical commit rows omit `loroUpdate`; GET hydrates it from the envelope; only `subject` is indexed | protocol | `lib/src/db/test.rs::commit_resource_blob_omits_loro_update` |
+| Critical commit rows keep the `loroUpdate` their signature covers, since `Latest` retention drops their envelope; only `subject` is indexed | protocol | `lib/src/db/test.rs::commit_resource_blob_keeps_loro_update_and_indexes_only_subject` |
 | Signed destroy removes the resource, keeps its envelope and tombstones the subject in one apply | protocol | `lib/src/db/test.rs::destroy_commit_removes_resource_and_keeps_envelope_atomically` |
 | Sequential saves do not chain `previousCommit`; commit DIDs are not store resources | glue | `browser/lib/src/commit.test.ts` |
 
