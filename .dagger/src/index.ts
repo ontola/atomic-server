@@ -50,7 +50,9 @@ function touchWorkspaceSources(container: Container): Container {
 }
 
 const NODE_IMAGE = 'node:22';
-const RUST_IMAGE = 'rust:bookworm';
+// Checked against rust-toolchain.toml by scripts/check-rust-alignment.py.
+const RUST_VERSION = '1.98.1';
+const RUST_IMAGE = `rust:${RUST_VERSION}-bookworm`;
 
 // Pin the tools and their published dependency locks. Unlocked linkcheck
 // installation picked up jiff 0.2.36, whose packaged doc includes are broken.
@@ -327,6 +329,11 @@ export class AtomicServer {
   ): Container {
     return (
       container
+        .withExec([
+          'rustup', 'toolchain', 'install', RUST_VERSION,
+          '--profile', 'minimal', '--component', 'rustfmt,clippy',
+        ])
+        .withEnvVariable('RUSTUP_TOOLCHAIN', RUST_VERSION)
         .withMountedCache(
           `${cargoHome}/registry`,
           dag.cacheVolume('cargo-shared-locks-v1'),
@@ -607,6 +614,7 @@ export class AtomicServer {
       dag
         .container()
         .from(FLUTTER_IMAGE)
+        .withEnvVariable('RUSTUP_TOOLCHAIN', RUST_VERSION)
         .withEnvVariable('CI', 'true')
         // Same pin as withCargoHomeCache — flutter's cargokit build would
         // otherwise see all host CPUs.
@@ -637,6 +645,10 @@ export class AtomicServer {
           'sh',
           '-c',
           'if [ ! -x "$HOME/.cargo/bin/rustc" ]; then curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal; fi',
+        ])
+        .withExec([
+          'sh', '-c',
+          `${pathPrefix}; rustup toolchain install ${RUST_VERSION} --profile minimal`,
         ])
         .withDirectory('/workspace/lib', this.source.directory('lib'))
         .withDirectory('/workspace/flutter', this.source.directory('flutter'))
@@ -810,6 +822,7 @@ export class AtomicServer {
         .withExec([
           'cargo',
           'build',
+          '--locked',
           '-p',
           'atomic-server',
           '--no-default-features',
@@ -1203,6 +1216,7 @@ export class AtomicServer {
         .withExec(['apt', 'install', '-y', 'nasm', 'protobuf-compiler']),
       CARGO_HOME_MUSL,
     )
+      .withExec(['rustup', 'target', 'add', target])
       .withExec(['rustup', 'component', 'add', 'clippy'])
       .withExec(['rustup', 'component', 'add', 'rustfmt']);
     // cargo-nextest used to be installed here, but recent versions need
@@ -1245,7 +1259,7 @@ export class AtomicServer {
       .withMountedCache('/code/target', dag.cacheVolume('rust-target-v3'))
       .with(touchWorkspaceSources)
       .withWorkdir('/code')
-      .withExec(['cargo', 'fetch']);
+      .withExec(['cargo', 'fetch', '--locked']);
 
     const browserDir = this.jsBuild(e2e).directory('/app/data-browser/dist');
     const containerWithAssets = sourceContainer.withDirectory(
@@ -1261,10 +1275,10 @@ export class AtomicServer {
     // at an optimisation level where commit round-trips stop dominating, and
     // cheap enough to compile that Playwright is not left waiting on LTO.
     const buildArgs = e2e
-      ? ['cargo', 'build', '--profile', 'e2e', '-p', 'atomic-server']
+      ? ['cargo', 'build', '--locked', '--profile', 'e2e', '-p', 'atomic-server']
       : release
-        ? ['cargo', 'build', '--release', '-p', 'atomic-server']
-        : ['cargo', 'build', '-p', 'atomic-server'];
+        ? ['cargo', 'build', '--locked', '--release', '-p', 'atomic-server']
+        : ['cargo', 'build', '--locked', '-p', 'atomic-server'];
 
     // ⚠️ PRODUCTION IMPACT, not just CI plumbing (2026-07-02): this
     // function backs BOTH the e2e test server (atomicService) AND the real
@@ -1398,6 +1412,7 @@ export class AtomicServer {
           .withExec(['apt', 'install', '-y', 'nasm', 'protobuf-compiler']),
         CARGO_HOME_MUSL,
       )
+        .withExec(['rustup', 'target', 'add', 'x86_64-unknown-linux-musl'])
         .withExec(['rustup', 'component', 'add', 'clippy'])
         .withExec(['rustup', 'component', 'add', 'rustfmt'])
         .withFile('/code/Cargo.toml', source.file('Cargo.toml'))
@@ -1450,7 +1465,7 @@ export class AtomicServer {
           '-c',
           'echo "<html><body>checks stub</body></html>" > /code/server/assets_tmp/index.html',
         ])
-        .withExec(['cargo', 'fetch'])
+        .withExec(['cargo', 'fetch', '--locked'])
     );
   }
 
@@ -1499,7 +1514,7 @@ export class AtomicServer {
             'BIN_DIR=/opt/cargo-bin/bin && mkdir -p "$BIN_DIR" && ' +
             'if [ ! -x "$BIN_DIR/cargo-nextest" ]; then ' +
             'curl -LsSf https://get.nexte.st/latest/linux-musl | tar zxf - -C "$BIN_DIR"; fi && ' +
-            'cargo nextest run --workspace --exclude atomic-server-tauri ' +
+            'cargo nextest run --locked --workspace --exclude atomic-server-tauri ' +
             '--no-default-features --features light,wasm-plugins ' +
             `--build-jobs ${this.hostKnobs.nextestBuildJobs} ` +
             `--test-threads ${this.hostKnobs.nextestTestThreads} ` +
@@ -1531,6 +1546,7 @@ export class AtomicServer {
       .withExec([
         'cargo',
         'clippy',
+        '--locked',
         '--workspace',
         '--exclude',
         'atomic-server-tauri',

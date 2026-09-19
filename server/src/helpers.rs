@@ -178,14 +178,27 @@ pub async fn get_client_agent(
         return Ok(ForAgent::Public);
     }
     // Authentication check. If the user has no headers, continue with the Public Agent.
-    let auth_header_values = get_auth(headers, requested_subject)?;
+    // Whatever goes wrong from here — headers that do not parse, a signature
+    // that does not verify, an unknown agent — the caller is not who they
+    // claim to be, which is a 401, not a 500. Converting the error to a
+    // string here used to lose the lib's `Unauthorized` type, so every
+    // failed sign-in reported itself as a server crash (security audit D).
+    let auth_header_values = get_auth(headers, requested_subject).map_err(unauthorized)?;
     let for_agent = atomic_lib::authentication::get_agent_from_auth_values_and_check(
         auth_header_values,
         &appstate.store,
     )
     .await
-    .map_err(|e| format!("Authentication failed: {}", e))?;
+    .map_err(|e| unauthorized(format!("Authentication failed: {}", e).into()))?;
     Ok(for_agent)
+}
+
+/// `error`, answered as 401 whatever it was typed as.
+fn unauthorized(error: AtomicServerError) -> AtomicServerError {
+    AtomicServerError {
+        error_type: AppErrorType::Unauthorized,
+        ..error
+    }
 }
 
 /// Rate-limit key for a request without a signed agent: the socket peer

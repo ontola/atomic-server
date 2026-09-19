@@ -605,12 +605,6 @@ pub struct CommitIngestOpts {
     /// for peer replicas — hosting subjects the node does not own is what
     /// replication is.
     pub enforce_subject_ownership: bool,
-    /// Peer-transport semantics: hold the importing flag while applying so the
-    /// live push loop doesn't rebroadcast the commit back to live peers (the
-    /// sender included). Off on the hub, where WS fanout is suppressed
-    /// per-source via `source_id` and Iroh live peers SHOULD receive the
-    /// update.
-    pub suppress_live_echo: bool,
     /// Origin used to resolve `internal:/` subjects in the response JSON-AD.
     /// `None` falls back to the store's base domain.
     pub response_origin: Option<String>,
@@ -624,7 +618,6 @@ impl CommitIngestOpts {
             source_id,
             validate_loro_causality: true,
             enforce_subject_ownership: true,
-            suppress_live_echo: false,
             response_origin,
         }
     }
@@ -632,15 +625,17 @@ impl CommitIngestOpts {
     /// Peer semantics: a signed commit from another full node over a peer
     /// transport. Signature, schema and rights still run; ownership and Loro
     /// causality do not (a replica hosts subjects it does not own, and
-    /// concurrent writes are expected), and the live push loop is muted so
-    /// the commit is not echoed back to the peers it came from. No
-    /// `source_id`: peers do not fan out through the commit monitor.
+    /// concurrent writes are expected). No `source_id` of its own: the
+    /// change is attributed to the peer whose [`ws_apply::import_scope`]
+    /// the caller runs this in, so the live push loop skips exactly that
+    /// peer and nothing else.
+    ///
+    /// [`ws_apply::import_scope`]: super::ws_apply::import_scope
     pub fn peer() -> Self {
         Self {
             source_id: None,
             validate_loro_causality: false,
             enforce_subject_ownership: false,
-            suppress_live_echo: true,
             response_origin: None,
         }
     }
@@ -674,8 +669,9 @@ pub async fn verify_commit_signer(
 /// Signature, schema, and signer-rights validation always run — the commit is
 /// a self-authorizing certificate, so those checks (not a connection's AUTH
 /// identity) are the authority. What varies is domain-ownership enforcement,
-/// Loro-causality enforcement, live-echo suppression, and source-id-based
-/// echo suppression, all controlled by `opts`.
+/// Loro-causality enforcement and source-id-based echo suppression, all
+/// controlled by `opts` (a peer transport runs this inside
+/// [`super::ws_apply::import_scope`] so the change is attributed to the peer).
 pub async fn ingest_commit_json(
     store: &Db,
     commit_json: &str,
@@ -795,20 +791,17 @@ pub async fn ingest_commit(
         validate_loro_causality: opts.validate_loro_causality,
         validate_for_agent: Some(signer.to_string()),
         update_index: true,
-        source_id: opts.source_id.clone(),
+        // A commit applied inside a peer's import scope is attributed to that
+        // peer, so the live push loop does not send it straight back. Not a
+        // process-wide mute: a concurrent import on another connection, or a
+        // local edit, is broadcast as usual (security audit C16).
+        source_id: opts
+            .source_id
+            .clone()
+            .or_else(super::ws_apply::current_import_source),
     };
 
-    let response = if opts.suppress_live_echo {
-        // Applying a remote peer's commit must not rebroadcast to live peers
-        // (the sender included) — the same mute the peer read loop holds
-        // around `persist_update`.
-        super::ws_apply::set_importing(true);
-        let result = store.apply_commit(incoming_commit, &commit_opts).await;
-        super::ws_apply::set_importing(false);
-        result
-    } else {
-        store.apply_commit(incoming_commit, &commit_opts).await
-    }?;
+    let response = store.apply_commit(incoming_commit, &commit_opts).await?;
 
     if needs_agent_resource {
         let mut new_agent = crate::Resource::new_instance(crate::urls::AGENT, store).await?;
