@@ -7,6 +7,7 @@ import {
   installationIdentifier,
   publishZipRelease,
   readInstallationReview,
+  updateInstallationRelease,
 } from './plugin-install.js';
 import { testStore } from './test-store.js';
 
@@ -236,6 +237,59 @@ describe('installRelease', () => {
     expect(installation.get(server.properties.namespace)).toBeUndefined();
     expect(installation.get(server.properties.config)).toBeUndefined();
     expect(installation.get(server.properties.grants)).toEqual([]);
+  });
+});
+
+describe('updateInstallationRelease', () => {
+  it('repoints the same Installation and keeps its identity and name', async () => {
+    const { store, posted } = await testStore();
+    const drive = await store.newResource({
+      isA: server.classes.drive,
+      noParent: true,
+      propVals: { [core.properties.name]: 'Team' },
+    });
+    await drive.save();
+
+    const subject = await installRelease(store, {
+      drive: drive.subject,
+      release: { url: 'blake3:one', id: 'blake3:one' },
+      name: 'test-plugin',
+      namespace: 'ontola',
+      version: '1.0.0',
+      config: { folderPrefix: 'My' },
+      grants: ['storage'],
+    });
+
+    const beforeUpdate = posted.length;
+    await updateInstallationRelease(store, subject, {
+      release: { url: 'blake3:two', id: 'blake3:two' },
+      grants: ['storage', 'custom-view'],
+      version: '1.1.0',
+    });
+
+    const installation = store.getResourceLoading(subject);
+    expect(installation.get(server.properties.release)).toBe('blake3:two');
+    expect(installation.get(server.properties.releaseId)).toBe('blake3:two');
+    expect(installation.get(server.properties.grants)).toEqual([
+      'storage',
+      'custom-view',
+    ]);
+    expect(installation.get(server.properties.version)).toBe('1.1.0');
+    // An update is not a new install: same resource, same identifiers, and the
+    // config it was running is untouched when the caller passes none.
+    expect(installation.get(core.properties.name)).toBe('test-plugin');
+    expect(installation.get(server.properties.namespace)).toBe('ontola');
+    expect(installation.get(server.properties.installationStatus)).toBe(
+      'active',
+    );
+    const config = installation.get(server.properties.config);
+    expect(typeof config === 'string' ? JSON.parse(config) : config).toEqual({
+      folderPrefix: 'My',
+    });
+    // One commit, not one per property: the server checks the grants against
+    // the new release's manifest, so a release that arrived on its own could be
+    // refused for capabilities the next commit was about to approve.
+    expect(posted.length - beforeUpdate).toBe(1);
   });
 });
 

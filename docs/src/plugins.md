@@ -15,7 +15,7 @@ Three classes describe a plugin's life on a server:
 
 - A **Release** is an immutable, content-addressed package: JS source (`atomic-js/1`) or a WASM zip (`wasip2/1`), its manifest, and a `releaseId` (`blake3:…` over every field). It lives at `<server>/releases/<id>` on the server it was published to, and can be fetched from any other server.
 - A **Listing** is a marketplace entry pointing at a Release: name, emoji, description, domains, standards. Every Listing the public can read on a server is part of that server's Store; `GET /plugin-catalog` returns them. Any drive of Listings is a marketplace.
-- An **Installation** is one installed Release on one Drive. It pins the `release` URL and its `releaseId`, holds the `grants` you approved, your `config`, and an `installationStatus` (`draft`, `active`, `paused`, `revoked`). Committing it as `active` is the single install trigger for both runtimes; `revoked` or destroying the resource uninstalls it.
+- An **Installation** is one installed Release on one Drive. It pins the `release` URL and its `releaseId`, holds the `grants` you approved, your `config`, and an `installationStatus` (`draft`, `active`, `paused`, `revoked`). Committing it as `active` is the single install trigger for both runtimes; `paused` stops the plugin without uninstalling it, keeping its files, its config and the agent it signs as; `revoked` or destroying the resource uninstalls it and retires that agent. Updating a plugin means pointing the same Installation at a newer Release, which keeps everything the plugin already owns.
 
 ## Installing a plugin
 

@@ -9,16 +9,16 @@
  * `planning/plugin-runtime-convergence.md`, "One install path and a
  * marketplace".
  */
-import { signRequest } from './authentication.js';
-import { core } from './ontologies/core.js';
-import { server, type Server } from './ontologies/server.js';
-import type { Store } from './store.js';
-import type { JSONValue } from './value.js';
+import { signRequest } from "./authentication.js";
+import { core } from "./ontologies/core.js";
+import { server, type Server } from "./ontologies/server.js";
+import type { Store } from "./store.js";
+import type { JSONValue } from "./value.js";
 
-export const RUNTIME_JS = 'atomic-js/1';
-const WORLD_EXTENSION = 'extension';
+export const RUNTIME_JS = "atomic-js/1";
+const WORLD_EXTENSION = "extension";
 
-export type InstallationStatus = 'draft' | 'active' | 'paused' | 'revoked';
+export type InstallationStatus = "draft" | "active" | "paused" | "revoked";
 
 /** The release record the server publishes and serves (`lib/src/db/plugin_release.rs`). */
 export interface PublishedRelease {
@@ -49,11 +49,11 @@ export interface ReleaseReference {
 }
 
 type CapabilityKind =
-  | 'permission'
-  | 'secret'
-  | 'operation'
-  | 'capability'
-  | 'network';
+  | "permission"
+  | "secret"
+  | "operation"
+  | "capability"
+  | "network";
 
 /** One line of the install review: what the plugin asks for and why. */
 export interface ReviewCapability {
@@ -84,11 +84,11 @@ export interface InstallationReview {
 }
 
 function asString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function asObject(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value)
+  return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
 }
@@ -102,7 +102,7 @@ function asArray(value: unknown): unknown[] {
  * installer approves. Drops anything malformed instead of trusting it.
  */
 export function readInstallationReview(
-  release: Pick<PublishedRelease, 'manifest'> &
+  release: Pick<PublishedRelease, "manifest"> &
     Partial<PublishedRelease> & { id?: string },
 ): InstallationReview {
   const manifest = asObject(release.manifest) ?? {};
@@ -115,7 +115,7 @@ export function readInstallationReview(
     const name = asString(entry) ?? asString(asObject(entry)?.permission);
     if (!name) continue;
     capabilities.push({
-      kind: 'permission',
+      kind: "permission",
       title: name,
       reason: asString(asObject(entry)?.reason),
       grant: name,
@@ -130,11 +130,11 @@ export function readInstallationReview(
     const origin = asString(secret?.origin);
     const description = asString(secret?.description);
     capabilities.push({
-      kind: 'secret',
+      kind: "secret",
       title: `Secret "${name}"`,
       reason: [description, origin && `Sent only to ${origin}`]
         .filter(Boolean)
-        .join('. '),
+        .join(". "),
     });
   }
 
@@ -142,11 +142,11 @@ export function readInstallationReview(
     const operation = asObject(entry);
     const id = asString(operation?.id);
     if (!id) continue;
-    const method = asString(operation?.method) ?? 'GET';
-    const url = asString(operation?.url) ?? '';
+    const method = asString(operation?.method) ?? "GET";
+    const url = asString(operation?.url) ?? "";
     const effect = asString(operation?.effect);
     capabilities.push({
-      kind: 'operation',
+      kind: "operation",
       title: `${method} ${url}`.trim(),
       reason: effect ? `${id}: ${effect}s external data` : id,
     });
@@ -159,7 +159,7 @@ export function readInstallationReview(
     const name = asString(entry) ?? asString(object?.name);
     if (!name) continue;
     capabilities.push({
-      kind: 'capability',
+      kind: "capability",
       title: name,
       reason: asString(object?.reason),
       grant: name,
@@ -168,12 +168,12 @@ export function readInstallationReview(
 
   // `network`: coarse egress for host `fetch` without an operation id.
   const network = asObject(manifest.network);
-  const origins = asArray(network?.origins).flatMap(o => asString(o) ?? []);
+  const origins = asArray(network?.origins).flatMap((o) => asString(o) ?? []);
 
   if (origins.length > 0) {
     capabilities.push({
-      kind: 'network',
-      title: `Network access to ${origins.join(', ')}`,
+      kind: "network",
+      title: `Network access to ${origins.join(", ")}`,
       reason: asString(network?.reason),
     });
   }
@@ -195,11 +195,11 @@ export function readInstallationReview(
 
 /** The grant names an installer approves when accepting the whole review. */
 export function grantsFor(review: InstallationReview): string[] {
-  return review.capabilities.flatMap(c => (c.grant ? [c.grant] : []));
+  return review.capabilities.flatMap((c) => (c.grant ? [c.grant] : []));
 }
 
 /** Namespace for releases whose manifest declares none (catalog JS releases). */
-export const DEFAULT_INSTALLATION_NAMESPACE = 'community';
+export const DEFAULT_INSTALLATION_NAMESPACE = "community";
 
 /**
  * A plugin identifier the server accepts (`validate_plugin_identifier`):
@@ -208,11 +208,11 @@ export const DEFAULT_INSTALLATION_NAMESPACE = 'community';
 export function installationIdentifier(name: string): string {
   const cleaned = name
     .trim()
-    .replace(/[^A-Za-z0-9_-]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .replace(/[^A-Za-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
     .slice(0, 128);
 
-  return cleaned || 'plugin';
+  return cleaned || "plugin";
 }
 
 export interface InstallReleaseOptions {
@@ -249,7 +249,7 @@ export async function installRelease(
     version,
     config,
     grants,
-    status = 'active',
+    status = "active",
   } = options;
   const propVals: Record<string, JSONValue> = {
     [core.properties.name]: name,
@@ -276,7 +276,52 @@ export async function installRelease(
   return installation.subject;
 }
 
-type InstallStore = Pick<Store, 'getAgent' | 'getServerUrl'>;
+export interface UpdateReleaseOptions {
+  release: ReleaseReference;
+  /** Capability names the installer approved for the new release. */
+  grants: string[];
+  config?: JSONValue;
+  version?: string;
+}
+
+/**
+ * Repoints an existing `Installation` at another release, in place.
+ *
+ * This is how a plugin is updated: the resource keeps its subject, its config
+ * and the agent it signs as, so everything it already owns stays its own. The
+ * server re-runs the activation, which verifies the new id, checks the grants
+ * and puts the new code on disk.
+ *
+ * All of it is one commit on purpose. `check_grants` requires the grants to
+ * equal what the new release declares, so a release that asks for a capability
+ * the old grants do not cover would be refused if the release landed first.
+ */
+export async function updateInstallationRelease(
+  store: Store,
+  installation: string,
+  options: UpdateReleaseOptions,
+): Promise<void> {
+  const { release, grants, config, version } = options;
+  const resource = await store.getResource<Server.Installation>(installation);
+
+  await resource.set(server.properties.releaseId, release.id);
+  // A release that only exists in this server's cache is an id, not a URL,
+  // so the atomicURL check is skipped here as it is on install.
+  await resource.set(server.properties.release, release.url, false);
+  await resource.set(server.properties.grants, grants);
+
+  if (version !== undefined) {
+    await resource.set(server.properties.version, version);
+  }
+
+  if (config !== undefined) {
+    await resource.set(server.properties.config, config);
+  }
+
+  await resource.save();
+}
+
+type InstallStore = Pick<Store, "getAgent" | "getServerUrl">;
 
 /**
  * Publishes a wasip2 zip as a private release on the store's server and
@@ -291,16 +336,16 @@ export async function publishZipRelease(
   transport: typeof fetch = fetch,
 ): Promise<{ id: string; release: PublishedRelease }> {
   const agent = store.getAgent();
-  if (!agent) throw new Error('sign in before publishing a plugin release');
-  const url = new URL('/plugin-release-package', store.getServerUrl());
-  url.searchParams.set('drive', drive);
-  if (options.world) url.searchParams.set('world', options.world);
-  if (options.public) url.searchParams.set('public', 'true');
+  if (!agent) throw new Error("sign in before publishing a plugin release");
+  const url = new URL("/plugin-release-package", store.getServerUrl());
+  url.searchParams.set("drive", drive);
+  if (options.world) url.searchParams.set("world", options.world);
+  if (options.public) url.searchParams.set("public", "true");
   const response = await transport(url.toString(), {
-    method: 'POST',
+    method: "POST",
     headers: {
       ...(await signRequest(url.toString(), agent, {})),
-      'Content-Type': 'application/zip',
+      "Content-Type": "application/zip",
     },
     body: await file.arrayBuffer(),
   });

@@ -1,27 +1,32 @@
-import { Button } from '@components/Button';
+import { Button } from "@components/Button";
 import {
   ConfirmationDialog,
   ConfirmationDialogTheme,
-} from '@components/ConfirmationDialog';
-import { ContainerNarrow } from '@components/Containers';
-import Markdown from '@components/datatypes/Markdown';
-import { JSONEditor } from '@components/JSONEditor';
-import { Column, Row } from '@components/Row';
-import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
+} from "@components/ConfirmationDialog";
+import { ContainerNarrow } from "@components/Containers";
+import Markdown from "@components/datatypes/Markdown";
+import { JSONEditor } from "@components/JSONEditor";
+import { Column, Row } from "@components/Row";
+import { useNavigateWithTransition } from "@hooks/useNavigateWithTransition";
 import {
   core,
+  publishZipRelease,
+  readInstallationReview,
   server,
+  updateInstallationRelease,
   useCanWrite,
   useSaveState,
+  useStore,
   useString,
   useValue,
   type InstallationStatus,
+  type JSONValue,
   type Server,
-} from '@tomic/react';
-import type { ResourcePageProps } from '@views/ResourcePage';
-import type { JSONSchema7 } from 'ai';
-import { constructOpenURL } from '@helpers/navigation';
-import { useId, useState } from 'react';
+} from "@tomic/react";
+import type { ResourcePageProps } from "@views/ResourcePage";
+import type { JSONSchema7 } from "ai";
+import { constructOpenURL } from "@helpers/navigation";
+import { useId, useRef, useState } from "react";
 import {
   FaFloppyDisk,
   FaGear,
@@ -29,31 +34,45 @@ import {
   FaPlay,
   FaBan,
   FaTrash,
-} from 'react-icons/fa6';
-import { styled } from 'styled-components';
-import toast from 'react-hot-toast';
+  FaArrowUp,
+} from "react-icons/fa6";
+import { styled } from "styled-components";
+import toast from "react-hot-toast";
 import {
   CapabilityList,
   capabilitiesFromPermissions,
-} from '@chunks/Plugins/CapabilityList';
-import { ConfigReference } from './ConfigReference';
-import { AssignRights } from './AssignRights';
-import { ResourceInline } from '@views/ResourceInline/ResourceInline';
-import { useCustomViews } from '@components/CustomViewProvider';
+} from "@chunks/Plugins/CapabilityList";
+import { ConfigReference } from "./ConfigReference";
+import { AssignRights } from "./AssignRights";
+import { ResourceInline } from "@views/ResourceInline/ResourceInline";
+import { useCustomViews } from "@components/CustomViewProvider";
+import {
+  InstallationReviewDialog,
+  type PendingInstallation,
+} from "@chunks/Plugins/InstallationReviewDialog";
+
+const UPDATE_VERB = {
+  title: "Update plugin",
+  confirm: "Update",
+  busy: "Updating…",
+};
 
 /**
  * One installed release on a drive, for either runtime. Status changes are
  * commits the server's Installation hook acts on: `active` installs,
- * `paused` keeps it but stops it, `revoked` or destroying uninstalls.
+ * `paused` unregisters it and keeps everything else, `revoked` or destroying
+ * uninstalls. Uploading a newer zip repoints this same resource at the new
+ * release, so the plugin keeps its config and the agent it signs as.
  */
 export const InstallationPage: React.FC<
   ResourcePageProps<Server.Installation>
 > = ({ resource }) => {
   const configLabelId = useId();
+  const store = useStore();
   const canWrite = useCanWrite(resource);
   const navigate = useNavigateWithTransition();
   const { refresh: refreshCustomViews } = useCustomViews();
-  const [confirm, setConfirm] = useState<'revoke' | 'uninstall'>();
+  const [confirm, setConfirm] = useState<"revoke" | "uninstall">();
   const [name] = useString(resource, core.properties.name);
   const [namespace] = useString(resource, server.properties.namespace);
   const [version] = useString(resource, server.properties.version);
@@ -75,16 +94,19 @@ export const InstallationPage: React.FC<
   const [configEdited, setConfigEdited] = useState(false);
   const saveState = useSaveState(resource);
   const [changing, setChanging] = useState(false);
+  const [pending, setPending] = useState<PendingInstallation>();
+  const [publishing, setPublishing] = useState(false);
+  const zipInputRef = useRef<HTMLInputElement>(null);
 
-  const title = `${namespace ? `${namespace}/` : ''}${name ?? ''}`;
-  const currentStatus = (status as InstallationStatus | undefined) ?? 'draft';
+  const title = `${namespace ? `${namespace}/` : ""}${name ?? ""}`;
+  const currentStatus = (status as InstallationStatus | undefined) ?? "draft";
   const declared = capabilitiesFromPermissions(permissions);
   const hasFullDriveAccess = declared.some(
-    c => c.title === 'full-drive-access',
+    (c) => c.title === "full-drive-access",
   );
   const grantNames = Array.isArray(grants)
     ? grants.map(String)
-    : grants && typeof grants === 'object'
+    : grants && typeof grants === "object"
       ? Object.keys(grants)
       : [];
 
@@ -103,12 +125,66 @@ export const InstallationPage: React.FC<
     }
   };
 
+  /**
+   * Publishes the uploaded zip as a release and reviews it. Nothing is
+   * installed until the review is confirmed; the release itself is private
+   * to this drive either way.
+   */
+  const handleZipChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+    setPublishing(true);
+
+    try {
+      const drive = resource.get(core.properties.parent) as string;
+      const { id, release: published } = await publishZipRelease(
+        store,
+        drive,
+        file,
+      );
+      setPending({
+        review: readInstallationReview({ ...published, id }),
+        release: { url: id, id },
+        currentConfig: config as JSONValue | undefined,
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPublishing(false);
+      if (zipInputRef.current) zipInputRef.current.value = "";
+    }
+  };
+
+  const applyUpdate = async (
+    p: PendingInstallation,
+    nextConfig: JSONValue | undefined,
+    nextGrants: string[],
+  ) => {
+    // The server compares these with the package, so a zip for a different
+    // plugin is refused there. Saying so here is the clearer error.
+    if (p.review.name !== name || p.review.namespace !== namespace) {
+      throw new Error(
+        `That package is ${p.review.namespace}/${p.review.name}, not ${title}. A plugin's name and namespace cannot change.`,
+      );
+    }
+
+    await updateInstallationRelease(store, resource.subject, {
+      release: p.release,
+      grants: nextGrants,
+      config: nextConfig,
+      version: p.review.version,
+    });
+    await refreshCustomViews();
+    toast.success("Plugin updated");
+  };
+
   return (
     <ContainerNarrow>
-      <Column gap='2rem'>
+      <Column gap="2rem">
         <div>
-          <Row justify='space-between' center>
-            <Row center gap='1ch'>
+          <Row justify="space-between" center>
+            <Row center gap="1ch">
               <PluginName>{title}</PluginName>
               <StatusBadge
                 data-status={currentStatus}
@@ -123,33 +199,49 @@ export const InstallationPage: React.FC<
         </div>
         <Column>
           {canWrite && (
-            <Row justify='flex-end' wrapItems>
-              {currentStatus === 'active' && (
+            <Row justify="flex-end" wrapItems>
+              {currentStatus === "active" && (
                 <Button
                   subtle
                   disabled={changing}
-                  onClick={() => changeStatus('paused')}
+                  onClick={() => changeStatus("paused")}
                 >
                   <FaPause />
                   <span>Pause</span>
                 </Button>
               )}
-              {(currentStatus === 'paused' || currentStatus === 'draft') && (
+              {(currentStatus === "paused" || currentStatus === "draft") && (
                 <Button
                   disabled={changing}
-                  onClick={() => changeStatus('active')}
+                  onClick={() => changeStatus("active")}
                 >
                   <FaPlay />
                   <span>
-                    {currentStatus === 'draft' ? 'Install' : 'Resume'}
+                    {currentStatus === "draft" ? "Install" : "Resume"}
                   </span>
                 </Button>
               )}
-              {currentStatus !== 'revoked' && (
+              {currentStatus !== "revoked" && (
+                <label>
+                  <Button as="div" subtle disabled={changing || publishing}>
+                    <FaArrowUp aria-hidden />
+                    <span>{publishing ? "Publishing…" : "Update"}</span>
+                  </Button>
+                  <input
+                    ref={zipInputRef}
+                    type="file"
+                    style={{ display: "none" }}
+                    accept="application/zip"
+                    disabled={changing || publishing}
+                    onChange={handleZipChosen}
+                  />
+                </label>
+              )}
+              {currentStatus !== "revoked" && (
                 <Button
                   subtle
                   disabled={changing}
-                  onClick={() => setConfirm('revoke')}
+                  onClick={() => setConfirm("revoke")}
                 >
                   <FaBan />
                   <span>Revoke</span>
@@ -158,7 +250,7 @@ export const InstallationPage: React.FC<
               <Button
                 alert
                 disabled={changing}
-                onClick={() => setConfirm('uninstall')}
+                onClick={() => setConfirm("uninstall")}
               >
                 <FaTrash />
                 <span>Uninstall</span>
@@ -166,21 +258,21 @@ export const InstallationPage: React.FC<
             </Row>
           )}
           {description && (
-            <DescriptionWrapper aria-label='Plugin Description'>
+            <DescriptionWrapper aria-label="Plugin Description">
               <Markdown text={description} />
             </DescriptionWrapper>
           )}
         </Column>
-        <Column as='section' aria-label='Release'>
+        <Column as="section" aria-label="Release">
           <h3>Release</h3>
           <Identity>
             Pinned to <code>{releaseId}</code>
             {release && release !== releaseId && (
               <>
                 <br />
-                from{' '}
+                from{" "}
                 {/^https?:\/\//.test(release) ? (
-                  <a href={release} target='_blank' rel='noreferrer'>
+                  <a href={release} target="_blank" rel="noreferrer">
                     {release}
                   </a>
                 ) : (
@@ -190,20 +282,20 @@ export const InstallationPage: React.FC<
             )}
           </Identity>
         </Column>
-        <Column as='section' aria-label='Grants'>
+        <Column as="section" aria-label="Grants">
           <h3>Grants</h3>
           {grantNames.length === 0 ? (
             <Muted>No capabilities were granted.</Muted>
           ) : (
-            <Row wrapItems gap='0.4rem'>
-              {grantNames.map(grant => (
+            <Row wrapItems gap="0.4rem">
+              {grantNames.map((grant) => (
                 <Tag key={grant}>{grant}</Tag>
               ))}
             </Row>
           )}
         </Column>
         {pluginAgent && (
-          <Column as='section' aria-label='Plugin agent'>
+          <Column as="section" aria-label="Plugin agent">
             <h3>Plugin agent</h3>
             <ResourceInline subject={pluginAgent} />
           </Column>
@@ -212,9 +304,9 @@ export const InstallationPage: React.FC<
           <AssignRights installation={resource} disabled={hasFullDriveAccess} />
         )}
         <Column>
-          <Row center justify='space-between'>
+          <Row center justify="space-between">
             <h3 id={configLabelId}>
-              <Row gap='0.5ch' center>
+              <Row gap="0.5ch" center>
                 <FaGear />
                 <span>Config</span>
               </Row>
@@ -224,9 +316,9 @@ export const InstallationPage: React.FC<
                 disabled={
                   !configValid ||
                   !configSyntaxValid ||
-                  saveState.kind === 'saving' ||
-                  saveState.kind === 'scheduled' ||
-                  (!configEdited && saveState.kind !== 'dirty')
+                  saveState.kind === "saving" ||
+                  saveState.kind === "scheduled" ||
+                  (!configEdited && saveState.kind !== "dirty")
                 }
                 onClick={() => {
                   setConfigEdited(false);
@@ -242,7 +334,7 @@ export const InstallationPage: React.FC<
           <JSONEditor
             labelId={configLabelId}
             initialValue={JSON.stringify(config ?? {}, null, 2)}
-            onChange={v => {
+            onChange={(v) => {
               try {
                 setConfig(JSON.parse(v));
                 setConfigEdited(true);
@@ -258,16 +350,22 @@ export const InstallationPage: React.FC<
         </Column>
         {schema && <ConfigReference schema={schema as JSONSchema7} />}
         {declared.length > 0 && (
-          <CapabilityList capabilities={declared} title='Permissions' />
+          <CapabilityList capabilities={declared} title="Permissions" />
         )}
       </Column>
+      <InstallationReviewDialog
+        pending={pending}
+        onClose={() => setPending(undefined)}
+        onInstall={applyUpdate}
+        verb={UPDATE_VERB}
+      />
       <ConfirmationDialog
-        title='Revoke installation'
-        show={confirm === 'revoke'}
+        title="Revoke installation"
+        show={confirm === "revoke"}
         theme={ConfirmationDialogTheme.Alert}
-        confirmLabel='Revoke'
-        bindShow={open => !open && setConfirm(undefined)}
-        onConfirm={() => changeStatus('revoked')}
+        confirmLabel="Revoke"
+        bindShow={(open) => !open && setConfirm(undefined)}
+        onConfirm={() => changeStatus("revoked")}
         onCancel={() => setConfirm(undefined)}
       >
         Revoking uninstalls the plugin and retires its agent. The Installation
@@ -275,17 +373,17 @@ export const InstallationPage: React.FC<
         a new Installation.
       </ConfirmationDialog>
       <ConfirmationDialog
-        title='Uninstall plugin'
-        show={confirm === 'uninstall'}
+        title="Uninstall plugin"
+        show={confirm === "uninstall"}
         theme={ConfirmationDialogTheme.Alert}
-        confirmLabel='Uninstall'
-        bindShow={open => !open && setConfirm(undefined)}
+        confirmLabel="Uninstall"
+        bindShow={(open) => !open && setConfirm(undefined)}
         onConfirm={async () => {
           const parent = resource.props.parent;
           await resource.destroy();
           await refreshCustomViews();
           navigate(constructOpenURL(parent));
-          toast.success('Plugin uninstalled');
+          toast.success("Plugin uninstalled");
         }}
         onCancel={() => setConfirm(undefined)}
       >
@@ -302,27 +400,27 @@ const PluginName = styled.span`
 `;
 
 const PluginAuthor = styled.span`
-  color: ${p => p.theme.colors.textLight};
+  color: ${(p) => p.theme.colors.textLight};
 `;
 
 const StatusBadge = styled.span`
   font-size: 0.8rem;
   padding: 0.1rem 0.5rem;
-  border-radius: ${p => p.theme.radius};
-  border: 1px solid ${p => p.theme.colors.bg2};
-  color: ${p => p.theme.colors.textLight};
+  border-radius: ${(p) => p.theme.radius};
+  border: 1px solid ${(p) => p.theme.colors.bg2};
+  color: ${(p) => p.theme.colors.textLight};
   text-transform: capitalize;
 
-  &[data-status='active'] {
-    color: ${p => p.theme.colors.main};
-    border-color: ${p => p.theme.colors.main};
+  &[data-status="active"] {
+    color: ${(p) => p.theme.colors.main};
+    border-color: ${(p) => p.theme.colors.main};
   }
 `;
 
 const DescriptionWrapper = styled.section`
-  background-color: ${p => p.theme.colors.bg1};
-  padding: ${p => p.theme.size()};
-  border-radius: ${p => p.theme.radius};
+  background-color: ${(p) => p.theme.colors.bg1};
+  padding: ${(p) => p.theme.size()};
+  border-radius: ${(p) => p.theme.radius};
   max-height: 33rem;
   overflow-y: auto;
 `;
@@ -330,18 +428,18 @@ const DescriptionWrapper = styled.section`
 const Identity = styled.p`
   overflow-wrap: anywhere;
   font-size: 0.9rem;
-  color: ${p => p.theme.colors.textLight};
+  color: ${(p) => p.theme.colors.textLight};
   margin: 0;
 `;
 
 const Muted = styled.p`
-  color: ${p => p.theme.colors.textLight};
+  color: ${(p) => p.theme.colors.textLight};
   margin: 0;
 `;
 
 const Tag = styled.span`
-  border: 1px solid ${p => p.theme.colors.bg2};
+  border: 1px solid ${(p) => p.theme.colors.bg2};
   padding: 0.2rem 0.5rem;
-  border-radius: ${p => p.theme.radius};
+  border-radius: ${(p) => p.theme.radius};
   font-size: 0.85rem;
 `;

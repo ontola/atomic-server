@@ -288,11 +288,15 @@ manifest, since the install review renders capabilities from it. The
 marketplace drive itself needs nothing new from the runtime work; Listing and
 Release can be added as classes first and the old paths adapted one at a time.
 
-## Implementation checkpoint (2026-09-18)
+## Implementation checkpoint (2026-09-19)
 
 Branch `feat/plugin-convergence`, built from four parallel tracks off develop
-`ec22e345b`. All Rust suites and the browser lib suites pass; the Playwright
-specs added for the Store were written but not run.
+`ec22e345b` and since merged with develop. All Rust suites and the browser lib
+suites pass; the Playwright specs added for the Store were written but not run.
+
+The merge with develop has one conflict, in `ClassExtender::can_extend`, and
+both sides are needed: develop's `class_subjects` reads every `isA` encoding,
+this branch's wider check covers `Installation` as well as `Plugin`.
 
 - [x] One host: `server/src/plugins/host_core.rs` backs both the wasm and JS
   hosts. Reads are authorized as the installation's agent (never Sudo), fetch is
@@ -307,16 +311,29 @@ specs added for the Store were written but not run.
   either runtime; publishing records a Release resource at
   `<server>/releases/<id>`. `check_grants` requires the exact declared set.
 - [x] Store UI installs through one review dialog from a Listing or a zip upload;
-  Installation page with pause, resume, revoke, uninstall.
+  Installation page with update, pause, resume, revoke, uninstall. Uploading a
+  newer zip on the Installation page publishes it, reviews it and repoints that
+  same resource (`updateInstallationRelease`), which keeps the plugin's subject,
+  its config and its agent. The release, the grants and the version go in one
+  commit, since `check_grants` compares the grants with the new release.
 - [x] One install path (cleanup, 2026-09-18): the legacy `Plugin` + `pluginFile`
   hook is gone. `migrate_legacy_plugins` runs at startup: each legacy resource's
   zip is published as a Release, recorded at `/releases/<id>`, and the same
   resource is rewritten in place as an active Installation (grants = declared
   capabilities, config kept), signed by the server agent. The on-disk install
-  is untouched: an Installation whose `PluginMeta` already holds the release's
-  manifest is treated as materialized, which also makes pause/resume and config
-  changes free. `Plugin` and `pluginFile` stay in the defaults, marked
-  deprecated, because the migration query needs the class URL.
+  is untouched: an Installation whose `PluginMeta` already records this release
+  id is treated as materialized, which also makes a config change free. The id
+  is what decides it, not the manifest: two releases of one plugin agree on
+  every manifest field and differ in their package bytes, so comparing manifests
+  left the old code running under the new release's id. `Plugin` and
+  `pluginFile` stay in the defaults, marked deprecated, because the migration
+  query needs the class URL.
+- [x] `installationStatus` is enforced, not just recorded. `paused` and `draft`
+  unregister the class extender and leave the files, `PluginMeta` and the agent
+  alone, so resuming re-registers the same identity rather than minting a new
+  one; `installation::resolve` refuses anything but `active`, which stops JS
+  runs; and the startup loader skips extenders whose Installation is not active,
+  so a pause survives a restart. Only `revoked` and destroy uninstall.
 - [x] One manifest per installed plugin: `PluginMeta.manifest` is the unified
   v2 manifest (JSON-encoded records; legacy MessagePack records upgrade on read
   and an untranslated `plugin.json` is translated the first time the plugin
