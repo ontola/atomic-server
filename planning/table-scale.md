@@ -56,19 +56,22 @@ Browser numbers (N=1000, Chromium) are in section 3;
 Each row is a full resource: Ed25519 genesis, a Loro snapshot, PropValSub /
 ValPropSub / search tokens / envelope. Native `Db::create_resource`:
 
-| N | create total | ms/row | redb file | live key+value | bytes/row (file / live) |
+| N | create | ms/row | redb file | live key+value | file / live per row |
 | --- | --- | --- | --- | --- | --- |
 | 1,000 | 2.1 s | 2.12 | 64 MB | **15 MB** | 67 KB / **16 KB** |
 | 10,000 | 35 s | 3.51 | 514 MB | **134 MB** | 54 KB / **14 KB** |
-| 100,000 (2026-09-18, before shrink) | **686 s** | **6.86** | **4.0 GB** | (not measured) | 43 KB / — |
+| 100,000 after shrink | **551 s** | **5.51** | **4.0 GB** | **1.32 GB** | 43 KB / **14 KB** |
+| 100,000 before shrink (2026-09-18) | 686 s | 6.86 | 4.0 GB | (not measured) | 43 KB / — |
 
-Per-row payload after shrink (N=10k sample): row blob 1.3 KB, Loro
-snapshot 2.2 KB, compact envelope 2.5 KB, thin commit row 0.6 KB.
+Per-row payload after shrink (N=100k sample): row blob 1.3 KB, Loro
+snapshot 2.3 KB, compact envelope 2.6 KB, thin commit row 0.6 KB.
 Indexes (PropValSub+ValPropSub) are 5.6 KB/row — the biggest live
-slice. The on-disk file is ~3–4× live because each genesis is its own
-COW transaction; `redb compact` rewrote 514→562 MB on this VM (not a
-win). `atomic-server compact` remains the admin tool; batched import
-is what would stop the file growing faster than live data.
+slice. Create is **20% faster** (5.5 vs 6.9 ms/row). The on-disk file
+stays **exactly 4 GiB** at 100k (4294971392 bytes): redb allocated a
+4 GiB region and each genesis is its own COW transaction. Live data
+is 1.32 GB. `redb compact` on the 10k store grew 514→562 MB (not a
+win). Batched import is what would stop the file tracking write
+amplification instead of live data.
 
 Create **slows as the store grows** (2.4 → 6.9 ms/row). The last 90k rows
 were 7.2 ms each. That is index + snapshot write amplification, not the

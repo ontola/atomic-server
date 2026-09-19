@@ -27,11 +27,11 @@ Now:
 - Critical commit atoms other than `subject` are not indexed (commits are not
   a queryable class). `Query` on `urls::SUBJECT` still finds them.
 
-At 10k rows, live key+value is **134 MB / 14 KB/row** (row + snapshot +
-compact envelope + thin commit + indexes). The redb *file* is still 514 MB
-— same checkpoint as before the shrink — because each genesis is its own
-COW transaction and redb does not shrink in place. `compact_file` on that
-store grew 514→562 MB. Current-state snapshot + one signed copy remain.
+At 100k rows, live key+value is **1.32 GB / 14 KB/row**. The redb *file*
+is still **4.0 GB** (exactly one 4 GiB region; same checkpoint as before
+the shrink) because each genesis is its own COW transaction. Create is
+20% faster (5.5 vs 6.9 ms/row). `compact_file` on the 10k store grew
+514→562 MB. Current-state snapshot + one signed copy remain.
 Incremental `loroUpdate` on non-genesis edits, batched import, and a
 compaction policy that actually reclaims are still the follow-ups below.
 
