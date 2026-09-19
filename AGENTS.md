@@ -44,6 +44,16 @@ second writer on tracked files. Four ways that has cost real time:
   vite sees a file change, and the page reloads. That is not cosmetic: a reload
   abandons in-flight work, and this silently cancelled a destroy mid-test. If
   `git status` shows `.po` churn on a clean checkout, settle them and commit.
+- **The compiled catalogs are a second artifact.** Wuchale compiles the `.po`
+  files into `src/locales/.wuchale/`, which is gitignored. `git checkout --
+  src/locales/` resets the `.po` files and leaves the compiled output from
+  another state; the two then disagree and *every indexed string shifts*.
+  Missing entries show as `[i18n-404:NNN]`; shifted entries show a different
+  real string, so nothing looks wrong and tests fail on the wrong element.
+  Whenever you reset the `.po` files, also `rm -rf
+  browser/data-browser/src/locales/.wuchale` and restart vite. Do not make
+  the `.po` files read-only to stop the rewrite; the compiled output goes
+  stale instead.
 - **`pnpm clean-translations` is not the same writer.** It extracts from test
   files too, which the vite plugin does not, so its output is a *different*
   fixed point. Settling by running the app is what matches the dev server.
@@ -282,6 +292,13 @@ cd browser && pnpm run -r build                  # Full workspace build
 cd browser && pnpm run test-e2e:light            # Playwright @smoke (feature-branch CI)
 cd browser && pnpm run test-e2e                  # Full Playwright suite (develop / tags)
 ```
+
+When you restart an `atomic-server` for tests, gate on `curl` returning HTTP
+200, never on the port: redb's lock outlives the listening socket by several
+seconds, so an immediate restart exits with "Database already open" and the
+suite runs against nothing, failing in ways that look like product bugs. Retry
+the spawn when the log says so, and give a fresh server about ten seconds
+before the first spec.
 
 `atomic_lib`'s unit tests need the `db` feature — `hierarchy.rs`'s test module
 calls `Db::init_temp` and `test_utils::setup_test_env`, both gated behind it. So

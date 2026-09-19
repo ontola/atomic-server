@@ -1,9 +1,9 @@
 # Website publishing: self-hosted first, managed hosting alongside it
 
-Status: first FOSS implementation, built on the Assistant website prototype.
-
-For current implementation status, verification limits and prioritized follow-up
-work, read [the implementation handoff](WEBSITE_HANDOFF.md).
+Status: FOSS implementation on `develop` since #1500 (merged 2026-09-17), built
+on the Assistant website prototype (#1498, still an open draft). The managed SaaS
+adapter is not started. The open follow-ups from the #1500 handoff are in
+[Remaining work](#remaining-work) below.
 
 ## Contract and boundaries
 
@@ -79,10 +79,12 @@ Create a website and click **Publish site**. Later edits go live with **Update
 site**. That single explicit action saves the draft snapshot, uploads it and
 conditionally activates it. Conflicting publication changes are refused; the
 current site stays available if saving/uploading fails. One blue primary button
-is visible at a time. **Publishing options** contains version restore and
-unpublish. The same **Publishing options** menu contains export controls; there is no separate versions panel. Status loads on
-mount, after actions and when the browser window regains focus; no manual
-refresh control is exposed. Action errors use `store.notifyError` for the
+is visible at a time. Version restore, unpublish, export, Design with AI and
+View site are entries in the standard resource More menu (registered through
+`useCustomContextItems` in `WebsitePage.tsx` / `WebsiteHosting.tsx`); versions
+open a shared dialog and there is no separate "Publishing options" menu or
+versions panel. Status loads on mount, after actions and when the browser
+window regains focus; no manual refresh control is exposed. Action errors use `store.notifyError` for the
 standard toast and logging pipeline.
 
 API routes (all control requests signed with the existing Atomic request proof):
@@ -147,3 +149,66 @@ structured rich text and its normal autosave path. Source permissions and privat
 authoring checks apply before enabling either editor. The iframe has no scripts
 or credentials; React and writes are owned by the Atomic host. Changes update
 the draft; publication still requires Update site.
+
+## Remaining work
+
+Carried from the #1500 handoff (2026-09-15/17) when it was deleted. In
+suggested order; none of these is a regression against `develop`.
+
+1. **Inline rich text in the preview iframe is not fully verified.** Focused
+   Chromium and Firefox runs pass, but not every control is covered: mention
+   selection and arrow navigation, bubble menus, link and colour popovers, image
+   upload, tables, drag handles, undo/redo, cross-block selection, long
+   documents. Some shared RTE components still reference the global
+   `document`/`window` or portal defaults; audit them against iframe ownership
+   rather than loosening the sandbox. Two known flakes:
+   - `website-inline-content` / `website-inline-rte`: characters intermittently
+     vanish or land in a new paragraph when typing at human speed. The main
+     document editor also commits about once per keystroke at that speed, so
+     the save scheduler is a suspect; `loro-prosemirror` logs "Cannot find the
+     loroNode" around the failures.
+   - `website-inline-rte`: a popup (mention list, link field) open inside the
+     iframe is destroyed when the server echoes the author's own commit. The
+     echo stamps `lastCommit` on the resource's `properties` map; `LoroSyncPlugin`
+     subscribes to the whole doc, so it rebuilds the ProseMirror document for a
+     change that never touched `doc`. **Do not re-attempt filtering non-local
+     events in `updateNodeOnLoroEvent`**: measured, it broke the mention list
+     (the Suggestion plugin relies on those rebuild transactions) and did not
+     stop the character drop. The tractable fix is to make the tiptap
+     Suggestion plugin re-establish itself after a rebuild; then the filter
+     becomes viable. Product decision pending.
+2. **Preview speed, invalidation and actionable failures.** Measure the
+   "Preparing preview" path (resource fetch, image decode/optimisation, render,
+   blob URL setup) before optimising; avoid re-fetching every asset on unrelated
+   changes; preserve cursor/selection during background updates. Audit the
+   Up to date / Unpublished changes state against actual published output,
+   never infer "clean" from an unavailable source. Missing-resource errors
+   should offer repair or removal of the binding, not a dead end with a DID.
+3. **Managed atomic-saas publishing** (the major missing deliverable): a
+   destination adapter with the same status/upload/preview/activate semantics,
+   account-to-drive ownership, hosting entitlement, durable compare-and-swap
+   activation, private object storage and a customer-content origin
+   independent of the managed drive process. Prove staging publication,
+   private preview, unauthorised denial, activation conflict, failed-build
+   preservation, rollback, unpublish, source drive offline and image delivery.
+   Live S3/managed delivery has not been demonstrated.
+4. **Storage and delivery production work**: retention and reference-aware
+   GC (failed uploads, concurrent publication), quota enforcement and
+   cap-reached UX, backup and restore covering metadata and blobs, cache and
+   serving cost measurements, portable unpublished exports across devices,
+   documented manifest compatibility and limits.
+5. **Reassess renderer/plugin abstractions** against arbitrary AI designs and
+   interactive apps; the static CSP blocks scripts, network, workers and
+   forms, and changing that needs an explicit runtime/security design. Forms
+   should reuse the implementation from PR #1281 once a compatible revision
+   is verified (its merge status was not rechecked). Site deployment, form
+   availability and private response rows stay independent; rollback must
+   not reopen forms or delete responses.
+6. **Authoring polish**: document File embeds, folder-to-gallery, labels and
+   icons, responsive layout, accessibility. Screenshot capture and Assistant
+   drag/drop were discussed but are not established as delivered.
+
+Harness notes that only matter for these specs: the website preview iframe
+wants an origin separate from the app, so the production (embedded-in-server)
+topology CI uses breaks the website specs while the Vite topology passes them;
+do not compare results across topologies mid-investigation.
