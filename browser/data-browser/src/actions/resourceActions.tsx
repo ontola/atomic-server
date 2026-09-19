@@ -472,9 +472,12 @@ export const resourceActions: ActionDefinition[] = [
         }
       } catch (error) {
         // A failed delete is the one that most needs saying so: `destroy()`
-        // throws before it removes the resource locally, so the row stays in
-        // the tree and the only thing distinguishing "deleted" from "refused"
-        // is this message. It used to read `(error as Error).message`, which is
+        // removes the resource locally at once and queues the signed destroy
+        // in the outbox, so when the server refuses it the row is already gone
+        // from the tree while the server still has it — the only thing
+        // distinguishing "deleted" from "refused" is this message (the entry
+        // stays queued and is retried / parked by the outbox). It used to read
+        // `(error as Error).message`, which is
         // `undefined` for anything thrown that isn't an Error — an empty toast,
         // i.e. a delete that silently did nothing.
         const detail =

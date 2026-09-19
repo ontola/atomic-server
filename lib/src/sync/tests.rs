@@ -1980,14 +1980,12 @@ mod peer_sync_tests {
                 source_id: None,
                 validate_loro_causality: true,
                 enforce_subject_ownership: true,
-                suppress_live_echo: false,
                 response_origin: None,
             },
             CommitIngestOpts {
                 source_id: None,
                 validate_loro_causality: false,
                 enforce_subject_ownership: false,
-                suppress_live_echo: true,
                 response_origin: None,
             },
         ]
@@ -2133,7 +2131,6 @@ mod peer_sync_tests {
             source_id: None,
             validate_loro_causality: true,
             enforce_subject_ownership: true,
-            suppress_live_echo: false,
             response_origin: None,
         };
         let hub_err = ingest_commit_json(&db, &commit_json, &hub_opts)
@@ -2149,7 +2146,6 @@ mod peer_sync_tests {
             source_id: None,
             validate_loro_causality: false,
             enforce_subject_ownership: false,
-            suppress_live_echo: true,
             response_origin: None,
         };
         // With the gate off, the outcome must differ from the hub case above:

@@ -81,6 +81,10 @@ away.
 *Should have:* wiped it. A warning is the wrong shape when the consequence is a
 failure list that changes every run.
 *Fixed 2026-08-18 (87e12c9a) — wipes by default, `--keep-store` to override.*
+The same shape returned on the #1500 branch with a custom data dir that
+`e2e-server.sh` does not manage: at 1.1 GB, all six `apps` tests and most of
+`plugins` failed a 10s `iframe[title="App"]` wait; a fresh data dir took the
+two specs from 16 failures to 1. Wipe before any full run.
 
 **`waitForSearchIndex(page)` with no query is a 1.5s sleep wearing a
 readiness-helper's name.**
@@ -93,6 +97,61 @@ a name that promises a readiness check.
 **Playwright's `-g` silently keeps only the last one.**
 Passing two spec files with two `-g` filters ran one test and reported
 `1 passed`. Nothing indicated the other filter had been discarded.
+
+**redb's lock outlives the listening socket, so a restart that waits for the
+port runs the suite against nothing.** *(open)*
+Killing the server frees the port within a second, but `atomic.redb` stays
+locked for several more. A restart that only waits for the port exits at once
+with `Failed to create redb ...: Database already open. Cannot acquire lock.`,
+and every spec then fails in ways that look like product defects: missing menu
+items, disabled buttons, empty panels. On the #1500 branch this accounted for
+most of one session's "unexplained" failures. `e2e-server.sh` refuses a busy
+port before starting, but nothing in the repo waits for HTTP 200 or retries the
+spawn.
+*Should have:* gate readiness on `curl` returning 200, never on the port, and
+retry the spawn (not just the wait) when the log says "Database already open".
+Give a fresh server about ten seconds before the first spec; within that
+window `menu-item-website-prepare` renders but stays disabled.
+
+**Compiled i18n catalogs silently shift every string.**
+The `wuchale` plugin rewrites `src/locales/*.po` while Vite runs; the compiled
+catalogs live in `src/locales/.wuchale/`, which is gitignored. So
+`git checkout -- src/locales/` restores the `.po` files and leaves compiled
+artifacts from some other state, and every indexed string lookup shifts.
+Missing entries render as `[i18n-404:NNN]`, which is visible; *shifted* entries
+render as a different real string, which is not. That is how
+`iframe[title="Website preview"]` became a Google Calendar sentence and every
+website spec failed, an hour of bisecting code later. A measurement taken with
+`src/locales/` dirty is suspect; one revert on the #1500 branch was made on
+exactly such a measurement. Making the `.po` files read-only does not help: the
+`.wuchale` output goes stale instead.
+*Should have:* the compiled output regenerated whenever the `.po` files change
+under it, or a refusal to serve when the two disagree. Until then: delete
+`src/locales/.wuchale` together with any `.po` reset and restart Vite (rule in
+`AGENTS.md`).
+
+**Vite serves a stale pre-bundle after a dependency's `dist` is edited.**
+Editing an installed package's `dist/index.js` to instrument it is invisible
+until the Vite cache directory is cleared; one measurement showed zero events
+for that reason alone.
+*Should have:* said which pre-bundle it was serving and when it was built.
+
+**A dependency install borrowed from another checkout.**
+Every `node_modules` under `browser/` was a symlink into a different branch's
+checkout, so this branch's `pnpm-lock.yaml` had never been installed:
+`browser/patches/loro-prosemirror@0.4.3.patch` was not applied (the inline
+editors dropped characters) and the production build died with
+`null pointer passed to rust`, failing every `@smoke` test. Both read as product
+bugs. A real `pnpm install --frozen-lockfile` fixed both.
+*Should have:* the runner refusing to start when `node_modules` does not match
+the lockfile, as `test-server` already refuses a stale binary.
+
+**`normalizeSubject('')` resolved to the server root.**
+`useResource(x ?? '')` and every render before the drive setting hydrated
+fetched `http://host/`, which 404s on a DID-drive server and logged two console
+errors each time. It failed the zero-diagnostics gate in four specs and looked
+like an architectural "nothing lives at the root" problem.
+*Fixed 2026-09-16 (027c090) — the empty string is not a subject.*
 
 **No `webServer` block, so every spec fails on a dead port.**
 With no dev server on 6747 the whole suite fails at `page.goto` with

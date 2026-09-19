@@ -515,6 +515,63 @@ describe('resource.ts', () => {
   });
 
   /**
+   * Regression: `remove()` and `push()` wrote to the Loro doc and marked the
+   * resource dirty but never fired `LocalChange`. `useValue` only listens to
+   * that per-property event, so clearing a field or appending to an array
+   * left the bound hooks rendering the old value.
+   */
+  it('remove and push emit a LocalChange for the property', async ({
+    expect,
+  }) => {
+    const { Resource: ResourceClass, ResourceEvents } =
+      await import('./resource.js');
+    const r = new ResourceClass('https://example.com/remove-push-event');
+    const name = 'https://atomicdata.dev/properties/name';
+    const tags = 'https://example.com/properties/tags';
+    await r.set(name, 'to be removed', false);
+    r.push(tags, ['a']);
+
+    const events: { prop: string; value: unknown }[] = [];
+    const off = r.on(ResourceEvents.LocalChange, (prop, value) =>
+      events.push({ prop, value }),
+    );
+
+    r.remove(name);
+    expect(events).toEqual([{ prop: name, value: undefined }]);
+    expect(r.get(name)).toBeUndefined();
+
+    r.push(tags, ['b', 'c']);
+    expect(events).toHaveLength(2);
+    expect(events[1]).toEqual({ prop: tags, value: ['a', 'b', 'c'] });
+    expect(r.get(tags)).toEqual(['a', 'b', 'c']);
+
+    off();
+  });
+
+  it('set(prop, undefined) emits exactly one LocalChange', async ({
+    expect,
+  }) => {
+    const { Resource: ResourceClass, ResourceEvents } =
+      await import('./resource.js');
+    const r = new ResourceClass('https://example.com/set-undefined-event');
+    // A non-ontology property: `set()`'s value type for a known property
+    // (e.g. `core.properties.name`) excludes `undefined` at compile time.
+    const note = 'https://example.com/properties/note';
+    await r.set(note, 'value', false);
+
+    const events: { prop: string; value: unknown }[] = [];
+    const off = r.on(ResourceEvents.LocalChange, (prop, value) =>
+      events.push({ prop, value }),
+    );
+
+    await r.set(note, undefined, false);
+    expect(events).toEqual([{ prop: note, value: undefined }]);
+    expect(r.get(note)).toBeUndefined();
+
+    off();
+  });
+
+  /**
    * Regression: the resource history page used to read only `getMap('properties')`,
    * so a Document's body content (which loro-prosemirror writes into a separate
    * top-level `doc` container) never showed up — only title/metadata edits did.
