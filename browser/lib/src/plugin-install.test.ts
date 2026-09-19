@@ -182,7 +182,10 @@ describe('installRelease', () => {
 
     const subject = await installRelease(store, {
       drive: drive.subject,
-      release: { url: 'blake3:abc', id: 'blake3:abc' },
+      release: {
+        url: 'https://example.com/releases/blake3:abc',
+        id: 'blake3:abc',
+      },
       name: 'test-plugin',
       namespace: 'ontola',
       description: 'Renames folders',
@@ -200,7 +203,9 @@ describe('installRelease', () => {
       'Renames folders',
     );
     expect(installation.get(server.properties.version)).toBe('1.0.0');
-    expect(installation.get(server.properties.release)).toBe('blake3:abc');
+    expect(installation.get(server.properties.release)).toBe(
+      'https://example.com/releases/blake3:abc',
+    );
     expect(installation.get(server.properties.releaseId)).toBe('blake3:abc');
     expect(installation.get(server.properties.installationStatus)).toBe(
       'active',
@@ -252,7 +257,10 @@ describe('updateInstallationRelease', () => {
 
     const subject = await installRelease(store, {
       drive: drive.subject,
-      release: { url: 'blake3:one', id: 'blake3:one' },
+      release: {
+        url: 'https://example.com/releases/blake3:one',
+        id: 'blake3:one',
+      },
       name: 'test-plugin',
       namespace: 'ontola',
       version: '1.0.0',
@@ -262,13 +270,18 @@ describe('updateInstallationRelease', () => {
 
     const beforeUpdate = posted.length;
     await updateInstallationRelease(store, subject, {
-      release: { url: 'blake3:two', id: 'blake3:two' },
+      release: {
+        url: 'https://example.com/releases/blake3:two',
+        id: 'blake3:two',
+      },
       grants: ['storage', 'custom-view'],
       version: '1.1.0',
     });
 
     const installation = store.getResourceLoading(subject);
-    expect(installation.get(server.properties.release)).toBe('blake3:two');
+    expect(installation.get(server.properties.release)).toBe(
+      'https://example.com/releases/blake3:two',
+    );
     expect(installation.get(server.properties.releaseId)).toBe('blake3:two');
     expect(installation.get(server.properties.grants)).toEqual([
       'storage',
@@ -302,6 +315,7 @@ describe('publishZipRelease', () => {
         new Response(
           JSON.stringify({
             id: 'blake3:zip',
+            subject: 'https://example.com/releases/blake3:zip',
             release: {
               runtime: 'wasip2/1',
               package: 'ab'.repeat(32),
@@ -321,6 +335,8 @@ describe('publishZipRelease', () => {
     );
 
     expect(result.id).toBe('blake3:zip');
+    // The Installation's `release` points at this, not at the id.
+    expect(result.subject).toBe('https://example.com/releases/blake3:zip');
     expect(result.release.manifest).toEqual({
       name: 'test-plugin',
       namespace: 'ontola',

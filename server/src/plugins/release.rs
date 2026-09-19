@@ -24,7 +24,15 @@ pub const PACKAGE_MAX_BYTES: usize = 50 * 1024 * 1024;
 
 pub const JSON_AD: &str = "application/ad+json";
 
-/// `reference` is a release id (`blake3:…`) or the URL of a `Release` resource.
+/// `reference` is the URL of a `Release` resource, which is what an
+/// Installation's `release` is declared to hold, or a bare release id
+/// (`blake3:…`).
+///
+/// The bare id reads this node's release cache and no resource, so it answers
+/// for a release that was never recorded. Every publish records a `Release`
+/// now and nothing writes a bare id any more, so the branch is here for
+/// Installations written before that; keeping it is what lets them keep
+/// running.
 ///
 /// The returned release is validated for shape but not yet compared with any
 /// pinned id; that is the caller's decision.
@@ -158,14 +166,22 @@ async fn remote_package(db: &Db, release: &Resource) -> AtomicResult<Option<Stri
 /// the extended classes read from the component itself), the bytes stored
 /// content-addressed. Returns the release id, the release and the manifest.
 /// Publishing identical bytes twice yields the same id.
+///
+/// `claimed_world` is what the caller believes the package is. Every reason to
+/// refuse is checked before the first write, so a refused publish leaves
+/// nothing behind: the blob and the cached release record are only written
+/// once the package is going to be published. Callers with nothing to claim
+/// pass `None`.
 pub async fn publish_package(
     db: &Db,
     bytes: &[u8],
+    claimed_world: Option<&str>,
 ) -> AtomicResult<(String, PluginRelease, Manifest)> {
     use atomic_lib::db::plugin_release::RUNTIME_WASIP2;
     let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes.to_vec()))
         .map_err(|e| AtomicError::from(format!("Body is not a zip archive: {e}")))?;
     let manifest = crate::plugins::wasm::describe_package(db, &mut zip).await?;
+    expect_world(&manifest, claimed_world)?;
     let package = store_package(db, bytes).await?;
     let release = PluginRelease {
         source: None,
@@ -459,15 +475,14 @@ pub async fn is_listed(db: &Db, id: &str) -> bool {
 
 /// Refuses a publish whose caller believes the package is one world when the
 /// component says another, rather than mislabeling it.
-pub fn expect_world(
-    release: &PluginRelease,
-    manifest: &Manifest,
-    claimed: Option<&str>,
-) -> AtomicResult<()> {
+///
+/// Read from the manifest rather than from the release, so that
+/// [`publish_package`] can ask before it has anything to store.
+pub fn expect_world(manifest: &Manifest, claimed: Option<&str>) -> AtomicResult<()> {
+    let actual = world_name(manifest.world);
     match claimed {
-        Some(claimed) if claimed != release.world => Err(AtomicError::from(format!(
-            "the package is a {} (its component extends {} classes), not a {claimed}",
-            release.world,
+        Some(claimed) if claimed != actual => Err(AtomicError::from(format!(
+            "the package is a {actual} (its component extends {} classes), but the publish claimed {claimed}",
             manifest.entrypoints.class_urls().len()
         ))),
         _ => Ok(()),

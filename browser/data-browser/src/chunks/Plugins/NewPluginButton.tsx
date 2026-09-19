@@ -47,14 +47,14 @@ const NewPluginButton: React.FC<NewPluginButtonProps> = ({ drive }) => {
     try {
       // The server validates the zip and translates its plugin.json into the
       // manifest the review shows; nothing is inspected client-side.
-      const { id, release } = await publishZipRelease(
+      const { id, subject, release } = await publishZipRelease(
         store,
         drive.subject,
         file,
       );
       setPending({
         review: readInstallationReview({ ...release, id }),
-        release: { url: id, id },
+        release: { url: subject, id },
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
