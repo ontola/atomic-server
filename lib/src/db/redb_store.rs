@@ -156,18 +156,34 @@ pub fn compact_file(path: &std::path::Path) -> AtomicResult<(u64, u64, bool)> {
     let size_before = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     let mut db = redb::Database::create(path)
         .map_err(|e| format!("Failed to open redb at {}: {e}", path.display()))?;
-    let did_compact = db
-        .compact()
-        .map_err(|e| format!("Compaction failed: {e}"))?;
+    let did_compact = super::compaction::compact_database(&mut db)?;
     drop(db);
     let size_after = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     Ok((size_before, size_after, did_compact))
 }
 
 impl RedbStore {
-    /// Create a RedbStore backed by a file on disk.
+    /// Create a RedbStore backed by a file on disk. No startup compaction;
+    /// see `new_file_with_policy` for the path `Db::init_redb_file` takes.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn new_file(path: &std::path::Path) -> AtomicResult<Self> {
+        Self::new_file_with_policy(path, &super::compaction::CompactionPolicy::disabled())
+            .map(|(store, _)| store)
+    }
+
+    /// Open (or create) the file, log its size and open duration, and run
+    /// the startup compaction `policy` on it before any table is touched.
+    /// The second value says whether a compaction ran; a failure there is a
+    /// `Skip::Failed`, never an error, so a store that cannot be compacted
+    /// still opens.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn new_file_with_policy(
+        path: &std::path::Path,
+        policy: &super::compaction::CompactionPolicy,
+    ) -> AtomicResult<(
+        Self,
+        Result<super::compaction::CompactionRecord, super::compaction::Skip>,
+    )> {
         // `Database::create` with defaults uses a 1 GiB cache and the
         // slow full-scan repair path on any unclean shutdown. On a
         // multi-GB store that's 40+ seconds added to every boot
@@ -177,9 +193,18 @@ impl RedbStore {
         // next open is "almost instant" (redb transactions.rs:1246-1258
         // describes the mechanism).
         let t = std::time::Instant::now();
-        let db = Database::create(path)
+        let mut db = Database::create(path)
             .map_err(|e| format!("Failed to create redb at {}: {e}", path.display()))?;
-        tracing::info!("RedbStore::new_file: Database::create in {:?}", t.elapsed());
+        let open_duration = t.elapsed();
+        tracing::info!(
+            "RedbStore::new_file: Database::create in {:?}",
+            open_duration
+        );
+
+        // On the handle we already hold: the file lock is taken once, and
+        // a bloated store is not opened a second time just to measure it.
+        let compaction =
+            super::compaction::run_startup_policy(&mut db, path, open_duration, policy);
 
         // Create all tables upfront
         let t = std::time::Instant::now();
@@ -203,11 +228,14 @@ impl RedbStore {
         }
         tracing::info!("RedbStore::new_file: table-create tx in {:?}", t.elapsed());
 
-        Ok(RedbStore {
-            db: Arc::new(db),
-            batch_buffer: std::sync::Mutex::new(None),
-            dirty: AtomicBool::new(false),
-        })
+        Ok((
+            RedbStore {
+                db: Arc::new(db),
+                batch_buffer: std::sync::Mutex::new(None),
+                dirty: AtomicBool::new(false),
+            },
+            compaction,
+        ))
     }
 
     /// Create a new in-memory RedbStore.

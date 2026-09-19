@@ -767,8 +767,9 @@ Not covered: derived AI tools invoked through a real model; MCP protocol project
 |---|---|---|
 | Hashed `view-transition-name` plus `view-transition-class` per tag | glue | `browser/data-browser/src/helpers/viewTransition.test.ts` |
 | `startViewTransition` throw / hung `finished` / rejected `ready` still navigates and skips the overlay | glue | `browser/data-browser/src/helpers/viewTransition.test.ts` |
+| Navigation skips `startViewTransition` unless the user opts in, and uses it once they do | glue | `browser/data-browser/src/hooks/useNavigateWithTransition.test.tsx` |
 
-Not covered: visual morph of a grid card into the resource page in Firefox (needs a headed Firefox run; Playwright's firefox project is locks-only and automation bypasses view transitions unless `forceViewTransitions` is set).
+Not covered: visual morph of a grid card into the resource page in Firefox (needs a headed Firefox run; Playwright's firefox project is locks-only and automation bypasses view transitions unless `forceViewTransitions` is set). Android Chrome is not covered at all, which is why transitions are off by default ([#1563](https://github.com/ontola/atomic-server/issues/1563)): re-enabling by default needs a per-browser check first.
 
 ## Documents
 
@@ -961,6 +962,18 @@ mounts without resetting or re-registering the global parser.
 - `client-db.worker.test.ts` requires vault cursor commits to flush before the
   worker acknowledges backup completion, and propagates flush failures. The
   SaaS `vault-refresh.spec.ts` checks stored objects and bytes across reloads.
+- `db::compaction::tests::startup_compaction_shrinks_a_bloated_store_and_keeps_every_resource`
+  (`cargo test -p atomic_lib --features db-redb --lib`) churns a real redb
+  file through `Db::init_redb_file_with_policy` — overwrites that double in
+  size plus throwaway resources deleted mid-file, so the buddy allocator
+  cannot reuse the holes — and reopens it: the policy compacts, the file
+  gives back most of the measured free space, every kept resource reads its
+  last value, the record survives the next open, and a disabled policy leaves
+  the file byte-for-byte alone. Overwrites *alone* leave only ~20% dead
+  (freed blocks coalesce and get reused), which is why the test deletes.
+  `server::config::tests` cover the `--auto-compact*` flags. Not covered:
+  compaction of a store another process holds open (the open itself fails
+  first, as before), and the cost of `DatabaseStats` on a multi-GB file.
 - `synthetic_agent_reads_have_stable_history_without_persisting` checks that
   fallback agent lookups neither invent creation timestamps nor generate new
   CRDT history or persist a resource merely by reading it.
@@ -2070,6 +2083,27 @@ on Linux x86_64, including a cached install followed by changed downstream
 source input and execution of the retained binary. Its aarch64 archive digest
 is pinned to the upstream release; native aarch64 execution is not covered by
 that check. Full CI wall-time savings require a completed hosted run.
+## Query index consistency (2026-09-18)
+
+`db::test::is_a_encodings_all_match_the_class_constraint` (formerly
+`#[ignore]`d as an open bug) writes four rows whose `isA` names one class in
+four encodings and asserts a drive-scoped, sorted, class-filtered query lists
+all of them and that `Db::check_query_index` finds index and store in
+agreement. `replicated_rows_reach_a_watched_scoped_sorted_query` watches that
+query shape with 5 rows and then replicates 17 more through
+`persist_replicated_resource` (the sync import path, propvals materialized
+from a Loro doc), asserting the sorted, unsorted and differently scoped shapes
+all answer 22. `first_build_cross_checks_the_unscanned_constraint` removes one
+row's `isA` entry from `PropValSub` and asserts the first build still files
+the row through the `parent` constraint.
+`check_query_index_names_missing_and_stale_members` corrupts a member index in
+both directions and asserts the report names each subject.
+`did_rows_stamped_into_another_drive_stay_out_of_a_watched_query` covers the
+audit's C17 on both the build and the commit path, including the unstamped
+row that is deliberately not excluded. Not covered: the runtime `warn!` text
+itself, and a UI-level comparison of a client's local answer with the
+server's (see `planning/silent-failures.md`).
+
 ## External cache access and authentication origins (#170)
 
 Paired SaaS `portal/e2e/recovery-passkey.spec.ts` uses Chromium virtual PRF authenticators with the real control plane to verify app enrollment followed by portal login using one credential, reuse of a portal-created credential, and account-settings migration without replacing ciphertext or old wrappers. Physical Safari/iCloud, Android/password-manager and native-shell behavior remain device acceptance checks.

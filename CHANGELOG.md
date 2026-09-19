@@ -76,6 +76,42 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   the WS `ERROR` frame and the HTTP `/commit` error body's `errorCode` alike.
   It was going out as `UNKNOWN`, leaving clients to match the message text to
   know the refusal is terminal. The Rust outbox drops such entries as terminal.
+- Query index: a drive-scoped, sorted, class-filtered collection could list
+  and count fewer rows than the store held, with nothing to show for it
+  (`planning/silent-failures.md`). Rows whose `isA` read back as a plain
+  `String` were in the index and then hidden, because the built-in
+  collection class extender could not parse the value and
+  `Db::resolve_query_member` dropped any row an extender check errored on;
+  an extender that cannot decide is now skipped with a warning and the row
+  is listed. Rows whose `isA` was a `String` holding the JSON array were
+  never indexed under their class and never matched it; the index keys and
+  the matcher now read the array's elements from one helper
+  (`Value::to_reference_index_strings`, `Value::contains_value`). New
+  `Db::check_query_index(&Query)` compares a query's member index with a
+  scan of the store and reports the missing and stale subjects; the first
+  build of a filter cross-checks the equality constraints the planner did
+  not scan (bounded by its 512-entry scan cap), warns with the filter and
+  the subjects, and files them. DID resources stamped into another drive no
+  longer enter a drive's watched query on commit or build: the `Db` resolves
+  each watched filter's `drive` subject to its drive root and compares
+  stamps (security audit C17; the filter's identity is unchanged).
+- Startup store-size diagnostics and automatic redb compaction. Opening the
+  store now logs the file's size and open duration (a warning above 1 GiB,
+  naming `atomic-server compact`) and, from redb's `DatabaseStats`, how much
+  of the file is live, fragmented and reclaimable (bytes on disk minus pages
+  in use; redb's sparse growth headroom does not count). When the file is at
+  least 256 MiB on disk and at least 30% of that is dead, `Db::init_redb_file`
+  compacts it before the server listens and logs the before/after sizes and
+  duration; the outcome is kept in the store and readable through
+  `Db::last_compaction`. A compaction failure is a warning, never a refused
+  start. New options `--auto-compact` (`ATOMIC_AUTO_COMPACT`, default
+  `true`), `--auto-compact-min-mb` (`ATOMIC_AUTO_COMPACT_MIN_MB`, `256`) and
+  `--auto-compact-min-reclaimable-percent`
+  (`ATOMIC_AUTO_COMPACT_MIN_RECLAIMABLE_PERCENT`, `30`); `atomic_lib` callers
+  pass a `db::compaction::CompactionPolicy` to
+  `Db::init_redb_file_with_policy`. Not applied to the OPFS (browser) or sled
+  backends. See `planning/disk-storage-and-persistence-optimization.md`.
+
 - CI: the `:develop` docker image is published by its own job instead of a
   step tacked onto the end of the CI job. As a step it inherited whatever the
   CI step had already spent (a wedged Dagger engine on the runner burned the

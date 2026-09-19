@@ -2398,11 +2398,16 @@ async fn sorted_query_index_keeps_up_with_two_constraints() {
 /// as the same subject fails the constraint, the row is silently absent from
 /// the index, and therefore from the table, while being present in the store
 /// and in every unfiltered query.
+///
+/// This reproduced two silent failures at once. The `String` row was in the
+/// index and was read, and then hidden: the built-in collection class
+/// extender did `is_a.to_subjects()?` on it, and `resolve_query_member` took
+/// any extender error as a reason to drop the row from the page and the
+/// count. The JSON-array `String` row was never a candidate: its `isA` was
+/// indexed under the literal `["…"]` string, so the class constraint could
+/// not find it and the matcher did not accept it either.
 #[tokio::test]
 #[timeout(120000)]
-#[ignore = "reproduces an OPEN bug: query_sorted_indexed returns 2 of 3 members \
-            that are written, parseable, local and matching — the read stops \
-            after the second. Run with `--ignored` while working on it."]
 async fn is_a_encodings_all_match_the_class_constraint() {
     use crate::storelike::Query;
 
@@ -2470,6 +2475,403 @@ async fn is_a_encodings_all_match_the_class_constraint() {
         encodings.len(),
         res.subjects
     );
+    assert_eq!(res.subjects.len(), encodings.len());
+    assert_eq!(res.resources.len(), encodings.len());
+
+    let report = store.check_query_index(&query).unwrap();
+    assert!(
+        report.is_consistent(),
+        "index and store disagree after the read: {report:?}"
+    );
+    assert_eq!(report.expected, encodings.len());
+}
+
+/// A row built the way sync builds it — a fresh `Resource` given a Loro doc
+/// through `apply_state_doc`, persisted by `persist_replicated_resource` —
+/// must land in a watched, drive-scoped, sorted, class-filtered index, and
+/// the sorted read must then agree with the unsorted and the unscoped
+/// shapes of the same question.
+///
+/// This is the shape from planning/silent-failures.md: a table rendered 5
+/// rows through `query_complex` while 22 existed and every other query shape
+/// returned 22. The first 5 rows are written before the query is watched
+/// (so the build files them), the other 17 arrive as replicas afterwards (so
+/// only commit-time maintenance can file them).
+#[tokio::test]
+#[timeout(120000)]
+async fn replicated_rows_reach_a_watched_scoped_sorted_query() {
+    use crate::storelike::Query;
+
+    let store = Db::init_temp("query_index_replicated_rows").await.unwrap();
+
+    let drive =
+        "did:ad:driveREPLaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let table =
+        "did:ad:tableREPLaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let cls =
+        "did:ad:classREPLaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    let mut t = crate::Resource::new(table.into());
+    t.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    t.set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+        .unwrap();
+    store
+        .add_resource_opts(&t, false, true, true)
+        .await
+        .unwrap();
+
+    // What a peer's SYNC_PUSH entry becomes here: propvals materialized from
+    // the Loro doc, not the ones a local caller set.
+    let replicate = |i: usize| {
+        let subj = format!("did:ad:repl{:0>69}==", format!("{i}"));
+        let mut authored = crate::Resource::new(subj.clone());
+        authored
+            .set_unsafe(urls::PARENT.into(), Value::AtomicUrl(table.into()))
+            .unwrap();
+        authored
+            .set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+            .unwrap();
+        authored
+            .set_unsafe(
+                urls::IS_A.into(),
+                Value::ResourceArray(vec![crate::values::SubResource::Subject(cls.into())]),
+            )
+            .unwrap();
+        authored
+            .set_unsafe(urls::NAME.into(), Value::String(format!("row {i:02}")))
+            .unwrap();
+        let doc = authored.build_state_doc().unwrap();
+        let mut replica = crate::Resource::new(subj);
+        replica.apply_state_doc(doc).unwrap();
+        replica
+    };
+
+    for i in 0..5 {
+        store
+            .persist_replicated_resource(&replicate(i))
+            .await
+            .unwrap();
+    }
+
+    let table_query = |sort: bool, scope: &str| {
+        let mut q = Query::new_prop_val(urls::PARENT, table);
+        q.filters = vec![crate::storelike::PropVal {
+            property: Some(urls::IS_A.to_string()),
+            value: Some(Value::AtomicUrl(cls.into())),
+            ..Default::default()
+        }];
+        q.sort_by = sort.then(|| urls::NAME.to_string());
+        q.drive = Some(scope.into());
+        q.limit = Some(100);
+        q
+    };
+    let scoped_sorted = table_query(true, drive);
+
+    assert_eq!(store.query(&scoped_sorted).await.unwrap().count, 5);
+    assert!(
+        crate::db::query_index::QueryFilter::try_from_query(&scoped_sorted)
+            .unwrap()
+            .is_watched(&store)
+    );
+
+    for i in 5..22 {
+        store
+            .persist_replicated_resource(&replicate(i))
+            .await
+            .unwrap();
+    }
+
+    let unsorted = table_query(false, drive);
+    let other_scope = table_query(true, table);
+
+    let sorted_res = store.query(&scoped_sorted).await.unwrap();
+    assert_eq!(
+        sorted_res.count, 22,
+        "the watched sorted index lists {} of 22 replicated rows",
+        sorted_res.count
+    );
+    assert_eq!(store.query(&unsorted).await.unwrap().count, 22);
+    assert_eq!(store.query(&other_scope).await.unwrap().count, 22);
+
+    for q in [&scoped_sorted, &unsorted, &other_scope] {
+        let report = store.check_query_index(q).unwrap();
+        assert!(report.is_consistent(), "{report:?}");
+        assert_eq!(report.indexed, 22);
+    }
+}
+
+/// The planner scans one constraint's index and trusts it to hold every
+/// member. When it does not — here one row's `isA` entry is simply gone —
+/// the first build must notice through the other constraint, say so, and
+/// file the row anyway, instead of watching a partial list for good.
+#[tokio::test]
+#[timeout(120000)]
+async fn first_build_cross_checks_the_unscanned_constraint() {
+    use crate::storelike::Query;
+
+    let store = Db::init_temp("query_index_cross_check").await.unwrap();
+    let drive =
+        "did:ad:driveXCHKaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let table =
+        "did:ad:tableXCHKaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let cls =
+        "did:ad:classXCHKaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    // More rows in the table than in the class, so the planner scans `isA`.
+    for i in 0..6 {
+        let subj = format!("did:ad:xchk{:0>69}==", format!("{i}"));
+        let mut r = crate::Resource::new(subj);
+        r.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(table.into()))
+            .unwrap();
+        if i < 4 {
+            r.set_unsafe(
+                urls::IS_A.into(),
+                Value::ResourceArray(vec![crate::values::SubResource::Subject(cls.into())]),
+            )
+            .unwrap();
+        }
+        r.set_unsafe(urls::NAME.into(), Value::String(format!("row{i}")))
+            .unwrap();
+        store
+            .add_resource_opts(&r, false, true, true)
+            .await
+            .unwrap();
+    }
+
+    // Knock one row out of the class index only. Its row still names the
+    // class, and its `parent` entry is intact.
+    let gone = "did:ad:xchk000000000000000000000000000000000000000000000000000000000000000000002==";
+    let mut transaction = crate::db::trees::Transaction::new();
+    transaction.push(
+        crate::db::trees::Operation::remove_atom_from_prop_val_sub_index(
+            &crate::atoms::IndexAtom {
+                subject: Subject::from(gone),
+                property: urls::IS_A.to_string(),
+                ref_value: cls.to_string(),
+                sort_value: cls.to_string(),
+            },
+        ),
+    );
+    store.apply_transaction(&mut transaction).unwrap();
+
+    let mut query = Query::new_prop_val(urls::PARENT, table);
+    query.filters = vec![crate::storelike::PropVal {
+        property: Some(urls::IS_A.to_string()),
+        value: Some(Value::AtomicUrl(cls.into())),
+        ..Default::default()
+    }];
+    query.sort_by = Some(urls::NAME.to_string());
+    query.drive = Some(drive.into());
+    query.limit = Some(100);
+
+    let res = store.query(&query).await.unwrap();
+    assert_eq!(res.count, 4, "got {:?}", res.subjects);
+    assert!(res.subjects.iter().any(|s| s.as_str() == gone));
+    let report = store.check_query_index(&query).unwrap();
+    assert!(report.is_consistent(), "{report:?}");
+}
+
+/// The consistency check names what is wrong, in both directions.
+#[tokio::test]
+#[timeout(120000)]
+async fn check_query_index_names_missing_and_stale_members() {
+    use crate::storelike::Query;
+
+    let store = Db::init_temp("query_index_report").await.unwrap();
+    let drive =
+        "did:ad:driveRPRTaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let table =
+        "did:ad:tableRPRTaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    let mut subjects = vec![];
+    for i in 0..3 {
+        let subj = format!("did:ad:rprt{:0>69}==", format!("{i}"));
+        let mut r = crate::Resource::new(subj.clone());
+        r.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(table.into()))
+            .unwrap();
+        r.set_unsafe(urls::NAME.into(), Value::String(format!("row{i}")))
+            .unwrap();
+        store
+            .add_resource_opts(&r, false, true, true)
+            .await
+            .unwrap();
+        subjects.push(subj);
+    }
+
+    let mut query = Query::new_prop_val(urls::PARENT, table);
+    query.sort_by = Some(urls::NAME.to_string());
+    query.drive = Some(drive.into());
+    assert_eq!(store.query(&query).await.unwrap().count, 3);
+
+    let report = store.check_query_index(&query).unwrap();
+    assert!(report.is_consistent(), "{report:?}");
+    assert!(report.watched);
+    assert_eq!((report.indexed, report.expected), (3, 3));
+
+    // Drop one member from the index, and file one that is not a row.
+    let q_filter = crate::db::query_index::QueryFilter::try_from_query(&query).unwrap();
+    let ghost =
+        "did:ad:rprtGHOSTaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let mut transaction = crate::db::trees::Transaction::new();
+    let dropped = store
+        .get_resource_shallow(&Subject::from(subjects[1].clone()))
+        .unwrap();
+    let sort_key = crate::db::query_index::sort_key_for(&dropped, urls::NAME);
+    crate::db::query_index::update_indexed_member(
+        &q_filter,
+        &subjects[1],
+        &sort_key,
+        true,
+        &mut transaction,
+    )
+    .unwrap();
+    crate::db::query_index::update_indexed_member(
+        &q_filter,
+        ghost,
+        &crate::db::query_index::encode_sort_value(Some(&Value::String("zzz".into()))),
+        false,
+        &mut transaction,
+    )
+    .unwrap();
+    store.apply_transaction(&mut transaction).unwrap();
+
+    let report = store.check_query_index(&query).unwrap();
+    assert!(!report.is_consistent());
+    assert_eq!(report.missing, vec![subjects[1].clone()]);
+    assert_eq!(report.stale, vec![ghost.to_string()]);
+    assert_eq!((report.indexed, report.expected), (3, 3));
+}
+
+/// A DID row cannot be routed to a drive by its subject, so every drive's
+/// watched filters see it on commit. Its `drive` stamp is what keeps it out
+/// of the drives it does not belong to — compared against the *root* the
+/// filter's `drive` resolves to, since for a `did:` query that field is the
+/// queried subject (a table), not the drive itself. Security audit C17.
+#[tokio::test]
+#[timeout(120000)]
+async fn did_rows_stamped_into_another_drive_stay_out_of_a_watched_query() {
+    use crate::storelike::Query;
+
+    let store = Db::init_temp("query_index_drive_stamp").await.unwrap();
+    let drive_a =
+        "did:ad:driveSTMPAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let drive_b =
+        "did:ad:driveSTMPBaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let table_a =
+        "did:ad:tableSTMPAaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let cls =
+        "did:ad:classSTMPaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+
+    for drive in [drive_a, drive_b] {
+        let mut d = crate::Resource::new(drive.into());
+        d.set_unsafe(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![crate::values::SubResource::Subject(
+                urls::DRIVE.into(),
+            )]),
+        )
+        .unwrap();
+        store
+            .add_resource_opts(&d, false, true, true)
+            .await
+            .unwrap();
+    }
+    let mut t = crate::Resource::new(table_a.into());
+    t.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(drive_a.into()))
+        .unwrap();
+    t.set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive_a.into()))
+        .unwrap();
+    store
+        .add_resource_opts(&t, false, true, true)
+        .await
+        .unwrap();
+
+    let row = |name: &str, drive: Option<&str>| {
+        let subj = format!("did:ad:stmp{name}{}==", "a".repeat(69 - name.len()));
+        let mut r = crate::Resource::new(subj.clone());
+        r.set_unsafe(
+            urls::IS_A.into(),
+            Value::ResourceArray(vec![crate::values::SubResource::Subject(cls.into())]),
+        )
+        .unwrap();
+        r.set_unsafe(urls::NAME.into(), Value::String(name.into()))
+            .unwrap();
+        if let Some(drive) = drive {
+            r.set_unsafe(urls::DRIVE_PROP.into(), Value::AtomicUrl(drive.into()))
+                .unwrap();
+        }
+        (subj, r)
+    };
+
+    // Written before the query exists: the build path.
+    let (in_a, r) = row("inA", Some(drive_a));
+    store
+        .add_resource_opts(&r, false, true, true)
+        .await
+        .unwrap();
+    let (in_b, r) = row("inB", Some(drive_b));
+    store
+        .add_resource_opts(&r, false, true, true)
+        .await
+        .unwrap();
+    let (unstamped, r) = row("noStamp", None);
+    store
+        .add_resource_opts(&r, false, true, true)
+        .await
+        .unwrap();
+
+    // Every instance of the class, as seen from table A.
+    let mut query = Query::new_class(cls);
+    query.sort_by = Some(urls::NAME.to_string());
+    query.drive = Some(table_a.into());
+    query.limit = Some(100);
+
+    let found: Vec<String> = store
+        .query(&query)
+        .await
+        .unwrap()
+        .subjects
+        .iter()
+        .map(|s| s.as_str().to_string())
+        .collect();
+    assert!(found.contains(&in_a), "{found:?}");
+    assert!(
+        !found.contains(&in_b),
+        "a row stamped into drive B is listed by drive A's query: {found:?}"
+    );
+    // No stamp is no evidence; read rights decide at query time.
+    assert!(found.contains(&unstamped), "{found:?}");
+
+    // Written while the query is watched: the commit path.
+    let (in_a2, r) = row("inA2", Some(drive_a));
+    store
+        .add_resource_opts(&r, false, true, true)
+        .await
+        .unwrap();
+    let (in_b2, r) = row("inB2", Some(drive_b));
+    store
+        .add_resource_opts(&r, false, true, true)
+        .await
+        .unwrap();
+
+    let found: Vec<String> = store
+        .query(&query)
+        .await
+        .unwrap()
+        .subjects
+        .iter()
+        .map(|s| s.as_str().to_string())
+        .collect();
+    assert!(found.contains(&in_a2), "{found:?}");
+    assert!(
+        !found.contains(&in_b2),
+        "a row committed into drive B reached drive A's watched query: {found:?}"
+    );
+    assert_eq!(found.len(), 3, "{found:?}");
+
+    let report = store.check_query_index(&query).unwrap();
+    assert!(report.is_consistent(), "{report:?}");
 }
 
 /// Narrows the previous failure: is the row rejected by the MATCHER

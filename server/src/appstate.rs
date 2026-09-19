@@ -60,10 +60,13 @@ impl AppState {
             tracing::warn!("Development mode is enabled. This will use staging environments for services like LetsEncrypt.");
         }
 
-        let mut store = atomic_lib::Db::init_redb_file(
+        // Opens the file, logs its size and open time, and compacts it
+        // first when `config.compaction` says the dead space is worth it.
+        let mut store = atomic_lib::Db::init_redb_file_with_policy(
             &config.store_path,
             Some(config.get_origin()),
             &config.uploads_path,
+            &config.compaction,
         )
         .await?;
 
