@@ -721,6 +721,30 @@ impl Resource {
         &self.propvals
     }
 
+    /// The subject of every class this resource's `isA` names, whatever the
+    /// encoding. Unlike [`Resource::get_classes`] this reads what is already
+    /// here and fetches nothing.
+    ///
+    /// A row written by a local commit carries `isA` as a `ResourceArray`; one
+    /// rebuilt from a Loro doc, or written by a client that pins no datatype,
+    /// reads back as an `AtomicUrl`, a plain `String`, or a `String` holding
+    /// the JSON array. They all name the same class, and `Value::to_subjects`
+    /// errors on the scalar shapes, so a caller that reaches for it lets an
+    /// encoding decide class membership. Reach for this instead.
+    ///
+    /// A resource without `isA` has no classes, which is not an error.
+    pub fn class_subjects(&self) -> Vec<String> {
+        self.propvals
+            .get(urls::IS_A)
+            .and_then(|is_a| is_a.to_reference_index_strings())
+            .unwrap_or_default()
+    }
+
+    /// Whether [`Resource::class_subjects`] contains `class`.
+    pub fn has_class(&self, class: &str) -> bool {
+        self.class_subjects().iter().any(|c| c == class)
+    }
+
     /// True for resources whose `loroUpdate` is a *signed payload*, not a CRDT
     /// snapshot of their own state — i.e. commits. Such resources are never
     /// given a live `loro` state doc, and their `loroUpdate` propval is

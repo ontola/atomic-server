@@ -703,7 +703,9 @@ async fn migrate_legacy_plugin(store: &Db, mut resource: Resource) -> AtomicResu
     };
     let drive = get_parent_drive(&resource, store).await?;
     let bytes = release::file_bytes(store, &plugin_file).await?;
-    let (id, published, manifest) = release::publish_package(store, &bytes).await?;
+    // No claimed world: the zip is already installed, so its own component
+    // decides what it is.
+    let (id, published, manifest) = release::publish_package(store, &bytes, None).await?;
     let origin = store.get_server_url();
     let release_url = release::record_release(store, &id, &published, &drive, None, &origin)
         .await?
@@ -759,7 +761,10 @@ async fn migrate_legacy_plugin(store: &Db, mut resource: Resource) -> AtomicResu
 mod installation_tests {
     use super::*;
     use crate::plugins::{
-        installation, release,
+        host_core::{installation_grants, ResourceGrants},
+        installation,
+        manifest::Manifest,
+        release,
         test_fixture::{fixture, genesis},
         wasm,
     };
@@ -882,6 +887,56 @@ mod installation_tests {
         assert!(db.app_agent_was_revoked(&app_key).unwrap());
     }
 
+    /// A run belongs to an Installation, so it is limited to the grants the
+    /// installer approved. Falling back to the manifest's own declared set
+    /// would hand a plugin what it asked for rather than what it was given,
+    /// and that is the one direction a fallback must never take.
+    ///
+    /// Reading the Installation's classes is the other half, and that is a unit
+    /// test on `Resource::class_subjects` instead: the encodings which used to
+    /// defeat the class check come from rebuilt rows, and a store write
+    /// normalizes them away, so there is no way to write one here.
+    #[actix_rt::test]
+    async fn a_js_run_gets_the_approved_grants_rather_than_the_declared_ones() {
+        let f = fixture("installation_grants").await;
+        let db = &f.appstate.store;
+        // Only the two budget capabilities show up in `ResourceGrants`, so the
+        // release declares one of them and the Installation approves that one.
+        let mut release = PluginRelease::js(
+            "export function run() { return { intents: [] }; }".into(),
+            json!({
+                "schemaVersion": 2,
+                "capabilities": [{"name": "extended-fuel", "reason": "long imports"}]
+            }),
+            Default::default(),
+        );
+        release.world = WORLD_EXTENSION.into();
+        let id = db.publish_plugin_release(&release).unwrap();
+        let mut props = installation_props(&f.drive, "acme", "importer", &id, &id, "active");
+        props.retain(|(prop, _)| *prop != urls::GRANTS);
+        props.push((urls::GRANTS, Value::Json(json!(["extended-fuel"]))));
+        let installation = genesis(db, props).await;
+
+        // The manifest the run carries asks for both budgets; the Installation
+        // approved one. `check_grants` makes the sets equal at install time, so
+        // this is the drift an Installation written before that rule carries.
+        let manifest = Manifest::parse(json!({
+            "schemaVersion": 2,
+            "capabilities": [
+                {"name": "extended-fuel", "reason": "long imports"},
+                {"name": "extended-memory", "reason": "big documents"}
+            ]
+        }))
+        .unwrap()
+        .expect("a version-two manifest");
+        let approved = ResourceGrants::from_grants(&json!(["extended-fuel"]));
+        let declared = ResourceGrants::from_v2(Some(&manifest));
+        assert_ne!(approved, declared, "the test needs the two to differ");
+
+        let granted = installation_grants(db, &f.drive, &installation, Some(&manifest)).await;
+        assert_eq!(granted, approved, "the approved set is what runs");
+    }
+
     #[actix_rt::test]
     async fn a_tampered_or_server_extension_release_is_refused() {
         let f = fixture("installation_refused").await;
@@ -954,7 +1009,9 @@ mod installation_tests {
     async fn a_wasip2_release_carries_a_v2_manifest_read_from_the_component() {
         let f = fixture("wasm_release_manifest").await;
         let db = &f.appstate.store;
-        let (id, release, manifest) = release::publish_package(db, TEST_PLUGIN_ZIP).await.unwrap();
+        let (id, release, manifest) = release::publish_package(db, TEST_PLUGIN_ZIP, None)
+            .await
+            .unwrap();
         assert_eq!(release.runtime, RUNTIME_WASIP2);
         assert_eq!(release.package.as_deref().map(str::len), Some(64));
         assert_eq!(release.version.as_deref(), Some("1.0.0"));
@@ -985,7 +1042,9 @@ mod installation_tests {
             .unwrap()
             .unwrap();
         // Content-addressed: the same bytes publish to the same id.
-        let (again, _, _) = release::publish_package(db, TEST_PLUGIN_ZIP).await.unwrap();
+        let (again, _, _) = release::publish_package(db, TEST_PLUGIN_ZIP, None)
+            .await
+            .unwrap();
         assert_eq!(again, id);
         assert_eq!(db.get_plugin_release(&id).unwrap(), release);
     }
@@ -994,7 +1053,9 @@ mod installation_tests {
     async fn a_wasip2_installation_goes_through_the_zip_install_path() {
         let f = fixture("installation_wasm").await;
         let db = &f.appstate.store;
-        let (id, release, _) = release::publish_package(db, TEST_PLUGIN_ZIP).await.unwrap();
+        let (id, release, _) = release::publish_package(db, TEST_PLUGIN_ZIP, None)
+            .await
+            .unwrap();
 
         // Grants must cover every capability the package declares.
         let mut props = installation_props(&f.drive, "ontola", "test-plugin", &id, &id, "active");
@@ -1139,10 +1200,11 @@ mod installation_tests {
     async fn a_new_release_with_an_unchanged_manifest_still_replaces_the_code() {
         let f = fixture("installation_same_manifest").await;
         let db = &f.appstate.store;
-        let (first, first_release, _) =
-            release::publish_package(db, TEST_PLUGIN_ZIP).await.unwrap();
+        let (first, first_release, _) = release::publish_package(db, TEST_PLUGIN_ZIP, None)
+            .await
+            .unwrap();
         let (second, second_release, _) =
-            release::publish_package(db, &repackaged(TEST_PLUGIN_ZIP))
+            release::publish_package(db, &repackaged(TEST_PLUGIN_ZIP), None)
                 .await
                 .unwrap();
 
@@ -1170,8 +1232,8 @@ mod installation_tests {
             .get_resource(&installation.as_str().into())
             .await
             .unwrap();
-        // `release` is declared as an atomicURL, and a release cached by id is
-        // not one, so this skips validation exactly as `installRelease` does.
+        // A bare id in `release`: the form Installations written before every
+        // publish recorded a `Release` resource carry, which still resolves.
         r.set_unsafe(urls::RELEASE_PROP.into(), Value::String(second.clone()))
             .unwrap();
         r.set_unsafe(urls::RELEASE_ID.into(), Value::String(second.clone()))
@@ -1214,7 +1276,9 @@ mod installation_tests {
         let f = fixture("installation_release_url").await;
         let db = &f.appstate.store;
         let origin = db.get_server_url();
-        let (id, published, _) = release::publish_package(db, TEST_PLUGIN_ZIP).await.unwrap();
+        let (id, published, _) = release::publish_package(db, TEST_PLUGIN_ZIP, None)
+            .await
+            .unwrap();
         let subject = release::record_release(db, &id, &published, &f.drive, None, &origin)
             .await
             .unwrap();
@@ -1358,7 +1422,9 @@ mod installation_tests {
 
         assert_eq!(migrate_legacy_plugins(db).await.unwrap(), 1);
 
-        let (id, published, _) = release::publish_package(db, TEST_PLUGIN_ZIP).await.unwrap();
+        let (id, published, _) = release::publish_package(db, TEST_PLUGIN_ZIP, None)
+            .await
+            .unwrap();
         let migrated = db.get_resource(&plugin.as_str().into()).await.unwrap();
         let classes = migrated.get(urls::IS_A).unwrap().to_subjects(None).unwrap();
         assert_eq!(classes, vec![urls::INSTALLATION.to_string()]);
