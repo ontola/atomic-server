@@ -78,8 +78,18 @@ export const AppSettingsContextProvider = (
   }, [drive, store]);
 
   // == ACCESSIBILITY ==
-  const [viewTransitionsDisabled, setViewTransitionsDisabled] = useLocalStorage(
-    'viewTransitionsDisabled',
+  // Opt-in, not opt-out. View transitions are still broken outside Chromium
+  // on desktop: Firefox and Android both show the card-to-page morph blowing
+  // up into an overlay ([#1563](https://github.com/ontola/atomic-server/issues/1563)).
+  // Until every browser we support is verified, they stay off unless the user
+  // asks for them.
+  //
+  // The key is deliberately *not* the old `viewTransitionsDisabled`: that one
+  // has `false` stored in plenty of browsers already (anyone who ever toggled
+  // the old checkbox twice), and reusing it would leave transitions on for
+  // exactly the people who noticed they were broken.
+  const [viewTransitionsEnabled, setViewTransitionsEnabled] = useLocalStorage(
+    'viewTransitionsEnabled',
     false,
   );
   const [sidebarKeyboardDndEnabled, setSidebarKeyboardDndEnabled] =
@@ -229,8 +239,8 @@ export const AppSettingsContextProvider = (
       setSideBarLocked,
       agent,
       setAgent: setAgentAndShowToast,
-      viewTransitionsDisabled,
-      setViewTransitionsDisabled,
+      viewTransitionsEnabled,
+      setViewTransitionsEnabled,
       sidebarKeyboardDndEnabled,
       setSidebarKeyboardDndEnabled,
       hideTemplates,
@@ -257,8 +267,8 @@ export const AppSettingsContextProvider = (
       setSideBarLocked,
       agent,
       setAgentAndShowToast,
-      viewTransitionsDisabled,
-      setViewTransitionsDisabled,
+      viewTransitionsEnabled,
+      setViewTransitionsEnabled,
       sidebarKeyboardDndEnabled,
       setSidebarKeyboardDndEnabled,
       hideTemplates,
@@ -304,9 +314,12 @@ export interface AppSettings {
   /** The currently signed in Agent */
   agent: Agent | undefined;
   setAgent: (a: Agent | undefined) => void;
-  /** If the app should use view transitions */
-  viewTransitionsDisabled: boolean;
-  setViewTransitionsDisabled: (b: boolean) => void;
+  /**
+   * If the app should use view transitions. Off unless the user opts in, see
+   * the hook in `AppSettingsContextProvider`.
+   */
+  viewTransitionsEnabled: boolean;
+  setViewTransitionsEnabled: (b: boolean) => void;
   sidebarKeyboardDndEnabled: boolean;
   setSidebarKeyboardDndEnabled: (b: boolean) => void;
   hideTemplates: boolean;
@@ -339,8 +352,8 @@ const initialState: AppSettings = {
   setSideBarLocked: () => undefined,
   agent: undefined,
   setAgent: () => undefined,
-  viewTransitionsDisabled: true,
-  setViewTransitionsDisabled: () => undefined,
+  viewTransitionsEnabled: false,
+  setViewTransitionsEnabled: () => undefined,
   sidebarKeyboardDndEnabled: false,
   setSidebarKeyboardDndEnabled: () => undefined,
   hideTemplates: false,

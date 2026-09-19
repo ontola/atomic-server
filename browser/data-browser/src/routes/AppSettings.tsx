@@ -46,8 +46,8 @@ const AppSettings: React.FunctionComponent = () => {
     setDarkMode,
     colorfulMode,
     setColorfulMode,
-    viewTransitionsDisabled,
-    setViewTransitionsDisabled,
+    viewTransitionsEnabled,
+    setViewTransitionsEnabled,
     sidebarKeyboardDndEnabled,
     setSidebarKeyboardDndEnabled,
     hideTemplates,
@@ -190,15 +190,18 @@ const AppSettings: React.FunctionComponent = () => {
             </SettingsSection>
             <SettingsSection
               label='Accessibility'
-              childSearchKeywords='disable page transition animations view transitions motion'
+              childSearchKeywords='enable disable page transition animations view transitions motion'
             >
               <Column gap='0.5rem'>
                 <CheckboxLabel>
                   <Checkbox
-                    checked={viewTransitionsDisabled}
-                    onChange={checked => setViewTransitionsDisabled(checked)}
+                    checked={viewTransitionsEnabled}
+                    onChange={checked => setViewTransitionsEnabled(checked)}
                   />{' '}
-                  <span>Disable page transition animations</span>
+                  <span>
+                    Enable page transition animations (experimental, known to
+                    misbehave outside Chromium on desktop)
+                  </span>
                 </CheckboxLabel>
                 <CheckboxLabel>
                   <Checkbox
