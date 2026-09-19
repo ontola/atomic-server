@@ -162,8 +162,13 @@ the main thread first. That dump is step 2.
    4 GB file. Browser `save()` is **99 ms/row** at 1k (40 ms OPFS + 55 ms
    WS). Dominates *creating* a huge table. Opening an already-written one
    is (1).
-3. **Aggregates re-walk every match** — 1.0 s extra at 100k. Fine on a
-   small table; another full pass at this N.
+3. **Aggregates re-walk every match** — 1.0 s extra at 100k — **once per
+   query now, not once per page.** Aggregates and the membership set are the
+   same answer on every page, so `Collection` computes them on the pass that
+   establishes the set and reuses them until `clearPages` invalidates. The
+   first page of a 100k table still pays the ~1 s aggregation plus the
+   ~156 ms membership walk; every page turn after it pays neither. Making the
+   *first* pass cheap is still open and belongs with (4).
 4. **Exact `totalMembers` walks the whole index** — 21–33 ms even for a
    30-row page at 100k. Planned as cursor pagination + `hasMore` in
    `index-performance.md`. Not built.
@@ -187,7 +192,8 @@ the main thread first. That dump is step 2.
    bodies only; JS fallback if the worker still returns the full set.
 2. Cursor / `hasMore` instead of exact `totalMembers` (`index-performance.md`).
    The count walk is still O(matches) (~33 ms at 100k) but no longer ships
-   430 MB of JSON-AD.
+   430 MB of JSON-AD. This is now the whole remaining cost of opening a big
+   table, since paging on is free.
 3. Write path: batched / unsigned-replica import so 100k creates are not
    one genesis commit each. That is also what would stop the redb *file*
    tracking COW write amplification (~54 KB/row) instead of live data

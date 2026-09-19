@@ -7,7 +7,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - Table collections fetch a page of local bodies (`limit` / `offset` /
   `sort_by`) instead of hydrating every matching row. The grid stays
   `aria-busy` until the collection answers, so the empty entry row no
-  longer looks settled while loading.
+  longer looks settled while loading. Turning a page no longer re-walks the
+  whole matching set: membership and aggregates are the same answer on every
+  page, so they are computed on the pass that establishes the set and reused
+  until something invalidates the collection. At 100k rows that was a ~156 ms
+  index walk plus a ~1 s aggregation being paid again on every page turn.
 
 - The data-browser no longer reports to Sentry from a dev server. Vite's hot
   reload legitimately throws while swapping modules ("_s is not a function",

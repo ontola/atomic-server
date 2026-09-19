@@ -57,6 +57,21 @@ function pagedClientDb(all: string[]): {
           ? slice.map((s, i) => jsonAd(s, offset + i))
           : [],
         count: all.length,
+        ...(opts.aggregation
+          ? {
+              aggregates: [
+                {
+                  id: 'total',
+                  property: commits.properties.createdAt,
+                  function: 'count',
+                  value: all.length,
+                  count: all.length,
+                  groups: [],
+                  groupsTruncated: false,
+                },
+              ],
+            }
+          : {}),
       };
     },
   } as unknown as ClientDbWorker;
@@ -119,6 +134,50 @@ describe('Collection local fetch pages in the store', () => {
 
     assert(pageTwo).toHaveLength(1);
     assert(pageTwo[0]!.limit).toBe(PAGE);
+  });
+
+  it('walks the whole matching set once, not once per page', async () => {
+    const all = subjects(90);
+    const { clientDb, calls } = pagedClientDb(all);
+    const store = new Store({ serverUrl: 'https://example.com' });
+    store.setDrive(DRIVE);
+    store.finishDriveSync(DRIVE, 3, Date.now());
+    store.setClientDb(clientDb);
+
+    const collection = new Collection(store, 'https://example.com', {
+      page_size: String(PAGE),
+      include_nested: false,
+      property: core.properties.parent,
+      value: TABLE,
+      sort_by: commits.properties.createdAt,
+      drive: DRIVE,
+      aggregation: {
+        aggregates: [
+          {
+            id: 'total',
+            property: commits.properties.createdAt,
+            function: 'count',
+          },
+        ],
+      },
+    } as ConstructorParameters<typeof Collection>[2]);
+    await collection.waitForReady();
+
+    // Turning pages must not re-ask for the membership set or the aggregates:
+    // both cover the whole match set and are the same answer on every page.
+    await collection.getMemberWithIndex(35);
+    await collection.getMemberWithIndex(89);
+
+    const membership = calls.filter(c => c.includeResources === false);
+    const aggregated = calls.filter(c => c.aggregation);
+    const bodies = calls.filter(c => c.includeResources);
+
+    assert(bodies.length).toBeGreaterThan(1);
+    assert(membership).toHaveLength(1);
+    assert(aggregated).toHaveLength(1);
+    assert(collection.totalMembers).toBe(90);
+    // The aggregates the first pass computed survive the page turns.
+    assert(collection.aggregates.map(a => a.value)).toEqual([90]);
   });
 
   it('does not hydrate off-page bodies', async () => {

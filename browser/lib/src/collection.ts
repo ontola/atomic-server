@@ -287,6 +287,16 @@ export class Collection {
    *  matching resource, so any page carries the same numbers. */
   private _aggregates: AggregateOutcome[] = [];
 
+  /**
+   * True once a pass over the whole matching set has landed for this query:
+   * `_queriedMembers` is every member and `_aggregates` covers all of them.
+   * Both are the same on every page, so paging on reuses them instead of
+   * asking the store again. At 100k rows that saved pass is a ~156 ms index
+   * walk plus a ~1 s aggregation, each of which the worker was doing again
+   * for every page turn. `clearPages` is the single invalidation point.
+   */
+  private _fullSetKnown = false;
+
   private _waitForReady: Promise<void>;
   /**
    * True while `fetchPage` is hydrating members into the store. Query
@@ -416,6 +426,7 @@ export class Collection {
     this.pages = new Map();
     this._memberIndex.clear();
     this._queriedMembers.clear();
+    this._fullSetKnown = false;
     // Note: `_optimisticAdds` is preserved on `clearPages` — they
     // represent subjects we trust are members (locally-created and
     // confirmed at the resource layer); the next `setPage` merges
@@ -998,6 +1009,13 @@ export class Collection {
     // `sort_by`; hydrating every match (the previous path) is the 100k-row
     // table-open cliff. Bodies come back for this page only. Aggregates and
     // `count` still cover the whole matching set.
+    // Aggregates are computed over the whole matching set, so they are the
+    // same answer on every page. Ask on the pass that establishes the set and
+    // reuse them after; at 100k rows this is a second full walk (~1 s) that
+    // was being paid again on every page turn.
+    const askAggregates =
+      !!this.params.aggregation?.aggregates.length && !this._fullSetKnown;
+
     const result = await this.store.queryLocalDb({
       ...queryBase,
       sortBy: this.params.sort_by,
@@ -1005,9 +1023,7 @@ export class Collection {
       limit: pageSize,
       offset: page * pageSize,
       includeResources: true,
-      aggregation: this.params.aggregation?.aggregates.length
-        ? this.params.aggregation
-        : undefined,
+      aggregation: askAggregates ? this.params.aggregation : undefined,
     });
 
     // Worker returned no result (query error / DB not available). Don't
@@ -1022,9 +1038,11 @@ export class Collection {
     // `applyResourceChange` needs the full membership set so hydrating a
     // later page (or another collection) does not inflate `totalMembers`.
     // Subjects-only is cheap vs JSON-AD bodies (no Loro snapshots).
+    // Same for membership: it is the same set on every page, and
+    // `_queriedMembers` already holds it once a pass has landed.
     let allSubjects: string[] | undefined;
 
-    if (result.count > result.subjects.length) {
+    if (result.count > result.subjects.length && !this._fullSetKnown) {
       const membership = await this.store.queryLocalDb({
         ...queryBase,
         includeResources: false,
@@ -1057,8 +1075,16 @@ export class Collection {
     drive: string | undefined,
     allSubjects?: string[],
   ): 'ok' | 'no-db' {
+    // A pass that reused the known full set did not ask for aggregates, so
+    // `result.aggregates` is absent rather than empty. Blanking the cache on
+    // it would clear a table's totals every time the user turns a page.
+    const keepAggregates = (): AggregateOutcome[] =>
+      result.aggregates ?? (this._fullSetKnown ? this._aggregates : []);
     if (result.count === 0) {
       this._queriedMembers.clear();
+      // The set is empty, which is a full-set answer of its own — but not one
+      // the cached aggregates describe, so let them be replaced below.
+      this._fullSetKnown = false;
 
       // Empty local result is normally authoritative — but it's ambiguous
       // until THIS drive has been synced (the index may be mid-populate, or
@@ -1081,7 +1107,7 @@ export class Collection {
         // Dropping them left dashboard/table totals as an em-dash: the UI
         // treated "no outcomes" as "not yet computed" and nothing re-asked,
         // because the resources were already in the JS store.
-        this._aggregates = result.aggregates ?? [];
+        this._aggregates = keepAggregates();
 
         return 'ok';
       }
@@ -1110,9 +1136,17 @@ export class Collection {
       ? filterIndexLeakage(allSubjects).filter(
           subject => !this.isDestroyed(subject),
         )
-      : pageSubjectsClean;
+      : this._fullSetKnown && storePaged
+        ? [...this._queriedMembers]
+        : pageSubjectsClean;
 
     this._queriedMembers = new Set(memberSubjects);
+    // The set is known when this pass saw all of it — the result was unpaged,
+    // or the membership query answered — or when it reused a pass that had.
+    // It stays unknown when the store paged and that membership query came
+    // back empty-handed, so the next page tries again rather than reporting a
+    // page as the whole table.
+    this._fullSetKnown = !storePaged || !!allSubjects || this._fullSetKnown;
 
     // Notifications may have arrived while the local query was pending.
     // Its full result already accounts for them, even outside page zero.
@@ -1151,7 +1185,7 @@ export class Collection {
 
     if (result.subjects.length === 0) {
       this.setEmptyPage(page);
-      this._aggregates = result.aggregates ?? [];
+      this._aggregates = keepAggregates();
 
       return 'ok';
     }
@@ -1254,7 +1288,7 @@ export class Collection {
     this._totalMembers = isNumber(mergedTotal) ? mergedTotal : result.count;
     // Computed by the same Rust code the server runs, so an offline table shows
     // the same totals rather than none.
-    this._aggregates = result.aggregates ?? [];
+    this._aggregates = keepAggregates();
 
     return 'ok';
   }
