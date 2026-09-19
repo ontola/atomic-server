@@ -846,6 +846,38 @@ Cloud Vault display metadata: `vaultAutoBackup.test.ts` verifies name/emoji enro
   authenticated read from the real managed node. Plan purchase alone creates
   no enrollment. Real Stripe-hosted test-card checkout remains a deployment check.
 
+## Host-to-Drive routing and hosted vanity subdomains
+
+`Tree::DriveMapping` is what makes one server answer for many hostnames. It
+backs `/bind-drive` for self-hosters and hosted vanity subdomains for
+`atomic-saas`, whose control plane reconciles it through
+`Db::sync_drive_mappings`.
+
+- `db::drive_mapping_tests`: the reconcile a managed node runs on every policy
+  poll — add, repoint, remove; idempotent on an unchanged list; scoped so a
+  binding it did not install (including the `localhost` / `127.0.0.1` entries
+  from `setup_test_env`, and anything bound by hand through `/bind-drive`) is
+  never removed; keys normalized so a mixed-case `Host` still resolves; empty
+  hosts and empty drives skipped.
+- `db::resolver_tests::a_bound_host_whose_drive_is_missing_does_not_serve_the_store_root`:
+  the multi-tenant leak. A host bound to a Drive this node does not hold (not
+  synced yet, or migrated away) must 404 rather than fall through to the store
+  root, which would answer one tenant's hostname with another namespace's
+  content. This is the property that lets the control plane authorize a
+  certificate on reservation instead of only after a node confirms.
+- `context::tests::a_served_domain_suffix_accepts_tenants_without_a_base_domain`:
+  `--served-domain-suffix` makes the request origin follow the hostname the
+  visitor used, without turning on `--base-domain` and with it the store's
+  subject normalization.
+- Paired `atomic-saas` coverage (registry, plan gating, `/caddy-ask`, the
+  heartbeat report) is listed in that repo's
+  `planning/TEST_COVERAGE_AND_CI.md`.
+
+**Not covered:** no test drives a real HTTP request against a vanity host
+end to end — the reconcile and the resolver are tested separately, and joining
+them needs the representative two-service environment. The multi-node gateway
+routing that a second node would require does not exist yet.
+
 ## Error reporting and feedback
 
 - `browser/data-browser/src/helpers/feedback.test.ts`: unavailable reporting, failed delivery, blank input and successful submission.
@@ -1351,7 +1383,12 @@ network transport, OS-process isolation or reviewed alias/reference repair.
 - Connection-state test verifies alias provenance, preserved baseline, incremented
   revision, idempotent reads and rejection of the earlier checkpoint revision.
 - `drain-datatype-tags.test.ts` reproduces and fixes newly added JSON values becoming
-  strings on incremental saves. The full client suite has 564 passing tests.
+  strings on incremental saves. It also drives the public `newResource → set → save`
+  flow through the real outbox drain and replays the posted `loroUpdate`s: the signed
+  incremental commit carries `json`/`resourceArray` tags for properties first set
+  after genesis, and the tag write runs after the user's ops are sealed, so the edit
+  keeps its own commit origin and stays on the undo stack. The full client suite has
+  564 passing tests.
 - Five Chromium flows pass against rebuilt native/WASM code. Duplicate review uses
   real authenticated SYNC_PUSH plus a signed primary decision and fresh lookup;
   the other flows cover setup recovery, MT940 and Clockify. It does not yet test
@@ -2152,3 +2189,12 @@ and upload hook, then delivers multiple files through the drop callback. It
 verifies the upload targets the displayed drive even when the current drive
 setting differs. Native drag events, overlay geometry and the refreshed child
 list are not covered by this component test.
+
+## Rust build alignment
+
+`scripts/test_rust_alignment.py` tests matching pairs, compiler/workflow pin drift,
+development profile drift, transitive Loro versions, missing shared crates, extra
+cryptography prereleases, and allowed unrelated dependency differences. Run
+`python3 -m unittest discover -s scripts -p test_rust_alignment.py -v`.
+The Rust build policy workflow runs these checks; downstream CI checks both
+repositories and rejects dependency lockfile drift before builds.
