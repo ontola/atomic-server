@@ -13,19 +13,57 @@ let activeTransition: Promise<void> = Promise.resolve();
 
 const QUEUE_TIMEOUT_MS = 1000;
 
+type NavigatorUAData = {
+  mobile?: boolean;
+  brands?: Array<{ brand: string }>;
+};
+
+/**
+ * Desktop Chrome / Chromium is the only place view transitions are known-good.
+ * Firefox and Android Chrome implement the API but leave a stuck overlay or
+ * skip the animation (https://github.com/ontola/atomic-server/issues/1563).
+ */
+export function isChromeDesktop(): boolean {
+  if (typeof navigator === 'undefined') {
+    return false;
+  }
+
+  const uaData = (navigator as Navigator & { userAgentData?: NavigatorUAData })
+    .userAgentData;
+
+  if (uaData?.brands?.length) {
+    const isChromeFamily = uaData.brands.some(
+      entry => entry.brand === 'Google Chrome' || entry.brand === 'Chromium',
+    );
+
+    return isChromeFamily && uaData.mobile !== true;
+  }
+
+  const ua = navigator.userAgent ?? '';
+
+  if (/Android|iPhone|iPad|iPod|Mobile|CriOS|FxiOS/i.test(ua)) {
+    return false;
+  }
+
+  return /Chrome\//.test(ua);
+}
+
+/** Escape hatch: `localStorage.setItem('forceViewTransitions', '1')` */
+function forceViewTransitionsEnabled(): boolean {
+  try {
+    return localStorage.getItem('forceViewTransitions') === '1';
+  } catch {
+    return false;
+  }
+}
+
 /** Headless drivers don't paint, so `finished` can hang forever. */
 function isAutomated(): boolean {
   if (typeof navigator === 'undefined' || navigator.webdriver !== true) {
     return false;
   }
 
-  try {
-    // Escape hatch for debugging transitions under automation:
-    // localStorage.setItem('forceViewTransitions', '1')
-    return localStorage.getItem('forceViewTransitions') !== '1';
-  } catch {
-    return true;
-  }
+  return !forceViewTransitionsEnabled();
 }
 
 function swallow(promise: Promise<unknown> | undefined) {
@@ -45,14 +83,15 @@ function skipQuietly(transition: ViewTransition) {
 
 /**
  * Wrap an async navigation so it runs inside `document.startViewTransition`
- * when the API exists and the user has not disabled animations.
+ * on desktop Chrome / Chromium when the API exists and the user has not
+ * disabled animations.
  *
- * Firefox 144+ implements the API but is stricter than Chromium: duplicate
- * `view-transition-name`s (including false duplicates from inline/block
- * splits) reject `ready` / `updateCallbackDone`, and a hung `finished`
- * promise leaves the `::view-transition` overlay on top of the page. We
- * always run the navigation, skip a stuck overlay, and never leave those
- * promises unhandled.
+ * Off everywhere else (Firefox, Android Chrome, Safari): those engines
+ * implement the API but duplicate `view-transition-name`s reject `ready` /
+ * `updateCallbackDone`, and a hung `finished` promise leaves the
+ * `::view-transition` overlay on top of the page. When we do animate, we
+ * still always run the navigation, skip a stuck overlay, and never leave
+ * those promises unhandled.
  */
 export function wrapWithViewTransition<Args extends unknown[]>(
   disabled: boolean,
@@ -62,7 +101,8 @@ export function wrapWithViewTransition<Args extends unknown[]>(
     disabled ||
     typeof document === 'undefined' ||
     !document.startViewTransition ||
-    isAutomated()
+    isAutomated() ||
+    !(isChromeDesktop() || forceViewTransitionsEnabled())
   ) {
     return cb;
   }

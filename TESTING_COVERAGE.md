@@ -767,8 +767,9 @@ Not covered: derived AI tools invoked through a real model; MCP protocol project
 |---|---|---|
 | Hashed `view-transition-name` plus `view-transition-class` per tag | glue | `browser/data-browser/src/helpers/viewTransition.test.ts` |
 | `startViewTransition` throw / hung `finished` / rejected `ready` still navigates and skips the overlay | glue | `browser/data-browser/src/helpers/viewTransition.test.ts` |
+| Chrome-desktop-only gate: Android Chrome / Firefox skip `startViewTransition`; `forceViewTransitions` overrides | glue | `browser/data-browser/src/helpers/viewTransition.test.ts` |
 
-Not covered: visual morph of a grid card into the resource page in Firefox (needs a headed Firefox run; Playwright's firefox project is locks-only and automation bypasses view transitions unless `forceViewTransitions` is set).
+Not covered: visual morph of a grid card into the resource page on headed Chrome (Playwright automation bypasses view transitions unless `forceViewTransitions` is set). Firefox / Android stay opted out until those engines are known-good.
 
 ## Documents
 

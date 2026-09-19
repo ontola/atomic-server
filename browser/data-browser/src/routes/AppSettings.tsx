@@ -24,6 +24,7 @@ import {
   SettingsSection,
   SettingsSearchProvider,
 } from '@components/Settings';
+import { isChromeDesktop } from '../helpers/viewTransition';
 import { presetColors } from '../styling';
 import { InputStyled, InputWrapper } from '@components/forms/InputStyles';
 import { FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
@@ -193,13 +194,15 @@ const AppSettings: React.FunctionComponent = () => {
               childSearchKeywords='disable page transition animations view transitions motion'
             >
               <Column gap='0.5rem'>
-                <CheckboxLabel>
-                  <Checkbox
-                    checked={viewTransitionsDisabled}
-                    onChange={checked => setViewTransitionsDisabled(checked)}
-                  />{' '}
-                  <span>Disable page transition animations</span>
-                </CheckboxLabel>
+                {isChromeDesktop() && (
+                  <CheckboxLabel>
+                    <Checkbox
+                      checked={viewTransitionsDisabled}
+                      onChange={checked => setViewTransitionsDisabled(checked)}
+                    />{' '}
+                    <span>Disable page transition animations</span>
+                  </CheckboxLabel>
+                )}
                 <CheckboxLabel>
                   <Checkbox
                     checked={sidebarKeyboardDndEnabled}

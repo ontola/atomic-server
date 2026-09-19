@@ -24,6 +24,7 @@ import { errorHandler } from '../handlers/errorHandler';
 import { isDev } from '../config';
 import { getLocalServerOrigin, isRunningInTauri } from './tauri';
 import { fetchManagedInfo, isAtomicServer } from './managedServer';
+import { isChromeDesktop } from './viewTransition';
 
 interface ProviderProps {
   children: ReactNode;
@@ -80,7 +81,7 @@ export const AppSettingsContextProvider = (
   // == ACCESSIBILITY ==
   const [viewTransitionsDisabled, setViewTransitionsDisabled] = useLocalStorage(
     'viewTransitionsDisabled',
-    false,
+    !isChromeDesktop(),
   );
   const [sidebarKeyboardDndEnabled, setSidebarKeyboardDndEnabled] =
     useLocalStorage('sidebarKeyboardDndEnabled', false);
@@ -304,7 +305,7 @@ export interface AppSettings {
   /** The currently signed in Agent */
   agent: Agent | undefined;
   setAgent: (a: Agent | undefined) => void;
-  /** If the app should use view transitions */
+  /** If the app should skip view transitions. On by default except Chrome desktop. */
   viewTransitionsDisabled: boolean;
   setViewTransitionsDisabled: (b: boolean) => void;
   sidebarKeyboardDndEnabled: boolean;
