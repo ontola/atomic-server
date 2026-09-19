@@ -1514,6 +1514,86 @@ async fn loro_non_property_container_survives_commit_roundtrip() {
     );
 }
 
+/// A signed destroy commit removes the resource and stores its envelope in
+/// one transaction, then tombstones the subject. Before, `apply_commit`
+/// called `remove_resource`, which applied its own transaction: the resource
+/// was gone before the envelope row landed, and a crash in between left a
+/// deletion with no signed destroy for `SYNC_DIFF.removeCommits` to carry.
+#[tokio::test]
+#[timeout(120000)]
+async fn destroy_commit_removes_resource_and_keeps_envelope_atomically() {
+    let store = Db::init_temp("destroy_commit_envelope").await.unwrap();
+
+    let mut resource = crate::Resource::new("did:ad:placeholder".into());
+    resource
+        .set(urls::NAME.into(), Value::String("doomed".into()), &store)
+        .await
+        .unwrap();
+    let genesis = resource.save_as_genesis(&store).await.unwrap();
+    let subject = genesis.resource_new.unwrap().get_subject().clone();
+    let pure_id = subject.pure_id();
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, pure_id.as_bytes())
+            .unwrap()
+            .is_some(),
+        "test premise: a saved resource has a Loro snapshot"
+    );
+    assert!(
+        !crate::sync::tombstones::is_tombstoned(&store, &pure_id),
+        "test premise: a live resource is not tombstoned"
+    );
+
+    let mut resource = store.get_resource(&subject).await.unwrap();
+    let destroy = resource.destroy(&store).await.unwrap();
+    let signature = destroy
+        .commit
+        .signature
+        .clone()
+        .expect("destroy via the default agent is a signed commit");
+    assert!(destroy.resource_new.is_none());
+
+    // (a) the resource, its Loro snapshot and its stored propvals are gone.
+    assert!(
+        store.get_resource(&subject).await.is_err(),
+        "destroyed resource must not resolve"
+    );
+    assert!(
+        store
+            .kv
+            .get(Tree::Resources, pure_id.as_bytes())
+            .unwrap()
+            .is_none(),
+        "destroyed resource row must be deleted"
+    );
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, pure_id.as_bytes())
+            .unwrap()
+            .is_none(),
+        "Loro snapshot must be deleted with the resource"
+    );
+
+    // (b) the signed destroy envelope is the subject's latest envelope.
+    let envelope = crate::envelopes::latest_envelope(&store, &pure_id)
+        .expect("the destroy envelope must be stored for the destroyed subject");
+    assert_eq!(envelope.signature, signature);
+    assert!(envelope.is_destroy(), "latest envelope must be the destroy");
+
+    // (c) the subject is tombstoned, and the tombstone resolves to the
+    // signed destroy `SYNC_DIFF.removeCommits` forwards.
+    assert!(
+        crate::sync::tombstones::is_tombstoned(&store, &pure_id),
+        "destroyed subject must be tombstoned"
+    );
+    assert!(
+        crate::sync::tombstones::destroy_envelope(&store, &pure_id).is_some(),
+        "tombstone must resolve to the signed destroy envelope"
+    );
+}
+
 /// A deleted resource must not leave its Loro snapshot orphaned in
 /// `Tree::LoroSnapshots`, and the subject must be tombstoned so bulk sync
 /// does not resurrect it.

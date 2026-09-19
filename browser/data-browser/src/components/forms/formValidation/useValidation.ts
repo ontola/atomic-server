@@ -1,6 +1,12 @@
-import { useCallback, useContext, useId, useState } from 'react';
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react';
 import { FormValidationContext } from './FormValidationContextProvider';
-import { useLifecycleWithDependencies } from './useLifecycleWithDependencies';
 import type { JSONValue } from '@tomic/react';
 
 export function useValidation(initialValue?: string | undefined): {
@@ -12,10 +18,16 @@ export function useValidation(initialValue?: string | undefined): {
 
   const [touched, setTouched] = useState(false);
   const { setValidations, validations } = useContext(FormValidationContext);
+  // Once the input reports its own validation result it owns the entry. Until
+  // then the registered error follows `initialValue`, so a required field
+  // whose value only arrives after the first render is (un)flagged correctly
+  // instead of keeping whatever the first render computed.
+  const ownedRef = useRef(false);
 
   const setError = useCallback(
     (error: Error | string | undefined, immediate = false) => {
       const err = error instanceof Error ? error.message : error;
+      ownedRef.current = true;
 
       setValidations(prev => {
         if (prev[id] === err) {
@@ -39,23 +51,35 @@ export function useValidation(initialValue?: string | undefined): {
     setTouched(true);
   }, []);
 
-  useLifecycleWithDependencies(
-    () => {
+  useEffect(() => {
+    if (ownedRef.current) {
+      return;
+    }
+
+    setValidations(prev => {
+      if (id in prev && prev[id] === initialValue) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [id]: initialValue,
+      };
+    });
+  }, [initialValue, id, setValidations]);
+
+  useEffect(() => {
+    return () => {
       setValidations(prev => {
-        return {
-          ...prev,
-          [id]: initialValue,
-        };
-      });
-    },
-    () => {
-      setValidations(prev => {
-        const { [id]: _, ...rest } = prev;
+        // Not `const { [id]: _, ...rest } = prev`: React Compiler cannot lower
+        // computed keys in an object pattern and would skip this hook.
+        const rest = { ...prev };
+        delete rest[id];
 
         return rest;
       });
-    },
-  );
+    };
+  }, [id, setValidations]);
 
   const error = touched ? validations[id] : undefined;
 

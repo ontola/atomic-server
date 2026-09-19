@@ -43,6 +43,14 @@ fn main() -> std::io::Result<()> {
                 PathBuf::from("../browser/data-browser/src"),
                 PathBuf::from("../browser/lib/src"),
                 PathBuf::from("../browser/react/src"),
+                // The wasm crate (built via `pnpm run build` -> wasm-pack) and
+                // the atomic_lib crate it depends on. Without these, a
+                // Rust-only change under either is invisible to the mtime
+                // check below: `cargo run` keeps serving the previously
+                // built `atomic_wasm_bg.wasm` until something else also
+                // touches a JS/TS path and masks the bug. See #1517.
+                PathBuf::from("../wasm/src"),
+                PathBuf::from("../lib/src"),
                 // Not just sources: how the bundle is *built* decides what
                 // ends up embedded. A vite.config.ts change (say, turning
                 // source maps off) leaves every file under src/ untouched, so
