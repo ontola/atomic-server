@@ -850,11 +850,13 @@ pub fn argon2id_derive_key_js(
 
 /// Delete one OPFS database file. Returns whether a file was actually removed.
 ///
-/// Only ever called for the *current* identity's file, and only after that
-/// file failed to open with `WRONG_KEY_MARKER` — i.e. its contents are already
-/// unreadable, and everything it held is re-fetchable from the server. Other
-/// agents' files are untouched: the caller passes the name it was about to
-/// open, and `validate_db_name` keeps that a plain filename in the OPFS root.
+/// Only ever called for the *current* identity's file, after that file failed
+/// to open with `WRONG_KEY_MARKER` and only when the JS caller opted in via
+/// `discardUndecryptable`. Being unreadable today is not on its own a reason to
+/// delete: the key may be recoverable, and a local-only drive has no copy
+/// anywhere else. `browser/lib/src/client-db-open.ts` holds that judgement.
+/// Other agents' files are untouched: the caller passes the name it was about
+/// to open, and `validate_db_name` keeps that a plain filename in the OPFS root.
 #[wasm_bindgen(js_name = "deleteClientDb")]
 pub async fn delete_client_db(db_name: String) -> Result<bool, JsError> {
     let name = validate_db_name(Some(db_name))?;

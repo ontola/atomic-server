@@ -104,6 +104,7 @@ describe('openClientDb', () => {
       baseUrl: 'https://example.com',
       dbName: DB_NAME,
       dbKey: DB_KEY,
+      discardUndecryptable: true,
     });
 
     expect(result.recreated).toBe(true);
@@ -122,7 +123,11 @@ describe('openClientDb', () => {
     const { wasm, deleted } = fakeWasm([failure]);
 
     await expect(
-      openClientDb(wasm, { dbName: DB_NAME, dbKey: DB_KEY }),
+      openClientDb(wasm, {
+        dbName: DB_NAME,
+        dbKey: DB_KEY,
+        discardUndecryptable: true,
+      }),
     ).rejects.toBe(failure);
     expect(deleted).toEqual([]);
     expect(wasm.deleteClientDb).not.toHaveBeenCalled();
@@ -134,7 +139,10 @@ describe('openClientDb', () => {
     const { wasm, deleted } = fakeWasm([new Error(wrongKeyMessage)]);
 
     await expect(
-      openClientDb(wasm, { dbName: 'atomic_data.anon.redb' }),
+      openClientDb(wasm, {
+        dbName: 'atomic_data.anon.redb',
+        discardUndecryptable: true,
+      }),
     ).rejects.toThrow(WRONG_KEY_MARKER);
     expect(deleted).toEqual([]);
   });
@@ -147,7 +155,11 @@ describe('openClientDb', () => {
     ]);
 
     await expect(
-      openClientDb(wasm, { dbName: DB_NAME, dbKey: DB_KEY }),
+      openClientDb(wasm, {
+        dbName: DB_NAME,
+        dbKey: DB_KEY,
+        discardUndecryptable: true,
+      }),
     ).rejects.toBe(second);
     expect(deleted).toEqual([DB_NAME]);
     expect(opened).toHaveLength(2);
@@ -159,8 +171,44 @@ describe('openClientDb', () => {
     const withoutDelete = { ClientDb: wasm.ClientDb };
 
     await expect(
-      openClientDb(withoutDelete, { dbName: DB_NAME, dbKey: DB_KEY }),
+      openClientDb(withoutDelete, {
+        dbName: DB_NAME,
+        dbKey: DB_KEY,
+        discardUndecryptable: true,
+      }),
     ).rejects.toBe(failure);
+  });
+
+  it('keeps an undecryptable database when discarding was not allowed', async () => {
+    // The default, and the case that matters: a local-only drive lives in this
+    // file and nothing else has a copy. A wrong key is a reason to stop, not a
+    // licence to delete.
+    const failure = new Error(wrongKeyMessage);
+    const { wasm, opened, deleted } = fakeWasm([failure]);
+
+    await expect(
+      openClientDb(wasm, { dbName: DB_NAME, dbKey: DB_KEY }),
+    ).rejects.toBe(failure);
+
+    expect(deleted).toEqual([]);
+    expect(wasm.deleteClientDb).not.toHaveBeenCalled();
+    // No second open either: the file is left exactly as it was found.
+    expect(opened).toHaveLength(1);
+  });
+
+  it('keeps it when discarding is explicitly refused', async () => {
+    const failure = new Error(wrongKeyMessage);
+    const { wasm, deleted } = fakeWasm([failure]);
+
+    await expect(
+      openClientDb(wasm, {
+        dbName: DB_NAME,
+        dbKey: DB_KEY,
+        discardUndecryptable: false,
+      }),
+    ).rejects.toBe(failure);
+
+    expect(deleted).toEqual([]);
   });
 });
 
