@@ -306,8 +306,11 @@ mod test {
 
     fn signed_at(timestamp: i64) -> AuthValues {
         let pair = generate_public_key(PRIVATE_KEY);
-        let signature =
-            sign_message(format!("{} {}", REQUESTED, timestamp).as_bytes(), &pair.private).unwrap();
+        let signature = sign_message(
+            format!("{} {}", REQUESTED, timestamp).as_bytes(),
+            &pair.private,
+        )
+        .unwrap();
         AuthValues {
             agent_subject: format!("{}{}", crate::subject::DID_AD_AGENT_PREFIX, pair.public),
             public_key: pair.public,
@@ -373,7 +376,10 @@ mod test {
         let error = get_agent_from_auth_values_or_public(Some(forged), &store)
             .await
             .expect_err("a forged proof must not authenticate");
-        assert_eq!(error.error_type, crate::errors::AtomicErrorType::UnauthorizedError);
+        assert_eq!(
+            error.error_type,
+            crate::errors::AtomicErrorType::UnauthorizedError
+        );
     }
 
     /// And a caller who presents nothing is simply the public agent, as before.
