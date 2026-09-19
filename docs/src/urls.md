@@ -29,8 +29,9 @@ The [DID specification](did.md) has the full derivation rules and the resolution
 | `did:ad:node:{nodeId}` | A device or server as a network endpoint | The device's transport keypair (Iroh) | Not a Resource; used for pairing and routing only |
 | `https://example.com/…` | Properties, Classes, Ontologies, external linked data, Resources on HTTP-era servers | The domain owner | An HTTP `GET` with an `application/ad+json` accept header |
 | `internal:/path` | A Resource on *this* server, in config files and server logs | The server | Rewritten to the server's own origin before it leaves the server |
+| `localId` (a string, not a URL) | A stable name for a Resource *within its parent*, used by imports and plugins | The data producer | Looked up as `parent` + `localId`; the Resource keeps its normal Subject |
 
-Two things to notice in the table.
+Three things to notice in the table.
 
 First, only the `https://` family and `internal:` rows have a path.
 `did:ad:` identifiers are flat: there is no `did:ad:abc/child`.
@@ -39,6 +40,10 @@ Structure comes from the [`parent` property](hierarchy.md), not from the URL.
 Second, the Agent row needs no lookup.
 The public key is part of the identifier, so any device can verify a signature from that Agent offline.
 That is what lets a signed edit made on a train be checked on a laptop that has never seen the network.
+
+Third, a `localId` is not a Subject. It is a property (`https://atomicdata.dev/properties/localId`) whose value is a string chosen by whoever produces the data, unique among the children of one parent.
+When you [publish JSON-AD for others to import](create-json-ad.md), resources carry a `localId` instead of an `@id`: the importer mints a `did:ad:` Subject on first import, finds the same Resource again by `parent` + `localId` on the next one, and rewrites references between `localId`s into real links.
+Plugins use the same mechanism to find the resources they created, with a namespaced convention such as `atomic:pets:table`.
 
 ## Routing hints
 
@@ -80,13 +85,21 @@ The web app puts the Subject in the query string, so a `did:ad:` identifier surv
 https://example.com/app/show?subject=did:ad:{genesis}
 ```
 
-Pairing codes use their own scheme. A QR code or deep link such as
+The desktop and mobile apps register the `atomic://` scheme for deep links, which is a transport for other identifiers rather than an identifier itself:
 
 ```text
 atomic://pair?v=1&node=did:ad:node:{nodeId}&drives=*
+atomic://open?subject=did:ad:{genesis}
 ```
 
-carries the *route* to a device. It never contains an Agent secret, and scanning it grants nothing by itself: what crosses the link is decided by the rights on each Resource, on every transport. See [Atomic Sync](sync.md).
+A pairing code, as a QR code or a link, carries the *route* to a device. It never contains an Agent secret, and scanning it grants nothing by itself: what crosses the link is decided by the rights on each Resource, on every transport. See [Atomic Sync](sync.md).
+An open link hands the app a Subject to navigate to.
+
+## Strings that look like identifiers but are not
+
+- `atomic:system` and `sys:init` are Loro commit *origins*, tags on an edit inside a Resource's CRDT document that the undo manager uses to skip internal writes. They never name anything.
+- `_new:` and similar placeholders appeared in older clients before a Resource had signed its genesis. Current clients mint the `did:ad:` Subject up front, so a placeholder should not reach the wire.
+- A `localId` value (see above) is a name inside a parent, not a global identifier, even when it is written in a URL-like namespace.
 
 ## Encoding
 

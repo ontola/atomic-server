@@ -30,23 +30,24 @@ It is type-safe (you know if something is a `string`, `number`, `date`, `URL`, e
 The default serialization format for Atomic Data is [JSON-AD](core/json-ad.md), which is simply JSON where each key is a URL of an Atomic Property.
 These Properties are responsible for setting the `datatype` (to ensure type-safety) and setting `shortnames` (which help to keep names short, for example in JSON serialization) and `descriptions` (which provide semantic explanations of what a property should be used for).
 
+Every Resource, Property and Class is named by a URL. Which URL shapes exist, from `https://` vocabularies to location-independent `did:ad:` identifiers, is explained in [URLs and identifiers](urls.md); read that first if you are new here.
+
 [Read more about Atomic Data Core](core/concepts.md)
 
 ## Atomic Data Extended
 
 Atomic Data Extended is a set of extra modules (on top of Atomic Data Core) that deal with identity, data that changes over time, authentication, authorization and synchronization between devices.
-If you are new here, read [URLs and identifiers](urls.md) first: it explains the `did:ad:` identifiers that show up everywhere in Extended.
 
 {{#include extended-table.md}}
 
 ## Tools & libraries
 
-- The web app ([demo on atomicdata.dev](https://atomicdata.dev)): documents, tables, chat, files and an ontology editor, working offline in the browser
-- Build a web app with [@tomic/lib](js.md), [@tomic/react](usecases/react.md) or [@tomic/svelte](svelte.md)
-- Build a native app with [Flutter / Dart](flutter.md), on top of the same Rust core
-- Host your own always-on [atomic-server](atomicserver/installation.md) (powers [atomicdata.dev](https://atomicdata.dev), run with `docker run -p 80:80 -v atomic-storage:/atomic-storage ghcr.io/ontola/atomic-server`), or use [Atomic Cloud](https://atomicserver.eu)
-- Discover the command line tool: [atomic-cli](rust-cli.md) (`cargo install atomic-cli`)
-- Use the Rust library: [atomic_lib](rust-lib.md)
+- [Atomic Cloud](https://atomicserver.eu) is the place to start: the web app, an always-on device for your data, and the app downloads, all in one place
+- The **web app**: documents, tables, chat, files and an ontology editor, working offline in the browser ([demo on atomicdata.dev](https://atomicdata.dev))
+- The **desktop and mobile apps** (macOS, Windows, Linux, Android and iOS), built with Tauri: the same app with a full node inside, so it can be paired with directly and act as an always-on device. Download them from [atomicserver.eu](https://atomicserver.eu) or the [GitHub releases](https://github.com/atomicdata-dev/atomic-server/releases)
+- Build a web app with [@tomic/lib](js.md), [@tomic/react](usecases/react.md) or [@tomic/svelte](svelte.md), or a native app with [Flutter / Dart](flutter.md), on top of the same Rust core
+- Prefer to run your own always-on device? [Self-host atomic-server](atomicserver/installation.md), a single binary
+- The command line tool [atomic-cli](rust-cli.md) and the Rust library [atomic_lib](rust-lib.md)
 
 ## Get involved
 
