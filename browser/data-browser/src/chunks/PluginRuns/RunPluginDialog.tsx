@@ -256,13 +256,13 @@ export function RunPluginDialog({
       </Dialog.Content>
       <Dialog.Actions>
         <Button subtle onClick={dismiss} disabled={applying}>
-          {plan?.blocked ? 'Close' : 'Cancel'}
+          {plan && nothingToApply ? 'Close' : 'Cancel'}
         </Button>
-        <Button onClick={apply} disabled={nothingToApply || applying}>
-          {applying
-            ? 'Applying…'
-            : `Apply ${plan?.changes.length ?? 0} changes`}
-        </Button>
+        {!nothingToApply && (
+          <Button onClick={apply} disabled={applying}>
+            {applying ? 'Applying…' : `Apply ${plan.changes.length} changes`}
+          </Button>
+        )}
       </Dialog.Actions>
     </Dialog>
   );

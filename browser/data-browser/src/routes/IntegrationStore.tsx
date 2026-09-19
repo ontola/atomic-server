@@ -7,6 +7,7 @@ import {
   visibleBundledIntegrations,
 } from '../chunks/PluginRuns/IntegrationDiscovery';
 import { ConnectedIntegration } from '../chunks/PluginRuns/ConnectedIntegration';
+import { useIntegrationCatalog } from '../chunks/PluginRuns/pluginCatalog';
 import { useIntegrationVisibility } from '@hooks/useIntegrationVisibility';
 import { createRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
@@ -34,7 +35,6 @@ import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { useSettings } from '@helpers/AppSettings';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import { constructOpenURL } from '@helpers/navigation';
-import type { IntegrationVisibilityKey } from '@helpers/integrationVisibility';
 
 interface Listing {
   metadata: {
@@ -63,13 +63,13 @@ function IntegrationStore(): React.JSX.Element {
   const { workspace } = IntegrationStoreRoute.useSearch();
   const store = useStore();
   const { drive } = useSettings();
+  const { showApiPlugins, showExperimentalPlugins, setVisibility } =
+    useIntegrationVisibility();
   const {
-    showApiPlugins,
-    showExperimentalPlugins,
-    ready: visibilityReady,
-    saving: visibilitySaving,
-    setVisibility,
-  } = useIntegrationVisibility();
+    entries: catalogEntries,
+    ready: catalogReady,
+    error: catalogEntriesError,
+  } = useIntegrationCatalog();
   // The ontology can hydrate after this page mounts on a full navigation.
   const pluginClass = usePluginClass(drive);
   const navigate = useNavigateWithTransition();
@@ -124,6 +124,7 @@ function IntegrationStore(): React.JSX.Element {
     };
   }, [store, drive, pluginClass]);
   const [search, setSearch] = useState('');
+  const [apiCatalogHasResults, setApiCatalogHasResults] = useState(true);
   const [creating, setCreating] = useState<string>();
   const server = store.getServerUrl();
   useEffect(() => {
@@ -187,6 +188,7 @@ function IntegrationStore(): React.JSX.Element {
 
   const query = search.trim().toLocaleLowerCase();
   const bundled = visibleBundledIntegrations(
+    catalogEntries,
     showExperimentalPlugins,
     showApiPlugins,
   ).filter(entry =>
@@ -194,6 +196,18 @@ function IntegrationStore(): React.JSX.Element {
       .toLocaleLowerCase()
       .includes(query),
   );
+  // Only offer a toggle when the catalog has something behind it: a checkbox
+  // that reveals nothing reads as broken.
+  const hasApiPlugins = catalogEntries.some(
+    entry => entry.enabled && entry.requiresApiPlugins,
+  );
+  const hasExperimentalPlugins = catalogEntries.some(
+    entry => entry.enabled && entry.experimental,
+  );
+  const nothingToDiscover =
+    catalogReady &&
+    bundled.length === 0 &&
+    (!showApiPlugins || !apiCatalogHasResults);
   const visible = (showExperimentalPlugins ? listings : [])?.filter(
     ({ metadata: entry }) =>
       [entry.name, entry.description, ...entry.domains, ...entry.standards]
@@ -255,33 +269,50 @@ function IntegrationStore(): React.JSX.Element {
             onChange={event => setSearch(event.target.value)}
           />
           {error && <Card role='alert'>{error}</Card>}
+          {catalogEntriesError && (
+            <Card role='alert'>{catalogEntriesError}</Card>
+          )}
+          {!catalogReady && !catalogEntriesError && (
+            <p>Loading integrations…</p>
+          )}
           {showExperimentalPlugins && catalogError && (
             <Card role='alert'>{catalogError}</Card>
           )}
           {showExperimentalPlugins && !listings && !catalogError && (
             <p>Loading integrations…</p>
           )}
-          {!showApiPlugins && (
-            <PluginVisibilityToggle
-              pluginKey='show-api-plugins'
-              label='Show API plugins'
-              ready={visibilityReady}
-              saving={visibilitySaving}
-              setVisibility={setVisibility}
-            />
-          )}
-          {!showExperimentalPlugins && (
-            <PluginVisibilityToggle
-              pluginKey='show-experimental-plugins'
-              label='Show experimental plugins'
-              ready={visibilityReady}
-              saving={visibilitySaving}
-              setVisibility={setVisibility}
-            />
+          {(hasApiPlugins || hasExperimentalPlugins) && (
+            <Column gap='0.5rem'>
+              {hasApiPlugins && (
+                <CheckboxLabel>
+                  <Checkbox
+                    checked={showApiPlugins}
+                    onChange={value => setVisibility('show-api-plugins', value)}
+                  />
+                  Show API plugins
+                </CheckboxLabel>
+              )}
+              {hasExperimentalPlugins && (
+                <CheckboxLabel>
+                  <Checkbox
+                    checked={showExperimentalPlugins}
+                    onChange={value =>
+                      setVisibility('show-experimental-plugins', value)
+                    }
+                  />
+                  Show experimental plugins
+                </CheckboxLabel>
+              )}
+            </Column>
           )}
           <Grid>
             {showApiPlugins && (
-              <LocalThoughtCatalog drive={drive} search={search} />
+              <LocalThoughtCatalog
+                drive={drive}
+                search={search}
+                showExperimentalPlugins={showExperimentalPlugins}
+                onVisibilityChange={setApiCatalogHasResults}
+              />
             )}
             {bundled.map(entry => (
               <IntegrationDiscovery
@@ -292,6 +323,7 @@ function IntegrationStore(): React.JSX.Element {
               />
             ))}
           </Grid>
+          {nothingToDiscover && <DiscoverEmptyState searching={!!query} />}
           <Column gap='0.75rem'>
             {visible && visible.length > 0 && (
               <>
@@ -428,32 +460,12 @@ function AutomationEmptyState() {
   );
 }
 
-interface PluginVisibilityToggleProps {
-  pluginKey: IntegrationVisibilityKey;
-  label: string;
-  ready: boolean;
-  saving: boolean;
-  setVisibility: (
-    key: IntegrationVisibilityKey,
-    value: boolean,
-  ) => Promise<void>;
-}
-
-function PluginVisibilityToggle({
-  pluginKey,
-  label,
-  ready,
-  saving,
-  setVisibility,
-}: PluginVisibilityToggleProps) {
+function DiscoverEmptyState({ searching }: { searching: boolean }) {
   return (
-    <CheckboxLabel>
-      <Checkbox
-        checked={false}
-        disabled={!ready || saving}
-        onChange={value => void setVisibility(pluginKey, value)}
-      />
-      {label}
-    </CheckboxLabel>
+    <p>
+      {searching
+        ? 'No integrations match your search.'
+        : 'No plugins to show here.'}
+    </p>
   );
 }

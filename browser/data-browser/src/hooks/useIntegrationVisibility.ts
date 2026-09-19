@@ -6,15 +6,24 @@ import {
   useCurrentAgent,
   useResource,
   useStore,
+  type Store,
 } from '@tomic/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePrivateDrive } from './usePrivateDrive';
 import {
   integrationVisibility,
   integrationVisibilitySchema,
+  readVisibilityCache,
+  writeVisibilityCache,
   type IntegrationVisibilityKey,
+  type IntegrationVisibilityValues,
 } from '@helpers/integrationVisibility';
 
+/**
+ * These preferences only decide what discovery shows, so the toggle is applied
+ * locally right away and written to the private drive in the background. That
+ * keeps the checkboxes usable while the server is still starting up.
+ */
 export function useIntegrationVisibility() {
   const store = useStore();
   const [agent] = useCurrentAgent();
@@ -34,13 +43,24 @@ export function useIntegrationVisibility() {
     properties: Record<string, string>;
   }>();
   const [saving, setSaving] = useState(false);
-  const [pending, setPending] = useState<{
-    actor: string;
-    drive: string;
-    key: IntegrationVisibilityKey;
-    value: boolean;
-  }>();
+  /** Last known values for this agent, shown until the drive is readable. */
+  const [local, setLocal] = useState<IntegrationVisibilityValues>(() =>
+    readVisibilityCache(actor),
+  );
+  /** Toggles that are queued, in flight, or failed: the local value wins. */
+  const [unconfirmed, setUnconfirmed] = useState<IntegrationVisibilityKey[]>(
+    [],
+  );
+  const [queue, setQueue] = useState<IntegrationVisibilityValues>({});
+  const flushing = useRef(false);
   const [error, setError] = useState<string>();
+
+  useEffect(() => {
+    setLocal(readVisibilityCache(actor));
+    setUnconfirmed([]);
+    setQueue({});
+    setError(undefined);
+  }, [actor]);
 
   useEffect(() => {
     let active = true;
@@ -79,60 +99,137 @@ export function useIntegrationVisibility() {
     resolved?.actor === actor &&
     !resource.loading &&
     !resource.error;
-  const visibility = integrationVisibility(
+  const stored = integrationVisibility(
     resource,
     ready ? resolved.properties : {},
   );
 
-  const setVisibility = async (
-    key: IntegrationVisibilityKey,
-    value: boolean,
-  ) => {
-    if (!ready || saving || !actor) return;
-    setPending({ actor, drive: privateDrive, key, value });
-    setSaving(true);
-    setError(undefined);
+  // Writes are queued rather than awaited, so a slow or unreachable server
+  // never blocks the toggle that triggered them.
+  useEffect(() => {
+    const entries = Object.entries(queue) as [
+      IntegrationVisibilityKey,
+      boolean,
+    ][];
 
-    try {
-      const schema = await ensureSchema(
-        store,
-        privateDrive,
-        integrationVisibilitySchema(),
-      );
-      const drive = await store.getResource(privateDrive);
-      if (store.getAgent()?.subject !== actor) return;
-      await drive.set(schema.properties[key], value);
-      await drive.save();
-      setResolved({
-        actor,
-        drive: privateDrive,
-        properties: schema.properties,
-      });
-    } catch (reason) {
-      setError(String(reason));
-    } finally {
-      setPending(undefined);
+    if (!ready || !actor || !privateDrive || flushing.current) return;
+
+    if (entries.length === 0) return;
+
+    flushing.current = true;
+    setSaving(true);
+
+    void saveVisibility(store, privateDrive, actor, entries).then(result => {
+      flushing.current = false;
       setSaving(false);
-    }
+
+      // Signing out or switching agents mid-write hands state to the effect
+      // above, which reloads the preferences for whoever is signed in now.
+      if (store.getAgent()?.subject !== actor) return;
+
+      if (result.properties)
+        setResolved({
+          actor,
+          drive: privateDrive,
+          properties: result.properties,
+        });
+
+      if (!result.error)
+        setUnconfirmed(current =>
+          current.filter(key => !entries.some(([saved]) => saved === key)),
+        );
+
+      // A failed write leaves the choice applied locally; only saving failed.
+      setError(result.error);
+      setQueue(current => dropSaved(current, entries));
+    });
+  }, [ready, queue, actor, privateDrive, store]);
+
+  // Once the drive is readable and in sync, it is the source of truth again.
+  useEffect(() => {
+    if (!ready) return;
+    const confirmed: IntegrationVisibilityValues = {};
+
+    if (!unconfirmed.includes('show-api-plugins'))
+      confirmed['show-api-plugins'] = stored.showApiPlugins;
+
+    if (!unconfirmed.includes('show-experimental-plugins'))
+      confirmed['show-experimental-plugins'] = stored.showExperimentalPlugins;
+
+    if (Object.keys(confirmed).length === 0) return;
+    setLocal(writeVisibilityCache(actor, confirmed));
+  }, [
+    ready,
+    actor,
+    unconfirmed,
+    stored.showApiPlugins,
+    stored.showExperimentalPlugins,
+  ]);
+
+  const value = (key: IntegrationVisibilityKey, remote: boolean) =>
+    ready && !unconfirmed.includes(key) ? remote : (local[key] ?? remote);
+
+  const setVisibility = (key: IntegrationVisibilityKey, next: boolean) => {
+    setLocal(writeVisibilityCache(actor, { [key]: next }));
+    setUnconfirmed(current =>
+      current.includes(key) ? current : [...current, key],
+    );
+    setQueue(current => ({ ...current, [key]: next }));
+    setError(undefined);
   };
 
-  const optimistic =
-    pending?.actor === actor && pending?.drive === privateDrive
-      ? pending
-      : undefined;
-
   return {
-    showApiPlugins:
-      optimistic?.key === 'show-api-plugins'
-        ? optimistic.value
-        : visibility.showApiPlugins,
-    showExperimentalPlugins:
-      optimistic?.key === 'show-experimental-plugins'
-        ? optimistic.value
-        : visibility.showExperimentalPlugins,
+    showApiPlugins: value('show-api-plugins', stored.showApiPlugins),
+    showExperimentalPlugins: value(
+      'show-experimental-plugins',
+      stored.showExperimentalPlugins,
+    ),
     ready,
     saving,
     error,
     setVisibility,
   };
+}
+
+/** Keeps entries that were changed again while the write was in flight. */
+function dropSaved(
+  queued: IntegrationVisibilityValues,
+  saved: [IntegrationVisibilityKey, boolean][],
+): IntegrationVisibilityValues {
+  const next = { ...queued };
+
+  for (const [key, value] of saved) {
+    if (next[key] === value) delete next[key];
+  }
+
+  return next;
+}
+
+async function saveVisibility(
+  store: Store,
+  privateDrive: string,
+  actor: string,
+  entries: [IntegrationVisibilityKey, boolean][],
+): Promise<{ properties?: Record<string, string>; error?: string }> {
+  try {
+    const schema = await ensureSchema(
+      store,
+      privateDrive,
+      integrationVisibilitySchema(),
+    );
+    const drive = await store.getResource(privateDrive);
+
+    // The agent may have changed while we waited for the server.
+    if (store.getAgent()?.subject !== actor) return {};
+
+    for (const [key, value] of entries) {
+      await drive.set(schema.properties[key], value);
+    }
+
+    await drive.save();
+
+    return { properties: schema.properties };
+  } catch (reason) {
+    return { error: String(reason) };
+  }
 }

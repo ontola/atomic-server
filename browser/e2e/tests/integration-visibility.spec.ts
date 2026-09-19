@@ -1,12 +1,31 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { before } from './test-utils';
 
 test.beforeEach(before);
+
+const ENABLED = 'https://atomicdata.dev/integrations/properties/enabled';
+const SHORTNAME = 'https://atomicdata.dev/properties/shortname';
+
+/** Serve the real catalog with exactly these entries enabled. */
+async function enableCatalogEntries(page: Page, shortnames: string[]) {
+  await page.route('**/integrations/catalog.json', async route => {
+    const response = await route.fetch();
+    const entries = (await response.json()) as Record<string, unknown>[];
+
+    for (const entry of entries) {
+      if (ENABLED in entry)
+        entry[ENABLED] = shortnames.includes(entry[SHORTNAME] as string);
+    }
+
+    await route.fulfill({ response, json: entries });
+  });
+}
 
 test('integration categories default off and independent Atomic preferences survive reload', async ({
   page,
 }) => {
   const catalogRequests: string[] = [];
+  await enableCatalogEntries(page, ['mt940', 'notion']);
   await page.route('**/catalog', route => route.fulfill({ json: ['pets'] }));
   await page.route('**/plugin-catalog', async route => {
     catalogRequests.push(route.request().url());
@@ -38,10 +57,7 @@ test('integration categories default off and independent Atomic preferences surv
   await expect(page.locator('[data-integration]')).toHaveCount(0);
   expect(catalogRequests).toHaveLength(0);
 
-  // `check()` verifies the box is checked afterwards — but enabling the
-  // category removes the inline toggle (asserted below), so the verification
-  // has nothing to read and retries until it times out. Click it instead.
-  await experimentalToggle.click();
+  await experimentalToggle.check();
   await expect
     .poll(() =>
       page.evaluate(async () => {
@@ -72,18 +88,12 @@ test('integration categories default off and independent Atomic preferences surv
       }),
     )
     .toBe(true);
-  // Once enabled, the inline toggle for that category is no longer shown.
-  await expect(experimentalToggle).toHaveCount(0);
 
   await page.reload();
   await expect(page.locator('[data-integration="mt940"]')).toBeVisible();
   await expect(page.locator('[data-release="fixture-release"]')).toBeVisible();
   await expect(apiToggle).toBeVisible();
-  await expect(
-    page.getByRole('checkbox', {
-      name: 'Show experimental plugins',
-    }),
-  ).toHaveCount(0);
+  await expect(experimentalToggle).toBeChecked();
   expect(catalogRequests.length).toBeGreaterThan(0);
 
   await page.goto(new URL('/app/settings', page.url()).href);
@@ -105,13 +115,13 @@ test('integration categories default off and independent Atomic preferences surv
   await expect(settingsExperimental).not.toBeChecked();
 
   await page.goto(new URL('/app/integrations', page.url()).href);
-  await expect(page.locator('[data-integration="proxy:pets"]')).toBeVisible();
-  await expect(apiToggle).toHaveCount(0);
-  await expect(
-    page.getByRole('checkbox', {
-      name: 'Show experimental plugins',
-    }),
-  ).toBeVisible();
+  // Raw LocalThought platforms are gated by the same catalog as bundled
+  // integrations: API plugins alone surfaces the section, but an
+  // uncertified platform like 'pets' stays hidden until experimental
+  // plugins are shown too.
+  await expect(page.locator('[data-integration="proxy:pets"]')).toHaveCount(0);
+  await expect(apiToggle).toBeChecked();
+  await expect(experimentalToggle).not.toBeChecked();
   await expect(page.locator('[data-integration="mt940"]')).toHaveCount(0);
   await expect(page.locator('[data-release]')).toHaveCount(0);
 });
@@ -133,11 +143,26 @@ test('existing connections remain visible while both discovery categories are hi
       .getByRole('region', { name: 'Your integrations' })
       .getByRole('link', { name: 'New plugin', exact: true }),
   ).toBeVisible();
+  // The stock catalog enables no API plugins, so that toggle is not offered.
   await expect(
     page.getByRole('checkbox', { name: 'Show API plugins' }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(
     page.getByRole('checkbox', { name: 'Show experimental plugins' }),
   ).toBeVisible();
   await expect(page.locator('[data-integration]')).toHaveCount(0);
+});
+
+test('visibility toggles are hidden when the catalog enables nothing behind them', async ({
+  page,
+}) => {
+  await enableCatalogEntries(page, []);
+  await page.goto(new URL('/app/integrations', page.url()).href);
+  await expect(page.getByText('No plugins to show here.')).toBeVisible();
+  await expect(
+    page.getByRole('checkbox', { name: 'Show API plugins' }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('checkbox', { name: 'Show experimental plugins' }),
+  ).toHaveCount(0);
 });

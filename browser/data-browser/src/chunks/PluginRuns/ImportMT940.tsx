@@ -21,7 +21,7 @@ import { ExternalLink } from '@components/ExternalLink';
 import { AtomicLink } from '@components/AtomicLink';
 import { bankingSchema } from '../../../../../integrations/mt940/schema';
 import type { Config } from '../../../../../integrations/mt940/plugin';
-import source from '../../../../../integrations/mt940/plugin.js?raw';
+import { fetchIntegrationSource } from '@helpers/integrationSource';
 import { pluginClassesFor } from './runScript';
 import { ensureInstallationResource } from './installationResources';
 import { RunPluginDialog } from './RunPluginDialog';
@@ -95,6 +95,7 @@ export function ImportMT940({
         throw new Error(
           'Choose a statement smaller than 512 KB. Export a shorter period if needed.',
         );
+      const source = await fetchIntegrationSource('mt940');
       const bytes = await file.arrayBuffer();
       // Prefer UTF-8, but older MT940 bank exports often use Windows-1252.
       let text: string;

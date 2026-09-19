@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   integrationVisibility,
   integrationVisibilitySchema,
+  readVisibilityCache,
+  writeVisibilityCache,
 } from './integrationVisibility';
 
 const properties = {
@@ -55,5 +57,80 @@ describe('Atomic integration visibility preferences', () => {
       ['show-api-plugins', 'https://atomicdata.dev/datatypes/boolean'],
       ['show-experimental-plugins', 'https://atomicdata.dev/datatypes/boolean'],
     ]);
+  });
+});
+
+function fakeStorage(initial: Record<string, string> = {}): Storage {
+  const items = new Map(Object.entries(initial));
+
+  return {
+    getItem: (key: string) => items.get(key) ?? null,
+    setItem: (key: string, value: string) => void items.set(key, value),
+    removeItem: (key: string) => void items.delete(key),
+    clear: () => items.clear(),
+    key: (index: number) => [...items.keys()][index] ?? null,
+    get length() {
+      return items.size;
+    },
+  } as Storage;
+}
+
+describe('Atomic integration visibility cache', () => {
+  it('reads back what it wrote for an agent', () => {
+    const storage = fakeStorage();
+    writeVisibilityCache('did:ad:alice', { 'show-api-plugins': true }, storage);
+    expect(readVisibilityCache('did:ad:alice', storage)).toEqual({
+      'show-api-plugins': true,
+    });
+  });
+
+  it('keeps agents apart', () => {
+    const storage = fakeStorage();
+    writeVisibilityCache('did:ad:alice', { 'show-api-plugins': true }, storage);
+    expect(readVisibilityCache('did:ad:bob', storage)).toEqual({});
+  });
+
+  it('merges without dropping the other preference', () => {
+    const storage = fakeStorage();
+    writeVisibilityCache('did:ad:alice', { 'show-api-plugins': true }, storage);
+    expect(
+      writeVisibilityCache(
+        'did:ad:alice',
+        { 'show-experimental-plugins': false },
+        storage,
+      ),
+    ).toEqual({
+      'show-api-plugins': true,
+      'show-experimental-plugins': false,
+    });
+  });
+
+  it.each(['null', '"true"', '{"show-api-plugins":"true"}', 'not json'])(
+    'ignores unusable cached value %s',
+    raw => {
+      const storage = fakeStorage({
+        'integration-visibility:did:ad:alice': raw,
+      });
+      expect(readVisibilityCache('did:ad:alice', storage)).toEqual({});
+    },
+  );
+
+  it('survives storage that is unavailable', () => {
+    const blocked = {
+      getItem: () => {
+        throw new Error('blocked');
+      },
+      setItem: () => {
+        throw new Error('blocked');
+      },
+    } as unknown as Storage;
+    expect(readVisibilityCache('did:ad:alice', blocked)).toEqual({});
+    expect(() =>
+      writeVisibilityCache(
+        'did:ad:alice',
+        { 'show-api-plugins': true },
+        blocked,
+      ),
+    ).not.toThrow();
   });
 });
