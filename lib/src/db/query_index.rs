@@ -407,15 +407,16 @@ pub(crate) fn index_key_property<'a>(
     q_filter: &'a QueryFilter,
     index_atom: &'a IndexAtom,
 ) -> &'a String {
+    filter_key_property(q_filter).unwrap_or(&index_atom.property)
+}
+
+/// [`index_key_property`] without an atom: `sort_by`, else the first
+/// constraint property; `None` only for an all-value-only filter.
+pub(crate) fn filter_key_property(q_filter: &QueryFilter) -> Option<&String> {
     if let Some(sort_by) = &q_filter.sort_by {
-        return sort_by;
+        return Some(sort_by);
     }
-    for c in &q_filter.filters {
-        if let Some(property) = &c.property {
-            return property;
-        }
-    }
-    &index_atom.property
+    q_filter.filters.iter().find_map(|c| c.property.as_ref())
 }
 
 /// Checks if a new IndexAtom should be updated for a specific [QueryFilter]
@@ -492,6 +493,11 @@ pub fn check_if_atom_matches_watched_query_filters(
     );
 
     for q_filter in &filters {
+        // A DID atom reaches every drive's filters (no prefix to route by);
+        // the resource's `drive` stamp is what keeps it out of the others.
+        if !store.filter_accepts_resource_drive(q_filter, resource) {
+            continue;
+        }
         if let Some(prop) = should_update_property(q_filter, index_atom, resource) {
             let sort_key = sort_key_for(resource, prop);
             update_indexed_member(

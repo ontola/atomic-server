@@ -4,6 +4,8 @@
 pub mod app_agent;
 pub mod blob_backend;
 pub mod btreemap_store;
+#[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+pub mod compaction;
 mod encoding;
 #[cfg(feature = "db-redb")]
 pub mod encrypted_backend;
@@ -110,6 +112,16 @@ pub struct EphemeralEvent {
     pub payload: Vec<u8>,
     /// The peer that relayed it, so it is not sent straight back.
     pub from_peer: String,
+}
+
+/// A subject `Db::recursive_remove` queued for deletion, kept until its
+/// transaction has been applied so the caller can tombstone and announce it.
+#[derive(Debug, Clone)]
+struct RemovedSubject {
+    /// The subject without query params, as [`DbEvent::Destroyed`] names it.
+    subject: Subject,
+    /// See [`DbEvent::Destroyed::drive`]: read before the resource was gone.
+    drive: Option<Subject>,
 }
 
 /// Event emitted when a resource is created, updated, or deleted.
@@ -229,6 +241,48 @@ pub struct ReplicationTarget {
     pub authorized_by: String,
 }
 
+/// What [`Db::sync_drive_mappings`] changed in the host → Drive mapping table.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct DriveMappingSync {
+    /// Hosts that had no mapping before.
+    pub added: Vec<String>,
+    /// Hosts that pointed at a different Drive before.
+    pub updated: Vec<String>,
+    /// Hosts an earlier reconcile installed and that the desired set no longer
+    /// names.
+    pub removed: Vec<String>,
+}
+
+impl DriveMappingSync {
+    /// Whether anything actually changed, so a caller polling on a timer can
+    /// log real edits instead of one line per poll.
+    pub fn is_empty(&self) -> bool {
+        self.added.is_empty() && self.updated.is_empty() && self.removed.is_empty()
+    }
+}
+
+/// `Tree::PluginMeta` key holding the hosts whose Drive mapping was installed
+/// by [`Db::sync_drive_mappings`].
+///
+/// Removal is scoped to this set rather than to everything in
+/// `Tree::DriveMapping`, because that table also holds bindings made by hand
+/// through `/bind-drive` plus the `localhost` / `127.0.0.1` entries every store
+/// gets at setup. A reconcile that treated its input as authoritative for the
+/// whole table would delete those the first time it ran.
+const MANAGED_ALIAS_HOSTS_KEY: &[u8] = b"managed_drive_alias_hosts";
+
+/// Normalizes a host into a `Tree::DriveMapping` key.
+///
+/// Hostnames are case-insensitive (RFC 4343), but the `Host` header comes back
+/// in whatever case the client sent, and `/bind-drive` derives its key from a
+/// parsed URL (which the `url` crate has already lowercased). Storing and
+/// looking up lowercased is what makes `ACME.example.com` resolve the Drive
+/// that `acme.example.com` was bound to, instead of silently missing the
+/// mapping and falling through to the store root.
+fn drive_mapping_key(host: &str) -> String {
+    host.trim().trim_end_matches('.').to_ascii_lowercase()
+}
+
 const REPLICATION_PREFIX: &str = "replication:";
 
 /// `Tree::PluginMeta` key holding the fingerprint of the built-in defaults
@@ -237,6 +291,34 @@ const DEFAULTS_FINGERPRINT_KEY: &[u8] = b"defaults_fingerprint";
 
 fn replication_key(drive: &str) -> String {
     format!("{REPLICATION_PREFIX}{drive}")
+}
+
+/// Upper bound on the `PropValSub` entries the planner counts per constraint
+/// when ranking them, and on what the first-build cross-check will walk.
+const PLANNER_SCAN_CAP: usize = 512;
+
+/// What [`Db::check_query_index`] found when it compared a query's member
+/// index with a scan of the store.
+#[derive(Debug, Clone)]
+pub struct QueryIndexReport {
+    /// The filter whose index was checked.
+    pub filter: query_index::QueryFilter,
+    /// Whether the filter is watched (its index is maintained on commit).
+    pub watched: bool,
+    /// Members the index holds.
+    pub indexed: usize,
+    /// Resources in the store that match the filter.
+    pub expected: usize,
+    /// Matching subjects the index does not list.
+    pub missing: Vec<String>,
+    /// Indexed subjects that no longer match (or no longer exist).
+    pub stale: Vec<String>,
+}
+
+impl QueryIndexReport {
+    pub fn is_consistent(&self) -> bool {
+        self.missing.is_empty() && self.stale.is_empty()
+    }
 }
 
 /// One drive's watched query filters, routed by the properties they touch so
@@ -343,6 +425,15 @@ pub struct Db {
     /// `check_if_atom_matches_watched_query_filters` reads from here and
     /// never touches msgpack on a commit.
     watched_queries_by_drive: Arc<RwLock<HashMap<String, DriveFilters>>>,
+    /// The drive root each watched filter's `drive` resolves to, keyed by the
+    /// filter's `drive` string. For a `did:` query, `QueryFilter::drive` is
+    /// the queried subject (a table, a folder), not the drive it lives in;
+    /// its stored `drive` stamp names the root. Resolved when a filter is
+    /// registered and looked up per DID atom on the commit path, so that a
+    /// DID resource stamped into another drive never enters this drive's
+    /// members (security audit C17). `None` records that the subject could
+    /// not be resolved here, in which case the filter is not drive-checked.
+    filter_drive_roots: Arc<RwLock<HashMap<String, Option<Subject>>>>,
     /// Serialises writers that read-modify-write the same subject's state, so
     /// a commit and a sync apply cannot replace each other's snapshot. Per
     /// store, not global — see [`crate::subject_lock`].
@@ -603,7 +694,7 @@ impl Db {
 
         // Run migrations before wrapping in Arc (migrations need direct sled access)
         migrations::migrate_maybe(&sled_store, base_domain.as_deref())
-            .map(|e| format!("Error during migration of database: {:?}", e))?;
+            .map_err(|e| format!("Error during migration of database: {:?}", e))?;
 
         let store = Db {
             path: path.into(),
@@ -618,6 +709,7 @@ impl Db {
             db_events: tokio::sync::broadcast::channel(64).0,
             ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
+            filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             plugin_locks: Default::default(),
             base_domain,
@@ -660,6 +752,7 @@ impl Db {
             db_events: tokio::sync::broadcast::channel(64).0,
             ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
+            filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             plugin_locks: Default::default(),
             base_domain,
@@ -698,6 +791,7 @@ impl Db {
             db_events: tokio::sync::broadcast::channel(64).0,
             ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
+            filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             plugin_locks: Default::default(),
             base_domain,
@@ -718,11 +812,36 @@ impl Db {
 
     /// Creates a Db backed by redb with file-based persistent storage.
     /// Works on all native targets (not WASM — use init_redb_opfs for that).
+    ///
+    /// Runs the default [`compaction::CompactionPolicy`] on the file before
+    /// serving it; `init_redb_file_with_policy` takes another.
     #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
     pub async fn init_redb_file(
         path: &std::path::Path,
         base_domain: Option<String>,
         uploads_path: &std::path::Path,
+    ) -> AtomicResult<Db> {
+        Self::init_redb_file_with_policy(
+            path,
+            base_domain,
+            uploads_path,
+            &compaction::CompactionPolicy::default(),
+        )
+        .await
+    }
+
+    /// `init_redb_file` with an explicit startup compaction policy. The
+    /// file's size and open duration are logged either way; with the policy
+    /// enabled the reclaimable space is measured and, past both thresholds,
+    /// compacted before any table is read. A compaction failure (including
+    /// redb refusing because of a live transaction) is logged and the store
+    /// opens as it was; it never fails startup.
+    #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+    pub async fn init_redb_file_with_policy(
+        path: &std::path::Path,
+        base_domain: Option<String>,
+        uploads_path: &std::path::Path,
+        policy: &compaction::CompactionPolicy,
     ) -> AtomicResult<Db> {
         tracing::info!("Opening ReDB database at {:?}", path);
 
@@ -782,7 +901,8 @@ impl Db {
         #[cfg(not(feature = "db-sled"))]
         let _ = uploads_path;
 
-        let redb_store = redb_store::RedbStore::new_file(&redb_path)?;
+        let (redb_store, compaction) =
+            redb_store::RedbStore::new_file_with_policy(&redb_path, policy)?;
 
         let store = Db {
             path: path.to_path_buf(),
@@ -797,6 +917,7 @@ impl Db {
             db_events: tokio::sync::broadcast::channel(64).0,
             ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
+            filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             plugin_locks: Default::default(),
             base_domain,
@@ -807,6 +928,14 @@ impl Db {
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
 
+        // Bookkeeping only: the compaction itself already happened, and
+        // failing to note it must not refuse the start.
+        if let Ok(record) = compaction {
+            if let Err(e) = store.record_compaction(&record) {
+                tracing::warn!("Could not record the startup compaction: {e}");
+            }
+        }
+
         store.populate_watched_queries_cache()?;
         crate::populate::bootstrap(&store)
             .await
@@ -814,6 +943,32 @@ impl Db {
         crate::search::maybe_rebuild_search_index(&store)?;
         store.spawn_durable_flush(DURABLE_FLUSH_INTERVAL);
         Ok(store)
+    }
+
+    /// Persist the outcome of a startup compaction so `last_compaction`
+    /// can report it after the log line is gone. Durable at once: the
+    /// compaction it describes already cost seconds, a 100 ms flush
+    /// window is nothing next to it.
+    #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+    fn record_compaction(&self, record: &compaction::CompactionRecord) -> AtomicResult<()> {
+        let bytes = serde_json::to_vec(record)
+            .map_err(|e| format!("Could not serialize the compaction record: {e}"))?;
+        self.kv
+            .insert(trees::Tree::PluginMeta, compaction::RECORD_KEY, &bytes)?;
+        self.kv.flush()
+    }
+
+    /// The most recent automatic startup compaction of this store's file,
+    /// if one ever ran. `None` on a store that was never compacted at
+    /// startup, and on the in-memory, OPFS and sled backends.
+    #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
+    pub fn last_compaction(&self) -> Option<compaction::CompactionRecord> {
+        let bytes = self
+            .kv
+            .get(trees::Tree::PluginMeta, compaction::RECORD_KEY)
+            .ok()
+            .flatten()?;
+        serde_json::from_slice(&bytes).ok()
     }
 
     /// Make `Durability::None` commits durable on a fixed cadence.
@@ -979,6 +1134,7 @@ impl Db {
             db_events: tokio::sync::broadcast::channel(64).0,
             ephemeral_events: tokio::sync::broadcast::channel(32).0,
             watched_queries_by_drive: Arc::new(RwLock::new(HashMap::new())),
+            filter_drive_roots: Arc::new(RwLock::new(HashMap::new())),
             subject_locks: Default::default(),
             plugin_locks: Default::default(),
             base_domain,
@@ -1593,8 +1749,16 @@ impl Db {
             return Ok(subject.clone());
         };
 
+        // A host bound to a Drive serves that Drive or nothing. Falling through
+        // to the store root here is what let a vanity host whose Drive has not
+        // synced yet — or was migrated to another node — quietly serve the
+        // node's *own* root Drive under a customer's hostname. On a
+        // multi-tenant node that is one tenant's domain answering with another
+        // namespace's content, so it is a 404 instead.
         if self.get_resource(&drive_did).await.is_err() {
-            return Ok(subject.clone());
+            return Err(AtomicError::not_found(format!(
+                "Host '{host}' is bound to drive {drive_did}, which this server does not have."
+            )));
         }
 
         if subject_string == "/" {
@@ -1763,17 +1927,129 @@ impl Db {
             _ => drive_did.to_string(),
         };
 
+        let key = drive_mapping_key(host);
         self.kv
-            .insert(Tree::DriveMapping, host.as_bytes(), did_str.as_bytes())?;
-        tracing::info!("Added drive mapping: {} -> {}", host, did_str);
+            .insert(Tree::DriveMapping, key.as_bytes(), did_str.as_bytes())?;
+        tracing::info!("Added drive mapping: {} -> {}", key, did_str);
         Ok(())
     }
 
     /// Removes the drive mapping for a given host.
     pub fn remove_drive_mapping(&self, host: &str) -> AtomicResult<()> {
-        self.kv.remove(Tree::DriveMapping, host.as_bytes())?;
-        tracing::info!("Removed drive mapping for host: {}", host);
+        let key = drive_mapping_key(host);
+        self.kv.remove(Tree::DriveMapping, key.as_bytes())?;
+        tracing::info!("Removed drive mapping for host: {}", key);
         Ok(())
+    }
+
+    /// Every host → Drive mapping in this store, sorted by host.
+    pub fn list_drive_mappings(&self) -> AtomicResult<Vec<(String, String)>> {
+        let mut out = Vec::new();
+
+        for (key, value) in self.kv.scan_prefix(Tree::DriveMapping, b"").flatten() {
+            let (Ok(host), Ok(did)) = (std::str::from_utf8(&key), std::str::from_utf8(&value))
+            else {
+                continue;
+            };
+            out.push((host.to_string(), did.to_string()));
+        }
+
+        out.sort();
+        Ok(out)
+    }
+
+    /// The hosts [`Self::sync_drive_mappings`] installed on its last run.
+    pub fn managed_alias_hosts(&self) -> AtomicResult<Vec<String>> {
+        let Some(bytes) = self.kv.get(Tree::PluginMeta, MANAGED_ALIAS_HOSTS_KEY)? else {
+            return Ok(Vec::new());
+        };
+
+        serde_json::from_slice(&bytes)
+            .map_err(|e| format!("Corrupt managed alias host list: {e}").into())
+    }
+
+    /// Reconciles the host → Drive mappings this server installs on behalf of a
+    /// control plane against `desired`, reporting what changed.
+    ///
+    /// Idempotent, so a managed node can call it on every policy poll: a host
+    /// already pointing at the right Drive is left untouched. Hosts a previous
+    /// run installed that `desired` no longer names are removed, which is what
+    /// makes a released vanity name stop resolving without anyone touching the
+    /// box. Ownership is tracked in [`MANAGED_ALIAS_HOSTS_KEY`], so a mapping
+    /// made by hand through `/bind-drive` is never removed by a reconcile that
+    /// does not name it.
+    ///
+    /// A host the control plane *does* name is taken over even if something
+    /// else bound it first: the control plane owns the namespace it hands out,
+    /// and a stale local binding shadowing an issued name is the failure this
+    /// is meant to correct.
+    pub fn sync_drive_mappings(
+        &self,
+        desired: &[(String, String)],
+    ) -> AtomicResult<DriveMappingSync> {
+        let mut report = DriveMappingSync::default();
+        let mut managed: Vec<String> = Vec::with_capacity(desired.len());
+
+        for (host, drive_did) in desired {
+            let key = drive_mapping_key(host);
+            // An empty host would claim the zero-length key and match no
+            // request; an empty DID would point a live hostname at nothing.
+            // Either is a bug upstream, and neither is worth writing.
+            if key.is_empty() || drive_did.trim().is_empty() {
+                tracing::warn!("Skipping drive mapping with an empty host or drive: {key:?}");
+                continue;
+            }
+
+            let current = self
+                .kv
+                .get(Tree::DriveMapping, key.as_bytes())?
+                .and_then(|bytes| String::from_utf8(bytes).ok());
+
+            match current {
+                Some(current) if current == *drive_did => {}
+                Some(_) => {
+                    self.kv
+                        .insert(Tree::DriveMapping, key.as_bytes(), drive_did.as_bytes())?;
+                    report.updated.push(key.clone());
+                }
+                None => {
+                    self.kv
+                        .insert(Tree::DriveMapping, key.as_bytes(), drive_did.as_bytes())?;
+                    report.added.push(key.clone());
+                }
+            }
+
+            if !managed.contains(&key) {
+                managed.push(key);
+            }
+        }
+
+        for host in self.managed_alias_hosts()? {
+            if managed.contains(&host) {
+                continue;
+            }
+            if self.kv.get(Tree::DriveMapping, host.as_bytes())?.is_some() {
+                self.kv.remove(Tree::DriveMapping, host.as_bytes())?;
+                report.removed.push(host);
+            }
+        }
+
+        managed.sort();
+        let bytes = serde_json::to_vec(&managed)
+            .map_err(|e| format!("Could not encode managed alias hosts: {e}"))?;
+        self.kv
+            .insert(Tree::PluginMeta, MANAGED_ALIAS_HOSTS_KEY, &bytes)?;
+
+        if !report.is_empty() {
+            tracing::info!(
+                "Drive mappings reconciled: {} added, {} updated, {} removed",
+                report.added.len(),
+                report.updated.len(),
+                report.removed.len()
+            );
+        }
+
+        Ok(report)
     }
 
     /// Where a drive is replicated to, and who authorized it.
@@ -1842,7 +2118,8 @@ impl Db {
 
     /// Returns the full Drive DID for a given host (domain/subdomain).
     pub async fn get_drive_did(&self, host: &str) -> AtomicResult<Option<Subject>> {
-        if let Some(did_bin) = self.kv.get(Tree::DriveMapping, host.as_bytes())? {
+        let key = drive_mapping_key(host);
+        if let Some(did_bin) = self.kv.get(Tree::DriveMapping, key.as_bytes())? {
             let did_str = std::str::from_utf8(&did_bin)
                 .map_err(|e| format!("Failed to parse DID from database: {}", e))?;
             return Ok(Some(Subject::from_raw(did_str, None)));
@@ -2094,6 +2371,27 @@ impl Db {
     /// This can be used to listen to events.
     pub fn set_handle_commit(&mut self, on_commit: HandleCommit) {
         self.on_commit = Some(Arc::new(on_commit));
+    }
+
+    /// Removes `subject` and its children in one transaction and tombstones
+    /// them, returning what was removed so the caller can announce it once it
+    /// has decided how: `remove_resource` sends a plain `DbEvent::Destroyed`
+    /// for each, `apply_commit` wraps the destroyed subject in its signed
+    /// destroy commit and announces only the children this way.
+    async fn remove_applied(&self, subject: &Subject) -> AtomicResult<Vec<RemovedSubject>> {
+        let mut transaction = Transaction::new();
+        let mut removed = Vec::new();
+        self.recursive_remove(subject, &mut transaction, &mut removed, None)
+            .await?;
+        self.apply_transaction(&mut transaction)?;
+        // Tombstone every removed subject so bulk sync (Iroh / WS `SYNC`)
+        // does not resurrect them from a peer that still holds a stale copy.
+        // Only after the apply succeeded: a tombstone for a resource that is
+        // still present would suppress it forever.
+        for r in &removed {
+            crate::sync::tombstones::record_tombstone(self, &r.subject.pure_id());
+        }
+        Ok(removed)
     }
 
     /// Subscribe to all DB events (changes, deletions).
@@ -2669,11 +2967,17 @@ impl Db {
     /// starting set — the estimate only decides how few resources get row-
     /// checked. Constraints with non-equality operators can't be point-
     /// scanned; they contribute a whole-property scan as their candidate set.
-    fn plan_candidate_iterator(&self, q: &Query, q_filter: &QueryFilter) -> IndexIterator {
-        const PLANNER_SCAN_CAP: usize = 512;
-
-        let mut best: Option<(usize, &crate::storelike::PropVal)> = None;
-        for constraint in &q_filter.filters {
+    ///
+    /// Also returns the position of the chosen constraint in
+    /// `q_filter.filters`, so the build can cross-check its result against
+    /// the constraints it did not scan (see `cross_check_first_build`).
+    fn plan_candidate_iterator(
+        &self,
+        q: &Query,
+        q_filter: &QueryFilter,
+    ) -> (IndexIterator, Option<usize>) {
+        let mut best: Option<(usize, usize, &crate::storelike::PropVal)> = None;
+        for (position, constraint) in q_filter.filters.iter().enumerate() {
             let Some(prop) = &constraint.property else {
                 continue;
             };
@@ -2682,13 +2986,13 @@ impl Db {
                 _ => None,
             };
             let estimate = self.estimate_prop_val_count(prop, scan_val, PLANNER_SCAN_CAP);
-            if best.is_none_or(|(current, _)| estimate < current) {
-                best = Some((estimate, constraint));
+            if best.is_none_or(|(current, _, _)| estimate < current) {
+                best = Some((estimate, position, constraint));
             }
         }
 
         match best {
-            Some((_, constraint)) => {
+            Some((_, position, constraint)) => {
                 let prop = constraint
                     .property
                     .as_ref()
@@ -2697,12 +3001,113 @@ impl Db {
                     crate::storelike::FilterOperator::Equal => constraint.value.as_ref(),
                     _ => None,
                 };
-                find_in_prop_val_sub_index(self, prop, val)
+                (find_in_prop_val_sub_index(self, prop, val), Some(position))
             }
             // No property-bearing constraint (value-only filters): fall back
             // to the query's own iterator (value index or full scan).
-            None => self.get_index_iterator_for_query(q),
+            None => (self.get_index_iterator_for_query(q), None),
         }
+    }
+
+    /// The members a first build missed, found by walking the small
+    /// equality constraints the planner did *not* scan.
+    ///
+    /// The planner trusts that any one constraint's `PropValSub` entries are a
+    /// superset of the members. That held only as long as every encoding of a
+    /// value produced the same index key; when one did not, the cheapest
+    /// constraint had fewer candidates than rows, the build filed a partial
+    /// member list, and the filter was watched — so the partial list was
+    /// trusted for good and every count it produced looked plausible
+    /// (planning/silent-failures.md). This walks each other equality
+    /// constraint whose entries fit under the planner's scan cap (so at most
+    /// `PLANNER_SCAN_CAP` extra key reads per constraint, once per first
+    /// build), and returns every matching resource that is not in `built`.
+    /// Constraints beyond the cap are not walked here; the full comparison is
+    /// [`Db::check_query_index`].
+    fn cross_check_first_build(
+        &self,
+        q_filter: &QueryFilter,
+        chosen: Option<usize>,
+        built: &HashSet<String>,
+    ) -> Vec<Resource> {
+        let mut missing = Vec::new();
+        let mut seen: HashSet<String> = HashSet::new();
+        for (position, constraint) in q_filter.filters.iter().enumerate() {
+            if Some(position) == chosen {
+                continue;
+            }
+            let (Some(prop), Some(val)) = (&constraint.property, &constraint.value) else {
+                continue;
+            };
+            if constraint.operator != crate::storelike::FilterOperator::Equal {
+                continue;
+            }
+            if self.estimate_prop_val_count(prop, Some(val), PLANNER_SCAN_CAP) >= PLANNER_SCAN_CAP {
+                continue;
+            }
+            for atom in find_in_prop_val_sub_index(self, prop, Some(val)).flatten() {
+                let subject = atom.subject.as_str().to_string();
+                if built.contains(&subject) || !seen.insert(subject) {
+                    continue;
+                }
+                let Ok(resource) = self.get_resource_shallow(&atom.subject) else {
+                    continue;
+                };
+                if query_index::resource_matches_filter(&resource, q_filter)
+                    && self.filter_accepts_resource_drive(q_filter, &resource)
+                {
+                    missing.push(resource);
+                }
+            }
+        }
+        missing
+    }
+
+    /// Compare a query's member index with the resources it claims to index.
+    ///
+    /// Walks every stored resource, applies the query's filter to it the way
+    /// the index maintenance does (`resource_matches_filter` plus the drive
+    /// check), and reports which matching subjects the index lacks and which
+    /// indexed subjects no longer match. Reading a row set out of the index
+    /// is fast because it trusts the index; this is the check that trust is
+    /// deserved. It is a full scan, so it is for tests, diagnostics and
+    /// one-off repairs, not for the query path.
+    pub fn check_query_index(&self, q: &Query) -> AtomicResult<QueryIndexReport> {
+        let q_filter = QueryFilter::try_from_query(q)?;
+        let id = query_index::query_id(&q_filter)?;
+        // Index keys hold the subject as the writer spelled it; rows come
+        // back under the store's normalized spelling. Compare one form.
+        let base_domain = self.get_base_domain();
+        let canonical = |s: &str| Subject::from_raw(s, base_domain.as_deref()).pure_id();
+
+        let mut indexed: HashSet<String> = HashSet::new();
+        for kv in self.kv.scan_prefix(Tree::QueryMembers, &id) {
+            let (key, _) = kv?;
+            let (_id, _sort, subject) = query_index::parse_members_key(&key)?;
+            indexed.insert(canonical(subject));
+        }
+
+        let mut expected: HashSet<String> = HashSet::new();
+        for resource in self.all_resources(true) {
+            if query_index::resource_matches_filter(&resource, &q_filter)
+                && self.filter_accepts_resource_drive(&q_filter, &resource)
+            {
+                expected.insert(canonical(resource.get_subject().as_str()));
+            }
+        }
+
+        let mut missing: Vec<String> = expected.difference(&indexed).cloned().collect();
+        let mut stale: Vec<String> = indexed.difference(&expected).cloned().collect();
+        missing.sort();
+        stale.sort();
+        Ok(QueryIndexReport {
+            watched: q_filter.is_watched(self),
+            filter: q_filter,
+            indexed: indexed.len(),
+            expected: expected.len(),
+            missing,
+            stale,
+        })
     }
 
     /// Register a filter to be watched. Persists to `Tree::WatchedQueries`
@@ -2715,6 +3120,9 @@ impl Db {
         &self,
         filter: query_index::QueryFilter,
     ) -> AtomicResult<()> {
+        // Before the persisted short-circuit: a client re-watching after the
+        // queried subject arrived here gets its drive root resolved now.
+        self.cache_filter_drive_root(&filter.drive);
         let filter_bytes = filter.encode()?;
         // Skip if already persisted — avoids growing the in-memory Vec on
         // re-watches. The KV is authoritative for "what filters exist"; the
@@ -2759,6 +3167,7 @@ impl Db {
                     continue;
                 }
             };
+            self.cache_filter_drive_root(&qf.drive);
             let drive_key = qf.drive.as_str().to_string();
             new_map.entry(drive_key).or_default().insert(Arc::new(qf));
         }
@@ -2766,6 +3175,57 @@ impl Db {
             *map = new_map;
         }
         Ok(())
+    }
+
+    /// Resolve the drive root a filter's `drive` subject lives in and remember
+    /// it. A subject that is not stored here (an `https://host` prefix, a DID
+    /// that has not arrived yet) records `None`; the next `watch()` retries.
+    fn cache_filter_drive_root(&self, drive: &Subject) {
+        let key = drive.as_str().to_string();
+        let known = self
+            .filter_drive_roots
+            .read()
+            .ok()
+            .and_then(|m| m.get(&key).cloned());
+        if matches!(known, Some(Some(_))) {
+            return;
+        }
+        let root = self
+            .get_resource_shallow(drive)
+            .ok()
+            .and_then(|resource| resource.get_drive());
+        if let Ok(mut map) = self.filter_drive_roots.write() {
+            map.insert(key, root);
+        }
+    }
+
+    /// The drive root a watched filter was resolved to, if known.
+    pub(crate) fn filter_drive_root(&self, filter: &query_index::QueryFilter) -> Option<Subject> {
+        self.filter_drive_roots
+            .read()
+            .ok()
+            .and_then(|m| m.get(filter.drive.as_str()).cloned().flatten())
+    }
+
+    /// Whether a resource may be a member of `filter` as far as drive scope
+    /// goes. HTTP and `internal:` subjects are already routed to their drive
+    /// by prefix. A DID subject has no prefix, so the only evidence is its
+    /// `drive` stamp: when both it and the filter's root are known, they
+    /// must agree. A row without a stamp, or a filter whose root could not be
+    /// resolved, is not excluded — a missing stamp is not proof of a leak,
+    /// and read rights still apply at query time.
+    pub(crate) fn filter_accepts_resource_drive(
+        &self,
+        filter: &query_index::QueryFilter,
+        resource: &Resource,
+    ) -> bool {
+        if !resource.get_subject().as_str().starts_with("did:") {
+            return true;
+        }
+        match (resource.get_drive(), self.filter_drive_root(filter)) {
+            (Some(stamp), Some(root)) => stamp.pure_id() == root.pure_id(),
+            _ => true,
+        }
     }
 
     /// The watched filters a changed atom in `drive_key` with `property` must
@@ -2963,6 +3423,13 @@ impl Db {
             Ok(guard) => guard.clone(),
             Err(_) => return None,
         };
+        // An extender that cannot decide whether it applies is skipped, not
+        // treated as a reason to hide the row. The row exists and the reader
+        // may see it; the only thing at stake here is the `incomplete`
+        // marker. Returning `None` from here used to drop every row whose
+        // `isA` the built-in collection extender could not parse, silently,
+        // from every collection listing and count (planning/silent-failures.md,
+        // "A query index silently disagreed with the data it indexes").
         for extender in extenders.iter() {
             if !extender.can_extend(&resource) {
                 continue;
@@ -2970,7 +3437,14 @@ impl Db {
             match extender.resource_has_extender(&resource) {
                 Ok(true) => {}
                 Ok(false) => continue,
-                Err(_) => return None,
+                Err(e) => {
+                    tracing::warn!(
+                        subject = %resource.get_subject(),
+                        extender = extender.id.as_deref().unwrap_or("<unnamed>"),
+                        "query member listed without its extender check: {e}"
+                    );
+                    continue;
+                }
             }
             match extender.check_scope(&resource, self, None).await {
                 Ok((true, _)) => {
@@ -2979,7 +3453,14 @@ impl Db {
                     break;
                 }
                 Ok((false, _)) => continue,
-                Err(_) => return None,
+                Err(e) => {
+                    tracing::warn!(
+                        subject = %resource.get_subject(),
+                        extender = extender.id.as_deref().unwrap_or("<unnamed>"),
+                        "query member listed without its extender scope check: {e}"
+                    );
+                    continue;
+                }
             }
         }
 
@@ -3294,7 +3775,7 @@ impl Db {
         if !q_filter.is_watched(self) {
             info!(filter = ?q_filter, "Building query index");
             crate::metrics::query_indexed();
-            let atoms = self.plan_candidate_iterator(q, &q_filter);
+            let (atoms, chosen) = self.plan_candidate_iterator(q, &q_filter);
             q_filter.watch(self)?;
 
             let mut transaction = Transaction::new();
@@ -3317,13 +3798,16 @@ impl Db {
             // constraints on its materialized row (no Loro decode), so the
             // member index only holds true AND-matches — including for
             // non-equality operators, whose candidate sets are supersets.
+            let mut built: HashSet<String> = HashSet::new();
             for atom in atoms.flatten() {
                 let Ok(resource) = self.get_resource_shallow(&atom.subject) else {
                     // No row to verify against (external/never-stored) —
                     // don't index what we can't confirm.
                     continue;
                 };
-                if !query_index::resource_matches_filter(&resource, &q_filter) {
+                if !query_index::resource_matches_filter(&resource, &q_filter)
+                    || !self.filter_accepts_resource_drive(&q_filter, &resource)
+                {
                     continue;
                 }
                 let prop = query_index::index_key_property(&q_filter, &atom);
@@ -3335,6 +3819,37 @@ impl Db {
                     false,
                     &mut transaction,
                 )?;
+                built.insert(atom.subject.as_str().to_string());
+            }
+            // A member the scanned constraint's index does not know about is
+            // a member the filter would have listed forever without. Say so,
+            // and file it.
+            let missed = self.cross_check_first_build(&q_filter, chosen, &built);
+            if !missed.is_empty() {
+                let subjects: Vec<String> = missed
+                    .iter()
+                    .map(|r| r.get_subject().as_str().to_string())
+                    .collect();
+                tracing::warn!(
+                    filter = ?q_filter,
+                    missing = ?subjects,
+                    "query index build missed members its candidate index did not list; added"
+                );
+                for resource in &missed {
+                    // The cross-check only walks property-bearing
+                    // constraints, so the filter always has a key property.
+                    let prop = query_index::filter_key_property(&q_filter)
+                        .cloned()
+                        .unwrap_or_default();
+                    let sort_key = query_index::sort_key_for(resource, &prop);
+                    update_indexed_member(
+                        &q_filter,
+                        resource.get_subject().as_str(),
+                        &sort_key,
+                        false,
+                        &mut transaction,
+                    )?;
+                }
             }
             self.apply_transaction(&mut transaction)?;
 
@@ -3375,8 +3890,9 @@ impl Db {
     }
 
     /// Recursively removes a resource and its children from the database.
-    /// `removed` collects the `pure_id()` of every deleted subject so the
-    /// caller can tombstone them after the transaction is applied.
+    /// `removed` collects every deleted subject so the caller can tombstone
+    /// and announce them after the transaction is applied — nothing is sent on
+    /// `db_events` from here, since the removal has not happened yet.
     /// `inherited_drive` is the drive of the resource whose cascade brought us
     /// here. A child that carries no `drive` of its own — anything created
     /// before the server stamped it — is still in its parent's drive, and the
@@ -3385,7 +3901,7 @@ impl Db {
         &self,
         subject: &Subject,
         transaction: &mut Transaction,
-        removed: &mut Vec<String>,
+        removed: &mut Vec<RemovedSubject>,
         inherited_drive: Option<Subject>,
     ) -> AtomicResult<()> {
         // Key by `pure_id()` — that is how resources and Loro snapshots are
@@ -3400,22 +3916,15 @@ impl Db {
             // the snapshot is orphaned in `Tree::LoroSnapshots` and leaks
             // forever — only the WS/Iroh DESTROY path cleaned it before.
             transaction.push(Operation::remove_loro_snapshot(&subject_str));
-            removed.push(subject_str.clone());
+            // Read the drive now, while the resource still exists: a listener
+            // reacting to the removal cannot look it up any more.
             let drive = resource.get_drive().or(inherited_drive);
+            removed.push(RemovedSubject {
+                subject: subject.without_params(),
+                drive: drive.clone(),
+            });
             let mut children = resource.get_children(self).await?;
             for child in children.iter_mut() {
-                // Notify subscribers so clients evict the cascade-deleted
-                // child from their cache. The signed destroy commit only
-                // fires DbEvent::Destroyed for the top-level subject; without
-                // this, children remain in WASM-DB / store and the UI keeps
-                // rendering them.
-                let _ = self.db_events.send(DbEvent::Destroyed {
-                    subject: child.get_subject().without_params(),
-                    drive: child.get_drive().or_else(|| drive.clone()),
-                    source_id: None,
-                    from_commit: false,
-                    commit_json: None,
-                });
                 // Because the function is async we need to box it to use recursion.
                 Box::pin(self.recursive_remove(
                     child.get_subject(),
@@ -3438,6 +3947,25 @@ impl Db {
             .into());
         }
         Ok(())
+    }
+
+    /// Announces subjects `recursive_remove` collected, once the transaction
+    /// holding their removal has been applied. Any earlier and a listener
+    /// (the WS fan-out in `atomic-server`'s `CommitMonitor`, a peer
+    /// transport) would tell clients about a deletion that can still fail or
+    /// roll back, and hear of a child before the parent whose destroy caused
+    /// it. Removals no commit authorises carry no `commit_json`, so they are
+    /// not propagated live to peers; see [`DbEvent::Destroyed`].
+    fn emit_destroyed<'a>(&self, removed: impl IntoIterator<Item = &'a RemovedSubject>) {
+        for r in removed {
+            let _ = self.db_events.send(DbEvent::Destroyed {
+                subject: r.subject.clone(),
+                drive: r.drive.clone(),
+                source_id: None,
+                from_commit: false,
+                commit_json: None,
+            });
+        }
     }
 
     fn is_endpoint(&self, url: &url::Url) -> bool {
@@ -3810,27 +4338,43 @@ impl Storelike for Db {
         // signed it, independent of the commit rows above.
         crate::envelopes::record_ops(store, &commit_response, &mut transaction)?;
 
+        // Every subject a destroy removes below (the resource and its
+        // cascade-deleted children). Tombstoned and announced once the
+        // transaction has landed; empty for anything but a destroy.
+        let mut removed: Vec<RemovedSubject> = Vec::new();
+
         match (&commit_response.resource_old, &commit_response.resource_new) {
             (None, None) if !commit_response.commit.destroy.unwrap_or(false) => {
                 return Err("Neither an old nor a new resource is returned from the commit - something went wrong.".into());
             }
             (None, None) => {}
-            (Some(_old), None) => {
+            (Some(old), None) => {
                 let normalized_commit_subject =
-                    self.normalize_subject(&commit_response.commit.subject.clone());
-                assert_eq!(
-                    _old.get_subject().to_string(),
-                    normalized_commit_subject.to_string()
-                );
-                assert!(&commit_response
-                    .commit
-                    .destroy
-                    .expect("Resource was removed but `commit.destroy` was not set!"));
+                    self.normalize_subject(&commit_response.commit.subject);
+                if old.get_subject().as_str() != normalized_commit_subject.as_str() {
+                    return Err(format!(
+                        "Commit for {} removed a different resource ({}) - refusing to apply.",
+                        normalized_commit_subject,
+                        old.get_subject()
+                    )
+                    .into());
+                }
+                if !commit_response.commit.destroy.unwrap_or(false) {
+                    return Err(format!(
+                        "Resource {} was removed but `commit.destroy` was not set.",
+                        normalized_commit_subject
+                    )
+                    .into());
+                }
                 let subject: Subject = commit_response.commit.subject.clone();
-                // `remove_resource` records the tombstone; the signed destroy
-                // is the envelope row `record_ops` queued above, which is what
-                // `SYNC_DIFF.removeCommits` carries.
-                self.remove_resource(&subject).await?;
+                // Queue the removal (resource, Loro snapshot, index and search
+                // rows, cascaded children) into the same transaction as the
+                // envelope row `record_ops` queued above, so the signed
+                // destroy — what `SYNC_DIFF.removeCommits` carries — lands
+                // with the deletion it signs, or not at all. Tombstones and
+                // the children's `Destroyed` events follow the apply below.
+                self.recursive_remove(&subject, &mut transaction, &mut removed, None)
+                    .await?;
             }
             _ => {}
         };
@@ -3850,12 +4394,22 @@ impl Storelike for Db {
             }
         }
 
+        // A destroy's `recursive_remove` above already queued the index and
+        // search removals for every stored atom of the subject (and its
+        // children); queuing them again here would only duplicate the same
+        // deletes and re-run the watched-query checks.
+        let removal_queued = !removed.is_empty();
+
         if opts.update_index {
             if let Some(old) = &commit_response.resource_old {
-                for atom in &commit_response.remove_atoms {
-                    store
-                        .remove_atom_from_index(atom, old, &mut transaction)
-                        .map_err(|e| format!("Error removing atom from index: {e}  Atom: {e}"))?
+                if !removal_queued {
+                    for atom in &commit_response.remove_atoms {
+                        store
+                            .remove_atom_from_index(atom, old, &mut transaction)
+                            .map_err(|e| {
+                                format!("Error removing atom from index: {e}  Atom: {e}")
+                            })?
+                    }
                 }
             }
             if let Some(new) = &commit_response.resource_new {
@@ -3872,7 +4426,7 @@ impl Storelike for Db {
                 )?;
                 crate::search::index_resource(store, new, &mut transaction)?;
             }
-            if commit_response.resource_new.is_none() {
+            if commit_response.resource_new.is_none() && !removal_queued {
                 if let Some(old) = &commit_response.resource_old {
                     crate::search::unindex_subject(
                         store,
@@ -3900,6 +4454,20 @@ impl Storelike for Db {
         {
             store.flush()?;
         }
+
+        // Tombstone every subject the destroy removed, so bulk sync (Iroh /
+        // WS `SYNC`) does not resurrect them from a peer that still holds a
+        // stale copy. Only after the transaction above succeeded: a tombstone
+        // for a resource that is still present would suppress it forever.
+        for r in &removed {
+            crate::sync::tombstones::record_tombstone(store, &r.subject.pure_id());
+        }
+
+        // Announce the cascade-deleted children now that the removal has
+        // landed. The destroyed subject itself is announced below, wrapped in
+        // the signed destroy commit, so it is left out here.
+        let top_level = commit_response.commit.subject.pure_id();
+        store.emit_destroyed(removed.iter().filter(|r| r.subject.pure_id() != top_level));
 
         // Notify subscribers
         let subject = commit_response.commit.subject.without_params();
@@ -4038,14 +4606,31 @@ impl Storelike for Db {
                 crate::db::trees::Tree::LoroSnapshots,
                 subject_str.as_bytes(),
             ) {
-                if let Ok(doc) = crate::loro::AtomicLoroDoc::from_snapshot(&snapshot) {
+                // A snapshot that cannot be read or applied is not fatal: the
+                // read falls back to the (possibly stale) propval projection
+                // stored beside it. It is still worth a warning, because a
+                // silent fallback would hide corruption behind stale data.
+                match crate::loro::AtomicLoroDoc::from_snapshot(&snapshot) {
                     // We already hold the exact bytes `doc` was just imported
                     // from — reuse them instead of having `apply_state_doc`
                     // re-export an equivalent snapshot. This is the hot path
                     // for every resource read (including once per member of
                     // a collection query), so the saved export is per-read,
                     // not one-off.
-                    let _ = resource.apply_state_doc_with_snapshot(doc, snapshot);
+                    Ok(doc) => {
+                        if let Err(e) = resource.apply_state_doc_with_snapshot(doc, snapshot) {
+                            tracing::warn!(
+                                subject = %subject_str,
+                                error = %e,
+                                "Failed to apply stored Loro snapshot; serving the stored propvals instead"
+                            );
+                        }
+                    }
+                    Err(e) => tracing::warn!(
+                        subject = %subject_str,
+                        error = %e,
+                        "Failed to read stored Loro snapshot; serving the stored propvals instead"
+                    ),
                 }
             }
             Ok(resource)
@@ -4433,16 +5018,10 @@ impl Storelike for Db {
 
     #[instrument(skip_all)]
     async fn remove_resource(&self, subject: &Subject) -> AtomicResult<()> {
-        let mut transaction = Transaction::new();
-        let mut removed = Vec::new();
-        self.recursive_remove(subject, &mut transaction, &mut removed, None)
-            .await?;
-        self.apply_transaction(&mut transaction)?;
-        // Tombstone every removed subject so bulk sync (Iroh / WS `SYNC`)
-        // does not resurrect them from a peer that still holds a stale copy.
-        for s in &removed {
-            crate::sync::tombstones::record_tombstone(self, s);
-        }
+        let removed = self.remove_applied(subject).await?;
+        // Only now, with the removal on disk: a listener that hears of it
+        // earlier evicts a resource the store may still hold.
+        self.emit_destroyed(&removed);
         // TODO: deletion sync — should create a signed destroy commit
         // and push it through the normal commit pipeline, not a raw DESTROY frame.
         Ok(())
@@ -4543,6 +5122,216 @@ mod resolver_tests {
         assert_eq!(
             resolved.subject.as_str(),
             "did:ad:test-child?drive=".to_string() + drive_did.as_str()
+        );
+    }
+
+    /// The vanity-subdomain hazard: a host is bound to a Drive this node does
+    /// not hold (not synced yet, or migrated away). Serving the store root
+    /// instead would answer a customer's hostname with another namespace's
+    /// content, so the request must fail.
+    #[tokio::test]
+    async fn a_bound_host_whose_drive_is_missing_does_not_serve_the_store_root() {
+        let store = Db::init_temp("resolver_missing_drive").await.unwrap();
+        setup_test_env(&store).await.unwrap();
+        let root_drive = store.get_drive_did("localhost").await.unwrap().unwrap();
+
+        store
+            .add_drive_mapping(
+                "acme.example.com",
+                &Value::AtomicUrl("did:ad:not-on-this-node".into()),
+            )
+            .unwrap();
+
+        for path in ["/", "/about"] {
+            let resolved = store
+                .resolve_request_target(
+                    &Subject::from_raw(path, None),
+                    "acme.example.com",
+                    path,
+                    "https://acme.example.com",
+                )
+                .await;
+
+            let Err(err) = resolved else {
+                panic!("{path} on a bound host with a missing drive must not resolve");
+            };
+            assert!(
+                !format!("{err}").contains(root_drive.as_str()),
+                "must not leak the root drive: {err}"
+            );
+        }
+
+        // The node's own hostname is unaffected: it has no mapping, so it
+        // keeps serving its root as before.
+        assert!(store
+            .resolve_request_target(
+                &Subject::from_raw("/", None),
+                "node1.example.com",
+                "/",
+                "https://node1.example.com",
+            )
+            .await
+            .is_ok());
+    }
+}
+
+#[cfg(test)]
+mod drive_mapping_tests {
+    use super::*;
+    use crate::{test_utils::setup_test_env, Value};
+
+    fn desired(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs
+            .iter()
+            .map(|(h, d)| (h.to_string(), d.to_string()))
+            .collect()
+    }
+
+    /// The reconcile a managed node runs on every policy poll: new names are
+    /// installed, a repointed name follows its Drive, and a released name
+    /// stops resolving. All three without an operator touching the box.
+    #[tokio::test]
+    async fn reconcile_adds_updates_and_removes() {
+        let store = Db::init_temp("drive_mapping_reconcile").await.unwrap();
+
+        let report = store
+            .sync_drive_mappings(&desired(&[
+                ("acme.example.com", "did:ad:acme"),
+                ("blog.example.com", "did:ad:blog"),
+            ]))
+            .unwrap();
+        assert_eq!(report.added, vec!["acme.example.com", "blog.example.com"]);
+        assert!(report.updated.is_empty());
+        assert!(report.removed.is_empty());
+
+        // `acme` is repointed at another Drive (a migration), `blog` is
+        // released, and `docs` is new.
+        let report = store
+            .sync_drive_mappings(&desired(&[
+                ("acme.example.com", "did:ad:acme-moved"),
+                ("docs.example.com", "did:ad:docs"),
+            ]))
+            .unwrap();
+        assert_eq!(report.added, vec!["docs.example.com"]);
+        assert_eq!(report.updated, vec!["acme.example.com"]);
+        assert_eq!(report.removed, vec!["blog.example.com"]);
+
+        assert_eq!(
+            store
+                .get_drive_did("acme.example.com")
+                .await
+                .unwrap()
+                .unwrap()
+                .as_str(),
+            "did:ad:acme-moved"
+        );
+        assert!(store
+            .get_drive_did("blog.example.com")
+            .await
+            .unwrap()
+            .is_none());
+    }
+
+    /// Polled on a timer, so an unchanged policy must be a no-op rather than a
+    /// write per tick.
+    #[tokio::test]
+    async fn reconcile_is_idempotent() {
+        let store = Db::init_temp("drive_mapping_idempotent").await.unwrap();
+        let want = desired(&[("acme.example.com", "did:ad:acme")]);
+
+        assert_eq!(
+            store.sync_drive_mappings(&want).unwrap().added,
+            vec!["acme.example.com"]
+        );
+        for _ in 0..3 {
+            assert!(store.sync_drive_mappings(&want).unwrap().is_empty());
+        }
+    }
+
+    /// The reconcile owns only what it installed. `setup_test_env` binds
+    /// `localhost` and `127.0.0.1`, and an operator may have bound a host by
+    /// hand through `/bind-drive`; treating the control plane's list as
+    /// authoritative for the whole table would delete all of those on the
+    /// first poll.
+    #[tokio::test]
+    async fn reconcile_leaves_bindings_it_did_not_install_alone() {
+        let store = Db::init_temp("drive_mapping_scope").await.unwrap();
+        setup_test_env(&store).await.unwrap();
+        let local_drive = store.get_drive_did("localhost").await.unwrap().unwrap();
+
+        store
+            .add_drive_mapping(
+                "hand-bound.example.com",
+                &Value::AtomicUrl("did:ad:hand-bound".into()),
+            )
+            .unwrap();
+
+        let report = store
+            .sync_drive_mappings(&desired(&[("acme.example.com", "did:ad:acme")]))
+            .unwrap();
+        assert!(report.removed.is_empty());
+
+        // Both survive a reconcile that names neither.
+        assert_eq!(
+            store.get_drive_did("localhost").await.unwrap().unwrap(),
+            local_drive
+        );
+        assert!(store
+            .get_drive_did("hand-bound.example.com")
+            .await
+            .unwrap()
+            .is_some());
+    }
+
+    /// Hostnames are case-insensitive, but the `Host` header is echoed in
+    /// whatever case the client sent. Without normalization a request for
+    /// `ACME.example.com` misses the mapping and falls through to the store
+    /// root.
+    #[tokio::test]
+    async fn mapping_keys_are_case_insensitive() {
+        let store = Db::init_temp("drive_mapping_case").await.unwrap();
+
+        store
+            .sync_drive_mappings(&desired(&[("ACME.Example.COM", "did:ad:acme")]))
+            .unwrap();
+
+        for spelling in ["acme.example.com", "ACME.EXAMPLE.COM", "Acme.Example.Com"] {
+            assert_eq!(
+                store
+                    .get_drive_did(spelling)
+                    .await
+                    .unwrap()
+                    .unwrap_or_else(|| panic!("{spelling} should resolve"))
+                    .as_str(),
+                "did:ad:acme",
+            );
+        }
+
+        assert_eq!(
+            store.list_drive_mappings().unwrap(),
+            vec![("acme.example.com".to_string(), "did:ad:acme".to_string())]
+        );
+    }
+
+    /// A host with no Drive, or a Drive with no host, is a bug upstream. Both
+    /// are skipped rather than written: the empty key would match no request,
+    /// and an empty Drive would point a live hostname at nothing.
+    #[tokio::test]
+    async fn reconcile_skips_empty_hosts_and_drives() {
+        let store = Db::init_temp("drive_mapping_empty").await.unwrap();
+
+        let report = store
+            .sync_drive_mappings(&desired(&[
+                ("", "did:ad:nohost"),
+                ("nodrive.example.com", "   "),
+                ("good.example.com", "did:ad:good"),
+            ]))
+            .unwrap();
+
+        assert_eq!(report.added, vec!["good.example.com"]);
+        assert_eq!(
+            store.list_drive_mappings().unwrap(),
+            vec![("good.example.com".to_string(), "did:ad:good".to_string())]
         );
     }
 }

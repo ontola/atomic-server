@@ -479,6 +479,8 @@ Two things worth knowing about the runners:
 | Rejected `SYNC_PUSH` answers `ERROR SYNC_REJECTED`, never `SYNC_OK` | `peer.rs` (`accept_gate_tests`), `server/tests/it/ws_auth_gate.rs` |
 | WS: writes and identity-bearing subscriptions need `AUTH`; anonymous `SUB` on a public drive still works; unreadable subscriptions answer `ERROR UNAUTHORIZED_READ` | `server/tests/it/ws_auth_gate.rs` |
 | Rejected cross-drive sync entry leaves no snapshot; later valid import cannot inherit rejected properties | `engine.rs` (`rejected_sync_entry_does_not_persist_snapshot`) |
+| Legacy `set`/`push`/`remove` commit rejection is on the parsed commit's properties: a signed commit carrying `set` is refused under hub and peer policy, a value quoting the deprecated URLs applies, a commit *on* the `set` Property reaches the ownership gate | `lib/src/sync/tests.rs` (`ingest_commit_rejects_legacy_field_commits`, `ingest_commit_accepts_values_that_mention_legacy_fields`) |
+| A fresh server store gets the core models without `--initialize` (`Db` open seeds them) | `server/src/tests.rs` (`fresh_store_gets_core_models_without_initialize`) |
 | Missing-drive bootstrap (OQ5): `Public` never creates a drive, Owner mode enrolls only the owner, open node admits an authenticated first-sync | `lib/src/sync/engine.rs` (`bootstrap_and_sub_tests`), `peer.rs` (`live_write_admission_tests`) |
 | Engine-owned `SUB`/`UNSUB`: granted `SUB` is a session command, unreadable `SUB` answers `ERROR UNAUTHORIZED_READ` | `lib/src/sync/engine.rs` (`bootstrap_and_sub_tests`) |
 | Signed `SYNC_DIFF.removeCommits`: envelope applies regardless of connection agent, tampered envelope does not delete, envelope only handed to drive readers, replay after re-creation refused | `lib/src/sync/peer.rs` (`initiator_trust_tests`), `engine.rs` (`bootstrap_and_sub_tests`), `tombstones.rs`, `protocol.rs` |
@@ -490,6 +492,7 @@ Two things worth knowing about the runners:
 | RBSR reconciliation, drive hashing | `lib/src/sync/rbsr.rs`, `tests.rs` |
 | RBSR finds a remote-only subject sorting below every local one | `lib/src/sync/rbsr.rs` **and** `browser/lib/src/rbsr.test.ts` (regression, see below) |
 | Remote update merge, drive-spoof rejection, tombstones | `lib/src/sync/ws_apply.rs`, `tombstones.rs` |
+| `DbEvent::Destroyed` for a removed resource and its cascade-deleted children arrives only after the removal is applied (the store no longer holds them when a listener hears), each subject announced exactly once | `lib/src/db/test.rs` (`destroyed_events_follow_the_applied_removal`) |
 | Pairing envelope encode/decode | `browser/lib/src/pairing.test.ts` |
 
 ### Cross-process — covered since 2026-07
@@ -550,6 +553,7 @@ Not covered: table `contains`; Playwright search overlay on the KV path and asse
 | Offline edits persist and sync on reconnect | `sync.spec.ts` |
 | Second device cold-loads a drive from the server | `second-device-load.spec.ts` |
 | Property reads stay pending through loading-placeholder notifications until hydration completes | `browser/lib/src/store.test.ts` |
+| Cold-load local hydration: all `useResource` misses of one tick share one worker round trip, a duplicate subject is asked once, a miss during a flush lands in the next batch, a failed bulk read is a per-subject miss, batches chunk at 200 | `browser/lib/src/store.read-policy.test.ts` |
 
 ---
 
@@ -763,8 +767,9 @@ Not covered: derived AI tools invoked through a real model; MCP protocol project
 |---|---|---|
 | Hashed `view-transition-name` plus `view-transition-class` per tag | glue | `browser/data-browser/src/helpers/viewTransition.test.ts` |
 | `startViewTransition` throw / hung `finished` / rejected `ready` still navigates and skips the overlay | glue | `browser/data-browser/src/helpers/viewTransition.test.ts` |
+| Navigation skips `startViewTransition` unless the user opts in, and uses it once they do | glue | `browser/data-browser/src/hooks/useNavigateWithTransition.test.tsx` |
 
-Not covered: visual morph of a grid card into the resource page in Firefox (needs a headed Firefox run; Playwright's firefox project is locks-only and automation bypasses view transitions unless `forceViewTransitions` is set).
+Not covered: visual morph of a grid card into the resource page in Firefox (needs a headed Firefox run; Playwright's firefox project is locks-only and automation bypasses view transitions unless `forceViewTransitions` is set). Android Chrome is not covered at all, which is why transitions are off by default ([#1563](https://github.com/ontola/atomic-server/issues/1563)): re-enabling by default needs a per-browser check first.
 
 ## Documents
 
@@ -782,6 +787,7 @@ No automated end-to-end coverage: uploaded-file conversion through the full UI a
 |---|---|---|
 | `LoroDoc` values are not KV-index keys | protocol | `lib/src/values.rs::loro_doc_is_not_indexed` |
 | Content commits are not stored; genesis/ACL/destroy are | protocol | `lib/src/db/test.rs::content_commits_are_not_stored` |
+| Signed destroy removes the resource, keeps its envelope and tombstones the subject in one apply | protocol | `lib/src/db/test.rs::destroy_commit_removes_resource_and_keeps_envelope_atomically` |
 | Sequential saves do not chain `previousCommit`; commit DIDs are not store resources | glue | `browser/lib/src/commit.test.ts` |
 
 ## Personal drive identity
@@ -843,6 +849,38 @@ Cloud Vault display metadata: `vaultAutoBackup.test.ts` verifies name/emoji enro
   authenticated read from the real managed node. Plan purchase alone creates
   no enrollment. Real Stripe-hosted test-card checkout remains a deployment check.
 
+## Host-to-Drive routing and hosted vanity subdomains
+
+`Tree::DriveMapping` is what makes one server answer for many hostnames. It
+backs `/bind-drive` for self-hosters and hosted vanity subdomains for
+`atomic-saas`, whose control plane reconciles it through
+`Db::sync_drive_mappings`.
+
+- `db::drive_mapping_tests`: the reconcile a managed node runs on every policy
+  poll — add, repoint, remove; idempotent on an unchanged list; scoped so a
+  binding it did not install (including the `localhost` / `127.0.0.1` entries
+  from `setup_test_env`, and anything bound by hand through `/bind-drive`) is
+  never removed; keys normalized so a mixed-case `Host` still resolves; empty
+  hosts and empty drives skipped.
+- `db::resolver_tests::a_bound_host_whose_drive_is_missing_does_not_serve_the_store_root`:
+  the multi-tenant leak. A host bound to a Drive this node does not hold (not
+  synced yet, or migrated away) must 404 rather than fall through to the store
+  root, which would answer one tenant's hostname with another namespace's
+  content. This is the property that lets the control plane authorize a
+  certificate on reservation instead of only after a node confirms.
+- `context::tests::a_served_domain_suffix_accepts_tenants_without_a_base_domain`:
+  `--served-domain-suffix` makes the request origin follow the hostname the
+  visitor used, without turning on `--base-domain` and with it the store's
+  subject normalization.
+- Paired `atomic-saas` coverage (registry, plan gating, `/caddy-ask`, the
+  heartbeat report) is listed in that repo's
+  `planning/TEST_COVERAGE_AND_CI.md`.
+
+**Not covered:** no test drives a real HTTP request against a vanity host
+end to end — the reconcile and the resolver are tested separately, and joining
+them needs the representative two-service environment. The multi-node gateway
+routing that a second node would require does not exist yet.
+
 ## Error reporting and feedback
 
 - `browser/data-browser/src/helpers/feedback.test.ts`: unavailable reporting, failed delivery, blank input and successful submission.
@@ -886,6 +924,19 @@ mounts without resetting or re-registering the global parser.
   drops), backoff, blocked entries and cancellation cannot report persistence.
   It also covers offline transport failures, successful retries, unrelated
   subjects and edits arriving during an acknowledged save (#1388).
+- `destroy-via-outbox.test.ts` exercises `Resource.destroy()` through the same
+  outbox: an online delete POSTs one destroy commit and removes the resource; a
+  delete while disconnected queues the pre-signed envelope, survives a simulated
+  reload (fresh `LocalOutbox` hydrating the same agent namespace) and is POSTed
+  exactly once on reconnect; create + delete while offline POSTs neither
+  envelope; a never-saved `newResource` is dropped without a POST; a server
+  refusal rejects `destroy()` and keeps the entry queued; a transport failure
+  resolves as queued and flips the store offline; "already gone" server answers
+  (`already applied here`, `predates the resource's genesis`, `does not exist
+  yet`) count as acknowledged; a pending destroy blocks resurrection through
+  `applyIncoming` / `hydrateResourceFromJsonAd` and is excluded from
+  `computeDriveSyncState`. Not covered: a real server round trip for the
+  reconnect drain (no `*.integration.test.ts` or Playwright variant yet).
 
 - `scripts/owned-process.node.mjs` exercises the template runner process lifecycle,
   including independent ephemeral ports and descendant cleanup. The superseded
@@ -910,6 +961,18 @@ mounts without resetting or re-registering the global parser.
 - `client-db.worker.test.ts` requires vault cursor commits to flush before the
   worker acknowledges backup completion, and propagates flush failures. The
   SaaS `vault-refresh.spec.ts` checks stored objects and bytes across reloads.
+- `db::compaction::tests::startup_compaction_shrinks_a_bloated_store_and_keeps_every_resource`
+  (`cargo test -p atomic_lib --features db-redb --lib`) churns a real redb
+  file through `Db::init_redb_file_with_policy` — overwrites that double in
+  size plus throwaway resources deleted mid-file, so the buddy allocator
+  cannot reuse the holes — and reopens it: the policy compacts, the file
+  gives back most of the measured free space, every kept resource reads its
+  last value, the record survives the next open, and a disabled policy leaves
+  the file byte-for-byte alone. Overwrites *alone* leave only ~20% dead
+  (freed blocks coalesce and get reused), which is why the test deletes.
+  `server::config::tests` cover the `--auto-compact*` flags. Not covered:
+  compaction of a store another process holds open (the open itself fails
+  first, as before), and the cost of `DatabaseStats` on a multi-GB file.
 - `synthetic_agent_reads_have_stable_history_without_persisting` checks that
   fallback agent lookups neither invent creation timestamps nor generate new
   CRDT history or persist a resource merely by reading it.
@@ -1348,7 +1411,12 @@ network transport, OS-process isolation or reviewed alias/reference repair.
 - Connection-state test verifies alias provenance, preserved baseline, incremented
   revision, idempotent reads and rejection of the earlier checkpoint revision.
 - `drain-datatype-tags.test.ts` reproduces and fixes newly added JSON values becoming
-  strings on incremental saves. The full client suite has 564 passing tests.
+  strings on incremental saves. It also drives the public `newResource → set → save`
+  flow through the real outbox drain and replays the posted `loroUpdate`s: the signed
+  incremental commit carries `json`/`resourceArray` tags for properties first set
+  after genesis, and the tag write runs after the user's ops are sealed, so the edit
+  keeps its own commit origin and stays on the undo stack. The full client suite has
+  564 passing tests.
 - Five Chromium flows pass against rebuilt native/WASM code. Duplicate review uses
   real authenticated SYNC_PUSH plus a signed primary decision and fresh lookup;
   the other flows cover setup recovery, MT940 and Clockify. It does not yet test
@@ -1507,6 +1575,15 @@ setup currently fails opening OPFS before it can create its dev drive.
   structured `SYNC_REJECTED` classification are covered.
 - `store-commit-fallback.test.ts`: a WebSocket enrollment refusal is not
   duplicated over HTTP; a transport failure still falls back.
+- `local-outbox.test.ts` ("classification is code-first") and
+  `save-acknowledgement.test.ts` ("terminal drops are classified by error
+  code"): a recognized `AtomicError.code` (`GENESIS_COLLISION`,
+  `IMMUTABLE_COMMIT`, ...) decides terminal/benign/blocking regardless of
+  message wording, including one parsed off an HTTP `/commit` JSON-AD error
+  body's `errorCode`; a code-less legacy message still classifies; another
+  recognized code wins over a legacy phrase in the message. Rust:
+  `protocol::classify_commit_error_matches_known_patterns` covers
+  `IMMUTABLE_COMMIT`.
 - Server `errors::admission_error_tests`: enrollment/quota refusals carry a
   blocking code and HTTP 403 rather than an internal-error response.
 - Server `tests::content_addressed_image_download`: raw, WebP and AVIF downloads
@@ -2005,6 +2082,27 @@ on Linux x86_64, including a cached install followed by changed downstream
 source input and execution of the retained binary. Its aarch64 archive digest
 is pinned to the upstream release; native aarch64 execution is not covered by
 that check. Full CI wall-time savings require a completed hosted run.
+## Query index consistency (2026-09-18)
+
+`db::test::is_a_encodings_all_match_the_class_constraint` (formerly
+`#[ignore]`d as an open bug) writes four rows whose `isA` names one class in
+four encodings and asserts a drive-scoped, sorted, class-filtered query lists
+all of them and that `Db::check_query_index` finds index and store in
+agreement. `replicated_rows_reach_a_watched_scoped_sorted_query` watches that
+query shape with 5 rows and then replicates 17 more through
+`persist_replicated_resource` (the sync import path, propvals materialized
+from a Loro doc), asserting the sorted, unsorted and differently scoped shapes
+all answer 22. `first_build_cross_checks_the_unscanned_constraint` removes one
+row's `isA` entry from `PropValSub` and asserts the first build still files
+the row through the `parent` constraint.
+`check_query_index_names_missing_and_stale_members` corrupts a member index in
+both directions and asserts the report names each subject.
+`did_rows_stamped_into_another_drive_stay_out_of_a_watched_query` covers the
+audit's C17 on both the build and the commit path, including the unstamped
+row that is deliberately not excluded. Not covered: the runtime `warn!` text
+itself, and a UI-level comparison of a client's local answer with the
+server's (see `planning/silent-failures.md`).
+
 ## External cache access and authentication origins (#170)
 
 Paired SaaS `portal/e2e/recovery-passkey.spec.ts` uses Chromium virtual PRF authenticators with the real control plane to verify app enrollment followed by portal login using one credential, reuse of a portal-created credential, and account-settings migration without replacing ciphertext or old wrappers. Physical Safari/iCloud, Android/password-manager and native-shell behavior remain device acceptance checks.
@@ -2149,3 +2247,12 @@ and upload hook, then delivers multiple files through the drop callback. It
 verifies the upload targets the displayed drive even when the current drive
 setting differs. Native drag events, overlay geometry and the refreshed child
 list are not covered by this component test.
+
+## Rust build alignment
+
+`scripts/test_rust_alignment.py` tests matching pairs, compiler/workflow pin drift,
+development profile drift, transitive Loro versions, missing shared crates, extra
+cryptography prereleases, and allowed unrelated dependency differences. Run
+`python3 -m unittest discover -s scripts -p test_rust_alignment.py -v`.
+The Rust build policy workflow runs these checks; downstream CI checks both
+repositories and rejects dependency lockfile drift before builds.

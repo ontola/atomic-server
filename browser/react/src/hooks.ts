@@ -243,6 +243,21 @@ export function useValue(
   propertyURL: string,
   opts: useValueOptions = {},
 ): [JSONValue | undefined, SetValue] {
+  const [val, set] = useValueWithSave(resource, propertyURL, opts);
+
+  return [val, set];
+}
+
+/**
+ * `useValue` plus the debounced `saveResource` its setter schedules with, so
+ * sibling hooks (`useArray`'s `push`) write through the same scheduler and
+ * error path instead of calling `resource.save()` themselves.
+ */
+function useValueWithSave(
+  resource: Resource,
+  propertyURL: string,
+  opts: useValueOptions = {},
+): [JSONValue | undefined, SetValue, () => void] {
   const {
     commit = false,
     validate = true,
@@ -294,15 +309,13 @@ export function useValue(
    */
   const validateAndSet = useCallback(
     async (newVal: JSONValue): Promise<void> => {
-      if (newVal === undefined) {
-        resource.__internalObject.remove(propertyURL);
-        saveResource();
-
-        return;
-      }
-
       try {
-        await resource.__internalObject.set(propertyURL, newVal, validate);
+        if (newVal === undefined) {
+          resource.__internalObject.remove(propertyURL);
+        } else {
+          await resource.__internalObject.set(propertyURL, newVal, validate);
+        }
+
         saveResource();
         handleValidationError?.(undefined);
       } catch (e) {
@@ -325,7 +338,7 @@ export function useValue(
   // `resource.get(prop)` is typed AtomicValue (JSONValue | Uint8Array).
   // useValue's contract is JSONValue-only (binary props live in auxValues
   // and are not surfaced through this hook), so narrow at the boundary.
-  return [val as JSONValue | undefined, validateAndSet];
+  return [val as JSONValue | undefined, validateAndSet, saveResource];
 }
 
 /**
@@ -444,7 +457,13 @@ export function useArray(
   propertyURL: string,
   opts?: useValueOptions,
 ): [string[], SetValue<JSONArray>, (vals: string[]) => void] {
-  const [value, set] = useValue(resource, propertyURL, opts);
+  const [value, set, saveResource] = useValueWithSave(
+    resource,
+    propertyURL,
+    opts,
+  );
+  const store = useStore();
+  const handleValidationError = opts?.handleValidationError;
   const [stableEmptyResourceArray] = useState<JSONArray>([]);
 
   const values = useMemo(() => {
@@ -467,16 +486,19 @@ export function useArray(
 
   const push = useCallback(
     (val: string[]) => {
-      resource.push(propertyURL, val);
-
-      if (opts?.commit) {
-        resource.save().catch(err => {
-          console.error('Failed to save resource after push', err);
-        });
+      try {
+        resource.push(propertyURL, val);
+        // Same debounced scheduler as `set`; honours `commit` and
+        // `commitDebounce`, and save failures reach `store.notifyError`.
+        saveResource();
+        handleValidationError?.(undefined);
+      } catch (e) {
+        if (handleValidationError) handleValidationError(asError(e));
+        else store.notifyError(asError(e));
       }
     },
 
-    [resource, propertyURL, opts?.commit],
+    [resource, propertyURL, saveResource, handleValidationError, store],
   );
 
   return [values as string[], set, push];
@@ -745,7 +767,7 @@ export function useCanWrite(resource: Resource): boolean {
  * The context must be provided by wrapping a high level React element in
  * `<StoreContext.Provider value={new Store}>My App</StoreContext.Provider>`
  */
-export const StoreContext = createContext<Store>(new Store());
+export const StoreContext = createContext<Store | undefined>(undefined);
 
 function useMemoizedOpts(
   opts: FetchOpts | undefined = {

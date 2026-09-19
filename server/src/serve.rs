@@ -1,4 +1,3 @@
-use actix_cors::Cors;
 use actix_web::{
     body::MessageBody,
     dev::{ServiceRequest, ServiceResponse},
@@ -182,7 +181,7 @@ async fn announce_drives_pkarr(
 
 // Increase the maximum payload size (for POSTing a body, for example) to 50MB
 pub(crate) const PAYLOAD_MAX: usize = 50_242_880;
-const SERVER_VERSION_HEADER: &str = "X-Atomic-Server-Version";
+pub(crate) const SERVER_VERSION_HEADER: &str = "X-Atomic-Server-Version";
 const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Start the server
@@ -382,12 +381,13 @@ where
     on_ready(&appstate);
 
     let server = HttpServer::new(move || {
-        let cors = Cors::permissive().expose_headers([SERVER_VERSION_HEADER]);
-
         actix_web::App::new()
             .app_data(web::PayloadConfig::new(PAYLOAD_MAX))
             .app_data(web::Data::new(appstate.clone()))
-            .wrap(cors)
+            .wrap(crate::cors::any_origin())
+            // Outside the CORS layer, so it sees the headers CORS added:
+            // credentials only for origins this server answers for.
+            .wrap(middleware::from_fn(crate::cors::credentials_gate))
             // Attaches the request (method, url, headers) to any Sentry event
             // raised while handling it, and reports handler panics and 5xx
             // errors. No-op without a bound Sentry client.

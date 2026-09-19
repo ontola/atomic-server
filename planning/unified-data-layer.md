@@ -73,9 +73,14 @@ See [unify-resource-dirty-signals.md](./unify-resource-dirty-signals.md).
   regression before each flow change. Keep read and persistence state separate.
 - [ ] Audit direct `addResource` producers before further ingress consolidation.
   Preserve normalization, alias handling, echo imports/dedup, unsaved local state,
-  atomic persistence and notification ordering.
+  atomic persistence and notification ordering. Counted 2026-09-18: no non-test
+  `addResource(` call site remains in `browser/data-browser/src` (one in a
+  `.test.ts`); the remaining producers are inside `browser/lib/src`.
 - [ ] Review remaining Resource signing/retry responsibilities and `CommitBuilder`
-  consumers as a separate change. Preserve immutable signed envelopes and export
+  consumers as a separate change. Counted 2026-09-18: 31 `CommitBuilder`
+  references outside `*.test.ts`, all in `browser/lib/src` (`commit.ts` 18,
+  `resource.ts` 10, `store.ts` 2, `test-store.ts` 1), none in `browser/react/src`
+  or `browser/data-browser/src`. Preserve immutable signed envelopes and export
   baselines; do not conflate queued writes with persisted local durability.
 - [ ] Evaluate whether a persistence facade removes meaningful duplication. Existing
   atomic writes must remain intact; index-only seeding needs an explicit path.

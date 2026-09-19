@@ -438,8 +438,9 @@ Everything else is open to an anonymous socket and gated per subject by
 | `7` | `UNAUTHORIZED_READ` | A subscription or a read-side reconcile frame was refused. `request_id = 0`. Message: `<FRAME> refused for <subject>: <reason>`. |
 | `8` | `AUTH_FAILED` | An `AUTH` frame was refused. `request_id = 0`. |
 | `9` | `INVALID_SIGNATURE` | A `COMMIT` whose signature does not verify against its signer's key, or that has none. Terminal for that envelope: sign again. |
+| `10` | `IMMUTABLE_COMMIT` | The commit's subject is itself a Commit, which can never be edited. Terminal: drop the entry; nothing is lost. |
 
-Codes `1` to `4` and `9` come from `classify_commit_error`, which pattern-matches the
+Codes `1` to `4`, `9` and `10` come from `classify_commit_error`, which pattern-matches the
 underlying error text where the frame is built. Many other engine failures
 are **not** classified and go out as `UNKNOWN` with a descriptive message: an
 invalid frame of any kind, `No state`, a failed `GET` lookup,

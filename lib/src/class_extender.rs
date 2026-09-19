@@ -195,7 +195,7 @@ impl ClassExtender {
             return Ok(false);
         };
 
-        let resource_classes = is_a.to_subjects(None)?;
+        let resource_classes = class_subjects(is_a);
         let matched = resource_classes
             .iter()
             .any(|c| self.classes.contains(&normalize_class(c)));
@@ -317,16 +317,26 @@ impl ClassExtender {
             return true;
         };
 
-        let Ok(is_a_subjects) = is_a.to_subjects(None) else {
-            return true;
-        };
-
         // An Installation (or a not-yet-migrated legacy Plugin) is the plugin
         // itself; a plugin must not extend the resource that installs it.
-        !is_a_subjects
+        !class_subjects(is_a)
             .iter()
             .any(|class| class == urls::INSTALLATION || class == urls::PLUGIN)
     }
+}
+
+/// Every class an `isA` value names, whatever its encoding.
+///
+/// A row created by a local commit carries `isA` as a `ResourceArray`; one
+/// rebuilt from a Loro doc, or written through a client that pins no datatype,
+/// can read back as an `AtomicUrl`, a plain `String`, or a `String` holding
+/// the JSON array. They all name the same class. `Value::to_subjects` errors on
+/// the scalar shapes, and that error used to be returned from
+/// [`ClassExtender::resource_has_extender`] — where `Db::resolve_query_member`
+/// took it as a reason to drop the row from a collection query, without a
+/// word. Membership in a class is not something an encoding gets to veto.
+fn class_subjects(is_a: &crate::Value) -> Vec<String> {
+    is_a.to_reference_index_strings().unwrap_or_default()
 }
 
 #[cfg(test)]
