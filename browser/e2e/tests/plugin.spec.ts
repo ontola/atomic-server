@@ -49,9 +49,11 @@ test.describe('Plugins', () => {
 
     await fileChooser.setFiles(testFilePath('test-plugin.zip'));
 
+    // The upload publishes a private Release, then the same Installation
+    // review screen the Store uses opens for it.
     await inDialog(page, async (dialog, closeWith) => {
       await expect(
-        dialog.getByRole('heading', { name: 'Add Plugin' }),
+        dialog.getByRole('heading', { name: 'Install plugin' }),
       ).toBeVisible();
       await expect(
         dialog.getByText('ontola/test-plugin', { exact: true }),
@@ -75,9 +77,12 @@ test.describe('Plugins', () => {
       await closeWith('Install');
     });
 
+    // Installing navigates to the new Installation, which the server has
+    // activated by the time the commit round-trips.
     await expect(
-      page.getByRole('link', { name: 'ontola/test-plugin' }),
+      page.getByText('ontola/test-plugin', { exact: true }),
     ).toBeVisible();
+    await expect(page.getByLabel('Status: active')).toBeVisible();
 
     // Now create the folder. The plugin's `after_commit` fires on the
     // folder's first commit and emits a follow-up commit setting the
@@ -202,7 +207,9 @@ test.describe('Plugins', () => {
     await page.getByRole('main').getByText('Plugins', { exact: true }).click();
     await page.getByRole('link', { name: 'ontola/test-plugin' }).click();
 
-    // Keep the mounted resource identity while changing metadata and saving config.
+    // Keep the mounted resource identity while changing metadata and saving
+    // config. The server's Installation extender fills version, author and
+    // description from the manifest, so these read as plain properties.
     const saveConfig = page.getByRole('button', { name: 'Save', exact: true });
     await expect(saveConfig).toBeDisabled();
     await page
@@ -293,7 +300,7 @@ test.describe('Plugins', () => {
 
     await inDialog(page, async (dialog, closeWith) => {
       await expect(
-        dialog.getByRole('heading', { name: 'Uninstall Plugin' }),
+        dialog.getByRole('heading', { name: 'Uninstall plugin' }),
       ).toBeVisible();
       await closeWith('Uninstall');
     });

@@ -7,6 +7,49 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Fix: a stale authentication proof no longer fails a request that needed no
+  authentication. A browser keeps its proof in the `atomic_session` cookie, and
+  until `AUTH_MAX_AGE_MS` arrived in 0.41 a proof never expired, so a stale one
+  is the ordinary state of any tab left open. Every request such a tab made was
+  answered 401, public ones included: on staging one tab polling the public
+  `GET /server` endpoint produced 4,215 rejections, all carrying the same
+  `signed at` timestamp. An HTTP request, and the headers a socket is opened
+  with, now treat a proof that has aged out as no proof at all and continue as
+  the public agent, leaving the rights check to decide whether that matters for
+  what was asked. A signature that does not verify is still refused outright,
+  and so is a stale proof in an `AUTH` frame or a peer handshake, where the
+  caller asked to be authenticated and is owed the answer
+  (`get_agent_from_auth_values_or_public` beside the existing
+  `get_agent_from_auth_values_and_check`).
+
+- Sentry no longer records every server error twice. `sentry_actix` captures a
+  handler's 5xx with the request attached, and `tracing_actix_web` separately
+  logs "Error encountered while processing the incoming HTTP request" at
+  `error!`, which the Sentry tracing layer turned into a second event; the two
+  staging floods of September arrived as paired issue groups of 6313 and 6312
+  events for the same incidents. The tracing layer now ignores the
+  `tracing_actix_web` target and delegates every other target to
+  `default_event_filter`, so background work reports as before and the stdout
+  log line is unchanged (`server/src/trace.rs`).
+
+- Plugin install path, three fixes after the runtime convergence (#1571):
+  - A publish refused for claiming the wrong `world` used to have already
+    stored the package bytes and cached the release record. The claim is now
+    checked before the first write, so a refusal leaves nothing behind
+    (`POST /plugin-release-package`).
+  - A JS plugin whose Installation could not be read, or whose `grants` could
+    not be, ran with everything its own manifest declared. Only a legacy draft
+    with no Installation still reads the manifest; anything else grants nothing
+    and logs why. Reading which classes a resource has also went through
+    `Value::to_subjects`, which errors on the scalar `isA` encodings, so an
+    encoding alone could widen a plugin's grants. `Resource::class_subjects`
+    and `Resource::has_class` are the one encoding-tolerant reader, shared
+    with `ClassExtender`.
+  - An Installation's `release` is declared an `atomicURL` and now holds one.
+    The browser's two zip paths dropped the `Release` subject the publish
+    response carries and stored the bare `blake3:` id, which meant writing the
+    property with datatype validation switched off. `release::resolve` still
+    accepts a bare id, for Installations written before this.
 - `atomic_lib`: a signed destroy commit now removes the resource (and its
   cascade-deleted children, Loro snapshot, index and search rows) in the same
   redb transaction that stores its envelope and commit row. `Db::apply_commit`

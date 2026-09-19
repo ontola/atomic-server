@@ -99,10 +99,9 @@ impl AppState {
         store.add_class_extender(plugins::chatroom::build_chatroom_extender())?;
         store.add_class_extender(plugins::chatroom::build_message_extender())?;
         store.add_endpoint(plugins::invite::invite_endpoint())?;
-        store.add_class_extender(plugins::plugin::build_plugin_extender(
+        store.add_class_extender(plugins::plugin::build_installation_extender(
             config.plugin_path.clone(),
             config.plugin_cache_path.clone(),
-            config.uploads_path.clone(),
         ))?;
         store.add_class_extender(plugins::files::build_file_extender(
             config.uploads_path.clone(),
@@ -156,6 +155,20 @@ impl AppState {
             .await?;
 
             for extender in extenders {
+                // A paused installation keeps its files, so the loader above
+                // finds them. Registering them anyway would resume every
+                // paused plugin on restart.
+                if let Some(subject) = &extender.subject {
+                    if let Ok(resource) = store.get_resource(&subject.as_str().into()).await {
+                        if plugins::installation::is_suspended(&resource) {
+                            tracing::info!(
+                                %subject,
+                                "skipped a class extender: its installation is not active"
+                            );
+                            continue;
+                        }
+                    }
+                }
                 store.add_class_extender(extender)?;
             }
         }
@@ -178,6 +191,14 @@ impl AppState {
             atomic_lib::populate::repopulate_defaults(&store)
                 .await
                 .map_err(|e| format!("Failed to repopulate defaults. {}", e))?;
+        }
+
+        // Legacy `Plugin` + `pluginFile` resources become Installations, once.
+        // After the extenders above are loaded (so their meta is current) and
+        // after the default agent is set (the migration commits as the server).
+        #[cfg(feature = "wasm-plugins")]
+        if let Err(e) = plugins::plugin::migrate_legacy_plugins(&store).await {
+            tracing::warn!("legacy plugin migration failed: {e}");
         }
 
         // Who may put a *new* Drive here. Installed after populate so the scan

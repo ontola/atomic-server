@@ -1895,6 +1895,14 @@ impl Db {
             .collect()
     }
 
+    /// Whether an extender of this id is registered right now.
+    pub fn has_class_extender(&self, id: &str) -> bool {
+        let Ok(extenders) = self.class_extenders.read() else {
+            return false;
+        };
+        extenders.iter().any(|e| e.id.as_deref() == Some(id))
+    }
+
     pub fn remove_class_extender(&self, id: &str) -> AtomicResult<()> {
         let mut extenders = self
             .class_extenders

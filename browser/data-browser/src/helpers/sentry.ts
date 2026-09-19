@@ -37,6 +37,13 @@ export function initSentry(): void {
     (import.meta.env.VITE_SENTRY_ENVIRONMENT as string | undefined) ||
     (import.meta.env.DEV ? 'development' : 'production');
 
+  // A dev server reports nothing. Vite's hot reload legitimately throws while
+  // swapping modules ("Cannot access X before initialization", "_s is not a
+  // function", all with `@react-refresh` frames), which is not a defect in
+  // anything shipped. Those arrived in Sentry rated above every real bug.
+  // Set VITE_SENTRY_ENVIRONMENT to report from a local build on purpose.
+  if (environment === 'development') return;
+
   Sentry.init({
     dsn,
     environment,

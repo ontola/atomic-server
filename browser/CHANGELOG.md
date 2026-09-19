@@ -4,6 +4,29 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: the authentication cookie is refreshed before the proof inside it
+  expires. `setCookieAuthentication` signed a proof once and stored it for a
+  day, and `checkAuthenticationCookie` only asked whether a cookie existed, so
+  a browser went on presenting the same proof for as long as the tab stayed
+  open. Since the server started refusing a proof older than five minutes, that
+  meant cookie-authenticated requests failed five minutes into every session,
+  with nothing re-signing. The cookie now lives no longer than the proof it
+  carries (`AUTH_PROOF_MAX_AGE_MS`), and the freshness check reads the signed
+  timestamp out of the cookie and reports an ageing proof as absent
+  (`AUTH_PROOF_REFRESH_MS`), which is what makes the request path install a
+  fresh one.
+
+- The data-browser no longer reports to Sentry from a dev server. Vite's hot
+  reload legitimately throws while swapping modules ("_s is not a function",
+  "Cannot access X before initialization", all with `@react-refresh` frames),
+  which is not a defect in anything shipped, and those arrived rated above
+  every real bug in the backlog. `initSentry` returns early when the resolved
+  environment is `development`; setting `VITE_SENTRY_ENVIRONMENT` still reports
+  from a local build on purpose.
+
+- Perf: creating a plugin on a drive that has no plugin schema yet no longer waits for nineteen round trips. `ensureSchema` writes the sixteen properties and three classes of `pluginSchema()` with one save each, and `ensureAll` awaited them one after another, which is most of the time between clicking "New plugin" and the page appearing, and enough to time the e2e suite out. The terms are independent resources under the same ontology and none reads another's subject, so the creates now go out together; the ontology's own list is still assembled in spec order.
+- Fix: deleting a resource no longer leaves a "Resource with error" row in the sidebar. A `parent=` query keeps answering with a destroyed child for a moment (the answer was computed before the destroy landed, and `Collection.fetchPage` races the local index against the server's `/query`), and every reader that had not itself witnessed the delete put the row back — which is not cosmetic, because rendering the row asks the store for the resource and re-creates the entry the destroy removed. "This subject is destroyed" is now one fact on the `Store` (`isDestroyed` / `clearDestroyed`, the in-memory half of the tombstone `removeResource` already wrote to the local database) instead of a suppression set per reader: `Collection._removedSubjects` and `useChildren`'s `removedRef` are gone, and both read the store. A destroyed subject is never a member of a collection, incoming state for one is refused after the server ack as well as before it, and `getResourceLoading` answers for one from the tombstone instead of firing a request that can only 404. Only creating a resource again under the same subject lifts a tombstone; a stale answer no longer can.
+- Toasts no longer cover the navbar's buttons when the navbar is at the bottom: the toast container is lifted by the navbar's height, so the sidebar toggle, search and context menu stay tappable while a toast is up. The sidebar's 3.8rem `OverlapSpacer`, beneath the App panel, is gone: it dated from the floating-navbar mode and guarded an overlap that cannot happen, since the sidebar's height already excludes the navbar ([#1565](https://github.com/ontola/atomic-server/issues/1565)).
 - The navbar sits at the bottom by default on phones and tablets, so the sidebar toggle, the search button and the context menu stay within thumb reach. The signal is a touch-primary pointer rather than viewport width, so a landscape tablet also gets the bottom bar and a narrow desktop window does not. Desktop keeps the top bar, and a position picked in Settings is untouched ([#1565](https://github.com/ontola/atomic-server/issues/1565)).
 - Fix: a local database that cannot be decrypted is no longer deleted on sight. `openClientDb` discards and recreates an undecryptable OPFS file only when the caller passes the new `discardUndecryptable`, and the data-browser passes it only when no wrapped key record exists for that agent — i.e. when the key is genuinely unrecoverable rather than merely absent from this page load. The old behaviour was unconditional, on the reasoning that the file is a cache whose contents are re-fetchable from the server; that is false for a local-only drive, whose only copy it is. Relatedly, `resolveDbKey` no longer invents a fresh key when an agent has a wrapped key record but no session key (an agent restored from a non-extractable keypair, where no secret enters JS). It returns null and no worker is started, so the store runs server-only until a sign-in with the agent secret or recovery code unwraps the real key — which is what the code's own comment already claimed it did. Minting a key in that state produced exactly the wrong-key open that triggered the delete, so a drive that existed only in the browser could be destroyed with no user action, while its key was still sitting in IndexedDB waiting to be unwrapped. New `discardUndecryptable` option on `ClientDbOptions` and the worker's `init` message, defaulting to off.
 - Fix: `agentVaultProof` verifies that a live signature reproduces itself unless the signer positively declares itself deterministic. It used to double-check only signers that declared `signsDeterministically: false`, so one that said nothing was taken on trust — and a signer that randomizes (WebKit's WebCrypto does, for Ed25519) could have had a non-reproducible signature turned into the key its Cloud Vault backups are wrapped under.

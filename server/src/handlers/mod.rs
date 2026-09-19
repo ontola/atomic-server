@@ -26,6 +26,8 @@ pub mod plugin_connection;
 pub mod plugin_external;
 #[cfg(feature = "wasm-plugins")]
 pub mod plugin_release;
+#[cfg(all(test, feature = "wasm-plugins"))]
+mod plugin_release_test;
 #[cfg(feature = "wasm-plugins")]
 pub mod plugin_run;
 #[cfg(feature = "wasm-plugins")]

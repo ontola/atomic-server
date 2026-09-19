@@ -118,6 +118,11 @@ describe('plainTextToTiptapJson', () => {
   });
 });
 
+// Both tests below await the same lazily imported collaborative Markdown
+// schema, so whichever runs first pays its import cost. That import is far
+// slower than the 5s default when the test threads are oversubscribed, as they
+// are on the shared runner, so this suite gets the same budget as the other
+// slow ones.
 describe('fileContentsToTiptapJson', () => {
   it('uses the collaborative Markdown schema so Markdown formatting becomes document nodes', async () => {
     const json = await fileContentsToTiptapJson(
@@ -160,7 +165,7 @@ describe('fileContentsToTiptapJson', () => {
       content: [{ type: 'paragraph', content: [{ text: '**' }] }],
     });
   });
-});
+}, 60000);
 
 describe('convertFileToDocument', () => {
   async function uploadedFile() {
