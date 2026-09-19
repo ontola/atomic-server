@@ -19,10 +19,10 @@ vi.mock('./chatConversionUtils', () => ({
   ),
   findMessageResource: (
     map: Map<{ id: string }, unknown>,
-    message: { id: string },
+    uiMessage: { id: string },
   ) => {
     for (const [m, resource] of map) {
-      if (m.id === message.id) return resource;
+      if (m.id === uiMessage.id) return resource;
     }
 
     return undefined;
