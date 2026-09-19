@@ -1,4 +1,5 @@
 import { Datatype, JSONValue } from '@tomic/react';
+import { isURL } from '@helpers/isURL';
 import { CellAlign } from '@chunks/TableEditor/Cell';
 import { AtomicURLCell } from './EditorCells/AtomicURLCell';
 import { BooleanCell } from './EditorCells/BooleanCell';
@@ -36,16 +37,6 @@ export const dataTypeAlignmentMap = new Map<string, CellAlign>([
   [Datatype.FLOAT, CellAlign.End],
   [Datatype.DATE, CellAlign.End],
 ]);
-
-const isURL = (value: string) => {
-  try {
-    new URL(value);
-
-    return true;
-  } catch {
-    return false;
-  }
-};
 
 export function appendStringToType<T extends JSONValue>(
   value: JSONValue,

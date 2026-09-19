@@ -1,24 +1,25 @@
 //! Validate the Store and create a ValidationReport.
-//! Might be deprecated soon, as Validation hasn't been necessary since parsing has built-in data validation.
+//!
+//! This is a local check used by `atomic-cli validate`. Parsing already
+//! rejects malformed values, so this pass is about required Class properties
+//! and whether linked Properties/Classes are present in the store.
 
 /// Checks Atomic Data in the store for validity.
-/// Returns an Error if it is not valid.
 ///
 /// Validates:
 ///
-/// - [X] If the Values can be parsed using their Datatype (e.g. if Integers are integers)
-/// - [X] If all required fields of the class are present
-/// - [X] If the URLs are publicly accessible
-/// - [ ] ..and return the right type of data?
-/// - [X] Returns a report, instead of throwing an error
-#[allow(dead_code, unreachable_code)]
+/// - If the Values can be parsed using their Datatype
+/// - If all required fields of the class are present
+/// - If the URLs are publicly accessible (when `fetch_items` is true)
+///
+/// Returns a report instead of throwing.
 pub async fn validate_store(
     store: &impl crate::Storelike,
     fetch_items: bool,
 ) -> crate::validate::ValidationReport {
     type Error = String;
-    let mut resource_count: u8 = 0;
-    let mut atom_count: u8 = 0;
+    let mut resource_count: usize = 0;
+    let mut atom_count: usize = 0;
     let mut unfetchable: Vec<(String, Error)> = Vec::new();
     let mut invalid_value: Vec<(crate::Atom, Error)> = Vec::new();
     let mut unfetchable_props: Vec<(String, Error)> = Vec::new();
@@ -28,8 +29,6 @@ pub async fn validate_store(
     for resource in store.all_resources(true) {
         let subject = resource.get_subject();
         let propvals = resource.get_propvals();
-        println!("Subject: {:?}", subject);
-        println!("Resource: {:?}", propvals);
         resource_count += 1;
 
         if fetch_items {
@@ -54,12 +53,29 @@ pub async fn validate_store(
                 Ok(prop) => prop,
                 Err(e) => {
                     unfetchable_props.push((prop_url.clone(), e.to_string()));
-                    break;
+                    continue;
                 }
             };
 
-            // Maybe this is no longer needed, because no store uses strings anymore
-            match crate::Value::new(&value.to_string(), &property.data_type) {
+            // `value` is already a parsed, typed `Value`. To check it against the Property's
+            // declared datatype we round-trip it through `Value::new`, because some
+            // "cosmetic" datatypes (e.g. Markdown/Slug/Date/Uri/Timestamp) are not preserved as
+            // their own `Value` variant once materialized (they collapse to String/Integer) -
+            // the Property's datatype stays authoritative and Value::new re-applies its
+            // format rules (e.g. the Slug/Date regexes) to the underlying value.
+            //
+            // `Value`'s `Display` impl is for human-readable output, not a re-parseable raw
+            // form: in particular `ResourceArray` joins subjects with commas rather than
+            // producing a Json array, so it needs its own raw string here.
+            let raw = match &value {
+                crate::Value::ResourceArray(subresources) => {
+                    let subjects: Vec<String> =
+                        subresources.iter().map(|s| s.to_string()).collect();
+                    serde_json::to_string(&subjects).unwrap_or_else(|_| value.to_string())
+                }
+                other => other.to_string(),
+            };
+            match crate::Value::new(&raw, &property.data_type) {
                 Ok(_) => {}
                 Err(e) => invalid_value.push((
                     crate::Atom::new(subject.clone(), prop_url.clone(), value.clone()),
@@ -72,16 +88,13 @@ pub async fn validate_store(
             Ok(classes) => classes,
             Err(e) => {
                 unfetchable_classes.push((subject.to_string(), e.to_string()));
-                break;
+                continue;
             }
         };
         for class in classes {
-            println!("Class: {:?}", class.shortname);
-            println!("Found: {:?}", found_props);
             for required_prop_subject in class.requires {
                 match store.get_property(&required_prop_subject).await {
                     Ok(required_prop) => {
-                        println!("Required: {:?}", required_prop.shortname);
                         if !found_props.contains(&required_prop.subject) {
                             missing_props.push((
                                 subject.to_string(),
@@ -94,25 +107,26 @@ pub async fn validate_store(
                 }
             }
         }
-        println!("{:?} Valid", subject);
     }
     crate::validate::ValidationReport {
         unfetchable,
         unfetchable_classes,
         unfetchable_props,
         invalid_value,
+        missing_props,
         resource_count,
         atom_count,
     }
 }
 
 pub struct ValidationReport {
-    pub resource_count: u8,
-    pub atom_count: u8,
+    pub resource_count: usize,
+    pub atom_count: usize,
     pub unfetchable: Vec<(String, String)>,
     pub invalid_value: Vec<(crate::Atom, String)>,
     pub unfetchable_props: Vec<(String, String)>,
     pub unfetchable_classes: Vec<(String, String)>,
+    pub missing_props: Vec<(String, String, String)>,
 }
 
 impl ValidationReport {
@@ -121,6 +135,7 @@ impl ValidationReport {
             && self.unfetchable_classes.is_empty()
             && self.unfetchable_props.is_empty()
             && self.invalid_value.is_empty()
+            && self.missing_props.is_empty()
     }
 }
 
@@ -142,21 +157,39 @@ impl std::fmt::Display for ValidationReport {
         for (atom, error) in &self.invalid_value {
             fmt.write_str(&format!("Invalid value {:?}: {} \n", atom, error))?;
         }
+        for (subject, property, class) in &self.missing_props {
+            fmt.write_str(&format!(
+                "Resource {} missing required property {} (class {}) \n",
+                subject, property, class
+            ))?;
+        }
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{Store, Storelike};
+    use crate::Storelike;
 
     #[tokio::test]
     async fn validate_populated() {
-        let store = Store::init().await.unwrap();
+        let store = crate::Store::init().await.unwrap();
         store.populate().await.unwrap();
-        // let report = store.validate().await;
-        // assert!(report.atom_count > 30);
-        // assert!(report.resource_count > 5);
-        // assert!(report.is_valid());
+        let report = store.validate().await;
+        assert!(
+            report.atom_count > 30,
+            "expected populated store to have more than 30 atoms, got {}",
+            report.atom_count
+        );
+        assert!(
+            report.resource_count > 5,
+            "expected populated store to have more than 5 resources, got {}",
+            report.resource_count
+        );
+        assert!(
+            report.is_valid(),
+            "populated default store should validate: {}",
+            report
+        );
     }
 }

@@ -7,6 +7,8 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Cleanup: `atomic-cli validate` no longer prints every resource, overflow `u8` counters, or skip missing required properties. The unused v1 `QueryFilter` type, WAPM/Earthly leftovers, and the stale 2020 desktop updater manifest are gone.
+- `@tomic/lib` exports `stringToSlug` (the data-browser copy that does not produce `meat--fish`). `@tomic/react` exports `useDebounce`. Unused e2e address-bar aliases and unused `generateNonce`/`randomSubject` helpers are removed.
 - `atomic_lib`: a signed destroy commit now removes the resource (and its
   cascade-deleted children, Loro snapshot, index and search rows) in the same
   redb transaction that stores its envelope and commit row. `Db::apply_commit`

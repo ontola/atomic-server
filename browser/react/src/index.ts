@@ -27,7 +27,7 @@ export * from './useServerURL.js';
 export * from './useDrive.js';
 export * from './useCurrentAgent.js';
 export * from './useChildren.js';
-export { useDebouncedSave } from './useDebounce.js';
+export { useDebounce, useDebouncedSave } from './useDebounce.js';
 export * from './useMarkdown.js';
 export * from './useServerSearch.js';
 export * from './useCollection.js';

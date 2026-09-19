@@ -144,7 +144,7 @@ JavaScript (`pnpm audit --prod` in `browser/`): 21 advisories, 11 high. Runtime-
 **Tests that assert nothing or hide bugs**
 - `lib/src/hierarchy.rs:576-596` `authorization` test is empty (`TODO: FINISH THIS`); `:502-504` TODO names the missing "malicious commit grants itself write" test (B1).
 - `lib/src/agents.rs:483-500` tautological assertion.
-- `lib/src/validate.rs:173-266` dead code with `u8` counters, `println!`, `break` where `continue` is meant, empty `validate_populated` test.
+- `lib/src/validate.rs:173-266` dead code with `u8` counters, `println!`, `break` where `continue` is meant, empty `validate_populated` test. (Cleanup 2026-09-17: the CLI `validate` command still uses this; counters are `usize`, debug prints are gone, missing required properties are reported, and `validate_populated` runs.)
 - `lib/src/db/test.rs:2212` `#[ignore]` documents an open bug in `query_sorted_indexed`.
 - `browser/lib/tests/upload-offline-reconnect.integration.test.ts:72` `it.skip` on a test the comment calls "a genuine, newly-surfaced bug".
 - `e2e/tests/drafts.spec.ts:22`, `resource-context-menu.spec.ts:150` `test.fixme`.
@@ -183,11 +183,11 @@ JavaScript (`pnpm audit --prod` in `browser/`): 21 advisories, 11 high. Runtime-
 - `browser/data-browser/src/components/ValueComp.tsx:54` `case (Datatype.DATE, Datatype.TIMESTAMP):` comma operator; DATE values never reach `<DateTime>`.
 - Unawaited `resource.save()` at `react/src/hooks.ts:478`, `EditPropertyDialog.tsx:31`, `useAddToOntology.ts:32`, `FilePicker.tsx:62`, `usePreview.ts:73`, `TableRangeInput.tsx:40`.
 - `browser/cli/src/store.ts:47-51` agent installed by an unawaited module-level promise; `:18` index 0 treated as missing.
-- Duplicated and diverged `EventManager.ts` and `stringToSlug.ts` between `lib/` and `data-browser/`.
+- Duplicated and diverged `EventManager.ts` and `stringToSlug.ts` between `lib/` and `data-browser/`. (Cleanup 2026-09-17: `EventManager` already lived in `@tomic/lib`; `stringToSlug` now does too, and data-browser re-exports it.)
 - Six "RECOVERY-RECONSTRUCTED" modules in `data-browser/src/helpers/managed/` with banners saying nobody has re-verified them; these decide where bearer tokens go (B8).
 - `useAtomicTools.ts:808-857` fifty lines of commented-out tool definition.
 - `browser/tsconfig.build.json` not `strict`; `useUnknownInCatchVariables: false`.
-- `desktop/latest-version.json` stale 2020 updater manifest with an empty signature; `Cross.toml`, `.earthlyignore`, `cli/wapm.toml` reference removed tooling; `.vscode/tasks.json` and `.zed/tasks.json` reference a non-existent `server/e2e_tests/`.
+- `desktop/latest-version.json` stale 2020 updater manifest with an empty signature; `Cross.toml`, `.earthlyignore`, `cli/wapm.toml` reference removed tooling; `.vscode/tasks.json` and `.zed/tasks.json` reference a non-existent `server/e2e_tests/`. (Cleanup 2026-09-17: the stale updater manifest, Earthly ignore file, WAPM manifest, and `server/e2e_tests` IDE tasks are gone. `Cross.toml` stays — CONTRIBUTING still documents local `cross` builds.)
 - `flutter/.mise.toml:3` pins `flutter = "2.5.3-stable"` while CI uses `flutter:3.44.0`; `scripts/dev-all.sh:46` vs `tauri-release.yml:390` disagree on the NDK version.
 - `scripts/bump-version.mjs:179` recommends the exact command its own header says must not be used.
 - `main.yml:44-73,188-191` dead `pull_request_target` guard on a workflow that only runs on `push`.
@@ -250,7 +250,7 @@ Not fixed here:
 
 - **B7** (desktop CSP disabled): a CSP is set since 2026-09-15 (`desktop/tauri.conf.json`: `script-src 'self' 'wasm-unsafe-eval'`, `style-src 'self' 'unsafe-inline'` plus Google Fonts for styled-components, `connect-src` to any http/https/ws/wss server plus the Tauri IPC origins, workers from the bundle or blobs, plugin iframes over http/https, `object-src 'none'`), with Tauri's own hashing of the bundle's inline scripts left on. It mirrors what the web build already runs under (`single_page_app.rs` nonce CSP) and was validated against the Tauri schema, not yet by a packaged desktop run; smoke-test a release build (sign-in, document editing, image upload, plugin view) before shipping. The `devtools` feature is opt-in.
 - **C18** (`Durability::None`), **C24** (loopback NFS): structural changes with performance or design trade-offs, listed above with the fix direction.
-- The `stringToSlug` duplicate stays: the data-browser copy fixes a case (`Meat & fish`) the lib copy gets wrong; port the fix into lib first.
+- The `stringToSlug` duplicate is gone: the data-browser algorithm (Meat & fish → meat-fish) lives in `@tomic/lib` and data-browser re-exports it.
 
 Fixed in the security-hygiene round (2026-09-18, branch `claude/technical-debt-analysis-b4ifz2-security-hygiene`):
 
