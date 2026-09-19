@@ -12,6 +12,11 @@ import { RequestCancelledError } from './error.js';
  *   a synchronous sign of the genesis commit (the signature *is* the
  *   subject). That envelope is stored here and POSTed verbatim before
  *   any incremental delta sign for the same subject.
+ * - `signedDestroy`: a delete has no Loro delta to export at drain time —
+ *   the signed destroy envelope IS the whole write. `Resource.destroy()`
+ *   signs it eagerly, stores it here, and removes the resource locally;
+ *   the drain POSTs it verbatim (with the same backoff / offline replay
+ *   as any other entry) and drops the entry on ack.
  *
  * Drain is idempotent — a call that arrives while a pass is in flight
  * chains ONE follow-up pass (with a fresh entry snapshot) instead of
@@ -32,6 +37,12 @@ export interface OutboxEntry {
    *  the subject from a sync sign. Drain POSTs this verbatim before
    *  attempting any incremental Loro-delta sign. Cleared on ack. */
   signedGenesis?: Commit;
+  /** Pre-signed destroy commit. Set by `Resource.destroy()`; the resource
+   *  is removed locally at once and the drain POSTs this verbatim. Cleared
+   *  (with the whole entry) on ack. When `signedGenesis` is ALSO still
+   *  pending the resource never reached the server, so the drain POSTs
+   *  neither and just drops the entry. */
+  signedDestroy?: Commit;
   /** Base64-encoded Loro `VersionVector` of the last version that was
    *  successfully synced to the server, captured when this subject went
    *  dirty WHILE OFFLINE. On reload the Loro doc rehydrates from clientDb
@@ -259,6 +270,7 @@ const KNOWN_ERROR_CODES: ReadonlySet<number> = new Set([
   ErrorCode.UNAUTHORIZED_WRITE,
   ErrorCode.MISSING_CLASS,
   ErrorCode.SYNC_REJECTED,
+  ErrorCode.IMMUTABLE_COMMIT,
 ]);
 
 /**
@@ -273,11 +285,46 @@ export function isTerminalCommitError(message: string, code?: number): boolean {
   if (code !== undefined && KNOWN_ERROR_CODES.has(code)) {
     return (
       code === ErrorCode.GENESIS_COLLISION ||
-      code === ErrorCode.MISSING_REQUIRED_PROPERTY
+      code === ErrorCode.MISSING_REQUIRED_PROPERTY ||
+      code === ErrorCode.IMMUTABLE_COMMIT
     );
   }
 
   return isTerminalCommitErrorMessage(message);
+}
+
+/**
+ * Whether a terminal refusal is bookkeeping rather than a lost write: the
+ * user's data is already where it should be, so the drop should be logged,
+ * not surfaced as an error toast.
+ *
+ * - A redundant genesis (`GENESIS_COLLISION`): the resource already exists on
+ *   the server; only the never-applied diff in this one commit is gone. These
+ *   arrive in bulk when local state lost its `lastCommit` chain (e.g. after
+ *   switching servers), so a toast per commit is pure noise.
+ * - A write aimed at a Commit (`IMMUTABLE_COMMIT`): a Commit is whatever was
+ *   signed; no local edit to it could ever have applied.
+ *
+ * Same code-first / string-fallback shape as {@link isTerminalCommitError}:
+ * a recognized `code` is authoritative (so a server wording change cannot
+ * turn a benign drop into a scary one, or vice versa), and only an absent or
+ * unrecognized code falls back to the legacy message text.
+ */
+export function isBenignTerminalCommitError(
+  message: string,
+  code?: number,
+): boolean {
+  if (code !== undefined && KNOWN_ERROR_CODES.has(code)) {
+    return (
+      code === ErrorCode.GENESIS_COLLISION ||
+      code === ErrorCode.IMMUTABLE_COMMIT
+    );
+  }
+
+  return (
+    message.includes('is_genesis: true, but the resource already exists') ||
+    message.includes('Commits cannot be edited')
+  );
 }
 
 /** Blocking-error check the outbox should actually call — see
@@ -349,6 +396,7 @@ interface PersistedEntry {
   subject: string;
   enqueuedAt: number;
   signedGenesis?: unknown;
+  signedDestroy?: unknown;
   baseVersion?: string;
 }
 
@@ -428,16 +476,16 @@ export class LocalOutbox {
 
   /** Clear the dirty bit for a subject. Called by the drain after the
    *  Loro delta has been signed + POSTed + acked. If a `signedGenesis`
-   *  is still pending, the entry stays (use `clearGenesis` to also
-   *  remove that). */
+   *  or `signedDestroy` is still pending, the entry stays (use
+   *  `clearGenesis` / `clearDestroy` to also remove that). */
   clearDirty(subject: string): void {
     const entry = this.entries.get(subject);
     if (!entry) return;
 
-    if (entry.signedGenesis) {
-      // Still holding a genesis envelope — keep the entry but treat
+    if (entry.signedGenesis || entry.signedDestroy) {
+      // Still holding a signed envelope — keep the entry but treat
       // it as "no incremental delta dirty"; the next drain will POST
-      // the genesis envelope and recheck.
+      // the envelope and recheck.
       this.schedulePersist();
       this.onChange();
 
@@ -476,6 +524,53 @@ export class LocalOutbox {
     // dirty" — any post-genesis Loro ops are queued by the
     // Loro subscriber's `markDirty`. Leave the entry; the drain
     // loop will detect "no Loro delta" and clear it.
+    this.schedulePersist();
+    this.onChange();
+  }
+
+  /** Stash a pre-signed destroy commit for `subject`. Called by
+   *  `Resource.destroy()` once the envelope is signed; the drain POSTs it
+   *  verbatim. Any offline `baseVersion` is dropped — there is no Loro
+   *  delta left to replay for a subject that is going away. Re-arms a
+   *  blocked entry: the delete is a fresh user intent worth attempting. */
+  setDestroyCommit(subject: string, commit: Commit): void {
+    const entry: OutboxEntry = this.entries.get(subject) ?? {
+      subject,
+      enqueuedAt: Date.now(),
+    };
+    entry.signedDestroy = commit;
+    entry.baseVersion = undefined;
+
+    if (entry.blocked) {
+      entry.blocked = false;
+      entry.failures = 0;
+    }
+
+    this.entries.set(subject, entry);
+    this.schedulePersist();
+    this.onChange();
+  }
+
+  /** Drop the entry once the destroy has been acked (or found to be moot).
+   *  Unlike `clearGenesis` this removes the WHOLE entry: a destroyed
+   *  subject has no dirty Loro ops or unposted genesis left worth
+   *  syncing. No-op when the entry holds no `signedDestroy`. */
+  clearDestroy(subject: string): void {
+    const entry = this.entries.get(subject);
+    if (!entry || !entry.signedDestroy) return;
+
+    this.entries.delete(subject);
+    this.schedulePersist();
+    this.onChange();
+  }
+
+  /** Forget every queued write for `subject` without POSTing anything.
+   *  For a resource that never reached the server (still `new`) and is
+   *  being discarded: an unposted genesis or stray dirty bit would
+   *  otherwise recreate it on the next drain. */
+  discard(subject: string): void {
+    if (!this.entries.delete(subject)) return;
+
     this.schedulePersist();
     this.onChange();
   }
@@ -765,6 +860,9 @@ export class LocalOutbox {
         signedGenesis: e.signedGenesis
           ? commitToJsonADObject(e.signedGenesis)
           : undefined,
+        signedDestroy: e.signedDestroy
+          ? commitToJsonADObject(e.signedDestroy)
+          : undefined,
         baseVersion: e.baseVersion,
       }));
       localStorage.setItem(this.activeKey, JSON.stringify(out));
@@ -882,6 +980,18 @@ export class LocalOutbox {
       }
     }
 
+    let signedDestroy: Commit | undefined;
+
+    if (obj.signedDestroy) {
+      try {
+        signedDestroy = parseCommitJSON(JSON.stringify(obj.signedDestroy));
+      } catch {
+        // skip — an unparseable destroy envelope can't be re-signed (the
+        // resource is already gone locally), so the delete is lost; the
+        // entry stays dirty-only and the drain clears it as a no-op.
+      }
+    }
+
     // Backcompat: old persisted entries had `commits: Commit[]`. We
     // no longer store signed envelopes here (the Loro state is the
     // source of truth), so the array is discarded — the next drain
@@ -894,10 +1004,40 @@ export class LocalOutbox {
       subject: obj.subject,
       enqueuedAt,
       signedGenesis,
+      signedDestroy,
       baseVersion:
         typeof obj.baseVersion === 'string' ? obj.baseVersion : undefined,
     });
   }
+}
+
+/**
+ * Server refusals of a destroy commit that mean "the resource you are
+ * deleting is not there to delete (any more)". The delete's goal is met, so
+ * the drain treats a match as an acknowledgement: it drops the entry and
+ * keeps the local removal, instead of retrying forever or surfacing a
+ * "dropped stuck commit" toast for a resource the user deliberately removed.
+ *
+ * - `Db::apply_commit` (`lib/src/db.rs`): "Destroy commit for {} was already
+ *   applied here; refusing replay" — this exact envelope already landed
+ *   (a reconnect re-POST after the ack was lost).
+ * - `Commit::reject_destroy_older_than_genesis` (`lib/src/commit.rs`):
+ *   "Destroy commit for {} (created {}) predates the resource's genesis
+ *   ({}); refusing replay" — the subject was re-created after our delete;
+ *   this destroy is about a resource that no longer exists.
+ * - `validate_and_build_response` (`lib/src/commit.rs`): "Commit for {} has
+ *   is_genesis: false, but the resource does not exist yet." — someone else
+ *   deleted it first.
+ *
+ * Anything else (401, transport, unknown) goes through the ordinary
+ * terminal / blocking / backoff classification like every other entry.
+ */
+export function isSettledDestroyErrorMessage(message: string): boolean {
+  return (
+    message.includes('was already applied here; refusing replay') ||
+    message.includes("predates the resource's genesis") ||
+    message.includes('is_genesis: false, but the resource does not exist yet')
+  );
 }
 
 /** Split sorted entries into runs of equal `tierOf` key. Without `tierOf`

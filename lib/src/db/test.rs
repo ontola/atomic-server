@@ -1514,6 +1514,86 @@ async fn loro_non_property_container_survives_commit_roundtrip() {
     );
 }
 
+/// A signed destroy commit removes the resource and stores its envelope in
+/// one transaction, then tombstones the subject. Before, `apply_commit`
+/// called `remove_resource`, which applied its own transaction: the resource
+/// was gone before the envelope row landed, and a crash in between left a
+/// deletion with no signed destroy for `SYNC_DIFF.removeCommits` to carry.
+#[tokio::test]
+#[timeout(120000)]
+async fn destroy_commit_removes_resource_and_keeps_envelope_atomically() {
+    let store = Db::init_temp("destroy_commit_envelope").await.unwrap();
+
+    let mut resource = crate::Resource::new("did:ad:placeholder".into());
+    resource
+        .set(urls::NAME.into(), Value::String("doomed".into()), &store)
+        .await
+        .unwrap();
+    let genesis = resource.save_as_genesis(&store).await.unwrap();
+    let subject = genesis.resource_new.unwrap().get_subject().clone();
+    let pure_id = subject.pure_id();
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, pure_id.as_bytes())
+            .unwrap()
+            .is_some(),
+        "test premise: a saved resource has a Loro snapshot"
+    );
+    assert!(
+        !crate::sync::tombstones::is_tombstoned(&store, &pure_id),
+        "test premise: a live resource is not tombstoned"
+    );
+
+    let mut resource = store.get_resource(&subject).await.unwrap();
+    let destroy = resource.destroy(&store).await.unwrap();
+    let signature = destroy
+        .commit
+        .signature
+        .clone()
+        .expect("destroy via the default agent is a signed commit");
+    assert!(destroy.resource_new.is_none());
+
+    // (a) the resource, its Loro snapshot and its stored propvals are gone.
+    assert!(
+        store.get_resource(&subject).await.is_err(),
+        "destroyed resource must not resolve"
+    );
+    assert!(
+        store
+            .kv
+            .get(Tree::Resources, pure_id.as_bytes())
+            .unwrap()
+            .is_none(),
+        "destroyed resource row must be deleted"
+    );
+    assert!(
+        store
+            .kv
+            .get(Tree::LoroSnapshots, pure_id.as_bytes())
+            .unwrap()
+            .is_none(),
+        "Loro snapshot must be deleted with the resource"
+    );
+
+    // (b) the signed destroy envelope is the subject's latest envelope.
+    let envelope = crate::envelopes::latest_envelope(&store, &pure_id)
+        .expect("the destroy envelope must be stored for the destroyed subject");
+    assert_eq!(envelope.signature, signature);
+    assert!(envelope.is_destroy(), "latest envelope must be the destroy");
+
+    // (c) the subject is tombstoned, and the tombstone resolves to the
+    // signed destroy `SYNC_DIFF.removeCommits` forwards.
+    assert!(
+        crate::sync::tombstones::is_tombstoned(&store, &pure_id),
+        "destroyed subject must be tombstoned"
+    );
+    assert!(
+        crate::sync::tombstones::destroy_envelope(&store, &pure_id).is_some(),
+        "tombstone must resolve to the signed destroy envelope"
+    );
+}
+
 /// A deleted resource must not leave its Loro snapshot orphaned in
 /// `Tree::LoroSnapshots`, and the subject must be tombstoned so bulk sync
 /// does not resurrect it.
@@ -1885,6 +1965,96 @@ async fn a_cascade_deleted_child_names_its_drive() {
         Some(drive.to_string()),
         "a removal with no drive on it reaches no subscriber"
     );
+}
+
+/// `DbEvent::Destroyed` is sent only once the removal has been applied.
+///
+/// `recursive_remove` used to announce each cascade-deleted child while it
+/// was still queueing operations into a transaction the caller had yet to
+/// apply. A listener — the WS fan-out in `atomic-server`'s `CommitMonitor`, a
+/// peer transport — heard of a deletion that could still fail or roll back,
+/// and heard of the children before the parent whose removal caused it. Now
+/// the caller announces every removed subject, the parent included, after the
+/// transaction has landed.
+///
+/// The listener runs on its own worker thread and checks the store the moment
+/// each event arrives. With the old ordering there is a wide window in which
+/// that read still finds the resource: the children have yet to be queried,
+/// unindexed and applied.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[timeout(120000)]
+async fn destroyed_events_follow_the_applied_removal() {
+    use crate::DbEvent;
+
+    let store = Db::init_temp("destroyed_after_apply").await.unwrap();
+    let drive = store.create_drive("destroyed-after-apply").await.unwrap();
+    let parent = store
+        .create_resource(urls::FOLDER, &drive, "parent", None)
+        .await
+        .unwrap();
+    let mut expected: Vec<String> = vec![parent.clone()];
+    for name in ["child-1", "child-2"] {
+        let child = store
+            .create_resource(urls::FOLDER, &parent, name, None)
+            .await
+            .unwrap();
+        expected.push(child);
+    }
+    let base = store.get_base_domain();
+    let to_subject = |s: &str| Subject::from_raw(s, base.as_deref()).without_params();
+    expected.sort();
+
+    // Subscribe before the removal, and observe concurrently: what matters is
+    // the state of the store at the moment each event can be seen.
+    let mut events = store.subscribe_events();
+    let observer_store = store.clone();
+    let observer = tokio::spawn(async move {
+        let mut seen: Vec<(Subject, bool)> = Vec::new();
+        while seen.len() < 3 {
+            match events.recv().await.unwrap() {
+                DbEvent::Destroyed { subject, .. } => {
+                    let still_present = observer_store.get_resource(&subject).await.is_ok();
+                    seen.push((subject, still_present));
+                }
+                _ => continue,
+            }
+        }
+        (seen, events)
+    });
+
+    store.remove_resource(&to_subject(&parent)).await.unwrap();
+
+    let (seen, mut events) = tokio::time::timeout(std::time::Duration::from_secs(30), observer)
+        .await
+        .expect("the removal never announced parent and both children")
+        .unwrap();
+
+    let mut announced: Vec<String> = seen.iter().map(|(s, _)| s.pure_id()).collect();
+    announced.sort();
+    assert_eq!(
+        announced, expected,
+        "parent and both children must each be announced exactly once"
+    );
+    for (subject, still_present) in &seen {
+        assert!(
+            !still_present,
+            "{subject} was announced as destroyed while the store still held it"
+        );
+        assert!(
+            store.get_resource(subject).await.is_err(),
+            "{subject} must be gone once its removal is announced"
+        );
+    }
+
+    // `remove_resource` has returned, so anything it sent is already in the
+    // channel: there must be no fourth removal — the parent is not announced
+    // twice.
+    while let Ok(event) = events.try_recv() {
+        assert!(
+            !matches!(event, DbEvent::Destroyed { .. }),
+            "unexpected extra removal event: {event:?}"
+        );
+    }
 }
 
 /// A resource created under a drive must be findable by that drive.

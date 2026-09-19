@@ -2,7 +2,8 @@
 
 Status: product direction agreed with the user, 2026-09-08; technical migration
 in progress. This describes the target, not guarantees already implemented. Current
-extension work is on PR #1307; Reflector integration is proposed in PR #1383.
+extension code reached `develop` with #1500 (2026-09-17); PR #1307 remains open
+for its remaining-work list. Reflector integration is proposed in PR #1383.
 Workspace navigation, shared view protocol and installation identity have implementation checkpoints below;
 the complete package and permission migration remains open.
 

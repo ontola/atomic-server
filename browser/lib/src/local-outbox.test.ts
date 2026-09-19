@@ -6,6 +6,7 @@ import {
   isUnrecoverableCommitErrorMessage,
   isTerminalCommitError,
   isUnrecoverableCommitError,
+  isBenignTerminalCommitError,
   isCommitSubject,
   drainBackoffMs,
   groupTiers,
@@ -1029,5 +1030,86 @@ describe('LocalOutbox.drain tiers (pipelined COMMITs)', () => {
 
     expect(outbox.size).toBe(1);
     expect(outbox.getEntry('did:ad:s1')?.failures).toBe(1);
+  });
+});
+
+describe('classification is code-first, message text is only a fallback', () => {
+  // A server wording change must not turn a terminal refusal into infinite
+  // retries (or a benign drop into an error toast). When the server sends a
+  // recognized code, that code decides; the legacy message patterns only
+  // apply to code-less responses from older servers.
+  const UNRELATED = 'some unrelated wording the client has never seen';
+  const LEGACY_GENESIS =
+    'Commit for did:ad:abc has is_genesis: true, but the resource already exists.';
+  const LEGACY_IMMUTABLE = 'Commits cannot be edited.';
+
+  it('GENESIS_COLLISION with an unrelated message is terminal and benign', ({
+    expect,
+  }) => {
+    expect(isTerminalCommitError(UNRELATED, ErrorCode.GENESIS_COLLISION)).toBe(
+      true,
+    );
+    expect(
+      isBenignTerminalCommitError(UNRELATED, ErrorCode.GENESIS_COLLISION),
+    ).toBe(true);
+  });
+
+  it('IMMUTABLE_COMMIT with an unrelated message is terminal and benign', ({
+    expect,
+  }) => {
+    expect(isTerminalCommitError(UNRELATED, ErrorCode.IMMUTABLE_COMMIT)).toBe(
+      true,
+    );
+    expect(
+      isBenignTerminalCommitError(UNRELATED, ErrorCode.IMMUTABLE_COMMIT),
+    ).toBe(true);
+    expect(
+      isUnrecoverableCommitError(UNRELATED, ErrorCode.IMMUTABLE_COMMIT),
+    ).toBe(false);
+  });
+
+  it('a code-less error with the legacy message still classifies', ({
+    expect,
+  }) => {
+    for (const message of [LEGACY_GENESIS, LEGACY_IMMUTABLE]) {
+      expect(isTerminalCommitError(message, undefined)).toBe(true);
+      expect(isBenignTerminalCommitError(message, undefined)).toBe(true);
+      expect(isTerminalCommitError(message, ErrorCode.UNKNOWN)).toBe(true);
+      expect(isBenignTerminalCommitError(message, ErrorCode.UNKNOWN)).toBe(
+        true,
+      );
+    }
+  });
+
+  it('another recognized code wins over a legacy phrase in the message', ({
+    expect,
+  }) => {
+    for (const message of [LEGACY_GENESIS, LEGACY_IMMUTABLE]) {
+      expect(isTerminalCommitError(message, ErrorCode.UNAUTHORIZED_WRITE)).toBe(
+        false,
+      );
+      expect(
+        isBenignTerminalCommitError(message, ErrorCode.UNAUTHORIZED_WRITE),
+      ).toBe(false);
+    }
+  });
+
+  it('a lost-write terminal code is terminal but not benign', ({ expect }) => {
+    expect(
+      isTerminalCommitError(UNRELATED, ErrorCode.MISSING_REQUIRED_PROPERTY),
+    ).toBe(true);
+    expect(
+      isBenignTerminalCommitError(
+        UNRELATED,
+        ErrorCode.MISSING_REQUIRED_PROPERTY,
+      ),
+    ).toBe(false);
+  });
+
+  it('an unrecognized nonzero code (garbled pre-F5 frame) falls back to text', ({
+    expect,
+  }) => {
+    expect(isBenignTerminalCommitError(LEGACY_GENESIS, 0x4322)).toBe(true);
+    expect(isBenignTerminalCommitError(UNRELATED, 0x4322)).toBe(false);
   });
 });
