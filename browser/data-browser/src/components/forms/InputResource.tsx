@@ -10,10 +10,12 @@ export function InputResource({
   resource,
   property,
   commit,
+  commitDebounceInterval,
   ...props
 }: InputProps): JSX.Element {
   const [subject, setSubject] = useSubject(resource, property.subject, {
     commit,
+    commitDebounce: commitDebounceInterval,
   });
 
   if (subject === noNestedSupport) {

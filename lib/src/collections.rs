@@ -253,31 +253,55 @@ pub struct Collection {
 }
 
 /// Sorts a vector or resources by some property.
+///
+/// Resources without the property sort last in both directions. The
+/// comparator is a total order: `sort_by` requires one, and since Rust 1.81
+/// it may panic on one that is not (the previous comparator answered
+/// `Greater` for a missing value on either side and for equal values, so a
+/// collection with two resources missing the property, or two equal ones,
+/// could bring the request down through the `sort_by` query parameter).
 #[tracing::instrument(skip_all)]
 pub fn sort_resources(
     mut resources: ResourceCollection,
     sort_by: &str,
     sort_desc: bool,
 ) -> ResourceCollection {
-    resources.sort_by(|a, b| {
-        let val_a = a.get(sort_by);
-        let val_b = b.get(sort_by);
-        if val_a.is_err() || val_b.is_err() {
-            return std::cmp::Ordering::Greater;
-        };
-        if val_b.unwrap().to_string() > val_a.unwrap().to_string() {
+    resources.sort_by(|a, b| match (a.get(sort_by).ok(), b.get(sort_by).ok()) {
+        (None, None) => std::cmp::Ordering::Equal,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (Some(val_a), Some(val_b)) => {
+            let ordering = compare_sort_values(val_a, val_b);
             if sort_desc {
-                std::cmp::Ordering::Greater
+                ordering.reverse()
             } else {
-                std::cmp::Ordering::Less
+                ordering
             }
-        } else if sort_desc {
-            std::cmp::Ordering::Less
-        } else {
-            std::cmp::Ordering::Greater
         }
     });
     resources
+}
+
+/// Total order over two present values. Numbers sort before everything else
+/// and compare numerically (`f64::total_cmp`, so `NaN` has a fixed place
+/// instead of comparing as neither smaller nor larger); everything else
+/// compares as its string form, which is what the collection sorted by
+/// before. The kind is compared first because mixing the two rules within
+/// one ordering is not transitive (`10 > 9`, `"9" > "5x"`, `"10" < "5x"`).
+fn compare_sort_values(a: &Value, b: &Value) -> std::cmp::Ordering {
+    fn as_number(value: &Value) -> Option<f64> {
+        match value {
+            Value::Integer(i) | Value::Timestamp(i) => Some(*i as f64),
+            Value::Float(f) => Some(*f),
+            _ => None,
+        }
+    }
+    match (as_number(a), as_number(b)) {
+        (Some(a), Some(b)) => a.total_cmp(&b),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a.to_string().cmp(&b.to_string()),
+    }
 }
 
 impl Collection {
@@ -1432,6 +1456,82 @@ mod test {
             sorted_desc[2].get_subject(),
             "c is missing the sorted property - it should _alway_ be last"
         );
+    }
+
+    /// The comparator must be a total order: `sort_by` may panic otherwise
+    /// (Rust 1.81+), and the `sort_by` query parameter reaches it with any
+    /// collection a client asks for. Mixed, equal, missing and NaN values are
+    /// the cases the old comparator got wrong. Thirty resources, not ten:
+    /// slices up to twenty elements are insertion-sorted, which never
+    /// notices a broken order, so a small collection hid the panic.
+    #[test]
+    fn sorting_mixed_missing_and_nan_values_is_a_total_order() {
+        let prop = urls::DESCRIPTION.to_string();
+        let pattern = [
+            Some(Value::Float(2.5)),
+            None,
+            Some(Value::Integer(1)),
+            Some(Value::Float(f64::NAN)),
+            Some(Value::String("b".into())),
+            None,
+            Some(Value::Integer(1)),
+            Some(Value::String("a".into())),
+            Some(Value::Float(f64::NAN)),
+            Some(Value::Integer(-3)),
+        ];
+        let mut resources = Vec::new();
+        for i in 0..30 {
+            let mut r = Resource::new(format!("r{i}"));
+            if let Some(v) = &pattern[i % pattern.len()] {
+                r.set_unsafe(prop.clone(), v.clone()).unwrap();
+            }
+            resources.push(r);
+        }
+
+        // Panicked with the old comparator ("user-provided comparison
+        // function does not correctly implement a total order").
+        let asc = sort_resources(resources.clone(), &prop, false);
+        let desc = sort_resources(resources, &prop, true);
+
+        // 24 resources carry the property, 6 do not. Missing values sit at
+        // the end, whichever direction was asked for.
+        let present = 24;
+        for sorted in [&asc, &desc] {
+            assert_eq!(sorted.len(), 30);
+            assert!(sorted[..present].iter().all(|r| r.get(&prop).is_ok()));
+            assert!(sorted[present..].iter().all(|r| r.get(&prop).is_err()));
+        }
+
+        let shown = |sorted: &Vec<Resource>| -> Vec<String> {
+            sorted[..present]
+                .iter()
+                .map(|r| match r.get(&prop).unwrap() {
+                    Value::Integer(i) => i.to_string(),
+                    Value::Float(f) if f.is_nan() => "NaN".into(),
+                    Value::Float(f) => f.to_string(),
+                    other => other.to_string(),
+                })
+                .collect()
+        };
+        // Numbers compare numerically (-3 < 1 == 1 < 2.5 whatever their
+        // string forms say), NaN has a fixed place after them, and numbers
+        // sort before strings so the two kinds never interleave (which would
+        // make the order depend on which pair happened to be compared).
+        let mut expected_asc: Vec<String> = Vec::new();
+        for (value, count) in [
+            ("-3", 3),
+            ("1", 6),
+            ("2.5", 3),
+            ("NaN", 6),
+            ("a", 3),
+            ("b", 3),
+        ] {
+            expected_asc.extend(std::iter::repeat_n(value.to_string(), count));
+        }
+        assert_eq!(shown(&asc), expected_asc);
+        let mut expected_desc = expected_asc;
+        expected_desc.reverse();
+        assert_eq!(shown(&desc), expected_desc);
     }
 
     /// Verifies that resources with DID subjects (`did:ad:...`) are correctly indexed and

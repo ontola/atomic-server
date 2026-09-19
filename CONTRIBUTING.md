@@ -37,6 +37,7 @@ Check out the [Roadmap](https://docs.atomicdata.dev/roadmap.html) if you want to
   - [Publishing manually - doing the CI's work](#publishing-manually---doing-the-cis-work)
     - [Building and publishing binaries](#building-and-publishing-binaries)
     - [Publishing to Cargo](#publishing-to-cargo)
+    - [Publishing to npm](#publishing-to-npm)
     - [Publishing server to Docker](#publishing-server-to-docker)
     - [Deploying to atomicdata.dev](#deploying-to-atomicdatadev)
     - [Publishing atomic-cli to WAPM](#publishing-atomic-cli-to-wapm)
@@ -314,6 +315,7 @@ We believe AI can be useful for improving software while also recognizing that i
 The following should be triggered automatically:
 
 - Push the `v*` tag, a Release will automatically be created on Github with the binaries. This will read `CHANGELOG.md`, so make sure to add the changes from there.
+- The same tag publishes Rust crates to crates.io and `@tomic/*` packages to npm (`latest` for a stable tag, the pre-release identifier — `beta`, `rc`, … — otherwise).
 - The main action required on this repo, is to _update the changelog_ and _tag releases_. The tags trigger the build and publish processes in the CI.
 
 Note:
@@ -413,7 +415,7 @@ environment is already declared, so no workflow change is needed.
 
 ### Publishing manually - doing the CI's work
 
-If the CI scripts for some reason do not do their job (buildin releases, docker file, publishing to cargo), you can follow these instructions:
+If the CI scripts for some reason do not do their job (building releases, docker file, publishing to cargo or npm), you can follow these instructions:
 
 #### Building and publishing binaries
 
@@ -438,6 +440,8 @@ dist-tag, never `latest`. By hand:
 1. `cd browser && pnpm install --frozen-lockfile`
 1. `pnpm --filter @tomic/lib run build`, then the same for `@tomic/react`, `@tomic/cli`, `@tomic/svelte`, `@tomic/create-template`, `@tomic/plugin` and `@tomic/edit-mode`
 1. `pnpm publish -r --no-git-checks --ignore-scripts --access public --tag <latest|beta>`
+   - `--ignore-scripts` skips `prepublishOnly`. Build first (step 2);
+     `@tomic/lib`'s `attw` currently crashes and would fail the publish.
    - Never `pnpm npm publish`: it skips the `workspace:*` rewrite and publishes a package that cannot resolve `@tomic/lib`.
 
 #### Publishing server to Docker
@@ -477,3 +481,40 @@ journalctl -u atomic.service --since "1 hour ago" -f
 1. `cd cli`
 1. run `cargo wasi build --release --no-default-features` (note: this fails, as ring does not compile to WASI [at this moment](https://github.com/briansmith/ring/issues/1043))
 1. `wapm publish`
+
+## Coordinated Rust updates
+
+Server and SaaS use the same exact Rust release, selected by each repository's
+`rust-toolchain.toml`. CI pins and Dagger's `RUST_VERSION` must match it. The
+Server-owned checker validates those copies; do not switch a workflow or Docker
+image back to floating `stable`/`rust:bookworm`.
+
+For an update, create branches with the same name in both repositories. Existing
+paired-branch CI resolves both heads to commit SHAs and tests that exact pair.
+Update both toolchain files, the workflow pins, and Dagger's version together.
+Keep separate committed `Cargo.lock` files. Update selected shared versions with
+`cargo update -p NAME@OLD --precise VERSION`, then run from the Server checkout:
+
+```sh
+python3 scripts/check-rust-alignment.py --saas ../atomic-saas
+cargo metadata --locked --format-version 1 > /dev/null
+(cd ../atomic-saas && cargo metadata --locked --format-version 1 > /dev/null)
+```
+
+The check compares Loro (including common transitive Loro crates), Iroh, Serde,
+JSON, Ed25519/Curve25519, Tokio, Reqwest, and Object Store. It fails on different
+resolved version sets, including additional prereleases. Other dependencies may
+differ: SaaS's own redb database intentionally still uses major 2 while Server
+uses major 4. Add a crate to the policy when its alignment matters; do not copy
+whole lockfiles or force unrelated dependencies to match.
+
+Development profiles also match (`line-tables-only` for local crates, no debug
+info for dependencies). Features, targets, native toolchains, and intentionally
+different CI profiles can still produce separate cached artifacts. A shared
+build cache does not synchronize dependencies.
+
+Paired Rust checks and SaaS build/release commands use `--locked` so source changes cannot silently
+rewrite the tested dependency graph. Commit any needed lockfile updates in the
+paired PR, run the affected Rust suites, and merge the pair together after CI.
+The SaaS alignment gate requires the Server checker, so land the Server PR
+before the SaaS PR when first introducing this policy.

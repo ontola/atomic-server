@@ -40,6 +40,24 @@ import { useClickAwayListener } from '../../hooks/useClickAwayListener';
 import { KeyboardInteraction } from './helpers/keyboardHandlers';
 import { useAvailableHeight } from './hooks/useAvailableHeight';
 
+/**
+ * Stable no-op defaults. Written inline (`onRowExpand = () => undefined`) they
+ * are a fresh function on every render, which changes the identity of the
+ * `Row` component handed to react-window — and a new `rowComponent` type
+ * unmounts and remounts every row. Besides the scroll reset described further
+ * down, a remounted row re-runs its cells' mount effects, so an editor that
+ * publishes cell options on mount can drive an endless remount/render loop.
+ */
+const noop = () => undefined;
+const noopResize = (_sizes: number[]) => undefined;
+
+const NAVIGATION_KEYS = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+]);
+
 const ARIA_TABLE_USAGE =
   'Use the arrow keys to navigate the table. Press enter to edit a cell. Press escape to exit edit mode.';
 
@@ -122,14 +140,14 @@ function FancyTableInner<T>({
   columnToKey,
   labelledBy,
   busy = false,
-  onCellResize = () => undefined,
+  onCellResize = noopResize,
   onClearCells,
   onClearRow,
   onCopyCommand,
   onUndoCommand,
   onPasteCommand,
   onColumnReorder,
-  onRowExpand = () => undefined,
+  onRowExpand = noop,
   onInsertRowBelow,
   onSelectedCellChange,
   HeadingComponent,
@@ -143,6 +161,7 @@ function FancyTableInner<T>({
     listRef,
     tableRef,
     setCursorMode,
+    exitEditMode,
     cursorMode,
     disabledKeyboardInteractions,
     readOnly,
@@ -210,11 +229,35 @@ function FancyTableInner<T>({
       ) {
         e.preventDefault();
         e.stopPropagation();
-        setCursorMode(CursorMode.Visual);
+        exitEditMode();
       }
     },
-    [cursorMode, disabledKeyboardInteractions, setCursorMode],
+    [cursorMode, disabledKeyboardInteractions, exitEditMode],
   );
+
+  // The opt-out above is only ever set *while* such a surface is open. Once it
+  // clears, the editor that asked to own Escape is gone — and a grid left in
+  // Edit mode with nothing to edit swallows every arrow key, which is what
+  // made those cells need a second Escape before the cursor would move again.
+  // Leaving Edit mode here keeps "the surface is closed" and "the grid is
+  // navigable" from drifting apart, whichever way the surface was dismissed:
+  // Escape, a click away, or picking a value.
+  const editorOwnsEscape = disabledKeyboardInteractions.has(
+    KeyboardInteraction.ExitEditMode,
+  );
+  const editorOwnedEscape = useRef(editorOwnsEscape);
+
+  useEffect(() => {
+    if (
+      editorOwnedEscape.current &&
+      !editorOwnsEscape &&
+      cursorMode === CursorMode.Edit
+    ) {
+      exitEditMode();
+    }
+
+    editorOwnedEscape.current = editorOwnsEscape;
+  }, [editorOwnsEscape, cursorMode, exitEditMode]);
 
   useLayoutEffect(() => {
     if (
@@ -228,6 +271,48 @@ function FancyTableInner<T>({
 
     previousCursorMode.current = cursorMode;
   }, [cursorMode, selectedColumn, selectedRow, tableRef]);
+
+  // Safety net for the same class of bug on the focus side: an editor surface
+  // that unmounts can drop focus on `<body>` (a dialog restoring focus to a
+  // button that no longer exists, for instance), and keystrokes then reach
+  // nothing. While the grid still owns a selected cell, take the arrow keys —
+  // only when focus is genuinely nowhere, never from another focused widget —
+  // and hand focus back to the grid so the next key arrives normally. Only
+  // navigation: a stray character should not start an edit from off-grid.
+  useEffect(() => {
+    if (cursorMode === CursorMode.Edit) {
+      return;
+    }
+
+    if (selectedRow === undefined || selectedColumn === undefined) {
+      return;
+    }
+
+    const handleOrphanedKey = (e: KeyboardEvent) => {
+      if (!NAVIGATION_KEYS.has(e.key)) {
+        return;
+      }
+
+      const active = document.activeElement;
+
+      if (
+        active &&
+        active !== document.body &&
+        active !== document.documentElement
+      ) {
+        return;
+      }
+
+      tableRef.current?.focus({ preventScroll: true });
+      handleKeyDown(e);
+    };
+
+    document.addEventListener('keydown', handleOrphanedKey);
+
+    return () => {
+      document.removeEventListener('keydown', handleOrphanedKey);
+    };
+  }, [cursorMode, selectedRow, selectedColumn, tableRef, handleKeyDown]);
 
   useClearCommands(columns, onClearRow, onClearCells);
 

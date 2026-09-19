@@ -479,6 +479,8 @@ Two things worth knowing about the runners:
 | Rejected `SYNC_PUSH` answers `ERROR SYNC_REJECTED`, never `SYNC_OK` | `peer.rs` (`accept_gate_tests`), `server/tests/it/ws_auth_gate.rs` |
 | WS: writes and identity-bearing subscriptions need `AUTH`; anonymous `SUB` on a public drive still works; unreadable subscriptions answer `ERROR UNAUTHORIZED_READ` | `server/tests/it/ws_auth_gate.rs` |
 | Rejected cross-drive sync entry leaves no snapshot; later valid import cannot inherit rejected properties | `engine.rs` (`rejected_sync_entry_does_not_persist_snapshot`) |
+| Legacy `set`/`push`/`remove` commit rejection is on the parsed commit's properties: a signed commit carrying `set` is refused under hub and peer policy, a value quoting the deprecated URLs applies, a commit *on* the `set` Property reaches the ownership gate | `lib/src/sync/tests.rs` (`ingest_commit_rejects_legacy_field_commits`, `ingest_commit_accepts_values_that_mention_legacy_fields`) |
+| A fresh server store gets the core models without `--initialize` (`Db` open seeds them) | `server/src/tests.rs` (`fresh_store_gets_core_models_without_initialize`) |
 | Missing-drive bootstrap (OQ5): `Public` never creates a drive, Owner mode enrolls only the owner, open node admits an authenticated first-sync | `lib/src/sync/engine.rs` (`bootstrap_and_sub_tests`), `peer.rs` (`live_write_admission_tests`) |
 | Engine-owned `SUB`/`UNSUB`: granted `SUB` is a session command, unreadable `SUB` answers `ERROR UNAUTHORIZED_READ` | `lib/src/sync/engine.rs` (`bootstrap_and_sub_tests`) |
 | Signed `SYNC_DIFF.removeCommits`: envelope applies regardless of connection agent, tampered envelope does not delete, envelope only handed to drive readers, replay after re-creation refused | `lib/src/sync/peer.rs` (`initiator_trust_tests`), `engine.rs` (`bootstrap_and_sub_tests`), `tombstones.rs`, `protocol.rs` |
@@ -2150,3 +2152,12 @@ and upload hook, then delivers multiple files through the drop callback. It
 verifies the upload targets the displayed drive even when the current drive
 setting differs. Native drag events, overlay geometry and the refreshed child
 list are not covered by this component test.
+
+## Rust build alignment
+
+`scripts/test_rust_alignment.py` tests matching pairs, compiler/workflow pin drift,
+development profile drift, transitive Loro versions, missing shared crates, extra
+cryptography prereleases, and allowed unrelated dependency differences. Run
+`python3 -m unittest discover -s scripts -p test_rust_alignment.py -v`.
+The Rust build policy workflow runs these checks; downstream CI checks both
+repositories and rejects dependency lockfile drift before builds.
