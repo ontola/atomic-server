@@ -1,12 +1,9 @@
 import { useState, type JSX } from 'react';
-import { useString, validateDatatype } from '@tomic/react';
+import { useString } from '@tomic/react';
 import { InputProps } from './ResourceField';
 import { InputStyled, InputWrapper } from './InputStyles';
 import { stringToSlug } from '../../helpers/stringToSlug';
-import {
-  checkForInitialRequiredValue,
-  useValidation,
-} from './formValidation/useValidation';
+import { useValidatedInput } from './formValidation/useValidatedInput';
 import { styled } from 'styled-components';
 import { ErrorChipInput } from './ErrorChip';
 
@@ -15,6 +12,7 @@ export default function InputSlug({
   property,
   commit,
   commitDebounceInterval,
+  required,
   ...props
 }: InputProps): JSX.Element {
   const [value, setValue] = useString(resource, property.subject, {
@@ -23,9 +21,10 @@ export default function InputSlug({
     commitDebounce: commitDebounceInterval,
   });
 
-  const { error, setError, setTouched } = useValidation(
-    checkForInitialRequiredValue(value, props.required),
-  );
+  const { error, setTouched, update } = useValidatedInput(value, setValue, {
+    datatype: property.datatype,
+    required,
+  });
 
   const [inputValue, setInputValue] = useState(value);
 
@@ -52,37 +51,20 @@ export default function InputSlug({
 
     if (settled !== inputValue) {
       setInputValue(settled);
-      setValue(settled === '' ? undefined : settled);
+      update(settled === '' ? undefined : settled);
     }
 
     setTouched();
   }
 
   function handleUpdate(event: React.ChangeEvent<HTMLInputElement>): void {
-    const newValue = slugWhileTyping(event.target.value);
-    setInputValue(newValue);
+    setInputValue(slugWhileTyping(event.target.value));
 
     // Validate and store the settled form, not the one on screen: a value
     // ending in the dash you are still typing is not a valid slug, and
-    // validating it would flash "Invalid Slug" between every hyphenated word.
+    // validating it would flash an error between every hyphenated word.
     const settled = stringToSlug(event.target.value);
-
-    setError(undefined);
-
-    try {
-      if (settled === '') {
-        setValue(undefined);
-      } else {
-        validateDatatype(settled, property.datatype);
-        setValue(settled);
-      }
-    } catch (e) {
-      setError('Invalid Slug');
-    }
-
-    if (props.required && settled === '') {
-      setError('Required');
-    }
+    update(settled === '' ? undefined : settled);
   }
 
   return (
@@ -94,6 +76,7 @@ export default function InputSlug({
           onChange={handleUpdate}
           onBlur={handleBlur}
           autoComplete='none'
+          required={required}
           {...props}
         />
       </InputWrapper>

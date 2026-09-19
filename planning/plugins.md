@@ -5,7 +5,7 @@ defines the target boundaries and phased retirement of overlapping models. This
 document retains earlier design and implementation history; its “one model” title
 does not mean the existing UI bridges and lifecycles have already converged.
 
-> **Status:** Partial, off `develop`. Track A built 2026-08-21 (`run` end to end: sandbox, planner, applier, secrets, server placement, scheduled and query-triggered runs, auto-apply); Track B revised 2026-08-22 onto that substrate. The code lives on `feat/plugin-model` (PR #1307). Absorbed `llm-wasm-gui-plugins.md`, `importers.md` and `habits-app.md` on 2026-09-01.
+> **Status:** Partial, on `develop` since #1500 (2026-09-17), which was stacked on `feat/plugin-model` and carried it in; PR #1307 is still open but now behind `develop`. Track A built 2026-08-21 (`run` end to end: sandbox, planner, applier, secrets, server placement, scheduled and query-triggered runs, auto-apply); Track B revised 2026-08-22 onto that substrate. Absorbed `llm-wasm-gui-plugins.md`, `importers.md` and `habits-app.md` on 2026-09-01.
 
 ## Status
 

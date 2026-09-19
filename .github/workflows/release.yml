@@ -33,11 +33,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref }}
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@1.98.1
         with:
-          toolchain: stable
-          override: true
-          target: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown
 
       # `version: 8` used to be pinned here while browser/package.json declares
       # `packageManager: pnpm@10.15.1`, and there was no Node at all — so this
@@ -252,14 +250,20 @@ jobs:
           cd browser
           # `--no-git-checks`: a detached tag HEAD is not a publish branch.
           # `--access public`: scoped packages default to restricted, and
-          # `@tomic/plugin` / `@tomic/edit-mode` have never been published.
-          # `--ignore-scripts`: the packages were built above; `@tomic/lib`'s
-          # prepublishOnly runs `attw`, which has failed in CI before, and
-          # lint belongs in the main pipeline. The `workspace:*` rewrite is
-          # done by `pnpm publish` itself, not by those scripts. Recursive
-          # publish skips `private: true` packages and any version already
-          # on the registry. Never `pnpm npm publish`: that skips the
-          # `workspace:*` rewrite (browser/CONTRIBUTING.md).
+          # `@tomic/plugin` / `@tomic/edit-mode` have never been published
+          # so they have no registry-side access flag yet.
+          # `--ignore-scripts`: skip prepublishOnly. We already built
+          # above, and `@tomic/lib`'s `lint-package` → `attw` currently
+          # crashes (`Cannot read properties of undefined (reading
+          # 'filename')`), which would fail every release. Lint and
+          # packaging checks belong in the main pipeline. The
+          # `workspace:*` rewrite is done by `pnpm publish` itself, not
+          # by those scripts.
+          # Recursive publish skips `private: true` (@tomic/root,
+          # data-browser, e2e) and any version already on the registry.
+          # DONT use `pnpm npm publish` — that skips the workspace:*
+          # rewrite and would publish a package that cannot resolve
+          # `@tomic/lib` (browser/CONTRIBUTING.md).
           pnpm publish -r --no-git-checks --ignore-scripts --access public --tag "$dist_tag" --report-summary
 
           if [ -f pnpm-publish-summary.json ]; then
@@ -275,7 +279,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v2.0.1
         name: Install pnpm
         id: pnpm-install
@@ -386,12 +390,9 @@ jobs:
           version: 10
           run_install: false
 
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@1.98.1
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          target: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
           # (required)
