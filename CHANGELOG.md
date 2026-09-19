@@ -7,6 +7,21 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Fix: a stale authentication proof no longer fails a request that needed no
+  authentication. A browser keeps its proof in the `atomic_session` cookie, and
+  until `AUTH_MAX_AGE_MS` arrived in 0.41 a proof never expired, so a stale one
+  is the ordinary state of any tab left open. Every request such a tab made was
+  answered 401, public ones included: on staging one tab polling the public
+  `GET /server` endpoint produced 4,215 rejections, all carrying the same
+  `signed at` timestamp. An HTTP request, and the headers a socket is opened
+  with, now treat a proof that has aged out as no proof at all and continue as
+  the public agent, leaving the rights check to decide whether that matters for
+  what was asked. A signature that does not verify is still refused outright,
+  and so is a stale proof in an `AUTH` frame or a peer handshake, where the
+  caller asked to be authenticated and is owed the answer
+  (`get_agent_from_auth_values_or_public` beside the existing
+  `get_agent_from_auth_values_and_check`).
+
 - Sentry no longer records every server error twice. `sentry_actix` captures a
   handler's 5xx with the request attached, and `tracing_actix_web` separately
   logs "Error encountered while processing the incoming HTTP request" at
