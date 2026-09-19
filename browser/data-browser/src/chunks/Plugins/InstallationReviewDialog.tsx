@@ -1,20 +1,20 @@
-import { Button } from "@components/Button";
-import { Dialog, useDialog } from "@components/Dialog";
-import { JSONEditor } from "@components/JSONEditor";
-import Markdown from "@components/datatypes/Markdown";
-import { Column, Row } from "@components/Row";
-import { ConfigReference } from "@views/Installation/ConfigReference";
-import { CapabilityList } from "./CapabilityList";
+import { Button } from '@components/Button';
+import { Dialog, useDialog } from '@components/Dialog';
+import { JSONEditor } from '@components/JSONEditor';
+import Markdown from '@components/datatypes/Markdown';
+import { Column, Row } from '@components/Row';
+import { ConfigReference } from '@views/Installation/ConfigReference';
+import { CapabilityList } from './CapabilityList';
 import {
   grantsFor,
   type InstallationReview,
   type JSONValue,
   type ReleaseReference,
-} from "@tomic/react";
-import type { JSONSchema7 } from "ai";
-import { useEffect, useId, useState } from "react";
-import toast from "react-hot-toast";
-import { styled } from "styled-components";
+} from '@tomic/react';
+import type { JSONSchema7 } from 'ai';
+import { useEffect, useId, useState } from 'react';
+import toast from 'react-hot-toast';
+import { styled } from 'styled-components';
 
 /** What the review screen needs, whichever path produced the release. */
 export interface PendingInstallation {
@@ -54,9 +54,9 @@ interface InstallationReviewDialogProps {
 }
 
 const INSTALL_VERB = {
-  title: "Install plugin",
-  confirm: "Install",
-  busy: "Installing…",
+  title: 'Install plugin',
+  confirm: 'Install',
+  busy: 'Installing…',
 };
 
 /**
@@ -91,7 +91,7 @@ export const InstallationReviewDialog: React.FC<
   const title =
     review.name && review.namespace
       ? `${review.namespace}/${review.name}`
-      : (review.name ?? pending.title ?? "plugin");
+      : (review.name ?? pending.title ?? 'plugin');
   const description = review.description ?? pending.description;
   const hasConfig =
     review.configSchema !== undefined ||
@@ -112,15 +112,15 @@ export const InstallationReviewDialog: React.FC<
   };
 
   return (
-    <Dialog {...dialogProps} width="800px">
+    <Dialog {...dialogProps} width='800px'>
       <Dialog.Title>
         <h1>{verb.title}</h1>
       </Dialog.Title>
       <Dialog.Content>
         <Column>
           <div>
-            <Row justify="space-between" center>
-              <Row center gap="0.5ch">
+            <Row justify='space-between' center>
+              <Row center gap='0.5ch'>
                 {pending.emoji && <span aria-hidden>{pending.emoji}</span>}
                 <PluginName>{title}</PluginName>
               </Row>
@@ -129,7 +129,7 @@ export const InstallationReviewDialog: React.FC<
             <Meta>
               {review.author && <span>by {review.author} · </span>}
               <span>{review.runtime}</span>
-              {review.world !== "extension" && <span> · {review.world}</span>}
+              {review.world !== 'extension' && <span> · {review.world}</span>}
             </Meta>
           </div>
           {description && (
@@ -148,7 +148,7 @@ export const InstallationReviewDialog: React.FC<
                   null,
                   2,
                 )}
-                onChange={(value) => {
+                onChange={value => {
                   try {
                     setConfig(JSON.parse(value));
                     setConfigSyntaxValid(true);
@@ -210,14 +210,14 @@ const PluginName = styled.span`
 `;
 
 const Meta = styled.p`
-  color: ${(p) => p.theme.colors.textLight};
+  color: ${p => p.theme.colors.textLight};
   margin: 0;
 `;
 
 const DescriptionWrapper = styled.div`
-  background-color: ${(p) => p.theme.colors.bg1};
-  padding: ${(p) => p.theme.size()};
-  border-radius: ${(p) => p.theme.radius};
+  background-color: ${p => p.theme.colors.bg1};
+  padding: ${p => p.theme.size()};
+  border-radius: ${p => p.theme.radius};
 `;
 
 const Label = styled.label`
@@ -227,5 +227,5 @@ const Label = styled.label`
 const Identity = styled.p`
   overflow-wrap: anywhere;
   font-size: 0.8rem;
-  color: ${(p) => p.theme.colors.textLight};
+  color: ${p => p.theme.colors.textLight};
 `;
