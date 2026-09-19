@@ -148,6 +148,16 @@
     "https://atomicdata.dev/properties/shortname": "is-genesis"
   },
   {
+    "@id": "https://atomicdata.dev/properties/sessionCert",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A base64url `SessionCert`: a root Agent's signed statement that the key which signed this Commit may act for it until `notAfter`. Optional. Carried inside the signed JSON-AD, so it is bound to this mutation and cannot be stripped without breaking the signature. When present, every rights check is answered for the root, while `signer` still records which device signed.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
+    "https://atomicdata.dev/properties/shortname": "session-cert"
+  },
+  {
     "@id": "https://atomicdata.dev/properties/atom/property",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
     "https://atomicdata.dev/properties/description": "The property of an Atom is the relationship between the resource (subject) and the value. For example, in the sentence `john is born in 1991`, the property is `is born in`.",
@@ -239,6 +249,16 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev",
     "https://atomicdata.dev/properties/shortname": "signature"
+  },
+  {
+    "@id": "https://atomicdata.dev/properties/auth/sessionCert",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "A base64url `SessionCert`, when the Agent that signed this Authentication is a short-lived session key a root Agent certified. Optional. Rights are then answered for that root.",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev",
+    "https://atomicdata.dev/properties/shortname": "session-cert"
   },
   {
     "@id": "https://atomicdata.dev/properties/drives",
@@ -1046,7 +1066,8 @@
       "https://atomicdata.dev/properties/destroy",
       "https://atomicdata.dev/properties/isGenesis",
       "https://atomicdata.dev/properties/previousCommit",
-      "https://atomicdata.dev/properties/loroUpdate"
+      "https://atomicdata.dev/properties/loroUpdate",
+      "https://atomicdata.dev/properties/sessionCert"
     ],
     "https://atomicdata.dev/properties/requires": [
       "https://atomicdata.dev/properties/createdAt",

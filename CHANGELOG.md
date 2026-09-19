@@ -458,7 +458,10 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   the root; the session DID gets no Agent resource. A path that validates
   timestamps also requires the window to still be open in wall-clock time.
   Absent a certificate every path is byte-identical to before, and OIDC login
-  itself is not implemented: no relying party, no browser flow. See
+  itself is not implemented: no relying party, no browser flow. `sessionCert`
+  and `auth/sessionCert` are declared Properties in the default store, so a
+  commit carrying one does not send the node fetching its definition from
+  atomicdata.dev. See
   [`planning/oidc-oauth.md`](planning/oidc-oauth.md) and
   [#277](https://github.com/ontola/atomic-server/issues/277).
 

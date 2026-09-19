@@ -1349,3 +1349,243 @@ async fn version_endpoints() {
         "reading a version must not move the live resource: {body}"
     );
 }
+
+// --- Session certificates over real HTTP ------------------------------------
+//
+// `atomic_lib` covers the verifier by calling `apply_commit` and
+// `get_agent_from_auth_values_and_check` directly. Neither exercises the wire:
+// a posted commit is parsed back by `Commit::from_resource`, which has to read
+// the `sessionCert` propval, and a request carries the certificate in a header
+// that `get_auth_headers` has to pick up. Those two parses are what these tests
+// pin. See `lib/src/session_cert.rs` and `planning/oidc-oauth.md`.
+
+/// A fresh session Agent plus a base64 certificate from `root` over its key.
+fn session_certified_by(
+    root: &atomic_lib::agents::Agent,
+    not_before: i64,
+    not_after: i64,
+) -> (atomic_lib::agents::Agent, String) {
+    fn raw_pubkey(agent: &atomic_lib::agents::Agent) -> [u8; 32] {
+        atomic_lib::agents::decode_base64(&agent.public_key)
+            .unwrap()
+            .try_into()
+            .unwrap()
+    }
+
+    let session = atomic_lib::agents::Agent::new(None).unwrap();
+    let cert = atomic_lib::session_cert::SessionCertClaims {
+        session_pubkey: raw_pubkey(&session),
+        not_before,
+        not_after,
+        root_pubkey: raw_pubkey(root),
+    }
+    .sign(&root.private_key.clone().unwrap())
+    .unwrap();
+
+    (session, cert.encode_b64())
+}
+
+/// A genesis commit for a new `did:ad:` resource, as JSON-AD ready to POST.
+async fn genesis_commit_json(
+    appstate: &AppState,
+    signer: &atomic_lib::agents::Agent,
+    session_cert: Option<String>,
+) -> (atomic_lib::Subject, String) {
+    let mut builder = atomic_lib::commit::CommitBuilder::new("placeholder".into());
+    builder.set(
+        urls::NAME.into(),
+        atomic_lib::Value::String("session cert over http".into()),
+    );
+    builder.set_session_cert(session_cert);
+
+    let commit = atomic_lib::commit::Commit::create_did(builder, signer, &appstate.store)
+        .await
+        .unwrap();
+    let subject = commit.subject.clone();
+    let json = commit
+        .into_resource(&appstate.store)
+        .await
+        .unwrap()
+        .to_json_ad(Some(&appstate.config.get_origin()))
+        .unwrap();
+
+    (subject, json)
+}
+
+/// `POST /commit` carrying a certificate: the body must survive the JSON-AD
+/// round trip (`Commit::from_resource` reading the new propval), and the
+/// resource it creates must name the ROOT in `write`. A session DID left in an
+/// ACL would outlive its certificate.
+#[actix_rt::test]
+async fn a_session_signed_commit_posted_over_http_is_authored_by_the_root() {
+    let appstate = init_test_appstate(&[]).await;
+    atomic_lib::test_utils::setup_test_env(&appstate.store)
+        .await
+        .unwrap();
+    let app = test::init_service(
+        App::new()
+            .app_data(Data::new(appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    let post_commit = |body: String| {
+        TestRequest::post()
+            .uri("/commit")
+            .insert_header(("Content-Type", "application/ad+json"))
+            .set_payload(body)
+            .to_request()
+    };
+
+    let root = atomic_lib::agents::Agent::new(None).unwrap();
+    let now = atomic_lib::utils::now();
+    let (session, cert) = session_certified_by(&root, now - 1000, now + 86_400_000);
+
+    let (subject, json) = genesis_commit_json(&appstate, &session, Some(cert.clone())).await;
+    // The certificate really is on the wire, not implied.
+    assert!(
+        json.contains(urls::SESSION_CERT) && json.contains(&cert),
+        "the posted body must carry the certificate: {json}"
+    );
+
+    let resp = test::call_service(&app, post_commit(json)).await;
+    assert_eq!(
+        resp.status(),
+        actix_web::http::StatusCode::OK,
+        "{}",
+        get_body(resp)
+    );
+
+    let stored = appstate.store.get_resource(&subject).await.unwrap();
+    let writers: Vec<String> = stored.get(urls::WRITE).unwrap().to_subjects(None).unwrap();
+    assert!(
+        writers.contains(&root.subject.to_string()),
+        "the person owns what their browser created: {writers:?}"
+    );
+    assert!(
+        !writers.contains(&session.subject.to_string()),
+        "a session DID in an ACL outlives its certificate: {writers:?}"
+    );
+}
+
+/// The same post with an expired certificate is refused at the door. Proves
+/// the live-ingest bound is reached through the real handler, not only from a
+/// direct `apply_commit` call.
+#[actix_rt::test]
+async fn a_posted_commit_with_an_expired_certificate_is_refused() {
+    let appstate = init_test_appstate(&[]).await;
+    atomic_lib::test_utils::setup_test_env(&appstate.store)
+        .await
+        .unwrap();
+    let app = test::init_service(
+        App::new()
+            .app_data(Data::new(appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    let root = atomic_lib::agents::Agent::new(None).unwrap();
+    let now = atomic_lib::utils::now();
+    // Closed an hour ago. `created_at` is stamped now, so this is refused on
+    // the window itself rather than on the wall-clock bound.
+    let (session, cert) = session_certified_by(&root, now - 86_400_000, now - 3_600_000);
+
+    let (_subject, json) = genesis_commit_json(&appstate, &session, Some(cert)).await;
+    let resp = test::call_service(
+        &app,
+        TestRequest::post()
+            .uri("/commit")
+            .insert_header(("Content-Type", "application/ad+json"))
+            .set_payload(json)
+            .to_request(),
+    )
+    .await;
+    assert_eq!(
+        resp.status(),
+        actix_web::http::StatusCode::UNAUTHORIZED,
+        "an expired certificate is an authentication failure"
+    );
+}
+
+/// `x-atomic-session-cert` on a real read: the header has to be picked up by
+/// `get_auth_headers` and remapped, so a session key sees what the root may
+/// see. Without it the same key is a stranger.
+#[actix_rt::test]
+async fn the_session_cert_header_is_read_and_remapped_to_the_root() {
+    let appstate = init_test_appstate(&[]).await;
+    atomic_lib::test_utils::setup_test_env(&appstate.store)
+        .await
+        .unwrap();
+    let app = test::init_service(
+        App::new()
+            .app_data(Data::new(appstate.clone()))
+            .configure(crate::routes::config_routes),
+    )
+    .await;
+
+    // A resource the ROOT created, so only the root may read it.
+    let root = atomic_lib::agents::Agent::new(None).unwrap();
+    let (subject, json) = genesis_commit_json(&appstate, &root, None).await;
+    let resp = test::call_service(
+        &app,
+        TestRequest::post()
+            .uri("/commit")
+            .insert_header(("Content-Type", "application/ad+json"))
+            .set_payload(json)
+            .to_request(),
+    )
+    .await;
+    assert_eq!(
+        resp.status(),
+        actix_web::http::StatusCode::OK,
+        "{}",
+        get_body(resp)
+    );
+
+    let now = atomic_lib::utils::now();
+    let (session, cert) = session_certified_by(&root, now - 1000, now + 86_400_000);
+
+    let path = format!("/did?subject={}", urlencoding::encode(subject.as_str()));
+    let origin = appstate.config.get_origin();
+    let url = format!("{origin}{path}");
+
+    let signed_by_session = || {
+        let mut req = TestRequest::get().uri(&path);
+        for (k, v) in atomic_lib::client::get_authentication_headers(&url, &session).unwrap() {
+            req = req.insert_header((k, v));
+        }
+        if let Ok(u) = url::Url::parse(&origin) {
+            if let Some(host) = u.host_str() {
+                let authority = match u.port() {
+                    Some(port) => format!("{host}:{port}"),
+                    None => host.to_string(),
+                };
+                req = req.insert_header(("Host", authority));
+            }
+        }
+        req.insert_header(("Accept", "application/ad+json"))
+    };
+
+    // Without the certificate the session key is nobody here.
+    let resp = test::call_service(&app, signed_by_session().to_request()).await;
+    assert_ne!(
+        resp.status(),
+        actix_web::http::StatusCode::OK,
+        "an uncertified session key must not read the root's resource"
+    );
+
+    // With it, the read is the root's read.
+    let resp = test::call_service(
+        &app,
+        signed_by_session()
+            .insert_header(("x-atomic-session-cert", cert))
+            .to_request(),
+    )
+    .await;
+    assert_eq!(
+        resp.status(),
+        actix_web::http::StatusCode::OK,
+        "{}",
+        get_body(resp)
+    );
+}
