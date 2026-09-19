@@ -239,6 +239,48 @@ pub struct ReplicationTarget {
     pub authorized_by: String,
 }
 
+/// What [`Db::sync_drive_mappings`] changed in the host → Drive mapping table.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct DriveMappingSync {
+    /// Hosts that had no mapping before.
+    pub added: Vec<String>,
+    /// Hosts that pointed at a different Drive before.
+    pub updated: Vec<String>,
+    /// Hosts an earlier reconcile installed and that the desired set no longer
+    /// names.
+    pub removed: Vec<String>,
+}
+
+impl DriveMappingSync {
+    /// Whether anything actually changed, so a caller polling on a timer can
+    /// log real edits instead of one line per poll.
+    pub fn is_empty(&self) -> bool {
+        self.added.is_empty() && self.updated.is_empty() && self.removed.is_empty()
+    }
+}
+
+/// `Tree::PluginMeta` key holding the hosts whose Drive mapping was installed
+/// by [`Db::sync_drive_mappings`].
+///
+/// Removal is scoped to this set rather than to everything in
+/// `Tree::DriveMapping`, because that table also holds bindings made by hand
+/// through `/bind-drive` plus the `localhost` / `127.0.0.1` entries every store
+/// gets at setup. A reconcile that treated its input as authoritative for the
+/// whole table would delete those the first time it ran.
+const MANAGED_ALIAS_HOSTS_KEY: &[u8] = b"managed_drive_alias_hosts";
+
+/// Normalizes a host into a `Tree::DriveMapping` key.
+///
+/// Hostnames are case-insensitive (RFC 4343), but the `Host` header comes back
+/// in whatever case the client sent, and `/bind-drive` derives its key from a
+/// parsed URL (which the `url` crate has already lowercased). Storing and
+/// looking up lowercased is what makes `ACME.example.com` resolve the Drive
+/// that `acme.example.com` was bound to, instead of silently missing the
+/// mapping and falling through to the store root.
+fn drive_mapping_key(host: &str) -> String {
+    host.trim().trim_end_matches('.').to_ascii_lowercase()
+}
+
 const REPLICATION_PREFIX: &str = "replication:";
 
 /// `Tree::PluginMeta` key holding the fingerprint of the built-in defaults
@@ -1603,8 +1645,16 @@ impl Db {
             return Ok(subject.clone());
         };
 
+        // A host bound to a Drive serves that Drive or nothing. Falling through
+        // to the store root here is what let a vanity host whose Drive has not
+        // synced yet — or was migrated to another node — quietly serve the
+        // node's *own* root Drive under a customer's hostname. On a
+        // multi-tenant node that is one tenant's domain answering with another
+        // namespace's content, so it is a 404 instead.
         if self.get_resource(&drive_did).await.is_err() {
-            return Ok(subject.clone());
+            return Err(AtomicError::not_found(format!(
+                "Host '{host}' is bound to drive {drive_did}, which this server does not have."
+            )));
         }
 
         if subject_string == "/" {
@@ -1773,17 +1823,129 @@ impl Db {
             _ => drive_did.to_string(),
         };
 
+        let key = drive_mapping_key(host);
         self.kv
-            .insert(Tree::DriveMapping, host.as_bytes(), did_str.as_bytes())?;
-        tracing::info!("Added drive mapping: {} -> {}", host, did_str);
+            .insert(Tree::DriveMapping, key.as_bytes(), did_str.as_bytes())?;
+        tracing::info!("Added drive mapping: {} -> {}", key, did_str);
         Ok(())
     }
 
     /// Removes the drive mapping for a given host.
     pub fn remove_drive_mapping(&self, host: &str) -> AtomicResult<()> {
-        self.kv.remove(Tree::DriveMapping, host.as_bytes())?;
-        tracing::info!("Removed drive mapping for host: {}", host);
+        let key = drive_mapping_key(host);
+        self.kv.remove(Tree::DriveMapping, key.as_bytes())?;
+        tracing::info!("Removed drive mapping for host: {}", key);
         Ok(())
+    }
+
+    /// Every host → Drive mapping in this store, sorted by host.
+    pub fn list_drive_mappings(&self) -> AtomicResult<Vec<(String, String)>> {
+        let mut out = Vec::new();
+
+        for (key, value) in self.kv.scan_prefix(Tree::DriveMapping, b"").flatten() {
+            let (Ok(host), Ok(did)) = (std::str::from_utf8(&key), std::str::from_utf8(&value))
+            else {
+                continue;
+            };
+            out.push((host.to_string(), did.to_string()));
+        }
+
+        out.sort();
+        Ok(out)
+    }
+
+    /// The hosts [`Self::sync_drive_mappings`] installed on its last run.
+    pub fn managed_alias_hosts(&self) -> AtomicResult<Vec<String>> {
+        let Some(bytes) = self.kv.get(Tree::PluginMeta, MANAGED_ALIAS_HOSTS_KEY)? else {
+            return Ok(Vec::new());
+        };
+
+        serde_json::from_slice(&bytes)
+            .map_err(|e| format!("Corrupt managed alias host list: {e}").into())
+    }
+
+    /// Reconciles the host → Drive mappings this server installs on behalf of a
+    /// control plane against `desired`, reporting what changed.
+    ///
+    /// Idempotent, so a managed node can call it on every policy poll: a host
+    /// already pointing at the right Drive is left untouched. Hosts a previous
+    /// run installed that `desired` no longer names are removed, which is what
+    /// makes a released vanity name stop resolving without anyone touching the
+    /// box. Ownership is tracked in [`MANAGED_ALIAS_HOSTS_KEY`], so a mapping
+    /// made by hand through `/bind-drive` is never removed by a reconcile that
+    /// does not name it.
+    ///
+    /// A host the control plane *does* name is taken over even if something
+    /// else bound it first: the control plane owns the namespace it hands out,
+    /// and a stale local binding shadowing an issued name is the failure this
+    /// is meant to correct.
+    pub fn sync_drive_mappings(
+        &self,
+        desired: &[(String, String)],
+    ) -> AtomicResult<DriveMappingSync> {
+        let mut report = DriveMappingSync::default();
+        let mut managed: Vec<String> = Vec::with_capacity(desired.len());
+
+        for (host, drive_did) in desired {
+            let key = drive_mapping_key(host);
+            // An empty host would claim the zero-length key and match no
+            // request; an empty DID would point a live hostname at nothing.
+            // Either is a bug upstream, and neither is worth writing.
+            if key.is_empty() || drive_did.trim().is_empty() {
+                tracing::warn!("Skipping drive mapping with an empty host or drive: {key:?}");
+                continue;
+            }
+
+            let current = self
+                .kv
+                .get(Tree::DriveMapping, key.as_bytes())?
+                .and_then(|bytes| String::from_utf8(bytes).ok());
+
+            match current {
+                Some(current) if current == *drive_did => {}
+                Some(_) => {
+                    self.kv
+                        .insert(Tree::DriveMapping, key.as_bytes(), drive_did.as_bytes())?;
+                    report.updated.push(key.clone());
+                }
+                None => {
+                    self.kv
+                        .insert(Tree::DriveMapping, key.as_bytes(), drive_did.as_bytes())?;
+                    report.added.push(key.clone());
+                }
+            }
+
+            if !managed.contains(&key) {
+                managed.push(key);
+            }
+        }
+
+        for host in self.managed_alias_hosts()? {
+            if managed.contains(&host) {
+                continue;
+            }
+            if self.kv.get(Tree::DriveMapping, host.as_bytes())?.is_some() {
+                self.kv.remove(Tree::DriveMapping, host.as_bytes())?;
+                report.removed.push(host);
+            }
+        }
+
+        managed.sort();
+        let bytes = serde_json::to_vec(&managed)
+            .map_err(|e| format!("Could not encode managed alias hosts: {e}"))?;
+        self.kv
+            .insert(Tree::PluginMeta, MANAGED_ALIAS_HOSTS_KEY, &bytes)?;
+
+        if !report.is_empty() {
+            tracing::info!(
+                "Drive mappings reconciled: {} added, {} updated, {} removed",
+                report.added.len(),
+                report.updated.len(),
+                report.removed.len()
+            );
+        }
+
+        Ok(report)
     }
 
     /// Where a drive is replicated to, and who authorized it.
@@ -1852,7 +2014,8 @@ impl Db {
 
     /// Returns the full Drive DID for a given host (domain/subdomain).
     pub async fn get_drive_did(&self, host: &str) -> AtomicResult<Option<Subject>> {
-        if let Some(did_bin) = self.kv.get(Tree::DriveMapping, host.as_bytes())? {
+        let key = drive_mapping_key(host);
+        if let Some(did_bin) = self.kv.get(Tree::DriveMapping, key.as_bytes())? {
             let did_str = std::str::from_utf8(&did_bin)
                 .map_err(|e| format!("Failed to parse DID from database: {}", e))?;
             return Ok(Some(Subject::from_raw(did_str, None)));
@@ -3855,8 +4018,8 @@ impl Storelike for Db {
         crate::envelopes::record_ops(store, &commit_response, &mut transaction)?;
 
         // Every subject a destroy removes below (the resource and its
-        // cascade-deleted children), announced once the transaction has
-        // landed; empty for anything but a destroy.
+        // cascade-deleted children). Tombstoned and announced once the
+        // transaction has landed; empty for anything but a destroy.
         let mut removed: Vec<RemovedSubject> = Vec::new();
 
         match (&commit_response.resource_old, &commit_response.resource_new) {
@@ -3864,22 +4027,33 @@ impl Storelike for Db {
                 return Err("Neither an old nor a new resource is returned from the commit - something went wrong.".into());
             }
             (None, None) => {}
-            (Some(_old), None) => {
+            (Some(old), None) => {
                 let normalized_commit_subject =
-                    self.normalize_subject(&commit_response.commit.subject.clone());
-                assert_eq!(
-                    _old.get_subject().to_string(),
-                    normalized_commit_subject.to_string()
-                );
-                assert!(&commit_response
-                    .commit
-                    .destroy
-                    .expect("Resource was removed but `commit.destroy` was not set!"));
+                    self.normalize_subject(&commit_response.commit.subject);
+                if old.get_subject().as_str() != normalized_commit_subject.as_str() {
+                    return Err(format!(
+                        "Commit for {} removed a different resource ({}) - refusing to apply.",
+                        normalized_commit_subject,
+                        old.get_subject()
+                    )
+                    .into());
+                }
+                if !commit_response.commit.destroy.unwrap_or(false) {
+                    return Err(format!(
+                        "Resource {} was removed but `commit.destroy` was not set.",
+                        normalized_commit_subject
+                    )
+                    .into());
+                }
                 let subject: Subject = commit_response.commit.subject.clone();
-                // `remove_applied` records the tombstones; the signed destroy
-                // is the envelope row `record_ops` queued above, which is what
-                // `SYNC_DIFF.removeCommits` carries.
-                removed = self.remove_applied(&subject).await?;
+                // Queue the removal (resource, Loro snapshot, index and search
+                // rows, cascaded children) into the same transaction as the
+                // envelope row `record_ops` queued above, so the signed
+                // destroy — what `SYNC_DIFF.removeCommits` carries — lands
+                // with the deletion it signs, or not at all. Tombstones and
+                // the children's `Destroyed` events follow the apply below.
+                self.recursive_remove(&subject, &mut transaction, &mut removed, None)
+                    .await?;
             }
             _ => {}
         };
@@ -3899,12 +4073,22 @@ impl Storelike for Db {
             }
         }
 
+        // A destroy's `recursive_remove` above already queued the index and
+        // search removals for every stored atom of the subject (and its
+        // children); queuing them again here would only duplicate the same
+        // deletes and re-run the watched-query checks.
+        let removal_queued = !removed.is_empty();
+
         if opts.update_index {
             if let Some(old) = &commit_response.resource_old {
-                for atom in &commit_response.remove_atoms {
-                    store
-                        .remove_atom_from_index(atom, old, &mut transaction)
-                        .map_err(|e| format!("Error removing atom from index: {e}  Atom: {e}"))?
+                if !removal_queued {
+                    for atom in &commit_response.remove_atoms {
+                        store
+                            .remove_atom_from_index(atom, old, &mut transaction)
+                            .map_err(|e| {
+                                format!("Error removing atom from index: {e}  Atom: {e}")
+                            })?
+                    }
                 }
             }
             if let Some(new) = &commit_response.resource_new {
@@ -3921,7 +4105,7 @@ impl Storelike for Db {
                 )?;
                 crate::search::index_resource(store, new, &mut transaction)?;
             }
-            if commit_response.resource_new.is_none() {
+            if commit_response.resource_new.is_none() && !removal_queued {
                 if let Some(old) = &commit_response.resource_old {
                     crate::search::unindex_subject(
                         store,
@@ -3948,6 +4132,14 @@ impl Storelike for Db {
             })
         {
             store.flush()?;
+        }
+
+        // Tombstone every subject the destroy removed, so bulk sync (Iroh /
+        // WS `SYNC`) does not resurrect them from a peer that still holds a
+        // stale copy. Only after the transaction above succeeded: a tombstone
+        // for a resource that is still present would suppress it forever.
+        for r in &removed {
+            crate::sync::tombstones::record_tombstone(store, &r.subject.pure_id());
         }
 
         // Announce the cascade-deleted children now that the removal has
@@ -4609,6 +4801,216 @@ mod resolver_tests {
         assert_eq!(
             resolved.subject.as_str(),
             "did:ad:test-child?drive=".to_string() + drive_did.as_str()
+        );
+    }
+
+    /// The vanity-subdomain hazard: a host is bound to a Drive this node does
+    /// not hold (not synced yet, or migrated away). Serving the store root
+    /// instead would answer a customer's hostname with another namespace's
+    /// content, so the request must fail.
+    #[tokio::test]
+    async fn a_bound_host_whose_drive_is_missing_does_not_serve_the_store_root() {
+        let store = Db::init_temp("resolver_missing_drive").await.unwrap();
+        setup_test_env(&store).await.unwrap();
+        let root_drive = store.get_drive_did("localhost").await.unwrap().unwrap();
+
+        store
+            .add_drive_mapping(
+                "acme.example.com",
+                &Value::AtomicUrl("did:ad:not-on-this-node".into()),
+            )
+            .unwrap();
+
+        for path in ["/", "/about"] {
+            let resolved = store
+                .resolve_request_target(
+                    &Subject::from_raw(path, None),
+                    "acme.example.com",
+                    path,
+                    "https://acme.example.com",
+                )
+                .await;
+
+            let Err(err) = resolved else {
+                panic!("{path} on a bound host with a missing drive must not resolve");
+            };
+            assert!(
+                !format!("{err}").contains(root_drive.as_str()),
+                "must not leak the root drive: {err}"
+            );
+        }
+
+        // The node's own hostname is unaffected: it has no mapping, so it
+        // keeps serving its root as before.
+        assert!(store
+            .resolve_request_target(
+                &Subject::from_raw("/", None),
+                "node1.example.com",
+                "/",
+                "https://node1.example.com",
+            )
+            .await
+            .is_ok());
+    }
+}
+
+#[cfg(test)]
+mod drive_mapping_tests {
+    use super::*;
+    use crate::{test_utils::setup_test_env, Value};
+
+    fn desired(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs
+            .iter()
+            .map(|(h, d)| (h.to_string(), d.to_string()))
+            .collect()
+    }
+
+    /// The reconcile a managed node runs on every policy poll: new names are
+    /// installed, a repointed name follows its Drive, and a released name
+    /// stops resolving. All three without an operator touching the box.
+    #[tokio::test]
+    async fn reconcile_adds_updates_and_removes() {
+        let store = Db::init_temp("drive_mapping_reconcile").await.unwrap();
+
+        let report = store
+            .sync_drive_mappings(&desired(&[
+                ("acme.example.com", "did:ad:acme"),
+                ("blog.example.com", "did:ad:blog"),
+            ]))
+            .unwrap();
+        assert_eq!(report.added, vec!["acme.example.com", "blog.example.com"]);
+        assert!(report.updated.is_empty());
+        assert!(report.removed.is_empty());
+
+        // `acme` is repointed at another Drive (a migration), `blog` is
+        // released, and `docs` is new.
+        let report = store
+            .sync_drive_mappings(&desired(&[
+                ("acme.example.com", "did:ad:acme-moved"),
+                ("docs.example.com", "did:ad:docs"),
+            ]))
+            .unwrap();
+        assert_eq!(report.added, vec!["docs.example.com"]);
+        assert_eq!(report.updated, vec!["acme.example.com"]);
+        assert_eq!(report.removed, vec!["blog.example.com"]);
+
+        assert_eq!(
+            store
+                .get_drive_did("acme.example.com")
+                .await
+                .unwrap()
+                .unwrap()
+                .as_str(),
+            "did:ad:acme-moved"
+        );
+        assert!(store
+            .get_drive_did("blog.example.com")
+            .await
+            .unwrap()
+            .is_none());
+    }
+
+    /// Polled on a timer, so an unchanged policy must be a no-op rather than a
+    /// write per tick.
+    #[tokio::test]
+    async fn reconcile_is_idempotent() {
+        let store = Db::init_temp("drive_mapping_idempotent").await.unwrap();
+        let want = desired(&[("acme.example.com", "did:ad:acme")]);
+
+        assert_eq!(
+            store.sync_drive_mappings(&want).unwrap().added,
+            vec!["acme.example.com"]
+        );
+        for _ in 0..3 {
+            assert!(store.sync_drive_mappings(&want).unwrap().is_empty());
+        }
+    }
+
+    /// The reconcile owns only what it installed. `setup_test_env` binds
+    /// `localhost` and `127.0.0.1`, and an operator may have bound a host by
+    /// hand through `/bind-drive`; treating the control plane's list as
+    /// authoritative for the whole table would delete all of those on the
+    /// first poll.
+    #[tokio::test]
+    async fn reconcile_leaves_bindings_it_did_not_install_alone() {
+        let store = Db::init_temp("drive_mapping_scope").await.unwrap();
+        setup_test_env(&store).await.unwrap();
+        let local_drive = store.get_drive_did("localhost").await.unwrap().unwrap();
+
+        store
+            .add_drive_mapping(
+                "hand-bound.example.com",
+                &Value::AtomicUrl("did:ad:hand-bound".into()),
+            )
+            .unwrap();
+
+        let report = store
+            .sync_drive_mappings(&desired(&[("acme.example.com", "did:ad:acme")]))
+            .unwrap();
+        assert!(report.removed.is_empty());
+
+        // Both survive a reconcile that names neither.
+        assert_eq!(
+            store.get_drive_did("localhost").await.unwrap().unwrap(),
+            local_drive
+        );
+        assert!(store
+            .get_drive_did("hand-bound.example.com")
+            .await
+            .unwrap()
+            .is_some());
+    }
+
+    /// Hostnames are case-insensitive, but the `Host` header is echoed in
+    /// whatever case the client sent. Without normalization a request for
+    /// `ACME.example.com` misses the mapping and falls through to the store
+    /// root.
+    #[tokio::test]
+    async fn mapping_keys_are_case_insensitive() {
+        let store = Db::init_temp("drive_mapping_case").await.unwrap();
+
+        store
+            .sync_drive_mappings(&desired(&[("ACME.Example.COM", "did:ad:acme")]))
+            .unwrap();
+
+        for spelling in ["acme.example.com", "ACME.EXAMPLE.COM", "Acme.Example.Com"] {
+            assert_eq!(
+                store
+                    .get_drive_did(spelling)
+                    .await
+                    .unwrap()
+                    .unwrap_or_else(|| panic!("{spelling} should resolve"))
+                    .as_str(),
+                "did:ad:acme",
+            );
+        }
+
+        assert_eq!(
+            store.list_drive_mappings().unwrap(),
+            vec![("acme.example.com".to_string(), "did:ad:acme".to_string())]
+        );
+    }
+
+    /// A host with no Drive, or a Drive with no host, is a bug upstream. Both
+    /// are skipped rather than written: the empty key would match no request,
+    /// and an empty Drive would point a live hostname at nothing.
+    #[tokio::test]
+    async fn reconcile_skips_empty_hosts_and_drives() {
+        let store = Db::init_temp("drive_mapping_empty").await.unwrap();
+
+        let report = store
+            .sync_drive_mappings(&desired(&[
+                ("", "did:ad:nohost"),
+                ("nodrive.example.com", "   "),
+                ("good.example.com", "did:ad:good"),
+            ]))
+            .unwrap();
+
+        assert_eq!(report.added, vec!["good.example.com"]);
+        assert_eq!(
+            store.list_drive_mappings().unwrap(),
+            vec![("good.example.com".to_string(), "did:ad:good".to_string())]
         );
     }
 }

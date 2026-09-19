@@ -62,6 +62,7 @@ import { bytesToHex, hexToBytes, type JSONValue } from './value.js';
 import { WSClient } from './websockets.js';
 import { withDeadline } from './withDeadline.js';
 import { BLOB, endpoints, INTERNAL_ID } from './urls.js';
+import { SERVER_MANAGED_PROPS } from './server-managed-props.js';
 import { initOntologies } from './ontologies/index.js';
 import { decodeB64, encodeB64Url } from './base64.js';
 import {
@@ -79,6 +80,7 @@ import { DrivePresenceManager } from './presence.js';
 import { perfMark, perfSpan } from './perf-trace.js';
 import {
   LocalOutbox,
+  isSettledDestroyErrorMessage,
   isTerminalCommitError,
   isUnrecoverableCommitError,
   type OutboxEntry,
@@ -394,6 +396,17 @@ export interface IncomingChange {
 const supportsWebSockets = () => typeof WebSocket !== 'undefined';
 /** Subjects per GET_MANY frame; keeps one answer well under a single large frame. */
 const GET_MANY_CHUNK = 200;
+/** Subjects per local-database read. The worker walks the list serially and a
+ *  follower tab's read also crosses a BroadcastChannel hop with a fixed
+ *  timeout, so one very large batch is split instead of sent whole. */
+const LOCAL_HYDRATION_CHUNK = GET_MANY_CHUNK;
+
+/** One caller's pending local-database read; see `Store.hydrateFromLocalDb`. */
+interface LocalHydrationRequest {
+  promise: Promise<boolean | undefined>;
+  resolve: (hydrated: boolean | undefined) => void;
+  reject: (error: unknown) => void;
+}
 
 /**
  * How long resource fallback and collection reads wait for the app's
@@ -404,22 +417,6 @@ const GET_MANY_CHUNK = 200;
  * was actually announced (see `Store.expectClientDb`).
  */
 const CLIENT_DB_ATTACH_GRACE = 5000;
-
-/**
- * The server-managed props that `Resource.rebuildCacheFromLoro` preserves even
- * when a Loro doc carries no delta for them (drive/parent/lastCommit/createdAt).
- * A resource that has ONLY these — no class, no user content — is a skeleton,
- * not a renderable resource. Used by the OPFS cold-load guard to decide whether
- * a local hit is authoritative. Keep in sync with the `serverManaged` list in
- * resource.ts.
- */
-const SERVER_MANAGED_SKELETON_PROPS: ReadonlySet<string> = new Set([
-  commits.properties.lastCommit,
-  commits.properties.createdAt,
-  'https://atomicdata.dev/properties/createdBy',
-  'https://atomicdata.dev/properties/drive',
-  core.properties.parent,
-]);
 
 /**
  * Cheap equality for commit-log property values. Strict `===` would always
@@ -1201,6 +1198,12 @@ export class Store {
   /**
    * Drain one subject's outbox entry under sign-at-drain. Steps:
    *
+   *  0. If a `signedDestroy` envelope is queued (`Resource.destroy()`
+   *     while the POST could not be made or acked), POST it verbatim and
+   *     drop the entry — there is no Loro delta to sign for a subject
+   *     that is going away, so steps 1-2 are skipped. If the entry ALSO
+   *     still holds an unposted `signedGenesis`, the resource never
+   *     existed on the server: nothing is POSTed and the entry is dropped.
    *  1. If a `signedGenesis` envelope is queued (DID-derived subject
    *     whose POST hadn't acked yet), POST it. Server idempotently
    *     applies. On success: clear genesis, run the wasNew pipeline
@@ -1241,6 +1244,17 @@ export class Store {
     }
 
     const endpoint = new URL('/commit', this.serverUrl).toString();
+
+    // Step 0: a queued destroy supersedes everything else for this subject.
+    // Handled BEFORE the cold-drain `getResource` below, which would refetch
+    // the (server-side still existing) resource and resurrect it locally.
+    if (entry.signedDestroy) {
+      await this.drainDestroy(subject, entry.signedDestroy, endpoint, {
+        neverSynced: !!entry.signedGenesis,
+      });
+
+      return;
+    }
 
     // Step 1: POST the pre-signed genesis if present. The genesis
     // commit's `loroUpdate` was captured in `signChanges` at sign
@@ -1523,6 +1537,58 @@ export class Store {
 
     this.emitSyncStatus();
   };
+
+  /**
+   * Drain a queued destroy (step 0 of {@link drainOutboxSubject}).
+   *
+   * `neverSynced`: the entry still carries an unposted `signedGenesis`, so
+   * the resource was created AND deleted before either write reached the
+   * server. A destroy of a subject the server has never seen would only be
+   * refused, and a never-synced resource needs no tombstone — POST neither,
+   * drop the entry, make sure the local copy is gone.
+   *
+   * A server answer that says the resource is already gone (see
+   * {@link isSettledDestroyErrorMessage}) counts as an ack: the goal of the
+   * delete is met. Every other failure is rethrown so the outbox applies
+   * its usual backoff / terminal / blocking classification and
+   * `Resource.destroy()` can surface it to the caller.
+   */
+  private async drainDestroy(
+    subject: string,
+    destroy: Commit,
+    endpoint: string,
+    opts: { neverSynced: boolean },
+  ): Promise<void> {
+    if (!opts.neverSynced) {
+      // Registered before the POST like every own commit: should the server
+      // echo anything for this subject before the ack, it is ours.
+      if (destroy.signature) {
+        this.resources
+          .get(subject)
+          ?.appliedCommitSignatures.add(destroy.signature);
+      }
+
+      try {
+        await this.postCommit(destroy, endpoint);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+
+        if (!isSettledDestroyErrorMessage(msg)) throw e;
+
+        console.debug(
+          `[Outbox] destroy of ${subject} already settled on the server: ${msg}`,
+        );
+      }
+    }
+
+    // Drops the whole entry: nothing else about this subject is worth
+    // syncing. Then make sure the resource is gone locally too — `destroy()`
+    // already removed it optimistically, but a cold drain after a reload
+    // (or a fetch that raced the delete) may have brought it back.
+    this.outbox.clearDestroy(subject);
+    this.removeResource(subject);
+    this.emitSyncStatus();
+  }
 
   /**
    * Compute the drive sync state: a hash summarizing all resources' Loro
@@ -1919,6 +1985,13 @@ export class Store {
   public applyIncoming(
     change: IncomingChange,
   ): 'applied' | 'deduped' | 'invalid' {
+    // A locally-destroyed resource whose destroy commit has not been acked
+    // yet must not come back: the server still holds it until the drain
+    // POSTs the envelope, so a SUB push, a reconnect SYNC or a fetch that
+    // raced the delete can all still deliver its state. Treat that state as
+    // already superseded — the pending destroy wins.
+    if (this.hasPendingDestroy(change.subject)) return 'deduped';
+
     // Resource-direct path: caller is the authoritative producer.
     if (change.resource) {
       if (
@@ -2180,7 +2253,7 @@ export class Store {
       !emitResource.get(core.properties.incomplete)
     ) {
       try {
-        const jsonAd = resourceToJsonAd(emitResource);
+        const jsonAd = emitResource.toClientDbJsonAd();
 
         if (jsonAd) {
           const doc = emitResource.getLoroDoc?.();
@@ -3032,19 +3105,10 @@ export class Store {
   }
 
   /**
-   * Try the local WASM DB (OPFS) for a persisted copy of `subject` and hydrate
-   * the store from it.
-   *
-   * @returns `true` when a local copy hydrated into something renderable,
-   *   `false` when the database was asked and does not have it, and
-   *   `undefined` when there was no database to ask — callers must not read
-   *   that silence as "not stored locally".
-   */
-  /**
    * True when the resource carries enough state to stand on its own: a
    * class, or any property beyond the server-managed skeleton
-   * (drive/parent/lastCommit/createdAt) that `rebuildCacheFromLoro`
-   * preserves. A resource that passes this is worth more than a failed
+   * (`SERVER_MANAGED_PROPS`) that `rebuildCacheFromLoro` preserves. A
+   * resource that passes this is worth more than a failed
    * fetch — it renders, and the alternative is showing the user nothing.
    */
   private hasRenderableContent(resource: Resource | undefined): boolean {
@@ -3054,13 +3118,121 @@ export class Store {
 
     return resource
       .getEntries()
-      .some(([prop]) => !SERVER_MANAGED_SKELETON_PROPS.has(prop));
+      .some(([prop]) => !SERVER_MANAGED_PROPS.has(prop));
   }
 
-  private async hydrateFromLocalDb(
-    subject: string,
-  ): Promise<boolean | undefined> {
-    return (await this.hydrateManyFromLocalDb([subject]))?.[0];
+  /** Local-database reads asked for since the last flush, one entry per
+   *  subject. A subject asked for twice before the flush shares the entry. */
+  private _pendingLocalHydration = new Map<string, LocalHydrationRequest>();
+
+  /** Subject → promise of a flushed read that still awaits the worker. */
+  private _inFlightLocalHydration = new Map<
+    string,
+    Promise<boolean | undefined>
+  >();
+
+  /** Set from the first request of a batch until that batch is handed to the
+   *  worker, so one flush is queued per batch and no more. */
+  private _localHydrationFlushQueued = false;
+
+  /**
+   * Try the local WASM DB (OPFS) for a persisted copy of `subject` and hydrate
+   * the store from it.
+   *
+   * Every `useResource` that misses the in-memory cache lands here, from
+   * inside React's render. One worker round trip per subject made a cold page
+   * with many resources slow: each `postMessage` costs milliseconds, queues
+   * behind sync traffic, and in a follower tab crosses a BroadcastChannel
+   * hop as well. So a call does not read at once. It joins the pending batch
+   * and the batch is read in one {@link hydrateManyFromLocalDb} call from a
+   * microtask — after the synchronous render pass that issued it. React
+   * renders a default-lane update in one task, so a whole cold mount is one
+   * round trip; a time-sliced (transition) render becomes one round trip per
+   * slice rather than per resource. A microtask beats `setTimeout(0)` here:
+   * that would put a timer clamp on every cold read, and `notify` already
+   * relies on a microtask being enough to leave the render phase.
+   *
+   * A subject that is pending or in flight reuses the existing read.
+   *
+   * @returns `true` when a local copy hydrated into something renderable,
+   *   `false` when the database was asked and does not have it, and
+   *   `undefined` when there was no database to ask — callers must not read
+   *   that silence as "not stored locally".
+   */
+  private hydrateFromLocalDb(subject: string): Promise<boolean | undefined> {
+    const inFlight = this._inFlightLocalHydration.get(subject);
+    if (inFlight) return inFlight;
+
+    const pending = this._pendingLocalHydration.get(subject);
+    if (pending) return pending.promise;
+
+    let resolve!: LocalHydrationRequest['resolve'];
+    let reject!: LocalHydrationRequest['reject'];
+    const promise = new Promise<boolean | undefined>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    this._pendingLocalHydration.set(subject, { promise, resolve, reject });
+
+    if (!this._localHydrationFlushQueued) {
+      this._localHydrationFlushQueued = true;
+      queueMicrotask(() => void this.flushLocalHydration());
+    }
+
+    return promise;
+  }
+
+  /**
+   * Hand the pending batch to the worker and settle each caller's promise
+   * with its own answer. A worker failure resolves every subject of the
+   * chunk to `false` inside `hydrateManyFromLocalDb`, exactly as the
+   * single-subject read did; only an unexpected throw rejects the callers.
+   */
+  private async flushLocalHydration(): Promise<void> {
+    // Hold the batch open while the database initializes. A reload mounts its
+    // resources before the worker is ready, and everything asked for in that
+    // window should ride the one round trip that follows.
+    if (this.clientDb) await this.clientDb.waitForInit();
+
+    const batch = this._pendingLocalHydration;
+    this._pendingLocalHydration = new Map();
+    this._localHydrationFlushQueued = false;
+
+    for (const [subject, request] of batch) {
+      this._inFlightLocalHydration.set(subject, request.promise);
+    }
+
+    const subjects = [...batch.keys()];
+    const chunks: string[][] = [];
+
+    for (let i = 0; i < subjects.length; i += LOCAL_HYDRATION_CHUNK) {
+      chunks.push(subjects.slice(i, i + LOCAL_HYDRATION_CHUNK));
+    }
+
+    await Promise.all(
+      chunks.map(async chunk => {
+        try {
+          const hydrated = await this.hydrateManyFromLocalDb(chunk);
+
+          chunk.forEach((subject, index) =>
+            batch.get(subject)!.resolve(hydrated?.[index]),
+          );
+        } catch (e) {
+          for (const subject of chunk) batch.get(subject)!.reject(e);
+        } finally {
+          // Before any caller resumes (their continuations are microtasks),
+          // so a re-ask after this answer is a fresh read, not this one.
+          for (const subject of chunk) {
+            if (
+              this._inFlightLocalHydration.get(subject) ===
+              batch.get(subject)!.promise
+            ) {
+              this._inFlightLocalHydration.delete(subject);
+            }
+          }
+        }
+      }),
+    );
   }
 
   /**
@@ -3341,6 +3513,13 @@ export class Store {
     parsed: Record<string, unknown>,
     snapshot?: Uint8Array,
   ): boolean {
+    // `removeResource` tombstoned this subject in OPFS, but the worker may
+    // not have processed that yet when a read races the delete. Whatever is
+    // still on disk is the pre-delete state; do not bring it back into
+    // memory. Report "handled" so the caller does not fall back to a server
+    // fetch that would resurrect it either.
+    if (this.hasPendingDestroy(subject)) return true;
+
     const existing = this.getResolved(subject);
 
     // Don't overwrite a resource that has a Loro snapshot with one that doesn't.
@@ -4510,6 +4689,17 @@ export class Store {
     url.searchParams.set('page_size', '999');
 
     return url.toString();
+  }
+
+  /** True while `Resource.destroy()` has removed `subject` locally but the
+   *  signed destroy commit is still queued in the outbox (offline, or the
+   *  POST has not acked yet). Incoming state for such a subject is stale by
+   *  definition and must not resurrect it. */
+  public hasPendingDestroy(subjectRaw: string): boolean {
+    const subject = this.normalizeSubject(subjectRaw);
+
+    return !!this.outbox.getEntry(this.aliases.get(subject) ?? subject)
+      ?.signedDestroy;
   }
 
   /** Removes resource from this store, does not delete it from the server, use `resource.destroy()` to delete it from the server. */
@@ -6232,6 +6422,24 @@ export class Store {
    *  dropped by `removeResource` and by a failed write. */
   private lastPersistedStamp = new Map<string, number>();
 
+  /**
+   * Record that `jsonAd` + `snapshot` is what the local DB now holds for
+   * `subject`, so `addResource` skips re-writing that same state. Called by
+   * `Resource.persistToClientDb` after its durable write lands — without it
+   * the dedup cache only knew about writes `addResource` itself made, and
+   * rewrote the row on the next ingress.
+   *
+   * @internal
+   */
+  public recordPersistedState(
+    subject: string,
+    jsonAd: string,
+    snapshot?: Uint8Array,
+  ): void {
+    // Keyed like `addResource` keys it: by the resource's own subject.
+    this.lastPersistedStamp.set(subject, hashPersistedState(jsonAd, snapshot));
+  }
+
   private snapshotReadDepth = 0;
 
   public getResourceSnapshot(
@@ -6376,13 +6584,6 @@ export interface FetchOpts {
    * local resource.
    */
   newResource?: boolean;
-}
-
-/** Convert a Resource to a JSON-AD string for storage in the WASM DB. */
-function resourceToJsonAd(resource: Resource): string | null {
-  const obj = resource.toObject({ includeBinary: false });
-
-  return obj ? JSON.stringify(obj) : null;
 }
 
 /**

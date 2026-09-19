@@ -761,10 +761,18 @@ The Commit wire format does not change between profiles. Only
 Questions 4 and 5 in the original draft (`writeDatatypeTags` placement
 under drain-time signing; `logPendingCommit` having no pending state
 under drain-time signing) were artefacts of the option 1 (sign-at-drain)
-direction. Under option 2 (eager sign, async POST), both are non-issues:
-`writeDatatypeTags` still runs inside the eager `signChanges`, and
-`logPendingCommit` still fires per commit with "pending → sent → failed"
-transitions intact.
+direction, and question 4 did become real once the store-level drain
+signed incremental commits without going through `signChanges`. The
+resolved state: `writeDatatypeTags` runs inside
+`Resource.exportLoroDeltaInternal`, the export path both signers share
+(`signChanges` for genesis and local-only drives, `drainOutboxSubject` via
+`exportLoroDeltaForDrain`), right after the user's pending ops are sealed
+into their own commit and before the bytes are exported. Ordering matters:
+tagging first would seal the user's `set()` ops inside the tag write's
+`atomic:system` commit, which the UndoManager excludes. Genesis signs still
+tag up front so the agent message rides on the doc's first change; the
+in-export call is then a no-op. `logPendingCommit` still fires per commit
+with "pending → sent → failed" transitions intact.
 
 ## Related plans
 
