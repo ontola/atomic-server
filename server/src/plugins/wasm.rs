@@ -1097,6 +1097,81 @@ fn ensure_direct_child(parent: &Path, child: &Path) -> AtomicResult<()> {
     Ok(())
 }
 
+/// The registry id of a drive-scoped class extender, the same one
+/// [`load_plugin_from_disk`] builds for the file it loads.
+pub fn scoped_extender_id(drive_subject: &str, namespace: &str, name: &str) -> String {
+    format!("{drive_subject}:{namespace}.{name}.wasm")
+}
+
+/// Unregisters a drive-scoped extender and leaves everything else alone.
+///
+/// This is what pausing an Installation does: the hooks stop firing at once,
+/// while the files stay on disk and `PluginMeta` keeps the plugin's agent
+/// secret, so resuming is a re-registration rather than a fresh install with a
+/// new identity. Uninstalling is [`uninstall_plugin`].
+pub fn suspend_plugin(
+    store: &Db,
+    drive_subject: &str,
+    namespace: &str,
+    name: &str,
+) -> AtomicResult<()> {
+    validate_plugin_identifiers(namespace, name)?;
+    store.remove_class_extender(&scoped_extender_id(drive_subject, namespace, name))
+}
+
+/// Registers an extender whose files are already extracted, for an activation
+/// that found this exact release materialized.
+///
+/// A no-op when it is registered already, so the common case (a config change
+/// on a running plugin) does not reload the component. Resuming a paused
+/// installation is the case that does.
+pub async fn register_installed_plugin(
+    store: &Db,
+    drive_subject: &str,
+    namespace: &str,
+    name: &str,
+    plugins_dir: &Path,
+    plugin_cache_dir: &Path,
+) -> AtomicResult<()> {
+    validate_plugin_identifiers(namespace, name)?;
+    let id = scoped_extender_id(drive_subject, namespace, name);
+    if store.has_class_extender(&id) {
+        return Ok(());
+    }
+
+    let encoded_subject = general_purpose::URL_SAFE.encode(drive_subject);
+    let target_dir = plugins_dir
+        .join(CLASS_EXTENDER_DIR_NAME)
+        .join("scoped")
+        .join(&encoded_subject);
+    let wasm_path = target_dir.join(format!("{namespace}.{name}.wasm"));
+    if !wasm_path.exists() {
+        return Err(AtomicError::not_found(format!(
+            "{namespace}.{name} is recorded as installed but {} is missing",
+            wasm_path.display()
+        )));
+    }
+
+    let scoped_cache = plugin_cache_dir.join("scoped").join(&encoded_subject);
+    if !scoped_cache.exists() {
+        std::fs::create_dir_all(&scoped_cache).ok();
+    }
+    let engine = host_core::engine().map_err(AtomicError::from)?;
+    let (extender, _) = load_plugin_from_disk(
+        &wasm_path,
+        &target_dir,
+        &scoped_cache,
+        ClassExtenderScope::Drive(drive_subject.to_string()),
+        engine,
+        store,
+    )
+    .await?;
+    let extender = extender.ok_or_else(|| {
+        AtomicError::from(format!("could not load the installed {namespace}.{name}"))
+    })?;
+    store.add_class_extender(extender)
+}
+
 pub async fn uninstall_plugin(
     name: &str,
     namespace: &str,
@@ -1148,8 +1223,7 @@ pub async fn uninstall_plugin(
     }
 
     // 1. Remove from DB
-    let id = format!("{}:{}", drive_subject, wasm_filename);
-    store.remove_class_extender(&id)?;
+    store.remove_class_extender(&scoped_extender_id(drive_subject, namespace, name))?;
 
     // 2. Remove from disk
     std::fs::remove_file(&wasm_path).map_err(|e| {
@@ -1238,6 +1312,9 @@ pub async fn install_or_update_plugin(
     drive_subject: &str,
     plugin_subject: &str,
     manifest: &Manifest,
+    // The release these bytes came from, recorded so a later activation can
+    // tell whether this exact code is already on disk.
+    release_id: Option<&str>,
     store: &Db,
     plugins_dir: &Path,
     plugin_cache_dir: &Path,
@@ -1301,7 +1378,7 @@ pub async fn install_or_update_plugin(
             extract_plugin_to_disk(zip_file, plugins_dir, &encoded_subject, namespace, name)?;
 
         // 3. Create a new agent for the plugin if needed
-        create_plugin_meta(store, drive_subject, manifest, plugin_subject).await?;
+        create_plugin_meta(store, drive_subject, manifest, plugin_subject, release_id).await?;
 
         // 4. Load Plugin
         let engine = host_core::engine().map_err(AtomicError::from)?;
@@ -1442,6 +1519,7 @@ async fn create_plugin_meta(
     drive_subject: &str,
     manifest: &Manifest,
     plugin_subject: &str,
+    release_id: Option<&str>,
 ) -> AtomicResult<()> {
     let (namespace, name) = manifest_identifiers(manifest)?;
 
@@ -1490,6 +1568,7 @@ async fn create_plugin_meta(
             subject: plugin_subject.to_string(),
             agent_secret: agent.build_secret()?.clone(),
             manifest: serde_json::to_value(manifest)?,
+            release_id: release_id.map(str::to_string),
         },
     )?;
 
@@ -1721,6 +1800,7 @@ async fn unified_manifest(
             subject: meta.subject.clone(),
             agent_secret: meta.agent_secret,
             manifest: serde_json::to_value(&manifest)?,
+            release_id: meta.release_id,
         },
     )?;
     Ok((meta.subject, manifest))

@@ -7,11 +7,45 @@
 
 use atomic_lib::{
     db::app_agent::{AppAgentKey, AppAgentState},
-    Db, Storelike, Subject,
+    urls, Db, Resource, Storelike, Subject, Value,
 };
 
 pub struct Installation {
     pub signing_as: Option<AppAgentKey>,
+}
+
+/// Whether this resource is an Installation that is not running.
+///
+/// Read from the resource rather than from any cached state, so pausing takes
+/// effect on the next run with no registry to keep in step. `revoked` needs no
+/// case here: revoking retires the identity, which the walk below already
+/// refuses. Anything that is not an Installation (a legacy `Plugin`, an entry
+/// point, a drive) is not suspendable and reads as running.
+pub fn suspended_status(resource: &Resource) -> Option<String> {
+    let is_installation = resource
+        .get(urls::IS_A)
+        .ok()
+        .map(|is_a| is_a.to_reference_index_strings().unwrap_or_default())
+        .is_some_and(|classes| classes.iter().any(|c| c == urls::INSTALLATION));
+    if !is_installation {
+        return None;
+    }
+    // Anything but `active` is suspended, including a status that is missing or
+    // in an encoding this does not recognise. A plugin that stopped when it
+    // should not have is visible and harmless; one that kept running through a
+    // pause is the bug this guards. `revoked` lands here too, ahead of the
+    // identity tombstone below, which is best-effort.
+    let status = match resource.get(urls::INSTALLATION_STATUS) {
+        Ok(Value::String(status)) => status.clone(),
+        Ok(other) => other.to_string(),
+        Err(_) => "a draft".to_string(),
+    };
+    (status != "active").then_some(status)
+}
+
+/// Whether this resource is an Installation that is not running.
+pub fn is_suspended(resource: &Resource) -> bool {
+    suspended_status(resource).is_some()
 }
 
 pub async fn resolve(db: &Db, drive: &str, entrypoint: &str) -> Result<Installation, String> {
@@ -28,6 +62,11 @@ pub async fn resolve(db: &Db, drive: &str, entrypoint: &str) -> Result<Installat
         }
         if !seen.insert(current.get_subject().pure_id()) {
             return Err("plugin parent hierarchy contains a cycle".into());
+        }
+        if let Some(status) = suspended_status(&current) {
+            return Err(format!(
+                "this installation is {status}, not active, so it does not run"
+            ));
         }
         if signing_as.is_none() {
             let key = AppAgentKey::new(drive, &current.get_subject().to_string());

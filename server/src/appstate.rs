@@ -155,6 +155,20 @@ impl AppState {
             .await?;
 
             for extender in extenders {
+                // A paused installation keeps its files, so the loader above
+                // finds them. Registering them anyway would resume every
+                // paused plugin on restart.
+                if let Some(subject) = &extender.subject {
+                    if let Ok(resource) = store.get_resource(&subject.as_str().into()).await {
+                        if plugins::installation::is_suspended(&resource) {
+                            tracing::info!(
+                                %subject,
+                                "skipped a class extender: its installation is not active"
+                            );
+                            continue;
+                        }
+                    }
+                }
                 store.add_class_extender(extender)?;
             }
         }
