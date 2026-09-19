@@ -569,6 +569,99 @@ describe('Store', () => {
     );
   });
 
+  it('writes the same client-DB row from addResource and persistToClientDb', async ({
+    expect,
+  }) => {
+    await enableLoro();
+    const store = new Store({ serverUrl: 'https://example.com' });
+    const putResourceWithSnapshot = vi.fn().mockResolvedValue(undefined);
+    store.setClientDb({
+      isReady: true,
+      flush: async () => undefined,
+      putResourceWithSnapshot,
+    } as unknown as Parameters<Store['setClientDb']>[0]);
+
+    const binaryProp = 'https://example.com/properties/bytes';
+    const loroUpdate = 'https://atomicdata.dev/properties/loroUpdate';
+    const resource = new Resource('did:ad:same-row-both-paths');
+    resource.setStore(store);
+    await resource.set(
+      core.properties.isA,
+      ['https://atomicdata.dev/classes/Folder'],
+      false,
+    );
+    await resource.set(core.properties.name, 'Same row', false);
+    // A binary propval and a Loro snapshot are the two entry kinds a row
+    // must leave out: the first is a Uint8Array aux value, the second is the
+    // doc itself and travels next to the row.
+    resource.applyHydratedValues([
+      [binaryProp, new Uint8Array([1, 2, 3])],
+      [loroUpdate, resource.getLoroDoc()!.export({ mode: 'snapshot' })],
+    ]);
+    resource.loading = false;
+    resource.new = false;
+    expect(resource.getEntries().map(([k]) => k)).toContain(binaryProp);
+
+    store.addResource(resource);
+    expect(putResourceWithSnapshot).toHaveBeenCalledTimes(1);
+    await resource.persistToClientDb();
+    expect(putResourceWithSnapshot).toHaveBeenCalledTimes(2);
+
+    const [, rowFromAddResource, snapshotFromAddResource] =
+      putResourceWithSnapshot.mock.calls[0];
+    const [, rowFromPersist, snapshotFromPersist] =
+      putResourceWithSnapshot.mock.calls[1];
+    expect(rowFromPersist).toBe(rowFromAddResource);
+    expect(rowFromPersist).toBe(resource.toClientDbJsonAd());
+    expect(snapshotFromAddResource).toBeInstanceOf(Uint8Array);
+    expect(snapshotFromPersist).toBeInstanceOf(Uint8Array);
+
+    const row = JSON.parse(rowFromPersist);
+    expect(row['@id']).toBe(resource.subject);
+    expect(row[core.properties.name]).toBe('Same row');
+    expect(row[core.properties.isA]).toEqual([
+      'https://atomicdata.dev/classes/Folder',
+    ]);
+    expect(row).not.toHaveProperty(binaryProp);
+    expect(row).not.toHaveProperty(loroUpdate);
+  });
+
+  it('does not rewrite a row that persistToClientDb already wrote', async ({
+    expect,
+  }) => {
+    await enableLoro();
+
+    const build = async () => {
+      const store = new Store({ serverUrl: 'https://example.com' });
+      const putResourceWithSnapshot = vi.fn().mockResolvedValue(undefined);
+      store.setClientDb({
+        isReady: true,
+        flush: async () => undefined,
+        putResourceWithSnapshot,
+      } as unknown as Parameters<Store['setClientDb']>[0]);
+      const resource = new Resource('did:ad:persisted-then-added');
+      resource.setStore(store);
+      await resource.set(core.properties.name, 'Persisted first', false);
+      resource.loading = false;
+      resource.new = false;
+
+      return { store, resource, putResourceWithSnapshot };
+    };
+
+    // Control: the ingress path writes a resource the store has not seen.
+    const control = await build();
+    control.store.addResource(control.resource);
+    expect(control.putResourceWithSnapshot).toHaveBeenCalledTimes(1);
+
+    // The durable save path wrote the row; the ingress that follows (a WS
+    // echo, a notify) finds the same state on disk and skips its write.
+    const { store, resource, putResourceWithSnapshot } = await build();
+    await resource.persistToClientDb();
+    expect(putResourceWithSnapshot).toHaveBeenCalledTimes(1);
+    store.addResource(resource);
+    expect(putResourceWithSnapshot).toHaveBeenCalledTimes(1);
+  });
+
   it('clears the previous identity drive before sign-out authentication changes', async ({
     expect,
   }) => {

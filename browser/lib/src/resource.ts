@@ -39,6 +39,11 @@ import {
 } from './forks.js';
 import { GENESIS, properties, instances } from './urls.js';
 import {
+  DERIVED_BY_SERVER,
+  SERVER_MANAGED_PROPS,
+  isDerivedByServer,
+} from './server-managed-props.js';
+import {
   valToArray,
   type JSONValue,
   type JSONArray,
@@ -48,33 +53,6 @@ import {
 
 /** Contains the PropertyURL / Value combinations */
 export type PropVals = Map<string, AtomicValue>;
-
-/**
- * Propvals the server derives and ships alongside a resource, which must never
- * be written into its CRDT.
- *
- * They all have another source of truth: `lastCommit` is commit metadata,
- * `createdAt` and `createdBy` come from the genesis certificate (see
- * {@link Resource.getCreatedBy}). Writing one into Loro produces a LOCAL
- * operation, and a local operation means a dirty subject and a commit — for a
- * value the client never authored. On a resource you may write that is a
- * redundant commit per hydration; on one you may only READ, the server refuses
- * it forever, which is how an invitee who had written nothing ended up with a
- * blocked outbox entry and a permanent "changes pending".
- *
- * They stay in the read cache, so `resource.get()` and JSON-AD round-trips are
- * unaffected — which is why every `serverManaged` preservation list below has
- * to include them.
- */
-const DERIVED_BY_SERVER: ReadonlySet<string> = new Set<string>([
-  properties.commit.lastCommit,
-  commits.properties.createdAt,
-  properties.createdBy,
-]);
-
-/** True for a propval the server derives — see {@link DERIVED_BY_SERVER}. */
-const isDerivedByServer = (prop: string): boolean =>
-  DERIVED_BY_SERVER.has(prop);
 
 export interface MergeOptions {
   replaceLoroDocs?: boolean;
@@ -797,23 +775,9 @@ export class Resource<C extends OptionalClass = any> {
     // Preserve server-managed / genesis-immutable properties in the cache.
     // These are set once (at genesis or by the server) and are NOT necessarily
     // re-encoded into a later Loro delta — so a rebuild from a delta-only doc
-    // would otherwise drop them. `drive` and `parent` matter especially for a
-    // GUEST who loaded a shared resource: losing the parent's `drive` here
-    // leaves a reply unstamped, so the drive-scoped commit fan-out never
-    // delivers it to the owner. See planning/commit-fanout-drive-isolation.md.
-    const serverManaged = [
-      properties.commit.lastCommit,
-      commits.properties.createdAt,
-      properties.createdBy,
-      'https://atomicdata.dev/properties/drive',
-      // The inline genesis certificate: set once at creation, immutable, and
-      // must not be dropped when the cache is rebuilt from a delta-only doc —
-      // it's what verifies the resource's DID.
-      'https://atomicdata.dev/properties/genesis',
-      core.properties.parent,
-    ];
-
-    for (const key of serverManaged) {
+    // would otherwise drop them. See `SERVER_MANAGED_PROPS` for why each is
+    // on the list.
+    for (const key of SERVER_MANAGED_PROPS) {
       if (this.#cache[key] !== undefined && nextCache[key] === undefined) {
         nextCache[key] = this.#cache[key];
       }
@@ -1689,15 +1653,13 @@ export class Resource<C extends OptionalClass = any> {
           }
         }
 
-        // Copy housekeeping properties from resourceB.#cache to this.#cache
-        // before rebuilding cache so they are preserved
-        const serverManaged = [
-          properties.commit.lastCommit,
-          commits.properties.createdAt,
-          properties.createdBy,
-        ];
-
-        for (const key of serverManaged) {
+        // Copy the server-derived properties from resourceB.#cache to
+        // this.#cache before rebuilding the cache so they are preserved.
+        // Deliberately the narrower `DERIVED_BY_SERVER`, not
+        // `SERVER_MANAGED_PROPS`: drive/genesis/parent live in the Loro doc
+        // and arrive through the CRDT import above, whereas these three are
+        // in no doc at all and only the incoming (server-fresh) cache has them.
+        for (const key of DERIVED_BY_SERVER) {
           if (resourceB.#cache[key] !== undefined) {
             this.#cache[key] = resourceB.#cache[key];
           }
@@ -1721,14 +1683,8 @@ export class Resource<C extends OptionalClass = any> {
       }
     } else {
       // No incoming Loro snapshot (e.g. metadata-only update or non-crdt resource)
-      // Copy housekeeping properties first
-      const serverManaged = [
-        properties.commit.lastCommit,
-        commits.properties.createdAt,
-        properties.createdBy,
-      ];
-
-      for (const key of serverManaged) {
+      // Copy the server-derived properties first (same reasoning as above).
+      for (const key of DERIVED_BY_SERVER) {
         if (resourceB.#cache[key] !== undefined) {
           this.#cache[key] = resourceB.#cache[key];
         }
@@ -2470,6 +2426,25 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     return count === 0 ? null : obj;
+  }
+
+  /**
+   * The JSON-AD row the client database (OPFS) stores for this resource:
+   * `@id` plus every non-binary propval. Binary aux values are left out — a
+   * blob lives in the blob store, keyed by hash, and the snapshot travels next
+   * to this row (see `ClientDb.putResourceWithSnapshot`).
+   *
+   * The one serializer for that row: `Store.addResource` and
+   * {@link persistToClientDb} both write through it, so the store's
+   * "already persisted" stamp (`Store.recordPersistedState`) is computed over
+   * exactly the bytes either path writes.
+   *
+   * Returns `null` when the resource has no non-binary propvals at all.
+   */
+  public toClientDbJsonAd(): string | null {
+    const obj = this.toObject({ includeBinary: false });
+
+    return obj ? JSON.stringify(obj) : null;
   }
 
   /** Compact debug representation for error messages. */
@@ -3599,11 +3574,10 @@ export class Resource<C extends OptionalClass = any> {
     const clientDb = this.store.getClientDb();
     if (!clientDb || clientDb.unsupportedEnvironment) return;
 
-    const obj: Record<string, unknown> = { '@id': this.subject };
-
-    for (const [k, v] of this.getEntries()) {
-      if (!(v instanceof Uint8Array)) obj[k] = v;
-    }
+    // A resource without propvals still gets its `@id` row: this path is the
+    // durable one, and a caller that awaited it expects a row to exist.
+    const jsonAd =
+      this.toClientDbJsonAd() ?? JSON.stringify({ '@id': this.subject });
 
     // The export seals pending ops; keep them under their history token.
     this.sealPendingEdits();
@@ -3615,14 +3589,13 @@ export class Resource<C extends OptionalClass = any> {
     const closePersist = perfSpan('resource.persistToClientDb');
 
     try {
-      await clientDb.putResourceWithSnapshot(
-        this.subject,
-        JSON.stringify(obj),
-        snapshot,
-      );
+      await clientDb.putResourceWithSnapshot(this.subject, jsonAd, snapshot);
       // This RPC includes the durable flush. A second RPC could race the
       // identity handoff closing this worker after the write has completed.
       closePersist();
+      // Tell the store's dedup cache what is now on disk, so the next
+      // `addResource` for this subject does not rewrite the same row.
+      this.store.recordPersistedState(this.subject, jsonAd, snapshot);
     } catch (e) {
       closePersist({ err: e instanceof Error ? e.message : String(e) });
 
