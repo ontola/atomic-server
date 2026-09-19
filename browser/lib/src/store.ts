@@ -499,6 +499,33 @@ export class Store {
    *  the agent branch in {@link fetchResourceWithLocalFallback}. */
   private _revalidatedAgents: Set<string> = new Set();
 
+  /**
+   * Subjects this store has destroyed — the in-memory half of the tombstone
+   * {@link removeResource} writes to the local database.
+   *
+   * A destroy is not instantaneous for everyone who can answer a query. The
+   * server's `/query` races the local index in `Collection.fetchPage`, and an
+   * answer computed before the destroy landed can arrive after it. Until this
+   * set existed, "this subject is deleted" was only ever held by
+   * {@link hasPendingDestroy} — an outbox entry that is dropped the moment the
+   * server acks — so every consumer of a live query kept its own copy:
+   * `Collection` had `_removedSubjects`, `useChildren` had a `removedRef`,
+   * each scoped to one instance. A consumer created after the delete (a folder
+   * re-expanded, a second view on the same query) had no memory of it and put
+   * the row back, and rendering that row asks the store for the resource,
+   * which re-creates the entry the destroy had just removed and renders it as
+   * an error.
+   *
+   * One fact, in one place, that every one of those paths reads instead.
+   * Insertion-ordered and capped: the oldest entries are the least likely to
+   * still be contradicted by an answer in flight, and an unbounded set in a
+   * long-lived tab is its own bug.
+   */
+  private _destroyed: Set<string> = new Set();
+
+  /** How many destroyed subjects {@link _destroyed} keeps. */
+  private static readonly DESTROYED_LIMIT = 10_000;
+
   /** Current Agent, used for signing commits. Is required for posting things. */
   private agent?: Agent;
   /** Mapped from origin to websocket */
@@ -1978,12 +2005,16 @@ export class Store {
   public applyIncoming(
     change: IncomingChange,
   ): 'applied' | 'deduped' | 'invalid' {
-    // A locally-destroyed resource whose destroy commit has not been acked
-    // yet must not come back: the server still holds it until the drain
-    // POSTs the envelope, so a SUB push, a reconnect SYNC or a fetch that
-    // raced the delete can all still deliver its state. Treat that state as
-    // already superseded — the pending destroy wins.
-    if (this.hasPendingDestroy(change.subject)) return 'deduped';
+    // A destroyed resource must not come back. Before the drain POSTs the
+    // envelope the server still holds it, and after the ack an answer that
+    // was computed before the destroy landed can still be in flight, so a SUB
+    // push, a reconnect SYNC or a fetch that raced the delete can all deliver
+    // its state at either moment. Treat that state as already superseded.
+    if (
+      this.isDestroyed(change.subject) ||
+      this.hasPendingDestroy(change.subject)
+    )
+      return 'deduped';
 
     // Resource-direct path: caller is the authoritative producer.
     if (change.resource) {
@@ -2361,6 +2392,12 @@ export class Store {
     } else {
       newSubject = this.createHTTPSubject(normalizedParent);
     }
+
+    // Creating a resource under a subject this store destroyed earlier is the
+    // one thing that legitimately undoes a tombstone. Minted DIDs never
+    // collide, so in practice this is a caller-supplied subject: a local-only
+    // drive rebuilt in place, or a test fixture.
+    this.clearDestroyed(newSubject);
 
     const resource = this.getResourceLoading(newSubject, { newResource: true });
 
@@ -3981,6 +4018,25 @@ export class Store {
 
     if (!resource) {
       resource = new Resource<C>(normalized, isNew);
+
+      // A view still holding a destroyed subject (a row a stale query answer
+      // put back, a link in a page that has not re-rendered yet) asks for it
+      // here. Answer from what the store already knows instead of fetching:
+      // the request can only 404, and the round-trip is what turned a row
+      // that should have gone away into a "Resource with error" that stays.
+      if (!isNew && this.isDestroyed(normalized)) {
+        resource.loading = false;
+        resource.setError(
+          new AtomicError(
+            `Resource ${normalized} was destroyed`,
+            ErrorType.NotFound,
+          ),
+        );
+        this.addResource(resource, { alias: normalized });
+
+        return resource;
+      }
+
       if (!isNew) resource.loading = true;
       this.addResource(resource, { alias: normalized });
       if (!isNew)
@@ -4695,9 +4751,52 @@ export class Store {
       ?.signedDestroy;
   }
 
+  /**
+   * True when this store has destroyed `subject`.
+   *
+   * The one answer every consumer of a live query asks before admitting a
+   * member: the query it is reading may have been answered before the destroy
+   * landed. Broader than {@link hasPendingDestroy}, which only covers the
+   * window before the server acks — the stale answer usually arrives after it.
+   */
+  public isDestroyed(subjectRaw: string): boolean {
+    return this._destroyed.has(this.resolveSubject(subjectRaw));
+  }
+
+  /**
+   * Forget that `subject` was destroyed, for the rare case where one is
+   * legitimately created again under the same subject (a local-only drive
+   * rebuilt in place, a test fixture). Called by {@link newResource}; a
+   * resource arriving from a query or a push never clears a tombstone,
+   * because that is the resurrection this set exists to stop.
+   */
+  public clearDestroyed(subjectRaw: string): void {
+    this._destroyed.delete(this.resolveSubject(subjectRaw));
+  }
+
+  /** Records the tombstone, evicting the oldest once the cap is reached. */
+  private markDestroyed(subject: string): void {
+    // Re-inserting moves the subject to the end of the iteration order, so a
+    // subject destroyed twice is treated as the more recent of the two.
+    this._destroyed.delete(subject);
+    this._destroyed.add(subject);
+
+    while (this._destroyed.size > Store.DESTROYED_LIMIT) {
+      const oldest = this._destroyed.values().next().value;
+
+      if (oldest === undefined) break;
+      this._destroyed.delete(oldest);
+    }
+  }
+
   /** Removes resource from this store, does not delete it from the server, use `resource.destroy()` to delete it from the server. */
   public removeResource(subjectRaw: string, shouldNotify = true): void {
     const resolved = this.resolveSubject(subjectRaw);
+
+    // The in-memory half of the tombstone below. Recorded before the eviction
+    // notifies, so a listener that reacts by re-reading a query already sees
+    // the subject as destroyed and drops it from the answer.
+    this.markDestroyed(resolved);
 
     // Tombstone in ClientDb (OPFS) so the resource doesn't reappear after a
     // page reload. The in-memory `resources` map is wiped on reload, but the
