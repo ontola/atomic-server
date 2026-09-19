@@ -7,6 +7,16 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Sentry no longer records every server error twice. `sentry_actix` captures a
+  handler's 5xx with the request attached, and `tracing_actix_web` separately
+  logs "Error encountered while processing the incoming HTTP request" at
+  `error!`, which the Sentry tracing layer turned into a second event; the two
+  staging floods of September arrived as paired issue groups of 6313 and 6312
+  events for the same incidents. The tracing layer now ignores the
+  `tracing_actix_web` target and delegates every other target to
+  `default_event_filter`, so background work reports as before and the stdout
+  log line is unchanged (`server/src/trace.rs`).
+
 - Plugin install path, three fixes after the runtime convergence (#1571):
   - A publish refused for claiming the wrong `world` used to have already
     stored the package bytes and cached the release record. The claim is now

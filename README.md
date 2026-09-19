@@ -53,7 +53,7 @@ _Status: alpha. [Breaking changes](CHANGELOG.md) are expected until 1.0._
 - 💻  **Runs everywhere**: linux, windows, mac, arm, plus desktop and mobile apps.
 - 📚  **Libraries** for JavaScript, React, Svelte, Rust and Dart / Flutter.
 
-https://user-images.githubusercontent.com/2183313/139728539-d69b899f-6f9b-44cb-a1b7-bbab68beac0c.mp4
+https://private-user-images.githubusercontent.com/2183313/655190495-4310ad43-2595-4cf8-b336-fb8bcc692e79.mp4
 
 ## Documentation
 
