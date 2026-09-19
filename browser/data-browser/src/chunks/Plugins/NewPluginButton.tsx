@@ -1,191 +1,118 @@
 import { Button } from '@components/Button';
-import { Dialog, useDialog } from '@components/Dialog';
-import type { JSONValue, Resource, Server } from '@tomic/react';
-import { useId, useRef, useState } from 'react';
+import {
+  installRelease,
+  publishZipRelease,
+  readInstallationReview,
+  useStore,
+  type JSONValue,
+  type Resource,
+  type Server,
+} from '@tomic/react';
+import { useRef, useState } from 'react';
 import { FaPlus } from 'react-icons/fa6';
-import { styled } from 'styled-components';
-import { Column, Row } from '@components/Row';
-import { JSONEditor } from '@components/JSONEditor';
-import Markdown from '@components/datatypes/Markdown';
-import { useCreatePlugin } from '@views/Plugin/createPlugin';
-import { readZip, type PluginMetadata } from './plugins';
-import { ConfigReference } from '@views/Plugin/ConfigReference';
-import { PluginPermissions } from '@views/Plugin/PluginPermissions';
-import toast from 'react-hot-toast';
 import { useCustomViews } from '@components/CustomViewProvider';
+import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
+import { constructOpenURL } from '@helpers/navigation';
+import {
+  InstallationReviewDialog,
+  type PendingInstallation,
+} from './InstallationReviewDialog';
 
 interface NewPluginButtonProps {
   drive: Resource<Server.Drive>;
 }
 
+/**
+ * Uploading a zip publishes it as a private Release on this server and then
+ * installs that release through the same review screen the Store uses. The
+ * server materializes the wasm files when the Installation commits.
+ */
 const NewPluginButton: React.FC<NewPluginButtonProps> = ({ drive }) => {
-  const configLabelId = useId();
-  const [error, setError] = useState<string>();
-  const [file, setFile] = useState<File | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [metadata, setMetadata] = useState<PluginMetadata>();
-  const [configValid, setConfigValid] = useState(true);
-  const [config, setConfig] = useState<JSONValue>();
+  const store = useStore();
+  const navigate = useNavigateWithTransition();
   const { refresh: refreshCustomViews } = useCustomViews();
-  const { createPluginResource, addPluginToDrive } = useCreatePlugin();
-
-  const reset = () => {
-    setError(undefined);
-    setFile(null);
-    setMetadata(undefined);
-    setConfig(undefined);
-    setConfigValid(true);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const [dialogProps, show, hide] = useDialog({
-    onCancel: reset,
-    onSuccess: async () => {
-      if (!metadata || !file) {
-        return setError('Please fill in all fields');
-      }
-
-      try {
-        const plugin = await createPluginResource({
-          metadata,
-          file,
-          drive,
-          config,
-        });
-        await addPluginToDrive(plugin, drive);
-        await refreshCustomViews();
-        reset();
-      } catch (err) {
-        toast.error('Failed to install plugin');
-        console.error(err);
-        reset();
-      }
-    },
-  });
+  const [error, setError] = useState<string>();
+  const [publishing, setPublishing] = useState(false);
+  const [pending, setPending] = useState<PendingInstallation>();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileInputChange = async (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
-    const targetFile = e.target.files?.[0];
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPublishing(true);
+    setError(undefined);
 
-    if (targetFile) {
-      try {
-        const readMetadata = await readZip(targetFile);
-        setMetadata(readMetadata);
-        setConfig(readMetadata.defaultConfig);
-        setFile(targetFile);
-        setError(undefined);
-        show();
-      } catch (err) {
-        setError(err.message);
-      }
+    try {
+      // The server validates the zip and translates its plugin.json into the
+      // manifest the review shows; nothing is inspected client-side.
+      const { id, release } = await publishZipRelease(
+        store,
+        drive.subject,
+        file,
+      );
+      setPending({
+        review: readInstallationReview({ ...release, id }),
+        release: { url: id, id },
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPublishing(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
+  };
+
+  const install = async (
+    p: PendingInstallation,
+    config: JSONValue | undefined,
+    grants: string[],
+  ) => {
+    // The server compares these with the zip's manifest, so they must be
+    // the manifest's own identifiers.
+    if (!p.review.name || !p.review.namespace) {
+      throw new Error('The plugin manifest has no name or namespace');
+    }
+
+    const subject = await installRelease(store, {
+      drive: drive.subject,
+      release: p.release,
+      name: p.review.name,
+      namespace: p.review.namespace,
+      description: p.review.description,
+      version: p.review.version,
+      config,
+      grants,
+    });
+    await refreshCustomViews();
+    navigate(constructOpenURL(subject));
   };
 
   return (
     <>
       <label>
-        <Button as='div'>
-          <FaPlus aria-hidden /> <span>Upload Plugin</span>
+        <Button as='div' disabled={publishing}>
+          <FaPlus aria-hidden />{' '}
+          <span>{publishing ? 'Publishing…' : 'Upload Plugin'}</span>
         </Button>
         <input
           ref={fileInputRef}
           type='file'
           style={{ display: 'none' }}
           accept='application/zip'
+          disabled={publishing}
           onChange={handleFileInputChange}
         />
       </label>
-      {error && <p>{error}</p>}
-      <Dialog {...dialogProps} width='800px'>
-        <Dialog.Title>
-          <h1>Add Plugin</h1>
-        </Dialog.Title>
-        <Dialog.Content>
-          {metadata && (
-            <Column>
-              <div>
-                <Row justify='space-between'>
-                  <PluginName>
-                    {metadata.namespace}/{metadata.name}
-                  </PluginName>
-                  <span>v{metadata.version}</span>
-                </Row>
-                <PluginAuthor>by {metadata.author}</PluginAuthor>
-              </div>
-              {metadata.description && (
-                <DescriptionWrapper>
-                  <Markdown text={metadata.description} />
-                </DescriptionWrapper>
-              )}
-              <PluginPermissions permissions={metadata.permissions} />
-
-              <Label id={configLabelId}>Config</Label>
-              <JSONEditor
-                labelId={configLabelId}
-                initialValue={JSON.stringify(metadata.defaultConfig, null, 2)}
-                onChange={val => {
-                  try {
-                    setConfig(JSON.parse(val));
-                  } catch (e) {
-                    // Do nothing
-                  }
-                }}
-                schema={metadata.configSchema}
-                showErrorStyling={!configValid}
-                onValidationChange={setConfigValid}
-              />
-              {metadata.configSchema && (
-                <ConfigReference schema={metadata.configSchema} />
-              )}
-            </Column>
-          )}
-          {!metadata && (
-            <label>
-              <Button as='div'>
-                <FaPlus aria-hidden /> <span>Upload Plugin</span>
-              </Button>
-              <input
-                type='file'
-                style={{ display: 'none' }}
-                accept='application/zip'
-                onChange={handleFileInputChange}
-              />
-            </label>
-          )}
-        </Dialog.Content>
-        <Dialog.Actions>
-          <Button onClick={() => hide(false)} subtle>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => hide(true)}
-            disabled={!metadata || !configValid}
-          >
-            Install
-          </Button>
-        </Dialog.Actions>
-      </Dialog>
+      {error && <p role='alert'>{error}</p>}
+      <InstallationReviewDialog
+        pending={pending}
+        onClose={() => setPending(undefined)}
+        onInstall={install}
+      />
     </>
   );
 };
 
 export default NewPluginButton;
-
-const PluginName = styled.span`
-  font-weight: bold;
-`;
-
-const DescriptionWrapper = styled.div`
-  background-color: ${p => p.theme.colors.bg1};
-  padding: ${p => p.theme.size()};
-  border-radius: ${p => p.theme.radius};
-`;
-
-const PluginAuthor = styled.span`
-  color: ${p => p.theme.colors.textLight};
-`;
-
-const Label = styled.label`
-  font-weight: bold;
-`;

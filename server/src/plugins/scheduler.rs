@@ -363,13 +363,12 @@ async fn run_one(appstate: &AppState, key: &PluginScheduleKey) -> Result<String,
         .ok_or("schedule no longer exists")?;
     let source = match &schedule.auto_apply {
         Some(grant) => match &grant.release {
-            Some(id) => {
-                appstate
-                    .store
-                    .get_plugin_release(id)
-                    .map_err(|e| e.to_string())?
-                    .source
-            }
+            Some(id) => appstate
+                .store
+                .get_plugin_release(id)
+                .map_err(|e| e.to_string())?
+                .source
+                .ok_or("the pinned release is not a JS release")?,
             None => grant
                 .source
                 .clone()
@@ -547,16 +546,19 @@ mod tests {
                         .appstate
                         .store
                         .publish_plugin_release(&atomic_lib::db::plugin_release::PluginRelease {
-                            source: plugin_source(
-                                &fixture.appstate.store,
-                                &fixture.drive,
-                                &fixture.plugin,
-                            )
-                            .await
-                            .unwrap(),
+                            source: Some(
+                                plugin_source(
+                                    &fixture.appstate.store,
+                                    &fixture.drive,
+                                    &fixture.plugin,
+                                )
+                                .await
+                                .unwrap(),
+                            ),
                             manifest: serde_json::Value::Null,
                             runtime: atomic_lib::db::plugin_release::RUNTIME.into(),
                             schemas: Default::default(),
+                            ..Default::default()
                         })
                         .unwrap(),
                 ),
@@ -647,13 +649,14 @@ mod tests {
             .appstate
             .store
             .publish_plugin_release(&atomic_lib::db::plugin_release::PluginRelease {
-                source: include_str!("../../../integrations/github-issues/plugin.js").into(),
+                source: Some(include_str!("../../../integrations/github-issues/plugin.js").into()),
                 manifest: serde_json::from_str(include_str!(
                     "../../../integrations/github-issues/manifest.fixture.json"
                 ))
                 .unwrap(),
                 runtime: atomic_lib::db::plugin_release::RUNTIME.into(),
                 schemas: Default::default(),
+                ..Default::default()
             })
             .unwrap();
         let mut plugin = f

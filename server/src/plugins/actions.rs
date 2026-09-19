@@ -258,7 +258,11 @@ async fn invoke_consumed(
     let input = json!({"phase":"action","action":call.action,"arguments":call.arguments,"config":bound.config,"trigger":{"kind":"manual","at":atomic_lib::utils::now()}});
     let output = embedded_runtime()
         .map_err(|e| e.to_string())?
-        .run(&package.source, &input.to_string(), NoCapabilities)
+        .run(
+            package.source.as_deref().unwrap_or_default(),
+            &input.to_string(),
+            NoCapabilities,
+        )
         .await
         .map_err(|e| e.to_string())??;
     if output.len() > 131072 {
@@ -1361,13 +1365,14 @@ mod tests {
         let db = std::sync::Arc::new(f.appstate.store.clone());
         let release = db
             .publish_plugin_release(&PluginRelease {
-                source: include_str!("../../../integrations/github-issues/plugin.js").into(),
+                source: Some(include_str!("../../../integrations/github-issues/plugin.js").into()),
                 manifest: serde_json::from_str(include_str!(
                     "../../../integrations/github-issues/manifest.fixture.json"
                 ))
                 .unwrap(),
                 runtime: atomic_lib::db::plugin_release::RUNTIME.into(),
                 schemas: Default::default(),
+                ..Default::default()
             })
             .unwrap();
         let mut plugin = db.get_resource(&f.plugin.as_str().into()).await.unwrap();

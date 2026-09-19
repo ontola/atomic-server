@@ -275,7 +275,17 @@ async function ensureAll<T extends { shortname: string; subject?: string }>(
       }),
   );
 
-  for (const spec of specs) {
+  // Resolving is separated from creating so the creates can go out together.
+  // Each term is a save of its own, and on a drive with no schema every term
+  // needs one: 19 saves in a row, which is most of the wait between asking for
+  // a plugin and seeing its page. They write different resources under the
+  // same ontology and none reads another's subject, so the order they land in
+  // does not matter. `slots` keeps the ontology's list in `specs` order all
+  // the same, because that order is what someone reading the ontology sees.
+  const slots: Array<string | undefined> = specs.map(() => undefined);
+  const toCreate: Array<{ index: number; spec: T; localId: string }> = [];
+
+  for (const [index, spec] of specs.entries()) {
     if (spec.subject) {
       const shared = await store.getResource(spec.subject);
       const desired = build(spec);
@@ -291,9 +301,7 @@ async function ensureAll<T extends { shortname: string; subject?: string }>(
         throw new Error(`incompatible property datatype: ${spec.subject}`);
       }
 
-      result[spec.shortname] = spec.subject;
-      if (!existing.includes(spec.subject) && !added.includes(spec.subject))
-        added.push(spec.subject);
+      slots[index] = spec.subject;
       continue;
     }
 
@@ -302,7 +310,6 @@ async function ensureAll<T extends { shortname: string; subject?: string }>(
       found.get(spec.shortname) ?? orphans.get(spec.shortname)?.subject;
 
     if (hit) {
-      result[spec.shortname] = hit;
       const resource = await store.getResource(hit);
       const desired = build(spec);
       const datatype = desired.propVals[core.properties.datatype];
@@ -311,32 +318,47 @@ async function ensureAll<T extends { shortname: string; subject?: string }>(
           `incompatible recovered schema datatype: ${spec.shortname}`,
         );
       await reconcile(store, hit, desired.propVals);
-      if (!existing.includes(hit)) added.push(hit);
+      slots[index] = hit;
       continue;
     }
 
-    const { isA, propVals } = build(spec);
-    const created = await store.newResource({
-      parent: ontology.subject,
-      isA,
-      propVals: { ...propVals, [core.properties.localId]: localId },
-    });
-    let saved = created;
+    toCreate.push({ index, spec, localId });
+  }
 
-    try {
-      await created.save();
-    } catch (error) {
-      const recovered = await store.findByLocalId(
-        drive,
-        ontology.subject,
-        localId,
-      );
-      if (!recovered) throw error;
-      saved = recovered;
-    }
+  const created = await Promise.all(
+    toCreate.map(async ({ spec, localId }) => {
+      const { isA, propVals } = build(spec);
+      const resource = await store.newResource({
+        parent: ontology.subject,
+        isA,
+        propVals: { ...propVals, [core.properties.localId]: localId },
+      });
 
-    result[spec.shortname] = saved.subject;
-    added.push(saved.subject);
+      try {
+        await resource.save();
+
+        return resource.subject;
+      } catch (error) {
+        const recovered = await store.findByLocalId(
+          drive,
+          ontology.subject,
+          localId,
+        );
+        if (!recovered) throw error;
+
+        return recovered.subject;
+      }
+    }),
+  );
+
+  for (const [slot, { index }] of toCreate.entries())
+    slots[index] = created[slot];
+
+  for (const [index, spec] of specs.entries()) {
+    const subject = slots[index]!;
+    result[spec.shortname] = subject;
+    if (!existing.includes(subject) && !added.includes(subject))
+      added.push(subject);
   }
 
   if (added.length > 0) {
