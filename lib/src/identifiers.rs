@@ -70,9 +70,9 @@ pub fn is_identifier_http_endpoint(path: &str) -> bool {
 }
 
 /// Path-form identifier: `/atomic:{genesis}` or `/did:ad:{genesis}`.
+/// The body may contain `/` (legacy standard-base64 signatures).
 pub fn is_identifier_path_form(path: &str) -> bool {
-    path.strip_prefix('/')
-        .is_some_and(|rest| !rest.contains('/') && is_atomic_identifier(rest))
+    path.strip_prefix('/').is_some_and(is_atomic_identifier)
 }
 
 /// True when this request path resolves an Atomic identifier rather than an
@@ -301,6 +301,7 @@ mod tests {
 
         assert!(is_identifier_path_form("/atomic:abc"));
         assert!(is_identifier_path_form("/did:ad:abc"));
+        assert!(is_identifier_path_form("/did:ad:ab/c+d=="));
         assert!(!is_identifier_path_form("/did:key:abc"));
         assert!(!is_identifier_path_form("/atomic://pair"));
         assert!(!is_identifier_path_form("/foo/atomic:abc"));

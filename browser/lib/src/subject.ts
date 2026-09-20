@@ -62,7 +62,7 @@ export function isIdentifierHttpEndpoint(path: string): boolean {
 
 /** Path-form identifier: `/atomic:{genesis}` or `/did:ad:{genesis}`. */
 export function isIdentifierPathForm(path: string): boolean {
-  if (!path.startsWith('/') || path.slice(1).includes('/')) {
+  if (!path.startsWith('/')) {
     return false;
   }
 

@@ -116,8 +116,10 @@ describe('subject', () => {
       expect(isIdentifierHttpEndpoint('/diddle')).toBe(false);
       expect(isIdentifierPathForm('/atomic:abc')).toBe(true);
       expect(isIdentifierPathForm('/did:ad:abc')).toBe(true);
+      expect(isIdentifierPathForm('/did:ad:ab/c+d==')).toBe(true);
       expect(isIdentifierPathForm('/did:key:abc')).toBe(false);
       expect(isIdentifierPathForm('/atomic://pair')).toBe(false);
+      expect(isIdentifierPathForm('/foo/atomic:abc')).toBe(false);
       expect(isIdentifierResolutionPath('/did?subject=atomic:abc')).toBe(true);
       expect(isIdentifierResolutionPath('/search')).toBe(false);
     });

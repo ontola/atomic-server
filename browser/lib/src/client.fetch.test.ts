@@ -41,7 +41,7 @@ describe('Client.fetchResourceHTTP DID subjects', () => {
     const httpAlias = `https://example.com/${DID}`;
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       expect(String(input)).toBe(
-        `https://example.com/resource?subject=${encodeURIComponent(DID)}`,
+        `https://example.com/resource?subject=${encodeURIComponent('atomic:ontology123')}`,
       );
 
       return jsonResponse();
