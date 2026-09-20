@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import { type AIMessageContext, type AtomicUIMessage } from './types';
 import { Column, Row } from '@components/Row';
 import { EditableTitle } from '@components/EditableTitle';
+import { ResourceContextMenu } from '@components/ResourceContextMenu';
 import { ResourceCoverImage } from '@components/ResourceDecorations';
 import { DEFAULT_AICHAT_NAME } from '@components/AI/aiContstants';
 import { useGenerativeData } from './useGenerativeData';
@@ -246,8 +247,13 @@ const AIChatPage: React.FC<ResourcePageProps<Ai.AiChat>> = ({ resource }) => {
     >
       <Column gap='0.5rem'>
         <ResourceCoverImage resource={resource} />
-        <Row>
+        <Row center justify='space-between'>
           <SmallTitle resource={resource} withDecorations />
+          <ResourceContextMenu
+            subject={resource.subject}
+            title='Chat resource actions'
+            searchable
+          />
         </Row>
       </Column>
     </RealAIChat>

@@ -14,7 +14,7 @@ export const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
   const visibleContext = context?.filter(item => item.type !== 'skill');
 
   return (
-    <UserMessageWrapper>
+    <UserMessageWrapper data-testid='ai-user-message'>
       <SenderName>You</SenderName>
       {visibleContext && visibleContext.length > 0 && (
         <ContextItemRow wrapItems center gap='1ch'>
@@ -42,7 +42,8 @@ const ContextItemRow = styled(Row)`
 
 const MessageWrapper = styled.div`
   border-radius: ${p => p.theme.radius};
-  width: 90%;
+  width: 100%;
+  min-width: 0;
   padding-block: ${p => p.theme.size()};
 
   &:hover {
@@ -55,6 +56,10 @@ const UserMessageWrapper = styled(MessageWrapper)`
   background-color: ${p => p.theme.colors.bg};
   align-self: flex-end;
   border: solid 1px ${p => p.theme.colors.bg2};
+
+  @media (max-width: 600px) {
+    padding: 0.5rem;
+  }
 `;
 
 const SenderName = styled.span`

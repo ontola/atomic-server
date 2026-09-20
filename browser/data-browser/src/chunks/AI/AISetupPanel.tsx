@@ -194,9 +194,7 @@ export const AISetupPanel: React.FC<{ onDismiss?: () => void }> = ({
               checked={syncGenFeatures}
               onChange={e => setSyncGenFeatures(e.target.checked)}
             />
-            <label htmlFor='sync-gen-features'>
-              Also use for chat titles and follow-up prompts
-            </label>
+            <label htmlFor='sync-gen-features'>Also use for chat titles</label>
           </CheckboxRow>
           <ActionsRow>
             <Button subtle onClick={handleBack}>
@@ -222,7 +220,7 @@ export const AISetupPanel: React.FC<{ onDismiss?: () => void }> = ({
       }}
     >
       <Panel>
-        <Title>Connect a model to use Atomic Assistant</Title>
+        <Title>Connect a model to use AI chat</Title>
         <Subtle>
           Use OpenRouter (cloud models) or Ollama (local models). At least one
           provider must be connected before you can continue.

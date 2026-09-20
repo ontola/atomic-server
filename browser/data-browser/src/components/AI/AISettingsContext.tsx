@@ -24,9 +24,6 @@ interface AISettingsContextType {
   /** Whether to show the token usage in AI chats */
   showTokenUsage: boolean;
   setShowTokenUsage: (b: boolean) => void;
-  /** Whether to show the follow up prompts in AI chats */
-  showFollowUpPrompts: boolean;
-  setShowFollowUpPrompts: (b: boolean) => void;
   /** Default model for built-in agents and new custom agents */
   defaultChatModel: AIModelIdentifier;
   setDefaultChatModel: (model: AIModelIdentifier) => void;
@@ -57,8 +54,6 @@ const initialState: AISettingsContextType = {
   setMcpServers: () => undefined,
   showTokenUsage: true,
   setShowTokenUsage: () => undefined,
-  showFollowUpPrompts: true,
-  setShowFollowUpPrompts: () => undefined,
   defaultChatModel: DEFAULT_CHAT_MODEL,
   setDefaultChatModel: () => undefined,
   isProviderAvailable: () => false,
@@ -137,11 +132,6 @@ export const AISettingsContextProvider = (
       provider: AIProvider.OpenRouter,
     });
 
-  const [showFollowUpPrompts, setShowFollowUpPrompts] = useLocalStorage(
-    'atomic.ai.showFollowUpPrompts',
-    true,
-  );
-
   const [shouldGenerateTitles, setShouldGenerateTitles] = useLocalStorage(
     'atomic.ai.shouldGenerateTitles',
     true,
@@ -169,8 +159,6 @@ export const AISettingsContextProvider = (
     setShowTokenUsage,
     ollamaUrl,
     setOllamaUrl,
-    showFollowUpPrompts,
-    setShowFollowUpPrompts,
     defaultChatModel,
     setDefaultChatModel,
     isProviderAvailable,
