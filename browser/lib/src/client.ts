@@ -458,7 +458,7 @@ export class Client {
   }
 }
 
-/** Origin used to turn a `did:ad:…` subject into `GET {origin}/did?subject=`. */
+/** Origin used to turn an identifier into `GET {origin}/resource?subject=`. */
 function didResolutionBaseUrl(
   ...candidates: Array<string | undefined>
 ): string | undefined {

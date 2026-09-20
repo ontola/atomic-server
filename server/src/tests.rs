@@ -478,7 +478,10 @@ async fn test_did_agent_edit() {
 
     // 5. Fetch the agent resource via GET and verify the name change
     let req = test::TestRequest::get()
-        .uri(&format!("/did?subject={}", urlencoding::encode(&agent_did)))
+        .uri(&format!(
+            "/resource?subject={}",
+            urlencoding::encode(&agent_did)
+        ))
         .insert_header(("Accept", "application/ad+json"))
         .to_request();
     let resp = test::call_service(&app, req).await;

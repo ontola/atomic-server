@@ -10,7 +10,7 @@ import {
 /**
  * Repro for: open a DID folder's own page, refresh → it renders BROKEN (raw
  * subject as H1, no Folder view, no isA), even though the server has the full
- * resource (the Data page's `/did?subject=` fetch returns complete JSON-AD).
+ * resource (the Data page's `/resource?subject=` fetch returns complete JSON-AD).
  *
  * The createdBy/createdAt subtitle that shows in the broken view is derived
  * from the DID genesis, so a resource with ZERO real props still renders that

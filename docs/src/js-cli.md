@@ -76,10 +76,10 @@ There should now be a file called `atomic.config.json` in the folder where you r
 > If you want to change the location where the files are generated you can change the `outputFolder` field.
 
 Next add the subjects of your atomic ontologies to the `ontologies` array in the config.
-Use the ontology's `did:ad:…` identifier (shown in the app's address/search bar as `?subject=did:ad:…`), not the `https://your-server/did:ad:…` URL.
+Use the ontology's `atomic:` identifier (shown in the app's address/search bar as `?subject=atomic:…`), not the `https://your-server/atomic:…` URL.
 Set `serverUrl` to the origin of the Atomic Server that hosts those ontologies (for local development that is usually `http://localhost:9883`).
 
-If you do paste an `https://your-server/did:ad:…` URL, the CLI treats it as an alias of the DID and takes the server origin from the URL.
+If you do paste an `https://your-server/atomic:…` or `https://your-server/did:ad:…` URL, the CLI treats it as an alias of the identifier and takes the server origin from the URL.
 
 Now we will generate the ontology files. We do this by running the `ad-generate ontologies` command. If your ontologies don't have public read rights you will have to add an agent secret to the command that has access to these resources.
 
@@ -174,8 +174,8 @@ interface AtomicConfig {
 
   /**
    * Origin of the Atomic Server used to fetch ontology subjects,
-   * including `did:ad:…` identifiers (GET `/did?subject=`).
-   * Required when `ontologies` contains DID subjects.
+   * including `atomic:` identifiers (GET `/resource?subject=`).
+   * Required when `ontologies` contains identifier subjects.
    */
   serverUrl?: string;
 

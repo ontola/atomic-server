@@ -82,7 +82,7 @@ function Data(): JSX.Element {
     let url = subject;
 
     if (isAtomicIdentifier(subject)) {
-      url = `${store.getServerUrl()}/did?subject=${encodeURIComponent(subject)}`;
+      url = `${store.getServerUrl()}/resource?subject=${encodeURIComponent(subject)}`;
     }
 
     if (agent) {

@@ -96,12 +96,12 @@ impl Drop for PeerServer {
     }
 }
 
-/// Fetch a subject from a server as an anonymous reader. `did:ad:` subjects are
-/// not path segments — they are resolved through `/did?subject=`.
+/// Fetch a subject from a server as an anonymous reader. Identifiers are
+/// not path segments — they are resolved through `/resource?subject=`.
 async fn get_subject_anonymously(base_url: &str, subject: &str) -> reqwest::Response {
     reqwest::Client::new()
         .get(format!(
-            "{base_url}/did?subject={}",
+            "{base_url}/resource?subject={}",
             urlencoding::encode(subject)
         ))
         .header("Accept", "application/ad+json")
