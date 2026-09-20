@@ -54,12 +54,8 @@ test.describe('apps', () => {
 
       // `New app` is search-only: it creates the drive's plugin schema on first
       // use, so it stays out of the default listing.
-      await page.getByRole('button', { name: 'More' }).click();
-      await page.getByPlaceholder(/filter/i).fill('app');
-      await page.locator('[data-testid="menu-item-new-app"]').click();
-
       // An app page is the app: no chrome of its own, just the frame.
-      await expect(main.locator('iframe[title="App"]')).toBeVisible();
+      await newApp(page);
 
       // And the frame is the page. An iframe never grows to fit its document,
       // so a box shorter than the page does not scroll — it clips the app and
@@ -99,10 +95,7 @@ test.describe('apps', () => {
   }) => {
     const main = page.getByRole('main');
 
-    await page.getByRole('button', { name: 'More' }).click();
-    await page.getByPlaceholder(/filter/i).fill('app');
-    await page.locator('[data-testid="menu-item-new-app"]').click();
-    await expect(main.locator('iframe[title="App"]')).toBeVisible();
+    await newApp(page);
 
     const app = page.frameLocator('iframe[title="App"]');
     await app.getByRole('button', { name: 'Add an item' }).click();
@@ -131,10 +124,7 @@ test.describe('apps', () => {
   }) => {
     const main = page.getByRole('main');
 
-    await page.getByRole('button', { name: 'More' }).click();
-    await page.getByPlaceholder(/filter/i).fill('app');
-    await page.locator('[data-testid="menu-item-new-app"]').click();
-    await expect(main.locator('iframe[title="App"]')).toBeVisible();
+    await newApp(page);
 
     // Open the app's own table and add the app as a second way to see it.
     const sidebar = page.getByRole('navigation').last();
@@ -163,12 +153,7 @@ test.describe('apps', () => {
   test('an app survives a reload, because its data is in the drive', async ({
     page,
   }) => {
-    const main = page.getByRole('main');
-
-    await page.getByRole('button', { name: 'More' }).click();
-    await page.getByPlaceholder(/filter/i).fill('app');
-    await page.locator('[data-testid="menu-item-new-app"]').click();
-    await expect(main.locator('iframe[title="App"]')).toBeVisible();
+    await newApp(page);
 
     const app = page.frameLocator('iframe[title="App"]');
     await app.getByRole('button', { name: 'Add an item' }).click();
@@ -186,10 +171,7 @@ test.describe('apps', () => {
   }) => {
     const main = page.getByRole('main');
 
-    await page.getByRole('button', { name: 'More' }).click();
-    await page.getByPlaceholder(/filter/i).fill('app');
-    await page.locator('[data-testid="menu-item-new-app"]').click();
-    await expect(main.locator('iframe[title="App"]')).toBeVisible();
+    await newApp(page);
 
     // Break it. The frame is null-origin, so its console belongs to nobody —
     // without a report crossing the boundary this is a blank panel and the
@@ -207,6 +189,34 @@ test.describe('apps', () => {
     await expect(alert.getByRole('button', { name: 'Fix it' })).toBeVisible();
   });
 });
+
+/**
+ * Asks for a new app and waits for its frame.
+ *
+ * The first app on a drive materializes that drive's plugin schema before
+ * anything can render: `createApp` calls `ensureSchema(pluginSchema())`, which
+ * is nineteen properties and classes, each its own resource. The browser sends
+ * those writes together, but the server applies commits one at a time, so the
+ * step costs what nineteen sequential writes cost. That is the same wait
+ * `newPlugin` in plugins.spec.ts documents: measured against a debug build,
+ * 5.2s on a fresh store and around 11s once the suite's shared store holds a
+ * handful of drives, which is where this spec runs. The suite's 10s default
+ * was never a budget this step could meet on CI hardware, and it is what made
+ * every test in this file fail there while passing on a clean laptop.
+ *
+ * So the wait is widened here rather than for the whole suite, and the test
+ * gets room for the part that comes after it. The wait is the symptom; making
+ * the schema cheaper to create is its own change.
+ */
+async function newApp(page: import('@playwright/test').Page) {
+  test.setTimeout(120000);
+  await page.getByRole('button', { name: 'More' }).click();
+  await page.getByPlaceholder(/filter/i).fill('app');
+  await page.locator('[data-testid="menu-item-new-app"]').click();
+  await expect(
+    page.getByRole('main').locator('iframe[title="App"]'),
+  ).toBeVisible({ timeout: 45000 });
+}
 
 /**
  * Replaces the source of the app on screen, through `window.store`.

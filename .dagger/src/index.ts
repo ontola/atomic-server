@@ -1169,6 +1169,15 @@ export class AtomicServer {
       .withFile(
         '/lib/defaults/tasks.json',
         this.source.file('lib/defaults/tasks.json'),
+      )
+      // browser/e2e/tests/apps.spec.ts serves this checkout's embedded app SDK
+      // as a fixture, read with a plain `readFileSync` at
+      // `../../../server/src/plugins/assets/view-client.js`. From /app/e2e/tests
+      // that resolves to /server/..., and the Rust tree is not mounted here, so
+      // mount just this one file.
+      .withFile(
+        '/server/src/plugins/assets/view-client.js',
+        this.source.file('server/src/plugins/assets/view-client.js'),
       );
 
     return sourceContainer;
@@ -1777,6 +1786,12 @@ export class AtomicServer {
         )
         .withEnvVariable('MOCK_FRONTEND_ORIGIN', 'http://atomic.localhost:9883')
         .withEnvVariable('MOCK_PROXY_HOST', '0.0.0.0')
+        // Website publishing is off until the server is given a site origin,
+        // and the website specs then get a "hosting is disabled" toast that
+        // also sits over the preview and swallows clicks meant for it. The
+        // server asks for a separate `.localhost` origin in development; this
+        // is that, and it has to stay outside the API domain.
+        .withEnvVariable('ATOMIC_WEBSITE_ORIGIN', 'http://sites.localhost:9883')
         .withExposedPort(19090)
         .withEntrypoint([
           'sh',
