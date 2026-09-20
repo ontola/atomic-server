@@ -498,7 +498,7 @@ export class AtomicServer {
 
     // Fail fast on cheap static checks. A store.ts oxfmt miss used to burn
     // ~20+ minutes of rust/e2e compile before jsLint surfaced it.
-    await Promise.all([this.jsLint(), this.rustFmt()]);
+    await Promise.all([this.jsLint(), this.jsTypecheck(), this.rustFmt()]);
 
     // Rust clippy/test still share the `rust-target` cache mount — keep
     // them serialized (parallel cargo contended the target lock for
@@ -534,6 +534,29 @@ export class AtomicServer {
     return depsContainer
       .withWorkdir('/app')
       .withExec(['pnpm', 'run', 'lint'])
+      .stdout();
+  }
+
+  @func()
+  async jsTypecheck(): Promise<string> {
+    const depsContainer = this.jsSource();
+
+    // Most packages map `@tomic/lib` and `@tomic/react` to their sources in
+    // `paths`, but edit-mode and e2e resolve them through node_modules, so
+    // `tsc` reads `lib/dist/src/index.d.ts` and fails with TS2307 until that
+    // exists. Building those two packages is enough and keeps this in the
+    // cheap static tier: unlike `jsBuild()` it needs no WASM and no Rust.
+    return depsContainer
+      .withWorkdir('/app')
+      .withExec([
+        'pnpm',
+        '--filter',
+        '@tomic/lib',
+        '--filter',
+        '@tomic/react',
+        'build',
+      ])
+      .withExec(['pnpm', 'run', 'typecheck'])
       .stdout();
   }
 
