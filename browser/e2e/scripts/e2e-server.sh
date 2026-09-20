@@ -129,7 +129,50 @@ done
 # suite ran green-looking nonsense against it for as long as nobody noticed.
 # The failures that produces look like product bugs — `new-resource-catalog`
 # lost its search box entirely — so nothing about them points at the cause.
-if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+# `lsof` alone was not safe to ask. A missing binary exits non-zero and the
+# `2>&1` swallows "command not found", so a container without it concludes the
+# port is free and walks straight into the wipe this check exists to prevent.
+# Establish the tools first, then ask the question, and ask the one that
+# actually matters: is anything answering on that port. `--noproxy` because an
+# HTTPS_PROXY in the environment would otherwise send a localhost probe through
+# it. `lsof` still runs when present, since a process can hold the socket
+# without answering, and either answer means busy.
+port_busy() {
+  if [[ "$HAVE_CURL" == true ]] \
+     && curl -s -o /dev/null --max-time 2 --noproxy '*' "$SERVER_URL"; then
+    return 0
+  fi
+
+  if [[ "$HAVE_LSOF" == true ]] \
+     && lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+    return 0
+  fi
+
+  return 1
+}
+
+HAVE_CURL=false
+HAVE_LSOF=false
+command -v curl >/dev/null 2>&1 && HAVE_CURL=true
+command -v lsof >/dev/null 2>&1 && HAVE_LSOF=true
+
+if [[ "$HAVE_CURL" != true ]] && [[ "$HAVE_LSOF" != true ]]; then
+  if [[ "$FRESH" == true ]]; then
+    echo "Neither curl nor lsof is installed, so whether $PORT is already in use" >&2
+    echo "cannot be established, and --fresh is about to delete $STORE." >&2
+    echo "Refusing, rather than wiping on an assumption: a stale server holding" >&2
+    echo "this port would go on serving a store that no longer exists, and the" >&2
+    echo "failures that produces look like product bugs rather than like this." >&2
+    echo "Install either tool, or run without --fresh." >&2
+    exit 1
+  fi
+
+  # Nothing is being deleted, so an unnoticed stale server can only make the
+  # new one fail to bind, which says so on its own.
+  echo "Neither curl nor lsof is installed; skipping the port check." >&2
+fi
+
+if port_busy; then
   echo "Something is already listening on $PORT, and nothing has been wiped." >&2
   echo "If that is your dev server, stop it first — the suite needs that port," >&2
   echo "because it is the port the app is pointed at. If it is an older e2e" >&2
