@@ -445,7 +445,11 @@ impl Subject {
         let s = if s.len() > 1 && s.ends_with('/') {
             if s.starts_with("internal:") {
                 // If it's internal:/, don't strip. internal:/path/ -> internal:/path
-                if s.len() > 10 { &s[..s.len() - 1] } else { s }
+                if s.len() > 10 {
+                    &s[..s.len() - 1]
+                } else {
+                    s
+                }
             } else {
                 &s[..s.len() - 1]
             }

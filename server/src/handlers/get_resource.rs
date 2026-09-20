@@ -1,11 +1,11 @@
 use crate::{
     appstate::AppState,
-    content_types::ContentType,
     content_types::get_accept,
+    content_types::ContentType,
     errors::AtomicServerResult,
     helpers::{get_client_agent, try_extension},
 };
-use actix_web::{HttpResponse, web};
+use actix_web::{web, HttpResponse};
 use atomic_lib::db::ResolvedTarget;
 use simple_server_timing_header::Timer;
 

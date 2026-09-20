@@ -5,7 +5,7 @@ use crate::{
     commit_monitor::CommitMonitor, config::Config, errors::AtomicServerResult,
     handlers::web_sockets::IndexStatusBroadcast, plugins,
 };
-use atomic_lib::{Storelike, agents::Agent, commit::CommitResponse, config::SharedConfig};
+use atomic_lib::{agents::Agent, commit::CommitResponse, config::SharedConfig, Storelike};
 
 #[cfg(feature = "wasm-plugins")]
 use crate::plugins::wasm;

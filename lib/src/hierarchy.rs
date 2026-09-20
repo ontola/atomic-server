@@ -4,7 +4,7 @@
 
 use core::fmt;
 
-use crate::{Resource, Storelike, agents::ForAgent, errors::AtomicResult, urls};
+use crate::{agents::ForAgent, errors::AtomicResult, urls, Resource, Storelike};
 
 #[cfg(target_arch = "wasm32")]
 type AsyncResult<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + 'a>>;
@@ -499,7 +499,7 @@ fn check_rights_impl<'a, S: Storelike>(
 #[cfg(test)]
 mod test {
     // use super::*;
-    use crate::{Storelike, Value, datatype::DataType};
+    use crate::{datatype::DataType, Storelike, Value};
 
     /// End-to-end guard for the migration's biggest rights hazard.
     ///
@@ -513,7 +513,7 @@ mod test {
     #[cfg(feature = "db")]
     async fn legacy_internal_agent_grant_still_authorizes_its_did() {
         use crate::agents::ForAgent;
-        use crate::hierarchy::{Right, check_rights};
+        use crate::hierarchy::{check_rights, Right};
 
         let store = crate::db::Db::init_temp("legacy_agent_grant_rights")
             .await
@@ -563,7 +563,7 @@ mod test {
     #[cfg(feature = "db")]
     async fn agents_are_readable_by_anyone_but_writable_only_by_their_owner() {
         use crate::agents::ForAgent;
-        use crate::hierarchy::{Right, check_rights};
+        use crate::hierarchy::{check_rights, Right};
 
         let store = crate::db::Db::init_temp("agents_are_public").await.unwrap();
         crate::test_utils::setup_test_env(&store).await.unwrap();

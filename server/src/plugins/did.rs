@@ -1,9 +1,8 @@
 use atomic_lib::{
-    Storelike,
     endpoints::{BoxFuture, Endpoint, HandleGetContext},
     errors::AtomicResult,
     storelike::ResourceResponse,
-    urls,
+    urls, Storelike,
 };
 
 pub fn did_endpoint() -> Endpoint {

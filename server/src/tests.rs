@@ -6,13 +6,13 @@ use crate::{appstate::AppState, config::Opts};
 
 use super::*;
 use actix_web::{
-    App,
     body::MessageBody,
     dev::ServiceResponse,
     test::{self, TestRequest},
     web::Data,
+    App,
 };
-use atomic_lib::{Storelike, urls};
+use atomic_lib::{urls, Storelike};
 use base64::Engine;
 
 /// Returns the request with signed headers. Also adds a json-ad accept header - overwrite this if you need something else.
@@ -381,7 +381,7 @@ async fn fresh_store_gets_core_models_without_initialize() {
 
 #[actix_rt::test]
 async fn test_did_agent_edit() {
-    use atomic_lib::{Resource, Value, agents::Agent, commit::CommitBuilder, urls};
+    use atomic_lib::{agents::Agent, commit::CommitBuilder, urls, Resource, Value};
     let unique_string = atomic_lib::utils::random_string(10);
     use clap::Parser;
     let opts = Opts::parse_from([
@@ -884,15 +884,13 @@ async fn content_addressed_image_with_storage(remote: bool) {
             resized.headers().get("x-content-type-options").unwrap(),
             "nosniff"
         );
-        assert!(
-            resized
-                .headers()
-                .get("content-disposition")
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .starts_with("attachment")
-        );
+        assert!(resized
+            .headers()
+            .get("content-disposition")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .starts_with("attachment"));
         let rendered = test::read_body(resized).await;
         assert_eq!(image::guess_format(&rendered).unwrap(), expected_format);
     }

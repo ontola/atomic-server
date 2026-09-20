@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    Commit, Db, Resource, agents::ForAgent, errors::AtomicResult, storelike::ResourceResponse, urls,
+    agents::ForAgent, errors::AtomicResult, storelike::ResourceResponse, urls, Commit, Db, Resource,
 };
 
 pub use crate::plugins::BoxFuture;
@@ -375,31 +375,25 @@ mod tests {
                 "{is_a:?}"
             );
             assert!(resource.has_class(CLASS), "{is_a:?}");
-            assert!(
-                extender_declaring(CLASS)
-                    .resource_has_extender(&resource)
-                    .unwrap()
-            );
+            assert!(extender_declaring(CLASS)
+                .resource_has_extender(&resource)
+                .unwrap());
         }
 
         // No `isA` at all is no classes, which is not an error.
         let bare = Resource::new("did:ad:someresource".to_string());
         assert!(bare.class_subjects().is_empty());
         assert!(!bare.has_class(CLASS));
-        assert!(
-            !extender_declaring(CLASS)
-                .resource_has_extender(&bare)
-                .unwrap()
-        );
+        assert!(!extender_declaring(CLASS)
+            .resource_has_extender(&bare)
+            .unwrap());
     }
 
     #[test]
     fn a_bare_did_matches_itself() {
-        assert!(
-            extender_declaring(CLASS)
-                .resource_has_extender(&resource_of_class(CLASS))
-                .unwrap()
-        );
+        assert!(extender_declaring(CLASS)
+            .resource_has_extender(&resource_of_class(CLASS))
+            .unwrap());
     }
 
     #[test]
@@ -409,27 +403,21 @@ mod tests {
         // never ran and nothing said why.
         let hinted = format!("{CLASS}?drive=did:ad:somedrive");
 
-        assert!(
-            extender_declaring(CLASS)
-                .resource_has_extender(&resource_of_class(&hinted))
-                .unwrap()
-        );
+        assert!(extender_declaring(CLASS)
+            .resource_has_extender(&resource_of_class(&hinted))
+            .unwrap());
 
         // And the other way round, since either side may carry it.
-        assert!(
-            extender_declaring(&hinted)
-                .resource_has_extender(&resource_of_class(CLASS))
-                .unwrap()
-        );
+        assert!(extender_declaring(&hinted)
+            .resource_has_extender(&resource_of_class(CLASS))
+            .unwrap());
     }
 
     #[test]
     fn surrounding_whitespace_is_not_a_different_class() {
-        assert!(
-            extender_declaring(&format!("  {CLASS}  "))
-                .resource_has_extender(&resource_of_class(CLASS))
-                .unwrap()
-        );
+        assert!(extender_declaring(&format!("  {CLASS}  "))
+            .resource_has_extender(&resource_of_class(CLASS))
+            .unwrap());
     }
 
     #[test]
@@ -438,31 +426,25 @@ mod tests {
         // the resource is. Accepting it would make a plugin's declared class
         // depend on the origin it was written against. `add_class_extender`
         // warns about this shape instead.
-        assert!(
-            !extender_declaring(CLASS)
-                .resource_has_extender(&resource_of_class(&format!(
-                    "http://localhost:24797/{CLASS}"
-                )))
-                .unwrap()
-        );
+        assert!(!extender_declaring(CLASS)
+            .resource_has_extender(&resource_of_class(&format!(
+                "http://localhost:24797/{CLASS}"
+            )))
+            .unwrap());
     }
 
     #[test]
     fn a_different_class_still_does_not_match() {
-        assert!(
-            !extender_declaring(CLASS)
-                .resource_has_extender(&resource_of_class("did:ad:someotherclassentirely"))
-                .unwrap()
-        );
+        assert!(!extender_declaring(CLASS)
+            .resource_has_extender(&resource_of_class("did:ad:someotherclassentirely"))
+            .unwrap());
     }
 
     #[test]
     fn a_resource_without_is_a_matches_nothing() {
         let bare = Resource::new("did:ad:someresource".to_string());
-        assert!(
-            !extender_declaring(CLASS)
-                .resource_has_extender(&bare)
-                .unwrap()
-        );
+        assert!(!extender_declaring(CLASS)
+            .resource_has_extender(&bare)
+            .unwrap());
     }
 }

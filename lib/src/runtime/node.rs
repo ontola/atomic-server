@@ -14,14 +14,14 @@
 //! to it (`planning/atomic-lib-runtime.md`).
 
 use crate::{
-    Resource, Storelike,
     agents::Agent,
     commit::{Commit, CommitOpts, CommitResponse},
     db::Db,
     errors::AtomicResult,
     storelike::{Query, QueryResult},
-    sync::engine::{CommitIngestOpts, ingest_commit},
+    sync::engine::{ingest_commit, CommitIngestOpts},
     sync::outbox::{CommitTransport, DrainReport, Outbox},
+    Resource, Storelike,
 };
 
 /// The trust role under which a signed commit is ingested. `Hub` and `Peer`
@@ -194,7 +194,7 @@ impl AtomicNode {
 mod tests {
     use super::*;
     use crate::{
-        Resource, Subject, Value, agents::ForAgent, client::commit_to_wire_json, db::DbEvent, urls,
+        agents::ForAgent, client::commit_to_wire_json, db::DbEvent, urls, Resource, Subject, Value,
     };
 
     async fn open_test_node(label: &str) -> AtomicNode {

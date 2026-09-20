@@ -246,12 +246,12 @@ mod vault_ipc {
     dek::DriveVaultKey,
     store::{MemoryVaultStore, VaultObjectStore},
     sync::{
-      CheckpointPolicy, SegmentKind, commit_lane_state, drive_prefix, export_vault_segment,
-      import_vault_batch,
+      commit_lane_state, drive_prefix, export_vault_segment, import_vault_batch, CheckpointPolicy,
+      SegmentKind,
     },
   };
-  use base64::Engine as _;
   pub use base64::engine::general_purpose::STANDARD;
+  use base64::Engine as _;
 
   #[derive(serde::Deserialize)]
   #[serde(rename_all = "camelCase")]
@@ -380,7 +380,7 @@ async fn vault_export(
   vault_ipc::on_worker_thread(move || {
     use atomic_lib::Storelike as _;
     use base64::Engine as _;
-    use vault_ipc::{STANDARD, VaultObjectStore as _};
+    use vault_ipc::{VaultObjectStore as _, STANDARD};
 
     let subject = atomic_lib::Subject::from_raw(&drive_subject, store.get_base_domain().as_deref());
     let staging = vault_ipc::MemoryVaultStore::new();
@@ -458,7 +458,7 @@ async fn vault_import(
 
   vault_ipc::on_worker_thread(move || {
     use base64::Engine as _;
-    use vault_ipc::{STANDARD, VaultObjectStore as _};
+    use vault_ipc::{VaultObjectStore as _, STANDARD};
 
     let staging = vault_ipc::MemoryVaultStore::new();
 

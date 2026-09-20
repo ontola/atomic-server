@@ -2,8 +2,8 @@
 //! It relies on lexicographic ordering of keys, which Sled utilizes using `scan_prefix` queries.
 
 use crate::{
-    Atom, Db, Resource, Storelike, Subject, Value, atoms::IndexAtom, errors::AtomicResult,
-    storelike::Query, utils::truncate_string,
+    atoms::IndexAtom, errors::AtomicResult, storelike::Query, utils::truncate_string, Atom, Db,
+    Resource, Storelike, Subject, Value,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -335,8 +335,8 @@ fn compare_values(actual: &Value, query: &Value) -> std::cmp::Ordering {
 
 /// Whether a single resource value satisfies the constraint's value + operator.
 fn value_matches(actual: &Value, query: &Value, operator: FilterOperator) -> bool {
-    use FilterOperator::*;
     use std::cmp::Ordering;
+    use FilterOperator::*;
 
     match operator {
         // Scalar equality or array membership — the historical behaviour.
