@@ -92,12 +92,61 @@ index writes — and there is no `spawn_blocking` or `web::block` anywhere in
 after another. Different connections use different workers and do
 parallelise; one client saving nineteen resources does not.
 
-The fix is to get that CPU work off the connection's thread, onto a pool
-that can use the other cores, keeping the per-subject lock as the ordering
-guarantee it already is. Not built. What is still unmeasured is the
-**server** path in release — the numbers above are the store, so they are a
-floor for what a release server would spend per commit, not a prediction of
-it.
+Getting that CPU work off the connection's thread, onto a pool that can use
+the other cores, would keep the per-subject lock as the ordering guarantee it
+already is. Not built, and the section below revises down what it is worth.
+
+## What a commit actually costs, phase by phase (2026-09-20)
+
+The section above found that the store parallelises but never asked what the
+2.63 ms is made of, or whether it grows. Four tests in
+`lib/tests/commit_throughput.rs` answer both, release, 4 cores, store layer
+only.
+
+**The growth is mild, so the constant is the target.** Per-commit cost rises
+1.36x going from 400 to 4,800 resources, sub-linear and B-tree shaped. With
+200 collections open on the drive it rises 1.18x.
+
+A caution about that second number, because the first attempt got it wrong.
+An earlier run reported 2.04x, but it gave every watched collection the *same*
+parent, so all of them passed the first constraint and each paid a full
+`resource_matches_filter`. Give each collection a parent of its own, which is
+what a drive in use looks like, and it falls to 1.18x, because
+`resource_matches_filter` short-circuits on the first failing constraint.
+Routing the filter bucket by the constraint's value is therefore worth about
+1.18x at most, not the 2x it first appeared to be. Benchmark shape decided the
+conclusion here, so it is worth stating what shape a number came from.
+
+**The constant, 2.67 ms, splits four ways.** `create_resource` is
+`Commit::create_did` then `apply_commit`, and `CommitOpts` toggles the
+validation and the indexing, so the phases separate cleanly:
+
+| phase | ms | share |
+| --- | --- | --- |
+| sign (canonical JSON-AD + Ed25519) | 0.55 | 21% |
+| verify (signature check on apply) | 0.33 | 12% |
+| index (index atoms + `PropValSub`) | 0.60 | 23% |
+| write (blob + Loro snapshot + redb txn) | 1.19 | 44% |
+
+A server pays about 2.1 ms of this, since signing is the client's.
+
+**The measured lever is the write transaction.** Wrapping a burst of creates
+in `begin_batch`/`commit_batch` takes it from 2.27 to 1.58 ms per commit,
+**1.44x**. Note this revises a claim in the section above, that batching was
+not the lever because redb was not what blocked. Redb's single writer indeed
+does not block parallelism, but per-transaction overhead is still a quarter of
+a commit, which is a separate cost the concurrency argument did not touch.
+
+Two constraints on building it. Applying a commit is a read-modify-write of
+the stored Loro snapshot, so a batch is only safe for commits creating new
+resources, never for an edit to something an earlier commit in the same batch
+wrote. And batch mode is a *global* flag on the store, used by `populate.rs`,
+so it cannot be reached for from concurrent request handlers as-is.
+
+**This also shrinks the actor-thread fix above.** At ~2.1 ms of server-side
+work, nineteen commits is ~40 ms. Spreading them across workers saves tens of
+milliseconds, not seconds. Still worth doing, but it is not the explanation
+for anything measured in seconds, and no timeout theory should rest on it.
 
 ## Thesis
 
