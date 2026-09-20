@@ -548,8 +548,17 @@ export function run() { return { intents: [] }; }
       .getByLabel('Clockify API key', { exact: true })
       .fill('synthetic-clockify-key');
     await page.getByRole('button', { name: 'Find my workspaces' }).click();
+    // Discovery is a plugin run: the browser posts to the server, the server
+    // starts a sandbox and the plugin's `discover` phase answers out of it.
+    // That is a real round trip through a real sandbox, and on a loaded box it
+    // does not fit the suite's 10s action budget — measured here, this spec
+    // passes in 27s run on its own and times out on exactly this assertion
+    // when the suite runs it beside another. Same shape as the wait `newApp`
+    // documents in apps.spec.ts: the budget was never achievable, and the
+    // assertion is about the workspace list, not about how fast it arrives.
     await expect(page.getByLabel('Workspace', { exact: true })).toContainText(
       'Test workspace',
+      { timeout: 45000 },
     );
     await expect(page.getByLabel('Import my completed entries')).toHaveValue(
       '7',
@@ -566,6 +575,9 @@ export function run() { return { intents: [] }; }
   test('Clockify applies linked entries through the real sandbox and skips repeats', async ({
     page,
   }) => {
+    // Discovery plus an apply, both through the sandbox: a minute here, which
+    // is the suite's whole per-test default.
+    test.setTimeout(120_000);
     // Replace only the provider transport inside the sandbox. Discovery, mapping,
     // runtime, planning, signed commits and the second run's DB query stay real.
     await createTableFromDialog(page, {
@@ -655,8 +667,10 @@ export function run() { return { intents: [] }; }
       .getByLabel('Clockify API key', { exact: true })
       .fill('synthetic-clockify-key');
     await page.getByRole('button', { name: 'Find my workspaces' }).click();
+    // Discovery through the sandbox, as above.
     await expect(page.getByLabel('Workspace', { exact: true })).toContainText(
       'Fixture workspace',
+      { timeout: 45000 },
     );
     await expect(page.getByLabel('Import into', { exact: true })).toContainText(
       'Shared time entries',
@@ -900,6 +914,9 @@ export function run() { return { intents: [] }; }
   test('GitHub can be installed through the assistant without a CLI', async ({
     page,
   }) => {
+    // A real install through the sandbox: 48s measured here, against the
+    // suite's 60s default, which leaves nothing for a slower box.
+    test.setTimeout(120_000);
     const pageErrors: string[] = [];
     page.on('pageerror', e => pageErrors.push(e.message));
     const { dialog } = await openLegacyGithubSetup(page, {
@@ -912,9 +929,14 @@ export function run() { return { intents: [] }; }
       .getByRole('button', { name: 'Connect GitHub', exact: true })
       .click();
     await expect(page).toHaveURL(/\/app\/show\?subject=/, { timeout: 30000 });
+    // The install is still running when that URL appears: the button here
+    // reads "Connecting…" and is disabled until the connection settles, so
+    // `Connections` does not exist yet. The 30s above covers the navigation
+    // and nothing after it. Measured here: the click succeeds at 45s and the
+    // whole test takes 48s, against a 10s default that it never met.
     await page
       .getByRole('button', { name: 'Connections', exact: true })
-      .click();
+      .click({ timeout: 45000 });
     await page
       .getByRole('link', { name: 'Connection settings', exact: true })
       .click();
