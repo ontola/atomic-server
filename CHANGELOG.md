@@ -7,6 +7,17 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Identifiers are now emitted as `atomic:` (`atomic:{genesis}`,
+  `atomic:agent:`, `atomic:commit:`, `atomic:blob:`, `atomic:node:`). The
+  previous `did:ad:` spelling is accepted forever and names the same
+  resource. New genesis certificates use version `0x02` and serialize
+  parent/drive strings as `atomic:`; existing v1 certificates and the
+  personal-drive singleton stay v1. Pairing is
+  `atomic:node:{id}?v=1&drives=*`; `/resource?subject=` is the HTTP
+  endpoint (`/atomic` and `/did` remain aliases). Sync advertises `canonical-scheme`
+  so a peer that does not list it still receives `did:ad:` on the wire
+  (#1584).
+
 - Fix: a stale authentication proof no longer fails a request that needed no
   authentication. A browser keeps its proof in the `atomic_session` cookie, and
   until `AUTH_MAX_AGE_MS` arrived in 0.41 a proof never expired, so a stale one

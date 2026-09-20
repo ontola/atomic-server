@@ -63,7 +63,10 @@ struct PairLinks {
 fn queue_pair_links(state: &PairLinks, urls: impl IntoIterator<Item = String>) {
   let mut pending = state.pending.lock().unwrap();
   for url in urls {
-    if url.starts_with("atomic://") && !pending.contains(&url) {
+    if (atomic_lib::identifiers::is_atomic_identifier(&url)
+      || atomic_lib::identifiers::is_legacy_atomic_link(&url))
+      && !pending.contains(&url)
+    {
       println!("[pairing] queued deep link");
       pending.push(url);
     }
@@ -243,12 +246,12 @@ mod vault_ipc {
     dek::DriveVaultKey,
     store::{MemoryVaultStore, VaultObjectStore},
     sync::{
-      commit_lane_state, drive_prefix, export_vault_segment, import_vault_batch, CheckpointPolicy,
-      SegmentKind,
+      CheckpointPolicy, SegmentKind, commit_lane_state, drive_prefix, export_vault_segment,
+      import_vault_batch,
     },
   };
-  pub use base64::engine::general_purpose::STANDARD;
   use base64::Engine as _;
+  pub use base64::engine::general_purpose::STANDARD;
 
   #[derive(serde::Deserialize)]
   #[serde(rename_all = "camelCase")]
@@ -377,7 +380,7 @@ async fn vault_export(
   vault_ipc::on_worker_thread(move || {
     use atomic_lib::Storelike as _;
     use base64::Engine as _;
-    use vault_ipc::{VaultObjectStore as _, STANDARD};
+    use vault_ipc::{STANDARD, VaultObjectStore as _};
 
     let subject = atomic_lib::Subject::from_raw(&drive_subject, store.get_base_domain().as_deref());
     let staging = vault_ipc::MemoryVaultStore::new();
@@ -455,7 +458,7 @@ async fn vault_import(
 
   vault_ipc::on_worker_thread(move || {
     use base64::Engine as _;
-    use vault_ipc::{VaultObjectStore as _, STANDARD};
+    use vault_ipc::{STANDARD, VaultObjectStore as _};
 
     let staging = vault_ipc::MemoryVaultStore::new();
 

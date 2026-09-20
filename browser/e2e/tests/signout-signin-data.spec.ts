@@ -172,7 +172,7 @@ async function signInAgain(page: Page, secret: string) {
     page.getByRole('heading', { name: 'Your data is on another device' }),
   ).toBeHidden({ timeout: 15000 });
   await expect(page.locator('a[href$="/app/agent"]')).toBeVisible();
-  await expect(page).toHaveURL(/did(?:%3A|:)ad(?:%3A|:)/);
+  await expect(page).toHaveURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/);
 }
 
 test.describe('sign-out / sign-in round trip', () => {

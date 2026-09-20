@@ -1,11 +1,11 @@
 //! Self-verifying genesis certificate.
 //!
-//! A DID resource's identity is its genesis: the resource subject is
-//! `did:ad:<base64url(signature)>`, where the signature is an Ed25519 signature
-//! by the creating agent over this certificate's canonical bytes. The
-//! certificate is carried *inline* on the resource (an immutable `genesis`
-//! propval), so authorship + identity can be verified offline with no commit
-//! fetch.
+//! A resource's identity is its genesis: the resource subject is
+//! `atomic:<base64url(signature)>` (legacy `did:ad:<signature>`), where the
+//! signature is an Ed25519 signature by the creating agent over this
+//! certificate's canonical bytes. The certificate is carried *inline* on the
+//! resource (an immutable `genesis` propval), so authorship + identity can be
+//! verified offline with no commit fetch.
 //!
 //! The signed bytes ARE [`GenesisCert::encode`]'s output — a fixed binary
 //! layout, deliberately *not* JSON, so there is no canonicalization ambiguity
@@ -30,17 +30,28 @@ pub fn domain_separator_nonce(purpose: &str) -> [u8; 16] {
     nonce
 }
 
-/// Current certificate format version. A signed layout can never change
-/// retroactively — only new versions may be added, and verifiers dispatch on
-/// this byte.
+/// v1 certificate format. Parent/drive strings were serialized as stored
+/// (typically `did:ad:`). A signed layout can never change retroactively.
 pub const GENESIS_VERSION_V1: u8 = 0x01;
+
+/// v2 certificate format: same layout as v1, version byte marks that
+/// parent/drive identifier strings were serialized in `atomic:` form.
+/// The issue comment on #1584 called this "v3"; the shipping format is v1,
+/// so the next byte is v2.
+pub const GENESIS_VERSION_V2: u8 = 0x02;
+
+/// Version written by new (non-personal-drive) certificates.
+pub const GENESIS_VERSION: u8 = GENESIS_VERSION_V2;
 
 /// `flags` bit 0: a 32-byte `stateHash` is present after the nonce.
 const FLAG_HAS_STATE_HASH: u8 = 0b0000_0001;
 
-/// The signed identity payload of a DID resource.
+/// The signed identity payload of a resource.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GenesisCert {
+    /// Certificate format version. v1 for existing / personal-drive certs;
+    /// v2 for new certs whose parent/drive strings use `atomic:`.
+    pub version: u8,
     /// Ed25519 public key of the creating agent (raw 32 bytes).
     pub signer_pubkey: [u8; 32],
     /// Creation time, Unix milliseconds.
@@ -71,7 +82,7 @@ impl GenesisCert {
             2 + 32 + 8 + 16 + 32 + 2 + parent_bytes.len() + 2 + drive_bytes.len(),
         );
 
-        out.push(GENESIS_VERSION_V1);
+        out.push(self.version);
         let mut flags = 0u8;
         if self.state_hash.is_some() {
             flags |= FLAG_HAS_STATE_HASH;
@@ -121,7 +132,7 @@ impl GenesisCert {
         let mut cursor = 0;
         let header = take(bytes, &mut cursor, 2)?;
         let version = header[0];
-        if version != GENESIS_VERSION_V1 {
+        if version != GENESIS_VERSION_V1 && version != GENESIS_VERSION_V2 {
             return Err(format!("Unsupported genesis certificate version {version}").into());
         }
         let flags = header[1];
@@ -157,6 +168,7 @@ impl GenesisCert {
         }
 
         Ok(Self {
+            version,
             signer_pubkey,
             created_at,
             nonce,
@@ -166,15 +178,15 @@ impl GenesisCert {
         })
     }
 
-    /// The signing agent's DID (`did:ad:agent:<pubkey>`), so callers can
+    /// The signing agent's identifier (`atomic:agent:<pubkey>`), so callers can
     /// cross-check the certificate's signer against `createdBy`.
     pub fn signer_did(&self) -> String {
-        format!("did:ad:agent:{}", encode_base64(&self.signer_pubkey))
+        crate::identifiers::agent_subject(&encode_base64(&self.signer_pubkey))
     }
 
     /// The resource subject that a given signature implies.
     pub fn subject_for_signature(signature: &str) -> String {
-        format!("did:ad:{signature}")
+        crate::identifiers::resource_subject(signature)
     }
 
     /// Genesis certificate for the agent's private drive: `created_at = 0`,
@@ -182,6 +194,10 @@ impl GenesisCert {
     /// The same key always signs the same subject.
     pub fn for_private_drive(signer_pubkey: [u8; 32]) -> Self {
         Self {
+            // Personal-drive identity is the signature of this exact v1
+            // payload. Bumping the version would remint every existing
+            // personal drive.
+            version: GENESIS_VERSION_V1,
             signer_pubkey,
             created_at: 0,
             nonce: domain_separator_nonce(PRIVATE_DRIVE_PURPOSE),
@@ -253,6 +269,7 @@ mod test {
 
     fn sample(pubkey: [u8; 32], state_hash: Option<[u8; 32]>) -> GenesisCert {
         GenesisCert {
+            version: GENESIS_VERSION_V2,
             signer_pubkey: pubkey,
             created_at: 1_780_000_123_456,
             nonce: [7u8; 16],
@@ -289,6 +306,7 @@ mod test {
         // browser-minted DID stops verifying server-side. Change only with a
         // new version byte + both sides updated.
         let cert = GenesisCert {
+            version: GENESIS_VERSION_V1,
             signer_pubkey: [1u8; 32],
             created_at: 1,
             nonce: [2u8; 16],
@@ -324,6 +342,7 @@ mod test {
             "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw"
         );
         let cert = GenesisCert {
+            version: GENESIS_VERSION_V1,
             signer_pubkey: pubkey,
             created_at: 1,
             nonce: [2u8; 16],
@@ -338,7 +357,7 @@ mod test {
         );
         assert_eq!(
             GenesisCert::subject_for_signature(&sig),
-            "did:ad:71Igt-CKD2nhZZn4aKCe8tetVUTCgMMqJ67d97Wrb3pT3LFazyP1lGJjAw2Gg9KY0daGHhHPXj3xFMWEmYVdCw"
+            "atomic:71Igt-CKD2nhZZn4aKCe8tetVUTCgMMqJ67d97Wrb3pT3LFazyP1lGJjAw2Gg9KY0daGHhHPXj3xFMWEmYVdCw"
         );
         cert.verify(&sig).unwrap();
     }
@@ -361,10 +380,10 @@ mod test {
         cert.verify(&signature).unwrap();
 
         let subject = GenesisCert::subject_for_signature(&signature);
-        assert!(subject.starts_with("did:ad:"));
+        assert!(crate::identifiers::is_resource_id(&subject));
         assert_eq!(
             cert.signer_did(),
-            format!("did:ad:agent:{}", encode_base64(&pubkey))
+            crate::identifiers::agent_subject(&encode_base64(&pubkey))
         );
     }
 
@@ -478,6 +497,7 @@ mod test {
         (
             private_key,
             GenesisCert {
+                version: GENESIS_VERSION_V1,
                 signer_pubkey: pubkey,
                 created_at: input.created_at,
                 nonce: input.nonce,
@@ -581,8 +601,8 @@ mod test {
         let first = GenesisCert::private_drive_subject(&private_key).unwrap();
         let second = GenesisCert::private_drive_subject(&private_key).unwrap();
         assert_eq!(first, second);
-        assert!(first.starts_with("did:ad:"));
-        assert!(!first.starts_with("did:ad:agent:"));
+        assert!(crate::identifiers::is_resource_id(&first));
+        assert!(!crate::identifiers::is_agent_id(&first));
 
         let cert = GenesisCert::for_private_drive(pubkey);
         assert_eq!(cert.created_at, 0);
@@ -625,7 +645,7 @@ mod test {
         );
         assert_eq!(
             GenesisCert::subject_for_signature(&sig),
-            "did:ad:uv-2o7-7LBEo69T8gj2ncUWOXgNn9oG_rwqJAqHeM0O2GQjE8236RjthBrYuIXQbO_b0TCkU41f-auIx-1AjBw"
+            "atomic:uv-2o7-7LBEo69T8gj2ncUWOXgNn9oG_rwqJAqHeM0O2GQjE8236RjthBrYuIXQbO_b0TCkU41f-auIx-1AjBw"
         );
         assert_eq!(
             GenesisCert::private_drive_subject(&private_key).unwrap(),

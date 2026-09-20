@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    agents::ForAgent, errors::AtomicResult, storelike::ResourceResponse, urls, Commit, Db, Resource,
+    Commit, Db, Resource, agents::ForAgent, errors::AtomicResult, storelike::ResourceResponse, urls,
 };
 
 pub use crate::plugins::BoxFuture;
@@ -218,20 +218,23 @@ impl ClassExtender {
 
     /// Warn about declared classes that cannot ever match.
     ///
-    /// A class is identified by its subject. The address-bar URL for a DID
-    /// resource (`http://host/did:ad:abc`) is not that subject, so declaring it
-    /// produces an extender that loads cleanly and never fires. Called once
-    /// when an extender is registered, because "never fires" is otherwise only
-    /// discoverable by reading this source.
+    /// A class is identified by its subject. The address-bar URL for an
+    /// identifier (`http://host/atomic:abc` / `http://host/did:ad:abc`) is not
+    /// that subject, so declaring it produces an extender that loads cleanly
+    /// and never fires. Called once when an extender is registered, because
+    /// "never fires" is otherwise only discoverable by reading this source.
     pub fn warn_about_unmatchable_classes(&self) {
         for class in &self.classes {
-            if let Some((_origin, tail)) = class.split_once("/did:") {
+            let Ok(url) = url::Url::parse(class) else {
+                continue;
+            };
+            if crate::identifiers::is_identifier_path_form(url.path()) {
+                let ident = crate::identifiers::canonicalize_scheme(&url.path()[1..]);
                 tracing::warn!(
                     extender = self.id.as_deref().unwrap_or("<unnamed>"),
                     declared = %class,
                     "class extender declares a class by URL, not by subject — it will never \
-                     match. Use the bare DID instead: did:{}",
-                    tail
+                     match. Use the bare identifier instead: {ident}"
                 );
             }
         }
@@ -372,25 +375,31 @@ mod tests {
                 "{is_a:?}"
             );
             assert!(resource.has_class(CLASS), "{is_a:?}");
-            assert!(extender_declaring(CLASS)
-                .resource_has_extender(&resource)
-                .unwrap());
+            assert!(
+                extender_declaring(CLASS)
+                    .resource_has_extender(&resource)
+                    .unwrap()
+            );
         }
 
         // No `isA` at all is no classes, which is not an error.
         let bare = Resource::new("did:ad:someresource".to_string());
         assert!(bare.class_subjects().is_empty());
         assert!(!bare.has_class(CLASS));
-        assert!(!extender_declaring(CLASS)
-            .resource_has_extender(&bare)
-            .unwrap());
+        assert!(
+            !extender_declaring(CLASS)
+                .resource_has_extender(&bare)
+                .unwrap()
+        );
     }
 
     #[test]
     fn a_bare_did_matches_itself() {
-        assert!(extender_declaring(CLASS)
-            .resource_has_extender(&resource_of_class(CLASS))
-            .unwrap());
+        assert!(
+            extender_declaring(CLASS)
+                .resource_has_extender(&resource_of_class(CLASS))
+                .unwrap()
+        );
     }
 
     #[test]
@@ -400,21 +409,27 @@ mod tests {
         // never ran and nothing said why.
         let hinted = format!("{CLASS}?drive=did:ad:somedrive");
 
-        assert!(extender_declaring(CLASS)
-            .resource_has_extender(&resource_of_class(&hinted))
-            .unwrap());
+        assert!(
+            extender_declaring(CLASS)
+                .resource_has_extender(&resource_of_class(&hinted))
+                .unwrap()
+        );
 
         // And the other way round, since either side may carry it.
-        assert!(extender_declaring(&hinted)
-            .resource_has_extender(&resource_of_class(CLASS))
-            .unwrap());
+        assert!(
+            extender_declaring(&hinted)
+                .resource_has_extender(&resource_of_class(CLASS))
+                .unwrap()
+        );
     }
 
     #[test]
     fn surrounding_whitespace_is_not_a_different_class() {
-        assert!(extender_declaring(&format!("  {CLASS}  "))
-            .resource_has_extender(&resource_of_class(CLASS))
-            .unwrap());
+        assert!(
+            extender_declaring(&format!("  {CLASS}  "))
+                .resource_has_extender(&resource_of_class(CLASS))
+                .unwrap()
+        );
     }
 
     #[test]
@@ -423,25 +438,31 @@ mod tests {
         // the resource is. Accepting it would make a plugin's declared class
         // depend on the origin it was written against. `add_class_extender`
         // warns about this shape instead.
-        assert!(!extender_declaring(CLASS)
-            .resource_has_extender(&resource_of_class(&format!(
-                "http://localhost:24797/{CLASS}"
-            )))
-            .unwrap());
+        assert!(
+            !extender_declaring(CLASS)
+                .resource_has_extender(&resource_of_class(&format!(
+                    "http://localhost:24797/{CLASS}"
+                )))
+                .unwrap()
+        );
     }
 
     #[test]
     fn a_different_class_still_does_not_match() {
-        assert!(!extender_declaring(CLASS)
-            .resource_has_extender(&resource_of_class("did:ad:someotherclassentirely"))
-            .unwrap());
+        assert!(
+            !extender_declaring(CLASS)
+                .resource_has_extender(&resource_of_class("did:ad:someotherclassentirely"))
+                .unwrap()
+        );
     }
 
     #[test]
     fn a_resource_without_is_a_matches_nothing() {
         let bare = Resource::new("did:ad:someresource".to_string());
-        assert!(!extender_declaring(CLASS)
-            .resource_has_extender(&bare)
-            .unwrap());
+        assert!(
+            !extender_declaring(CLASS)
+                .resource_has_extender(&bare)
+                .unwrap()
+        );
     }
 }

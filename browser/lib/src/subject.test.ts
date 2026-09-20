@@ -5,7 +5,12 @@ import {
   InvalidSubjectError,
   isDidSubject,
   isHttpSubject,
+  isIdentifierHttpEndpoint,
+  isIdentifierPathForm,
+  isIdentifierResolutionPath,
   isValidSubject,
+  isAtomicIdentifier,
+  isLegacyAtomicLink,
   subjectsReferToSameResource,
   tryAsSubject,
   type Subject,
@@ -13,8 +18,12 @@ import {
 
 describe('subject', () => {
   describe('isValidSubject', () => {
-    it('accepts DID subjects', () => {
+    it('accepts Atomic identifier subjects', () => {
       expect(isValidSubject('did:ad:abc')).toBe(true);
+      expect(isValidSubject('atomic:abc')).toBe(true);
+      expect(isValidSubject('atomic:agent:pk')).toBe(true);
+      expect(isAtomicIdentifier('atomic://pair?v=1')).toBe(false);
+      expect(isLegacyAtomicLink('atomic://pair?v=1')).toBe(true);
     });
 
     it('accepts http(s) URL subjects', () => {
@@ -67,21 +76,50 @@ describe('subject', () => {
 
   describe('extractDidSubject / subjectsReferToSameResource', () => {
     it('returns a DID unchanged, stripping query and fragment', () => {
-      expect(extractDidSubject('did:ad:abc')).toBe('did:ad:abc');
+      expect(extractDidSubject('did:ad:abc')).toBe('atomic:abc');
+      expect(extractDidSubject('atomic:abc')).toBe('atomic:abc');
       expect(extractDidSubject('did:ad:abc?drive=did:ad:drive')).toBe(
-        'did:ad:abc',
+        'atomic:abc',
       );
     });
 
-    it('extracts a DID from the HTTP path form and the /did endpoint', () => {
+    it('extracts an identifier from the HTTP path form and resolver endpoints', () => {
       expect(extractDidSubject('https://example.com/did:ad:abc')).toBe(
-        'did:ad:abc',
+        'atomic:abc',
+      );
+      expect(extractDidSubject('https://example.com/atomic:abc')).toBe(
+        'atomic:abc',
       );
       expect(
         extractDidSubject(
           'https://example.com/did?subject=' + encodeURIComponent('did:ad:abc'),
         ),
-      ).toBe('did:ad:abc');
+      ).toBe('atomic:abc');
+      expect(
+        extractDidSubject(
+          'https://example.com/resource?subject=' +
+            encodeURIComponent('atomic:abc'),
+        ),
+      ).toBe('atomic:abc');
+      expect(
+        extractDidSubject(
+          'https://example.com/atomic?subject=' +
+            encodeURIComponent('atomic:abc'),
+        ),
+      ).toBe('atomic:abc');
+    });
+
+    it('classifies identifier resolution paths without treating did:key as Atomic', () => {
+      expect(isIdentifierHttpEndpoint('/did')).toBe(true);
+      expect(isIdentifierHttpEndpoint('/resource')).toBe(true);
+      expect(isIdentifierHttpEndpoint('/atomic')).toBe(true);
+      expect(isIdentifierHttpEndpoint('/diddle')).toBe(false);
+      expect(isIdentifierPathForm('/atomic:abc')).toBe(true);
+      expect(isIdentifierPathForm('/did:ad:abc')).toBe(true);
+      expect(isIdentifierPathForm('/did:key:abc')).toBe(false);
+      expect(isIdentifierPathForm('/atomic://pair')).toBe(false);
+      expect(isIdentifierResolutionPath('/did?subject=atomic:abc')).toBe(true);
+      expect(isIdentifierResolutionPath('/search')).toBe(false);
     });
 
     it('does not treat ordinary HTTP resources as DIDs', () => {
@@ -89,6 +127,12 @@ describe('subject', () => {
         extractDidSubject('https://atomicdata.dev/ontology/core'),
       ).toBeUndefined();
       expect(extractDidSubject('/relative')).toBeUndefined();
+    });
+
+    it('treats atomic:x and did:ad:x as the same resource', () => {
+      expect(subjectsReferToSameResource('atomic:abc', 'did:ad:abc')).toBe(
+        true,
+      );
     });
 
     it('treats https://host/did:ad:x and did:ad:x as the same resource', () => {

@@ -26,7 +26,9 @@ test('a DID drive renders (not bare subject) with Local DB off, server-only', as
   });
 
   await page.goto(`${FRONTEND_URL}/app/dev-drive`);
-  await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
+  await page.waitForURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/, {
+    timeout: 30000,
+  });
   await expect(currentDriveTitle(page)).toBeVisible({ timeout: 15000 });
 
   const drive = await page.evaluate(() => window.store.getDrive());

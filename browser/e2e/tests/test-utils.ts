@@ -544,7 +544,9 @@ export async function signIn(page: Page, secret?: string) {
  */
 export async function devDrive(page: Page): Promise<string> {
   await page.goto(`${FRONTEND_URL}/app/dev-drive`);
-  await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
+  await page.waitForURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/, {
+    timeout: 30000,
+  });
   await expect(currentDriveTitle(page)).toBeVisible({ timeout: 15000 });
 
   const secret = await page.evaluate(() =>
@@ -586,7 +588,9 @@ export async function newDrive(page: Page) {
   await createButton.click();
 
   // Wait for the URL to change to did:ad: (newly created drive)
-  await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
+  await page.waitForURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/, {
+    timeout: 30000,
+  });
   await expect(currentDriveTitle(page)).toHaveText(driveTitle);
   const driveURL = await getCurrentSubject(page);
   expect(driveURL).toBeTruthy();

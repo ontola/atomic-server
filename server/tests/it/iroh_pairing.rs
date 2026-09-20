@@ -281,8 +281,8 @@ async fn a_public_drive_reconciles_between_two_servers_over_iroh() {
 
     let node_a = await_node_id(&url_a).await;
     assert!(
-        node_a.starts_with("did:ad:node:"),
-        "a pairing code carries a node DID, got {node_a}"
+        atomic_lib::identifiers::is_node_id(&node_a),
+        "a pairing code carries a node identifier, got {node_a}"
     );
 
     // A peer is handed only what the requester may read, so pairing before the

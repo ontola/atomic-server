@@ -2,7 +2,7 @@
 
 #[cfg(all(test, feature = "db-redb"))]
 mod peer_sync_tests {
-    use crate::{agents::ForAgent, storelike::Query, Db, Storelike};
+    use crate::{Db, Storelike, agents::ForAgent, storelike::Query};
 
     /// Test sync engine: Device A creates resources, Device B syncs via the protocol.
     /// This tests the same code path that Iroh/WS would use, without needing network.
@@ -1735,7 +1735,7 @@ mod peer_sync_tests {
         );
         for s in &a_subjects {
             assert!(
-                !s.starts_with("did:ad:commit:"),
+                !crate::identifiers::is_commit_id(s),
                 "commit subject leaked into drive A: {s}"
             );
         }
@@ -1845,7 +1845,7 @@ mod peer_sync_tests {
     /// one is still accepted unless the responder requires it.
     #[tokio::test]
     async fn auth_frame_answers_the_connection_challenge() {
-        use crate::sync::engine::{handle_auth_frame, AuthBinding, AuthChallenge};
+        use crate::sync::engine::{AuthBinding, AuthChallenge, handle_auth_frame};
         use crate::sync::protocol::{decode_error, encode_auth, error_code, tag};
 
         let db = Db::init_temp("engine_auth_challenge").await.unwrap();
@@ -2145,7 +2145,7 @@ mod peer_sync_tests {
     async fn ingest_commit_ownership_gate_is_policy_gated() {
         use crate::client::commit_to_wire_json;
         use crate::commit::CommitBuilder;
-        use crate::sync::engine::{ingest_commit_json, CommitIngestOpts};
+        use crate::sync::engine::{CommitIngestOpts, ingest_commit_json};
 
         let db = Db::init_temp("ingest_commit_ownership_gate").await.unwrap();
         let (alice, _drive) = db.setup("Alice").await.unwrap();
@@ -2293,7 +2293,7 @@ mod peer_sync_tests {
     #[tokio::test]
     async fn rbsr_reduced_matches_full_sync_vv() {
         use crate::sync::engine::{drive_items_for, handle_sync_vv, handle_sync_vv_filtered};
-        use crate::sync::rbsr::{reconcile, Item, RemoteRange};
+        use crate::sync::rbsr::{Item, RemoteRange, reconcile};
         use std::collections::{HashMap, HashSet};
 
         // Server has a drive with three resources.
@@ -2450,7 +2450,7 @@ mod peer_sync_tests {
     async fn reconcile_over_real_store_finds_the_lagging_resource() {
         use crate::sync::engine::drive_items_for;
         use crate::sync::rbsr::{
-            item_fingerprint, range_fingerprint, reconcile, Item, RemoteRange,
+            Item, RemoteRange, item_fingerprint, range_fingerprint, reconcile,
         };
 
         let db = Db::init_temp("rbsr_real_store").await.unwrap();

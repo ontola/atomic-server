@@ -8,6 +8,7 @@ import {
   aiChatsFolderCert,
   verifyGenesisCert,
 } from './genesis.js';
+import { isAgentSubject, isAtomicIdentifier } from './subject.js';
 
 describe('Agent', () => {
   const validPrivateKey = 'CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=';
@@ -59,8 +60,8 @@ describe('Agent', () => {
     const second = await agent.privateDriveSubject();
     expect(first).toBe(second);
     expect(first).toBe(await privateDriveSubject(decodeB64(validPrivateKey)));
-    expect(first.startsWith('did:ad:')).toBe(true);
-    expect(first.startsWith('did:ad:agent:')).toBe(false);
+    expect(isAtomicIdentifier(first)).toBe(true);
+    expect(isAgentSubject(first)).toBe(false);
   });
 
   /**

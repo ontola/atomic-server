@@ -42,6 +42,7 @@ import {
   useProperty,
   truncateUrl,
   Datatype,
+  isAtomicIdentifier,
 } from '@tomic/react';
 import { styled, keyframes, css, type DefaultTheme } from 'styled-components';
 import {
@@ -138,7 +139,7 @@ export const SyncRoute = createRoute({
   path: pathNames.sync,
   validateSearch: (search): { drive?: string } => ({
     drive:
-      typeof search.drive === 'string' && search.drive.startsWith('did:ad:')
+      typeof search.drive === 'string' && isAtomicIdentifier(search.drive)
         ? search.drive
         : undefined,
   }),
@@ -1119,7 +1120,7 @@ function SyncPage() {
       return 'Checking whether this workspace is hosted…';
     }
 
-    if (!status.drive.startsWith('did:ad:')) {
+    if (!isAtomicIdentifier(status.drive)) {
       return 'This drive uses a legacy server address. Cloud Server requires a portable DID drive.';
     }
 

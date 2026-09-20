@@ -2,8 +2,8 @@
 //! It relies on lexicographic ordering of keys, which Sled utilizes using `scan_prefix` queries.
 
 use crate::{
-    atoms::IndexAtom, errors::AtomicResult, storelike::Query, utils::truncate_string, Atom, Db,
-    Resource, Storelike, Subject, Value,
+    Atom, Db, Resource, Storelike, Subject, Value, atoms::IndexAtom, errors::AtomicResult,
+    storelike::Query, utils::truncate_string,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -335,8 +335,8 @@ fn compare_values(actual: &Value, query: &Value) -> std::cmp::Ordering {
 
 /// Whether a single resource value satisfies the constraint's value + operator.
 fn value_matches(actual: &Value, query: &Value, operator: FilterOperator) -> bool {
-    use std::cmp::Ordering;
     use FilterOperator::*;
+    use std::cmp::Ordering;
 
     match operator {
         // Scalar equality or array membership — the historical behaviour.
@@ -478,7 +478,7 @@ pub fn check_if_atom_matches_watched_query_filters(
 ) -> AtomicResult<()> {
     let subject_str = index_atom.subject.as_str();
 
-    let filters: Vec<Arc<QueryFilter>> = if subject_str.starts_with("did:") {
+    let filters: Vec<Arc<QueryFilter>> = if crate::identifiers::is_atomic_identifier(subject_str) {
         store.all_watched_queries_for_property(&index_atom.property)
     } else {
         let drive_prefix = drive_prefix_from_subject(&index_atom.subject);

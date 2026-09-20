@@ -28,7 +28,10 @@ impl BrowserPeerSession {
         expected_peer: Option<String>,
         challenge: String,
     ) -> AtomicResult<Self> {
-        if !drive.starts_with("did:ad:") || drive.contains(['#', '?']) || challenge.len() < 32 {
+        if !crate::identifiers::is_resource_id(&drive)
+            || drive.contains(['#', '?'])
+            || challenge.len() < 32
+        {
             return Err(
                 "Peer sessions require a canonical drive DID and a fresh channel-bound challenge"
                     .into(),

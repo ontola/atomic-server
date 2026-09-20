@@ -1,11 +1,11 @@
 use crate::{
     appstate::AppState,
-    content_types::get_accept,
     content_types::ContentType,
+    content_types::get_accept,
     errors::AtomicServerResult,
     helpers::{get_client_agent, try_extension},
 };
-use actix_web::{web, HttpResponse};
+use actix_web::{HttpResponse, web};
 use atomic_lib::db::ResolvedTarget;
 use simple_server_timing_header::Timer;
 
@@ -40,7 +40,7 @@ pub async fn handle_get_resource(
                 format!("?{}", req.query_string())
             };
             // DID subjects should be used as-is, not prefixed with /
-            if subj_end_string.starts_with("did:") {
+            if atomic_lib::identifiers::is_atomic_identifier(subj_end_string) {
                 format!("{}{}", subj_end_string, querystring)
             } else {
                 format!("/{}{}", subj_end_string, querystring)

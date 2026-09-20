@@ -15,12 +15,12 @@ const jsonResponse = () =>
   });
 
 describe('Client.fetchResourceHTTP DID subjects', () => {
-  it('resolves a DID via /did?subject= when given a serverURL', async ({
+  it('resolves an identifier via /resource?subject= when given a serverURL', async ({
     expect,
   }) => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       expect(String(input)).toBe(
-        `https://example.com/did?subject=${encodeURIComponent(DID)}`,
+        `https://example.com/resource?subject=${encodeURIComponent(DID)}`,
       );
 
       return jsonResponse();
@@ -35,13 +35,13 @@ describe('Client.fetchResourceHTTP DID subjects', () => {
     expect(resource.get(core.properties.name)).toBe('My ontology');
   });
 
-  it('rewrites https://host/did:ad:… to the /did endpoint and accepts the DID @id', async ({
+  it('rewrites https://host/did:ad:… to /resource and accepts the identifier @id', async ({
     expect,
   }) => {
     const httpAlias = `https://example.com/${DID}`;
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       expect(String(input)).toBe(
-        `https://example.com/did?subject=${encodeURIComponent(DID)}`,
+        `https://example.com/resource?subject=${encodeURIComponent(DID)}`,
       );
 
       return jsonResponse();

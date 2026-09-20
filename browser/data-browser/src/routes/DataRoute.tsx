@@ -7,6 +7,7 @@ import {
   signRequest,
   HeadersObject,
   useStore,
+  isAtomicIdentifier,
 } from '@tomic/react';
 
 import AllProps from '../components/AllProps';
@@ -80,7 +81,7 @@ function Data(): JSX.Element {
 
     let url = subject;
 
-    if (subject.startsWith('did:')) {
+    if (isAtomicIdentifier(subject)) {
       url = `${store.getServerUrl()}/did?subject=${encodeURIComponent(subject)}`;
     }
 

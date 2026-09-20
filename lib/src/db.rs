@@ -1059,7 +1059,7 @@ impl Db {
                             propvals.insert(
                                 urls::BLOB.to_string(),
                                 Value::AtomicUrl(
-                                    format!("did:ad:blob:{}", hash_hex.clone()).into(),
+                                    crate::identifiers::blob_subject(&hash_hex).into(),
                                 ),
                             );
                             propvals.insert(urls::INTERNAL_ID.to_string(), Value::String(hash_hex));
@@ -1780,7 +1780,7 @@ impl Db {
 
     fn should_bypass_drive_routing(subject: &Subject, subject_string: &str) -> bool {
         subject.is_did()
-            || subject_string.starts_with("/did")
+            || crate::identifiers::is_identifier_resolution_path(subject_string)
             || subject_string.starts_with("/bind-drive")
             || subject_string.starts_with("/search")
             || subject_string.starts_with("/upload")
@@ -1799,9 +1799,7 @@ impl Db {
     /// pubkey is standard base64 and contains `/` and `+`, so the whole
     /// remainder is carried across untouched.
     fn legacy_agent_subject(subject: &Subject) -> Option<Subject> {
-        let pubkey = subject
-            .as_str()
-            .strip_prefix(crate::subject::DID_AD_AGENT_PREFIX)?;
+        let pubkey = subject.agent_public_key()?;
 
         if pubkey.is_empty() {
             return None;
@@ -2433,6 +2431,26 @@ impl Db {
         }
     }
 
+    /// The key under which `subject` is actually stored. Tries the canonical
+    /// `atomic:` form first, then the legacy `did:ad:` alias.
+    fn stored_resource_key(&self, subject: &str) -> Option<String> {
+        crate::identifiers::storage_lookup_keys(subject)
+            .into_iter()
+            .find(|key| self.get_propvals(key).is_ok())
+    }
+
+    fn get_propvals_aliased(&self, subject: &str) -> AtomicResult<(String, PropVals)> {
+        let mut last_err = None;
+        for key in crate::identifiers::storage_lookup_keys(subject) {
+            match self.get_propvals(&key) {
+                Ok(propvals) => return Ok((key, propvals)),
+                Err(e) => last_err = Some(e),
+            }
+        }
+        Err(last_err
+            .unwrap_or_else(|| AtomicError::not_found(format!("Resource {} not found", subject))))
+    }
+
     /// A resource built only from its last-committed materialized propvals,
     /// **skipping the Loro snapshot re-decode** that [`Storelike::get_resource`]
     /// performs. That decode decompresses a resource's full CRDT history and can
@@ -2444,8 +2462,7 @@ impl Db {
     /// drive hint) matches `get_resource`, so ids/subjects stay consistent.
     pub fn get_resource_shallow(&self, subject: &Subject) -> AtomicResult<Resource> {
         let normalized = self.normalize_subject(subject);
-        let subject_str = normalized.pure_id();
-        let propvals = self.get_propvals(&subject_str)?;
+        let (subject_str, propvals) = self.get_propvals_aliased(&normalized.pure_id())?;
 
         let mut res_subject = normalized.clone();
         if let Subject::Did {
@@ -3227,7 +3244,7 @@ impl Db {
         filter: &query_index::QueryFilter,
         resource: &Resource,
     ) -> bool {
-        if !resource.get_subject().as_str().starts_with("did:") {
+        if !crate::identifiers::is_atomic_identifier(resource.get_subject().as_str()) {
             return true;
         }
         match (resource.get_drive(), self.filter_drive_root(filter)) {
@@ -4214,7 +4231,7 @@ impl Storelike for Db {
         // never be resolved over the network.
         if commit.destroy.unwrap_or(false) && opts.validate_rights {
             if let Some(sig) = commit.signature.as_ref() {
-                let commit_id = format!("did:ad:commit:{sig}");
+                let commit_id = crate::identifiers::commit_subject(sig);
                 if store.has_resource_locally(&commit_id)
                     && store.has_resource_locally(&commit.subject.pure_id())
                 {
@@ -4591,7 +4608,7 @@ impl Storelike for Db {
     async fn get_resource(&self, subject: &Subject) -> AtomicResult<Resource> {
         let normalized = self.normalize_subject(subject);
         let subject_str = normalized.pure_id();
-        if let Ok(propvals) = self.get_propvals(&subject_str) {
+        if let Ok((subject_str, propvals)) = self.get_propvals_aliased(&subject_str) {
             let mut res_subject = normalized.clone();
 
             // If it's a DID and we don't have a hint in the requested subject,
@@ -4666,17 +4683,18 @@ impl Storelike for Db {
                 }
             }
             let resolved_url = normalized.resolve(&origin);
+            let path = normalized.path();
 
-            if normalized.is_did() || normalized.path().starts_with("/did") {
-                // If it's an agent DID and not found locally, return a minimal resource
+            if normalized.is_did()
+                || crate::identifiers::is_identifier_resolution_path(&path)
+            {
+                // If it's an agent identifier and not found locally, return a minimal resource
                 // instead of an error. This is important for "just-in-time" agent registration.
-                if normalized.is_agent_did() || normalized.path().starts_with("/did:ad:agent:") {
-                    let lookup = if normalized.path().starts_with('/') {
-                        &normalized.path()[1..]
-                    } else {
-                        &normalized.path()
-                    };
-                    if let Some(pubkey) = lookup.strip_prefix("did:ad:agent:") {
+                if normalized.is_agent_did()
+                    || crate::identifiers::is_agent_id(path.trim_start_matches('/'))
+                {
+                    let lookup = path.strip_prefix('/').unwrap_or(&path);
+                    if let Some(pubkey) = crate::identifiers::agent_public_key(lookup) {
                         if let Ok(agent) = crate::agents::Agent::new_from_public_key(pubkey) {
                             if let Ok(mut resource) = agent.to_resource() {
                                 // A lookup is not creation of an agent. There is
@@ -4701,7 +4719,10 @@ impl Storelike for Db {
                     }
                 }
 
-                if normalized.is_did() || resolved_url.starts_with("/did:") {
+                if normalized.is_did()
+                    || crate::identifiers::is_identifier_path_form(&resolved_url)
+                    || crate::identifiers::is_atomic_identifier(&resolved_url)
+                {
                     return Err(AtomicError::not_found(format!(
                         "DID Resource {} not found locally",
                         resolved_url
@@ -4783,7 +4804,7 @@ impl Storelike for Db {
 
     fn has_stored_resource(&self, subject: &Subject) -> bool {
         let normalized = self.normalize_subject(subject);
-        self.get_propvals(&normalized.pure_id()).is_ok()
+        self.stored_resource_key(&normalized.pure_id()).is_some()
     }
 
     fn get_defaults_fingerprint(&self) -> AtomicResult<Option<String>> {

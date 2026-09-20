@@ -6,13 +6,13 @@ use crate::{appstate::AppState, config::Opts};
 
 use super::*;
 use actix_web::{
+    App,
     body::MessageBody,
     dev::ServiceResponse,
     test::{self, TestRequest},
     web::Data,
-    App,
 };
-use atomic_lib::{urls, Storelike};
+use atomic_lib::{Storelike, urls};
 use base64::Engine;
 
 /// Returns the request with signed headers. Also adds a json-ad accept header - overwrite this if you need something else.
@@ -223,25 +223,29 @@ async fn server_tests() {
         "response should be a search resource"
     );
 
-    // Get DID endpoint
-    let req = build_request_authenticated("/did", &appstate);
-    let resp = test::call_service(&app, req.to_request()).await;
-    assert!(resp.status().is_success());
-    let body = get_body(resp);
-    assert!(
-        body.as_str().contains("Resolves a DID"),
-        "response should be the DID endpoint description"
-    );
+    // Identifier resolution endpoints: /resource is canonical; /did and /atomic alias it.
+    for path in ["/did", "/resource", "/atomic"] {
+        let req = build_request_authenticated(path, &appstate);
+        let resp = test::call_service(&app, req.to_request()).await;
+        assert!(resp.status().is_success(), "{path}");
+        let body = get_body(resp);
+        assert!(
+            body.as_str().contains("atomic:"),
+            "response should describe identifier resolution, got: {}",
+            body.as_str()
+        );
+    }
 
-    // Test path-based DID resolution (even if it doesn't exist, we should get a 404 from the store, not a 500 or 401 before getting there)
-    let req = build_request_authenticated("/did:ad:test", &appstate);
-    let resp = test::call_service(&app, req.to_request()).await;
-    // It should be a 404 because did:ad:test doesn't exist, but it confirms it reached the handler correctly
-    assert_eq!(
-        resp.status(),
-        404,
-        "Should be a 404, because `did:ad:test` does not exist"
-    );
+    // Path-form identifiers reach the store (404 if missing), not a 500/401 first.
+    for path in ["/did:ad:test", "/atomic:test"] {
+        let req = build_request_authenticated(path, &appstate);
+        let resp = test::call_service(&app, req.to_request()).await;
+        assert_eq!(
+            resp.status(),
+            404,
+            "Should be a 404, because `{path}` does not exist"
+        );
+    }
 
     // Test Unauthenticated Invite with Public Key
     let issuer_agent = appstate.store.get_default_agent().unwrap();
@@ -377,7 +381,7 @@ async fn fresh_store_gets_core_models_without_initialize() {
 
 #[actix_rt::test]
 async fn test_did_agent_edit() {
-    use atomic_lib::{agents::Agent, commit::CommitBuilder, urls, Resource, Value};
+    use atomic_lib::{Resource, Value, agents::Agent, commit::CommitBuilder, urls};
     let unique_string = atomic_lib::utils::random_string(10);
     use clap::Parser;
     let opts = Opts::parse_from([
@@ -877,13 +881,15 @@ async fn content_addressed_image_with_storage(remote: bool) {
             resized.headers().get("x-content-type-options").unwrap(),
             "nosniff"
         );
-        assert!(resized
-            .headers()
-            .get("content-disposition")
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .starts_with("attachment"));
+        assert!(
+            resized
+                .headers()
+                .get("content-disposition")
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("attachment")
+        );
         let rendered = test::read_body(resized).await;
         assert_eq!(image::guess_format(&rendered).unwrap(), expected_format);
     }

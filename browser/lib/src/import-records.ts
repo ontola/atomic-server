@@ -6,6 +6,7 @@ import {
 /** Shared sandbox import mapping. No provider, DOM, network or Store dependencies. */
 import type { Intent, Problem } from './plugin-run.js';
 import type { JSONValue } from './value.js';
+import { canonicalIdentifier } from './subject.js';
 
 export const IMPORT_LOCAL_ID = 'https://atomicdata.dev/properties/localId';
 export const IMPORT_BASELINE =
@@ -46,9 +47,7 @@ function canonical(value: unknown): string {
 
 const same = (a: unknown, b: unknown) => canonical(a) === canonical(b);
 const pure = (subject: unknown) =>
-  typeof subject === 'string' && subject.startsWith('did:')
-    ? subject.split('?')[0]
-    : subject;
+  typeof subject === 'string' ? canonicalIdentifier(subject) : subject;
 
 /** Convert source records into ordinary reviewed intents with persistent localIds. */
 export function importRecords(host: ImportHost, records: ImportRecord[]) {

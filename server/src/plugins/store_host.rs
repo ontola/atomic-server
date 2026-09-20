@@ -7,8 +7,8 @@
 use std::collections::HashMap;
 
 use atomic_lib::{
-    agents::ForAgent, datatype::DataType, db::app_agent::AppAgentKey, hierarchy::check_write, urls,
-    Db, Resource, Storelike, Subject, Value,
+    Db, Resource, Storelike, Subject, Value, agents::ForAgent, datatype::DataType,
+    db::app_agent::AppAgentKey, hierarchy::check_write, urls,
 };
 use serde_json::Value as Json;
 
@@ -366,7 +366,7 @@ fn json_to_value(value: Json, datatype: &DataType) -> Result<Value, String> {
 /// Whether resources under this parent are identified by genesis certificate
 /// rather than by path.
 fn is_did(subject: &str) -> bool {
-    subject.starts_with("did:")
+    atomic_lib::identifiers::is_atomic_identifier(subject)
 }
 
 /// Mark each approved import write, even when two previews have identical data.

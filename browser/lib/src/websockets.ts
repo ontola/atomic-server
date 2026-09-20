@@ -6,6 +6,7 @@
  */
 
 import { createAuthentication } from './authentication.js';
+import { isAgentSubject, isBlobSubject } from './subject.js';
 import { Resource } from './resource.js';
 import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
 import { StoreEvents, type Store, type DriveSyncState } from './store.js';
@@ -1577,11 +1578,7 @@ export class WSClient {
 
   /** Agent profiles are public resources outside the reader's active drive. */
   public subscribeAgentProfile(subject: string): void {
-    if (
-      !subject.startsWith('did:ad:agent:') ||
-      this.readyState !== WebSocket.OPEN
-    )
-      return;
+    if (!isAgentSubject(subject) || this.readyState !== WebSocket.OPEN) return;
     if (this.store.isLocalOnlySubject(subject)) return;
     if (
       this.store.getAgent()?.subject &&
@@ -1599,11 +1596,7 @@ export class WSClient {
   }
 
   public unsubscribeAgentProfile(subject: string): void {
-    if (
-      !subject.startsWith('did:ad:agent:') ||
-      this.readyState !== WebSocket.OPEN
-    )
-      return;
+    if (!isAgentSubject(subject) || this.readyState !== WebSocket.OPEN) return;
     this.sendBinary(encodeUnsub(subject));
   }
 
@@ -2118,9 +2111,9 @@ export class WSClient {
 
     if (!blobDid) return;
 
-    // Extract the hash from did:ad:blob:{hash}
-    const hashStr = blobDid.startsWith('did:ad:blob:')
-      ? blobDid.substring(12)
+    // Extract the hash from atomic:blob:{hash} / did:ad:blob:{hash}
+    const hashStr = isBlobSubject(blobDid)
+      ? blobDid.replace(/^(atomic:blob:|did:ad:blob:)/, '')
       : blobDid;
 
     const clientDb = this.store.getClientDb();

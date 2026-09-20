@@ -1,7 +1,7 @@
 use tauri::{
+  App, Manager,
   menu::{Menu, MenuItem, PredefinedMenuItem},
   tray::TrayIconBuilder,
-  App, Manager,
 };
 use tauri_plugin_opener::OpenerExt;
 

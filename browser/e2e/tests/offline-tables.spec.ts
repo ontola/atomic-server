@@ -30,7 +30,7 @@ test.describe('offline tables', () => {
       () => window.store?.getClientDb()?.isReady === true,
       { timeout: 30000 },
     );
-    await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
+    await page.waitForURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/, { timeout: 30000 });
     await expect(page.getByTestId('current-drive-title')).toBeVisible({
       timeout: 15000,
     });

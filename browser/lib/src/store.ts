@@ -66,6 +66,14 @@ import { SERVER_MANAGED_PROPS } from './server-managed-props.js';
 import { initOntologies } from './ontologies/index.js';
 import { decodeB64, encodeB64Url } from './base64.js';
 import {
+  canonicalizeScheme,
+  isAgentSubject,
+  isAtomicIdentifier,
+  isBlobSubject,
+  commitSubject,
+  blobSubject,
+} from './subject.js';
+import {
   encodeGenesisCert,
   privateDriveCert,
   subjectForSignature,
@@ -1062,7 +1070,7 @@ export class Store {
         signer: commit.signer,
         previousCommit: commit.previousCommit,
         commitId: commit.signature
-          ? `did:ad:commit:${commit.signature}`
+          ? commitSubject(commit.signature)
           : undefined,
         hasLoroUpdate: !!commit.loroUpdate,
         destroy: !!commit.destroy,
@@ -1215,7 +1223,7 @@ export class Store {
    */
   private outboxTier(subject: string): [number, number] {
     let priority = 2;
-    if (subject.startsWith('did:ad:agent:')) priority = 0;
+    if (isAgentSubject(subject)) priority = 0;
     else if (subject === this.drive) priority = 1;
 
     let depth = 0;
@@ -1890,8 +1898,8 @@ export class Store {
    * but must not reach our `/commit` endpoint.
    */
   public isOwnedSubject(subject: string): boolean {
-    if (subject.startsWith('did:ad:commit:')) return false;
-    if (subject.startsWith('did:')) return true;
+    if (isCommitSubject(subject)) return false;
+    if (isAtomicIdentifier(subject)) return true;
     // `_new:` is the client-only transient subject between
     // `getResourceLoading` and the DID derive in `signChanges`.
     // `_local:` is Rust-side and shouldn't appear here.
@@ -1935,9 +1943,10 @@ export class Store {
       return maybeTempSubject;
     }
 
-    // DIDs are returned as-is — new URL() would mangle base64 characters (+, /, =)
-    if (subject.startsWith('did:')) {
-      return subject;
+    // Atomic identifiers — new URL() would mangle base64 characters.
+    // Canonicalize `did:ad:` → `atomic:` so both spellings share one Map key.
+    if (isAtomicIdentifier(subject)) {
+      return canonicalizeScheme(subject);
     }
 
     // HTTP URLs are normalized
@@ -2085,8 +2094,8 @@ export class Store {
     // Not notifying matters as much as importing: a notify re-renders the
     // page, and an own save's echo lands right as the user opens the next
     // cell's picker (tables e2e "create and fill" on a loaded runner).
-    const ownSignature = change.commitId?.startsWith('did:ad:commit:')
-      ? change.commitId.slice('did:ad:commit:'.length)
+    const ownSignature = isCommitSubject(change.commitId ?? '')
+      ? change.commitId!.replace(/^(atomic:commit:|did:ad:commit:)/, '')
       : undefined;
     const isOwnCommit =
       !!existing &&
@@ -2101,7 +2110,7 @@ export class Store {
       !existing.error &&
       isOwnCommit
     ) {
-      if (!subject.startsWith('did:ad:commit:')) {
+      if (!isCommitSubject(subject)) {
         existing.importLoroUpdate(change.loroBytes);
       }
 
@@ -2140,7 +2149,7 @@ export class Store {
     // narrower gate: only whether a destructive replace is safe.
     const replace =
       !!change.replaceLoroDocsFromRemote &&
-      !subject.startsWith('did:ad:commit:') &&
+      !isCommitSubject(subject) &&
       !resource.hasUnsavedChanges() &&
       !this.outbox.hasPending(subject);
     const { complete } = resource.importLoroUpdate(change.loroBytes, replace);
@@ -2152,7 +2161,7 @@ export class Store {
     // exempt from the incomplete-import guard below; otherwise every
     // commit fetched on refresh (e.g. <CommitDetail> in a chatroom)
     // would be failed and vanish.
-    const isCommitDetail = subject.startsWith('did:ad:commit:');
+    const isCommitDetail = isCommitSubject(subject);
 
     // Incomplete import: the bytes couldn't fully apply (missing base
     // ops left pending). The resource has whatever it had before plus
@@ -2373,8 +2382,9 @@ export class Store {
     genesisCert,
     deferGenesis,
   }: CreateResourceOptions = {}): Promise<Resource<C>> {
+    const agentSubject = this.getAgent()?.subject;
     const shouldUseDid =
-      did ?? this.getAgent()?.subject?.startsWith('did:ad:agent:') ?? false;
+      did ?? !!(agentSubject && isAgentSubject(agentSubject));
     const normalizedParent = parent
       ? this.normalizeSubject(parent)
       : this.normalizeSubject(this.serverUrl);
@@ -3009,7 +3019,7 @@ export class Store {
   public createSubject(parent?: string): string {
     const agentSubject = this.getAgent()?.subject;
 
-    if (agentSubject?.startsWith('did:ad:agent:')) {
+    if (!!agentSubject && isAgentSubject(agentSubject)) {
       return `_new:${this.randomPart()}`;
     }
 
@@ -3046,6 +3056,7 @@ export class Store {
     }
 
     const cert: GenesisCert = {
+      version: 0x02,
       signerPubkey: decodeB64(await agent.getPublicKey()),
       createdAt: Date.now(),
       nonce: crypto.getRandomValues(new Uint8Array(16)),
@@ -3468,7 +3479,7 @@ export class Store {
       // socket (a Node client, a unit test) fetches over HTTP right away.
       if (
         !this._serverConnected &&
-        (subject.startsWith('did:') || this.getWebSocketForSubject(subject))
+        (isAtomicIdentifier(subject) || this.getWebSocketForSubject(subject))
       ) {
         // Offline — use whatever local data we found. If there IS no local
         // data, surface the offline state to the caller rather than leaving
@@ -3533,10 +3544,7 @@ export class Store {
         // started allowing the read: every client already held a cached stub
         // and stopped asking. Re-check each agent once per session; after that
         // it is trusted like anything else.
-        if (
-          subject.startsWith('did:ad:agent:') &&
-          !this._revalidatedAgents.has(subject)
-        ) {
+        if (isAgentSubject(subject) && !this._revalidatedAgents.has(subject)) {
           this._revalidatedAgents.add(subject);
           await this.fetchResourceFromServer(subject, opts);
         }
@@ -3787,7 +3795,7 @@ export class Store {
     }
 
     const fetchSubject =
-      subject.startsWith('http') || subject.startsWith('did:ad:')
+      subject.startsWith('http') || isAtomicIdentifier(subject)
         ? subject
         : new URL(subject, this.serverUrl).toString();
 
@@ -3919,7 +3927,7 @@ export class Store {
       // DIDs are hosted on the current server, so use server URL for WebSocket
       let origin: string;
 
-      if (subject.startsWith('did:')) {
+      if (isAtomicIdentifier(subject)) {
         origin = new URL(this.serverUrl).origin;
       } else if (subject.startsWith('http')) {
         origin = new URL(subject).origin;
@@ -4044,7 +4052,7 @@ export class Store {
     // a prior fetch (e.g. `did:ad:commit:<sig>` accidentally aliased to the
     // committed-to subject during signing/hydration) sends the user to the
     // resource the commit edits instead of the commit itself.
-    const resolved = normalized.startsWith('did:ad:commit:')
+    const resolved = isCommitSubject(normalized)
       ? normalized
       : (this.aliases.get(normalized) ?? normalized);
     const isNew =
@@ -4110,7 +4118,7 @@ export class Store {
         // showing your own name and avatar depend on a reachable server,
         // which is how an unreachable one turned `/app/show?subject=<your DID>`
         // into "Error loading resource" while `/app/agent` rendered you fine.
-        if (resolved.startsWith('did:ad:agent:')) {
+        if (isAgentSubject(resolved)) {
           this.fetchResourceWithLocalFallback(resolved, opts).catch(
             () => undefined,
           );
@@ -5177,7 +5185,7 @@ export class Store {
     subject: string,
     legacyOrigin?: string,
   ): boolean {
-    if (subject.startsWith('did:')) return true;
+    if (isAtomicIdentifier(subject)) return true;
 
     // The migration's mangled spelling. It survives serialization as a path
     // segment containing a colon, which is not a subject this server can
@@ -5448,7 +5456,7 @@ export class Store {
     if (
       normalized === unknownSubject ||
       normalized.includes('/commits/') ||
-      normalized.startsWith('did:ad:commit:') ||
+      isCommitSubject(normalized) ||
       this.isLocalOnlySubject(normalized)
     ) {
       return;
@@ -5843,7 +5851,7 @@ export class Store {
       previousCommit: commit.previousCommit,
       commitId:
         extras.commitId ??
-        (commit.signature ? `did:ad:commit:${commit.signature}` : undefined),
+        (commit.signature ? commitSubject(commit.signature) : undefined),
       hasLoroUpdate: !!commit.loroUpdate,
       destroy: !!commit.destroy,
       summary: this.summarizeCommit(commit),
@@ -6055,9 +6063,8 @@ export class Store {
 
     const blobValue = resource.get(BLOB);
     if (typeof blobValue !== 'string') return;
-    const prefix = 'did:ad:blob:';
-    if (!blobValue.startsWith(prefix)) return;
-    const hashHex = blobValue.slice(prefix.length);
+    if (!isBlobSubject(blobValue)) return;
+    const hashHex = blobValue.replace(/^(atomic:blob:|did:ad:blob:)/, '');
 
     let hashBytes: Uint8Array;
 
@@ -6147,7 +6154,8 @@ export class Store {
     // required attachment property is included in the first server commit.
     if (
       parent.startsWith('_new:') &&
-      agent.subject?.startsWith('did:ad:agent:')
+      !!agent.subject &&
+      isAgentSubject(agent.subject)
     ) {
       const parentResource = this.resources.get(parent);
       if (!parentResource) throw new Error('Upload parent is not in the store');
@@ -6177,8 +6185,8 @@ export class Store {
     }
 
     const createdSubjects: string[] = [];
-    const useDid =
-      this.getAgent()!.subject?.startsWith('did:ad:agent:') ?? false;
+    const agentForDid = this.getAgent()!.subject;
+    const useDid = !!agentForDid && isAgentSubject(agentForDid);
 
     for (const file of files) {
       const blob = 'blob' in file ? file.blob : file;
@@ -6230,7 +6238,7 @@ export class Store {
       await resource.set(server.properties.filesize, blob.size, false);
       await resource.set(server.properties.mimetype, blob.type, false);
       await resource.set(INTERNAL_ID, hash, false);
-      await resource.set(BLOB, `did:ad:blob:${hash}`, false);
+      await resource.set(BLOB, blobSubject(hash), false);
       await resource.set(
         server.properties.downloadUrl,
         `${this.getServerUrl()}/download/files/${hash}`,

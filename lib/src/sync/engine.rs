@@ -806,7 +806,7 @@ pub async fn ingest_commit(
     if needs_agent_resource {
         let mut new_agent = crate::Resource::new_instance(crate::urls::AGENT, store).await?;
         new_agent.set_subject(signer_pure.clone());
-        if let Some(pk) = signer.as_str().strip_prefix("did:ad:agent:") {
+        if let Some(pk) = signer.agent_public_key() {
             new_agent
                 .set_string(crate::urls::PUBLIC_KEY.into(), pk, store)
                 .await?;

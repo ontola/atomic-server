@@ -5,9 +5,9 @@
 //! set/remove/push deltas. The server imports the update, derives add/remove atoms from
 //! the diff events, and updates indexes — the read path (JSON-AD) stays unchanged.
 
+use crate::Atom;
 use crate::errors::{AtomicError, AtomicResult};
 use crate::values::Value;
-use crate::Atom;
 use loro::{ExportMode, LoroDoc, VersionVector};
 use std::ops::ControlFlow;
 
@@ -976,7 +976,10 @@ pub fn loro_value_to_atomic_value(lv: &loro::LoroValue) -> Option<Value> {
             // that pattern-match on `Value::AtomicUrl` see them correctly.
             // Without this, e.g. plugin extender's `resource.get(parent)`
             // returns `Value::String` and rejects the commit.
-            if s.starts_with("did:") || s.starts_with("http://") || s.starts_with("https://") {
+            if crate::identifiers::is_atomic_identifier(&s)
+                || s.starts_with("http://")
+                || s.starts_with("https://")
+            {
                 return Some(Value::AtomicUrl(s.into()));
             }
 
@@ -1844,15 +1847,17 @@ mod test {
             &Value::String("Alice".into()),
         )
         .unwrap();
-        assert!(doc
-            .get_string_property("https://atomicdata.dev/properties/name")
-            .is_some());
+        assert!(
+            doc.get_string_property("https://atomicdata.dev/properties/name")
+                .is_some()
+        );
 
         doc.remove_property("https://atomicdata.dev/properties/name")
             .unwrap();
-        assert!(doc
-            .get_string_property("https://atomicdata.dev/properties/name")
-            .is_none());
+        assert!(
+            doc.get_string_property("https://atomicdata.dev/properties/name")
+                .is_none()
+        );
     }
 
     #[test]

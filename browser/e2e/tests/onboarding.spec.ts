@@ -89,7 +89,9 @@ test.describe('onboarding', () => {
 
     // The form auto-submits ~150ms after fill (GettingStartedFlow useEffect).
     // The URL assertion below already polls — no separate sleep needed.
-    await expect(page).toHaveURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 10000 });
+    await expect(page).toHaveURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/, {
+      timeout: 10000,
+    });
 
     // Open a NEW BROWSER CONTEXT (fresh, as if on a completely different computer)
     const context2 = await browser.newContext();
@@ -103,7 +105,7 @@ test.describe('onboarding', () => {
     // Signing in lands the user on their home drive (sign-in is unified through
     // /app/welcome now; /app/agent no longer hosts its own login form). Wait for
     // the signed-in drive URL, then open settings to confirm the account.
-    await expect(page2).toHaveURL(/did(?:%3A|:)ad(?:%3A|:)/, {
+    await expect(page2).toHaveURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/, {
       timeout: 10000,
     });
     await page2.goto(`${FRONTEND_URL}/app/agent`);

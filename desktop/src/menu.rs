@@ -1,6 +1,6 @@
 use tauri::{
-  menu::{AboutMetadata, Menu, PredefinedMenuItem, Submenu},
   AppHandle, Runtime,
+  menu::{AboutMetadata, Menu, PredefinedMenuItem, Submenu},
 };
 
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {

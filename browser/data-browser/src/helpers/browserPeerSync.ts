@@ -4,6 +4,8 @@ import {
   randomPeerToken,
   server,
   type Store,
+  isAtomicIdentifier,
+  isAgentSubject,
 } from '@tomic/lib';
 
 export interface SavedPeerLink {
@@ -155,12 +157,12 @@ export function parsePeerLink(invitation: string): SavedPeerLink {
   const link = JSON.parse(atob(encoded));
   if (
     typeof link.drive !== 'string' ||
-    !link.drive.startsWith('did:ad:') ||
+    !isAtomicIdentifier(link.drive) ||
     link.drive.includes('#') ||
     link.drive.includes('?') ||
     !/^[a-f0-9]{64}$/.test(link.room) ||
     typeof link.expectedPeer !== 'string' ||
-    !link.expectedPeer.startsWith('did:ad:agent:') ||
+    !isAgentSubject(link.expectedPeer) ||
     typeof link.signalingUrl !== 'string'
   )
     throw new Error('Invalid peer link');
@@ -210,7 +212,7 @@ export async function discoverPeerDrives(store: Store): Promise<void> {
       const id = `automatic:${drive}`;
       if (
         readTemplateDemo()?.drive === drive ||
-        !drive.startsWith('did:ad:') ||
+        !isAtomicIdentifier(drive) ||
         !resource.isReady() ||
         resource.error ||
         !resource.hasClasses(server.classes.drive) ||

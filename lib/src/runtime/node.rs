@@ -14,14 +14,14 @@
 //! to it (`planning/atomic-lib-runtime.md`).
 
 use crate::{
+    Resource, Storelike,
     agents::Agent,
     commit::{Commit, CommitOpts, CommitResponse},
     db::Db,
     errors::AtomicResult,
     storelike::{Query, QueryResult},
-    sync::engine::{ingest_commit, CommitIngestOpts},
+    sync::engine::{CommitIngestOpts, ingest_commit},
     sync::outbox::{CommitTransport, DrainReport, Outbox},
-    Resource, Storelike,
 };
 
 /// The trust role under which a signed commit is ingested. `Hub` and `Peer`
@@ -194,7 +194,7 @@ impl AtomicNode {
 mod tests {
     use super::*;
     use crate::{
-        agents::ForAgent, client::commit_to_wire_json, db::DbEvent, urls, Resource, Subject, Value,
+        Resource, Subject, Value, agents::ForAgent, client::commit_to_wire_json, db::DbEvent, urls,
     };
 
     async fn open_test_node(label: &str) -> AtomicNode {
@@ -285,7 +285,10 @@ mod tests {
             .unwrap();
         let response = draft.save_as_genesis(alice_node.db()).await.unwrap();
         let subject = response.commit.subject.clone();
-        assert!(subject.as_str().starts_with("did:ad:"), "got {subject}");
+        assert!(
+            crate::identifiers::is_atomic_identifier(subject.as_str()),
+            "got {subject}"
+        );
         assert!(
             bob_node.db().get_resource(&subject).await.is_err(),
             "bob must not see alice's write before ingesting it"

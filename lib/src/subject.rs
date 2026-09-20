@@ -1,27 +1,17 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use url::Url;
 
-/// The prefix for Agent DIDs: `did:ad:agent:`
-pub const DID_AD_AGENT_PREFIX: &str = "did:ad:agent:";
+pub use crate::identifiers::{
+    ATOMIC_AGENT_PREFIX, ATOMIC_BLOB_PREFIX, ATOMIC_COMMIT_PREFIX, ATOMIC_NODE_PREFIX,
+    ATOMIC_PREFIX, DID_AD_AGENT_PREFIX, DID_AD_BLOB_PREFIX, DID_AD_COMMIT_PREFIX,
+    DID_AD_NODE_PREFIX, DID_AD_PREFIX,
+};
 
-/// The prefix for Commit DIDs: `did:ad:commit:`
-pub const DID_AD_COMMIT_PREFIX: &str = "did:ad:commit:";
-
-/// The prefix for Blob DIDs: `did:ad:blob:`. The remainder is the
-/// 32-byte BLAKE3 hash of the bytes, hex-encoded (64 chars).
-pub const DID_AD_BLOB_PREFIX: &str = "did:ad:blob:";
-
-/// The prefix for Node DIDs: `did:ad:node:`.
-pub const DID_AD_NODE_PREFIX: &str = "did:ad:node:";
-
-/// The prefix shared by all identifiers defined by the `did:ad` method.
-pub const DID_AD_PREFIX: &str = "did:ad:";
-
-/// The semantic form of a parsed `did:ad` identifier.
+/// The semantic form of a parsed Atomic identifier (`atomic:` or `did:ad:`).
 ///
 /// This keeps callers from repeating string-prefix checks while the broader
 /// end-to-end subject typing migration remains incremental. `Other` covers
-/// malformed or future `did:ad` forms without changing `Subject::from_raw`'s
+/// malformed or future forms without changing `Subject::from_raw`'s
 /// intentionally permissive parsing.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DidKind {
@@ -39,10 +29,11 @@ pub enum DidKind {
 /// They are differentiated by their scheme:
 /// - `internal:` for resources hosted on this server.
 /// - `http:` or `https:` for resources on other servers.
-/// - `did:` for Decentralized Identifiers. Five `did:ad:` forms exist:
-///   `did:ad:agent:{publicKey}`, `did:ad:commit:{signature}`,
-///   `did:ad:blob:{blake3-hex}`, `did:ad:node:{nodeId}`, and the default
-///   `did:ad:{genesis}` for Resources. See `docs/src/did.md`.
+/// - `atomic:` (canonical) or `did:ad:` (legacy alias) for content-addressed
+///   identifiers. Five forms exist: `atomic:agent:{publicKey}`,
+///   `atomic:commit:{signature}`, `atomic:blob:{blake3-hex}`,
+///   `atomic:node:{nodeId}`, and the default `atomic:{genesis}` for Resources.
+///   See `docs/src/identifiers.md`.
 #[derive(Clone, Debug)]
 pub enum Subject {
     /// Internal representation for local data.
@@ -54,8 +45,9 @@ pub enum Subject {
     },
     /// External resource identifier (usually over HTTP).
     External(Url),
-    /// Decentralized Identifier (including `did:ad` resources, agents,
-    /// commits, blobs, and nodes). Contains an optional drive routing hint.
+    /// Content-addressed identifier (`atomic:` or legacy `did:ad:`), including
+    /// resources, agents, commits, blobs, and nodes. Contains an optional drive
+    /// routing hint.
     Did {
         url: Url,
         drive_hint: Option<String>,
@@ -220,106 +212,85 @@ impl Subject {
         matches!(self, Subject::Did { .. })
     }
 
-    /// Classifies identifiers defined by the `did:ad` method.
+    /// Classifies Atomic identifiers (`atomic:` or `did:ad:`).
     pub fn did_kind(&self) -> Option<DidKind> {
         let Subject::Did { url, .. } = self else {
             return None;
         };
-
-        let mut identifier = url.as_str();
-        if let Some(end) = identifier.find(['?', '#']) {
-            identifier = &identifier[..end];
-        }
-
-        if identifier
-            .strip_prefix(DID_AD_AGENT_PREFIX)
-            .is_some_and(|value| !value.is_empty())
-        {
-            Some(DidKind::Agent)
-        } else if identifier
-            .strip_prefix(DID_AD_COMMIT_PREFIX)
-            .is_some_and(|value| !value.is_empty())
-        {
-            Some(DidKind::Commit)
-        } else if identifier
-            .strip_prefix(DID_AD_BLOB_PREFIX)
-            .is_some_and(|value| !value.is_empty())
-        {
-            Some(DidKind::Blob)
-        } else if identifier
-            .strip_prefix(DID_AD_NODE_PREFIX)
-            .is_some_and(|value| !value.is_empty())
-        {
-            Some(DidKind::Node)
-        } else if identifier
-            .strip_prefix(DID_AD_PREFIX)
-            .is_some_and(|value| !value.is_empty() && !value.contains(':'))
-        {
-            Some(DidKind::Resource)
-        } else if identifier.starts_with(DID_AD_PREFIX) {
-            Some(DidKind::Other)
-        } else {
-            None
-        }
+        crate::identifiers::identifier_kind(url.as_str())
     }
 
-    /// Returns true if this is an unprefixed `did:ad:{genesis}` resource.
+    /// Returns true if this is an unprefixed `atomic:{genesis}` / `did:ad:{genesis}` resource.
     pub fn is_resource_did(&self) -> bool {
         self.did_kind() == Some(DidKind::Resource)
     }
 
-    /// Returns true if this is a DID Agent subject (did:ad:agent:).
+    /// Returns true if this is an Agent subject (`atomic:agent:` / `did:ad:agent:`).
     pub fn is_agent_did(&self) -> bool {
         self.did_kind() == Some(DidKind::Agent)
     }
 
-    /// Returns true if this is a DID Commit subject (did:ad:commit:).
+    /// Returns true if this is a Commit subject (`atomic:commit:` / `did:ad:commit:`).
     pub fn is_commit_did(&self) -> bool {
         self.did_kind() == Some(DidKind::Commit)
     }
 
-    /// Returns true if this is a DID Blob subject (did:ad:blob:).
+    /// Returns true if this is a Blob subject (`atomic:blob:` / `did:ad:blob:`).
     pub fn is_blob_did(&self) -> bool {
         self.did_kind() == Some(DidKind::Blob)
     }
 
-    /// Returns true if this is a DID Node subject (`did:ad:node:`).
+    /// Returns true if this is a Node subject (`atomic:node:` / `did:ad:node:`).
     pub fn is_node_did(&self) -> bool {
         self.did_kind() == Some(DidKind::Node)
     }
 
-    /// If this is a `did:ad:blob:` subject, returns the hex-encoded BLAKE3
-    /// hash (the part after the prefix, with any `?drive=` hint stripped).
-    /// Returns `None` for any other variant.
+    /// If this is a blob subject, returns the hex-encoded BLAKE3 hash
+    /// (query / fragment stripped). Returns `None` for any other variant.
     pub fn blob_hash_hex(&self) -> Option<&str> {
         match self {
-            Subject::Did { url, .. } => {
-                // url.path() includes the part after `did:`, e.g. `ad:blob:abc...`
-                // Use as_str() and slice past the prefix to keep it simple.
-                let s = url.as_str();
-                let rest = s.strip_prefix(DID_AD_BLOB_PREFIX)?;
-                // Drop query (`?drive=...`) / fragment if present.
-                let end = rest.find(['?', '#']).unwrap_or(rest.len());
-                Some(&rest[..end])
-            }
+            Subject::Did { url, .. } => crate::identifiers::blob_hash_hex(url.as_str()),
             _ => None,
         }
     }
 
-    /// Construct a `did:ad:blob:` subject from a 32-byte BLAKE3 hash.
+    /// Agent public key, if this is an agent identifier.
+    pub fn agent_public_key(&self) -> Option<&str> {
+        match self {
+            Subject::Did { url, .. } => crate::identifiers::agent_public_key(url.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Commit signature, if this is a commit identifier.
+    pub fn commit_signature(&self) -> Option<&str> {
+        match self {
+            Subject::Did { url, .. } => crate::identifiers::commit_signature(url.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Node id, if this is a node identifier.
+    pub fn node_id(&self) -> Option<&str> {
+        match self {
+            Subject::Did { url, .. } => crate::identifiers::node_id(url.as_str()),
+            _ => None,
+        }
+    }
+
+    /// Construct an `atomic:blob:` subject from a 32-byte BLAKE3 hash.
     /// Used on the receiving end of `BLOB_REQUEST`/`BLOB_RESPONSE` frames,
-    /// which carry the raw bytes rather than the DID form.
+    /// which carry the raw bytes rather than the identifier form.
     pub fn from_blob_hash(hash: &[u8; 32]) -> Self {
-        let mut hex = String::with_capacity(DID_AD_BLOB_PREFIX.len() + 64);
-        hex.push_str(DID_AD_BLOB_PREFIX);
+        let mut hex = String::with_capacity(ATOMIC_BLOB_PREFIX.len() + 64);
+        hex.push_str(ATOMIC_BLOB_PREFIX);
         for byte in hash {
             // Inline lowercase-hex; avoids pulling in the `hex` crate just for this.
             hex.push(char::from_digit((byte >> 4) as u32, 16).unwrap());
             hex.push(char::from_digit((byte & 0xf) as u32, 16).unwrap());
         }
-        // Url::parse on a `did:ad:blob:<hex>` always succeeds (hex is RFC-3986 safe).
         Subject::Did {
-            url: Url::parse(&hex).expect("valid did:ad:blob: URL"),
+            url: Url::parse(&hex).expect("valid atomic:blob: URL"),
             drive_hint: None,
         }
     }
@@ -467,18 +438,14 @@ impl Subject {
     /// Normalizes a subject string based on a base domain.
     /// If the URL matches the base domain or its subdomains, it becomes an Internal subject.
     pub fn from_raw(s: &str, base_domain: Option<&str>) -> Self {
-        if s.starts_with("/did:") {
+        if crate::identifiers::is_identifier_path_form(s) {
             return Subject::from_raw(&s[1..], base_domain);
         }
 
         let s = if s.len() > 1 && s.ends_with('/') {
             if s.starts_with("internal:") {
                 // If it's internal:/, don't strip. internal:/path/ -> internal:/path
-                if s.len() > 10 {
-                    &s[..s.len() - 1]
-                } else {
-                    s
-                }
+                if s.len() > 10 { &s[..s.len() - 1] } else { s }
             } else {
                 &s[..s.len() - 1]
             }
@@ -486,7 +453,7 @@ impl Subject {
             s
         };
 
-        if s.starts_with("did:") {
+        if crate::identifiers::is_atomic_identifier(s) {
             if let Ok(u) = Url::parse(s) {
                 let mut drive_hint = None;
                 if let Some(query) = u.query() {
@@ -657,7 +624,7 @@ impl Subject {
                 if s.ends_with('/') {
                     s.pop();
                 }
-                s
+                crate::identifiers::canonicalize_scheme(&s)
             }
         }
     }
@@ -848,6 +815,10 @@ mod tests {
         assert!(matches!(subject_from_did, Subject::Did { .. }));
         assert_eq!(subject_from_did.as_str(), did);
         assert_eq!(subject_from_did.resolve(origin), did);
+        assert_eq!(
+            subject_from_did.pure_id(),
+            crate::identifiers::canonicalize_scheme(did)
+        );
 
         let subject_from_slash = Subject::from_raw(&with_slash, None);
         assert!(matches!(subject_from_slash, Subject::Did { .. }));
@@ -885,11 +856,17 @@ mod tests {
 
         for (raw, expected) in cases {
             assert_eq!(Subject::from_raw(raw, None).did_kind(), Some(expected));
+            let atomic = raw.replacen("did:ad:", "atomic:", 1);
+            assert_eq!(
+                Subject::from_raw(&atomic, None).did_kind(),
+                Some(expected),
+                "{atomic}"
+            );
         }
         assert_eq!(
             Subject::from_raw("did:key:abc", None).did_kind(),
             None,
-            "non-Atomic DID methods are not classified as did:ad forms"
+            "non-Atomic DID methods are not classified as Atomic identifiers"
         );
         assert_eq!(
             Subject::from_raw("https://example.com", None).did_kind(),
@@ -969,7 +946,26 @@ mod tests {
 
         assert!(matches!(subject, Subject::Did { .. }));
         assert_eq!(subject.drive_hint(), Some("abc"));
-        assert_eq!(subject.pure_id(), "did:ad:123");
+        assert_eq!(subject.pure_id(), "atomic:123");
+    }
+
+    #[test]
+    fn atomic_and_did_ad_are_the_same_identity() {
+        let legacy = Subject::from_raw("did:ad:resource", None);
+        let canonical = Subject::from_raw("atomic:resource", None);
+        assert_eq!(legacy, canonical);
+        assert_eq!(legacy.pure_id(), "atomic:resource");
+        assert_eq!(canonical.pure_id(), "atomic:resource");
+        assert_eq!(legacy.did_kind(), Some(DidKind::Resource));
+        assert_eq!(canonical.did_kind(), Some(DidKind::Resource));
+
+        let agent = Subject::from_raw("atomic:agent:pk", None);
+        assert!(agent.is_agent_did());
+        assert_eq!(agent.agent_public_key(), Some("pk"));
+        assert_eq!(
+            Subject::from_raw("did:ad:agent:pk", None).agent_public_key(),
+            Some("pk")
+        );
     }
 
     #[test]

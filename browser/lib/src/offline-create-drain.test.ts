@@ -2,6 +2,7 @@ import { describe, it, vi, expect as assert } from 'vitest';
 import { server } from './ontologies/server.js';
 import { testStore } from './test-store.js';
 import type { ClientDbWorker } from './client-db.js';
+import { isAtomicIdentifier } from './subject.js';
 
 /**
  * Reproduces the develop full-e2e failure of
@@ -22,7 +23,7 @@ describe('offline create drain', () => {
     const extra = await store.createDrive('Offline-Created Drive', {
       personal: false,
     });
-    expect(extra.subject.startsWith('did:ad:')).toBe(true);
+    expect(isAtomicIdentifier(extra.subject)).toBe(true);
 
     const pending = store.outbox.pending();
     expect(pending.length).toBeGreaterThan(0);

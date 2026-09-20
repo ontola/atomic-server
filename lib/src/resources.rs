@@ -153,10 +153,13 @@ impl Resource {
     /// the result per subject (the cert never changes for a resource).
     pub fn genesis_signer(&self) -> Option<String> {
         let subject = self.get_subject().to_string();
-        // Agent DIDs are identity-based (`did:ad:agent:<pubkey>`), not
-        // cert-based; plain URL resources have no cert-DID binding at all.
-        let signature = subject.strip_prefix("did:ad:")?;
-        if subject.starts_with("did:ad:agent:") {
+        // Agent identifiers are identity-based (`atomic:agent:<pubkey>`), not
+        // cert-based; plain URL resources have no cert binding at all.
+        if crate::identifiers::is_agent_id(&subject) {
+            return None;
+        }
+        let signature = crate::identifiers::identifier_body(&subject)?;
+        if signature.contains(':') {
             return None;
         }
         let cert_b64 = self.get(urls::GENESIS).ok()?.to_string();
@@ -1299,7 +1302,7 @@ impl Resource {
             .signature
             .as_ref()
             .ok_or("No signature generated for genesis commit")?;
-        let did_subject = Subject::from_raw(&format!("did:ad:{}", signature), None);
+        let did_subject = Subject::from_raw(&crate::identifiers::resource_subject(signature), None);
 
         // Update both the resource and the commit subject to the real DID
         self.subject = did_subject.clone();
@@ -1343,7 +1346,7 @@ impl Resource {
             let commit_id = commit
                 .signature
                 .as_ref()
-                .map(|sig| format!("did:ad:commit:{}", sig));
+                .map(|sig| crate::identifiers::commit_subject(sig));
             crate::client::post_commit(&commit, store).await?;
             self.subject = subject.clone();
             // Stamp lastCommit so subsequent saves do not mis-detect genesis.
@@ -1362,7 +1365,7 @@ impl Resource {
             let commit_id = commit
                 .signature
                 .as_ref()
-                .map(|sig| format!("did:ad:commit:{}", sig));
+                .map(|sig| crate::identifiers::commit_subject(sig));
             crate::client::post_commit(&commit, store).await?;
             if let Some(id) = commit_id {
                 self.propvals

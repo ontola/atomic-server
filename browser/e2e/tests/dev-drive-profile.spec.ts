@@ -38,7 +38,9 @@ test('dev-drive CDP trace', async ({ page }) => {
 
   const t0 = Date.now();
   await page.goto(`${FRONTEND_URL}/app/dev-drive`);
-  await page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 });
+  await page.waitForURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/, {
+    timeout: 30000,
+  });
   await currentDriveTitle(page).waitFor({ state: 'visible', timeout: 30000 });
   const total = Date.now() - t0;
 

@@ -29,7 +29,7 @@ pub(crate) const ATOMIC_ALPN: &[u8] = b"atomic/1";
 /// Canonical 64-char lowercase hex NodeID for map keys and UI matching.
 pub fn normalize_node_id(id: &str) -> String {
     let mut s = id.trim().to_string();
-    if let Some(rest) = s.strip_prefix("did:ad:node:") {
+    if let Some(rest) = crate::identifiers::node_id(&s) {
         s = rest.split(':').next().unwrap_or(rest).to_string();
     } else if let Some(rest) = s.strip_prefix("iroh:") {
         s = rest.to_string();

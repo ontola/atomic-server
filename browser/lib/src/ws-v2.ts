@@ -163,7 +163,10 @@ export type ServerCapability =
 
 /** Capability names this client lists in the `HELLO` it sends on open
  *  (mirrors `protocol::CLIENT_CAPABILITIES`). */
-export const CLIENT_CAPABILITIES: readonly string[] = ['commit-ok-slim'];
+export const CLIENT_CAPABILITIES: readonly string[] = [
+  'commit-ok-slim',
+  'canonical-scheme',
+];
 
 /** What this client calls itself in its `HELLO`. Display only. */
 export const CLIENT_HELLO_NAME = '@tomic/lib browser';

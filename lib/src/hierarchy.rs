@@ -4,7 +4,7 @@
 
 use core::fmt;
 
-use crate::{agents::ForAgent, errors::AtomicResult, urls, Resource, Storelike};
+use crate::{Resource, Storelike, agents::ForAgent, errors::AtomicResult, urls};
 
 #[cfg(target_arch = "wasm32")]
 type AsyncResult<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + 'a>>;
@@ -155,7 +155,7 @@ pub fn check_rights_cached<'a, S: Storelike>(
                     return Err(crate::errors::AtomicError::unauthorized(format!(
                         "No {} right found for {} (cached for this request)",
                         right, for_agent_enum
-                    )))
+                    )));
                 }
                 None => {}
             }
@@ -190,14 +190,14 @@ pub async fn check_append(
         Ok(parent) => check_rights(store, &parent, for_agent, Right::Append).await,
         Err(e) => {
             let subject = resource.get_subject().to_string();
-            if subject.starts_with(crate::subject::DID_AD_AGENT_PREFIX) {
+            if crate::identifiers::is_agent_id(&subject) {
                 // An Agent resource is an identity. With no parent to grant
                 // anything, only the key it names (or the node itself) may
                 // create it — otherwise anyone could squat `did:ad:agent:X`
                 // with their own `write` grant before X ever signs in.
                 return check_agent_self_creation(store, &subject, for_agent);
             }
-            if subject.starts_with("did:") {
+            if crate::identifiers::is_atomic_identifier(&subject) {
                 // A cert-bound resource that names no parent at all is a
                 // top-level resource (a drive): anyone may mint one, and its
                 // grants are its own.
@@ -257,10 +257,7 @@ fn check_top_level_drive_creation(
 
 /// Same key as `a` and `b`, in whatever spelling either arrives in.
 fn same_agent_key(a: &str, b: &str) -> bool {
-    let strip = |s: &str| {
-        s.strip_prefix(crate::subject::DID_AD_AGENT_PREFIX)
-            .map(|k| k.to_string())
-    };
+    let strip = |s: &str| crate::identifiers::agent_public_key(s).map(|k| k.to_string());
     match (strip(a), strip(b)) {
         (Some(ka), Some(kb)) => crate::authentication::public_keys_match(&ka, &kb),
         _ => a == b,
@@ -361,8 +358,9 @@ fn check_rights_impl<'a, S: Storelike>(
         // own payload, could show a name at all; everything else read a 401 and
         // rendered a stub. Writing is untouched — still owner-only.
         if matches!(right, Right::Read)
-            && crate::agents::migrate_legacy_agent_subject(resource.get_subject().as_str())
-                .starts_with("did:ad:agent:")
+            && crate::identifiers::is_agent_id(&crate::agents::migrate_legacy_agent_subject(
+                resource.get_subject().as_str(),
+            ))
         {
             return Ok("Agents are publicly readable.".into());
         }
@@ -398,7 +396,7 @@ fn check_rights_impl<'a, S: Storelike>(
                             return Ok(format!(
                                 "PublicAgent has been granted rights in {}",
                                 resource.get_subject()
-                            ))
+                            ));
                         }
                         agent => {
                             // A store migrated from the pre-DID era holds its
@@ -501,7 +499,7 @@ fn check_rights_impl<'a, S: Storelike>(
 #[cfg(test)]
 mod test {
     // use super::*;
-    use crate::{datatype::DataType, Storelike, Value};
+    use crate::{Storelike, Value, datatype::DataType};
 
     /// End-to-end guard for the migration's biggest rights hazard.
     ///
@@ -515,7 +513,7 @@ mod test {
     #[cfg(feature = "db")]
     async fn legacy_internal_agent_grant_still_authorizes_its_did() {
         use crate::agents::ForAgent;
-        use crate::hierarchy::{check_rights, Right};
+        use crate::hierarchy::{Right, check_rights};
 
         let store = crate::db::Db::init_temp("legacy_agent_grant_rights")
             .await
@@ -565,7 +563,7 @@ mod test {
     #[cfg(feature = "db")]
     async fn agents_are_readable_by_anyone_but_writable_only_by_their_owner() {
         use crate::agents::ForAgent;
-        use crate::hierarchy::{check_rights, Right};
+        use crate::hierarchy::{Right, check_rights};
 
         let store = crate::db::Db::init_temp("agents_are_public").await.unwrap();
         crate::test_utils::setup_test_env(&store).await.unwrap();

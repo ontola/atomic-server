@@ -124,6 +124,7 @@ pub const CAPABILITIES: &[&str] = &[
     "sync-probe",
     "ephemeral",
     "get-many",
+    "canonical-scheme",
 ];
 
 /// Capability names a *client* may list in the `HELLO` it sends a responder
@@ -133,7 +134,7 @@ pub const CAPABILITIES: &[&str] = &[
 /// - `commit-ok-slim`: the client decodes a `COMMIT_OK` whose payload is a
 ///   bare commit id, so the responder need not ship the full commit JSON
 ///   back to the agent that just signed it.
-pub const CLIENT_CAPABILITIES: &[&str] = &["commit-ok-slim"];
+pub const CLIENT_CAPABILITIES: &[&str] = &["commit-ok-slim", "canonical-scheme"];
 
 /// The name of the client capability a responder consults before sending a
 /// slim `COMMIT_OK`.

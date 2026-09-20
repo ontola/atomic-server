@@ -35,7 +35,7 @@ use async_trait::async_trait;
 
 use atomic_lib::db::trees::{Method, Operation, Tree};
 use atomic_lib::values::SubResource;
-use atomic_lib::{urls, Db, Resource, Storelike, Subject, Value};
+use atomic_lib::{Db, Resource, Storelike, Subject, Value, urls};
 use nfsserve::nfs::{
   fattr3, fileid3, filename3, ftype3, nfspath3, nfsstat3, nfstime3, sattr3, set_size3, specdata3,
 };
@@ -1011,10 +1011,11 @@ const LINK_EXT: &str = "inetloc";
 /// resolves the embedded `atomic://` URL to the registered desktop app, whose
 /// deep-link handler forwards it to the frontend to navigate to the resource.
 fn link_file_bytes(subject: &str) -> Vec<u8> {
-  let url = xml_escape(&format!(
-    "atomic://open?subject={}",
-    percent_encode(subject)
-  ));
+  let url = xml_escape(&if atomic_lib::identifiers::is_atomic_identifier(subject) {
+    subject.to_string()
+  } else {
+    format!("atomic://open?subject={}", percent_encode(subject))
+  });
   format!(
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
      <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \
@@ -1109,7 +1110,7 @@ fn hash_props(store: &Db, hash_hex: &str, size: usize) -> Vec<(&'static str, Val
     (urls::INTERNAL_ID, Value::String(hash_hex.to_string())),
     (
       urls::BLOB,
-      Value::AtomicUrl(format!("did:ad:blob:{hash_hex}").into()),
+      Value::AtomicUrl(atomic_lib::identifiers::blob_subject(hash_hex).into()),
     ),
     (urls::FILESIZE, Value::Integer(size as i64)),
     (
@@ -1402,7 +1403,9 @@ fn store_bytes(store: &Db, data: &[u8]) -> Result<Option<Vec<SubResource>>, ()> 
       .kv
       .insert(Tree::Blobs, hash.as_bytes(), bytes)
       .map_err(|_| ())?;
-    refs.push(SubResource::from(format!("did:ad:blob:{}", hash.to_hex())));
+    refs.push(SubResource::from(atomic_lib::identifiers::blob_subject(
+      &hash.to_hex(),
+    )));
   }
 
   Ok(Some(refs))
