@@ -177,12 +177,24 @@ test('blank drive remains a short path without feedback covering it on mobile', 
     page.getByRole('button', { name: 'Close', exact: true }),
   ).toBeVisible();
   const blank = page.getByRole('button', { name: 'Create a blank drive' });
-  await blank.scrollIntoViewIfNeeded();
-  const blankBox = await blank.boundingBox();
-  const feedbackBox = await page
-    .getByRole('button', { name: 'Feedback', exact: true })
-    .boundingBox();
-  expect(feedbackBox!.y).toBeGreaterThanOrEqual(blankBox!.y + blankBox!.height);
+  const feedback = page.getByRole('button', { name: 'Feedback', exact: true });
+  // The gallery above this button keeps loading after the page is
+  // interactive, growing the scroll area by about 250px. A single
+  // `scrollIntoViewIfNeeded` issued inside that window scrolls to what was
+  // then the bottom and is left short, so scroll again on every attempt
+  // rather than measuring once. If the fixed Feedback control really does
+  // cover the last option, no amount of scrolling clears it and this fails.
+  await expect
+    .poll(async () => {
+      await blank.scrollIntoViewIfNeeded();
+      const blankBox = await blank.boundingBox();
+      const feedbackBox = await feedback.boundingBox();
+
+      if (!blankBox || !feedbackBox) return -1;
+
+      return feedbackBox.y - (blankBox.y + blankBox.height);
+    })
+    .toBeGreaterThanOrEqual(0);
   await blank.click();
   await page.getByLabel('Drive name').fill('Blank example');
   await page.getByRole('button', { name: 'Create drive', exact: true }).click();
