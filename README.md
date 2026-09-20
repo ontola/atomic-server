@@ -6,8 +6,6 @@
 [![github](https://img.shields.io/github/stars/atomicdata-dev/atomic-server?style=social)](https://github.com/atomicdata-dev/atomic-server)
 
 **AtomicServer is an all-in one workspace / CMS / Graph Database.
-Designed for interopera
-Demo on [atomicdata.dev](https://atomicdata.dev).
 Docs on [docs.atomicdata.dev](https://docs.atomicdata.dev/atomic-data-overview)**
 
 This repo includes:
