@@ -4,6 +4,10 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: the editor's slash menu no longer reaches through an unmounted renderer.
+  `onStart` positions the menu again on the next animation frame, which can
+  land after the suggestion was destroyed.
+
 - Fix: someone who opens a chatroom shared from another drive sees the messages
   in it. The message list is a collection query, and a collection defaults its
   drive scope to the viewer's active drive. A guest arriving through an invite

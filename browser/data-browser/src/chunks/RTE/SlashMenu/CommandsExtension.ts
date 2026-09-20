@@ -65,7 +65,10 @@ export const createRenderFunction =
     };
 
     const updatePosition = (props: SuggestionProps<ItemType, ItemType>) => {
-      if (!props.decorationNode) {
+      // `component` is unset once the renderer is destroyed, and the
+      // `requestAnimationFrame` in `onStart` can land after that: measuring
+      // then would reach through an already-unmounted element.
+      if (!props.decorationNode || !component) {
         return;
       }
 
