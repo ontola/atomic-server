@@ -210,6 +210,11 @@ echo "Serving e2e on $SERVER_URL with its own store at $STORE"
 echo "Run the tests with a matching helper URL:"
 echo "  SERVER_URL=$SERVER_URL pnpm test-e2e"
 
+# Website publishing is off until the server is given a site origin, and the
+# website specs then get a "hosting is disabled" toast that also sits over the
+# preview and swallows clicks meant for it. Same value the CI e2e service uses.
+export ATOMIC_WEBSITE_ORIGIN="${ATOMIC_WEBSITE_ORIGIN:-http://sites.localhost:$PORT}"
+
 # `ATOMIC_REPOPULATE_DEFAULTS` so an existing e2e store picks up vocabulary added
 # since it was created: a store seeded before a Property existed can never
 # receive it otherwise, and every test using that Property fails on a 404 that

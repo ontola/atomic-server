@@ -4,6 +4,24 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: installing a plugin works again. Since the `Installation` class started
+  requiring `release`, the server refused the commit that creates one with
+  "Property .../properties/release missing", the outbox dropped it as terminal
+  and nothing was installed; both the integration store and a zip upload go
+  through `installRelease`, so neither worked. `store.newResource` signs the
+  genesis commit from the propvals it is handed and holds it until `save()`,
+  so a property set between those two calls is missing from the commit the
+  server validates. `release` is now one of the propvals.
+
+- Fix: opening an AI chat no longer risks taking the page to its error
+  boundary. `useEditor` replaces the tiptap editor when its dependencies change
+  and destroys the old one, which nulls its `commandManager` while its last
+  state stays readable, so `isEmpty` still answers and `commands` throws
+  ("Cannot read properties of null (reading 'commands')"). A prefill arriving
+  in that same breath is what "New automation" and "AI edit" do. Both effects
+  now check `isDestroyed`, and a prefill that is skipped is re-applied to the
+  editor that replaces it.
+
 - Fix: the authentication cookie is refreshed before the proof inside it
   expires. `setCookieAuthentication` signed a proof once and stored it for a
   day, and `checkAuthenticationCookie` only asked whether a cookie existed, so

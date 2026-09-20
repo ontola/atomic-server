@@ -74,12 +74,11 @@ test('website document preview, frozen release and reload', async ({
     fullPage: true,
   });
   const versionURL = await page.evaluate(async () => {
-    const { hostingRequest } =
-      await import('/src/chunks/Website/hostingClient.ts');
+    const { hostingRequest } = window.atomicE2E.hostingClient;
     const subject = new URL(location.href).searchParams.get('subject')!;
     const status = await hostingRequest(window.store, subject);
 
-    return `/app/show?subject=${encodeURIComponent(subject)}&view=website-version:${status.state.deployments.at(-1)}`;
+    return `/app/show?subject=${encodeURIComponent(subject)}&view=website-version:${status.state!.deployments.at(-1)}`;
   });
   await page.goto(`${new URL(websiteURL).origin}${versionURL}`);
   await expect(

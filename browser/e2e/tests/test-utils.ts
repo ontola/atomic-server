@@ -1088,9 +1088,18 @@ export async function newResource(klass: string, page: Page) {
         } as Record<string, string>
       )[klass] ?? klass;
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const classButton = page.getByRole('main').getByRole('button', {
-      name: new RegExp(`^${escaped}$`, 'i'),
-    });
+    // Scoped to the page's `section`s, which is where the class buttons live:
+    // "Start blank" and "Your resource types". The assistant's suggestion row
+    // above them is not a section, and #1577 gave it buttons that carry the
+    // same words, since "Dashboard" and "Custom table" are each both a
+    // suggestion and a class. Unscoped, the name then matches two buttons and
+    // Playwright refuses to touch either.
+    const classButton = page
+      .getByRole('main')
+      .locator('section')
+      .getByRole('button', {
+        name: new RegExp(`^${escaped}$`, 'i'),
+      });
     await classButton.waitFor({ state: 'visible', timeout: 30000 });
     await classButton.click();
     // Wait for any of: URL leaves /app/new (basic-instance handlers), a
