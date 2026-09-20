@@ -10,25 +10,26 @@ test('integration categories default off and independent Atomic preferences surv
   await page.route('**/catalog', route => route.fulfill({ json: ['pets'] }));
   await page.route('**/plugin-catalog', async route => {
     catalogRequests.push(route.request().url());
-    // The shape `/plugin-catalog` answers with: one flat Listing per entry.
-    // This used to send `{ metadata: {...}, verification }`, which the page
-    // has not read since the catalog was flattened, and an entry with no
-    // `domains` to spread took the whole Integrations page down to its error
-    // boundary rather than failing this assertion.
     await route.fulfill({
+      // The shape `/plugin-catalog` actually answers with: one flat object per
+      // Listing, as `plugin_release::catalog` builds it. The nested
+      // `{ metadata, verification }` this used to send is the *publish*
+      // payload, and reading `entry.domains` off it threw
+      // "domains is not iterable" out of the store's filter, which took the
+      // whole page down with an error boundary instead of rendering anything.
       json: [
         {
           subject: 'https://example.com/listings/fixture',
           name: 'Community fixture',
           emoji: null,
           description: 'Test listing',
-          publisher: 'https://example.com/agents/test',
+          publisher: 'test',
           domains: [],
           standards: [],
           release: 'https://example.com/releases/fixture',
           releaseId: 'fixture-release',
-          runtime: 'atomic-js/1',
-          world: 'extension',
+          runtime: null,
+          world: null,
         },
       ],
     });
