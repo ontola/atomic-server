@@ -447,7 +447,7 @@ async fn what_batching_the_write_would_buy() {
         ..CommitOpts::no_validations_no_index()
     };
 
-    let mut sign_leg = async |leg: usize| {
+    let sign_leg = async |leg: usize| {
         let mut commits = Vec::with_capacity(n);
         for i in 0..n {
             let mut builder = CommitBuilder::new("placeholder".into());
@@ -480,6 +480,26 @@ async fn what_batching_the_write_would_buy() {
     }
     store.commit_batch().unwrap();
     let batched = start.elapsed();
+
+    // Speed is only half the question: the batched resources have to be
+    // there and indexed afterwards. `get` is read-your-writes against the
+    // buffer, but `range`/`scan_prefix`/`iter_tree` are not, so a batch is
+    // only correct when nothing inside it scans — which a run of pure
+    // creates does not. This asserts that rather than assuming it.
+    let members = store
+        .query(&Query {
+            property: Some(urls::PARENT.into()),
+            value: Some(Value::AtomicUrl(parent.clone().into())),
+            drive: Some(drive_subject.clone()),
+            ..Query::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        members.count,
+        2 * n + 20,
+        "every batched create must be queryable once the batch is committed"
+    );
 
     let speedup = unbatched.as_secs_f64() / batched.as_secs_f64();
     println!("\n=== batching the write, n={n} commits ===");
