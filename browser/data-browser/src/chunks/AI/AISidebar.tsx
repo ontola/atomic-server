@@ -12,6 +12,7 @@ import { useCurrentSubject } from '@helpers/useCurrentSubject';
 import { FaPlus, FaXmark } from 'react-icons/fa6';
 import { IconButton } from '@components/IconButton/IconButton';
 import { Row } from '@components/Row';
+import { ResourceContextMenu } from '@components/ResourceContextMenu';
 import {
   ai,
   core,
@@ -527,7 +528,15 @@ const AISidebar: React.FC = () => {
               {chatResource?.title || 'AI chat'}
             </Heading>
           </Row>
-          <Row center gap='0.5ch' style={{ minWidth: 0 }}>
+          <Row center gap='0.5ch' style={{ flexShrink: 0 }}>
+            {isChatSaved && chatResource && (
+              <ResourceContextMenu
+                subject={chatResource.subject}
+                title='Chat resource actions'
+                searchable
+                onAfterDelete={() => openChat()}
+              />
+            )}
             <IconButton
               title='Close AI Sidebar'
               color='textLight'

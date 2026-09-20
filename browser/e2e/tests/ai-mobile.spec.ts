@@ -4,6 +4,7 @@ import {
   enableAIForTesting,
   openAISidebar,
   setupAIRouteMocks,
+  setupScriptedToolCallMocks,
   sendChatMessage,
 } from './ai-mock';
 
@@ -38,6 +39,20 @@ test('mobile AI chat fills the width and keeps its composer above the keyboard',
   await expect(
     panel.getByText('This is a mock AI response.', { exact: true }),
   ).toBeVisible();
+
+  for (const testId of ['ai-message-text', 'ai-user-message']) {
+    await expect
+      .poll(async () =>
+        panel.getByTestId(testId).evaluate(element => {
+          const parentWidth =
+            element.parentElement!.getBoundingClientRect().width;
+
+          return Math.abs(parentWidth - element.getBoundingClientRect().width);
+        }),
+      )
+      .toBeLessThanOrEqual(1);
+  }
+
   await expect(panel.getByText('Tokens used:', { exact: false })).toHaveCount(
     0,
   );
@@ -63,8 +78,24 @@ test('mobile AI chat fills the width and keeps its composer above the keyboard',
   await expect(page.getByRole('combobox')).toBeVisible();
   await expect(page.getByText(/Tokens used:.*input,.*output/)).toBeVisible();
   await page.keyboard.press('Escape');
+  await panel
+    .getByRole('button', { name: 'Chat resource actions', exact: true })
+    .click();
+  await expect(page.getByRole('menuitem', { name: /Data View/ })).toBeVisible();
+  // Navigate through the chat menu, not the underlying drive's menu.
+  await page.getByRole('menuitem', { name: /Normal View/ }).click();
   await panel.getByRole('button', { name: 'Close AI Sidebar' }).click();
   await expect(panel).not.toHaveAttribute('data-open', '');
+  await expect(
+    page
+      .getByRole('main')
+      .getByText('This is a mock AI response.', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole('main')
+      .getByRole('button', { name: 'Chat resource actions', exact: true }),
+  ).toBeVisible();
 });
 
 test('desktop AI chat keeps the composer inside the docked panel', async ({
@@ -124,4 +155,71 @@ test('desktop AI chat keeps the composer inside the docked panel', async ({
     .getByRole('button', { name: 'Chat options', exact: true })
     .click();
   await expect(page.getByRole('combobox')).toHaveValue('Alternate model');
+});
+
+test('keyboard resize keeps the final sentence visible without a spacer above the composer', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const ending = 'This final sentence must remain fully readable.';
+  await setupScriptedToolCallMocks(
+    page,
+    [],
+    Array(15)
+      .fill(
+        'A longer response fills the chat with useful information and several lines of text.',
+      )
+      .join('\n\n') +
+      '\n\n' +
+      ending,
+  );
+  await enableAIForTesting(page);
+  await before({ page });
+  await sendChatMessage(page, 'Give me a long answer');
+  const panel = page.getByTestId('ai-sidebar');
+  const lastLine = panel.getByText(ending, { exact: true });
+  await expect(lastLine).toBeVisible();
+  const viewport = panel.locator('[data-radix-scroll-area-viewport]');
+  await viewport.evaluate(element => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(lastLine).toBeInViewport();
+  await page.evaluate(() =>
+    document.documentElement.style.setProperty('--keyboard-inset', '320px'),
+  );
+  await expect
+    .poll(async () => {
+      const text = (await lastLine.boundingBox())!;
+      const bounds = (await viewport.boundingBox())!;
+
+      return text.y + text.height - bounds.y - bounds.height;
+    })
+    .toBeLessThanOrEqual(0);
+  const composer = panel.getByTestId('assistant-file-dropzone');
+  const bounds = (await viewport.boundingBox())!;
+  expect(
+    (await composer.boundingBox())!.y - bounds.y - bounds.height,
+  ).toBeLessThanOrEqual(8);
+  const finalText = (await lastLine.boundingBox())!;
+  expect(
+    (await composer.boundingBox())!.y - finalText.y - finalText.height,
+  ).toBeLessThanOrEqual(16);
+  await page.screenshot({ path: 'test-results/ai-mobile-long-keyboard.png' });
+  await viewport.evaluate(element => {
+    element.scrollTop = 100;
+  });
+  await expect
+    .poll(() => viewport.evaluate(element => element.scrollTop))
+    .toBe(100);
+  await page.evaluate(() =>
+    document.documentElement.style.setProperty('--keyboard-inset', '240px'),
+  );
+  await expect
+    .poll(() =>
+      viewport.evaluate(
+        element =>
+          element.scrollHeight - element.clientHeight - element.scrollTop,
+      ),
+    )
+    .toBeGreaterThan(100);
 });

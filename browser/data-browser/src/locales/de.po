@@ -11919,3 +11919,8 @@ msgstr ""
 #: src/chunks/AI/AISetupPanel.tsx
 msgid "Connect a model to use AI chat"
 msgstr ""
+
+#: src/chunks/AI/AIChatPage.tsx
+#: src/chunks/AI/AISidebar.tsx
+msgid "Chat resource actions"
+msgstr ""
