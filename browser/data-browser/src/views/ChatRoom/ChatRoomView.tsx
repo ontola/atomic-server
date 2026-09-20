@@ -715,10 +715,10 @@ const ONLY_MESSAGES = [
   { property: core.properties.isA, value: dataBrowser.classes.message },
 ];
 
-/** A subject we can scope a query to: a real DID or URL, not a placeholder. */
-function isResolvableSubject(subject: string): boolean {
-  return subject.startsWith('did:') || subject.startsWith('http');
-}
+/** Every resource is stamped with the drive it belongs to at genesis, which
+ *  for a resource shared from elsewhere is the OWNER's drive, not the
+ *  viewer's. See `Resource.save` in @tomic/lib. */
+const DRIVE_PROP = 'https://atomicdata.dev/properties/drive';
 
 /**
  * Fetches messages linked to a subject using the Collection system, sorted by
@@ -731,6 +731,15 @@ export function useChatMessages(
 ) {
   const [messages, setMessages] = useState<string[]>([]);
 
+  // Scope the query to the drive the THREAD lives on, not the viewer's active
+  // one. A guest opening a chatroom shared from another drive has their own
+  // drive selected, and the query index is keyed by drive, so the default
+  // scope looked for the messages in the wrong place and always answered
+  // zero. Until the thread resource has loaded its stamp there is nothing
+  // better than the default, so leave it alone.
+  const thread = useResource(subject);
+  const threadDrive = thread.get(DRIVE_PROP);
+
   const { collection, ready, invalidateCollection } = useCollection(
     {
       property,
@@ -738,13 +747,7 @@ export function useChatMessages(
       filters: ONLY_MESSAGES,
       sort_by: commits.properties.createdAt,
       sort_desc: false,
-      // Scope the query to the thread's own drive, not the viewer's active
-      // one. A guest opening a chatroom shared from another drive has their
-      // own drive selected, and the query index is keyed by drive, so the
-      // default scope looked for the messages in the wrong place and always
-      // answered zero. A placeholder subject is not a scope, so leave the
-      // default alone until the real one arrives.
-      drive: isResolvableSubject(subject) ? subject : undefined,
+      drive: typeof threadDrive === 'string' ? threadDrive : undefined,
     },
     { pageSize: CHAT_PAGE_SIZE },
   );

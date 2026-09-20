@@ -4,14 +4,29 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: someone joining a drive through a browser invitation is told when the
+  pairing is not getting anywhere. The page showed "Connecting…" and "Waiting
+  for a peer" indefinitely: `WebRtcPeer`'s 60 second pairing timeout only
+  exists on a peer that has built an `RTCPeerConnection`, and the guest is the
+  one waiting for an offer, so it had no timer at all. After 60 seconds without
+  a peer the page now says so and points at what the inviter has to do. The
+  attempt keeps running, so a slow pairing that later succeeds still does.
+- Fix: the editor's slash menu no longer reaches through an unmounted renderer.
+  `onStart` positions the menu again on the next animation frame, which can
+  land after the suggestion was destroyed.
+
 - Fix: someone who opens a chatroom shared from another drive sees the messages
   in it. The message list is a collection query, and a collection defaults its
   drive scope to the viewer's active drive. A guest arriving through an invite
   has their own drive selected, so the query went looking on the wrong drive and
   answered with nothing, leaving "No messages yet" on a thread that had them.
-  The query now scopes to the thread's own subject. The same hook backs the
-  comments panel, so comment threads on shared resources are fixed with it.
-
+  The query now scopes to the drive the thread itself is stamped with, which
+  for a shared thread is the owner's. The same hook backs the comments panel
+  and the meeting chat, so those are fixed with it. Scoping to the thread's
+  subject instead, as this first did, fixed the guest's first read but broke
+  every later one: the local index is keyed by drive, a subject is not a key
+  in it, and the panel then stopped showing messages other people sent while
+  it was open.
 - Fix: installing a plugin works again. Since the `Installation` class started
   requiring `release`, the server refused the commit that creates one with
   "Property .../properties/release missing", the outbox dropped it as terminal

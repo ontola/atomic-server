@@ -1446,10 +1446,18 @@ export async function run(ctx) {
             'https://atomicdata.dev/ontology/server/property/default-ontology',
           ),
         );
+        const propertySubjects = ontology.get(
+          'https://atomicdata.dev/properties/properties',
+        ) as string[] | undefined;
+
+        // Say so here rather than letting `property()` below answer undefined
+        // for every lookup, which reads as a missing field in the form.
+        if (!propertySubjects) {
+          throw new Error('The default ontology lists no properties');
+        }
+
         const properties = await Promise.all(
-          ontology
-            .get('https://atomicdata.dev/properties/properties')
-            .map((subject: string) => store.getResource(subject)),
+          propertySubjects.map(subject => store.getResource(subject)),
         );
 
         const property = (name: string) => {

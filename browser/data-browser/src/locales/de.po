@@ -11892,3 +11892,7 @@ msgstr ""
 #: node_modules/devonian/platform-lenses/atomic-integrations/ui/GoogleCalendar.tsx
 msgid "Send edits to imported events back to Google: Name or Summary, Description, Location, Start and End. Reconnect with Calendar write access before your first sync."
 msgstr ""
+
+#: src/views/PeerInvitePage.tsx
+msgid "This is taking longer than it should. The person who invited you needs to have this drive open in their browser. Try again, or ask them for a new invitation."
+msgstr ""
