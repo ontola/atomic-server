@@ -143,10 +143,33 @@ resources, never for an edit to something an earlier commit in the same batch
 wrote. And batch mode is a *global* flag on the store, used by `populate.rs`,
 so it cannot be reached for from concurrent request handlers as-is.
 
-**This also shrinks the actor-thread fix above.** At ~2.1 ms of server-side
-work, nineteen commits is ~40 ms. Spreading them across workers saves tens of
-milliseconds, not seconds. Still worth doing, but it is not the explanation
-for anything measured in seconds, and no timeout theory should rest on it.
+## What the server adds, and what the actor thread costs (2026-09-20)
+
+Everything above is the store on its own, so it is a floor rather than a
+prediction. `server/tests/it/commit_throughput.rs` measures the whole path,
+release, 4 cores, 20 commits per leg, over a real WebSocket, with every commit
+signed up front so the timed section is server work only:
+
+| leg | per commit |
+| --- | --- |
+| one connection, sequential | 5.99 ms |
+| one connection, all at once | 4.03 ms |
+| one connection each, all at once | 1.52 ms |
+
+**The server roughly doubles the store's cost**, so a burst of nineteen on one
+connection is about 77 ms. Any arithmetic about bursts should start from 4 ms,
+not from the store's 2.67 ms or from 2.1 ms with signing removed.
+
+**Spreading the burst over connections is worth 2.65x.** That is the actor
+thread, measured rather than predicted: `web_sockets.rs` applies a connection's
+`COMMIT` frames with `ctx.spawn`, on a single-threaded actix worker, and
+separate connections use separate workers. So the serialisation the first
+section identified is real and threading would remove it.
+
+But note the absolute size before planning around it. 2.65x on nineteen commits
+is 77 ms against 29 ms, a saving of about 48 ms. It is worth doing on its own
+terms and it is never an explanation for anything measured in seconds. No
+timeout theory should rest on it.
 
 ## Thesis
 
