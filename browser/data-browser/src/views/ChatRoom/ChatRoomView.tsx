@@ -715,6 +715,11 @@ const ONLY_MESSAGES = [
   { property: core.properties.isA, value: dataBrowser.classes.message },
 ];
 
+/** A subject we can scope a query to: a real DID or URL, not a placeholder. */
+function isResolvableSubject(subject: string): boolean {
+  return subject.startsWith('did:') || subject.startsWith('http');
+}
+
 /**
  * Fetches messages linked to a subject using the Collection system, sorted by
  * createdAt ascending (oldest first) with pagination. ChatRooms link their
@@ -733,6 +738,13 @@ export function useChatMessages(
       filters: ONLY_MESSAGES,
       sort_by: commits.properties.createdAt,
       sort_desc: false,
+      // Scope the query to the thread's own drive, not the viewer's active
+      // one. A guest opening a chatroom shared from another drive has their
+      // own drive selected, and the query index is keyed by drive, so the
+      // default scope looked for the messages in the wrong place and always
+      // answered zero. A placeholder subject is not a scope, so leave the
+      // default alone until the real one arrives.
+      drive: isResolvableSubject(subject) ? subject : undefined,
     },
     { pageSize: CHAT_PAGE_SIZE },
   );
