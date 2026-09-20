@@ -165,7 +165,10 @@ test.describe('AI Chat', () => {
               const store = window.store;
 
               const read = async (id: string) => {
-                const result = await store.client.fetchResourceHTTP(id, {
+                // `client` is private. Reached the same way this block reaches
+                // `_pendingGenesis` below, and on purpose: the point of the
+                // poll is what the SERVER holds, not what this tab believes.
+                const result = await store['client'].fetchResourceHTTP(id, {
                   signInfo: {
                     agent: store.getAgent()!,
                     serverURL: store.getServerUrl(),
