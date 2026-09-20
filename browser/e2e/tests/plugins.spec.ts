@@ -566,7 +566,11 @@ export function run() { return { intents: [] }; }
     await page
       .getByRole('button', { name: 'Preview import', exact: true })
       .click();
-    await expect(page.getByText(/Could not run this plugin/)).toBeVisible();
+    // The aborted run has to reach the server and come back before the page
+    // can say so; same load story as the discovery above it.
+    await expect(page.getByText(/Could not run this plugin/)).toBeVisible({
+      timeout: 45000,
+    });
     await expect(
       page.getByRole('button', { name: 'Preview import', exact: true }),
     ).toBeEnabled();
@@ -853,9 +857,17 @@ export function run() { return { intents: [] }; }
     await page
       .getByRole('button', { name: 'Apply importer update', exact: true })
       .click();
+    // The second apply is the slow one: it writes the source back and then
+    // pins the release over the network (`/plugin-release-pin`), and the
+    // button only unmounts once both have landed. Under suite load that is
+    // past the 10s expect budget, and the failure is indistinguishable from
+    // the button being stuck: the count sits at 1 for the whole wait. It is
+    // not stuck. Run on its own this test passes at the default budget in
+    // 53s, and the ARIA snapshot Playwright captures after the timeout shows
+    // the button already gone and no error alert anywhere on the page.
     await expect(
       page.getByRole('button', { name: 'Review Clockify update', exact: true }),
-    ).toHaveCount(0);
+    ).toHaveCount(0, { timeout: 45000 });
     expect(
       await page.evaluate(
         async ({ subject, property }) =>
