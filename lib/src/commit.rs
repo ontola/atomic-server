@@ -480,7 +480,15 @@ impl Commit {
                             continue;
                         }
                         if let Some(doc_val) = propvals.get(prop) {
-                            if doc_val.to_string() != cert_val {
+                            // A v1 cert carries the string as it was signed
+                            // (`did:ad:` for every pre-rename resource) while
+                            // the materialized doc is canonical (`atomic:`).
+                            // Both name the same resource; compare on one
+                            // spelling or every old client's genesis fails.
+                            let doc_str = doc_val.to_string();
+                            if crate::identifiers::canonicalize_scheme(&doc_str)
+                                != crate::identifiers::canonicalize_scheme(cert_val)
+                            {
                                 return Err(format!(
                                     "Genesis certificate {name} ({cert_val}) does not match the resource's {name} ({doc_val})"
                                 )
@@ -1718,7 +1726,7 @@ mod test {
         assert_eq!(
             agent.subject,
             // base64url (URL_SAFE_NO_PAD): agent DIDs must be URL-safe.
-            "did:ad:agent:7LsjMW5gOfDdJzK_atgjQ1t20J_rw8MjVg6xwqm-h8U"
+            "atomic:agent:7LsjMW5gOfDdJzK_atgjQ1t20J_rw8MjVg6xwqm-h8U"
         );
         store
             .add_resource(&agent.to_resource().unwrap())
@@ -2555,9 +2563,10 @@ mod test {
             .unwrap();
 
         let created = store.get_resource(&did_subject).await.unwrap();
+        // Added as `did:ad:`, materialized in the canonical spelling.
         assert_eq!(
             created.get(crate::urls::PARENT).unwrap().to_string(),
-            drive_subject
+            crate::identifiers::canonicalize_scheme(drive_subject)
         );
 
         let mut updated_resource = created.clone();
@@ -2579,7 +2588,7 @@ mod test {
         let updated = store.get_resource(&did_subject).await.unwrap();
         assert_eq!(
             updated.get(crate::urls::PARENT).unwrap().to_string(),
-            drive_subject
+            crate::identifiers::canonicalize_scheme(drive_subject)
         );
         assert_eq!(
             updated.get(crate::urls::DESCRIPTION).unwrap().to_string(),

@@ -63,7 +63,7 @@ describe('applyIncoming — incomplete Loro import surfaces an error', () => {
     expect(delta.length).toBeGreaterThan(4);
 
     const subject =
-      'did:ad:incompleteImportReproAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==';
+      'atomic:incompleteImportReproAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==';
     seedLoadingPlaceholder(store, subject);
 
     vi.spyOn(store, 'fetchResourceFromServer').mockRejectedValue(
@@ -118,7 +118,7 @@ describe('applyIncoming — incomplete Loro import surfaces an error', () => {
     const snapshot = doc.export({ mode: 'snapshot' });
 
     const subject =
-      'did:ad:fullSnapshotReproBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB==';
+      'atomic:fullSnapshotReproBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB==';
     seedLoadingPlaceholder(store, subject);
 
     const result = store.applyIncoming({
@@ -140,7 +140,7 @@ describe('applyIncoming — incomplete Loro import surfaces an error', () => {
     expect,
   }) => {
     // Regression: a commit's `loroUpdate` is a delta by design.
-    // Importing it into a fresh `did:ad:commit:` resource leaves pending
+    // Importing it into a fresh `atomic:commit:` resource leaves pending
     // ops — that's expected, NOT a sync error. Earlier this failed the
     // commit and chatroom <CommitDetail>s vanished on refresh.
     const store = new Store({ serverUrl: 'https://example.com' });
@@ -165,7 +165,7 @@ describe('applyIncoming — incomplete Loro import surfaces an error', () => {
     const delta = doc.export({ mode: 'update', from: v1 });
 
     const subject =
-      'did:ad:commit:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC==';
+      'atomic:commit:CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC==';
     seedLoadingPlaceholder(store, subject);
 
     const result = store.applyIncoming({

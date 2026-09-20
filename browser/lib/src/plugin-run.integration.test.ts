@@ -86,8 +86,8 @@ describe('a run, end to end', () => {
     const folder = report.outcomes.find(o => o.localId === 'folder')!;
     const child = report.outcomes.find(o => o.localId === 'child')!;
 
-    // The store minted DIDs of its own; the planner's placeholders are gone.
-    expect(folder.subject).toMatch(/^did:ad:/);
+    // The store minted `atomic:` subjects of its own; the planner's placeholders are gone.
+    expect(folder.subject).toMatch(/^atomic:/);
     expect(folder.subject).not.toBe(folder.planned);
 
     // The child landed under the subject the folder actually got.

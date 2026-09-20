@@ -2680,13 +2680,13 @@ async fn check_query_index_names_missing_and_stale_members() {
 
     let store = Db::init_temp("query_index_report").await.unwrap();
     let drive =
-        "did:ad:driveRPRTaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+        "atomic:driveRPRTaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
     let table =
-        "did:ad:tableRPRTaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+        "atomic:tableRPRTaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
 
     let mut subjects = vec![];
     for i in 0..3 {
-        let subj = format!("did:ad:rprt{:0>69}==", format!("{i}"));
+        let subj = format!("atomic:rprt{:0>69}==", format!("{i}"));
         let mut r = crate::Resource::new(subj.clone());
         r.set_unsafe(urls::PARENT.into(), Value::AtomicUrl(table.into()))
             .unwrap();
@@ -2712,7 +2712,7 @@ async fn check_query_index_names_missing_and_stale_members() {
     // Drop one member from the index, and file one that is not a row.
     let q_filter = crate::db::query_index::QueryFilter::try_from_query(&query).unwrap();
     let ghost =
-        "did:ad:rprtGHOSTaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+        "atomic:rprtGHOSTaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
     let mut transaction = crate::db::trees::Transaction::new();
     let dropped = store
         .get_resource_shallow(&Subject::from(subjects[1].clone()))
@@ -2881,10 +2881,10 @@ async fn did_rows_stamped_into_another_drive_stay_out_of_a_watched_query() {
 #[tokio::test]
 #[timeout(120000)]
 async fn is_a_string_encoding_matcher_vs_candidates() {
-    let cls = "did:ad:classPROBEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
+    let cls = "atomic:classPROBEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==";
 
     let mut r = crate::Resource::new(
-        "did:ad:probe0000000000000000000000000000000000000000000000000000000000000000==".into(),
+        "atomic:probe0000000000000000000000000000000000000000000000000000000000000000==".into(),
     );
     r.set_unsafe(urls::IS_A.into(), Value::String(cls.into()))
         .unwrap();
@@ -2897,7 +2897,7 @@ async fn is_a_string_encoding_matcher_vs_candidates() {
         }],
         sort_by: None,
         drive:
-            "did:ad:drivePROBEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=="
+            "atomic:drivePROBEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=="
                 .into(),
     };
 
@@ -3314,4 +3314,108 @@ async fn canonical_scheme_open_rewrites_legacy_keys() {
         rewritten.get(urls::PARENT).unwrap().to_string(),
         "atomic:migrateParent"
     );
+}
+
+/// Every tree that is looked up by canonical subject after the rename is
+/// rewritten on open, not only the three a resource is read from.
+#[tokio::test]
+async fn canonical_scheme_open_rewrites_every_subject_keyed_tree() {
+    let store = Db::init_temp("canonical-scheme-migrate-all").await.unwrap();
+    let legacy = "did:ad:migrateAll";
+    let canon = crate::identifiers::canonicalize_scheme(legacy);
+    let legacy_agent = "did:ad:agent:migrateAgent";
+    let canon_agent = crate::identifiers::canonicalize_scheme(legacy_agent);
+
+    // Loro snapshot, keyed by subject; the bytes are opaque.
+    store
+        .kv
+        .insert(Tree::LoroSnapshots, legacy.as_bytes(), b"snapshot")
+        .unwrap();
+    // DID mapping: a legacy key AND a legacy routing-hint value.
+    store
+        .kv
+        .insert(Tree::DidMapping, legacy.as_bytes(), b"did:ad:migrateDrive")
+        .unwrap();
+    // Envelope: `{subject}\0{created_at be}\0{signature}`; signed JSON value.
+    let mut envelope_key = legacy.as_bytes().to_vec();
+    envelope_key.push(0);
+    envelope_key.extend_from_slice(&42u64.to_be_bytes());
+    envelope_key.push(0);
+    envelope_key.extend_from_slice(b"sig");
+    store
+        .kv
+        .insert(Tree::Envelopes, &envelope_key, b"{}")
+        .unwrap();
+    // Tombstone marker on the plugin-meta tree.
+    let tombstone_key = format!("tombstone:{legacy}");
+    store
+        .kv
+        .insert(Tree::PluginMeta, tombstone_key.as_bytes(), &[1])
+        .unwrap();
+    // An unrelated plugin-meta row must be left alone.
+    store
+        .kv
+        .insert(Tree::PluginMeta, b"unrelated:did:ad:x", b"keep")
+        .unwrap();
+    // Outbox: `{agent}\0{subject}`, both halves legacy.
+    let mut outbox_key = legacy_agent.as_bytes().to_vec();
+    outbox_key.push(0);
+    outbox_key.extend_from_slice(legacy.as_bytes());
+    store
+        .kv
+        .insert(Tree::Outbox, &outbox_key, b"{\"subject\":\"x\"}")
+        .unwrap();
+
+    store
+        .kv
+        .remove(
+            Tree::PluginMeta,
+            super::canonical_scheme::SCHEME_REWRITE_KEY,
+        )
+        .unwrap();
+    store.migrate_canonical_scheme_if_needed().unwrap();
+
+    let get = |tree, key: &[u8]| store.kv.get(tree, key).unwrap();
+
+    assert_eq!(
+        get(Tree::LoroSnapshots, canon.as_bytes()),
+        Some(b"snapshot".to_vec())
+    );
+    assert!(get(Tree::LoroSnapshots, legacy.as_bytes()).is_none());
+
+    assert_eq!(
+        get(Tree::DidMapping, canon.as_bytes()),
+        Some(b"atomic:migrateDrive".to_vec()),
+        "the routing hint value is canonical too"
+    );
+    assert!(get(Tree::DidMapping, legacy.as_bytes()).is_none());
+
+    let mut canon_envelope_key = canon.as_bytes().to_vec();
+    canon_envelope_key.extend_from_slice(&envelope_key[legacy.len()..]);
+    assert_eq!(
+        get(Tree::Envelopes, &canon_envelope_key),
+        Some(b"{}".to_vec())
+    );
+    assert!(get(Tree::Envelopes, &envelope_key).is_none());
+
+    let canon_tombstone = format!("tombstone:{canon}");
+    assert_eq!(
+        get(Tree::PluginMeta, canon_tombstone.as_bytes()),
+        Some(vec![1])
+    );
+    assert!(get(Tree::PluginMeta, tombstone_key.as_bytes()).is_none());
+    assert_eq!(
+        get(Tree::PluginMeta, b"unrelated:did:ad:x"),
+        Some(b"keep".to_vec())
+    );
+
+    let mut canon_outbox_key = canon_agent.as_bytes().to_vec();
+    canon_outbox_key.push(0);
+    canon_outbox_key.extend_from_slice(canon.as_bytes());
+    assert!(get(Tree::Outbox, &canon_outbox_key).is_some());
+    assert!(get(Tree::Outbox, &outbox_key).is_none());
+
+    // Idempotent: a second open finds the flag and touches nothing.
+    store.migrate_canonical_scheme_if_needed().unwrap();
+    assert!(get(Tree::Outbox, &canon_outbox_key).is_some());
 }

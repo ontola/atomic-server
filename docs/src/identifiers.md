@@ -308,4 +308,16 @@ The scheme is opaque (no `//`). There are no reserved words such as `open`, `pai
 
 ## Sync capability
 
-A peer that understands `atomic:` on the wire lists the `canonical-scheme` capability during AUTH. A peer that does not list it receives `did:ad:` subjects on the wire.
+A peer that understands `atomic:` on the wire lists the `canonical-scheme` capability: a WebSocket client and an Iroh dialer in their `HELLO`, a responder in its `AUTH_OK`. Every subject the other side then puts on the wire follows that list, on both transports:
+
+- `UPDATE` and `DESTROY` fan-out, and the answers to `GET` and `GET_MANY` (subject and `lastCommit`);
+- `SYNC_OK`, `SYNC_RESEND`, `SYNC_DIFF` (drive, `pull`, `push`, `remove` and the keys of `pullFrom` / `removeCommits`) and every `SYNC_PUSH` entry;
+- the drive and agent in an `EPHEMERAL` frame header.
+
+A peer that lists nothing predates the rename and receives `did:ad:`, which it can parse. A client that sends no `HELLO` (the workspace inspection handshake, for one) is answered in `did:ad:` and canonicalizes what it reads. Signed material is never rewritten: a commit's JSON-AD and the envelopes that ride in a `SYNC_PUSH` verify as stored, whichever spelling they carry.
+
+## Certificates and stored data
+
+A genesis certificate's version byte says which spelling its parent and drive strings were signed in: v1 as stored (typically `did:ad:`), v2 `atomic:`. A v2 certificate that carries a `did:ad:` string is refused when decoded. The parent and drive a certificate binds are compared with the resource's materialized values in one spelling, so a v1 certificate from before the rename still verifies against canonical propvals.
+
+A store filled before the rename is rewritten once, on open: resource and snapshot keys, DID-mapping keys and the routing-hint values they hold, retained envelopes, tombstones and the outbox all move to the canonical key, and the query and search indexes are rebuilt when a resource or snapshot moved. The pass streams each tree and keeps only the keys it has to touch in memory.

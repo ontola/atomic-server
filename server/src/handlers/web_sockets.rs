@@ -392,10 +392,17 @@ impl WebSocketConnection {
                 let store = self.store.clone();
                 let mut agent = self.agent.clone();
                 let bin_vec = bin.to_vec();
+                // Subjects in the answer follow what this client said it
+                // speaks in its HELLO: a client that predates the rename
+                // gets `did:ad:` back, not a scheme it cannot parse.
+                let wire =
+                    atomic_lib::sync::engine::WireScheme::from_caps(&self.client_capabilities);
                 ctx.spawn(
                     async move {
-                        atomic_lib::sync::engine::handle_frame_full(&bin_vec, &store, &mut agent)
-                            .await
+                        atomic_lib::sync::engine::handle_frame_full_for_caps(
+                            &bin_vec, &store, &mut agent, wire,
+                        )
+                        .await
                     }
                     .into_actor(self)
                     .map(|out, actor, ctx| {

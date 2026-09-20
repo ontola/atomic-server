@@ -443,14 +443,17 @@ impl Handler<ExternalChange> for CommitMonitor {
                 commit_id: msg.commit_id.as_deref(),
             }
         };
-        let frame_canonical = ws_v2::encode_change_frame(&self.store, &subject, change);
-        let frame_legacy =
-            ws_v2::encode_change_frame_for_caps(&self.store, &subject, change, &[] as &[&str]);
+        let store = &self.store;
+        let subject_ref = &subject;
+        let frames = SchemeFrames::new(
+            ws_v2::encode_change_frame(store, subject_ref, change),
+            move || ws_v2::encode_change_frame_for_caps(store, subject_ref, change, &[] as &[&str]),
+        );
 
         let source = msg.source_id.as_deref();
 
         if let Some(subscribers) = self.subscriptions.get(&subject) {
-            send_scheme_frames(subscribers, &frame_canonical, &frame_legacy, |s| {
+            send_scheme_frames(subscribers, &frames, |s| {
                 skip_same_source(source, &s.source_id)
             });
         }
@@ -467,7 +470,7 @@ impl Handler<ExternalChange> for CommitMonitor {
             if !owner.is_within_drive(&drive_subject) {
                 continue;
             }
-            send_scheme_frames(subscribers, &frame_canonical, &frame_legacy, |s| {
+            send_scheme_frames(subscribers, &frames, |s| {
                 skip_same_source(source, &s.source_id)
             });
         }
@@ -611,7 +614,7 @@ impl Handler<CommitMessage> for CommitMonitor {
         // per-connection.
         let frames = encode_commit_frames(&self.store, &msg);
 
-        if let Some((frame_canonical, frame_legacy)) = frames.as_ref() {
+        if let Some(frames) = frames.as_ref() {
             // Per-resource subscribers
             if let Some(subscribers) = self.subscriptions.get(&target_subject) {
                 tracing::debug!(
@@ -621,7 +624,7 @@ impl Handler<CommitMessage> for CommitMonitor {
                 );
                 // The author's own connection is included on purpose: see
                 // `skip_same_source`.
-                send_scheme_frames(subscribers, frame_canonical, frame_legacy, |_| false);
+                send_scheme_frames(subscribers, frames, |_| false);
             } else {
                 tracing::debug!("No subscribers for {}", target_subject);
             }
@@ -651,7 +654,7 @@ impl Handler<CommitMessage> for CommitMonitor {
                 if !owner.is_within_drive(&drive_subject) {
                     continue;
                 }
-                send_scheme_frames(subscribers, frame_canonical, frame_legacy, |_| false);
+                send_scheme_frames(subscribers, frames, |_| false);
             }
         }
 
@@ -723,35 +726,57 @@ impl Handler<CommitMessage> for CommitMonitor {
     }
 }
 
-/// Encode the UPDATE/DESTROY frame a subscriber should receive, in both
-/// identifier schemes. `canonical_scheme` peers get the first; everyone else
-/// the second.
+/// The UPDATE/DESTROY frame a subscriber should receive, per identifier
+/// scheme. The canonical frame is encoded up front, once per change. The
+/// `did:ad:` frame for a subscriber that predates the rename is encoded on
+/// first use and cached: most fan-outs never need it, and for a snapshot it
+/// is a second full copy of the state.
+struct SchemeFrames<'a> {
+    canonical: Arc<[u8]>,
+    legacy: std::cell::OnceCell<Arc<[u8]>>,
+    build_legacy: Box<dyn Fn() -> Arc<[u8]> + 'a>,
+}
+
+impl<'a> SchemeFrames<'a> {
+    fn new(canonical: Arc<[u8]>, build_legacy: impl Fn() -> Arc<[u8]> + 'a) -> Self {
+        Self {
+            canonical,
+            legacy: std::cell::OnceCell::new(),
+            build_legacy: Box::new(build_legacy),
+        }
+    }
+
+    fn for_subscriber(&self, subscriber: &Subscriber) -> Arc<[u8]> {
+        if subscriber.canonical_scheme {
+            self.canonical.clone()
+        } else {
+            self.legacy.get_or_init(|| (self.build_legacy)()).clone()
+        }
+    }
+}
+
+/// Send each subscriber the frame in the scheme it listed: `canonical_scheme`
+/// peers get `atomic:`, everyone else `did:ad:`.
 #[allow(clippy::mutable_key_type)]
 fn send_scheme_frames(
     subscribers: &Subscribers,
-    canonical: &Arc<[u8]>,
-    legacy: &Arc<[u8]>,
+    frames: &SchemeFrames<'_>,
     skip: impl Fn(&Subscriber) -> bool,
 ) {
     for (connection, subscriber) in subscribers {
         if skip(subscriber) {
             continue;
         }
-        let frame = if subscriber.canonical_scheme {
-            canonical.clone()
-        } else {
-            legacy.clone()
-        };
-        connection.do_send(SendFrame { frame });
+        connection.do_send(SendFrame {
+            frame: frames.for_subscriber(subscriber),
+        });
     }
 }
 
 /// Encode the wire frame (`UPDATE` or `DESTROY`) for a `CommitMessage`,
-/// once per identifier scheme, wrapped in `Arc<[u8]>` for cheap fanout.
-/// Returns `None` when the commit produces no frame.
-type SchemeFrames = (Arc<[u8]>, Arc<[u8]>);
-
-fn encode_commit_frames(store: &Db, msg: &CommitMessage) -> Option<SchemeFrames> {
+/// wrapped in `Arc<[u8]>` for cheap fanout, with the legacy-scheme frame
+/// built lazily. Returns `None` when the commit produces no frame.
+fn encode_commit_frames<'a>(store: &'a Db, msg: &'a CommitMessage) -> Option<SchemeFrames<'a>> {
     let commit = &msg.commit_response.commit;
 
     if let Some(loro_update) = msg.commit_response.fanout_delta() {
@@ -774,16 +799,27 @@ fn encode_commit_frames(store: &Db, msg: &CommitMessage) -> Option<SchemeFrames>
             bytes: loro_update,
             commit_id: &commit_id,
         };
-        Some((
-            ws_v2::encode_change_frame(store, &commit.subject, change),
-            ws_v2::encode_change_frame_for_caps(store, &commit.subject, change, &[] as &[&str]),
-        ))
+        let canonical = ws_v2::encode_change_frame(store, &commit.subject, change);
+        Some(SchemeFrames::new(canonical, move || {
+            // Rebuilt from `msg`, which outlives the fan-out: the commit id
+            // is recomputed rather than borrowed from this call's local.
+            let change = ws_v2::Change::Delta {
+                bytes: loro_update,
+                commit_id: &commit_id,
+            };
+            ws_v2::encode_change_frame_for_caps(store, &commit.subject, change, &[] as &[&str])
+        }))
     } else if commit.destroy.unwrap_or(false) {
         let change = ws_v2::Change::Destroyed;
-        Some((
-            ws_v2::encode_change_frame(store, &commit.subject, change),
-            ws_v2::encode_change_frame_for_caps(store, &commit.subject, change, &[] as &[&str]),
-        ))
+        let canonical = ws_v2::encode_change_frame(store, &commit.subject, change);
+        Some(SchemeFrames::new(canonical, move || {
+            ws_v2::encode_change_frame_for_caps(
+                store,
+                &commit.subject,
+                ws_v2::Change::Destroyed,
+                &[] as &[&str],
+            )
+        }))
     } else {
         None
     }

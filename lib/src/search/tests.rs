@@ -312,7 +312,7 @@ async fn text_and_isa_filter() {
     let file = add_classed(
         &store,
         &drive,
-        "did:ad:fts-avocado-file",
+        "atomic:fts-avocado-file",
         urls::FILE,
         "avocado",
     )
@@ -423,5 +423,5 @@ async fn index_resource_roundtrip() {
     index_resource(&store, &resource, &mut tx).unwrap();
     store.apply_transaction(&mut tx).unwrap();
     let hits = query(&store, "RoundtripName", &opts_parents(&drive)).unwrap();
-    assert_eq!(subjects(&hits), vec!["did:ad:fts-roundtrip".to_string()]);
+    assert_eq!(subjects(&hits), vec!["atomic:fts-roundtrip".to_string()]);
 }

@@ -2,7 +2,7 @@ import { describe, it, vi, expect as assert } from 'vitest';
 import { server } from './ontologies/server.js';
 import { testStore } from './test-store.js';
 import type { ClientDbWorker } from './client-db.js';
-import { isAtomicIdentifier } from './subject.js';
+import { canonicalizeScheme, isAtomicIdentifier } from './subject.js';
 
 /**
  * Reproduces the develop full-e2e failure of
@@ -87,7 +87,14 @@ describe('offline create drain', () => {
   it.each([true, false])(
     'only clears an unchanged offline baseline with a complete local snapshot (available: %s)',
     async available => {
-      const { store, agentDID, postCommitSpy } = await testStore();
+      const {
+        store,
+        agentDID: legacyAgentDID,
+        postCommitSpy,
+      } = await testStore();
+      // The test agent is configured with the legacy `did:ad:agent:` spelling;
+      // the store keys its resources by the canonical `atomic:agent:` one.
+      const agentDID = canonicalizeScheme(legacyAgentDID);
       await store.createDrive('Home', { personal: true });
       const agent = store.resources.get(agentDID)!;
       agent.setLastCommitValue('did:ad:commit:previous');

@@ -1004,11 +1004,12 @@ describe('WSClient.fetchMany', () => {
 
     const [found, missing, unauthorized] = await results;
     expect(found).toBeInstanceOf(Resource);
-    expect((found as Resource).subject).toBe('did:ad:found');
+    // Asked and answered in the legacy spelling; the store keys canonically.
+    expect((found as Resource).subject).toBe('atomic:found');
     expect(
       (found as Resource).get('https://atomicdata.dev/properties/name'),
     ).toBe('Batched');
-    expect(store.resources.get('did:ad:found')).toBe(found);
+    expect(store.resources.get('atomic:found')).toBe(found);
     expect(missing).toMatchObject({ type: ErrorType.NotFound });
     expect(unauthorized).toMatchObject({ type: ErrorType.Unauthorized });
     client.close();

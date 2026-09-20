@@ -568,11 +568,11 @@ mod import_scope_tests {
             }
         }
         assert_eq!(
-            attributed.get("did:ad:import-scope-a"),
+            attributed.get("atomic:import-scope-a"),
             Some(&Some("peer-a".to_string()))
         );
         assert_eq!(
-            attributed.get("did:ad:import-scope-b"),
+            attributed.get("atomic:import-scope-b"),
             Some(&Some("peer-b".to_string()))
         );
     }

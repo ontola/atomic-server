@@ -189,6 +189,21 @@ impl GenesisCert {
             return Err("Genesis certificate has trailing bytes".into());
         }
 
+        // The v2 byte promises canonical `atomic:` parent/drive strings. A
+        // cert that claims v2 but carries `did:ad:` would verify and then be
+        // compared against canonical propvals as a different string, the
+        // split the version byte exists to rule out. Refuse it at the door.
+        if version == GENESIS_VERSION_V2 {
+            for (name, value) in [("parent", &parent), ("drive", &drive)] {
+                if crate::identifiers::canonicalize_scheme(value) != *value {
+                    return Err(format!(
+                        "Genesis certificate v2 {name} must use the atomic: scheme, got {value}"
+                    )
+                    .into());
+                }
+            }
+        }
+
         Ok(Self {
             version,
             signer_pubkey,
@@ -474,6 +489,29 @@ mod test {
         );
         assert_eq!(again.parent, "atomic:parentAAAA");
         assert_eq!(again.drive, "https://example.com/drive");
+    }
+
+    #[test]
+    fn v2_decode_refuses_legacy_parent_or_drive() {
+        let (_pk, pubkey) = test_key(3);
+        let mut cert = sample(pubkey, None);
+        cert.parent = "did:ad:parentAAAA".to_string();
+        cert.drive = "atomic:driveBBBB".to_string();
+        let err = GenesisCert::decode(&cert.encode()).unwrap_err().to_string();
+        assert!(err.contains("parent"), "{err}");
+
+        cert.parent = "atomic:parentAAAA".to_string();
+        cert.drive = "did:ad:driveBBBB".to_string();
+        let err = GenesisCert::decode(&cert.encode()).unwrap_err().to_string();
+        assert!(err.contains("drive"), "{err}");
+
+        cert.drive = "atomic:driveBBBB".to_string();
+        assert_eq!(GenesisCert::decode(&cert.encode()).unwrap(), cert);
+
+        // A v1 cert was signed over whatever it carried; it keeps decoding.
+        cert.version = GENESIS_VERSION_V1;
+        cert.parent = "did:ad:parentAAAA".to_string();
+        assert_eq!(GenesisCert::decode(&cert.encode()).unwrap(), cert);
     }
 
     fn hex(bytes: &[u8]) -> String {

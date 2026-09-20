@@ -16,9 +16,16 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   `atomic:node:{id}?v=1&drives=*`; `/resource?subject=` is the HTTP
   endpoint (`/atomic` and `/did` remain aliases). The store canonicalizes
   subjects and identifier-shaped values on write and on query filters.
-  Opening a pre-rename database rewrites leftover `did:ad:` keys and
-  rebuilds indexes. Sync advertises `canonical-scheme` and actually emits
-  `did:ad:` to peers that do not list it (#1584).
+  Opening a pre-rename database rewrites leftover `did:ad:` keys in every
+  subject-keyed tree (resources, snapshots, DID mapping keys and hint
+  values, envelopes, tombstones, the outbox), streaming each tree, and
+  rebuilds indexes. A v2 certificate that carries a `did:ad:` string is
+  refused on decode; a v1 certificate's parent and drive are compared with
+  the resource in one spelling. Sync advertises `canonical-scheme` and
+  emits `did:ad:` to peers that do not list it on every frame that names a
+  subject, over WebSocket and Iroh alike; a client canonicalizes what an
+  old server echoes back. The in-memory store keys resources canonically
+  (#1584).
 
 - Fix: a stale authentication proof no longer fails a request that needed no
   authentication. A browser keeps its proof in the `atomic_session` cookie, and

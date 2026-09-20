@@ -330,7 +330,7 @@ mod tests {
     use super::*;
     use crate::Value;
 
-    const CLASS: &str = "did:ad:guDVPzQKpsfcS5Vpbgdh0cj19CFapvKuQ5NVyYfjcspo0ZMpua9UzgC8WkDZa1_Z";
+    const CLASS: &str = "atomic:guDVPzQKpsfcS5Vpbgdh0cj19CFapvKuQ5NVyYfjcspo0ZMpua9UzgC8WkDZa1_Z";
 
     fn extender_declaring(class: &str) -> ClassExtender {
         ClassExtender::builder()

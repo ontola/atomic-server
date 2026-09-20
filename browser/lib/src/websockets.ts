@@ -9,6 +9,7 @@ import { createAuthentication } from './authentication.js';
 import {
   isAgentSubject,
   isBlobSubject,
+  canonicalizeScheme,
   emitSubjectForCaps,
 } from './subject.js';
 import { Resource } from './resource.js';
@@ -741,6 +742,16 @@ export class WSClient {
     return emitSubjectForCaps(subject, this._serverCaps);
   }
 
+  /** A resource by the subject a server answered with. A server without
+   *  `canonical-scheme` echoes the `did:ad:` we sent while the store keys
+   *  canonically, so the canonical spelling is tried second. */
+  private hydratedResource(subject: string): Resource | undefined {
+    return (
+      this.store.resources.get(subject) ??
+      this.store.resources.get(canonicalizeScheme(subject))
+    );
+  }
+
   /** Subscribe to vector index status updates for a drive root (see server `SUBSCRIBE_INDEX_STATUS`). */
   public subscribeIndexStatus(drive: string): void {
     void this.authenticate()
@@ -1272,7 +1283,7 @@ export class WSClient {
           });
           // The resource we just hydrated is what the GET caller is
           // waiting for — read it back from the store map.
-          const resource = this.store.resources.get(msg.subject);
+          const resource = this.hydratedResource(msg.subject);
           if (resource) pending.resolve(resource);
           break;
         }
@@ -1292,7 +1303,7 @@ export class WSClient {
           source: msg.flags & Flags.PUSH ? 'ws-sub-push' : 'ws-pending-get',
         });
 
-        const resource = this.store.resources.get(msg.subject);
+        const resource = this.hydratedResource(msg.subject);
         if (resource) this.checkForMissingBlobs(resource);
 
         break;
@@ -1338,7 +1349,7 @@ export class WSClient {
               source: 'ws-pending-get',
               replaceLoroDocsFromRemote: !!(update.flags & Flags.SNAPSHOT),
             });
-            const hydrated = this.store.resources.get(update.subject);
+            const hydrated = this.hydratedResource(update.subject);
 
             return (
               hydrated ??
@@ -1374,7 +1385,11 @@ export class WSClient {
         const msg = decodeSyncOk(payload);
 
         if (msg) {
-          this.store.finishDriveSync(msg.drive, 0, Date.now());
+          this.store.finishDriveSync(
+            canonicalizeScheme(msg.drive),
+            0,
+            Date.now(),
+          );
         }
 
         break;
@@ -1408,7 +1423,7 @@ export class WSClient {
               loroBytes,
               source: 'ws-sync-push',
             });
-            const resource = this.store.resources.get(subject);
+            const resource = this.hydratedResource(subject);
             if (resource) this.checkForMissingBlobs(resource);
           }
 
@@ -1432,7 +1447,7 @@ export class WSClient {
           // the "done" UI state.
           if (msg.last) {
             this.store.finishDriveSync(
-              msg.drive,
+              canonicalizeScheme(msg.drive),
               msg.entries.length,
               Date.now(),
             );
@@ -1836,8 +1851,13 @@ export class WSClient {
     if (!current() || (agent && this.authenticatedWith !== agent)) return;
 
     // A response to a probe invalidated by a drive switch must not restart it.
-    const syncState = this._pendingSyncState.get(drive);
-    this._pendingSyncState.delete(drive);
+    // The probe was keyed by what we sent; a server without
+    // `canonical-scheme` answers with the `did:ad:` spelling of it.
+    const pendingKey = this._pendingSyncState.has(drive)
+      ? drive
+      : canonicalizeScheme(drive);
+    const syncState = this._pendingSyncState.get(pendingKey);
+    this._pendingSyncState.delete(pendingKey);
 
     if (!syncState || !current()) return;
 

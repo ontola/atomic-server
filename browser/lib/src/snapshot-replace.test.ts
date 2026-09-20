@@ -49,7 +49,9 @@ function snapshotWith(props: Record<string, unknown>): Uint8Array {
 }
 
 describe('applyIncoming — a SNAPSHOT GET response replaces a partial seed', () => {
-  const subject = 'did:ad:driveSnapshotReplaceReproAAAAAAAAAAAAAAAAAAAAAA==';
+  // Canonical spelling: the test seeds `store.resources` directly, and that
+  // Map is keyed by `atomic:`.
+  const subject = 'atomic:driveSnapshotReplaceReproAAAAAAAAAAAAAAAAAAAAAA==';
 
   it('surfaces the full class after replacing a class-less seeded doc', async ({
     expect,
