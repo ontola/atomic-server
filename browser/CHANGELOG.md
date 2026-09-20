@@ -4,6 +4,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Improve AI chat on phones: use the full screen width, keep the composer above the keyboard, reduce padding, and move model selection and token usage into Chat options. Remove generated follow-up suggestions and rename Atomic Assistant to AI chat ([#1591](https://github.com/ontola/atomic-server/issues/1591)).
+
 - Fix: someone joining a drive through a browser invitation is told when the
   pairing is not getting anywhere. The page showed "Connecting…" and "Waiting
   for a peer" indefinitely: `WebRtcPeer`'s 60 second pairing timeout only

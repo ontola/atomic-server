@@ -9,7 +9,7 @@ import { styled, keyframes } from 'styled-components';
 import { GeneratingIndicator } from './GeneratingIndicator';
 import { IconButton } from '@components/IconButton/IconButton';
 import { Button } from '@components/Button';
-import { FaXmark, FaPaperclip, FaFile } from 'react-icons/fa6';
+import { FaXmark, FaPaperclip, FaFile, FaSliders } from 'react-icons/fa6';
 import { ChatMessagesContainer } from '@components/ChatMessagesContainer';
 import { useStore, type Resource } from '@tomic/react';
 import { AIProvider } from '@components/AI/aiContstants';
@@ -51,9 +51,9 @@ import {
 import type { MentionItem } from '@chunks/RTE/AIChatInput/types';
 import { useChat } from '@ai-sdk/react';
 import { useClientOnlyTransport } from './ClientOnlyTransport';
-import { useGenerativeData } from './useGenerativeData';
 import { useConversationSummary } from './useConversationSummary';
-import { FollowUpPrompt } from './FollowUpPrompt';
+import { Popover } from '@components/Popover';
+import { Trigger as PopoverTrigger } from '@radix-ui/react-popover';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import UsesMCPServers from '@components/AI/MCP/UsesMCPServers';
 import { useRAG } from './useRAG';
@@ -131,16 +131,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   children,
 }) => {
   const store = useStore();
-  const {
-    openRouterApiKey,
-    showTokenUsage,
-    showFollowUpPrompts,
-    ollamaUrl,
-    isProviderAvailable,
-  } = useAISettings();
+  const { openRouterApiKey, showTokenUsage, ollamaUrl, isProviderAvailable } =
+    useAISettings();
 
-  // useChat does not update it's options so we need to use a ref to make it use the latest value.
-  const showFollowUpPromptsRef = useRef(showFollowUpPrompts);
+  // useChat callbacks need refs to read the latest values.
   const autoCompactTokenThresholdRef = useRef<number | null>(null);
   // Use a ref for the guard so the stale onFinish closure sees the current value.
   const isCompactingRef = useRef(false);
@@ -330,10 +324,11 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
     AIMessageContext[]
   >([]);
-  const { generateFollowUpQuestions } = useGenerativeData();
   const { generateConversationSummary } = useConversationSummary(activeModel);
   const [agentConfigOpen, setAgentConfigOpen] = useState(false);
-  const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const focusModelOnOpen = useRef(false);
+  const focusInputOnClose = useRef(false);
   // Bumped to move focus into the chat input (e.g. right after picking a model).
   const [inputFocusSignal, setInputFocusSignal] = useState(0);
 
@@ -393,12 +388,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         );
         onNewMessage(message);
 
-        // A failed request must not spend more quota on follow-ups or compaction.
+        // A failed request must not spend more quota on compaction.
         if (isError) return;
-
-        if (showFollowUpPromptsRef.current && message.role === 'assistant') {
-          generateFollowUpQuestions(_messages).then(setFollowUpQuestions);
-        }
 
         const inputTokens = message.metadata?.inputTokensUsed ?? 0;
         const threshold = autoCompactTokenThresholdRef.current;
@@ -619,7 +610,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     lastRequestErrorRef.current = undefined;
     sendMessage(message);
     setAttachedFiles([]);
-    setFollowUpQuestions([]);
 
     if (chatSubject) {
       setLastUsedAgentForChat(chatSubject, selectedAgent.id);
@@ -717,10 +707,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   );
 
   useEffect(() => {
-    showFollowUpPromptsRef.current = showFollowUpPrompts;
-  }, [showFollowUpPrompts]);
-
-  useEffect(() => {
     const percent = selectedAgent.autoCompactThresholdPercent ?? 80;
     autoCompactTokenThresholdRef.current = getAutoCompactTokenThreshold(
       modelContextLength,
@@ -758,7 +744,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
           />
         ))}
       </ChatMessagesContainer>
-      <Column style={{ minWidth: 0 }}>
+      <Column gap='0.5rem' style={{ minWidth: 0 }}>
         {status === 'streaming' && (
           <Row center gap='0.2ch'>
             <GeneratingIndicator text='Generating' />
@@ -779,17 +765,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         )}
         {!readonly && (
           <>
-            {followUpQuestions.length > 0 && (
-              <Column gap='0px'>
-                {followUpQuestions.map(question => (
-                  <FollowUpPrompt
-                    key={question}
-                    text={question}
-                    onClick={() => handleSubmit(question)}
-                  />
-                ))}
-              </Column>
-            )}
             {providerNotice && (
               <ProviderNotice>
                 <span>{providerNotice}</span>
@@ -945,13 +920,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     onSubmit={handleSubmit}
                     onCompact={compact}
                     onEditModel={() => {
-                      const input =
-                        modelSelectContainerRef.current?.querySelector('input');
-
-                      if (input) {
-                        input.focus();
-                        input.select();
-                      }
+                      focusModelOnOpen.current = true;
+                      setControlsOpen(true);
                     }}
                     onEditAgent={() => setAgentConfigOpen(true)}
                     onFileAdded={
@@ -977,55 +947,104 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                         flex: 1,
                       }}
                     >
-                      <SubtleButton onClick={() => setAgentConfigOpen(true)}>
-                        {selectedAgent.name}
-                      </SubtleButton>
-                      <ModelSelectWrapper ref={modelSelectContainerRef}>
-                        <ComboBox
-                          subtle
-                          selectedItem={`${activeModel.provider}:${activeModel.id}`}
-                          options={combinedModelOptions}
-                          onSelect={value => {
-                            if (!value) return;
-                            const [providerStr, ...idParts] = value.split(':');
-                            const id = idParts.join(':');
-                            const provider =
-                              providerStr === 'openrouter'
-                                ? AIProvider.OpenRouter
-                                : AIProvider.Ollama;
-                            const newModel = { id, provider };
-                            setActiveModel(newModel);
-
-                            // Persist the choice to whichever source the chat reads
-                            // on open (`agent.model ?? defaultChatModel`), so it
-                            // survives refreshes and new chats.
-                            if (selectedAgent.model) {
-                              const updatedAgent = {
-                                ...selectedAgent,
-                                model: newModel,
-                              };
-                              setSelectedAgent(updatedAgent);
-                              saveAgents(
-                                agents.map(a =>
-                                  a.id === updatedAgent.id ? updatedAgent : a,
-                                ),
-                              );
-                            } else {
-                              setDefaultChatModel(newModel);
-                            }
-
-                            // Remember this model so it surfaces at the top next time.
-                            setRecentModelValues(prev =>
-                              [value, ...prev.filter(v => v !== value)].slice(
-                                0,
-                                5,
-                              ),
+                      <Popover
+                        open={controlsOpen}
+                        onOpenChange={setControlsOpen}
+                        onOpenAutoFocus={event => {
+                          if (!focusModelOnOpen.current) return;
+                          focusModelOnOpen.current = false;
+                          event.preventDefault();
+                          const input =
+                            modelSelectContainerRef.current?.querySelector(
+                              'input',
                             );
-                            // Move focus to the chat input so the user can type right away.
-                            setInputFocusSignal(n => n + 1);
-                          }}
-                        />
-                      </ModelSelectWrapper>
+                          input?.focus();
+                          input?.select();
+                        }}
+                        onCloseAutoFocus={event => {
+                          if (agentConfigOpen) event.preventDefault();
+                          if (!focusInputOnClose.current) return;
+                          focusInputOnClose.current = false;
+                          event.preventDefault();
+                          setInputFocusSignal(n => n + 1);
+                        }}
+                        side='top'
+                        Trigger={
+                          <PopoverTrigger asChild>
+                            <IconButton title='Chat options'>
+                              <FaSliders />
+                            </IconButton>
+                          </PopoverTrigger>
+                        }
+                      >
+                        <ChatControls>
+                          <SubtleButton
+                            onClick={() => {
+                              setControlsOpen(false);
+                              setAgentConfigOpen(true);
+                            }}
+                          >
+                            {selectedAgent.name}
+                          </SubtleButton>
+                          <ModelSelectWrapper ref={modelSelectContainerRef}>
+                            <ComboBox
+                              subtle
+                              selectedItem={`${activeModel.provider}:${activeModel.id}`}
+                              options={combinedModelOptions}
+                              onSelect={value => {
+                                if (!value) return;
+                                const [providerStr, ...idParts] =
+                                  value.split(':');
+                                const id = idParts.join(':');
+                                const provider =
+                                  providerStr === 'openrouter'
+                                    ? AIProvider.OpenRouter
+                                    : AIProvider.Ollama;
+                                const newModel = { id, provider };
+                                setActiveModel(newModel);
+
+                                // Persist the choice to whichever source the chat reads
+                                // on open (`agent.model ?? defaultChatModel`), so it
+                                // survives refreshes and new chats.
+                                if (selectedAgent.model) {
+                                  const updatedAgent = {
+                                    ...selectedAgent,
+                                    model: newModel,
+                                  };
+                                  setSelectedAgent(updatedAgent);
+                                  saveAgents(
+                                    agents.map(a =>
+                                      a.id === updatedAgent.id
+                                        ? updatedAgent
+                                        : a,
+                                    ),
+                                  );
+                                } else {
+                                  setDefaultChatModel(newModel);
+                                }
+
+                                // Remember this model so it surfaces at the top next time.
+                                setRecentModelValues(prev =>
+                                  [
+                                    value,
+                                    ...prev.filter(v => v !== value),
+                                  ].slice(0, 5),
+                                );
+                                // Move focus to the chat input so the user can type right away.
+                                focusInputOnClose.current = true;
+                                setControlsOpen(false);
+                              }}
+                            />
+                          </ModelSelectWrapper>
+                          {showTokenUsage && totalTokensUsed > 0 && (
+                            <TokensUsed>
+                              Tokens used:{' '}
+                              {nummberFormatter.format(usage.input)} input,{' '}
+                              {nummberFormatter.format(usage.output)} output
+                            </TokensUsed>
+                          )}
+                        </ChatControls>
+                      </Popover>
                       {checkModelSupportsImageInput(activeModel) && (
                         <>
                           <input
@@ -1051,14 +1070,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                   </AIChatInput>
                 </React.Suspense>
               </Column>
-              {messages.length === 0 && <div></div>}
             </ChatInputWrapper>
-            {showTokenUsage && totalTokensUsed > 0 && (
-              <TokensUsed>
-                Tokens used: {nummberFormatter.format(usage.input)} input,{' '}
-                {nummberFormatter.format(usage.output)} output
-              </TokensUsed>
-            )}
           </>
         )}
       </Column>
@@ -1128,6 +1140,10 @@ const ChatInputWrapper = styled.div`
   position: relative;
   min-width: 0;
 
+  @media (max-width: 600px) {
+    padding: 0.25rem;
+  }
+
   ${transition('border-color')}
   &:focus-within {
     border-color: ${p => p.theme.colors.main};
@@ -1156,12 +1172,16 @@ const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
   position: relative;
   display: grid;
   grid-template-rows: ${p =>
-    p.empty && p.fullView ? 'auto 1fr auto 1fr' : 'auto 1fr auto'};
+    p.empty && p.fullView
+      ? 'auto minmax(0, 1fr) auto minmax(0, 1fr)'
+      : 'auto minmax(0, 1fr) auto'};
   /* Unquoted, or the browser discards the declaration and the grid sizes to
      its own content: the 1fr message row has nothing to expand into, so the
      composer stops sitting at the bottom of the panel and slides up under the
      last reply. */
   height: 100%;
+  min-height: 0;
+  min-width: 0;
   width: min(100%, 70rem);
   margin-inline: auto;
   gap: 1rem;
@@ -1171,12 +1191,20 @@ const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
     word-break: break-word;
   }
 
-  @media (max-width: 1550px) {
-    height: 90vh;
+  @media (max-width: 600px) {
+    padding: ${p => (p.fullView ? '0.25rem' : 0)};
+    gap: 0.25rem;
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
 `;
 
+const ChatControls = styled(Column)`
+  padding: 0.75rem;
+  width: min(22rem, calc(100vw - 2rem));
+`;
+
 const TokensUsed = styled.p`
+  margin: 0;
   font-size: 0.8rem;
   color: ${p => p.theme.colors.textLight};
 `;
@@ -1261,7 +1289,7 @@ const HistoricalMessageWrapper = styled.div`
 `;
 
 const ModelSelectWrapper = styled.div`
-  min-width: 14rem;
+  min-width: 0;
   flex: 1.5;
   flex-shrink: 1;
 

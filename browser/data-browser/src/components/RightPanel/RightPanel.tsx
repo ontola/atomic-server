@@ -18,13 +18,14 @@ const PANEL_WIDTH_PROP = new CSSVar('right-panel-width');
  */
 const PANEL_OVERLAY_BREAKPOINT = 1000;
 
-/** The panel never takes the whole viewport: the content always keeps a strip
- *  (enough to see it and tap out of the drawer). */
+/** Default width leaves a strip of content for tapping out of the drawer.
+ *  AI chat opts into full width on phones, with an explicit close button. */
 const PANEL_WIDTH = `min(${PANEL_WIDTH_PROP.var()}, calc(100vw - 3rem))`;
 
 interface RightPanelProps {
   isOpen: boolean;
   testId?: string;
+  fullWidthOnMobile?: boolean;
 }
 
 /**
@@ -37,6 +38,7 @@ interface RightPanelProps {
 export const RightPanel: React.FC<React.PropsWithChildren<RightPanelProps>> = ({
   isOpen,
   testId,
+  fullWidthOnMobile = false,
   children,
 }) => {
   const targetRef = useRef<HTMLDivElement>(null);
@@ -67,17 +69,21 @@ export const RightPanel: React.FC<React.PropsWithChildren<RightPanelProps>> = ({
       <PanelContainer
         ref={targetRef}
         data-open={isOpen ? '' : undefined}
+        $fullWidthOnMobile={fullWidthOnMobile}
         $overlay={overlay}
         $dragging={isDragging}
         size={size}
         data-testid={testId}
       >
         <PanelDragArea
+          $fullWidthOnMobile={fullWidthOnMobile}
           ref={dragAreaRef}
           isDragging={isDragging}
           {...dragAreaListeners}
         />
-        <PanelInner>{children}</PanelInner>
+        <PanelInner $fullWidthOnMobile={fullWidthOnMobile}>
+          {children}
+        </PanelInner>
       </PanelContainer>
     </>
   );
@@ -85,6 +91,7 @@ export const RightPanel: React.FC<React.PropsWithChildren<RightPanelProps>> = ({
 
 interface PanelContainerProps {
   size: string;
+  $fullWidthOnMobile: boolean;
   $overlay: boolean;
   $dragging: boolean;
 }
@@ -132,6 +139,14 @@ const PanelContainer = styled.div.attrs<PanelContainerProps>(p => ({
             opacity: 1;
           }
         `}
+
+  @media (max-width: 600px) {
+    ${p =>
+      p.$fullWidthOnMobile &&
+      css`
+        width: 100%;
+      `}
+  }
 `;
 
 /**
@@ -139,7 +154,7 @@ const PanelContainer = styled.div.attrs<PanelContainerProps>(p => ({
  * container's width animation reveals it (via `overflow: hidden`) rather than
  * re-wrapping the content every frame.
  */
-const PanelInner = styled.div`
+const PanelInner = styled.div<{ $fullWidthOnMobile: boolean }>`
   position: absolute;
   top: 0;
   right: 0;
@@ -153,6 +168,16 @@ const PanelInner = styled.div`
   overflow: hidden;
   padding: ${p => p.theme.size()};
   padding-top: 2px;
+
+  @media (max-width: 600px) {
+    ${p =>
+      p.$fullWidthOnMobile &&
+      css`
+        width: 100%;
+        border-left: none;
+        padding: 0.25rem;
+      `}
+  }
 `;
 
 /** Dims the content and closes the drawer on tap (small screens only). */
@@ -168,7 +193,14 @@ const Backdrop = styled.div<{ $visible: boolean }>`
   -webkit-tap-highlight-color: transparent;
 `;
 
-const PanelDragArea = styled(DragAreaBase)`
+const PanelDragArea = styled(DragAreaBase)<{ $fullWidthOnMobile: boolean }>`
+  @media (max-width: 600px) {
+    ${p =>
+      p.$fullWidthOnMobile &&
+      css`
+        display: none;
+      `}
+  }
   --handle-margin: 1rem;
   height: calc(100% - var(--handle-margin) * 2);
   margin-top: var(--handle-margin);

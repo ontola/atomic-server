@@ -368,6 +368,13 @@ const EditorWrapper = styled(EditorWrapperBase)<{ $large?: boolean }>`
   line-height: 1.5;
   flex: unset !important;
   min-height: ${p => (p.$large ? '8rem' : 'none')};
+  @media (max-width: 600px) {
+    padding: 0.25rem;
+    min-height: 0;
+    max-height: 25dvh;
+    overflow-y: auto;
+  }
+
   .ai-chat-mention {
     background-color: ${p => p.theme.colors.mainSelectedBg};
     color: ${p => p.theme.colors.mainSelectedFg};

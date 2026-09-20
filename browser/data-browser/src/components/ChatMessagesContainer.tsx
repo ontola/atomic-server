@@ -162,8 +162,13 @@ export const ChatMessagesContainer: React.FC<
  */
 const MessagesContainer = styled(ScrollArea)<{ $fullView?: boolean }>`
   overflow: auto;
+  min-height: 0;
   height: 100%;
   padding: ${p => (p.$fullView ? '0.25rem 0' : p.theme.size())};
+
+  @media (max-width: 600px) {
+    padding: 0.25rem 0;
+  }
 
   /* The viewport is what scrolls and therefore what clips, so the room for an
    * avatar's keyboard focus ring (2px + 2px offset) has to live here —

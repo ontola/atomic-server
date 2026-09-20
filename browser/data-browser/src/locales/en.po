@@ -24,9 +24,8 @@ msgstr "Failed to regenerate AI chat message"
 msgid "New Chat"
 msgstr "New Chat"
 
-#: src/chunks/AI/AISidebar.tsx
-msgid "Atomic Assistant"
-msgstr "Atomic Assistant"
+#~ msgid "Atomic Assistant"
+#~ msgstr "Atomic Assistant"
 
 #: src/chunks/AI/AISidebar.tsx
 msgid "Close AI Sidebar"
@@ -298,9 +297,8 @@ msgstr "Remove"
 msgid "Choose a default model"
 msgstr "Choose a default model"
 
-#: src/chunks/AI/AISetupPanel.tsx
-msgid "Also use for chat titles and follow-up prompts"
-msgstr "Also use for chat titles and follow-up prompts"
+#~ msgid "Also use for chat titles and follow-up prompts"
+#~ msgstr "Also use for chat titles and follow-up prompts"
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/components/DemoExitButton.tsx
@@ -312,9 +310,8 @@ msgstr "Back"
 msgid "Start chatting"
 msgstr "Start chatting"
 
-#: src/chunks/AI/AISetupPanel.tsx
-msgid "Connect a model to use Atomic Assistant"
-msgstr "Connect a model to use Atomic Assistant"
+#~ msgid "Connect a model to use Atomic Assistant"
+#~ msgstr "Connect a model to use Atomic Assistant"
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/components/AI/AISettings.tsx
@@ -2747,13 +2744,11 @@ msgstr "Generative features"
 msgid "<0/> Generate AI Chat titles"
 msgstr "<0/> Generate AI Chat titles"
 
-#: src/components/AI/AISettings.tsx
-msgid "Show follow up prompts in chats"
-msgstr "Show follow up prompts in chats"
+#~ msgid "Show follow up prompts in chats"
+#~ msgstr "Show follow up prompts in chats"
 
-#: src/components/AI/AISettings.tsx
-msgid "Uses a small model to generate a follow up prompt based on the last message in the chat."
-msgstr "Uses a small model to generate a follow up prompt based on the last message in the chat."
+#~ msgid "Uses a small model to generate a follow up prompt based on the last message in the chat."
+#~ msgstr "Uses a small model to generate a follow up prompt based on the last message in the chat."
 
 #: src/components/AI/AISettings.tsx
 msgid "(Tip) Choose a cheap and fast model"
@@ -11935,3 +11930,31 @@ msgstr "Send edits to imported events back to Google: Name or Summary, Descripti
 #: src/views/PeerInvitePage.tsx
 msgid "This is taking longer than it should. The person who invited you needs to have this drive open in their browser. Try again, or ask them for a new invitation."
 msgstr "This is taking longer than it should. The person who invited you needs to have this drive open in their browser. Try again, or ask them for a new invitation."
+
+#: src/chunks/AI/AISidebar.tsx
+msgid "AI chat"
+msgstr "AI chat"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Tokens used:"
+msgstr "Tokens used:"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "input,"
+msgstr "input,"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "output"
+msgstr "output"
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Chat options"
+msgstr "Chat options"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Also use for chat titles"
+msgstr "Also use for chat titles"
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Connect a model to use AI chat"
+msgstr "Connect a model to use AI chat"

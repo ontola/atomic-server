@@ -2256,3 +2256,7 @@ cryptography prereleases, and allowed unrelated dependency differences. Run
 `python3 -m unittest discover -s scripts -p test_rust_alignment.py -v`.
 The Rust build policy workflow runs these checks; downstream CI checks both
 repositories and rejects dependency lockfile drift before builds.
+
+## Mobile AI chat (#1591)
+
+`browser/e2e/tests/ai-mobile.spec.ts` checks full-width phone layout, a composer that fits above a simulated keyboard inset, options and token visibility, closing the panel, desktop composer bounds, and model selection with focus returning to the editor. AI responses are mocked; a physical mobile keyboard is not exercised.

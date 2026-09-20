@@ -24,9 +24,8 @@ msgstr "Échec de la régénération du message de chat de l'IA"
 msgid "New Chat"
 msgstr "Nouvelle discussion"
 
-#: src/chunks/AI/AISidebar.tsx
-msgid "Atomic Assistant"
-msgstr "Assistant Atomique"
+#~ msgid "Atomic Assistant"
+#~ msgstr "Assistant Atomique"
 
 #: src/chunks/AI/AISidebar.tsx
 msgid "Close AI Sidebar"
@@ -298,9 +297,8 @@ msgstr "Supprimer"
 msgid "Choose a default model"
 msgstr "Choisir un modèle par défaut"
 
-#: src/chunks/AI/AISetupPanel.tsx
-msgid "Also use for chat titles and follow-up prompts"
-msgstr "Utiliser également pour les titres de chat et les invites de suivi"
+#~ msgid "Also use for chat titles and follow-up prompts"
+#~ msgstr "Utiliser également pour les titres de chat et les invites de suivi"
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/components/DemoExitButton.tsx
@@ -312,9 +310,8 @@ msgstr "Retour"
 msgid "Start chatting"
 msgstr "Commencer à discuter"
 
-#: src/chunks/AI/AISetupPanel.tsx
-msgid "Connect a model to use Atomic Assistant"
-msgstr "Connecter un modèle pour utiliser Atomic Assistant"
+#~ msgid "Connect a model to use Atomic Assistant"
+#~ msgstr "Connecter un modèle pour utiliser Atomic Assistant"
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/components/AI/AISettings.tsx
@@ -2747,13 +2744,11 @@ msgstr "Fonctionnalités génératives"
 msgid "<0/> Generate AI Chat titles"
 msgstr "<0/> Générer des titres de chat IA"
 
-#: src/components/AI/AISettings.tsx
-msgid "Show follow up prompts in chats"
-msgstr "Afficher les invites de suivi dans les chats"
+#~ msgid "Show follow up prompts in chats"
+#~ msgstr "Afficher les invites de suivi dans les chats"
 
-#: src/components/AI/AISettings.tsx
-msgid "Uses a small model to generate a follow up prompt based on the last message in the chat."
-msgstr "Utilise un petit modèle pour générer une invite de suivi basée sur le dernier message dans le chat."
+#~ msgid "Uses a small model to generate a follow up prompt based on the last message in the chat."
+#~ msgstr "Utilise un petit modèle pour générer une invite de suivi basée sur le dernier message dans le chat."
 
 #: src/components/AI/AISettings.tsx
 msgid "(Tip) Choose a cheap and fast model"
@@ -11895,4 +11890,32 @@ msgstr ""
 
 #: src/views/PeerInvitePage.tsx
 msgid "This is taking longer than it should. The person who invited you needs to have this drive open in their browser. Try again, or ask them for a new invitation."
+msgstr ""
+
+#: src/chunks/AI/AISidebar.tsx
+msgid "AI chat"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Tokens used:"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "input,"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "output"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Chat options"
+msgstr ""
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Also use for chat titles"
+msgstr ""
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Connect a model to use AI chat"
 msgstr ""

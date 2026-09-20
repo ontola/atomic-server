@@ -513,7 +513,7 @@ const AISidebar: React.FC = () => {
         onRegenerateMessage={onRegenerateMessage}
       >
         <Row center justify='space-between' fullWidth>
-          <Row center gap='0.5ch'>
+          <Row center gap='0.5ch' style={{ minWidth: 0 }}>
             <IconButton
               title='New Chat'
               onClick={() => openChat()}
@@ -524,10 +524,10 @@ const AISidebar: React.FC = () => {
             </IconButton>
             <Heading>
               {chatEmoji && <span aria-hidden>{chatEmoji} </span>}
-              {chatResource?.title || 'Atomic Assistant'}
+              {chatResource?.title || 'AI chat'}
             </Heading>
           </Row>
-          <Row center gap='0.5ch'>
+          <Row center gap='0.5ch' style={{ minWidth: 0 }}>
             <IconButton
               title='Close AI Sidebar'
               color='textLight'
@@ -548,7 +548,11 @@ const AISidebar: React.FC = () => {
 const Heading = styled.h2`
   font-size: 1rem;
   font-weight: 600;
-  margin-bottom: ${p => p.theme.size(2)};
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 export default AISidebar;

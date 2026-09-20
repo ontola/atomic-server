@@ -24,9 +24,8 @@ msgstr ""
 msgid "New Chat"
 msgstr ""
 
-#: src/chunks/AI/AISidebar.tsx
-msgid "Atomic Assistant"
-msgstr ""
+#~ msgid "Atomic Assistant"
+#~ msgstr ""
 
 #: src/chunks/AI/AISidebar.tsx
 msgid "Close AI Sidebar"
@@ -298,9 +297,8 @@ msgstr ""
 msgid "Choose a default model"
 msgstr ""
 
-#: src/chunks/AI/AISetupPanel.tsx
-msgid "Also use for chat titles and follow-up prompts"
-msgstr ""
+#~ msgid "Also use for chat titles and follow-up prompts"
+#~ msgstr ""
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/components/DemoExitButton.tsx
@@ -312,9 +310,8 @@ msgstr ""
 msgid "Start chatting"
 msgstr ""
 
-#: src/chunks/AI/AISetupPanel.tsx
-msgid "Connect a model to use Atomic Assistant"
-msgstr ""
+#~ msgid "Connect a model to use Atomic Assistant"
+#~ msgstr ""
 
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/components/AI/AISettings.tsx
@@ -2747,13 +2744,11 @@ msgstr ""
 msgid "<0/> Generate AI Chat titles"
 msgstr ""
 
-#: src/components/AI/AISettings.tsx
-msgid "Show follow up prompts in chats"
-msgstr ""
+#~ msgid "Show follow up prompts in chats"
+#~ msgstr ""
 
-#: src/components/AI/AISettings.tsx
-msgid "Uses a small model to generate a follow up prompt based on the last message in the chat."
-msgstr ""
+#~ msgid "Uses a small model to generate a follow up prompt based on the last message in the chat."
+#~ msgstr ""
 
 #: src/components/AI/AISettings.tsx
 msgid "(Tip) Choose a cheap and fast model"
@@ -11895,4 +11890,32 @@ msgstr ""
 
 #: src/views/PeerInvitePage.tsx
 msgid "This is taking longer than it should. The person who invited you needs to have this drive open in their browser. Try again, or ask them for a new invitation."
+msgstr ""
+
+#: src/chunks/AI/AISidebar.tsx
+msgid "AI chat"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Tokens used:"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "input,"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "output"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Chat options"
+msgstr ""
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Also use for chat titles"
+msgstr ""
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Connect a model to use AI chat"
 msgstr ""
