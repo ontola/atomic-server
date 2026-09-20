@@ -4,6 +4,13 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: someone joining a drive through a browser invitation is told when the
+  pairing is not getting anywhere. The page showed "Connecting…" and "Waiting
+  for a peer" indefinitely: `WebRtcPeer`'s 60 second pairing timeout only
+  exists on a peer that has built an `RTCPeerConnection`, and the guest is the
+  one waiting for an offer, so it had no timer at all. After 60 seconds without
+  a peer the page now says so and points at what the inviter has to do. The
+  attempt keeps running, so a slow pairing that later succeeds still does.
 - Fix: the editor's slash menu no longer reaches through an unmounted renderer.
   `onStart` positions the menu again on the next animation frame, which can
   land after the suggestion was destroyed.
