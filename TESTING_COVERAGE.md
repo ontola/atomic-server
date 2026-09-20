@@ -2255,6 +2255,41 @@ same through `window.store` + the grid, skipped unless `TABLE_STRESS=1`
 `totalMembers` as the full count, and hydrates only the page.
 Findings: [`planning/table-scale.md`](./planning/table-scale.md).
 
+## Commit throughput and cost
+
+`lib/tests/commit_throughput.rs` is an ignored native redb probe
+(`cargo test -p atomic_lib --features db-redb --test commit_throughput --release -- --ignored --nocapture`).
+It must be run in **release**: a debug build makes Ed25519 and Loro dominate
+and reports roughly fifty times the real cost. `COMMIT_THROUGHPUT_N` sets the
+commits per leg.
+
+Five tests, each answering one question about the store layer with no server
+in the way:
+
+| test | question |
+| --- | --- |
+| `sequential_versus_concurrent_commits` | does the store parallelise, or are redb's single writer and the per-subject lock the wall? |
+| `commit_cost_against_store_size` | does a commit cost more once the store holds more? |
+| `commit_cost_against_unrelated_watched_queries` | does a commit cost more as other collections on the drive are opened? |
+| `where_a_commit_spends_its_time` | what is the constant made of? |
+| `what_batching_the_write_would_buy` | how much of the write phase is per-transaction overhead? |
+
+The last two split the cost by driving `Commit::create_did` and `apply_commit`
+separately and toggling `CommitOpts`, which is what separates signing,
+verification, indexing and the write. `what_batching_the_write_would_buy` also
+asserts every batched resource is queryable once the batch commits, because
+`RedbStore::get` reads through the batch buffer but `range`/`scan_prefix`/
+`iter_tree` do not, so a batch is only correct while nothing inside it scans.
+
+`commit_cost_against_unrelated_watched_queries` deliberately gives every
+watched collection a parent of its own. An earlier version gave them all the
+same parent and reported roughly twice the growth, because each filter then
+passed its first constraint and paid a full `resource_matches_filter`. The
+benchmark's shape decided its answer, so the shape is part of the test's
+contract, not an incidental detail.
+
+Findings: [`planning/disk-storage-and-persistence-optimization.md`](./planning/disk-storage-and-persistence-optimization.md).
+
 ## Drive root file drops
 
 `views/Drive/DrivePage.test.tsx` renders the drive page with its real dropzone
