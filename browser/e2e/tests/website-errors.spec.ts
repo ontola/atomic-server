@@ -10,8 +10,7 @@ test('unreadable website content reports an error, stops loading and recovers', 
     if (message.type() === 'error') errors.push(message.text());
   });
   const subject = await page.evaluate(async () => {
-    const { createWebsite, starterWebsite } =
-      await import('/src/chunks/Website/websiteModel.ts');
+    const { createWebsite, starterWebsite } = window.atomicE2E.websiteModel;
     const store = window.store;
     const config = starterWebsite('Preview error recovery');
     config.pages[0].media = [
@@ -51,8 +50,7 @@ test('unreadable website content reports an error, stops loading and recovers', 
     page.getByRole('button', { name: 'Retry preview', exact: true }),
   ).toBeVisible();
   await page.evaluate(async site => {
-    const { readWebsite, updateWebsite } =
-      await import('/src/chunks/Website/websiteModel.ts');
+    const { readWebsite, updateWebsite } = window.atomicE2E.websiteModel;
     const store = window.store;
     const resource = await store.getResource(site);
     const { config } = await readWebsite(store, store.getDrive()!, resource);
@@ -86,8 +84,7 @@ test('hosting status failures are logged and clear after reconnecting', async ({
     route.fulfill({ status: 503, body: 'Hosting temporarily unavailable' }),
   );
   const subject = await page.evaluate(async () => {
-    const { createWebsite, starterWebsite } =
-      await import('/src/chunks/Website/websiteModel.ts');
+    const { createWebsite, starterWebsite } = window.atomicE2E.websiteModel;
     const store = window.store;
 
     return (

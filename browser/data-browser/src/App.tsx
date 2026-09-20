@@ -1,6 +1,6 @@
 import { StoreContext, Store, enableLoro, Client } from '@tomic/react';
 
-import { isDev } from './config';
+import { isDev, isE2E } from './config';
 import { registerHandlers } from './handlers';
 import { getAgentFromIDB, saveAgentToIDB } from './helpers/agentStorage';
 import { shouldLock } from './helpers/deviceLock';
@@ -238,6 +238,15 @@ attachStoreToProfiler(store);
 if (isDev()) {
   const { attachDevtools } = await import('./helpers/devtools');
   attachDevtools(store);
+}
+
+// The e2e specs build some fixtures by calling app modules directly. They
+// cannot import them by source path from a built bundle, so an E2E build
+// hands them over on `window`. Awaited here, so they are in place before the
+// first spec can reach the page.
+if (isE2E()) {
+  const { attachE2EModules } = await import('./helpers/e2eModules');
+  await attachE2EModules();
 }
 
 /** Entrypoint of the application. This is where providers go. */
