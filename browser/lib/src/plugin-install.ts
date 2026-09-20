@@ -255,6 +255,12 @@ export async function installRelease(
   } = options;
   const propVals: Record<string, JSONValue> = {
     [core.properties.name]: name,
+    // `release` belongs in the genesis commit, not in a `set` after it.
+    // `store.newResource` signs the genesis from these propvals alone, and
+    // `save()` sends it first; a property the class requires that is only set
+    // afterwards is missing from the commit the server validates, which
+    // refuses it and drops the whole installation.
+    [server.properties.release]: release.url,
     [server.properties.releaseId]: release.id,
     [server.properties.installationStatus]: status,
     [server.properties.grants]: grants,
@@ -269,7 +275,6 @@ export async function installRelease(
     parent: drive,
     propVals,
   });
-  await installation.set(server.properties.release, release.url);
   await installation.save();
 
   return installation.subject;
