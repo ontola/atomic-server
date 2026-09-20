@@ -394,6 +394,9 @@ export function run() { return { intents: [] }; }
   test('Notion setup validates identifiers before storing credentials', async ({
     page,
   }) => {
+    // The wait below can take 45s of this; the suite's 60s default leaves
+    // nothing for the rest of the test.
+    test.setTimeout(120_000);
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
     const secretWrites: string[] = [];
@@ -492,8 +495,14 @@ export function run() { return { intents: [] }; }
     await page
       .getByLabel('Notion connection token', { exact: true })
       .press('Enter');
+    // Enter starts the installation: the connection is created against the
+    // server first, and only when the secret write comes back refused does
+    // the page say so. That is a round trip, and under suite load it does not
+    // fit ten seconds — this spec passes on its own in 21s and times out here
+    // when another worker is running beside it.
     await expect(page.getByRole('alert')).toContainText(
       'Could not store Notion credential',
+      { timeout: 45000 },
     );
     await expect(page.getByRole('alert')).toContainText(
       'Check your integrations for a partially created connection',
