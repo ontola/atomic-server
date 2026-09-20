@@ -37,7 +37,30 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 STORE="${ATOMIC_E2E_STORE:-$REPO_ROOT/.e2e-store}"
-BINARY="${ATOMIC_E2E_BINARY:-$REPO_ROOT/target/debug/atomic-server}"
+# Prefer the `e2e` cargo profile, because that is what CI runs. `.dagger` builds
+# the e2e server with `cargo build --locked --profile e2e`, and the workspace
+# Cargo.toml defines that profile as release brought down to opt-level 2 with
+# `debug-assertions` and `overflow-checks` deliberately left on. Its own comment
+# says why: it is "an optimisation level where commit round-trips stop
+# dominating".
+#
+# This script used to point straight at `target/debug`, and that is not a
+# slower version of the same thing. At opt-level 0, with two Playwright workers,
+# the app stops being able to BOOT: specs fail on a page whose whole snapshot is
+# `img "AtomicServer"`, one of them after a 30s `waitForURL`, and the same file
+# at `--workers=1` passes every time. Read as test failures those look like
+# behaviour bugs or "CI shard contention", and they are neither. Anything
+# concluded about timing from a debug binary is a measurement of the binary.
+#
+# A green on the slower build is still trustworthy, since a spec that passes at
+# opt-level 0 passes at opt-level 2. A red is not evidence of anything.
+if [[ -n "${ATOMIC_E2E_BINARY:-}" ]]; then
+  BINARY="$ATOMIC_E2E_BINARY"
+elif [[ -x "$REPO_ROOT/target/e2e/atomic-server" ]]; then
+  BINARY="$REPO_ROOT/target/e2e/atomic-server"
+else
+  BINARY="$REPO_ROOT/target/debug/atomic-server"
+fi
 ENV_DIR="$REPO_ROOT/browser/data-browser"
 
 # The same files vite loads, in the same order it loads them: a developer's own
@@ -125,7 +148,11 @@ fi
 if [[ ! -x "$BINARY" ]]; then
   echo "No server binary at $BINARY" >&2
   echo "Build one first:" >&2
-  echo "  ATOMICSERVER_SKIP_JS_BUILD=true cargo build -p atomic-server" >&2
+  echo "  ATOMICSERVER_SKIP_JS_BUILD=true cargo build --profile e2e -p atomic-server" >&2
+  echo >&2
+  echo "Drop ATOMICSERVER_SKIP_JS_BUILD if you have not built the frontend yet;" >&2
+  echo "keep it if you have, so build.rs embeds the dist you built rather than" >&2
+  echo "replacing it with one built without VITE_E2E." >&2
   exit 1
 fi
 
@@ -165,7 +192,7 @@ if [[ "$STALE_OK" != true ]] && [[ -n "$(stale_bundle)" ]]; then
   echo "The invite and dev-drive pages are served from that bundle, not from" >&2
   echo "vite, so they would run stale code while every other page runs current" >&2
   echo "code. Rebuild it:" >&2
-  echo "  cargo build -p atomic-server" >&2
+  echo "  cargo build --profile e2e -p atomic-server" >&2
   echo >&2
   echo "If that leaves the bundle untouched, something non-bundle in dist/ is" >&2
   echo "newer than your sources and build.rs is skipping the JS build; build" >&2
@@ -181,7 +208,7 @@ if [[ "$STALE_OK" != true ]] && [[ -n "$(stale_source)" ]]; then
   echo "  newer:  $(stale_source)" >&2
   echo >&2
   echo "Rebuild it (this also refreshes the embedded frontend bundle):" >&2
-  echo "  cargo build -p atomic-server" >&2
+  echo "  cargo build --profile e2e -p atomic-server" >&2
   echo >&2
   echo "Pass --stale-ok to start anyway. That is fine when the specs you are" >&2
   echo "running only touch vite-served pages; it is not fine for anything" >&2
