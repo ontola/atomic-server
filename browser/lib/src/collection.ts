@@ -288,6 +288,11 @@ export class Collection {
   private _aggregates: AggregateOutcome[] = [];
 
   private _waitForReady: Promise<void>;
+  /** One in-flight fetch per page. A virtualized list mounts several rows from
+   * the same missing page in one render; without sharing this promise, every
+   * row starts the same local query and the competing hydrations can leave the
+   * page unresolved for all of their consumers. */
+  private _pageFetches = new Map<number, Promise<void>>();
   /**
    * True while `fetchPage` is hydrating members into the store. Query
    * hydration fires `ResourceUpdated` for every row; `useCollection`
@@ -395,8 +400,19 @@ export class Collection {
     const page = Math.floor(index / this.pageSize);
 
     if (!this.pages.has(page)) {
-      this._waitForReady = this.fetchPage(page);
-      await this._waitForReady;
+      let fetch = this._pageFetches.get(page);
+
+      if (!fetch) {
+        fetch = this.fetchPage(page).finally(() => {
+          if (this._pageFetches.get(page) === fetch) {
+            this._pageFetches.delete(page);
+          }
+        });
+        this._pageFetches.set(page, fetch);
+      }
+
+      this._waitForReady = fetch;
+      await fetch;
     }
 
     // `fetchPage` short-circuits without populating `pages` when there's

@@ -371,6 +371,50 @@ describe('collection page assemble does not flash unsorted members', () => {
 });
 
 describe('deferred collection membership', () => {
+  it('shares one fetch between concurrent reads from the same missing page', async ({
+    expect,
+  }) => {
+    const store = new Store({ serverUrl: 'https://example.com' });
+    store.setDrive(DRIVE);
+    const subjects = Array.from(
+      { length: 40 },
+      (_, i) => `did:ad:resource:row-${i}`,
+    );
+    let queryCount = 0;
+    store.setClientDb(
+      mockClientDb(async () => {
+        queryCount += 1;
+
+        return {
+          subjects,
+          count: subjects.length,
+          resources: subjects.map((s, i) => jsonAd(s, i)),
+        };
+      }),
+    );
+    const collection = new Collection(
+      store,
+      'https://example.com',
+      {
+        page_size: '30',
+        include_nested: false,
+        property: core.properties.parent,
+        value: TABLE,
+      },
+      true,
+    );
+
+    await collection.refresh();
+    const secondPage = await Promise.all(
+      Array.from({ length: 10 }, (_, i) =>
+        collection.getMemberWithIndex(30 + i),
+      ),
+    );
+
+    expect(secondPage).toEqual(subjects.slice(30));
+    expect(queryCount).toBe(2);
+  });
+
   it('does not count later pages again when hydration notifications are deferred', async ({
     expect,
   }) => {
