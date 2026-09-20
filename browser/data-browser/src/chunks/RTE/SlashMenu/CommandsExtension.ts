@@ -65,7 +65,10 @@ export const createRenderFunction =
     };
 
     const updatePosition = (props: SuggestionProps<ItemType, ItemType>) => {
-      if (!props.decorationNode) {
+      // `onStart` schedules a second call on the next frame, and Escape can
+      // destroy the renderer in between, so the reference is checked here
+      // rather than only at the call sites.
+      if (!props.decorationNode || !component) {
         return;
       }
 

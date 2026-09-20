@@ -4,6 +4,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: dismissing the editor's slash menu with Escape no longer throws. `onStart`
+  positions the command list and schedules a second pass on the next animation
+  frame, and Escape in that window destroys the renderer, so the scheduled pass
+  read `element` off a reference that had just been cleared. The positioning step
+  now bails on a missing renderer, as the update and keydown handlers already did.
 - Fix: someone who opens a chatroom shared from another drive sees the messages
   in it. The message list is a collection query, and a collection defaults its
   drive scope to the viewer's active drive. A guest arriving through an invite
