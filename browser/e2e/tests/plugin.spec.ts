@@ -184,7 +184,7 @@ test.describe('Plugins', () => {
       grantKeys[0].slice('atomic.plugins.ui.v2.'.length),
     );
     expect(identity).toHaveLength(4);
-    expect(identity[2]).toMatch(/^did:ad:agent:/);
+    expect(identity[2]).toMatch(/^(atomic|did:ad):agent:/);
     expect(identity[3]).toBeTruthy();
 
     // Check if the view can commit by refreshing and checking the favorite folder.

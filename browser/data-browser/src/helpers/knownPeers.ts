@@ -3,18 +3,23 @@
 // the Sync page's peer flow, a scanned/pasted atomic://pair link, or the
 // account device directory. The Sync page renders and syncs these.
 
+import { nodeId } from '@tomic/lib';
+
 const KNOWN_PEERS_KEY = 'atomic-peers';
-const NODE_DID_PREFIX = 'did:ad:node:';
 
 export type KnownPeer = { nodeId: string; label: string; lastSync?: string };
+
+function nodeHex(nodeDid: string | undefined): string | undefined {
+  const hex = nodeId(nodeDid ?? '')?.split(':')[0];
+
+  return hex && /^[0-9a-f]{64}$/i.test(hex) ? hex : undefined;
+}
 
 export function readKnownPeers(): KnownPeer[] {
   try {
     return (
       JSON.parse(localStorage.getItem(KNOWN_PEERS_KEY) ?? '[]') as KnownPeer[]
-    ).filter(peer =>
-      /^[0-9a-f]{64}$/i.test(peer.nodeId?.slice(NODE_DID_PREFIX.length) ?? ''),
-    );
+    ).filter(peer => !!nodeHex(peer.nodeId));
   } catch {
     return [];
   }
@@ -34,7 +39,7 @@ export function upsertKnownPeer(nodeDid: string, label?: string): void {
   } else {
     peers.push({
       nodeId: nodeDid,
-      label: label ?? `${nodeDid.slice(0, NODE_DID_PREFIX.length + 8)}...`,
+      label: label ?? `${nodeDid.slice(0, 20)}...`,
     });
   }
 

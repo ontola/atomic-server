@@ -291,15 +291,7 @@ impl Commit {
                     .get(urls::DRIVE_PROP)
                     .map(|v| v.to_string())
                     .unwrap_or_default();
-                crate::genesis::GenesisCert {
-                    version: crate::genesis::GENESIS_VERSION_V2,
-                    signer_pubkey,
-                    created_at: now,
-                    nonce,
-                    state_hash: None,
-                    parent,
-                    drive,
-                }
+                crate::genesis::GenesisCert::new_v2(signer_pubkey, now, nonce, None, parent, drive)
             }
         };
         let cert_b64 = crate::agents::encode_base64(&cert.encode());

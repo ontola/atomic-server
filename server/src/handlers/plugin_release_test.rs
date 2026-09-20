@@ -227,7 +227,7 @@ async fn a_listed_release_is_public_and_a_js_release_has_no_zip() {
     assert_eq!(entry["name"], "Example");
     assert_eq!(entry["emoji"], "🧪");
     assert_eq!(entry["description"], "An example");
-    assert_eq!(entry["publisher"], "did:ad:publisher");
+    assert_eq!(entry["publisher"], "atomic:publisher");
     assert_eq!(entry["domains"], serde_json::json!(["education"]));
     assert_eq!(
         entry["standards"],

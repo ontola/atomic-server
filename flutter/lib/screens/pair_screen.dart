@@ -117,8 +117,10 @@ class PairScreen extends StatefulWidget {
     var value = trimmed;
     String name = '';
 
-    if (value.startsWith(_nodeDidPrefix)) {
-      value = value.substring(_nodeDidPrefix.length);
+    if (value.startsWith(_nodePrefix) || value.startsWith(_nodeDidPrefix)) {
+      value = value.startsWith(_nodePrefix)
+          ? value.substring(_nodePrefix.length)
+          : value.substring(_nodeDidPrefix.length);
       // Check for :<name> suffix after the 64-char hex
       if (value.length > 64 && value[64] == ':') {
         name = Uri.decodeComponent(value.substring(65));

@@ -3060,8 +3060,8 @@ export class Store {
       signerPubkey: decodeB64(await agent.getPublicKey()),
       createdAt: Date.now(),
       nonce: crypto.getRandomValues(new Uint8Array(16)),
-      parent,
-      drive,
+      parent: canonicalizeScheme(parent),
+      drive: canonicalizeScheme(drive),
     };
     const certBytes = encodeGenesisCert(cert);
 

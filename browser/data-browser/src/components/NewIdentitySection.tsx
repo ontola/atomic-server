@@ -1,7 +1,14 @@
 import { getManagedPortalUrl } from '../helpers/managed/cloudSync';
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Agent, JSCryptoProvider, core, useStore } from '@tomic/react';
+import {
+  Agent,
+  JSCryptoProvider,
+  agentPublicKey,
+  agentSubject,
+  core,
+  useStore,
+} from '@tomic/react';
 import { fetchPrivateDriveSubject } from '../helpers/privateDrive';
 import { isOriginWithoutNode } from '../helpers/originNode';
 import { useSettings } from '../helpers/AppSettings';
@@ -140,7 +147,7 @@ export function NewIdentitySection({
 
     try {
       const agentKeys = await Agent.generateKeyPair();
-      const agentDID = `did:ad:agent:${agentKeys.publicKey}`;
+      const agentDID = agentSubject(agentKeys.publicKey);
       const agentProvider = new JSCryptoProvider(agentKeys.privateKey);
       const newAgent = new Agent(agentProvider, agentDID);
 
@@ -203,7 +210,7 @@ export function NewIdentitySection({
       const agentResource = store.getResourceLoading(identity.agentSubject, {
         newResource: true,
       });
-      const publicKey = identity.agentSubject.replace('did:ad:agent:', '');
+      const publicKey = agentPublicKey(identity.agentSubject) ?? '';
 
       await agentResource.set(core.properties.publicKey, publicKey);
       await agentResource.set(core.properties.isA, [core.classes.agent]);

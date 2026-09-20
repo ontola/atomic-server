@@ -1650,9 +1650,8 @@ msgstr ""
 msgid "In sync"
 msgstr ""
 
-#. 0: NODE_DID_PREFIX
 #: src/routes/SyncRoute.tsx
-msgid "Error: Expected {0}<node-id>"
+msgid "Error: Expected atomic:node:<node-id>"
 msgstr ""
 
 #: src/helpers/managed/deviceLink.ts

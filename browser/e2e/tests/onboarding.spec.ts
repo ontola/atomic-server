@@ -66,9 +66,9 @@ test.describe('onboarding', () => {
     // Verify the secret contains the drive URL and agent subject by decoding it
     const decodedSecret = JSON.parse(atob(secret!));
     expect(decodedSecret.initialDrive).toBeTruthy();
-    expect(decodedSecret.initialDrive).toContain('did:ad:');
+    expect(decodedSecret.initialDrive).toMatch(/atomic:|did:ad:/);
     expect(decodedSecret.subject).toBeTruthy();
-    expect(decodedSecret.subject).toContain('did:ad:agent:');
+    expect(decodedSecret.subject).toMatch(/^(atomic|did:ad):agent:/);
 
     // Click confirm to sign out and go to verify
     await page.locator('button[title="Copy to clipboard"]').click();

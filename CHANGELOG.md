@@ -14,9 +14,11 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
   parent/drive strings as `atomic:`; existing v1 certificates and the
   personal-drive singleton stay v1. Pairing is
   `atomic:node:{id}?v=1&drives=*`; `/resource?subject=` is the HTTP
-  endpoint (`/atomic` and `/did` remain aliases). Sync advertises `canonical-scheme`
-  so a peer that does not list it still receives `did:ad:` on the wire
-  (#1584).
+  endpoint (`/atomic` and `/did` remain aliases). The store canonicalizes
+  subjects and identifier-shaped values on write and on query filters.
+  Opening a pre-rename database rewrites leftover `did:ad:` keys and
+  rebuilds indexes. Sync advertises `canonical-scheme` and actually emits
+  `did:ad:` to peers that do not list it (#1584).
 
 - Fix: a stale authentication proof no longer fails a request that needed no
   authentication. A browser keeps its proof in the `atomic_session` cookie, and

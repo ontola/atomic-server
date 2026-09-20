@@ -43,6 +43,8 @@ import {
   truncateUrl,
   Datatype,
   isAtomicIdentifier,
+  nodeId as parseNodeId,
+  nodeSubject,
 } from '@tomic/react';
 import { styled, keyframes, css, type DefaultTheme } from 'styled-components';
 import {
@@ -149,18 +151,14 @@ export const SyncRoute = createRoute({
 
 type KnownPeer = { nodeId: string; label: string; lastSync?: string };
 
-const NODE_DID_PREFIX = 'did:ad:node:';
-
 function nodeDidToRaw(nodeDid: string): string | undefined {
-  if (!nodeDid.startsWith(NODE_DID_PREFIX)) return undefined;
+  const raw = parseNodeId(nodeDid)?.split(':')[0];
 
-  const raw = nodeDid.slice(NODE_DID_PREFIX.length).split(':')[0];
-
-  return /^[0-9a-f]{64}$/i.test(raw) ? raw.toLowerCase() : undefined;
+  return raw && /^[0-9a-f]{64}$/i.test(raw) ? raw.toLowerCase() : undefined;
 }
 
 function rawToNodeDid(raw: string): string {
-  return `${NODE_DID_PREFIX}${raw}`;
+  return nodeSubject(raw);
 }
 
 function normalizeStoredPeer(peer: KnownPeer): KnownPeer | undefined {
@@ -1357,7 +1355,7 @@ function SyncPage() {
     const rawNodeId = nodeDidToRaw(nodeDid);
 
     if (!rawNodeId) {
-      setPeerSyncResult(`Error: Expected ${NODE_DID_PREFIX}<node-id>`);
+      setPeerSyncResult('Error: Expected atomic:node:<node-id>');
 
       return;
     }
@@ -1402,7 +1400,7 @@ function SyncPage() {
           typeof data.peerName === 'string' && data.peerName.trim()
             ? data.peerName.trim()
             : undefined;
-        const didFallback = `${NODE_DID_PREFIX}${rawNodeId.slice(0, 8)}...`;
+        const didFallback = `${nodeSubject(rawNodeId).slice(0, 20)}...`;
         // Say what moved in each direction. A pass that sends 49 and receives 1
         // is not "1 resource synced", and reporting it that way hides whether
         // the link works at all.

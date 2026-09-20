@@ -73,6 +73,28 @@ pub struct GenesisCert {
 }
 
 impl GenesisCert {
+    /// A new v2 certificate: parent and drive identifier strings are stored
+    /// in `atomic:` form. Does not rewrite already-canonical or non-identifier
+    /// strings. Encode/verify still use these fields verbatim.
+    pub fn new_v2(
+        signer_pubkey: [u8; 32],
+        created_at: i64,
+        nonce: [u8; 16],
+        state_hash: Option<[u8; 32]>,
+        parent: impl AsRef<str>,
+        drive: impl AsRef<str>,
+    ) -> Self {
+        Self {
+            version: GENESIS_VERSION_V2,
+            signer_pubkey,
+            created_at,
+            nonce,
+            state_hash,
+            parent: crate::identifiers::canonicalize_scheme(parent.as_ref()),
+            drive: crate::identifiers::canonicalize_scheme(drive.as_ref()),
+        }
+    }
+
     /// Serialize to the canonical v1 binary layout (little-endian integers).
     /// These bytes are exactly what gets signed/verified.
     pub fn encode(&self) -> Vec<u8> {
@@ -427,6 +449,31 @@ mod test {
         let mut trailing = bytes.clone();
         trailing.push(0);
         assert!(GenesisCert::decode(&trailing).is_err());
+    }
+
+    #[test]
+    fn v2_construction_canonicalizes_legacy_parent_and_drive() {
+        let cert = GenesisCert::new_v2(
+            [1u8; 32],
+            1,
+            [2u8; 16],
+            None,
+            "did:ad:parentAAAA",
+            "did:ad:driveBBBB",
+        );
+        assert_eq!(cert.version, GENESIS_VERSION_V2);
+        assert_eq!(cert.parent, "atomic:parentAAAA");
+        assert_eq!(cert.drive, "atomic:driveBBBB");
+        let again = GenesisCert::new_v2(
+            [1u8; 32],
+            1,
+            [2u8; 16],
+            None,
+            "atomic:parentAAAA",
+            "https://example.com/drive",
+        );
+        assert_eq!(again.parent, "atomic:parentAAAA");
+        assert_eq!(again.drive, "https://example.com/drive");
     }
 
     fn hex(bytes: &[u8]) -> String {

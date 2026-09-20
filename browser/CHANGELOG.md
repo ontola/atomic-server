@@ -44,7 +44,9 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   `atomic:node:{id}?v=1&drives=*`; a node identifier starts pairing,
   anything else navigates. The store canonicalizes at `normalizeSubject`.
   Fetch uses `/resource?subject=` (`/atomic` and `/did` are aliases).
-  Sync lists the `canonical-scheme` capability (#1584).
+  Sync lists the `canonical-scheme` capability and sends `did:ad:` to a
+  server that does not advertise it. Blob copy, identity mint, and node
+  pairing accept both spellings (#1584).
 
 - Fix: installing a plugin works again. Since the `Installation` class started
   requiring `release`, the server refused the commit that creates one with
