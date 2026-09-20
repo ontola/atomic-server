@@ -9,8 +9,13 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   drive scope to the viewer's active drive. A guest arriving through an invite
   has their own drive selected, so the query went looking on the wrong drive and
   answered with nothing, leaving "No messages yet" on a thread that had them.
-  The query now scopes to the thread's own subject. The same hook backs the
-  comments panel, so comment threads on shared resources are fixed with it.
+  The query now scopes to the drive the thread itself is stamped with, which
+  for a shared thread is the owner's. The same hook backs the comments panel
+  and the meeting chat, so those are fixed with it. Scoping to the thread's
+  subject instead, as this first did, fixed the guest's first read but broke
+  every later one: the local index is keyed by drive, a subject is not a key
+  in it, and the panel then stopped showing messages other people sent while
+  it was open.
 - Fix: installing a plugin works again. Since the `Installation` class started
   requiring `release`, the server refused the commit that creates one with
   "Property .../properties/release missing", the outbox dropped it as terminal
