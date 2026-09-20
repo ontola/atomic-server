@@ -1196,9 +1196,22 @@ export class AtomicServer {
       // data-browser/src/config.ts.
       buildContainer = buildContainer
         .withEnvVariable('VITE_E2E', 'true')
+        // The mock integration proxy runs beside the server, so from the
+        // server's own process it is on loopback. This value is not the
+        // server's: it is baked into the bundle and used by the browser,
+        // which runs in the playwright container, where 127.0.0.1 is that
+        // container and nothing answers on 19090. Every page that lists
+        // integrations then shows a "TypeError: Failed to fetch" alert, which
+        // is a second `role="alert"` on screen and makes the specs that assert
+        // on an alert either read the wrong one or fail strict mode.
+        //
+        // `atomic.localhost` is the name the browser is told to map to the
+        // server service (see ATOMIC_TEST_HOST_MAP, and the note on
+        // ATOMIC_DOMAIN above), and the mapping is per host, not per port, so
+        // this reaches the same container's exposed 19090.
         .withEnvVariable(
           'VITE_INTEGRATION_PROXY_URL',
-          'http://127.0.0.1:19090',
+          'http://atomic.localhost:19090',
         );
     }
 

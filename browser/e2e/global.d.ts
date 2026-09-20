@@ -71,6 +71,15 @@ export interface E2EModules {
     ): Promise<{ classSubject: string; [key: string]: unknown }>;
     resolveOntologyParent(store: Store, driveSubject: string): Promise<string>;
   };
+  githubInstaller: {
+    installGitHub(
+      store: Store,
+      drive: string,
+      repository: string,
+      token: string,
+      destination?: string,
+    ): Promise<{ plugin: string; table: string; [key: string]: unknown }>;
+  };
   hostingClient: {
     hostingRequest<T = HostingStatus>(
       store: Store,
@@ -96,6 +105,17 @@ export interface E2EModules {
       source?: string,
       schemas?: Record<string, string>,
     ): Promise<string>;
+  };
+  tomicLib: {
+    findSchema(
+      store: Store,
+      drive: string,
+      schema: unknown,
+    ): Promise<{
+      classes: Record<string, string>;
+      properties: Record<string, string>;
+    }>;
+    pluginSchema(): unknown;
   };
   websiteExport: {
     buildWebsiteArtifact(

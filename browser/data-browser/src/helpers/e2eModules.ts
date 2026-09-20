@@ -13,7 +13,9 @@
  * a release build neither exposes the registry nor pulls these chunks into its
  * entry graph.
  */
+import type * as TomicLib from '@tomic/lib';
 import type * as CreateTableFromSpec from '@integration-host/table/createTableFromSpec';
+import type * as GithubInstaller from '../chunks/PluginRuns/githubInstaller';
 import type * as RunScript from '@integration-host/runScript';
 import type * as HostingClient from '../chunks/Website/hostingClient';
 import type * as OptimizeWebsiteImage from '../chunks/Website/optimizeWebsiteImage';
@@ -25,9 +27,11 @@ import type * as WsV2 from '../../../lib/src/ws-v2';
 
 export interface E2EModules {
   createTableFromSpec: typeof CreateTableFromSpec;
+  githubInstaller: typeof GithubInstaller;
   hostingClient: typeof HostingClient;
   optimizeWebsiteImage: typeof OptimizeWebsiteImage;
   runScript: typeof RunScript;
+  tomicLib: typeof TomicLib;
   websiteExport: typeof WebsiteExport;
   websiteModel: typeof WebsiteModel;
   wsV2: typeof WsV2;
@@ -36,17 +40,21 @@ export interface E2EModules {
 export async function attachE2EModules(): Promise<void> {
   const [
     createTableFromSpec,
+    githubInstaller,
     hostingClient,
     optimizeWebsiteImage,
     runScript,
+    tomicLib,
     websiteExport,
     websiteModel,
     wsV2,
   ] = await Promise.all([
     import('@integration-host/table/createTableFromSpec'),
+    import('../chunks/PluginRuns/githubInstaller'),
     import('../chunks/Website/hostingClient'),
     import('../chunks/Website/optimizeWebsiteImage'),
     import('@integration-host/runScript'),
+    import('@tomic/lib'),
     import('../chunks/Website/websiteExport'),
     import('../chunks/Website/websiteModel'),
     import('../../../lib/src/ws-v2'),
@@ -54,9 +62,11 @@ export async function attachE2EModules(): Promise<void> {
 
   window.atomicE2E = {
     createTableFromSpec,
+    githubInstaller,
     hostingClient,
     optimizeWebsiteImage,
     runScript,
+    tomicLib,
     websiteExport,
     websiteModel,
     wsV2,

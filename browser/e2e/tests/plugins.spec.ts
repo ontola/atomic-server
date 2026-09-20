@@ -35,18 +35,6 @@ test.describe('plugins', () => {
       'Run with the documented mock integration-proxy server configuration',
     );
 
-    // CI's browser and server are in different containers. Forward the mock's
-    // loopback address to the server container before catalog loading starts.
-    if (process.env.ATOMIC_SERVICE_URL)
-      await page.route('http://127.0.0.1:19090/**', async route => {
-        const target = new URL(route.request().url());
-        target.hostname = new URL(process.env.ATOMIC_SERVICE_URL!).hostname;
-        const response = await route.fetch({
-          url: target.href,
-          maxRedirects: 0,
-        });
-        await route.fulfill({ response });
-      });
     await page.getByRole('link', { name: 'Integrations', exact: true }).click();
     const pets = page.locator('[data-integration="proxy:pets"]');
     await expect(
@@ -149,11 +137,14 @@ export function run() { return { intents: [] }; }
       })
       .filter({ hasText: id });
     await expect(card.getByText('Unverified', { exact: true })).toBeVisible();
-    await page.screenshot({
-      path: '/tmp/atomic-integration-store.png',
-      fullPage: true,
-    });
-    await card.getByRole('button', { name: 'Create draft' }).click();
+    // Nothing happens to a published release before it has been reviewed, so
+    // the card opens the installation review and the draft is one of the
+    // choices there, beside installing it.
+    await card.getByRole('button', { name: 'Open', exact: true }).click();
+    await page
+      .locator('dialog[open]')
+      .getByRole('button', { name: 'Create draft', exact: true })
+      .click();
     await expect(
       page
         .getByRole('main')
