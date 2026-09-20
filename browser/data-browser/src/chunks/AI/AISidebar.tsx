@@ -514,7 +514,11 @@ const AISidebar: React.FC = () => {
         onRegenerateMessage={onRegenerateMessage}
       >
         <Row center justify='space-between' fullWidth>
-          <Row center gap='0.5ch' style={{ minWidth: 0 }}>
+          <Row
+            center
+            gap='0.5ch'
+            style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}
+          >
             <IconButton
               title='New Chat'
               onClick={() => openChat()}

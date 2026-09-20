@@ -1171,6 +1171,7 @@ const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
   padding-top: ${p => (p.fullView ? p.theme.size(2) : 0)};
   position: relative;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: ${p =>
     p.empty && p.fullView
       ? 'auto minmax(0, 1fr) auto minmax(0, 1fr)'

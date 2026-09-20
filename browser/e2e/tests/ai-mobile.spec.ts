@@ -13,6 +13,31 @@ test('mobile AI chat fills the width and keeps its composer above the keyboard',
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await setupAIRouteMocks(page);
+  // A long saved title must leave room for both header action buttons.
+  await page.route('https://openrouter.ai/api/v1/chat/completions**', route => {
+    if (route.request().postDataJSON().stream) return route.fallback();
+
+    return route.fulfill({
+      json: {
+        id: 'chat-title-test',
+        object: 'chat.completion',
+        created: 1234567890,
+        model: '~google/gemini-flash-latest',
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: 'Planning a detailed project with AI chat',
+            },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+      },
+    });
+  });
+
   await enableAIForTesting(page);
   await before({ page });
   await openAISidebar(page);
@@ -71,7 +96,24 @@ test('mobile AI chat fills the width and keeps its composer above the keyboard',
   await expect
     .poll(async () => (await composer.boundingBox())!.height)
     .toBeLessThan(140);
-  await page.screenshot({ path: 'test-results/ai-mobile-keyboard.png' });
+  const resourceMenu = panel.getByRole('button', {
+    name: 'Chat resource actions',
+    exact: true,
+  });
+  await expect(resourceMenu).toBeInViewport();
+  await expect
+    .poll(async () => {
+      const button = (await resourceMenu.boundingBox())!;
+
+      return button.x + button.width;
+    })
+    .toBeLessThanOrEqual(390);
+  await expect
+    .poll(() =>
+      panel.evaluate(element => element.scrollWidth - element.clientWidth),
+    )
+    .toBeLessThanOrEqual(1);
+  await page.screenshot({ path: 'test-results/ai-chat-header-menu.png' });
   await panel
     .getByRole('button', { name: 'Chat options', exact: true })
     .click();
@@ -82,6 +124,10 @@ test('mobile AI chat fills the width and keeps its composer above the keyboard',
     .getByRole('button', { name: 'Chat resource actions', exact: true })
     .click();
   await expect(page.getByRole('menuitem', { name: /Data View/ })).toBeVisible();
+  await page.screenshot({
+    path: 'test-results/ai-chat-resource-menu-open.png',
+    animations: 'disabled',
+  });
   // Navigate through the chat menu, not the underlying drive's menu.
   await page.getByRole('menuitem', { name: /Normal View/ }).click();
   await panel.getByRole('button', { name: 'Close AI Sidebar' }).click();
