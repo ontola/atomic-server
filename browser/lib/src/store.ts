@@ -75,6 +75,7 @@ import {
 } from './subject.js';
 import {
   encodeGenesisCert,
+  GENESIS_VERSION_V1,
   privateDriveCert,
   subjectForSignature,
   type GenesisCert,
@@ -3056,7 +3057,7 @@ export class Store {
     }
 
     const cert: GenesisCert = {
-      version: 0x02,
+      version: GENESIS_VERSION_V1,
       signerPubkey: decodeB64(await agent.getPublicKey()),
       createdAt: Date.now(),
       nonce: crypto.getRandomValues(new Uint8Array(16)),

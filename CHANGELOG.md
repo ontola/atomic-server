@@ -10,8 +10,10 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 - Identifiers are now emitted as `atomic:` (`atomic:{genesis}`,
   `atomic:agent:`, `atomic:commit:`, `atomic:blob:`, `atomic:node:`). The
   previous `did:ad:` spelling is accepted forever and names the same
-  resource. New genesis certificates use version `0x02` and serialize
-  parent/drive strings as `atomic:`; existing v1 certificates and the
+  resource. New genesis certificates still encode the v1 header byte
+  (`0x01`) so `GenesisCert` literals in downstream crates keep compiling;
+  `GenesisCert::new_v2` canonicalizes parent/drive strings to `atomic:`.
+  Decode accepts a `0x02` header. Existing v1 certificates and the
   personal-drive singleton stay v1. Pairing is
   `atomic:node:{id}?v=1&drives=*`; `/resource?subject=` is the HTTP
   endpoint (`/atomic` and `/did` remain aliases). The store canonicalizes

@@ -47,11 +47,14 @@ pub const GENESIS_VERSION: u8 = GENESIS_VERSION_V2;
 const FLAG_HAS_STATE_HASH: u8 = 0b0000_0001;
 
 /// The signed identity payload of a resource.
+///
+/// Field list matches develop on purpose: `atomic-saas` constructs this
+/// struct by literal. The version byte lives only on the wire (`encode` /
+/// `decode`); putting it here broke downstream CI. New certs still write
+/// [`GENESIS_VERSION_V1`]. `decode` accepts v1 and v2. Parent/drive
+/// canonicalization happens in [`Self::new_v2`], not via a version field.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GenesisCert {
-    /// Certificate format version. v1 for existing / personal-drive certs;
-    /// v2 for new certs whose parent/drive strings use `atomic:`.
-    pub version: u8,
     /// Ed25519 public key of the creating agent (raw 32 bytes).
     pub signer_pubkey: [u8; 32],
     /// Creation time, Unix milliseconds.
@@ -73,9 +76,9 @@ pub struct GenesisCert {
 }
 
 impl GenesisCert {
-    /// A new v2 certificate: parent and drive identifier strings are stored
-    /// in `atomic:` form. Does not rewrite already-canonical or non-identifier
-    /// strings. Encode/verify still use these fields verbatim.
+    /// Construct a certificate whose parent and drive identifier strings are
+    /// stored in `atomic:` form. Does not rewrite already-canonical or
+    /// non-identifier strings. The wire header remains v1.
     pub fn new_v2(
         signer_pubkey: [u8; 32],
         created_at: i64,
@@ -85,7 +88,6 @@ impl GenesisCert {
         drive: impl AsRef<str>,
     ) -> Self {
         Self {
-            version: GENESIS_VERSION_V2,
             signer_pubkey,
             created_at,
             nonce,
@@ -104,7 +106,10 @@ impl GenesisCert {
             2 + 32 + 8 + 16 + 32 + 2 + parent_bytes.len() + 2 + drive_bytes.len(),
         );
 
-        out.push(self.version);
+        // Public field list stays develop-compatible. The v2 bump is accepted
+        // on decode; new signatures still cover the v1 header byte so existing
+        // fixtures and `atomic-saas` literals keep verifying.
+        out.push(GENESIS_VERSION_V1);
         let mut flags = 0u8;
         if self.state_hash.is_some() {
             flags |= FLAG_HAS_STATE_HASH;
@@ -205,7 +210,6 @@ impl GenesisCert {
         }
 
         Ok(Self {
-            version,
             signer_pubkey,
             created_at,
             nonce,
@@ -231,10 +235,6 @@ impl GenesisCert {
     /// The same key always signs the same subject.
     pub fn for_private_drive(signer_pubkey: [u8; 32]) -> Self {
         Self {
-            // Personal-drive identity is the signature of this exact v1
-            // payload. Bumping the version would remint every existing
-            // personal drive.
-            version: GENESIS_VERSION_V1,
             signer_pubkey,
             created_at: 0,
             nonce: domain_separator_nonce(PRIVATE_DRIVE_PURPOSE),
@@ -277,6 +277,13 @@ impl GenesisCert {
     /// [`Self::subject_for_signature`] equals the resource subject (binding the
     /// signature to the DID), and that `signer_pubkey` matches `createdBy`.
     pub fn verify(&self, signature: &str) -> AtomicResult<()> {
+        self.verify_signed_bytes(&self.encode(), signature)
+    }
+
+    /// Verify `signature` over the exact stored certificate bytes.
+    /// Use this after [`Self::decode`]: re-encoding would rewrite a v2
+    /// header to v1 and fail a still-valid signature.
+    pub fn verify_signed_bytes(&self, signed_bytes: &[u8], signature: &str) -> AtomicResult<()> {
         use ed25519_dalek::Verifier;
 
         let verifying_key = ed25519_dalek::VerifyingKey::from_bytes(&self.signer_pubkey)
@@ -286,7 +293,7 @@ impl GenesisCert {
             .map_err(|_| "Ed25519 signature must be 64 bytes")?;
         let sig = ed25519_dalek::Signature::from_bytes(&sig_bytes);
         verifying_key
-            .verify(&self.encode(), &sig)
+            .verify(signed_bytes, &sig)
             .map_err(|_| "Genesis certificate signature is invalid".into())
     }
 }
@@ -306,7 +313,6 @@ mod test {
 
     fn sample(pubkey: [u8; 32], state_hash: Option<[u8; 32]>) -> GenesisCert {
         GenesisCert {
-            version: GENESIS_VERSION_V2,
             signer_pubkey: pubkey,
             created_at: 1_780_000_123_456,
             nonce: [7u8; 16],
@@ -343,7 +349,6 @@ mod test {
         // browser-minted DID stops verifying server-side. Change only with a
         // new version byte + both sides updated.
         let cert = GenesisCert {
-            version: GENESIS_VERSION_V1,
             signer_pubkey: [1u8; 32],
             created_at: 1,
             nonce: [2u8; 16],
@@ -379,7 +384,6 @@ mod test {
             "6kpsY-KcUgq-9VB7Ey7F-ZVHdq6-vnuSQh7qaRRG0iw"
         );
         let cert = GenesisCert {
-            version: GENESIS_VERSION_V1,
             signer_pubkey: pubkey,
             created_at: 1,
             nonce: [2u8; 16],
@@ -476,7 +480,7 @@ mod test {
             "did:ad:parentAAAA",
             "did:ad:driveBBBB",
         );
-        assert_eq!(cert.version, GENESIS_VERSION_V2);
+        assert_eq!(cert.encode()[0], GENESIS_VERSION_V1);
         assert_eq!(cert.parent, "atomic:parentAAAA");
         assert_eq!(cert.drive, "atomic:driveBBBB");
         let again = GenesisCert::new_v2(
@@ -582,7 +586,6 @@ mod test {
         (
             private_key,
             GenesisCert {
-                version: GENESIS_VERSION_V1,
                 signer_pubkey: pubkey,
                 created_at: input.created_at,
                 nonce: input.nonce,

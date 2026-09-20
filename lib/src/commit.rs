@@ -461,7 +461,7 @@ impl Commit {
                 // Path 1: self-verifying genesis certificate.
                 let cert_bytes = decode_base64(&cert_b64)?;
                 let cert = crate::genesis::GenesisCert::decode(&cert_bytes)?;
-                cert.verify(subject_val)?;
+                cert.verify_signed_bytes(&cert_bytes, subject_val)?;
                 if cert.signer_pubkey != pubkey_bytes {
                     return Err(
                         "Genesis certificate signer does not match the commit signer".into(),

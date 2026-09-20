@@ -139,7 +139,7 @@ export function encodeGenesisCert(cert: GenesisCert): Uint8Array {
   const view = new DataView(out.buffer);
   let o = 0;
 
-  out[o++] = cert.version ?? GENESIS_VERSION_V2;
+  out[o++] = cert.version ?? GENESIS_VERSION_V1;
   out[o++] = hasHash ? FLAG_HAS_STATE_HASH : 0;
   out.set(cert.signerPubkey, o);
   o += 32;

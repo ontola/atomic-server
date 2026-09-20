@@ -166,7 +166,8 @@ impl Resource {
         let cert_bytes = crate::agents::decode_base64(&cert_b64).ok()?;
         let cert = crate::genesis::GenesisCert::decode(&cert_bytes).ok()?;
         // Binds the cert (and thus its signer) to this exact subject.
-        cert.verify(signature).ok()?;
+        // Verify the stored bytes: re-encoding would rewrite a v2 header.
+        cert.verify_signed_bytes(&cert_bytes, signature).ok()?;
         Some(cert.signer_did())
     }
 
