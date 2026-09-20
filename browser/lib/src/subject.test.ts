@@ -12,6 +12,8 @@ import {
   isAtomicIdentifier,
   isLegacyAtomicLink,
   subjectsReferToSameResource,
+  emitSubjectForCaps,
+  CAP_CANONICAL_SCHEME,
   tryAsSubject,
   type Subject,
 } from './subject.js';
@@ -165,6 +167,19 @@ describe('subject', () => {
           'https://example.com/bar',
         ),
       ).toBe(false);
+    });
+
+    it('emits atomic: only when the peer listed canonical-scheme', () => {
+      expect(emitSubjectForCaps('atomic:abc', [CAP_CANONICAL_SCHEME])).toBe(
+        'atomic:abc',
+      );
+      expect(emitSubjectForCaps('did:ad:abc', [CAP_CANONICAL_SCHEME])).toBe(
+        'atomic:abc',
+      );
+      expect(emitSubjectForCaps('atomic:abc', [])).toBe('did:ad:abc');
+      expect(emitSubjectForCaps('did:ad:abc', ['commit-ok-slim'])).toBe(
+        'did:ad:abc',
+      );
     });
   });
 });

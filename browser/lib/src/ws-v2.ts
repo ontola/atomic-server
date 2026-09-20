@@ -159,7 +159,12 @@ export type ServerCapability =
   | 'rebind-on-auth'
   /** The binary `SYNC` payload may carry `probe` and `subjects`; a probe is
    *  answered with `SYNC_OK` or `SYNC_RESEND`. */
-  | 'sync-probe';
+  | 'sync-probe'
+  /** Understands `atomic:` subjects on the wire. A peer that does not list
+   *  it receives `did:ad:` subjects. */
+  | 'canonical-scheme'
+  | 'ephemeral'
+  | 'get-many';
 
 /** Capability names this client lists in the `HELLO` it sends on open
  *  (mirrors `protocol::CLIENT_CAPABILITIES`). */

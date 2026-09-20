@@ -6,7 +6,11 @@
  */
 
 import { createAuthentication } from './authentication.js';
-import { isAgentSubject, isBlobSubject } from './subject.js';
+import {
+  isAgentSubject,
+  isBlobSubject,
+  emitSubjectForCaps,
+} from './subject.js';
 import { Resource } from './resource.js';
 import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
 import { StoreEvents, type Store, type DriveSyncState } from './store.js';
@@ -722,7 +726,7 @@ export class WSClient {
       return;
     }
 
-    this.sendBinary(encodeUnsub(drive));
+    this.sendBinary(encodeUnsub(this.wireSubject(drive)));
   }
 
   /** Capability names the server advertised on `AUTH_OK` (see
@@ -730,6 +734,11 @@ export class WSClient {
    *  than 2026-09. */
   public get serverCapabilities(): string[] {
     return [...this._serverCaps];
+  }
+
+  /** Subjects on the wire: `atomic:` if the server listed `canonical-scheme`, else `did:ad:`. */
+  private wireSubject(subject: string): string {
+    return emitSubjectForCaps(subject, this._serverCaps);
   }
 
   /** Subscribe to vector index status updates for a drive root (see server `SUBSCRIBE_INDEX_STATUS`). */
@@ -855,7 +864,7 @@ export class WSClient {
         },
         timer,
       });
-      this.sendBinary(encodeGet(requestId, subject));
+      this.sendBinary(encodeGet(requestId, this.wireSubject(subject)));
     });
   }
 
@@ -921,7 +930,12 @@ export class WSClient {
         },
         timer,
       });
-      this.sendBinary(encodeGetMany(requestId, subjects));
+      this.sendBinary(
+        encodeGetMany(
+          requestId,
+          subjects.map(s => this.wireSubject(s)),
+        ),
+      );
     });
   }
 
@@ -1551,7 +1565,7 @@ export class WSClient {
     if (drive && this.awaitingDriveGenesis(drive)) return;
 
     if (drive && this.store.isLiveSyncedDrive(drive)) {
-      this.sendBinary(encodeSub(drive));
+      this.sendBinary(encodeSub(this.wireSubject(drive)));
       this._subscribedDrive = drive;
     }
   }
@@ -1592,12 +1606,12 @@ export class WSClient {
       isUnauthorized(resource?.error)
     )
       return;
-    this.sendBinary(encodeSub(subject));
+    this.sendBinary(encodeSub(this.wireSubject(subject)));
   }
 
   public unsubscribeAgentProfile(subject: string): void {
     if (!isAgentSubject(subject) || this.readyState !== WebSocket.OPEN) return;
-    this.sendBinary(encodeUnsub(subject));
+    this.sendBinary(encodeUnsub(this.wireSubject(subject)));
   }
 
   private reSubscribeAll(): void {
@@ -1789,7 +1803,7 @@ export class WSClient {
       this._pendingSyncState.set(drive, syncState);
       this.sendBinary(
         encodeSync(
-          drive,
+          this.wireSubject(drive),
           syncState.driveHash,
           JSON.stringify({ peers: [], resources: {}, probe: true }),
         ),
@@ -1868,7 +1882,7 @@ export class WSClient {
 
       this.sendBinary(
         encodeSync(
-          drive,
+          this.wireSubject(drive),
           syncState.driveHash,
           JSON.stringify({
             peers: syncState.peers,
@@ -1888,7 +1902,7 @@ export class WSClient {
       if (this.readyState === WebSocket.OPEN) {
         this.sendBinary(
           encodeSync(
-            drive,
+            this.wireSubject(drive),
             syncState.driveHash,
             JSON.stringify({
               peers: syncState.peers,
@@ -2059,7 +2073,7 @@ export class WSClient {
 
       try {
         for (const frame of encodeSyncPushChunks(
-          diff.drive,
+          this.wireSubject(diff.drive),
           entries,
           envelopes,
         )) {

@@ -111,6 +111,8 @@ export function canonicalizeScheme(raw: string): string {
   return raw;
 }
 
+export const CAP_CANONICAL_SCHEME = 'canonical-scheme';
+
 /** Rewrite `atomic:` → `did:ad:` for a peer that predates the rename. */
 export function toLegacyScheme(raw: string): string {
   if (startsWithAtomicScheme(raw)) {
@@ -118,6 +120,16 @@ export function toLegacyScheme(raw: string): string {
   }
 
   return raw;
+}
+
+/** Emit `atomic:` when the peer listed {@link CAP_CANONICAL_SCHEME}, else `did:ad:`. */
+export function emitSubjectForCaps(
+  subject: string,
+  caps: readonly string[],
+): string {
+  return caps.includes(CAP_CANONICAL_SCHEME)
+    ? canonicalizeScheme(subject)
+    : toLegacyScheme(subject);
 }
 
 export function schemeAlias(raw: string): string | undefined {

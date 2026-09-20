@@ -140,6 +140,11 @@ pub const CLIENT_CAPABILITIES: &[&str] = &["commit-ok-slim", "canonical-scheme"]
 /// slim `COMMIT_OK`.
 pub const CAP_COMMIT_OK_SLIM: &str = "commit-ok-slim";
 
+/// Capability a peer lists when it understands `atomic:` subjects on the wire.
+/// A peer that does not list it receives [`crate::identifiers::to_legacy_scheme`]
+/// subjects. See [`crate::identifiers::emit_subject_for_caps`].
+pub const CAP_CANONICAL_SCHEME: &str = crate::identifiers::CAP_CANONICAL_SCHEME;
+
 /// How often an otherwise-idle live connection sends a `KEEPALIVE`.
 pub const KEEPALIVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
 

@@ -410,6 +410,9 @@ impl WebSocketConnection {
                                     subject,
                                     agent: actor.agent.to_string(),
                                     source_id: actor.connection_id.clone(),
+                                    canonical_scheme: actor.client_capabilities.iter().any(|c| {
+                                        c == atomic_lib::identifiers::CAP_CANONICAL_SCHEME
+                                    }),
                                 });
                         }
                         if let Some(subject) = out.unsubscribe {
