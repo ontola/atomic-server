@@ -6,36 +6,20 @@ test('workspace owns its views and links to separate connection settings', async
   page,
 }) => {
   const installed = await page.evaluate(async () => {
-    // `ConnectGitHub.tsx` is a thin compatibility wrapper around the
-    // schema-driven AppSetupForm and no longer imports the installer;
-    // `githubInstaller.ts` is the module that still names its path.
-    const setupPath = '/src/chunks/PluginRuns/githubInstaller.ts';
-    await import(/* @vite-ignore */ setupPath);
-    // Vite serves the installer after loading its owning UI module.
-    const ui = await fetch(setupPath).then(r => r.text());
-    const path = ui.match(
-      /"([^"]*integrations\/github-issues\/atomic[^"]*)"/,
-    )![1];
-    const { install } = await import(path);
-    const sourceModule = await import(
-      path.replace(/atomic\.ts.*$/, 'plugin.js?raw')
-    );
-    const source = sourceModule.default;
     const store = window.store!;
-    const connection = await install(
+    // `installGitHub` is the app's own installer, which already holds the
+    // provider bundle it installs. This used to reach for the module by
+    // source path and read the bundled source out of the served text, which
+    // only a Vite dev server can answer.
+    const connection = await window.atomicE2E.githubInstaller.installGitHub(
       store,
-      store.getDrive(),
+      store.getDrive()!,
       'ontola/workspace-test',
-      source,
+      '',
     );
     // Existing installations retain their JSON binding, without a write-on-read migration.
-    const { findSchema, pluginSchema } = await import(
-      path.replace(
-        /integrations\/github-issues\/atomic\.ts.*$/,
-        'browser/lib/src/index.ts',
-      )
-    );
-    const schema = await findSchema(store, store.getDrive(), pluginSchema());
+    const { findSchema, pluginSchema } = window.atomicE2E.tomicLib;
+    const schema = await findSchema(store, store.getDrive()!, pluginSchema());
     const legacy = await store.getResource(connection.plugin);
     await legacy.remove(schema.properties['plugin-workspace']);
     await legacy.save();
@@ -195,14 +179,13 @@ test('workspace starts automation chat without requiring a connection', async ({
     page.getByRole('dialog').getByText('No automations yet.', { exact: true }),
   ).not.toBeVisible();
   const automation = await page.evaluate(async workspace => {
-    const scriptPath = '/src/chunks/PluginRuns/runScript.ts';
-    const { createPlugin } = await import(/* @vite-ignore */ scriptPath);
+    const { createPlugin } = window.atomicE2E.runScript;
 
     return createPlugin(
       window.store!,
       {
-        parent: window.store!.getDrive(),
-        drive: window.store!.getDrive(),
+        parent: window.store!.getDrive()!,
+        drive: window.store!.getDrive()!,
         workspace,
         connections: [],
       },

@@ -7,9 +7,9 @@ test('website versions deduplicate without creating sidebar resources', async ({
   await before({ page });
   const saved = await page.evaluate(async () => {
     const { createWebsite, starterWebsite, readWebsite } =
-      await import('/src/chunks/Website/websiteModel.ts');
+      window.atomicE2E.websiteModel;
     const { buildWebsiteArtifact, saveWebsiteRelease } =
-      await import('/src/chunks/Website/websiteExport.ts');
+      window.atomicE2E.websiteExport;
     const store = window.store;
     const drive = store.getDrive()!;
     const config = starterWebsite('Version navigation');
@@ -29,8 +29,8 @@ test('website versions deduplicate without creating sidebar resources', async ({
       release: site.get(schema.properties!['website-release']),
     };
   });
-  expect(saved.again.state.deployments).toHaveLength(1);
-  expect(saved.again.state.revision).toBe(saved.first.state.revision);
+  expect(saved.again.state!.deployments).toHaveLength(1);
+  expect(saved.again.state!.revision).toBe(saved.first.state!.revision);
   expect(saved.release).toBeFalsy();
   await page.goto(
     `${new URL(page.url()).origin}/app/show?subject=${encodeURIComponent(saved.subject)}`,

@@ -1169,6 +1169,15 @@ export class AtomicServer {
       .withFile(
         '/lib/defaults/tasks.json',
         this.source.file('lib/defaults/tasks.json'),
+      )
+      // browser/e2e/tests/apps.spec.ts serves this checkout's embedded app SDK
+      // as a fixture, read with a plain `readFileSync` at
+      // `../../../server/src/plugins/assets/view-client.js`. From /app/e2e/tests
+      // that resolves to /server/..., and the Rust tree is not mounted here, so
+      // mount just this one file.
+      .withFile(
+        '/server/src/plugins/assets/view-client.js',
+        this.source.file('server/src/plugins/assets/view-client.js'),
       );
 
     return sourceContainer;
@@ -1187,9 +1196,22 @@ export class AtomicServer {
       // data-browser/src/config.ts.
       buildContainer = buildContainer
         .withEnvVariable('VITE_E2E', 'true')
+        // The mock integration proxy runs beside the server, so from the
+        // server's own process it is on loopback. This value is not the
+        // server's: it is baked into the bundle and used by the browser,
+        // which runs in the playwright container, where 127.0.0.1 is that
+        // container and nothing answers on 19090. Every page that lists
+        // integrations then shows a "TypeError: Failed to fetch" alert, which
+        // is a second `role="alert"` on screen and makes the specs that assert
+        // on an alert either read the wrong one or fail strict mode.
+        //
+        // `atomic.localhost` is the name the browser is told to map to the
+        // server service (see ATOMIC_TEST_HOST_MAP, and the note on
+        // ATOMIC_DOMAIN above), and the mapping is per host, not per port, so
+        // this reaches the same container's exposed 19090.
         .withEnvVariable(
           'VITE_INTEGRATION_PROXY_URL',
-          'http://127.0.0.1:19090',
+          'http://atomic.localhost:19090',
         );
     }
 
@@ -1777,6 +1799,12 @@ export class AtomicServer {
         )
         .withEnvVariable('MOCK_FRONTEND_ORIGIN', 'http://atomic.localhost:9883')
         .withEnvVariable('MOCK_PROXY_HOST', '0.0.0.0')
+        // Website publishing is off until the server is given a site origin,
+        // and the website specs then get a "hosting is disabled" toast that
+        // also sits over the preview and swallows clicks meant for it. The
+        // server asks for a separate `.localhost` origin in development; this
+        // is that, and it has to stay outside the API domain.
+        .withEnvVariable('ATOMIC_WEBSITE_ORIGIN', 'http://sites.localhost:9883')
         .withExposedPort(19090)
         .withEntrypoint([
           'sh',

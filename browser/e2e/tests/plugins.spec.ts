@@ -35,18 +35,6 @@ test.describe('plugins', () => {
       'Run with the documented mock integration-proxy server configuration',
     );
 
-    // CI's browser and server are in different containers. Forward the mock's
-    // loopback address to the server container before catalog loading starts.
-    if (process.env.ATOMIC_SERVICE_URL)
-      await page.route('http://127.0.0.1:19090/**', async route => {
-        const target = new URL(route.request().url());
-        target.hostname = new URL(process.env.ATOMIC_SERVICE_URL!).hostname;
-        const response = await route.fetch({
-          url: target.href,
-          maxRedirects: 0,
-        });
-        await route.fulfill({ response });
-      });
     await page.getByRole('link', { name: 'Integrations', exact: true }).click();
     const pets = page.locator('[data-integration="proxy:pets"]');
     await expect(
@@ -149,11 +137,14 @@ export function run() { return { intents: [] }; }
       })
       .filter({ hasText: id });
     await expect(card.getByText('Unverified', { exact: true })).toBeVisible();
-    await page.screenshot({
-      path: '/tmp/atomic-integration-store.png',
-      fullPage: true,
-    });
-    await card.getByRole('button', { name: 'Create draft' }).click();
+    // Nothing happens to a published release before it has been reviewed, so
+    // the card opens the installation review and the draft is one of the
+    // choices there, beside installing it.
+    await card.getByRole('button', { name: 'Open', exact: true }).click();
+    await page
+      .locator('dialog[open]')
+      .getByRole('button', { name: 'Create draft', exact: true })
+      .click();
     await expect(
       page
         .getByRole('main')
@@ -403,6 +394,9 @@ export function run() { return { intents: [] }; }
   test('Notion setup validates identifiers before storing credentials', async ({
     page,
   }) => {
+    // The wait below can take 45s of this; the suite's 60s default leaves
+    // nothing for the rest of the test.
+    test.setTimeout(120_000);
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
     const secretWrites: string[] = [];
@@ -501,8 +495,14 @@ export function run() { return { intents: [] }; }
     await page
       .getByLabel('Notion connection token', { exact: true })
       .press('Enter');
+    // Enter starts the installation: the connection is created against the
+    // server first, and only when the secret write comes back refused does
+    // the page say so. That is a round trip, and under suite load it does not
+    // fit ten seconds — this spec passes on its own in 21s and times out here
+    // when another worker is running beside it.
     await expect(page.getByRole('alert')).toContainText(
       'Could not store Notion credential',
+      { timeout: 45000 },
     );
     await expect(page.getByRole('alert')).toContainText(
       'Check your integrations for a partially created connection',
@@ -557,8 +557,17 @@ export function run() { return { intents: [] }; }
       .getByLabel('Clockify API key', { exact: true })
       .fill('synthetic-clockify-key');
     await page.getByRole('button', { name: 'Find my workspaces' }).click();
+    // Discovery is a plugin run: the browser posts to the server, the server
+    // starts a sandbox and the plugin's `discover` phase answers out of it.
+    // That is a real round trip through a real sandbox, and on a loaded box it
+    // does not fit the suite's 10s action budget — measured here, this spec
+    // passes in 27s run on its own and times out on exactly this assertion
+    // when the suite runs it beside another. Same shape as the wait `newApp`
+    // documents in apps.spec.ts: the budget was never achievable, and the
+    // assertion is about the workspace list, not about how fast it arrives.
     await expect(page.getByLabel('Workspace', { exact: true })).toContainText(
       'Test workspace',
+      { timeout: 45000 },
     );
     await expect(page.getByLabel('Import my completed entries')).toHaveValue(
       '7',
@@ -566,7 +575,11 @@ export function run() { return { intents: [] }; }
     await page
       .getByRole('button', { name: 'Preview import', exact: true })
       .click();
-    await expect(page.getByText(/Could not run this plugin/)).toBeVisible();
+    // The aborted run has to reach the server and come back before the page
+    // can say so; same load story as the discovery above it.
+    await expect(page.getByText(/Could not run this plugin/)).toBeVisible({
+      timeout: 45000,
+    });
     await expect(
       page.getByRole('button', { name: 'Preview import', exact: true }),
     ).toBeEnabled();
@@ -575,6 +588,9 @@ export function run() { return { intents: [] }; }
   test('Clockify applies linked entries through the real sandbox and skips repeats', async ({
     page,
   }) => {
+    // Discovery plus an apply, both through the sandbox: a minute here, which
+    // is the suite's whole per-test default.
+    test.setTimeout(120_000);
     // Replace only the provider transport inside the sandbox. Discovery, mapping,
     // runtime, planning, signed commits and the second run's DB query stay real.
     await createTableFromDialog(page, {
@@ -664,8 +680,10 @@ export function run() { return { intents: [] }; }
       .getByLabel('Clockify API key', { exact: true })
       .fill('synthetic-clockify-key');
     await page.getByRole('button', { name: 'Find my workspaces' }).click();
+    // Discovery through the sandbox, as above.
     await expect(page.getByLabel('Workspace', { exact: true })).toContainText(
       'Fixture workspace',
+      { timeout: 45000 },
     );
     await expect(page.getByLabel('Import into', { exact: true })).toContainText(
       'Shared time entries',
@@ -848,9 +866,17 @@ export function run() { return { intents: [] }; }
     await page
       .getByRole('button', { name: 'Apply importer update', exact: true })
       .click();
+    // The second apply is the slow one: it writes the source back and then
+    // pins the release over the network (`/plugin-release-pin`), and the
+    // button only unmounts once both have landed. Under suite load that is
+    // past the 10s expect budget, and the failure is indistinguishable from
+    // the button being stuck: the count sits at 1 for the whole wait. It is
+    // not stuck. Run on its own this test passes at the default budget in
+    // 53s, and the ARIA snapshot Playwright captures after the timeout shows
+    // the button already gone and no error alert anywhere on the page.
     await expect(
       page.getByRole('button', { name: 'Review Clockify update', exact: true }),
-    ).toHaveCount(0);
+    ).toHaveCount(0, { timeout: 45000 });
     expect(
       await page.evaluate(
         async ({ subject, property }) =>
@@ -909,6 +935,9 @@ export function run() { return { intents: [] }; }
   test('GitHub can be installed through the assistant without a CLI', async ({
     page,
   }) => {
+    // A real install through the sandbox: 48s measured here, against the
+    // suite's 60s default, which leaves nothing for a slower box.
+    test.setTimeout(120_000);
     const pageErrors: string[] = [];
     page.on('pageerror', e => pageErrors.push(e.message));
     const { dialog } = await openLegacyGithubSetup(page, {
@@ -921,9 +950,14 @@ export function run() { return { intents: [] }; }
       .getByRole('button', { name: 'Connect GitHub', exact: true })
       .click();
     await expect(page).toHaveURL(/\/app\/show\?subject=/, { timeout: 30000 });
+    // The install is still running when that URL appears: the button here
+    // reads "Connecting…" and is disabled until the connection settles, so
+    // `Connections` does not exist yet. The 30s above covers the navigation
+    // and nothing after it. Measured here: the click succeeds at 45s and the
+    // whole test takes 48s, against a 10s default that it never met.
     await page
       .getByRole('button', { name: 'Connections', exact: true })
-      .click();
+      .click({ timeout: 45000 });
     await page
       .getByRole('link', { name: 'Connection settings', exact: true })
       .click();

@@ -274,8 +274,17 @@ const AsyncAIChatInput: React.FC<
     [serversWithResources, searchResourcesOfServer, disabled],
   );
 
+  // `useEditor` replaces the editor when its dependencies change, and the
+  // replaced one is destroyed: its `commandManager` is nulled while its last
+  // state stays readable. So `isEmpty` still answers on a destroyed editor and
+  // `commands` throws, which crashed the whole page to an error boundary
+  // whenever a prefill arrived in the same breath as that swap. `isDestroyed`
+  // covers the other end too, an editor whose view has not been mounted yet.
   useEffect(() => {
-    if (!prefill || !editor || prefilled.current === prefill) return;
+    if (!prefill || !editor || editor.isDestroyed) return;
+
+    if (prefilled.current === prefill) return;
+
     prefilled.current = prefill;
 
     if (editor.isEmpty) {
@@ -289,9 +298,9 @@ const AsyncAIChatInput: React.FC<
   // Lets the parent move focus into the editor on demand (e.g. right after the
   // user picks a model) by bumping `focusSignal`.
   useEffect(() => {
-    if (!focusSignal) return;
+    if (!focusSignal || !editor || editor.isDestroyed) return;
 
-    editor?.commands.focus('end');
+    editor.commands.focus('end');
   }, [focusSignal, editor]);
 
   const handleChange = () => {
