@@ -2148,6 +2148,9 @@ Paired SaaS `portal/e2e/passkey-open-drive.spec.ts` covers account/profile creat
 | JSON-AD parse accepts `@id: did:ad:…` when the request used the HTTP path alias | `browser/lib/src/parse.test.ts` |
 | `Client.fetchResourceHTTP` resolves identifiers via `/resource?subject=` and does not touch `window` in Node | `browser/lib/src/client.fetch.test.ts` |
 | Store fetch by HTTP path alias returns the resource stored under the DID | `browser/lib/src/store.test.ts` |
+| Writes collapse `did:ad:` / `atomic:` aliases; parent queries match either spelling; destroy-replay sees a legacy commit id | `lib/src/db/test.rs` `canonical_scheme_store_boundary` |
+| Opening a store rewrites leftover `did:ad:` resource keys and reference values to `atomic:` | `lib/src/db/test.rs` `canonical_scheme_open_rewrites_legacy_keys` |
+| Wire subjects follow `canonical-scheme` (empty caps emit `did:ad:`) | `browser/lib/src/subject.test.ts` `emitSubjectForCaps` |
 
 Not covered: `ad-generate ontologies` end-to-end against a live server (no CLI test runner).
 
@@ -2297,6 +2300,9 @@ Paired SaaS `portal/e2e/passkey-open-drive.spec.ts` covers account/profile creat
 | JSON-AD parse accepts `@id: did:ad:…` when the request used the HTTP path alias | `browser/lib/src/parse.test.ts` |
 | `Client.fetchResourceHTTP` resolves identifiers via `/resource?subject=` and does not touch `window` in Node | `browser/lib/src/client.fetch.test.ts` |
 | Store fetch by HTTP path alias returns the resource stored under the DID | `browser/lib/src/store.test.ts` |
+| Writes collapse `did:ad:` / `atomic:` aliases; parent queries match either spelling; destroy-replay sees a legacy commit id | `lib/src/db/test.rs` `canonical_scheme_store_boundary` |
+| Opening a store rewrites leftover `did:ad:` resource keys and reference values to `atomic:` | `lib/src/db/test.rs` `canonical_scheme_open_rewrites_legacy_keys` |
+| Wire subjects follow `canonical-scheme` (empty caps emit `did:ad:`) | `browser/lib/src/subject.test.ts` `emitSubjectForCaps` |
 
 Not covered: `ad-generate ontologies` end-to-end against a live server (no CLI test runner).
 

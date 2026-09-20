@@ -2,8 +2,7 @@
 //! is mandatory; cache ingest must never be used for untrusted peer frames.
 use super::{engine, protocol};
 use crate::{
-    agents::ForAgent, db::trees::Tree, errors::AtomicResult, loro::AtomicLoroDoc, Db, Resource,
-    Storelike, Subject,
+    agents::ForAgent, errors::AtomicResult, loro::AtomicLoroDoc, Db, Resource, Storelike, Subject,
 };
 
 pub struct BrowserPeerSession {
@@ -48,27 +47,33 @@ impl BrowserPeerSession {
     }
 
     fn in_drive(&self, resource: &Resource) -> bool {
-        *resource.get_subject() == self.drive
-            || resource
-                .get(crate::urls::DRIVE_PROP)
-                .is_ok_and(|value| value.to_string() == self.drive)
+        let drive = crate::identifiers::canonicalize_scheme(&self.drive);
+        crate::identifiers::canonicalize_scheme(&resource.get_subject().pure_id()) == drive
+            || resource.get(crate::urls::DRIVE_PROP).is_ok_and(|value| {
+                crate::identifiers::canonicalize_scheme(&value.to_string()) == drive
+            })
     }
 
     async fn candidate(&self, db: &Db, subject: &str, bytes: &[u8]) -> AtomicResult<Resource> {
-        if Subject::from(subject).pure_id() != subject {
+        if subject.contains(['#', '?']) {
             return Err("Noncanonical peer subject".into());
         }
-        if let Ok(existing) = db.get_resource(&subject.into()).await {
+        let parsed = Subject::from(subject);
+        if parsed.pure_id() != crate::identifiers::canonicalize_scheme(subject) {
+            return Err("Noncanonical peer subject".into());
+        }
+        let subject = parsed.pure_id();
+        if let Ok(existing) = db.get_resource(&subject.as_str().into()).await {
             if !self.in_drive(&existing) {
                 return Err("Peer frame targets another drive".into());
             }
         }
-        let doc = match db.kv.get(Tree::LoroSnapshots, subject.as_bytes())? {
+        let doc = match db.get_loro_snapshot_bytes(&subject) {
             Some(snapshot) => AtomicLoroDoc::from_snapshot(&snapshot)?,
             None => AtomicLoroDoc::new(),
         };
         doc.import_update(bytes)?;
-        let mut resource = Resource::new(subject.into());
+        let mut resource = Resource::new(subject);
         resource.apply_state_doc(doc)?;
         if !self.in_drive(&resource) {
             return Err("Peer frame moves data outside its drive".into());
@@ -249,7 +254,7 @@ impl BrowserPeerSession {
                         return Err("Peer requested another drive".into());
                     }
                     crate::hierarchy::check_read(db, &resource, &self.agent).await?;
-                    if let Some(bytes) = db.kv.get(Tree::LoroSnapshots, subject.as_bytes())? {
+                    if let Some(bytes) = db.get_loro_snapshot_bytes(subject) {
                         entries.push((subject.clone(), bytes));
                     }
                 }
@@ -391,6 +396,7 @@ impl BrowserPeerSession {
 #[cfg(all(test, feature = "db-redb"))]
 mod tests {
     use super::*;
+    use crate::db::trees::Tree;
     async fn fixture() -> (Db, crate::agents::Agent, String, BrowserPeerSession) {
         let db = Db::init_temp(&format!(
             "browser-peer-{}-{}",
