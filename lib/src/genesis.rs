@@ -495,25 +495,32 @@ mod test {
         assert_eq!(again.drive, "https://example.com/drive");
     }
 
+    /// The wire header still writes v1, so a v2 header only ever comes from
+    /// another encoder. Whoever writes it promises canonical strings.
     #[test]
     fn v2_decode_refuses_legacy_parent_or_drive() {
         let (_pk, pubkey) = test_key(3);
         let mut cert = sample(pubkey, None);
+        let as_v2 = |cert: &GenesisCert| {
+            let mut bytes = cert.encode();
+            bytes[0] = GENESIS_VERSION_V2;
+            bytes
+        };
+
         cert.parent = "did:ad:parentAAAA".to_string();
         cert.drive = "atomic:driveBBBB".to_string();
-        let err = GenesisCert::decode(&cert.encode()).unwrap_err().to_string();
+        let err = GenesisCert::decode(&as_v2(&cert)).unwrap_err().to_string();
         assert!(err.contains("parent"), "{err}");
 
         cert.parent = "atomic:parentAAAA".to_string();
         cert.drive = "did:ad:driveBBBB".to_string();
-        let err = GenesisCert::decode(&cert.encode()).unwrap_err().to_string();
+        let err = GenesisCert::decode(&as_v2(&cert)).unwrap_err().to_string();
         assert!(err.contains("drive"), "{err}");
 
         cert.drive = "atomic:driveBBBB".to_string();
-        assert_eq!(GenesisCert::decode(&cert.encode()).unwrap(), cert);
+        assert_eq!(GenesisCert::decode(&as_v2(&cert)).unwrap(), cert);
 
-        // A v1 cert was signed over whatever it carried; it keeps decoding.
-        cert.version = GENESIS_VERSION_V1;
+        // A v1 header was signed over whatever it carried; it keeps decoding.
         cert.parent = "did:ad:parentAAAA".to_string();
         assert_eq!(GenesisCert::decode(&cert.encode()).unwrap(), cert);
     }
