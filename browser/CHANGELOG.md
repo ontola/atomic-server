@@ -4,6 +4,13 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: someone who opens a chatroom shared from another drive sees the messages
+  in it. The message list is a collection query, and a collection defaults its
+  drive scope to the viewer's active drive. A guest arriving through an invite
+  has their own drive selected, so the query went looking on the wrong drive and
+  answered with nothing, leaving "No messages yet" on a thread that had them.
+  The query now scopes to the thread's own subject. The same hook backs the
+  comments panel, so comment threads on shared resources are fixed with it.
 - Fix: installing a plugin works again. Since the `Installation` class started
   requiring `release`, the server refused the commit that creates one with
   "Property .../properties/release missing", the outbox dropped it as terminal
