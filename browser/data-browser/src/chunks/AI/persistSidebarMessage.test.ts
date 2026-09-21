@@ -16,9 +16,15 @@ vi.mock('./chatConversionUtils', () => ({
       serverPersisted.push(resource.subject);
     },
   ),
+  // The real one serializes this work against the chat's message writes.
+  // There are none to serialize against here, so running it is the whole job.
+  queueChatWrite: vi.fn(async (_chat: unknown, work: () => Promise<unknown>) =>
+    work(),
+  ),
 }));
 
 const { persistSidebarMessage } = await import('./persistSidebarMessage');
+const { addMessageToChatResource } = await import('./chatConversionUtils');
 
 const NAME = 'https://atomicdata.dev/properties/name';
 
@@ -144,6 +150,36 @@ describe('persistSidebarMessage', () => {
     expect(chat.get('https://atomicdata.dev/properties/emoji')).toBe(
       '\u{1F4A1}',
     );
+  });
+
+  it('sends a reply whose chat stopped being a draft while the write was queued', async () => {
+    // The checkpoint carrying the last chunk of a streamed reply is built
+    // while the chat is still a draft, so it is created local-only, and its
+    // write can resolve after the user's message has finalized the chat. It
+    // then misses the sweep that runs on the user's message, and nothing else
+    // ever comes back for it: not in the outbox, no dirty flag, so no drain
+    // retries it and the tab reports itself fully synced while that chunk
+    // exists on screen and nowhere else.
+    const chat = fakeChat();
+    const isChatSavedRef = { current: false };
+
+    vi.mocked(addMessageToChatResource).mockImplementationOnce(async added => {
+      // The finalization lands while this write is in flight.
+      isChatSavedRef.current = true;
+
+      return {
+        subject: `message-${added.role}`,
+        props: { parts: [] },
+      } as never;
+    });
+
+    await persistSidebarMessage({
+      ...args(chat, { isChatSavedRef }),
+      message: message('assistant'),
+      newMessages: [message('user'), message('assistant')],
+    });
+
+    expect(serverPersisted).toContain('message-assistant');
   });
 
   it('leaves a chat that already has a name alone', async () => {
