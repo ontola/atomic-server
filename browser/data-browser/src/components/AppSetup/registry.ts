@@ -1,12 +1,57 @@
 // @wc-ignore-file
 import { parseSetupDeclaration } from '../../../../../browser/lib/src/plugin-setup';
 import { requireInstallationServer } from '../../../../../browser/lib/src/plugin-installation';
+import {
+  setup,
+  setupDeclaration,
+  credentialLink,
+} from '../../../../../integrations/github-issues/setup';
 import type { SetupAdapter } from './types';
 import {
   setup as notionSetup,
   setupDeclaration as notionDeclaration,
 } from '../../../../../integrations/notion/setup';
 
+/** Explicit migration adapter: the legacy installer remains host code until its effects migrate. */
+const github: SetupAdapter = {
+  id: 'github-issues',
+  icon: '🐙',
+  declaration: parseSetupDeclaration(setupDeclaration),
+  preflight: ({ store, drive }) => requireInstallationServer(store, drive),
+  defaults: workspace => ({ destination: workspace ?? '' }),
+  choices: async (lookup, { store, drive }) => {
+    if (lookup !== 'destinations') throw new Error('Unknown setup lookup');
+    const { compatibleTables } =
+      await import('../../../../../integrations/github-issues/atomic');
+
+    return (await compatibleTables(store, drive)).map(t => ({
+      value: t.subject,
+      label: t.name,
+    }));
+  },
+  credential: {
+    label: 'GitHub token',
+    description:
+      'Select this repository and grant Issues read/write access. Your token is stored on AtomicServer, outside the setup arguments. Create the atomic:doing label in GitHub to use the Doing column.',
+    link: args => credentialLink(args.repository),
+    linkLabel: 'Create GitHub token',
+  },
+  prepare: setup,
+  connect: async (raw, token, { store, drive }) => {
+    const args = setup(raw);
+    const { installGitHub } =
+      await import('../../chunks/PluginRuns/githubInstaller');
+    const result = await installGitHub(
+      store,
+      drive,
+      args.repository,
+      token,
+      args.destination || undefined,
+    );
+
+    return { subject: result.table };
+  },
+};
 const notion: SetupAdapter = {
   id: 'notion',
   icon: '📓',
@@ -30,7 +75,7 @@ const notion: SetupAdapter = {
     return { subject: result.table };
   },
 };
-const adapters = [notion];
+const adapters = [github, notion];
 
 export function listAppSetups() {
   return adapters.map(({ id, declaration }) => ({ id, ...declaration }));
