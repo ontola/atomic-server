@@ -64,7 +64,7 @@ export async function createBakery(page: Page) {
     ];
     const site = await createWebsite(store, store.getDrive()!, config);
 
-    return { subject: site.subject, row: row.subject };
+    return { subject: site.subject, row: row.subject, price: price.subject };
   }, documentSubject);
   // The @ menu searches the server index; wait until the row is findable so
   // the mention step does not race indexing.
@@ -81,11 +81,20 @@ export async function createBakery(page: Page) {
       { timeout: 20_000 },
     )
     .toContain(fixture.row);
+  // Finish fixture writes before navigation, then wait for the generated
+  // preview before switching modes. Startup refreshes can disable the toggle.
+  await waitForSynced(page);
   await page.goto(
     `${new URL(page.url()).origin}/app/show?subject=${encodeURIComponent(fixture.subject)}`,
   );
-  await page.getByRole('button', { name: 'Page edit', exact: true }).click();
   const frame = page.frameLocator('iframe[title="Website preview"]');
+  await expect(
+    frame.getByText('Fresh bread every morning.', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Page edit', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Done editing', exact: true }),
+  ).toBeVisible();
   const editor = frame.getByLabel('Rich Text Editor', { exact: true });
   await expect(editor).toContainText('Fresh bread every morning.');
 
@@ -108,5 +117,5 @@ export async function createBakery(page: Page) {
     }).toPass({ timeout: 20_000 });
   };
 
-  return { frame, editor, clear };
+  return { ...fixture, frame, editor, clear };
 }
