@@ -794,6 +794,11 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
           <AIChatMessage
             key={message.id}
             message={message}
+            hideError={Boolean(
+              requestError &&
+              message.id === messages.at(-1)?.id &&
+              message.metadata?.error === requestError,
+            )}
             onDeleteMessage={deleteMessage}
             onRegenerateMessage={regenerateMessage}
           />

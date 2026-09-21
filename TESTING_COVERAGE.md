@@ -1,6 +1,9 @@
 Included AI: managed transport tests cover signed-out status, explicit consent,
 backend errors, streaming credit failure and non-streaming title generation without
-forwarding a provider key. Setup component tests cover consent failure/retry and
+forwarding a provider key or SDK User-Agent header (Firefox/Zen CORS regression).
+Assistant rendering tests retain historical errors and partial replies while
+suppressing the duplicate current error when the composer displays it.
+Setup component tests cover consent failure/retry and
 successful dismissal. atomic-saas owns account isolation, budget concurrency,
 month rollover, paid-drive aggregation, origin/auth checks and disconnected-client
 accounting tests. These tests do not call the live funded OpenRouter service.
