@@ -1,4 +1,3 @@
-import { googleCalendarIntegration } from '@localthought/atomic-integrations/ui/GoogleCalendar';
 import type { ComponentType } from 'react';
 import type { Config } from '../../../../../integrations/localthought/plugin';
 import type { FetchedPlatform } from '../../../../../integrations/localthought/schema';
@@ -13,23 +12,17 @@ import { clockifyIntegration } from './ClockifyLocalThought';
 
 /**
  * How a LocalThought installation was set up. `none` is the plain generated
- * import; the others name the Devonian lens that translates the provider's
- * records on their way in (and, for Calendar, back out). Stored on the
- * installation, so a lens added later never changes what an older folder
- * shows.
+ * import; the others name the lens that translates the provider's records on
+ * their way in. Stored on the installation, so a lens added later never
+ * changes what an older folder shows.
  */
-export type LocalThoughtExtensionMode =
-  | 'calendar'
-  | 'tasks'
-  | 'clockify'
-  | 'none';
+export type LocalThoughtExtensionMode = 'tasks' | 'clockify' | 'none';
 
 /**
  * A platform-specific translation on top of the generic LocalThought import:
  * what to ask the provider for, how to project what comes back, and which
- * view to open the projected table in. `googleCalendarIntegration` is the
- * reference shape; the fields it has that this type leaves optional are the
- * ones only a writable lens needs.
+ * view to open the projected table in. The fields this type leaves optional
+ * are the ones only a writable lens needs.
  */
 export interface LocalThoughtExtension<Selection = unknown> {
   /** The LocalThought platform id this lens is for. */
@@ -42,13 +35,14 @@ export interface LocalThoughtExtension<Selection = unknown> {
   /** Turns the setup dialog's selection into provider query overrides. */
   selection(value: Selection): FetchedPlatformSelection | undefined;
   identitySuffix(value: Selection): string;
-  /** The Devonian lens: projects fetched records into local columns. */
+  /** Projects fetched records into local columns. */
   project(fetched: FetchedPlatform): FetchedPlatform;
   /** The projected view added beside the plain table for this class. */
   view?: {
     classShortname: string;
     groupByShortname: string;
-    /** Which renderer. Missing is `calendar`, the first lens's only option. */
+    /** Which renderer. Missing defaults to `calendar` (see localThoughtTables.ts)
+     * so already-synced Calendar folders keep resolving to their existing view. */
     kind?: 'calendar' | 'issues';
   };
   /** Views that replace the plain table view, by class shortname, in the
@@ -115,32 +109,17 @@ export const todoistIntegration: LocalThoughtExtension = {
   },
 };
 
-const calendarIntegration: LocalThoughtExtension<
-  ReturnType<typeof googleCalendarIntegration.defaultSelection>
-> = {
-  ...googleCalendarIntegration,
-  mode: 'calendar',
-  view: { ...googleCalendarIntegration.view, kind: 'calendar' },
-};
-
-// Consumers forget each lens's selection type: the setup dialog only ever
-// hands a selection back to the lens that produced it.
-export const googleCalendarLens = calendarIntegration as LocalThoughtExtension;
-
 const EXTENSIONS: LocalThoughtExtension[] = [
-  googleCalendarLens,
   todoistIntegration,
   clockifyIntegration,
 ];
 
-/** Missing mode is a pre-category installation, when Calendar was always Devonian. */
+/** Missing mode is a pre-category installation; there's no lens to infer. */
 export function extensionMode(
-  platform: string,
+  _platform: string,
   mode: LocalThoughtExtensionMode | undefined,
 ): LocalThoughtExtensionMode {
-  return (
-    mode ?? (platform === googleCalendarIntegration.id ? 'calendar' : 'none')
-  );
+  return mode ?? 'none';
 }
 
 export function localThoughtExtension(

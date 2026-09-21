@@ -102,17 +102,17 @@ cleanup and the current assistant handoff. External approval transport is stubbe
 
 # Testing coverage map
 
-Devonian discovery: `PluginRuns/localThoughtCatalogEntries.test.ts` checks that
-generated API entries follow the remote catalog without injecting Calendar.
-`PluginRuns/IntegrationDiscovery.test.ts` covers separate bundled Devonian
-Calendar and GitHub issue/comment entries and removal of the older GitHub-to-kanban
-listing. The Devonian GitHub route uses the browser-safe bundle, avoiding
-node:events from the package root. Discovery unit checks do not exercise live
-provider consent.
+Bundled plugin discovery: `PluginRuns/localThoughtCatalogEntries.test.ts` checks
+that generated API entries follow the remote catalog. `PluginRuns/IntegrationDiscovery.test.ts`
+covers bundled entries (Todoist, Moneybird, Notion) and gating by the
+experimental/API-plugins toggles. Discovery unit checks do not exercise live
+provider consent. The Google Calendar and GitHub issues (Devonian) bundled
+lenses were retired along with the `devonian` dependency; Google Calendar and
+GitHub issues remain available as plain generated LocalThought imports.
 
-Calendar category isolation: `PluginRuns/localThoughtExtension.test.ts` and
-`PluginRuns/localThoughtSync.test.ts` cover explicit generated/Devonian mode,
-separate schema namespaces, and legacy Calendar refresh behavior.
+Extension mode isolation: `PluginRuns/localThoughtExtension.test.ts` and
+`PluginRuns/localThoughtSync.test.ts` cover explicit generated/lens mode and
+separate schema namespaces for the remaining Todoist and Clockify extensions.
 `PluginRuns/localThoughtCallback.test.ts` checks originating-entry selection
 and callback redemption; real provider consent remains outside these unit tests.
 
@@ -156,29 +156,12 @@ consent/replay, optional credential grants, callback binding and redemption expi
 CORS was verified with the earlier live browser flow; the new secret-free flow
 still requires matching proxy/frontend deployments and live verification.
 
-`browser/data-browser/src/chunks/DevonianDemo/demo.test.ts` covers overlapping
-OAuth callback resumes: one redemption completes and both callers recover the
-same tracker. It also checks callback ownership and refusal to retry an uncertain
-redemption. This covers callback orchestration separately from the browser
-transport tests; live OAuth acceptance still requires a matching app build.
-
-`browser/e2e/tests/devonian-issue-sync.spec.mts` exercises the no-paste redirect,
-selected-platform consent and PKCE redemption, direct HTTP writes and local OPFS storage for two-way issue
-creation, comments, close/reopen and reload without duplicate resources. Its
-stateful HTTP mock isolates repositories and consumes/rotates connection codes;
-it does not substitute the in-page sample transport.
-
-The browser-only Devonian issue tracker demo has focused tests under
-`integrations/github-issues/devonian`: real Devonian lenses with deterministic
-connectors exercise bidirectional issue/comment creation and edits, close/reopen,
-distinct identical resources, conflicts, missing records and restart/replay.
-Transport fixtures cover pagination, label preservation, scoped comment links,
-rotating connection codes and refusal to resend uncertain writes. The native
-OPFS browser flow was manually verified for creation and comments on both sides,
-closing from Atomic, reopening from the sample GitHub side and reloading without
-duplicate issues/comments. Live proxy OAuth,
-GitHub writes and a guided uncertain-write recovery UI remain unverified/unbuilt;
-proxy v40 CORS and browser OAuth are verified, but its GitHub credential returns 404 for the private sandbox.
+The standalone browser-only Devonian demo (`chunks/DevonianDemo/`, the
+`/app/devonian-demo` route, and `browser/e2e/tests/devonian-issue-sync.spec.mts`)
+and the `integrations/github-issues/devonian` bridge were removed along with
+the `devonian` dependency; their coverage no longer applies. GitHub issue
+sync is covered through `integrations/github-issues/adapter.test.ts` and the
+generic app-setup/assistant paths described above.
 
 What is tested, at which layer, and — the part that matters — **what is not**.
 
@@ -1822,19 +1805,20 @@ account.
   COUNT/UNTIL, DST gaps and offset changes, exclusions/additions, moved/cancelled
   instances, cross-calendar identities, provider-expanded deduplication and
   date-only recurring spans. No real provider calls.
-- The version-pinned Google Calendar Devonian package tests complete recurrence
-  metadata projection, normalized fields, minimal cancellation records and
-  refusal when instance identity is missing. The catalog's schema overlay
-  declares `recurrence` and `originalStartTime` on the provider response.
 - `browser/data-browser/src/chunks/TablePage/Calendar/calendarOccurrences.test.ts`:
   imported/native property names, civil-day placement across offset boundaries,
   recurring all-day spans clipped to the visible grid.
 - `wasm/src/calendar_import.rs` unit tests: generic catalog selections set
   documented query parameters, reject unknown paths and parameters, and remove
   inherited `timeMin`, `timeMax`, and `orderBy` values for series requests.
-- `browser/e2e/tests/google-calendar-import.spec.mts`: real browser/OPFS/import
-  preview using a mock provider, covering bounded instances and retained series,
-  moved/cancelled slots, reimport, reload and preservation of local notes.
+
+The bundled Google Calendar (Devonian) lens and its end-to-end coverage
+(`browser/e2e/tests/google-calendar-import.spec.ts`, which drove the retired
+`devonian-google-calendar` card) were removed along with the `devonian`
+dependency. Google Calendar still imports through the plain generated
+LocalThought path above; there is currently no e2e coverage of a full
+recurring-series import through that plain path — a gap, not a deliberate
+scope cut.
 
 The actionable fidelity audit is `docs/imports/google-calendar-gap-report.md`.
 Live Google equivalence for historical/exotic recurrence rules remains outside
@@ -1885,10 +1869,11 @@ Retry-After handling with rotating credentials, deadline rejection, and separate
 catalog selections with explicit caller precedence. Notion now uses this shared
 browser authorization flow; its proxy migration coverage is described above.
 
-The Local Thought Vitest suite imports Calendar code from the pinned Devonian
-package. Existing GitHub, Notion and Clockify implementations, fixture suites,
-certification metadata and Rust tests remain in this repository; Rust tests
-execute the shipped provider bundles.
+The Local Thought Vitest suite no longer imports Calendar code from the
+`devonian` package, now that the Google Calendar lens is retired. GitHub,
+Notion and Clockify implementations, fixture suites, certification metadata
+and Rust tests remain in this repository; Rust tests execute the shipped
+provider bundles.
 
 `integrations/localthought/settings.test.ts` covers runtime proxy selection,
 deployment-default fallback, URL validation without losing the previous setting,

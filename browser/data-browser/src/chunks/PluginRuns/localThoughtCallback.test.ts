@@ -52,11 +52,11 @@ it('routes a Calendar callback to its pending connection when API cards are abse
   );
 });
 
-it('reopens only the originating setup card and supplies safe legacy targets', () => {
-  expect(callbackEntry({ ...pending, entry: 'devonian-google-calendar' })).toBe(
-    'devonian-google-calendar',
+it('reopens only the originating setup card and supplies safe fallback targets', () => {
+  expect(callbackEntry({ ...pending, entry: 'devonian-todoist' })).toBe(
+    'devonian-todoist',
   );
-  expect(callbackEntry(pending)).toBe('devonian-google-calendar');
+  expect(callbackEntry(pending)).toBe('proxy:google-calendar');
   expect(
     callbackEntry({ ...pending, platform: 'pets', entry: undefined }),
   ).toBe('proxy:pets');
@@ -65,7 +65,7 @@ it('reopens only the originating setup card and supplies safe legacy targets', (
     drive: pending.drive,
     actor: pending.actor,
     origin: pending.origin,
-    entry: 'devonian-google-calendar',
+    entry: 'devonian-todoist',
     platform: pending.platform,
     expires: Date.now() + 1_000,
   };
@@ -77,7 +77,7 @@ it('reopens only the originating setup card and supplies safe legacy targets', (
   expect(
     completedPlatformForEntry(completed, {
       ...base,
-      entry: 'devonian-google-calendar',
+      entry: 'devonian-todoist',
     }),
   ).toBe('google-calendar');
   expect(

@@ -27,11 +27,7 @@ export interface LocalThoughtCallbackData {
 export function callbackEntry(pending: PendingLocalThoughtConnection) {
   return (
     pending.entry ??
-    (pending.platform === 'google-calendar'
-      ? 'devonian-google-calendar'
-      : pending.platform === 'notion'
-        ? 'notion'
-        : `proxy:${pending.platform}`)
+    (pending.platform === 'notion' ? 'notion' : `proxy:${pending.platform}`)
   );
 }
 

@@ -23,15 +23,16 @@ function entry(
 
 const FIXTURE: CatalogEntry[] = [
   entry({
-    shortname: 'devonian-github-issues',
+    shortname: 'devonian-todoist',
     requiresApiPlugins: true,
-    capabilities: 'Sync issues and comments in both directions.',
+    platform: 'todoist',
+    capabilities: 'Imports active tasks and projects.',
   }),
   entry({
-    shortname: 'devonian-google-calendar',
+    shortname: 'moneybird',
     requiresApiPlugins: true,
-    platform: 'google-calendar',
-    capabilities: 'Preserves recurring series.',
+    platform: 'moneybird',
+    capabilities: 'Imports contacts, invoices and mutations.',
   }),
   entry({ shortname: 'mt940' }),
   entry({ shortname: 'clockify' }),
@@ -49,13 +50,7 @@ it.each([
   [
     true,
     true,
-    [
-      'devonian-github-issues',
-      'devonian-google-calendar',
-      'mt940',
-      'clockify',
-      'notion',
-    ],
+    ['devonian-todoist', 'moneybird', 'mt940', 'clockify', 'notion'],
   ],
 ])(
   'gates catalog-backed bundled cards for experimental=%s api=%s',
@@ -75,7 +70,7 @@ it('keeps a disabled entry dark regardless of either toggle', () => {
 
 it('drops an enabled entry missing descriptive copy instead of rendering a broken card', () => {
   const incomplete: CatalogEntry[] = [
-    { shortname: 'devonian-github-issues', experimental: true, enabled: true },
+    { shortname: 'devonian-todoist', experimental: true, enabled: true },
   ];
   expect(visibleBundledIntegrations(incomplete, true, true)).toEqual([]);
 });
