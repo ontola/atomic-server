@@ -294,6 +294,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     'atomic.ai.setupComplete',
     false,
   );
+  const [setupRequestId, setSetupRequestId] = useState(0);
 
   // Why the last request failed, if it did. A request that dies — an unreachable
   // provider, a rejected key, a model that doesn't exist — used to leave no
@@ -768,7 +769,12 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
             {providerNotice && (
               <ProviderNotice>
                 <span>{providerNotice}</span>
-                <Button onClick={() => setSetupComplete(false)}>
+                <Button
+                  onClick={() => {
+                    setSetupComplete(false);
+                    setSetupRequestId(previous => previous + 1);
+                  }}
+                >
                   Set up a model
                 </Button>
               </ProviderNotice>
@@ -1081,7 +1087,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         onSelectAgent={handleSelectAgent}
       />
 
-      {!readonly && <AISetupPanel />}
+      {!readonly && <AISetupPanel requestId={setupRequestId} />}
     </ChatWindow>
   );
 };

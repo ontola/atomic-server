@@ -63,7 +63,18 @@ const getInitialStep = (hasProvider: boolean): SetupStep => {
   return 'providers';
 };
 
-export const AISetupPanel: React.FC<{ onDismiss?: () => void }> = ({
+/** A new request resets dismissal and any half-finished setup step. */
+export function AISetupPanel({
+  requestId = 0,
+  onDismiss,
+}: {
+  requestId?: number;
+  onDismiss?: () => void;
+}) {
+  return <AISetupPanelSession key={requestId} onDismiss={onDismiss} />;
+}
+
+const AISetupPanelSession: React.FC<{ onDismiss?: () => void }> = ({
   onDismiss,
 }) => {
   const [dismissed, setDismissed] = useState(false);

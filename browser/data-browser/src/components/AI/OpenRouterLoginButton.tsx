@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { ButtonLink } from '../ButtonLink';
 import { paths } from '../../routes/paths';
-import { randomString } from '../../helpers/randomString';
 
 const TEXT = 'Login with OpenRouter';
 const AUTH_ENDPOINT = 'https://openrouter.ai/auth';
@@ -36,21 +35,39 @@ const buildUrl = (challenge: string) => {
 };
 
 export const OpenRouterLoginButton = () => {
-  const [challenge, setChallenge] = useState<string | null>(null);
+  const [verifier] = useState(() => {
+    // 32 random bytes encoded as hex satisfy PKCE's 43–128 character rule.
+    return Array.from(crypto.getRandomValues(new Uint8Array(32)), byte =>
+      byte.toString(16).padStart(2, '0'),
+    ).join('');
+  });
+  const challenge = createSHA256CodeChallenge(verifier);
+  const [error, setError] = useState<string>();
 
-  useEffect(() => {
-    const verifier = crypto.randomUUID ? crypto.randomUUID() : randomString(32);
-    const generatedChallenge = createSHA256CodeChallenge(verifier);
-    setChallenge(generatedChallenge);
-    // Stored in localStorage (not sessionStorage) so the verifier survives the
-    // OpenRouter round-trip even if the callback lands in a different tab or a
-    // fresh session. It is removed again as soon as the code is exchanged.
-    localStorage.setItem('atomic.ai.openrouter-code-verifier', verifier);
-  }, []);
-
-  if (!challenge) {
-    return <ButtonLink href='#'>{TEXT}</ButtonLink>;
-  }
-
-  return <ButtonLink href={buildUrl(challenge)}>{TEXT}</ButtonLink>;
+  return (
+    <>
+      <ButtonLink
+        href={buildUrl(challenge)}
+        onClick={event => {
+          try {
+            // Only the clicked link owns this attempt. Mounting another button
+            // must not invalidate the verifier while OpenRouter is authorizing.
+            localStorage.setItem(
+              'atomic.ai.openrouter-code-verifier',
+              verifier,
+            );
+            setError(undefined);
+          } catch {
+            event.preventDefault();
+            setError(
+              'Could not start OpenRouter login. Allow browser storage and try again.',
+            );
+          }
+        }}
+      >
+        {TEXT}
+      </ButtonLink>
+      {error && <p role='alert'>{error}</p>}
+    </>
+  );
 };
