@@ -127,6 +127,15 @@ test('integration categories default off and independent Atomic preferences surv
 test('existing connections remain visible while both discovery categories are hidden', async ({
   page,
 }) => {
+  // The click below is not a navigation. `new-plugin` awaits `createPlugin`,
+  // whose first line is `pluginClassesFor`, which creates the drive's whole
+  // plugin schema: every property and class saved before a subject exists to
+  // navigate to. Measured here at 3.6s idle and 6.8s under four local workers,
+  // an 89% inflation matching what `devonian-issue-sync` showed, and Mancave
+  // carries far more than four workers. The save and the render come after it,
+  // inside the same budget.
+  test.setTimeout(90_000);
+  const SCHEMA_CREATED = { timeout: 30_000 };
   await page.getByRole('button', { name: 'More' }).click();
   await page.getByPlaceholder(/filter/i).fill('plugin');
   await page.locator('[data-testid="menu-item-new-plugin"]').click();
@@ -134,7 +143,7 @@ test('existing connections remain visible while both discovery categories are hi
     page
       .getByRole('main')
       .getByRole('heading', { name: 'New plugin', level: 1 }),
-  ).toBeVisible();
+  ).toBeVisible(SCHEMA_CREATED);
   await page.goto(new URL('/app/integrations', page.url()).href);
   await expect(
     page
