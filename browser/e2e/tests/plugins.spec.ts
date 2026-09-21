@@ -5,6 +5,7 @@ import {
   before,
   createTableFromDialog,
   getDevDriveSecret,
+  nodeReachableServerUrl,
   SERVER_URL,
 } from './test-utils';
 import {
@@ -1428,7 +1429,14 @@ export async function run(ctx) {
       };
     });
     const agent = await Agent.fromSecret(await getDevDriveSecret(page));
-    const api = { getAgent: () => agent, getServerUrl: () => SERVER_URL };
+    // `SERVER_URL` is the browser-facing origin, which in CI is
+    // `http://atomic.localhost:9883`. Chromium is told to map that name;
+    // this call runs in the Node test process, which is not, and resolves
+    // `.localhost` to 127.0.0.1 — a different container from the server.
+    const api = {
+      getAgent: () => agent,
+      getServerUrl: () => nodeReachableServerUrl(SERVER_URL),
+    };
     const reviewed = await getPluginSync(api, target);
     await page.getByRole('button', { name: 'Enable background sync' }).click();
     await expect(
