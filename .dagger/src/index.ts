@@ -619,6 +619,13 @@ export class AtomicServer {
 
     return (
       depsContainer
+        // Hook registration tests resolve repo-root files above /app and run
+        // the registered command inside their own temporary Git checkout.
+        .withFile('/.codex/hooks.json', this.source.file('.codex/hooks.json'))
+        .withFile(
+          '/.claude/settings.json',
+          this.source.file('.claude/settings.json'),
+        )
         .withWorkdir('/app')
         .withExec(['pnpm', 'run', 'test'])
         // jsBuild mounts external integration tests at /integrations and

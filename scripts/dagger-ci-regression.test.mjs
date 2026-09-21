@@ -100,3 +100,15 @@ test('end-to-end applies overrides to the actual shard run and clone setting', a
     grep: 'focused',
   });
 });
+
+test('JS tests include repository hook registrations', async () => {
+  const pipeline = new AtomicServer(source());
+  pipeline.wasmBuild = () => makeChain('wasm');
+  resetCalls();
+  await pipeline.jsTest();
+  const mounts = recordedCalls()
+    .filter(([name]) => name === 'withFile')
+    .map(([, path]) => path);
+  assert.ok(mounts.includes('/.codex/hooks.json'));
+  assert.ok(mounts.includes('/.claude/settings.json'));
+});

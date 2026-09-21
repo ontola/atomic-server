@@ -6,6 +6,8 @@ import {
   rmSync,
   writeFileSync,
   readFileSync,
+  symlinkSync,
+  copyFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -18,6 +20,23 @@ const dir = realpathSync(mkdtempSync(join(tmpdir(), 'compiler-hook-test-')));
 const root = join(dir, 'repo with spaces');
 const src = join(root, 'browser/data-browser/src');
 mkdirSync(src, { recursive: true });
+// Exercise the registered Git-root command in the fixture, even when CI
+// supplies source files without the outer repository's Git metadata.
+const scripts = join(root, 'browser/data-browser/scripts');
+mkdirSync(scripts);
+
+for (const name of ['react-compiler-hook.mjs', 'react-compiler.mjs']) {
+  copyFileSync(
+    new URL(`../scripts/${name}`, import.meta.url),
+    join(scripts, name),
+  );
+}
+
+symlinkSync(
+  fileURLToPath(new URL('../node_modules', import.meta.url)),
+  join(root, 'browser/data-browser/node_modules'),
+  'dir',
+);
 const git = (...args) =>
   execFileSync('git', args, {
     cwd: root,
@@ -154,7 +173,7 @@ describe('React Compiler hook', () => {
     const invoke = () =>
       spawnSync(group.hooks[0].command, {
         shell: true,
-        cwd: fileURLToPath(new URL('../', import.meta.url)),
+        cwd: src,
         input: JSON.stringify({
           ...event,
           session_id: `claude-${dir}`,

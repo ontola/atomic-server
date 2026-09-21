@@ -2471,3 +2471,4 @@ Recovery read fan-out: `recovery-fetch.test.ts` verifies concurrent reads share
 one in-flight request per API/account, settled responses are not cached, failures
 can be retried, and signed-out callers make no request. The SaaS legacy recovery
 upgrade journey passes with the production per-account request limit.
+- `scripts/dagger-ci-regression.test.mjs` checks that JS CI includes both hook registration files; `react-compiler-hook.test.mjs` executes the registered command from an isolated Git fixture, independent of checkout metadata in CI.
