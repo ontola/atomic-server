@@ -235,7 +235,7 @@ test('AI setup can be dismissed and reopened without trapping the gallery', asyn
   for (const method of ['outside', 'escape', 'close']) {
     await page.getByRole('button', { name: 'Set up AI', exact: true }).click();
     const title = page.getByRole('heading', {
-      name: 'Connect a model to use Atomic Assistant',
+      name: 'Connect a model to use AI chat',
     });
     await expect(title).toBeVisible();
     if (method === 'outside') await page.mouse.click(5, 5);

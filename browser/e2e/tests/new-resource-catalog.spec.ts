@@ -98,7 +98,7 @@ test('creation prompt opens the assistant and keeps the request while setting up
   ).toBe(true);
   await page.getByRole('button', { name: 'Create with assistant' }).click();
   await expect(
-    page.getByText('Connect a model to use Atomic Assistant', { exact: true }),
+    page.getByText('Connect a model to use AI chat', { exact: true }),
   ).toBeVisible();
   await expect(
     page
@@ -283,7 +283,7 @@ test('mobile search hands its query to the assistant without overflowing', async
   ).toBe(true);
   await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
   await expect(
-    page.getByText('Connect a model to use Atomic Assistant', { exact: true }),
+    page.getByText('Connect a model to use AI chat', { exact: true }),
   ).toBeVisible();
   await expect(
     page
