@@ -94,14 +94,20 @@ function parseConfigToml(text: string): MinimalConfigToml {
   return out;
 }
 
-export async function startServer(): Promise<ServerHandle> {
+export function serverBinaryPath(): string {
+  if (process.env.ATOMIC_SERVER_BINARY) return process.env.ATOMIC_SERVER_BINARY;
+
   const target = JSON.parse(
     execFileSync('cargo', ['metadata', '--format-version=1', '--no-deps'], {
       cwd: REPO_ROOT,
       encoding: 'utf8',
     }),
   ).target_directory;
-  const binPath = path.join(target, 'debug/atomic-server');
+  return path.join(target, 'debug/atomic-server');
+}
+
+export async function startServer(): Promise<ServerHandle> {
+  const binPath = serverBinaryPath();
 
   if (!existsSync(binPath)) {
     throw new Error(

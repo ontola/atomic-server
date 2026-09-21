@@ -2472,3 +2472,7 @@ one in-flight request per API/account, settled responses are not cached, failure
 can be retried, and signed-out callers make no request. The SaaS legacy recovery
 upgrade journey passes with the production per-account request limit.
 - `scripts/dagger-ci-regression.test.mjs` checks that JS CI includes both hook registration files; `react-compiler-hook.test.mjs` executes the registered command from an isolated Git fixture, independent of checkout metadata in CI.
+
+Integration fixture binary discovery: `browser/lib/src/server-binary-fixture.test.ts`
+checks that CI's explicit prebuilt binary path does not invoke Cargo, while local
+builds honor Cargo's configured target directory.
