@@ -1,3 +1,4 @@
+import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Column, Row } from '@components/Row';
 import { useAtomicMCPTools } from './useAtomicTools';
@@ -131,6 +132,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   children,
 }) => {
   const store = useStore();
+  const navigate = useNavigateWithTransition();
   const {
     openRouterApiKey,
     showTokenUsage,
@@ -1067,6 +1069,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                         }
                       >
                         <ChatControls>
+                          <strong>Chat options</strong>
+                          <ControlLabel>Agent</ControlLabel>
                           <SubtleButton
                             onClick={() => {
                               setControlsOpen(false);
@@ -1075,6 +1079,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                           >
                             {selectedAgent.name}
                           </SubtleButton>
+                          <ControlLabel>Model</ControlLabel>
                           {hostedAI?.enabled &&
                           !openRouterApiKey &&
                           !ollamaUrl ? (
@@ -1082,7 +1087,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                           ) : (
                             <ModelSelectWrapper ref={modelSelectContainerRef}>
                               <ComboBox
-                                subtle
+                                ariaLabel='Model'
                                 selectedItem={`${activeModel.provider}:${activeModel.id}`}
                                 options={combinedModelOptions}
                                 onSelect={value => {
@@ -1140,6 +1145,23 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                               {nummberFormatter.format(usage.output)} output
                             </TokensUsed>
                           )}
+                          <SettingsLink
+                            href='/app/settings?section=ai'
+                            onClick={event => {
+                              if (
+                                event.metaKey ||
+                                event.ctrlKey ||
+                                event.shiftKey ||
+                                event.altKey
+                              )
+                                return;
+                              event.preventDefault();
+                              navigate('/app/settings?section=ai');
+                              setControlsOpen(false);
+                            }}
+                          >
+                            AI settings
+                          </SettingsLink>
                         </ChatControls>
                       </Popover>
                       {checkModelSupportsImageInput(activeModel) && (
@@ -1299,6 +1321,27 @@ const ChatWindow = styled.div<{ fullView?: boolean; empty?: boolean }>`
 const ChatControls = styled(Column)`
   padding: 0.75rem;
   width: min(22rem, calc(100vw - 2rem));
+  box-sizing: border-box;
+  gap: 0.5rem;
+  align-items: stretch;
+
+  > button {
+    text-align: left;
+    padding: 0.6rem;
+    border: 1px solid ${p => p.theme.colors.bg2};
+    border-radius: ${p => p.theme.radius};
+  }
+`;
+
+const ControlLabel = styled.span`
+  font-size: 0.8rem;
+  color: ${p => p.theme.colors.textLight};
+`;
+
+const SettingsLink = styled.a`
+  border-top: 1px solid ${p => p.theme.colors.bg2};
+  padding-top: 0.75rem;
+  margin-top: 0.25rem;
 `;
 
 const TokensUsed = styled.p`

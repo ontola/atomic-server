@@ -1,3 +1,8 @@
+Mobile AI chat navigation: Chromium covers opening the left sidebar above chat,
+Back dismissal without leaving the page, the AI settings link, an empty composer
+without vertical overflow, and messages without a redundant sender row. History
+unit tests cover StrictMode, explicit close, and navigation to another page.
+
 Included AI: managed transport tests cover signed-out status, explicit consent,
 backend errors, streaming credit failure and non-streaming title generation without
 forwarding a provider key or SDK User-Agent header (Firefox/Zen CORS regression).

@@ -130,7 +130,7 @@ test('mobile AI chat fills the width and keeps its composer above the keyboard',
   });
   // Navigate through the chat menu, not the underlying drive's menu.
   await page.getByRole('menuitem', { name: /Normal View/ }).click();
-  await panel.getByRole('button', { name: 'Close AI Sidebar' }).click();
+  // Mobile navigation dismisses the full-screen chat to reveal its destination.
   await expect(panel).not.toHaveAttribute('data-open', '');
   await expect(
     page
@@ -268,4 +268,63 @@ test('keyboard resize keeps the final sentence visible without a spacer above th
       ),
     )
     .toBeGreaterThan(100);
+});
+
+test('mobile chat keeps navigation usable and Back dismisses only the chat', async ({
+  page,
+}) => {
+  await page.route('https://openrouter.ai/api/v1/credits', route =>
+    route.fulfill({ json: { data: { total_credits: 10, total_usage: 1 } } }),
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await setupAIRouteMocks(page);
+  await enableAIForTesting(page);
+  await before({ page });
+  const location = page.url();
+  await openAISidebar(page);
+  const panel = page.getByTestId('ai-sidebar');
+  const editor = panel.locator('[contenteditable="true"]');
+  await expect(editor).toBeVisible();
+  await panel.getByRole('heading').click();
+  await expect
+    .poll(() =>
+      editor.evaluate(element => {
+        const wrapper = element.parentElement!.parentElement!;
+
+        return wrapper.scrollHeight - wrapper.clientHeight;
+      }),
+    )
+    .toBeLessThanOrEqual(1);
+
+  await page.getByRole('button', { name: 'Show / hide sidebar' }).click();
+  const sidebar = page.getByTestId('sidebar');
+  await sidebar.getByRole('button', { name: 'New Chat', exact: true }).click();
+  await page.getByRole('button', { name: 'Show / hide sidebar' }).click();
+  await sendChatMessage(page, 'Hello from mobile');
+  await expect(
+    panel.getByText('This is a mock AI response.', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    panel.getByTestId('ai-user-message').getByText('You', { exact: true }),
+  ).toHaveCount(0);
+  await page.goBack();
+  await expect(panel).not.toHaveAttribute('data-open');
+  expect(page.url()).toBe(location);
+
+  await openAISidebar(page);
+  await panel
+    .getByRole('button', { name: 'Chat options', exact: true })
+    .click();
+  await expect(page.getByText('Agent', { exact: true })).toBeVisible();
+  await expect(page.getByText('Model', { exact: true })).toBeVisible();
+  await page.screenshot({
+    path: 'test-results/mobile-ai-options.png',
+    animations: 'disabled',
+  });
+  await page.getByRole('link', { name: 'AI settings', exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/settings\?section=ai/);
+  await expect(panel).not.toHaveAttribute('data-open');
+  await expect(
+    page.getByRole('checkbox', { name: 'Enable AI Features' }),
+  ).toBeVisible();
 });

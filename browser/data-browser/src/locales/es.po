@@ -241,6 +241,8 @@ msgid "<0/> Use Default Model"
 msgstr "<0/> Usar modelo predeterminado"
 
 #: src/chunks/AI/AgentConfig.tsx
+#: src/chunks/AI/RealAIChat.tsx
+#: src/chunks/AI/RealAIChat.tsx
 msgid "Model"
 msgstr "Modelo"
 
@@ -358,7 +360,6 @@ msgstr "Agentes"
 #~ msgid "No custom classes found on the current drive."
 #~ msgstr "No se encontraron clases personalizadas en la unidad actual."
 
-#: src/chunks/AI/AIChatMessageParts/UserMessage.tsx
 #: src/chunks/Conference/ConferenceRoom.tsx
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "You"
@@ -11906,6 +11907,7 @@ msgid "output"
 msgstr ""
 
 #: src/chunks/AI/RealAIChat.tsx
+#: src/chunks/AI/RealAIChat.tsx
 msgid "Chat options"
 msgstr ""
 
@@ -11997,4 +11999,12 @@ msgstr ""
 
 #: src/chunks/AI/ModelSelect/ModelSelect.tsx
 msgid "Use included model"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Agent"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "AI settings"
 msgstr ""

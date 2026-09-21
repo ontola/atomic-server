@@ -149,7 +149,7 @@ const StyledNav = styled.nav.attrs<StyledNavProps>(p => ({
     [SIDEBAR_WIDTH_PROP.raw]: p.size,
   } as Record<string, string>,
 }))`
-  z-index: ${p => p.theme.zIndex.sidebar};
+  z-index: ${p => p.theme.zIndex.sidebar + 2};
   box-sizing: border-box;
   background: ${p => p.theme.colors.bg};
   transition:
@@ -207,7 +207,7 @@ const SideBarOverlay = styled.div<SideBarOverlayProps>`
   pointer-events: ${p => (p.visible ? 'auto' : 'none')};
   height: 100%;
   cursor: pointer;
-  z-index: 1;
+  z-index: ${p => p.theme.zIndex.sidebar + 1};
   -webkit-tap-highlight-color: transparent;
 `;
 
