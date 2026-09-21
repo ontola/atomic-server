@@ -79,6 +79,22 @@ test.describe('resource context menu', () => {
       .getByRole('navigation')
       .getByRole('button', { name: 'Widgets' })
       .first();
+    // The embedded sidebar button offers the same filter as right-click.
+    await sidebarLink.hover();
+    await sidebarLink
+      .locator('xpath=ancestor::*[.//button[@title="Open menu"]][1]')
+      .getByRole('button', { name: 'Open menu', exact: true })
+      .click();
+    const sidebarFilter = page.getByRole('textbox', { name: 'Filter actions' });
+    await expect(sidebarFilter).toBeFocused();
+    await sidebarFilter.fill('histo');
+    await expect(page.getByTestId('menu-item-history')).toBeVisible();
+    await expect(page.getByTestId('menu-item-edit')).toHaveCount(0);
+    for (const kind of ['plugin', 'website', 'app']) {
+      await sidebarFilter.fill(`new ${kind}`);
+      await expect(page.getByTestId(`menu-item-new-${kind}`)).toHaveCount(0);
+    }
+    await sidebarFilter.press('Escape');
     await openContextMenu(page, sidebarLink, [
       page.getByTestId('menu-item-history'),
     ]);

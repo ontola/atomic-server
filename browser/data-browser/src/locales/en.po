@@ -7868,13 +7868,11 @@ msgstr "This plugin ran too long and was stopped. Nothing was planned."
 msgid "This run proposes no changes."
 msgstr "This run proposes no changes."
 
-#: src/actions/resourceActions.tsx
-msgid "New plugin"
-msgstr "New plugin"
+#~ msgid "New plugin"
+#~ msgstr "New plugin"
 
-#: src/actions/resourceActions.tsx
-msgid "Create a plugin here. It proposes changes that you review before anything is written."
-msgstr "Create a plugin here. It proposes changes that you review before anything is written."
+#~ msgid "Create a plugin here. It proposes changes that you review before anything is written."
+#~ msgstr "Create a plugin here. It proposes changes that you review before anything is written."
 
 #: src/chunks/PluginRuns/PluginRunHistory.tsx
 msgid "This plugin has not run yet."
@@ -8089,20 +8087,15 @@ msgstr "This app has no entry point, so there is nothing to open."
 msgid "Sign in to open this app."
 msgstr "Sign in to open this app."
 
-#: src/actions/resourceActions.tsx
-#: src/actions/resourceActions.tsx
-#: src/chunks/AppPage/useRegisterAppCreation.ts
+#: src/routes/NewResource/createDriveResource.ts
 msgid "New app"
 msgstr "New app"
 
-#: src/actions/resourceActions.tsx
-msgid "Create an app here: a screen you open, backed by its own data."
-msgstr "Create an app here: a screen you open, backed by its own data."
+#~ msgid "Create an app here: a screen you open, backed by its own data."
+#~ msgstr "Create an app here: a screen you open, backed by its own data."
 
-#. 0: (e as Error).message
-#: src/actions/resourceActions.tsx
-msgid "This app cannot write on its own: {0}"
-msgstr "This app cannot write on its own: {0}"
+#~ msgid "This app cannot write on its own: {0}"
+#~ msgstr "This app cannot write on its own: {0}"
 
 #: src/chunks/AppPage/AppFrame.tsx
 msgid "Something went wrong."
@@ -10667,9 +10660,8 @@ msgstr "Preserves recurring series and previews supported edits to send back to 
 msgid "Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google."
 msgstr "Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google."
 
-#: src/actions/resourceActions.tsx
-msgid "New website"
-msgstr "New website"
+#~ msgid "New website"
+#~ msgstr "New website"
 
 #~ msgid "Release ready"
 #~ msgstr "Release ready"
@@ -10759,11 +10751,10 @@ msgstr "Frozen release"
 msgid "Website preview"
 msgstr "Website preview"
 
-#: src/actions/resourceActions.tsx
-msgid "Design a website with Assistant, using Atomic documents and tables."
-msgstr "Design a website with Assistant, using Atomic documents and tables."
+#~ msgid "Design a website with Assistant, using Atomic documents and tables."
+#~ msgstr "Design a website with Assistant, using Atomic documents and tables."
 
-#: src/actions/resourceActions.tsx
+#: src/routes/NewResource/createDriveResource.ts
 msgid "My website"
 msgstr "My website"
 

@@ -33,6 +33,7 @@ This document might not be entirely up to date. If you need anything that is not
 - `src/components/ScrollArea.tsx` - Themed Radix scroll area; also exports `ScrollViewPort` for nested viewport needs.
 - `src/components/ChatMessagesContainer.tsx` - Stick-to-bottom scroll container for chat-like message lists (auto-scrolls on new content unless the user scrolled up). Used by the AI chat and ChatRoom views.
 - `src/components/RightPanel/RightPanel.tsx` - Resizable drawer docked to the right of the screen; combine with `RightPanelContext` so panels (AI sidebar, Comments) are mutually exclusive.
+- `src/components/PanelLayout.tsx` - Shared animated width slot, transition timing and floating-panel backdrop for the left sidebar and right panels. Width transitions pause while resizing.
 
 ## Resource Views
 
