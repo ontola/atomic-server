@@ -1305,7 +1305,11 @@ export function run() { return { intents: [] }; }
   test('an integration opens from the sidebar and syncs through the server sandbox', async ({
     page,
   }) => {
-    test.setTimeout(120_000);
+    // 84s alone and 102s under four local workers, so 120s had 18s of margin
+    // even before the 30s the sample assertion below can now wait. Raised so
+    // that fixing that assertion does not simply move the failure to the test
+    // budget. Every other assertion in this test keeps the 10s default.
+    test.setTimeout(240_000);
     const pageErrors: string[] = [];
     page.on('pageerror', error => pageErrors.push(error.message));
     await newPlugin(page);
@@ -1561,9 +1565,24 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
       .fill(code);
     await page.getByRole('button', { name: 'Save and test sample' }).click();
     const sampleDialog = page.locator('dialog[open]');
+    // One click, three pieces of work behind it: `setPluginSource` resolves the
+    // drive's plugin schema, saves the script resource, and only then does
+    // `onTest` run the automation in the server sandbox and build the proposal.
+    // The dialog is the end of all three. Measured with a timer around the
+    // click, on this exact test:
+    //
+    //     4480 ms  alone on an idle box
+    //     9473 ms  under four local Playwright workers
+    //
+    // 111% inflation against a 10s default, so 521 ms of headroom at four
+    // workers. Mancave runs four shards of two workers beside clippy, a 6-wide
+    // nextest, flutter and two vitest suites, which is considerably more, and
+    // it fails there on every attempt rather than rotating. The button still
+    // reads "Saving…" in the CI snapshot, which is this work unfinished, not a
+    // save that hangs.
     await expect(
       sampleDialog.getByText('Automation sample result'),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30_000 });
     await sampleDialog.getByRole('button', { name: /Apply 1 change/ }).click();
     await expect(sampleDialog).toBeHidden();
     await page
