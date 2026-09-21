@@ -1924,38 +1924,28 @@ export class AtomicServer {
         // explicitly bound to a Drive, and `atomic` is not bound, so the
         // containers that curl `http://atomic:9883` are unaffected.
         .withEnvVariable('ATOMIC_DOMAIN', 'atomic.localhost')
-        // Kept for one run, and expected to be dead weight now.
-        //
-        // This and the hosts line below are the two earlier attempts at
-        // `plugin.spec.ts:26`, both aimed at the HTTP fetch rather than at the
-        // reason there was one. Each moved the error and neither cleared it:
-        // first the name did not resolve, then it resolved to 127.0.0.1 and
-        // the SSRF guard's `PublicOnlyResolver` refused it (reqwest reports
-        // both as "error sending request for url", which is why the hosts line
-        // alone did not change the log by one character), and finally, with
-        // this flag letting it through, a 401, because the fetch is unsigned
-        // and the Release inherits its Drive's rights. The line above removes
-        // the fetch instead, so none of those stages is reached.
-        //
-        // They stay only so the next run tests one change. Once it is green
-        // both should go, which puts the guard back on where it protects
-        // something: `resolve_public` and `resolver_rejects_loopback_domain`
-        // in lib/src/client/helpers.rs are that behaviour, deliberate and
-        // asserted.
-        .withEnvVariable('ATOMIC_ALLOW_PRIVATE_FETCH', '1')
         .withExposedPort(19090)
         .withEntrypoint([
           'sh',
           '-c',
-          // Resources the browser creates carry `atomic.localhost:9883`, the
-          // origin it was served from, so anything the server then fetches by
-          // subject goes to that name from inside this container. RFC 6761
+          // Makes `atomic.localhost` resolve inside this container. RFC 6761
           // gives `.localhost` to loopback, but that is a rule browsers and
           // Node implement and glibc does not: with `hosts: files dns` the
-          // name simply does not resolve, and reqwest fails with "error
-          // sending request for url" before any request goes out. It is why
-          // `plugin.spec.ts:26` has been red since 4194: the install 500s on
-          // `/releases/blake3:…` and the dialog it waits behind never closes.
+          // name does not resolve at all, and anything here that looks it up
+          // fails before a request goes out.
+          //
+          // This is no longer about `plugin.spec.ts:26`. That was fixed by
+          // giving the server its own `ATOMIC_DOMAIN` above, so it reads its
+          // own subjects locally instead of fetching them, and the run after
+          // that change was green on `:26`, `mt940:16` and
+          // `installation-recovery:96`. What this line covers now is
+          // everything else in the container that resolves the name: the
+          // server for any subject genuinely on another host, and the Node
+          // mock proxy, which is given `atomic.localhost:9883` as its frontend
+          // origin. That is a wider scope than the SSRF escape hatch removed
+          // alongside it, which reached only five Rust call sites, so the two
+          // were not a pair despite arriving in one commit.
+          //
           // Written at start rather than baked in, because the runtime mounts
           // its own `/etc/hosts` over the image's. The server binds `::`, so
           // once the name resolves it reaches itself.
