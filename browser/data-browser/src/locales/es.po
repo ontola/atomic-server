@@ -11906,10 +11906,8 @@ msgstr ""
 msgid "output"
 msgstr ""
 
-#: src/chunks/AI/RealAIChat.tsx
-#: src/chunks/AI/RealAIChat.tsx
-msgid "Chat options"
-msgstr ""
+#~ msgid "Chat options"
+#~ msgstr ""
 
 #: src/chunks/AI/AISetupPanel.tsx
 msgid "Also use for chat titles"
@@ -11954,10 +11952,8 @@ msgstr ""
 msgid "Could not start included AI. Please try again."
 msgstr ""
 
-#. 0: Math.floor(hostedAI.remaining_micros / 1000); 1: Math.floor(hostedAI.allowance_micros / 1000); 2: new Date(hostedAI.resets_at * 1000).toLocaleDateString()
-#: src/chunks/AI/RealAIChat.tsx
-msgid "{0} of {1} AI credits left · account-wide · resets {2}"
-msgstr ""
+#~ msgid "{0} of {1} AI credits left · account-wide · resets {2}"
+#~ msgstr ""
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "Advanced AI settings"
@@ -12007,4 +12003,32 @@ msgstr ""
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "AI settings"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+#: src/chunks/AI/RealAIChat.tsx
+msgid "AI Chat options"
+msgstr ""
+
+#. 0: credits(monthly); 1: credits(status.allowance_micros)
+#: src/chunks/AI/HostedAICredits.tsx
+msgid "{0} of {1} monthly credits left"
+msgstr ""
+
+#. 0: new Date(status.resets_at * 1000).toLocaleDateString(undefined, { dateStyle\\: 'medium' })
+#: src/chunks/AI/HostedAICredits.tsx
+msgid "Account-wide · resets {0}"
+msgstr ""
+
+#. 0: credits(purchased)
+#: src/chunks/AI/HostedAICredits.tsx
+msgid "{0} purchased credits · carries over"
+msgstr ""
+
+#: src/chunks/AI/HostedAICredits.tsx
+msgid "AI credits"
+msgstr ""
+
+#: src/chunks/AI/HostedAICredits.tsx
+msgid "Get more credits"
 msgstr ""

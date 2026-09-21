@@ -2,7 +2,12 @@
 // @wc-ignore-file
 import { afterEach, expect, it, vi } from 'vitest';
 import { streamText, generateText } from 'ai';
-import { createHostedModel, enableHostedAI, getHostedAIStatus } from './ai';
+import {
+  createHostedModel,
+  enableHostedAI,
+  getHostedAIStatus,
+  HOSTED_AI_USAGE_EVENT,
+} from './ai';
 import { managedFetch } from './api';
 import { getManagedAccount } from './session';
 
@@ -88,4 +93,35 @@ it('supports non-streaming title generation using the same account endpoint', as
     '/ai/chat/completions',
     expect.any(Object),
   );
+});
+
+it('refreshes the balance when the SDK cancels a completed response stream', async () => {
+  const refresh = vi.fn();
+  window.addEventListener(HOSTED_AI_USAGE_EVENT, refresh);
+
+  try {
+    vi.mocked(managedFetch).mockResolvedValue(
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode(
+                'data: {"id":"gen","object":"chat.completion.chunk","created":1,"model":"test","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}\n\n',
+              ),
+            );
+          },
+        }),
+        { headers: { 'Content-Type': 'text/event-stream' } },
+      ),
+    );
+    const result = await createHostedModel('test').doStream({
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }] }],
+    });
+    const reader = result.stream.getReader();
+    await reader.read();
+    await reader.cancel();
+    await vi.waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  } finally {
+    window.removeEventListener(HOSTED_AI_USAGE_EVENT, refresh);
+  }
 });
