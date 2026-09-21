@@ -141,42 +141,6 @@
     "https://atomicdata.dev/properties/description": "The platform id LocalThought's OAuth callback reports back, for an integration that owns its own setup component instead of using the generic LocalThought flow (so it has no `platform`)."
   },
   {
-    "@id": "https://atomicdata.dev/integrations/catalog/devonian-github-issues",
-    "https://atomicdata.dev/properties/isA": [
-      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
-    ],
-    "https://atomicdata.dev/properties/shortname": "devonian-github-issues",
-    "https://atomicdata.dev/integrations/properties/experimental": true,
-    "https://atomicdata.dev/integrations/properties/enabled": true,
-    "https://atomicdata.dev/properties/name": "GitHub issues and comments (Devonian)",
-    "https://atomicdata.dev/properties/emoji": "🐙",
-    "https://atomicdata.dev/properties/description": "Connect a GitHub repository to a local issue tracker.",
-    "https://atomicdata.dev/integrations/properties/capabilities": "Sync issues and comments in both directions, including closing and reopening issues.",
-    "https://atomicdata.dev/integrations/properties/events": "Connect through LocalThought, then use Sync now to exchange changes.",
-    "https://atomicdata.dev/integrations/properties/limitation": "Creates a separate local drive. Keep the browser open to sync. Sync writes changes to your GitHub repository.",
-    "https://atomicdata.dev/integrations/properties/keywords": "devonian github issues comments lens local tracker",
-    "https://atomicdata.dev/integrations/properties/requires-api-plugins": true
-  },
-  {
-    "https://atomicdata.dev/properties/localId": "devonian-google-calendar",
-    "https://atomicdata.dev/properties/isA": [
-      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
-    ],
-    "https://atomicdata.dev/properties/shortname": "devonian-google-calendar",
-    "https://atomicdata.dev/integrations/properties/experimental": true,
-    "https://atomicdata.dev/integrations/properties/enabled": true,
-    "https://atomicdata.dev/properties/name": "Google Calendar (Devonian)",
-    "https://atomicdata.dev/properties/emoji": "🗓️",
-    "https://atomicdata.dev/properties/description": "Import Google Calendar events into calendar views.",
-    "https://atomicdata.dev/integrations/properties/capabilities": "Preserves recurring series and previews supported edits to send back to Google.",
-    "https://atomicdata.dev/integrations/properties/events": "Connect through LocalThought, then use Sync now to exchange changes.",
-    "https://atomicdata.dev/integrations/properties/limitation": "Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google.",
-    "https://atomicdata.dev/integrations/properties/keywords": "google calendar devonian events recurring lens local tracker",
-    "https://atomicdata.dev/integrations/properties/requires-api-plugins": true,
-    "https://atomicdata.dev/integrations/properties/platform": "google-calendar",
-    "https://atomicdata.dev/integrations/properties/pluginUrl": "https://github.com/localthought/devonian"
-  },
-  {
     "https://atomicdata.dev/properties/localId": "devonian-todoist",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"

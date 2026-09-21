@@ -199,9 +199,7 @@ export class BrowserIntegrations {
     const callback = new URL(returnUrl);
     if (
       callback.origin !== location.origin ||
-      !['/app/integrations', '/app/devonian-demo'].includes(
-        callback.pathname,
-      ) ||
+      callback.pathname !== '/app/integrations' ||
       callback.search ||
       callback.hash
     )

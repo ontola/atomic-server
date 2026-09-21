@@ -320,13 +320,13 @@ it('calls the browser fetch function without binding it to the client', async ()
   expect(await client.catalog()).toEqual(['pets']);
 });
 
-it('supports the demo callback and write credentials without using the import engine', async () => {
+it('supports write credentials without using the import engine', async () => {
   const { client, http, values } = setup();
   const { state } = await client.start(
     'drive',
     'actor',
     'pets',
-    'https://atomic.example/app/devonian-demo',
+    'https://atomic.example/app/integrations',
   );
   await client.finish('drive', 'actor', state, 'handoff');
   http.mockImplementation(async (_url, init) => {

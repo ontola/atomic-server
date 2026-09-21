@@ -1,5 +1,4 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { ButtonLink } from '@components/ButtonLink';
 import { Card } from '@components/Card';
 import { Column } from '@components/Row';
 import { Button } from '@components/Button';
@@ -10,7 +9,6 @@ import { useIntegrationProxy } from '@helpers/integrationProxy';
 import { useLocalThoughtCompletedPlatform } from './localThoughtCallback';
 import { isCatalogVisible, type CatalogEntry } from './pluginCatalog';
 import {
-  googleCalendarLens,
   todoistIntegration,
   type LocalThoughtExtension,
 } from './localThoughtExtension';
@@ -53,7 +51,6 @@ type BundledIntegration = {
 // Everything else about a bundled integration's card is data, sourced from
 // catalog.json; this is code, so it stays here, keyed by the same shortname.
 const EXTENSIONS: Partial<Record<string, LocalThoughtExtension>> = {
-  'devonian-google-calendar': googleCalendarLens,
   'devonian-todoist': todoistIntegration,
   clockify: clockifyIntegration,
 };
@@ -145,20 +142,12 @@ export function IntegrationDiscovery({
         {workspace && (entry.id === 'notion' || entry.id === 'mt940') && (
           <p>This integration creates a new workspace for its imported data.</p>
         )}
-        {entry.id === 'devonian-github-issues' ? (
-          <ButtonLink href='/app/devonian-demo'>Install plugin</ButtonLink>
-        ) : (
-          <>
-            {!entry.platform && (
-              <IntegrationEvidence
-                id={entry.id as 'mt940' | 'notion' | 'pets'}
-              />
-            )}
-            <Button disabled={!drive} onClick={show}>
-              Set up connection
-            </Button>
-          </>
+        {!entry.platform && (
+          <IntegrationEvidence id={entry.id as 'mt940' | 'notion' | 'pets'} />
         )}
+        <Button disabled={!drive} onClick={show}>
+          Set up connection
+        </Button>
       </Column>
       <Dialog {...dialog} width='38rem'>
         <Dialog.Title>

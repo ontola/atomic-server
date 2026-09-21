@@ -1855,7 +1855,7 @@ export class AtomicServer {
           browserContainer.directory('/app/node_modules'),
         )
         // Raw imports in browser/e2e/tests (e.g. mt940.spec.ts,
-        // devonian-issue-sync.spec.mts) reach into ../../../integrations
+        // clockify-import.spec.ts) reach into ../../../integrations
         // relative to /app/e2e/tests, resolving to /integrations here.
         .withDirectory('/integrations', this.source.directory('integrations'))
         .withWorkdir('/app/e2e')
