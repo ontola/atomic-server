@@ -76,22 +76,17 @@ test('workspace owns its views and links to separate connection settings', async
   // The kanban column headings are four Tag resources of the embedded task
   // vocabulary (`https://atomicdata.dev/task/v1/{todo,doing,blocked,done}`),
   // and until they load the header renders `useTitle`'s loading placeholder,
-  // `...`. Reaching them is local-first: `fetchResourceWithLocalFallback`
-  // waits on a client-database read in the WASM worker before it will ask the
-  // server. Under four local Playwright workers that one worker round trip was
-  // measured at 3965 ms, and the headings arrived 12 to 13 seconds after the
-  // navigation in four runs out of four:
+  // so the whole board reads `... 0`. That is what this used to fail on, and
+  // the cause was not this test: reaching them was local-first, and
+  // `fetchResourceWithLocalFallback` would not ask the server until a
+  // client-database read in the WASM worker had answered. Measured under four
+  // local Playwright workers, that one worker round trip cost 3965 ms while
+  // the host answered the same four subjects in 1.5 to 2.1 ms, and raising
+  // this assertion to 45 s was not enough — it failed at 45 s too.
   //
-  //     10 s   the assertion below, on its old default, with all four
-  //            headings still showing `...`
-  //     +2036 ms, +3099 ms, +3102 ms, +3234 ms until `Todo` appeared
-  //
-  // The server itself is not the slow part: asked directly for the same four
-  // subjects through its `/path` proxy it answers in 1.5 to 2.1 ms, and a
-  // hand-issued `fetchResourceFromServer` from the stalled page returns a
-  // complete resource in 11 to 71 ms. So this is a budget, not a hang — but
-  // the local read's lack of a deadline is a real product question, raised
-  // separately.
+  // Fixed in `Store.fetchResourceWithLocalFallback`, which now asks the host
+  // for embedded vocabulary directly. The budget stays because the rest of
+  // this page is still read local-first, but it should no longer be near it.
   await expect(page.getByText('Todo', { exact: true }).first()).toBeVisible({
     timeout: 45_000,
   });
