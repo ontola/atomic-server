@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { test, expect } from '@playwright/test';
-import { before } from './test-utils';
+import { before, waitForSynced } from './test-utils';
 
 /**
  * The one thing about apps that only a browser can answer.
@@ -159,11 +159,24 @@ test.describe('apps', () => {
     await app.getByRole('button', { name: 'Add an item' }).click();
     await expect(app.getByRole('listitem')).toHaveCount(1);
 
+    // `toHaveCount(1)` above is the app's own render, which happens before the
+    // write reaches the server. Reloading on top of that is a race, and under
+    // load this test lost it every time: four local Playwright workers, and the
+    // item is gone after the reload and never arrives, still 0 with the
+    // assertion given 120s. The suite waits for the outbox before a reload in
+    // 24 other files; this one did not.
+    await waitForSynced(page);
+
     // Atomic is the persistence layer: nothing about the app is in the page.
     await page.reload();
 
     const reopened = page.frameLocator('iframe[title="App"]');
-    await expect(reopened.getByRole('listitem')).toHaveCount(1);
+    // Reload, app frame boot and its first query, measured at 13879 ms under
+    // four local workers, so the 10s default has nothing left on a box that
+    // carries more.
+    await expect(reopened.getByRole('listitem')).toHaveCount(1, {
+      timeout: 30_000,
+    });
   });
 
   test('an app that breaks says so, and offers to have it fixed', async ({
