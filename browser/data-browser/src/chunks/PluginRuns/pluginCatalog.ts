@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useStore } from '@tomic/react';
+import { usePluginCatalogUrl } from '@helpers/pluginCatalogUrl';
 
 const CATALOG_ENTRY_CLASS =
   'https://atomicdata.dev/integrations/classes/PluginCatalogEntry';
@@ -75,20 +75,21 @@ function parseCatalogEntries(raw: unknown): CatalogEntry[] {
     }));
 }
 
-// integrations/catalog.json is compiled into the server as a static asset
-// (see server/build.rs::embed_integrations) and served at
-// /integrations/catalog.json, rather than bundled into the SPA at build
-// time — a Tauri desktop/mobile build ships a separate frontend that can
-// point at any paired server, so the catalog has to come from wherever
-// `store.getServerUrl()` says the data actually lives, not from the origin
-// the frontend itself was loaded from.
+// catalog.json is published from https://github.com/localthought/atomic-plugins
+// (gh-pages, mirroring this repo's own integrations/ tree) rather than
+// bundled into the SPA at build time or fetched from the paired
+// atomic-server — a Tauri desktop/mobile build ships a separate frontend
+// that can pair with any server, so the catalog has to come from a fixed,
+// publicly reachable location independent of both. The URL is
+// user-configurable (see pluginCatalogUrl.ts / Settings > Integration) so a
+// self-hosted or staging catalog can be used instead.
 const cache = new Map<string, Promise<CatalogEntry[]>>();
 
-function fetchIntegrationCatalog(server: string): Promise<CatalogEntry[]> {
-  let promise = cache.get(server);
+function fetchIntegrationCatalog(catalogUrl: string): Promise<CatalogEntry[]> {
+  let promise = cache.get(catalogUrl);
 
   if (!promise) {
-    promise = fetch(`${server}/integrations/catalog.json`)
+    promise = fetch(catalogUrl)
       .then(response => {
         if (!response.ok) {
           throw new Error(
@@ -100,10 +101,10 @@ function fetchIntegrationCatalog(server: string): Promise<CatalogEntry[]> {
       })
       .then(parseCatalogEntries)
       .catch(reason => {
-        cache.delete(server);
+        cache.delete(catalogUrl);
         throw reason;
       });
-    cache.set(server, promise);
+    cache.set(catalogUrl, promise);
   }
 
   return promise;
@@ -114,15 +115,14 @@ export function useIntegrationCatalog(): {
   ready: boolean;
   error?: string;
 } {
-  const store = useStore();
-  const server = store.getServerUrl();
+  const catalogUrl = usePluginCatalogUrl();
   const [entries, setEntries] = useState<CatalogEntry[]>();
   const [error, setError] = useState<string>();
 
   useEffect(() => {
     let active = true;
     setError(undefined);
-    fetchIntegrationCatalog(server)
+    fetchIntegrationCatalog(catalogUrl)
       .then(result => {
         if (active) setEntries(result);
       })
@@ -133,7 +133,7 @@ export function useIntegrationCatalog(): {
     return () => {
       active = false;
     };
-  }, [server]);
+  }, [catalogUrl]);
 
   return { entries: entries ?? [], ready: entries !== undefined, error };
 }
