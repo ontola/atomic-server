@@ -6,7 +6,15 @@
     "moduleResolution": "NodeNext",
     "typeRoots": ["../../browser/node_modules/@types"],
     "types": ["node"],
-    "noEmit": true
+    "noEmit": true,
+    // devonian is only installed under browser/data-browser's node_modules;
+    // this directory has no ancestor node_modules of its own to climb to.
+    // Same gap integrations/localthought/vitest.config.ts already works
+    // around for tests, via a devonian alias to the same location.
+    "paths": {
+      "devonian/*": ["../../browser/data-browser/node_modules/devonian/*"],
+      "@tomic/lib": ["../../browser/lib/src/index.ts"]
+    }
   },
   "include": ["localthought.ts"]
 }
