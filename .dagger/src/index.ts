@@ -1912,6 +1912,16 @@ export class AtomicServer {
         // devonian-issue-sync.spec.mts) reach into ../../../integrations
         // relative to /app/e2e/tests, resolving to /integrations here.
         .withDirectory('/integrations', this.source.directory('integrations'))
+        // Same shape, one file: apps.spec.ts reads the embedded app SDK with a
+        // plain `readFileSync` at `../../../server/src/plugins/assets/
+        // view-client.js`, which from /app/e2e/tests is /server/... . jsSource()
+        // mounts it for browser/plugin's unit test, but the specs run here, in a
+        // fresh Playwright image that copies only what is named, so this
+        // container needs its own copy.
+        .withFile(
+          '/server/src/plugins/assets/view-client.js',
+          this.source.file('server/src/plugins/assets/view-client.js'),
+        )
         .withWorkdir('/app/e2e')
         .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
         .withExec(['pnpm', 'config', 'set', 'store-dir', '/app/.pnpm-store'])
