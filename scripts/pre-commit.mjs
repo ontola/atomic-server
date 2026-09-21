@@ -114,6 +114,13 @@ function syncSnapshot() {
   if (!previous) {
     rmSync(snapshot, { recursive: true, force: true });
     mkdirSync(snapshot, { recursive: true });
+    // The snapshot lives under `target/`, which the repo's own .gitignore
+    // excludes. Ignore-aware tools (oxlint's file walker among them) that
+    // find no `.git` here search upward, hit the real repo's `.git`, and
+    // then treat every file in the snapshot as gitignored — "no files
+    // found" for a directory that plainly has files. An empty `.git` stops
+    // that search at the snapshot root instead.
+    mkdirSync(join(snapshot, '.git'), { recursive: true });
     git(['checkout-index', '--all', `--prefix=${snapshot}${sep}`], {
       stdio: 'inherit',
     });
