@@ -79,6 +79,7 @@ export const useGenerativeData = () => {
       async () => {
         const { text } = await generateText({
           model,
+          maxRetries: modelIdentifier?.provider === AIProvider.Hosted ? 0 : 2,
           system: titleSystemPrompt,
           prompt: `Generate a title for the following conversation:
 \`\`\`json

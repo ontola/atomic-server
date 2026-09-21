@@ -336,7 +336,6 @@ msgstr "URL d'Ollama"
 msgid "Ollama"
 msgstr "Ollama"
 
-#: src/chunks/AI/AISetupPanel.tsx
 #: src/chunks/AI/toolHistory.test.ts
 #: src/chunks/AI/toolHistory.test.ts
 #: src/views/InvitePage.tsx
@@ -1788,9 +1787,8 @@ msgstr "modifier une ressource"
 msgid "Enter a Resource URL..."
 msgstr "Entrez une URL de ressource..."
 
-#: src/routes/LinkOpenRouter.tsx
-msgid "No code verifier found"
-msgstr "Aucun vérificateur de code trouvé"
+#~ msgid "No code verifier found"
+#~ msgstr "Aucun vérificateur de code trouvé"
 
 #: src/routes/LinkOpenRouter.tsx
 msgid "Linking OpenRouter"
@@ -4074,9 +4072,8 @@ msgstr "IMPORTANT ! Ci-dessous se trouve votre secret d'agent, vous l'utilisez p
 msgid "This pre-selects a model for built-in agents and new custom agents. You can change each agent's model individually later."
 msgstr "Ceci présélectionne un modèle pour les agents intégrés et les nouveaux agents personnalisés. Vous pouvez modifier le modèle de chaque agent individuellement plus tard."
 
-#: src/chunks/AI/AISetupPanel.tsx
-msgid "Use OpenRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
-msgstr "Utilisez OpenRouter (modèles cloud) ou Ollama (modèles locaux). Au moins un fournisseur doit être connecté avant de pouvoir continuer."
+#~ msgid "Use OpenRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
+#~ msgstr "Utilisez OpenRouter (modèles cloud) ou Ollama (modèles locaux). Au moins un fournisseur doit être connecté avant de pouvoir continuer."
 
 #. 0: agentToDuplicate.name
 #: src/chunks/AI/AgentConfig.tsx
@@ -11923,4 +11920,81 @@ msgstr ""
 #: src/chunks/AI/AIChatPage.tsx
 #: src/chunks/AI/AISidebar.tsx
 msgid "Chat resource actions"
+msgstr ""
+
+#: src/components/AI/OpenRouterLoginButton.tsx
+msgid "Could not start OpenRouter login. Allow browser storage and try again."
+msgstr ""
+
+#: src/routes/LinkOpenRouter.tsx
+msgid "OpenRouter did not return an authorization code. Try connecting again."
+msgstr ""
+
+#: src/routes/LinkOpenRouter.tsx
+msgid "Your OpenRouter login session is missing. Try connecting again in this browser."
+msgstr ""
+
+#: src/chunks/AI/ModelSelect/ModelSelect.tsx
+#: src/chunks/AI/RealAIChat.tsx
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Included AI"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Uses your account credits"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Included AI is unavailable or your credits have run out. Check your account allowance or use your own provider. There are no automatic extra charges."
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Could not start included AI. Please try again."
+msgstr ""
+
+#. 0: Math.floor(hostedAI.remaining_micros / 1000); 1: Math.floor(hostedAI.allowance_micros / 1000); 2: new Date(hostedAI.resets_at * 1000).toLocaleDateString()
+#: src/chunks/AI/RealAIChat.tsx
+msgid "{0} of {1} AI credits left · account-wide · resets {2}"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Advanced AI settings"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "By sending, you enable included AI. Your messages and selected document context are sent through Atomic to its AI providers."
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Included AI · model managed by Atomic"
+msgstr ""
+
+#. 0: Math.floor(hostedAI.remaining_micros / 1000); 1: Math.floor(hostedAI.allowance_micros / 1000)
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "{0} of {1} credits remaining this month, shared across your drives."
+msgstr ""
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Could not enable included AI."
+msgstr ""
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "AI included with your account"
+msgstr ""
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Prompts and selected document content pass through Atomic and our AI provider. Atomic does not save prompt or response content in the AI service. Your own provider and local models remain available below."
+msgstr ""
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Use included AI"
+msgstr ""
+
+#. 0: Math.floor(hostedAI.remaining_micros / 1000)
+#: src/chunks/AI/ModelSelect/ModelSelect.tsx
+msgid "{0} credits remaining across your drives."
+msgstr ""
+
+#: src/chunks/AI/ModelSelect/ModelSelect.tsx
+msgid "Use included model"
 msgstr ""

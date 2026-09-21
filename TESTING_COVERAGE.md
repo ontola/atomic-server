@@ -1,3 +1,16 @@
+Included AI: managed transport tests cover signed-out status, explicit consent,
+backend errors, streaming credit failure and non-streaming title generation without
+forwarding a provider key. Setup component tests cover consent failure/retry and
+successful dismissal. atomic-saas owns account isolation, budget concurrency,
+month rollover, paid-drive aggregation, origin/auth checks and disconnected-client
+accounting tests. These tests do not call the live funded OpenRouter service.
+
+AI setup recovery: component tests reproduce dismissed setup reopening on repeated
+requests, prevent login-button mounts from overwriting an in-flight OpenRouter
+verifier, verify the clicked link's PKCE challenge and verifier length, and check
+visible feedback with navigation cancelled when browser storage is blocked.
+Real OpenRouter consent and paid model requests are not exercised by these tests.
+
 Website exports open in a dedicated frozen preview. Browser coverage verifies the
 export resource shows original content after source edits and reload, with scripts
 disabled and no publication action.

@@ -131,8 +131,14 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   children,
 }) => {
   const store = useStore();
-  const { openRouterApiKey, showTokenUsage, ollamaUrl, isProviderAvailable } =
-    useAISettings();
+  const {
+    openRouterApiKey,
+    showTokenUsage,
+    ollamaUrl,
+    isProviderAvailable,
+    hostedAI,
+    enableIncludedAI,
+  } = useAISettings();
 
   // useChat callbacks need refs to read the latest values.
   const autoCompactTokenThresholdRef = useRef<number | null>(null);
@@ -237,7 +243,17 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
       };
     });
 
-    const all = [...openRouterOptions, ...ollamaOptions];
+    const hostedOptions = hostedAI?.enabled
+      ? [
+          {
+            label: 'Included AI',
+            searchLabel: 'included hosted atomic ai',
+            description: 'Uses your account credits',
+            value: `hosted:${hostedAI.model}`,
+          },
+        ]
+      : [];
+    const all = [...hostedOptions, ...openRouterOptions, ...ollamaOptions];
 
     // Surface recently used models at the top. With an empty query the ComboBox
     // shows the options in this order; once the user types, QuickScore re-ranks.
@@ -251,7 +267,13 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     const rest = all.filter(option => !recentRank.has(option.value));
 
     return [...recent, ...rest];
-  }, [openRouterModels, ollamaModels, currencyFormatter, recentModelValues]);
+  }, [
+    openRouterModels,
+    ollamaModels,
+    currencyFormatter,
+    recentModelValues,
+    hostedAI,
+  ]);
 
   const modelSelectContainerRef = useRef<HTMLDivElement>(null);
 
@@ -268,9 +290,15 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const [selectedAgent, setSelectedAgent] = useState<AIAgent>(
     getInitialAgent(!chatSubject, chatSubject),
   );
-  const [activeModel, setActiveModel] = useState<AIModelIdentifier>(() => {
+  const [selectedModel, setActiveModel] = useState<AIModelIdentifier>(() => {
     return selectedAgent.model ?? defaultChatModel;
   });
+  // Old saved agents can name a BYOK model even though this SaaS account never
+  // configured a provider. They should work with the included default too.
+  const activeModel =
+    hostedAI?.enabled && !openRouterApiKey && !ollamaUrl
+      ? defaultChatModel
+      : selectedModel;
   const modelContextLength = useModelContextLength(activeModel);
   const vectorIndexing = useVectorIndexStatus();
   const searchDependentIndexing =
@@ -286,7 +314,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   // this to block typing (a user must always be able to compose a message, even
   // while a provider is unreachable or still being set up) — only to disable the
   // SEND and to surface a clear reason.
-  const canUseInput = isProviderAvailable(activeModel.provider);
+  const canUseInput =
+    isProviderAvailable(activeModel.provider) &&
+    (activeModel.provider !== AIProvider.Hosted ||
+      Boolean(hostedAI?.remaining_micros));
 
   // Re-opens the provider setup overlay (`AISetupPanel` renders while
   // `atomic.ai.setupComplete` is false).
@@ -294,6 +325,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     'atomic.ai.setupComplete',
     false,
   );
+  const [setupRequestId, setSetupRequestId] = useState(0);
 
   // Why the last request failed, if it did. A request that dies — an unreachable
   // provider, a rejected key, a model that doesn't exist — used to leave no
@@ -307,19 +339,23 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
   /** Names the thing that didn't answer, since "no answer" alone helps nobody. */
   const providerLabel =
-    activeModel.provider === AIProvider.Ollama
-      ? `Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}`
-      : activeModel.provider === AIProvider.OpenRouter
-        ? 'OpenRouter'
-        : 'the model provider';
+    activeModel.provider === AIProvider.Hosted
+      ? 'Included AI'
+      : activeModel.provider === AIProvider.Ollama
+        ? `Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}`
+        : activeModel.provider === AIProvider.OpenRouter
+          ? 'OpenRouter'
+          : 'the model provider';
 
   const providerNotice = canUseInput
     ? null
-    : activeModel.provider === AIProvider.Ollama
-      ? `Can't reach Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}. Make sure it's running, or switch to a cloud model — you can keep typing in the meantime.`
-      : activeModel.provider === AIProvider.OpenRouter
-        ? 'No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime.'
-        : 'No AI model provider is available. Set one up to send — you can keep typing in the meantime.';
+    : activeModel.provider === AIProvider.Hosted
+      ? 'Included AI is unavailable or your credits have run out. Check your account allowance or use your own provider. There are no automatic extra charges.'
+      : activeModel.provider === AIProvider.Ollama
+        ? `Can't reach Ollama${ollamaUrl ? ` at ${ollamaUrl}` : ''}. Make sure it's running, or switch to a cloud model — you can keep typing in the meantime.`
+        : activeModel.provider === AIProvider.OpenRouter
+          ? 'No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime.'
+          : 'No AI model provider is available. Set one up to send — you can keep typing in the meantime.';
 
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
     AIMessageContext[]
@@ -560,6 +596,22 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     const text = inputOverride || userInput;
     setRequestError(undefined);
 
+    // The composer discloses the hosted provider before the user sends. Do not
+    // upload context or create a message if recording that choice fails.
+    if (activeModel.provider === AIProvider.Hosted && !hostedAI?.consent) {
+      try {
+        await enableIncludedAI();
+      } catch (error) {
+        setRequestError(
+          error instanceof Error
+            ? error.message
+            : 'Could not start included AI. Please try again.',
+        );
+
+        return;
+      }
+    }
+
     if (text.trim() === '/compact') {
       setUserInput('');
       await compact();
@@ -677,7 +729,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
     autoSubmittedRef.current = true;
 
-    if (!canUseInput) {
+    if (
+      !canUseInput ||
+      (activeModel.provider === AIProvider.Hosted && !hostedAI?.consent)
+    ) {
       // Keep an app handoff editable while the user configures a provider.
       // Do not discard the request or attempt a generation without one.
       setUserInput(autoSubmitMessage);
@@ -765,11 +820,32 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         )}
         {!readonly && (
           <>
+            {activeModel.provider === AIProvider.Hosted && hostedAI && (
+              <Column gap='0.5rem'>
+                <span>
+                  {`${Math.floor(hostedAI.remaining_micros / 1000)} of ${Math.floor(hostedAI.allowance_micros / 1000)} AI credits left · account-wide · resets ${new Date(hostedAI.resets_at * 1000).toLocaleDateString()}`}
+                </span>
+                {!hostedAI.consent && (
+                  <span>
+                    By sending, you enable included AI. Your messages and
+                    selected document context are sent through Atomic to its AI
+                    providers.
+                  </span>
+                )}
+              </Column>
+            )}
             {providerNotice && (
               <ProviderNotice>
                 <span>{providerNotice}</span>
-                <Button onClick={() => setSetupComplete(false)}>
-                  Set up a model
+                <Button
+                  onClick={() => {
+                    setSetupComplete(false);
+                    setSetupRequestId(previous => previous + 1);
+                  }}
+                >
+                  {hostedAI?.enabled
+                    ? 'Advanced AI settings'
+                    : 'Set up a model'}
                 </Button>
               </ProviderNotice>
             )}
@@ -781,7 +857,15 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                 <Button
                   onClick={() => {
                     setRequestError(undefined);
-                    regenerate();
+
+                    if (
+                      activeModel.provider === AIProvider.Hosted &&
+                      !hostedAI?.consent
+                    ) {
+                      void handleSubmit();
+                    } else {
+                      regenerate();
+                    }
                   }}
                 >
                   Try again
@@ -986,56 +1070,64 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                           >
                             {selectedAgent.name}
                           </SubtleButton>
-                          <ModelSelectWrapper ref={modelSelectContainerRef}>
-                            <ComboBox
-                              subtle
-                              selectedItem={`${activeModel.provider}:${activeModel.id}`}
-                              options={combinedModelOptions}
-                              onSelect={value => {
-                                if (!value) return;
-                                const [providerStr, ...idParts] =
-                                  value.split(':');
-                                const id = idParts.join(':');
-                                const provider =
-                                  providerStr === 'openrouter'
-                                    ? AIProvider.OpenRouter
-                                    : AIProvider.Ollama;
-                                const newModel = { id, provider };
-                                setActiveModel(newModel);
+                          {hostedAI?.enabled &&
+                          !openRouterApiKey &&
+                          !ollamaUrl ? (
+                            <span>Included AI · model managed by Atomic</span>
+                          ) : (
+                            <ModelSelectWrapper ref={modelSelectContainerRef}>
+                              <ComboBox
+                                subtle
+                                selectedItem={`${activeModel.provider}:${activeModel.id}`}
+                                options={combinedModelOptions}
+                                onSelect={value => {
+                                  if (!value) return;
+                                  const [providerStr, ...idParts] =
+                                    value.split(':');
+                                  const id = idParts.join(':');
+                                  const provider =
+                                    providerStr === 'hosted'
+                                      ? AIProvider.Hosted
+                                      : providerStr === 'openrouter'
+                                        ? AIProvider.OpenRouter
+                                        : AIProvider.Ollama;
+                                  const newModel = { id, provider };
+                                  setActiveModel(newModel);
 
-                                // Persist the choice to whichever source the chat reads
-                                // on open (`agent.model ?? defaultChatModel`), so it
-                                // survives refreshes and new chats.
-                                if (selectedAgent.model) {
-                                  const updatedAgent = {
-                                    ...selectedAgent,
-                                    model: newModel,
-                                  };
-                                  setSelectedAgent(updatedAgent);
-                                  saveAgents(
-                                    agents.map(a =>
-                                      a.id === updatedAgent.id
-                                        ? updatedAgent
-                                        : a,
-                                    ),
+                                  // Persist the choice to whichever source the chat reads
+                                  // on open (`agent.model ?? defaultChatModel`), so it
+                                  // survives refreshes and new chats.
+                                  if (selectedAgent.model) {
+                                    const updatedAgent = {
+                                      ...selectedAgent,
+                                      model: newModel,
+                                    };
+                                    setSelectedAgent(updatedAgent);
+                                    saveAgents(
+                                      agents.map(a =>
+                                        a.id === updatedAgent.id
+                                          ? updatedAgent
+                                          : a,
+                                      ),
+                                    );
+                                  } else {
+                                    setDefaultChatModel(newModel);
+                                  }
+
+                                  // Remember this model so it surfaces at the top next time.
+                                  setRecentModelValues(prev =>
+                                    [
+                                      value,
+                                      ...prev.filter(v => v !== value),
+                                    ].slice(0, 5),
                                   );
-                                } else {
-                                  setDefaultChatModel(newModel);
-                                }
-
-                                // Remember this model so it surfaces at the top next time.
-                                setRecentModelValues(prev =>
-                                  [
-                                    value,
-                                    ...prev.filter(v => v !== value),
-                                  ].slice(0, 5),
-                                );
-                                // Move focus to the chat input so the user can type right away.
-                                focusInputOnClose.current = true;
-                                setControlsOpen(false);
-                              }}
-                            />
-                          </ModelSelectWrapper>
+                                  // Move focus to the chat input so the user can type right away.
+                                  focusInputOnClose.current = true;
+                                  setControlsOpen(false);
+                                }}
+                              />
+                            </ModelSelectWrapper>
+                          )}
                           {showTokenUsage && totalTokensUsed > 0 && (
                             <TokensUsed>
                               Tokens used:{' '}
@@ -1081,7 +1173,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         onSelectAgent={handleSelectAgent}
       />
 
-      {!readonly && <AISetupPanel />}
+      {!readonly && <AISetupPanel requestId={setupRequestId} />}
     </ChatWindow>
   );
 };
