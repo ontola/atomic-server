@@ -620,6 +620,12 @@ export class Collection {
     // row renders) and must not affect membership.
     if (subject.startsWith('_new:')) return 'unchanged';
 
+    // Server queries return member IDs before their resource bodies load.
+    // An empty loading placeholder has no parent yet; that is not evidence
+    // that the member was re-parented. Removing it here corrupts the shared
+    // query page while other collection readers are still hydrating it.
+    if (resource?.loading) return 'unchanged';
+
     // `r.get(fp)` is a string for single-valued properties (e.g. `parent`)
     // and an array for multi-valued ones (e.g. `isA`). Match like
     // server-side `/query` does ("value-in-property").

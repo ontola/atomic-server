@@ -1,3 +1,8 @@
+Server-only collection hydration: a library regression keeps query members while
+their resource bodies are loading, while still removing a completed re-parent.
+The existing local-db-off-server-only E2Es verify visible children after disabling
+OPFS and reloading both dev and UI-created drives.
+
 Included AI: managed transport tests cover signed-out status, explicit consent,
 backend errors, streaming credit failure and non-streaming title generation without
 forwarding a provider key or SDK User-Agent header (Firefox/Zen CORS regression).
