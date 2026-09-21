@@ -41,6 +41,7 @@ test('creation catalog searches templates and creates a selected table inside a 
     animations: 'disabled',
   });
   await expect(search).toBeFocused();
+
   for (const title of ['Plugin', 'Website', 'App']) {
     await search.fill(title);
     await expect(
@@ -50,13 +51,17 @@ test('creation catalog searches templates and creates a selected table inside a 
       }),
     ).toBeVisible();
   }
+
   for (const query of ['file', 'upload']) {
     await search.fill(query);
     await expect(
       page.getByRole('button', { name: 'Drop files or click here to upload.' }),
     ).toBeVisible();
-    await expect(page.getByText(/No matches. Try another search/)).toHaveCount(0);
+    await expect(page.getByText(/No matches. Try another search/)).toHaveCount(
+      0,
+    );
   }
+
   await search.fill('kanban issue');
   await expect(
     page.getByRole('button', { name: 'Use Issue Tracker template' }),

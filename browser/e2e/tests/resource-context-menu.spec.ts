@@ -90,10 +90,12 @@ test.describe('resource context menu', () => {
     await sidebarFilter.fill('histo');
     await expect(page.getByTestId('menu-item-history')).toBeVisible();
     await expect(page.getByTestId('menu-item-edit')).toHaveCount(0);
+
     for (const kind of ['plugin', 'website', 'app']) {
       await sidebarFilter.fill(`new ${kind}`);
       await expect(page.getByTestId(`menu-item-new-${kind}`)).toHaveCount(0);
     }
+
     await sidebarFilter.press('Escape');
     await openContextMenu(page, sidebarLink, [
       page.getByTestId('menu-item-history'),

@@ -11999,8 +11999,3 @@ msgstr ""
 #: src/chunks/AI/RealAIChat.tsx
 msgid "AI settings"
 msgstr ""
-
-#. 0: property
-#: src/components/PanelLayout.tsx
-msgid "{0} 0.3s ease"
-msgstr ""

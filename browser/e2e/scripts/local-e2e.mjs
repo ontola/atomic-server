@@ -169,6 +169,10 @@ try {
     ATOMIC_CACHE_DIR: join(output, 'cache'),
     ATOMIC_PORT: String(serverPort),
     ATOMIC_DOMAIN: sameOrigin ? 'atomic.localhost' : 'localhost',
+    // Release/export tests use the hosting API even without a public deploy.
+    ATOMIC_WEBSITE_ORIGIN:
+      process.env.ATOMIC_WEBSITE_ORIGIN ??
+      `http://sites.localhost:${serverPort}`,
     ATOMIC_INITIALIZE: 'true',
   };
   delete env.SKIP_WASM_BUILD;

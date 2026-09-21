@@ -19,6 +19,7 @@ async function sampleToggle(page: Page, side: 'left' | 'right') {
     )!;
     const frame = () =>
       new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+
     const measure = () => {
       const bounds = main.getBoundingClientRect();
 
@@ -28,6 +29,7 @@ async function sampleToggle(page: Page, side: 'left' | 'right') {
         sidebarWidth: sidebar.getBoundingClientRect().width,
       };
     };
+
     const start = measure();
     trigger.click();
     let animation: Animation | undefined;
