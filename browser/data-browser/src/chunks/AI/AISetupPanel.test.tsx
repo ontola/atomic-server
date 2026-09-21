@@ -1,12 +1,28 @@
 // @vitest-environment jsdom
 // @wc-ignore-file
 import React from 'react';
-import { cleanup, fireEvent, render } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ThemeProvider, type DefaultTheme } from 'styled-components';
 import { AISetupPanel } from './AISetupPanel';
+import type { HostedAIStatus } from '@helpers/managed/ai';
+
+const hosted = vi.hoisted(() => ({
+  status: undefined as HostedAIStatus | undefined,
+  enable: vi.fn(),
+  managed: false,
+}));
+
+beforeEach(() => {
+  hosted.status = undefined;
+  hosted.managed = false;
+  hosted.enable.mockReset();
+});
 
 vi.mock('@components/Row', () => ({ Column: 'div', Row: 'div' }));
+vi.mock('@helpers/managed/api', () => ({
+  hasManagedApi: () => hosted.managed,
+}));
 vi.mock('@chunks/AI/ModelSelect/ModelSelect', () => ({ default: () => null }));
 
 vi.mock('@components/Dialog', () => ({
@@ -30,6 +46,8 @@ vi.mock('@components/Dialog', () => ({
 vi.mock('@components/AI/AISettingsContext', () => ({
   DEFAULT_CHAT_MODEL: { id: 'test', provider: 'openrouter' },
   useAISettings: () => ({
+    hostedAI: hosted.status,
+    enableIncludedAI: hosted.enable,
     availableProviders: [],
     isProviderAvailable: () => false,
     defaultChatModel: { id: 'test', provider: 'openrouter' },
@@ -85,4 +103,49 @@ it('reopens a dismissed setup when chat requests it again', () => {
   fireEvent.click(view.getByText('Dismiss'));
   view.rerender(panel(2));
   expect(view.queryByRole('dialog')).not.toBeNull();
+});
+
+it('requires an explicit included-AI choice and keeps failed setup retryable', async () => {
+  hosted.status = {
+    enabled: true,
+    consent: false,
+    paid: false,
+    model: 'google/gemini-2.5-flash',
+    allowance_micros: 100000,
+    used_micros: 0,
+    remaining_micros: 100000,
+    resets_at: 1790812800,
+  };
+  hosted.enable.mockRejectedValueOnce(
+    new Error('Could not enable included AI.'),
+  );
+  const view = render(
+    <ThemeProvider theme={{ colors: {} } as DefaultTheme}>
+      <AISetupPanel />
+    </ThemeProvider>,
+  );
+  expect(hosted.enable).not.toHaveBeenCalled();
+  fireEvent.click(view.getByRole('button', { name: 'Use included AI' }));
+  await waitFor(() =>
+    expect(view.getByRole('alert').textContent).toContain('Could not enable'),
+  );
+  expect(view.getByRole('dialog')).not.toBeNull();
+  hosted.enable.mockResolvedValueOnce(undefined);
+  fireEvent.click(view.getByRole('button', { name: 'Use included AI' }));
+  await waitFor(() => expect(view.queryByRole('dialog')).toBeNull());
+  expect(hosted.enable).toHaveBeenCalledTimes(2);
+});
+
+it('never opens onboarding for a SaaS instance, even before status has loaded', () => {
+  hosted.managed = true;
+  const panel = (requestId: number) => (
+    <ThemeProvider theme={{ colors: {} } as DefaultTheme}>
+      <AISetupPanel requestId={requestId} />
+    </ThemeProvider>
+  );
+  const view = render(panel(0));
+  expect(view.queryByRole('dialog')).toBeNull();
+  expect(hosted.enable).not.toHaveBeenCalled();
+  view.rerender(panel(1));
+  expect(view.getByRole('dialog')).not.toBeNull();
 });

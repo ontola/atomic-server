@@ -336,7 +336,6 @@ msgstr "URL de Ollama"
 msgid "Ollama"
 msgstr "Ollama"
 
-#: src/chunks/AI/AISetupPanel.tsx
 #: src/chunks/AI/toolHistory.test.ts
 #: src/chunks/AI/toolHistory.test.ts
 #: src/views/InvitePage.tsx
@@ -4073,9 +4072,8 @@ msgstr "¡IMPORTANTE! Abajo está tu secreto de agente, lo usas para iniciar ses
 msgid "This pre-selects a model for built-in agents and new custom agents. You can change each agent's model individually later."
 msgstr "Esto preselecciona un modelo para agentes integrados y nuevos agentes personalizados. Podrás cambiar el modelo de cada agente individualmente más tarde."
 
-#: src/chunks/AI/AISetupPanel.tsx
-msgid "Use OpenRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
-msgstr "Usa OpenRouter (modelos en la nube) u Ollama (modelos locales). Al menos un proveedor debe estar conectado antes de poder continuar."
+#~ msgid "Use OpenRouter (cloud models) or Ollama (local models). At least one provider must be connected before you can continue."
+#~ msgstr "Usa OpenRouter (modelos en la nube) u Ollama (modelos locales). Al menos un proveedor debe estar conectado antes de poder continuar."
 
 #. 0: agentToDuplicate.name
 #: src/chunks/AI/AgentConfig.tsx
@@ -11934,4 +11932,69 @@ msgstr ""
 
 #: src/routes/LinkOpenRouter.tsx
 msgid "Your OpenRouter login session is missing. Try connecting again in this browser."
+msgstr ""
+
+#: src/chunks/AI/ModelSelect/ModelSelect.tsx
+#: src/chunks/AI/RealAIChat.tsx
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Included AI"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Uses your account credits"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Included AI is unavailable or your credits have run out. Check your account allowance or use your own provider. There are no automatic extra charges."
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Could not start included AI. Please try again."
+msgstr ""
+
+#. 0: Math.floor(hostedAI.remaining_micros / 1000); 1: Math.floor(hostedAI.allowance_micros / 1000); 2: new Date(hostedAI.resets_at * 1000).toLocaleDateString()
+#: src/chunks/AI/RealAIChat.tsx
+msgid "{0} of {1} AI credits left · account-wide · resets {2}"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Advanced AI settings"
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "By sending, you enable included AI. Your messages and selected document context are sent through Atomic to its AI providers."
+msgstr ""
+
+#: src/chunks/AI/RealAIChat.tsx
+msgid "Included AI · model managed by Atomic"
+msgstr ""
+
+#. 0: Math.floor(hostedAI.remaining_micros / 1000); 1: Math.floor(hostedAI.allowance_micros / 1000)
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "{0} of {1} credits remaining this month, shared across your drives."
+msgstr ""
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Could not enable included AI."
+msgstr ""
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "AI included with your account"
+msgstr ""
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Prompts and selected document content pass through Atomic and our AI provider. Atomic does not save prompt or response content in the AI service. Your own provider and local models remain available below."
+msgstr ""
+
+#: src/chunks/AI/AISetupPanel.tsx
+msgid "Use included AI"
+msgstr ""
+
+#. 0: Math.floor(hostedAI.remaining_micros / 1000)
+#: src/chunks/AI/ModelSelect/ModelSelect.tsx
+msgid "{0} credits remaining across your drives."
+msgstr ""
+
+#: src/chunks/AI/ModelSelect/ModelSelect.tsx
+msgid "Use included model"
 msgstr ""
