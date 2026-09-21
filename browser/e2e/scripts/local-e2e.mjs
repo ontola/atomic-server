@@ -169,6 +169,7 @@ try {
     ATOMIC_CONFIG_DIR: join(output, 'config'),
     ATOMIC_CACHE_DIR: join(output, 'cache'),
     ATOMIC_PORT: String(serverPort),
+    ATOMIC_WEBSITE_ORIGIN: `http://sites.localhost:${serverPort}`,
     ATOMIC_DOMAIN: sameOrigin ? 'atomic.localhost' : 'localhost',
     ATOMIC_INITIALIZE: 'true',
   };

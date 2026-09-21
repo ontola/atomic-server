@@ -1112,7 +1112,9 @@ mounts without resetting or re-registering the global parser.
   cannot reuse the holes — and reopens it: the policy compacts, the file
   gives back most of the measured free space, every kept resource reads its
   last value, the record survives the next open, and a disabled policy leaves
-  the file byte-for-byte alone. Overwrites *alone* leave only ~20% dead
+  dead space uncompacted. The fixture disables periodic background flushes
+  so page-allocation measurements are deterministic; it flushes explicitly.
+  Overwrites *alone* leave only ~20% dead
   (freed blocks coalesce and get reused), which is why the test deletes.
   `server::config::tests` cover the `--auto-compact*` flags. Not covered:
   compaction of a store another process holds open (the open itself fails
