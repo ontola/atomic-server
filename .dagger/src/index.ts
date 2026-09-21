@@ -1098,11 +1098,34 @@ export class AtomicServer {
     );
   }
 
-  /** Extracts the unique deploy URL from netlify output */
+  /**
+   * Extracts the unique deploy URL from netlify output.
+   *
+   * Says which of the two failures happened, because they need opposite
+   * responses and for weeks they printed the same sentence. `netlifyDeploy`
+   * exits 0 with a skip message when `NETLIFY_AUTH_TOKEN` is empty, so an
+   * unset secret and a parse miss both arrived as "Deploy URL not found" —
+   * which reads like the URL format changed and is the reason nobody noticed
+   * that every failed e2e run on develop was publishing no report at all.
+   *
+   * That report is not a nicety. `playwright.config.ts` records traces with
+   * `retain-on-failure`, and this deploy is the only path that carries them
+   * off the runner: the `upload-artifact` step in `main-ci.yml` uploads
+   * `./artifact`, which nothing writes, because the Dagger container holding
+   * them is discarded when the `ci` call throws. So with the token unset the
+   * per-shard 20k-char log tail is the entire evidence channel for a failed
+   * run, and "which assertion failed" arrives without "why".
+   */
   private extractDeployUrl(netlifyOutput: string): string {
     const match = netlifyOutput.match(/https:\/\/[a-f0-9]+--.+\.netlify\.app/);
 
-    return match ? match[0] : 'Deploy URL not found';
+    if (match) return match[0];
+
+    if (netlifyOutput.includes('NETLIFY_AUTH_TOKEN not set')) {
+      return 'no report deployed — NETLIFY_AUTH_TOKEN is empty on this runner, so traces and error-context for this shard were discarded with the container';
+    }
+
+    return 'Deploy URL not found (netlify ran but printed no deploy URL)';
   }
 
   @func()
