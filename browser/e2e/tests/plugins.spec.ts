@@ -1501,7 +1501,12 @@ export async function run(ctx) {
       },
       { connection: target.plugin, drive: target.drive },
     );
-    const triggerURL = `${SERVER_URL}/plugin-trigger`;
+    // Same two-runtime split as the `getServerUrl` above: `page.request` reads
+    // as browser-side but Playwright issues it from the Node test process,
+    // which resolves `atomic.localhost` to loopback rather than the server
+    // container. The signature is over this URL and the server derives the
+    // subject it checks from the `Host` it is reached on, so both move together.
+    const triggerURL = `${nodeReachableServerUrl(SERVER_URL)}/plugin-trigger`;
     const triggerResponse = await page.request.post(triggerURL, {
       headers: await signRequest(triggerURL, agent, {}),
       data: {
