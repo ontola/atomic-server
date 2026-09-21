@@ -1885,7 +1885,20 @@ export class AtomicServer {
         .withEntrypoint([
           'sh',
           '-c',
-          'node /mock-proxy/mock-proxy.mjs & exec /atomic-server-bin',
+          // Resources the browser creates carry `atomic.localhost:9883`, the
+          // origin it was served from, so anything the server then fetches by
+          // subject goes to that name from inside this container. RFC 6761
+          // gives `.localhost` to loopback, but that is a rule browsers and
+          // Node implement and glibc does not: with `hosts: files dns` the
+          // name simply does not resolve, and reqwest fails with "error
+          // sending request for url" before any request goes out. It is why
+          // `plugin.spec.ts:26` has been red since 4194: the install 500s on
+          // `/releases/blake3:…` and the dialog it waits behind never closes.
+          // Written at start rather than baked in, because the runtime mounts
+          // its own `/etc/hosts` over the image's. The server binds `::`, so
+          // once the name resolves it reaches itself.
+          'echo "127.0.0.1 atomic.localhost" >> /etc/hosts; ' +
+            'node /mock-proxy/mock-proxy.mjs & exec /atomic-server-bin',
         ]);
 
     // Dagger deduplicates identical services, including their writable state.
