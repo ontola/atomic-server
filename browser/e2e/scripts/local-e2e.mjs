@@ -160,6 +160,7 @@ try {
     PLAYWRIGHT_HTML_OUTPUT_DIR: join(output, 'report'),
     PLAYWRIGHT_JSON_OUTPUT_FILE: join(output, 'report.json'),
     ATOMICSERVER_SKIP_JS_BUILD: 'true',
+    ATOMICSERVER_REQUIRE_PLUGIN_RUNTIME: 'true',
     SERVER_URL: serverURL,
     FRONTEND_URL: serverURL,
     ATOMIC_SERVICE_URL: `http://127.0.0.1:${serverPort}`,

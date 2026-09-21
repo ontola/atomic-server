@@ -1,3 +1,7 @@
+Editor sync formatting: unit tests cover both enabling and disabling bold before
+an incoming property update, so sync receipts cannot reset the next typed text's
+formatting. The production-bundle typing E2E exercises the keyboard shortcut.
+
 Sidebar layout: browser checks sample both docked sidebar transitions halfway
 through opening/closing and verify that the main content moves with them, with
 matching duration/easing. They also cover hover reveal, mobile backdrop dismissal,

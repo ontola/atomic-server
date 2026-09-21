@@ -1,5 +1,5 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 74c4b30c8be44a01bfa974046502af2de912f667..8983d1a5ea05a39f7ffe6ec530f79223b8e1640f 100644
+index 74c4b30c8be44a01bfa974046502af2de912f667..5ad7e2756f2861f39c9a55351d6a5487cfe465b3 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
 @@ -5,7 +5,6 @@ let loro_crdt = require("loro-crdt");
@@ -413,7 +413,7 @@ index 74c4b30c8be44a01bfa974046502af2de912f667..8983d1a5ea05a39f7ffe6ec530f79223
  	const mapping = /* @__PURE__ */ new Map();
  	if (innerDoc.size === 0) {
  		const tr = view.state.tr.delete(0, view.state.doc.content.size);
-@@ -649,15 +812,17 @@ function updateNodeOnLoroEvent(view, event) {
+@@ -649,15 +812,21 @@ function updateNodeOnLoroEvent(view, event) {
  	if (event.by === "local" && event.origin !== "undo") return;
  	const mapping = state.mapping;
  	clearChangedNodes(state.doc, event, mapping);
@@ -428,6 +428,10 @@ index 74c4b30c8be44a01bfa974046502af2de912f667..8983d1a5ea05a39f7ffe6ec530f79223
 +		const size = tr.doc.content.size;
 +		if (anchorPos != null && focusPos != null && anchorPos >= 0 && focusPos >= 0 && anchorPos <= size && focusPos <= size) tr.setSelection(prosemirror_state.TextSelection.between(tr.doc.resolve(anchorPos), tr.doc.resolve(focusPos)));
 +	}
++	// A remote receipt or edit must not reset the user's pending formatting.
++	if (event.by === "import" && view.state.selection.empty && tr.selection.empty && view.state.storedMarks !== null) {
++	  tr.setStoredMarks(tr.selection.$from.parent.type.allowedMarks(view.state.storedMarks));
++	}
  	view.dispatch(tr);
 -	if (anchor == null) return;
 -	setTimeout(() => {
@@ -436,7 +440,7 @@ index 74c4b30c8be44a01bfa974046502af2de912f667..8983d1a5ea05a39f7ffe6ec530f79223
  }
  /**
  * Update ProseMirror selection based on the given Loro cursors.
-@@ -672,7 +837,6 @@ function syncCursorsToPmSelection(view, anchor, focus) {
+@@ -672,7 +841,6 @@ function syncCursorsToPmSelection(view, anchor, focus) {
  	if (anchorPos == null) return;
  	safeSetSelection(view, anchorPos, focusPos);
  }
@@ -445,7 +449,7 @@ index 74c4b30c8be44a01bfa974046502af2de912f667..8983d1a5ea05a39f7ffe6ec530f79223
  //#region \0@oxc-project+runtime@0.112.0/helpers/typeof.js
  function _typeof(o) {
 diff --git a/dist/index.d.ts b/dist/index.d.ts
-index 187d0891377a3b876b77ed2a4d617c71057eff84..5b75bca6b51989e4f82256ea06df1737779300ed 100644
+index 187d0891377a3b876b77ed2a4d617c71057eff84..9901c32abb08677e280a5dbac287e5ef31ee62c6 100644
 --- a/dist/index.d.ts
 +++ b/dist/index.d.ts
 @@ -1,6 +1,6 @@
@@ -466,7 +470,7 @@ index 187d0891377a3b876b77ed2a4d617c71057eff84..5b75bca6b51989e4f82256ea06df1737
  declare function createNodeFromLoroObj(schema: Schema, obj: LoroText, mapping: LoroNodeMapping): Node[];
  //#endregion
 diff --git a/dist/index.js b/dist/index.js
-index e41095d5b08a1fdebb48143beceb7fe93aa20565..54b1d2ff3177a97dedc4155d191a224835953f40 100644
+index e41095d5b08a1fdebb48143beceb7fe93aa20565..ba7465b94878e9c3dac29db532221781bf1bbee7 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -4,7 +4,6 @@ import { Awareness, Cursor, EphemeralStore, LoroDoc, LoroList, LoroMap, LoroText
@@ -880,7 +884,7 @@ index e41095d5b08a1fdebb48143beceb7fe93aa20565..54b1d2ff3177a97dedc4155d191a2248
  	const mapping = /* @__PURE__ */ new Map();
  	if (innerDoc.size === 0) {
  		const tr = view.state.tr.delete(0, view.state.doc.content.size);
-@@ -648,15 +811,17 @@ function updateNodeOnLoroEvent(view, event) {
+@@ -648,15 +811,21 @@ function updateNodeOnLoroEvent(view, event) {
  	if (event.by === "local" && event.origin !== "undo") return;
  	const mapping = state.mapping;
  	clearChangedNodes(state.doc, event, mapping);
@@ -895,6 +899,10 @@ index e41095d5b08a1fdebb48143beceb7fe93aa20565..54b1d2ff3177a97dedc4155d191a2248
 +		const size = tr.doc.content.size;
 +		if (anchorPos != null && focusPos != null && anchorPos >= 0 && focusPos >= 0 && anchorPos <= size && focusPos <= size) tr.setSelection(TextSelection.between(tr.doc.resolve(anchorPos), tr.doc.resolve(focusPos)));
 +	}
++	// A remote receipt or edit must not reset the user's pending formatting.
++	if (event.by === "import" && view.state.selection.empty && tr.selection.empty && view.state.storedMarks !== null) {
++	  tr.setStoredMarks(tr.selection.$from.parent.type.allowedMarks(view.state.storedMarks));
++	}
  	view.dispatch(tr);
 -	if (anchor == null) return;
 -	setTimeout(() => {
@@ -903,7 +911,7 @@ index e41095d5b08a1fdebb48143beceb7fe93aa20565..54b1d2ff3177a97dedc4155d191a2248
  }
  /**
  * Update ProseMirror selection based on the given Loro cursors.
-@@ -671,7 +836,6 @@ function syncCursorsToPmSelection(view, anchor, focus) {
+@@ -671,7 +840,6 @@ function syncCursorsToPmSelection(view, anchor, focus) {
  	if (anchorPos == null) return;
  	safeSetSelection(view, anchorPos, focusPos);
  }
@@ -1385,7 +1393,7 @@ index 51d62a8b2229abd051454ab031fa898f4e94c67b..896bab8a3bb0313c25b1cf7c9d3be421
    } else if (loroDelLength > 0) {
      loroChildren
 diff --git a/src/sync-plugin.ts b/src/sync-plugin.ts
-index e5ef3228ed0c3edd57e9bea474c682fde01cf422..08100f94c4b375dca1d97b6d35ac36121693434d 100644
+index e5ef3228ed0c3edd57e9bea474c682fde01cf422..046a6a84308c00e66d988e0587eb7eb0f4308e24 100644
 --- a/src/sync-plugin.ts
 +++ b/src/sync-plugin.ts
 @@ -1,6 +1,12 @@
@@ -1434,7 +1442,7 @@ index e5ef3228ed0c3edd57e9bea474c682fde01cf422..08100f94c4b375dca1d97b6d35ac3612
          });
        }
        return null;
-@@ -209,14 +221,30 @@ function updateNodeOnLoroEvent(view: EditorView, event: LoroEventBatch) {
+@@ -209,14 +221,34 @@ function updateNodeOnLoroEvent(view: EditorView, event: LoroEventBatch) {
    tr.setMeta(loroSyncPluginKey, {
      type: "non-local-updates",
    });
@@ -1468,6 +1476,10 @@ index e5ef3228ed0c3edd57e9bea474c682fde01cf422..08100f94c4b375dca1d97b6d35ac3612
 -  setTimeout(() => {
 -    syncCursorsToPmSelection(view, anchor, focus);
 -  });
++  // A remote receipt or edit must not reset the user's pending formatting.
++  if (event.by === "import" && view.state.selection.empty && tr.selection.empty && view.state.storedMarks !== null) {
++    tr.setStoredMarks(tr.selection.$from.parent.type.allowedMarks(view.state.storedMarks));
++  }
 +  view.dispatch(tr);
  }
  
