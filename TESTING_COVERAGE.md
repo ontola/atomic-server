@@ -1218,7 +1218,7 @@ This does not yet prove restoration of the user's private staging workspace.
 
 - `browser/e2e/tests/plugin.spec.ts`: private plugin assets load through signed parent requests; custom rendering and RPC still work.
 - The bootstrap test opens the shell directly and verifies its server-enforced opaque origin, independently of iframe attributes.
-- `signout-signin-data.spec.ts` uses fresh persistent profiles on macOS WebKit because ephemeral contexts reject OPFS; these remain browser tests, not native Tauri acceptance.
+- `signout-signin-data.spec.ts` runs in the optional Linux WebKit project. macOS WebKit runs are rejected before browser launch: persistent profiles repeatedly prompt for the login Keychain, while ephemeral contexts reject OPFS. These remain browser tests, not native Tauri acceptance.
 
 - `browser/lib/src/store.test.ts`: receiving an older resource preserves the merged value in both JSON and the persisted Loro snapshot; dashboard configuration reload exercises the real OPFS path.
 ## Plugin release and recovery additions
@@ -1708,7 +1708,7 @@ This does not yet prove restoration of the user's private staging workspace.
 
 - `browser/e2e/tests/plugin.spec.ts`: private plugin assets load through signed parent requests; custom rendering and RPC still work. The compiled PluginPage flow checks client metadata updates without replacing its mounted resource, active draft preservation, valid/invalid config, Save completion and offline save/reconnect persistence.
 - The bootstrap test opens the shell directly and verifies its server-enforced opaque origin, independently of iframe attributes.
-- `signout-signin-data.spec.ts` uses fresh persistent profiles on macOS WebKit because ephemeral contexts reject OPFS; these remain browser tests, not native Tauri acceptance.
+- `signout-signin-data.spec.ts` runs in the optional Linux WebKit project. macOS WebKit runs are rejected before browser launch: persistent profiles repeatedly prompt for the login Keychain, while ephemeral contexts reject OPFS. These remain browser tests, not native Tauri acceptance.
 
 - `browser/lib/src/store.test.ts`: receiving an older resource preserves the merged value in both JSON and the persisted Loro snapshot; dashboard configuration reload exercises the real OPFS path.
 
