@@ -165,6 +165,31 @@ export function run() { return { intents: [] }; }
   test('Notion discovers databases through the proxy and reports revoked access without server OAuth', async ({
     page,
   }) => {
+    // Two 45s waits below on the suite's 60s default, so neither could ever
+    // fire: the wall always reported first and named itself instead of the
+    // step. The test next door already says why, in its own words, and every
+    // other test in this file carrying a 45s wait raises its budget. This was
+    // the one that did not.
+    //
+    // Timed step by step under four-worker load, three copies:
+    //
+    //   step                       budget   run A    run B    run C
+    //   setup through the alert         -    5.0s     4.2s     1.9s
+    //   approve-enabled               45s   29.9s    33.4s     8.3s
+    //   proxy-task visible       default     49ms     32ms      6ms
+    //   sync-complete                 45s     4.3s    (wall)    1.0s
+    //   whole test                    60s  (wall)   (wall)    34.0s
+    //
+    // The assertion budgets are not the problem: the worst `approve-enabled`
+    // sample is 33.4s of its 45s. Run B is the one that settles it, reaching
+    // the sync with 33s already spent and dying mid-step with its budget
+    // untouched. Only the wall was ever failing this test.
+    //
+    // 45s stays on both waits deliberately. At a 120s wall it can fire for the
+    // first time, so a future failure names the step that was slow rather than
+    // reporting the wall; 33.4s against 45s keeps eleven seconds of headroom on
+    // a box harsher than the shard.
+    test.setTimeout(120_000);
     const actor = Agent.fromSecret(await getDevDriveSecret(page), 'js').subject;
     const drive = new URL(page.url()).searchParams.get('subject')!;
     const origin = 'https://notion-proxy.test';
