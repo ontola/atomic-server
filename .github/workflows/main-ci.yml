@@ -74,6 +74,17 @@ jobs:
           # comma-separated — the default newline separator would split the
           # shell command instead.
           sep-tags: ","
+          # Explicit list so the default preset (schedule/branch/tag/pr) stays
+          # exactly as before, plus a full-SHA tag: ontola/atomic-plugins pins
+          # its own CI to an exact atomic-server commit (see the TEMPORARY
+          # publish gate below) and needs a tag it can compute without
+          # querying the API — the commit SHA it already has.
+          tags: |
+            type=schedule
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
+            type=sha,format=long
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install Node
         uses: actions/setup-node@v4
@@ -111,7 +122,14 @@ jobs:
         # it invites someone to conclude one exists. `master` is not a docker
         # trigger either. Versioned images are published from tags via the
         # release process (`dagger call create-docker-images --tags …`).
-        if: github.ref == 'refs/heads/develop'
+        #
+        # TEMPORARY: also publish from feat/plugin-debug (sha-tagged, via the
+        # `type=sha,format=long` tag added above). localthought/atomic-plugins
+        # pins its CI to an exact commit on this branch and has no other way
+        # to get a running atomic-server without compiling one from source on
+        # every run. Remove this `|| ...` clause once the plugin interface
+        # stabilizes and atomic-plugins integrates against develop instead.
+        if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/feat/plugin-debug'
         uses: dagger/dagger-for-github@8.0.0
         with:
           version: "latest"
