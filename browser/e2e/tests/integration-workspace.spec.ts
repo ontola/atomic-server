@@ -1,10 +1,17 @@
 import { test, expect } from '@playwright/test';
-import { before } from './test-utils';
+import { before, waitForSynced } from './test-utils';
 test.beforeEach(before);
 
 test('workspace owns its views and links to separate connection settings', async ({
   page,
 }) => {
+  // This test installs a connection, navigates, reloads twice and walks four
+  // settings tabs, and two of its steps are now allowed 45s each because the
+  // resources behind them are read local-first. It measured 25s alone and
+  // failed the 60s default under four local workers with 20s still to run, so
+  // fixing only the assertions would move the failure onto the test budget.
+  test.setTimeout(240_000);
+
   const installed = await page.evaluate(async () => {
     const store = window.store!;
     // `installGitHub` is the app's own installer, which already holds the
@@ -45,6 +52,12 @@ test('workspace owns its views and links to separate connection settings', async
 
     return { plugin: connection.plugin, table: connection.table };
   });
+  // Everything above was written through the store in this page. Navigating
+  // on top of an outbox that has not drained is the race `apps.spec.ts`
+  // documents: the write the UI has already accepted is gone after the
+  // navigation. Twenty-four other spec files wait here; this one did not.
+  await waitForSynced(page);
+
   await page.goto(
     new URL(
       `/app/show?subject=${encodeURIComponent(installed.table)}`,
@@ -60,7 +73,28 @@ test('workspace owns its views and links to separate connection settings', async
   await expect(
     page.getByRole('heading', { name: 'Source', exact: true }),
   ).not.toBeVisible();
-  await expect(page.getByText('Todo', { exact: true }).first()).toBeVisible();
+  // The kanban column headings are four Tag resources of the embedded task
+  // vocabulary (`https://atomicdata.dev/task/v1/{todo,doing,blocked,done}`),
+  // and until they load the header renders `useTitle`'s loading placeholder,
+  // `...`. Reaching them is local-first: `fetchResourceWithLocalFallback`
+  // waits on a client-database read in the WASM worker before it will ask the
+  // server. Under four local Playwright workers that one worker round trip was
+  // measured at 3965 ms, and the headings arrived 12 to 13 seconds after the
+  // navigation in four runs out of four:
+  //
+  //     10 s   the assertion below, on its old default, with all four
+  //            headings still showing `...`
+  //     +2036 ms, +3099 ms, +3102 ms, +3234 ms until `Todo` appeared
+  //
+  // The server itself is not the slow part: asked directly for the same four
+  // subjects through its `/path` proxy it answers in 1.5 to 2.1 ms, and a
+  // hand-issued `fetchResourceFromServer` from the stalled page returns a
+  // complete resource in 11 to 71 ms. So this is a budget, not a hang — but
+  // the local read's lack of a deadline is a real product question, raised
+  // separately.
+  await expect(page.getByText('Todo', { exact: true }).first()).toBeVisible({
+    timeout: 45_000,
+  });
   await page.screenshot({
     path: '/tmp/atomic-integration-workspace.png',
     fullPage: true,
@@ -93,11 +127,21 @@ test('workspace owns its views and links to separate connection settings', async
   await expect(
     page.getByRole('button', { name: 'New automation' }),
   ).toBeVisible();
+  // The opening-view setting is a write; reloading before it has gone out is
+  // the same race as the navigation above.
+  await waitForSynced(page);
   await page.reload();
   await page.getByRole('tab', { name: 'Settings', exact: true }).click();
+  // Each `<option>` is a view resource rendered by name, so this is the same
+  // local-first read as the kanban headings and shows the same `...` until it
+  // lands. Seen under four workers as
+  //
+  //     <option value="did:ad:_3wWljDq…">...</option>
+  //
+  // still unresolved sixteen polls in.
   await expect(
     page.getByLabel('Opening view').locator('option:checked'),
-  ).toHaveText('All issues');
+  ).toHaveText('All issues', { timeout: 45_000 });
   await page.getByRole('tab', { name: 'Sync', exact: true }).click();
   let releasePreview!: () => void;
   const previewGate = new Promise<void>(resolve => {
