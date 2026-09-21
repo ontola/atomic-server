@@ -328,3 +328,55 @@ test('mobile chat keeps navigation usable and Back dismisses only the chat', asy
     page.getByRole('checkbox', { name: 'Enable AI Features' }),
   ).toBeVisible();
 });
+
+for (const { name, width, navigateAway } of [
+  { name: 'mobile current resource', width: 390, navigateAway: false },
+  { name: 'mobile different resource', width: 390, navigateAway: true },
+  { name: 'desktop resource', width: 1280, navigateAway: true },
+]) {
+  test(`${name} links reveal the destination without losing chat`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await enableAIForTesting(page);
+    await before({ page });
+    const driveURL = page.url();
+    const subject = await page.locator('main[about]').getAttribute('about');
+    expect(subject).toBeTruthy();
+    await setupAIRouteMocks(page, {
+      chatResponse: `Here is your [linked drive](${subject}).`,
+    });
+
+    if (navigateAway) {
+      const agent = await page.evaluate(
+        () => window.store!.getAgent()!.subject,
+      );
+      if (!agent) throw new Error('Expected a signed-in agent');
+      await page.goto(
+        new URL(`/app/open?subject=${encodeURIComponent(agent)}`, driveURL)
+          .href,
+      );
+    }
+
+    await openAISidebar(page);
+    await sendChatMessage(page, 'Show my drive');
+    const panel = page.getByTestId('ai-sidebar');
+    await panel
+      .getByRole('link', { name: 'linked drive', exact: true })
+      .click();
+    await expect(page.locator('main[about]')).toHaveAttribute(
+      'about',
+      subject!,
+    );
+
+    if (width === 390) {
+      await expect(panel).not.toHaveAttribute('data-open', '');
+      await openAISidebar(page);
+      await expect(
+        panel.getByRole('link', { name: 'linked drive', exact: true }),
+      ).toBeVisible();
+    } else {
+      await expect(panel).toHaveAttribute('data-open', '');
+    }
+  });
+}

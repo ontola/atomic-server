@@ -60,3 +60,15 @@ it('navigation closes the panel without returning from the destination', () => {
   rerender({ open: false });
   expect(history.location.href).toBe('/app/settings');
 });
+
+it('navigation with inherited chat state keeps the resource destination', () => {
+  const close = vi.fn();
+  const { rerender } = renderHook(
+    ({ open }) => useMobilePanelHistory(open, close),
+    { initialProps: { open: true } },
+  );
+  act(() => history.push('/app/open?subject=next', history.location.state));
+  expect(close).toHaveBeenCalledOnce();
+  rerender({ open: false });
+  expect(history.location.href).toBe('/app/open?subject=next');
+});
