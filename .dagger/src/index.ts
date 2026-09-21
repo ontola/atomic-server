@@ -1881,26 +1881,44 @@ export class AtomicServer {
         // server asks for a separate `.localhost` origin in development; this
         // is that, and it has to stay outside the API domain.
         .withEnvVariable('ATOMIC_WEBSITE_ORIGIN', 'http://sites.localhost:9883')
-        // `plugin.spec.ts:26` installs a plugin whose Release the server then
-        // fetches back by subject URL. The browser addressed it as
-        // `atomic.localhost:9883` rather than this container's own `atomic`,
-        // so `Subject::is_local()` (server/src/plugins/release.rs) reads it as
-        // remote and the fetch goes out over HTTP instead of reading the blob
-        // beside it. That fetch is the *untrusted* one, behind the SSRF guard,
-        // whose `PublicOnlyResolver` drops every non-public address it
-        // resolves to. So once the hosts line below makes the name resolve, it
-        // resolves to 127.0.0.1 and the guard refuses it — and reqwest reports
-        // an unresolvable name and a refused address with the same string,
-        // "error sending request for url", which is why adding that line alone
-        // did not change the log by one character. `resolve_public` and the
-        // `resolver_rejects_loopback_domain` test in lib/src/client/helpers.rs
-        // are that behaviour, deliberate and asserted.
+        // The name the server answers to, which until now was not the name it
+        // is addressed by. `ATOMIC_DOMAIN` above is the dagger hostname, and
+        // the server was given the same string, so its configured origin was
+        // `http://atomic:9883` while every browser-created subject carried
+        // `http://atomic.localhost:9883`. Those two are compared as authorities
+        // in `Subject::from_raw`, where `atomic.localhost:9883` matches neither
+        // `atomic:9883` nor the `.atomic:9883` suffix case, so the server read
+        // its own subjects as somebody else's:
         //
-        // This flag is the escape hatch that module documents, and only the
-        // e2e container gets it. A real deployment is addressed by its own
-        // configured domain, so `is_local()` is true there, the release is
-        // read locally and this fetch never happens: the guard stays on where
-        // it protects something.
+        //   from_raw(".../releases/blake3:1a0b3fbb", Some("http://atomic:9883"))
+        //     -> is_local false
+        //   from_raw(".../releases/blake3:1a0b3fbb", Some("http://atomic.localhost:9883"))
+        //     -> is_local true
+        //
+        // Splitting the two lets the server know its own name while dagger
+        // keeps addressing the container as `atomic`. Routing does not move
+        // with it: `map_request_subject` (lib/src/db.rs) only re-routes a host
+        // explicitly bound to a Drive, and `atomic` is not bound, so the
+        // containers that curl `http://atomic:9883` are unaffected.
+        .withEnvVariable('ATOMIC_DOMAIN', 'atomic.localhost')
+        // Kept for one run, and expected to be dead weight now.
+        //
+        // This and the hosts line below are the two earlier attempts at
+        // `plugin.spec.ts:26`, both aimed at the HTTP fetch rather than at the
+        // reason there was one. Each moved the error and neither cleared it:
+        // first the name did not resolve, then it resolved to 127.0.0.1 and
+        // the SSRF guard's `PublicOnlyResolver` refused it (reqwest reports
+        // both as "error sending request for url", which is why the hosts line
+        // alone did not change the log by one character), and finally, with
+        // this flag letting it through, a 401, because the fetch is unsigned
+        // and the Release inherits its Drive's rights. The line above removes
+        // the fetch instead, so none of those stages is reached.
+        //
+        // They stay only so the next run tests one change. Once it is green
+        // both should go, which puts the guard back on where it protects
+        // something: `resolve_public` and `resolver_rejects_loopback_domain`
+        // in lib/src/client/helpers.rs are that behaviour, deliberate and
+        // asserted.
         .withEnvVariable('ATOMIC_ALLOW_PRIVATE_FETCH', '1')
         .withExposedPort(19090)
         .withEntrypoint([
