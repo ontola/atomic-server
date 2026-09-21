@@ -75,3 +75,38 @@ the tenant handoff and rotating connection code, then maps fetched records into
 locally reviewed proposals. Companion branches in Syncables and integration-proxy
 provide WASM compatibility and CORS. See `integrations/localthought/README.md`.
 Legacy direct integrations, action infrastructure and scheduling remain separate.
+
+## Reflector supersedes the browser/WASM path
+
+[Issue #1599](https://github.com/ontola/atomic-server/issues/1599) (2026-09-21)
+decides that `localthought/reflector` — a working TS service that already syncs
+Google Calendar via `localthought/syncables` (the OpenAPI+overlay sync engine
+above) and its own OAuth/PKCE handshake — supersedes the browser/WASM/
+integration-proxy mechanism above for LocalThought platforms going forward, and
+that the Rust `integrations/localthought/syncables` crate and
+`wasm/src/integrations.rs` are retired once every platform has migrated.
+Migration is per platform, not a flag-day cutover:
+
+- [ ] Google Calendar first — reflector already supports it live.
+- [ ] Todoist and Clockify keep using the browser/WASM/integration-proxy path
+  above until each is ported.
+- A plugin consumes a self-hosted reflector instance the same way it consumes
+  any other third-party API: through the sandboxed `fetch` capability
+  (`plugin-runtime/wit/plugin-runtime.wit`), with reflector's origin declared
+  in the plugin manifest and its credentials handled via the existing
+  `secret:<name>` substitution. This needs no new host capability.
+- Reflector's own bidirectional reflection engine (id-map, origin markers,
+  reflect loop — see its README's "Reflecting between two systems" section) is
+  being generalized and extracted as a new `localthought/devonian` package,
+  superseding the narrower, GitHub-issues-specific copy currently nested in
+  `atomic-plugins/integrations/github-issues/devonian/`; reflector will depend
+  on that package instead of keeping its own copy.
+- Reflector's OAuth/PKCE handshake stays in reflector, exposed as a
+  fetch-wrapper factory that feeds `syncables`' `ApiClientOptions.fetch`;
+  `syncables` itself stays auth-agnostic.
+- PR #1383 (`reflector-rs`, the Rust OpenAPI-import approach) remains
+  closed/unmerged; nothing in it is being ported forward.
+
+Once every LocalThought platform has migrated: delete `wasm/src/integrations.rs`,
+the `integrations/localthought/syncables` Rust crate, and the `syncables` path
+dependency in `wasm/Cargo.toml`.
