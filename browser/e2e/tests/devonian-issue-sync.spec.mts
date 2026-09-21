@@ -252,8 +252,15 @@ async function waitForCardStatus(page: Page, title: string, col: Locator) {
 test('Dragging a card in the real Atomic kanban board closes and reopens the linked GitHub issue', async ({
   page,
 }) => {
-  test.setTimeout(60_000);
+  // Three full sample-data setups and two kanban drags. Measured locally at
+  // 22.4s alone and 40.9s under four workers, so 60s left almost no margin on
+  // a box as contended as Mancave.
+  test.setTimeout(120_000);
   const title = 'Welcome from GitHub';
+  // `Try sample data` seeds a drive and an in-browser tracker fixture before
+  // the demo panel renders anything, which is more than the 10s default
+  // `expect` timeout is meant to cover. Readiness after it gets its own budget.
+  const SETUP_READY = { timeout: 30_000 };
   const tryAgain = () =>
     page.getByRole('button', { name: 'Try sample data', exact: true }).click();
 
@@ -266,9 +273,9 @@ test('Dragging a card in the real Atomic kanban board closes and reopens the lin
     name: 'Open Atomic kanban',
     exact: true,
   });
-  await expect(openKanban).toBeVisible();
+  await expect(openKanban).toBeVisible(SETUP_READY);
   const demoIssue = page.getByTestId('atomic-issue').filter({ hasText: title });
-  await expect(demoIssue).toContainText('Todo');
+  await expect(demoIssue).toContainText('Todo', SETUP_READY);
   await expect(page.getByRole('alert')).toHaveCount(0);
 
   // Drag the card from Todo to Done in the real, native kanban board.
@@ -292,7 +299,7 @@ test('Dragging a card in the real Atomic kanban board closes and reopens the lin
   await tryAgain();
   await expect(
     page.getByRole('button', { name: 'Sync now', exact: true }),
-  ).toBeVisible();
+  ).toBeVisible(SETUP_READY);
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(demoIssue).toContainText('Done');
   await expect(page.getByText('closed', { exact: true }).first()).toBeVisible();
@@ -312,7 +319,7 @@ test('Dragging a card in the real Atomic kanban board closes and reopens the lin
   await tryAgain();
   await expect(
     page.getByRole('button', { name: 'Sync now', exact: true }),
-  ).toBeVisible();
+  ).toBeVisible(SETUP_READY);
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(demoIssue).toContainText('Todo');
   await expect(page.getByText('open', { exact: true }).first()).toBeVisible();

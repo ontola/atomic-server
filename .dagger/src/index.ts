@@ -498,7 +498,7 @@ export class AtomicServer {
 
     // Fail fast on cheap static checks. A store.ts oxfmt miss used to burn
     // ~20+ minutes of rust/e2e compile before jsLint surfaced it.
-    await Promise.all([this.jsLint(), this.rustFmt()]);
+    await Promise.all([this.jsLint(), this.jsTypecheck(), this.rustFmt()]);
 
     // Rust clippy/test still share the `rust-target` cache mount — keep
     // them serialized (parallel cargo contended the target lock for
@@ -535,6 +535,82 @@ export class AtomicServer {
       .withWorkdir('/app')
       .withExec(['pnpm', 'run', 'lint'])
       .stdout();
+  }
+
+  @func()
+  async jsTypecheck(): Promise<string> {
+    // A first attempt at this (#1590) ran `pnpm run typecheck` here, passed
+    // on a checkout, and failed sixty seconds into its first CI run. Nothing
+    // it reported was a type error: `jsSource()` does not lay the tree out
+    // the way a checkout does. The three differences it hit are handled
+    // below, each one reproduced and then re-checked against a replica of
+    // this container's paths. A clean `tsc` in a checkout proves nothing
+    // about this function, so validate a change to it the same way, or by
+    // dispatching `main.yml` on a branch.
+    const depsContainer = this.jsSource()
+      // 1. `data-browser/tsconfig.json` maps `@repo-lib-defaults/*` to
+      //    `../../lib/defaults/*`, which is repo-root `lib/defaults`. The
+      //    browser mounts at /app, so that lands on /lib/defaults, where
+      //    `jsSource()` places only `tasks.json`, and bootstrap.ts's ten
+      //    imports came back TS2307. Mount the directory itself. As with the
+      //    genesis vectors mounted beside it, staying a level below /lib
+      //    leaves the OS libraries alone.
+      .withDirectory('/lib/defaults', this.source.directory('lib/defaults'));
+
+    return (
+      depsContainer
+        .withWorkdir('/app')
+        // 2. Packages reached through node_modules need a `dist`. Building
+        //    only lib and react left `@tomic/plugin`, `@tomic/service-ui` and
+        //    `@tomic/edit-mode/react` unresolvable. All five build from
+        //    TypeScript alone, so this stays in the cheap static tier beside
+        //    lint and `cargo fmt`: no WASM, no Rust.
+        .withExec([
+          'pnpm',
+          '--filter',
+          '@tomic/lib',
+          '--filter',
+          '@tomic/react',
+          '--filter',
+          '@tomic/plugin',
+          '--filter',
+          '@tomic/service-ui',
+          '--filter',
+          '@tomic/edit-mode',
+          'build',
+        ])
+        .withExec([
+          'pnpm',
+          '--filter=!@tomic/data-browser',
+          'run',
+          '-r',
+          '--parallel',
+          'typecheck',
+        ])
+        // 3. data-browser is the one package that reaches repo-root
+        //    `integrations`, and those files import
+        //    `../../browser/lib/src/index.js`, which here is /browser: the
+        //    symlink `jsSource()` makes so integration tsconfigs can find
+        //    `../../browser/tsconfig.build.json`. `tsc` keeps whichever
+        //    prefix it is handed, so compiling data-browser as /app while its
+        //    own imports arrive as /browser produces two unrelated
+        //    declarations of every type in `lib`, which is the wall of
+        //    "Store is not assignable to Store" the first attempt hit.
+        //    Naming the project by its /browser path puts both ends on one
+        //    prefix. A workdir cannot do this: the kernel resolves the
+        //    symlink, so `process.cwd()` would be /app again.
+        .withExec([
+          'pnpm',
+          '--filter',
+          '@tomic/data-browser',
+          'exec',
+          'tsc',
+          '--noEmit',
+          '-p',
+          '/browser/data-browser/tsconfig.json',
+        ])
+        .stdout()
+    );
   }
 
   @func()
@@ -1022,11 +1098,34 @@ export class AtomicServer {
     );
   }
 
-  /** Extracts the unique deploy URL from netlify output */
+  /**
+   * Extracts the unique deploy URL from netlify output.
+   *
+   * Says which of the two failures happened, because they need opposite
+   * responses and for weeks they printed the same sentence. `netlifyDeploy`
+   * exits 0 with a skip message when `NETLIFY_AUTH_TOKEN` is empty, so an
+   * unset secret and a parse miss both arrived as "Deploy URL not found" —
+   * which reads like the URL format changed and is the reason nobody noticed
+   * that every failed e2e run on develop was publishing no report at all.
+   *
+   * That report is not a nicety. `playwright.config.ts` records traces with
+   * `retain-on-failure`, and this deploy is the only path that carries them
+   * off the runner: the `upload-artifact` step in `main-ci.yml` uploads
+   * `./artifact`, which nothing writes, because the Dagger container holding
+   * them is discarded when the `ci` call throws. So with the token unset the
+   * per-shard 20k-char log tail is the entire evidence channel for a failed
+   * run, and "which assertion failed" arrives without "why".
+   */
   private extractDeployUrl(netlifyOutput: string): string {
     const match = netlifyOutput.match(/https:\/\/[a-f0-9]+--.+\.netlify\.app/);
 
-    return match ? match[0] : 'Deploy URL not found';
+    if (match) return match[0];
+
+    if (netlifyOutput.includes('NETLIFY_AUTH_TOKEN not set')) {
+      return 'no report deployed — NETLIFY_AUTH_TOKEN is empty on this runner, so traces and error-context for this shard were discarded with the container';
+    }
+
+    return 'Deploy URL not found (netlify ran but printed no deploy URL)';
   }
 
   @func()
@@ -1169,6 +1268,15 @@ export class AtomicServer {
       .withFile(
         '/lib/defaults/tasks.json',
         this.source.file('lib/defaults/tasks.json'),
+      )
+      // browser/e2e/tests/apps.spec.ts serves this checkout's embedded app SDK
+      // as a fixture, read with a plain `readFileSync` at
+      // `../../../server/src/plugins/assets/view-client.js`. From /app/e2e/tests
+      // that resolves to /server/..., and the Rust tree is not mounted here, so
+      // mount just this one file.
+      .withFile(
+        '/server/src/plugins/assets/view-client.js',
+        this.source.file('server/src/plugins/assets/view-client.js'),
       );
 
     return sourceContainer;
@@ -1187,9 +1295,22 @@ export class AtomicServer {
       // data-browser/src/config.ts.
       buildContainer = buildContainer
         .withEnvVariable('VITE_E2E', 'true')
+        // The mock integration proxy runs beside the server, so from the
+        // server's own process it is on loopback. This value is not the
+        // server's: it is baked into the bundle and used by the browser,
+        // which runs in the playwright container, where 127.0.0.1 is that
+        // container and nothing answers on 19090. Every page that lists
+        // integrations then shows a "TypeError: Failed to fetch" alert, which
+        // is a second `role="alert"` on screen and makes the specs that assert
+        // on an alert either read the wrong one or fail strict mode.
+        //
+        // `atomic.localhost` is the name the browser is told to map to the
+        // server service (see ATOMIC_TEST_HOST_MAP, and the note on
+        // ATOMIC_DOMAIN above), and the mapping is per host, not per port, so
+        // this reaches the same container's exposed 19090.
         .withEnvVariable(
           'VITE_INTEGRATION_PROXY_URL',
-          'http://127.0.0.1:19090',
+          'http://atomic.localhost:19090',
         );
     }
 
@@ -1430,6 +1551,16 @@ export class AtomicServer {
         .withFile(
           '/code/testdata/pairing-request.json',
           source.file('testdata/pairing-request.json'),
+        )
+        // server/src/plugins/plugin.rs and handlers/plugin_release_test.rs
+        // `include_bytes!` the Playwright suite's plugin zip, which is the one
+        // packaged plugin both sides test against. Nothing else from
+        // `browser/` belongs in this container, and mounting the tree would
+        // make every front-end edit invalidate the Rust layer, so mount the
+        // single file. Same reasoning as the pairing-contract fixture above.
+        .withFile(
+          '/code/browser/e2e/tests/fixtures/test-plugin.zip',
+          source.file('browser/e2e/tests/fixtures/test-plugin.zip'),
         )
         .withDirectory('/code/server', source.directory('server'))
         .withDirectory('/code/integrations', source.directory('integrations'))
@@ -1767,11 +1898,69 @@ export class AtomicServer {
         )
         .withEnvVariable('MOCK_FRONTEND_ORIGIN', 'http://atomic.localhost:9883')
         .withEnvVariable('MOCK_PROXY_HOST', '0.0.0.0')
+        // Website publishing is off until the server is given a site origin,
+        // and the website specs then get a "hosting is disabled" toast that
+        // also sits over the preview and swallows clicks meant for it. The
+        // server asks for a separate `.localhost` origin in development; this
+        // is that, and it has to stay outside the API domain.
+        .withEnvVariable('ATOMIC_WEBSITE_ORIGIN', 'http://sites.localhost:9883')
+        // The name the server answers to, which until now was not the name it
+        // is addressed by. `ATOMIC_DOMAIN` above is the dagger hostname, and
+        // the server was given the same string, so its configured origin was
+        // `http://atomic:9883` while every browser-created subject carried
+        // `http://atomic.localhost:9883`. Those two are compared as authorities
+        // in `Subject::from_raw`, where `atomic.localhost:9883` matches neither
+        // `atomic:9883` nor the `.atomic:9883` suffix case, so the server read
+        // its own subjects as somebody else's:
+        //
+        //   from_raw(".../releases/blake3:1a0b3fbb", Some("http://atomic:9883"))
+        //     -> is_local false
+        //   from_raw(".../releases/blake3:1a0b3fbb", Some("http://atomic.localhost:9883"))
+        //     -> is_local true
+        //
+        // Splitting the two lets the server know its own name while dagger
+        // keeps addressing the container as `atomic`. Routing does not move
+        // with it: `map_request_subject` (lib/src/db.rs) only re-routes a host
+        // explicitly bound to a Drive, and `atomic` is not bound, so the
+        // containers that curl `http://atomic:9883` are unaffected.
+        .withEnvVariable('ATOMIC_DOMAIN', 'atomic.localhost')
+        // Kept for one run, and expected to be dead weight now.
+        //
+        // This and the hosts line below are the two earlier attempts at
+        // `plugin.spec.ts:26`, both aimed at the HTTP fetch rather than at the
+        // reason there was one. Each moved the error and neither cleared it:
+        // first the name did not resolve, then it resolved to 127.0.0.1 and
+        // the SSRF guard's `PublicOnlyResolver` refused it (reqwest reports
+        // both as "error sending request for url", which is why the hosts line
+        // alone did not change the log by one character), and finally, with
+        // this flag letting it through, a 401, because the fetch is unsigned
+        // and the Release inherits its Drive's rights. The line above removes
+        // the fetch instead, so none of those stages is reached.
+        //
+        // They stay only so the next run tests one change. Once it is green
+        // both should go, which puts the guard back on where it protects
+        // something: `resolve_public` and `resolver_rejects_loopback_domain`
+        // in lib/src/client/helpers.rs are that behaviour, deliberate and
+        // asserted.
+        .withEnvVariable('ATOMIC_ALLOW_PRIVATE_FETCH', '1')
         .withExposedPort(19090)
         .withEntrypoint([
           'sh',
           '-c',
-          'node /mock-proxy/mock-proxy.mjs & exec /atomic-server-bin',
+          // Resources the browser creates carry `atomic.localhost:9883`, the
+          // origin it was served from, so anything the server then fetches by
+          // subject goes to that name from inside this container. RFC 6761
+          // gives `.localhost` to loopback, but that is a rule browsers and
+          // Node implement and glibc does not: with `hosts: files dns` the
+          // name simply does not resolve, and reqwest fails with "error
+          // sending request for url" before any request goes out. It is why
+          // `plugin.spec.ts:26` has been red since 4194: the install 500s on
+          // `/releases/blake3:…` and the dialog it waits behind never closes.
+          // Written at start rather than baked in, because the runtime mounts
+          // its own `/etc/hosts` over the image's. The server binds `::`, so
+          // once the name resolves it reaches itself.
+          'echo "127.0.0.1 atomic.localhost" >> /etc/hosts; ' +
+            'node /mock-proxy/mock-proxy.mjs & exec /atomic-server-bin',
         ]);
 
     // Dagger deduplicates identical services, including their writable state.
@@ -1874,6 +2063,16 @@ export class AtomicServer {
         // devonian-issue-sync.spec.mts) reach into ../../../integrations
         // relative to /app/e2e/tests, resolving to /integrations here.
         .withDirectory('/integrations', this.source.directory('integrations'))
+        // Same shape, one file: apps.spec.ts reads the embedded app SDK with a
+        // plain `readFileSync` at `../../../server/src/plugins/assets/
+        // view-client.js`, which from /app/e2e/tests is /server/... . jsSource()
+        // mounts it for browser/plugin's unit test, but the specs run here, in a
+        // fresh Playwright image that copies only what is named, so this
+        // container needs its own copy.
+        .withFile(
+          '/server/src/plugins/assets/view-client.js',
+          this.source.file('server/src/plugins/assets/view-client.js'),
+        )
         .withWorkdir('/app/e2e')
         .withMountedCache('/app/.pnpm-store', dag.cacheVolume('pnpm-store'))
         .withExec(['pnpm', 'config', 'set', 'store-dir', '/app/.pnpm-store'])

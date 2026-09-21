@@ -52,6 +52,12 @@ afterEach(() => {
   inTauri.value = false;
 });
 
+// Every test here starts with `freshApi()`, which is `vi.resetModules()`
+// followed by a dynamic import, so each one re-transforms and re-imports the
+// module's whole graph rather than sharing one cached copy. That costs
+// milliseconds on a quiet machine and far more than the 5s default when the
+// test threads are oversubscribed, as they are on the shared runner. Same
+// budget and same reason as `convertFileToDocument.test.ts`.
 describe('safePortalUrl', () => {
   it('accepts absolute https URLs, trimming trailing slashes', async () => {
     const { safePortalUrl } = await freshApi();
@@ -97,7 +103,7 @@ describe('safePortalUrl', () => {
     expect(safePortalUrl(null)).toBeUndefined();
     expect(safePortalUrl(undefined)).toBeUndefined();
   });
-});
+}, 60000);
 
 describe('rememberManagedPortalUrl', () => {
   it('remembers a safe portal and serves it as the API base', async () => {
@@ -138,7 +144,7 @@ describe('rememberManagedPortalUrl', () => {
     expect(api.getRememberedManagedPortalUrl()).toBeNull();
     expect(api.getManagedApiBase()).toBe('/api');
   });
-});
+}, 60000);
 
 describe('a linked device', () => {
   it('keeps the token bound when runtime configuration names another portal', async () => {
@@ -241,7 +247,7 @@ describe('a linked device', () => {
 
     expect(api.getLinkedPortalOrigin()).toBeNull();
   });
-});
+}, 60000);
 
 describe('browser control-plane routing', () => {
   beforeEach(() => {
@@ -281,4 +287,4 @@ describe('browser control-plane routing', () => {
     expect(api.hasManagedApi()).toBe(true);
     expect(api.getManagedApiBase()).toBe(`${PORTAL}/api`);
   });
-});
+}, 60000);

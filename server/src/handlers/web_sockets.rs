@@ -18,7 +18,7 @@ use actix::{
 use actix_web::{web, HttpRequest, HttpResponse};
 use actix_web_actors::ws::{self, WsResponseBuilder};
 use atomic_lib::{
-    agents::ForAgent, authentication::get_agent_from_auth_values_and_check, Db, Storelike,
+    agents::ForAgent, authentication::get_agent_from_auth_values_or_public, Db, Storelike,
 };
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -59,8 +59,12 @@ pub async fn web_socket_handler(
     context: crate::context::RequestContext,
 ) -> AtomicServerResult<HttpResponse> {
     let auth_header_values = get_auth_headers(req.headers(), "ws")?;
+    // A proof that has aged out opens the socket as the public agent rather
+    // than refusing the upgrade: the client's own `AUTH` frame signs a fresh
+    // one straight after connecting, and that frame is where a failure to
+    // authenticate is reported.
     let for_agent =
-        get_agent_from_auth_values_and_check(auth_header_values, &appstate.store).await?;
+        get_agent_from_auth_values_or_public(auth_header_values, &appstate.store).await?;
 
     // The origin this socket was opened on, as the client sees it (scheme
     // and `Host`, honouring forwarded headers the way the rest of the server

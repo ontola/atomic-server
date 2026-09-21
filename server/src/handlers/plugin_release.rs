@@ -113,7 +113,7 @@ pub struct PublishPackage {
     /// What the publisher believes the world is. The world is read from the
     /// component (a package extending classes is a `server-extension`); when
     /// this is given and disagrees, the publish is refused rather than
-    /// mislabeled.
+    /// mislabeled, before anything is stored.
     #[serde(default)]
     pub world: Option<String>,
     /// Also list the release in this server's marketplace.
@@ -134,11 +134,12 @@ pub async fn publish_package(
     context: RequestContext,
 ) -> AtomicServerResult<HttpResponse> {
     let agent = super::plugin_schedule::authorize(&appstate, &req, &context, &query.drive).await?;
-    let (_, release, manifest) = release::publish_package(&appstate.store, &body)
-        .await
-        .map_err(|e| AtomicServerError::bad_request(e.to_string()))?;
-    release::expect_world(&release, &manifest, query.world.as_deref())
-        .map_err(|e| AtomicServerError::bad_request(e.to_string()))?;
+    // The claimed world goes in, so a package that does not match it is
+    // refused before its bytes or its release record are stored.
+    let (_, release, manifest) =
+        release::publish_package(&appstate.store, &body, query.world.as_deref())
+            .await
+            .map_err(|e| AtomicServerError::bad_request(e.to_string()))?;
     let listing = query.public.then(|| ListingInput::from_manifest(&manifest));
     respond(&appstate, &context, &release, &query.drive, &agent, listing).await
 }

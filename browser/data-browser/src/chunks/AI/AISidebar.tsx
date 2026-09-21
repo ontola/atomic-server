@@ -12,6 +12,7 @@ import { useCurrentSubject } from '@helpers/useCurrentSubject';
 import { FaPlus, FaXmark } from 'react-icons/fa6';
 import { IconButton } from '@components/IconButton/IconButton';
 import { Row } from '@components/Row';
+import { ResourceContextMenu } from '@components/ResourceContextMenu';
 import {
   ai,
   core,
@@ -41,7 +42,7 @@ import { userTiming } from '@helpers/userTiming';
 
 const handleSidebarMessageSaveError = (error: unknown) => {
   console.error(error);
-  toast.error('Failed to save AI chat message');
+  toast.error('Failed to save AI chat message', { id: 'ai-chat-save' });
 };
 
 const AISidebar: React.FC = () => {
@@ -513,7 +514,11 @@ const AISidebar: React.FC = () => {
         onRegenerateMessage={onRegenerateMessage}
       >
         <Row center justify='space-between' fullWidth>
-          <Row center gap='0.5ch'>
+          <Row
+            center
+            gap='0.5ch'
+            style={{ minWidth: 0, flex: 1, overflow: 'hidden' }}
+          >
             <IconButton
               title='New Chat'
               onClick={() => openChat()}
@@ -524,10 +529,18 @@ const AISidebar: React.FC = () => {
             </IconButton>
             <Heading>
               {chatEmoji && <span aria-hidden>{chatEmoji} </span>}
-              {chatResource?.title || 'Atomic Assistant'}
+              {chatResource?.title || 'AI chat'}
             </Heading>
           </Row>
-          <Row center gap='0.5ch'>
+          <Row center gap='0.5ch' style={{ flexShrink: 0 }}>
+            {isChatSaved && chatResource && (
+              <ResourceContextMenu
+                subject={chatResource.subject}
+                title='Chat resource actions'
+                searchable
+                onAfterDelete={() => openChat()}
+              />
+            )}
             <IconButton
               title='Close AI Sidebar'
               color='textLight'
@@ -548,7 +561,11 @@ const AISidebar: React.FC = () => {
 const Heading = styled.h2`
   font-size: 1rem;
   font-weight: 600;
-  margin-bottom: ${p => p.theme.size(2)};
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 export default AISidebar;

@@ -213,39 +213,63 @@ pub trait PluginHost: Send + 'static {
 }
 
 /// The resource grants of a JS plugin: the approved `grants` of the
-/// Installation it runs under, or, for a legacy draft that has none, what its
-/// own manifest declares. A lookup that fails yields the baseline rather than
-/// an error; the run's reads are guarded separately by [`Grant`].
+/// Installation it runs under, or, for a legacy draft that has no Installation
+/// at all, what its own manifest declares.
+///
+/// Those are the only two answers. Once a run is known to belong to an
+/// Installation, every way of failing to read its grants yields nothing
+/// granted, never the declared set: the declared set is what the plugin asked
+/// for, and handing it over because a lookup went wrong would be the one case
+/// where asking for more than was approved pays off. `check_grants` makes the
+/// two sets equal at install time, so a healthy installation loses nothing by
+/// this; an unreadable or half-written one runs with no resource grants and
+/// says so in the log. The run's reads are guarded separately by [`Grant`].
 pub async fn installation_grants(
     db: &Db,
     drive: &str,
     plugin: &str,
     manifest: Option<&Manifest>,
 ) -> ResourceGrants {
-    let declared = ResourceGrants::from_v2(manifest);
+    // No Installation: a legacy draft, which never had grants of its own.
     let Ok(installation) = super::installation::resolve(db, drive, plugin).await else {
-        return declared;
+        return ResourceGrants::from_v2(manifest);
     };
     let Some(key) = installation.signing_as else {
-        return declared;
+        return ResourceGrants::from_v2(manifest);
     };
     let Ok(resource) = db.get_resource(&key.app.as_str().into()).await else {
-        return declared;
+        tracing::warn!(
+            "installation {} of {drive} cannot be read; running {plugin} with no resource grants",
+            key.app
+        );
+        return ResourceGrants::default();
     };
-    let is_installation = resource
-        .get(urls::IS_A)
-        .ok()
-        .and_then(|v| v.to_subjects(None).ok())
-        .is_some_and(|classes| classes.contains(&urls::INSTALLATION.to_string()));
-    if !is_installation {
-        return declared;
+    if !resource.has_class(urls::INSTALLATION) {
+        return ResourceGrants::from_v2(manifest);
     }
     match resource.get(urls::GRANTS) {
         Ok(Value::Json(grants)) => ResourceGrants::from_grants(grants),
-        Ok(Value::String(s)) => serde_json::from_str(s)
-            .map(|grants| ResourceGrants::from_grants(&grants))
-            .unwrap_or_default(),
-        _ => ResourceGrants::default(),
+        // A client that pinned no datatype writes the JSON as a string.
+        Ok(Value::String(s)) => match serde_json::from_str(s) {
+            Ok(grants) => ResourceGrants::from_grants(&grants),
+            Err(e) => {
+                tracing::warn!(
+                    "installation {} has grants that are not JSON ({e}); running {plugin} with no resource grants",
+                    resource.get_subject()
+                );
+                ResourceGrants::default()
+            }
+        },
+        Ok(other) => {
+            tracing::warn!(
+                "installation {} has grants of an unexpected shape ({other}); running {plugin} with no resource grants",
+                resource.get_subject()
+            );
+            ResourceGrants::default()
+        }
+        // Nothing was approved, so nothing is granted. Not a surprise for a
+        // release that declares no capabilities.
+        Err(_) => ResourceGrants::default(),
     }
 }
 

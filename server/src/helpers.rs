@@ -184,7 +184,10 @@ pub async fn get_client_agent(
     // string here used to lose the lib's `Unauthorized` type, so every
     // failed sign-in reported itself as a server crash (security audit D).
     let auth_header_values = get_auth(headers, requested_subject).map_err(unauthorized)?;
-    let for_agent = atomic_lib::authentication::get_agent_from_auth_values_and_check(
+    // `_or_public`, not `_and_check`: nothing here asked to be authenticated.
+    // A proof that has aged out makes this caller nobody, and the rights check
+    // below decides whether that matters for what was requested.
+    let for_agent = atomic_lib::authentication::get_agent_from_auth_values_or_public(
         auth_header_values,
         &appstate.store,
     )
@@ -277,8 +280,80 @@ fn session_cookies_from_header(header: &HeaderValue) -> AtomicServerResult<Vec<S
 #[cfg(test)]
 mod test {
     use actix_web::http::header::{HeaderMap, HeaderValue};
+    use atomic_lib::Storelike;
 
     use super::*;
+    use crate::tests::init_test_appstate;
+
+    /// A 32-byte ed25519 seed. Any 32 bytes are a valid one.
+    const PRIVATE_KEY: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+    /// A `Cookie` header holding the auth proof a browser would have stored at
+    /// `timestamp`, exactly as `setCookieAuthentication` writes it.
+    fn cookie_header(server_url: &str, timestamp: i64) -> HeaderMap {
+        use base64::Engine;
+        let pair = atomic_lib::agents::generate_public_key(PRIVATE_KEY);
+        let signature = atomic_lib::agents::sign_message(
+            format!("{} {}", server_url, timestamp).as_bytes(),
+            &pair.private,
+        )
+        .unwrap();
+        let proof = serde_json::json!({
+            "https://atomicdata.dev/properties/auth/agent":
+                format!("did:ad:agent:{}", pair.public),
+            "https://atomicdata.dev/properties/auth/requestedSubject": server_url,
+            "https://atomicdata.dev/properties/auth/publicKey": pair.public,
+            "https://atomicdata.dev/properties/auth/timestamp": timestamp,
+            "https://atomicdata.dev/properties/auth/signature": signature,
+        });
+        let encoded =
+            base64::engine::general_purpose::STANDARD.encode(proof.to_string().as_bytes());
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "Cookie".try_into().unwrap(),
+            HeaderValue::from_str(&format!("atomic_session={}", encoded)).unwrap(),
+        );
+        headers
+    }
+
+    /// The staging 401 flood, at the layer it reached the client. A tab keeps
+    /// the cookie it was given, that cookie's proof ages past
+    /// `AUTH_MAX_AGE_MS`, and every request it makes after that was refused,
+    /// including the polls of the public `/server` endpoint that produced the
+    /// flood. An aged-out proof now makes the caller nobody instead, so the
+    /// rights check is what decides whether the request can be answered.
+    #[actix_rt::test]
+    async fn a_cookie_whose_proof_aged_out_is_the_public_agent() {
+        let appstate = init_test_appstate(&["--domain", "localhost"]).await;
+        let server_url = appstate.store.get_server_url().to_string();
+        let stale = atomic_lib::utils::now() - atomic_lib::authentication::AUTH_MAX_AGE_MS - 60_000;
+
+        let for_agent =
+            get_client_agent(&cookie_header(&server_url, stale), &appstate, &server_url)
+                .await
+                .expect("a stale cookie does not fail the request");
+        assert_eq!(for_agent, ForAgent::Public);
+    }
+
+    /// And a cookie whose proof is still fresh authenticates, as it always has.
+    #[actix_rt::test]
+    async fn a_fresh_cookie_still_authenticates() {
+        let appstate = init_test_appstate(&["--domain", "localhost"]).await;
+        let server_url = appstate.store.get_server_url().to_string();
+
+        let for_agent = get_client_agent(
+            &cookie_header(&server_url, atomic_lib::utils::now()),
+            &appstate,
+            &server_url,
+        )
+        .await
+        .unwrap();
+        assert!(
+            matches!(for_agent, ForAgent::AgentSubject(ref s) if s.is_did()),
+            "expected the signing agent, got {for_agent:?}"
+        );
+    }
 
     #[test]
     fn parse_cookie() {

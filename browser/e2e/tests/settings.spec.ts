@@ -10,8 +10,12 @@ test.describe('settings', () => {
     await page.goto(`${FRONTEND_URL}/app/settings`);
 
     const settingsSearch = page.getByPlaceholder('Search settings...');
+    // #1566 made the animations opt-in and renamed the toggle, which now
+    // carries a parenthetical about Chromium. Matched on the words the
+    // setting's own search keywords use, so the next wording change does not
+    // break this again.
     const transitionToggle = page.getByRole('checkbox', {
-      name: 'Disable page transition animations',
+      name: /page transition animations/i,
     });
 
     await settingsSearch.fill('transition');

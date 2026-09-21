@@ -98,7 +98,7 @@ test('creation prompt opens the assistant and keeps the request while setting up
   ).toBe(true);
   await page.getByRole('button', { name: 'Create with assistant' }).click();
   await expect(
-    page.getByText('Connect a model to use Atomic Assistant', { exact: true }),
+    page.getByText('Connect a model to use AI chat', { exact: true }),
   ).toBeVisible();
   await expect(
     page
@@ -203,6 +203,67 @@ test('search selection follows arrows, resets on edits, and clear restores the c
   ).toHaveCount(0);
 });
 
+test('build suggestions hand a half-written request to the composer', async ({
+  page,
+}) => {
+  await page.goto(new URL('/app/new', page.url()).href);
+  const composer = page.getByRole('textbox', {
+    name: 'Describe what you want to create',
+  });
+  const suggestions = page.getByRole('group', {
+    name: 'What the assistant can build',
+  });
+
+  // Apps and websites have no blank button, so this row is the only place the
+  // page says they exist at all.
+  for (const name of ['App', 'Website', 'Dashboard', 'Custom table']) {
+    await expect(
+      suggestions.getByRole('button', { name, exact: true }),
+    ).toBeVisible();
+  }
+
+  await suggestions.getByRole('button', { name: 'App', exact: true }).click();
+  await expect(composer).toHaveValue('Build an app that ');
+  await expect(composer).toBeFocused();
+  // Swapping is free while nothing of the user's own is in there.
+  await suggestions
+    .getByRole('button', { name: 'Website', exact: true })
+    .click();
+  await expect(composer).toHaveValue('Build a website for ');
+  // Once they write their own words the row gets out of the way, because a
+  // second click would replace text the browser cannot undo.
+  await composer.pressSequentially('my pottery studio');
+  await expect(composer).toHaveValue('Build a website for my pottery studio');
+  await expect(suggestions).toHaveCount(0);
+});
+
+test('turning AI features off takes the whole composer with it', async ({
+  page,
+}) => {
+  await page.goto(new URL('/app/new', page.url()).href);
+  await page.evaluate(() => localStorage.setItem('atomic.ai.enabled', 'false'));
+  await page.reload();
+  const search = page.getByRole('searchbox', {
+    name: 'Search templates and resource types',
+  });
+  await expect(search).toBeFocused();
+  await expect(
+    page.getByRole('heading', { name: 'Build with AI' }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('group', { name: 'What the assistant can build' }),
+  ).toHaveCount(0);
+  // The blank buttons and templates are not AI features, so they stay.
+  await expect(
+    page.getByRole('button', { name: 'Use Reading list template' }),
+  ).toBeVisible();
+  await search.fill('zz-no-such-template');
+  await expect(page.getByText('No matches. Try another search.')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Ask AI', exact: true }),
+  ).toHaveCount(0);
+});
+
 test('mobile search hands its query to the assistant without overflowing', async ({
   page,
 }) => {
@@ -222,7 +283,7 @@ test('mobile search hands its query to the assistant without overflowing', async
   ).toBe(true);
   await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
   await expect(
-    page.getByText('Connect a model to use Atomic Assistant', { exact: true }),
+    page.getByText('Connect a model to use AI chat', { exact: true }),
   ).toBeVisible();
   await expect(
     page

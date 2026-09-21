@@ -37,11 +37,13 @@ export interface PublishedRelease {
 /**
  * Where an Installation finds its Release and what it pins.
  *
- * `url` is what the server resolves: a `Release` resource URL, or a bare
- * release id (`blake3:…`) for releases that only exist in this server's
- * release cache (the catalog and zip-publish paths today). `id` is always the
- * content hash the installer reviewed; the server refuses to install when
- * `url` resolves to anything else.
+ * `url` is the `Release` resource the server recorded when the release was
+ * published, which is what `release` is declared to hold. `id` is the content
+ * hash the installer reviewed; the server refuses to install when `url`
+ * resolves to anything else.
+ *
+ * The server still resolves a bare `blake3:` id, for Installations written
+ * before every publish recorded a Release resource. Nothing writes one now.
  */
 export interface ReleaseReference {
   url: string;
@@ -253,6 +255,12 @@ export async function installRelease(
   } = options;
   const propVals: Record<string, JSONValue> = {
     [core.properties.name]: name,
+    // `release` belongs in the genesis commit, not in a `set` after it.
+    // `store.newResource` signs the genesis from these propvals alone, and
+    // `save()` sends it first; a property the class requires that is only set
+    // afterwards is missing from the commit the server validates, which
+    // refuses it and drops the whole installation.
+    [server.properties.release]: release.url,
     [server.properties.releaseId]: release.id,
     [server.properties.installationStatus]: status,
     [server.properties.grants]: grants,
@@ -267,10 +275,6 @@ export async function installRelease(
     parent: drive,
     propVals,
   });
-  // `release` is an atomicURL, but a release published to this server's
-  // cache has no Release resource yet, only an id. The server resolves
-  // either, so skip the client-side URL check for it.
-  await installation.set(server.properties.release, release.url, false);
   await installation.save();
 
   return installation.subject;
@@ -305,9 +309,7 @@ export async function updateInstallationRelease(
   const resource = await store.getResource<Server.Installation>(installation);
 
   await resource.set(server.properties.releaseId, release.id);
-  // A release that only exists in this server's cache is an id, not a URL,
-  // so the atomicURL check is skipped here as it is on install.
-  await resource.set(server.properties.release, release.url, false);
+  await resource.set(server.properties.release, release.url);
   await resource.set(server.properties.grants, grants);
 
   if (version !== undefined) {
@@ -325,8 +327,12 @@ type InstallStore = Pick<Store, 'getAgent' | 'getServerUrl'>;
 
 /**
  * Publishes a wasip2 zip as a private release on the store's server and
- * returns its id with the record the server built, so the caller can review
- * and install it without a second request.
+ * returns its id, the `Release` resource the server recorded for it, and the
+ * record itself, so the caller can review and install it without a second
+ * request.
+ *
+ * `subject` is what an Installation's `release` points at. Take it from here
+ * rather than passing the id: the id is not a URL, and the property is.
  */
 export async function publishZipRelease(
   store: InstallStore,
@@ -334,7 +340,7 @@ export async function publishZipRelease(
   file: Blob,
   options: { world?: string; public?: boolean } = {},
   transport: typeof fetch = fetch,
-): Promise<{ id: string; release: PublishedRelease }> {
+): Promise<{ id: string; subject: string; release: PublishedRelease }> {
   const agent = store.getAgent();
   if (!agent) throw new Error('sign in before publishing a plugin release');
   const url = new URL('/plugin-release-package', store.getServerUrl());
@@ -351,5 +357,9 @@ export async function publishZipRelease(
   });
   if (!response.ok) throw new Error(await response.text());
 
-  return response.json() as Promise<{ id: string; release: PublishedRelease }>;
+  return response.json() as Promise<{
+    id: string;
+    subject: string;
+    release: PublishedRelease;
+  }>;
 }

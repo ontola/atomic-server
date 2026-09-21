@@ -3,6 +3,7 @@ import { generateText } from 'ai';
 import { type AIModelIdentifier, type AtomicUIMessage } from './types';
 import { useGetModel } from './useModel';
 import { prepareConversationForSummary } from './prepareConversationForSummary';
+import { AIProvider } from '@components/AI/aiContstants';
 
 const summarySystemPrompt = `You are compacting an AI conversation to save context window space.
 Summarize the full conversation below into a concise but complete narrative.
@@ -29,6 +30,7 @@ export function useConversationSummary(agentModel: AIModelIdentifier) {
 
     const { text } = await generateText({
       model,
+      maxRetries: agentModel.provider === AIProvider.Hosted ? 0 : 2,
       system: summarySystemPrompt,
       prompt: convoString,
     });

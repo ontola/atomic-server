@@ -68,3 +68,68 @@ export function matchesCreationSearch(
 }
 export const CREATION_TABLE_TEMPLATES = TABLE_TEMPLATES.filter(t => t.spec);
 export const CREATION_PAGE_TEMPLATES = templates;
+
+/**
+ * What the assistant can build that this page otherwise never mentions.
+ *
+ * Apps and websites are minted per drive, so their classes only show up under
+ * "Your resource types" once the drive already has one — which is to say,
+ * never, for anyone who has not already been told they exist. Dashboards and
+ * tables do have a blank button, but a blank one is not the part worth
+ * discovering: the assistant fills them from data already on the drive.
+ *
+ * Every seed is deliberately unfinished. A suggestion puts its seed in the
+ * composer with the caret at the end instead of sending it, because "build me
+ * an app" on its own tells the assistant nothing and it would only have to ask
+ * the same question back.
+ */
+export const AI_BUILD_SUGGESTIONS: AIBuildSuggestion[] = [
+  {
+    id: 'app',
+    title: 'App',
+    seed: 'Build an app that ',
+    shortname: 'app',
+  },
+  {
+    id: 'website',
+    title: 'Website',
+    seed: 'Build a website for ',
+    shortname: 'website-project',
+  },
+  {
+    id: 'dashboard',
+    title: 'Dashboard',
+    seed: 'Build a dashboard showing ',
+    subject: dataBrowser.classes.dashboard,
+  },
+  {
+    id: 'table',
+    title: 'Custom table',
+    seed: 'Build a table for tracking ',
+    subject: dataBrowser.classes.table,
+  },
+];
+
+export interface AIBuildSuggestion {
+  id: string;
+  title: string;
+  seed: string;
+  /** The class whose icon this wears, for the ones with a fixed subject. */
+  subject?: string;
+  /** Used instead for App and Website, which are minted per drive. */
+  shortname?: string;
+}
+
+/**
+ * Whether the composer still holds nothing but a suggestion.
+ *
+ * Suggestions replace what is in the composer, so they are only offered while
+ * there is nothing of the user's own to lose. Setting a textarea's value from
+ * code does not go on the browser's undo stack, so a click that wiped a
+ * half-written description could not be taken back.
+ */
+export function isUntouchedSuggestion(prompt: string): boolean {
+  return (
+    prompt === '' || AI_BUILD_SUGGESTIONS.some(item => item.seed === prompt)
+  );
+}

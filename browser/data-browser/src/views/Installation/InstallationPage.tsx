@@ -138,14 +138,14 @@ export const InstallationPage: React.FC<
 
     try {
       const drive = resource.get(core.properties.parent) as string;
-      const { id, release: published } = await publishZipRelease(
-        store,
-        drive,
-        file,
-      );
+      const {
+        id,
+        subject,
+        release: published,
+      } = await publishZipRelease(store, drive, file);
       setPending({
         review: readInstallationReview({ ...published, id }),
-        release: { url: id, id },
+        release: { url: subject, id },
         currentConfig: config as JSONValue | undefined,
       });
     } catch (err) {

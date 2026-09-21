@@ -89,6 +89,51 @@ export function useAppClass(drive: string | undefined): string | undefined {
  * re-renders nothing, so a page that asked during render would decide the
  * class does not exist and never look again.
  */
+/**
+ * The drive's schema, retried, because a failure and an absence are not the
+ * same answer and used to arrive as the same `undefined`.
+ *
+ * A drive with no plugin classes resolves fine and returns nothing; only a
+ * genuine failure to ask reaches the throw. Collapsing the two means one
+ * unlucky read renders a plugin as a bare list of its properties, with no
+ * error anywhere, and nothing re-asks until the ontology happens to change.
+ * Outside the hook so the React compiler does not have to reason about a
+ * try/catch inside a component.
+ */
+async function resolveDriveClass(
+  store: Store,
+  drive: string,
+  shortname: 'plugin-script' | 'app',
+  isCancelled: () => boolean,
+): Promise<{ ok: true; value: string | undefined } | { ok: false }> {
+  const attempts = 3;
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const schema = await findSchema(store, drive, pluginSchema());
+
+      return { ok: true, value: schema.classes?.[shortname] };
+    } catch (error) {
+      if (isCancelled()) return { ok: false };
+
+      if (attempt === attempts) {
+        // Deliberately loud. A page that renders the wrong thing perfectly is
+        // the worst failure to diagnose, and this one has cost CI runs.
+        console.error(
+          `[plugins] could not resolve "${shortname}" for drive ${drive}; showing it as an ordinary resource`,
+          error,
+        );
+
+        return { ok: false };
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 150 * attempt));
+    }
+  }
+
+  return { ok: false };
+}
+
 function useDriveClass(
   drive: string | undefined,
   shortname: 'plugin-script' | 'app',
@@ -106,14 +151,21 @@ function useDriveClass(
     let cancelled = false;
     let unsubscribe: (() => void) | undefined;
 
-    const resolve = () =>
-      findSchema(store, drive, pluginSchema())
-        .then(schema => {
-          if (!cancelled) setPluginClass(schema.classes?.[shortname]);
-        })
-        .catch(() => {
-          if (!cancelled) setPluginClass(undefined);
-        });
+    const resolve = async () => {
+      const result = await resolveDriveClass(
+        store,
+        drive,
+        shortname,
+        () => cancelled,
+      );
+
+      if (cancelled) return;
+
+      // A failed lookup leaves whatever was already resolved in place. It is
+      // not evidence that the class is gone, and dropping it turns a working
+      // page into a generic one.
+      if (result.ok) setPluginClass(result.value);
+    };
 
     (async () => {
       const driveResource = await store.getResource(drive);
@@ -130,7 +182,12 @@ function useDriveClass(
           void resolve();
         });
       }
-    })().catch(() => undefined);
+    })().catch(error => {
+      console.error(
+        `[plugins] could not read drive ${drive} to resolve "${shortname}"`,
+        error,
+      );
+    });
 
     return () => {
       cancelled = true;

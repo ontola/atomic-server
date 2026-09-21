@@ -5,21 +5,20 @@
 [![MIT licensed](https://img.shields.io/github/license/atomicdata-dev/atomic-server.svg?color=blue&logo=github&logoColor=blue)](./LICENSE)
 [![github](https://img.shields.io/github/stars/atomicdata-dev/atomic-server?style=social)](https://github.com/atomicdata-dev/atomic-server)
 
-**Create, share, fetch and model [Atomic Data](https://docs.atomicdata.dev)!
-AtomicServer is a lightweight, yet powerful CMS / Graph Database.
-Demo on [atomicdata.dev](https://atomicdata.dev).
+**AtomicServer is an all-in one workspace / CMS / Graph Database.
 Docs on [docs.atomicdata.dev](https://docs.atomicdata.dev/atomic-data-overview)**
 
-This repo also includes:
+This repo includes:
 
-- [Atomic Data Browser](/browser/data-browser/README.md), the React front-end for Atomic-Server.
+- **AtomicServer**, our main product, as [self-hostable server](/server) or as [desktop / mobile app](/desktop).
+- [`docs`](docs/README.md) documentation / specification for Atomic Data ([docs.atomicdata.dev](https://docs.atomicdata.dev)).
+- [Atomic Data Browser](/browser/data-browser/README.md), the React front-end powering Atomic-Server.
 - [`@tomic/lib`](/browser/lib/README.md) JS NPM library.
 - [`@tomic/react`](/browser/react/README.md) React NPM library.
 - [`@tomic/svelte`](/browser/svelte/README.md) Svelte NPM library.
 - [`atomic_lib`](lib/README.md) Rust library.
 - [`atomic-cli`](cli/README.md) terminal client.
-- [`flutter`](/flutter) a Dart / Flutter client for Atomic Data, plus AtomicCanvas, a collaborative infinite drawing canvas that syncs peer-to-peer between devices.
-- [`docs`](docs/README.md) documentation / specification for Atomic Data ([docs.atomicdata.dev](https://docs.atomicdata.dev)).
+- [`flutter`](/flutter) a Dart / Flutter client (with demo app AtomicCanvas)
 
 _Status: alpha. [Breaking changes](CHANGELOG.md) are expected until 1.0._
 
@@ -53,7 +52,7 @@ _Status: alpha. [Breaking changes](CHANGELOG.md) are expected until 1.0._
 - 💻  **Runs everywhere**: linux, windows, mac, arm, plus desktop and mobile apps.
 - 📚  **Libraries** for JavaScript, React, Svelte, Rust and Dart / Flutter.
 
-https://user-images.githubusercontent.com/2183313/139728539-d69b899f-6f9b-44cb-a1b7-bbab68beac0c.mp4
+https://github.com/user-attachments/assets/32e82de5-11ca-4c2e-8c25-b293d79f6023
 
 ## Documentation
 

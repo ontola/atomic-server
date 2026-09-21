@@ -60,7 +60,20 @@ export async function signRequest(
   return newHeaders;
 }
 
-const ONE_DAY = 24 * 60 * 60 * 1000;
+/**
+ * How long a signed authentication proof stays valid, mirroring the server's
+ * `AUTH_MAX_AGE_MS` in `lib/src/authentication.rs`. Before 0.41 a proof never
+ * expired, so anything that stored one could keep presenting it; now anything
+ * that stores one has to replace it before it ages out.
+ */
+export const AUTH_PROOF_MAX_AGE_MS = 5 * 60 * 1000;
+
+/**
+ * When a stored proof counts as due for replacement. Comfortably inside
+ * {@link AUTH_PROOF_MAX_AGE_MS}, so a request that goes out just before the
+ * refresh still reaches the server with minutes to spare.
+ */
+export const AUTH_PROOF_REFRESH_MS = 2 * 60 * 1000;
 
 /**
  * Every parent domain a host-only cookie could have wrongly been scoped to.
@@ -100,7 +113,7 @@ const setCookieExpires = (
   name: string,
   value: string,
   serverUrl: string,
-  expires_in_ms = ONE_DAY,
+  expires_in_ms = AUTH_PROOF_MAX_AGE_MS,
 ) => {
   const expiry = new Date(Date.now() + expires_in_ms).toUTCString();
   const encodedValue = encodeURIComponent(value);
@@ -166,17 +179,66 @@ export const setCookieAuthentication = async (
   }
 };
 
-/** Returns false if the auth cookie is not set / expired */
-export const checkAuthenticationCookie = (): boolean => {
-  const matches = document.cookie.match(
-    /^(.*;)?\s*atomic_session\s*=\s*[^;]+(.*)?$/,
-  );
+const AUTH_TIMESTAMP_PROPERTY =
+  'https://atomicdata.dev/properties/auth/timestamp';
 
-  if (!matches) {
+/** The value of the auth cookie this browser holds, if it holds one. */
+const readAuthCookie = (): string | undefined => {
+  if (typeof document === 'undefined') {
+    return undefined;
+  }
+
+  return document.cookie.match(
+    new RegExp(`(?:^|;)\\s*${COOKIE_NAME_AUTH}\\s*=\\s*([^;]+)`),
+  )?.[1];
+};
+
+/** When the proof inside a cookie value was signed, if it can be read. */
+const proofSignedAt = (cookieValue: string): number | undefined => {
+  try {
+    const proof = JSON.parse(atob(decodeURIComponent(cookieValue)));
+    const signedAt = proof?.[AUTH_TIMESTAMP_PROPERTY];
+
+    return typeof signedAt === 'number' ? signedAt : undefined;
+  } catch {
+    // Not a cookie this library wrote, or not one it can still parse.
+    return undefined;
+  }
+};
+
+/**
+ * Whether this browser holds an auth cookie the server will still accept.
+ *
+ * Presence alone is not enough, and treating it as enough is what produced
+ * thousands of 401s a day on staging. The cookie carries a proof signed at the
+ * moment it was installed, and since 0.41 the server refuses one older than
+ * `AUTH_MAX_AGE_MS` (see {@link AUTH_PROOF_MAX_AGE_MS}). The cookie itself
+ * outlived that by a wide margin, so a session went on presenting the same
+ * dead proof for as long as the tab stayed open: one staging tab re-sent an
+ * identical `signed at` timestamp every five seconds for hours, each time
+ * answered with "Authentication timestamp rejected".
+ *
+ * Reporting an ageing proof as absent is what makes the request path
+ * (`Client.fetchResourceHTTP`) sign and install a fresh one, well before the
+ * server would refuse it.
+ */
+export const checkAuthenticationCookie = (): boolean => {
+  const value = readAuthCookie();
+
+  if (value === undefined) {
     return false;
   }
 
-  return matches.length > 0;
+  const signedAt = proofSignedAt(value);
+
+  // A proof whose age cannot be read is not one to keep presenting.
+  if (signedAt === undefined) {
+    return false;
+  }
+
+  // Both timestamps come from this device, so the difference is elapsed time
+  // regardless of how wrong the device's clock is.
+  return Date.now() - signedAt < AUTH_PROOF_REFRESH_MS;
 };
 
 export const removeCookieAuthentication = () => {

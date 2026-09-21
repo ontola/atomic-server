@@ -355,3 +355,41 @@ Decision recorded: a wasip2 release whose component exports class URLs is
 where it runs drive-scoped exactly as legacy zips did. Only the operator's
 `global/` directory is server-scoped. A JS `server-extension` release is
 refused through an Installation until step 4 exists.
+
+## Follow-up (2026-09-19)
+
+Three things the convergence left behind, fixed together after it merged.
+
+- **A refused publish used to leave its bytes behind.** `publish_package` stored
+  the zip and cached the release record, and only then did the handler compare
+  the caller's claimed `world` with the component's. The claim now goes into
+  `publish_package`, which checks it straight after reading the manifest and
+  before the first write, so a refusal stores nothing. `expect_world` reads the
+  world from the manifest rather than from the release, because at that point
+  there is no release yet.
+- **Unreadable grants used to widen to the declared set.** `installation_grants`
+  fell back to what the manifest declares whenever any step of the lookup
+  failed, which is the one direction a fallback must not take: the declared set
+  is what the plugin asked for. Only the absence of an Installation (a legacy
+  draft) still reads the manifest; an Installation that cannot be read, or whose
+  grants cannot be, now grants nothing and logs it. The class check also used
+  `Value::to_subjects`, which errors on the scalar `isA` encodings, so an
+  encoding could hand a plugin the declared set. Both readers now go through
+  `Resource::class_subjects`, one implementation shared with `ClassExtender`.
+- **`release` is an atomicURL that held bare ids.** Every publish records a
+  `Release` resource and the publish response carries its subject, but the two
+  zip paths in the browser threw the subject away and stored the `blake3:` id,
+  which meant writing the property with datatype validation switched off.
+  `publishZipRelease` now returns `subject` and the callers pass it, so the
+  property holds what it is declared to hold and nothing skips validation.
+  `release::resolve` still accepts a bare id, because Installations written
+  before this carry one and must keep running.
+
+One known consequence of the third: an Installation whose `release` is a URL is
+resolved with a read check, which a bare id skipped. `/releases/<id>` is keyed
+on the content hash but parented to whichever drive published first, so an agent
+who publishes byte-identical bytes on a second drive gets that first drive's
+Release resource back and may not be able to read it. They now get a rights
+error at install time instead of installing from a record they cannot see. The
+deeper wart, that a content-addressed subject is parented to one drive, is
+untouched.

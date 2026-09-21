@@ -1,3 +1,24 @@
+Mobile AI chat navigation: Chromium covers opening the left sidebar above chat,
+Back dismissal without leaving the page, the AI settings link, an empty composer
+without vertical overflow, and messages without a redundant sender row. History
+unit tests cover StrictMode, explicit close, and navigation to another page.
+
+Included AI: managed transport tests cover signed-out status, explicit consent,
+backend errors, streaming credit failure and non-streaming title generation without
+forwarding a provider key or SDK User-Agent header (Firefox/Zen CORS regression).
+Assistant rendering tests retain historical errors and partial replies while
+suppressing the duplicate current error when the composer displays it.
+Setup component tests cover consent failure/retry and
+successful dismissal. atomic-saas owns account isolation, budget concurrency,
+month rollover, paid-drive aggregation, origin/auth checks and disconnected-client
+accounting tests. These tests do not call the live funded OpenRouter service.
+
+AI setup recovery: component tests reproduce dismissed setup reopening on repeated
+requests, prevent login-button mounts from overwriting an in-flight OpenRouter
+verifier, verify the clicked link's PKCE challenge and verifier length, and check
+visible feedback with navigation cancelled when browser storage is blocked.
+Real OpenRouter consent and paid model requests are not exercised by these tests.
+
 Website exports open in a dedicated frozen preview. Browser coverage verifies the
 export resource shows original content after source edits and reload, with scripts
 disabled and no publication action.
@@ -2271,3 +2292,12 @@ cryptography prereleases, and allowed unrelated dependency differences. Run
 `python3 -m unittest discover -s scripts -p test_rust_alignment.py -v`.
 The Rust build policy workflow runs these checks; downstream CI checks both
 repositories and rejects dependency lockfile drift before builds.
+
+## Mobile AI chat (#1591)
+
+`browser/e2e/tests/ai-mobile.spec.ts` checks full-width phone layout and message bodies, long titles keeping the header menu on-screen, the chat resource menu targeting the saved conversation and opening its full-page view, a composer that fits above a simulated keyboard inset, options and token visibility, closing the panel, desktop composer bounds, and model selection with focus returning to the editor. A long-response regression reproduces the final sentence being clipped after keyboard resize, verifies bottom-following and the small gap above the composer, and preserves reading position when scrolled up. AI responses are mocked; a physical mobile keyboard is not exercised.
+
+Recovery read fan-out: `recovery-fetch.test.ts` verifies concurrent reads share
+one in-flight request per API/account, settled responses are not cached, failures
+can be retried, and signed-out callers make no request. The SaaS legacy recovery
+upgrade journey passes with the production per-account request limit.

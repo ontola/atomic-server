@@ -1,4 +1,3 @@
-import { resolve } from 'node:path';
 import { test, expect } from '@playwright/test';
 import type { Resource } from '@tomic/lib';
 import { before } from './test-utils';
@@ -7,10 +6,8 @@ test('table installation reuses saved class after a lost receipt', async ({
   page,
 }) => {
   const result = await page.evaluate(async () => {
-    const path = '/src/chunks/TablePage/createTableFromSpec.ts';
-    const { buildTableFromSpec, resolveOntologyParent } = await import(
-      /* @vite-ignore */ path
-    );
+    const { buildTableFromSpec, resolveOntologyParent } =
+      window.atomicE2E.createTableFromSpec;
     const store = window.store!;
     const driveSubject = store.getDrive()!;
     const ontology = await store.getResource(
@@ -99,8 +96,11 @@ test('table installation reuses saved class after a lost receipt', async ({
 test('duplicate import review links both copies and blocks apply', async ({
   page,
 }) => {
-  const protocolModule = '/@fs' + resolve(__dirname, '../../lib/src/ws-v2.ts');
-  const fixture = await page.evaluate(async protocolPath => {
+  // 18.8s alone from a wiped store, and the save below is now allowed 30s, so
+  // the 60s default would be the next thing to expire. Every other assertion
+  // here keeps the 10s default.
+  test.setTimeout(120_000);
+  const fixture = await page.evaluate(async () => {
     const store = window.store!;
     const drive = store.getDrive()!;
     const copies = [];
@@ -116,7 +116,7 @@ test('duplicate import review links both copies and blocks apply', async ({
 
     // Simulate two previously independent replica histories over the real,
     // authenticated transport. Authoring another duplicate would correctly fail.
-    const { encodeSyncPush } = await import(/* @vite-ignore */ protocolPath);
+    const { encodeSyncPush } = window.atomicE2E.wsV2;
     const entries = [];
 
     for (const subject of copies) {
@@ -164,8 +164,7 @@ test('duplicate import review links both copies and blocks apply', async ({
       },
     });
     await edited.save();
-    const path = '/src/chunks/PluginRuns/runScript.ts';
-    const { createPlugin } = await import(/* @vite-ignore */ path);
+    const { createPlugin } = window.atomicE2E.runScript;
     const plugin = await createPlugin(
       store,
       { drive, parent: drive },
@@ -181,7 +180,7 @@ test('duplicate import review links both copies and blocks apply', async ({
       edited: edited.subject,
       property: property.subject,
     };
-  }, protocolModule);
+  });
   await expect
     .poll(() =>
       page.evaluate(async () => {
@@ -237,9 +236,20 @@ test('duplicate import review links both copies and blocks apply', async ({
   await page
     .getByRole('button', { name: 'Save primary record', exact: true })
     .click();
+  // Merging two copies writes the primary, rewrites the duplicate's links and
+  // re-queries before the toast appears. Measured with a timer around the
+  // click:
+  //
+  //      4533 ms  alone, from a wiped store
+  //     10814 ms  alone, against a store grown to 61 MB
+  //
+  // So this exceeds its own 10s default on an idle box with nothing else
+  // running, purely on store size, and a shard runs ~70 tests against one
+  // server. Reproduced red here at four local workers on the 10s budget, at
+  // this exact assertion.
   await expect(
     page.getByRole('status').filter({ hasText: 'Primary record saved' }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 30_000 });
   const result = await page.evaluate(async () => {
     const store = window.store!;
     const primary = await store.findByLocalId(
