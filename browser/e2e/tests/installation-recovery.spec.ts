@@ -96,6 +96,10 @@ test('table installation reuses saved class after a lost receipt', async ({
 test('duplicate import review links both copies and blocks apply', async ({
   page,
 }) => {
+  // 18.8s alone from a wiped store, and the save below is now allowed 30s, so
+  // the 60s default would be the next thing to expire. Every other assertion
+  // here keeps the 10s default.
+  test.setTimeout(120_000);
   const fixture = await page.evaluate(async () => {
     const store = window.store!;
     const drive = store.getDrive()!;
@@ -232,9 +236,20 @@ test('duplicate import review links both copies and blocks apply', async ({
   await page
     .getByRole('button', { name: 'Save primary record', exact: true })
     .click();
+  // Merging two copies writes the primary, rewrites the duplicate's links and
+  // re-queries before the toast appears. Measured with a timer around the
+  // click:
+  //
+  //      4533 ms  alone, from a wiped store
+  //     10814 ms  alone, against a store grown to 61 MB
+  //
+  // So this exceeds its own 10s default on an idle box with nothing else
+  // running, purely on store size, and a shard runs ~70 tests against one
+  // server. Reproduced red here at four local workers on the 10s budget, at
+  // this exact assertion.
   await expect(
     page.getByRole('status').filter({ hasText: 'Primary record saved' }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 30_000 });
   const result = await page.evaluate(async () => {
     const store = window.store!;
     const primary = await store.findByLocalId(

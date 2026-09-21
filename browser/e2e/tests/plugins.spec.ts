@@ -1305,10 +1305,11 @@ export function run() { return { intents: [] }; }
   test('an integration opens from the sidebar and syncs through the server sandbox', async ({
     page,
   }) => {
-    // 84s alone and 102s under four local workers, so 120s had 18s of margin
-    // even before the 30s the sample assertion below can now wait. Raised so
-    // that fixing that assertion does not simply move the failure to the test
-    // budget. Every other assertion in this test keeps the 10s default.
+    // 84s alone and 114s under four local workers, both from a wiped store, so
+    // 120s had six seconds of margin before the sample assertion below was
+    // allowed to wait 30. Raised so that fixing that assertion does not simply
+    // move the failure to the test budget. Every other assertion in this test
+    // keeps the 10s default.
     test.setTimeout(240_000);
     const pageErrors: string[] = [];
     page.on('pageerror', error => pageErrors.push(error.message));
@@ -1568,18 +1569,22 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
     // One click, three pieces of work behind it: `setPluginSource` resolves the
     // drive's plugin schema, saves the script resource, and only then does
     // `onTest` run the automation in the server sandbox and build the proposal.
-    // The dialog is the end of all three. Measured with a timer around the
-    // click, on this exact test:
+    // The dialog is the end of all three, following the save by 6 ms. Measured
+    // with a timer around the click, each run starting from a wiped store:
     //
-    //     4480 ms  alone on an idle box
-    //     9473 ms  under four local Playwright workers
+    //     2964 ms  alone on an idle box
+    //     7066 ms  under four local Playwright workers
     //
-    // 111% inflation against a 10s default, so 521 ms of headroom at four
-    // workers. Mancave runs four shards of two workers beside clippy, a 6-wide
-    // nextest, flutter and two vitest suites, which is considerably more, and
-    // it fails there on every attempt rather than rotating. The button still
-    // reads "Saving…" in the CI snapshot, which is this work unfinished, not a
-    // save that hangs.
+    // 138% inflation against a 10s default. Mancave runs four shards of two
+    // workers beside clippy, a 6-wide nextest, flutter and two vitest suites,
+    // which is considerably more, and it fails there on every attempt rather
+    // than rotating. The button still reads "Saving…" in the CI snapshot, which
+    // is this work unfinished, not a save that hangs.
+    //
+    // Wiping matters: the same measurement against a store grown to 61 MB by a
+    // morning of runs gave 4480 ms idle, half again the clean figure. A shard
+    // runs ~70 tests against one server, so a test late in a shard meets a
+    // slower server than the same test early in it.
     await expect(
       sampleDialog.getByText('Automation sample result'),
     ).toBeVisible({ timeout: 30_000 });
