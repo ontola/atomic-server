@@ -26,7 +26,7 @@ import {
 import type { ResourcePageProps } from '@views/ResourcePage';
 import type { JSONSchema7 } from 'ai';
 import { constructOpenURL } from '@helpers/navigation';
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   FaFloppyDisk,
   FaGear,
@@ -44,6 +44,7 @@ import {
 } from '@chunks/Plugins/CapabilityList';
 import { ConfigReference } from './ConfigReference';
 import { AssignRights } from './AssignRights';
+import { useInstallationConfigSchema } from './useInstallationConfigSchema';
 import { ResourceInline } from '@views/ResourceInline/ResourceInline';
 import { useCustomViews } from '@components/CustomViewProvider';
 import {
@@ -86,7 +87,12 @@ export const InstallationPage: React.FC<
   );
   const [grants] = useValue(resource, server.properties.grants);
   const [config, setConfig] = useValue(resource, server.properties.config);
-  const [schema] = useValue(resource, server.properties.jsonSchema);
+  const [currentSchema] = useValue(resource, server.properties.jsonSchema);
+  const schema = useInstallationConfigSchema(
+    resource.subject,
+    release,
+    currentSchema as JSONSchema7 | undefined,
+  );
   const [permissions] = useValue(resource, server.properties.pluginPermissions);
   const [pluginAgent] = useString(resource, server.properties.pluginAgent);
   const [configValid, setConfigValid] = useState(true);
@@ -97,6 +103,14 @@ export const InstallationPage: React.FC<
   const [pending, setPending] = useState<PendingInstallation>();
   const [publishing, setPublishing] = useState(false);
   const zipInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Loro snapshots omit the server-computed manifest metadata, including
+    // the config schema. Load it even when the installation is already cached.
+    store
+      .fetchResourceFromServer(resource.subject, { noWebSocket: true })
+      .catch(error => toast.error(error.message));
+  }, [store, resource.subject, release]);
 
   const title = `${namespace ? `${namespace}/` : ''}${name ?? ''}`;
   const currentStatus = (status as InstallationStatus | undefined) ?? 'draft';

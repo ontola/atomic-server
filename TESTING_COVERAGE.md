@@ -1,3 +1,7 @@
+Plugin configuration: hook tests retain a release's validation schema when a save
+receipt omits computed metadata, and clear it when the release or installation
+changes. The plugin-install E2E checks invalid config after saving valid config.
+
 Editor sync formatting: unit tests cover both enabling and disabling bold before
 an incoming property update, so sync receipts cannot reset the next typed text's
 formatting. The production-bundle typing E2E exercises the keyboard shortcut.

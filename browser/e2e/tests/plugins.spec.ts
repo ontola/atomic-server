@@ -411,7 +411,9 @@ export function run() { return { intents: [] }; }
     });
     await page.getByRole('link', { name: 'Integrations', exact: true }).click();
     await expect(
-      page.getByRole('heading', { name: 'Notion', exact: true }),
+      page
+        .locator('[data-integration=notion]')
+        .getByRole('heading', { name: 'Notion', exact: true }),
     ).toBeVisible();
     await page.screenshot({
       path: '/tmp/atomic-integration-discovery.png',
@@ -525,6 +527,9 @@ export function run() { return { intents: [] }; }
   test('Clockify discovers named workspaces and surfaces preview transport errors', async ({
     page,
   }) => {
+    // Discovery and the failed preview each have a 45s assertion budget,
+    // in addition to installing the connector and filling its setup form.
+    test.setTimeout(120_000);
     await page.route('**/plugin-run', route => {
       const body = route.request().postDataJSON();
       if (JSON.parse(body.input).phase !== 'discover')

@@ -151,7 +151,7 @@ describe('LoroSyncPlugin typing history', () => {
           );
         }
 
-        const remote = new LoroDoc() as unknown as LoroDocType;
+        const remote = new LoroDoc();
         remote.import(instance.doc.export({ mode: 'snapshot' }));
         instance.view.dispatch(
           instance.view.state.tr.setStoredMarks(

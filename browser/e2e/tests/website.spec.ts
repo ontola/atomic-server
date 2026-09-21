@@ -96,7 +96,7 @@ test('website document preview, frozen release and reload', async ({
     page.getByRole('button', { name: 'Update site', exact: true }),
   ).toHaveCount(0);
   await page.screenshot({
-    path: '/private/tmp/website-export-preview.png',
+    path: test.info().outputPath('website-export-preview.png'),
     fullPage: true,
   });
   await page.reload();
