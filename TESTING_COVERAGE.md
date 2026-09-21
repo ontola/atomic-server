@@ -1,3 +1,9 @@
+AI setup recovery: component tests reproduce dismissed setup reopening on repeated
+requests, prevent login-button mounts from overwriting an in-flight OpenRouter
+verifier, verify the clicked link's PKCE challenge and verifier length, and check
+visible feedback with navigation cancelled when browser storage is blocked.
+Real OpenRouter consent and paid model requests are not exercised by these tests.
+
 Website exports open in a dedicated frozen preview. Browser coverage verifies the
 export resource shows original content after source edits and reload, with scripts
 disabled and no publication action.

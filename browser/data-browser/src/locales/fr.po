@@ -1788,9 +1788,8 @@ msgstr "modifier une ressource"
 msgid "Enter a Resource URL..."
 msgstr "Entrez une URL de ressource..."
 
-#: src/routes/LinkOpenRouter.tsx
-msgid "No code verifier found"
-msgstr "Aucun vérificateur de code trouvé"
+#~ msgid "No code verifier found"
+#~ msgstr "Aucun vérificateur de code trouvé"
 
 #: src/routes/LinkOpenRouter.tsx
 msgid "Linking OpenRouter"
@@ -11923,4 +11922,16 @@ msgstr ""
 #: src/chunks/AI/AIChatPage.tsx
 #: src/chunks/AI/AISidebar.tsx
 msgid "Chat resource actions"
+msgstr ""
+
+#: src/components/AI/OpenRouterLoginButton.tsx
+msgid "Could not start OpenRouter login. Allow browser storage and try again."
+msgstr ""
+
+#: src/routes/LinkOpenRouter.tsx
+msgid "OpenRouter did not return an authorization code. Try connecting again."
+msgstr ""
+
+#: src/routes/LinkOpenRouter.tsx
+msgid "Your OpenRouter login session is missing. Try connecting again in this browser."
 msgstr ""
