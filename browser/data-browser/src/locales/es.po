@@ -7857,13 +7857,11 @@ msgstr ""
 msgid "This run proposes no changes."
 msgstr ""
 
-#: src/actions/resourceActions.tsx
-msgid "New plugin"
-msgstr ""
+#~ msgid "New plugin"
+#~ msgstr ""
 
-#: src/actions/resourceActions.tsx
-msgid "Create a plugin here. It proposes changes that you review before anything is written."
-msgstr ""
+#~ msgid "Create a plugin here. It proposes changes that you review before anything is written."
+#~ msgstr ""
 
 #: src/chunks/PluginRuns/PluginRunHistory.tsx
 msgid "This plugin has not run yet."
@@ -8078,20 +8076,15 @@ msgstr ""
 msgid "Sign in to open this app."
 msgstr ""
 
-#: src/actions/resourceActions.tsx
-#: src/actions/resourceActions.tsx
-#: src/chunks/AppPage/useRegisterAppCreation.ts
+#: src/routes/NewResource/createDriveResource.ts
 msgid "New app"
 msgstr ""
 
-#: src/actions/resourceActions.tsx
-msgid "Create an app here: a screen you open, backed by its own data."
-msgstr ""
+#~ msgid "Create an app here: a screen you open, backed by its own data."
+#~ msgstr ""
 
-#. 0: (e as Error).message
-#: src/actions/resourceActions.tsx
-msgid "This app cannot write on its own: {0}"
-msgstr ""
+#~ msgid "This app cannot write on its own: {0}"
+#~ msgstr ""
 
 #: src/chunks/AppPage/AppFrame.tsx
 msgid "Something went wrong."
@@ -10628,9 +10621,8 @@ msgstr ""
 msgid "Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google."
 msgstr ""
 
-#: src/actions/resourceActions.tsx
-msgid "New website"
-msgstr ""
+#~ msgid "New website"
+#~ msgstr ""
 
 #~ msgid "Release ready"
 #~ msgstr ""
@@ -10720,11 +10712,10 @@ msgstr ""
 msgid "Website preview"
 msgstr ""
 
-#: src/actions/resourceActions.tsx
-msgid "Design a website with Assistant, using Atomic documents and tables."
-msgstr ""
+#~ msgid "Design a website with Assistant, using Atomic documents and tables."
+#~ msgstr ""
 
-#: src/actions/resourceActions.tsx
+#: src/routes/NewResource/createDriveResource.ts
 msgid "My website"
 msgstr ""
 
@@ -12007,4 +11998,9 @@ msgstr ""
 
 #: src/chunks/AI/RealAIChat.tsx
 msgid "AI settings"
+msgstr ""
+
+#. 0: property
+#: src/components/PanelLayout.tsx
+msgid "{0} 0.3s ease"
 msgstr ""

@@ -1,3 +1,14 @@
+Sidebar layout: browser checks sample both docked sidebar transitions halfway
+through opening/closing and verify that the main content moves with them, with
+matching duration/easing. They also cover hover reveal, mobile backdrop dismissal,
+and keeping the main content aligned while resizing and after reopening.
+
+Creation catalog/context menus: browser checks cover the embedded sidebar filter,
+keyboard filtering, removal of plugin/website/app creation actions from menus,
+discovery of their blank starters on a fresh drive, and file/upload searches.
+Existing app, plugin, and website browser flows create through the catalog,
+including a website seeded from its selected parent document.
+
 Mobile AI chat navigation: Chromium covers opening the left sidebar above chat,
 Back dismissal without leaving the page, the AI settings link, an empty composer
 without vertical overflow, and messages without a redundant sender row. History

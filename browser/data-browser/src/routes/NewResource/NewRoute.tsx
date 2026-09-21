@@ -47,6 +47,7 @@ import { creationAssistantAsk } from './creationAssistant';
 import {
   AI_BUILD_SUGGESTIONS,
   BASIC_CREATIONS,
+  DRIVE_CREATIONS,
   CREATION_TABLE_TEMPLATES,
   CREATION_PAGE_TEMPLATES,
   isUntouchedSuggestion,
@@ -109,6 +110,7 @@ function NewResourceSelector() {
   const [templateOpen, setTemplateOpen] = useState(false);
   const [loadingTemplate, setLoadingTemplate] = useState('');
   const [templateError, setTemplateError] = useState('');
+  const [creating, setCreating] = useState(false);
   const {
     results: customClasses,
     loading,
@@ -119,9 +121,11 @@ function NewResourceSelector() {
     allowEmptyQuery: true,
     limit: 100,
   });
-  const basic = BASIC_CREATIONS.filter(
+  const basic = [...BASIC_CREATIONS, ...DRIVE_CREATIONS].filter(
     item =>
-      (enableAI || item.subject !== ai.classes.aiChat) &&
+      (enableAI ||
+        !('subject' in item) ||
+        item.subject !== ai.classes.aiChat) &&
       matchesCreationSearch(query, item.title, item.description, 'blank'),
   );
   const tables = CREATION_TABLE_TEMPLATES.filter(item =>
@@ -137,10 +141,18 @@ function NewResourceSelector() {
     matchesCreationSearch(query, item.title, item.description, 'template'),
   );
   const custom = customClasses.filter(
-    subject => !BASIC_CREATIONS.some(item => item.subject === subject),
+    subject =>
+      !BASIC_CREATIONS.some(item => item.subject === subject) &&
+      !DRIVE_CREATIONS.some(
+        item =>
+          item.shortname ===
+          store.getResourceLoading(subject).get(core.properties.shortname),
+      ),
   );
   const searching = query.trim().length > 0;
+  const showUpload = matchesCreationSearch(query, 'files upload');
   const noMatches =
+    !showUpload &&
     basic.length + tables.length + pages.length + custom.length === 0 &&
     !loading;
 
@@ -189,6 +201,32 @@ function NewResourceSelector() {
     if (!prompt.trim()) return;
 
     askAI(creationAssistantAsk(prompt, destination));
+  };
+
+  const openCreation = async (item: (typeof basic)[number]) => {
+    if ('subject' in item) {
+      showNewResourceUI(item.subject, destination);
+
+      return;
+    }
+
+    if (creating) return;
+    setCreating(true);
+
+    try {
+      const { createDriveResource } = await import('./createDriveResource');
+      const subject = await createDriveResource(
+        item.shortname,
+        store,
+        drive,
+        destination,
+      );
+      navigate(constructOpenURL(subject));
+    } catch (creationError) {
+      store.notifyError(creationError);
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -277,6 +315,34 @@ function NewResourceSelector() {
             </p>
           )}
         </Column>
+        {basic.length > 0 && (
+          <section aria-label='Start blank'>
+            <SectionHeading>Start blank</SectionHeading>
+            <BasicGrid>
+              {basic.map((item, index) => {
+                const subject = 'subject' in item ? item.subject : undefined;
+                const shortname =
+                  'shortname' in item ? item.shortname : undefined;
+                const Icon = getIconForClass(subject, undefined, shortname);
+
+                return (
+                  <BasicChoice
+                    data-creation-result
+                    data-selected={selectedIndex === index}
+                    key={subject ?? shortname}
+                    subtle
+                    title={item.description}
+                    disabled={creating}
+                    onClick={() => void openCreation(item)}
+                  >
+                    <Icon aria-hidden />
+                    {item.title}
+                  </BasicChoice>
+                );
+              })}
+            </BasicGrid>
+          </section>
+        )}
         {!searching && enableAI && (
           <Column gap='0.5rem'>
             <SectionHeading>Build with AI</SectionHeading>
@@ -338,31 +404,7 @@ function NewResourceSelector() {
             )}
           </Column>
         )}
-        {basic.length > 0 && (
-          <section aria-label='Start blank'>
-            <SectionHeading>Start blank</SectionHeading>
-            <BasicGrid>
-              {basic.map((item, index) => {
-                const Icon = getIconForClass(item.subject);
-
-                return (
-                  <BasicChoice
-                    data-creation-result
-                    data-selected={selectedIndex === index}
-                    key={item.subject}
-                    subtle
-                    title={item.description}
-                    onClick={() => showNewResourceUI(item.subject, destination)}
-                  >
-                    <Icon aria-hidden />
-                    {item.title}
-                  </BasicChoice>
-                );
-              })}
-            </BasicGrid>
-          </section>
-        )}
-        {!searching && (
+        {showUpload && (
           <div>
             <CompactUpload
               parentResource={parentResource}

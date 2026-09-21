@@ -3,6 +3,7 @@ import { openLegacyGithubSetup } from './legacy-github-setup';
 import { test, expect } from '@playwright/test';
 import {
   before,
+  createFromCatalog,
   createTableFromDialog,
   getDevDriveSecret,
   nodeReachableServerUrl,
@@ -1681,8 +1682,7 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
   }) => {
     const main = page.getByRole('main');
 
-    // `New plugin` is search-only: it creates the drive's plugin schema on
-    // first use, so it stays out of the default listing.
+    // The catalog starter creates the drive's plugin schema on first use.
     await newPlugin(page);
 
     // The starter source is what an author (or an LLM) reads first.
@@ -1872,9 +1872,7 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
  */
 async function newPlugin(page: import('@playwright/test').Page) {
   test.setTimeout(120000);
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByPlaceholder(/filter/i).fill('plugin');
-  await page.locator('[data-testid="menu-item-new-plugin"]').click();
+  await createFromCatalog(page, 'Plugin');
   await expect(
     page.getByRole('main').getByRole('heading', {
       name: 'New plugin',

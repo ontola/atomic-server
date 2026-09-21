@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { test, expect } from '@playwright/test';
-import { before, waitForSynced } from './test-utils';
+import { createFromCatalog, before, waitForSynced } from './test-utils';
 
 /**
  * The one thing about apps that only a browser can answer.
@@ -223,9 +223,7 @@ test.describe('apps', () => {
  */
 async function newApp(page: import('@playwright/test').Page) {
   test.setTimeout(120000);
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByPlaceholder(/filter/i).fill('app');
-  await page.locator('[data-testid="menu-item-new-app"]').click();
+  await createFromCatalog(page, 'App');
   await expect(
     page.getByRole('main').locator('iframe[title="App"]'),
   ).toBeVisible({ timeout: 45000 });

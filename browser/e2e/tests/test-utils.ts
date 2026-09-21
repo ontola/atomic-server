@@ -1043,6 +1043,23 @@ export async function openNewResourcePage(page: Page) {
   }).toPass({ timeout: 20_000 });
 }
 
+/** Create a complete starter from the catalog, preserving the current parent. */
+export async function createFromCatalog(page: Page, title: string) {
+  const parent = new URL(page.url()).searchParams.get('subject');
+  await waitForSynced(page);
+  const url = new URL('/app/new', page.url());
+  if (parent) url.searchParams.set('parentSubject', parent);
+  await page.goto(url.href);
+  await page
+    .getByRole('searchbox', { name: 'Search templates and resource types' })
+    .fill(title);
+  await page
+    .getByRole('region', { name: 'Start blank' })
+    .getByRole('button', { name: title, exact: true })
+    .click();
+  await expect(page).not.toHaveURL(/\/app\/new(\?|$)/, { timeout: 45_000 });
+}
+
 export async function newResource(klass: string, page: Page) {
   await openNewResourcePage(page);
 
