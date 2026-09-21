@@ -498,7 +498,7 @@ export class AtomicServer {
 
     // Fail fast on cheap static checks. A store.ts oxfmt miss used to burn
     // ~20+ minutes of rust/e2e compile before jsLint surfaced it.
-    await Promise.all([this.jsLint(), this.rustFmt()]);
+    await Promise.all([this.jsLint(), this.jsTypecheck(), this.rustFmt()]);
 
     // Rust clippy/test still share the `rust-target` cache mount — keep
     // them serialized (parallel cargo contended the target lock for
@@ -535,6 +535,82 @@ export class AtomicServer {
       .withWorkdir('/app')
       .withExec(['pnpm', 'run', 'lint'])
       .stdout();
+  }
+
+  @func()
+  async jsTypecheck(): Promise<string> {
+    // A first attempt at this (#1590) ran `pnpm run typecheck` here, passed
+    // on a checkout, and failed sixty seconds into its first CI run. Nothing
+    // it reported was a type error: `jsSource()` does not lay the tree out
+    // the way a checkout does. The three differences it hit are handled
+    // below, each one reproduced and then re-checked against a replica of
+    // this container's paths. A clean `tsc` in a checkout proves nothing
+    // about this function, so validate a change to it the same way, or by
+    // dispatching `main.yml` on a branch.
+    const depsContainer = this.jsSource()
+      // 1. `data-browser/tsconfig.json` maps `@repo-lib-defaults/*` to
+      //    `../../lib/defaults/*`, which is repo-root `lib/defaults`. The
+      //    browser mounts at /app, so that lands on /lib/defaults, where
+      //    `jsSource()` places only `tasks.json`, and bootstrap.ts's ten
+      //    imports came back TS2307. Mount the directory itself. As with the
+      //    genesis vectors mounted beside it, staying a level below /lib
+      //    leaves the OS libraries alone.
+      .withDirectory('/lib/defaults', this.source.directory('lib/defaults'));
+
+    return (
+      depsContainer
+        .withWorkdir('/app')
+        // 2. Packages reached through node_modules need a `dist`. Building
+        //    only lib and react left `@tomic/plugin`, `@tomic/service-ui` and
+        //    `@tomic/edit-mode/react` unresolvable. All five build from
+        //    TypeScript alone, so this stays in the cheap static tier beside
+        //    lint and `cargo fmt`: no WASM, no Rust.
+        .withExec([
+          'pnpm',
+          '--filter',
+          '@tomic/lib',
+          '--filter',
+          '@tomic/react',
+          '--filter',
+          '@tomic/plugin',
+          '--filter',
+          '@tomic/service-ui',
+          '--filter',
+          '@tomic/edit-mode',
+          'build',
+        ])
+        .withExec([
+          'pnpm',
+          '--filter=!@tomic/data-browser',
+          'run',
+          '-r',
+          '--parallel',
+          'typecheck',
+        ])
+        // 3. data-browser is the one package that reaches repo-root
+        //    `integrations`, and those files import
+        //    `../../browser/lib/src/index.js`, which here is /browser: the
+        //    symlink `jsSource()` makes so integration tsconfigs can find
+        //    `../../browser/tsconfig.build.json`. `tsc` keeps whichever
+        //    prefix it is handed, so compiling data-browser as /app while its
+        //    own imports arrive as /browser produces two unrelated
+        //    declarations of every type in `lib`, which is the wall of
+        //    "Store is not assignable to Store" the first attempt hit.
+        //    Naming the project by its /browser path puts both ends on one
+        //    prefix. A workdir cannot do this: the kernel resolves the
+        //    symlink, so `process.cwd()` would be /app again.
+        .withExec([
+          'pnpm',
+          '--filter',
+          '@tomic/data-browser',
+          'exec',
+          'tsc',
+          '--noEmit',
+          '-p',
+          '/browser/data-browser/tsconfig.json',
+        ])
+        .stdout()
+    );
   }
 
   @func()
