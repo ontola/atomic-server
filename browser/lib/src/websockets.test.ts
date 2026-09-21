@@ -1,3 +1,4 @@
+import type { Store } from './store.js';
 import { Resource } from './resource.js';
 import { AtomicError, ErrorType } from './error.js';
 import { describe, it, vi, afterEach, expect as assert } from 'vitest';
@@ -1001,6 +1002,35 @@ describe('WSClient SYNC_DIFF and the outbox', () => {
     );
     socket.receive(syncFrame(Tag.SYNC_OK, 'did:ad:drive'));
     await vi.waitFor(() => assert(finish).toHaveBeenCalledTimes(1));
+    client.close();
+  });
+
+  it('completes a pending probe when the current drive is selected again', async () => {
+    const { client, socket, store } = await connectedClient();
+    vi.mocked(store.getDrive).mockRestore();
+    store.setDrive('did:ad:drive');
+    const finish = vi.spyOn(store, 'finishDriveSync');
+    let computed!: (
+      state: Awaited<ReturnType<Store['computeDriveSyncState']>>,
+    ) => void;
+    vi.spyOn(store, 'computeDriveSyncState').mockImplementation(
+      () =>
+        new Promise(resolve => {
+          computed = resolve;
+        }),
+    );
+    const pending = client.resyncDrive('did:ad:drive');
+    store.setDrive('did:ad:drive');
+    computed({
+      drive: 'did:ad:drive',
+      driveHash: 'hash',
+      peers: [],
+      resources: {},
+    });
+    await pending;
+    socket.receive(syncFrame(Tag.SYNC_OK, 'did:ad:drive'));
+    await vi.waitFor(() => assert(finish).toHaveBeenCalledTimes(1));
+    assert(store.getSyncStatus().syncInProgress).toBe(false);
     client.close();
   });
 

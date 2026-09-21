@@ -511,3 +511,34 @@ it('preserves causal history when hydrating a persisted query member', async () 
     'acknowledged offline',
   );
 });
+
+it('recovers a filtered table from its persisted drive when session drive state was lost', async () => {
+  const store = new Store({ serverUrl: 'https://example.com' });
+  const table = new Resource(TABLE);
+  table.setStore(store);
+  await table.set('https://atomicdata.dev/properties/drive', DRIVE, false);
+  store.resources.set(TABLE, table);
+  const query = vi.fn(async () => ({
+    subjects: [ALICE],
+    count: 1,
+    resources: [jsonAd(ALICE, 1000)],
+  }));
+  store.setClientDb(mockClientDb(query));
+  const collection = new Collection(
+    store,
+    'https://example.com',
+    {
+      property: core.properties.parent,
+      value: TABLE,
+      filters: [
+        { property: core.properties.isA, value: dataBrowser.classes.folder },
+      ],
+      page_size: '30',
+      include_nested: false,
+    },
+    true,
+  );
+  await collection.refresh();
+  assert(query).toHaveBeenCalledWith(assert.objectContaining({ drive: DRIVE }));
+  assert(pageMembers(collection)).toEqual([ALICE]);
+});

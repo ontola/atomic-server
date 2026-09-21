@@ -4623,8 +4623,21 @@ export class Store {
         const r = this.resources.get(subject);
 
         if (r) {
+          // An empty cancelled fetch remains pending so reconnect retries it;
+          // it must not look like a successfully loaded, class-less resource.
+          if (
+            e instanceof RequestCancelledError &&
+            !this.hasRenderableContent(r)
+          )
+            return;
+
           r.loading = false;
-          r.setError(e instanceof Error ? e : new Error(String(e)));
+
+          // Disconnecting cancels ingress; it does not invalidate local edits.
+          if (!(e instanceof RequestCancelledError)) {
+            r.setError(e instanceof Error ? e : new Error(String(e)));
+          }
+
           this.notify(r);
         }
       });
@@ -5438,6 +5451,8 @@ export class Store {
    *  so AppSettings-style UI mirrors stay in sync.
    */
   public setDrive(drive: string): void {
+    const previousDrive = this.drive;
+
     if (!drive) {
       this.drive = undefined;
     } else if (Client.isBareHttpOrigin(drive)) {
@@ -5450,7 +5465,9 @@ export class Store {
       localStorage.setItem('drive', JSON.stringify(drive));
     }
 
-    this.eventManager.emit(StoreEvents.DriveChanged, drive);
+    if (this.drive !== previousDrive) {
+      this.eventManager.emit(StoreEvents.DriveChanged, drive);
+    }
   }
 
   /** Opens a WebSocket for this Atomic Server URL */

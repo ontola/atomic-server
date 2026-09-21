@@ -276,8 +276,13 @@ behavior. Slow/stalled events are heuristic warnings, not data-loss assertions.
   checks that ingestion awaits the actual persistence promise and propagates failure.
 - `client-db.node.test.ts` pauses the JSON half of a composed snapshot write and
   verifies a concurrent read cannot observe its temporary reconstructed history.
-  These cases do not cover power loss, other browsers/native platforms, table
-  query/UI membership, conflicting edits or seeded schedules.
+  `collection-page-assemble.test.ts` checks filtered table recovery when OPFS
+  survives but session drive selection is lost; `crash-durability.spec.ts` checks
+  visible row membership after SIGKILL. These cases do not cover power loss,
+  other browsers/native platforms, conflicting edits or seeded schedules.
+- `cancelled-lifecycle.test.ts` checks a cancelled reconnect fetch preserves
+  locally edited content; `websockets.test.ts` checks selecting the current
+  drive again does not invalidate an active reconciliation.
 
 - `server/src/handlers/commit/durability_tests.rs` injects a real redb flush failure,
   verifies no acknowledgement, retries the identical signed commit, and checks

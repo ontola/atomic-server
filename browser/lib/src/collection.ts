@@ -3,6 +3,8 @@ import { enableLoro } from './loro-loader.js';
 import { Collections, collections } from './ontologies/collections.js';
 import { Resource, normalizeLoroChangeTimestampMs } from './resource.js';
 import { Store } from './store.js';
+import { core } from './ontologies/core.js';
+import { server as serverOntology } from './ontologies/server.js';
 import { commits } from './ontologies/commits.js';
 import { dataBrowser } from './ontologies/dataBrowser.js';
 
@@ -994,7 +996,23 @@ export class Collection {
     // `drive: undefined` for the rest of its life even once the drive is
     // known. Falling back to the store's current drive here is the same value
     // the builder would have captured a moment later.
-    const drive = this.params.drive ?? this.store.getDrive();
+    const parent =
+      this.params.property === core.properties.parent &&
+      typeof this.params.value === 'string'
+        ? this.store.resources.get(this.params.value)
+        : undefined;
+    // A process kill can lose session localStorage while OPFS retains the
+    // table and every acknowledged row. Its immutable drive is sufficient
+    // to query those rows without a server or session-drive selection.
+    const parentDrive = parent?.get('https://atomicdata.dev/properties/drive');
+    const drive =
+      this.params.drive ??
+      this.store.getDrive() ??
+      (typeof parentDrive === 'string'
+        ? parentDrive
+        : parent?.hasClasses(serverOntology.classes.drive)
+          ? parent.subject
+          : undefined);
 
     // Extra AND constraints route through the indexed path
     // (`query_complex`), which REQUIRES a drive scope: the query index is

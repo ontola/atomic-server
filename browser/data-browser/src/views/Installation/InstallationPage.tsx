@@ -16,6 +16,7 @@ import {
   server,
   updateInstallationRelease,
   useCanWrite,
+  useResource,
   useSaveState,
   useStore,
   useString,
@@ -87,7 +88,17 @@ export const InstallationPage: React.FC<
   );
   const [grants] = useValue(resource, server.properties.grants);
   const [config, setConfig] = useValue(resource, server.properties.config);
-  const [schema] = useValue(resource, server.properties.jsonSchema);
+  const [legacySchema] = useValue(resource, server.properties.jsonSchema);
+  // Manifest metadata is derived on HTTP reads of an Installation and is
+  // absent from its persisted Loro snapshot. The pinned Release owns it.
+  const releaseSubject = release?.startsWith('blake3:') ? undefined : release;
+  const releaseResource = useResource<Server.Release>(releaseSubject);
+  const [manifest] = useValue(releaseResource, server.properties.manifest);
+  const schema =
+    manifest && typeof manifest === 'object' && !Array.isArray(manifest)
+      ? manifest.configSchema
+      : legacySchema;
+  const schemaLoading = !!releaseSubject && releaseResource.loading;
   const [permissions] = useValue(resource, server.properties.pluginPermissions);
   const [pluginAgent] = useString(resource, server.properties.pluginAgent);
   const [configValid, setConfigValid] = useState(true);
@@ -315,6 +326,7 @@ export const InstallationPage: React.FC<
             {canWrite && (
               <Button
                 disabled={
+                  schemaLoading ||
                   !configValid ||
                   !configSyntaxValid ||
                   saveState.kind === ResourceSaveStateKind.Saving ||
