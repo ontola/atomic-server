@@ -1881,6 +1881,27 @@ export class AtomicServer {
         // server asks for a separate `.localhost` origin in development; this
         // is that, and it has to stay outside the API domain.
         .withEnvVariable('ATOMIC_WEBSITE_ORIGIN', 'http://sites.localhost:9883')
+        // `plugin.spec.ts:26` installs a plugin whose Release the server then
+        // fetches back by subject URL. The browser addressed it as
+        // `atomic.localhost:9883` rather than this container's own `atomic`,
+        // so `Subject::is_local()` (server/src/plugins/release.rs) reads it as
+        // remote and the fetch goes out over HTTP instead of reading the blob
+        // beside it. That fetch is the *untrusted* one, behind the SSRF guard,
+        // whose `PublicOnlyResolver` drops every non-public address it
+        // resolves to. So once the hosts line below makes the name resolve, it
+        // resolves to 127.0.0.1 and the guard refuses it — and reqwest reports
+        // an unresolvable name and a refused address with the same string,
+        // "error sending request for url", which is why adding that line alone
+        // did not change the log by one character. `resolve_public` and the
+        // `resolver_rejects_loopback_domain` test in lib/src/client/helpers.rs
+        // are that behaviour, deliberate and asserted.
+        //
+        // This flag is the escape hatch that module documents, and only the
+        // e2e container gets it. A real deployment is addressed by its own
+        // configured domain, so `is_local()` is true there, the release is
+        // read locally and this fetch never happens: the guard stays on where
+        // it protects something.
+        .withEnvVariable('ATOMIC_ALLOW_PRIVATE_FETCH', '1')
         .withExposedPort(19090)
         .withEntrypoint([
           'sh',
