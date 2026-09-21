@@ -2260,3 +2260,8 @@ repositories and rejects dependency lockfile drift before builds.
 ## Mobile AI chat (#1591)
 
 `browser/e2e/tests/ai-mobile.spec.ts` checks full-width phone layout and message bodies, long titles keeping the header menu on-screen, the chat resource menu targeting the saved conversation and opening its full-page view, a composer that fits above a simulated keyboard inset, options and token visibility, closing the panel, desktop composer bounds, and model selection with focus returning to the editor. A long-response regression reproduces the final sentence being clipped after keyboard resize, verifies bottom-following and the small gap above the composer, and preserves reading position when scrolled up. AI responses are mocked; a physical mobile keyboard is not exercised.
+
+Recovery read fan-out: `recovery-fetch.test.ts` verifies concurrent reads share
+one in-flight request per API/account, settled responses are not cached, failures
+can be retried, and signed-out callers make no request. The SaaS legacy recovery
+upgrade journey passes with the production per-account request limit.
