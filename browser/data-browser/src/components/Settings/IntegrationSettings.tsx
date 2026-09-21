@@ -148,8 +148,8 @@ function CatalogUrlForm({ catalogUrl }: { catalogUrl: string }) {
       <Column gap='0.5rem'>
         <SectionTitle>Plugin catalog URL</SectionTitle>
         <Description>
-          Discover integrations from this catalog.json. This setting is
-          saved in this browser.
+          Discover integrations from this catalog.json. This setting is saved in
+          this browser.
         </Description>
         <Row center gap='1ch'>
           <label htmlFor='plugin-catalog-url'>Plugin catalog URL</label>

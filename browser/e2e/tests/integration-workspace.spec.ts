@@ -6,9 +6,9 @@ test('workspace owns its views and links to separate connection settings', async
   page,
 }) => {
   const installed = await page.evaluate(async () => {
-    // `ConnectGitHub.tsx` is a thin compatibility wrapper around the
-    // schema-driven AppSetupForm and no longer imports the installer;
-    // `githubInstaller.ts` is the module that still names its path.
+    // The schema-driven AppSetupForm install path for github-issues is
+    // gone; `githubInstaller.ts` is the module that still names its path,
+    // used here to install directly for this legacy-installation test.
     const setupPath = '/src/chunks/PluginRuns/githubInstaller.ts';
     await import(/* @vite-ignore */ setupPath);
     // Vite serves the installer after loading its owning UI module.

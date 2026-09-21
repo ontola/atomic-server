@@ -27,7 +27,6 @@ import {
   savedBrowserSync,
   type BrowserPlugin,
 } from './browserPluginSync';
-import { ConnectNotionManual } from './ConnectNotionManual';
 
 export function ConnectNotion({
   drive,
@@ -366,10 +365,6 @@ function NotionConnection({
       {completed && <p>{messages.complete}</p>}
       {busy && <p aria-live='polite'>{messages.working}</p>}
       {error && <ErrMessage role='alert'>{error}</ErrMessage>}
-      <details>
-        <summary>Advanced setup with a token</summary>
-        <ConnectNotionManual drive={drive} />
-      </details>
     </Column>
   );
 }

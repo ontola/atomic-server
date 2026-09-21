@@ -24,9 +24,7 @@ function validateCatalogUrl(value: string): string {
       ['localhost', '127.0.0.1'].includes(url.hostname)
     )
   ) {
-    throw new Error(
-      'Catalog URL must be an HTTPS URL or a localhost HTTP URL',
-    );
+    throw new Error('Catalog URL must be an HTTPS URL or a localhost HTTP URL');
   }
 
   return value;
