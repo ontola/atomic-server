@@ -15,7 +15,6 @@ export const UserMessage: React.FC<UserMessageProps> = ({ message }) => {
 
   return (
     <UserMessageWrapper data-testid='ai-user-message'>
-      <SenderName>You</SenderName>
       {visibleContext && visibleContext.length > 0 && (
         <ContextItemRow wrapItems center gap='1ch'>
           {visibleContext.map(item => (
@@ -60,12 +59,4 @@ const UserMessageWrapper = styled(MessageWrapper)`
   @media (max-width: 600px) {
     padding: 0.5rem;
   }
-`;
-
-const SenderName = styled.span`
-  font-weight: bold;
-  color: ${p => p.theme.colors.textLight};
-  font-size: 0.8rem;
-  margin-bottom: 0.5rem;
-  display: block;
 `;
