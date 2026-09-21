@@ -4,6 +4,14 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: the integration proxy may live on a `.localhost` name. `proxyOrigin`
+  allowed plain http only for the bare `localhost` and `127.0.0.1`, so a proxy
+  at, say, `http://atomic.localhost:19090` was rejected, and because the value
+  is read during render that rejection replaced any page showing integrations,
+  the settings page included, with "Error loading resource". RFC 6761 gives the
+  whole `.localhost` TLD to loopback and browsers treat those names as secure
+  origins, so they are accepted now, `[::1]` with them.
+
 - Improve AI chat on phones: use the full screen width, keep the composer above the keyboard and the final response line visible as it opens, remove the bottom spacer, reduce padding, use the full message width, add the chat resource menu to its header, and move model selection and token usage into Chat options. Remove generated follow-up suggestions and rename Atomic Assistant to AI chat ([#1591](https://github.com/ontola/atomic-server/issues/1591)).
 
 - Fix: someone joining a drive through a browser invitation is told when the
