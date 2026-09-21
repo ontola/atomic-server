@@ -669,8 +669,27 @@ export function run() { return { intents: [] }; }
           return {status:200, body:JSON.stringify(fixtures[r.operation])};
         }};`,
       );
-      const response = await route.fetch({ postData: JSON.stringify(body) });
-      await route.fulfill({ response });
+      // Re-issue from the browser, not from Node. `route.fetch` sends the
+      // request from the Node test process, which implements RFC 6761 and
+      // resolves `atomic.localhost` to its own container, where nothing
+      // listens; run 4279 failed here with
+      //
+      //     route.fetch: connect ECONNREFUSED 127.0.0.1:9883
+      //     → POST http://atomic.localhost:9883/plugin-run
+      //
+      // and the `Workspace` assertion below was the consequence, not the
+      // cause. The three other `route.fetch` call sites in the suite all pass
+      // an explicit node-reachable `url`; this one did not.
+      //
+      // Rewriting the url would work for them and not here, because this
+      // request is signed. `signRequest` covers the subject and the timestamp
+      // (lib/src/authentication.ts) and the server checks that against the
+      // `Host` it was reached on, so moving the request to another host after
+      // the browser signed it invalidates the proof. The body is not signed,
+      // which is what makes `continue` with a replaced `postData` safe: the
+      // browser sends it, to the same host, with its own headers intact, and
+      // Chromium resolves the name because it is told the rule explicitly.
+      await route.continue({ postData: JSON.stringify(body) });
     });
     await page.getByRole('link', { name: 'Integrations', exact: true }).click();
     await page
