@@ -42,7 +42,7 @@ import { userTiming } from '@helpers/userTiming';
 
 const handleSidebarMessageSaveError = (error: unknown) => {
   console.error(error);
-  toast.error('Failed to save AI chat message');
+  toast.error('Failed to save AI chat message', { id: 'ai-chat-save' });
 };
 
 const AISidebar: React.FC = () => {

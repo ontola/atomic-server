@@ -11,12 +11,14 @@ import {
 
 interface MessageProps {
   message: AtomicUIMessage;
+  hideError?: boolean;
   onDeleteMessage?: (message: AtomicUIMessage) => void;
   onRegenerateMessage?: (message: AtomicUIMessage) => void;
 }
 
 export const AIChatMessage = ({
   message,
+  hideError,
   onDeleteMessage,
   onRegenerateMessage,
 }: MessageProps) => {
@@ -49,7 +51,7 @@ export const AIChatMessage = ({
   if (message.role === 'assistant') {
     return (
       <MessageActionWrapper message={message} onDeleteMessage={onDeleteMessage}>
-        <AssistantMessage message={message} />
+        <AssistantMessage message={message} hideError={hideError} />
       </MessageActionWrapper>
     );
   }

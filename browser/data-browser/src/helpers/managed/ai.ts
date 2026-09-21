@@ -49,8 +49,9 @@ export function createHostedModel(model: string): LanguageModel {
     baseURL: 'https://hosted.invalid',
     compatibility: 'strict',
     fetch: async (_input, init) => {
-      const headers = new Headers(init?.headers);
-      headers.delete('Authorization');
+      // SDK transport headers (notably User-Agent in Firefox) must not leak
+      // into the cross-origin control-plane request. managedFetch adds auth.
+      const headers = new Headers({ 'Content-Type': 'application/json' });
       const response = await managedFetch('/ai/chat/completions', {
         ...init,
         headers,

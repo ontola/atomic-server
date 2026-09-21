@@ -48,6 +48,9 @@ it('uses the authenticated control plane without sending the placeholder provide
   const [path, init] = vi.mocked(managedFetch).mock.calls[0];
   expect(path).toBe('/ai/chat/completions');
   expect(new Headers(init?.headers).has('Authorization')).toBe(false);
+  // Firefox/Zen preserves the SDK's custom User-Agent, unlike Chromium.
+  // Only the control-plane JSON header belongs on this cross-origin request.
+  expect([...new Headers(init?.headers).keys()]).toEqual(['content-type']);
 });
 
 it('supports non-streaming title generation using the same account endpoint', async () => {
