@@ -11481,76 +11481,68 @@ msgid "Retry clearing diagnostics"
 msgstr "Retry clearing diagnostics"
 
 #: src/components/SideBar/FeedbackDiagnostics.tsx
-msgid "Stop and clear recording"
-msgstr "Stop and clear recording"
-
-#: src/components/SideBar/FeedbackDiagnostics.tsx
-msgid "Start local recording"
-msgstr "Start local recording"
-
-#: src/components/SideBar/FeedbackDiagnostics.tsx
 msgid "Diagnostic report preview"
 msgstr "Diagnostic report preview"
 
+#: src/components/SideBar/FeedbackMenuItem.tsx
+msgid "Email for a reply (optional)"
+msgstr "Email for a reply (optional)"
+
 #: src/components/SideBar/FeedbackDiagnostics.tsx
-msgid ""
-"Diagnostic storage is unavailable. Recent events are only in memory and may "
-"be lost on reload."
-msgstr ""
-"Diagnostic storage is unavailable. Recent events are only in memory and may "
-"be lost on reload."
+msgid "Include diagnostic data"
+msgstr "Include diagnostic data"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Recording locally"
+msgstr "Recording locally"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Not recording"
+msgstr "Not recording"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Stop and clear"
+msgstr "Stop and clear"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Start recording"
+msgstr "Start recording"
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Kept in this tab only; it will be lost on reload."
+msgstr "Kept in this tab only; it will be lost on reload."
 
 #: src/components/SideBar/FeedbackDiagnostics.tsx
 msgid ""
-"Could not clear diagnostic storage or save the recording preference. "
-"Recording is stopped. Retry clearing before leaving this browser."
+"Couldn’t clear local diagnostics. Recording is stopped; retry before leaving "
+"this browser."
 msgstr ""
-"Could not clear diagnostic storage or save the recording preference. "
-"Recording is stopped. Retry clearing before leaving this browser."
+"Couldn’t clear local diagnostics. Recording is stopped; retry before leaving "
+"this browser."
+
+#: src/components/SideBar/FeedbackDiagnostics.tsx
+msgid "Reset in another tab. Reload to record again."
+msgstr "Reset in another tab. Reload to record again."
 
 #: src/components/SideBar/FeedbackDiagnostics.tsx
 msgid ""
-"Recording was reset in another tab. Reload this tab before recording again."
+"Recent save and connection activity only. No document content, names, URLs, "
+"or error messages. Nothing is shared unless you attach it below."
 msgstr ""
-"Recording was reset in another tab. Reload this tab before recording again."
+"Recent save and connection activity only. No document content, names, URLs, "
+"or error messages. Nothing is shared unless you attach it below."
 
 #: src/components/SideBar/FeedbackDiagnostics.tsx
-msgid "Preview diagnostics"
-msgstr "Preview diagnostics"
+msgid "Review the timing and activity counts before sharing."
+msgstr "Review the timing and activity counts before sharing."
 
 #: src/components/SideBar/FeedbackDiagnostics.tsx
-msgid ""
-"Recent save and connection events are recorded locally by default. No "
-"document text, filenames, URLs, or error messages are collected. Up to 500 "
-"events from the last 10 minutes are kept in this browser, including across "
-"reloads. Expired records are removed when the app next accesses storage. "
-"Nothing is uploaded automatically."
-msgstr ""
-"Recent save and connection events are recorded locally by default. No "
-"document text, filenames, URLs, or error messages are collected. Up to 500 "
-"events from the last 10 minutes are kept in this browser, including across "
-"reloads. Expired records are removed when the app next accesses storage. "
-"Nothing is uploaded automatically."
+msgid "Download report"
+msgstr "Download report"
 
 #: src/components/SideBar/FeedbackDiagnostics.tsx
-msgid ""
-"Events show timing and activity counts, which can still be sensitive. Review "
-"before sharing."
-msgstr ""
-"Events show timing and activity counts, which can still be sensitive. Review "
-"before sharing."
-
-#: src/components/SideBar/FeedbackDiagnostics.tsx
-msgid "Download diagnostics"
-msgstr "Download diagnostics"
-
-#: src/components/SideBar/FeedbackDiagnostics.tsx
-msgid "Diagnostics"
-msgstr "Diagnostics"
-
-#: src/components/SideBar/FeedbackDiagnostics.tsx
-msgid "<0/> Include diagnostic data"
-msgstr "<0/> Include diagnostic data"
+msgid "Diagnostic data"
+msgstr "Diagnostic data"
 
 #~ msgid "Atomic Assistant"
 #~ msgstr "Atomic Assistant"
@@ -13196,3 +13188,62 @@ msgstr "<0/> Include diagnostic data"
 #~ "The response was interrupted.Gib deinen Wiederherstellungscode ein, um "
 #~ "deinen geheimen Schlüssel anzuzeigen oder diesem Gerät einen Passkey "
 #~ "hinzuzufügen. Dein bisheriger Wiederherstellungscode bleibt gültig."
+
+#~ msgid "Stop and clear recording"
+#~ msgstr "Stop and clear recording"
+
+#~ msgid "Start local recording"
+#~ msgstr "Start local recording"
+
+#~ msgid ""
+#~ "Diagnostic storage is unavailable. Recent events are only in memory and "
+#~ "may be lost on reload."
+#~ msgstr ""
+#~ "Diagnostic storage is unavailable. Recent events are only in memory and "
+#~ "may be lost on reload."
+
+#~ msgid ""
+#~ "Could not clear diagnostic storage or save the recording preference. "
+#~ "Recording is stopped. Retry clearing before leaving this browser."
+#~ msgstr ""
+#~ "Could not clear diagnostic storage or save the recording preference. "
+#~ "Recording is stopped. Retry clearing before leaving this browser."
+
+#~ msgid ""
+#~ "Recording was reset in another tab. Reload this tab before recording "
+#~ "again."
+#~ msgstr ""
+#~ "Recording was reset in another tab. Reload this tab before recording "
+#~ "again."
+
+#~ msgid "Preview diagnostics"
+#~ msgstr "Preview diagnostics"
+
+#~ msgid ""
+#~ "Recent save and connection events are recorded locally by default. No "
+#~ "document text, filenames, URLs, or error messages are collected. Up to "
+#~ "500 events from the last 10 minutes are kept in this browser, including "
+#~ "across reloads. Expired records are removed when the app next accesses "
+#~ "storage. Nothing is uploaded automatically."
+#~ msgstr ""
+#~ "Recent save and connection events are recorded locally by default. No "
+#~ "document text, filenames, URLs, or error messages are collected. Up to "
+#~ "500 events from the last 10 minutes are kept in this browser, including "
+#~ "across reloads. Expired records are removed when the app next accesses "
+#~ "storage. Nothing is uploaded automatically."
+
+#~ msgid ""
+#~ "Events show timing and activity counts, which can still be sensitive. "
+#~ "Review before sharing."
+#~ msgstr ""
+#~ "Events show timing and activity counts, which can still be sensitive. "
+#~ "Review before sharing."
+
+#~ msgid "Download diagnostics"
+#~ msgstr "Download diagnostics"
+
+#~ msgid "Diagnostics"
+#~ msgstr "Diagnostics"
+
+#~ msgid "<0/> Include diagnostic data"
+#~ msgstr "<0/> Include diagnostic data"

@@ -88,5 +88,12 @@ pub async fn setup_test_env(store: &Db) -> crate::errors::AtomicResult<()> {
 pub async fn init_redb_file_without_periodic_flush(
     path: &std::path::Path,
 ) -> crate::errors::AtomicResult<Db> {
-    Db::init_redb_file_inner(path, None, &path.join("uploads"), &crate::db::compaction::CompactionPolicy::default(), false).await
+    Db::init_redb_file_inner(
+        path,
+        None,
+        &path.join("uploads"),
+        &crate::db::compaction::CompactionPolicy::default(),
+        false,
+    )
+    .await
 }

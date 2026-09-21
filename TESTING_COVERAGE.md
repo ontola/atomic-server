@@ -1067,7 +1067,8 @@ mounts without resetting or re-registering the global parser.
   delete while disconnected queues the pre-signed envelope, survives a simulated
   reload (fresh `LocalOutbox` hydrating the same agent namespace) and is POSTed
   exactly once on reconnect; create + delete while offline POSTs neither
-  envelope; a never-saved `newResource` is dropped without a POST; a server
+  envelope; a never-saved `newResource` is dropped without a POST; the offline-create
+  fixture supplies an explicit in-memory persistence double; a server
   refusal rejects `destroy()` and keeps the entry queued; a transport failure
   resolves as queued and flips the store offline; "already gone" server answers
   (`already applied here`, `predates the resource's genesis`, `does not exist
