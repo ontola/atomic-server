@@ -160,7 +160,7 @@ export const persistSidebarMessage = async ({
   }
 
   if (titlePromiseRef.current) {
-    const pending = applyChatTitle(resource, titlePromiseRef);
+    const pending = applyChatTitle(resource, titlePromiseRef, isChatSavedRef);
 
     if (message.role === 'assistant') await pending;
   }
@@ -170,6 +170,7 @@ export const persistSidebarMessage = async ({
 async function applyChatTitle(
   resource: DraftChatResource,
   titlePromiseRef: PersistSidebarMessageArgs['titlePromiseRef'],
+  isChatSavedRef: PersistSidebarMessageArgs['isChatSavedRef'],
 ) {
   const promise = titlePromiseRef.current;
 
@@ -186,6 +187,15 @@ async function applyChatTitle(
   if (generated.emoji) {
     await resource.set(dataBrowser.properties.emoji, generated.emoji);
   }
+
+  // Not while the chat is still a draft. A title can resolve before the
+  // finalization has pushed the messages, and this save would then put the
+  // chat on the server already pointing at children the server has not seen,
+  // which is what the sweep's ordering exists to avoid. Whoever opens the chat
+  // in that window gets "Resource not found" where the reply should be. The
+  // name is set on the resource either way, so the finalization's own save
+  // carries it.
+  if (!isChatSavedRef.current) return;
 
   await resource.save();
 }

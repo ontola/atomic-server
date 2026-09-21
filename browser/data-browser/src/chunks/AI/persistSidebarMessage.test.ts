@@ -182,6 +182,24 @@ describe('persistSidebarMessage', () => {
     expect(serverPersisted).toContain('message-assistant');
   });
 
+  it('does not put a still-draft chat on the server just to name it', async () => {
+    // A title can resolve before the finalization has pushed the messages.
+    // Saving the chat then publishes it already pointing at children the
+    // server has not seen, and whoever opens it in that window gets
+    // "Resource not found" where the reply should be. The name still lands on
+    // the resource; the finalization's own save carries it.
+    const chat = fakeChat();
+
+    await persistSidebarMessage({
+      ...args(chat, { isChatSavedRef: { current: false } }),
+      message: message('assistant'),
+      newMessages: [message('user'), message('assistant')],
+    });
+
+    expect(chat.get(NAME)).toBe('A good title');
+    expect(saved).not.toContain('chat-1');
+  });
+
   it('leaves a chat that already has a name alone', async () => {
     const chat = fakeChat('Something the user typed');
 
