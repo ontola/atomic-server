@@ -6,7 +6,6 @@ import {
   createFromCatalog,
   createTableFromDialog,
   getDevDriveSecret,
-  nodeReachableServerUrl,
   SERVER_URL,
 } from './test-utils';
 import {
@@ -1484,13 +1483,11 @@ export async function run(ctx) {
       };
     });
     const agent = await Agent.fromSecret(await getDevDriveSecret(page));
-    // `SERVER_URL` is the browser-facing origin, which in CI is
-    // `http://atomic.localhost:9883`. Chromium is told to map that name;
-    // this call runs in the Node test process, which is not, and resolves
-    // `.localhost` to 127.0.0.1 — a different container from the server.
+    // DNS maps the public hostname to the CI service. Sign the public URL:
+    // the server verifies against its canonical origin, not the service alias.
     const api = {
       getAgent: () => agent,
-      getServerUrl: () => nodeReachableServerUrl(SERVER_URL),
+      getServerUrl: () => SERVER_URL,
     };
     const reviewed = await getPluginSync(api, target);
     await page.getByRole('button', { name: 'Enable background sync' }).click();
@@ -1556,12 +1553,7 @@ export async function run(ctx) {
       },
       { connection: target.plugin, drive: target.drive },
     );
-    // Same two-runtime split as the `getServerUrl` above: `page.request` reads
-    // as browser-side but Playwright issues it from the Node test process,
-    // which resolves `atomic.localhost` to loopback rather than the server
-    // container. The signature is over this URL and the server derives the
-    // subject it checks from the `Host` it is reached on, so both move together.
-    const triggerURL = `${nodeReachableServerUrl(SERVER_URL)}/plugin-trigger`;
+    const triggerURL = `${SERVER_URL}/plugin-trigger`;
     const triggerResponse = await page.request.post(triggerURL, {
       headers: await signRequest(triggerURL, agent, {}),
       data: {

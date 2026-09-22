@@ -1802,6 +1802,14 @@ cannot resolve early and needs no second RPC during identity handoff.
 coalesces DOM writes outside ResizeObserver delivery, and cancels pending work
 on unmount. Table filtering E2E retains strict browser diagnostics.
 
+## CI server hostname mapping
+
+`browser/e2e/scripts/server-dns.node.mjs` starts a real HTTP server and a Node
+child with the CI DNS preload. It verifies callback-based fetch and promise-based
+DNS lookup reach the service while preserving the public HTTP Host, and that
+unrelated hosts remain unchanged. The template and plugin integration E2E tests
+use the public server URL for generated configuration and signed requests.
+
 ## Unified templates and create-drive setup
 
 `chunks/Templates/model.test.ts` tests version-pinned composition, duplicate keys,
