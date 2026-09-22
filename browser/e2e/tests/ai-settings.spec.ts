@@ -42,6 +42,9 @@ test('AI configuration lives in Settings and persists agent, skill and MCP edits
       },
     });
   });
+  await page.route('http://localhost:11434/api/tags', route =>
+    route.fulfill({ json: { models: [] } }),
+  );
   await setupAIRouteMocks(page);
   await enableAIForTesting(page);
   await page.route('https://openrouter.ai/api/v1/credits**', route =>

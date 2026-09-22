@@ -74,6 +74,15 @@ test('push-to-talk transcribes, answers and speaks using credits without a perso
     await route.fulfill({ status: 204 });
   });
   await page.addInitScript(() => {
+    // This test mocks audio; do not call the browser's native speech service.
+    Object.defineProperty(window, 'SpeechRecognition', {
+      value: undefined,
+      configurable: true,
+    });
+    Object.defineProperty(window, 'webkitSpeechRecognition', {
+      value: undefined,
+      configurable: true,
+    });
     localStorage.removeItem('atomic.ai.openrouter-api-key');
     Object.assign(window, {
       __ATOMIC_MANAGED__: { portalUrl: 'https://voice.atomic.test' },
