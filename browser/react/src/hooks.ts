@@ -734,7 +734,7 @@ export function useCanWrite(resource: Resource): boolean {
           setCanWrite(true);
         } else if (
           isAtomicIdentifier(resource.subject) &&
-          isAtomicIdentifier(agent.subject)
+          isAtomicIdentifier(agent.subject ?? '')
         ) {
           // DID resources are self-sovereign — the owning agent always has write access.
           // The normal canWrite check fails because DID drives don't have explicit write rights.
@@ -749,7 +749,7 @@ export function useCanWrite(resource: Resource): boolean {
         // Offline fallback: assume write access for DID resources
         if (
           isAtomicIdentifier(resource.subject) &&
-          isAtomicIdentifier(agent.subject)
+          isAtomicIdentifier(agent.subject ?? '')
         ) {
           setCanWrite(true);
         }
