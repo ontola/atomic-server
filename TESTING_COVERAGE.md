@@ -981,7 +981,7 @@ routing that a second node would require does not exist yet.
 - `browser/data-browser/src/helpers/feedback.test.ts`: unavailable reporting, failed delivery, blank input and successful submission.
 - `browser/data-browser/src/helpers/sentry.test.ts`: runtime disable override, environment and build attribution.
 - `browser/e2e/tests/feedback.spec.ts`: sidebar form, unavailable-reporting guidance, failed Sentry transport, retained input and successful retry; uses a fake Sentry project with intercepted transport.
-- `browser/data-browser/src/chunks/AI/formatAIChatReport.test.ts`: reviewable AI chat text, error inclusion, attachment-data exclusion, and long-chat truncation. The chat report dialog currently prepares and copies locally; remote submission is pending destination approval.
+- `browser/data-browser/src/chunks/AI/formatAIChatReport.test.ts`: reviewable AI chat text, error inclusion, attachment-data exclusion, and long-chat truncation. `ai-sidebar-navigation.spec.ts` checks the menu, preview, and explicit send through a fake Sentry feedback transport; a real Sentry receipt still needs production verification.
 - Real Sentry evidence and remaining production gates: `planning/sentry-feedback-readiness.md`.
 
 ### E2E browser diagnostic gate
