@@ -423,19 +423,19 @@ export function validateManifest(raw: unknown): PluginManifest {
     return action as unknown as DeclaredAction;
   });
   if (actions.length > 64) throw new Error('at most 64 actions per release');
-  const declared =
+  const declaredConfig =
     entry.config === undefined ? undefined : object(entry.config);
 
-  if (declared) {
-    known(declared, ['key', 'properties', 'required']);
+  if (declaredConfig) {
+    known(declaredConfig, ['key', 'properties', 'required']);
     if (
-      declared.key !== undefined &&
-      (typeof declared.key !== 'string' ||
-        !/^[A-Za-z0-9_.-]{1,128}$/.test(declared.key))
+      declaredConfig.key !== undefined &&
+      (typeof declaredConfig.key !== 'string' ||
+        !/^[A-Za-z0-9_.-]{1,128}$/.test(declaredConfig.key))
     )
       throw new Error('invalid config key');
 
-    const fields = object(declared.properties);
+    const fields = object(declaredConfig.properties);
     if (Object.keys(fields).length > 64)
       throw new Error('unsupported config schema');
 
@@ -453,7 +453,7 @@ export function validateManifest(raw: unknown): PluginManifest {
     // Required fields the declaration does not describe could not be reported
     // in the plugin's own words, which is the whole point of declaring them.
     if (
-      list(declared.required).some(
+      list(declaredConfig.required).some(
         key => typeof key !== 'string' || !(key in fields),
       )
     )
@@ -466,7 +466,9 @@ export function validateManifest(raw: unknown): PluginManifest {
       secrets,
       operations,
       ...(actions.length ? { actions } : {}),
-      ...(declared ? { config: declared as unknown as DeclaredConfig } : {}),
+      ...(declaredConfig
+        ? { config: declaredConfig as unknown as DeclaredConfig }
+        : {}),
     };
   }
 
@@ -641,7 +643,9 @@ export function validateManifest(raw: unknown): PluginManifest {
     secrets,
     operations,
     ...(actions.length ? { actions } : {}),
-    ...(declared ? { config: declared as unknown as DeclaredConfig } : {}),
+    ...(declaredConfig
+      ? { config: declaredConfig as unknown as DeclaredConfig }
+      : {}),
     ...(network.origins.length || network.reason !== undefined
       ? {
           network: {
