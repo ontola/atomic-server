@@ -74,7 +74,7 @@ fork review diff) are recorded in their owning plans, not here.
    [`plugins.md`](./plugins.md).
 
 ## Active
-- [Unified views and publishing](./unified-view-publishing.md) — composed Views own blocks; the first View publication shares the static host with Sites. App, block and live action migration remains.
+- [Apps and publishing](./apps-and-publishing.md) — one App resource and release path for site, block, code and table layouts. Block and code publication remain open in draft PR #1634.
 - [Drive sharing and hosting state](drive-sharing-state.md) — verified transition for unenrolled drives; authoritative seat counts and staging acceptance remain.
 - [Website publishing](./website-publishing.md) — FOSS publication on `develop` since #1500 (2026-09-17); managed SaaS adapter and the open follow-ups carried from that PR's handoff.
 - [Assistant-authored websites](./assistant-websites.md) — prototype merged with #1500; plugin abstraction audit and remaining SaaS deployment work.
@@ -127,7 +127,7 @@ browser flow; standalone recovery remains self-managed.
 | [`json-ad-compact.md`](./json-ad-compact.md) | **Phase 1–2 shipped** (resolver, tool I/O, context providers). Remaining: rebase `create_table.rows` on `fromCompact`; server `format=compact`. |
 | [`table-view-filters.md`](./table-view-filters.md) | **Views shipped** — Default View (filters, sort, columns, operators) and the multi-view switcher (`TableViewTabs`, `?view=`). Remaining: index-accelerated range scans. |
 | [`unified-templates.md`](./unified-templates.md) | **Initial slice shipped** (#1428: catalogue, editable previews, template chat). Remaining: portable format, website adapter, demo-lifecycle extraction, provenance and resume, live-AI acceptance. |
-| [`dashboards.md`](./dashboards.md) | **First slice shipped**; new standalone and table compositions are View resources, while old Dashboard resources remain readable. Open: Assistant and template migration, the set-level action verb and parameters. |
+| [`dashboards.md`](./dashboards.md) | **Superseded by Apps and publishing.** Its block composition remains useful; the separate Dashboard product is being removed in draft PR #1634. |
 | [`content-i18n.md`](./content-i18n.md) | **LocalizedText + template locales shipped.** Nothing in the app resolves translation siblings. Remaining: TranslationsBar, `useTranslation`, `/query` `lang`, search language filter. |
 | [`website-templates.md`](./website-templates.md) | Template repair complete (DID), two-locale E2E exists. Its CMS list is the website view of `drafts-and-suggestions.md` and `content-i18n.md`. Open: publication visibility, CMS origin, in-page edit affordance, canonical paths. Self-hosted publishing (#1500) merged 2026-09-17; the assistant-designed-sites prototype PR #1498 is still an open draft against `feat/plugin-model`. |
 | [`structural-problems-index.md`](./structural-problems-index.md) | **Live index.** React subscription audit is partial; save-state APIs shipped with two consumers. Browser metadata cleanup and subject-brand consumers remain; server subscription work is complete. |

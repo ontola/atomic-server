@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { CollectionBuilder, core, useStore } from '@tomic/react';
+import { CollectionBuilder, core, dataBrowser, useStore } from '@tomic/react';
 import { findSchema, pluginSchema } from '@tomic/lib';
-import { useAppClass } from '@chunks/PluginRuns/runScript';
 
 export interface DriveApp {
   subject: string;
@@ -31,19 +30,17 @@ export function appsForClass(
 /**
  * The apps on this drive, so one can be chosen as a way of looking at a table.
  *
- * Resolved in state rather than read during render: the app class is minted
- * per drive, so this waits on a lookup, and filling a cache re-renders
- * nothing.
+ * Resolved in state because the drive schema provides the property that names
+ * the row classes an app can render.
  */
 export function useDriveApps(drive: string | undefined): DriveApp[] {
   const store = useStore();
-  const appClass = useAppClass(drive);
   const [apps, setApps] = useState<DriveApp[]>([]);
 
   useEffect(() => {
     let cancelled = false;
 
-    if (!drive || !appClass) {
+    if (!drive) {
       // Cleared asynchronously so this effect never sets state during the
       // render that scheduled it, which would cascade.
       queueMicrotask(() => {
@@ -58,7 +55,7 @@ export function useDriveApps(drive: string | undefined): DriveApp[] {
     (async () => {
       const collection = new CollectionBuilder(store)
         .setProperty(core.properties.isA)
-        .setValue(appClass)
+        .setValue(dataBrowser.classes.view)
         .setPageSize(100)
         .build();
 
@@ -68,6 +65,7 @@ export function useDriveApps(drive: string | undefined): DriveApp[] {
 
       for (const subject of await collection.getAllMembers()) {
         const resource = await store.getResource(subject);
+        if (resource.get(dataBrowser.properties.viewKind) !== 'code') continue;
         const renders = rendersProperty
           ? resource.get(rendersProperty)
           : undefined;
@@ -89,7 +87,7 @@ export function useDriveApps(drive: string | undefined): DriveApp[] {
     return () => {
       cancelled = true;
     };
-  }, [store, drive, appClass]);
+  }, [store, drive]);
 
   return apps;
 }

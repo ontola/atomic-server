@@ -16,7 +16,7 @@ import { WebsiteHosting } from '@chunks/Website/WebsiteHosting';
 import { WebsitePreview } from '@chunks/Website/WebsitePreview';
 import {
   buildWebsiteArtifact,
-  saveViewRelease,
+  saveAppRelease,
 } from '@chunks/Website/websiteExport';
 import {
   starterWebsite,
@@ -40,16 +40,16 @@ const SCALAR_TYPES: ReadonlySet<Datatype> = new Set([
   Datatype.BOOLEAN,
 ]);
 
-/** Explicit, read-only selection for a View's public snapshot. */
-export function ViewPublication({
-  view,
+/** Explicit, read-only selection for a table App's public snapshot. */
+export function AppPublication({
+  app,
   table,
 }: {
-  view: Resource;
+  app: Resource;
   table: Resource;
 }) {
   const store = useStore();
-  const canWrite = useCanWrite(view);
+  const canWrite = useCanWrite(app);
   const rowClass = table.get(core.properties.classtype) as string | undefined;
   const [columns, setColumns] = useState<TableColumnInfo[]>([]);
   const [columnSubjects, setColumnSubjects] = useState<string[]>([
@@ -73,7 +73,7 @@ export function ViewPublication({
       store
         .getResource(rowClass)
         .then(resource => readTableColumns(store, resource)),
-      hostingRequest<HostingStatus>(store, view.subject),
+      hostingRequest<HostingStatus>(store, app.subject),
     ])
       .then(async ([map, status]) => {
         if (!active) return;
@@ -94,16 +94,16 @@ export function ViewPublication({
         if (id) {
           const pkg = await hostingRequest<WebsitePackage>(
             store,
-            view.subject,
+            app.subject,
             `/preview/${id}`,
           );
           const config = websiteConfigSchema.parse(pkg.metadata?.config);
           const selection = config.pages[0]?.tables[0];
           if (
-            pkg.metadata?.project !== view.subject ||
+            pkg.metadata?.project !== app.subject ||
             selection?.table !== table.subject
           )
-            throw new Error('The active release does not match this View.');
+            throw new Error('The active release does not match this App.');
           if (active) {
             setRows(selection.rows);
             setColumnSubjects(selection.columns.map(column => column.property));
@@ -123,15 +123,15 @@ export function ViewPublication({
     return () => {
       active = false;
     };
-  }, [store, view.subject, table.subject, rowClass]);
+  }, [store, app.subject, table.subject, rowClass]);
 
   const selection = useMemo(() => {
-    const config = starterWebsite(view.title);
+    const config = starterWebsite(app.title);
     config.description = '';
     config.pages[0].tables = [
       {
         table: table.subject,
-        title: view.title,
+        title: app.title,
         layout: 'table',
         rows,
         columns: columnSubjects.map(subject => ({
@@ -142,13 +142,13 @@ export function ViewPublication({
       },
     ];
     return config;
-  }, [view.title, table.subject, rows, columnSubjects, columns]);
+  }, [app.title, table.subject, rows, columnSubjects, columns]);
 
   useEffect(() => {
     if (!initialized || columnSubjects.length === 0) return;
     let active = true;
     setLoading(true);
-    buildWebsiteArtifact(store, view.subject, selection)
+    buildWebsiteArtifact(store, app.subject, selection)
       .then(next => {
         if (active) {
           setDraft(next);
@@ -168,7 +168,7 @@ export function ViewPublication({
     };
   }, [
     store,
-    view.subject,
+    app.subject,
     selection,
     initialized,
     columnSubjects.length,
@@ -195,7 +195,7 @@ export function ViewPublication({
 
   return (
     <Panel>
-      <h2>Publish {view.title}</h2>
+      <h2>Publish {app.title}</h2>
       <p>
         Public, read-only snapshot. Select exactly which rows and fields
         visitors can see. Later changes to the source stay private until you
@@ -287,14 +287,13 @@ export function ViewPublication({
         <p>Preparing preview…</p>
       )}
       <WebsiteHosting
-        kind='view'
-        project={view.subject}
+        project={app.subject}
         draft={!loading && columnSubjects.length > 0 ? draft : undefined}
         draftError={
           error || (columnSubjects.length === 0 ? 'Select a field.' : '')
         }
         canWrite={!!canWrite}
-        saveRelease={artifact => saveViewRelease(store, view, artifact)}
+        saveRelease={artifact => saveAppRelease(store, app, artifact)}
       />
     </Panel>
   );

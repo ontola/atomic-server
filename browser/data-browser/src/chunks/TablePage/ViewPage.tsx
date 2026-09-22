@@ -11,31 +11,42 @@ import { Button } from '@components/Button';
 import type { ResourcePageProps } from '@views/ResourcePage';
 import { DashboardPage } from '@chunks/DashboardPage';
 import { TablePage } from './TablePage';
-import { ViewPublication } from './ViewPublication';
+import { AppPublication } from './AppPublication';
+import { WebsitePage } from '@chunks/Website/WebsitePage';
+import { AppPage } from '@chunks/AppPage';
+import { WebsiteExportPage } from '@chunks/Website/WebsiteExportPage';
 
 /** A View has its own URL even when it also appears as a table tab. */
-export function ViewPage({ resource }: ResourcePageProps): JSX.Element {
-  const [publishing, setPublishing] = useState(false);
+export function ViewPage({
+  resource,
+  websiteVersion,
+}: ResourcePageProps & { websiteVersion?: string }): JSX.Element {
   const [kind] = useString(resource, dataBrowser.properties.viewKind);
-  const [legacyDashboard] = useString(
-    resource,
-    dataBrowser.properties.viewDashboard,
-  );
+
+  if (kind === 'site')
+    return websiteVersion ? (
+      <WebsiteExportPage resource={resource} deployment={websiteVersion} />
+    ) : (
+      <WebsitePage resource={resource} />
+    );
+  if (kind === 'code') return <AppPage resource={resource} />;
+  if (kind === 'blocks') return <DashboardPage resource={resource} />;
+
+  return <TableAppPage resource={resource} />;
+}
+
+function TableAppPage({ resource }: ResourcePageProps): JSX.Element {
+  const [publishing, setPublishing] = useState(false);
   const [parent] = useString(resource, core.properties.parent);
   const table = useResource(parent ?? unknownSubject);
-  const dashboard = useResource(legacyDashboard ?? resource.subject);
-
-  if (resource.loading || (kind !== 'dashboard' && table.loading)) {
+  if (resource.loading || table.loading) {
     return <LoaderBlock />;
   }
   if (resource.error) {
-    return <p>Could not load this view: {String(resource.error)}</p>;
-  }
-  if (kind === 'dashboard') {
-    return <DashboardPage resource={dashboard} />;
+    return <p>Could not load this app: {String(resource.error)}</p>;
   }
   if (table.error || !table.hasClasses(dataBrowser.classes.table)) {
-    return <p>This view has no table to display.</p>;
+    return <p>This app has no table to display.</p>;
   }
 
   return (
@@ -51,10 +62,10 @@ export function ViewPage({ resource }: ResourcePageProps): JSX.Element {
         Back to table
       </Button>
       <Button subtle onClick={() => setPublishing(value => !value)}>
-        {publishing ? 'Back to view' : 'Publish view'}
+        {publishing ? 'Back to app' : 'Publish app'}
       </Button>
       {publishing ? (
-        <ViewPublication view={resource} table={table} />
+        <AppPublication app={resource} table={table} />
       ) : (
         <TablePage resource={table} viewSubject={resource.subject} embedded />
       )}

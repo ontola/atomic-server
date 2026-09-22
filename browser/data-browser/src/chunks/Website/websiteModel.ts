@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import {
   core,
+  dataBrowser,
   Datatype,
   ensureSchema,
   server,
@@ -158,13 +159,6 @@ export const WEBSITE_SPEC: SchemaSpec = {
   ],
   classes: [
     {
-      shortname: 'website-project',
-      name: 'Website',
-      description:
-        'A website authored in Atomic Assistant, using existing documents and tables.',
-      requires: ['website-design'],
-    },
-    {
       shortname: 'website-export',
       name: 'Website export',
       description: 'A frozen website ready for static hosting.',
@@ -199,15 +193,17 @@ export async function createWebsite(
   store: Store,
   drive: string,
   config: WebsiteConfig,
+  parent = drive,
 ) {
   const parsed = websiteConfigSchema.parse(config);
-  await assertPrivateWebsiteParent(store, drive);
+  await assertPrivateWebsiteParent(store, parent);
   const schema = await ensureSchema(store, drive, WEBSITE_SPEC);
   const resource = await store.newResource({
-    parent: drive,
-    isA: [schema.classes['website-project']],
+    parent,
+    isA: [dataBrowser.classes.view],
     propVals: {
       [core.properties.name]: parsed.title,
+      [dataBrowser.properties.viewKind]: 'site',
       [schema.properties['website-design']]: JSON.stringify(parsed),
     },
   });
@@ -222,10 +218,10 @@ export async function readWebsite(
 ) {
   const schema = await findWebsiteSchema(store, drive);
   if (
-    !schema.classes?.['website-project'] ||
-    !resource.hasClasses(schema.classes['website-project'])
+    !resource.hasClasses(dataBrowser.classes.view) ||
+    resource.get(dataBrowser.properties.viewKind) !== 'site'
   )
-    throw new Error('This resource is not a website.');
+    throw new Error('This app does not use the site renderer.');
   const property = schema.properties?.['website-design'];
   if (!property) throw new Error('Website schema is missing.');
   const config = websiteConfigSchema.parse(

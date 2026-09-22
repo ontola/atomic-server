@@ -25,7 +25,7 @@ describe('composed View authoring', () => {
       isA: dataBrowser.classes.view,
       propVals: {
         [core.properties.name]: 'Overview',
-        [dataBrowser.properties.viewKind]: 'dashboard',
+        [dataBrowser.properties.viewKind]: 'blocks',
       },
     });
     expect(resource.set).toHaveBeenCalledWith(

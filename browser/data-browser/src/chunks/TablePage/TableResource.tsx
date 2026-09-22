@@ -141,7 +141,6 @@ export const TableResource: React.FC<TableResourceProps> = ({
     invalidateCollection,
     viewKind,
     appView,
-    viewDashboard,
     viewGroupBy,
     setViewGroupBy,
     viewEndProp,
@@ -1163,8 +1162,8 @@ export const TableResource: React.FC<TableResourceProps> = ({
               table={resource.subject}
             />
           </AppViewWrapper>
-        ) : viewKind === 'dashboard' ? (
-          <DashboardView dashboard={viewDashboard} view={activeView} />
+        ) : viewKind === 'blocks' ? (
+          <DashboardView view={activeView} />
         ) : viewKind === 'kanban' ? (
           <KanbanView
             tableSubject={resource.subject}

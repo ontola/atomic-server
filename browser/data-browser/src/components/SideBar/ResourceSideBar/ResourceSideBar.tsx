@@ -1,4 +1,3 @@
-import { useWebsiteClass } from '@chunks/Website/useWebsiteClass';
 import {
   Fragment,
   memo,
@@ -76,10 +75,11 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
     // into the tree, then hides them when the class arrives — the sidebar
     // flash on open.
     const classes = resource.getClasses();
-    const websiteClass = useWebsiteClass(classes.join('|'));
+    const appKind = resource.get(dataBrowser.properties.viewKind);
     const hideChildren =
-      !!websiteClass ||
       classes.length === 0 ||
+      (classes.includes(dataBrowser.classes.view) &&
+        (appKind === 'site' || appKind === 'blocks' || appKind === 'code')) ||
       classes.includes(dataBrowser.classes.table) ||
       classes.includes(dataBrowser.classes.chatroom) ||
       classes.includes(dataBrowser.classes.meeting) ||
@@ -238,14 +238,12 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
         >
           {hasSubResources && (
             <>
-              {!websiteClass && (
-                <DropEdge
-                  parentHierarchy={hierarchyWithItself}
-                  index={0}
-                  prevSubject={undefined}
-                  nextSubject={subResources[0]}
-                />
-              )}
+              <DropEdge
+                parentHierarchy={hierarchyWithItself}
+                index={0}
+                prevSubject={undefined}
+                nextSubject={subResources[0]}
+              />
               {subResources.map((child, idx) => (
                 <Fragment key={child}>
                   <ResourceSideBar
@@ -254,14 +252,12 @@ export const ResourceSideBar: React.FC<ResourceSideBarProps> = memo(
                     ancestry={ancestry}
                     onClick={onClick}
                   />
-                  {!websiteClass && (
-                    <DropEdge
-                      parentHierarchy={hierarchyWithItself}
-                      index={idx + 1}
-                      prevSubject={child}
-                      nextSubject={subResources[idx + 1]}
-                    />
-                  )}
+                  <DropEdge
+                    parentHierarchy={hierarchyWithItself}
+                    index={idx + 1}
+                    prevSubject={child}
+                    nextSubject={subResources[idx + 1]}
+                  />
                 </Fragment>
               ))}
             </>

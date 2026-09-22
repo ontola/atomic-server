@@ -26,7 +26,6 @@ export function WebsiteHosting({
   savedDigest,
   saveRelease,
   secondary = false,
-  kind = 'site',
 }: {
   project: string;
   draft?: WebsiteArtifact;
@@ -35,7 +34,6 @@ export function WebsiteHosting({
   savedDigest?: string;
   saveRelease: (artifact: WebsiteArtifact) => Promise<HostingStatus>;
   secondary?: boolean;
-  kind?: 'site' | 'view';
 }) {
   const store = useStore();
   const [dialogProps, showVersions] = useDialog();
@@ -145,7 +143,7 @@ export function WebsiteHosting({
     () => [
       {
         id: 'publication-view',
-        label: kind === 'view' ? 'Open published view' : 'View site',
+        label: 'Open published app',
         disabled: !status?.state?.active,
         onClick: () => {
           if (status?.state?.active)
@@ -154,21 +152,21 @@ export function WebsiteHosting({
       },
       {
         id: 'publication-versions',
-        label: kind === 'view' ? 'View versions' : 'Website versions',
+        label: 'Publication versions',
         helper: 'Preview, restore and inspect publication history',
         disabled: !status?.state?.deployments.length,
         onClick: showVersions,
       },
       {
         id: 'publication-unpublish',
-        label: kind === 'view' ? 'Unpublish view' : 'Unpublish website',
+        label: 'Unpublish app',
         disabled: busy || !canWrite || !status?.state?.active,
         onClick: () => {
           if (status) void run(() => activate(null, status));
         },
       },
     ],
-    [status, showVersions, busy, canWrite, run, activate, kind],
+    [status, showVersions, busy, canWrite, run, activate],
   );
   useCustomContextItems(menuItems);
 
@@ -233,16 +231,12 @@ export function WebsiteHosting({
             : upToDate
               ? 'Up to date'
               : status?.state?.active
-                ? kind === 'view'
-                  ? 'Update view'
-                  : 'Update site'
-                : kind === 'view'
-                  ? 'Publish view'
-                  : 'Publish site'}
+                ? 'Update app'
+                : 'Publish app'}
         </Button>
         <Dialog {...dialogProps}>
           <DialogTitle>
-            {kind === 'view' ? 'View versions' : 'Website versions'}
+            Publication versions
           </DialogTitle>
           <DialogContent>
             <p>
@@ -270,9 +264,7 @@ export function WebsiteHosting({
               <SiteLink
                 as='a'
                 href={
-                  kind === 'view'
-                    ? `${status.url}_releases/${previous}/`
-                    : `/app/show?subject=${encodeURIComponent(project)}&view=website-version:${previous}`
+                  `${status.url}_releases/${previous}/`
                 }
               >
                 Preview version

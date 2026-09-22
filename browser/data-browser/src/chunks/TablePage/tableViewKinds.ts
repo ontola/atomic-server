@@ -13,13 +13,13 @@ import {
  * kinds can be added without a schema migration; this union is the frontend's
  * source of truth for the ones we actually render.
  */
-/** `dashboard` composes blocks on the View; old Views may reference a Dashboard. */
+/** `blocks` composes reusable blocks on the App resource. */
 export const VIEW_KINDS = [
   'table',
   'kanban',
   'calendar',
   'timer',
-  'dashboard',
+  'blocks',
 ] as const;
 
 export type ViewKind = (typeof VIEW_KINDS)[number];
@@ -56,7 +56,7 @@ export const VIEW_KIND_LABELS: Record<ViewKind, string> = {
   kanban: 'Kanban',
   calendar: 'Calendar',
   timer: 'Timer',
-  dashboard: 'Dashboard',
+  blocks: 'Blocks',
 };
 
 export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {
@@ -64,5 +64,5 @@ export const VIEW_KIND_ICONS: Record<ViewKind, IconType> = {
   kanban: FaTableColumns,
   calendar: FaCalendarDays,
   timer: FaStopwatch,
-  dashboard: FaChartPie,
+  blocks: FaChartPie,
 };

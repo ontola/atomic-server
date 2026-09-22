@@ -35,11 +35,11 @@ const KIND_ICONS: Record<BlockKind, JSX.Element> = {
 };
 
 /**
- * A composed page of blocks over a Drive's data.
+ * A block-based App over a Drive's data.
  *
  * The blocks are resources, so this page renders stored configuration and
  * nothing else — which is what makes a dashboard an assistant writes and a
- * dashboard a person builds the same object.
+ * app a person builds the same object.
  */
 export function DashboardPage({ resource }: ResourcePageProps): JSX.Element {
   const titleId = useId();
@@ -85,7 +85,7 @@ export function DashboardPage({ resource }: ResourcePageProps): JSX.Element {
           <Empty>
             {canWrite
               ? 'Nothing here yet. Add a number, a chart, a button or a table.'
-              : 'This dashboard has no blocks yet.'}
+              : 'This app has no blocks yet.'}
           </Empty>
         ) : (
           <Grid data-testid='dashboard-grid'>
@@ -126,7 +126,7 @@ const Grid = styled.div`
   align-items: stretch;
 
   /* One column when there isn't room: a 3-of-12 stat block is unreadable at
-   * phone width, and a dashboard is exactly the kind of page people open on a
+   * phone width, and an app is exactly the kind of page people open on a
    * phone. */
   @media (max-width: 50rem) {
     grid-template-columns: 1fr;

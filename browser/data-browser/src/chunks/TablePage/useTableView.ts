@@ -110,8 +110,6 @@ export interface UseTableViewResult {
   viewKind: ViewKind;
   /** Set when this view is rendered by an app rather than a built-in kind. */
   appView: string | undefined;
-  /** Legacy dashboard resource; new composed views keep blocks on the View. */
-  viewDashboard: string | undefined;
   /**
    * The property this view arranges rows by: a SelectProperty (kanban), a date
    * property (calendar), or the start timestamp (timer).
@@ -237,7 +235,6 @@ export function useTableView(
   );
   const [storedColumns] = useArray(view, dataBrowser.properties.viewColumns);
   const [storedKind] = useString(view, dataBrowser.properties.viewKind);
-  const [viewDashboard] = useString(view, dataBrowser.properties.viewDashboard);
   const [viewGroupBy] = useString(view, dataBrowser.properties.viewGroupBy);
   const [viewEndProp] = useString(view, dataBrowser.properties.viewEndProp);
   // Preserve absence here: unlike useBoolean's false fallback, an unset
@@ -450,7 +447,7 @@ export function useTableView(
     ): Promise<Resource> => {
       let isFirst = views.length === 0 && !defaultViewSubject;
 
-      if (kind === 'dashboard' && isFirst) {
+      if (kind === 'blocks' && isFirst) {
         // The first saved view replaces the implicit "Default View" tab and
         // becomes what the table opens on. A dashboard must be neither: the
         // rows keep their tab and stay the default, so materialize that view
@@ -990,7 +987,6 @@ export function useTableView(
     deleteView,
     viewKind: normalizeViewKind(storedKind),
     appView: appViewOf(storedKind),
-    viewDashboard,
     viewGroupBy,
     setViewGroupBy,
     viewEndProp,

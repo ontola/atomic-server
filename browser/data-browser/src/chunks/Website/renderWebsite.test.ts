@@ -9,7 +9,7 @@ import {
 import { renderDocument, renderRows, renderWebsitePage } from './renderWebsite';
 import {
   artifactDigest,
-  saveViewRelease,
+  saveAppRelease,
   selectedSubjects,
 } from './websiteExport';
 
@@ -138,7 +138,7 @@ describe('website publication output', () => {
 });
 
 describe('private website authoring', () => {
-  it('refuses to publish a non-View through the View release path', async () => {
+  it('refuses to publish a non-App through the shared release path', async () => {
     const resource = {
       subject: 'project',
       get: () => undefined,
@@ -152,7 +152,7 @@ describe('private website authoring', () => {
     const config = starterWebsite();
     const files = { 'index.html': '<p>private</p>' };
     await expect(
-      saveViewRelease(store, resource, {
+      saveAppRelease(store, resource, {
         version: 1,
         renderer: 'atomic-static-v1',
         project: resource.subject,
@@ -161,7 +161,7 @@ describe('private website authoring', () => {
         digest: await artifactDigest(files),
         createdAt: new Date().toISOString(),
       }),
-    ).rejects.toThrow('Only a View');
+    ).rejects.toThrow('Only an App');
   });
   it('rejects inherited public access and unresolved or cyclic ancestry', async () => {
     const resources: Record<string, Record<string, unknown>> = {

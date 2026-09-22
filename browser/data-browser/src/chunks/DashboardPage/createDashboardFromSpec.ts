@@ -101,7 +101,7 @@ export async function buildDashboardFromSpec(
     isA: dataBrowser.classes.view,
     propVals: {
       [core.properties.name]: spec.name,
-      [dataBrowser.properties.viewKind]: 'dashboard',
+      [dataBrowser.properties.viewKind]: 'blocks',
     },
   });
   await dashboard.save();

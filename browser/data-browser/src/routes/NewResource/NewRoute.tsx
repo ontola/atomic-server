@@ -91,6 +91,7 @@ function NewRoutePage(): JSX.Element {
 }
 
 function NewResourceSelector() {
+  const appCreation = DRIVE_CREATIONS.find(item => item.shortname === 'app')!;
   const { parentSubject, parent } = NewRoute.useSearch();
   const { drive, hideTemplates } = useSettings();
   const destination = parentSubject || parent || drive;
@@ -111,6 +112,7 @@ function NewResourceSelector() {
   const [loadingTemplate, setLoadingTemplate] = useState('');
   const [templateError, setTemplateError] = useState('');
   const [creating, setCreating] = useState(false);
+  const [choosingAppMode, setChoosingAppMode] = useState(false);
   const {
     results: customClasses,
     loading,
@@ -203,10 +205,18 @@ function NewResourceSelector() {
     askAI(creationAssistantAsk(prompt, destination));
   };
 
-  const openCreation = async (item: (typeof basic)[number]) => {
+  const openCreation = async (
+    item: (typeof basic)[number],
+    mode?: 'blocks' | 'site' | 'code',
+  ) => {
     if ('subject' in item) {
       showNewResourceUI(item.subject, destination);
 
+      return;
+    }
+
+    if (item.shortname === 'app' && !mode) {
+      setChoosingAppMode(true);
       return;
     }
 
@@ -220,6 +230,7 @@ function NewResourceSelector() {
         store,
         drive,
         destination,
+        mode,
       );
       navigate(constructOpenURL(subject));
     } catch (creationError) {
@@ -343,6 +354,22 @@ function NewResourceSelector() {
             </BasicGrid>
           </section>
         )}
+        {choosingAppMode && (
+          <section aria-label='Choose app layout'>
+            <SectionHeading>Choose an app layout</SectionHeading>
+            <Row gap='0.5rem'>
+              <Button disabled={creating} onClick={() => void openCreation(appCreation, 'blocks')}>
+                Blocks
+              </Button>
+              <Button disabled={creating} onClick={() => void openCreation(appCreation, 'site')}>
+                Site pages
+              </Button>
+              <Button disabled={creating} onClick={() => void openCreation(appCreation, 'code')}>
+                Custom code
+              </Button>
+            </Row>
+          </section>
+        )}
         {!searching && enableAI && (
           <Column gap='0.5rem'>
             <SectionHeading>Build with AI</SectionHeading>
@@ -457,7 +484,7 @@ function NewResourceSelector() {
                   <Kind>
                     {loadingTemplate === item.id
                       ? 'Loading…'
-                      : 'Website template'}
+                      : 'Site template'}
                   </Kind>
                 </TemplateChoice>
               ))}

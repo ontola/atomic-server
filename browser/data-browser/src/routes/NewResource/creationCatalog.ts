@@ -19,11 +19,6 @@ export const BASIC_CREATIONS = [
     description: 'Keep related work together.',
   },
   {
-    subject: dataBrowser.classes.dashboard,
-    title: 'Dashboard',
-    description: 'Bring tables, charts and resources together.',
-  },
-  {
     subject: dataBrowser.classes.meeting,
     title: 'Meeting',
     description: 'Capture a conversation and its notes.',
@@ -64,14 +59,9 @@ export const DRIVE_CREATIONS = [
       'Create a script or automation and review its proposed changes.',
   },
   {
-    shortname: 'website-project',
-    title: 'Website',
-    description: 'Build a website from your documents and tables.',
-  },
-  {
     shortname: 'app',
     title: 'App',
-    description: 'Create an interactive app backed by its own data.',
+    description: 'Create an app with blocks, pages or custom code.',
   },
 ] as const;
 
@@ -106,18 +96,6 @@ export const AI_BUILD_SUGGESTIONS: AIBuildSuggestion[] = [
     title: 'App',
     seed: 'Build an app that ',
     shortname: 'app',
-  },
-  {
-    id: 'website',
-    title: 'Website',
-    seed: 'Build a website for ',
-    shortname: 'website-project',
-  },
-  {
-    id: 'dashboard',
-    title: 'Dashboard',
-    seed: 'Build a dashboard showing ',
-    subject: dataBrowser.classes.dashboard,
   },
   {
     id: 'table',

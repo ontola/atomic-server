@@ -443,7 +443,7 @@ saved tab. Blocks remain standalone child resources and can point to any table
 or View the author can read. Creating a separate Dashboard resource for every
 table tab was redundant, so new tabs and the standalone New Dashboard flow
 create only a View. Older `Dashboard` resources and `view-dashboard` links keep
-rendering. See [`unified-view-publishing.md`](./unified-view-publishing.md) for
+rendering. See [`apps-and-publishing.md`](./apps-and-publishing.md) for
 the broader View and publication migration.
 
 The earlier recommendation to keep Dashboard as a separate model is superseded:

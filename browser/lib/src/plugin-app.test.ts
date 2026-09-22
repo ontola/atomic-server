@@ -160,6 +160,12 @@ describe('createApp', () => {
       created.app,
     );
     expect(resources.get(created.app)?.[core.properties.parent]).toBe('drive');
+    expect(resources.get(created.app)?.[core.properties.isA]).toEqual([
+      dataBrowser.classes.view,
+    ]);
+    expect(resources.get(created.app)?.[dataBrowser.properties.viewKind]).toBe(
+      'code',
+    );
   });
 
   it('names the app’s parts after the domain, not after the app', async () => {

@@ -305,28 +305,8 @@ export async function buildWebsiteArtifact(
   };
 }
 
-/** Stores a PRIVATE export. Public activation belongs to the hosting API. */
-export async function saveWebsiteRelease(
-  store: Store,
-  drive: string,
-  resource: Resource,
-  artifact: WebsiteArtifact,
-) {
-  await assertPrivateWebsiteParent(store, resource.subject);
-  const agent = store.getAgent();
-  if (!agent || !(await resource.canWrite(agent.subject)))
-    throw new Error('You cannot create a release for this website.');
-  if (
-    artifact.project !== resource.subject ||
-    (await artifactDigest(artifact.files, artifact.assets)) !== artifact.digest
-  )
-    throw new Error('Release does not match the reviewed website artifact.');
-  await readWebsite(store, drive, resource);
-  return uploadStaticRelease(store, resource, artifact);
-}
-
-/** A View uses the same frozen host without creating a Website resource. */
-export async function saveViewRelease(
+/** Uploads a reviewed App release. Public activation belongs to the hosting API. */
+export async function saveAppRelease(
   store: Store,
   resource: Resource,
   artifact: WebsiteArtifact,
@@ -334,14 +314,14 @@ export async function saveViewRelease(
   await assertPrivateWebsiteParent(store, resource.subject);
   const agent = store.getAgent();
   if (!agent || !(await resource.canWrite(agent.subject)))
-    throw new Error('You cannot publish this view.');
+    throw new Error('You cannot publish this app.');
   if (!resource.hasClasses(dataBrowser.classes.view))
-    throw new Error('Only a View can use this publication path.');
+    throw new Error('Only an App can use this publication path.');
   if (
     artifact.project !== resource.subject ||
     (await artifactDigest(artifact.files, artifact.assets)) !== artifact.digest
   )
-    throw new Error('Release does not match the reviewed view artifact.');
+    throw new Error('Release does not match the reviewed app artifact.');
   return uploadStaticRelease(store, resource, artifact);
 }
 

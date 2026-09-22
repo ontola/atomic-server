@@ -80,11 +80,6 @@ export function usePluginClass(drive: string | undefined): string | undefined {
   return useDriveClass(drive, 'plugin-script');
 }
 
-/** The drive's App class, once resolved. Absent while looking up. */
-export function useAppClass(drive: string | undefined): string | undefined {
-  return useDriveClass(drive, 'app');
-}
-
 /**
  * One of the drive's plugin classes, by shortname.
  *
@@ -106,7 +101,7 @@ export function useAppClass(drive: string | undefined): string | undefined {
 async function resolveDriveClass(
   store: Store,
   drive: string,
-  shortname: 'plugin-script' | 'app',
+  shortname: 'plugin-script',
   isCancelled: () => boolean,
 ): Promise<{ ok: true; value: string | undefined } | { ok: false }> {
   const attempts = 3;
@@ -139,7 +134,7 @@ async function resolveDriveClass(
 
 function useDriveClass(
   drive: string | undefined,
-  shortname: 'plugin-script' | 'app',
+  shortname: 'plugin-script',
 ): string | undefined {
   const store = useStore();
   const [pluginClass, setPluginClass] = useState<string>();

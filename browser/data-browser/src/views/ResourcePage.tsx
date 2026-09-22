@@ -47,15 +47,11 @@ import { PluginView } from './PluginView/PluginView';
 import { MeetingPage } from './Meeting/MeetingPage';
 import { PluginPage as AtomicPluginPage } from '@chunks/PluginRuns/PluginPage';
 import { useIsPlugin } from '@chunks/PluginRuns/PluginSection';
-import { useAppClass } from '@chunks/PluginRuns/runScript';
 
 const TablePage = lazy(() =>
   import('../chunks/TablePage').then(m => ({ default: m.TablePage })),
 );
 
-const DashboardPage = lazy(() =>
-  import('../chunks/DashboardPage').then(m => ({ default: m.DashboardPage })),
-);
 const ViewPage = lazy(() =>
   import('../chunks/TablePage/ViewPage').then(m => ({ default: m.ViewPage })),
 );
@@ -65,14 +61,6 @@ const WebsiteExportPage = lazy(() =>
     default: m.WebsiteExportPage,
   })),
 );
-const WebsitePage = lazy(() =>
-  import('@chunks/Website/WebsitePage').then(m => ({ default: m.WebsitePage })),
-);
-
-const AppPage = lazy(() =>
-  import('../chunks/AppPage').then(m => ({ default: m.AppPage })),
-);
-
 /** These properties are passed to every View at Page level */
 export type ResourcePageProps<Subject extends OptionalClass = never> = {
   resource: Resource<Subject>;
@@ -96,8 +84,6 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
   const isPlugin = useIsPlugin(resource);
   const store = useStore();
   const drive = store.getDrive();
-  const appClass = useAppClass(drive);
-  const websiteClass = useWebsiteClass(isAList.join('|'));
   const websiteExportClass = useWebsiteClass(
     isAList.join('|'),
     'website-export',
@@ -187,42 +173,12 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
   if (ReturnComponent === ResourcePageDefault) {
     if (loading) return null;
 
-    if (
-      (websiteClass && resource.hasClasses(websiteClass)) ||
-      (websiteExportClass && resource.hasClasses(websiteExportClass))
-    ) {
+    if (websiteExportClass && resource.hasClasses(websiteExportClass)) {
       return (
         <Main subject={subject}>
           <ErrorBoundary>
             <Suspense fallback={<Spinner />}>
-              {websiteExportClass ? (
-                <WebsiteExportPage resource={resource} />
-              ) : (
-                <>
-                  {websiteVersion ? (
-                    <WebsiteExportPage
-                      resource={resource}
-                      deployment={websiteVersion}
-                    />
-                  ) : (
-                    <WebsitePage resource={resource} />
-                  )}
-                </>
-              )}
-            </Suspense>
-          </ErrorBoundary>
-        </Main>
-      );
-    }
-
-    // Like a plugin's, an app's class is minted per drive, so it cannot be a
-    // case in `selectComponent`. An app opens to its own view.
-    if (appClass !== undefined && resource.hasClasses(appClass)) {
-      return (
-        <Main subject={subject}>
-          <ErrorBoundary>
-            <Suspense fallback={<Spinner />}>
-              <AppPage resource={resource} />
+              <WebsiteExportPage resource={resource} />
             </Suspense>
           </ErrorBoundary>
         </Main>
@@ -269,7 +225,11 @@ const ResourcePage: React.FC<Props> = ({ subject, websiteVersion }) => {
           <PendingForks resource={resource} />
           <ImportResolutionNotice resource={resource} />
           <LocalThoughtSync resource={resource} />
-          <ReturnComponent resource={resource} />
+          {ReturnComponent === ViewPage ? (
+            <ViewPage resource={resource} websiteVersion={websiteVersion} />
+          ) : (
+            <ReturnComponent resource={resource} />
+          )}
         </Suspense>
       </ErrorBoundary>
     </Main>
@@ -309,8 +269,6 @@ function selectComponent(klass: string | undefined) {
       return TablePage;
     case dataBrowser.classes.view:
       return ViewPage;
-    case dataBrowser.classes.dashboard:
-      return DashboardPage;
     case core.classes.ontology:
       return OntologyPage;
     case dataBrowser.classes.tag:

@@ -60,7 +60,7 @@ export function WebsiteExportPage({
             </div>
             <nav aria-label='Export actions'>
               <AtomicLink subject={artifact.project}>
-                Back to website
+                Back to app
               </AtomicLink>
               <select
                 aria-label='Preview page'
@@ -81,7 +81,7 @@ export function WebsiteExportPage({
                   );
                 }}
               >
-                Download website
+                Download app
               </Button>
             </nav>
           </header>
