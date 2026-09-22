@@ -11,6 +11,7 @@ import { decodeB64 } from './base64.js';
 import { AtomicError, ErrorType } from './error.js';
 import {
   AGENT_VAULT_PROOF_MESSAGE,
+  aiChatsFolderCert,
   encodeGenesisCert,
   privateDriveCert,
   privateDriveSubject as derivePrivateDriveSubject,
@@ -47,6 +48,8 @@ export class Agent implements AgentInterface {
    * session still knows which drive is its home.
    */
   public privateDrive?: string;
+  /** Stable chat-folder subjects computed before storing non-extractable keys. */
+  public aiChatsFolders: Record<string, string> = {};
   /**
    * The agent's Cloud Vault proof: its signature over
    * {@link AGENT_VAULT_PROOF_MESSAGE}, base64url. Same story as
@@ -108,6 +111,8 @@ export class Agent implements AgentInterface {
           agent.privateDrive =
             await Agent.privateDriveSubjectFromSecret(secretB64);
           agent.vaultProof = await Agent.vaultProofFromSecret(secretB64);
+          agent.aiChatsFolders =
+            await Agent.aiChatsFoldersFromSecret(secretB64);
 
           resolve(agent);
         })
@@ -220,6 +225,42 @@ export class Agent implements AgentInterface {
     this.privateDrive = subject;
 
     return subject;
+  }
+
+  public async aiChatsFolderSubject(drive: string): Promise<string> {
+    if (this.aiChatsFolders[drive]) return this.aiChatsFolders[drive];
+
+    if (!this.#cryptoProvider.signsDeterministically) {
+      throw new AtomicError(
+        'Sign in again to initialize the shared AI Chats folder on this device.',
+        ErrorType.Client,
+      );
+    }
+
+    const cert = aiChatsFolderCert(decodeB64(await this.getPublicKey()), drive);
+    const subject = subjectForSignature(
+      await this.signBytes(encodeGenesisCert(cert)),
+    );
+    this.aiChatsFolders[drive] = subject;
+
+    return subject;
+  }
+
+  /** Precompute canonical and legacy-home folders while the raw key is available. */
+  public static async aiChatsFoldersFromSecret(
+    secret: string,
+  ): Promise<Record<string, string>> {
+    const agent = Agent.fromSecret(secret, 'js');
+    const drives = new Set([
+      await agent.privateDriveSubject(),
+      agent.initialDrive,
+    ]);
+
+    for (const drive of drives) {
+      if (drive) await agent.aiChatsFolderSubject(drive);
+    }
+
+    return agent.aiChatsFolders;
   }
 
   /**
