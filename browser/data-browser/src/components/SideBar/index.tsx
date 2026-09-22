@@ -104,6 +104,7 @@ export function SideBar(): JSX.Element {
               {enabledPanels.has(Panel.AIChats) && (
                 <SideBarPanel
                   title='AI Chats'
+                  heightStorageKey='aiChatsPanelHeight'
                   data-testid='ai-chats-panel'
                   key={drive}
                   actions={<NewSidebarChatButton />}
@@ -112,11 +113,16 @@ export function SideBar(): JSX.Element {
                 </SideBarPanel>
               )}
               {enabledPanels.has(Panel.Ontologies) && (
-                <SideBarPanel title='Ontologies' key={drive}>
+                <SideBarPanel
+                  title='Ontologies'
+                  heightStorageKey='ontologiesPanelHeight'
+                  initialHeight={160}
+                  key={drive}
+                >
                   <OntologiesPanel />
                 </SideBarPanel>
               )}
-              <SideBarPanel title='App'>
+              <SideBarPanel title='App' heightStorageKey='appPanelHeight'>
                 <Column gap='0.5rem' align='stretch'>
                   <AppMenu onItemClick={closeSideBar} />
                 </Column>

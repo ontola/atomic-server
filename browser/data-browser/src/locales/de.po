@@ -11101,7 +11101,7 @@ msgstr ""
 #~ msgid "<0/> AI edit"
 #~ msgstr ""
 
-#: src/components/SideBar/AIPanel.tsx
+#: src/components/SideBar/SideBarPanel.tsx
 msgid "Drag to resize"
 msgstr ""
 

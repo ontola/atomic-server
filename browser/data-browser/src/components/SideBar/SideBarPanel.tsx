@@ -1,9 +1,14 @@
 import { styled } from 'styled-components';
 import { Collapse } from '../Collapse';
-import { useState, type JSX } from 'react';
+import { useRef, useState, type JSX } from 'react';
+import { useResizable } from '@hooks/useResizable';
+import { useLocalStorage } from '@hooks/useLocalStorage';
 
 export interface SideBarPanelProps {
   title: string;
+  /** Stable, untranslated key for the section's height preference. */
+  heightStorageKey: string;
+  initialHeight?: number;
   actions?: React.ReactNode;
   /** When false, section starts collapsed */
   defaultOpen?: boolean;
@@ -15,12 +20,29 @@ export interface SideBarPanelProps {
 export function SideBarPanel({
   children,
   title,
+  heightStorageKey,
+  initialHeight = 320,
   actions,
   defaultOpen = true,
   embedded = false,
   'data-testid': dataTestId,
 }: React.PropsWithChildren<SideBarPanelProps>): JSX.Element {
   const [open, setOpen] = useState(defaultOpen);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [storedHeight, setStoredHeight] = useLocalStorage(
+    heightStorageKey,
+    initialHeight,
+  );
+  const { size, dragAreaListeners, isDragging } = useResizable({
+    initialSize: storedHeight,
+    minSize: 60,
+    maxSize: 1200,
+    targetRef: contentRef,
+    edge: 'bottom',
+    mode: 'delta',
+    threshold: 6,
+    onResize: setStoredHeight,
+  });
 
   return (
     <Wrapper $embedded={embedded} data-testid={dataTestId}>
@@ -30,13 +52,18 @@ export function SideBarPanel({
           onClick={() => setOpen(prev => !prev)}
           aria-expanded={open}
           aria-label={`${open ? 'Collapse' : 'Expand'} ${title}`}
+          title={open ? 'Drag to resize' : undefined}
+          $dragging={isDragging}
+          {...(open ? dragAreaListeners : {})}
         >
           <PanelTitle>{title}</PanelTitle>
         </HeaderButton>
         {actions}
       </HeaderRow>
       <StyledCollapse open={open} $embedded={embedded}>
-        {children}
+        <PanelContent ref={contentRef} style={{ maxHeight: size }}>
+          {children}
+        </PanelContent>
       </StyledCollapse>
     </Wrapper>
   );
@@ -58,7 +85,7 @@ const PanelTitle = styled.span`
   white-space: nowrap;
 `;
 
-const HeaderButton = styled.button`
+const HeaderButton = styled.button<{ $dragging: boolean }>`
   background: none;
   border: none;
   margin: 0;
@@ -71,6 +98,37 @@ const HeaderButton = styled.button`
   box-sizing: border-box;
   width: 100%;
   text-align: start;
+  gap: 0.5rem;
+
+  &[aria-expanded='true'] {
+    touch-action: none;
+    user-select: none;
+    cursor: row-resize;
+  }
+
+  &[aria-expanded='true']::after {
+    content: '';
+    margin-left: auto;
+    flex-shrink: 0;
+    width: 1.25rem;
+    height: 3px;
+    border-radius: 2px;
+    background: ${p => p.theme.colors.textLight};
+    opacity: ${p => (p.$dragging ? 1 : 0)};
+  }
+
+  &:hover::after,
+  &:focus-visible::after {
+    opacity: 1;
+  }
+
+  @media (pointer: coarse) {
+    min-height: 44px;
+
+    &[aria-expanded='true']::after {
+      opacity: 0.5;
+    }
+  }
 
   &:hover {
     background-color: ${p => p.theme.colors.bg1};
@@ -84,6 +142,11 @@ const HeaderButton = styled.button`
     outline: 2px solid ${p => p.theme.colors.main};
     outline-offset: 2px;
   }
+`;
+
+const PanelContent = styled.div`
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
 `;
 
 const StyledCollapse = styled(Collapse)<{ $embedded: boolean }>`

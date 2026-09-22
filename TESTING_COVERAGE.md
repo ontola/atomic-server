@@ -10,6 +10,10 @@ Sidebar layout: browser checks sample both docked sidebar transitions halfway
 through opening/closing and verify that the main content moves with them, with
 matching duration/easing. They also cover hover reveal, mobile backdrop dismissal,
 and keeping the main content aligned while resizing and after reopening.
+Section resizing: hook tests cover touch pointers, drag thresholds, size bounds,
+tap preservation, cancellation, secondary pointers and unmount cleanup. Chromium
+uses native touch gestures on the AI Chats header to shrink/grow the list, checks
+the 44px touch target, saved height after reload, collapse/expand and New Chat.
 
 Creation catalog/context menus: browser checks cover the embedded sidebar filter,
 keyboard filtering, removal of plugin/website/app creation actions from menus,
