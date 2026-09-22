@@ -4,12 +4,12 @@ import { useSyncExternalStore } from 'react';
 const CATALOG_URL_KEY = 'plugin-catalog-url';
 
 // Published from the `integrations/` folder of
-// https://github.com/localthought/atomic-plugins (gh-pages), which mirrors
+// https://github.com/ontola/atomic-plugins (gh-pages), which mirrors
 // this repo's own `integrations/` tree. Kept as a separate, publicly
 // reachable catalog so a data-browser build isn't limited to the plugins its
 // own paired atomic-server happens to embed.
 const DEFAULT_PLUGIN_CATALOG_URL =
-  'https://localthought.github.io/atomic-plugins/catalog.json';
+  'https://ontola.github.io/atomic-plugins/integrations/catalog.json';
 
 export const defaultPluginCatalogUrl: string =
   import.meta.env.VITE_PLUGIN_CATALOG_URL || DEFAULT_PLUGIN_CATALOG_URL;

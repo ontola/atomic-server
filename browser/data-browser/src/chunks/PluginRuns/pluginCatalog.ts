@@ -75,7 +75,7 @@ function parseCatalogEntries(raw: unknown): CatalogEntry[] {
     }));
 }
 
-// catalog.json is published from https://github.com/localthought/atomic-plugins
+// catalog.json is published from https://github.com/ontola/atomic-plugins
 // (gh-pages, mirroring this repo's own integrations/ tree) rather than
 // bundled into the SPA at build time or fetched from the paired
 // atomic-server — a Tauri desktop/mobile build ships a separate frontend
