@@ -152,6 +152,36 @@ test('mobile AI chat fills the width and keeps its composer above the keyboard',
   ).toBeVisible();
 });
 
+test('tablet chat composer fits when the visible viewport shrinks with the keyboard', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 828, height: 1160 });
+  await setupAIRouteMocks(page);
+  await enableAIForTesting(page);
+  await before({ page });
+  await openAISidebar(page);
+
+  // Firefox Android may shrink innerHeight and visualViewport together,
+  // leaving the keyboard inset at zero while CSS viewport units stay taller.
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty('--keyboard-inset', '0px');
+    document.documentElement.style.setProperty(
+      '--visible-viewport-height',
+      '810px',
+    );
+  });
+
+  const panel = page.getByTestId('ai-sidebar');
+  const composer = panel.getByTestId('assistant-file-dropzone');
+  await expect
+    .poll(async () => {
+      const box = (await composer.boundingBox())!;
+
+      return box.y + box.height;
+    })
+    .toBeLessThanOrEqual(810);
+});
+
 test('desktop AI chat keeps the composer inside the docked panel', async ({
   page,
 }) => {

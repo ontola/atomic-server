@@ -9,6 +9,7 @@ import { CSSVar } from '@helpers/CSSVar';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useRightPanel } from './RightPanelContext';
 import { PanelBackdrop, PanelLayout, panelTransition } from '../PanelLayout';
+import { RIGHT_PANEL_OVERLAY_BREAKPOINT } from './layout';
 
 const PANEL_WIDTH_PROP = new CSSVar('right-panel-width');
 
@@ -17,8 +18,6 @@ const PANEL_WIDTH_PROP = new CSSVar('right-panel-width');
  * tap-out backdrop) instead of pushing it aside — otherwise on a portrait
  * tablet/phone it would leave the main content too little room.
  */
-const PANEL_OVERLAY_BREAKPOINT = 1000;
-
 /** Default width leaves a strip of content for tapping out of the drawer.
  *  AI chat opts into full width on phones, with an explicit close button. */
 const PANEL_WIDTH = `min(${PANEL_WIDTH_PROP.var()}, calc(100vw - 3rem))`;
@@ -45,7 +44,7 @@ export const RightPanel: React.FC<React.PropsWithChildren<RightPanelProps>> = ({
   const targetRef = useRef<HTMLDivElement>(null);
   const { activePanel, setPanelOpen } = useRightPanel();
   const wide = useMediaQuery(
-    `(min-width: ${PANEL_OVERLAY_BREAKPOINT}px)`,
+    `(min-width: ${RIGHT_PANEL_OVERLAY_BREAKPOINT}px)`,
     true,
   );
   const overlay = !wide;

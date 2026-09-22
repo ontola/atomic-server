@@ -1,8 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { before } from './test-utils';
-import { enableAIForTesting, setupAIRouteMocks } from './ai-mock';
+import {
+  enableAIForTesting,
+  openAISidebar,
+  setupAIRouteMocks,
+} from './ai-mock';
 
-test('AI chats default on, create beside toggle and reopen without page navigation', async ({
+test('AI chats menu appears for a saved chat and reopens it without page navigation', async ({
   page,
 }) => {
   await setupAIRouteMocks(page, { chatResponse: 'Saved sidebar answer.' });
@@ -13,16 +17,9 @@ test('AI chats default on, create beside toggle and reopen without page navigati
   );
   await before({ page });
   const sidebar = page.getByTestId('sidebar');
-  const toggle = sidebar.getByRole('button', {
-    name: 'Collapse AI Chats',
-    exact: true,
-  });
-  await expect(toggle).toBeVisible();
-  const create = sidebar.getByRole('button', { name: 'New Chat', exact: true });
-  await expect(create).toBeVisible();
+  await expect(sidebar.getByTestId('ai-chats-panel')).toHaveCount(0);
   const location = page.url();
-  await toggle.click();
-  await create.click();
+  await openAISidebar(page);
   expect(page.url()).toBe(location);
   const panel = page.getByTestId('ai-sidebar');
   const input = panel.locator('[contenteditable="true"]');
@@ -32,10 +29,16 @@ test('AI chats default on, create beside toggle and reopen without page navigati
   await expect(
     panel.getByText('Saved sidebar answer.', { exact: true }),
   ).toBeVisible();
+  const section = sidebar.getByTestId('ai-chats-panel');
+  const create = section.getByRole('button', { name: 'New Chat', exact: true });
+  await expect(section.getByRole('link')).toHaveCount(1);
+  await section
+    .getByRole('button', { name: 'Collapse AI Chats', exact: true })
+    .click();
   await sidebar
     .getByRole('button', { name: 'Expand AI Chats', exact: true })
     .click();
-  const saved = sidebar.getByTestId('ai-chats-panel').getByRole('link').first();
+  const saved = section.getByRole('link').first();
   await expect(saved).toBeVisible();
   await create.click();
   await expect(
