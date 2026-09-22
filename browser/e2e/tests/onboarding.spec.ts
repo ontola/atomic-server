@@ -108,7 +108,7 @@ test.describe('onboarding', () => {
     });
     await page2.goto(`${FRONTEND_URL}/app/agent`);
     await expect(
-      page2.getByRole('heading', { name: 'User Settings' }),
+      page2.getByRole('heading', { name: 'User', exact: true }),
     ).toBeVisible({ timeout: 10000 });
 
     // Navigate to the agent's profile edit page to verify the name was saved
