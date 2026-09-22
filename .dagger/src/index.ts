@@ -200,16 +200,14 @@ function condenseErrorContext(body: string): string {
 }
 
 const HOST_PROFILES: Record<HostProfile, HostKnobs> = {
-  // 4 shards × 2 workers ≈ 8 browsers. `ci()` runs endToEnd concurrently with
-  // clippy/nextest/flutter/vitest, so the box carries those browsers AND their
-  // four optimized atomic-servers AND cargoBuildJobs=8 AND a 6-wide nextest at the
-  // same time. Earlier 3-worker runs produced 12 browsers and the suite
-  // failed accordingly — including a chromium killed outright ("Target page,
-  // context or browser has been closed"), which is starvation, not a race.
-  // Raise this only alongside the cargo/nextest widths it shares the host with.
+  // Four browser workers total, one per shard/server. At eight, full develop
+  // runs repeatedly exhausted settings-save and app-creation waits while the
+  // same journeys passed in focused runs. The full local suite also passed
+  // with two workers and no retries. Keep browser headroom alongside the
+  // Rust, WASM and frontend jobs instead of widening every interaction wait.
   mancave: {
     e2eShardCount: 4,
-    e2ePlaywrightWorkers: '2',
+    e2ePlaywrightWorkers: '1',
     // Back to the suite's own documented default (playwright.config.ts): three
     // attempts catch a genuinely flaky path while a real regression still
     // fails all three. This branch dropped it to 1 for runtime, and that trade

@@ -963,6 +963,9 @@ export function run() { return { intents: [] }; }
   test('GitHub setup through assistant reuses a task template table without replacing its views', async ({
     page,
   }) => {
+    // This creates a task template before the same sandbox installation that
+    // already needs a 120s total budget in the standalone GitHub scenario.
+    test.setTimeout(120_000);
     await createTableFromDialog(page, {
       template: /Project tasks/i,
       name: 'Shared project tasks',
