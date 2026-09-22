@@ -75,7 +75,9 @@ test('push-to-talk transcribes, answers and speaks using credits without a perso
   });
   await page.addInitScript(() => {
     localStorage.removeItem('atomic.ai.openrouter-api-key');
-    window.__ATOMIC_MANAGED__ = { portalUrl: 'https://voice.atomic.test' };
+    Object.assign(window, {
+      __ATOMIC_MANAGED__: { portalUrl: 'https://voice.atomic.test' },
+    });
     const state = { requests: 0, stops: 0, played: 0 };
     (
       window as unknown as {
