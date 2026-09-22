@@ -2,6 +2,7 @@ import {
   Page,
   expect,
   Browser,
+  ConsoleMessage,
   Locator,
   TestInfo,
   test,
@@ -1047,11 +1048,46 @@ export async function createFromCatalog(page: Page, title: string) {
   await page
     .getByRole('searchbox', { name: 'Search templates and resource types' })
     .fill(title);
-  await page
-    .getByRole('region', { name: 'Start blank' })
-    .getByRole('button', { name: title, exact: true })
-    .click();
-  await expect(page).not.toHaveURL(/\/app\/new(\?|$)/, { timeout: 45_000 });
+
+  // `openCreation` (NewRoute.tsx:205) navigates only after the template has
+  // been built, and its catch calls `store.notifyError` and navigates nowhere.
+  // So a creation that failed and a creation still running leave the page on
+  // exactly the same URL, and the wait below reports them identically: a wall
+  // of identical polls and a timeout naming itself. `apps:93` and `apps:182`
+  // both flaked here on develop run 4334 with 90 unchanged polls over the full
+  // 45s and nothing in the log to say which of the two had happened.
+  //
+  // `errorHandler` calls `console.error` before it raises the toast, and an
+  // unhandled rejection reaches it too, so the page's own console is the one
+  // place that can tell them apart. Collect it for the length of this step and
+  // report it only if the wait fails, leaving Playwright's call log intact.
+  const complaints: string[] = [];
+
+  const onConsole = (message: ConsoleMessage) => {
+    if (message.type() === 'error') complaints.push(message.text());
+  };
+
+  const onPageError = (error: Error) => complaints.push(error.message);
+  page.on('console', onConsole);
+  page.on('pageerror', onPageError);
+
+  try {
+    await page
+      .getByRole('region', { name: 'Start blank' })
+      .getByRole('button', { name: title, exact: true })
+      .click();
+    await expect(page).not.toHaveURL(/\/app\/new(\?|$)/, { timeout: 45_000 });
+  } catch (waitFailed) {
+    console.error(
+      complaints.length > 0
+        ? `Creating a ${title} from the catalog left the page on /app/new, and the page reported: ${complaints.join(' | ')}`
+        : `Creating a ${title} from the catalog left the page on /app/new, and the page reported no error, so the creation had not finished within the budget.`,
+    );
+    throw waitFailed;
+  } finally {
+    page.off('console', onConsole);
+    page.off('pageerror', onPageError);
+  }
 }
 
 export async function newResource(klass: string, page: Page) {
