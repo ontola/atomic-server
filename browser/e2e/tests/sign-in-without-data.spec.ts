@@ -1,112 +1,205 @@
 import { test, expect, type Page } from './fixtures';
-import { generateKeyPair } from '@tomic/lib';
-import { FRONTEND_URL } from './test-utils';
+import { Agent, generateKeyPair } from '@tomic/lib';
+import {
+  FRONTEND_URL,
+  getCurrentSubject,
+  newResource,
+  setTitle,
+  smoke,
+} from './test-utils';
 
-/**
- * Signing in with a secret whose workspace this device has never held.
- *
- * A secret restores who you are, not what you have — so this is a normal
- * state, and it keeps producing the same complaint: "I made an account on my
- * phone, signed in on my desktop, and my drive wasn't there." The workspace
- * genuinely isn't there. What was wrong is the app carrying on as if it were.
- *
- * The failure has a shape. Nothing sets the active drive when the account's
- * own cannot be found, so it keeps whatever it had — and its default is the
- * server's own root. That is somebody else's workspace, on screen, under your
- * name, immediately after signing in.
- *
- * Deliberately no `before`: that signs in as the dev agent and opens the dev
- * drive, which is the exact state this test must not start from.
- */
-test.describe('signing in on a device that holds none of the account’s data', () => {
-  /**
-   * A real, well-formed secret for an account this server has never seen.
-   * Minted with the library's own keygen — hand-rolling one would test my
-   * crypto rather than the flow.
-   */
-  async function strangerSecret(): Promise<string> {
-    const { privateKey, publicKey } = await generateKeyPair();
+// No dev-drive setup: neither this browser nor the server has this identity's
+// home. A stored DID alone is not a usable workspace.
+async function unknownAccount(
+  legacyHome = false,
+): Promise<{ secret: string; home: string }> {
+  const { privateKey, publicKey } = await generateKeyPair();
+  const initialDrive = legacyHome ? (await unknownAccount()).home : undefined;
+  const secret = btoa(
+    JSON.stringify({
+      privateKey,
+      subject: `did:ad:agent:${publicKey}`,
+      initialDrive,
+    }),
+  );
 
-    return btoa(
-      JSON.stringify({
-        privateKey,
-        subject: `did:ad:agent:${publicKey}`,
-      }),
-    );
-  }
+  return { secret, home: await Agent.privateDriveSubjectFromSecret(secret) };
+}
 
-  async function signInAsAStranger(page: Page) {
-    await page.goto(FRONTEND_URL);
+async function signIn(page: Page, secret: string) {
+  const home = await Agent.privateDriveSubjectFromSecret(secret);
+  await page.goto(
+    `${FRONTEND_URL}/app/welcome?next=${encodeURIComponent(home)}`,
+  );
+  await page.getByLabel('Agent secret').fill(secret);
+  // Wait for identity persistence independently of navigation so the direct
+  // link test can exercise a restored session even when onboarding is broken.
+  await expect
+    .poll(() => page.evaluate(() => window.store.getAgent()?.subject))
+    .toBe(JSON.parse(atob(secret)).subject);
+}
 
-    await page
-      .getByRole('button', { name: 'Sign in', exact: true })
-      .click({ timeout: 20_000 });
-    // No confirm button: the flow signs in as soon as the secret parses —
-    // `onChange` runs the sign-in, and on success the dialog unmounts. So
-    // don't touch the field after filling it: a `blur()` here races the
-    // dialog teardown and fails on the success path itself. The callers'
-    // assertions on what the sign-in produced are the completion signal.
-    await page.getByLabel('Agent secret').fill(await strangerSecret());
-  }
+async function expectWritableHome(page: Page, home: string) {
+  await expect(page).toHaveURL(
+    url =>
+      url.pathname === '/app/show' && url.searchParams.get('subject') === home,
+    { timeout: 30_000 },
+  );
+  await expect(page.locator(`main[about="${home}"]`)).toBeVisible();
+  expect(await page.evaluate(() => window.store.getDrive())).toBe(home);
+  // The error screen also has main[about]. Require a readable Drive before
+  // clicking New, which could otherwise initialize the home as a side effect.
+  await expect
+    .poll(() =>
+      page.evaluate(subject => {
+        const resource = window.store.resources.get(subject);
 
-  async function expectRecoveryStep(page: Page) {
-    // Managed installations offer account recovery first. Standalone nodes
-    // offer device pairing first; both must stop before opening a workspace.
-    await expect(
-      page.getByRole('heading', {
-        name: /^(Your data is on another device|Bring your data back)$/,
-      }),
-    ).toBeVisible({ timeout: 20_000 });
-  }
+        return (
+          !!resource &&
+          !resource.error &&
+          resource.hasClasses('https://atomicdata.dev/classes/Drive')
+        );
+      }, home),
+    )
+    .toBe(true);
 
-  test('stops, and says so, instead of opening a workspace', async ({
-    page,
-  }) => {
-    await signInAsAStranger(page);
+  await newResource('document-v2', page);
+  const title = `Private home canary ${Date.now()}`;
+  await setTitle(page, title);
+  const subject = await getCurrentSubject(page);
+  await page.reload();
+  await expect(page.locator(`main[about="${subject}"]`)).toBeVisible();
+  await expect(page.getByTestId('editable-title')).toHaveText(title);
+}
 
-    await expectRecoveryStep(page);
+test(
+  'a secret with no recoverable data opens its writable private home',
+  smoke,
+  async ({ page }) => {
+    const { secret, home } = await unknownAccount();
+    await signIn(page, secret);
+    await expectWritableHome(page, home);
+  },
+);
 
-    const devices = page.getByText('…or bring it over from another device', {
-      exact: true,
-    });
-    if (await devices.isVisible()) await devices.click();
+test('an unavailable legacy home does not prevent a writable derived home', async ({
+  page,
+}) => {
+  const { secret, home } = await unknownAccount(true);
+  await signIn(page, secret);
+  await expectWritableHome(page, home);
+});
 
-    // And offers the way across, rather than only naming the problem.
-    await expect(
-      page.getByText(/Scan this from that device|Connect a device/),
-    ).toBeVisible();
-  });
+test('a restored session can initialize its missing private home from a direct link', async ({
+  page,
+  browserDiagnostics,
+}) => {
+  const { secret, home } = await unknownAccount();
+  browserDiagnostics.expect(
+    'warning',
+    new RegExp(
+      `^\\[WS\\] refused: (SUB|SYNC) refused for ${home}: not readable$`,
+    ),
+    'The persisted identity has no drive on the node before initialization.',
+    4,
+    undefined,
+    { optional: true },
+  );
+  // Seed only a supported persisted identity record, never run sign-in or
+  // create the home. This remains a missing-home test after sign-in is fixed.
+  await page.goto(
+    `${FRONTEND_URL}/app/welcome?next=${encodeURIComponent(home)}`,
+  );
+  await page.evaluate(
+    async ({ secret: storedSecret, home: storedHome }) => {
+      await new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('keyval-store');
+        request.onupgradeneeded = () =>
+          request.result.createObjectStore('keyval');
+        request.onerror = () => reject(request.error);
 
-  test('leaves no other workspace active', async ({ page }) => {
-    await signInAsAStranger(page);
+        request.onsuccess = () => {
+          const db = request.result;
+          const tx = db.transaction('keyval', 'readwrite');
+          // The fallback record is a supported format for installations without
+          // WebCrypto. Only this disposable, generated test identity is stored.
+          tx.objectStore('keyval').put(
+            {
+              ...JSON.parse(atob(storedSecret)),
+              privateDrive: storedHome,
+            },
+            'atomic.agent.fallback',
+          );
 
-    await expectRecoveryStep(page);
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
 
-    const drive = await page.evaluate(() =>
-      JSON.parse(localStorage.getItem('drive') ?? '""'),
-    );
+          tx.onerror = () => {
+            db.close();
+            reject(tx.error);
+          };
+        };
+      });
+      localStorage.setItem('drive', JSON.stringify(storedHome));
+    },
+    { secret, home },
+  );
+  await page.goto(
+    `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(home)}`,
+  );
+  await expectWritableHome(page, home);
+});
 
-    // The default is the server's origin. Anything of the server's own is not
-    // this account's, and must not be sitting there waiting to be opened. The
-    // account's own key-derived drive is fine — that one is empty, not
-    // somebody else's, and it is where this identity writes.
-    expect(
-      drive,
-      'signing in without data must not leave another workspace active',
-    ).not.toMatch(/^https?:/);
-  });
+test('Sync does not claim an unreadable drive is cached or on another device', async ({
+  page,
+  browserDiagnostics,
+}) => {
+  const { secret, home } = await unknownAccount();
+  await signIn(page, secret);
+  await expect
+    .poll(() => page.evaluate(() => window.store.getDrive()))
+    .toBe(home);
+  // Select an unrelated, genuinely absent drive, even after private-home
+  // initialization is fixed. Merely knowing a DID must not synthesize it.
+  const missing = (await unknownAccount()).home;
+  browserDiagnostics.expect(
+    'warning',
+    new RegExp(
+      `^\\[WS\\] refused: (SUB|SYNC) refused for ${missing}: not readable$`,
+    ),
+    'Selecting and reloading this deliberately nonexistent foreign drive can be refused by the node.',
+    8,
+    undefined,
+    { optional: true },
+  );
+  browserDiagnostics.expect(
+    'error',
+    /^Failed to load resource: the server responded with a status of 404 \(Not Found\)$/,
+    'Drive usage for the deliberately nonexistent drive can return 404.',
+    2,
+    new RegExp(`/drive-usage\\?subject=${encodeURIComponent(missing)}$`),
+    { optional: true },
+  );
+  await page.evaluate(drive => window.store.setDrive(drive), missing);
+  await page.goto(`${FRONTEND_URL}/app/sync`);
+  await expect(
+    page.getByRole('heading', { name: 'Sync', exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(async drive => {
+        const resource = await window.store.getResource(drive);
 
-  test('names the account’s own drive as the place to write', async ({
-    page,
-  }) => {
-    await signInAsAStranger(page);
-
-    await expectRecoveryStep(page);
-
-    const drive = await page.evaluate(() =>
-      JSON.parse(localStorage.getItem('drive') ?? '""'),
-    );
-
-    expect(drive).toMatch(/^did:ad:/);
-  });
+        return !!resource.error;
+      }, missing),
+    )
+    .toBe(true);
+  await expect
+    .soft(page.getByText('Cached locally · works offline', { exact: true }))
+    .toBeHidden();
+  await expect
+    .soft(page.getByText('Your data is on another device', { exact: true }))
+    .toBeHidden();
 });
