@@ -2448,3 +2448,8 @@ passed against the local app; cross-network staging presence was not certified.
 reads. `browser-peer-sync.test.ts` verifies increasing per-peer retry delays and
 that repeated discovery notifications cannot bypass them. These mitigate retry
 pressure; they do not prove the cause of the reported staging slowdown.
+
+The sign-in/profile/sign-out smoke test also requires explicit sign-out to
+clear the local identity and land on the welcome screen without an account
+settings continuation, both immediately and after reload. The settings guard
+must not override an intentional sign-out or device lock.

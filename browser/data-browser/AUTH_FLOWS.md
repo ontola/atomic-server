@@ -37,6 +37,10 @@ not prevent signing in with an agent secret, including while offline.
 | Portal public pages, billing, device linking, invitations | Preserve their existing destinations rather than applying the generic sign-in redirect. |
 
 `return_to` accepts only the named value `agent`, never an arbitrary URL.
+An explicit sign-out or device lock suppresses the settings guard during
+identity removal, so its generic welcome destination is not overwritten by
+`return_to=agent`.
+
 Welcome's Back buttons can explicitly return to the portal; merely rendering
 welcome does not leave the app.
 
