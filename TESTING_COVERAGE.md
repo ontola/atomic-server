@@ -1,3 +1,12 @@
+Server descriptor budget (2026-09-22): `server/src/serve.rs` tests the HTTP
+connection budget at small, staging-sized, and effectively unlimited process
+descriptor limits. Startup reads the process soft `RLIMIT_NOFILE`, limits Actix
+workers and per-worker connections, and reserves descriptors for other services.
+This bounds accepted HTTP sockets when they dominate descriptor use; it does
+not identify the source of the September 22 staging descriptor spike or bound
+Iroh and other non-HTTP sockets. A staging load test and process FD sampling
+are still needed before claiming the original incident's cause is fixed.
+
 File uploads during tab handoff (2026-09-22): `browser/lib/src/client-db-handoff.test.ts` closes the leader during hashing and blob storage, verifies recovery when the uploader or a third tab takes over, and covers duplicate announcements, non-repeatable mutations, timeout and teardown. A local Chromium harness also exercised these four handoffs with real Web Locks, BroadcastChannel, WASM and OPFS, verifying the blob survives reload. The exact reported staging profile-picture event could not be retrieved from Sentry on this host; a live-but-unresponsive leader without a handoff still uses the bounded timeout.
 
 Account redirects (2026-09-22): mounted `GettingStartedFlow.test.tsx` and `IdentityReconcileGate.test.tsx` cover hosted local sign-in, settings/passkey continuation, invite/drive priority, missing-data recovery and cancellation of stale identity/hosting checks. See [the route map](browser/data-browser/AUTH_FLOWS.md). Portal session, email-link and dashboard browser checks live in atomic-saas and use HTTP fixtures; real production passkey registration is not covered by these checks.

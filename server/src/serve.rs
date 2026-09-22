@@ -6,6 +6,37 @@ use actix_web::{
 use atomic_lib::Storelike;
 use tracing_actix_web::{DefaultRootSpanBuilder, RootSpanBuilder};
 
+/// Actix's connection limit is per worker (25,000 by default), while the OS
+/// descriptor limit is shared by the whole process. Leave at least a quarter
+/// of that limit, or 128 descriptors, for the database, Iroh, Sentry, and
+/// listener sockets. A very small process limit cannot provide that reserve;
+/// still allow one HTTP connection per worker so startup can report the issue.
+fn http_connections_per_worker(soft_limit: usize, workers: usize) -> usize {
+    let reserve = (soft_limit / 4).max(128);
+    soft_limit
+        .saturating_sub(reserve)
+        .checked_div(workers.max(1))
+        .unwrap_or(0)
+        .clamp(1, 1024)
+}
+
+#[cfg(unix)]
+fn process_fd_soft_limit() -> Option<usize> {
+    let mut limit = std::mem::MaybeUninit::<libc::rlimit>::uninit();
+    // SAFETY: getrlimit writes the initialized rlimit into this valid pointer
+    // on success. We only read it after checking the return value.
+    if unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, limit.as_mut_ptr()) } != 0 {
+        return None;
+    }
+    let limit = unsafe { limit.assume_init() };
+    usize::try_from(limit.rlim_cur).ok()
+}
+
+#[cfg(not(unix))]
+fn process_fd_soft_limit() -> Option<usize> {
+    None
+}
+
 /// Custom span builder: uses "{method} {path}" when no route pattern is matched
 /// (e.g. static files), so spans are legible in SigNoz instead of just "GET".
 struct AtomicRootSpanBuilder;
@@ -380,6 +411,32 @@ where
     // server passes a no-op (see `serve`), so it never phones home.
     on_ready(&appstate);
 
+    let fd_soft_limit = process_fd_soft_limit().unwrap_or_else(|| {
+        tracing::warn!("Could not read the process file-descriptor limit; budgeting HTTP connections against 1024 descriptors");
+        1024
+    });
+    // Match Actix's default worker calculation, then keep the worker count
+    // itself bounded. On a low-limit host, too many worker runtimes consume
+    // the reserve before any clients arrive.
+    let workers = std::thread::available_parallelism()
+        .map_or(2, std::num::NonZeroUsize::get)
+        .min((fd_soft_limit / 128).max(1))
+        .min(8);
+    let max_connections = http_connections_per_worker(fd_soft_limit, workers);
+    tracing::info!(
+        fd_soft_limit,
+        workers,
+        max_connections_per_worker = max_connections,
+        max_http_connections = workers * max_connections,
+        "HTTP connection budget"
+    );
+    if fd_soft_limit < 256 {
+        tracing::warn!(
+            fd_soft_limit,
+            "Process file-descriptor limit leaves little headroom for HTTP and background services"
+        );
+    }
+
     let server = HttpServer::new(move || {
         actix_web::App::new()
             .app_data(web::PayloadConfig::new(PAYLOAD_MAX))
@@ -409,7 +466,9 @@ where
                     // register error_handler for JSON extractors.
                     .error_handler(crate::jsonerrors::json_error_handler),
             )
-    });
+    })
+    .workers(workers)
+    .max_connections(max_connections);
 
     let protocol = if config.opts.https { "https" } else { "http" };
     let port = if config.opts.https {
@@ -553,3 +612,27 @@ const BANNER: &str = r#"
 / /_/ / /_/ /_/ / / / / / / / /__/_____(__  )  __/ /   | |/ /  __/ /
 \__,_/\__/\____/_/ /_/ /_/_/\___/     /____/\___/_/    |___/\___/_/
 "#;
+
+#[cfg(test)]
+mod connection_budget_tests {
+    use super::http_connections_per_worker;
+
+    #[test]
+    fn reserves_descriptors_across_all_workers() {
+        for (limit, workers) in [(1024, 2), (1024, 8), (256, 2), (4096, 8)] {
+            let per_worker = http_connections_per_worker(limit, workers);
+            let reserve = (limit / 4).max(128);
+            assert!(workers * per_worker <= limit - reserve);
+        }
+        assert_eq!(http_connections_per_worker(1024, 2), 384);
+        assert_eq!(http_connections_per_worker(1024, 8), 96);
+    }
+
+    #[test]
+    fn very_small_and_unlimited_limits_stay_nonzero_and_bounded() {
+        assert_eq!(http_connections_per_worker(64, 1), 1);
+        assert_eq!(http_connections_per_worker(64, 8), 1);
+        assert_eq!(http_connections_per_worker(usize::MAX, 8), 1024);
+        assert_eq!(http_connections_per_worker(1024, 0), 768);
+    }
+}
