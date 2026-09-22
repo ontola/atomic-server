@@ -1,4 +1,6 @@
-# Browser peer sync
+# Browser peer sync (WebRTC)
+
+This is the browser-to-browser transport of [Atomic Sync](sync.md): the same signed commits and the same rights checks as over WebSocket or Iroh, carried over a WebRTC data channel because a browser tab cannot be dialed by a peer.
 
 The Sync page can connect up to eight browsers without an Atomic Cloud Server subscription.
 Create a peer link in the source drive's Sync page, share it with the other person,

@@ -13,4 +13,8 @@ Feel free to spice it up and add some styling while following along though.
 I will also not cover every little detail about Astro, only what is necessary to follow along with this guide.
 If you're completely new to Astro consider skimming the [documentation](https://docs.astro.build/en/getting-started/) to see what it has to offer.
 
+> [!NOTE]
+> This guide uses AtomicServer as an HTTP data source: the site is built from data on a server you host, and the resources are addressed by that server's URLs. That is the right shape for a public website rendered at build time, and it still works as described.
+> If you are building an app that people use on their own devices, start with the [local-first guide](../local-first-guide/1-index.md) instead, where a server is optional and added last.
+
 With all that out of the way let's start by setting up your atomic data server. If you already have a server running skip to [Creating the frontend](3-frontend-setup.md)

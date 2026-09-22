@@ -25,7 +25,7 @@ _Status: alpha. [Breaking changes](CHANGELOG.md) are expected until 1.0._
 ## AtomicServer
 
 <!-- We re-use this table in various places, such as README.md and in the docs repo. Consider this the source. -->
-- 🏠  **Local-first**: works offline in the browser, syncs when you reconnect.
+- 🏠  **Local-first**: works offline in the browser, syncs when you reconnect with [Atomic Sync](https://docs.atomicdata.dev/sync).
 - 🔄  **Real-time collaboration**: live cursors, typing indicators, and following what a teammate is doing.
 - 📄  **Documents**: collaborative rich text, like Google Docs or Notion.
 - 🗄️  **Tables**: strict schema, keyboard navigation, copy / paste. Like Airtable.

@@ -33,7 +33,7 @@ See [concepts](concepts.md) for the field list.
 3. It signs a commit containing `subject`, `signer`, `createdAt`, `loroUpdate`, and a signature.
 4. The server verifies the signature and the signer's rights, imports the Loro bytes, and materializes properties. Ordinary content commits are not stored as resources; genesis and rights/parent/destroy are.
 
-HTTP `POST /commit` remains the fallback. The WebSocket `COMMIT` frame is the live path.
+HTTP `POST /commit` remains the fallback. The WebSocket `COMMIT` frame is the live path, and a paired peer accepts the same frame over Iroh. How commits travel between devices, and what happens to edits made offline, is the subject of [Atomic Sync](../sync.md).
 
 ## Motivation
 
