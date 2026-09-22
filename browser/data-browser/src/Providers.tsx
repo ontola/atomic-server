@@ -33,9 +33,9 @@ import { LazyAIChangesProvider } from '@components/AI/AIChanges/LazyAIChangesPro
 import { FollowProvider } from '@components/Presence/FollowContext';
 
 // Setup bugsnag for error handling, but only if there's an API key
-const ErrBoundary = window.bugsnagApiKey
-  ? initBugsnag(window.bugsnagApiKey)
-  : ErrorBoundary;
+const bugsnagApiKey =
+  typeof window === 'undefined' ? undefined : window.bugsnagApiKey;
+const ErrBoundary = bugsnagApiKey ? initBugsnag(bugsnagApiKey) : ErrorBoundary;
 
 const VALID_PROPS = ['popover', 'closedby'];
 
