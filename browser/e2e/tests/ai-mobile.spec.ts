@@ -425,7 +425,7 @@ for (const { name, width, navigateAway } of [
   });
 }
 
-test('AI Chat options refreshes account credits and links to the portal only on tap', async ({
+test('FOSS AI Chat options refreshes account credits without offering checkout', async ({
   page,
 }) => {
   let remaining = 5_000_000;
@@ -448,6 +448,7 @@ test('AI Chat options refreshes account credits and links to the portal only on 
           allowance_micros: 5_000_000,
           remaining_micros: remaining,
           used_micros: 5_000_000 - remaining,
+          purchases_enabled: true,
           resets_at: 1790812800,
         },
       });
@@ -484,7 +485,7 @@ test('AI Chat options refreshes account credits and links to the portal only on 
   ).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'Get more credits' }),
-  ).toHaveAttribute('href', 'https://portal.example/dashboard');
+  ).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(page.getByText(/monthly credits left/)).toHaveCount(0);
 });
