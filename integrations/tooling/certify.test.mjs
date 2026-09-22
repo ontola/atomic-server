@@ -78,10 +78,17 @@ test('failed certification checks surface a concise useful diagnostic', () => {
     'reproducible-bundle: generated bundle differs from committed plugin.js; fixtures',
   );
 });
-test('both current providers are discovered with exact sandbox tests', () => {
+// This repo used to host certifiable providers (`github-issues`, `notion`,
+// `pets`, `mt940`) and this test named them. They now live in atomic-plugins
+// and reach a server as bundles fetched from a catalog, so the set here is
+// empty — `clockify` and `localthought` have no `package.json` and are not
+// providers. Asserting the empty set is the point: the tooling still has to
+// run, and if a provider is ever added back here, this fails and asks whether
+// that is intended. (A provider added *without* certification metadata is
+// caught by 'new packages cannot silently escape certification' instead.)
+test('no certifiable providers are bundled in this repo', () => {
   const ids = discover().map(p => p.id);
-  assert.ok(ids.includes('github-issues'));
-  assert.ok(ids.includes('notion'));
+  assert.deepEqual(ids, []);
   assert.equal(new Set(ids).size, ids.length);
 });
 

@@ -20,7 +20,7 @@ import { PluginTrigger } from './PluginTrigger';
 import toast from 'react-hot-toast';
 import { paths } from '../../routes/paths';
 import { publishPluginRelease } from '@tomic/react';
-import { useCallback, useEffect, useState, lazy, Suspense } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import { FaPencil, FaPlay } from 'react-icons/fa6';
 import {
@@ -219,14 +219,14 @@ export function PluginPage({
               {(!automation ||
                 manifest.secrets.length > 0 ||
                 secretsMentionedIn(source ?? '').length > 0) && (
-                  <PluginSecrets
-                    plugin={resource.subject}
-                    drive={drive}
-                    declared={manifest.secrets}
-                    mentioned={secretsMentionedIn(source ?? '')}
-                    candidateOrigins={originsMentionedIn(source ?? '')}
-                  />
-                )}
+                <PluginSecrets
+                  plugin={resource.subject}
+                  drive={drive}
+                  declared={manifest.secrets}
+                  mentioned={secretsMentionedIn(source ?? '')}
+                  candidateOrigins={originsMentionedIn(source ?? '')}
+                />
+              )}
             </Column>
           </Panel>
           <Panel value='activity'>

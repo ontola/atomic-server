@@ -665,7 +665,14 @@ mod tests {
             .get_resource(&f.plugin.as_str().into())
             .await
             .unwrap();
-        plugin.set_unsafe(f.terms.property("plugin-connection").unwrap().into(),Value::Json(serde_json::json!({"release":release,"config":{"collection":"records"}}))).unwrap();
+        plugin
+            .set_unsafe(
+                f.terms.property("plugin-connection").unwrap().into(),
+                Value::Json(
+                    serde_json::json!({"release":release,"config":{"collection":"records"}}),
+                ),
+            )
+            .unwrap();
         plugin
             .set_unsafe(
                 f.terms.property("automation-integrations").unwrap().into(),
@@ -682,10 +689,7 @@ mod tests {
         plugin.save(&f.appstate.store).await.unwrap();
         let key = arm(&f, true).await;
         assert_eq!(run_due(&f.appstate).await, 1);
-        assert_eq!(
-            children_named(&f, &f.drive, "After approval").await,
-            0
-        );
+        assert_eq!(children_named(&f, &f.drive, "After approval").await, 0);
         assert!(super::super::actions::waits(
             f.appstate
                 .store
@@ -751,10 +755,7 @@ mod tests {
             .unwrap()
             .pending_verdict
             .is_none());
-        assert_eq!(
-            children_named(&f, &f.drive, "After approval").await,
-            1
-        );
+        assert_eq!(children_named(&f, &f.drive, "After approval").await, 1);
     }
 
     #[actix_rt::test]

@@ -820,7 +820,14 @@ mod tests {
             .get_resource(&f.plugin.as_str().into())
             .await
             .unwrap();
-        plugin.set_unsafe(f.terms.property("plugin-connection").unwrap().into(),Value::Json(serde_json::json!({"release":release,"config":{"collection":"records"}}))).unwrap();
+        plugin
+            .set_unsafe(
+                f.terms.property("plugin-connection").unwrap().into(),
+                Value::Json(
+                    serde_json::json!({"release":release,"config":{"collection":"records"}}),
+                ),
+            )
+            .unwrap();
         plugin
             .set_unsafe(
                 f.terms.property("automation-integrations").unwrap().into(),
@@ -838,10 +845,7 @@ mod tests {
         arm(&f, true).await;
         add_watched(&f, "Arrival").await;
         drain(&f.appstate, &Arc::new(Mutex::new(Guard::default()))).await;
-        assert_eq!(
-            children_named(&f, &f.drive, "After approval").await,
-            0
-        );
+        assert_eq!(children_named(&f, &f.drive, "After approval").await, 0);
         assert_eq!(f.appstate.store.queued_plugin_events().unwrap().len(), 1);
         let host = js_runtime::StoreHost {
             db: Arc::new(f.appstate.store.clone()),
@@ -890,10 +894,7 @@ mod tests {
         drain(&f.appstate, &Arc::new(Mutex::new(Guard::default()))).await;
         assert_eq!(provider.0, 1);
         assert!(f.appstate.store.queued_plugin_events().unwrap().is_empty());
-        assert_eq!(
-            children_named(&f, &f.drive, "After approval").await,
-            1
-        );
+        assert_eq!(children_named(&f, &f.drive, "After approval").await, 1);
     }
 
     #[actix_rt::test]

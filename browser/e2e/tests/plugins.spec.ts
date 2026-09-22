@@ -1,19 +1,6 @@
 import { enableIntegrationDiscovery } from './integration-settings-utils';
 import { test, expect } from '@playwright/test';
-import {
-  before,
-  createFromCatalog,
-  createTableFromDialog,
-  getDevDriveSecret,
-  SERVER_URL,
-} from './test-utils';
-import {
-  Agent,
-  dataBrowser,
-  getPluginSync,
-  pluginSyncSchedule,
-  signRequest,
-} from '@tomic/lib';
+import { before, createFromCatalog } from './test-utils';
 
 /**
  * The whole manual-run path, which is otherwise only ever verified by hand:

@@ -30,6 +30,7 @@ test('workspace owns its views and links to separate connection settings', async
     // the connection only has to exist and be shaped right. Plugins
     // themselves live in atomic-plugins; nothing in this repo installs one.
     const schema = await ensureSchema(store, drive, pluginSchema());
+
     const save = async (resource: { save(): Promise<string> }) => {
       if ((await resource.save()) === 'offline')
         throw new Error('AtomicServer disconnected while building the fixture');

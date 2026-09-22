@@ -71,7 +71,6 @@ export const IntegrationStoreRoute = createRoute({
 });
 
 function IntegrationStore(): React.JSX.Element {
-  const { workspace } = IntegrationStoreRoute.useSearch();
   const store = useStore();
   const { drive } = useSettings();
   const { showApiPlugins, showExperimentalPlugins, setVisibility } =

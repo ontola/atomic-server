@@ -1379,9 +1379,7 @@ mod tests {
         plugin
             .set_unsafe(
                 f.terms.property("plugin-connection").unwrap().into(),
-                AtomicValue::Json(
-                    json!({"release":release,"config":{"collection":"records"}}),
-                ),
+                AtomicValue::Json(json!({"release":release,"config":{"collection":"records"}})),
             )
             .unwrap();
         plugin.save(&*db).await.unwrap();
@@ -1895,10 +1893,7 @@ mod tests {
         let prepared = invoke(host.clone(), call("one")).await.unwrap();
         assert_eq!(prepared["status"], "needs_review");
         let p = saved(&host, "one").unwrap().unwrap();
-        assert_eq!(
-            p.intent.url,
-            "https://provider.test/records"
-        );
+        assert_eq!(p.intent.url, "https://provider.test/records");
         assert!(external::inspect(
             &host.db,
             &json!([host.drive, host.plugin]).to_string(),
@@ -2097,9 +2092,11 @@ mod tests {
             .is_none());
         let mut other = host.clone();
         other.for_agent = ForAgent::Public;
-        assert!(set_grant(&other, &host.plugin, "create_record", "automatic")
-            .await
-            .is_err());
+        assert!(
+            set_grant(&other, &host.plugin, "create_record", "automatic")
+                .await
+                .is_err()
+        );
         assert!(valid_grant(&other, &origin, "create_record", &bound)
             .await
             .unwrap()
