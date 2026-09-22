@@ -672,12 +672,19 @@ fn embed_integrations(dirs: &Dirs) -> std::io::Result<()> {
             }
             fs::copy(entry.path(), &dest)?;
         }
-    } else if !dirs.integrations_tmp.exists() {
-        // `cargo publish` of the standalone crate: `integrations/` is outside
-        // the package and isn't shipped (see `include` in Cargo.toml), and no
-        // pre-baked copy was carried over either. Embed an empty set rather
-        // than failing the build — a server without bundled integrations is
-        // a degraded server, not a broken build.
+    }
+
+    // Embed an empty set rather than failing the build — a server without
+    // bundled integrations is a degraded server, not a broken build. Two ways
+    // to land here with nothing copied: `cargo publish` of the standalone
+    // crate, where `integrations/` is outside the package and isn't shipped
+    // (see `include` in Cargo.toml); and CI containers that mount only a
+    // subtree of `integrations/` (a crate dependency such as
+    // `localthought/syncables`) to keep the Rust layer from being invalidated
+    // by every front-end edit. In the second case the source dir *does* exist,
+    // so the loop above runs, finds no `plugin.js` and no top-level
+    // `catalog.json`, and leaves the destination it just removed missing.
+    if !dirs.integrations_tmp.exists() {
         fs::create_dir_all(&dirs.integrations_tmp)?;
     }
 
