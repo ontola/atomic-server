@@ -448,6 +448,7 @@ test('AI Chat options refreshes account credits and links to the portal only on 
           allowance_micros: 5_000_000,
           remaining_micros: remaining,
           used_micros: 5_000_000 - remaining,
+          purchases_enabled: true,
           resets_at: 1790812800,
         },
       });

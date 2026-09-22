@@ -1224,7 +1224,8 @@ export class ClientDbWorker {
           // Reads, flush, and content-addressed blob writes are safe to
           // repeat. A general write may have committed before its reply was
           // lost, and worker-local peer sessions cannot move across tabs.
-          const repeatable = REPEATABLE_RPC_TYPES.has(msg.type);
+          const repeatable =
+            typeof msg.type === 'string' && REPEATABLE_RPC_TYPES.has(msg.type);
 
           if (!repeatable || retries === 0) {
             reject(

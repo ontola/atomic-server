@@ -25,13 +25,15 @@ export function HostedAICredits({
       <span>{`${credits(monthly)} of ${credits(status.allowance_micros)} monthly credits left`}</span>
       <span>{`Account-wide · resets ${new Date(status.resets_at * 1000).toLocaleDateString(undefined, { dateStyle: 'medium' })}`}</span>
       {purchasedSummary}
-      <a
-        href={`${portalUrl}/dashboard`}
-        target='_blank'
-        rel='noopener noreferrer'
-      >
-        Get more credits
-      </a>
+      {status.purchases_enabled && (
+        <a
+          href={`${portalUrl}/dashboard`}
+          target='_blank'
+          rel='noopener noreferrer'
+        >
+          Get more credits
+        </a>
+      )}
     </Column>
   );
 }

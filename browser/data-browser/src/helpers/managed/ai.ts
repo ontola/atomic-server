@@ -13,6 +13,7 @@ export interface HostedAIStatus {
   used_micros: number;
   remaining_micros: number;
   purchased_remaining_micros?: number;
+  purchases_enabled?: boolean;
   resets_at: number;
 }
 
