@@ -12202,5 +12202,5 @@ msgid "Enable AI Chats panel"
 msgstr ""
 
 #: src/helpers/syncPresentation.ts
-msgid "This workspace could not be loaded. Its sync and backup status are unknown."
+msgid "This workspace could not be read on this device. Try opening it again."
 msgstr ""

@@ -66,7 +66,7 @@ Rules of thumb:
   elsewhere — these are normal, and read as normal.
 - **An unreadable workspace has unknown sync and backup status.** A failed
   read does not establish that another device has the data. The browser's
-  `syncSummary` says this explicitly; Flutter's device settings currently has
+  `syncSummary` reports the failed read; Flutter's device settings currently has
   no corresponding workspace-status summary, only connection controls and
   operation errors.
 

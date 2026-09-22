@@ -1,9 +1,9 @@
 import { test, expect, type Page } from './fixtures';
-import { before, getDevDriveSecret, signIn, FRONTEND_URL } from './test-utils';
+import { before, FRONTEND_URL } from './test-utils';
 
 /**
  * Drive presence + follow mode (#1229), driven as two sessions (browser
- * contexts) of the same agent in one drive:
+ * tabs) of the same agent in one drive:
  *
  * 1. Presence: each session sees the other's avatar in the navbar facepile.
  * 2. Follow: B follows via the avatar menu → compact following indicator,
@@ -62,17 +62,13 @@ test('presence avatars and follow mode across two sessions', async ({
     });
   }).toPass({ timeout: 30_000 });
   const { drive, folder } = created;
-  const secret = await getDevDriveSecret(pageA);
 
   await pageA.goto(
     `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive)}`,
   );
 
-  // --- Session B (the follower): same agent, fresh context ---
-  const ctxB = await browser.newContext();
-  const pageB = await ctxB.newPage();
-  await pageB.goto(FRONTEND_URL);
-  await signIn(pageB, secret);
+  // --- Session B (the follower): same identity, independent tab presence ---
+  const pageB = await ctxA.newPage();
   await pageB.goto(
     `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(drive)}`,
   );
@@ -84,6 +80,10 @@ test('presence avatars and follow mode across two sessions', async ({
   await expect(facepile(pageA).getByRole('button').first()).toBeVisible({
     timeout: 30_000,
   });
+
+  // Compact navigation hides action labels, never the span-based avatars.
+  await pageB.setViewportSize({ width: 320, height: 800 });
+  await expect(facepile(pageB).getByRole('button').first()).toBeVisible();
 
   // 2. B follows A via the avatar's context menu. The trigger remounts
   // when the agent's name resolves (closing the menu), so open-and-click
@@ -97,6 +97,7 @@ test('presence avatars and follow mode across two sessions', async ({
       .click({ timeout: 2000 });
   }).toPass({ timeout: 30_000 });
   await expect(followingBadge(pageB)).toBeVisible();
+  await pageB.setViewportSize({ width: 1200, height: 800 });
   // The followed agent's avatar moves into the badge — facepile empties.
   await expect(facepile(pageB)).toHaveCount(0);
 
@@ -121,5 +122,4 @@ test('presence avatars and follow mode across two sessions', async ({
   );
 
   await ctxA.close();
-  await ctxB.close();
 });

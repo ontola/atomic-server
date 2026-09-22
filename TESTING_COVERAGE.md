@@ -2426,4 +2426,18 @@ Integration bundle delivery: `integrationSource.test.ts` covers connected-server
 
 `ai-chat-discovery.spec.ts` checks that the visible sidebar includes chats from duplicate folders and the drive root before and after reload, excludes other drives and non-chat resources, and that two separately signed-in browser contexts create chats using the same folder ID. AI responses are mocked. Physical Safari and an offline two-device reconnect are not covered.
 
-Unreadable workspace summaries: `syncPresentation.test.ts` rejects copy that assumes another device has the data or that local data is protected; the summary now reports sync and backup status as unknown.
+Unreadable workspace summaries: `syncPresentation.test.ts` rejects copy that assumes another device has the data or that local data is protected; the summary reports an unreadable workspace without asserting where its data resides.
+
+## Compact presence and retry pressure (2026-09-22)
+
+`NavBarButton.test.tsx` reproduces the compact navbar hiding span-based presence
+triggers and verifies only action labels disappear. `presence-follow.spec.ts`
+uses two tabs sharing one stored test identity, checks the avatar at 320px,
+opens Follow and verifies subsequent navigation. The updated Chromium test
+passed against the local app; cross-network staging presence was not certified.
+
+`recovery-fetch.test.ts` verifies 429 cooldowns (Retry-After seconds and a
+60-second fallback), retry after expiry, in-flight sharing and fresh successful
+reads. `browser-peer-sync.test.ts` verifies increasing per-peer retry delays and
+that repeated discovery notifications cannot bypass them. These mitigate retry
+pressure; they do not prove the cause of the reported staging slowdown.
