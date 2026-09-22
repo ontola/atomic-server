@@ -77,8 +77,9 @@ Other known drags, already documented in-tree:
   `sync.spec.ts`) hold extra contexts.
 - Perf / profile specs (`first-paint-*`, `dev-drive-timing/profile`,
   `opfs-init-perf`, `perf-budgets`, `perf-sidebar-reload`,
-  `table-create-perf`) are probes. Several already `test.skip` unless an env
-  var is set, but they still occupy the suite.
+  `table-create-perf`, `table-stress`) are probes. Several already `test.skip`
+  unless an env var is set (`TABLE_STRESS` for the 100k-row table probe), but
+  they still occupy the suite. See [`table-scale.md`](./table-scale.md).
 - Staging deploys from `develop` only after Main is green
   (`deploy_staging.yml`). Production follows a `v*` tag. The full suite is
   load-bearing for those two gates; PRs do not have to share that cost.

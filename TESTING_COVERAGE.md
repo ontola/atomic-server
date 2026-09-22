@@ -574,7 +574,7 @@ Two things worth knowing about the runners:
 | Engine-owned `SUB`/`UNSUB`: granted `SUB` is a session command, unreadable `SUB` answers `ERROR UNAUTHORIZED_READ` | `lib/src/sync/engine.rs` (`bootstrap_and_sub_tests`) |
 | Signed `SYNC_DIFF.removeCommits`: envelope applies regardless of connection agent, tampered envelope does not delete, envelope only handed to drive readers, replay after re-creation refused | `lib/src/sync/peer.rs` (`initiator_trust_tests`), `engine.rs` (`bootstrap_and_sub_tests`), `tombstones.rs`, `protocol.rs` |
 | `SyncSession` over an in-process `AtomicTransport` holds `AUTH` across frames | `lib/src/sync/session.rs` |
-| Signed envelopes per resource: `latest`/`all` retention, time order, not indexed, verified attribution per Loro token, tampered envelope unverified, two writers, destroy fold | `lib/src/envelopes.rs` |
+| Signed envelopes per resource: `latest`/`all` retention, time order, not indexed, verified attribution per Loro token, tampered envelope unverified, two writers, destroy fold, compact `AE01` on disk | `lib/src/envelopes.rs` |
 | `GET /history-attribution` names the verified signer and is read-gated | `server/tests/it/history_attribution.rs` |
 | Attribution parse / version lookup / server+local merge | `browser/lib/src/history-attribution.test.ts` |
 | Engine-level two-store sync, private drives, blobs, live push | `lib/src/sync/tests.rs` |
@@ -876,6 +876,7 @@ No automated end-to-end coverage: uploaded-file conversion through the full UI a
 |---|---|---|
 | `LoroDoc` values are not KV-index keys | protocol | `lib/src/values.rs::loro_doc_is_not_indexed` |
 | Content commits are not stored; genesis/ACL/destroy are | protocol | `lib/src/db/test.rs::content_commits_are_not_stored` |
+| Critical commit rows omit `loroUpdate`; GET hydrates it from the envelope; only `subject` is indexed | protocol | `lib/src/db/test.rs::commit_resource_blob_omits_loro_update` |
 | Signed destroy removes the resource, keeps its envelope and tombstones the subject in one apply | protocol | `lib/src/db/test.rs::destroy_commit_removes_resource_and_keeps_envelope_atomically` |
 | Sequential saves do not chain `previousCommit`; commit DIDs are not store resources | glue | `browser/lib/src/commit.test.ts` |
 
@@ -2338,6 +2339,20 @@ subject-only) and direct reads, while the authorized agent can still read it.
 `client::helpers` origin tests reject lookalike hosts, userinfo-host confusion,
 changed ports/schemes, malformed URLs and non-HTTP URLs; normalized same-origin
 and localhost requests remain eligible for DID-agent authentication.
+
+## Table scale (100k rows)
+
+`lib/tests/table_scale.rs` is an ignored native redb probe
+(`cargo test -p atomic_lib --features db-redb --test table_scale -- --ignored --nocapture`).
+It creates 1k / 10k / 100k table-shaped children and times the query paths a
+table open uses (nested unpaged, subjects-only, page of 30, sort, aggregates,
+JSON-AD size, redb file). `browser/e2e/tests/table-stress.spec.ts` does the
+same through `window.store` + the grid, skipped unless `TABLE_STRESS=1`
+(default 1000 rows; 100k browser creates are not a realistic session).
+`browser/lib/src/collection-local-page.test.ts` checks that
+`fetchPageFromLocalDb` passes `limit`/`offset`/`sortBy`, keeps
+`totalMembers` as the full count, and hydrates only the page.
+Findings: [`planning/table-scale.md`](./planning/table-scale.md).
 
 ## Drive root file drops
 

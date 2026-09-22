@@ -7,6 +7,11 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Store shrink for genesis-heavy tables: commit resource blobs no longer
+  keep `loroUpdate` (GET hydrates it from `Tree::Envelopes`), envelopes are
+  stored as compact `AE01` instead of JSON-AD base64, and commit atoms other
+  than `subject` are not indexed. Live data at 10k rows is 14 KB/row; the
+  on-disk file is still COW-amplified until a batched import exists.
 - Fix: a stale authentication proof no longer fails a request that needed no
   authentication. A browser keeps its proof in the `atomic_session` cookie, and
   until `AUTH_MAX_AGE_MS` arrived in 0.41 a proof never expired, so a stale one

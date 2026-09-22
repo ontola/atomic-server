@@ -73,7 +73,7 @@ a derived, rebuildable projection:
 | First-build cross-check of the constraints the planner did not scan (bounded by the scan cap) + `Db::check_query_index` full-scan diagnostic | **built (2026-09-18, finding 7)** |
 | Drive-stamp scoping of DID resources for watched filters (`filter_drive_roots`, audit C17) | **built (2026-09-18)** |
 | Typed sort keys in `PropValSub`/`ValPropSub` sort segment | not built (their sort segment is currently unused by ordering-sensitive paths) |
-| Cursor pagination / `hasMore` instead of exact counts | not built (wire + client change) |
+| Cursor pagination / `hasMore` instead of exact counts | not built (wire + client change). Exact `totalMembers` still walks the index (~33 ms at 100k); the table-open body-hydrate cliff is fixed — see [`table-scale.md`](./table-scale.md). |
 | Batched KV reads (one read txn per query) | not built (`KvStore` trait change; per-`get` redb txns remain) |
 | Zones index (walk-free auth) | see [`zones.md`](./zones.md) |
 

@@ -8,12 +8,15 @@ import { Store, StoreEvents } from './store.js';
 /**
  * Opening a filled table (and the sidebar tree) flashed as if order changed.
  *
- * WASM `parent=` queries are unsorted. `fetchPageFromLocalDb` hydrates each
- * member into the store — each hydrate notifies `ResourceUpdated` — and
- * `useCollection` optimistic-adds those members in arrival order while
- * `pages.has(0)` is still false. Client-side sort then `setPage`s the real
- * order. The grid keeps the last-known subject by index, so index 0 briefly
- * shows the wrong row.
+ * Local `parent=` queries used to return every match unsorted.
+ * `fetchPageFromLocalDb` hydrates each member into the store — each hydrate
+ * notifies `ResourceUpdated` — and `useCollection` optimistic-adds those
+ * members in arrival order while `pages.has(0)` is still false. Client-side
+ * sort then `setPage`s the real order. The grid keeps the last-known subject
+ * by index, so index 0 briefly shows the wrong row.
+ *
+ * The worker now pages and sorts when asked; stubs that ignore `limit` still
+ * return the full set, which keeps this client-side assemble path alive.
  *
  * The same listener is what `useChildren` uses for the sidebar, so folder
  * children flash the same way.
