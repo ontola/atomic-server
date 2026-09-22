@@ -679,6 +679,8 @@ describe('WSClient drive subscription', () => {
     const drive = new Resource('did:ad:new-drive');
     store.resources.set(drive.subject, drive);
     store.outbox.setGenesisCommit(drive.subject, signedCommit());
+    // Locally stamped metadata does not prove the server has the genesis.
+    drive.setLastCommitValue('did:ad:commit:local');
     vi.mocked(store.getDrive).mockReturnValue(drive.subject);
     vi.spyOn(store, 'computeDriveSyncState').mockResolvedValue({
       drive: drive.subject,
@@ -690,6 +692,7 @@ describe('WSClient drive subscription', () => {
     await Promise.resolve();
     expect(framesWithTag(socket, Tag.SUB)).toHaveLength(0);
     expect(framesWithTag(socket, Tag.SYNC)).toHaveLength(0);
+    store.outbox.clearGenesis(drive.subject);
     drive.setLastCommitValue('did:ad:commit:ack');
     await store.notifyResourceSaved(drive);
     await vi.waitFor(() =>

@@ -1773,10 +1773,7 @@ export class WSClient {
   /** A local save can finish before its genesis is acknowledged by the server.
    * ResourceSaved retries subscription after that acknowledgement arrives. */
   private awaitingDriveGenesis(drive: string): boolean {
-    return (
-      !!this.store.outbox.getEntry(drive)?.signedGenesis &&
-      !this.store.resources.get(drive)?.getLastCommitForChain()
-    );
+    return !!this.store.outbox.getEntry(drive)?.signedGenesis;
   }
 
   private async startVVSync(drive: string): Promise<void> {
