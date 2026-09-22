@@ -10,7 +10,10 @@ export async function installGitHub(
   token: string,
   destination?: string,
 ) {
-  const source = await fetchIntegrationSource('github-issues');
+  const source = await fetchIntegrationSource(
+    'github-issues',
+    store.getServerUrl(),
+  );
 
   return install(store, drive, repository, source, token, destination);
 }

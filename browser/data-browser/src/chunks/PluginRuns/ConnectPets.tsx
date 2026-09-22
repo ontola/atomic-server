@@ -42,7 +42,7 @@ export function ConnectPets({ drive }: { drive: string }) {
     setImported(false);
 
     try {
-      const source = await fetchIntegrationSource('pets');
+      const source = await fetchIntegrationSource('pets', store.getServerUrl());
       const pluginTerms = await pluginClassesFor(store, drive);
       const resource = await ensureInstallationResource(store, drive, {
         parent: drive,

@@ -100,3 +100,17 @@ test('end-to-end applies overrides to the actual shard run and clone setting', a
     grep: 'focused',
   });
 });
+
+test('release and E2E servers embed the integration catalog and bundles', () => {
+  for (const e2e of [false, true]) {
+    const pipeline = new AtomicServer(source());
+    pipeline.jsBuild = () => makeChain('frontend');
+    resetCalls();
+    pipeline.rustBuild(!e2e, 'x86_64-unknown-linux-musl', e2e);
+    const mounts = recordedCalls().filter(
+      ([name, path]) => name === 'withDirectory' && path === '/code/integrations',
+    );
+    assert.equal(mounts.length, 1, 'server must receive the integration assets');
+    assert.deepEqual(mounts[0][3].include, ['catalog.json', '*/plugin.js']);
+  }
+});

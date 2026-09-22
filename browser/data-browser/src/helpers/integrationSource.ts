@@ -1,27 +1,30 @@
 // @wc-ignore-file
-/**
- * Fetches a bundled integration's `plugin.js` from the server's
- * `/integrations` static route (see server/build.rs::embed_integrations and
- * server/src/routes.rs), instead of inlining the source into this bundle at
- * build time via a Vite `?raw` import.
- */
+/** Fetch a bundled plugin from the connected server, including in desktop builds. */
 const cache = new Map<string, Promise<string>>();
 
-export function fetchIntegrationSource(id: string): Promise<string> {
-  let promise = cache.get(id);
+export function fetchIntegrationSource(
+  id: string,
+  server: string,
+): Promise<string> {
+  const url = new URL(`/integrations/${id}/plugin.js`, server).href;
+  let promise = cache.get(url);
 
   if (!promise) {
-    promise = fetch(`/integrations/${id}/plugin.js`).then(response => {
-      if (!response.ok) {
-        cache.delete(id);
-        throw new Error(
-          `Could not load the ${id} integration (${response.status}).`,
-        );
-      }
+    promise = fetch(url)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(
+            `Could not load the ${id} integration (${response.status}).`,
+          );
+        }
 
-      return response.text();
-    });
-    cache.set(id, promise);
+        return response.text();
+      })
+      .catch(reason => {
+        cache.delete(url);
+        throw reason;
+      });
+    cache.set(url, promise);
   }
 
   return promise;

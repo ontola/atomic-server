@@ -115,7 +115,10 @@ export function ConnectClockify({
     setError('');
 
     try {
-      const source = await fetchIntegrationSource('clockify');
+      const source = await fetchIntegrationSource(
+        'clockify',
+        store.getServerUrl(),
+      );
       const subject =
         plugin ??
         (await createPlugin(
@@ -184,7 +187,10 @@ export function ConnectClockify({
     setError('');
 
     try {
-      const source = await fetchIntegrationSource('clockify');
+      const source = await fetchIntegrationSource(
+        'clockify',
+        store.getServerUrl(),
+      );
       const existing = target
         ? (await timeTrackerTables(store, drive)).find(
             t => t.tableSubject === target,

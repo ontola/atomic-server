@@ -10,8 +10,8 @@ export type BundledEvidenceId =
   | 'mt940'
   | 'pets';
 
-export async function loadEvidence(id: BundledEvidenceId) {
-  const source = await fetchIntegrationSource(id);
+export async function loadEvidence(id: BundledEvidenceId, server: string) {
+  const source = await fetchIntegrationSource(id, server);
   const digest = await crypto.subtle.digest(
     'SHA-256',
     new TextEncoder().encode(source),

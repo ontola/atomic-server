@@ -20,17 +20,23 @@ export function ClockifyUpgrade({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [pending, setPending] = useState<string>();
+  const server = store.getServerUrl();
   const [bundle, setBundle] = useState<string>();
   useEffect(() => {
     let active = true;
-    void fetchIntegrationSource('clockify').then(text => {
-      if (active) setBundle(text);
-    });
+    setBundle(undefined);
+    void fetchIntegrationSource('clockify', server)
+      .then(text => {
+        if (active) setBundle(text);
+      })
+      .catch(() => {
+        // An unavailable update must not interrupt the installed importer.
+      });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [server]);
   const next =
     pending ??
     (bundle === undefined ? undefined : clockifyUpgrade(source, bundle));

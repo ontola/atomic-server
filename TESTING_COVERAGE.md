@@ -2329,3 +2329,5 @@ Recovery read fan-out: `recovery-fetch.test.ts` verifies concurrent reads share
 one in-flight request per API/account, settled responses are not cached, failures
 can be retried, and signed-out callers make no request. The SaaS legacy recovery
 upgrade journey passes with the production per-account request limit.
+
+Integration bundle delivery: `integrationSource.test.ts` covers connected-server URLs, per-server caching, and retry after network, HTTP, or response-body failures. `scripts/dagger-ci-regression.test.mjs` verifies release and E2E builds receive the catalog and plugin bundles independently of the SPA.
