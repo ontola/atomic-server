@@ -1154,8 +1154,8 @@ export class ClientDbWorker {
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private sendToLeader(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     msg: Record<string, any>,
     retries = 1,
   ): Promise<unknown> {

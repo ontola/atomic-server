@@ -85,7 +85,9 @@ test.describe('resource context menu', () => {
     }
 
     expect((await menu.boundingBox())!.y).toBeLessThan(originalTop);
-    await expect(page.getByRole('textbox', { name: 'Filter actions' })).toBeFocused();
+    await expect(
+      page.getByRole('textbox', { name: 'Filter actions' }),
+    ).toBeFocused();
   });
 
   test('sidebar link + table cell open the resource menu on right-click', async ({
