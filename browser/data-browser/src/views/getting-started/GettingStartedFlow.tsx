@@ -194,22 +194,28 @@ export function GettingStartedFlow({
     new URLSearchParams(window.location.search).get('drive') ||
     new URLSearchParams(window.location.search).get('subject') ||
     undefined;
+  // Only this named, internal destination is accepted; never navigate to an
+  // arbitrary return URL supplied by a link. Adding a passkey needs the local
+  // identity unlocked before the account settings can edit its backup.
+  const returnToAgent =
+    !fromManaged &&
+    !inviteToken &&
+    !nextDrive &&
+    new URLSearchParams(window.location.search).get('return_to') === 'agent';
+  const signInRequested =
+    new URLSearchParams(window.location.search).get('step') === 'signin';
   const [step, setStep] = useState<Step>(
     fromManaged
       ? 'create'
       : inviteToken
         ? 'restore'
-        : nextDrive
+        : nextDrive || returnToAgent || signInRequested
           ? 'signin'
           : initialStep,
   );
-  useEffect(() => {
-    // A configured SaaS app uses the portal as its account entry point.
-    // A direct drive URL already starts at the unlock step above.
-    if (step === 'welcome' && knownPortalUrl) {
-      window.location.replace(new URL('/dashboard', knownPortalUrl).toString());
-    }
-  }, [step, knownPortalUrl]);
+  // Welcome is also the destination for lock, sign-out, recovery and resource
+  // guards. A portal configuration is not a reason to leave an unlock flow.
+  // Account creation and the explicit Back action can still open the portal.
   const [loading, setLoading] = useState(false);
   const [workspaceStage, setWorkspaceStage] = useState<
     'identity' | 'local' | 'backup'
@@ -693,7 +699,7 @@ export function GettingStartedFlow({
       // "your data is on another device" hides which one this is.
       let vaultReason: string | undefined;
 
-      if (!hasData && target) {
+      if (!hasData && target && !returnToAgent) {
         setWorkspaceStage('backup');
         const restored = await withDeadline(
           restoreFromVault(store, target),
@@ -758,7 +764,12 @@ export function GettingStartedFlow({
         // the whole drive, and sign-in should not wait on an upload.
         void ensureVaultBackup(store, target!);
 
-        navigate(constructOpenURL(target!));
+        navigate(
+          returnToAgent ? paths.agentSettings : constructOpenURL(target!),
+        );
+      } else if (returnToAgent) {
+        // Passkey management needs the key, not a downloaded copy of the drive.
+        navigate(paths.agentSettings);
       } else {
         setMissingDrive(target);
         setMissingDriveVaultReason(vaultReason);
@@ -818,7 +829,7 @@ export function GettingStartedFlow({
 
   return (
     <Shell>
-      {step === 'welcome' && (!createTarget || knownPortalUrl) ? (
+      {step === 'welcome' && !createTarget ? (
         <div role='status' aria-label='Loading account'>
           <Spinner />
         </div>

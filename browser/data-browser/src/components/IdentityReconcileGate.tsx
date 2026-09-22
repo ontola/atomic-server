@@ -65,6 +65,7 @@ export function IdentityReconcileGate({
   const [checking, setChecking] = useState(true);
   const [conflict, setConflict] = useState<Conflict | null>(null);
   const [resolving, setResolving] = useState(false);
+  const [reconcileAttempt, setReconcileAttempt] = useState(0);
   // Re-checks fire on every `agent?.subject` change (e.g. a device
   // creating/accepting-as a brand new local agent, not just managed-sync
   // sign-in/out). Blanking `children` on every one of those unmounts the
@@ -82,85 +83,116 @@ export function IdentityReconcileGate({
     pathname === paths.welcome ||
     pathname.startsWith(`${paths.welcome}/`);
 
-  const converge = useCallback(async () => {
-    if (skip) {
-      setChecking(false);
-      hasCheckedOnceRef.current = true;
-
-      return;
-    }
-
-    if (!hasCheckedOnceRef.current) {
-      setChecking(true);
-    }
-
-    const localAgent = agent?.subject ?? store.getAgent()?.subject ?? undefined;
-    const result = await evaluateIdentityReconciliation(localAgent);
-
-    if (!result.ok && result.issue.reason === 'recovery_agent') {
-      const disposable =
-        !result.issue.localAgentSubject ||
-        (await localAgentIsDisposable(store, result.issue.localAgentSubject));
-
-      if (!disposable) {
-        // Two identities that both have something on them. Render the
-        // question instead of the app, so nothing is used as the wrong one
-        // meanwhile.
-        setConflict({ managedAccountEmail: result.issue.managedAccountEmail });
+  const converge = useCallback(
+    async (signal: AbortSignal) => {
+      if (skip) {
+        setChecking(false);
+        hasCheckedOnceRef.current = true;
 
         return;
       }
 
-      // The account has a restorable identity. Unlock it via the recover flow;
-      // it replaces the local agent. Keep `checking` true so we render nothing
-      // during the redirect rather than flashing the app as the wrong agent.
-      navigate({ to: paths.welcome, replace: true });
+      if (!hasCheckedOnceRef.current) {
+        setChecking(true);
+      }
 
-      return;
-    }
+      const localAgent =
+        agent?.subject ?? store.getAgent()?.subject ?? undefined;
+      // An old response must not undo a deliberate sign-in, lock, or navigation
+      // into onboarding. Check after every await, including workspace discovery.
+      const isCurrent = () =>
+        !signal.aborted &&
+        localAgent === (store.getAgent()?.subject ?? undefined);
+      const result = await evaluateIdentityReconciliation(localAgent);
+      if (!isCurrent()) return;
 
-    if (!result.ok && result.issue.localAgentSubject) {
-      // Adopt this device's agent as the account's agent — no UI.
-      writeManagedAccountBinding(
-        result.issue.managedAccountEmail,
-        result.issue.localAgentSubject,
+      if (!result.ok && result.issue.reason === 'recovery_agent') {
+        const disposable =
+          !result.issue.localAgentSubject ||
+          (await localAgentIsDisposable(store, result.issue.localAgentSubject));
+        if (!isCurrent()) return;
+
+        if (!disposable) {
+          // Two identities that both have something on them. Render the
+          // question instead of the app, so nothing is used as the wrong one
+          // meanwhile.
+          setConflict({
+            managedAccountEmail: result.issue.managedAccountEmail,
+          });
+
+          return;
+        }
+
+        // The account has a restorable identity. Unlock it via the recover flow;
+        // it replaces the local agent. Keep `checking` true so we render nothing
+        // during the redirect rather than flashing the app as the wrong agent.
+        navigate({
+          to: paths.welcome,
+          search: {
+            step: 'signin',
+            return_to: pathname === paths.agentSettings ? 'agent' : undefined,
+          },
+          replace: true,
+        });
+
+        return;
+      }
+
+      if (!result.ok && result.issue.localAgentSubject) {
+        // Adopt this device's agent as the account's agent — no UI.
+        writeManagedAccountBinding(
+          result.issue.managedAccountEmail,
+          result.issue.localAgentSubject,
+        );
+      }
+
+      // Keep `serverUrl` pointed at the node actually hosting the active
+      // drive — silently, like the agent check above. Needed once the app is
+      // served from a fixed origin instead of the node's own domain: a fresh
+      // device has no stored server yet, and a migrated drive's stored value
+      // goes stale. See reconcile.ts for why this can't be derived from the
+      // drive's `did:` subject directly.
+      const serverResult = await evaluateServerReconciliation(
+        store.getServerUrl(),
+        store.getDrive(),
       );
-    }
+      if (!isCurrent()) return;
 
-    // Keep `serverUrl` pointed at the node actually hosting the active
-    // drive — silently, like the agent check above. Needed once the app is
-    // served from a fixed origin instead of the node's own domain: a fresh
-    // device has no stored server yet, and a migrated drive's stored value
-    // goes stale. See reconcile.ts for why this can't be derived from the
-    // drive's `did:` subject directly.
-    const serverResult = await evaluateServerReconciliation(
-      store.getServerUrl(),
-      store.getDrive(),
-    );
+      if (!serverResult.ok) {
+        setServer(serverResult.expectedOrigin);
+      }
 
-    if (!serverResult.ok) {
-      setServer(serverResult.expectedOrigin);
-    }
+      // Announce this device to the account's device directory, seed KnownPeers
+      // from it, and auto-connect the account's other devices with the active
+      // drive (zero-scan pairing — no manual "Sync now"). Fire-and-forget:
+      // routing hints only, must never delay or gate the app.
+      void syncDeviceDirectory(store.getDrive(), store.getAgent());
 
-    // Announce this device to the account's device directory, seed KnownPeers
-    // from it, and auto-connect the account's other devices with the active
-    // drive (zero-scan pairing — no manual "Sync now"). Fire-and-forget:
-    // routing hints only, must never delay or gate the app.
-    void syncDeviceDirectory(store.getDrive(), store.getAgent());
-
-    setConflict(null);
-    setChecking(false);
-    hasCheckedOnceRef.current = true;
-  }, [agent?.subject, skip, store, navigate, setServer]);
+      setConflict(null);
+      setChecking(false);
+      hasCheckedOnceRef.current = true;
+    },
+    [agent?.subject, skip, store, navigate, setServer, pathname],
+  );
 
   useEffect(() => {
-    void converge();
-  }, [converge]);
+    const controller = new AbortController();
+    void converge(controller.signal);
+
+    return () => controller.abort();
+  }, [converge, reconcileAttempt]);
 
   /** Switch this browser to the account's identity: the recover flow does it. */
   function switchToAccount() {
     setConflict(null);
-    navigate({ to: paths.welcome, replace: true });
+    navigate({
+      to: paths.welcome,
+      search: {
+        step: 'signin',
+        return_to: pathname === paths.agentSettings ? 'agent' : undefined,
+      },
+      replace: true,
+    });
   }
 
   /**
@@ -178,7 +210,7 @@ export function IdentityReconcileGate({
     } finally {
       setResolving(false);
       setConflict(null);
-      void converge();
+      setReconcileAttempt(attempt => attempt + 1);
     }
   }
 
