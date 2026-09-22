@@ -94,6 +94,8 @@ export const AgentConfigItem: React.FC<AgentConfigItemProps> = ({
         <input
           disabled={providerDisabled}
           type='radio'
+          checked={selected}
+          onChange={() => onSelect(agent)}
           id={inputId}
           name='agent'
           value={agent.id}

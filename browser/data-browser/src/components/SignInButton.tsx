@@ -13,7 +13,7 @@ export function SignInButton() {
     <Button
       type='button'
       onClick={() => navigate(paths.agentSettings)}
-      title='Go the the User Settings page'
+      title='Go to the User page'
     >
       Sign in
     </Button>

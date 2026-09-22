@@ -72,7 +72,7 @@ export function AppMenu({ onItemClick }: AppMenuProps): JSX.Element {
         }
         label={
           agent
-            ? (agentResource.get(core.properties.name) ?? 'User Settings')
+            ? (agentResource.get(core.properties.name) ?? 'User')
             : 'Login / New User'
         }
         helper='See and edit the current Agent / User (u)'

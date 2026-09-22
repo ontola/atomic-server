@@ -92,7 +92,7 @@ function NewRoutePage(): JSX.Element {
 
 function NewResourceSelector() {
   const { parentSubject, parent } = NewRoute.useSearch();
-  const { drive } = useSettings();
+  const { drive, hideTemplates } = useSettings();
   const destination = parentSubject || parent || drive;
   const parentResource = useResource(destination);
   const store = useStore();
@@ -128,7 +128,7 @@ function NewResourceSelector() {
         item.subject !== ai.classes.aiChat) &&
       matchesCreationSearch(query, item.title, item.description, 'blank'),
   );
-  const tables = CREATION_TABLE_TEMPLATES.filter(item =>
+  const tables = (hideTemplates ? [] : CREATION_TABLE_TEMPLATES).filter(item =>
     matchesCreationSearch(
       query,
       item.title,
@@ -137,7 +137,7 @@ function NewResourceSelector() {
       ...(item.spec?.views ?? []).map(v => v.kind),
     ),
   );
-  const pages = CREATION_PAGE_TEMPLATES.filter(item =>
+  const pages = (hideTemplates ? [] : CREATION_PAGE_TEMPLATES).filter(item =>
     matchesCreationSearch(query, item.title, item.description, 'template'),
   );
   const custom = customClasses.filter(
@@ -483,12 +483,7 @@ function NewResourceSelector() {
             </BasicGrid>
           </section>
         )}
-        {error && (
-          <p role='alert'>
-            Your resource types could not be loaded. Templates above are still
-            available.
-          </p>
-        )}
+        {error && <p role='alert'>Your resource types could not be loaded.</p>}
         {!searching && (
           <details>
             <ChooseClassSummary />

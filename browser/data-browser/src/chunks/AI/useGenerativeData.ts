@@ -62,6 +62,19 @@ export const useGenerativeData = () => {
   const generateTitleFromConversation = async (
     conversation: AtomicUIMessage[],
   ) => {
+    // Voice must not silently spend a user's separately configured API key.
+    if (conversation.some(message => message.metadata?.liveVoice)) {
+      const first = conversation.find(message => message.role === 'user');
+      const title = first?.parts
+        .filter(part => part.type === 'text')
+        .map(part => part.text)
+        .join(' ')
+        .trim()
+        .slice(0, 80);
+
+      return title ? { title, emoji: '🎙️' } : undefined;
+    }
+
     const model = modelIdentifier ? getModel(modelIdentifier) : undefined;
 
     if (!model) {
