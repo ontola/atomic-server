@@ -56,6 +56,38 @@ async function openContextMenu(page: Page, target: Locator, items: Locator[]) {
 test.describe('resource context menu', () => {
   test.beforeEach(before);
 
+  test('open menu follows the visible viewport as a keyboard appears', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('button', { name: 'More', exact: true }).click();
+    const menu = page.getByRole('menu');
+    await expect(menu).toBeVisible();
+    const originalTop = (await menu.boundingBox())!.y;
+
+    for (const height of [620, 480]) {
+      await page.evaluate(visibleHeight => {
+        const viewport = window.visualViewport!;
+        Object.defineProperty(viewport, 'height', {
+          configurable: true,
+          value: visibleHeight,
+        });
+        viewport.dispatchEvent(new Event('resize'));
+      }, height);
+
+      await expect
+        .poll(async () => {
+          const bounds = (await menu.boundingBox())!;
+
+          return bounds.y + bounds.height;
+        })
+        .toBeLessThanOrEqual(height - 8);
+    }
+
+    expect((await menu.boundingBox())!.y).toBeLessThan(originalTop);
+    await expect(page.getByRole('textbox', { name: 'Filter actions' })).toBeFocused();
+  });
+
   test('sidebar link + table cell open the resource menu on right-click', async ({
     page,
   }: {

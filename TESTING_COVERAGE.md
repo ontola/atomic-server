@@ -62,6 +62,8 @@ keyboard filtering, removal of plugin/website/app creation actions from menus,
 discovery of their blank starters on a fresh drive, and file/upload searches.
 Existing app, plugin, and website browser flows create through the catalog,
 including a website seeded from its selected parent document.
+The resource menu check simulates a shrinking visual viewport and requires the
+open menu, including its filter, to remain above the keyboard boundary.
 
 Mobile AI chat navigation: Chromium covers opening the left sidebar above chat,
 Back dismissal without leaving the page, the AI settings link, an empty composer
