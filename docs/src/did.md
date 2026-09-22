@@ -1,10 +1,11 @@
 {{#title Decentralized Identifiers (DIDs) in Atomic Data }}
 # Decentralized Identifiers
 
-_status: work in progress_
+_status: implemented for Resources, Agents, Commits, blobs and nodes; mesh resolution is planned_
 
-Atomic Data is moving from HTTP URLs to Decentralized Identifiers (DIDs) as the primary way to address resources.
-This makes resources portable, self-authenticating, and resolvable over both the internet and local mesh networks.
+Atomic Data uses Decentralized Identifiers (DIDs) as the primary way to address resources, with HTTP URLs kept for vocabularies, external linked data and older servers.
+This makes resources portable, self-authenticating, and resolvable over both the internet and, in the future, local mesh networks.
+For an overview of every identifier shape and where you meet it, start with [URLs and identifiers](urls.md); this page is the specification.
 
 ## Design goals
 
