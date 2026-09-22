@@ -2,7 +2,12 @@ import { describe, it } from 'vitest';
 import { Agent } from './agent.js';
 import { decodeB64 } from './base64.js';
 import { JSCryptoProvider, legacySubjectFromSecret } from './CryptoProvider.js';
-import { AGENT_VAULT_PROOF_MESSAGE, privateDriveSubject } from './genesis.js';
+import {
+  AGENT_VAULT_PROOF_MESSAGE,
+  privateDriveSubject,
+  aiChatsFolderCert,
+  verifyGenesisCert,
+} from './genesis.js';
 
 describe('Agent', () => {
   const validPrivateKey = 'CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=';
@@ -121,5 +126,63 @@ describe('legacySubjectFromSecret', () => {
       expect(() => legacySubjectFromSecret(bad)).not.toThrow();
       expect(legacySubjectFromSecret(bad)).toBeUndefined();
     }
+  });
+});
+
+describe('AI chat folder identity', () => {
+  const key = 'CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=';
+  const secret = Agent.buildSecret(key, 'did:ad:agent:test');
+
+  it('converges across independent devices, scoped by drive and account', async ({
+    expect,
+  }) => {
+    const phone = Agent.fromSecret(secret, 'js');
+    const desktop = Agent.fromSecret(secret, 'js');
+    const drive = await phone.privateDriveSubject();
+    const [a, b] = await Promise.all([
+      phone.aiChatsFolderSubject(drive),
+      desktop.aiChatsFolderSubject(drive),
+    ]);
+    expect(a).toBe(b);
+    expect(
+      await verifyGenesisCert(
+        aiChatsFolderCert(decodeB64(await phone.getPublicKey()), drive),
+        a.slice('did:ad:'.length),
+      ),
+    ).toBe(true);
+    expect(await phone.aiChatsFolderSubject('did:ad:other-drive')).not.toBe(a);
+    const other = Agent.fromSecret(
+      Agent.buildSecret(
+        'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+        'did:ad:agent:other',
+      ),
+      'js',
+    );
+    expect(await other.aiChatsFolderSubject(drive)).not.toBe(a);
+    expect((await Agent.aiChatsFoldersFromSecret(secret))[drive]).toBe(a);
+  });
+
+  it('restores stable identities without signing with a randomized provider', async ({
+    expect,
+  }) => {
+    const provider = new JSCryptoProvider(key);
+    const restored = new Agent({
+      type: 'test',
+      signsDeterministically: false,
+      getPublicKey: () => provider.getPublicKey(),
+      sign: () => {
+        throw new Error('Must not sign');
+      },
+      signBytes: () => {
+        throw new Error('Must not sign');
+      },
+    });
+    const identities = await Agent.aiChatsFoldersFromSecret(secret);
+    const drive = Object.keys(identities)[0];
+    await expect(restored.aiChatsFolderSubject(drive)).rejects.toThrow(
+      'Sign in again',
+    );
+    restored.aiChatsFolders = JSON.parse(JSON.stringify(identities));
+    expect(await restored.aiChatsFolderSubject(drive)).toBe(identities[drive]);
   });
 });

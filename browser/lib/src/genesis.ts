@@ -43,6 +43,21 @@ export function privateDriveCert(signerPubkey: Uint8Array): GenesisCert {
   };
 }
 
+/** Stable storage location for AI chats, scoped to the signer and drive.
+ * No content hash: title and other folder metadata remain editable. */
+export function aiChatsFolderCert(
+  signerPubkey: Uint8Array,
+  drive: string,
+): GenesisCert {
+  return {
+    signerPubkey,
+    createdAt: 0,
+    nonce: domainSeparatorNonce('atomic-ai-chats-folder-v1'),
+    parent: drive,
+    drive,
+  };
+}
+
 /** `did:ad:<sig>` of {@link privateDriveCert} signed by `privateKey`. */
 export async function privateDriveSubject(
   privateKey: Uint8Array,
