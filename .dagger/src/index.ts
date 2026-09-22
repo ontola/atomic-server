@@ -1283,25 +1283,12 @@ export class AtomicServer {
       // Surfaces /app/dev-drive and /app/prunetests in the production
       // build the e2e tests run against. See `devRoutesEnabled()` in
       // data-browser/src/config.ts.
-      buildContainer = buildContainer
-        .withEnvVariable('VITE_E2E', 'true')
-        // The mock integration proxy runs beside the server, so from the
-        // server's own process it is on loopback. This value is not the
-        // server's: it is baked into the bundle and used by the browser,
-        // which runs in the playwright container, where 127.0.0.1 is that
-        // container and nothing answers on 19090. Every page that lists
-        // integrations then shows a "TypeError: Failed to fetch" alert, which
-        // is a second `role="alert"` on screen and makes the specs that assert
-        // on an alert either read the wrong one or fail strict mode.
-        //
-        // `atomic.localhost` is the name the browser is told to map to the
-        // server service (see ATOMIC_TEST_HOST_MAP, and the note on
-        // ATOMIC_DOMAIN above), and the mapping is per host, not per port, so
-        // this reaches the same container's exposed 19090.
-        .withEnvVariable(
-          'VITE_INTEGRATION_PROXY_URL',
-          'http://atomic.localhost:19090',
-        );
+      buildContainer = buildContainer.withEnvVariable('VITE_E2E', 'true');
+      // The integration proxy URL is no longer baked in. It is seeded into
+      // localStorage by playwright (`INTEGRATION_PROXY_URL`, set on the
+      // playwright container below), so this bundle is the same one a
+      // non-e2e build produces apart from the dev routes, and a lane on a
+      // different proxy port needs no rebuild.
     }
 
     return buildContainer.withExec(['pnpm', 'run', 'build']);
@@ -2058,6 +2045,20 @@ export class AtomicServer {
         .withEnvVariable('FRONTEND_URL', `http://atomic.localhost:9883`)
         .withEnvVariable('SERVER_URL', `http://atomic.localhost:9883`)
         .withEnvVariable('ATOMIC_SERVICE_URL', `http://${ATOMIC_DOMAIN}:9883`)
+        // Seeded into localStorage for every origin the suite visits, so the
+        // browser reaches the mock proxy without the bundle knowing about it.
+        // This value is not the server's: the proxy runs beside the server, so
+        // from the server's own process it is on loopback, but the browser
+        // runs in this container, where 127.0.0.1 is this container and
+        // nothing answers on 19090. `atomic.localhost` is the name the browser
+        // is told to map to the server service (see ATOMIC_TEST_HOST_MAP), and
+        // the mapping is per host, not per port, so this reaches that
+        // container's exposed 19090. It is also why the runtime validators
+        // accept the whole `.localhost` TLD and not just the bare name.
+        .withEnvVariable(
+          'INTEGRATION_PROXY_URL',
+          'http://atomic.localhost:19090',
+        )
         .withEnvVariable(
           'ATOMIC_TEST_HOST_MAP',
           `MAP atomic.localhost ${ATOMIC_DOMAIN}`,

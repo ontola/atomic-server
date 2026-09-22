@@ -311,19 +311,13 @@ export ATOMIC_WEBSITE_ORIGIN="${ATOMIC_WEBSITE_ORIGIN:-http://sites.localhost:$P
 if [[ "$MOCK_PROXY" == true ]]; then
   PROXY_URL="http://127.0.0.1:$MOCK_PROXY_PORT"
 
-  # `VITE_INTEGRATION_PROXY_URL` is read at build time, like `VITE_E2E`, so a
-  # bundle built without it cannot be rescued by anything this script does.
-  # Say so now rather than letting the specs fail as if the proxy were down.
-  DIST="$REPO_ROOT/browser/data-browser/dist"
-  if [[ -d "$DIST" ]] && ! grep -rqs ":$MOCK_PROXY_PORT" "$DIST"; then
-    echo "WARNING: the built bundle in $DIST does not mention port" >&2
-    echo "         $MOCK_PROXY_PORT, so it was not built against the proxy." >&2
-    echo "         Rebuild with:" >&2
-    echo "           cd browser && SKIP_WASM_BUILD=1 VITE_E2E=true \\" >&2
-    echo "             VITE_INTEGRATION_PROXY_URL=$PROXY_URL pnpm run build" >&2
-    echo "         (in .dagger the value is http://atomic.localhost:$MOCK_PROXY_PORT" >&2
-    echo "         instead — different container, same port.)" >&2
-  fi
+  # The browser reads the proxy URL from localStorage at runtime, and
+  # playwright seeds that key from `INTEGRATION_PROXY_URL` (see
+  # playwright.config.ts). No rebuild is involved, so any port works with a
+  # bundle that was never built against it — say which value to pass rather
+  # than letting the specs fail as if the proxy were down.
+  echo "Run the integration specs against this proxy with:"
+  echo "  INTEGRATION_PROXY_URL=$PROXY_URL SERVER_URL=$SERVER_URL pnpm test-e2e"
 
   MOCK_FRONTEND_ORIGIN="${MOCK_FRONTEND_ORIGIN:-$SERVER_URL}" \
   MOCK_PROXY_HOST="${MOCK_PROXY_HOST:-127.0.0.1}" \

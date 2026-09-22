@@ -73,7 +73,9 @@ silently take over the old plugin tables.
   preference is saved in this browser and applies without rebuilding. Connections
   are isolated by proxy origin; switching back restores that proxy’s connections.
   HTTPS or loopback HTTP origins only. **Reset to default** uses the deployment’s
-  `VITE_INTEGRATION_PROXY_URL`, or `https://localthought.io` when unset.
+  `VITE_INTEGRATION_PROXY_URL`, or `https://localthought.io` when unset. A build-time
+  value that would not pass the same check is ignored, so a bad one cannot lock
+  you out of this screen.
 - Existing bundled GitHub, Notion and MT940 plugins remain available
   independently. Clockify is a LocalThought lens (`integrations/clockify/`). Proxy cards have an accent border and a “Via integration proxy” label.
 - Deploy the companion integration-proxy CORS change. It handles preflights for
@@ -249,8 +251,11 @@ FRONTEND_URL=http://127.0.0.1:6747 SERVER_URL=http://127.0.0.1:19999 \
   browser/e2e/tests/google-calendar-import.spec.mts --project chromium
 ```
 
-If the frontend uses `VITE_INTEGRATION_PROXY_URL`, pass the same value to the
-test process. The test forwards that origin to its own fixture. Live Google
+Pass `INTEGRATION_PROXY_URL` to the test process to point the browser at a
+proxy on another port: playwright seeds it into localStorage for every origin
+the suite visits, so no rebuild is involved. The test forwards that origin to
+its own fixture. `VITE_INTEGRATION_PROXY_URL` is accepted under that name too,
+and is now only the built-in default. Live Google
 OAuth on the browser path still depends on the proxy CORS deployment described
 above; this fixture test does not claim live-provider verification.
 

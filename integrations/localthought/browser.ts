@@ -102,7 +102,7 @@ function importLimits(value: unknown): ImportLimits {
 // built against `http://atomic.localhost:19090`, because the browser runs in
 // its own container where `127.0.0.1` is the wrong machine, so a check that
 // only knew the bare name rejected a proxy that is loopback by definition.
-const isLoopbackHost = (host: string) =>
+export const isLoopbackHost = (host: string) =>
   host === 'localhost' ||
   host.endsWith('.localhost') ||
   host === '127.0.0.1' ||
