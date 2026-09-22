@@ -4568,7 +4568,6 @@ msgstr ""
 msgid "<0/> Scan a QR code"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx src/views/getting-started/ConnectDeviceStep.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Your data is on another device"
@@ -4855,9 +4854,8 @@ msgstr ""
 msgid "Copy {0}"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "You’re signed in, but this device doesn’t have your workspace yet. Scan the code below with the device that has it."
-msgstr ""
+#~ msgid "You’re signed in, but this device doesn’t have your workspace yet. Scan the code below with the device that has it."
+#~ msgstr ""
 
 #: src/helpers/syncPresentation.ts
 msgid "Your data lives on the device you’re connected to."
@@ -4867,9 +4865,8 @@ msgstr ""
 msgid "Syncing this workspace…"
 msgstr ""
 
-#: src/routes/SyncRoute.tsx
-msgid "You’re signed in, but this device doesn’t have your workspace yet. Connect a device that has it."
-msgstr ""
+#~ msgid "You’re signed in, but this device doesn’t have your workspace yet. Connect a device that has it."
+#~ msgstr ""
 
 #: src/components/ConnectServerDialog.tsx src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
@@ -7553,6 +7550,7 @@ msgstr ""
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/helpers/openPrivateHome.ts
 msgid "My drive"
 msgstr ""
 
@@ -8211,25 +8209,20 @@ msgid "The next screen opens an editable JavaScript starter. Automatic execution
 msgstr ""
 
 #: src/chunks/PluginRuns/ConnectNotion.tsx
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 msgid "Notion"
 msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Work with your Notion database in Atomic."
-msgstr ""
+#~ msgid "Work with your Notion database in Atomic."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Sync supported row fields, property names and table or board views."
-msgstr ""
+#~ msgid "Sync supported row fields, property names and table or board views."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Start automations from newly discovered rows."
-msgstr ""
+#~ msgid "Start automations from newly discovered rows."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Formatted text, relations, formulas and filtered views need additional mappings."
-msgstr ""
+#~ msgid "Formatted text, relations, formulas and filtered views need additional mappings."
+#~ msgstr ""
 
 #: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 msgid "Supported scope"
@@ -8677,25 +8670,20 @@ msgstr ""
 msgid "Review this external action before approving it."
 msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Clockify"
-msgstr ""
+#~ msgid "Clockify"
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Bring your completed work into the Time Tracker."
-msgstr ""
+#~ msgid "Bring your completed work into the Time Tracker."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Import completed entries with project and person links, start/end times and billable flags."
-msgstr ""
+#~ msgid "Import completed entries with project and person links, start/end times and billable flags."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Review imports before applying them. This first version does not sync changes back."
-msgstr ""
+#~ msgid "Review imports before applying them. This first version does not sync changes back."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Your entries only; up to 31 days. No active timers, updates, deletions, tags, task links, rates or custom fields."
-msgstr ""
+#~ msgid "Your entries only; up to 31 days. No active timers, updates, deletions, tags, task links, rates or custom fields."
+#~ msgstr ""
 
 #: node_modules/devonian/platform-lenses/atomic-integrations/ui/ConnectClockify.tsx
 #: src/chunks/PluginRuns/ConnectClockify.tsx
@@ -8834,25 +8822,20 @@ msgid "No automations yet. Create one to respond to events from your connected a
 msgstr ""
 
 #: src/chunks/PluginRuns/ImportMT940.tsx
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 msgid "Bank statements"
 msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Import bank transactions from bunq and other MT940 exports."
-msgstr ""
+#~ msgid "Import bank transactions from bunq and other MT940 exports."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Preview exact amounts, dates, account references and original descriptions in a Bank transactions table."
-msgstr ""
+#~ msgid "Preview exact amounts, dates, account references and original descriptions in a Bank transactions table."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Upload a statement when you need it. No bank token required."
-msgstr ""
+#~ msgid "Upload a statement when you need it. No bank token required."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "MT940 files only, up to 500 transactions and 512 KB. No payment initiation or live bank sync. Bank-specific formats may need additional support."
-msgstr ""
+#~ msgid "MT940 files only, up to 500 transactions and 512 KB. No payment initiation or live bank sync. Bank-specific formats may need additional support."
+#~ msgstr ""
 
 #: src/chunks/PluginRuns/ImportMT940.tsx
 msgid "Bank transactions"
@@ -9441,35 +9424,28 @@ msgstr ""
 msgid "These preferences are saved in your private Atomic drive. Existing connections remain available."
 msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 #: src/routes/DevonianDemoRoute.tsx
 msgid "GitHub issues and comments (Devonian)"
 msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Connect a GitHub repository to a local issue tracker."
-msgstr ""
+#~ msgid "Connect a GitHub repository to a local issue tracker."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Sync issues and comments in both directions, including closing and reopening issues."
-msgstr ""
+#~ msgid "Sync issues and comments in both directions, including closing and reopening issues."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Connect through LocalThought, then use Sync now to exchange changes."
-msgstr ""
+#~ msgid "Connect through LocalThought, then use Sync now to exchange changes."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Creates a separate local drive. Keep the browser open to sync. Sync writes changes to your GitHub repository."
-msgstr ""
+#~ msgid "Creates a separate local drive. Keep the browser open to sync. Sync writes changes to your GitHub repository."
+#~ msgstr ""
 
 #: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 msgid "Install plugin"
 msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Google Calendar (Devonian)"
-msgstr ""
+#~ msgid "Google Calendar (Devonian)"
+#~ msgstr ""
 
 #: src/routes/DevonianDemoRoute.tsx
 msgid "LocalThought will ask you to sign in and authorize the GitHub connection."
@@ -9540,17 +9516,14 @@ msgstr ""
 msgid "Preparing invite…"
 msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Import Google Calendar events into calendar views."
-msgstr ""
+#~ msgid "Import Google Calendar events into calendar views."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Preserves recurring series and previews supported edits to send back to Google."
-msgstr ""
+#~ msgid "Preserves recurring series and previews supported edits to send back to Google."
+#~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google."
-msgstr ""
+#~ msgid "Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google."
+#~ msgstr ""
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Prepare release"
@@ -9893,12 +9866,10 @@ msgid "Enable page transition animations (experimental, known to misbehave outsi
 msgstr ""
 
 #: src/components/Settings/IntegrationSettings.tsx
-#: src/routes/IntegrationStore.tsx
 msgid "Show API plugins"
 msgstr ""
 
 #: src/components/Settings/IntegrationSettings.tsx
-#: src/routes/IntegrationStore.tsx
 msgid "Show experimental plugins"
 msgstr ""
 
@@ -12203,4 +12174,33 @@ msgstr ""
 
 #: src/helpers/syncPresentation.ts
 msgid "This workspace could not be read on this device. Try opening it again."
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "No integrations match your search."
+msgstr ""
+
+#: src/routes/IntegrationStore.tsx
+msgid "No plugins to show here."
+msgstr ""
+
+#. 0: ' '
+#: src/helpers/privateHomeNudge.tsx
+msgid "Your home is ready. Have data elsewhere?{0} <0>Connect another device or restore a backup</0>."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "If another device has this workspace, scan the code below to connect it."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "If another device has this workspace, you can connect it."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "This workspace could not be read on this device"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Local copy unavailable"
 msgstr ""

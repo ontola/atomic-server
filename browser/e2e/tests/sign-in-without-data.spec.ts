@@ -3,10 +3,15 @@ import { Agent, generateKeyPair } from '@tomic/lib';
 import {
   FRONTEND_URL,
   getCurrentSubject,
+  installCommitWatcher,
   newResource,
   setTitle,
   smoke,
 } from './test-utils';
+
+test.beforeEach(async ({ page }) => {
+  await installCommitWatcher(page);
+});
 
 // No dev-drive setup: neither this browser nor the server has this identity's
 // home. A stored DID alone is not a usable workspace.
@@ -78,14 +83,37 @@ test(
   async ({ page }) => {
     const { secret, home } = await unknownAccount();
     await signIn(page, secret);
+    await expect(
+      page.getByRole('link', {
+        name: 'Connect another device or restore a backup',
+      }),
+    ).toBeVisible();
     await expectWritableHome(page, home);
   },
 );
 
 test('an unavailable legacy home does not prevent a writable derived home', async ({
   page,
+  browserDiagnostics,
 }) => {
   const { secret, home } = await unknownAccount(true);
+  const legacy = JSON.parse(atob(secret)).initialDrive as string;
+  browserDiagnostics.expect(
+    'error',
+    /^Failed to load resource: the server responded with a status of 404 \(Not Found\)$/,
+    'The deliberately unavailable legacy drive returns 404.',
+    1,
+    new RegExp(`/did\\?subject=${encodeURIComponent(legacy)}$`),
+    { optional: true },
+  );
+  browserDiagnostics.expect(
+    'error',
+    new RegExp(`^${legacy} .*Resource not found`),
+    'Legacy drive migration reports the unavailable source; the derived home must still work.',
+    1,
+    undefined,
+    { optional: true },
+  );
   await signIn(page, secret);
   await expectWritableHome(page, home);
 });
@@ -100,8 +128,8 @@ test('a restored session can initialize its missing private home from a direct l
     new RegExp(
       `^\\[WS\\] refused: (SUB|SYNC) refused for ${home}: not readable$`,
     ),
-    'The persisted identity has no drive on the node before initialization.',
-    4,
+    'The persisted identity has no drive on the node while recovery and initialization run; bounded sync retries may be refused.',
+    16,
     undefined,
     { optional: true },
   );
@@ -169,16 +197,16 @@ test('Sync does not claim an unreadable drive is cached or on another device', a
     new RegExp(
       `^\\[WS\\] refused: (SUB|SYNC) refused for ${missing}: not readable$`,
     ),
-    'Selecting and reloading this deliberately nonexistent foreign drive can be refused by the node.',
-    8,
+    'Selecting and reloading this deliberately nonexistent foreign drive can be refused by the node, including bounded sync retries.',
+    16,
     undefined,
     { optional: true },
   );
   browserDiagnostics.expect(
     'error',
     /^Failed to load resource: the server responded with a status of 404 \(Not Found\)$/,
-    'Drive usage for the deliberately nonexistent drive can return 404.',
-    2,
+    'Drive usage for the deliberately nonexistent drive can return 404 on initial mount and refresh.',
+    4,
     new RegExp(`/drive-usage\\?subject=${encodeURIComponent(missing)}$`),
     { optional: true },
   );

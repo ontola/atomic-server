@@ -23,7 +23,7 @@ not prevent signing in with an agent secret, including while offline.
 | Portal verification for an account without existing data | `/app/welcome?from_portal=true&email=…` opens identity creation. |
 | Private drive opened without an agent | `/app/welcome?next=<subject>` opens sign-in; successful unlock returns to that drive. |
 | Secret / passkey / recovery-code unlock, workspace present | Open the requested or personal drive. |
-| Unlock, workspace absent | Try hosting and encrypted vault restore; if still absent, show Connect device. Do not open an empty workspace as if restored. |
+| Unlock, workspace absent | Try hosting and encrypted vault restore. If the requested workspace is the identity’s derived private home, initialize a writable home and offer an optional device/backup nudge. This does not mean previous data was recovered. Other missing workspaces retain recovery actions. |
 | Portal Add passkey, no recovery backup | Register the portal passkey in the portal. |
 | Portal Add passkey, recovery backup exists | Open `/app/agent` to manage the encrypted account backup. |
 | `/app/agent` without a local agent | `/app/welcome?return_to=agent` opens sign-in, then returns to `/app/agent`. Managing a passkey does not require restoring all workspace data. |

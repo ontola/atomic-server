@@ -2376,9 +2376,14 @@ boolean-helper tests do not establish why a read failed or where copies exist.
 (previously zero passed); the duplicate same-subject test was removed because
 `store.private-drive.test.ts` already checks repeated creation and identity.
 
-These are regression specifications, not a claim that the implementation is
-fixed. Validation results are recorded below. Existing genesis, migration,
-sign-out/content preservation and successful Vault restoration tests remain.
+The browser now recovers first, then initializes only the signed-in identity’s
+derived home with an optional device/backup nudge. `openPrivateHome.test.ts`
+covers existing/recovered data preservation, foreign subjects, concurrent
+requests, recovery failure and identity switches. Mounted onboarding tests
+cover the nonblocking own-home path and the foreign-workspace recovery gate.
+Existing genesis, migration, sign-out/content preservation and successful
+Vault restoration tests remain. The E2E fixture installs the commit watcher
+so document persistence is checked for both HTTP and WebSocket saves.
 
 Still missing: late failed reads invalidating a newly initialized home;
 reconciliation preserving both old content and new fallback work; integrated

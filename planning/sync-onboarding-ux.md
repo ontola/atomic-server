@@ -32,6 +32,12 @@ Three consequences that keep being forgotten:
 - **A secret restores who you are, not what you have.** Signing in on a new
   device gets you an identity and an empty workspace. Something still has to
   carry the data.
+- **Connecting another device is optional.** After trying available recovery,
+  browser/Tauri sign-in opens a writable derived private home and offers a
+  device/backup nudge. Creating that home does not mean old content was
+  recovered. Foreign workspace links never synthesize a replacement. The
+  Flutter login still uses `resume_app_session` and its needs-sync screen;
+  it has no browser private-home materialization path yet.
 - **Connecting is not pushing.** Connecting to a device fetches a workspace
   you lack; it never offers the one you have. A workspace made before you
   connected anywhere exists in exactly one place until someone pushes it.
