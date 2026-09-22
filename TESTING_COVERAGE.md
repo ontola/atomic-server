@@ -46,11 +46,16 @@ formatting. The production-bundle typing E2E exercises the keyboard shortcut.
 Sidebar layout: browser checks sample both docked sidebar transitions halfway
 through opening/closing and verify that the main content moves with them, with
 matching duration/easing. They also cover hover reveal, mobile backdrop dismissal,
-and keeping the main content aligned while resizing and after reopening.
+and keeping the main content aligned while resizing and after reopening. Tablet
+checks verify that opening AI, comments, or meeting chat closes the left sidebar.
 Section resizing: hook tests cover touch pointers, drag thresholds, size bounds,
 tap preservation, cancellation, secondary pointers and unmount cleanup. Chromium
 uses native touch gestures on the AI Chats header to shrink/grow the list, checks
 the 44px touch target, saved height after reload, collapse/expand and New Chat.
+AI sidebar navigation checks that the AI Chats section is absent on a fresh
+drive and appears after a chat is saved. The tablet composer check simulates a
+shorter visual viewport with zero keyboard inset; physical Firefox Android
+keyboard behavior still needs device verification.
 
 Creation catalog/context menus: browser checks cover the embedded sidebar filter,
 keyboard filtering, removal of plugin/website/app creation actions from menus,

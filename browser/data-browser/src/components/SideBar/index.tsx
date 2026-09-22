@@ -20,9 +20,11 @@ import { Panel, usePanelList } from './usePanelList';
 import { SIDEBAR_WIDTH_PROP } from './SidebarCSSVars';
 import { useRef, type JSX } from 'react';
 import { CalculatedPageHeight } from '../../globalCssVars';
-import { AIChatsPanel, NewSidebarChatButton } from './AIPanel';
+import { AIChatsPanel } from './AIPanel';
 import { ChromeTheme } from '../../styling';
 import { PanelBackdrop, PanelLayout, panelTransition } from '../PanelLayout';
+import { useRightPanel } from '../RightPanel/RightPanelContext';
+import { RIGHT_PANEL_OVERLAY_BREAKPOINT } from '../RightPanel/layout';
 
 /** Amount of pixels where the sidebar automatically shows */
 export const SIDEBAR_TOGGLE_WIDTH = 600;
@@ -34,11 +36,15 @@ export function SideBar(): JSX.Element {
   const [isRearanging, setIsRearanging] = React.useState(false);
 
   const { drive, sideBarLocked, setSideBarLocked } = useSettings();
+  const { activePanel } = useRightPanel();
   const [ref, hoveringOverSideBar, listeners] = useHover<HTMLElement>();
   // Check if the window is small enough to hide the sidebar
   const isWideScreen = useMediaQuery(
     `(min-width: ${SIDEBAR_TOGGLE_WIDTH}px)`,
     true,
+  );
+  const rightPanelOverlays = useMediaQuery(
+    `(max-width: ${RIGHT_PANEL_OVERLAY_BREAKPOINT - 1}px)`,
   );
 
   const { size, dragAreaRef, isDragging, dragAreaListeners } = useResizable({
@@ -74,7 +80,11 @@ export function SideBar(): JSX.Element {
     }
   }, [isWideScreen, setSideBarLocked]);
 
-  const sidebarVisible = sideBarLocked || (hoveringOverSideBar && isWideScreen);
+  const sidebarVisible =
+    sideBarLocked ||
+    (hoveringOverSideBar &&
+      isWideScreen &&
+      !(rightPanelOverlays && activePanel));
 
   return (
     <SideBarContainer
@@ -101,17 +111,7 @@ export function SideBar(): JSX.Element {
           <MenuWrapper>
             <Column gap='0.5rem' align='stretch'>
               <SideBarHomePanels onItemClick={closeSideBar} />
-              {enabledPanels.has(Panel.AIChats) && (
-                <SideBarPanel
-                  title='AI Chats'
-                  heightStorageKey='aiChatsPanelHeight'
-                  data-testid='ai-chats-panel'
-                  key={drive}
-                  actions={<NewSidebarChatButton />}
-                >
-                  <AIChatsPanel />
-                </SideBarPanel>
-              )}
+              {enabledPanels.has(Panel.AIChats) && <AIChatsPanel key={drive} />}
               {enabledPanels.has(Panel.Ontologies) && (
                 <SideBarPanel
                   title='Ontologies'

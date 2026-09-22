@@ -44,16 +44,31 @@ export function useKeyboardInset(): void {
         '--keyboard-inset',
         `${Math.max(0, Math.round(covered))}px`,
       );
+
+      // Firefox on Android can resize the layout viewport together with the
+      // visual viewport. In that case `covered` is zero even if 100dvh still
+      // extends behind the keyboard. Cap the app at the measured visible area.
+      if (viewport.scale === 1) {
+        root.style.setProperty(
+          '--visible-viewport-height',
+          `${Math.round(viewport.height)}px`,
+        );
+      } else {
+        root.style.removeProperty('--visible-viewport-height');
+      }
     };
 
     update();
     viewport.addEventListener('resize', update);
     viewport.addEventListener('scroll', update);
+    window.addEventListener('resize', update);
 
     return () => {
       viewport.removeEventListener('resize', update);
       viewport.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
       root.style.removeProperty('--keyboard-inset');
+      root.style.removeProperty('--visible-viewport-height');
     };
   }, []);
 }

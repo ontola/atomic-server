@@ -18,18 +18,26 @@ import {
   SideBarMenuRowIcon,
   SideBarMenuItemLink,
 } from './SideBarMenuItem';
+import { SideBarPanel } from './SideBarPanel';
 
 /** Discover chats throughout the private drive, including legacy duplicate folders. */
 export function AIChatsPanel(): JSX.Element | null {
   const { privateDrive } = usePrivateDrive();
   const chats = useDriveChats(privateDrive);
 
+  if (chats.length === 0) return null;
+
   return (
-    <>
+    <SideBarPanel
+      title='AI Chats'
+      heightStorageKey='aiChatsPanelHeight'
+      data-testid='ai-chats-panel'
+      actions={<NewSidebarChatButton />}
+    >
       {chats.map(subject => (
         <ChatLink key={subject} subject={subject} />
       ))}
-    </>
+    </SideBarPanel>
   );
 }
 

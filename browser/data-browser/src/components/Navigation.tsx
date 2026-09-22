@@ -201,9 +201,11 @@ const SideBarWrapper = styled.div<{
      already visible and nothing scrolls. */
   ${p =>
     p.fullViewportContent
-      ? CalculatedPageHeight.define(`calc(100dvh - var(--keyboard-inset, 0px))`)
+      ? CalculatedPageHeight.define(
+          `min(calc(100dvh - var(--keyboard-inset, 0px)), var(--visible-viewport-height, 100dvh))`,
+        )
       : CalculatedPageHeight.define(
-          `calc(100dvh - ${p.theme.heights.breadCrumbBar} - ${p.previewHeight} - var(--keyboard-inset, 0px))`,
+          `min(calc(100dvh - ${p.theme.heights.breadCrumbBar} - ${p.previewHeight} - var(--keyboard-inset, 0px)), calc(var(--visible-viewport-height, 100dvh) - ${p.theme.heights.breadCrumbBar} - ${p.previewHeight}))`,
         )}
   display: flex;
   height: ${CalculatedPageHeight.var()};

@@ -1,5 +1,65 @@
-import { test, expect } from './fixtures';
+import { test, expect, type Page } from './fixtures';
 import { before } from './test-utils';
+
+async function expectLeftSidebarClosed(page: Page) {
+  const sidebar = page.getByTestId('sidebar');
+
+  await expect
+    .poll(async () =>
+      sidebar.evaluate(element => element.parentElement!.getBoundingClientRect().width),
+    )
+    .toBe(0);
+  await expect
+    .poll(() => sidebar.evaluate(element => Number(getComputedStyle(element).opacity)))
+    .toBe(0);
+}
+
+for (const [name, trigger, panel] of [
+  ['AI chat', 'navbar-ai-button', 'ai-sidebar'],
+  ['comments', 'navbar-comments-button', 'comments-panel'],
+] as const) {
+  test(`opening ${name} closes the left sidebar at tablet width`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 828, height: 1160 });
+    await before({ page });
+    const sidebar = page.getByTestId('sidebar');
+    await expect
+      .poll(() =>
+        sidebar.evaluate(element => element.parentElement!.getBoundingClientRect().width),
+      )
+      .toBeGreaterThan(0);
+    await page.mouse.move(700, 400);
+    await page.getByTestId(trigger).click();
+    await expect(page.getByTestId(panel)).toHaveAttribute('data-open', '');
+    await expectLeftSidebarClosed(page);
+    await page.mouse.move(2, 400);
+    await expect
+      .poll(() => sidebar.evaluate(element => Number(getComputedStyle(element).opacity)))
+      .toBe(0);
+  });
+}
+
+test('opening meeting chat closes the left sidebar at tablet width', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 828, height: 1160 });
+  await before({ page });
+  await expect
+    .poll(() =>
+      page
+        .getByTestId('sidebar')
+        .evaluate(element => element.parentElement!.getBoundingClientRect().width),
+    )
+    .toBeGreaterThan(0);
+  await page.getByRole('button', { name: 'New Meeting' }).first().click();
+  await page.getByRole('button', { name: 'Open chat', exact: true }).click();
+  await expect(page.getByTestId('follow-session-panel')).toHaveAttribute(
+    'data-open',
+    '',
+  );
+  await expectLeftSidebarClosed(page);
+});
 
 for (const panel of ['followSession', 'comments', 'ai']) {
   test(`does not restore stale ${panel} panel from another session`, async ({
