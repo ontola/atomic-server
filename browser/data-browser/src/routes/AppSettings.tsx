@@ -30,6 +30,9 @@ import { FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
 
 export const AppSettingsRoute = createRoute({
   path: pathNames.appSettings,
+  validateSearch: (search: Record<string, unknown>): { section?: string } => ({
+    section: typeof search.section === 'string' ? search.section : undefined,
+  }),
   component: () => <AppSettings />,
   getParentRoute: () => appRoute,
 });
@@ -57,7 +60,8 @@ const AppSettings: React.FunctionComponent = () => {
   } = useSettings();
 
   const { locale, setLocale } = useLocale();
-  const [searchQuery, setSearchQuery] = useState('');
+  const { section } = AppSettingsRoute.useSearch();
+  const [searchQuery, setSearchQuery] = useState(section === 'ai' ? 'ai' : '');
 
   const { enabledPanels, enablePanel, disablePanel } = usePanelList();
 

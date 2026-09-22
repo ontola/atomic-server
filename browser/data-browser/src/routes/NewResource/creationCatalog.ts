@@ -54,6 +54,29 @@ export const BASIC_CREATIONS = [
     description: 'Start a dedicated conversation with an assistant.',
   },
 ];
+
+/** These classes are minted per drive, so they must be offered before they exist. */
+export const DRIVE_CREATIONS = [
+  {
+    shortname: 'plugin-script',
+    title: 'Plugin',
+    description:
+      'Create a script or automation and review its proposed changes.',
+  },
+  {
+    shortname: 'website-project',
+    title: 'Website',
+    description: 'Build a website from your documents and tables.',
+  },
+  {
+    shortname: 'app',
+    title: 'App',
+    description: 'Create an interactive app backed by its own data.',
+  },
+] as const;
+
+export type DriveCreation = (typeof DRIVE_CREATIONS)[number]['shortname'];
+
 export function matchesCreationSearch(
   query: string,
   ...values: string[]
@@ -70,13 +93,7 @@ export const CREATION_TABLE_TEMPLATES = TABLE_TEMPLATES.filter(t => t.spec);
 export const CREATION_PAGE_TEMPLATES = templates;
 
 /**
- * What the assistant can build that this page otherwise never mentions.
- *
- * Apps and websites are minted per drive, so their classes only show up under
- * "Your resource types" once the drive already has one — which is to say,
- * never, for anyone who has not already been told they exist. Dashboards and
- * tables do have a blank button, but a blank one is not the part worth
- * discovering: the assistant fills them from data already on the drive.
+ * Offer assistant-filled alternatives to the blank starters above.
  *
  * Every seed is deliberately unfinished. A suggestion puts its seed in the
  * composer with the caret at the end instead of sending it, because "build me

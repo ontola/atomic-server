@@ -22,6 +22,7 @@ import { stringifyTree, useGetDriveStructure } from './useGetDriveStructure';
 import { useSettings } from '@helpers/AppSettings';
 import { shortenSubject } from '@helpers/subjectRefs';
 import { getClassesOnDrive } from './atomicSchemaHelpers';
+import { createHostedModel } from '@helpers/managed/ai';
 
 export type Modalities = 'text' | 'image';
 
@@ -78,7 +79,10 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
       system: await this._prepareSystemPrompt(agent.systemPrompt),
       tools: this.options.tools,
       abortSignal,
-      stopWhen: stepCountIs(1000),
+      stopWhen: stepCountIs(
+        this.options.model.provider === AIProvider.Hosted ? 8 : 1000,
+      ),
+      maxRetries: this.options.model.provider === AIProvider.Hosted ? 0 : 2,
       ...this.getParameters(agent, this.options.model),
     });
 
@@ -112,6 +116,9 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
   }
 
   private getModel(model: AIModelIdentifier) {
+    if (model.provider === AIProvider.Hosted)
+      return createHostedModel(model.id);
+
     if (
       model.provider === AIProvider.OpenRouter &&
       this.options.openRouterAPIKey
@@ -142,6 +149,9 @@ export class ClientOnlyTransport implements ChatTransport<AtomicUIMessage> {
   }
 
   private getParameters(agent: AIAgent, model: AIModelIdentifier) {
+    if (model.provider === AIProvider.Hosted)
+      return { temperature: agent.temperature };
+
     if (model.provider === AIProvider.Ollama) {
       // We can't check if Ollama supports specific parameters, so we just return all of them.
       return {

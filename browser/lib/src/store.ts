@@ -402,6 +402,31 @@ const GET_MANY_CHUNK = 200;
  *  timeout, so one very large batch is split instead of sent whole. */
 const LOCAL_HYDRATION_CHUNK = GET_MANY_CHUNK;
 
+/**
+ * Subjects of the vocabulary every host carries in its own store.
+ *
+ * They are `atomicdata.dev` URLs that name a shape, not a deployment: a fixed,
+ * tiny set that an installed server answers from its own data. Reaching them
+ * over the public catalog would make an offline or firewalled install depend
+ * on a website, so {@link Store.fetchResourceFromServer} routes them through
+ * the host's `/path` proxy, and {@link Store.fetchResourceWithLocalFallback}
+ * asks the host for them directly rather than local-first.
+ */
+export function isEmbeddedVocabulary(subject: string): boolean {
+  return (
+    embeddedVocabulary.has(subject) ||
+    subject === 'https://atomicdata.dev/task/v1'
+  );
+}
+
+const embeddedVocabulary = new Set<string>([
+  ...Object.values(taskSchema.properties),
+  ...Object.values(taskSchema.tags),
+  core.properties.importBaseline,
+  core.properties.importResolution,
+  core.properties.importReferenceReview,
+]);
+
 /** One caller's pending local-database read; see `Store.hydrateFromLocalDb`. */
 interface LocalHydrationRequest {
   promise: Promise<boolean | undefined>;
@@ -3367,6 +3392,27 @@ export class Store {
     subject: string,
     opts: FetchOpts = {},
   ): Promise<void> {
+    // Embedded vocabulary skips the local-first detour while there is a server
+    // to ask. It is about twenty fixed, tiny resources that the installed host
+    // serves from its own store, so the client database can only ever hold a
+    // copy of what the host would return — while the read that fetches that
+    // copy is a WASM worker round trip, measured at 3965 ms under four local
+    // Playwright workers where the host answered the same subjects in 1.5 to
+    // 2.1 ms. Nothing here can ask the server until that read comes back, so a
+    // busy worker left a kanban board rendering `useTitle`'s `...` placeholder
+    // for its column headings well past 45 seconds, with the answer two
+    // milliseconds away. A failed fetch falls through to the path below, which
+    // is what keeps an offline install working.
+    if (this._serverConnected && isEmbeddedVocabulary(subject)) {
+      try {
+        await this.fetchResourceFromServer(subject, opts);
+
+        return;
+      } catch (e) {
+        if (e instanceof RequestCancelledError) throw e;
+      }
+    }
+
     let local = await this.hydrateFromLocalDb(subject);
     let hasLocalData = local === true;
 
@@ -3640,16 +3686,7 @@ export class Store {
   ): Promise<Resource<C>> {
     // Embedded pilot vocabulary must resolve through the installed host, not
     // depend on a public catalog deployment being available.
-    if (
-      [
-        ...Object.values(taskSchema.properties),
-        ...Object.values(taskSchema.tags),
-        'https://atomicdata.dev/task/v1',
-        core.properties.importBaseline,
-        core.properties.importResolution,
-        core.properties.importReferenceReview,
-      ].includes(subject)
-    ) {
+    if (isEmbeddedVocabulary(subject)) {
       opts = { ...opts, fromProxy: true, noWebSocket: true };
     }
 

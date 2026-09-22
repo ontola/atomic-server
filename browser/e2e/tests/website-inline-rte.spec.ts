@@ -15,6 +15,10 @@ import { createBakery } from './website-inline-fixture';
 test('rich text menus, popovers and handles work inside the website preview', async ({
   page,
 }) => {
+  // This journey creates a website, exercises eight editor controls, and
+  // reloads persisted content. CI reached different controls on each attempt
+  // before the 60s total budget expired; retain the individual action limits.
+  test.setTimeout(120_000);
   await before({ page });
   const { frame, editor, clear } = await createBakery(page);
 

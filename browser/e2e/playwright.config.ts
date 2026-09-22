@@ -1,6 +1,24 @@
 import type { PlaywrightTestConfig } from '@playwright/test';
 import { devices } from '@playwright/test';
 import { workerBudget } from './scripts/concurrency.mjs';
+import './scripts/server-dns.cjs';
+import path from 'node:path';
+
+// Workers and generated Next/Svelte sites must use the same DNS mapping as the
+// test process, without baking the internal service hostname into their URLs.
+const serverDns = path.resolve(__dirname, 'scripts/server-dns.cjs');
+
+if (
+  process.env.ATOMIC_SERVICE_URL &&
+  !process.env.NODE_OPTIONS?.includes(serverDns)
+) {
+  process.env.NODE_OPTIONS = [
+    process.env.NODE_OPTIONS,
+    `--require=${JSON.stringify(serverDns)}`,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
 
 const config: PlaywrightTestConfig = {
   // Default `expect` timeout. Playwright's built-in is 5s; bump to 10s

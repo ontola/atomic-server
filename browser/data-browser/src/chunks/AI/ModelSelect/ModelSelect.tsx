@@ -7,6 +7,7 @@ import { OllamaModelSelector } from './OllamaModelSelector';
 import { transition } from '@helpers/transition';
 import { Link } from '@tanstack/react-router';
 import { useAISettings } from '@components/AI/AISettingsContext';
+import { Button } from '@components/Button';
 
 interface ModelSelectProps {
   onSelect?: (model: AIModelIdentifier) => void;
@@ -30,16 +31,38 @@ export const ModelSelect = ({
   defaultModel,
   enforceToolSupport = false,
 }: ModelSelectProps) => {
-  const { openRouterApiKey, ollamaUrl } = useAISettings();
+  const { openRouterApiKey, ollamaUrl, hostedAI } = useAISettings();
 
   return (
     <Wrapper>
       <Tabs
-        tabs={PROVIDER_TABS}
+        tabs={
+          hostedAI?.enabled
+            ? [
+                { label: 'Included AI', value: AIProvider.Hosted },
+                ...PROVIDER_TABS,
+              ]
+            : PROVIDER_TABS
+        }
         label='Provider'
         rounded
         defaultValue={defaultModel.provider}
       >
+        {hostedAI?.enabled && (
+          <StyledTabPanel value={AIProvider.Hosted}>
+            <p>{`${Math.floor(hostedAI.remaining_micros / 1000)} credits remaining across your drives.`}</p>
+            <Button
+              onClick={() =>
+                onSelect?.({
+                  id: hostedAI.model,
+                  provider: AIProvider.Hosted,
+                })
+              }
+            >
+              Use included model
+            </Button>
+          </StyledTabPanel>
+        )}
         <StyledTabPanel value={AIProvider.OpenRouter}>
           {openRouterApiKey ? (
             <OpenRouterModelSelector

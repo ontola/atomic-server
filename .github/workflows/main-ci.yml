@@ -93,9 +93,19 @@ jobs:
           # the argument.
           args: ci --netlify-auth-token env://NETLIFY_TOKEN --host-profile ${{ inputs.host-profile }} --playwright-mode ${{ inputs.e2e-mode }} ${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') && '--publish-docs' || '' }}
       - name: Upload artifacts
-        # `always()`: the e2e traces exported above are only interesting when
-        # the CI step failed, and without this the upload is skipped exactly
-        # then.
+        # `always()`: whatever lands in ./artifact is only interesting when the
+        # CI step failed, and without this the upload is skipped exactly then.
+        #
+        # Nothing writes ./artifact today, so this step uploads nothing on
+        # every run. The comment here used to say "the e2e traces exported
+        # above", which is what it was meant to carry and never has: the
+        # Dagger container holding playwright-report and test-results is
+        # discarded when the `ci` call throws, and `.dagger` has no host
+        # export. The disabled wiring is still in browser/e2e/playwright.config.ts
+        # (`// outputFolder: '/artifact/test-report'`). Until one of those is
+        # finished, a failed run's only evidence is the per-shard log tail in
+        # the thrown error, plus the Netlify report when NETLIFY_TOKEN is set —
+        # which it currently is not on the self-hosted runner.
         if: always()
         uses: actions/upload-artifact@v4
         with:

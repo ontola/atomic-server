@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { test, expect } from '@playwright/test';
-import { before } from './test-utils';
+import { createFromCatalog, before, waitForSynced } from './test-utils';
 
 /**
  * The one thing about apps that only a browser can answer.
@@ -159,11 +159,22 @@ test.describe('apps', () => {
     await app.getByRole('button', { name: 'Add an item' }).click();
     await expect(app.getByRole('listitem')).toHaveCount(1);
 
+    // `toHaveCount(1)` above is the app's own render, which happens before the
+    // write reaches the server. Reloading on top of that is a race, and under
+    // load this test lost it every time: four local Playwright workers, and the
+    // item is gone after the reload and never arrives, still 0 with the
+    // assertion given 120s. The suite waits for the outbox before a reload in
+    // 24 other files; this one did not.
+    await waitForSynced(page);
+
     // Atomic is the persistence layer: nothing about the app is in the page.
     await page.reload();
 
     const reopened = page.frameLocator('iframe[title="App"]');
-    await expect(reopened.getByRole('listitem')).toHaveCount(1);
+    // Include cold database recovery and the bridge's bounded request wait.
+    await expect(reopened.getByRole('listitem')).toHaveCount(1, {
+      timeout: 60_000,
+    });
   });
 
   test('an app that breaks says so, and offers to have it fixed', async ({
@@ -209,10 +220,22 @@ test.describe('apps', () => {
  * the schema cheaper to create is its own change.
  */
 async function newApp(page: import('@playwright/test').Page) {
-  test.setTimeout(120000);
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByPlaceholder(/filter/i).fill('app');
-  await page.locator('[data-testid="menu-item-new-app"]').click();
+  // `test.setTimeout` applies to the RUNNING TEST, not to the function it is
+  // written in, so a bare call here would overwrite whatever the caller asked
+  // for, downward and without an error. `newPlugin` in `plugins.spec.ts` was
+  // the same shape and did exactly that: its sidebar test declared 240s two
+  // lines before calling it, ran on 120s, and died at a wall it had itself
+  // raised. Nothing in this file declares a budget today, which is the only
+  // reason this one was harmless, and that stops being true the first time
+  // someone adds one.
+  //
+  // So raise, never lower. Playwright uses 0 for "no timeout", so that case is
+  // left alone rather than handed a ceiling it deliberately removed; a bare
+  // `Math.max` here would be the same bug pointing the other way.
+  const currentTimeout = test.info().timeout;
+
+  if (currentTimeout !== 0 && currentTimeout < 120000) test.setTimeout(120000);
+  await createFromCatalog(page, 'App');
   await expect(
     page.getByRole('main').locator('iframe[title="App"]'),
   ).toBeVisible({ timeout: 45000 });

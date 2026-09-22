@@ -11,7 +11,6 @@ import { SideBarMenuRow } from '../SideBarMenuItem';
 import { Row } from '../../Row';
 import { AtomicLink } from '../../AtomicLink';
 import { getIconForClass } from '../../../helpers/iconMap';
-import { ScrollArea } from '../../ScrollArea';
 import { ErrorLook } from '../../ErrorLook';
 import { useCallback, useEffect, useState, type JSX } from 'react';
 import { useSettings } from '../../../helpers/AppSettings';
@@ -45,11 +44,9 @@ export function OntologiesPanel(): JSX.Element | null {
 
   return (
     <Wrapper>
-      <StyledScrollArea key={drive} type='hover'>
-        {ontologies.map(subject => (
-          <Item key={subject} subject={subject} />
-        ))}
-      </StyledScrollArea>
+      {ontologies.map(subject => (
+        <Item key={subject} subject={subject} />
+      ))}
     </Wrapper>
   );
 }
@@ -59,13 +56,6 @@ const Wrapper = styled.div`
   width: 100%;
   min-width: 0;
   padding-top: 0;
-  max-height: 10rem;
-  overflow: hidden;
-`;
-
-const StyledScrollArea = styled(ScrollArea)`
-  height: 10rem;
-  overflow-x: hidden;
 `;
 
 interface ItemProps {

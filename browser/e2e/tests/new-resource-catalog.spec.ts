@@ -41,6 +41,27 @@ test('creation catalog searches templates and creates a selected table inside a 
     animations: 'disabled',
   });
   await expect(search).toBeFocused();
+
+  for (const title of ['Plugin', 'Website', 'App']) {
+    await search.fill(title);
+    await expect(
+      page.getByRole('region', { name: 'Start blank' }).getByRole('button', {
+        name: title,
+        exact: true,
+      }),
+    ).toBeVisible();
+  }
+
+  for (const query of ['file', 'upload']) {
+    await search.fill(query);
+    await expect(
+      page.getByRole('button', { name: 'Drop files or click here to upload.' }),
+    ).toBeVisible();
+    await expect(page.getByText(/No matches. Try another search/)).toHaveCount(
+      0,
+    );
+  }
+
   await search.fill('kanban issue');
   await expect(
     page.getByRole('button', { name: 'Use Issue Tracker template' }),
@@ -214,8 +235,7 @@ test('build suggestions hand a half-written request to the composer', async ({
     name: 'What the assistant can build',
   });
 
-  // Apps and websites have no blank button, so this row is the only place the
-  // page says they exist at all.
+  // These suggestions prefill the assistant alongside the blank starters.
   for (const name of ['App', 'Website', 'Dashboard', 'Custom table']) {
     await expect(
       suggestions.getByRole('button', { name, exact: true }),

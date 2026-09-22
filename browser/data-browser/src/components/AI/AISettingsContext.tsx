@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useContext, type JSX } from 'react';
+import { createContext, ReactNode, useContext, useMemo, type JSX } from 'react';
 import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { AIProvider } from './aiContstants';
 import type { AIModelIdentifier, MCPServer } from '@chunks/AI/types';
@@ -7,6 +7,8 @@ import {
   mergeDefaultMCPServers,
 } from '@chunks/AI/defaultMCPServers';
 import { useProviderAvailability } from './useProviderAvailability';
+import { useHostedAI } from './useHostedAI';
+import { enableHostedAI, type HostedAIStatus } from '@helpers/managed/ai';
 
 export const DEFAULT_CHAT_MODEL: AIModelIdentifier = {
   id: '~google/gemini-flash-latest',
@@ -14,6 +16,8 @@ export const DEFAULT_CHAT_MODEL: AIModelIdentifier = {
 };
 
 interface AISettingsContextType {
+  hostedAI?: HostedAIStatus;
+  enableIncludedAI: () => Promise<void>;
   /** Enable all AI features in the app */
   enableAI: boolean;
   setEnableAI: (b: boolean) => void;
@@ -48,6 +52,7 @@ interface ProviderProps {
 }
 
 const initialState: AISettingsContextType = {
+  enableIncludedAI: async () => {},
   enableAI: true,
   setEnableAI: () => undefined,
   mcpServers: defaultMCPServers,
@@ -120,13 +125,13 @@ export const AISettingsContextProvider = (
     string | undefined
   >('atomic.ai.openrouter-api-key', undefined);
 
-  const [defaultChatModel, setDefaultChatModel] =
+  const [storedDefaultChatModel, setDefaultChatModel] =
     useLocalStorage<AIModelIdentifier>(
       'atomic.ai.defaultChatModel',
       DEFAULT_CHAT_MODEL,
     );
 
-  const [genFeaturesModel, setGenFeaturesModel] =
+  const [storedGenFeaturesModel, setGenFeaturesModel] =
     useLocalStorage<AIModelIdentifier>('atomic.ai.genFeaturesModel', {
       id: 'google/gemma-3-4b-it',
       provider: AIProvider.OpenRouter,
@@ -137,18 +142,48 @@ export const AISettingsContextProvider = (
     true,
   );
 
+  const { hostedAI, setHostedAI } = useHostedAI();
+  // SaaS is ready immediately; consent is recorded on the first explicit send,
+  // after the inline disclosure, rather than through a setup wizard.
+  const hostedAvailable = Boolean(hostedAI?.enabled);
+  const hostedModelId = hostedAI?.model;
+  const hostedModel = useMemo<AIModelIdentifier | undefined>(
+    () =>
+      hostedAvailable && hostedModelId
+        ? { id: hostedModelId, provider: AIProvider.Hosted }
+        : undefined,
+    [hostedAvailable, hostedModelId],
+  );
+  const defaultChatModel =
+    hostedAvailable && hostedModel && !openRouterApiKey && !ollamaUrl
+      ? hostedModel
+      : storedDefaultChatModel;
+  const genFeaturesModel =
+    hostedAvailable && hostedModel && !openRouterApiKey && !ollamaUrl
+      ? hostedModel
+      : storedGenFeaturesModel;
+
+  const enableIncludedAI = async () => {
+    const status = await enableHostedAI();
+    setHostedAI(status);
+    setDefaultChatModel({ id: status.model, provider: AIProvider.Hosted });
+    setGenFeaturesModel({ id: status.model, provider: AIProvider.Hosted });
+  };
+
   const {
     openRouterAvailable,
     ollamaAvailable,
     isProviderAvailable,
     availableProviders,
-  } = useProviderAvailability(openRouterApiKey, ollamaUrl);
+  } = useProviderAvailability(openRouterApiKey, ollamaUrl, hostedAvailable);
 
   const mcpServers = mergeDefaultMCPServers(storedMcpServers);
   const setMcpServers = (servers: MCPServer[]) =>
     setStoredMcpServers(mergeDefaultMCPServers(servers));
 
   const context = {
+    hostedAI,
+    enableIncludedAI,
     openRouterApiKey,
     setOpenRouterApiKey,
     mcpServers,

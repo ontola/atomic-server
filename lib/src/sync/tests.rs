@@ -941,16 +941,20 @@ mod peer_sync_tests {
         println!("TEST PASSED: Iroh sync authenticates and syncs private drives");
     }
 
-    /// Full end-to-end test: pkarr discovery + Iroh sync.
-    /// Device A creates a drive with data, publishes its NodeID via pkarr relay.
-    /// Device B discovers Device A via pkarr, connects via Iroh, syncs the drive.
+    /// Device A creates a drive with data and starts Iroh; Device B connects and
+    /// syncs it. `via_pkarr` decides how Device B learns Device A's NodeID:
+    /// through the live pkarr relay, or from the value the test already holds.
+    ///
+    /// The two are split because only the relay path leaves the machine. See
+    /// the two callers below.
     #[cfg(feature = "discovery")]
-    #[tokio::test]
-    async fn pkarr_discovery_and_iroh_sync() {
+    async fn discovery_and_iroh_sync(via_pkarr: bool) {
         use crate::sync::peer;
 
+        let suffix = if via_pkarr { "pkarr" } else { "direct" };
+
         // === Device A: create drive + resource ===
-        let db_a = Db::init_temp("pkarr_sync_a").await.unwrap();
+        let db_a = Db::init_temp(&format!("sync_a_{suffix}")).await.unwrap();
         let (agent, drive_a) = db_a.setup("Alice").await.unwrap();
         let secret = agent.build_secret().unwrap();
 
@@ -973,14 +977,16 @@ mod peer_sync_tests {
         let (node_id_a, _router_a) = peer::start(db_a.clone()).await.unwrap();
         println!("Device A NodeID: {node_id_a}");
 
-        // Publish Device A's NodeID via pkarr relay
-        crate::discovery::publish_node_id(&drive_a, &node_id_a.to_string())
-            .await
-            .expect("pkarr publish should succeed");
-        println!("Device A: published NodeID to pkarr relay");
+        if via_pkarr {
+            // Publish Device A's NodeID via pkarr relay
+            crate::discovery::publish_node_id(&drive_a, &node_id_a.to_string())
+                .await
+                .expect("pkarr publish should succeed");
+            println!("Device A: published NodeID to pkarr relay");
+        }
 
         // === Device B: restore agent, discover, sync ===
-        let db_b = Db::init_temp("pkarr_sync_b").await.unwrap();
+        let db_b = Db::init_temp(&format!("sync_b_{suffix}")).await.unwrap();
         let agent_b = crate::agents::Agent::from_secret(&secret).unwrap();
         db_b.set_default_agent(agent_b.clone());
 
@@ -995,23 +1001,28 @@ mod peer_sync_tests {
         let node_addr_a = _router_a.endpoint().node_addr().await.unwrap();
         ep_b.add_node_addr(node_addr_a).unwrap();
 
-        // Discover Device A's NodeID via pkarr relay
-        // Filter out Device B's own NodeID (in tests, the global ENDPOINT is Device A's)
-        let my_node_id_b = ep_b.node_id().to_string();
-        let discovered_node_id =
-            crate::discovery::resolve_node_id_filtered(&drive_a, Some(my_node_id_b.as_str()))
-                .await
-                .expect("pkarr resolve should find Device A");
-        println!("Device B discovered: {discovered_node_id}");
-        assert_eq!(
-            discovered_node_id,
-            node_id_a.to_string(),
-            "Discovered NodeID should match Device A's"
-        );
+        let node_id_for_sync = if via_pkarr {
+            // Discover Device A's NodeID via pkarr relay
+            // Filter out Device B's own NodeID (in tests, the global ENDPOINT is Device A's)
+            let my_node_id_b = ep_b.node_id().to_string();
+            let discovered_node_id =
+                crate::discovery::resolve_node_id_filtered(&drive_a, Some(my_node_id_b.as_str()))
+                    .await
+                    .expect("pkarr resolve should find Device A");
+            println!("Device B discovered: {discovered_node_id}");
+            assert_eq!(
+                discovered_node_id,
+                node_id_a.to_string(),
+                "Discovered NodeID should match Device A's"
+            );
+            discovered_node_id
+        } else {
+            node_id_a.to_string()
+        };
 
-        // Sync via Iroh using the discovered NodeID
+        // Sync via Iroh using that NodeID
         let count =
-            peer::sync_drive_with_peer_using(&ep_b, &discovered_node_id, &drive_a, &db_b, true)
+            peer::sync_drive_with_peer_using(&ep_b, &node_id_for_sync, &drive_a, &db_b, true)
                 .await
                 .expect("Iroh sync should succeed");
 
@@ -1031,7 +1042,34 @@ mod peer_sync_tests {
             "Synced Doc"
         );
 
-        println!("TEST PASSED: pkarr discovery → Iroh sync works end-to-end");
+        println!("TEST PASSED: Iroh sync works end-to-end (via_pkarr = {via_pkarr})");
+    }
+
+    /// The half of the flow that stays on this machine: Iroh sync against a
+    /// NodeID the caller already has. This is what CI runs.
+    #[cfg(feature = "discovery")]
+    #[tokio::test]
+    async fn iroh_sync_with_known_node_id() {
+        discovery_and_iroh_sync(false).await;
+    }
+
+    /// Full end-to-end test: pkarr discovery + Iroh sync.
+    /// Device A publishes its NodeID to the pkarr relay, Device B resolves it
+    /// back and syncs with it.
+    ///
+    /// Network test — requires outbound HTTPS to the pkarr relay
+    /// (`dns.iroh.link`, see `discovery::RELAY_URL`). Ignored by default; run
+    /// explicitly with `cargo test -- --ignored`, the same way
+    /// `discovery::tests::publish_and_resolve_via_pkarr_relay` is. It was not
+    /// ignored until 2026-09-21, when the relay answered a publish and then
+    /// returned no peers for the same key seconds later, twice, and took
+    /// develop's whole pipeline down with it before the e2e suite ran. A live
+    /// third-party relay is not something to gate a merge on.
+    #[cfg(feature = "discovery")]
+    #[tokio::test]
+    #[ignore]
+    async fn pkarr_discovery_and_iroh_sync() {
+        discovery_and_iroh_sync(true).await;
     }
 
     /// QR pairing flow: two devices each start Iroh, exchange NodeIDs

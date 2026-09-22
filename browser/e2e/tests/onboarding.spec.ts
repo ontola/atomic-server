@@ -14,6 +14,13 @@ test.describe('onboarding', () => {
     page,
     browser,
   }) => {
+    // This test signs up, creates a drive, signs out, verifies the secret and
+    // then repeats the sign-in in a second browser context. Timed step by step
+    // under four-worker load it runs 41.9s, 43.5s and 23.7s, i.e. up to 72% of
+    // the suite's 60s default with nothing wrong. That is the same marginal
+    // shape mt940 had: a test winning a coin toss rather than passing.
+    test.slow();
+
     // Navigate to user settings
     await page.goto(`${FRONTEND_URL}/app/agent`);
 
@@ -38,9 +45,15 @@ test.describe('onboarding', () => {
     // account" since the passkey-first rework: on a self-hosted server there
     // is no passkey-wrapped backup to fall back on, so the secret is still
     // shown here and this remains the step that hands it over.
+    // Behind the drive creation above, which is several signed commits before
+    // this step mounts. Measured under four-worker load at 4.7s, 6.3s and 8.2s
+    // against the 10s it used to carry, so the worst sample was at 82% of its
+    // budget. This is the assertion develop run 4326 failed on, all three
+    // attempts. 30s is what the other write-then-read-back waits in this suite
+    // carry; anything near it is a hang rather than slowness.
     await expect(
       page.getByRole('heading', { name: 'This is your account' }),
-    ).toBeVisible({ timeout: 10000 });
+    ).toBeVisible({ timeout: 30000 });
 
     // Get the secret from the code block BEFORE signing out
     const secret = await page
@@ -104,8 +117,13 @@ test.describe('onboarding', () => {
     );
 
     // The profile name should be loaded into the edit form from the server.
+    // A second browser context navigating to /app/edit and waiting for the
+    // profile resource to arrive from the server: the heaviest step in the
+    // test, on what was its shortest budget. Measured at 0.6s, 2.1s and 3.3s,
+    // and observed failing outright on a loaded box. The assertions either
+    // side of it already carry 10s.
     await expect(page2.getByLabel('Name')).toHaveValue('Test User', {
-      timeout: 5000,
+      timeout: 30000,
     });
 
     await context2.close();

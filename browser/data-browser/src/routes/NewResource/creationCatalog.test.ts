@@ -32,7 +32,7 @@ it('hands off the actual request with the selected parent', () => {
     },
   ]);
 });
-it('suggests the four things the blank list cannot show, each left unfinished', () => {
+it('suggests four assistant-built starters, each left unfinished', () => {
   expect(AI_BUILD_SUGGESTIONS.map(item => item.id)).toEqual([
     'app',
     'website',

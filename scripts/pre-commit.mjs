@@ -2,10 +2,12 @@
 import { execFileSync } from 'node:child_process';
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   rmSync,
   symlinkSync,
+  writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
@@ -104,6 +106,14 @@ try {
   }
 
   if (rust) {
+    // Like CI's Rust checks, Clippy needs an embed input but does not serve it.
+    // Generated frontend assets are absent from the staged source snapshot.
+    const assets = join(snapshot, 'server/assets_tmp');
+    mkdirSync(assets, { recursive: true });
+    writeFileSync(
+      join(assets, 'index.html'),
+      '<html><body>checks stub</body></html>',
+    );
     console.log('pre-commit: checking staged Rust snapshot with Clippy');
     execFileSync(
       'cargo',
@@ -126,6 +136,7 @@ try {
         env: {
           ...env,
           CARGO_TARGET_DIR: resolve(root, env.CARGO_TARGET_DIR || 'target'),
+          ATOMICSERVER_SKIP_JS_BUILD: 'true',
         },
         stdio: 'inherit',
       },

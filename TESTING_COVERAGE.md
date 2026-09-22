@@ -1,3 +1,45 @@
+Plugin configuration: hook tests retain a release's validation schema when a save
+receipt omits computed metadata, and clear it when the release or installation
+changes. The plugin-install E2E checks invalid config after saving valid config.
+
+Editor sync formatting: unit tests cover both enabling and disabling bold before
+an incoming property update, so sync receipts cannot reset the next typed text's
+formatting. The production-bundle typing E2E exercises the keyboard shortcut.
+
+Sidebar layout: browser checks sample both docked sidebar transitions halfway
+through opening/closing and verify that the main content moves with them, with
+matching duration/easing. They also cover hover reveal, mobile backdrop dismissal,
+and keeping the main content aligned while resizing and after reopening.
+Section resizing: hook tests cover touch pointers, drag thresholds, size bounds,
+tap preservation, cancellation, secondary pointers and unmount cleanup. Chromium
+uses native touch gestures on the AI Chats header to shrink/grow the list, checks
+the 44px touch target, saved height after reload, collapse/expand and New Chat.
+
+Creation catalog/context menus: browser checks cover the embedded sidebar filter,
+keyboard filtering, removal of plugin/website/app creation actions from menus,
+discovery of their blank starters on a fresh drive, and file/upload searches.
+Existing app, plugin, and website browser flows create through the catalog,
+including a website seeded from its selected parent document.
+
+Mobile AI chat navigation: Chromium covers opening the left sidebar above chat,
+Back dismissal without leaving the page, the AI settings link, an empty composer
+without vertical overflow, and messages without a redundant sender row. History
+unit tests cover StrictMode, explicit close, and navigation to another page.
+Resource links dismiss mobile chat even for the already-open resource; Chromium
+covers current/different targets, retained conversation and desktop staying open.
+Link unit tests check dismissal waits for navigation; history tests protect
+destinations when navigation inherits the chat marker.
+
+Included AI: managed transport tests cover signed-out status, explicit consent,
+backend errors, streaming credit failure and non-streaming title generation without
+forwarding a provider key or SDK User-Agent header (Firefox/Zen CORS regression).
+Assistant rendering tests retain historical errors and partial replies while
+suppressing the duplicate current error when the composer displays it.
+Setup component tests cover consent failure/retry and
+successful dismissal. atomic-saas owns account isolation, budget concurrency,
+month rollover, paid-drive aggregation, origin/auth checks and disconnected-client
+accounting tests. These tests do not call the live funded OpenRouter service.
+
 AI setup recovery: component tests reproduce dismissed setup reopening on repeated
 requests, prevent login-button mounts from overwriting an in-flight OpenRouter
 verifier, verify the clicked link's PKCE challenge and verifier length, and check
@@ -245,6 +287,10 @@ imports do not wait on local indexing or WebSocket readiness.
 
 `cargo test -p atomic-server --test build_assets` exercises content/settings
 cache separation, corrupted Brotli recovery and concurrent atomic publication.
+`cargo test -p atomic-server --test build_plugin_runtime --features wasm-plugins`
+builds a tiny release workspace using the production runtime build script. It
+checks that nested Cargo completes while the parent holds its release lock and
+that the server embeds a real WASI component, including with a custom target dir.
 The context-menu E2E flow catches title blur stealing focus from the menu;
 Enter retains its explicit handoff into page content.
 
@@ -1768,6 +1814,14 @@ cannot resolve early and needs no second RPC during identity handoff.
 coalesces DOM writes outside ResizeObserver delivery, and cancels pending work
 on unmount. Table filtering E2E retains strict browser diagnostics.
 
+## CI server hostname mapping
+
+`browser/e2e/scripts/server-dns.node.mjs` starts a real HTTP server and a Node
+child with the CI DNS preload. It verifies callback-based fetch and promise-based
+DNS lookup reach the service while preserving the public HTTP Host, and that
+unrelated hosts remain unchanged. The template and plugin integration E2E tests
+use the public server URL for generated configuration and signed requests.
+
 ## Unified templates and create-drive setup
 
 `chunks/Templates/model.test.ts` tests version-pinned composition, duplicate keys,
@@ -1830,6 +1884,8 @@ deep packaged ancestry, bounded app writes, cycles and unavailable ancestors.
 `viewSession.test.ts` checks canonical resource/error replies. The actual packaged
 and generated SDK clients share conformance tests in
 `browser/plugin/src/viewProtocol.test.ts`, including ignoring foreign-window replies.
+The generated client also accepts a reply after the host's 30-second recovery
+window, clears its deadline on completion, and rejects a host that stays silent.
 The packaged adapter additionally tests canonical requests, caller-supplied policy
 spoofing, subscription acknowledgements and unsupported operations.
 
@@ -2266,6 +2322,8 @@ repositories and rejects dependency lockfile drift before builds.
 ## Mobile AI chat (#1591)
 
 `browser/e2e/tests/ai-mobile.spec.ts` checks full-width phone layout and message bodies, long titles keeping the header menu on-screen, the chat resource menu targeting the saved conversation and opening its full-page view, a composer that fits above a simulated keyboard inset, options and token visibility, closing the panel, desktop composer bounds, and model selection with focus returning to the editor. A long-response regression reproduces the final sentence being clipped after keyboard resize, verifies bottom-following and the small gap above the composer, and preserves reading position when scrolled up. AI responses are mocked; a physical mobile keyboard is not exercised.
+
+AI credit display: `helpers/managed/ai.test.ts` verifies usage notification when the SDK cancels a hosted stream; `components/AI/useHostedAI.test.tsx` verifies the immediate refresh and one delayed settlement refresh without ongoing polling. `HostedAICredits.test.tsx` covers fractional monthly and purchased balances. `ai-mobile.spec.ts` verifies the balance stays hidden until AI Chat options opens, refreshes from the account API, and links to the configured portal. These use mocked account/provider responses and do not verify live billing.
 
 Recovery read fan-out: `recovery-fetch.test.ts` verifies concurrent reads share
 one in-flight request per API/account, settled responses are not cached, failures
