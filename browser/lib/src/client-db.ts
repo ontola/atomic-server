@@ -138,6 +138,7 @@ export interface ClientDbOptions {
 type PendingRequest = {
   resolve: (value: unknown) => void;
   reject: (reason: Error) => void;
+  onLeaderChanged?: () => void;
 };
 
 /** Legacy shared database file name, used when no `dbName` is given. */
@@ -193,7 +194,7 @@ const STEAL_SETTLE_WAIT_MS = 15_000;
 
 type BroadcastMessage =
   | { type: 'leader-ping' }
-  | { type: 'leader-announce' }
+  | { type: 'leader-announce'; tabId?: string }
   | {
       type: 'rpc-req';
       fromTab: string;
@@ -224,6 +225,7 @@ export class ClientDbWorker {
     : Math.random().toString(36).slice(2);
   private nextId = 1;
   private pending = new Map<string, PendingRequest>();
+  private observedLeader: string | undefined;
   private workerUrl: string;
   private wasmUrl: string;
   private opts: ClientDbOptions;
@@ -543,9 +545,20 @@ export class ClientDbWorker {
     this._initError = undefined;
     this.ready = true;
     this.onBecameLeader();
+    this.observedLeader = this.tabId;
     this.bc?.postMessage({
       type: 'leader-announce',
+      tabId: this.tabId,
     } satisfies BroadcastMessage);
+    this.resumeAfterLeaderChange();
+  }
+
+  private resumeAfterLeaderChange(): void {
+    // Snapshot first: retrying adds new pending entries, which must not be
+    // visited again during this same handoff.
+    for (const pending of [...this.pending.values()]) {
+      pending.onLeaderChanged?.();
+    }
   }
 
   private handleBroadcast(msg: BroadcastMessage): void {
@@ -554,6 +567,7 @@ export class ClientDbWorker {
         if (this.role === 'leader') {
           this.bc?.postMessage({
             type: 'leader-announce',
+            tabId: this.tabId,
           } satisfies BroadcastMessage);
         }
 
@@ -572,6 +586,13 @@ export class ClientDbWorker {
 
           this.role = 'follower';
           this.onObservedLeader();
+
+          // Older deployed tabs do not include a tab id. Remain compatible,
+          // but only replay after a positively identified replacement.
+          if (msg.tabId && msg.tabId !== this.observedLeader) {
+            this.observedLeader = msg.tabId;
+            this.resumeAfterLeaderChange();
+          }
         }
 
         break;
@@ -1134,7 +1155,10 @@ export class ClientDbWorker {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private sendToLeader(msg: Record<string, any>): Promise<unknown> {
+  private sendToLeader(
+    msg: Record<string, any>,
+    retries = 1,
+  ): Promise<unknown> {
     if (!this.bc) {
       return Promise.reject(
         new Error('ClientDb BroadcastChannel not initialized'),
@@ -1147,8 +1171,8 @@ export class ClientDbWorker {
       // If the leader tab dies between sending the request and the
       // response coming back, the BroadcastChannel doesn't surface a
       // "peer closed" event — the pending entry sits forever.
-      // Time out after 30 s. The caller can retry; by then a new
-      // leader will usually have been elected via navigator.locks.
+      // Handoffs settle these entries through onLeaderChanged below. Keep a
+      // deadline as well for a leader that stays alive but stops answering.
       const timer = setTimeout(() => {
         if (this.pending.has(id)) {
           this.pending.delete(id);
@@ -1161,6 +1185,32 @@ export class ClientDbWorker {
       }, 30_000);
 
       this.pending.set(id, {
+        onLeaderChanged: () => {
+          this.pending.delete(id);
+          clearTimeout(timer);
+          // File hashing/reading is pure, and putBlob writes the same bytes
+          // under their content hash. A lost acknowledgement is safe to retry.
+          // Arbitrary mutations and worker-local peer sessions are not.
+          const repeatable = ['blake3Hash', 'getBlob', 'putBlob'].includes(
+            msg.type,
+          );
+
+          if (!repeatable || retries === 0) {
+            reject(
+              new Error(
+                `ClientDb leader changed during ${msg.type}; please retry the operation.`,
+              ),
+            );
+
+            return;
+          }
+
+          const retry =
+            this.role === 'leader'
+              ? this.sendToWorker(msg)
+              : this.sendToLeader(msg, retries - 1);
+          retry.then(resolve, reject);
+        },
         resolve: (data: unknown) => {
           clearTimeout(timer);
           resolve(data);
