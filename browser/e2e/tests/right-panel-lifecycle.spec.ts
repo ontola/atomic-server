@@ -6,11 +6,15 @@ async function expectLeftSidebarClosed(page: Page) {
 
   await expect
     .poll(async () =>
-      sidebar.evaluate(element => element.parentElement!.getBoundingClientRect().width),
+      sidebar.evaluate(
+        element => element.parentElement!.getBoundingClientRect().width,
+      ),
     )
     .toBe(0);
   await expect
-    .poll(() => sidebar.evaluate(element => Number(getComputedStyle(element).opacity)))
+    .poll(() =>
+      sidebar.evaluate(element => Number(getComputedStyle(element).opacity)),
+    )
     .toBe(0);
 }
 
@@ -26,7 +30,9 @@ for (const [name, trigger, panel] of [
     const sidebar = page.getByTestId('sidebar');
     await expect
       .poll(() =>
-        sidebar.evaluate(element => element.parentElement!.getBoundingClientRect().width),
+        sidebar.evaluate(
+          element => element.parentElement!.getBoundingClientRect().width,
+        ),
       )
       .toBeGreaterThan(0);
     await page.mouse.move(700, 400);
@@ -35,7 +41,9 @@ for (const [name, trigger, panel] of [
     await expectLeftSidebarClosed(page);
     await page.mouse.move(2, 400);
     await expect
-      .poll(() => sidebar.evaluate(element => Number(getComputedStyle(element).opacity)))
+      .poll(() =>
+        sidebar.evaluate(element => Number(getComputedStyle(element).opacity)),
+      )
       .toBe(0);
   });
 }
@@ -49,7 +57,9 @@ test('opening meeting chat closes the left sidebar at tablet width', async ({
     .poll(() =>
       page
         .getByTestId('sidebar')
-        .evaluate(element => element.parentElement!.getBoundingClientRect().width),
+        .evaluate(
+          element => element.parentElement!.getBoundingClientRect().width,
+        ),
     )
     .toBeGreaterThan(0);
   await page.getByRole('button', { name: 'New Meeting' }).first().click();

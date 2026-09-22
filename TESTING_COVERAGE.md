@@ -1071,7 +1071,10 @@ mounts without resetting or re-registering the global parser.
   fallback agent lookups neither invent creation timestamps nor generate new
   CRDT history or persist a resource merely by reading it.
 - `client-db.test.ts` verifies that cold worker initialization does not steal
-  its own Web Lock or emit a false ghost-leader warning.
+  its own Web Lock or emit a false ghost-leader warning. It also covers safe
+  follower calls and unacknowledged writes during lock handoff, plus a failed
+  replacement worker. `client-db-locks.spec.ts` exercises the pending-call
+  handoff with real tabs in Chromium and Firefox.
 - `store.private-drive.test.ts` verifies that linking a private drive on a
   nodeless origin preserves the local profile without fetching it from the SPA.
 

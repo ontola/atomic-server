@@ -19,6 +19,7 @@ import { planTemplate, type TemplateDefinition } from './model';
 import { instantiateTemplate, startTemplateDemo } from './instantiate';
 import { readTemplateDemo, TEMPLATE_DEMO_KEY } from './demoSession';
 import { keepTemplateDemo } from './keepTemplateDemo';
+import { prepareTemplateDrive } from './prepareTemplateDrive';
 const TemplateChat = lazy(() => import('./TemplateChat'));
 
 export function DriveTemplateSetup({
@@ -101,6 +102,8 @@ export function DriveTemplateSetup({
   async function create() {
     if (!name.trim() || partial) return;
     await run(async () => {
+      await prepareTemplateDrive(store);
+
       if (keepEdits && matchingDemo) {
         const resource = await keepTemplateDemo(
           store,

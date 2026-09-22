@@ -20,10 +20,16 @@ import {
   SideBarMenuRowIcon,
   SideBarMenuRowLabel,
 } from './SideBarMenuItem';
-import { submitFeedback } from '../../helpers/feedback';
+import { errorFeedbackMessage, submitFeedback } from '../../helpers/feedback';
 
-export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
-  const feedbackTitle = 'Send feedback';
+export function FeedbackMenuItem({
+  floating = false,
+  reportError,
+}: {
+  floating?: boolean;
+  reportError?: Error;
+}) {
+  const feedbackTitle = reportError ? 'Report this error' : 'Send feedback';
   const messageId = useId();
   const emailId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -42,7 +48,7 @@ export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
     setFailed(false);
 
     try {
-      await submitFeedback(message, email);
+      await submitFeedback(message, email, reportError ? 'error' : 'sidebar');
       setSent(true);
       setMessage('');
     } catch {
@@ -52,29 +58,25 @@ export function FeedbackMenuItem({ floating = false }: { floating?: boolean }) {
     }
   }
 
+  function open() {
+    setSent(false);
+    if (reportError) setMessage(errorFeedbackMessage(reportError));
+    showDialog();
+  }
+
   return (
     <>
       {floating ? (
-        <Button
-          subtle
-          ref={triggerRef}
-          onClick={() => {
-            setSent(false);
-            showDialog();
-          }}
-        >
+        <Button subtle ref={triggerRef} onClick={open}>
           <FaComment aria-hidden />
-          Feedback
+          {reportError ? 'Report this error' : 'Feedback'}
         </Button>
       ) : (
         <SideBarMenuRow
           as='button'
           ref={triggerRef}
           type='button'
-          onClick={() => {
-            setSent(false);
-            showDialog();
-          }}
+          onClick={open}
           style={{
             border: 0,
             font: 'inherit',

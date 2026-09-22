@@ -150,6 +150,26 @@ const DEFAULT_DB_NAME = 'atomic_data.redb';
 const LEADER_LOCK_PREFIX = 'atomic-db-leader';
 const RPC_CHANNEL_PREFIX = 'atomic-db-rpc';
 
+/** Operations whose result remains valid when repeated by a new DB owner. */
+const REPEATABLE_RPC_TYPES = new Set([
+  'blake3Hash',
+  'getBlob',
+  'putBlob', // Content-addressed write of the same bytes.
+  'getResource',
+  'getResourceWithSnapshot',
+  'getResourcesWithSnapshots',
+  'query',
+  'search',
+  'allSubjects',
+  'flush',
+  'exportAllResources',
+  'getLoroSnapshot',
+  'historyAttribution',
+  'envelopesFor',
+  'getAllVersionVectors',
+  'getVersionVectorsForDrive',
+]);
+
 /**
  * `'failed'` means leader election timed out: the lock is held by a stale tab
  * that isn't answering `leader-ping`, so we have no leader and aren't the
@@ -460,6 +480,20 @@ export class ClientDbWorker {
           await this.becomeLeader(baseUrl);
         } catch (e) {
           this._initError = asInitError(e);
+          this.worker?.terminate();
+          this.worker = null;
+
+          if (!this.destroyed) {
+            this.role = 'failed';
+            this.ready = false;
+          }
+
+          for (const [id, pending] of this.pending) {
+            if (!pending.onLeaderChanged) continue;
+            this.pending.delete(id);
+            pending.reject(this._initError);
+          }
+
           // Release the lock so another tab can try.
           throw e;
         }
@@ -1154,9 +1188,8 @@ export class ClientDbWorker {
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private sendToLeader(
-    msg: Record<string, any>,
+    msg: Record<string, unknown>,
     retries = 1,
   ): Promise<unknown> {
     if (!this.bc) {
@@ -1188,16 +1221,14 @@ export class ClientDbWorker {
         onLeaderChanged: () => {
           this.pending.delete(id);
           clearTimeout(timer);
-          // File hashing/reading is pure, and putBlob writes the same bytes
-          // under their content hash. A lost acknowledgement is safe to retry.
-          // Arbitrary mutations and worker-local peer sessions are not.
-          const repeatable = ['blake3Hash', 'getBlob', 'putBlob'].includes(
-            msg.type,
-          );
+          // Reads, flush, and content-addressed blob writes are safe to
+          // repeat. A general write may have committed before its reply was
+          // lost, and worker-local peer sessions cannot move across tabs.
+          const repeatable = REPEATABLE_RPC_TYPES.has(msg.type);
 
           if (!repeatable || retries === 0) {
             reject(
-              new Error(
+              new RequestCancelledError(
                 `ClientDb leader changed during ${msg.type}; please retry the operation.`,
               ),
             );
