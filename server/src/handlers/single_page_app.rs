@@ -26,10 +26,33 @@ pub async fn single_page(
         MetaTags::default()
     };
 
+    // A vanity host is itself the entry point for the Drive bound to it. The
+    // JSON endpoint already resolves `/` through the host -> Drive mapping,
+    // but the SPA needs the same answer synchronously on its first render.
+    // Without it, a fresh origin has no Agent yet and the generic root route
+    // sends the visitor to the managed portal before it ever requests `/`.
+    let mapped_home_drive = match url::Url::parse(&origin)
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_owned))
+    {
+        Some(host) => appstate
+            .store
+            .get_drive_did(&host)
+            .await?
+            .map(|drive| drive.to_string()),
+        None => None,
+    };
+    let home_drive = appstate
+        .config
+        .opts
+        .home_drive
+        .as_deref()
+        .or(mapped_home_drive.as_deref());
+
     let script = format!(
         "<script nonce=\"{}\">{}{}{}</script>",
         csp_nonce,
-        home_drive_script(appstate.config.opts.home_drive.as_deref(), &origin),
+        home_drive_script(home_drive, &origin),
         sentry_script(appstate.config.opts.sentry_dsn_browser.as_deref()),
         appstate.config.opts.script
     );

@@ -3,41 +3,54 @@
 //!
 //! Shared by Iroh live sync (`peer.rs`) and native WS sync sessions.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::future::Future;
 
 use crate::{db::Db, errors::AtomicResult, Storelike};
 
-static IMPORTING: AtomicBool = AtomicBool::new(false);
-
-/// True while applying remote data (suppresses live-sync echo).
-pub fn is_importing() -> bool {
-    IMPORTING.load(Ordering::Relaxed)
+/// What an import in progress knows about where its data came from.
+#[derive(Clone, Debug, Default)]
+struct ImportScope {
+    /// The peer the data arrived from, when the transport can name one.
+    source: Option<String>,
 }
 
-pub(crate) fn set_importing(v: bool) {
-    IMPORTING.store(v, Ordering::Relaxed);
+tokio::task_local! {
+    /// The import the current task is applying, if any.
+    ///
+    /// A task-local rather than a process-wide flag (security audit C16):
+    /// every peer connection runs its own read loop, and with one global
+    /// `AtomicBool` the first connection to finish cleared the flag while a
+    /// second was still mid-import, and one connection's peer id was stamped
+    /// on writes made for another. The scope now travels with the task that
+    /// does the import, so concurrent connections cannot observe each other.
+    static IMPORT_SCOPE: ImportScope;
 }
 
-/// The peer an import is currently being applied from, if any.
+/// Run `f` as an import from `source` (the peer id, when the transport knows
+/// one). Inside it, [`is_importing`] is true and [`current_import_source`]
+/// returns `source`, for this task only.
 ///
-/// Read synchronously by the write that emits `DbEvent::Changed`, so the event
-/// carries the peer it came from. That is what makes echo suppression
-/// deterministic: the alternative — a bool the live push loop checks when it
-/// eventually processes the event — cannot work, because the push loop is a
-/// separate task consuming a broadcast channel and may not be scheduled until
-/// after the flag is cleared. Two idle nodes then trade the same snapshot
-/// forever (see `peer.rs`'s live read loop).
-static IMPORT_SOURCE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
-
-pub(crate) fn set_import_source(source: Option<String>) {
-    if let Ok(mut guard) = IMPORT_SOURCE.lock() {
-        *guard = source;
-    }
+/// The write that emits `DbEvent::Changed` reads the source synchronously,
+/// while the import is still on the stack, so the event carries the peer it
+/// came from. That is what makes echo suppression deterministic: a flag the
+/// live push loop checks when it eventually processes the event cannot work,
+/// because the push loop is a separate task consuming a broadcast channel and
+/// may not be scheduled until after the import has finished. Two idle nodes
+/// then trade the same snapshot forever (see `peer.rs`'s live read loop).
+pub async fn import_scope<F: Future>(source: Option<String>, f: F) -> F::Output {
+    IMPORT_SCOPE.scope(ImportScope { source }, f).await
 }
 
-/// The peer id to attribute a write to, for echo suppression.
+/// True while the current task is applying remote data (see [`import_scope`]).
+pub fn is_importing() -> bool {
+    IMPORT_SCOPE.try_with(|_| ()).is_ok()
+}
+
+/// The peer id to attribute a write made by the current task to, for echo
+/// suppression. `None` outside an import, or inside one from a transport
+/// that names no peer.
 pub fn current_import_source() -> Option<String> {
-    IMPORT_SOURCE.lock().ok().and_then(|g| g.clone())
+    IMPORT_SCOPE.try_with(|s| s.source.clone()).ok().flatten()
 }
 
 /// Import a remote UPDATE frame into the local store. Trusted callers only —
@@ -46,16 +59,13 @@ pub fn current_import_source() -> Option<String> {
 /// established (i.e. Iroh's live loop) must use [`resolve_update`] +
 /// [`persist_update`] instead, so a check can run before anything is written.
 pub async fn apply_state_update(store: &Db, subject: &str, state_bytes: &[u8]) -> AtomicResult<()> {
-    set_importing(true);
-    let result = async {
+    import_scope(None, async {
         if let Some(resolved) = resolve_update(store, subject, state_bytes).await {
             persist_update(store, subject, resolved).await?;
         }
         Ok(())
-    }
-    .await;
-    set_importing(false);
-    result
+    })
+    .await
 }
 
 /// A merged-in-memory UPDATE, not yet persisted. Lets the caller resolve the
@@ -227,10 +237,7 @@ pub async fn apply_destroy(store: &Db, subject: &str) -> AtomicResult<()> {
         return Ok(());
     }
 
-    set_importing(true);
-    let result = apply_destroy_unchecked(store, subject).await;
-    set_importing(false);
-    result
+    import_scope(None, apply_destroy_unchecked(store, subject)).await
 }
 
 async fn apply_destroy_unchecked(store: &Db, subject: &str) -> AtomicResult<()> {
@@ -467,5 +474,106 @@ mod destroy_phantom_tombstone_tests {
         apply_destroy(&db, subject).await.unwrap();
 
         assert!(tombstones::is_tombstoned(&db, subject));
+    }
+}
+
+#[cfg(test)]
+mod import_scope_tests {
+    use super::*;
+    use crate::loro::AtomicLoroDoc;
+    use crate::values::Value;
+
+    /// Security audit C16: the import flag and the import source were
+    /// process-global, so two peer connections importing at the same time
+    /// observed each other: the first to finish cleared the flag for the
+    /// second, and a write made for peer A could be stamped with peer B's id.
+    /// The scope is per task now; two imports that interleave at every await
+    /// each see only their own source, and the task outside sees none.
+    #[tokio::test]
+    async fn concurrent_imports_do_not_observe_each_other() {
+        async fn import_from(peer: &str) -> Vec<Option<String>> {
+            import_scope(Some(peer.to_string()), async move {
+                let mut seen = Vec::new();
+                for _ in 0..8 {
+                    // Hand control to the other import between reads, so the
+                    // reads below are taken while the other task is mid-import.
+                    tokio::task::yield_now().await;
+                    assert!(is_importing(), "inside the scope of {peer}");
+                    seen.push(current_import_source());
+                }
+                seen
+            })
+            .await
+        }
+
+        assert!(!is_importing(), "no import is running in this task");
+        assert_eq!(current_import_source(), None);
+
+        let a = tokio::spawn(import_from("peer-a"));
+        let b = tokio::spawn(import_from("peer-b"));
+        let (a, b) = (a.await.unwrap(), b.await.unwrap());
+
+        assert!(a.iter().all(|s| s.as_deref() == Some("peer-a")), "{a:?}");
+        assert!(b.iter().all(|s| s.as_deref() == Some("peer-b")), "{b:?}");
+        assert!(
+            !is_importing(),
+            "finishing an import leaves this task alone"
+        );
+        assert_eq!(current_import_source(), None);
+    }
+
+    /// The scope reaches the write: two interleaved imports of two subjects
+    /// each emit a `DbEvent::Changed` attributed to their own peer, which is
+    /// what the live push loop uses to skip exactly the peer an update came
+    /// from.
+    #[tokio::test]
+    async fn concurrent_imports_stamp_their_own_source_on_the_event() {
+        let db = Db::init_temp("import_scope_two_peers").await.unwrap();
+        let (_alice, drive) = db.setup("Alice").await.unwrap();
+        let mut events = db.subscribe_events();
+
+        let mut imports = Vec::new();
+        for (peer, subject) in [
+            ("peer-a", "did:ad:import-scope-a"),
+            ("peer-b", "did:ad:import-scope-b"),
+        ] {
+            let doc = AtomicLoroDoc::new();
+            doc.set_property(crate::urls::PARENT, &Value::AtomicUrl(drive.clone().into()))
+                .unwrap();
+            doc.set_property(crate::urls::NAME, &Value::String(format!("from {peer}")))
+                .unwrap();
+            let bytes = doc.export_snapshot();
+            let db = db.clone();
+            imports.push(tokio::spawn(import_scope(
+                Some(peer.to_string()),
+                async move {
+                    tokio::task::yield_now().await;
+                    let resolved = resolve_update(&db, subject, &bytes).await.unwrap();
+                    tokio::task::yield_now().await;
+                    persist_update(&db, subject, resolved).await.unwrap();
+                },
+            )));
+        }
+        for import in imports {
+            import.await.unwrap();
+        }
+
+        let mut attributed = std::collections::HashMap::new();
+        while let Ok(event) = events.try_recv() {
+            if let crate::DbEvent::Changed {
+                subject, source_id, ..
+            } = event
+            {
+                attributed.insert(subject.pure_id(), source_id);
+            }
+        }
+        assert_eq!(
+            attributed.get("did:ad:import-scope-a"),
+            Some(&Some("peer-a".to_string()))
+        );
+        assert_eq!(
+            attributed.get("did:ad:import-scope-b"),
+            Some(&Some("peer-b".to_string()))
+        );
     }
 }

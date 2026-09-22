@@ -143,6 +143,17 @@ it('rejects non-origin proxy URLs', () => {
   expect(() => proxyOrigin('https://proxy.example/path')).toThrow();
   expect(() => proxyOrigin('http://proxy.example')).toThrow();
 });
+it('accepts plain http on any loopback name', () => {
+  // The value CI bakes into the e2e bundle. Rejecting it threw during render,
+  // which took the whole settings page down rather than one integration.
+  expect(proxyOrigin('http://atomic.localhost:19090')).toBe(
+    'http://atomic.localhost:19090',
+  );
+  expect(proxyOrigin('http://localhost:9883')).toBe('http://localhost:9883');
+  expect(proxyOrigin('http://127.0.0.1:19090')).toBe('http://127.0.0.1:19090');
+  expect(() => proxyOrigin('http://notlocalhost')).toThrow();
+  expect(() => proxyOrigin('http://localhost.evil.example')).toThrow();
+});
 it('starts a platform-bound PKCE redirect without a tenant session', async () => {
   const { start, values, http } = setup();
   const { state, url } = await start();

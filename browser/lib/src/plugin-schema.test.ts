@@ -220,4 +220,35 @@ describe('ensureSchema', () => {
       terms.properties['field-3'],
     ]);
   });
+
+  it('keeps the ontology in spec order when only some terms are new', async () => {
+    // The created terms are awaited together, so their order is whatever the
+    // server answers first. What an ontology lists is read by people, so it
+    // follows the spec regardless.
+    const spec: SchemaSpec = {
+      properties: ['alpha', 'beta', 'gamma'].map(shortname => ({
+        shortname,
+        name: shortname,
+        description: shortname,
+        datatype: Datatype.STRING,
+      })),
+      classes: [],
+    };
+
+    const store = makeStore();
+    await ensureSchema(store, DRIVE, {
+      properties: [spec.properties[1]],
+      classes: [],
+    });
+    const beta = store.world[ONTOLOGY].props[core.properties.properties];
+    expect(beta).toHaveLength(1);
+
+    await ensureSchema(store, DRIVE, spec);
+    const listed = store.world[ONTOLOGY].props[
+      core.properties.properties
+    ] as string[];
+    const shortnameOf = (subject: string) =>
+      store.world[subject].props[core.properties.shortname];
+    expect(listed.map(shortnameOf)).toEqual(['beta', 'alpha', 'gamma']);
+  });
 });

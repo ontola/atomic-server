@@ -30,7 +30,11 @@ export function SideBarHomePanels({
   return (
     <>
       {favorites.length > 0 && (
-        <SideBarPanel title='Favorites' data-testid='favorites'>
+        <SideBarPanel
+          title='Favorites'
+          heightStorageKey='favoritesPanelHeight'
+          data-testid='favorites'
+        >
           {favorites.map((subject: string) => (
             <SharedWithMeLink
               key={subject}
@@ -42,7 +46,11 @@ export function SideBarHomePanels({
         </SideBarPanel>
       )}
       {sharedWithMe.length > 0 && (
-        <SideBarPanel title='Shared with me' data-testid='shared-with-me'>
+        <SideBarPanel
+          title='Shared with me'
+          heightStorageKey='sharedWithMePanelHeight'
+          data-testid='shared-with-me'
+        >
           {sharedWithMe.map((subject: string) => (
             <SharedWithMeLink
               key={subject}

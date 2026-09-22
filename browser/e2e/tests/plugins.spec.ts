@@ -1,8 +1,15 @@
 import { enableIntegrationDiscovery } from './integration-settings-utils';
 import { test, expect } from '@playwright/test';
-import { before, getDevDriveSecret, SERVER_URL } from './test-utils';
+import {
+  before,
+  createFromCatalog,
+  createTableFromDialog,
+  getDevDriveSecret,
+  SERVER_URL,
+} from './test-utils';
 import {
   Agent,
+  dataBrowser,
   getPluginSync,
   pluginSyncSchedule,
   signRequest,
@@ -27,19 +34,31 @@ test.describe('plugins', () => {
       !process.env.ATOMIC_MOCK_INTEGRATION_PROXY,
       'Run with the documented mock integration-proxy server configuration',
     );
-
-    // CI's browser and server are in different containers. Forward the mock's
-    // loopback address to the server container before catalog loading starts.
-    if (process.env.ATOMIC_SERVICE_URL)
-      await page.route('http://127.0.0.1:19090/**', async route => {
-        const target = new URL(route.request().url());
-        target.hostname = new URL(process.env.ATOMIC_SERVICE_URL!).hostname;
-        const response = await route.fetch({
-          url: target.href,
-          maxRedirects: 0,
-        });
-        await route.fulfill({ response });
-      });
+    // Failed all three attempts on develop run 4326, reported as the 60s test
+    // timeout and naming the `Last synced` wait below. That name is an
+    // artefact: the wall prints whichever assertion was in flight, and the
+    // longest ceiling in a test is the most likely one to be holding it. The
+    // step is not slow. Timed under four-worker load, three copies:
+    //
+    //   step                            budget   run A    run B    run C
+    //   integrations link through connect    -    5.7s     5.9s     4.9s
+    //   complete install, open folder        -    4.5s     5.1s     5.6s
+    //   `Last synced`                      60s    8.2s     7.1s     7.2s
+    //   open the Pets table            default    0.9s     0.6s     0.5s
+    //   rows and datatypes             default    2.5s     1.7s     0.5s
+    //   ------------------------------------- sum 21.9s   20.5s    18.8s
+    //   whole test                         60s   43.6s    38.6s    36.6s
+    //
+    // `Last synced` never passes 8.2s, and 18 to 22 seconds of each run are
+    // spent in `beforeEach` before the first step here begins. So the test is
+    // marginal as a whole, at 73% of its wall on the worst sample, and the
+    // wall lands wherever it happens to land.
+    //
+    // 120s for the test, matching the rest of this file. And `Last synced`
+    // comes DOWN to 30s: a ceiling equal to the wall can never fire, so it
+    // could only ever be reported as a wall casualty. At 30s against an 8.2s
+    // worst sample it can finally fail on its own terms and name itself.
+    test.setTimeout(120_000);
     await page.getByRole('link', { name: 'Integrations', exact: true }).click();
     const pets = page.locator('[data-integration="proxy:pets"]');
     await expect(
@@ -69,7 +88,7 @@ test.describe('plugins', () => {
     await page.getByRole('link', { name: 'Open folder', exact: true }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Last synced' }),
-    ).toBeVisible({ timeout: 60000 });
+    ).toBeVisible({ timeout: 30000 });
     await page
       .locator('[data-test="folder-list"]')
       .getByRole('link', { name: 'Pets', exact: true })
@@ -142,11 +161,14 @@ export function run() { return { intents: [] }; }
       })
       .filter({ hasText: id });
     await expect(card.getByText('Unverified', { exact: true })).toBeVisible();
-    await page.screenshot({
-      path: '/tmp/atomic-integration-store.png',
-      fullPage: true,
-    });
-    await card.getByRole('button', { name: 'Create draft' }).click();
+    // Nothing happens to a published release before it has been reviewed, so
+    // the card opens the installation review and the draft is one of the
+    // choices there, beside installing it.
+    await card.getByRole('button', { name: 'Open', exact: true }).click();
+    await page
+      .locator('dialog[open]')
+      .getByRole('button', { name: 'Create draft', exact: true })
+      .click();
     await expect(
       page
         .getByRole('main')
@@ -165,6 +187,31 @@ export function run() { return { intents: [] }; }
   test('Notion discovers databases through the proxy and reports revoked access without server OAuth', async ({
     page,
   }) => {
+    // Two 45s waits below on the suite's 60s default, so neither could ever
+    // fire: the wall always reported first and named itself instead of the
+    // step. The test next door already says why, in its own words, and every
+    // other test in this file carrying a 45s wait raises its budget. This was
+    // the one that did not.
+    //
+    // Timed step by step under four-worker load, three copies:
+    //
+    //   step                       budget   run A    run B    run C
+    //   setup through the alert         -    5.0s     4.2s     1.9s
+    //   approve-enabled               45s   29.9s    33.4s     8.3s
+    //   proxy-task visible       default     49ms     32ms      6ms
+    //   sync-complete                 45s     4.3s    (wall)    1.0s
+    //   whole test                    60s  (wall)   (wall)    34.0s
+    //
+    // The assertion budgets are not the problem: the worst `approve-enabled`
+    // sample is 33.4s of its 45s. Run B is the one that settles it, reaching
+    // the sync with 33s already spent and dying mid-step with its budget
+    // untouched. Only the wall was ever failing this test.
+    //
+    // 45s stays on both waits deliberately. At a 120s wall it can fire for the
+    // first time, so a future failure names the step that was slow rather than
+    // reporting the wall; 33.4s against 45s keeps eleven seconds of headroom on
+    // a box harsher than the shard.
+    test.setTimeout(120_000);
     const actor = Agent.fromSecret(await getDevDriveSecret(page), 'js').subject;
     const drive = new URL(page.url()).searchParams.get('subject')!;
     const origin = 'https://notion-proxy.test';
@@ -393,10 +440,403 @@ export function run() { return { intents: [] }; }
     expect(forbidden).toEqual([]);
   });
 
+  test('Clockify discovers named workspaces and surfaces preview transport errors', async ({
+    page,
+  }) => {
+    // Discovery and the failed preview each have a 45s assertion budget,
+    // in addition to installing the connector and filling its setup form.
+    test.setTimeout(120_000);
+    await page.route('**/plugin-run', route => {
+      const body = route.request().postDataJSON();
+      if (JSON.parse(body.input).phase !== 'discover')
+        return route.abort('failed');
+
+      return route.fulfill({
+        json: {
+          error: null,
+          verdict: JSON.stringify({
+            intents: [],
+            problems: [],
+            discovery: {
+              user: { id: 'bbbbbbbbbbbbbbbbbbbbbbbb', name: 'Test Person' },
+              workspaces: [
+                { id: 'aaaaaaaaaaaaaaaaaaaaaaaa', name: 'Test workspace' },
+              ],
+            },
+          }),
+        },
+      });
+    });
+    await page.getByRole('link', { name: 'Integrations', exact: true }).click();
+    await page
+      .locator('[data-integration=clockify]')
+      .getByRole('button', { name: 'Set up connection' })
+      .click();
+    await page.getByRole('button', { name: 'Find my workspaces' }).click();
+    await expect(page.getByRole('alert')).toContainText(
+      'Enter your Clockify API key',
+    );
+    await page
+      .getByLabel('Clockify API key', { exact: true })
+      .fill('synthetic-clockify-key');
+    await page.getByRole('button', { name: 'Find my workspaces' }).click();
+    // Discovery is a plugin run: the browser posts to the server, the server
+    // starts a sandbox and the plugin's `discover` phase answers out of it.
+    // That is a real round trip through a real sandbox, and on a loaded box it
+    // does not fit the suite's 10s action budget — measured here, this spec
+    // passes in 27s run on its own and times out on exactly this assertion
+    // when the suite runs it beside another. Same shape as the wait `newApp`
+    // documents in apps.spec.ts: the budget was never achievable, and the
+    // assertion is about the workspace list, not about how fast it arrives.
+    await expect(page.getByLabel('Workspace', { exact: true })).toContainText(
+      'Test workspace',
+      { timeout: 45000 },
+    );
+    await expect(page.getByLabel('Import my completed entries')).toHaveValue(
+      '7',
+    );
+    await page
+      .getByRole('button', { name: 'Preview import', exact: true })
+      .click();
+    // The aborted run has to reach the server and come back before the page
+    // can say so; same load story as the discovery above it.
+    await expect(page.getByText(/Could not run this plugin/)).toBeVisible({
+      timeout: 45000,
+    });
+    await expect(
+      page.getByRole('button', { name: 'Preview import', exact: true }),
+    ).toBeEnabled();
+  });
+
+  test('Clockify applies linked entries through the real sandbox and skips repeats', async ({
+    page,
+  }) => {
+    // Discovery plus an apply, both through the sandbox: a minute here, which
+    // is the suite's whole per-test default.
+    test.setTimeout(120_000);
+    // Replace only the provider transport inside the sandbox. Discovery, mapping,
+    // runtime, planning, signed commits and the second run's DB query stay real.
+    await createTableFromDialog(page, {
+      template: /Time tracker/i,
+      name: 'Shared time entries',
+    });
+    const tableUrl = page.url();
+    const tableSubject = new URL(tableUrl).searchParams.get('subject')!;
+    const originalViews = await page.evaluate(
+      async ({ subject, property }) =>
+        (await window.store!.getResource(subject)).get(property),
+      { subject: tableSubject, property: dataBrowser.properties.tableViews },
+    );
+    const startProperty = await page.evaluate(async subject => {
+      const table = await window.store!.getResource(subject);
+      const row = await window.store!.getResource(
+        table.get('https://atomicdata.dev/properties/classtype') as string,
+      );
+
+      for (const field of row.get(
+        'https://atomicdata.dev/properties/recommends',
+      ) as string[]) {
+        const property = await window.store!.getResource(field);
+
+        if (
+          property.get('https://atomicdata.dev/properties/shortname') ===
+          'work-start'
+        ) {
+          await property.set(
+            'https://atomicdata.dev/properties/name',
+            'Started working',
+          );
+          await property.save();
+
+          return field;
+        }
+      }
+
+      throw new Error('Time Tracker start property missing');
+    }, tableSubject);
+    const now = Date.now();
+    const fixture = {
+      user: { id: 'bbbbbbbbbbbbbbbbbbbbbbbb', name: 'Fixture Person' },
+      workspaces: [
+        { id: 'aaaaaaaaaaaaaaaaaaaaaaaa', name: 'Fixture workspace' },
+      ],
+      projects: [{ id: 'cccccccccccccccccccccccc', name: 'Fixture Project' }],
+      entries: [
+        {
+          id: 'dddddddddddddddddddddddd',
+          userId: 'bbbbbbbbbbbbbbbbbbbbbbbb',
+          projectId: 'cccccccccccccccccccccccc',
+          description: 'Clockify fixture work',
+          billable: true,
+          timeInterval: {
+            start: new Date(now - 7200000).toISOString(),
+            end: new Date(now - 3600000).toISOString(),
+          },
+        },
+      ],
+    };
+    let appSubject = '';
+    let importDrive = '';
+    await page.route('**/plugin-run', async route => {
+      const body = route.request().postDataJSON();
+      appSubject = body.plugin;
+      importDrive = body.drive;
+      expect(body.source).toContain('function run(ctx) {');
+      body.source = body.source.replace(
+        'function run(ctx) {',
+        `function run(realCtx) { const ctx = { ...realCtx, http: r => {
+          if (r.method !== 'GET') throw new Error('Fixture refuses provider writes');
+          const fixtures = ${JSON.stringify(fixture)};
+          if (!fixtures[r.operation]) throw new Error('Unknown fixture operation');
+          return {status:200, body:JSON.stringify(fixtures[r.operation])};
+        }};`,
+      );
+      // Re-issue from the browser, not from Node. `route.fetch` sends the
+      // request from the Node test process, which implements RFC 6761 and
+      // resolves `atomic.localhost` to its own container, where nothing
+      // listens; run 4279 failed here with
+      //
+      //     route.fetch: connect ECONNREFUSED 127.0.0.1:9883
+      //     → POST http://atomic.localhost:9883/plugin-run
+      //
+      // and the `Workspace` assertion below was the consequence, not the
+      // cause. The three other `route.fetch` call sites in the suite all pass
+      // an explicit node-reachable `url`; this one did not.
+      //
+      // Rewriting the url would work for them and not here, because this
+      // request is signed. `signRequest` covers the subject and the timestamp
+      // (lib/src/authentication.ts) and the server checks that against the
+      // `Host` it was reached on, so moving the request to another host after
+      // the browser signed it invalidates the proof. The body is not signed,
+      // which is what makes `continue` with a replaced `postData` safe: the
+      // browser sends it, to the same host, with its own headers intact, and
+      // Chromium resolves the name because it is told the rule explicitly.
+      await route.continue({ postData: JSON.stringify(body) });
+    });
+    await page.getByRole('link', { name: 'Integrations', exact: true }).click();
+    await page
+      .locator('[data-integration=clockify]')
+      .getByRole('button', { name: 'Set up connection' })
+      .click();
+    await page
+      .getByLabel('Clockify API key', { exact: true })
+      .fill('synthetic-clockify-key');
+    await page.getByRole('button', { name: 'Find my workspaces' }).click();
+    // Discovery through the sandbox, as above.
+    await expect(page.getByLabel('Workspace', { exact: true })).toContainText(
+      'Fixture workspace',
+      { timeout: 45000 },
+    );
+    await expect(page.getByLabel('Import into', { exact: true })).toContainText(
+      'Shared time entries',
+    );
+    await page
+      .getByLabel('Import into', { exact: true })
+      .selectOption(tableSubject);
+    await page
+      .getByRole('button', { name: 'Preview import', exact: true })
+      .click();
+    await expect(
+      page.getByRole('button', { name: 'Apply 3 changes', exact: true }),
+    ).toBeEnabled();
+    await page
+      .getByRole('button', { name: 'Apply 3 changes', exact: true })
+      .click();
+    await expect(
+      page.getByText('Applied 3 changes', { exact: true }),
+    ).toBeVisible();
+    const children = await page.evaluate(async parent => {
+      const url = new URL('/query', window.store!.getServerUrl());
+      url.searchParams.set(
+        'property',
+        'https://atomicdata.dev/properties/parent',
+      );
+      url.searchParams.set('value', parent);
+      url.searchParams.set('include_nested', 'false');
+      const result = await window.store!.fetchResourceFromServer(
+        url.toString(),
+        { noWebSocket: true, forceOverride: true },
+      );
+      const members = result.get(
+        'https://atomicdata.dev/properties/collection/members',
+      ) as string[];
+
+      return Promise.all(
+        members.map(async subject => ({
+          subject,
+          name: (await window.store!.getResource(subject)).title,
+        })),
+      );
+    }, appSubject);
+    expect(children.map(child => child.name)).toEqual(
+      expect.arrayContaining(['Fixture Project', 'Fixture Person']),
+    );
+    // Simulate a previously imported record at the old default location.
+    const projectSubject = children.find(
+      child => child.name === 'Fixture Project',
+    )!.subject;
+    await page.evaluate(
+      async ({ subject, drive }) => {
+        const project = await window.store!.getResource(subject);
+        await project.set('https://atomicdata.dev/properties/parent', drive);
+        await project.save();
+      },
+      { subject: projectSubject, drive: importDrive },
+    );
+    await page
+      .getByRole('button', { name: 'Preview import', exact: true })
+      .click();
+    await expect(
+      page.getByRole('button', { name: 'Apply 1 changes', exact: true }),
+    ).toBeEnabled();
+    await expect(
+      page.getByText(
+        /previously imported root records will move inside this app/,
+      ),
+    ).toBeVisible();
+    await page
+      .getByRole('button', { name: 'Apply 1 changes', exact: true })
+      .click();
+    await expect(
+      page.getByText('Applied 1 changes', { exact: true }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        async subject =>
+          (await window.store!.getResource(subject)).get(
+            'https://atomicdata.dev/properties/parent',
+          ),
+        projectSubject,
+      ),
+    ).toBe(appSubject);
+    await page
+      .getByRole('button', { name: 'Preview import', exact: true })
+      .click();
+    await expect(
+      page.getByText('This run proposes no changes.', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /^Apply \d+ changes$/ }),
+    ).toHaveCount(0);
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
+    await page.evaluate(async subject => {
+      const resource = await window.store!.getResource(subject);
+      await resource.set(
+        'https://atomicdata.dev/properties/name',
+        'My project name',
+      );
+      await resource.save();
+    }, projectSubject);
+
+    for (const choice of ['Keep my value', 'Use source value']) {
+      fixture.projects[0].name =
+        choice === 'Keep my value'
+          ? 'Remote project name'
+          : 'New remote project name';
+      await page
+        .getByRole('button', { name: 'Preview import', exact: true })
+        .click();
+      await expect(
+        page.getByText('Your value: "My project name"', { exact: true }),
+      ).toBeVisible();
+      await page.getByRole('button', { name: choice, exact: true }).click();
+      await expect(
+        page.getByText(
+          'Resolution saved. Close this dialog and preview the import again.',
+          { exact: true },
+        ),
+      ).toBeVisible();
+      await page.getByRole('button', { name: 'Close', exact: true }).click();
+      await page
+        .getByRole('button', { name: 'Preview import', exact: true })
+        .click();
+      await expect(
+        page.getByText('This run proposes no changes.', { exact: true }),
+      ).toBeVisible();
+      await page.getByRole('button', { name: 'Close', exact: true }).click();
+    }
+
+    await expect(
+      page.getByRole('button', { name: 'Manage import', exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole('button', { name: 'Open time entries', exact: true })
+      .click();
+    await expect(
+      page.getByRole('heading', { name: 'Shared time entries', exact: true }),
+    ).toBeVisible();
+    const afterViews = await page.evaluate(
+      async ({ subject, property }) =>
+        (await window.store!.getResource(subject)).get(property),
+      { subject: tableSubject, property: dataBrowser.properties.tableViews },
+    );
+    expect(
+      await page.evaluate(
+        async subject =>
+          (await window.store!.getResource(subject)).get(
+            'https://atomicdata.dev/properties/name',
+          ),
+        startProperty,
+      ),
+    ).toBe('Started working');
+    expect(afterViews).toEqual(originalViews);
+    await expect(page.getByText('All entries', { exact: true })).toBeVisible();
+    const originalSource = await page.evaluate(async subject => {
+      const resource = await window.store!.getResource(subject);
+      const entry = Object.entries(resource.getPropVals()).find(
+        ([, value]) =>
+          typeof value === 'string' && value.includes('const settings='),
+      );
+      if (!entry) throw new Error('Clockify source missing');
+      await resource.set(entry[0], '// Previous release\n' + entry[1]);
+      await resource.save();
+
+      return { property: entry[0], source: entry[1] };
+    }, appSubject);
+    const pluginUrl = new URL(tableUrl);
+    pluginUrl.searchParams.set('subject', appSubject);
+    await page.goto(pluginUrl.href);
+    await page.getByRole('tab', { name: 'Run', exact: true }).click();
+    await page
+      .getByRole('button', { name: 'Review Clockify update', exact: true })
+      .click();
+    await expect(
+      page.getByText(
+        /Your workspace, date range, destination table and stored key are kept/,
+      ),
+    ).toBeVisible();
+    await page
+      .getByRole('button', { name: 'Apply importer update', exact: true })
+      .click();
+    // The second apply is the slow one: it writes the source back and then
+    // pins the release over the network (`/plugin-release-pin`), and the
+    // button only unmounts once both have landed. Under suite load that is
+    // past the 10s expect budget, and the failure is indistinguishable from
+    // the button being stuck: the count sits at 1 for the whole wait. It is
+    // not stuck. Run on its own this test passes at the default budget in
+    // 53s, and the ARIA snapshot Playwright captures after the timeout shows
+    // the button already gone and no error alert anywhere on the page.
+    await expect(
+      page.getByRole('button', { name: 'Review Clockify update', exact: true }),
+    ).toHaveCount(0, { timeout: 45000 });
+    expect(
+      await page.evaluate(
+        async ({ subject, property }) =>
+          (await window.store!.getResource(subject)).get(property),
+        { subject: appSubject, property: originalSource.property },
+      ),
+    ).toBe(originalSource.source);
+  });
+
   test('an integration opens from the sidebar and syncs through the server sandbox', async ({
     page,
   }) => {
-    test.setTimeout(120_000);
+    // 84s alone and 114s under four local workers, both from a wiped store, so
+    // 120s had six seconds of margin before the sample assertion below was
+    // allowed to wait 30. Raised so that fixing that assertion does not simply
+    // move the failure to the test budget. Every other assertion in this test
+    // keeps the 10s default.
+    test.setTimeout(240_000);
     const pageErrors: string[] = [];
     page.on('pageerror', error => pageErrors.push(error.message));
     await newPlugin(page);
@@ -420,7 +860,18 @@ export async function run(ctx) {
       .click();
     const { id } = await (await publication).json();
     await page.goto(original);
-    await page.getByRole('tab', { name: 'Code', exact: true }).click();
+    // The first interaction after a full navigation, so the editor has to
+    // remount and render its tab list before the click can land. This is the
+    // click that failed on develop run 4330, all three attempts, on
+    // `use.actionTimeout`'s 10s. Timed under four-worker load it took 1.5s,
+    // 3.9s and 5.4s across three copies of the same run, rising with the
+    // store rather than varying randomly, so the worst sample was already at
+    // 54% of the ceiling with the trend still going up. The click above,
+    // which follows an in-page edit rather than a navigation, measured 106ms,
+    // 103ms and 128ms and is left alone.
+    await page
+      .getByRole('tab', { name: 'Code', exact: true })
+      .click({ timeout: 30000 });
     await expect(
       page
         .getByRole('main')
@@ -520,7 +971,12 @@ export async function run(ctx) {
       };
     });
     const agent = await Agent.fromSecret(await getDevDriveSecret(page));
-    const api = { getAgent: () => agent, getServerUrl: () => SERVER_URL };
+    // DNS maps the public hostname to the CI service. Sign the public URL:
+    // the server verifies against its canonical origin, not the service alias.
+    const api = {
+      getAgent: () => agent,
+      getServerUrl: () => SERVER_URL,
+    };
     const reviewed = await getPluginSync(api, target);
     await page.getByRole('button', { name: 'Enable background sync' }).click();
     await expect(
@@ -538,10 +994,18 @@ export async function run(ctx) {
             'https://atomicdata.dev/ontology/server/property/default-ontology',
           ),
         );
+        const propertySubjects = ontology.get(
+          'https://atomicdata.dev/properties/properties',
+        ) as string[] | undefined;
+
+        // Say so here rather than letting `property()` below answer undefined
+        // for every lookup, which reads as a missing field in the form.
+        if (!propertySubjects) {
+          throw new Error('The default ontology lists no properties');
+        }
+
         const properties = await Promise.all(
-          ontology
-            .get('https://atomicdata.dev/properties/properties')
-            .map((subject: string) => store.getResource(subject)),
+          propertySubjects.map(subject => store.getResource(subject)),
         );
 
         const property = (name: string) => {
@@ -632,9 +1096,28 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
       .fill(code);
     await page.getByRole('button', { name: 'Save and test sample' }).click();
     const sampleDialog = page.locator('dialog[open]');
+    // One click, three pieces of work behind it: `setPluginSource` resolves the
+    // drive's plugin schema, saves the script resource, and only then does
+    // `onTest` run the automation in the server sandbox and build the proposal.
+    // The dialog is the end of all three, following the save by 6 ms. Measured
+    // with a timer around the click, each run starting from a wiped store:
+    //
+    //     2964 ms  alone on an idle box
+    //     7066 ms  under four local Playwright workers
+    //
+    // 138% inflation against a 10s default. Mancave runs four shards of two
+    // workers beside clippy, a 6-wide nextest, flutter and two vitest suites,
+    // which is considerably more, and it fails there on every attempt rather
+    // than rotating. The button still reads "Saving…" in the CI snapshot, which
+    // is this work unfinished, not a save that hangs.
+    //
+    // Wiping matters: the same measurement against a store grown to 61 MB by a
+    // morning of runs gave 4480 ms idle, half again the clean figure. A shard
+    // runs ~70 tests against one server, so a test late in a shard meets a
+    // slower server than the same test early in it.
     await expect(
       sampleDialog.getByText('Automation sample result'),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30_000 });
     await sampleDialog.getByRole('button', { name: /Apply 1 change/ }).click();
     await expect(sampleDialog).toBeHidden();
     await page
@@ -709,15 +1192,8 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
   }) => {
     const main = page.getByRole('main');
 
-    // `New plugin` is search-only: it creates the drive's plugin schema on
-    // first use, so it stays out of the default listing.
-    await page.getByRole('button', { name: 'More' }).click();
-    await page.getByPlaceholder(/filter/i).fill('plugin');
-    await page.locator('[data-testid="menu-item-new-plugin"]').click();
-
-    await expect(
-      main.getByRole('heading', { name: 'New plugin', level: 1 }),
-    ).toBeVisible();
+    // The catalog starter creates the drive's plugin schema on first use.
+    await newPlugin(page);
 
     // The starter source is what an author (or an LLM) reads first.
     await page.getByRole('tab', { name: 'Code', exact: true }).click();
@@ -768,12 +1244,7 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
   }) => {
     const main = page.getByRole('main');
 
-    await page.getByRole('button', { name: 'More' }).click();
-    await page.getByPlaceholder(/filter/i).fill('plugin');
-    await page.locator('[data-testid="menu-item-new-plugin"]').click();
-    await expect(
-      main.getByRole('heading', { name: 'New plugin', level: 1 }),
-    ).toBeVisible();
+    await newPlugin(page);
 
     // Point the plugin at a resource that is not there. The source property is
     // drive-local, so it is found by its value rather than by a subject the
@@ -893,16 +1364,40 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
   });
 });
 
+/**
+ * Asks for a new plugin and waits for its page.
+ *
+ * The first plugin on a drive materializes that drive's plugin schema before
+ * anything can render: nineteen properties and classes, each its own resource.
+ * The browser sends those writes together, but the server applies commits one
+ * at a time, so the step costs what nineteen sequential writes cost. Measured
+ * against a debug build: 5.2s on a fresh store, and 11s once the suite's
+ * shared store holds a handful of drives, which is where this spec runs. The
+ * suite's 10s default was never a budget this step could meet on CI hardware,
+ * and it is what made these tests fail there while passing on a clean laptop.
+ *
+ * So the wait is widened here rather than for the whole suite, and the test
+ * gets room for the part that comes after it. The wait is the symptom; making
+ * the schema cheaper to create is its own change.
+ */
 async function newPlugin(page: import('@playwright/test').Page) {
-  await page.getByRole('button', { name: 'More' }).click();
-  await page.getByPlaceholder(/filter/i).fill('plugin');
-  await page.locator('[data-testid="menu-item-new-plugin"]').click();
+  // `test.setTimeout` applies to the RUNNING TEST, not to the function it is
+  // written in, so a bare call here overwrote whatever the caller asked for,
+  // downward and without an error. The sidebar test above declares 240s three
+  // lines before calling this, and had never once run on 240s: it ran on 120s
+  // and died at a wall it had itself raised. Raise, never lower. Playwright uses 0 for "no timeout", so that case is
+  // left alone rather than handed a ceiling it deliberately removed; a bare
+  // `Math.max` here would be the same bug pointing the other way.
+  const currentTimeout = test.info().timeout;
+
+  if (currentTimeout !== 0 && currentTimeout < 120000) test.setTimeout(120000);
+  await createFromCatalog(page, 'Plugin');
   await expect(
     page.getByRole('main').getByRole('heading', {
       name: 'New plugin',
       level: 1,
     }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 45000 });
 }
 
 /**

@@ -128,6 +128,11 @@ export interface ClientDbOptions {
   /** When true (and `dbName` differs from the legacy name), the worker asks
    *  WASM to migrate the legacy shared DB file into `dbName` before opening. */
   migrateLegacy?: boolean;
+  /** When true, a `dbName` that cannot be decrypted with `dbKey` is discarded
+   *  and recreated instead of failing the open. Off by default: the file may
+   *  hold a local-only drive that exists nowhere else, and a key that is
+   *  missing now is not necessarily gone (see `client-db-open.ts`). */
+  discardUndecryptable?: boolean;
 }
 
 type PendingRequest = {
@@ -519,6 +524,7 @@ export class ClientDbWorker {
       dbName: this.opts.dbName,
       dbKey: this.opts.dbKey,
       migrateLegacy: this.opts.migrateLegacy,
+      discardUndecryptable: this.opts.discardUndecryptable,
     })) as ClientDbInitTimings | undefined;
     endWorkerInit(timings);
 

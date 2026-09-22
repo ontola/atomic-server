@@ -264,9 +264,18 @@ export class Collection {
    * that says "0 members" silently wipes the optimistic add and the
    * UI loses the just-created resource until the next reload. */
   private _optimisticAdds = new Set<string>();
-  /** Removals survive stale queries until a matching resource event admits
-   * the subject again. */
-  private _removedSubjects = new Set<string>();
+  /**
+   * True when the store has destroyed `subject`.
+   *
+   * This used to be a `_removedSubjects` Set on each Collection, which meant
+   * a Collection built after the delete — a second view on the same query, a
+   * folder re-expanded — had no memory of it and admitted the subject from
+   * the next stale answer. The store owns the fact now, so every Collection
+   * on the same store agrees regardless of when it was built.
+   */
+  private isDestroyed(subject: string): boolean {
+    return this.store.isDestroyed(subject);
+  }
   private server: string;
   private params: CollectionParams;
 
@@ -279,6 +288,11 @@ export class Collection {
   private _aggregates: AggregateOutcome[] = [];
 
   private _waitForReady: Promise<void>;
+  /** One in-flight fetch per page. A virtualized list mounts several rows from
+   * the same missing page in one render; without sharing this promise, every
+   * row starts the same local query and the competing hydrations can leave the
+   * page unresolved for all of their consumers. */
+  private _pageFetches = new Map<number, Promise<void>>();
   /**
    * True while `fetchPage` is hydrating members into the store. Query
    * hydration fires `ResourceUpdated` for every row; `useCollection`
@@ -386,8 +400,19 @@ export class Collection {
     const page = Math.floor(index / this.pageSize);
 
     if (!this.pages.has(page)) {
-      this._waitForReady = this.fetchPage(page);
-      await this._waitForReady;
+      let fetch = this._pageFetches.get(page);
+
+      if (!fetch) {
+        fetch = this.fetchPage(page).finally(() => {
+          if (this._pageFetches.get(page) === fetch) {
+            this._pageFetches.delete(page);
+          }
+        });
+        this._pageFetches.set(page, fetch);
+      }
+
+      this._waitForReady = fetch;
+      await fetch;
     }
 
     // `fetchPage` short-circuits without populating `pages` when there's
@@ -454,7 +479,7 @@ export class Collection {
     const incomingMembers = resource.getSubjects(
       collections.properties.members,
     );
-    const retained = incomingMembers.filter(s => !this._removedSubjects.has(s));
+    const retained = incomingMembers.filter(s => !this.isDestroyed(s));
 
     if (retained.length !== incomingMembers.length) {
       const total = resource.get(collections.properties.totalMembers);
@@ -598,6 +623,11 @@ export class Collection {
     // server-side `/query` does ("value-in-property").
     const matches =
       !!resource &&
+      // A destroyed subject is never a member, whatever state arrives for it.
+      // Answers and pushes that were produced before the destroy landed keep
+      // carrying its full body, and each one used to read as a member that
+      // matches the filter.
+      !this.isDestroyed(subject) &&
       constraintMatches(resource, fp, fv) &&
       // Every extra AND constraint must also hold (multi-property filtering).
       (this.params.filters ?? []).every(
@@ -608,14 +638,9 @@ export class Collection {
       );
 
     if (!resource) {
-      // refresh clears the index before awaiting its query. Remember deletion
-      // even when the subject is temporarily absent from that index.
-      this._removedSubjects.add(subject);
+      // The store recorded the tombstone before it notified, so there is
+      // nothing to remember here — only the optimistic add to retract.
       this._optimisticAdds.delete(subject);
-    } else if (matches && !resource.new && !this._assemblingPage) {
-      if (this._removedSubjects.delete(subject)) {
-        this._queriedMembers.delete(subject);
-      }
     }
 
     // O(1) lookup via the maintained subject→page index instead of
@@ -760,7 +785,6 @@ export class Collection {
     // so they should observe the same membership.
     collection._memberIndex = this._memberIndex;
     collection._queriedMembers = this._queriedMembers;
-    collection._removedSubjects = this._removedSubjects;
 
     return collection;
   }
@@ -1066,7 +1090,13 @@ export class Collection {
       return 'no-db';
     }
 
-    this._queriedMembers = new Set(filterIndexLeakage(result.subjects));
+    // Destroyed subjects are dropped from the page below, so they must not
+    // count as "the query accounted for this one" either — that is what the
+    // add path reads to decide a matching subject is not new. Leaving them in
+    // would keep a subject unaddable after its tombstone is lifted.
+    this._queriedMembers = new Set(
+      filterIndexLeakage(result.subjects).filter(s => !this.isDestroyed(s)),
+    );
 
     // Notifications may have arrived while the local query was pending.
     // Its full result already accounts for them, even outside page zero.
@@ -1079,7 +1109,7 @@ export class Collection {
       result.resources.length === result.subjects.length
     ) {
       for (let i = 0; i < result.subjects.length; i++) {
-        if (this._removedSubjects.has(result.subjects[i]!)) continue;
+        if (this.isDestroyed(result.subjects[i]!)) continue;
         this.store.hydrateResourceFromJsonAd(
           result.subjects[i]!,
           result.resources[i]!,
@@ -1094,7 +1124,7 @@ export class Collection {
     // for the missing index that gets stuck on a loading shimmer. Stripping
     // here keeps the count and the addressable members consistent.
     result.subjects = filterIndexLeakage(result.subjects).filter(
-      subject => !this._removedSubjects.has(subject),
+      subject => !this.isDestroyed(subject),
     );
     result.count = result.subjects.length;
 

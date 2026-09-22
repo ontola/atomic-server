@@ -25,6 +25,7 @@ const PARENT = 'https://atomicdata.dev/properties/parent';
 const DRIVE = 'https://atomicdata.dev/properties/drive';
 const CREATED_AT = 'https://atomicdata.dev/properties/createdAt';
 const LAST_COMMIT = 'https://atomicdata.dev/properties/lastCommit';
+const GENESIS = 'https://atomicdata.dev/properties/genesis';
 const NAME = 'https://atomicdata.dev/properties/name';
 const FOLDER = 'https://atomicdata.dev/classes/Folder';
 
@@ -143,6 +144,36 @@ describe('OPFS cold-load — incomplete snapshot must not yield a silent-faulty 
 
     // Same invariant: a class-less skeleton hit is a miss, so the resource
     // stays LOADING (waiting for the WS) — never settled-blank without error.
+    expect(r.loading).toBe(true);
+    expect(r.get(core.properties.isA)).toBeUndefined();
+  });
+
+  it('a skeleton that also carries its genesis certificate is still a skeleton', async ({
+    expect,
+  }) => {
+    // Every DID resource this client creates carries an inline genesis
+    // certificate, and `rebuildCacheFromLoro` preserves it like the other
+    // server-managed props. It is not content: a skeleton row that has it
+    // must be judged by the same list the rebuild preserves, or the guard
+    // waves through exactly the state the two cases above reject.
+    const store = await makeStore();
+    store.setClientDb(
+      fakeClientDb(
+        subject,
+        JSON.stringify({
+          ...JSON.parse(skeletonJsonAd),
+          [GENESIS]: 'AQID',
+        }),
+        incompleteDelta(),
+      ) as unknown as Parameters<Store['setClientDb']>[0],
+    );
+
+    const r = store.getResourceLoading(subject);
+
+    for (let i = 0; i < 50 && r.loading; i++) {
+      await new Promise(res => setTimeout(res, 10));
+    }
+
     expect(r.loading).toBe(true);
     expect(r.get(core.properties.isA)).toBeUndefined();
   });

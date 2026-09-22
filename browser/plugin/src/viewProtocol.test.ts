@@ -5,6 +5,7 @@ import { isViewRequest, viewRequest } from './viewProtocol';
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 function frame() {
@@ -94,3 +95,45 @@ it.each(['packaged', 'generated'])(
     });
   },
 );
+
+it('lets a generated view wait for host recovery but still rejects a silent host', async () => {
+  vi.useFakeTimers();
+  const f = frame();
+  const source = readFileSync(
+    new URL(
+      '../../../server/src/plugins/assets/view-client.js',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  const store = new Function(
+    'window',
+    'setTimeout',
+    'clearTimeout',
+    source.replace('export const store', 'const store') + '\nreturn store;',
+  )(f.window, setTimeout, clearTimeout);
+  const pending = store.query({ property: 'parent', value: 'table' });
+  const outcome = pending.then(
+    (value: unknown) => ({ value }),
+    (error: Error) => ({ error: error.message }),
+  );
+  // ClientDb's follower recovery and websocket authentication each allow 30s.
+  // A view must not abandon the host halfway through that supported recovery.
+  await vi.advanceTimersByTimeAsync(30_000);
+  f.reply({
+    type: 'atomic.view.response',
+    version: 1,
+    id: f.parent.postMessage.mock.calls[0][0].id,
+    result: ['row'],
+  });
+  expect(await outcome).toEqual({ value: ['row'] });
+  expect(vi.getTimerCount()).toBe(0);
+
+  const silent = store.query({ property: 'parent', value: 'table' });
+  const rejected = expect(silent).rejects.toThrow(
+    'The host did not answer query in time.',
+  );
+  await vi.advanceTimersByTimeAsync(60_000);
+  await rejected;
+  expect(vi.getTimerCount()).toBe(0);
+});

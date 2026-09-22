@@ -70,6 +70,9 @@ test('switching drives closes a panel without resurrecting it on return', async 
 }) => {
   await before({ page });
   const original = await page.evaluate(() => window.store.getDrive());
+  // The last assertion is about returning to this drive, so it is vacuous if
+  // there was never one to return to.
+  expect(original).toBeTruthy();
   await page.getByTestId('navbar-comments-button').click();
   await expect(page.getByTestId('comments-panel')).toHaveAttribute(
     'data-open',
@@ -85,7 +88,7 @@ test('switching drives closes a panel without resurrecting it on return', async 
     'data-open',
     '',
   );
-  await page.evaluate(drive => window.store.setDrive(drive), original);
+  await page.evaluate(drive => window.store.setDrive(drive), original!);
   await expect(page.getByTestId('comments-panel')).not.toHaveAttribute(
     'data-open',
     '',

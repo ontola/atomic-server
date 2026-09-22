@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { test, expect } from '@playwright/test';
-import { before } from './test-utils';
+import { createFromCatalog, before, waitForSynced } from './test-utils';
 
 /**
  * The one thing about apps that only a browser can answer.
@@ -54,12 +54,8 @@ test.describe('apps', () => {
 
       // `New app` is search-only: it creates the drive's plugin schema on first
       // use, so it stays out of the default listing.
-      await page.getByRole('button', { name: 'More' }).click();
-      await page.getByPlaceholder(/filter/i).fill('app');
-      await page.locator('[data-testid="menu-item-new-app"]').click();
-
       // An app page is the app: no chrome of its own, just the frame.
-      await expect(main.locator('iframe[title="App"]')).toBeVisible();
+      await newApp(page);
 
       // And the frame is the page. An iframe never grows to fit its document,
       // so a box shorter than the page does not scroll — it clips the app and
@@ -99,10 +95,7 @@ test.describe('apps', () => {
   }) => {
     const main = page.getByRole('main');
 
-    await page.getByRole('button', { name: 'More' }).click();
-    await page.getByPlaceholder(/filter/i).fill('app');
-    await page.locator('[data-testid="menu-item-new-app"]').click();
-    await expect(main.locator('iframe[title="App"]')).toBeVisible();
+    await newApp(page);
 
     const app = page.frameLocator('iframe[title="App"]');
     await app.getByRole('button', { name: 'Add an item' }).click();
@@ -131,10 +124,7 @@ test.describe('apps', () => {
   }) => {
     const main = page.getByRole('main');
 
-    await page.getByRole('button', { name: 'More' }).click();
-    await page.getByPlaceholder(/filter/i).fill('app');
-    await page.locator('[data-testid="menu-item-new-app"]').click();
-    await expect(main.locator('iframe[title="App"]')).toBeVisible();
+    await newApp(page);
 
     // Open the app's own table and add the app as a second way to see it.
     const sidebar = page.getByRole('navigation').last();
@@ -163,22 +153,28 @@ test.describe('apps', () => {
   test('an app survives a reload, because its data is in the drive', async ({
     page,
   }) => {
-    const main = page.getByRole('main');
-
-    await page.getByRole('button', { name: 'More' }).click();
-    await page.getByPlaceholder(/filter/i).fill('app');
-    await page.locator('[data-testid="menu-item-new-app"]').click();
-    await expect(main.locator('iframe[title="App"]')).toBeVisible();
+    await newApp(page);
 
     const app = page.frameLocator('iframe[title="App"]');
     await app.getByRole('button', { name: 'Add an item' }).click();
     await expect(app.getByRole('listitem')).toHaveCount(1);
 
+    // `toHaveCount(1)` above is the app's own render, which happens before the
+    // write reaches the server. Reloading on top of that is a race, and under
+    // load this test lost it every time: four local Playwright workers, and the
+    // item is gone after the reload and never arrives, still 0 with the
+    // assertion given 120s. The suite waits for the outbox before a reload in
+    // 24 other files; this one did not.
+    await waitForSynced(page);
+
     // Atomic is the persistence layer: nothing about the app is in the page.
     await page.reload();
 
     const reopened = page.frameLocator('iframe[title="App"]');
-    await expect(reopened.getByRole('listitem')).toHaveCount(1);
+    // Include cold database recovery and the bridge's bounded request wait.
+    await expect(reopened.getByRole('listitem')).toHaveCount(1, {
+      timeout: 60_000,
+    });
   });
 
   test('an app that breaks says so, and offers to have it fixed', async ({
@@ -186,10 +182,7 @@ test.describe('apps', () => {
   }) => {
     const main = page.getByRole('main');
 
-    await page.getByRole('button', { name: 'More' }).click();
-    await page.getByPlaceholder(/filter/i).fill('app');
-    await page.locator('[data-testid="menu-item-new-app"]').click();
-    await expect(main.locator('iframe[title="App"]')).toBeVisible();
+    await newApp(page);
 
     // Break it. The frame is null-origin, so its console belongs to nobody —
     // without a report crossing the boundary this is a blank panel and the
@@ -207,6 +200,46 @@ test.describe('apps', () => {
     await expect(alert.getByRole('button', { name: 'Fix it' })).toBeVisible();
   });
 });
+
+/**
+ * Asks for a new app and waits for its frame.
+ *
+ * The first app on a drive materializes that drive's plugin schema before
+ * anything can render: `createApp` calls `ensureSchema(pluginSchema())`, which
+ * is nineteen properties and classes, each its own resource. The browser sends
+ * those writes together, but the server applies commits one at a time, so the
+ * step costs what nineteen sequential writes cost. That is the same wait
+ * `newPlugin` in plugins.spec.ts documents: measured against a debug build,
+ * 5.2s on a fresh store and around 11s once the suite's shared store holds a
+ * handful of drives, which is where this spec runs. The suite's 10s default
+ * was never a budget this step could meet on CI hardware, and it is what made
+ * every test in this file fail there while passing on a clean laptop.
+ *
+ * So the wait is widened here rather than for the whole suite, and the test
+ * gets room for the part that comes after it. The wait is the symptom; making
+ * the schema cheaper to create is its own change.
+ */
+async function newApp(page: import('@playwright/test').Page) {
+  // `test.setTimeout` applies to the RUNNING TEST, not to the function it is
+  // written in, so a bare call here would overwrite whatever the caller asked
+  // for, downward and without an error. `newPlugin` in `plugins.spec.ts` was
+  // the same shape and did exactly that: its sidebar test declared 240s two
+  // lines before calling it, ran on 120s, and died at a wall it had itself
+  // raised. Nothing in this file declares a budget today, which is the only
+  // reason this one was harmless, and that stops being true the first time
+  // someone adds one.
+  //
+  // So raise, never lower. Playwright uses 0 for "no timeout", so that case is
+  // left alone rather than handed a ceiling it deliberately removed; a bare
+  // `Math.max` here would be the same bug pointing the other way.
+  const currentTimeout = test.info().timeout;
+
+  if (currentTimeout !== 0 && currentTimeout < 120000) test.setTimeout(120000);
+  await createFromCatalog(page, 'App');
+  await expect(
+    page.getByRole('main').locator('iframe[title="App"]'),
+  ).toBeVisible({ timeout: 45000 });
+}
 
 /**
  * Replaces the source of the app on screen, through `window.store`.

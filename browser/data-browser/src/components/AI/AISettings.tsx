@@ -7,7 +7,6 @@ import styled, { useTheme } from 'styled-components';
 import { Suspense, useEffect, useState } from 'react';
 import { OpenRouterLoginButton } from './OpenRouterLoginButton';
 import { effectFetch } from '@helpers/effectFetch';
-import { CheckboxDescriptor } from '@components/forms/CheckboxDescriptor';
 import { transition } from '@helpers/transition';
 import { useAISettings } from './AISettingsContext';
 import { useIsOllamaUrlValid } from './useIsOllamaUrlValid';
@@ -60,8 +59,6 @@ const AISettings: React.FC = () => {
     setShowTokenUsage,
     ollamaUrl,
     setOllamaUrl,
-    showFollowUpPrompts,
-    setShowFollowUpPrompts,
     isProviderAvailable,
     shouldGenerateTitles,
     setShouldGenerateTitles,
@@ -268,18 +265,6 @@ const AISettings: React.FC = () => {
                         />
                         Generate AI Chat titles
                       </CheckboxLabel>
-                      <CheckboxDescriptor
-                        label='Show follow up prompts in chats'
-                        description='Uses a small model to generate a follow up prompt based on the last message in the chat.'
-                      >
-                        {id => (
-                          <Checkbox
-                            id={id}
-                            checked={showFollowUpPrompts}
-                            onChange={setShowFollowUpPrompts}
-                          />
-                        )}
-                      </CheckboxDescriptor>
                       <Details title='Change what model is used for generative features'>
                         <Suspense>
                           <Subtle>(Tip) Choose a cheap and fast model</Subtle>

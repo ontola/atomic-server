@@ -217,10 +217,11 @@ async fn notion_bundle_syncs_both_directions_and_renames_without_rebinding() {
     let config = json!({"dataSource":DS,"table":f.plugin,"rowClass":class,"identity":props["identity"],"arrival":props["arrival"],"fields":[{"id":"title","property":props["title"],"type":"title"},{"id":"n","property":props["n"],"type":"number"}],"views":[{"id":VIEW,"subject":view_subject,"kind":"table"}]});
     let release = db
         .publish_plugin_release(&PluginRelease {
-            source: SOURCE.into(),
+            source: Some(SOURCE.into()),
             manifest: json!({}),
             runtime: "atomic-js/1".into(),
             schemas: BTreeMap::new(),
+            ..Default::default()
         })
         .unwrap();
     let provider = Arc::new(Mutex::new(Provider::default()));

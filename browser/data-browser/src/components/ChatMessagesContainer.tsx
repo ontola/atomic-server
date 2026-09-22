@@ -24,7 +24,6 @@ export const ChatMessagesContainer: React.FC<
   scrollToBottomTrigger,
   fullView,
 }) => {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Whether the view is "stuck" to the bottom. The user detaches by scrolling
@@ -37,7 +36,9 @@ export const ChatMessagesContainer: React.FC<
   const lastScrollTopRef = useRef(0);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+    const scroller = scrollRef.current;
+
+    if (scroller) scroller.scrollTop = scroller.scrollHeight;
   };
 
   const isNearBottom = () => {
@@ -111,6 +112,14 @@ export const ChatMessagesContainer: React.FC<
 
     scroller?.addEventListener('scroll', handleScroll, { passive: true });
 
+    // Opening the keyboard shrinks the message viewport without adding any
+    // messages. Keep the last line visible when already following the bottom;
+    // leave the reading position alone when the user has scrolled up.
+    const resizeObserver = new ResizeObserver(() => {
+      if (stuckToBottomRef.current) scrollToBottom();
+    });
+    if (scroller) resizeObserver.observe(scroller);
+
     let observer: MutationObserver | undefined;
 
     if (containerRef.current) {
@@ -142,15 +151,13 @@ export const ChatMessagesContainer: React.FC<
     return () => {
       scroller?.removeEventListener('scroll', handleScroll);
       observer?.disconnect();
+      resizeObserver.disconnect();
     };
   }, []);
 
   return (
     <MessagesContainer ref={scrollRef} $fullView={fullView}>
-      <Column ref={containerRef}>
-        {children}
-        <div ref={messagesEndRef} />
-      </Column>
+      <Column ref={containerRef}>{children}</Column>
     </MessagesContainer>
   );
 };
@@ -162,8 +169,13 @@ export const ChatMessagesContainer: React.FC<
  */
 const MessagesContainer = styled(ScrollArea)<{ $fullView?: boolean }>`
   overflow: auto;
+  min-height: 0;
   height: 100%;
   padding: ${p => (p.$fullView ? '0.25rem 0' : p.theme.size())};
+
+  @media (max-width: 600px) {
+    padding: 0.25rem 0;
+  }
 
   /* The viewport is what scrolls and therefore what clips, so the room for an
    * avatar's keyboard focus ring (2px + 2px offset) has to live here —

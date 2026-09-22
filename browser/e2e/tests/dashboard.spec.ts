@@ -486,7 +486,13 @@ test.describe('dashboards', () => {
     await page.getByTestId('block-function').selectOption('avg');
     await page.getByTestId('block-target').selectOption({ label: 'amount' });
     await page.getByTestId('block-save').click();
-    await expect(page.getByTestId('block-save')).not.toBeVisible();
+    // The dialog closes once the save commits, so this is a round trip on the
+    // default 10s. Measured at 6.8s and 8.1s under the same load that fails
+    // the sibling test above — passing, but with less than two seconds to
+    // spare, which is the same bug waiting its turn.
+    await expect(page.getByTestId('block-save')).not.toBeVisible({
+      timeout: 30_000,
+    });
 
     // 946.5 over four rows.
     await expect(block(page, 'Average spend')).toContainText('236.63', {
@@ -547,7 +553,17 @@ test.describe('dashboards', () => {
 
     // Adding a block opens its config dialog: a block that arrives empty and
     // silent is worse than one that asks what it should show.
-    await page.getByTestId('block-name').fill('Biggest expense');
+    //
+    // That dialog is behind `addBlock`'s two sequential commits — the Block
+    // resource, then the dashboard's block list — before `setConfiguring`
+    // mounts it. Timed under four-worker load it took 4.9s and 11.3s, against
+    // Playwright's 10s default, which is why this line failed on CI 4318 and
+    // passes on a quiet box. 30s is the budget the other write-then-read-back
+    // waits in this suite carry. The surrounding render assertions already
+    // have 15s; this one had nothing.
+    await page.getByTestId('block-name').fill('Biggest expense', {
+      timeout: 30_000,
+    });
     await pickTable(page, 'Spending');
     await page.getByTestId('block-function').selectOption('max');
     await page.getByTestId('block-target').selectOption({ label: 'amount' });

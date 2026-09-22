@@ -342,6 +342,17 @@ use std::sync::{LazyLock, Mutex};
 /// still belongs to the connection asking to remove it.
 static LIVE_PEERS: LazyLock<Mutex<HashMap<String, LivePeer>>> = LazyLock::new(Default::default);
 
+/// The live peer map, whether or not a previous holder panicked. The map only
+/// holds channel senders and connection handles, which a panic cannot leave
+/// half-updated in a way that matters, so a poisoned lock is recovered rather
+/// than propagated: unwrapping it here made one panic (in whichever task
+/// happened to hold the lock) kill live broadcast for the rest of the process.
+fn live_peers() -> std::sync::MutexGuard<'static, HashMap<String, LivePeer>> {
+    LIVE_PEERS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 /// One live peer: the write loop's channel, the generation that installed
 /// it, and (dial side only) the QUIC connection kept alive for it. Dropping
 /// the entry drops the connection, so a re-dial replaces the link it
@@ -387,15 +398,12 @@ pub fn live_peer_name(peer_id: &str) -> Option<String> {
 
 /// Returns the number of currently connected live peers.
 pub fn live_peer_count() -> usize {
-    LIVE_PEERS.lock().map(|m| m.len()).unwrap_or(0)
+    live_peers().len()
 }
 
 /// Returns the node IDs of currently connected live peers.
 pub fn live_peer_ids() -> Vec<String> {
-    LIVE_PEERS
-        .lock()
-        .map(|m| m.keys().cloned().collect())
-        .unwrap_or_default()
+    live_peers().keys().cloned().collect()
 }
 
 type CommitWaiter =
@@ -447,10 +455,7 @@ impl LivePeerCommitTransport {
 
     /// Whether the peer currently has a live link.
     pub fn is_live(&self) -> bool {
-        LIVE_PEERS
-            .lock()
-            .map(|m| m.contains_key(&self.peer))
-            .unwrap_or(false)
+        live_peers().contains_key(&self.peer)
     }
 }
 
@@ -480,11 +485,7 @@ impl crate::sync::outbox::CommitTransport for LivePeerCommitTransport {
             }
         };
 
-        let Some(tx) = LIVE_PEERS
-            .lock()
-            .ok()
-            .and_then(|m| m.get(&self.peer).map(|p| p.tx.clone()))
-        else {
+        let Some(tx) = live_peers().get(&self.peer).map(|p| p.tx.clone()) else {
             forget();
             return Err(transport_error(format!(
                 "peer {} is not live",
@@ -573,7 +574,8 @@ fn remove_live_peer_inner(peer_id: &str, generation: Option<u64>, notify: bool) 
     // Take the entry out under the lock and drop it (connection included)
     // after; the superseding-connection case is excluded, so this never
     // closes a link a newer registration is using.
-    let removed = LIVE_PEERS.lock().ok().and_then(|mut map| {
+    let removed = {
+        let mut map = live_peers();
         let is_current = match generation {
             Some(generation) => map.get(&key).is_some_and(|p| p.generation == generation),
             None => true,
@@ -589,7 +591,7 @@ fn remove_live_peer_inner(peer_id: &str, generation: Option<u64>, notify: bool) 
             }
             None
         }
-    });
+    };
     if let Some(peer) = removed {
         drop(peer);
         tracing::info!("[live] removed peer {}", &key[..key.len().min(12)]);
@@ -608,7 +610,8 @@ fn last_event_ms() -> &'static std::sync::Mutex<std::collections::HashMap<(Strin
     LAST_EVENT_MS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
 }
 
-/// Returns true if we're currently importing data from a remote peer.
+/// Whether the current task is applying data from a remote peer (see
+/// [`super::ws_apply::import_scope`]).
 pub fn is_importing() -> bool {
     super::ws_apply::is_importing()
 }
@@ -655,7 +658,7 @@ fn own_agent_update_frame(store: &Db) -> Option<Vec<u8>> {
 /// snapshot indefinitely.
 fn send_live_update_wire_msg_except(msg: Vec<u8>, skip_peer: Option<&str>) {
     let mut dead_peers = Vec::new();
-    let peers = LIVE_PEERS.lock().unwrap();
+    let peers = live_peers();
     {
         for (peer_id, LivePeer { generation, tx, .. }) in peers.iter() {
             if skip_peer.is_some_and(|skip| normalize_node_id(skip) == *peer_id) {
@@ -746,10 +749,6 @@ fn start_live_sync(store: Db) {
                     continue;
                 }
             };
-
-            if super::ws_apply::is_importing() {
-                continue;
-            }
 
             let subject_key = match &event {
                 crate::DbEvent::Changed { subject, .. }
@@ -974,7 +973,7 @@ fn register_live_peer(
     // Add to peer map — replace if already connected (incoming may supersede outgoing)
     let generation = LIVE_PEER_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
     let is_new_peer = {
-        let mut map = LIVE_PEERS.lock().unwrap();
+        let mut map = live_peers();
         let replacing = map.contains_key(&key);
         if replacing {
             tracing::info!(
@@ -1362,48 +1361,29 @@ fn register_live_peer(
                             )
                             .await
                             {
-                                // Hold the importing flag across EVERY live
-                                // import so the push loop doesn't re-broadcast
-                                // what we just received — an unconditional
-                                // re-send of an identical snapshot ping-pongs
-                                // between the two nodes.
-                                //
-                                // This used to apply only when the subject was
-                                // this node's own agent, which suppressed the
-                                // echo on exactly one side: the device whose
-                                // agent it is stays quiet, the peer for whom it
-                                // is a stranger's agent re-sends it, and a drive
-                                // — nobody's own agent — echoes on both. Two
-                                // idle nodes then traded ~8.6KB frames
-                                // indefinitely (measured: 355 frames in 58s,
-                                // ~50KB/s, for one agent resource and one
-                                // drive).
-                                //
-                                // The WS announcer ignores this flag, so the
-                                // local browser still sees the merged state.
-                                //
-                                // A global mute is the blunt version of this:
-                                // `DbEvent` already carries `source_id`, so the
-                                // push loop could instead skip only the peer the
-                                // update came from, and never mute a concurrent
-                                // local edit. That needs `persist_update` to
-                                // take a source and the push loop to read it.
                                 // Attribute this write to the peer it came
-                                // from. `add_resource_opts` reads it while the
-                                // write is still on the stack and stamps it on
-                                // the `DbEvent`, so the push loop can skip that
-                                // one peer rather than muting every broadcast
-                                // for the duration of an import.
-                                super::ws_apply::set_import_source(Some(read_peer_id.clone()));
-                                super::ws_apply::set_importing(true);
-                                let _ = super::ws_apply::persist_update(
-                                    &store,
-                                    &decoded.subject,
-                                    resolved,
+                                // from: `add_resource_opts` reads the import
+                                // scope while the write is still on the stack
+                                // and stamps it on the `DbEvent`, so the push
+                                // loop skips exactly that peer. Without it an
+                                // unconditional re-send of an identical
+                                // snapshot ping-pongs between the two nodes
+                                // (measured: 355 frames in 58s, ~50KB/s, for
+                                // one agent resource and one drive). The scope
+                                // is per task, so another connection's import
+                                // or a concurrent local edit is never muted by
+                                // this one (security audit C16). The WS
+                                // announcer ignores it, so the local browser
+                                // still sees the merged state.
+                                let _ = super::ws_apply::import_scope(
+                                    Some(read_peer_id.clone()),
+                                    super::ws_apply::persist_update(
+                                        &store,
+                                        &decoded.subject,
+                                        resolved,
+                                    ),
                                 )
                                 .await;
-                                super::ws_apply::set_importing(false);
-                                super::ws_apply::set_import_source(None);
                                 tracing::trace!(
                                     "[live] imported update for {} from {}",
                                     &decoded.subject[..decoded.subject.len().min(20)],
@@ -1435,8 +1415,16 @@ fn register_live_peer(
             // Public here would silently downgrade every fallback-routed
             // frame regardless of the AUTH this connection already completed
             // (or a later AUTH mid-session, which this call can apply).
+            //
+            // Inside this connection's import scope, so a `COMMIT` the engine
+            // applies is attributed to this peer and the push loop does not
+            // send it straight back (see `ws_apply::import_scope`).
             let agent_before_frame = agent.clone();
-            let responses = super::engine::handle_frame(&buf, &store, &mut agent).await;
+            let responses = super::ws_apply::import_scope(
+                Some(read_peer_id.clone()),
+                super::engine::handle_frame(&buf, &store, &mut agent),
+            )
+            .await;
             invalidate_drive_cache_on_identity_change(
                 &agent,
                 &agent_before_frame,
@@ -3952,7 +3940,7 @@ mod live_peer_registry_tests {
         let generation =
             LIVE_PEER_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
         let (tx, _rx) = tokio::sync::mpsc::channel(4);
-        LIVE_PEERS.lock().unwrap().insert(
+        live_peers().insert(
             normalize_node_id(key),
             LivePeer {
                 generation,
@@ -3965,10 +3953,7 @@ mod live_peer_registry_tests {
     }
 
     fn is_registered(key: &str) -> bool {
-        LIVE_PEERS
-            .lock()
-            .unwrap()
-            .contains_key(&normalize_node_id(key))
+        live_peers().contains_key(&normalize_node_id(key))
     }
 
     /// A reconnect installs a new connection under the same node id, and the

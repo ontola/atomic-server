@@ -7,10 +7,10 @@ import { useNavigate, useRouter } from '@tanstack/react-router';
  */
 export function useNavigateWithTransition() {
   const navigate = useNavigate();
-  const { viewTransitionsDisabled } = useSettings();
+  const { viewTransitionsEnabled } = useSettings();
 
   const navigateWithTransition = wrapWithViewTransition(
-    viewTransitionsDisabled,
+    !viewTransitionsEnabled,
     (options: Parameters<typeof navigate>[0] | string) => {
       const newOptions =
         typeof options === 'string'
@@ -28,10 +28,10 @@ export function useNavigateWithTransition() {
 
 export function useBackForward() {
   const router = useRouter();
-  const { viewTransitionsDisabled } = useSettings();
+  const { viewTransitionsEnabled } = useSettings();
 
   const back = wrapWithViewTransition(
-    viewTransitionsDisabled,
+    !viewTransitionsEnabled,
     () =>
       new Promise(resolve => {
         router.history.back();
@@ -40,7 +40,7 @@ export function useBackForward() {
   );
 
   const forward = wrapWithViewTransition(
-    viewTransitionsDisabled,
+    !viewTransitionsEnabled,
     () =>
       new Promise(resolve => {
         router.history.forward();

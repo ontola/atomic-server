@@ -2,6 +2,7 @@ import {
   Page,
   expect,
   Browser,
+  ConsoleMessage,
   Locator,
   TestInfo,
   test,
@@ -49,15 +50,9 @@ export function spaUrl(url: string): string {
 }
 
 /**
- * Hostname the Node test process can actually reach.
- *
- * Dagger serves the SPA at `http://atomic.localhost:9883` so Chromium treats
- * it as a secure context (`crypto.subtle` / WASM ClientDb). Chromium is told
- * to map that name via `--host-resolver-rules`; Node is not, and `/etc/hosts`
- * is read-only in the playwright container. When `ATOMIC_SERVICE_URL` is set
- * (dagger: `http://atomic:9883`), rewrite browser-facing URLs to that
- * service-binding host for anything fetched from the test process itself
- * (`route.fetch`, create-template, …).
+ * Internal transport URL for intercepted requests forwarded with `route.fetch`.
+ * Keep public URLs in generated configuration and authentication signatures:
+ * `server-dns.cjs` maps those to the CI service without changing their identity.
  */
 export function nodeReachableServerUrl(browserFacingUrl: string): string {
   const service = process.env.ATOMIC_SERVICE_URL?.replace(/\/$/, '');
@@ -1043,6 +1038,58 @@ export async function openNewResourcePage(page: Page) {
   }).toPass({ timeout: 20_000 });
 }
 
+/** Create a complete starter from the catalog, preserving the current parent. */
+export async function createFromCatalog(page: Page, title: string) {
+  const parent = new URL(page.url()).searchParams.get('subject');
+  await waitForSynced(page);
+  const url = new URL('/app/new', page.url());
+  if (parent) url.searchParams.set('parentSubject', parent);
+  await page.goto(url.href);
+  await page
+    .getByRole('searchbox', { name: 'Search templates and resource types' })
+    .fill(title);
+
+  // `openCreation` (NewRoute.tsx:205) navigates only after the template has
+  // been built, and its catch calls `store.notifyError` and navigates nowhere.
+  // So a creation that failed and a creation still running leave the page on
+  // exactly the same URL, and the wait below reports them identically: a wall
+  // of identical polls and a timeout naming itself. `apps:93` and `apps:182`
+  // both flaked here on develop run 4334 with 90 unchanged polls over the full
+  // 45s and nothing in the log to say which of the two had happened.
+  //
+  // `errorHandler` calls `console.error` before it raises the toast, and an
+  // unhandled rejection reaches it too, so the page's own console is the one
+  // place that can tell them apart. Collect it for the length of this step and
+  // report it only if the wait fails, leaving Playwright's call log intact.
+  const complaints: string[] = [];
+
+  const onConsole = (message: ConsoleMessage) => {
+    if (message.type() === 'error') complaints.push(message.text());
+  };
+
+  const onPageError = (error: Error) => complaints.push(error.message);
+  page.on('console', onConsole);
+  page.on('pageerror', onPageError);
+
+  try {
+    await page
+      .getByRole('region', { name: 'Start blank' })
+      .getByRole('button', { name: title, exact: true })
+      .click();
+    await expect(page).not.toHaveURL(/\/app\/new(\?|$)/, { timeout: 45_000 });
+  } catch (waitFailed) {
+    console.error(
+      complaints.length > 0
+        ? `Creating a ${title} from the catalog left the page on /app/new, and the page reported: ${complaints.join(' | ')}`
+        : `Creating a ${title} from the catalog left the page on /app/new, and the page reported no error, so the creation had not finished within the budget.`,
+    );
+    throw waitFailed;
+  } finally {
+    page.off('console', onConsole);
+    page.off('pageerror', onPageError);
+  }
+}
+
 export async function newResource(klass: string, page: Page) {
   await openNewResourcePage(page);
 
@@ -1088,9 +1135,18 @@ export async function newResource(klass: string, page: Page) {
         } as Record<string, string>
       )[klass] ?? klass;
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const classButton = page.getByRole('main').getByRole('button', {
-      name: new RegExp(`^${escaped}$`, 'i'),
-    });
+    // Scoped to the page's `section`s, which is where the class buttons live:
+    // "Start blank" and "Your resource types". The assistant's suggestion row
+    // above them is not a section, and #1577 gave it buttons that carry the
+    // same words, since "Dashboard" and "Custom table" are each both a
+    // suggestion and a class. Unscoped, the name then matches two buttons and
+    // Playwright refuses to touch either.
+    const classButton = page
+      .getByRole('main')
+      .locator('section')
+      .getByRole('button', {
+        name: new RegExp(`^${escaped}$`, 'i'),
+      });
     await classButton.waitFor({ state: 'visible', timeout: 30000 });
     await classButton.click();
     // Wait for any of: URL leaves /app/new (basic-instance handlers), a

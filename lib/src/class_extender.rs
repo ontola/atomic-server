@@ -191,11 +191,11 @@ impl ClassExtender {
     }
 
     pub fn resource_has_extender(&self, resource: &Resource) -> AtomicResult<bool> {
-        let Ok(is_a) = resource.get(urls::IS_A) else {
+        let resource_classes = resource.class_subjects();
+        if resource_classes.is_empty() {
             return Ok(false);
-        };
+        }
 
-        let resource_classes = is_a.to_subjects(None)?;
         let matched = resource_classes
             .iter()
             .any(|c| self.classes.contains(&normalize_class(c)));
@@ -313,16 +313,12 @@ impl ClassExtender {
             return true;
         };
 
-        let Ok(is_a) = resource.get(urls::IS_A) else {
-            return true;
-        };
-
-        let Ok(is_a_subjects) = is_a.to_subjects(None) else {
-            return true;
-        };
-
-        // Check if the resource is a plugin, if so return false.
-        !is_a_subjects.contains(&urls::PLUGIN.to_string())
+        // An Installation (or a not-yet-migrated legacy Plugin) is the plugin
+        // itself; a plugin must not extend the resource that installs it.
+        !resource
+            .class_subjects()
+            .iter()
+            .any(|class| class == urls::INSTALLATION || class == urls::PLUGIN)
     }
 }
 
@@ -349,6 +345,45 @@ mod tests {
             )
             .unwrap();
         resource
+    }
+
+    /// `isA` is not always a `ResourceArray`. A row rebuilt from a Loro doc, or
+    /// written by a client that pinned no datatype, reads back as an
+    /// `AtomicUrl`, a plain string, or a string holding the JSON array. Class
+    /// membership is the same in all of them, which is why nothing reads the
+    /// classes with `Value::to_subjects`, which errors on the scalar shapes.
+    #[test]
+    fn every_is_a_encoding_names_the_same_class() {
+        let encodings = [
+            Value::ResourceArray(vec![CLASS.into()]),
+            Value::AtomicUrl(CLASS.into()),
+            Value::String(CLASS.to_string()),
+            Value::String(format!("[\"{CLASS}\"]")),
+        ];
+
+        for is_a in encodings {
+            let mut resource = Resource::new("did:ad:someresource".to_string());
+            resource
+                .set_unsafe(urls::IS_A.into(), is_a.clone())
+                .unwrap();
+            assert_eq!(
+                resource.class_subjects(),
+                vec![CLASS.to_string()],
+                "{is_a:?}"
+            );
+            assert!(resource.has_class(CLASS), "{is_a:?}");
+            assert!(extender_declaring(CLASS)
+                .resource_has_extender(&resource)
+                .unwrap());
+        }
+
+        // No `isA` at all is no classes, which is not an error.
+        let bare = Resource::new("did:ad:someresource".to_string());
+        assert!(bare.class_subjects().is_empty());
+        assert!(!bare.has_class(CLASS));
+        assert!(!extender_declaring(CLASS)
+            .resource_has_extender(&bare)
+            .unwrap());
     }
 
     #[test]
