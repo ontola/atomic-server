@@ -20,12 +20,6 @@ const ANY: &str = "{tail:.*}";
 // See build.rs for more info.
 include!(concat!(env!("OUT_DIR"), "/generated.rs"));
 
-// Includes the `integrations/*/plugin.js` bundles as a second, separate
-// resource map (function `generate_integrations`), served at `/integrations`
-// instead of being inlined into the data-browser JS bundle.
-// See build.rs::embed_integrations for more info.
-include!(concat!(env!("OUT_DIR"), "/generated_integrations.rs"));
-
 /// Lightweight index of the embedded resource map, computed once.
 /// `static_files::Resource` is not `Clone`, so we can't cache the whole
 /// HashMap in a `OnceLock` and pass it to `ResourceFiles` too —
@@ -405,17 +399,6 @@ pub fn config_routes(app: &mut actix_web::web::ServiceConfig) {
             .route(web::get().to(handlers::plugin_secret::handle_list_secrets))
             .route(web::delete().to(handlers::plugin_secret::handle_delete_secret)),
     )
-    // Plugin bundles and catalog.json from `integrations/`, embedded
-    // separately from the SPA assets below (see build.rs::embed_integrations).
-    // `/integrations` isn't
-    // shared with any other handler, so a missing file 404s here directly —
-    // no `skip_handler_when_not_found`, whose guard checks the full request
-    // path against the resource map rather than the prefix-stripped suffix
-    // `ResourceFiles::call` actually looks up, and so never matches once the
-    // map's keys (`notion/plugin.js`, ...) don't repeat the `/integrations`
-    // prefix. Registered before the catch-all `/` ResourceFiles regardless,
-    // to keep intent obvious.
-    .service(ResourceFiles::new("/integrations", generate_integrations()).do_not_resolve_defaults())
     // Serve pre-compressed brotli assets when:
     //   - The client sends `Accept-Encoding: br`, AND
     //   - The build script wrote a `<path>.br` sibling into the

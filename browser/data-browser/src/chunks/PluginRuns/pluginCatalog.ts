@@ -27,7 +27,7 @@ type CatalogResource = Record<string, unknown>;
 
 // A parsed integrations/catalog.json entry. Every entry has an id, an
 // experimental flag and an enabled flag; the rest are only present on the
-// bundled integrations that own card copy (see IntegrationDiscovery.tsx) —
+// integrations that own card copy —
 // a raw LocalThought proxy platform like 'pets' only carries the first three.
 export interface CatalogEntry {
   shortname: string;

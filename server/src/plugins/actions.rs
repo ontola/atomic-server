@@ -1365,9 +1365,9 @@ mod tests {
         let db = std::sync::Arc::new(f.appstate.store.clone());
         let release = db
             .publish_plugin_release(&PluginRelease {
-                source: Some(include_str!("../../../integrations/github-issues/plugin.js").into()),
+                source: Some(include_str!("../../../testdata/plugin-for-testing/plugin.js").into()),
                 manifest: serde_json::from_str(include_str!(
-                    "../../../integrations/github-issues/manifest.fixture.json"
+                    "../../../testdata/plugin-for-testing/manifest.json"
                 ))
                 .unwrap(),
                 runtime: atomic_lib::db::plugin_release::RUNTIME.into(),
@@ -1380,7 +1380,7 @@ mod tests {
             .set_unsafe(
                 f.terms.property("plugin-connection").unwrap().into(),
                 AtomicValue::Json(
-                    json!({"release":release,"config":{"repository":"atomic-fixtures/issues"}}),
+                    json!({"release":release,"config":{"collection":"records"}}),
                 ),
             )
             .unwrap();
@@ -1396,8 +1396,8 @@ mod tests {
     fn call(id: &str) -> Call {
         Call {
             id: id.into(),
-            action: "create_issue".into(),
-            arguments: json!({"title":"Review this issue","body":"Synthetic"}),
+            action: "create_record".into(),
+            arguments: json!({"title":"Review this record","body":"Synthetic"}),
         }
     }
     #[actix_web::test]
@@ -1872,7 +1872,7 @@ mod tests {
     async fn sandbox_actions_prepare_validate_and_pin_without_writing() {
         let host = setup().await;
         let catalog = list(&host).await.unwrap();
-        assert_eq!(catalog["tools"][0]["name"], "get_issue");
+        assert_eq!(catalog["tools"][0]["name"], "get_record");
         assert_eq!(catalog["tools"][0]["annotations"]["readOnlyHint"], true);
         assert!(invoke(
             host.clone(),
@@ -1897,7 +1897,7 @@ mod tests {
         let p = saved(&host, "one").unwrap().unwrap();
         assert_eq!(
             p.intent.url,
-            "https://api.github.com/repos/atomic-fixtures/issues/issues"
+            "https://provider.test/records"
         );
         assert!(external::inspect(
             &host.db,
@@ -2053,15 +2053,15 @@ mod tests {
             caller: host.plugin.clone(),
             source_hash: blake3::hash(source.as_bytes()).to_hex().to_string(),
         };
-        assert!(valid_grant(&host, &origin, "create_issue", &bound)
+        assert!(valid_grant(&host, &origin, "create_record", &bound)
             .await
             .unwrap()
             .is_none());
-        set_grant(&host, &host.plugin, "create_issue", "automatic")
+        set_grant(&host, &host.plugin, "create_record", "automatic")
             .await
             .unwrap();
         assert_eq!(
-            valid_grant(&host, &origin, "create_issue", &bound)
+            valid_grant(&host, &origin, "create_record", &bound)
                 .await
                 .unwrap()
                 .unwrap()
@@ -2075,7 +2075,7 @@ mod tests {
                 source_hash: "edited".into(),
                 ..origin.clone()
             },
-            "create_issue",
+            "create_record",
             &bound
         )
         .await
@@ -2083,7 +2083,7 @@ mod tests {
         assert!(valid_grant(
             &host,
             &origin,
-            "create_issue",
+            "create_record",
             &Binding {
                 config: json!({}),
                 ..bound.clone()
@@ -2091,16 +2091,16 @@ mod tests {
         )
         .await
         .is_err());
-        assert!(valid_grant(&host, &origin, "get_issue", &bound)
+        assert!(valid_grant(&host, &origin, "get_record", &bound)
             .await
             .unwrap()
             .is_none());
         let mut other = host.clone();
         other.for_agent = ForAgent::Public;
-        assert!(set_grant(&other, &host.plugin, "create_issue", "automatic")
+        assert!(set_grant(&other, &host.plugin, "create_record", "automatic")
             .await
             .is_err());
-        assert!(valid_grant(&other, &origin, "create_issue", &bound)
+        assert!(valid_grant(&other, &origin, "create_record", &bound)
             .await
             .unwrap()
             .is_none());
@@ -2116,7 +2116,7 @@ mod tests {
                 ),
             )
             .unwrap();
-        set_grant(&host, &host.plugin, "create_issue", "automatic")
+        set_grant(&host, &host.plugin, "create_record", "automatic")
             .await
             .unwrap();
         let request =
@@ -2130,10 +2130,10 @@ mod tests {
             .unwrap()["status"],
             "needs_review"
         );
-        set_grant(&host, &host.plugin, "create_issue", "revoke")
+        set_grant(&host, &host.plugin, "create_record", "revoke")
             .await
             .unwrap();
-        assert!(valid_grant(&host, &origin, "create_issue", &bound)
+        assert!(valid_grant(&host, &origin, "create_record", &bound)
             .await
             .unwrap()
             .is_none());

@@ -16,7 +16,6 @@ artifact
 /.e2e-store
 /.e2e-runs
 server/assets_tmp
-server/integrations_assets_tmp
 server/js-build.log
 .netlify
 scratchpad

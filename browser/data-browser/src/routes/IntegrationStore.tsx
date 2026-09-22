@@ -2,10 +2,6 @@ import { usePluginClass } from '../chunks/PluginRuns/runScript';
 import { LocalThoughtCatalog } from '../chunks/PluginRuns/LocalThoughtCatalog';
 import { LocalThoughtCallback } from '../chunks/PluginRuns/localThoughtCallback';
 import { NewAutomation } from '../chunks/PluginRuns/NewAutomation';
-import {
-  IntegrationDiscovery,
-  visibleBundledIntegrations,
-} from '../chunks/PluginRuns/IntegrationDiscovery';
 import { ConnectedIntegration } from '../chunks/PluginRuns/ConnectedIntegration';
 import { useIntegrationCatalog } from '../chunks/PluginRuns/pluginCatalog';
 import { useIntegrationVisibility } from '@hooks/useIntegrationVisibility';
@@ -278,15 +274,6 @@ function IntegrationStore(): React.JSX.Element {
   };
 
   const query = search.trim().toLocaleLowerCase();
-  const bundled = visibleBundledIntegrations(
-    catalogEntries,
-    showExperimentalPlugins,
-    showApiPlugins,
-  ).filter(entry =>
-    `${entry.name} ${entry.description} ${entry.capabilities} ${entry.events} ${entry.keywords}`
-      .toLocaleLowerCase()
-      .includes(query),
-  );
   // Only offer a toggle when the catalog has something behind it: a checkbox
   // that reveals nothing reads as broken.
   const hasApiPlugins = catalogEntries.some(
@@ -296,9 +283,7 @@ function IntegrationStore(): React.JSX.Element {
     entry => entry.enabled && entry.experimental,
   );
   const nothingToDiscover =
-    catalogReady &&
-    bundled.length === 0 &&
-    (!showApiPlugins || !apiCatalogHasResults);
+    catalogReady && (!showApiPlugins || !apiCatalogHasResults);
   const visible = (showExperimentalPlugins ? listings : [])?.filter(entry =>
     [entry.name, entry.description, ...entry.domains, ...entry.standards]
       .join(' ')
@@ -409,14 +394,6 @@ function IntegrationStore(): React.JSX.Element {
                 onVisibilityChange={setApiCatalogHasResults}
               />
             )}
-            {bundled.map(entry => (
-              <IntegrationDiscovery
-                key={entry.id}
-                entry={entry}
-                workspace={workspace}
-                drive={drive}
-              />
-            ))}
           </Grid>
           {nothingToDiscover && <DiscoverEmptyState searching={!!query} />}
           <Column gap='0.75rem'>

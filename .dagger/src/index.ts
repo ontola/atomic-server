@@ -1906,8 +1906,7 @@ export class AtomicServer {
           // This is no longer about `plugin.spec.ts:26`. That was fixed by
           // giving the server its own `ATOMIC_DOMAIN` above, so it reads its
           // own subjects locally instead of fetching them, and the run after
-          // that change was green on `:26`, `mt940:16` and
-          // `installation-recovery:96`. What this line covers now is
+          // that change was green on `:26` and `installation-recovery:96`. What this line covers now is
           // everything else in the container that resolves the name: the
           // server for any subject genuinely on another host, and the Node
           // mock proxy, which is given `atomic.localhost:9883` as its frontend
@@ -2018,8 +2017,7 @@ export class AtomicServer {
           '/app/node_modules',
           browserContainer.directory('/app/node_modules'),
         )
-        // Raw imports in browser/e2e/tests (e.g. mt940.spec.ts,
-        // clockify-import.spec.ts) reach into ../../../integrations
+        // Raw imports in browser/e2e/tests reach into ../../../integrations
         // relative to /app/e2e/tests, resolving to /integrations here.
         .withDirectory('/integrations', this.source.directory('integrations'))
         // Same shape, one file: apps.spec.ts reads the embedded app SDK with a

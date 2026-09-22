@@ -6,7 +6,7 @@
     ],
     "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology",
     "https://atomicdata.dev/properties/shortname": "integrations-catalog",
-    "https://atomicdata.dev/properties/description": "The store's plugin gate: which of the bundled integrations in this folder are shown to every visitor of the Integrations page, and which stay hidden until a visitor enables 'Show experimental plugins'. Also owns the card copy for the bundled ones (`browser/data-browser/src/chunks/PluginRuns/IntegrationDiscovery.tsx` only keeps the one field JSON can't hold: a live reference to a LocalThought extension module). `shortname` on each PluginCatalogEntry matches a `BundledIntegration.id`. `enabled: false`, same as an id with no entry at all, makes it dark matter: its module is still compiled into the server as a static asset, but it is never offered, even with 'Show experimental plugins' on. Flip `experimental` to `false` once its package.json `atomicCertification.support` has left \"experimental\" — see integrations/README.md. This file is served as a static asset at `/integrations/catalog.json`; the data-browser fetches it from the connected server at runtime rather than bundling it at build time.",
+    "https://atomicdata.dev/properties/description": "The store's plugin gate: which of the integrations in this folder are shown to every visitor of the Integrations page, and which stay hidden until a visitor enables 'Show experimental plugins'. `enabled: false`, same as a shortname with no entry at all, makes it dark matter: it is never offered, even with 'Show experimental plugins' on. Flip `experimental` to `false` once its package.json `atomicCertification.support` has left \"experimental\" — see integrations/README.md. The data-browser fetches this file over HTTP from the catalog URL in its settings; no copy of it is compiled into the server or the SPA.",
     "https://atomicdata.dev/properties/classes": [
       "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
     ],
@@ -159,22 +159,6 @@
     "https://atomicdata.dev/integrations/properties/platform": "todoist"
   },
   {
-    "@id": "https://atomicdata.dev/integrations/catalog/mt940",
-    "https://atomicdata.dev/properties/isA": [
-      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
-    ],
-    "https://atomicdata.dev/properties/shortname": "mt940",
-    "https://atomicdata.dev/integrations/properties/experimental": true,
-    "https://atomicdata.dev/integrations/properties/enabled": true,
-    "https://atomicdata.dev/properties/name": "Bank statements",
-    "https://atomicdata.dev/properties/emoji": "🏦",
-    "https://atomicdata.dev/properties/description": "Import bank transactions from MT940 and camt.053 statement exports.",
-    "https://atomicdata.dev/integrations/properties/capabilities": "Preview exact amounts, dates, account references and original descriptions in a Bank transactions table.",
-    "https://atomicdata.dev/integrations/properties/events": "Upload an MT940 or camt.053 statement when you need it. No bank token required.",
-    "https://atomicdata.dev/integrations/properties/limitation": "MT940 (up to 512 KB) and camt.053 XML (up to 5 MB) files only, up to 500 transactions. No payment initiation or live bank sync. Bank-specific formats may need additional support.",
-    "https://atomicdata.dev/integrations/properties/keywords": "bank bunq banking finance accounting statement mt940 camt camt.053 iso20022 xml sepa import swift"
-  },
-  {
     "https://atomicdata.dev/properties/localId": "moneybird",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
@@ -210,24 +194,6 @@
     "https://atomicdata.dev/integrations/properties/platform": "clockify"
   },
   {
-    "@id": "https://atomicdata.dev/integrations/catalog/notion",
-    "https://atomicdata.dev/properties/isA": [
-      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
-    ],
-    "https://atomicdata.dev/properties/shortname": "notion",
-    "https://atomicdata.dev/integrations/properties/experimental": true,
-    "https://atomicdata.dev/integrations/properties/enabled": false,
-    "https://atomicdata.dev/properties/name": "Notion",
-    "https://atomicdata.dev/properties/emoji": "📓",
-    "https://atomicdata.dev/properties/description": "Work with your Notion database in Atomic.",
-    "https://atomicdata.dev/integrations/properties/capabilities": "Sync supported row fields, property names and table or board views.",
-    "https://atomicdata.dev/integrations/properties/events": "Start automations from newly discovered rows.",
-    "https://atomicdata.dev/integrations/properties/limitation": "Formatted text, relations, formulas and filtered views need additional mappings.",
-    "https://atomicdata.dev/integrations/properties/keywords": "notion database table board rows knowledge tasks automation",
-    "https://atomicdata.dev/integrations/properties/requires-api-plugins": true,
-    "https://atomicdata.dev/integrations/properties/callback-platform": "notion"
-  },
-  {
     "@id": "https://atomicdata.dev/integrations/properties/pluginUrl",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Property"
@@ -236,21 +202,5 @@
     "https://atomicdata.dev/properties/shortname": "plugin-url",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
     "https://atomicdata.dev/properties/description": "Where this integration's source can be fetched from, for entries not bundled as a local package.json in this folder. Optional — omitted for integrations developed in this repo."
-  },
-  {
-    "https://atomicdata.dev/properties/localId": "pets",
-    "https://atomicdata.dev/properties/isA": [
-      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
-    ],
-    "https://atomicdata.dev/properties/shortname": "pets",
-    "https://atomicdata.dev/integrations/properties/experimental": true,
-    "https://atomicdata.dev/integrations/properties/enabled": true,
-    "https://atomicdata.dev/properties/name": "Pets",
-    "https://atomicdata.dev/properties/emoji": "🐾",
-    "https://atomicdata.dev/properties/description": "A trivial demo collection, useful for trying plugins out.",
-    "https://atomicdata.dev/integrations/properties/capabilities": "Imports five static demo pets into a Pets table with a small ontology (species, breed, age, mood).",
-    "https://atomicdata.dev/integrations/properties/events": "A one-off, on-demand import. Nothing runs in the background.",
-    "https://atomicdata.dev/integrations/properties/limitation": "No external account, API key or network call. Static sample data only, not a live provider.",
-    "https://atomicdata.dev/integrations/properties/keywords": "pets demo example sample ontology test touch points"
   }
 ]

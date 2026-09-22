@@ -14,43 +14,103 @@ test('workspace owns its views and links to separate connection settings', async
 
   const installed = await page.evaluate(async () => {
     const store = window.store!;
-    // `installGitHub` is the app's own installer, which already holds the
-    // provider bundle it installs. This used to reach for the module by
-    // source path and read the bundled source out of the served text, which
-    // only a Vite dev server can answer.
-    const connection = await window.atomicE2E.githubInstaller.installGitHub(
-      store,
-      store.getDrive()!,
-      'ontola/workspace-test',
-      '',
-    );
-    // Existing installations retain their JSON binding, without a write-on-read migration.
-    const { findSchema, pluginSchema } = window.atomicE2E.tomicLib;
-    const schema = await findSchema(store, store.getDrive()!, pluginSchema());
-    const legacy = await store.getResource(connection.plugin);
-    await legacy.remove(schema.properties['plugin-workspace']);
-    await legacy.save();
-    const table = await store.getResource(connection.table);
+    const drive = store.getDrive()!;
+    const {
+      core,
+      dataBrowser,
+      ensureSchema,
+      pinPluginRelease,
+      pluginSchema,
+      taskSchema,
+    } = window.atomicE2E.tomicLib;
+
+    // A connected integration, built here rather than by installing a real
+    // provider. This test is about what the workspace page does with a
+    // connection — its own views, and a link out to connection settings — so
+    // the connection only has to exist and be shaped right. Plugins
+    // themselves live in atomic-plugins; nothing in this repo installs one.
+    const schema = await ensureSchema(store, drive, pluginSchema());
+    const save = async (resource: { save(): Promise<string> }) => {
+      if ((await resource.save()) === 'offline')
+        throw new Error('AtomicServer disconnected while building the fixture');
+    };
+
+    const plugin = await store.newResource({
+      parent: drive,
+      isA: [schema.classes['plugin-script']],
+      propVals: {
+        [core.properties.name]: 'Workspace fixture',
+        [dataBrowser.properties.emoji]: '🧪',
+        [schema.properties['plugin-source']]:
+          'export const manifest = { schemaVersion: 1, operations: [], secrets: [] };\n' +
+          'export function run() { return { intents: [], problems: [] }; }',
+      },
+    });
+    await save(plugin);
+
+    // The kanban columns the assertions below read are the embedded task
+    // vocabulary's Tag resources, so the table groups by task status.
+    const status = await store.getResource(taskSchema.properties.status);
+    const table = await store.newResource({
+      parent: plugin.subject,
+      isA: [dataBrowser.classes.table],
+      propVals: {
+        [core.properties.name]: 'Fixture workspace',
+        [core.properties.classtype]: core.classes.class,
+      },
+    });
+    await save(table);
+
+    const view = await store.newResource({
+      parent: table.subject,
+      isA: [dataBrowser.classes.view],
+      propVals: {
+        [core.properties.name]: 'Kanban',
+        [dataBrowser.properties.viewKind]: 'kanban',
+        [dataBrowser.properties.viewGroupBy]: status.subject,
+        [dataBrowser.properties.viewColumns]: [
+          core.properties.name,
+          status.subject,
+        ],
+      },
+    });
+    await save(view);
+    await table.set(dataBrowser.properties.tableViews, [view.subject]);
+    await table.set(dataBrowser.properties.tableDefaultView, view.subject);
+    await save(table);
+
+    const pinned = await pinPluginRelease(store, {
+      drive,
+      plugin: plugin.subject,
+    });
+    await plugin.set(schema.properties['plugin-connection'], {
+      release: pinned.id,
+      config: { drive, plugin: plugin.subject, table: table.subject },
+      events: [],
+    });
+    await save(plugin);
+
+    // A second view, so the assertions can tell the workspace's own views
+    // apart from the one the fixture starts with.
     const views = table.get(
       'https://atomicdata.dev/properties/table-views',
     ) as string[];
-    const original = await store.getResource(views[0]);
     const extra = await store.newResource({
-      parent: connection.table,
-      isA: original.get('https://atomicdata.dev/properties/isA'),
+      parent: table.subject,
+      isA: view.get('https://atomicdata.dev/properties/isA'),
       propVals: {
-        'https://atomicdata.dev/properties/name': 'All issues',
+        'https://atomicdata.dev/properties/name': 'All rows',
         'https://atomicdata.dev/properties/view-kind': 'table',
       },
     });
-    await extra.save();
+    await save(extra);
     await table.set('https://atomicdata.dev/properties/table-views', [
       ...views,
       extra.subject,
     ]);
-    await table.save();
+    await save(table);
 
-    return { plugin: connection.plugin, table: connection.table };
+    return { plugin: plugin.subject, table: table.subject };
   });
   // Everything above was written through the store in this page. Navigating
   // on top of an outbox that has not drained is the race `apps.spec.ts`
