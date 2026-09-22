@@ -279,6 +279,10 @@ imports do not wait on local indexing or WebSocket readiness.
 
 `cargo test -p atomic-server --test build_assets` exercises content/settings
 cache separation, corrupted Brotli recovery and concurrent atomic publication.
+`cargo test -p atomic-server --test build_plugin_runtime --features wasm-plugins`
+builds a tiny release workspace using the production runtime build script. It
+checks that nested Cargo completes while the parent holds its release lock and
+that the server embeds a real WASI component, including with a custom target dir.
 The context-menu E2E flow catches title blur stealing focus from the menu;
 Enter retains its explicit handoff into page content.
 
