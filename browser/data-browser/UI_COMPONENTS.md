@@ -27,6 +27,8 @@ This document might not be entirely up to date. If you need anything that is not
 
 ## Disclosure And Navigation UI
 
+- `src/components/AtomicLink.tsx` - Resource and app links; overlays can provide `ResourceLinkNavigationContext` to dismiss after resource navigation, including activating the current resource.
+
 - `src/components/Tabs.tsx` - Radix-based tabs with config-driven tab lists, panel children, rounded variant, and error styling.
 - `src/components/Collapse.tsx` - Animated expand/collapse wrapper, used in the Details component.
 - `src/components/Details.tsx` - Disclosure component similar to `<details>`, with a caret row or custom title control.

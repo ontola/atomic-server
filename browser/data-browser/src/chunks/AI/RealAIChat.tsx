@@ -1,3 +1,6 @@
+import { HOSTED_AI_USAGE_EVENT } from '@helpers/managed/ai';
+import { getManagedApiBase } from '@helpers/managed/api';
+import { HostedAICredits } from './HostedAICredits';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Column, Row } from '@components/Row';
@@ -827,20 +830,14 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         )}
         {!readonly && (
           <>
-            {activeModel.provider === AIProvider.Hosted && hostedAI && (
-              <Column gap='0.5rem'>
+            {activeModel.provider === AIProvider.Hosted &&
+              hostedAI &&
+              !hostedAI.consent && (
                 <span>
-                  {`${Math.floor(hostedAI.remaining_micros / 1000)} of ${Math.floor(hostedAI.allowance_micros / 1000)} AI credits left · account-wide · resets ${new Date(hostedAI.resets_at * 1000).toLocaleDateString()}`}
+                  By sending, you enable included AI. Your messages and selected
+                  document context are sent through Atomic to its AI providers.
                 </span>
-                {!hostedAI.consent && (
-                  <span>
-                    By sending, you enable included AI. Your messages and
-                    selected document context are sent through Atomic to its AI
-                    providers.
-                  </span>
-                )}
-              </Column>
-            )}
+              )}
             {providerNotice && (
               <ProviderNotice>
                 <span>{providerNotice}</span>
@@ -1040,7 +1037,13 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     >
                       <Popover
                         open={controlsOpen}
-                        onOpenChange={setControlsOpen}
+                        onOpenChange={open => {
+                          setControlsOpen(open);
+                          if (open)
+                            window.dispatchEvent(
+                              new Event(HOSTED_AI_USAGE_EVENT),
+                            );
+                        }}
                         onOpenAutoFocus={event => {
                           if (!focusModelOnOpen.current) return;
                           focusModelOnOpen.current = false;
@@ -1062,14 +1065,14 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                         side='top'
                         Trigger={
                           <PopoverTrigger asChild>
-                            <IconButton title='Chat options'>
+                            <IconButton title='AI Chat options'>
                               <FaSliders />
                             </IconButton>
                           </PopoverTrigger>
                         }
                       >
                         <ChatControls>
-                          <strong>Chat options</strong>
+                          <strong>AI Chat options</strong>
                           <ControlLabel>Agent</ControlLabel>
                           <SubtleButton
                             onClick={() => {
@@ -1137,6 +1140,17 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                                 }}
                               />
                             </ModelSelectWrapper>
+                          )}
+                          {hostedAI?.enabled && (
+                            <HostedAICredits
+                              status={hostedAI}
+                              portalUrl={
+                                new URL(
+                                  getManagedApiBase(),
+                                  window.location.origin,
+                                ).origin
+                              }
+                            />
                           )}
                           {showTokenUsage && totalTokensUsed > 0 && (
                             <TokensUsed>

@@ -25,6 +25,10 @@ Mobile AI chat navigation: Chromium covers opening the left sidebar above chat,
 Back dismissal without leaving the page, the AI settings link, an empty composer
 without vertical overflow, and messages without a redundant sender row. History
 unit tests cover StrictMode, explicit close, and navigation to another page.
+Resource links dismiss mobile chat even for the already-open resource; Chromium
+covers current/different targets, retained conversation and desktop staying open.
+Link unit tests check dismissal waits for navigation; history tests protect
+destinations when navigation inherits the chat marker.
 
 Included AI: managed transport tests cover signed-out status, explicit consent,
 backend errors, streaming credit failure and non-streaming title generation without
@@ -2318,6 +2322,8 @@ repositories and rejects dependency lockfile drift before builds.
 ## Mobile AI chat (#1591)
 
 `browser/e2e/tests/ai-mobile.spec.ts` checks full-width phone layout and message bodies, long titles keeping the header menu on-screen, the chat resource menu targeting the saved conversation and opening its full-page view, a composer that fits above a simulated keyboard inset, options and token visibility, closing the panel, desktop composer bounds, and model selection with focus returning to the editor. A long-response regression reproduces the final sentence being clipped after keyboard resize, verifies bottom-following and the small gap above the composer, and preserves reading position when scrolled up. AI responses are mocked; a physical mobile keyboard is not exercised.
+
+AI credit display: `helpers/managed/ai.test.ts` verifies usage notification when the SDK cancels a hosted stream; `components/AI/useHostedAI.test.tsx` verifies the immediate refresh and one delayed settlement refresh without ongoing polling. `HostedAICredits.test.tsx` covers fractional monthly and purchased balances. `ai-mobile.spec.ts` verifies the balance stays hidden until AI Chat options opens, refreshes from the account API, and links to the configured portal. These use mocked account/provider responses and do not verify live billing.
 
 Recovery read fan-out: `recovery-fetch.test.ts` verifies concurrent reads share
 one in-flight request per API/account, settled responses are not cached, failures

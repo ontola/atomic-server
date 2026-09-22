@@ -1,4 +1,6 @@
 import { styled } from 'styled-components';
+import { ResourceLinkNavigationContext } from '@components/ResourceLinkNavigationContext';
+import { useMediaQuery } from '@hooks/useMediaQuery';
 import React, {
   useCallback,
   useEffect,
@@ -47,6 +49,7 @@ const handleSidebarMessageSaveError = (error: unknown) => {
 
 const AISidebar: React.FC = () => {
   const store = useStore();
+  const mobile = useMediaQuery('(max-width: 600px)', false);
   const [rerenderKey, updateRenderKey] = useReducer(prev => prev + 1, 0);
   const { shouldGenerateTitles } = useAISettings();
   const {
@@ -497,7 +500,10 @@ const AISidebar: React.FC = () => {
   }, [messages]);
 
   return (
-    <React.Fragment key={rerenderKey}>
+    <ResourceLinkNavigationContext
+      key={rerenderKey}
+      value={mobile ? () => setIsOpen(false) : undefined}
+    >
       {/* When resetting the chat it is better to refresh the whole component because the useChat hook keeps internal state that is not easy to reset. */}
       <RealAIChat
         autoSubmitMessage={autoSubmitMessage}
@@ -554,7 +560,7 @@ const AISidebar: React.FC = () => {
           </Row>
         </Row>
       </RealAIChat>
-    </React.Fragment>
+    </ResourceLinkNavigationContext>
   );
 };
 

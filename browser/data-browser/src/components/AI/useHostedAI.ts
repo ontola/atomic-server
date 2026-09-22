@@ -11,6 +11,7 @@ export function useHostedAI() {
   useEffect(() => {
     let generation = 0;
     let active = true;
+    let settlementRefresh: ReturnType<typeof setTimeout> | undefined;
 
     const refresh = async () => {
       const request = ++generation;
@@ -24,18 +25,27 @@ export function useHostedAI() {
       }
     };
 
+    const refreshUsage = () => {
+      void refresh();
+      clearTimeout(settlementRefresh);
+      // The server finishes metering even after the SDK cancels its stream.
+      settlementRefresh = setTimeout(() => void refresh(), 1000);
+    };
+
     void refresh();
-    window.addEventListener(HOSTED_AI_USAGE_EVENT, refresh);
+    window.addEventListener(HOSTED_AI_USAGE_EVENT, refreshUsage);
     window.addEventListener('focus', refresh);
     const removeLogout = onManagedLogout(() => {
       generation++;
+      clearTimeout(settlementRefresh);
       setStatus(undefined);
     });
 
     return () => {
       active = false;
+      clearTimeout(settlementRefresh);
       removeLogout();
-      window.removeEventListener(HOSTED_AI_USAGE_EVENT, refresh);
+      window.removeEventListener(HOSTED_AI_USAGE_EVENT, refreshUsage);
       window.removeEventListener('focus', refresh);
     };
   }, []);
