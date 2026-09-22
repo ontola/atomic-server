@@ -35,7 +35,31 @@ test.describe('plugins', () => {
       !process.env.ATOMIC_MOCK_INTEGRATION_PROXY,
       'Run with the documented mock integration-proxy server configuration',
     );
-
+    // Failed all three attempts on develop run 4326, reported as the 60s test
+    // timeout and naming the `Last synced` wait below. That name is an
+    // artefact: the wall prints whichever assertion was in flight, and the
+    // longest ceiling in a test is the most likely one to be holding it. The
+    // step is not slow. Timed under four-worker load, three copies:
+    //
+    //   step                            budget   run A    run B    run C
+    //   integrations link through connect    -    5.7s     5.9s     4.9s
+    //   complete install, open folder        -    4.5s     5.1s     5.6s
+    //   `Last synced`                      60s    8.2s     7.1s     7.2s
+    //   open the Pets table            default    0.9s     0.6s     0.5s
+    //   rows and datatypes             default    2.5s     1.7s     0.5s
+    //   ------------------------------------- sum 21.9s   20.5s    18.8s
+    //   whole test                         60s   43.6s    38.6s    36.6s
+    //
+    // `Last synced` never passes 8.2s, and 18 to 22 seconds of each run are
+    // spent in `beforeEach` before the first step here begins. So the test is
+    // marginal as a whole, at 73% of its wall on the worst sample, and the
+    // wall lands wherever it happens to land.
+    //
+    // 120s for the test, matching the rest of this file. And `Last synced`
+    // comes DOWN to 30s: a ceiling equal to the wall can never fire, so it
+    // could only ever be reported as a wall casualty. At 30s against an 8.2s
+    // worst sample it can finally fail on its own terms and name itself.
+    test.setTimeout(120_000);
     await page.getByRole('link', { name: 'Integrations', exact: true }).click();
     const pets = page.locator('[data-integration="proxy:pets"]');
     await expect(
@@ -65,7 +89,7 @@ test.describe('plugins', () => {
     await page.getByRole('link', { name: 'Open folder', exact: true }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Last synced' }),
-    ).toBeVisible({ timeout: 60000 });
+    ).toBeVisible({ timeout: 30000 });
     await page
       .locator('[data-test="folder-list"]')
       .getByRole('link', { name: 'Pets', exact: true })
@@ -1383,7 +1407,18 @@ export async function run(ctx) {
       .click();
     const { id } = await (await publication).json();
     await page.goto(original);
-    await page.getByRole('tab', { name: 'Code', exact: true }).click();
+    // The first interaction after a full navigation, so the editor has to
+    // remount and render its tab list before the click can land. This is the
+    // click that failed on develop run 4330, all three attempts, on
+    // `use.actionTimeout`'s 10s. Timed under four-worker load it took 1.5s,
+    // 3.9s and 5.4s across three copies of the same run, rising with the
+    // store rather than varying randomly, so the worst sample was already at
+    // 54% of the ceiling with the trend still going up. The click above,
+    // which follows an in-page edit rather than a navigation, measured 106ms,
+    // 103ms and 128ms and is left alone.
+    await page
+      .getByRole('tab', { name: 'Code', exact: true })
+      .click({ timeout: 30000 });
     await expect(
       page
         .getByRole('main')
@@ -1893,7 +1928,16 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
  * the schema cheaper to create is its own change.
  */
 async function newPlugin(page: import('@playwright/test').Page) {
-  test.setTimeout(120000);
+  // `test.setTimeout` applies to the RUNNING TEST, not to the function it is
+  // written in, so a bare call here overwrote whatever the caller asked for,
+  // downward and without an error. The sidebar test above declares 240s three
+  // lines before calling this, and had never once run on 240s: it ran on 120s
+  // and died at a wall it had itself raised. Raise, never lower. Playwright uses 0 for "no timeout", so that case is
+  // left alone rather than handed a ceiling it deliberately removed; a bare
+  // `Math.max` here would be the same bug pointing the other way.
+  const currentTimeout = test.info().timeout;
+
+  if (currentTimeout !== 0 && currentTimeout < 120000) test.setTimeout(120000);
   await createFromCatalog(page, 'Plugin');
   await expect(
     page.getByRole('main').getByRole('heading', {

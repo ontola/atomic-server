@@ -222,7 +222,21 @@ test.describe('apps', () => {
  * the schema cheaper to create is its own change.
  */
 async function newApp(page: import('@playwright/test').Page) {
-  test.setTimeout(120000);
+  // `test.setTimeout` applies to the RUNNING TEST, not to the function it is
+  // written in, so a bare call here would overwrite whatever the caller asked
+  // for, downward and without an error. `newPlugin` in `plugins.spec.ts` was
+  // the same shape and did exactly that: its sidebar test declared 240s two
+  // lines before calling it, ran on 120s, and died at a wall it had itself
+  // raised. Nothing in this file declares a budget today, which is the only
+  // reason this one was harmless, and that stops being true the first time
+  // someone adds one.
+  //
+  // So raise, never lower. Playwright uses 0 for "no timeout", so that case is
+  // left alone rather than handed a ceiling it deliberately removed; a bare
+  // `Math.max` here would be the same bug pointing the other way.
+  const currentTimeout = test.info().timeout;
+
+  if (currentTimeout !== 0 && currentTimeout < 120000) test.setTimeout(120000);
   await createFromCatalog(page, 'App');
   await expect(
     page.getByRole('main').locator('iframe[title="App"]'),
