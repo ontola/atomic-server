@@ -171,11 +171,9 @@ test.describe('apps', () => {
     await page.reload();
 
     const reopened = page.frameLocator('iframe[title="App"]');
-    // Reload, app frame boot and its first query, measured at 13879 ms under
-    // four local workers, so the 10s default has nothing left on a box that
-    // carries more.
+    // Include cold database recovery and the bridge's bounded request wait.
     await expect(reopened.getByRole('listitem')).toHaveCount(1, {
-      timeout: 30_000,
+      timeout: 60_000,
     });
   });
 

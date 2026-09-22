@@ -1872,6 +1872,8 @@ deep packaged ancestry, bounded app writes, cycles and unavailable ancestors.
 `viewSession.test.ts` checks canonical resource/error replies. The actual packaged
 and generated SDK clients share conformance tests in
 `browser/plugin/src/viewProtocol.test.ts`, including ignoring foreign-window replies.
+The generated client also accepts a reply after the host's 30-second recovery
+window, clears its deadline on completion, and rejects a host that stays silent.
 The packaged adapter additionally tests canonical requests, caller-supplied policy
 spoofing, subscription acknowledgements and unsupported operations.
 
