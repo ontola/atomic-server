@@ -790,10 +790,6 @@ export class AtomicServer {
           this.source.directory('plugin-runtime'),
         )
         .withDirectory('/code/wasm', this.source.directory('wasm'))
-        .withDirectory(
-          '/code/integrations/localthought/syncables',
-          this.source.directory('integrations/localthought/syncables'),
-        )
         .withDirectory('/code/server', this.source.directory('server'))
         .withDirectory('/code/cli', this.source.directory('cli'))
         .withDirectory('/code/desktop', this.source.directory('desktop'))
@@ -856,10 +852,6 @@ export class AtomicServer {
         .withDirectory('/code/cli', this.source.directory('cli'))
         .withDirectory('/code/desktop', this.source.directory('desktop'))
         .withDirectory('/code/wasm', this.source.directory('wasm'))
-        .withDirectory(
-          '/code/integrations/localthought/syncables',
-          this.source.directory('integrations/localthought/syncables'),
-        )
         .withDirectory(
           '/code/plugin-examples',
           this.source.directory('plugin-examples'),
@@ -1366,10 +1358,6 @@ export class AtomicServer {
       .withDirectory('/code/desktop', source.directory('desktop'))
       .withDirectory('/code/wasm', source.directory('wasm'))
       .withDirectory(
-        '/code/integrations/localthought/syncables',
-        source.directory('integrations/localthought/syncables'),
-      )
-      .withDirectory(
         '/code/plugin-examples',
         source.directory('plugin-examples'),
       )
@@ -1571,10 +1559,6 @@ export class AtomicServer {
         .withDirectory('/code/cli', source.directory('cli'))
         .withDirectory('/code/desktop', source.directory('desktop'))
         .withDirectory('/code/wasm', source.directory('wasm'))
-        .withDirectory(
-          '/code/integrations/localthought/syncables',
-          source.directory('integrations/localthought/syncables'),
-        )
         .withDirectory(
           '/code/plugin-examples',
           source.directory('plugin-examples'),
