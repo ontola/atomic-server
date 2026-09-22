@@ -14,8 +14,15 @@ export const WelcomeRoute = createRoute({
   // Both are read in GettingStartedFlow.
   validateSearch: (
     search: Record<string, unknown>,
-  ): { next?: string; from_portal?: boolean } => ({
+  ): {
+    next?: string;
+    from_portal?: boolean;
+    return_to?: 'agent';
+    step?: 'signin';
+  } => ({
     next: typeof search.next === 'string' ? search.next : undefined,
+    return_to: search.return_to === 'agent' ? 'agent' : undefined,
+    step: search.step === 'signin' ? 'signin' : undefined,
     // tanstack coerces `?from_portal=true` to a boolean before we see it, so
     // accept both. Dropping it here would also strip it from the URL.
     from_portal:

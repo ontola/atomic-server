@@ -1,3 +1,5 @@
+Account redirects (2026-09-22): mounted `GettingStartedFlow.test.tsx` and `IdentityReconcileGate.test.tsx` cover hosted local sign-in, settings/passkey continuation, invite/drive priority, missing-data recovery and cancellation of stale identity/hosting checks. See [the route map](browser/data-browser/AUTH_FLOWS.md). Portal session, email-link and dashboard browser checks live in atomic-saas and use HTTP fixtures; real production passkey registration is not covered by these checks.
+
 New-drive sync: WebSocket unit coverage verifies SUB and SYNC wait for a pending genesis acknowledgement, then resume on ResourceSaved. The Local DB-off rendering E2E exercises this ordering with real server persistence.
 
 Cover repositioning: `cover-reposition.spec.ts` uploads a real image and verifies multiple pointer movements update its framing before release (native image dragging previously interrupted the gesture).
