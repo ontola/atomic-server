@@ -88,9 +88,12 @@ const SettingsAgent: React.FunctionComponent = () => {
   // second, parallel login form on this settings page.
   useEffect(() => {
     if (!effectiveAgent) {
-      navigate({ to: paths.welcome, replace: true });
+      navigate({
+        to: `${paths.welcome}?return_to=agent`,
+        replace: true,
+      });
     }
-  }, [effectiveAgent]);
+  }, [effectiveAgent, navigate]);
 
   /**
    * Sign out, and also drop this device's cached copy of the encrypted
