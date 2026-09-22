@@ -2424,3 +2424,17 @@ upgrade journey passes with the production per-account request limit.
 `agent.test.ts` covers independent devices deriving the same valid folder certificate, separation by drive/account, and refusal to derive an identity using a nondeterministic signer. `agentStorage.test.ts` checks stable folder IDs survive non-extractable key storage and subsequent keypair updates. `standardLocations.test.ts` covers concurrent calls across stores, reuse without resetting folder metadata, legacy sessions, and refusal to initialize over transport failures or known deletion.
 
 `ai-chat-discovery.spec.ts` checks that the visible sidebar includes chats from duplicate folders and the drive root before and after reload, excludes other drives and non-chat resources, and that two separately signed-in browser contexts create chats using the same folder ID. AI responses are mocked. Physical Safari and an offline two-device reconnect are not covered.
+
+## Compact presence and retry pressure (2026-09-22)
+
+`NavBarButton.test.tsx` reproduces the compact navbar hiding span-based presence
+triggers and verifies only action labels disappear. `presence-follow.spec.ts`
+uses two tabs sharing one stored test identity, checks the avatar at 320px,
+opens Follow and verifies subsequent navigation. The updated Chromium test
+passed against the local app; cross-network staging presence was not certified.
+
+`recovery-fetch.test.ts` verifies 429 cooldowns (Retry-After seconds and a
+60-second fallback), retry after expiry, in-flight sharing and fresh successful
+reads. `browser-peer-sync.test.ts` verifies increasing per-peer retry delays and
+that repeated discovery notifications cannot bypass them. These mitigate retry
+pressure; they do not prove the cause of the reported staging slowdown.
