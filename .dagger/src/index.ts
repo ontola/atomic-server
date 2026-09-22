@@ -1381,10 +1381,13 @@ export class AtomicServer {
       .withExec(['cargo', 'fetch', '--locked']);
 
     const browserDir = this.jsBuild(e2e).directory('/app/data-browser/dist');
-    const containerWithAssets = sourceContainer.withDirectory(
-      '/code/server/assets_tmp',
-      browserDir,
-    );
+    const containerWithAssets = sourceContainer
+      .withDirectory('/code/server/assets_tmp', browserDir)
+      // These static assets are fetched at runtime, separately from the SPA.
+      // Keep test fixtures and plugin TypeScript out of the Rust build input.
+      .withDirectory('/code/integrations', source.directory('integrations'), {
+        include: ['catalog.json', '*/plugin.js'],
+      });
 
     // Scope the build to `atomic-server` so cargo doesn't try to build
     // workspace siblings like the wasm cdylib plugin examples — which

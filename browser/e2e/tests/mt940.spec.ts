@@ -89,8 +89,11 @@ test('MT940 rejects unbalanced files, previews in sandbox and skips repeat impor
     page.getByText(/2 previously imported transactions skipped/),
   ).toBeVisible({ timeout: 30000 });
   await expect(
-    page.getByRole('button', { name: 'Apply 0 changes' }),
-  ).toBeDisabled();
+    page.getByRole('button', { name: /^Apply \d+ changes$/ }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Close', exact: true }),
+  ).toBeVisible();
   await page.screenshot({
     path: '/tmp/mt940-repeat-preview.png',
     fullPage: true,

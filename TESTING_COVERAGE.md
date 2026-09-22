@@ -2378,9 +2378,14 @@ boolean-helper tests do not establish why a read failed or where copies exist.
 (previously zero passed); the duplicate same-subject test was removed because
 `store.private-drive.test.ts` already checks repeated creation and identity.
 
-These are regression specifications, not a claim that the implementation is
-fixed. Validation results are recorded below. Existing genesis, migration,
-sign-out/content preservation and successful Vault restoration tests remain.
+The browser now recovers first, then initializes only the signed-in identity’s
+derived home with an optional device/backup nudge. `openPrivateHome.test.ts`
+covers existing/recovered data preservation, foreign subjects, concurrent
+requests, recovery failure and identity switches. Mounted onboarding tests
+cover the nonblocking own-home path and the foreign-workspace recovery gate.
+Existing genesis, migration, sign-out/content preservation and successful
+Vault restoration tests remain. The E2E fixture installs the commit watcher
+so document persistence is checked for both HTTP and WebSocket saves.
 
 Still missing: late failed reads invalidating a newly initialized home;
 reconciliation preserving both old content and new fallback work; integrated
@@ -2422,12 +2427,15 @@ one in-flight request per API/account, settled responses are not cached, failure
 can be retried, and signed-out callers make no request. The SaaS legacy recovery
 upgrade journey passes with the production per-account request limit.
 
+Integration bundle delivery: `integrationSource.test.ts` covers connected-server URLs, per-server caching, and retry after network, HTTP, or response-body failures. `scripts/dagger-ci-regression.test.mjs` verifies release and E2E builds receive the catalog and plugin bundles independently of the SPA.
 
 ## AI chat folder identity and discovery
 
 `agent.test.ts` covers independent devices deriving the same valid folder certificate, separation by drive/account, and refusal to derive an identity using a nondeterministic signer. `agentStorage.test.ts` checks stable folder IDs survive non-extractable key storage and subsequent keypair updates. `standardLocations.test.ts` covers concurrent calls across stores, reuse without resetting folder metadata, legacy sessions, and refusal to initialize over transport failures or known deletion.
 
 `ai-chat-discovery.spec.ts` checks that the visible sidebar includes chats from duplicate folders and the drive root before and after reload, excludes other drives and non-chat resources, and that two separately signed-in browser contexts create chats using the same folder ID. AI responses are mocked. Physical Safari and an offline two-device reconnect are not covered.
+
+Unreadable workspace summaries: `syncPresentation.test.ts` rejects copy that assumes another device has the data or that local data is protected; the summary reports an unreadable workspace without asserting where its data resides.
 
 ## Compact presence and retry pressure (2026-09-22)
 
@@ -2442,3 +2450,8 @@ passed against the local app; cross-network staging presence was not certified.
 reads. `browser-peer-sync.test.ts` verifies increasing per-peer retry delays and
 that repeated discovery notifications cannot bypass them. These mitigate retry
 pressure; they do not prove the cause of the reported staging slowdown.
+
+The sign-in/profile/sign-out smoke test also requires explicit sign-out to
+clear the local identity and land on the welcome screen without an account
+settings continuation, both immediately and after reload. The settings guard
+must not override an intentional sign-out or device lock.

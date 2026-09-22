@@ -21,9 +21,12 @@ const state = vi.hoisted(() => ({
   setServer: vi.fn(),
   recovery: vi.fn(),
   hasData: true,
+  agent: { subject: 'did:ad:agent:test' },
   store: {
     ensurePrivateDrive: vi.fn(async () => undefined),
     getServerUrl: () => 'https://node.example',
+    getAgent: () => state.agent,
+    privateDriveSubject: async () => 'did:ad:home',
   },
   restoreVault: vi.fn(),
 }));
@@ -216,9 +219,9 @@ it('returns a drive link to that drive after secret sign-in', async () => {
   );
 });
 
-it('keeps missing-data sign-in on the connect-device step', async () => {
+it('keeps an unreadable foreign workspace on the recovery step', async () => {
   state.hasData = false;
-  await show('?step=signin');
+  await show('?next=did%3Aad%3Aforeign');
   await act(async () => {
     fireEvent.change(screen.getByLabelText('Agent secret'), {
       target: { value: 'test-secret' },
@@ -250,4 +253,17 @@ it('resumes an invitation instead of settings after unlock', async () => {
   expect(state.navigate).toHaveBeenCalledWith(
     expect.stringContaining('/app/invite'),
   );
+});
+
+it('opens its own home without requiring another device', async () => {
+  state.hasData = false;
+  await show('?step=signin');
+  await act(async () => {
+    fireEvent.change(screen.getByLabelText('Agent secret'), {
+      target: { value: 'test-secret' },
+    });
+  });
+  expect(state.store.ensurePrivateDrive).toHaveBeenCalled();
+  expect(state.navigate).toHaveBeenCalledWith('/app/show?subject=did:ad:home');
+  expect(screen.queryByText('Connect device')).toBeNull();
 });

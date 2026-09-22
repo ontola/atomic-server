@@ -19,6 +19,13 @@ struct Dirs {
     /// All source directories to watch for changes
     src_dirs: Vec<PathBuf>,
     browser_root: PathBuf,
+    /// The monorepo's plugin sources. Only present when building inside the
+    /// full workspace checkout — see `embed_integrations`.
+    integrations_source: PathBuf,
+    /// Filtered copy (just `plugin.js` bundles) that gets embedded, so a
+    /// published crate tarball (which ships this dir but not `integrations/`
+    /// itself, per `include` in Cargo.toml) still has something to embed.
+    integrations_tmp: PathBuf,
 }
 
 fn main() -> std::io::Result<()> {
@@ -65,9 +72,12 @@ fn main() -> std::io::Result<()> {
                 PathBuf::from("../browser/pnpm-lock.yaml"),
             ],
             browser_root: PathBuf::from(BROWSER_ROOT),
+            integrations_source: PathBuf::from("../integrations"),
+            integrations_tmp: PathBuf::from("./integrations_assets_tmp"),
         }
     };
     println!("cargo:rerun-if-changed={}", BROWSER_ROOT);
+    println!("cargo:rerun-if-changed=../integrations");
 
     let start_should_build = Instant::now();
     let needs_build = should_build(&dirs);
@@ -132,6 +142,13 @@ fn main() -> std::io::Result<()> {
             start_copy.elapsed().as_secs_f32()
         );
     }
+
+    let start_integrations = Instant::now();
+    embed_integrations(&dirs)?;
+    p!(
+        "Embedding integration plugin assets took: {:.3}s",
+        start_integrations.elapsed().as_secs_f32()
+    );
 
     // Pre-compress big, compressible assets with brotli quality 11. The
     // runtime `middleware::Compress` only uses brotli at its default
@@ -611,4 +628,76 @@ fn is_newer_than_dist(dir_entry: &walkdir::DirEntry, dist_time: Duration) -> boo
     }
 
     false
+}
+
+/// Embeds the integration plugins' `plugin.js` bundles (checked-in build
+/// artifacts, not sources compiled by this build), plus the root
+/// `catalog.json` gate file, as a second, separate static-files resource
+/// map, served at `/integrations` (see `routes.rs`).
+///
+/// The `plugin.js` bundles used to be pulled into the data-browser's own JS
+/// bundle via Vite `?raw` imports, which meant every plugin's source lived
+/// twice: once here in the monorepo, once inlined into the SPA bundle.
+/// Embedding them directly and serving them over HTTP lets the browser
+/// `fetch()` a plugin's source at install time instead, and keeps the SPA
+/// bundle from growing with every new integration. `catalog.json` is
+/// embedded and served the same way, at `/integrations/catalog.json`, so a
+/// Tauri build (whose frontend is bundled separately and may talk to any
+/// paired server) can fetch it from whichever server it's actually
+/// connected to instead of a copy baked into the SPA at build time.
+///
+/// Only `plugin.js` files and the top-level `catalog.json` are collected —
+/// not the surrounding TypeScript sources, tests, fixtures or tooling, which
+/// remain source code compiled into the data-browser bundle like any other
+/// application logic.
+fn embed_integrations(dirs: &Dirs) -> std::io::Result<()> {
+    if dirs.integrations_source.exists() {
+        let _ = fs::remove_dir_all(&dirs.integrations_tmp);
+        for entry in walkdir::WalkDir::new(&dirs.integrations_source)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            let is_plugin_bundle = entry.file_name() == "plugin.js";
+            let is_root_catalog = entry.file_name() == "catalog.json" && entry.depth() == 1;
+            if !is_plugin_bundle && !is_root_catalog {
+                continue;
+            }
+            let relative = entry
+                .path()
+                .strip_prefix(&dirs.integrations_source)
+                .expect("walked entry is under integrations_source");
+            let dest = dirs.integrations_tmp.join(relative);
+            if let Some(parent) = dest.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::copy(entry.path(), &dest)?;
+        }
+    }
+
+    // Embed an empty set rather than failing the build — a server without
+    // bundled integrations is a degraded server, not a broken build. Two ways
+    // to land here with nothing copied: `cargo publish` of the standalone
+    // crate, where `integrations/` is outside the package and isn't shipped
+    // (see `include` in Cargo.toml); and CI containers that mount only a
+    // subtree of `integrations/` (a crate dependency such as
+    // `localthought/syncables`) to keep the Rust layer from being invalidated
+    // by every front-end edit. In the second case the source dir *does* exist,
+    // so the loop above runs, finds no `plugin.js` and no top-level
+    // `catalog.json`, and leaves the destination it just removed missing.
+    if !dirs.integrations_tmp.exists() {
+        fs::create_dir_all(&dirs.integrations_tmp)?;
+    }
+
+    let out_dir = std::env::var("OUT_DIR").expect("Cargo supplies OUT_DIR");
+    let mut resource_dir = static_files::resource_dir(&dirs.integrations_tmp);
+    resource_dir
+        .with_generated_filename(PathBuf::from(&out_dir).join("generated_integrations.rs"))
+        .with_generated_fn("generate_integrations");
+    resource_dir.build().unwrap_or_else(|_e| {
+        panic!(
+            "failed to open integrations assets from {}",
+            dirs.integrations_tmp.display()
+        )
+    });
+    Ok(())
 }

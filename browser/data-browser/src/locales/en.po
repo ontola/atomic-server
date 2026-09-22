@@ -4579,7 +4579,6 @@ msgstr "Could not open the scanner."
 msgid "<0/> Scan a QR code"
 msgstr "<0/> Scan a QR code"
 
-#: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx src/views/getting-started/ConnectDeviceStep.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
 msgid "Your data is on another device"
@@ -4866,9 +4865,8 @@ msgstr "Node ID copied"
 msgid "Copy {0}"
 msgstr "Copy {0}"
 
-#: src/routes/SyncRoute.tsx
-msgid "You’re signed in, but this device doesn’t have your workspace yet. Scan the code below with the device that has it."
-msgstr "You’re signed in, but this device doesn’t have your workspace yet. Scan the code below with the device that has it."
+#~ msgid "You’re signed in, but this device doesn’t have your workspace yet. Scan the code below with the device that has it."
+#~ msgstr "You’re signed in, but this device doesn’t have your workspace yet. Scan the code below with the device that has it."
 
 #: src/helpers/syncPresentation.ts
 msgid "Your data lives on the device you’re connected to."
@@ -4878,9 +4876,8 @@ msgstr "Your data lives on the device you’re connected to."
 msgid "Syncing this workspace…"
 msgstr "Syncing this workspace…"
 
-#: src/routes/SyncRoute.tsx
-msgid "You’re signed in, but this device doesn’t have your workspace yet. Connect a device that has it."
-msgstr "You’re signed in, but this device doesn’t have your workspace yet. Connect a device that has it."
+#~ msgid "You’re signed in, but this device doesn’t have your workspace yet. Connect a device that has it."
+#~ msgstr "You’re signed in, but this device doesn’t have your workspace yet. Connect a device that has it."
 
 #: src/components/ConnectServerDialog.tsx src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
@@ -7564,6 +7561,7 @@ msgstr "<0/> Loading"
 
 #: src/chunks/Templates/DriveTemplateSetup.tsx
 #: src/chunks/Templates/DriveTemplateSetup.tsx
+#: src/helpers/openPrivateHome.ts
 msgid "My drive"
 msgstr "My drive"
 
@@ -7713,7 +7711,7 @@ msgstr "Applied {0} changes"
 msgid "Applying…"
 msgstr "Applying…"
 
-#. 0: plan?.changes.length ?? 0
+#. 0: plan.changes.length
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 msgid "Apply {0} changes"
 msgstr "Apply {0} changes"
@@ -8222,25 +8220,20 @@ msgid "The next screen opens an editable JavaScript starter. Automatic execution
 msgstr "The next screen opens an editable JavaScript starter. Automatic execution stays off until you enable it."
 
 #: src/chunks/PluginRuns/ConnectNotion.tsx
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 msgid "Notion"
 msgstr "Notion"
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Work with your Notion database in Atomic."
-msgstr "Work with your Notion database in Atomic."
+#~ msgid "Work with your Notion database in Atomic."
+#~ msgstr "Work with your Notion database in Atomic."
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Sync supported row fields, property names and table or board views."
-msgstr "Sync supported row fields, property names and table or board views."
+#~ msgid "Sync supported row fields, property names and table or board views."
+#~ msgstr "Sync supported row fields, property names and table or board views."
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Start automations from newly discovered rows."
-msgstr "Start automations from newly discovered rows."
+#~ msgid "Start automations from newly discovered rows."
+#~ msgstr "Start automations from newly discovered rows."
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Formatted text, relations, formulas and filtered views need additional mappings."
-msgstr "Formatted text, relations, formulas and filtered views need additional mappings."
+#~ msgid "Formatted text, relations, formulas and filtered views need additional mappings."
+#~ msgstr "Formatted text, relations, formulas and filtered views need additional mappings."
 
 #: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 msgid "Supported scope"
@@ -8688,25 +8681,20 @@ msgstr "Proposal cancelled."
 msgid "Review this external action before approving it."
 msgstr "Review this external action before approving it."
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Clockify"
-msgstr "Clockify"
+#~ msgid "Clockify"
+#~ msgstr "Clockify"
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Bring your completed work into the Time Tracker."
-msgstr "Bring your completed work into the Time Tracker."
+#~ msgid "Bring your completed work into the Time Tracker."
+#~ msgstr "Bring your completed work into the Time Tracker."
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Import completed entries with project and person links, start/end times and billable flags."
-msgstr "Import completed entries with project and person links, start/end times and billable flags."
+#~ msgid "Import completed entries with project and person links, start/end times and billable flags."
+#~ msgstr "Import completed entries with project and person links, start/end times and billable flags."
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Review imports before applying them. This first version does not sync changes back."
-msgstr "Review imports before applying them. This first version does not sync changes back."
+#~ msgid "Review imports before applying them. This first version does not sync changes back."
+#~ msgstr "Review imports before applying them. This first version does not sync changes back."
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Your entries only; up to 31 days. No active timers, updates, deletions, tags, task links, rates or custom fields."
-msgstr "Your entries only; up to 31 days. No active timers, updates, deletions, tags, task links, rates or custom fields."
+#~ msgid "Your entries only; up to 31 days. No active timers, updates, deletions, tags, task links, rates or custom fields."
+#~ msgstr "Your entries only; up to 31 days. No active timers, updates, deletions, tags, task links, rates or custom fields."
 
 #: node_modules/devonian/platform-lenses/atomic-integrations/ui/ConnectClockify.tsx
 #: src/chunks/PluginRuns/ConnectClockify.tsx
@@ -8845,25 +8833,20 @@ msgid "No automations yet. Create one to respond to events from your connected a
 msgstr "No automations yet. Create one to respond to events from your connected apps."
 
 #: src/chunks/PluginRuns/ImportMT940.tsx
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 msgid "Bank statements"
 msgstr "Bank statements"
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Import bank transactions from bunq and other MT940 exports."
-msgstr "Import bank transactions from bunq and other MT940 exports."
+#~ msgid "Import bank transactions from bunq and other MT940 exports."
+#~ msgstr "Import bank transactions from bunq and other MT940 exports."
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Preview exact amounts, dates, account references and original descriptions in a Bank transactions table."
-msgstr "Preview exact amounts, dates, account references and original descriptions in a Bank transactions table."
+#~ msgid "Preview exact amounts, dates, account references and original descriptions in a Bank transactions table."
+#~ msgstr "Preview exact amounts, dates, account references and original descriptions in a Bank transactions table."
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Upload a statement when you need it. No bank token required."
-msgstr "Upload a statement when you need it. No bank token required."
+#~ msgid "Upload a statement when you need it. No bank token required."
+#~ msgstr "Upload a statement when you need it. No bank token required."
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "MT940 files only, up to 500 transactions and 512 KB. No payment initiation or live bank sync. Bank-specific formats may need additional support."
-msgstr "MT940 files only, up to 500 transactions and 512 KB. No payment initiation or live bank sync. Bank-specific formats may need additional support."
+#~ msgid "MT940 files only, up to 500 transactions and 512 KB. No payment initiation or live bank sync. Bank-specific formats may need additional support."
+#~ msgstr "MT940 files only, up to 500 transactions and 512 KB. No payment initiation or live bank sync. Bank-specific formats may need additional support."
 
 #: src/chunks/PluginRuns/ImportMT940.tsx
 msgid "Bank transactions"
@@ -9452,35 +9435,28 @@ msgstr "Close preview"
 msgid "These preferences are saved in your private Atomic drive. Existing connections remain available."
 msgstr "These preferences are saved in your private Atomic drive. Existing connections remain available."
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 #: src/routes/DevonianDemoRoute.tsx
 msgid "GitHub issues and comments (Devonian)"
 msgstr "GitHub issues and comments (Devonian)"
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Connect a GitHub repository to a local issue tracker."
-msgstr "Connect a GitHub repository to a local issue tracker."
+#~ msgid "Connect a GitHub repository to a local issue tracker."
+#~ msgstr "Connect a GitHub repository to a local issue tracker."
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Sync issues and comments in both directions, including closing and reopening issues."
-msgstr "Sync issues and comments in both directions, including closing and reopening issues."
+#~ msgid "Sync issues and comments in both directions, including closing and reopening issues."
+#~ msgstr "Sync issues and comments in both directions, including closing and reopening issues."
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Connect through LocalThought, then use Sync now to exchange changes."
-msgstr "Connect through LocalThought, then use Sync now to exchange changes."
+#~ msgid "Connect through LocalThought, then use Sync now to exchange changes."
+#~ msgstr "Connect through LocalThought, then use Sync now to exchange changes."
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Creates a separate local drive. Keep the browser open to sync. Sync writes changes to your GitHub repository."
-msgstr "Creates a separate local drive. Keep the browser open to sync. Sync writes changes to your GitHub repository."
+#~ msgid "Creates a separate local drive. Keep the browser open to sync. Sync writes changes to your GitHub repository."
+#~ msgstr "Creates a separate local drive. Keep the browser open to sync. Sync writes changes to your GitHub repository."
 
 #: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 msgid "Install plugin"
 msgstr "Install plugin"
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Google Calendar (Devonian)"
-msgstr "Google Calendar (Devonian)"
+#~ msgid "Google Calendar (Devonian)"
+#~ msgstr "Google Calendar (Devonian)"
 
 #: src/routes/DevonianDemoRoute.tsx
 msgid "LocalThought will ask you to sign in and authorize the GitHub connection."
@@ -9551,17 +9527,14 @@ msgstr "Viewers are free."
 msgid "Preparing invite…"
 msgstr "Preparing invite…"
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Import Google Calendar events into calendar views."
-msgstr "Import Google Calendar events into calendar views."
+#~ msgid "Import Google Calendar events into calendar views."
+#~ msgstr "Import Google Calendar events into calendar views."
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Preserves recurring series and previews supported edits to send back to Google."
-msgstr "Preserves recurring series and previews supported edits to send back to Google."
+#~ msgid "Preserves recurring series and previews supported edits to send back to Google."
+#~ msgstr "Preserves recurring series and previews supported edits to send back to Google."
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google."
-msgstr "Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google."
+#~ msgid "Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google."
+#~ msgstr "Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google."
 
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Prepare release"
@@ -9904,12 +9877,10 @@ msgid "Enable page transition animations (experimental, known to misbehave outsi
 msgstr "Enable page transition animations (experimental, known to misbehave outside Chromium on desktop)"
 
 #: src/components/Settings/IntegrationSettings.tsx
-#: src/routes/IntegrationStore.tsx
 msgid "Show API plugins"
 msgstr "Show API plugins"
 
 #: src/components/Settings/IntegrationSettings.tsx
-#: src/routes/IntegrationStore.tsx
 msgid "Show experimental plugins"
 msgstr "Show experimental plugins"
 
@@ -12243,3 +12214,32 @@ msgstr "Enable AI Chats panel"
 #: src/helpers/syncPresentation.ts
 msgid "This workspace could not be read on this device. Try opening it again."
 msgstr "This workspace could not be read on this device. Try opening it again."
+
+#: src/routes/IntegrationStore.tsx
+msgid "No integrations match your search."
+msgstr "No integrations match your search."
+
+#: src/routes/IntegrationStore.tsx
+msgid "No plugins to show here."
+msgstr "No plugins to show here."
+
+#. 0: ' '
+#: src/helpers/privateHomeNudge.tsx
+msgid "Your home is ready. Have data elsewhere?{0} <0>Connect another device or restore a backup</0>."
+msgstr "Your home is ready. Have data elsewhere?{0} <0>Connect another device or restore a backup</0>."
+
+#: src/routes/SyncRoute.tsx
+msgid "If another device has this workspace, scan the code below to connect it."
+msgstr "If another device has this workspace, scan the code below to connect it."
+
+#: src/routes/SyncRoute.tsx
+msgid "If another device has this workspace, you can connect it."
+msgstr "If another device has this workspace, you can connect it."
+
+#: src/routes/SyncRoute.tsx
+msgid "This workspace could not be read on this device"
+msgstr "This workspace could not be read on this device"
+
+#: src/routes/SyncRoute.tsx
+msgid "Local copy unavailable"
+msgstr "Local copy unavailable"

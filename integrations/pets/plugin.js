@@ -245,12 +245,38 @@ function demoPets() {
 }
 
 // integrations/pets/plugin.ts
-var manifest = { schemaVersion: 1, operations: [], secrets: [] };
+var manifest = {
+  schemaVersion: 1,
+  operations: [],
+  secrets: [],
+  // Declared so the host can check the install before starting the sandbox: a
+  // Pets import with nothing stored pauses on the field to set rather than on
+  // a destructuring error from inside run().
+  config: {
+    key: "pets",
+    properties: {
+      table: { type: "string", description: "Table the pets are written to" },
+      rowClass: { type: "string", description: "Class each imported pet gets" },
+      properties: {
+        type: "object",
+        description: "Pet ontology properties, by shortname"
+      }
+    },
+    required: ["table", "rowClass", "properties"]
+  }
+};
 var NAME = "https://atomicdata.dev/properties/name";
 function run(ctx) {
-  const { table, rowClass, properties: p } = ctx.config;
-  if (!table || !rowClass || !p)
-    throw new Error("Configure the connection before running it");
+  const { table, rowClass, properties: p } = ctx.config ?? {};
+  const missing = [
+    ["table", table],
+    ["rowClass", rowClass],
+    ["properties", p]
+  ].filter(([, value]) => !value).map(([name]) => name);
+  if (missing.length)
+    throw new Error(
+      `Configure the connection before running it: missing ${missing.join(", ")}`
+    );
   const pets = demoPets();
   const records = pets.map((pet) => {
     const identity = `pets:demo:${pet.id}`;

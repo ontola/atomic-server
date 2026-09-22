@@ -848,9 +848,9 @@ export function run() { return { intents: [] }; }
       page.getByText('This run proposes no changes.', { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole('button', { name: 'Apply 0 changes', exact: true }),
-    ).toBeDisabled();
-    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+      page.getByRole('button', { name: /^Apply \d+ changes$/ }),
+    ).toHaveCount(0);
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
     await page.evaluate(async subject => {
       const resource = await window.store!.getResource(subject);
       await resource.set(
@@ -885,7 +885,7 @@ export function run() { return { intents: [] }; }
       await expect(
         page.getByText('This run proposes no changes.', { exact: true }),
       ).toBeVisible();
-      await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await page.getByRole('button', { name: 'Close', exact: true }).click();
     }
 
     await expect(

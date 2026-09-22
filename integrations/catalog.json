@@ -1,0 +1,255 @@
+[
+  {
+    "@id": "https://atomicdata.dev/integrations/ontology/catalog",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/class/ontology"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/ontology",
+    "https://atomicdata.dev/properties/shortname": "integrations-catalog",
+    "https://atomicdata.dev/properties/description": "The store's plugin gate: which of the bundled integrations in this folder are shown to every visitor of the Integrations page, and which stay hidden until a visitor enables 'Show experimental plugins'. Also owns the card copy for the bundled ones (`browser/data-browser/src/chunks/PluginRuns/IntegrationDiscovery.tsx` only keeps the one field JSON can't hold: a live reference to a LocalThought extension module). `shortname` on each PluginCatalogEntry matches a `BundledIntegration.id`. `enabled: false`, same as an id with no entry at all, makes it dark matter: its module is still compiled into the server as a static asset, but it is never offered, even with 'Show experimental plugins' on. Flip `experimental` to `false` once its package.json `atomicCertification.support` has left \"experimental\" — see integrations/README.md. This file is served as a static asset at `/integrations/catalog.json`; the data-browser fetches it from the connected server at runtime rather than bundling it at build time.",
+    "https://atomicdata.dev/properties/classes": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/properties": [
+      "https://atomicdata.dev/integrations/properties/experimental",
+      "https://atomicdata.dev/integrations/properties/enabled",
+      "https://atomicdata.dev/integrations/properties/capabilities",
+      "https://atomicdata.dev/integrations/properties/events",
+      "https://atomicdata.dev/integrations/properties/limitation",
+      "https://atomicdata.dev/integrations/properties/keywords",
+      "https://atomicdata.dev/integrations/properties/requires-api-plugins",
+      "https://atomicdata.dev/integrations/properties/platform",
+      "https://atomicdata.dev/integrations/properties/callback-platform",
+      "https://atomicdata.dev/integrations/properties/pluginUrl"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/classes/PluginCatalogEntry",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Class"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/integrations/ontology/catalog",
+    "https://atomicdata.dev/properties/shortname": "plugin-catalog-entry",
+    "https://atomicdata.dev/properties/description": "One integration's visibility gate and, for a bundled one, its card copy.",
+    "https://atomicdata.dev/properties/requires": [
+      "https://atomicdata.dev/properties/shortname",
+      "https://atomicdata.dev/integrations/properties/experimental",
+      "https://atomicdata.dev/integrations/properties/enabled"
+    ],
+    "https://atomicdata.dev/properties/recommends": [
+      "https://atomicdata.dev/properties/name",
+      "https://atomicdata.dev/properties/emoji",
+      "https://atomicdata.dev/properties/description",
+      "https://atomicdata.dev/integrations/properties/capabilities",
+      "https://atomicdata.dev/integrations/properties/events",
+      "https://atomicdata.dev/integrations/properties/limitation",
+      "https://atomicdata.dev/integrations/properties/keywords",
+      "https://atomicdata.dev/integrations/properties/requires-api-plugins",
+      "https://atomicdata.dev/integrations/properties/platform",
+      "https://atomicdata.dev/integrations/properties/callback-platform",
+      "https://atomicdata.dev/integrations/properties/pluginUrl"
+    ]
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/properties/experimental",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/integrations/ontology/catalog",
+    "https://atomicdata.dev/properties/shortname": "experimental",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "True until this integration's advertised capabilities have current live evidence. An experimental entry is hidden from the Integrations page unless the visitor turns on 'Show experimental plugins'. Only meaningful when `enabled` is true."
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/properties/enabled",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/integrations/ontology/catalog",
+    "https://atomicdata.dev/properties/shortname": "enabled",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "Whether this integration can be reached at all. False, same as omitting the entry entirely, makes it dark matter: its module is still compiled into the server as a static asset, but the Integrations page never offers it, even with 'Show experimental plugins' on."
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/properties/capabilities",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/integrations/ontology/catalog",
+    "https://atomicdata.dev/properties/shortname": "capabilities",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "What this bundled integration's sync or import can actually do, shown on its Integrations page card."
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/properties/events",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/integrations/ontology/catalog",
+    "https://atomicdata.dev/properties/shortname": "events",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "How and when this bundled integration exchanges data, shown on its Integrations page card."
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/properties/limitation",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/integrations/ontology/catalog",
+    "https://atomicdata.dev/properties/shortname": "limitation",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The supported scope and caveats, shown in the card's 'Supported scope' details."
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/properties/keywords",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/integrations/ontology/catalog",
+    "https://atomicdata.dev/properties/shortname": "keywords",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Extra space-separated search terms matched against the Integrations page search box, alongside name and description."
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/properties/requires-api-plugins",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/integrations/ontology/catalog",
+    "https://atomicdata.dev/properties/shortname": "requires-api-plugins",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/boolean",
+    "https://atomicdata.dev/properties/description": "True if this integration's card only appears once a visitor also enables 'Show API plugins', on top of any `experimental` gating."
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/properties/platform",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/integrations/ontology/catalog",
+    "https://atomicdata.dev/properties/shortname": "platform",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The LocalThought platform id this integration's setup dialog connects through, for one that uses the generic LocalThought extension flow instead of its own setup component."
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/properties/callback-platform",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/integrations/ontology/catalog",
+    "https://atomicdata.dev/properties/shortname": "callback-platform",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "The platform id LocalThought's OAuth callback reports back, for an integration that owns its own setup component instead of using the generic LocalThought flow (so it has no `platform`)."
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/catalog/devonian-github-issues",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/shortname": "devonian-github-issues",
+    "https://atomicdata.dev/integrations/properties/experimental": true,
+    "https://atomicdata.dev/integrations/properties/enabled": false,
+    "https://atomicdata.dev/properties/name": "GitHub issues and comments (Devonian)",
+    "https://atomicdata.dev/properties/emoji": "🐙",
+    "https://atomicdata.dev/properties/description": "Connect a GitHub repository to a local issue tracker.",
+    "https://atomicdata.dev/integrations/properties/capabilities": "Sync issues and comments in both directions, including closing and reopening issues.",
+    "https://atomicdata.dev/integrations/properties/events": "Connect through LocalThought, then use Sync now to exchange changes.",
+    "https://atomicdata.dev/integrations/properties/limitation": "Creates a separate local drive. Keep the browser open to sync. Sync writes changes to your GitHub repository.",
+    "https://atomicdata.dev/integrations/properties/keywords": "devonian github issues comments lens local tracker",
+    "https://atomicdata.dev/integrations/properties/requires-api-plugins": true
+  },
+  {
+    "https://atomicdata.dev/properties/localId": "devonian-google-calendar",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/shortname": "devonian-google-calendar",
+    "https://atomicdata.dev/integrations/properties/experimental": true,
+    "https://atomicdata.dev/integrations/properties/enabled": false,
+    "https://atomicdata.dev/properties/name": "Google Calendar (Devonian)",
+    "https://atomicdata.dev/properties/emoji": "🗓️",
+    "https://atomicdata.dev/properties/description": "Import Google Calendar events into calendar views.",
+    "https://atomicdata.dev/integrations/properties/capabilities": "Preserves recurring series and previews supported edits to send back to Google.",
+    "https://atomicdata.dev/integrations/properties/events": "Connect through LocalThought, then use Sync now to exchange changes.",
+    "https://atomicdata.dev/integrations/properties/limitation": "Creates a local calendar folder. Keep the browser open to sync. Calendar writes require review before they are sent to Google.",
+    "https://atomicdata.dev/integrations/properties/keywords": "google calendar devonian events recurring lens local tracker",
+    "https://atomicdata.dev/integrations/properties/requires-api-plugins": true,
+    "https://atomicdata.dev/integrations/properties/platform": "google-calendar",
+    "https://atomicdata.dev/integrations/properties/pluginUrl": "https://github.com/localthought/devonian"
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/catalog/mt940",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/shortname": "mt940",
+    "https://atomicdata.dev/integrations/properties/experimental": true,
+    "https://atomicdata.dev/integrations/properties/enabled": false,
+    "https://atomicdata.dev/properties/name": "Bank statements",
+    "https://atomicdata.dev/properties/emoji": "🏦",
+    "https://atomicdata.dev/properties/description": "Import bank transactions from bunq and other MT940 exports.",
+    "https://atomicdata.dev/integrations/properties/capabilities": "Preview exact amounts, dates, account references and original descriptions in a Bank transactions table.",
+    "https://atomicdata.dev/integrations/properties/events": "Upload a statement when you need it. No bank token required.",
+    "https://atomicdata.dev/integrations/properties/limitation": "MT940 files only, up to 500 transactions and 512 KB. No payment initiation or live bank sync. Bank-specific formats may need additional support.",
+    "https://atomicdata.dev/integrations/properties/keywords": "bank bunq banking finance accounting statement mt940 import swift"
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/catalog/clockify",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/shortname": "clockify",
+    "https://atomicdata.dev/integrations/properties/experimental": true,
+    "https://atomicdata.dev/integrations/properties/enabled": false,
+    "https://atomicdata.dev/properties/name": "Clockify",
+    "https://atomicdata.dev/properties/emoji": "⏱️",
+    "https://atomicdata.dev/properties/description": "Bring your completed work into the Time Tracker.",
+    "https://atomicdata.dev/integrations/properties/capabilities": "Import completed entries with project and person links, start/end times and billable flags.",
+    "https://atomicdata.dev/integrations/properties/events": "Review imports before applying them. This first version does not sync changes back.",
+    "https://atomicdata.dev/integrations/properties/limitation": "Your entries only; up to 31 days. No active timers, updates, deletions, tags, task links, rates or custom fields.",
+    "https://atomicdata.dev/integrations/properties/keywords": "clockify time tracking timesheet projects billable import"
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/catalog/notion",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/shortname": "notion",
+    "https://atomicdata.dev/integrations/properties/experimental": true,
+    "https://atomicdata.dev/integrations/properties/enabled": false,
+    "https://atomicdata.dev/properties/name": "Notion",
+    "https://atomicdata.dev/properties/emoji": "📓",
+    "https://atomicdata.dev/properties/description": "Work with your Notion database in Atomic.",
+    "https://atomicdata.dev/integrations/properties/capabilities": "Sync supported row fields, property names and table or board views.",
+    "https://atomicdata.dev/integrations/properties/events": "Start automations from newly discovered rows.",
+    "https://atomicdata.dev/integrations/properties/limitation": "Formatted text, relations, formulas and filtered views need additional mappings.",
+    "https://atomicdata.dev/integrations/properties/keywords": "notion database table board rows knowledge tasks automation",
+    "https://atomicdata.dev/integrations/properties/requires-api-plugins": true,
+    "https://atomicdata.dev/integrations/properties/callback-platform": "notion"
+  },
+  {
+    "@id": "https://atomicdata.dev/integrations/properties/pluginUrl",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/classes/Property"
+    ],
+    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/integrations/ontology/catalog",
+    "https://atomicdata.dev/properties/shortname": "plugin-url",
+    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/string",
+    "https://atomicdata.dev/properties/description": "Where this integration's source can be fetched from, for entries not bundled as a local package.json in this folder. Optional — omitted for integrations developed in this repo."
+  },
+  {
+    "https://atomicdata.dev/properties/localId": "pets",
+    "https://atomicdata.dev/properties/isA": [
+      "https://atomicdata.dev/integrations/classes/PluginCatalogEntry"
+    ],
+    "https://atomicdata.dev/properties/shortname": "pets",
+    "https://atomicdata.dev/integrations/properties/experimental": true,
+    "https://atomicdata.dev/integrations/properties/enabled": true,
+    "https://atomicdata.dev/properties/name": "Pets",
+    "https://atomicdata.dev/properties/emoji": "🐾",
+    "https://atomicdata.dev/properties/description": "A trivial demo collection, useful for trying plugins out.",
+    "https://atomicdata.dev/integrations/properties/capabilities": "Imports five static demo pets into a Pets table with a small ontology (species, breed, age, mood).",
+    "https://atomicdata.dev/integrations/properties/events": "A one-off, on-demand import. Nothing runs in the background.",
+    "https://atomicdata.dev/integrations/properties/limitation": "No external account, API key or network call. Static sample data only, not a live provider.",
+    "https://atomicdata.dev/integrations/properties/keywords": "pets demo example sample ontology test touch points"
+  }
+]

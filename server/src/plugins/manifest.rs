@@ -35,6 +35,11 @@ pub struct Manifest {
     /// an operation id. It never widens what `operations` grant.
     #[serde(default, skip_serializing_if = "Network::is_default")]
     pub network: Network,
+    /// What the plugin's user-editable config looks like. The host validates
+    /// the stored config against it before a run; nothing here grants access,
+    /// so it is carried rather than interpreted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub config_schema: Option<serde_json::Map<String, serde_json::Value>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -62,6 +67,8 @@ struct ManifestV1 {
     operations: Vec<Operation>,
     #[serde(default)]
     actions: Vec<super::actions::Action>,
+    #[serde(default)]
+    config: Option<serde_json::Value>,
 }
 
 impl From<ManifestV1> for Manifest {
@@ -76,6 +83,7 @@ impl From<ManifestV1> for Manifest {
             operations: v1.operations,
             actions: v1.actions,
             network: Network::default(),
+            config: v1.config,
             config_schema: None,
             default_config: None,
             name: None,
@@ -520,6 +528,7 @@ pub fn translate_plugin_json(
             origins,
             reason: network_reason,
         },
+        config: None,
         config_schema: plugin_json.config_schema.as_ref().map(sorted),
         default_config: plugin_json.default_config.as_ref().map(sorted),
         name: Some(plugin_json.name.clone()),

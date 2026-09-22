@@ -1,6 +1,6 @@
 import { useAccountDriveCatalog } from '../hooks/useAccountDriveCatalog';
 import * as React from 'react';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { core, server, urls, useCurrentAgent, useStore } from '@tomic/react';
 import { useSettings } from '../helpers/AppSettings';
 import { Button } from '../components/Button';
@@ -54,6 +54,7 @@ const SettingsAgent: React.FunctionComponent = () => {
   const [storeAgent] = useCurrentAgent();
   const effectiveAgent = agent ?? storeAgent ?? store.getAgent();
   const navigate = useNavigateWithTransition();
+  const leavingAccount = useRef(false);
 
   const { privateDrive } = usePrivateDrive();
   const [savedDrives] = useSavedDrives();
@@ -87,7 +88,7 @@ const SettingsAgent: React.FunctionComponent = () => {
   // /app/welcome (GettingStartedFlow). Redirect there rather than rendering a
   // second, parallel login form on this settings page.
   useEffect(() => {
-    if (!effectiveAgent) {
+    if (!effectiveAgent && !leavingAccount.current) {
       navigate({
         to: `${paths.welcome}?return_to=agent`,
         replace: true,
@@ -113,6 +114,7 @@ const SettingsAgent: React.FunctionComponent = () => {
    * your account, you're just closing the door behind you.
    */
   function handleLockNow() {
+    leavingAccount.current = true;
     clearHeartbeat();
     setAgent(undefined);
     setDrive('');
@@ -134,6 +136,10 @@ const SettingsAgent: React.FunctionComponent = () => {
     // surface. This used to sit behind an `await getResource` that a public
     // drive skipped entirely, so signing out did nothing visible until a
     // refresh re-read the (now empty) agent.
+    // Clearing the store synchronously re-renders this route before navigation
+    // completes. Its signed-out guard must not replace our destination with
+    // the account-settings continuation.
+    leavingAccount.current = true;
     setAgent(undefined);
     // Empty, not the server origin: a drive is a workspace, and the origin is
     // the pre-DID default standing in for one. Signed out, there is no

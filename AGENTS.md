@@ -9,6 +9,30 @@ Guidance for coding agents working in this repo.
 
 The frontend auto-updates via HMR. If changes don't appear, reload the page. If you edit `@tomic/lib` or `@tomic/react`, those packages may need a rebuild first.
 
+## Fresh Worktrees
+
+A new `git worktree` starts with no installed `browser/node_modules` and no
+built `dist/` for the internal JS packages — none of that is git-tracked, so
+it doesn't come along with the checkout. Before your first `git commit` that
+touches any `.rs`, `Cargo.toml`/`Cargo.lock` file in a fresh worktree, run a
+full build so both sides are warm:
+
+```
+cd browser && pnpm install && pnpm run -r build
+cd ../server && cargo build
+```
+
+Skipping this turns a setup problem into a confusing commit-time failure:
+`scripts/pre-commit.mjs`'s Rust step (any staged `.rs`/`Cargo.*` file) runs
+`cargo clippy` against a snapshot containing only staged, git-tracked files —
+no `node_modules`, no `assets_tmp`. `server/build.rs` then has to run its own
+`pnpm install && pnpm run build` from scratch inside that snapshot to embed
+the frontend. If this worktree's own `browser/` was never fully installed and
+built, that inner build fails too, and it fails with errors that look
+unrelated to your change (a missing package, a stale/missing export from a
+workspace package) rather than anything obviously about "run pnpm install."
+Warming the worktree once up front avoids that entirely.
+
 ## Planning
 
 Use the `./planning` folder to write plans and keep track of progress.

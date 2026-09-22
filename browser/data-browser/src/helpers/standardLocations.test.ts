@@ -12,7 +12,7 @@ import {
 import { getOrCreateAiChatsFolder } from './standardLocations';
 
 const secret = Agent.buildSecret(
-  'CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=',
+  btoa('test-only-ai-folder-seed'.padEnd(32, '.')),
   'did:ad:agent:test',
 );
 

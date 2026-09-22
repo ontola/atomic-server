@@ -19,6 +19,8 @@ import { beat } from '../../helpers/deviceLock';
 import { fetchPrivateDriveSubject } from '../../helpers/privateDrive';
 import { connectHostedDrive } from '../../helpers/managed/reconcile';
 import { deviceHasDriveData } from '../../helpers/driveData';
+import { openPrivateHome } from '../../helpers/openPrivateHome';
+import { privateHomeNudge } from '../../helpers/privateHomeNudge';
 import { withDeadline } from '../../helpers/withDeadline';
 import { constructOpenURL } from '../../helpers/navigation';
 import { paths } from '../../routes/paths';
@@ -655,13 +657,8 @@ export function GettingStartedFlow({
         ? await connectHostedDrive(store, target, setServer)
         : false;
 
-      // A secret restores who you are, not what you have. So the app only
-      // opens once the workspace is here to read: opening one we cannot read
-      // shows an empty shell wearing its name, which reads as data loss.
-      //
-      // Asked before anything writes the drive, deliberately. Materializing it
-      // first — which is what this flow used to do — makes every "do I have my
-      // data?" check answer yes about data the device does not have.
+      // Check for existing data before creating anything, so a newly writable
+      // home is never mistaken for successful recovery of previous content.
       const canRead = (subject: string, refresh = hosted) =>
         withDeadline(
           deviceHasDriveData(store, subject, { refresh }),
@@ -728,17 +725,19 @@ export function GettingStartedFlow({
         store.registerLocalOnlyDrive(target);
       }
 
-      // Name the account's drive even when its data hasn't arrived: it is
-      // derived from the key, so it is the one place this identity can write
-      // right away, and the Sync page says "your data is on another device"
-      // about *that* drive, which is true and useful. Only when the drive
-      // cannot be named at all is no drive the honest answer — the value here
-      // otherwise falls back to whatever was last open, or to the default,
-      // which is the server's own root. Showing that as your workspace is how
-      // signing in ends with somebody else's data on screen.
       setDrive(target ?? '');
 
-      if (hasData) {
+      // Recover first, but connecting a device is optional for the identity's
+      // own home. A foreign requested workspace must never be synthesized.
+      const home =
+        !hasData && target && !returnToAgent
+          ? await openPrivateHome(store, target, true)
+          : undefined;
+
+      if (home) {
+        if (home === 'created') privateHomeNudge();
+        navigate(constructOpenURL(target!));
+      } else if (hasData) {
         // The home drive is derived from the key rather than looked up, so
         // nothing else will ever write it — `fetchPrivateDriveSubject` above
         // computes the subject but does not materialize it. Signing in is the

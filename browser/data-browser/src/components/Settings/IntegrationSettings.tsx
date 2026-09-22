@@ -18,14 +18,8 @@ import {
 
 export function IntegrationSettings() {
   const proxy = useIntegrationProxy();
-  const {
-    showApiPlugins,
-    showExperimentalPlugins,
-    ready,
-    saving,
-    error,
-    setVisibility,
-  } = useIntegrationVisibility();
+  const { showApiPlugins, showExperimentalPlugins, error, setVisibility } =
+    useIntegrationVisibility();
 
   return (
     <SettingsSection
@@ -36,17 +30,15 @@ export function IntegrationSettings() {
         <CheckboxLabel>
           <Checkbox
             checked={showApiPlugins}
-            disabled={!ready || saving}
-            onChange={value => void setVisibility('show-api-plugins', value)}
+            onChange={value => setVisibility('show-api-plugins', value)}
           />
           <span>Show API plugins</span>
         </CheckboxLabel>
         <CheckboxLabel>
           <Checkbox
             checked={showExperimentalPlugins}
-            disabled={!ready || saving}
             onChange={value =>
-              void setVisibility('show-experimental-plugins', value)
+              setVisibility('show-experimental-plugins', value)
             }
           />
           <span>Show experimental plugins</span>

@@ -38,6 +38,31 @@ export interface DeclaredOperation {
   effect: 'read' | 'write';
 }
 
+/**
+ * One field of the user-editable config a plugin reads from `input.config`.
+ *
+ * Declared beside the code that destructures it, for the same reason secrets
+ * are: an import whose config never made it into the resource then fails as a
+ * readable problem naming the field, instead of as a `TypeError` thrown out of
+ * `run()` that only the plugin's author can decode.
+ */
+export interface DeclaredConfigField {
+  type: 'string' | 'object';
+  description?: string;
+}
+
+export interface DeclaredConfig {
+  /**
+   * Key this plugin's config sits under in the installation's stored config.
+   * Omitted when the config is stored flat, which is what a plugin written
+   * against one destination does.
+   */
+  key?: string;
+  properties: Record<string, DeclaredConfigField>;
+  /** Fields `run()` cannot work without. Checked before the plugin is called. */
+  required?: string[];
+}
+
 export type ManifestRuntime = 'atomic-js/1' | 'wasip2/1';
 
 /** The trust boundary, independent of the language. */
@@ -85,6 +110,7 @@ export interface PluginManifestV2 {
   operations?: DeclaredOperation[];
   actions?: DeclaredAction[];
   network?: DeclaredNetwork;
+  config?: DeclaredConfig;
   configSchema?: Record<string, JSONValue>;
   defaultConfig?: Record<string, JSONValue>;
   name?: string;
@@ -285,7 +311,7 @@ export function validateManifest(raw: unknown): PluginManifest {
   known(
     entry,
     version === 1
-      ? ['schemaVersion', 'secrets', 'operations', 'actions']
+      ? ['schemaVersion', 'secrets', 'operations', 'actions', 'config']
       : [
           'schemaVersion',
           'runtime',
@@ -296,6 +322,7 @@ export function validateManifest(raw: unknown): PluginManifest {
           'operations',
           'actions',
           'network',
+          'config',
           'configSchema',
           'defaultConfig',
           'name',
@@ -396,6 +423,42 @@ export function validateManifest(raw: unknown): PluginManifest {
     return action as unknown as DeclaredAction;
   });
   if (actions.length > 64) throw new Error('at most 64 actions per release');
+  const declaredConfig =
+    entry.config === undefined ? undefined : object(entry.config);
+
+  if (declaredConfig) {
+    known(declaredConfig, ['key', 'properties', 'required']);
+    if (
+      declaredConfig.key !== undefined &&
+      (typeof declaredConfig.key !== 'string' ||
+        !/^[A-Za-z0-9_.-]{1,128}$/.test(declaredConfig.key))
+    )
+      throw new Error('invalid config key');
+
+    const fields = object(declaredConfig.properties);
+    if (Object.keys(fields).length > 64)
+      throw new Error('unsupported config schema');
+
+    for (const rawField of Object.values(fields)) {
+      const field = object(rawField);
+      known(field, ['type', 'description']);
+      if (
+        !['string', 'object'].includes(String(field.type)) ||
+        (field.description !== undefined &&
+          typeof field.description !== 'string')
+      )
+        throw new Error('unsupported config field');
+    }
+
+    // Required fields the declaration does not describe could not be reported
+    // in the plugin's own words, which is the whole point of declaring them.
+    if (
+      list(declaredConfig.required).some(
+        key => typeof key !== 'string' || !(key in fields),
+      )
+    )
+      throw new Error('unsupported config schema');
+  }
 
   if (version === 1) {
     return {
@@ -403,6 +466,9 @@ export function validateManifest(raw: unknown): PluginManifest {
       secrets,
       operations,
       ...(actions.length ? { actions } : {}),
+      ...(declaredConfig
+        ? { config: declaredConfig as unknown as DeclaredConfig }
+        : {}),
     };
   }
 
@@ -577,6 +643,9 @@ export function validateManifest(raw: unknown): PluginManifest {
     secrets,
     operations,
     ...(actions.length ? { actions } : {}),
+    ...(declaredConfig
+      ? { config: declaredConfig as unknown as DeclaredConfig }
+      : {}),
     ...(network.origins.length || network.reason !== undefined
       ? {
           network: {

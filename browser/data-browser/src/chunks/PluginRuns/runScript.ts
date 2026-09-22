@@ -8,6 +8,8 @@ import {
   parseVerdict,
   describePlugin,
   errorMessageFromResponse,
+  pluginConfigFor,
+  pluginConfigProblems,
   pluginSchema,
   recordRun,
   runPlugin,
@@ -15,6 +17,7 @@ import {
   type ApplyReport,
   type EnsuredSchema,
   type RunPlan,
+  type JSONObject,
   type RunTrigger,
   type Verdict,
   type PluginManifest,
@@ -406,6 +409,8 @@ export function usePluginManifest(source: string | undefined): PluginManifest {
 
 export interface PreparedRun {
   schemas?: Record<string, string>;
+  /** Exactly what `run()` was given, so preview and run can be compared. */
+  config?: JSONObject;
   source?: string;
   plan: RunPlan;
   trigger: RunTrigger;
@@ -442,23 +447,47 @@ export async function prepareRun(
     ? await pluginClassesFor(store, target.drive)
     : undefined;
   const instance = target ? await store.getResource(target.plugin) : undefined;
-  const schemas = (
-    schema ? instance?.get(schema.properties['plugin-schemas']) : undefined
-  ) as Record<string, string> | undefined;
+  const stored = schema
+    ? instance?.get(schema.properties['plugin-schemas'])
+    : undefined;
+  const schemas = stored as Record<string, string> | undefined;
+  // One config for every way a plugin is started. Preview, a manual run and a
+  // scheduled one all go through here, so none of them can hand `run()` a
+  // different `ctx.config` — or none at all — than the others.
+  const config = pluginConfigFor(
+    {
+      schemas: stored,
+      connection: schema
+        ? instance?.get(schema.properties['plugin-connection'])
+        : undefined,
+    },
+    declaration.config,
+  );
+  // Checked before the sandbox starts: a plugin cannot report a config field it
+  // never received well enough to be worth letting it try.
+  const misconfigured = pluginConfigProblems(config, declaration.config);
 
-  const { verdict, timedOut } = serverPlaced
-    ? await runOnServer(store, source, trigger, target!, schemas)
-    : await runPlugin(
-        source,
-        { trigger, schemas },
-        {
-          createWorker: () => new PluginWorker() as never,
-        },
-      );
+  const stopped: { verdict: Verdict; timedOut: boolean } = {
+    verdict: { intents: [], problems: misconfigured },
+    timedOut: false,
+  };
+
+  const { verdict, timedOut } =
+    misconfigured.length > 0
+      ? stopped
+      : serverPlaced
+        ? await runOnServer(store, source, trigger, target!, schemas, config)
+        : await runPlugin(
+            source,
+            { trigger, schemas, config },
+            {
+              createWorker: () => new PluginWorker() as never,
+            },
+          );
 
   const plan = await planVerdict(verdict, planHostFromStore(store));
 
-  return { plan, trigger, timedOut, serverPlaced, source, schemas };
+  return { plan, trigger, timedOut, serverPlaced, source, schemas, config };
 }
 
 /**
@@ -505,11 +534,12 @@ async function runOnServer(
   trigger: RunTrigger,
   target: { plugin: string; drive: string },
   schemas?: Record<string, string>,
+  config?: JSONObject,
 ): Promise<{ verdict: Verdict; timedOut: boolean }> {
   const body = await executeServerPlugin(store, {
     ...target,
     source,
-    input: { trigger, schemas },
+    input: { trigger, schemas, config },
   });
 
   if (body.error || !body.verdict) {
