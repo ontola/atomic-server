@@ -7219,9 +7219,8 @@ msgstr "This may take a little while. Please keep this window open."
 msgid "We found your workspace"
 msgstr "We found your workspace"
 
-#: src/helpers/syncPresentation.ts
-msgid "This device does not have this workspace yet. Fetch it from a device that has it."
-msgstr "This device does not have this workspace yet. Fetch it from a device that has it."
+#~ msgid "This device does not have this workspace yet. Fetch it from a device that has it."
+#~ msgstr "This device does not have this workspace yet. Fetch it from a device that has it."
 
 #: src/components/AccountRecoveryCard.tsx
 msgid "Could not add a passkey."
@@ -12240,3 +12239,7 @@ msgstr "User"
 #: src/routes/AppSettings.tsx
 msgid "Enable AI Chats panel"
 msgstr "Enable AI Chats panel"
+
+#: src/helpers/syncPresentation.ts
+msgid "This workspace could not be read on this device. Try opening it again."
+msgstr "This workspace could not be read on this device. Try opening it again."
