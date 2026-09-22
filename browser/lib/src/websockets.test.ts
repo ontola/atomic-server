@@ -663,6 +663,42 @@ describe('WSClient drive subscription', () => {
     client.close();
   });
 
+  it('waits for a new drive genesis acknowledgement before subscribing', async ({
+    expect,
+  }) => {
+    const { client, socket, store } = await connectedClient();
+    socket.receive(encodeChallenge('new-drive'));
+    const auth = client.authenticate();
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.AUTH)).toHaveLength(1),
+    );
+    socket.receive(encodeAuthOk([]));
+    await auth;
+    await new Promise(resolve => setTimeout(resolve, 10));
+    socket.sent.length = 0;
+    const drive = new Resource('did:ad:new-drive');
+    store.resources.set(drive.subject, drive);
+    store.outbox.setGenesisCommit(drive.subject, signedCommit());
+    vi.mocked(store.getDrive).mockReturnValue(drive.subject);
+    vi.spyOn(store, 'computeDriveSyncState').mockResolvedValue({
+      drive: drive.subject,
+      driveHash: 'hash',
+      resources: {},
+      peers: [],
+    });
+    store.setDrive(drive.subject);
+    await Promise.resolve();
+    expect(framesWithTag(socket, Tag.SUB)).toHaveLength(0);
+    expect(framesWithTag(socket, Tag.SYNC)).toHaveLength(0);
+    drive.setLastCommitValue('did:ad:commit:ack');
+    await store.notifyResourceSaved(drive);
+    await vi.waitFor(() =>
+      expect(framesWithTag(socket, Tag.SYNC)).toHaveLength(1),
+    );
+    expect(framesWithTag(socket, Tag.SUB)).toHaveLength(1);
+    client.close();
+  });
+
   it('UNSUBs the previous drive when the store switches drives', async ({
     expect,
   }) => {
