@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { core, type Store, type Resource } from '@tomic/lib';
+import { core, dataBrowser, type Store, type Resource } from '@tomic/lib';
 import {
   starterWebsite,
   websiteConfigSchema,
@@ -7,7 +7,11 @@ import {
   saveWebsiteResource,
 } from './websiteModel';
 import { renderDocument, renderRows, renderWebsitePage } from './renderWebsite';
-import { artifactDigest } from './websiteExport';
+import {
+  artifactDigest,
+  saveViewRelease,
+  selectedSubjects,
+} from './websiteExport';
 
 describe('website publication output', () => {
   it('renders semantic rich text and escapes source text', () => {
@@ -118,9 +122,47 @@ describe('website publication output', () => {
       await artifactDigest({ 'a.html': 'draft' }),
     );
   });
+  it('selects only named table rows for a public view snapshot', () => {
+    const config = starterWebsite('People');
+    config.pages[0].tables = [
+      {
+        table: 'table',
+        title: 'People',
+        layout: 'table',
+        rows: ['chosen-row'],
+        columns: [{ property: 'name', label: 'Name' }],
+      },
+    ];
+    expect(selectedSubjects(config)).toEqual(['table', 'chosen-row']);
+  });
 });
 
 describe('private website authoring', () => {
+  it('refuses to publish a non-View through the View release path', async () => {
+    const resource = {
+      subject: 'project',
+      get: () => undefined,
+      canWrite: async () => true,
+      hasClasses: (klass: string) => klass !== dataBrowser.classes.view,
+    } as unknown as Resource;
+    const store = {
+      getResource: async () => resource,
+      getAgent: () => ({ subject: 'owner' }),
+    } as unknown as Store;
+    const config = starterWebsite();
+    const files = { 'index.html': '<p>private</p>' };
+    await expect(
+      saveViewRelease(store, resource, {
+        version: 1,
+        renderer: 'atomic-static-v1',
+        project: resource.subject,
+        config,
+        files,
+        digest: await artifactDigest(files),
+        createdAt: new Date().toISOString(),
+      }),
+    ).rejects.toThrow('Only a View');
+  });
   it('rejects inherited public access and unresolved or cyclic ancestry', async () => {
     const resources: Record<string, Record<string, unknown>> = {
       site: { [core.properties.parent]: 'drive' },

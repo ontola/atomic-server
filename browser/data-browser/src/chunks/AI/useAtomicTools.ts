@@ -1363,7 +1363,8 @@ NEVER omit spans of pre-existing text without using the \`<unchanged-text>\` ele
       }),
       [TOOL_NAMES.CREATE_DASHBOARD]: tool({
         description:
-          'Create a dashboard over existing tables in ONE call: its blocks and their layout. A dashboard is the overview a table cannot give — a few numbers, a chart, and the list itself. Blocks come in four kinds: "stat" (one number), "chart" (a number per bucket, drawn as bars), "view" (an embedded, editable table/board/calendar) and "text" (a heading or note). A stat or chart block borrows a view\'s filters, so "open issues" is a stat block pointing at the view that filters to open — call describe_table first to see which views exist. Blocks are laid out left to right in twelfths automatically.',
+          /* @wc-ignore */
+          'Create a composed View over existing tables in ONE call: its blocks and their layout. The View can live under a Drive and combine multiple tables. Blocks come in four kinds: "stat" (one number), "chart" (a number per bucket, drawn as bars), "view" (an embedded, editable table/board/calendar) and "text" (a heading or note). A stat or chart block borrows a view\'s filters, so "open issues" is a stat block pointing at the view that filters to open — call describe_table first to see which views exist. Blocks are laid out left to right in twelfths automatically.',
         inputSchema: z.object({
           name: z.string().describe('The display name of the dashboard.'),
           parent: z

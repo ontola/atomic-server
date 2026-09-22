@@ -3,7 +3,7 @@ import { styled } from 'styled-components';
 import { ContainerFull } from '@components/Containers';
 import { EditableTitle } from '@components/EditableTitle';
 import { ResourceCoverImage } from '@components/ResourceDecorations';
-import type { ResourcePageProps } from '@views/ResourcePage';
+import type { Resource } from '@tomic/react';
 import { Row as FlexRow, Column } from '@components/Row';
 import { FaFileCsv } from 'react-icons/fa6';
 import { TableExportDialog } from './TableExportDialog';
@@ -17,7 +17,15 @@ const WorkspaceControls = lazy(() =>
   })),
 );
 
-export function TablePage({ resource }: ResourcePageProps): JSX.Element {
+export function TablePage({
+  resource,
+  viewSubject,
+  embedded = false,
+}: {
+  resource: Resource;
+  viewSubject?: string;
+  embedded?: boolean;
+}): JSX.Element {
   const titleId = useId();
 
   const [showExportDialog, setShowExportDialog] = useState(false);
@@ -69,7 +77,11 @@ export function TablePage({ resource }: ResourcePageProps): JSX.Element {
           <Suspense fallback={null}>
             <WorkspaceControls workspace={resource.subject} />
           </Suspense>
-          <TableResource resource={resource} />
+          <TableResource
+            resource={resource}
+            viewSubject={viewSubject}
+            embedded={embedded}
+          />
         </Column>
         <TableExportDialog
           subject={resource.subject}

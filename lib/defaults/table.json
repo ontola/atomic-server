@@ -272,7 +272,7 @@
   },
   {
     "@id": "https://atomicdata.dev/classes/View",
-    "https://atomicdata.dev/properties/description": "A saved view configuration for displaying a collection of resources (e.g. the rows of a Table): which filters are applied, how the data is sorted, and which kind of view (table, kanban, …) renders it.",
+    "https://atomicdata.dev/properties/description": "A saved interface over data. A View may render a table, board, calendar, custom app or composed blocks, and can live under a Table or Drive.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Class"
     ],
@@ -293,7 +293,9 @@
       "https://atomicdata.dev/properties/view-column-order",
       "https://atomicdata.dev/properties/view-row-actions",
       "https://atomicdata.dev/properties/view-quick-add",
-      "https://atomicdata.dev/properties/view-dashboard"
+      "https://atomicdata.dev/properties/view-dashboard",
+      "https://atomicdata.dev/properties/dashboard-blocks",
+      "https://atomicdata.dev/properties/dashboard-layout"
     ],
     "https://atomicdata.dev/properties/requires": [
       "https://atomicdata.dev/properties/name",

@@ -207,6 +207,8 @@ export const dataBrowser = {
       'https://atomicdata.dev/properties/view-dashboard',
       'https://atomicdata.dev/properties/view-group-by-column',
       'https://atomicdata.dev/properties/view-group-granularity',
+      'https://atomicdata.dev/properties/dashboard-blocks',
+      'https://atomicdata.dev/properties/dashboard-layout',
     ],
     ['https://atomicdata.dev/classes/Dashboard']: [
       'https://atomicdata.dev/properties/name',
@@ -417,7 +419,9 @@ declare module '../index.js' {
         | typeof dataBrowser.properties.viewQuickAdd
         | typeof dataBrowser.properties.viewDashboard
         | typeof dataBrowser.properties.viewGroupByColumn
-        | typeof dataBrowser.properties.viewGroupGranularity;
+        | typeof dataBrowser.properties.viewGroupGranularity
+        | typeof dataBrowser.properties.dashboardBlocks
+        | typeof dataBrowser.properties.dashboardLayout;
     };
     [dataBrowser.classes.dashboard]: {
       requires: BaseProps | 'https://atomicdata.dev/properties/name';

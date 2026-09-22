@@ -96,6 +96,16 @@ Website publication state: browser coverage verifies unchanged output after publ
 and reload, pending document edits, and pending changes after rollback. Unit tests
 compare page bytes and image hashes, including removed files and entry ordering.
 
+Unified View publication: `renderWebsite.test.ts` checks that the static export
+selection reads only explicitly named table rows and that the View release path
+rejects a non-View project. `createDashboardFromSpec.test.ts` checks Assistant
+composition creates a View with block storage. `dashboard.spec.ts` now checks standalone and table
+dashboard creation use View resources, with no extra Dashboard resource, and
+that the composed View opens at its own URL. The
+new View publication editor and anonymous public output still need a dedicated
+browser run; the local isolated checkout could not boot because linked workspace
+dependencies placed Loro WASM outside Vite's serving boundary.
+
 Website error recovery: Chromium verifies an unreadable selected image emits the
 Store toast and console error, replaces the loading placeholder, disables publication,
 and recovers after repairing the selection. Explicit retry is available.

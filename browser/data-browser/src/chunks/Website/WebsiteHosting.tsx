@@ -26,6 +26,7 @@ export function WebsiteHosting({
   savedDigest,
   saveRelease,
   secondary = false,
+  kind = 'site',
 }: {
   project: string;
   draft?: WebsiteArtifact;
@@ -34,6 +35,7 @@ export function WebsiteHosting({
   savedDigest?: string;
   saveRelease: (artifact: WebsiteArtifact) => Promise<HostingStatus>;
   secondary?: boolean;
+  kind?: 'site' | 'view';
 }) {
   const store = useStore();
   const [dialogProps, showVersions] = useDialog();
@@ -83,7 +85,7 @@ export function WebsiteHosting({
         .catch(error => {
           if (!active || request !== sequence) return;
           const failure = new Error(
-            `Could not load website hosting status: ${error instanceof Error ? error.message : String(error)}`,
+            `Could not load publication status: ${error instanceof Error ? error.message : String(error)}`,
             { cause: error },
           );
           setStatusError(failure.message);
@@ -123,7 +125,8 @@ export function WebsiteHosting({
 
   const activate = useCallback(
     async (deployment: string | null, current: HostingStatus) => {
-      if (!current.state) throw new Error('No website version is available.');
+      if (!current.state)
+        throw new Error('No publication version is available.');
       const next = await hostingRequest<HostingStatus>(
         store,
         project,
@@ -141,8 +144,8 @@ export function WebsiteHosting({
   const menuItems = useMemo(
     () => [
       {
-        id: 'website-view',
-        label: 'View site',
+        id: 'publication-view',
+        label: kind === 'view' ? 'Open published view' : 'View site',
         disabled: !status?.state?.active,
         onClick: () => {
           if (status?.state?.active)
@@ -150,22 +153,22 @@ export function WebsiteHosting({
         },
       },
       {
-        id: 'website-versions',
-        label: 'Website versions',
+        id: 'publication-versions',
+        label: kind === 'view' ? 'View versions' : 'Website versions',
         helper: 'Preview, restore and inspect publication history',
         disabled: !status?.state?.deployments.length,
         onClick: showVersions,
       },
       {
-        id: 'website-unpublish',
-        label: 'Unpublish website',
+        id: 'publication-unpublish',
+        label: kind === 'view' ? 'Unpublish view' : 'Unpublish website',
         disabled: busy || !canWrite || !status?.state?.active,
         onClick: () => {
           if (status) void run(() => activate(null, status));
         },
       },
     ],
-    [status, showVersions, busy, canWrite, run, activate],
+    [status, showVersions, busy, canWrite, run, activate, kind],
   );
   useCustomContextItems(menuItems);
 
@@ -185,7 +188,7 @@ export function WebsiteHosting({
 
       if (uploaded.state?.revision !== expected) {
         throw new Error(
-          'Someone else changed this website. Check the live site before updating again.',
+          'Someone else changed this publication. Check the live version before updating again.',
         );
       }
 
@@ -230,14 +233,21 @@ export function WebsiteHosting({
             : upToDate
               ? 'Up to date'
               : status?.state?.active
-                ? 'Update site'
-                : 'Publish site'}
+                ? kind === 'view'
+                  ? 'Update view'
+                  : 'Update site'
+                : kind === 'view'
+                  ? 'Publish view'
+                  : 'Publish site'}
         </Button>
         <Dialog {...dialogProps}>
-          <DialogTitle>Website versions</DialogTitle>
+          <DialogTitle>
+            {kind === 'view' ? 'View versions' : 'Website versions'}
+          </DialogTitle>
           <DialogContent>
             <p>
-              Hosted on your Atomic Server. Updates publish the current draft.
+              Hosted on your Atomic Server. Updates publish the reviewed
+              snapshot.
             </p>
             {!!status?.state?.deployments.length && (
               <Field label='Previous version' fieldId='hosting-release'>
@@ -259,7 +269,11 @@ export function WebsiteHosting({
             {previous && status?.state?.versions?.[previous] && (
               <SiteLink
                 as='a'
-                href={`/app/show?subject=${encodeURIComponent(project)}&view=website-version:${previous}`}
+                href={
+                  kind === 'view'
+                    ? `${status.url}_releases/${previous}/`
+                    : `/app/show?subject=${encodeURIComponent(project)}&view=website-version:${previous}`
+                }
               >
                 Preview version
               </SiteLink>

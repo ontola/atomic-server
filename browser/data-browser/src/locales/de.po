@@ -12240,3 +12240,116 @@ msgstr ""
 #: src/components/SideBar/FeedbackMenuItem.tsx
 msgid "Report this error"
 msgstr ""
+
+#. 0: String(cause)
+#: src/chunks/TablePage/ViewPublication.tsx
+msgid "Could not load publication: {0}"
+msgstr ""
+
+#. 0: String(cause)
+#: src/chunks/TablePage/ViewPublication.tsx
+msgid "Could not read the row: {0}"
+msgstr ""
+
+#. 0: String(cause)
+#: src/chunks/TablePage/ViewPublication.tsx
+msgid "Could not build the preview: {0}"
+msgstr ""
+
+#: src/chunks/TablePage/ViewPublication.tsx
+msgid "Choose a row from this table."
+msgstr ""
+
+#: src/chunks/TablePage/ViewPublication.tsx
+msgid "Fields"
+msgstr ""
+
+#. 0: rows.length
+#: src/chunks/TablePage/ViewPublication.tsx
+msgid "Rows ({0})"
+msgstr ""
+
+#: src/chunks/TablePage/ViewPublication.tsx
+msgid "Add a row"
+msgstr ""
+
+#: src/chunks/TablePage/ViewPublication.tsx
+msgid "Add row"
+msgstr ""
+
+#: src/chunks/TablePage/ViewPublication.tsx
+msgid "Select a field."
+msgstr ""
+
+#: src/chunks/TablePage/ViewPublication.tsx
+msgid "Select at least one field."
+msgstr ""
+
+#. 0: view.title
+#: src/chunks/TablePage/ViewPublication.tsx
+msgid "Publish {0}"
+msgstr ""
+
+#: src/chunks/TablePage/ViewPublication.tsx
+msgid "Public, read-only snapshot. Select exactly which rows and fields visitors can see. Later changes to the source stay private until you publish again."
+msgstr ""
+
+#: src/chunks/TablePage/ViewPublication.tsx
+msgid "Review public output"
+msgstr ""
+
+#. 0: error instanceof Error ? error.message \\: String(error)
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Could not load publication status: {0}"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Open published view"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "View versions"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Unpublish view"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Update view"
+msgstr ""
+
+#: src/chunks/TablePage/ViewPage.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Publish view"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Hosted on your Atomic Server. Updates publish the reviewed snapshot."
+msgstr ""
+
+#. 0: String(resource.error)
+#: src/chunks/TablePage/ViewPage.tsx
+msgid "Could not load this view: {0}"
+msgstr ""
+
+#: src/chunks/TablePage/ViewPage.tsx
+msgid "This view has no table to display."
+msgstr ""
+
+#: src/chunks/TablePage/ViewPage.tsx
+msgid "Back to view"
+msgstr ""
+
+#: src/chunks/TablePage/ViewPage.tsx
+msgid "Back to table"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Open view and publish"
+msgstr ""
+
+#: src/chunks/TablePage/Dashboard/DashboardView.tsx
+msgid "This view is still loading."
+msgstr ""

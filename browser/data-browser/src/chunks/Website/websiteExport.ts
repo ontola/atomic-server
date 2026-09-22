@@ -322,6 +322,34 @@ export async function saveWebsiteRelease(
   )
     throw new Error('Release does not match the reviewed website artifact.');
   await readWebsite(store, drive, resource);
+  return uploadStaticRelease(store, resource, artifact);
+}
+
+/** A View uses the same frozen host without creating a Website resource. */
+export async function saveViewRelease(
+  store: Store,
+  resource: Resource,
+  artifact: WebsiteArtifact,
+) {
+  await assertPrivateWebsiteParent(store, resource.subject);
+  const agent = store.getAgent();
+  if (!agent || !(await resource.canWrite(agent.subject)))
+    throw new Error('You cannot publish this view.');
+  if (!resource.hasClasses(dataBrowser.classes.view))
+    throw new Error('Only a View can use this publication path.');
+  if (
+    artifact.project !== resource.subject ||
+    (await artifactDigest(artifact.files, artifact.assets)) !== artifact.digest
+  )
+    throw new Error('Release does not match the reviewed view artifact.');
+  return uploadStaticRelease(store, resource, artifact);
+}
+
+async function uploadStaticRelease(
+  store: Store,
+  resource: Resource,
+  artifact: WebsiteArtifact,
+) {
   await uploadWebsiteAssets(store, resource.subject, artifact.assets);
 
   return hostingRequest<HostingStatus>(

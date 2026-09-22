@@ -98,8 +98,11 @@ export async function buildDashboardFromSpec(
 ): Promise<CreatedDashboard> {
   const dashboard = await store.newResource({
     parent: opts.parent,
-    isA: dataBrowser.classes.dashboard,
-    propVals: { [core.properties.name]: spec.name },
+    isA: dataBrowser.classes.view,
+    propVals: {
+      [core.properties.name]: spec.name,
+      [dataBrowser.properties.viewKind]: 'dashboard',
+    },
   });
   await dashboard.save();
 
@@ -263,12 +266,11 @@ export async function buildDashboardFromSpec(
     });
   }
 
-  await dashboard.set(dataBrowser.properties.dashboardBlocks, subjects, false);
+  await dashboard.set(dataBrowser.properties.dashboardBlocks, subjects);
   await dashboard.set(
     dataBrowser.properties.dashboardLayout,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     layout as any,
-    false,
   );
   await dashboard.save();
 

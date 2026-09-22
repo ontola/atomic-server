@@ -13,12 +13,7 @@ import {
  * kinds can be added without a schema migration; this union is the frontend's
  * source of truth for the ones we actually render.
  */
-/**
- * `dashboard` is the one kind that renders no rows: it shows the Dashboard
- * resource the view names in `view-dashboard`, so a dashboard is reachable as
- * a tab of the table it describes while staying a resource of its own
- * (`planning/dashboards.md`, Remaining work 1).
- */
+/** `dashboard` composes blocks on the View; old Views may reference a Dashboard. */
 export const VIEW_KINDS = [
   'table',
   'kanban',

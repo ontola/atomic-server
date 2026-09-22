@@ -1164,7 +1164,7 @@ export const TableResource: React.FC<TableResourceProps> = ({
             />
           </AppViewWrapper>
         ) : viewKind === 'dashboard' ? (
-          <DashboardView dashboard={viewDashboard} />
+          <DashboardView dashboard={viewDashboard} view={activeView} />
         ) : viewKind === 'kanban' ? (
           <KanbanView
             tableSubject={resource.subject}

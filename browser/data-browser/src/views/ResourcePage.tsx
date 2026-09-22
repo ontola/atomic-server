@@ -56,6 +56,9 @@ const TablePage = lazy(() =>
 const DashboardPage = lazy(() =>
   import('../chunks/DashboardPage').then(m => ({ default: m.DashboardPage })),
 );
+const ViewPage = lazy(() =>
+  import('../chunks/TablePage/ViewPage').then(m => ({ default: m.ViewPage })),
+);
 
 const WebsiteExportPage = lazy(() =>
   import('@chunks/Website/WebsiteExportPage').then(m => ({
@@ -304,6 +307,8 @@ function selectComponent(klass: string | undefined) {
       return ArticlePage;
     case dataBrowser.classes.table:
       return TablePage;
+    case dataBrowser.classes.view:
+      return ViewPage;
     case dataBrowser.classes.dashboard:
       return DashboardPage;
     case core.classes.ontology:

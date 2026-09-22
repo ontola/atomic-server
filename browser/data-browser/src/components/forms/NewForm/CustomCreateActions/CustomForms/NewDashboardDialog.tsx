@@ -22,12 +22,8 @@ import type { CustomResourceDialogProps } from '../../useNewResourceUI';
 /**
  * Asks for a name and nothing else.
  *
- * A Dashboard's real editor is the page itself — Add block, and a Configure
- * dialog per block. Without this, the New flow fell through to the generic
- * resource form, which renders `dashboard-blocks` and `dashboard-layout` as raw
- * JSON fields: a create screen that asks you to hand-write a layout before you
- * have any blocks to lay out. An empty dashboard is a perfectly good starting
- * point, so there is nothing else to ask for here.
+ * The old Dashboard catalog entry now creates a composed View. Existing
+ * Dashboard resources still open, but new block pages share the View model.
  */
 export const NewDashboardDialog: FC<CustomResourceDialogProps> = ({
   parent,
@@ -40,8 +36,11 @@ export const NewDashboardDialog: FC<CustomResourceDialogProps> = ({
 
   const onSuccess = useCallback(async () => {
     await createResourceAndNavigate(
-      dataBrowser.classes.dashboard,
-      { [core.properties.name]: name.trim() || 'Dashboard' },
+      dataBrowser.classes.view,
+      {
+        [core.properties.name]: name.trim() || 'Dashboard',
+        [dataBrowser.properties.viewKind]: 'dashboard',
+      },
       { parent, skipNavigation, onCreated },
     );
 

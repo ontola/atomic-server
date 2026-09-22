@@ -8,8 +8,8 @@
 > pattern ([[table-view-filters]]) and the `create_table` LLM-authoring precedent.
 > Interactivity is half built: five of the six action verbs ship (four as row
 > actions, one as the create button, on both the table and the dashboard). What is
-> *not* built is the sixth verb, parameters, and — the biggest gap — any way to
-> reach a dashboard from the table it describes. See **Remaining work**.
+> *not* built is the sixth verb and parameters. The former table reachability
+> gap is closed; the composed View migration is in **Remaining work**.
 >
 > The aggregation engine this plan specified shipped for table totals instead —
 > see step 4 of [[table-templates-and-mini-apps]]. It landed as designed here (an
@@ -435,44 +435,22 @@ is left is below, roughly in the order it is worth doing.
 Written after building the first slice, so this is what is actually missing rather
 than what was guessed at the start.
 
-#### 1. Where a dashboard *lives* — the biggest open thing
+#### 1. Where composed blocks live — revised 2026-09-22
 
-Today a Dashboard is a resource you create from the New menu and then have to find
-again. Nothing links a table to the dashboard about it. That is the single
-largest gap between "this works" and "people use it", and it splits into two
-questions that are easy to conflate.
+New block pages are `View` resources with `view-kind: dashboard`. They can live
+under a Drive for composition across several tables, or under one Table as a
+saved tab. Blocks remain standalone child resources and can point to any table
+or View the author can read. Creating a separate Dashboard resource for every
+table tab was redundant, so new tabs and the standalone New Dashboard flow
+create only a View. Older `Dashboard` resources and `view-dashboard` links keep
+rendering. See [`unified-view-publishing.md`](./unified-view-publishing.md) for
+the broader View and publication migration.
 
-**Should a dashboard be a View?** Tempting — it would appear as a tab beside
-Board and Calendar, and you would navigate to it the way you already navigate
-between views. **Recommendation: no, not as the model.** A `View` belongs to
-exactly one table, and the motivating example at the top of this document is
-cross-table (a perfume Drive with Batches, Batch Ingredients, Batch Log and
-Shopping List; "my week" across projects). Folding Dashboard into View would also
-contradict the decision the whole design rests on — blocks are standalone
-resources *so they can render in more than one context*.
-
-What is right is the **ergonomics** the suggestion is reaching for. Two ways, not
-exclusive:
-
-- **A view of kind `dashboard` that points at one** (`view-kind: 'dashboard'` plus
-  a `view-dashboard` reference). The tab bar then shows it, navigation is free, and
-  the Dashboard stays a first-class resource that a Drive homepage or a document
-  can also embed. This is the cheap half and probably the right first move.
-- **A table names its dashboard** (`table-dashboard`), which is the same idea
-  without the tab machinery.
-
-Either way the Dashboard resource is unchanged; what is added is a way to *reach*
-it. Do this before anything else on this list — a feature nobody can find has no
-users to tell you what is wrong with it.
-
-**Shipped 2026-09-16, the first way:** `view-kind: 'dashboard'` plus
-`view-dashboard` (`lib/defaults/table.json`, `tableViewKinds.ts`). "Add view →
-Dashboard" and "View type → Dashboard" create an empty Dashboard as a child of
-the table and point the view at it (`useTableView.ts`
-`createDashboardResource`); `TableResource` renders `DashboardView`, the same
-page the resource has on its own. `table-dashboard` is not added: the view
-already names it. E2E: `dashboard.spec.ts` "a table reaches its dashboard as a
-tab".
+The earlier recommendation to keep Dashboard as a separate model is superseded:
+it assumed every View must belong to exactly one Table. A composed View can
+instead live under a Drive and bind multiple sources explicitly. The remaining
+todo is to update templates to create composed Views, then retire the Dashboard
+authoring label after existing resources and links have compatibility paths.
 
 #### 2. Templates that ship a dashboard
 

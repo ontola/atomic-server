@@ -299,6 +299,15 @@ test.describe('dashboards', () => {
     ).toHaveValue('Overview', {
       timeout: 15_000,
     });
+    const createdClass = await page.evaluate(async () => {
+      const subject = new URL(location.href).searchParams.get('subject')!;
+      const resource = await window.store.getResource(subject);
+      return resource.get('https://atomicdata.dev/properties/isA');
+    });
+    expect(createdClass).toContain('https://atomicdata.dev/classes/View');
+    expect(createdClass).not.toContain(
+      'https://atomicdata.dev/classes/Dashboard',
+    );
 
     // It lands on the dashboard's own editor, which is where blocks are added.
     await expect(page.getByTitle('Add block')).toBeVisible();
@@ -310,9 +319,8 @@ test.describe('dashboards', () => {
   });
 
   test('a table reaches its dashboard as a tab', async ({ page }) => {
-    // A dashboard nobody can find has no users. "Add view → Dashboard" makes
-    // one as a child of the table and shows it beside Table and Board; the
-    // tab survives a reload because the view names the dashboard.
+    // The tab is now the composed View itself. No second Dashboard resource
+    // is created, and the View also has its own direct URL.
     const fixture = await createSpendingTable(page);
     await page.goto(
       `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(fixture.table)}`,
@@ -334,6 +342,13 @@ test.describe('dashboards', () => {
     });
     await expect(page.getByText(/Nothing here yet/)).toBeVisible();
     await waitForSynced(page);
+    const viewSubject = new URL(page.url()).searchParams.get('view');
+    expect(viewSubject).toBeTruthy();
+    const extraDashboard = await page.evaluate(async subject => {
+      const view = await window.store.getResource(subject!);
+      return view.get('https://atomicdata.dev/properties/view-dashboard');
+    }, viewSubject);
+    expect(extraDashboard).toBeUndefined();
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('tab', { name: 'Dashboard' })).toBeVisible({
@@ -342,6 +357,16 @@ test.describe('dashboards', () => {
     await expect(page.getByTitle('Add block')).toBeVisible({
       timeout: 15_000,
     });
+    await page.goto(
+      `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(viewSubject!)}`,
+    );
+    await expect(page.getByTitle('Add block')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await page.goto(
+      `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(fixture.table)}`,
+    );
 
     // The rows are one tab away.
     await page.getByRole('tab', { name: 'Default View' }).click();

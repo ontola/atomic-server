@@ -8,24 +8,20 @@ const DashboardPage = lazy(() =>
   import('@chunks/DashboardPage').then(m => ({ default: m.DashboardPage })),
 );
 
-/**
- * A table tab that shows a Dashboard: the view of kind `dashboard` names one
- * in `view-dashboard`, and this renders the same page the Dashboard resource
- * has on its own. Nothing about the dashboard is view-specific, which is the
- * point: blocks are resources, and this is only how the table reaches them.
- */
+/** A composed View owns its blocks. Older views may still reference a Dashboard. */
 export function DashboardView({
   dashboard,
+  view,
 }: {
   dashboard: string | undefined;
+  view: string | undefined;
 }): JSX.Element {
-  if (!dashboard) {
-    // A view whose dashboard is still being created, or one written by hand
-    // without the reference.
-    return <Empty>This view has no dashboard yet.</Empty>;
+  const subject = dashboard ?? view;
+  if (!subject) {
+    return <Empty>This view is still loading.</Empty>;
   }
 
-  return <LoadedDashboard subject={dashboard} />;
+  return <LoadedDashboard subject={subject} />;
 }
 
 function LoadedDashboard({ subject }: { subject: string }): JSX.Element {
