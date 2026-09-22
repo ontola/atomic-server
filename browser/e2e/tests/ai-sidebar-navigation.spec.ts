@@ -50,4 +50,16 @@ test('AI chats menu appears for a saved chat and reopens it without page navigat
   ).toBeVisible();
   expect(page.url()).toBe(location);
   await expect(panel.getByRole('heading')).toHaveText(await saved.innerText());
+  await panel.getByRole('button', { name: 'Chat resource actions' }).click();
+  await page.getByRole('menuitem', { name: 'Report AI chat' }).click();
+  const report = page.locator('dialog[open]');
+  await expect(
+    report.getByRole('heading', { name: 'Report AI chat' }),
+  ).toBeVisible();
+  await expect(
+    report.getByRole('textbox', { name: 'Chat transcript (editable)' }),
+  ).toHaveValue(/Keep my main page open[\s\S]*Saved sidebar answer\./);
+  await expect(
+    report.getByRole('button', { name: 'Copy report' }),
+  ).toBeEnabled();
 });
