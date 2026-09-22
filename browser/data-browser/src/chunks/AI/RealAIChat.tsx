@@ -1,4 +1,7 @@
-import { HOSTED_AI_USAGE_EVENT } from '@helpers/managed/ai';
+import {
+  canPurchaseHostedAICredits,
+  HOSTED_AI_USAGE_EVENT,
+} from '@helpers/managed/ai';
 import { getManagedApiBase } from '@helpers/managed/api';
 import { HostedAICredits } from './HostedAICredits';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
@@ -364,7 +367,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
           : 'No AI model provider is available. Set one up to send — you can keep typing in the meantime.';
 
   const creditPurchaseUrl =
-    hostedAI?.purchases_enabled && activeModel.provider === AIProvider.Hosted
+    canPurchaseHostedAICredits(hostedAI) &&
+    activeModel.provider === AIProvider.Hosted
       ? `${new URL(getManagedApiBase(), window.location.origin).origin}/dashboard`
       : undefined;
 

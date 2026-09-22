@@ -1,5 +1,8 @@
 import { Column } from '@components/Row';
-import type { HostedAIStatus } from '@helpers/managed/ai';
+import {
+  canPurchaseHostedAICredits,
+  type HostedAIStatus,
+} from '@helpers/managed/ai';
 
 const credits = (micros: number) =>
   (micros / 1000).toLocaleString(undefined, { maximumFractionDigits: 3 });
@@ -25,7 +28,7 @@ export function HostedAICredits({
       <span>{`${credits(monthly)} of ${credits(status.allowance_micros)} monthly credits left`}</span>
       <span>{`Account-wide · resets ${new Date(status.resets_at * 1000).toLocaleDateString(undefined, { dateStyle: 'medium' })}`}</span>
       {purchasedSummary}
-      {status.purchases_enabled && (
+      {canPurchaseHostedAICredits(status) && (
         <a
           href={`${portalUrl}/dashboard`}
           target='_blank'

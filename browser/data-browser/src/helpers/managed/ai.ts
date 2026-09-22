@@ -3,6 +3,7 @@ import type { LanguageModel } from 'ai';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { hasManagedApi, managedFetch, getManagedDeviceToken } from './api';
 import { getManagedAccount } from './session';
+import { isHostedDistribution } from '@helpers/managedServer';
 
 export interface HostedAIStatus {
   enabled: boolean;
@@ -15,6 +16,12 @@ export interface HostedAIStatus {
   purchased_remaining_micros?: number;
   purchases_enabled?: boolean;
   resets_at: number;
+}
+
+export function canPurchaseHostedAICredits(
+  status: HostedAIStatus | undefined,
+): boolean {
+  return isHostedDistribution() && status?.purchases_enabled === true;
 }
 
 export async function getHostedAIStatus(): Promise<HostedAIStatus | undefined> {
