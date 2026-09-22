@@ -1986,22 +1986,19 @@ provider Start/End retention. The existing Google import E2E now imports a
 three-day all-day event, asserts all three occupied cells and the excluded end,
 and verifies repeated chips survive reload without duplicate resources.
 
-## Metadata-driven platform extraction (2026-09-10)
+## Metadata-driven platform extraction (2026-09-10, removed)
 
-`integrations/localthought/syncables/tests/query_bindings.rs` exercises Link
-traversal with repeated identifiers in distinct parent contexts, query-only
-bindings, missing source fields, duplicate incoming Links, root input discovery,
-unqualified target parameters, and pagination beyond 50 pages.
-`read_absence.rs` distinguishes declared missing-object responses from permission,
-server, and undeclared errors. `ontology_shared_types.rs` preserves heterogeneous
-shared fields as JSON.
-
-`moneybird_fixture.rs` is explicitly ignored by the ordinary suite: it requires
-external OAD and overlay directories. Run with `MONEYBIRD_OAD_DIR` and
-`MONEYBIRD_OVERLAYS_DIR` plus `--ignored`. It covers 32 collections, two object
-reads, the administration input, and all six consumer query selections against
-the actual composed metadata. This is synthetic traversal, not live account
-coverage.
+This section documented `integrations/localthought/syncables/tests/query_bindings.rs`
+(Link traversal, query-only bindings, pagination beyond 50 pages),
+`read_absence.rs` (declared-missing vs. permission/server/undeclared errors)
+and `ontology_shared_types.rs` (heterogeneous shared fields as JSON) —
+coverage for the vendored Rust `syncables` crate at
+`integrations/localthought/syncables/`. That crate, `wasm/Cargo.toml`'s
+dependency on it and `wasm/src/integrations.rs`'s
+`describeIntegration`/`fetchIntegration` bridge to it have been removed
+entirely; the browser-side OpenAPI-driven import/sync feature they backed no
+longer exists in this repo. `moneybird_fixture.rs`'s ignored-by-default
+32-collection synthetic-traversal coverage went with it.
 
 `integrations/localthought/browser.test.ts` covers consumer-owned request budgets,
 Retry-After handling with rotating credentials, deadline rejection, and separate
