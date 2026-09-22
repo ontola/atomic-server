@@ -43,7 +43,7 @@ import {
 } from 'react';
 import { useAISidebar } from './AI/AISidebarContext';
 import { useRightPanel } from './RightPanel/RightPanelContext';
-import { LabelButton } from './NavBarButton';
+import { ButtonArea, LabelButton } from './NavBarButton';
 import { useCommentCount } from '../hooks/useCommentCount';
 import { AIIcon } from './AI/AIIcon';
 import { useAISettings } from './AI/AISettingsContext';
@@ -501,29 +501,6 @@ const WideOnly = styled.span`
   @container breadcrumb-bar (max-width: 600px) {
     display: none;
   }
-`;
-
-const ButtonArea = styled.div<{ $iconOnly: boolean }>`
-  display: flex;
-  margin-left: auto;
-  color: ${p => p.theme.colors.textLight};
-  gap: ${p => p.theme.size(1)};
-  align-items: center;
-  flex-shrink: 0;
-
-  @container breadcrumb-bar (max-width: 600px) {
-    gap: 0;
-  }
-
-  /* Icon-only once the bar can no longer fit the labels (measured in JS, not a
-   * fixed breakpoint). */
-  ${p =>
-    p.$iconOnly &&
-    css`
-      & > * > span {
-        display: none;
-      }
-    `}
 `;
 
 const CommentsLabelButton = styled(LabelButton)`
