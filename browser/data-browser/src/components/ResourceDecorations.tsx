@@ -181,6 +181,9 @@ export function ResourceCoverImage({
   };
 
   const handlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || !e.isPrimary) return;
+    // Native image dragging cancels pointer events after the first movement.
+    e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     setDragFocus(focusFromPointer(e));
   };
@@ -206,11 +209,14 @@ export function ResourceCoverImage({
       onPointerDown={repositioning ? handlePointerDown : undefined}
       onPointerMove={repositioning ? handlePointerMove : undefined}
       onPointerUp={repositioning ? handlePointerUp : undefined}
-      onPointerCancel={repositioning ? handlePointerUp : undefined}
+      onPointerCancel={
+        repositioning ? () => setDragFocus(undefined) : undefined
+      }
     >
       <ErrorBoundary FallBackComponent={NothingOnError}>
         <CoverImage
           subject={cover}
+          draggable={false}
           alt=''
           sizeIndication={100}
           style={{ objectPosition: `50% ${effectiveFocus * 100}%` }}

@@ -53,13 +53,19 @@ test('mobile AI chat fills the width and keeps its composer above the keyboard',
   await expect
     .poll(async () => Math.round((await panel.boundingBox())!.x))
     .toBe(0);
-  await expect(panel.getByRole('combobox')).toHaveCount(0);
+  await expect(
+    panel.getByRole('combobox', { name: 'Model', exact: true }),
+  ).toHaveCount(0);
   await panel
     .getByRole('button', { name: 'AI Chat options', exact: true })
     .click();
-  await expect(page.getByRole('combobox')).toBeVisible();
+  await expect(
+    page.getByRole('combobox', { name: 'Model', exact: true }),
+  ).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('combobox')).toHaveCount(0);
+  await expect(
+    page.getByRole('combobox', { name: 'Model', exact: true }),
+  ).toHaveCount(0);
   await sendChatMessage(page, 'Hello');
   await expect(
     panel.getByText('This is a mock AI response.', { exact: true }),
@@ -117,7 +123,9 @@ test('mobile AI chat fills the width and keeps its composer above the keyboard',
   await panel
     .getByRole('button', { name: 'AI Chat options', exact: true })
     .click();
-  await expect(page.getByRole('combobox')).toBeVisible();
+  await expect(
+    page.getByRole('combobox', { name: 'Model', exact: true }),
+  ).toBeVisible();
   await expect(page.getByText(/Tokens used:.*input,.*output/)).toBeVisible();
   await page.keyboard.press('Escape');
   await panel
@@ -192,15 +200,21 @@ test('desktop AI chat keeps the composer inside the docked panel', async ({
   await panel
     .getByRole('button', { name: 'AI Chat options', exact: true })
     .click();
-  await expect(page.getByRole('combobox')).toBeVisible();
-  await page.getByRole('combobox').click();
+  await expect(
+    page.getByRole('combobox', { name: 'Model', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('combobox', { name: 'Model', exact: true }).click();
   await page.getByRole('option', { name: /Alternate model/ }).click();
-  await expect(page.getByRole('combobox')).toHaveCount(0);
+  await expect(
+    page.getByRole('combobox', { name: 'Model', exact: true }),
+  ).toHaveCount(0);
   await expect(composer.locator('[contenteditable="true"]')).toBeFocused();
   await panel
     .getByRole('button', { name: 'AI Chat options', exact: true })
     .click();
-  await expect(page.getByRole('combobox')).toHaveValue('Alternate model');
+  await expect(
+    page.getByRole('combobox', { name: 'Model', exact: true }),
+  ).toHaveValue('Alternate model');
 });
 
 test('keyboard resize keeps the final sentence visible without a spacer above the composer', async ({

@@ -6,6 +6,44 @@ import { isOriginWithoutNode } from './originNode';
 vi.mock('./originNode', () => ({ isOriginWithoutNode: vi.fn() }));
 
 describe('refreshing drive availability', () => {
+  it('rechecks an earlier failure after data arrives instead of retaining the miss', async () => {
+    vi.mocked(isOriginWithoutNode).mockReturnValue(true);
+    let error: Error | undefined = new Error('Not found');
+    const store = {
+      getServerUrl: () => 'https://app.example',
+      isLocalOnlyDrive: () => true,
+      getResource: vi.fn(async () => ({ error })),
+      getResourceLoading: () => ({ error }),
+      reloadResource: vi.fn(async () => {
+        error = undefined;
+      }),
+    };
+    const typedStore = store as unknown as Store;
+    expect(await deviceHasDriveData(typedStore, 'did:ad:drive')).toBe(false);
+    expect(
+      await deviceHasDriveData(typedStore, 'did:ad:drive', { refresh: true }),
+    ).toBe(true);
+  });
+
+  it('does not report an errored resource as available just because the read resolved', async () => {
+    const store = {
+      getResource: vi
+        .fn()
+        .mockResolvedValue({ error: new Error('Unauthorized') }),
+    };
+    expect(
+      await deviceHasDriveData(store as unknown as Store, 'did:ad:drive'),
+    ).toBe(false);
+  });
+
+  it('does not report availability when local storage rejects the read', async () => {
+    const store = {
+      getResource: vi.fn().mockRejectedValue(new Error('Storage unavailable')),
+    };
+    expect(
+      await deviceHasDriveData(store as unknown as Store, 'did:ad:drive'),
+    ).toBe(false);
+  });
   it.each([
     [true, false, true],
     [false, true, true],

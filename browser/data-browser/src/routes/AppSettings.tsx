@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { createRoute } from '@tanstack/react-router';
 import { HexColorPicker } from 'react-colorful';
 import { ContainerNarrow } from '../components/Containers';
@@ -30,7 +30,10 @@ import { FaMagnifyingGlass, FaXmark } from 'react-icons/fa6';
 
 export const AppSettingsRoute = createRoute({
   path: pathNames.appSettings,
-  validateSearch: (search: Record<string, unknown>): { section?: string } => ({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { q?: string; section?: string } => ({
+    q: typeof search.q === 'string' ? search.q : undefined,
     section: typeof search.section === 'string' ? search.section : undefined,
   }),
   component: () => <AppSettings />,
@@ -60,8 +63,14 @@ const AppSettings: React.FunctionComponent = () => {
   } = useSettings();
 
   const { locale, setLocale } = useLocale();
-  const { section } = AppSettingsRoute.useSearch();
-  const [searchQuery, setSearchQuery] = useState(section === 'ai' ? 'ai' : '');
+  const { q, section } = AppSettingsRoute.useSearch();
+  const [searchQuery, setSearchQuery] = useState(
+    q ?? (section === 'ai' ? 'ai' : ''),
+  );
+  useEffect(
+    () => setSearchQuery(q ?? (section === 'ai' ? 'ai' : '')),
+    [q, section],
+  );
 
   const { enabledPanels, enablePanel, disablePanel } = usePanelList();
 
@@ -102,19 +111,10 @@ const AppSettings: React.FunctionComponent = () => {
         </SettingsSearchWrapper>
         <SettingsSearchProvider value={searchContext}>
           <SettingsGroup>
-            <SettingsSection label='Language'>
-              <BasicSelect
-                value={locale}
-                onChange={e => setLocale(e.target.value)}
-              >
-                {SUPPORTED_LOCALES.map(locale_code => (
-                  <option key={locale_code} value={locale_code}>
-                    {getLocaleName(locale_code)}
-                  </option>
-                ))}
-              </BasicSelect>
-            </SettingsSection>
-            <SettingsSection label='Appearance'>
+            <SettingsSection
+              label='Appearance'
+              childSearchKeywords='language locale panels templates ontology aichats hide templates'
+            >
               <Column gap='1rem'>
                 <Column gap='0.5rem'>
                   <SubLabel>Theme</SubLabel>
@@ -165,31 +165,45 @@ const AppSettings: React.FunctionComponent = () => {
                   <Checkbox checked={colorfulMode} onChange={setColorfulMode} />{' '}
                   <span>Colorful mode</span>
                 </CheckboxLabel>
-              </Column>
-            </SettingsSection>
-            <SettingsSection label='Panels & Templates'>
-              <Column gap='0.5rem'>
-                <CheckboxLabel>
-                  <Checkbox
-                    checked={enabledPanels.has(Panel.Ontologies)}
-                    onChange={changePanelPref(Panel.Ontologies)}
-                  />{' '}
-                  <span>Enable Ontology panel</span>
-                </CheckboxLabel>
-                <CheckboxLabel>
-                  <Checkbox
-                    checked={enabledPanels.has(Panel.AIChats)}
-                    onChange={changePanelPref(Panel.AIChats)}
-                  />{' '}
-                  <span>Enable AIChats panel</span>
-                </CheckboxLabel>
-                <CheckboxLabel>
-                  <Checkbox
-                    checked={hideTemplates}
-                    onChange={setHideTemplates}
-                  />{' '}
-                  <span>Hide templates on new resource page</span>
-                </CheckboxLabel>
+                <Column gap='0.5rem'>
+                  <label htmlFor='settings-language'>Language</label>
+                  <BasicSelect
+                    id='settings-language'
+                    value={locale}
+                    onChange={e => setLocale(e.target.value)}
+                  >
+                    {SUPPORTED_LOCALES.map(locale_code => (
+                      <option key={locale_code} value={locale_code}>
+                        {getLocaleName(locale_code)}
+                      </option>
+                    ))}
+                  </BasicSelect>
+                </Column>
+                <SettingsSection label='Panels & Templates'>
+                  <Column gap='0.5rem'>
+                    <CheckboxLabel>
+                      <Checkbox
+                        checked={enabledPanels.has(Panel.Ontologies)}
+                        onChange={changePanelPref(Panel.Ontologies)}
+                      />{' '}
+                      <span>Enable Ontology panel</span>
+                    </CheckboxLabel>
+                    <CheckboxLabel>
+                      <Checkbox
+                        checked={enabledPanels.has(Panel.AIChats)}
+                        onChange={changePanelPref(Panel.AIChats)}
+                      />{' '}
+                      <span>Enable AI Chats panel</span>
+                    </CheckboxLabel>
+                    <CheckboxLabel>
+                      <Checkbox
+                        checked={hideTemplates}
+                        onChange={setHideTemplates}
+                      />{' '}
+                      <span>Hide templates on new resource page</span>
+                    </CheckboxLabel>
+                  </Column>
+                </SettingsSection>
               </Column>
             </SettingsSection>
             <SettingsSection

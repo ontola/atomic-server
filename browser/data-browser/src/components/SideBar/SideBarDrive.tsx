@@ -250,7 +250,7 @@ const DriveTitle = styled.h2`
 
 /**
  * The title and the drive-switcher caret form one segmented control: a
- * shared hairline border, flush inner edges, shared outer rounding, each
+ * flush inner edges, shared outer rounding, each
  * half highlighting on its own hover.
  */
 const TitleButton = styled(Button)<{ current?: boolean }>`
@@ -263,8 +263,7 @@ const TitleButton = styled(Button)<{ current?: boolean }>`
   flex: 1;
   min-width: 0;
   padding: 0.35rem 0.5rem;
-  border: 1px solid ${p => p.theme.colors.bg2};
-  border-right: none;
+  border: none;
   border-radius: ${props => props.theme.radius} 0 0
     ${props => props.theme.radius};
 
@@ -287,7 +286,7 @@ const SwitcherButton = styled(IconButton)`
   height: auto;
   width: auto;
   padding-inline: 0.35rem;
-  border: 1px solid ${p => p.theme.colors.bg2};
+  border: none;
   border-radius: 0 ${p => p.theme.radius} ${p => p.theme.radius} 0;
   color: ${p => p.theme.colors.textLight};
   font-size: 0.85rem;

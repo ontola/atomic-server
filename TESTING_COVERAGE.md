@@ -1,3 +1,36 @@
+New-drive sync: WebSocket unit coverage verifies SUB and SYNC wait for a pending genesis acknowledgement, then resume on ResourceSaved. The Local DB-off rendering E2E exercises this ordering with real server persistence.
+
+Cover repositioning: `cover-reposition.spec.ts` uploads a real image and verifies multiple pointer movements update its framing before release (native image dragging previously interrupted the gesture).
+
+Template visibility: `settings-templates.spec.ts` toggles Hide templates through Settings, verifies the loaded New page hides templates across reload, and restores them when unchecked.
+
+AI settings search: browser coverage checks API matches retain provider credentials but hide model, generative, and voice controls; titles matches show only the title toggle within AI.
+
+Model option details: settings browser coverage checks input/output prices per million tokens and the OpenRouter added month inside an option, while preserving selection and dropdown width.
+
+OpenRouter privacy: settings browser coverage filters out models absent from the mocked ZDR endpoint list. The BYOK voice/chat flow asserts provider.zdr is sent on its chat completion; voice audio remains outside this chat-only policy.
+
+Model dropdown geometry: `ai-settings.spec.ts` checks that the open list matches its input width (regression: viewport-wide popover).
+
+Speech settings: browser coverage selects a transcription model, persists the voice toggle across reload, hides the mic when disabled, and verifies the selected model in the personal-key audio request. The managed-credit model remains service-controlled.
+
+AI settings: `ai-settings.spec.ts` exercises navigation from the chat agent menu,
+provider controls and default model selection, agent/skill/MCP creation and reload
+persistence, and settings search. Provider/MCP APIs are mocked. Agent radios expose
+saved selection; voice BYOK regression still passes after the menu refactor.
+
+Voice feedback: unit checks cover audio-level bounds and local-recognition cancellation; the personal-key Chromium flow checks mic scaling with simulated volume and interim word rendering. Real on-device transcription requires browser support and an installed language pack.
+
+Voice with personal OpenRouter key: `ai-voice-byok.spec.ts` verifies the mic remains usable, direct audio requests carry the configured key, and no SaaS voice endpoint is called. Media and model responses are mocked.
+
+Voice chat: `voiceTurn.test.ts` checks PCM WAV serialization and cancellation
+without retries. `ai-live.spec.ts` runs the actual chat controls with mocked media
+and OpenRouter responses: record, transcribe, hosted AI reply and speech playback,
+without a personal API key. SaaS `ai::voice` validates input bounds and model pinning;
+shared AI tests cover credit reservations and settlement. Real microphone/provider
+quality remains unverified without the SaaS OpenRouter key. The earlier GPT-Live
+lifecycle tests remain for its retained, separate backend implementation.
+
 Plugin configuration: hook tests retain a release's validation schema when a save
 receipt omits computed metadata, and clear it when the release or installation
 changes. The plugin-install E2E checks invalid config after saving valid config.
@@ -850,13 +883,13 @@ No automated end-to-end coverage: uploaded-file conversion through the full UI a
 | Cross-language personal-drive vector | `genesis.rs` + `genesis.test.ts` |
 | Repeat genesis for that DID merges Loro state | `lib/src/commit.rs::repeat_personal_drive_genesis_merges` |
 | Repeat genesis without a cert is still rejected | `lib/src/commit.rs::repeat_genesis_without_cert_is_still_rejected` |
-| `createDrive({ personal: true })` uses the derived DID | `browser/lib/src/store.personal-drive.test.ts` |
-| Two stores with the same key mint the same subject | `store.personal-drive.test.ts` |
-| Extra drives are listed on the derived personal drive | `store.personal-drive.test.ts` |
+| `createDrive({ personal: true })` uses the derived DID | `browser/lib/src/store.private-drive.test.ts` |
+| Two stores with the same key mint the same subject | `store.private-drive.test.ts` |
+| Extra drives are listed on the derived personal drive | `store.private-drive.test.ts` |
 | Extra drive created offline drains on reconnect (genesis must not set a rewind baseline) | `browser/lib/src/offline-create-drain.test.ts` |
 | Idempotent offline saves clear only after a complete local snapshot matches the synced baseline | `browser/lib/src/offline-create-drain.test.ts`, `browser/e2e/tests/offline-create-then-online.spec.ts` |
-| Lists from a previous random-DID home are unioned onto the derived drive | `store.personal-drive.test.ts` |
-| `Agent.personalDriveSubject` matches the genesis helper | `agent.test.ts` |
+| Lists from a previous random-DID home are unioned onto the derived drive | `store.private-drive.test.ts` |
+| `Agent.privateDriveSubject` matches the genesis helper | `agent.test.ts` |
 | `Db::setup` / `ensure_personal_drive` use the derived DID and are idempotent | `lib/src/db.rs::personal_drive_tests` |
 | Extra `Db::create_drive` is listed on the personal drive | `lib/src/db.rs::personal_drive_tests` |
 
@@ -2310,6 +2343,61 @@ verifies the upload targets the displayed drive even when the current drive
 setting differs. Native drag events, overlay geometry and the refreshed child
 list are not covered by this component test.
 
+## Private-drive sign-in availability regressions (2026-09-22)
+
+Required outcome: a valid agent secret can open a writable private drive at
+its deterministic DID even when no prior content can be recovered. Creating
+that root must not be presented as successful recovery of previous content.
+
+`browser/e2e/tests/sign-in-without-data.spec.ts` now requires:
+
+- A fresh account with no recoverable data opens the exact derived home,
+  reads it as a Drive, creates a document, and retains its title after reload
+  (`@smoke`). This subsumes the old "not another workspace" assertion.
+- An unavailable legacy home does not prevent that same writable-home outcome.
+- A persisted identity with no home can initialize it on a direct link. The
+  fixture seeds only the supported IndexedDB fallback identity record, so it
+  does not depend on sign-in first creating the drive.
+- An unrelated missing drive stays unreadable; Sync does not claim it is
+  cached/offline-ready or known to exist on another device.
+
+The old recovery-roadblock expectation and localStorage-DID-only "place to
+write" assertions were removed. The label-only "sync page shows correct
+status" test was removed; `sync-devices.spec.ts` retains device rendering,
+provider isolation and pairing coverage.
+
+`helpers/syncPresentation.test.ts` rejects an inferred remote copy in the
+missing-drive summary. `helpers/driveData.test.ts` covers read failures and
+refresh after a cached miss, alongside local/server refresh dispatch. These
+boolean-helper tests do not establish why a read failed or where copies exist.
+`private-drive-idempotence.test.ts` requires exactly one own-drive list entry
+(previously zero passed); the duplicate same-subject test was removed because
+`store.private-drive.test.ts` already checks repeated creation and identity.
+
+These are regression specifications, not a claim that the implementation is
+fixed. Validation results are recorded below. Existing genesis, migration,
+sign-out/content preservation and successful Vault restoration tests remain.
+
+Still missing: late failed reads invalidating a newly initialized home;
+reconciliation preserving both old content and new fallback work; integrated
+sign-in variants for empty Vault, failed restore, read timeout, offline nodes
+and blocked local storage. Vault helper tests cover several return values,
+but do not prove sign-in's next action. The real Vault E2E skips without its
+control plane. Same-subject library tests are not persistence evidence, and
+a second browser using the same populated server is not an unavailable-data
+scenario.
+
+Validation for this coverage change: 14 library tests passed; 14 presentation/
+availability tests passed and the new missing-drive-summary assertion failed
+on the unsupported "device that has it" claim. All four Chromium regressions
+failed against the current app: both sign-in cases stayed at recovery, the
+persisted-session home remained unreadable, and Sync displayed both false
+claims. Document creation/reload assertions are downstream of these failures
+and are not yet validated by this run. The smoke listing includes the new
+no-data sign-in acceptance test. Focused lint/format checks passed. App and
+E2E typechecks report errors in unchanged files (including RTE CommandsExtension,
+AI, plugin, right-panel and website tests), not the edited coverage files.
+
 ## Rust build alignment
 
 `scripts/test_rust_alignment.py` tests matching pairs, compiler/workflow pin drift,
@@ -2331,3 +2419,9 @@ can be retried, and signed-out callers make no request. The SaaS legacy recovery
 upgrade journey passes with the production per-account request limit.
 
 Integration bundle delivery: `integrationSource.test.ts` covers connected-server URLs, per-server caching, and retry after network, HTTP, or response-body failures. `scripts/dagger-ci-regression.test.mjs` verifies release and E2E builds receive the catalog and plugin bundles independently of the SPA.
+
+## AI chat folder identity and discovery
+
+`agent.test.ts` covers independent devices deriving the same valid folder certificate, separation by drive/account, and refusal to derive an identity using a nondeterministic signer. `agentStorage.test.ts` checks stable folder IDs survive non-extractable key storage and subsequent keypair updates. `standardLocations.test.ts` covers concurrent calls across stores, reuse without resetting folder metadata, legacy sessions, and refusal to initialize over transport failures or known deletion.
+
+`ai-chat-discovery.spec.ts` checks that the visible sidebar includes chats from duplicate folders and the drive root before and after reload, excludes other drives and non-chat resources, and that two separately signed-in browser contexts create chats using the same folder ID. AI responses are mocked. Physical Safari and an offline two-device reconnect are not covered.

@@ -1,3 +1,6 @@
+import { Panel, usePanelList } from '@components/SideBar/usePanelList';
+import SpeechSettings from './SpeechSettings';
+import { AIProvider } from './aiContstants';
 import { LocalOllamaDiscovery } from '@components/AI/LocalOllamaDiscovery';
 import * as React from 'react';
 import { Column, Row } from '@components/Row';
@@ -13,6 +16,7 @@ import { useIsOllamaUrlValid } from './useIsOllamaUrlValid';
 import { Details } from '@components/Details';
 import {
   SettingsContent,
+  SettingsSection,
   SettingsSectionWrapper,
   SettingsLabel,
   useSettingsSearch,
@@ -21,6 +25,14 @@ import {
 } from '@components/Settings';
 import { WarningBlock } from '@components/WarningBlock';
 import { FaCheck, FaTriangleExclamation } from 'react-icons/fa6';
+
+const ProviderModelSettings = React.lazy(
+  () => import('@chunks/AI/ProviderModelSettings'),
+);
+
+const AIConfigurationSections = React.lazy(
+  () => import('@chunks/AI/AIConfigurationSections'),
+);
 
 const ModelSelect = React.lazy(
   () => import('@chunks/AI/ModelSelect/ModelSelect'),
@@ -42,13 +54,14 @@ interface CreditUsage {
 const CREDITS_ENDPOINT = 'https://openrouter.ai/api/v1/credits';
 
 // Keywords for the AI section's own content (enable toggle, token usage)
-const AI_OWN_KEYWORDS = 'ai token usage';
+const AI_OWN_KEYWORDS = 'ai enable features token usage panel sidebar';
 // Keywords from child sections — makes this section visible, but children still filter
 const AI_CHILD_KEYWORDS =
-  'openrouter ollama mcp server generative model chat provider api key local';
+  'openrouter ollama mcp server generative model chat provider api key local agents skills default voice microphone speech stt transcription privacy retention zdr generate titles follow up prompts temperature context tools system prompt content references transport headers';
 
 const AISettings: React.FC = () => {
   const theme = useTheme();
+  const { enabledPanels, enablePanel, disablePanel } = usePanelList();
   const { query: searchQuery } = useSettingsSearch();
   const {
     enableAI,
@@ -109,14 +122,21 @@ const AISettings: React.FC = () => {
     !ownMatch &&
     queryMatches(searchQuery, `ai ${AI_CHILD_KEYWORDS}`);
 
+  const wholeSectionMatch = searchQuery.trim().toLowerCase() === 'ai';
+  const matches = (keywords: string) =>
+    !isSearching ||
+    parentMatched ||
+    wholeSectionMatch ||
+    queryMatches(searchQuery, `ai ${keywords}`);
+
   // Only propagate parentMatched when this section's own content matched,
   // not when a child keyword matched (let children filter themselves).
   const childContext = React.useMemo(
     () => ({
       query: searchQuery,
-      parentMatched: parentMatched || ownMatch,
+      parentMatched: parentMatched || wholeSectionMatch,
     }),
-    [searchQuery, parentMatched, ownMatch],
+    [searchQuery, parentMatched, wholeSectionMatch],
   );
 
   if (isSearching && !ownMatch && !childMatch && !parentMatched) {
@@ -134,148 +154,220 @@ const AISettings: React.FC = () => {
         <SettingsContent>
           <SettingsSearchProvider value={childContext}>
             <Column gap='0.75rem'>
-              <CheckboxLabel>
-                <Checkbox checked={enableAI} onChange={setEnableAI} /> Enable AI
-                Features
-              </CheckboxLabel>
-              <ConditionalSettings enabled={enableAI} inert={!enableAI}>
+              {matches('enable ai features') && (
+                <CheckboxLabel>
+                  <Checkbox checked={enableAI} onChange={setEnableAI} />
+                  <span>Enable AI Features</span>
+                </CheckboxLabel>
+              )}
+              {matches('enable ai chats panel sidebar') && (
                 <CheckboxLabel>
                   <Checkbox
-                    checked={showTokenUsage}
-                    onChange={setShowTokenUsage}
+                    checked={enabledPanels.has(Panel.AIChats)}
+                    onChange={checked =>
+                      checked
+                        ? enablePanel(Panel.AIChats)
+                        : disablePanel(Panel.AIChats)
+                    }
                   />
-                  Show token usage in chats
+                  <span>Enable AI Chats panel</span>
                 </CheckboxLabel>
-
+              )}
+              <ConditionalSettings enabled={enableAI} inert={!enableAI}>
                 <SubGroup>
-                  <SubSection>
-                    <SubSectionTitle>OpenRouter</SubSectionTitle>
-                    <Column gap='0.5rem'>
-                      <ConditionalSettings
-                        fullWidth
-                        gap='0.5rem'
-                        enabled={true}
-                      >
-                        <label htmlFor='openrouter-api-key'>
-                          OpenRouter API Key
-                        </label>
-                        <Row center>
-                          {!openRouterApiKey && (
-                            <>
-                              <OpenRouterLoginButton />
-                              or
-                            </>
-                          )}
-                          <InputWrapper>
-                            <InputStyled
-                              id='openrouter-api-key'
-                              type='password'
-                              value={openRouterApiKey || ''}
-                              onChange={e =>
-                                handleSetOpenRouterKey(
-                                  e.target.value || undefined,
-                                )
-                              }
-                              placeholder='Enter your OpenRouter API key'
+                  {matches(
+                    'generative features generate titles model show token usage chats',
+                  ) && (
+                    <SettingsSection
+                      label='Generative features'
+                      childSearchKeywords='generative features generate chat titles model show token usage chats'
+                    >
+                      {genFeaturesUnavailable && (
+                        <WarningBlock>
+                          <WarningBlock.Title>
+                            The generative features model uses a provider that
+                            is not available.
+                          </WarningBlock.Title>
+                        </WarningBlock>
+                      )}
+                      <Column gap='0.5rem'>
+                        {matches(
+                          'generative features show token usage chats',
+                        ) && (
+                          <CheckboxLabel>
+                            <Checkbox
+                              checked={showTokenUsage}
+                              onChange={setShowTokenUsage}
                             />
-                          </InputWrapper>
-                        </Row>
-                        {creditUsage && (
-                          <Subtle>
-                            Credits used: {intl.format(creditUsage.used)} /{' '}
-                            {intl.format(creditUsage.total)}
-                          </Subtle>
+                            <span>Show token usage in chats</span>
+                          </CheckboxLabel>
                         )}
-                        {!openRouterApiKey && (
-                          <Subtle>
-                            OpenRouter provides a unified API that gives you
-                            access to hundreds of AI models from all major
-                            vendors, while automatically handling fallbacks and
-                            selecting the most cost-effective options.
-                          </Subtle>
+                        {matches(
+                          'generative features generate chat titles',
+                        ) && (
+                          <CheckboxLabel>
+                            <Checkbox
+                              checked={shouldGenerateTitles}
+                              onChange={setShouldGenerateTitles}
+                            />
+                            <span>Generate AI Chat titles</span>
+                          </CheckboxLabel>
                         )}
-                      </ConditionalSettings>
-                    </Column>
-                  </SubSection>
 
-                  <SubSection>
-                    <SubSectionTitle>Ollama</SubSectionTitle>
-                    <Column gap='0.5rem'>
-                      {!ollamaUrl && <LocalOllamaDiscovery />}
-                      <Subtle>
-                        Host your own AI models locally using{' '}
-                        <a
-                          href='https://ollama.com/'
-                          target='_blank'
-                          rel='noreferrer'
-                        >
-                          Ollama
-                        </a>
-                      </Subtle>
-                      <ConditionalSettings
-                        fullWidth
-                        gap='0.5rem'
-                        enabled={true}
-                      >
-                        <Row center gap='1ch'>
-                          {ollamaUrl &&
-                            (isOllamaUrlValid ? (
-                              <FaCheck
-                                title='Server found'
-                                color={theme.colors.main}
+                        {matches('generative features model') && (
+                          <Column gap='0.5rem'>
+                            <span>Provider</span>
+                            <Suspense>
+                              <ModelSelect
+                                defaultModel={genFeaturesModel}
+                                onSelect={setGenFeaturesModel}
                               />
-                            ) : (
-                              <FaTriangleExclamation
-                                title='Server not responding'
-                                color={theme.colors.warning}
-                              />
-                            ))}
-                          <label htmlFor='ollama-url'>Ollama API Url</label>
-                        </Row>
-                        <InputWrapper>
-                          <InputStyled
-                            id='ollama-url'
-                            value={ollamaUrl || ''}
-                            onChange={e =>
-                              setOllamaUrl(e.target.value || undefined)
-                            }
-                            type='url'
-                            placeholder='http://localhost:11434'
-                          />
-                        </InputWrapper>
-                      </ConditionalSettings>
-                    </Column>
-                  </SubSection>
+                            </Suspense>
+                          </Column>
+                        )}
+                      </Column>
+                    </SettingsSection>
+                  )}
+                  {matches(
+                    'openrouter api key credits model default privacy retention zdr',
+                  ) && (
+                    <SettingsSection
+                      label='OpenRouter'
+                      childSearchKeywords='openrouter api key credits model default privacy retention zdr'
+                    >
+                      <Column gap='0.5rem'>
+                        {matches('openrouter api key credits') && (
+                          <Column gap='0.5rem'>
+                            <ConditionalSettings
+                              fullWidth
+                              gap='0.5rem'
+                              enabled={true}
+                            >
+                              <label htmlFor='openrouter-api-key'>
+                                OpenRouter API Key
+                              </label>
+                              <Row center>
+                                {!openRouterApiKey && (
+                                  <>
+                                    <OpenRouterLoginButton />
+                                    or
+                                  </>
+                                )}
+                                <InputWrapper>
+                                  <InputStyled
+                                    id='openrouter-api-key'
+                                    type='password'
+                                    value={openRouterApiKey || ''}
+                                    onChange={e =>
+                                      handleSetOpenRouterKey(
+                                        e.target.value || undefined,
+                                      )
+                                    }
+                                    placeholder='Enter your OpenRouter API key'
+                                  />
+                                </InputWrapper>
+                              </Row>
+                              {creditUsage && (
+                                <Subtle>
+                                  Credits used: {intl.format(creditUsage.used)}{' '}
+                                  / {intl.format(creditUsage.total)}
+                                </Subtle>
+                              )}
+                              {!openRouterApiKey && (
+                                <Subtle>
+                                  OpenRouter provides a unified API that gives
+                                  you access to hundreds of AI models from all
+                                  major vendors, while automatically handling
+                                  fallbacks and selecting the most
+                                  cost-effective options.
+                                </Subtle>
+                              )}
+                            </ConditionalSettings>
+                          </Column>
+                        )}
+                        {matches(
+                          'openrouter model default privacy retention zdr',
+                        ) && (
+                          <Suspense>
+                            <ProviderModelSettings
+                              provider={AIProvider.OpenRouter}
+                            />
+                          </Suspense>
+                        )}
+                      </Column>
+                    </SettingsSection>
+                  )}
 
-                  <SubSection>
-                    <SubSectionTitle>Generative features</SubSectionTitle>
-                    {genFeaturesUnavailable && (
-                      <WarningBlock>
-                        <WarningBlock.Title>
-                          The generative features model uses a provider that is
-                          not available.
-                        </WarningBlock.Title>
-                      </WarningBlock>
-                    )}
-                    <Column gap='0.5rem'>
-                      <CheckboxLabel>
-                        <Checkbox
-                          checked={shouldGenerateTitles}
-                          onChange={setShouldGenerateTitles}
-                        />
-                        Generate AI Chat titles
-                      </CheckboxLabel>
-                      <Details title='Change what model is used for generative features'>
-                        <Suspense>
-                          <Subtle>(Tip) Choose a cheap and fast model</Subtle>
-                          <ModelSelect
-                            defaultModel={genFeaturesModel}
-                            onSelect={setGenFeaturesModel}
-                          />
-                        </Suspense>
-                      </Details>
-                    </Column>
-                  </SubSection>
+                  {matches('ollama api url local server model default') && (
+                    <SettingsSection
+                      label='Ollama'
+                      childSearchKeywords='ollama api url local server model default'
+                    >
+                      <Column gap='0.5rem'>
+                        {matches('ollama api url local server') && (
+                          <Column gap='0.5rem'>
+                            {!ollamaUrl && <LocalOllamaDiscovery />}
+                            <Subtle>
+                              Host your own AI models locally using{' '}
+                              <a
+                                href='https://ollama.com/'
+                                target='_blank'
+                                rel='noreferrer'
+                              >
+                                Ollama
+                              </a>
+                            </Subtle>
+                            <ConditionalSettings
+                              fullWidth
+                              gap='0.5rem'
+                              enabled={true}
+                            >
+                              <Row center gap='1ch'>
+                                {ollamaUrl &&
+                                  (isOllamaUrlValid ? (
+                                    <FaCheck
+                                      title='Server found'
+                                      color={theme.colors.main}
+                                    />
+                                  ) : (
+                                    <FaTriangleExclamation
+                                      title='Server not responding'
+                                      color={theme.colors.warning}
+                                    />
+                                  ))}
+                                <label htmlFor='ollama-url'>
+                                  Ollama API Url
+                                </label>
+                              </Row>
+                              <InputWrapper>
+                                <InputStyled
+                                  id='ollama-url'
+                                  value={ollamaUrl || ''}
+                                  onChange={e =>
+                                    setOllamaUrl(e.target.value || undefined)
+                                  }
+                                  type='url'
+                                  placeholder='http://localhost:11434'
+                                />
+                              </InputWrapper>
+                            </ConditionalSettings>
+                          </Column>
+                        )}
+                        {matches('ollama model default') && (
+                          <Suspense>
+                            <ProviderModelSettings
+                              provider={AIProvider.Ollama}
+                            />
+                          </Suspense>
+                        )}
+                      </Column>
+                    </SettingsSection>
+                  )}
+
+                  <SpeechSettings />
+                  <Suspense fallback={<span>Loading AI settings…</span>}>
+                    <AIConfigurationSections />
+                  </Suspense>
                 </SubGroup>
               </ConditionalSettings>
             </Column>
@@ -294,12 +386,10 @@ const ConditionalSettings = styled(Column)<{ enabled: boolean }>`
 `;
 
 const SubGroup = styled.div`
-  border-top: 1px solid ${p => p.theme.colors.bg2};
   margin-top: 0.25rem;
-  padding-top: 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0;
 
   button[aria-label='collapse'],
   button[aria-label='expand'] {
@@ -307,26 +397,6 @@ const SubGroup = styled.div`
     background: transparent !important;
     box-shadow: none !important;
   }
-`;
-
-const SubSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid ${p => p.theme.colors.bg2};
-
-  &:last-child {
-    border-bottom: 0;
-    padding-bottom: 0;
-  }
-`;
-
-const SubSectionTitle = styled.h3`
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 650;
-  color: ${p => p.theme.colors.text};
 `;
 
 const Subtle = styled.p`

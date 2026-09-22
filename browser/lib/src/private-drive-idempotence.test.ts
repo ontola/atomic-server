@@ -9,15 +9,6 @@ import { testStore } from './test-store.js';
  * first one made.
  */
 describe('ensurePrivateDrive is idempotent', () => {
-  it('returns the same subject when called twice', async ({ expect }) => {
-    const { store } = await testStore();
-
-    const first = await store.ensurePrivateDrive();
-    const second = await store.ensurePrivateDrive();
-
-    expect(second.subject).toBe(first.subject);
-  });
-
   it('returns the same subject after the in-memory cache is dropped', async ({
     expect,
   }) => {
@@ -25,7 +16,7 @@ describe('ensurePrivateDrive is idempotent', () => {
 
     const first = await store.ensurePrivateDrive();
 
-    // What a reload looks like: same key, same store config, nothing cached.
+    // In-memory cache eviction only; browser E2E covers actual reloads.
     (
       store as unknown as { _resources: Map<string, unknown> }
     )._resources.clear();
@@ -47,7 +38,7 @@ describe('ensurePrivateDrive is idempotent', () => {
     const listed = third.getSubjects(server.properties.drives);
     const own = listed.filter(s => s === first.subject);
 
-    expect(own.length).toBeLessThanOrEqual(1);
+    expect(own).toEqual([first.subject]);
   });
 
   it('migrates once per agent even when setAgent fires repeatedly', async ({

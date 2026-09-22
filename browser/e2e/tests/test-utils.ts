@@ -1745,7 +1745,7 @@ export async function openConfigureDrive(page: Page) {
   // there too, but go direct).
   await page.goto(`${FRONTEND_URL}/app/agent`);
   await expect(
-    page.getByRole('heading', { name: 'User Settings' }),
+    page.getByRole('heading', { name: 'User', exact: true }),
   ).toBeVisible({
     timeout: 10000,
   });

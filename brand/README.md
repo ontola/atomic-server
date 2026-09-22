@@ -197,3 +197,18 @@ Two consequences worth knowing:
 `transform-box`, and the explicit chain has one meaning in every engine.
 Placement stays an SVG `transform` attribute, copied from `logo.svg`, so a
 stylesheet failure still leaves a correct static lockup.
+
+## Atomic Place web identity — September 2026
+
+`src/place-mark.svg` and `src/place-mark-mono.svg` supply the centred-orb
+icon for the data-browser web app, SaaS portal and marketing site. Native
+app and specification icons retain their existing sources for now. Regenerate
+only the web surfaces with:
+
+```sh
+node brand/generate.mjs --target=browser/data-browser/public/app_data/images --target=portal/public --target=site/src/app
+```
+
+The app wordmark in `Logo.tsx` and the boot splash spell `atomic.place` with
+a normal o and gradient full stop. Existing developer identifiers and hosting
+origins remain unchanged in this visual rollout.

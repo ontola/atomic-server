@@ -118,8 +118,8 @@ const AISidebar: React.FC = () => {
     const generation = chatGenerationRef.current;
 
     if (!draftChatPromiseRef.current) {
-      // Chats live in the personal drive's "AI Chats" folder (a standard
-      // location) instead of cluttering the drive root. `about` records which
+      // Chats live in the personal drive's "AI Chats" folder (a deterministic
+      // standard location) instead of cluttering the drive root. `about` records which
       // resource the chat was started on, so the sidebar can re-open it when
       // the user returns to that resource.
       const aboutSubject =

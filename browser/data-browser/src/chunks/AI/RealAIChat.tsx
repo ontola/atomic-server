@@ -27,7 +27,7 @@ import {
   type AtomicUIMessage,
 } from './types';
 import { useAIAgentConfig } from './AgentConfig';
-import { AISettingsDialog } from './AISettingsDialog';
+import { BasicSelect } from '@components/forms/BasicSelect';
 import { MessageContextItem } from './MessageContextItem';
 
 import { ComboBox } from '@components/ComboBox';
@@ -67,6 +67,7 @@ import { useAIChanges } from '@components/AIChangesContext';
 import { useVectorIndexStatus } from '@hooks/useVectorIndexStatus';
 import { useLocalStorage } from '@hooks/useLocalStorage';
 import { Spinner } from '@components/Spinner';
+import { LiveConversation } from './LiveConversation';
 
 const AIChatInput = React.lazy(
   () => import('@chunks/RTE/AIChatInput/AsyncAIChatInput'),
@@ -136,6 +137,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 }) => {
   const store = useStore();
   const navigate = useNavigateWithTransition();
+  const [liveActive, setLiveActive] = useState(false);
   const {
     openRouterApiKey,
     showTokenUsage,
@@ -291,7 +293,13 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [draggingFiles, setDraggingFiles] = useState(false);
   const fileDragDepth = useRef(0);
-  const { defaultChatModel, setDefaultChatModel } = useAISettings();
+  const {
+    defaultChatModel,
+    setDefaultChatModel,
+    voiceEnabled,
+    transcriptionModel,
+    openRouterZdr,
+  } = useAISettings();
   const [selectedAgent, setSelectedAgent] = useState<AIAgent>(
     getInitialAgent(!chatSubject, chatSubject),
   );
@@ -323,14 +331,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     isProviderAvailable(activeModel.provider) &&
     (activeModel.provider !== AIProvider.Hosted ||
       Boolean(hostedAI?.remaining_micros));
-
-  // Re-opens the provider setup overlay (`AISetupPanel` renders while
-  // `atomic.ai.setupComplete` is false).
-  const [, setSetupComplete] = useLocalStorage(
-    'atomic.ai.setupComplete',
-    false,
-  );
-  const [setupRequestId, setSetupRequestId] = useState(0);
 
   // Why the last request failed, if it did. A request that dies — an unreachable
   // provider, a rejected key, a model that doesn't exist — used to leave no
@@ -366,15 +366,22 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     AIMessageContext[]
   >([]);
   const { generateConversationSummary } = useConversationSummary(activeModel);
-  const [agentConfigOpen, setAgentConfigOpen] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
   const focusModelOnOpen = useRef(false);
   const focusInputOnClose = useRef(false);
+
+  const openAISettings = () => {
+    setControlsOpen(false);
+
+    return navigate('/app/settings?q=ai');
+  };
+
   // Bumped to move focus into the chat input (e.g. right after picking a model).
   const [inputFocusSignal, setInputFocusSignal] = useState(0);
 
   const { tools: atomicTools } = useAtomicMCPTools({
     editModel: activeModel,
+    hosted: liveActive && !openRouterApiKey,
     onResourceEdited: (originalResource: Resource) => {
       reportAIEdit(originalResource);
     },
@@ -382,6 +389,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
 
   const transport = useClientOnlyTransport({
     openRouterAPIKey: openRouterApiKey,
+    openRouterZdr,
     ollamaURL: ollamaUrl,
     selectedAgent,
     model: activeModel,
@@ -598,6 +606,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
   );
 
   const handleSubmit = async (inputOverride?: string) => {
+    if (liveActive) return;
     const text = inputOverride || userInput;
     setRequestError(undefined);
 
@@ -726,6 +735,19 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     }
   }, [defaultChatModel]);
 
+  // Settings can edit or delete an agent while this chat remains open.
+  useOnValueChange(() => {
+    const agent =
+      agents.find(item => item.id === selectedAgent.id) ??
+      getInitialAgent(!chatSubject, chatSubject);
+    setSelectedAgent(agent);
+    setActiveModel(agent.model ?? defaultChatModel);
+  }, [JSON.stringify(agents)]);
+
+  useOnValueChange(() => {
+    if (!voiceEnabled) setLiveActive(false);
+  }, [voiceEnabled]);
+
   const autoSubmittedRef = useRef(false);
 
   useEffect(() => {
@@ -778,7 +800,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     <ChatWindow fullView={fullView} empty={messages.length === 0}>
       {children}
       <ChatMessagesContainer
-        enableAutoScroll={status === 'streaming'}
+        enableAutoScroll={status === 'streaming' || liveActive}
         scrollToCompactTrigger={scrollToCompactTrigger}
         fullView={fullView}
       >
@@ -838,15 +860,10 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                   document context are sent through Atomic to its AI providers.
                 </span>
               )}
-            {providerNotice && (
+            {providerNotice && !liveActive && (
               <ProviderNotice>
                 <span>{providerNotice}</span>
-                <Button
-                  onClick={() => {
-                    setSetupComplete(false);
-                    setSetupRequestId(previous => previous + 1);
-                  }}
-                >
+                <Button onClick={openAISettings}>
                   {hostedAI?.enabled
                     ? 'Advanced AI settings'
                     : 'Set up a model'}
@@ -1001,7 +1018,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                     // Never block typing — only the SEND is gated on an available
                     // provider (the notice above the input explains why).
                     disabled={false}
-                    disableSubmit={!canUseInput}
+                    disableSubmit={!canUseInput || liveActive}
                     hasFiles={attachedFiles.length > 0}
                     onMentionUpdate={handleMentionUpdate}
                     onChange={setUserInput}
@@ -1011,7 +1028,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                       focusModelOnOpen.current = true;
                       setControlsOpen(true);
                     }}
-                    onEditAgent={() => setAgentConfigOpen(true)}
+                    onEditAgent={() => openAISettings()}
                     onFileAdded={
                       checkModelSupportsImageInput(activeModel)
                         ? handleFileUpload
@@ -1056,7 +1073,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                           input?.select();
                         }}
                         onCloseAutoFocus={event => {
-                          if (agentConfigOpen) event.preventDefault();
                           if (!focusInputOnClose.current) return;
                           focusInputOnClose.current = false;
                           event.preventDefault();
@@ -1074,14 +1090,30 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                         <ChatControls>
                           <strong>AI Chat options</strong>
                           <ControlLabel>Agent</ControlLabel>
-                          <SubtleButton
-                            onClick={() => {
-                              setControlsOpen(false);
-                              setAgentConfigOpen(true);
+                          <BasicSelect
+                            aria-label='Chat agent'
+                            value={selectedAgent.id}
+                            onChange={event => {
+                              if (event.target.value === 'settings') {
+                                void openAISettings();
+
+                                return;
+                              }
+
+                              const agent = agents.find(
+                                item => item.id === event.target.value,
+                              );
+                              if (agent) handleSelectAgent(agent);
                             }}
+                            style={{ width: 'auto', maxWidth: '10rem' }}
                           >
-                            {selectedAgent.name}
-                          </SubtleButton>
+                            {agents.map(agent => (
+                              <option key={agent.id} value={agent.id}>
+                                {agent.name}
+                              </option>
+                            ))}
+                            <option value='settings'>AI settings…</option>
+                          </BasicSelect>
                           <ControlLabel>Model</ControlLabel>
                           {hostedAI?.enabled &&
                           !openRouterApiKey &&
@@ -1178,6 +1210,41 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                           </SettingsLink>
                         </ChatControls>
                       </Popover>
+                      {voiceEnabled && (
+                        <LiveConversation
+                          transcriptionModel={transcriptionModel}
+                          apiKey={openRouterApiKey}
+                          onConfigure={() => openAISettings()}
+                          messages={messages}
+                          busy={
+                            status === 'streaming' || status === 'submitted'
+                          }
+                          delegate={(history, signal) =>
+                            transport.runLiveTask(history, signal)
+                          }
+                          onActive={setLiveActive}
+                          onTranscript={message => {
+                            setMessages(previous =>
+                              previous.some(m => m.id === message.id)
+                                ? previous.map(m =>
+                                    m.id === message.id ? message : m,
+                                  )
+                                : [...previous, message],
+                            );
+                            Promise.resolve(onNewMessage(message)).catch(
+                              error => {
+                                console.error(
+                                  'Could not save voice transcript:',
+                                  error,
+                                );
+                                setRequestError(
+                                  'Could not save the voice transcript.',
+                                );
+                              },
+                            );
+                          }}
+                        />
+                      )}
                       {checkModelSupportsImageInput(activeModel) && (
                         <>
                           <input
@@ -1207,14 +1274,8 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
           </>
         )}
       </Column>
-      <AISettingsDialog
-        open={agentConfigOpen}
-        onOpenChange={setAgentConfigOpen}
-        selectedAgent={selectedAgent}
-        onSelectAgent={handleSelectAgent}
-      />
 
-      {!readonly && <AISetupPanel requestId={setupRequestId} />}
+      {!readonly && <AISetupPanel />}
     </ChatWindow>
   );
 };
@@ -1362,28 +1423,6 @@ const TokensUsed = styled.p`
   margin: 0;
   font-size: 0.8rem;
   color: ${p => p.theme.colors.textLight};
-`;
-
-const SubtleButton = styled.button`
-  appearance: none;
-  cursor: pointer;
-  background: none;
-  border: none;
-  color: inherit;
-  border-radius: ${p => p.theme.radius};
-  padding: ${p => p.theme.size(1)};
-  padding-inline: ${p => p.theme.size(2)};
-
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-  flex-shrink: 1;
-
-  &:focus-visible,
-  &:hover {
-    background-color: ${p => p.theme.colors.bg1};
-  }
 `;
 
 const ProviderNotice = styled.div`
