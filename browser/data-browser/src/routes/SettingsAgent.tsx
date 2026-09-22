@@ -173,7 +173,7 @@ const SettingsAgent: React.FunctionComponent = () => {
       <ContainerNarrow>
         {effectiveAgent ? (
           <>
-            <h1>User Settings</h1>
+            <h1>User</h1>
             <Column>
               {effectiveAgent.subject?.startsWith('http://localhost') && (
                 <WarningBlock>

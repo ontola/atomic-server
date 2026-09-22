@@ -1,10 +1,10 @@
-import styled from 'styled-components';
+import { useState } from 'react';
+import { Column } from '@components/Row';
+import { BasicSelect } from '@components/forms/BasicSelect';
 import { AIProvider } from '@components/AI/aiContstants';
 import { type AIModelIdentifier } from '../types';
 import { OpenRouterModelSelector } from './OpenRouterModelSelector';
-import { TAB_PANEL_HAS_ERROR_CLASS, TabPanel, Tabs } from '@components/Tabs';
 import { OllamaModelSelector } from './OllamaModelSelector';
-import { transition } from '@helpers/transition';
 import { Link } from '@tanstack/react-router';
 import { useAISettings } from '@components/AI/AISettingsContext';
 import { Button } from '@components/Button';
@@ -15,7 +15,7 @@ interface ModelSelectProps {
   enforceToolSupport?: boolean;
 }
 
-const PROVIDER_TABS = [
+const PROVIDERS = [
   {
     label: 'OpenRouter',
     value: AIProvider.OpenRouter,
@@ -33,37 +33,41 @@ export const ModelSelect = ({
 }: ModelSelectProps) => {
   const { openRouterApiKey, ollamaUrl, hostedAI } = useAISettings();
 
+  const [provider, setProvider] = useState(defaultModel.provider);
+  const providers = hostedAI?.enabled
+    ? [{ label: 'Included AI', value: AIProvider.Hosted }, ...PROVIDERS]
+    : PROVIDERS;
+
   return (
-    <Wrapper>
-      <Tabs
-        tabs={
-          hostedAI?.enabled
-            ? [
-                { label: 'Included AI', value: AIProvider.Hosted },
-                ...PROVIDER_TABS,
-              ]
-            : PROVIDER_TABS
-        }
-        label='Provider'
-        rounded
-        defaultValue={defaultModel.provider}
+    <Column gap='0.75rem'>
+      <BasicSelect
+        aria-label='Provider'
+        value={provider}
+        onChange={event => setProvider(event.target.value as AIProvider)}
       >
-        {hostedAI?.enabled && (
-          <StyledTabPanel value={AIProvider.Hosted}>
-            <p>{`${Math.floor(hostedAI.remaining_micros / 1000)} credits remaining across your drives.`}</p>
-            <Button
-              onClick={() =>
-                onSelect?.({
-                  id: hostedAI.model,
-                  provider: AIProvider.Hosted,
-                })
-              }
-            >
-              Use included model
-            </Button>
-          </StyledTabPanel>
-        )}
-        <StyledTabPanel value={AIProvider.OpenRouter}>
+        {providers.map(option => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </BasicSelect>
+      {provider === AIProvider.Hosted && hostedAI?.enabled && (
+        <Column gap='0.5rem'>
+          <p>{`${Math.floor(hostedAI.remaining_micros / 1000)} credits remaining across your drives.`}</p>
+          <Button
+            onClick={() =>
+              onSelect?.({
+                id: hostedAI.model,
+                provider: AIProvider.Hosted,
+              })
+            }
+          >
+            Use included model
+          </Button>
+        </Column>
+      )}
+      {provider === AIProvider.OpenRouter && (
+        <>
           {openRouterApiKey ? (
             <OpenRouterModelSelector
               enforceToolSupport={enforceToolSupport}
@@ -73,15 +77,17 @@ export const ModelSelect = ({
               defaultModel={defaultModel.id}
             />
           ) : (
-            <NotConfiguredMessage>
+            <Column>
               <span>
                 OpenRouter API key is not configured. Go to{' '}
                 <Link to='/app/settings'>Settings</Link>.
               </span>
-            </NotConfiguredMessage>
+            </Column>
           )}
-        </StyledTabPanel>
-        <StyledTabPanel value={AIProvider.Ollama}>
+        </>
+      )}
+      {provider === AIProvider.Ollama && (
+        <>
           {ollamaUrl ? (
             <OllamaModelSelector
               onSelect={model => {
@@ -90,43 +96,17 @@ export const ModelSelect = ({
               selectedModel={defaultModel}
             />
           ) : (
-            <NotConfiguredMessage>
+            <Column>
               <span>
                 Ollama URL is not configured. Go to{' '}
                 <Link to='/app/settings'>Settings</Link>.
               </span>
-            </NotConfiguredMessage>
+            </Column>
           )}
-        </StyledTabPanel>
-      </Tabs>
-    </Wrapper>
+        </>
+      )}
+    </Column>
   );
 };
-
-const Wrapper = styled.div`
-  background-color: ${p => p.theme.colors.bg};
-  border-radius: ${p => p.theme.radius};
-
-  border: 1px solid ${p => p.theme.colors.bg2};
-  ${transition('border-color')}
-  &:has(*.${TAB_PANEL_HAS_ERROR_CLASS}) {
-    border: 1px solid ${p => p.theme.colors.alert};
-  }
-`;
-
-const StyledTabPanel = styled(TabPanel)`
-  padding: ${p => p.theme.size()};
-  padding-top: unset;
-`;
-
-const NotConfiguredMessage = styled.div`
-  display: grid;
-  place-items: center;
-  margin: -${p => p.theme.size()};
-  padding: ${p => p.theme.size()};
-  background-color: ${p => p.theme.colors.bgBody};
-  border-radius: ${p => p.theme.radius};
-  color: ${p => p.theme.colors.textLight};
-`;
 
 export default ModelSelect;

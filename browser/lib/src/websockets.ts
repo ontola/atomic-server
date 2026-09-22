@@ -227,6 +227,7 @@ export class WSClient {
   private _retryTimer: ReturnType<typeof setTimeout> | undefined;
   private _onlineListener: (() => void) | undefined;
   private _driveUnsub: (() => void) | undefined;
+  private _savedDriveUnsub: (() => void) | undefined;
   /** Drive-sync state computed for a hash-first probe, kept until the server
    *  either accepts it (`SYNC_OK`) or asks for a reconcile (`SYNC_RESEND`). */
   private _pendingSyncState = new Map<
@@ -382,6 +383,16 @@ export class WSClient {
       this._pendingSyncState.clear();
       this.subscribeToDrive();
       void this.reconcileSubscribedDrive();
+    });
+
+    this._savedDriveUnsub = store.on(StoreEvents.ResourceSaved, resource => {
+      if (
+        resource.subject === store.getDrive() &&
+        this._subscribedDrive !== resource.subject
+      ) {
+        this.subscribeToDrive();
+        void this.reconcileSubscribedDrive();
+      }
     });
 
     const wsURL = new URL(url);
@@ -558,6 +569,8 @@ export class WSClient {
 
     this._driveUnsub?.();
     this._driveUnsub = undefined;
+    this._savedDriveUnsub?.();
+    this._savedDriveUnsub = undefined;
 
     if (
       this._onlineListener &&
@@ -1534,6 +1547,7 @@ export class WSClient {
     // Onboarding can name a key-derived home whose data has not arrived yet.
     // A prior read already established that this server cannot subscribe it.
     if (isNotFound(knownError) || isUnauthorized(knownError)) return;
+    if (drive && this.awaitingDriveGenesis(drive)) return;
 
     if (drive && this.store.isLiveSyncedDrive(drive)) {
       this.sendBinary(encodeSub(drive));
@@ -1756,7 +1770,14 @@ export class WSClient {
     }
   }
 
+  /** A local save can finish before its genesis is acknowledged by the server.
+   * ResourceSaved retries subscription after that acknowledgement arrives. */
+  private awaitingDriveGenesis(drive: string): boolean {
+    return !!this.store.outbox.getEntry(drive)?.signedGenesis;
+  }
+
   private async startVVSync(drive: string): Promise<void> {
+    if (this.awaitingDriveGenesis(drive)) return;
     if (this.readyState !== WebSocket.OPEN) return;
 
     const current = this.connectionGuard();

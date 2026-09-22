@@ -108,9 +108,25 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
     if (!inputWrapperRef.current) return;
     const inputWrapperPosition =
       inputWrapperRef.current.getBoundingClientRect();
+
+    // A top-layer popover's percentages resolve against the viewport.
+    // Measure the input instead; this also works with the anchor polyfill.
+    if (menuRef.current) {
+      menuRef.current.style.width = `${inputWrapperPosition.width}px`;
+    }
+
     const isNearBottom = inputWrapperPosition.bottom > window.innerHeight - 320;
     setMenuAboveInput(isNearBottom);
   }, []);
+
+  useEffect(() => {
+    const input = inputWrapperRef.current;
+    if (!input) return;
+    const observer = new ResizeObserver(checkMenuPosition);
+    observer.observe(input);
+
+    return () => observer.disconnect();
+  }, [checkMenuPosition]);
 
   useEffect(() => {
     if (!menuRef || !menuRef.current) return;
@@ -277,8 +293,10 @@ const List = styled.ul<{ $open: boolean; anchorName: string }>`
   top: anchor(bottom);
   left: anchor(left);
   bottom: unset;
-  min-width: max(100%, 25rem);
-  max-width: 95vw;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: calc(100vw - 16px);
+  overflow-wrap: anywhere;
   background-color: ${p => p.theme.colors.bg};
   scrollbar-color: ${p => p.theme.colors.bg2} transparent;
   border: solid 1px ${p => p.theme.colors.main};

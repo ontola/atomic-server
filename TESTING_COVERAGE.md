@@ -1,3 +1,36 @@
+New-drive sync: WebSocket unit coverage verifies SUB and SYNC wait for a pending genesis acknowledgement, then resume on ResourceSaved. The Local DB-off rendering E2E exercises this ordering with real server persistence.
+
+Cover repositioning: `cover-reposition.spec.ts` uploads a real image and verifies multiple pointer movements update its framing before release (native image dragging previously interrupted the gesture).
+
+Template visibility: `settings-templates.spec.ts` toggles Hide templates through Settings, verifies the loaded New page hides templates across reload, and restores them when unchecked.
+
+AI settings search: browser coverage checks API matches retain provider credentials but hide model, generative, and voice controls; titles matches show only the title toggle within AI.
+
+Model option details: settings browser coverage checks input/output prices per million tokens and the OpenRouter added month inside an option, while preserving selection and dropdown width.
+
+OpenRouter privacy: settings browser coverage filters out models absent from the mocked ZDR endpoint list. The BYOK voice/chat flow asserts provider.zdr is sent on its chat completion; voice audio remains outside this chat-only policy.
+
+Model dropdown geometry: `ai-settings.spec.ts` checks that the open list matches its input width (regression: viewport-wide popover).
+
+Speech settings: browser coverage selects a transcription model, persists the voice toggle across reload, hides the mic when disabled, and verifies the selected model in the personal-key audio request. The managed-credit model remains service-controlled.
+
+AI settings: `ai-settings.spec.ts` exercises navigation from the chat agent menu,
+provider controls and default model selection, agent/skill/MCP creation and reload
+persistence, and settings search. Provider/MCP APIs are mocked. Agent radios expose
+saved selection; voice BYOK regression still passes after the menu refactor.
+
+Voice feedback: unit checks cover audio-level bounds and local-recognition cancellation; the personal-key Chromium flow checks mic scaling with simulated volume and interim word rendering. Real on-device transcription requires browser support and an installed language pack.
+
+Voice with personal OpenRouter key: `ai-voice-byok.spec.ts` verifies the mic remains usable, direct audio requests carry the configured key, and no SaaS voice endpoint is called. Media and model responses are mocked.
+
+Voice chat: `voiceTurn.test.ts` checks PCM WAV serialization and cancellation
+without retries. `ai-live.spec.ts` runs the actual chat controls with mocked media
+and OpenRouter responses: record, transcribe, hosted AI reply and speech playback,
+without a personal API key. SaaS `ai::voice` validates input bounds and model pinning;
+shared AI tests cover credit reservations and settlement. Real microphone/provider
+quality remains unverified without the SaaS OpenRouter key. The earlier GPT-Live
+lifecycle tests remain for its retained, separate backend implementation.
+
 Plugin configuration: hook tests retain a release's validation schema when a save
 receipt omits computed metadata, and clear it when the release or installation
 changes. The plugin-install E2E checks invalid config after saving valid config.
