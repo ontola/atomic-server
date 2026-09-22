@@ -4,7 +4,7 @@ import { core, useStore } from '@tomic/react';
 /** Inspect the resource's declared classes, not every term in the drive ontology. */
 export function useWebsiteClass(
   classKey: string,
-  shortname = 'website-project',
+  shortname: string,
 ) {
   const store = useStore();
   const [resolved, setResolved] = useState<{ key: string; subject?: string }>();

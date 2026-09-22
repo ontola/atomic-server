@@ -293,7 +293,6 @@
       "https://atomicdata.dev/properties/view-column-order",
       "https://atomicdata.dev/properties/view-row-actions",
       "https://atomicdata.dev/properties/view-quick-add",
-      "https://atomicdata.dev/properties/view-dashboard",
       "https://atomicdata.dev/properties/dashboard-blocks",
       "https://atomicdata.dev/properties/dashboard-layout"
     ],
@@ -302,17 +301,6 @@
       "https://atomicdata.dev/properties/view-kind"
     ],
     "https://atomicdata.dev/properties/shortname": "view"
-  },
-  {
-    "@id": "https://atomicdata.dev/properties/view-dashboard",
-    "https://atomicdata.dev/properties/classtype": "https://atomicdata.dev/classes/Dashboard",
-    "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/atomicURL",
-    "https://atomicdata.dev/properties/description": "The Dashboard a view of kind 'dashboard' shows as a tab of its table. The Dashboard stays a resource of its own (a Drive page or a document can embed it too); this is only how the table reaches it.",
-    "https://atomicdata.dev/properties/isA": [
-      "https://atomicdata.dev/classes/Property"
-    ],
-    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/properties",
-    "https://atomicdata.dev/properties/shortname": "view-dashboard"
   },
   {
     "@id": "https://atomicdata.dev/properties/view-kind",

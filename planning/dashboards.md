@@ -341,7 +341,7 @@ is the smallest thing that proves the whole idea, and it is one action away.
 
 Built to the design above, with the deviations noted.
 
-- **Ontology** (`lib/defaults/dashboard.json`, seeded by `populate.rs` and by the
+- **Ontology at the time** (now `lib/defaults/blocks.json`, seeded by `populate.rs` and by the
   browser's `bootstrap.ts`): `Dashboard` (`dashboard-blocks`, `dashboard-layout`)
   and `Block` (`block-kind`, `block-source`, `block-view`, `block-query`,
   `block-aggregate`, `block-chart-spec`; a text block's body is `description`).
@@ -435,22 +435,18 @@ is left is below, roughly in the order it is worth doing.
 Written after building the first slice, so this is what is actually missing rather
 than what was guessed at the start.
 
-#### 1. Where composed blocks live — revised 2026-09-22
+#### 1. Where composed blocks live — revised 2026-09-23
 
-New block pages are `View` resources with `view-kind: dashboard`. They can live
+Block Apps are stored as `View` resources with `view-kind: blocks`. They can live
 under a Drive for composition across several tables, or under one Table as a
-saved tab. Blocks remain standalone child resources and can point to any table
-or View the author can read. Creating a separate Dashboard resource for every
-table tab was redundant, so new tabs and the standalone New Dashboard flow
-create only a View. Older `Dashboard` resources and `view-dashboard` links keep
-rendering. See [`apps-and-publishing.md`](./apps-and-publishing.md) for
-the broader View and publication migration.
+saved tab. Blocks remain child resources and can point to any table or View the
+author can read. New authoring has one App entry; the separate Dashboard class
+and creation form have been removed. See [`apps-and-publishing.md`](./apps-and-publishing.md)
+for the current App and publication model.
 
-The earlier recommendation to keep Dashboard as a separate model is superseded:
-it assumed every View must belong to exactly one Table. A composed View can
-instead live under a Drive and bind multiple sources explicitly. The remaining
-todo is to update templates to create composed Views, then retire the Dashboard
-authoring label after existing resources and links have compatibility paths.
+The earlier recommendation to keep Dashboard as a separate model is superseded.
+It assumed every View must belong to exactly one Table. A block App can instead
+bind multiple sources explicitly. Templates still need to create block Apps.
 
 #### 2. Templates that ship a dashboard
 

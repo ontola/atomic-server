@@ -104,6 +104,8 @@ table tabs but has not run in the isolated checkout. Site and table App release
 paths still need browser validation. Block and code App publication have no
 release path yet. The isolated checkout could not boot the browser tests because
 linked workspace dependencies place Loro WASM outside Vite's serving boundary.
+`bootstrap.test.ts` verifies the block schema loads without the retired
+Dashboard class; six Rust population tests pass with the renamed defaults file.
 
 Website error recovery: Chromium verifies an unreadable selected image emits the
 Store toast and console error, replaces the loading placeholder, disables publication,
