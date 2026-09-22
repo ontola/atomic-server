@@ -895,7 +895,7 @@ export class Store {
     const agent = this.getAgent();
     const serverUrl = this.serverUrl;
     const ws = this.getDefaultWebSocket();
-    if (!db?.isReady || !agent || !ws || this.getDrive() !== drive)
+    if (!db?.isReady || !agent || !ws)
       throw new Error(
         'Open this drive with local storage available before disconnecting.',
       );
@@ -906,7 +906,6 @@ export class Store {
         this.getClientDb() !== db ||
         this.getAgent() !== agent ||
         this.serverUrl !== serverUrl ||
-        this.getDrive() !== drive ||
         status.syncInProgress ||
         status.pendingDirtyCount ||
         status.blockedCount

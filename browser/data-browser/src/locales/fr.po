@@ -126,6 +126,7 @@ msgstr "Agents IA"
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx src/chunks/Website/WebsitePage.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/AvatarCropper.tsx src/components/ConfirmationDialog.tsx
@@ -277,8 +278,11 @@ msgstr "Compacte automatiquement la conversation lorsque les jetons d'entrée d�
 #: src/chunks/EmojiInput/EmojiInput.tsx src/chunks/RTE/EditLinkForm.tsx
 #: src/chunks/RTE/EditLinkForm.tsx
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
+#: src/chunks/TablePage/DerivedColumnHeading.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/components/forms/ResourceSelector/ResourceSelector.tsx
 #: src/routes/SyncRoute.tsx
@@ -527,6 +531,7 @@ msgstr "En-têtes HTTP optionnels à envoyer lors de la connexion à ce serveur 
 #: src/chunks/PluginRuns/PluginPage.tsx
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
 #: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx src/routes/EditRoute.tsx
 #: src/routes/EditRoute.tsx
 #: src/views/OntologyPage/OntologyPage.tsx
@@ -537,6 +542,7 @@ msgstr "Modifier"
 
 #: src/chunks/AI/AgentConfigItem.tsx
 #: src/chunks/AI/AgentConfigItem.tsx src/chunks/TablePage/TableViewTabs.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/Templates/model.test.ts
 msgid "Duplicate"
 msgstr "Dupliquer"
@@ -560,6 +566,7 @@ msgstr "Modèle par défaut"
 
 #: src/chunks/TablePage/EditorCells/AtomicURLCell.tsx
 #: src/chunks/TablePage/EditorCells/MultiRelationCell.tsx
+#: src/chunks/TablePage/EditorCells/SelectCell.tsx
 #: src/chunks/TablePage/EditorCells/SelectCell.tsx src/components/ComboBox.tsx
 #: src/components/ComboBox.tsx
 msgid "No results"
@@ -752,7 +759,7 @@ msgstr "Ajoutez une clé API OpenRouter dans les paramètres"
 msgid "{0} /M output tokens"
 msgstr "{0} /M jetons de sortie"
 
-#: src/components/SideBar/index.tsx
+#: src/components/SideBar/AIPanel.tsx
 msgid "AI Chats"
 msgstr "Conversations IA"
 
@@ -1477,9 +1484,11 @@ msgstr "Description textuelle <0/>"
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/RTE/ImagePicker.tsx
 #: src/chunks/RTE/ImagePicker.tsx src/chunks/TablePage/BreakdownDialog.tsx
+#: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/PropertyForm/EditPropertyDialog.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
+#: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx src/components/AvatarCropper.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/Settings/IntegrationSettings.tsx
@@ -1656,6 +1665,7 @@ msgstr "Cet appareil"
 #: src/chunks/TablePage/Kanban/KanbanColumn.tsx
 #: src/chunks/TablePage/PropertyForm/ExternalPropertyDialog.tsx
 #: src/chunks/TablePage/quickAdd.test.ts src/components/EditLanguagesDialog.tsx
+#: src/components/EditLanguagesDialog.tsx
 msgid "Add"
 msgstr "Ajouter"
 
@@ -1809,6 +1819,7 @@ msgstr "Définir un titre"
 msgid "Untitled"
 msgstr "Sans titre"
 
+#: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx src/components/EditableTitle.tsx
 #: src/components/EditableTitle.tsx
 msgid "Click to edit title"
@@ -2013,6 +2024,7 @@ msgstr ""
 
 #: src/actions/resourceActions.tsx
 #: src/chunks/DashboardPage/blocks/ViewBlock.tsx
+#: src/chunks/TablePage/Kanban/KanbanCard.tsx
 #: src/chunks/TablePage/Kanban/KanbanCard.tsx src/routes/IntegrationStore.tsx
 #: src/routes/IntegrationStore.tsx
 #: src/routes/SettingsAgent.tsx
@@ -3339,7 +3351,9 @@ msgid "No alt text"
 msgstr "Pas de texte alternatif"
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
+#: src/chunks/Demo/SimulatedTypist.ts
 #: src/chunks/Demo/SimulatedTypist.ts src/chunks/TablePage/NewColumnButton.tsx
+#: src/chunks/TablePage/NewColumnButton.tsx
 msgid "Text"
 msgstr "Texte"
 
@@ -3379,7 +3393,11 @@ msgid "Table filters"
 msgstr "Filtres du tableau"
 
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
+#: src/chunks/TablePage/DerivedColumnHeading.tsx
 #: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/RowActionHeading.tsx
+#: src/chunks/TablePage/TableHeading.tsx
+#: src/chunks/TablePage/TableHeading.tsx
 #: src/chunks/TablePage/TableHeading.tsx
 msgid "Drag column"
 msgstr "Faire glisser la colonne"
@@ -3387,7 +3405,9 @@ msgstr "Faire glisser la colonne"
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/PluginRuns/ConnectNotion.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx src/chunks/TablePage/useTableView.ts
+#: src/chunks/TablePage/useTableView.ts
 msgid "View"
 msgstr "Afficher"
 
@@ -3452,6 +3472,8 @@ msgid "Filter operator"
 msgstr "Opérateur de filtre"
 
 #: src/chunks/TablePage/useTableView.ts
+#: src/chunks/TablePage/useTableView.ts
+#: src/chunks/TablePage/useTableView.ts
 msgid "Default View"
 msgstr "Vue par défaut"
 
@@ -3496,6 +3518,8 @@ msgstr "Entrez une URL Atomique ou recherchez (appuyez sur \"/\")"
 msgid "Search"
 msgstr "Rechercher"
 
+#: src/chunks/Templates/prepareTemplateDrive.ts
+#: src/chunks/Templates/prepareTemplateDrive.ts
 #: src/helpers/managed/cloudSync.ts
 #: src/helpers/managed/driveHostingState.test.ts
 #: src/helpers/managed/prepareDriveSharing.ts
@@ -3505,6 +3529,7 @@ msgstr "Rechercher"
 msgid "Disabled"
 msgstr ""
 
+#: src/components/forms/MinMaxInput.tsx
 #: src/components/forms/MinMaxInput.tsx
 msgid "Value should be a round number."
 msgstr "La valeur doit être un nombre entier."
@@ -5514,6 +5539,7 @@ msgid "Duration"
 msgstr ""
 
 #: src/chunks/TablePage/TableViewTabs.tsx
+#: src/chunks/TablePage/TableViewTabs.tsx
 msgid "Toggle properties"
 msgstr ""
 
@@ -5801,7 +5827,9 @@ msgstr ""
 msgid "groups"
 msgstr ""
 
+#: src/chunks/TablePage/QuickAddFields.tsx
 #: src/chunks/TablePage/QuickAddFields.tsx src/chunks/TablePage/rowActions.ts
+#: src/chunks/TablePage/rowActions.ts
 msgid "Value"
 msgstr ""
 
@@ -6936,6 +6964,7 @@ msgstr ""
 msgid "Are you sure you want to delete"
 msgstr ""
 
+#: src/chunks/TablePage/TableExportDialog.tsx
 #: src/chunks/TablePage/TableExportDialog.tsx src/views/File/DownloadButton.tsx
 #: src/views/File/DownloadButton.tsx
 msgid "Download"
@@ -10210,6 +10239,8 @@ msgid "Assignee"
 msgstr ""
 
 #. 0: tableName
+#. 0: tableName
+#: src/chunks/TablePage/useTableView.ts
 #: src/chunks/TablePage/useTableView.ts
 msgid "{0} dashboard"
 msgstr ""
@@ -12203,4 +12234,9 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Local copy unavailable"
+msgstr ""
+
+#: src/components/SideBar/FeedbackMenuItem.tsx
+#: src/components/SideBar/FeedbackMenuItem.tsx
+msgid "Report this error"
 msgstr ""
