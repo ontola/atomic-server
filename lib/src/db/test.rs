@@ -3419,3 +3419,49 @@ async fn canonical_scheme_open_rewrites_every_subject_keyed_tree() {
     store.migrate_canonical_scheme_if_needed().unwrap();
     assert!(get(Tree::Outbox, &canon_outbox_key).is_some());
 }
+
+#[tokio::test]
+async fn canonical_scheme_resumes_index_rebuild_after_rows_moved() {
+    let store = Db::init_temp("canonical-scheme-resume-index")
+        .await
+        .unwrap();
+    let mut pv = crate::resources::PropVals::new();
+    pv.insert(
+        urls::NAME.into(),
+        Value::String("migrationresumeneedle".into()),
+    );
+    store
+        .kv
+        .insert(
+            Tree::Resources,
+            b"atomic:migrated",
+            &encode_propvals(&pv).unwrap(),
+        )
+        .unwrap();
+    // Simulate a stop after canonical rows were written and indexes cleared,
+    // but before the completion marker was committed.
+    store
+        .kv
+        .insert(
+            Tree::PluginMeta,
+            super::canonical_scheme::INDEX_REBUILD_PENDING_KEY,
+            b"1",
+        )
+        .unwrap();
+    store.clear_index().unwrap();
+    store
+        .kv
+        .remove(
+            Tree::PluginMeta,
+            super::canonical_scheme::SCHEME_REWRITE_KEY,
+        )
+        .unwrap();
+    store.migrate_canonical_scheme_if_needed().unwrap();
+    let hits = store
+        .search_hits("migrationresumeneedle", &Default::default())
+        .unwrap();
+    assert!(
+        !hits.is_empty(),
+        "restart must rebuild even when no rows remain to rename"
+    );
+}

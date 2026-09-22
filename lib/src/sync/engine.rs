@@ -434,7 +434,7 @@ pub async fn handle_frame_full_for_caps(
             // readable subjects both so it can match the client's and so an
             // anonymous socket learns nothing about a drive it cannot read.
             Some(sync) if sync.probe => {
-                match drive_sync_hash_for(store, &sync.drive, agent).await {
+                match drive_sync_hash_for_wire(store, &sync.drive, agent, wire).await {
                     Ok(server_hash) if server_hash == sync.drive_hash => {
                         vec![protocol::encode_sync_ok(&wire.subject(&sync.drive))]
                     }
@@ -1114,6 +1114,22 @@ pub async fn drive_items_for(
     Ok(items)
 }
 
+/// Sorted inventory in the peer's spelling. Convert before range filtering or
+/// fingerprinting: both subject bytes and their ordering are part of RBSR.
+pub async fn drive_items_for_wire(
+    store: &Db,
+    drive: &str,
+    agent: &crate::agents::ForAgent,
+    wire: WireScheme,
+) -> Result<Vec<crate::sync::rbsr::Item>, String> {
+    let mut items = drive_items_for(store, drive, agent).await?;
+    for (subject, _) in &mut items {
+        *subject = wire.subject(subject);
+    }
+    items.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(items)
+}
+
 /// [`drive_sync_hash`] over the subjects `agent` may read — the hash the
 /// probe compares against, so it agrees with what that client can hold.
 pub async fn drive_sync_hash_for(
@@ -1121,7 +1137,16 @@ pub async fn drive_sync_hash_for(
     drive: &str,
     agent: &crate::agents::ForAgent,
 ) -> Result<String, String> {
-    let items = drive_items_for(store, drive, agent).await?;
+    drive_sync_hash_for_wire(store, drive, agent, WireScheme::CANONICAL).await
+}
+
+pub async fn drive_sync_hash_for_wire(
+    store: &Db,
+    drive: &str,
+    agent: &crate::agents::ForAgent,
+    wire: WireScheme,
+) -> Result<String, String> {
+    let items = drive_items_for_wire(store, drive, agent, wire).await?;
     let vvs: std::collections::HashMap<String, std::collections::HashMap<String, i32>> = items
         .into_iter()
         .map(|(subject, vv)| (subject, vv.into_iter().collect()))
@@ -1176,6 +1201,12 @@ pub async fn handle_sync_vv_filtered(
     agent: &crate::agents::ForAgent,
     wire: WireScheme,
 ) -> Vec<Vec<u8>> {
+    let canonical_subjects = subjects.map(|set| {
+        set.iter()
+            .map(|s| crate::Subject::from_raw(s, None).pure_id())
+            .collect::<std::collections::HashSet<_>>()
+    });
+    let subjects = canonical_subjects.as_ref();
     let server_vvs = match subjects {
         // RBSR path: build VVs for only the differing subjects — no full-drive
         // parent walk, no full-drive snapshot reads.
@@ -1199,7 +1230,12 @@ pub async fn handle_sync_vv_filtered(
 
     // Fast path: hash match
     if !drive_hash.is_empty() {
-        let server_hash = compute_drive_hash(&server_vvs);
+        let server_hash = compute_drive_hash(
+            &server_vvs
+                .iter()
+                .map(|(s, vv)| (wire.subject(s), vv.clone()))
+                .collect(),
+        );
 
         if server_hash == drive_hash {
             tracing::info!("SYNC: drive {} — hashes match, in sync", drive);
@@ -1223,7 +1259,13 @@ pub async fn handle_sync_vv_filtered(
             }
         }
 
-        client_vvs.insert(subject.clone(), vv);
+        let entry = client_vvs
+            .entry(crate::Subject::from_raw(subject, None).pure_id())
+            .or_default();
+        for (peer, counter) in vv {
+            let current = entry.entry(peer).or_default();
+            *current = (*current).max(counter);
+        }
     }
 
     let mut pull: Vec<String> = Vec::new();
@@ -1917,10 +1959,7 @@ pub async fn collect_readable_snapshots(
             }
             Err(_) => continue,
         }
-        if let Ok(Some(snapshot)) = store
-            .kv
-            .get(crate::db::trees::Tree::LoroSnapshots, subject.as_bytes())
-        {
+        if let Some(snapshot) = store.get_loro_snapshot_bytes(&subj.pure_id()) {
             entries.push((subject.clone(), snapshot));
         }
     }
@@ -2235,6 +2274,68 @@ mod bootstrap_and_sub_tests {
 
         let third = protocol::decode_update(&result.frames[2][1..]).unwrap();
         assert_eq!(third.subject, alice_subject);
+    }
+
+    #[tokio::test]
+    async fn legacy_filtered_sync_finds_canonical_snapshots() {
+        let db = Db::init_temp("legacy_filtered_sync").await.unwrap();
+        let (alice, drive) = db.setup("Alice").await.unwrap();
+        let legacy = crate::identifiers::to_legacy_scheme(&drive);
+        let filter = std::collections::HashSet::from([legacy.clone()]);
+        let frames = handle_sync_vv_filtered(
+            &legacy,
+            "",
+            &[],
+            &Default::default(),
+            Some(&filter),
+            &db,
+            &ForAgent::from(alice.clone()),
+            WireScheme::LEGACY,
+        )
+        .await;
+        let diff = protocol::decode_sync_diff(&frames[0][1..]).unwrap();
+        assert!(
+            diff.push.contains(&legacy),
+            "a legacy filtered request must receive the canonical snapshot"
+        );
+        let agent = ForAgent::from(alice);
+        let snapshots =
+            collect_readable_snapshots(&db, &agent, std::slice::from_ref(&legacy), None).await;
+        assert_eq!(
+            snapshots.len(),
+            1,
+            "legacy pull requests must find canonical snapshots"
+        );
+        let items = drive_items_for_wire(&db, &drive, &agent, WireScheme::LEGACY)
+            .await
+            .unwrap();
+        assert!(items.iter().all(|(s, _)| !s.starts_with("atomic:")));
+        let vv = &items.iter().find(|(s, _)| s == &legacy).unwrap().1;
+        let peers: Vec<String> = vv.keys().cloned().collect();
+        let counters: Vec<i32> = peers.iter().map(|p| vv[p]).collect();
+        let resources = std::collections::HashMap::from([(legacy.clone(), counters)]);
+        for filter in [Some(&filter), None] {
+            let frames = handle_sync_vv_filtered(
+                &legacy,
+                "",
+                &peers,
+                &resources,
+                filter,
+                &db,
+                &agent,
+                WireScheme::LEGACY,
+            )
+            .await;
+            let diff = protocol::decode_sync_diff(&frames[0][1..]).unwrap();
+            assert!(
+                !diff.pull.contains(&legacy),
+                "the same legacy VV must not be treated as missing"
+            );
+            assert!(
+                !diff.push.contains(&legacy),
+                "the same legacy VV must not need a snapshot"
+            );
+        }
     }
 
     #[tokio::test]

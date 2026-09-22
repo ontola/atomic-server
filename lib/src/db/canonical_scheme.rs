@@ -26,13 +26,15 @@ use super::Db;
 /// `Tree::PluginMeta` flag: this store's subject-keyed trees have been
 /// rewritten to the canonical scheme.
 pub const SCHEME_REWRITE_KEY: &[u8] = b"canonical-scheme-v1";
+/// Persisted before the first indexed row moves, cleared only after rebuilding.
+pub const INDEX_REBUILD_PENDING_KEY: &[u8] = b"canonical-scheme-index-pending";
 
 /// Prefix of a tombstone marker in `Tree::PluginMeta`; must match
 /// `crate::sync::tombstones`.
 const TOMBSTONE_PREFIX: &[u8] = b"tombstone:";
 
 /// Rewrite legacy identifier keys and reference values, then rebuild indexes
-/// if a resource or snapshot moved. Idempotent: a store that already ran this
+/// until the completion marker is persisted. Idempotent: a store that already ran this
 /// is a no-op.
 pub fn migrate_if_needed(store: &Db) -> AtomicResult<()> {
     if store
@@ -55,10 +57,16 @@ pub fn migrate_if_needed(store: &Db) -> AtomicResult<()> {
     other += rewrite_prefixed_keys(store, Tree::PluginMeta, TOMBSTONE_PREFIX, 0)?;
     other += rewrite_outbox_keys(store)?;
 
-    if indexed > 0 {
+    // This marker precedes the first indexed write. A restart must finish the
+    // rebuild even when there are no legacy rows left to move.
+    if store
+        .kv
+        .get(Tree::PluginMeta, INDEX_REBUILD_PENDING_KEY)?
+        .is_some()
+    {
         tracing::info!(
             rewritten = indexed,
-            "Rewrote did:ad: resource / snapshot keys to atomic:; rebuilding indexes"
+            "Rebuilding indexes for the canonical scheme"
         );
         store.clear_index()?;
         store.build_index(true)?;
@@ -74,6 +82,9 @@ pub fn migrate_if_needed(store: &Db) -> AtomicResult<()> {
     store
         .kv
         .insert(Tree::PluginMeta, SCHEME_REWRITE_KEY, b"1")?;
+    store
+        .kv
+        .remove(Tree::PluginMeta, INDEX_REBUILD_PENDING_KEY)?;
     Ok(())
 }
 
@@ -116,6 +127,11 @@ fn rewrite_subject_keys(store: &Db, tree: Tree, values: ValueRewrite) -> AtomicR
             continue;
         };
         let (new_val, val_changed) = rewrite_value(&val, values)?;
+        if (key_moved || val_changed) && !matches!(values, ValueRewrite::Identifier) {
+            store
+                .kv
+                .insert(Tree::PluginMeta, INDEX_REBUILD_PENDING_KEY, b"1")?;
+        }
 
         if !key_moved {
             if val_changed {

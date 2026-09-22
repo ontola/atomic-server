@@ -682,11 +682,14 @@ impl WebSocketConnection {
             if let Ok(req) = serde_json::from_str::<RbsrFpRequest>(json) {
                 let store = self.store.clone();
                 let agent = self.agent.clone();
+                let wire =
+                    atomic_lib::sync::engine::WireScheme::from_caps(&self.client_capabilities);
                 ctx.spawn(
                     async move {
-                        let items =
-                            atomic_lib::sync::engine::drive_items_for(&store, &req.drive, &agent)
-                                .await;
+                        let items = atomic_lib::sync::engine::drive_items_for_wire(
+                            &store, &req.drive, &agent, wire,
+                        )
+                        .await;
                         items
                             .map(|items| {
                                 let fps: Vec<String> = req
@@ -719,11 +722,14 @@ impl WebSocketConnection {
             if let Ok(req) = serde_json::from_str::<RbsrItemsRequest>(json) {
                 let store = self.store.clone();
                 let agent = self.agent.clone();
+                let wire =
+                    atomic_lib::sync::engine::WireScheme::from_caps(&self.client_capabilities);
                 ctx.spawn(
                     async move {
-                        let items =
-                            atomic_lib::sync::engine::drive_items_for(&store, &req.drive, &agent)
-                                .await;
+                        let items = atomic_lib::sync::engine::drive_items_for_wire(
+                            &store, &req.drive, &agent, wire,
+                        )
+                        .await;
                         items
                             .map(|items| {
                                 let hi = req.hi.as_deref();

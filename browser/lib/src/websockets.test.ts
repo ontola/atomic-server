@@ -474,6 +474,65 @@ describe('WSClient drive sync probe', () => {
   });
 });
 
+describe('WSClient legacy scheme sync', () => {
+  const original = globalThis.WebSocket;
+  afterEach(() => {
+    globalThis.WebSocket = original;
+    vi.restoreAllMocks();
+  });
+
+  it('uses legacy nested subjects in reduced sync and its full fallback', async () => {
+    for (const fallback of [false, true]) {
+      const { client, socket, store } = await connectedClient();
+      const internal = client as unknown as {
+        authenticatedWith: string | undefined;
+        _pendingSyncState: Map<string, unknown>;
+        sendReducedSyncState: (drive: string) => Promise<void>;
+      };
+      internal.authenticatedWith = store.getAgent()?.subject;
+      internal._pendingSyncState.set('atomic:drive', {
+        drive: 'atomic:drive',
+        driveHash: 'hash',
+        peers: ['1'],
+        resources: { 'atomic:doc': [1] },
+      });
+      const fp = vi.spyOn(client, 'rbsrFingerprints');
+      if (fallback) fp.mockRejectedValue(new Error('test fallback'));
+      else fp.mockResolvedValue(['00'.repeat(32)]);
+      vi.spyOn(client, 'rbsrItems').mockResolvedValue([]);
+      await internal.sendReducedSyncState('did:ad:drive');
+      const frame = framesWithTag(socket, Tag.SYNC).at(-1)!;
+      const dl = (frame[1] << 8) | frame[2];
+      const ho = 3 + dl;
+      const hl = (frame[ho] << 8) | frame[ho + 1];
+      const body = JSON.parse(
+        new TextDecoder().decode(frame.subarray(ho + 2 + hl)),
+      );
+      assert(body.resources).toEqual({ 'did:ad:doc': [1] });
+      if (!fallback) assert(body.subjects).toEqual(['did:ad:doc']);
+      client.close();
+    }
+  });
+
+  it('exports canonical in-memory snapshots when a legacy peer requests them', async () => {
+    const { client, socket, store } = await connectedClient();
+    const resource = store.getResourceLoading('atomic:doc');
+    await resource.set(
+      'https://atomicdata.dev/properties/name',
+      'offline edit',
+    );
+    await (
+      client as unknown as { handleSyncDiff: (diff: unknown) => Promise<void> }
+    ).handleSyncDiff({
+      drive: 'did:ad:drive',
+      pull: ['did:ad:doc'],
+      push: [],
+    });
+    assert(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(1);
+    client.close();
+  });
+});
+
 describe('WSClient live collaboration', () => {
   const original = globalThis.WebSocket;
 
@@ -898,7 +957,7 @@ describe('WSClient SYNC_DIFF and the outbox', () => {
       push: [],
     });
 
-    expect(exported).toEqual(['did:ad:clean']);
+    expect(exported).toEqual(['atomic:clean']);
     expect(framesWithTag(socket, Tag.SYNC_PUSH)).toHaveLength(1);
     client.close();
   });
