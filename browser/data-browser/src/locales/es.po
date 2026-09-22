@@ -7208,9 +7208,8 @@ msgstr ""
 msgid "We found your workspace"
 msgstr ""
 
-#: src/helpers/syncPresentation.ts
-msgid "This device does not have this workspace yet. Fetch it from a device that has it."
-msgstr ""
+#~ msgid "This device does not have this workspace yet. Fetch it from a device that has it."
+#~ msgstr ""
 
 #: src/components/AccountRecoveryCard.tsx
 msgid "Could not add a passkey."
@@ -7703,7 +7702,7 @@ msgstr ""
 msgid "Applying…"
 msgstr ""
 
-#. 0: plan?.changes.length ?? 0
+#. 0: plan.changes.length
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 msgid "Apply {0} changes"
 msgstr ""
@@ -12200,4 +12199,8 @@ msgstr ""
 #: src/components/AI/AISettings.tsx
 #: src/routes/AppSettings.tsx
 msgid "Enable AI Chats panel"
+msgstr ""
+
+#: src/helpers/syncPresentation.ts
+msgid "This workspace could not be loaded. Its sync and backup status are unknown."
 msgstr ""

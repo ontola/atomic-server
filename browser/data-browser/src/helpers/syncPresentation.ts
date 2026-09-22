@@ -7,7 +7,7 @@ export function syncSummary(input: {
   vaultOn: boolean;
 }): string {
   if (input.missing)
-    return 'This device does not have this workspace yet. Fetch it from a device that has it.';
+    return 'This workspace could not be loaded. Its sync and backup status are unknown.';
   if (input.managed && input.serverSync && input.hosting === false)
     return 'This drive is still syncing with a server, but Cloud Server hosting has not been confirmed.';
   if (!input.local) return 'Your data lives on the device you’re connected to.';

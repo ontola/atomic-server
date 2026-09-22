@@ -2425,3 +2425,5 @@ Integration bundle delivery: `integrationSource.test.ts` covers connected-server
 `agent.test.ts` covers independent devices deriving the same valid folder certificate, separation by drive/account, and refusal to derive an identity using a nondeterministic signer. `agentStorage.test.ts` checks stable folder IDs survive non-extractable key storage and subsequent keypair updates. `standardLocations.test.ts` covers concurrent calls across stores, reuse without resetting folder metadata, legacy sessions, and refusal to initialize over transport failures or known deletion.
 
 `ai-chat-discovery.spec.ts` checks that the visible sidebar includes chats from duplicate folders and the drive root before and after reload, excludes other drives and non-chat resources, and that two separately signed-in browser contexts create chats using the same folder ID. AI responses are mocked. Physical Safari and an offline two-device reconnect are not covered.
+
+Unreadable workspace summaries: `syncPresentation.test.ts` rejects copy that assumes another device has the data or that local data is protected; the summary now reports sync and backup status as unknown.

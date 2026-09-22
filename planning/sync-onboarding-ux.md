@@ -64,6 +64,11 @@ Rules of thumb:
   in a footnote, never in the headline.
 - **A state is not an error.** No device connected, unreachable, data
   elsewhere — these are normal, and read as normal.
+- **An unreadable workspace has unknown sync and backup status.** A failed
+  read does not establish that another device has the data. The browser's
+  `syncSummary` says this explicitly; Flutter's device settings currently has
+  no corresponding workspace-status summary, only connection controls and
+  operation errors.
 
 ## 3. The paths
 
