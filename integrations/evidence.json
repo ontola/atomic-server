@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-18T12:38:38.722Z",
+  "generatedAt": "2026-09-22T21:19:05.418Z",
   "layer": "all",
   "live": {
     "status": "not-run",
@@ -18,7 +18,7 @@
         "projects:import",
         "person:import"
       ],
-      "bundleSha256": "e669e6c3bd3f2b2f67eda7d6b1be62ab0cf70ca3fe82e00f90caa1f194b2f50d",
+      "bundleSha256": "8c9acc1f0fb06ccbaaae5f01000f1ed6f8af43aacd72e6987bf323c6c8a09b8a",
       "checks": [
         {
           "name": "reproducible-bundle",
@@ -60,7 +60,7 @@
         "issues.status:two-way",
         "issues.create:two-way"
       ],
-      "bundleSha256": "eb9516c869db95525da8c94ab4616ec9b03c347c3ca7d74c9fe9b5bee5496381",
+      "bundleSha256": "093885eb4bbfdfccd90ea49144c063d2c117dd750c90fd681b13c4970b748422",
       "checks": [
         {
           "name": "reproducible-bundle",
@@ -143,7 +143,7 @@
       "declaredCapabilities": [
         "bank-statements:import"
       ],
-      "bundleSha256": "39c76cd8b536e4a7e1eb170483a47a99fea1d75ba755548befe96d8d5e9c231a",
+      "bundleSha256": "43184b88f226d256cb7831030690a87e80a96ced5045de41d344c98177b1912c",
       "checks": [
         {
           "name": "reproducible-bundle",
@@ -182,7 +182,7 @@
         "schema.property-name:two-way",
         "views.table-board-subset:two-way"
       ],
-      "bundleSha256": "081e544193f65cb5843e876ad6f1a696da29791e2b69ac811dd0a193eed896b4",
+      "bundleSha256": "f7e1986ee9c7878e9906de6ec4ab6a98752d0ee7cefe598acaac44a45822480a",
       "checks": [
         {
           "name": "reproducible-bundle",
@@ -217,7 +217,7 @@
       "declaredCapabilities": [
         "demo-pets:import"
       ],
-      "bundleSha256": "bf9a687dda16d1ba2d8bae4b80a26d2c7e011a102d6c15b55b83132685fb7a4f",
+      "bundleSha256": "678500fbeac6b53e4000940e26a4f709e1e909c690ba280eac0e5bcaa4331d8d",
       "checks": [
         {
           "name": "reproducible-bundle",
