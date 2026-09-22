@@ -488,15 +488,15 @@ export function validateManifest(raw: unknown): PluginManifest {
   const network = { origins: [] as string[], reason: undefined as unknown };
 
   if (entry.network !== undefined) {
-    const declared = object(entry.network, 'network');
-    known(declared, ['origins', 'reason']);
-    network.origins = list(declared.origins, 'network.origins').map(origin =>
-      exactOrigin(origin, 'network origin'),
+    const declaredNetwork = object(entry.network, 'network');
+    known(declaredNetwork, ['origins', 'reason']);
+    network.origins = list(declaredNetwork.origins, 'network.origins').map(
+      origin => exactOrigin(origin, 'network origin'),
     );
     if (new Set(network.origins).size !== network.origins.length)
       throw new Error('network origins must be unique');
-    if (declared.reason !== undefined)
-      network.reason = text(declared.reason, 'network.reason');
+    if (declaredNetwork.reason !== undefined)
+      network.reason = text(declaredNetwork.reason, 'network.reason');
   }
 
   const seenCapabilities = new Set<string>();
@@ -506,11 +506,15 @@ export function validateManifest(raw: unknown): PluginManifest {
 
     if (typeof value === 'string') name = value;
     else if (value && typeof value === 'object' && !Array.isArray(value)) {
-      const declared = value as Record<string, unknown>;
-      if (Object.keys(declared).some(key => !['name', 'reason'].includes(key)))
+      const declaredCapability = value as Record<string, unknown>;
+      if (
+        Object.keys(declaredCapability).some(
+          key => !['name', 'reason'].includes(key),
+        )
+      )
         throw new Error('capability must be a known name or {name, reason}');
-      name = declared.name;
-      reason = declared.reason;
+      name = declaredCapability.name;
+      reason = declaredCapability.reason;
     }
 
     if (
@@ -535,20 +539,20 @@ export function validateManifest(raw: unknown): PluginManifest {
   };
 
   if (entry.entrypoints !== undefined) {
-    const declared = object(entry.entrypoints, 'entrypoints');
-    known(declared, ['run', 'view', 'classExtender']);
+    const declaredEntrypoints = object(entry.entrypoints, 'entrypoints');
+    known(declaredEntrypoints, ['run', 'view', 'classExtender']);
 
-    if (declared.run !== undefined) {
-      if (typeof declared.run !== 'boolean')
+    if (declaredEntrypoints.run !== undefined) {
+      if (typeof declaredEntrypoints.run !== 'boolean')
         throw new Error('entrypoints.run: invalid type, expected a boolean');
-      entrypoints.run = declared.run;
+      entrypoints.run = declaredEntrypoints.run;
     }
 
-    if (declared.view !== undefined)
-      entrypoints.view = text(declared.view, 'entrypoints.view');
-    if (declared.classExtender !== undefined)
+    if (declaredEntrypoints.view !== undefined)
+      entrypoints.view = text(declaredEntrypoints.view, 'entrypoints.view');
+    if (declaredEntrypoints.classExtender !== undefined)
       entrypoints.classExtender = list(
-        declared.classExtender,
+        declaredEntrypoints.classExtender,
         'entrypoints.classExtender',
       ).map(url => text(url, 'entrypoints.classExtender'));
   }
