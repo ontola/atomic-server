@@ -1396,12 +1396,15 @@ export async function getRecoverySecret(): Promise<RecoverySecret | null> {
   // Share only an in-flight read: a later call must see newly saved wrappers.
   const key = JSON.stringify([getManagedApiBase(), account.email]);
   const now = Date.now();
+
   for (const [readKey, until] of recoveryReadCooldowns) {
     if (until <= now) recoveryReadCooldowns.delete(readKey);
   }
+
   if (recoveryReadCooldowns.has(key)) {
     throw new Error('Could not load encrypted recovery backup.');
   }
+
   const pending = pendingRecoveryReads.get(key);
   if (pending) return pending;
   const request = fetchRecoverySecret(key);

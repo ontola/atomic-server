@@ -30,9 +30,11 @@ it.each([undefined, '120', 'invalid'])(
       }),
     );
     await expect(getRecoverySecret()).rejects.toThrow();
+
     for (let i = 0; i < 10; i++) {
       await expect(getRecoverySecret()).rejects.toThrow();
     }
+
     expect(managedFetch).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(retryAfter === '120' ? 120_000 : 60_000);
     vi.mocked(managedFetch).mockResolvedValue(
