@@ -2,6 +2,8 @@ File uploads during tab handoff (2026-09-22): `browser/lib/src/client-db-handoff
 
 Account redirects (2026-09-22): mounted `GettingStartedFlow.test.tsx` and `IdentityReconcileGate.test.tsx` cover hosted local sign-in, settings/passkey continuation, invite/drive priority, missing-data recovery and cancellation of stale identity/hosting checks. See [the route map](browser/data-browser/AUTH_FLOWS.md). Portal session, email-link and dashboard browser checks live in atomic-saas and use HTTP fixtures; real production passkey registration is not covered by these checks.
 
+PR #1585 frontend regressions: Vault backup tests verify a legacy drive ID reads canonical cached metadata and refreshes it after edits. Deep-link and peer-pairing tests retain legacy inputs while checking canonical identity behavior.
+
 PR #1585 upgrade regressions: library tests pin the pre-rename AI Chats singleton and restored alias cache, negotiate nested reduced/full sync identifiers, and export canonical snapshots for legacy requests. Rust tests cover legacy filtered/full version vectors and restarting an interrupted scheme migration after rows moved but before indexes finished. These are library/frame-level checks; a deployed mixed-version browser/Iroh pairing is not exercised.
 
 New-drive sync: WebSocket unit coverage verifies SUB and SYNC wait for a pending genesis acknowledgement, then resume on ResourceSaved. The Local DB-off rendering E2E exercises this ordering with real server persistence.
