@@ -69,7 +69,7 @@ export const test = base.extend<{}, { sessionSeed: Seed | undefined }>({
         await installEmptyDiscoveryRoom(context);
         await context.addInitScript(origin => {
           if (location.origin !== origin) return;
-          localStorage.setItem('viewTransitionsDisabled', 'true');
+          localStorage.setItem('viewTransitionsEnabled', 'false');
         }, new URL(FRONTEND_URL).origin);
         const page = context.pages()[0] ?? (await context.newPage());
         await devDrive(page);

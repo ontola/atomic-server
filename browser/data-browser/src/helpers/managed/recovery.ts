@@ -3,7 +3,7 @@ import { getManagedAccount } from './session';
 import { isRunningInTauri } from '../tauri';
 import { wasmBinaryUrl, wasmJsUrl } from '../wasmUrls';
 import { PRODUCT_NAME } from './product';
-import { managedFetch } from './api';
+import { getManagedApiBase, managedFetch } from './api';
 import { writeManagedAccountBinding } from './binding';
 
 export type RecoveryWrapperInput = {
@@ -1386,8 +1386,28 @@ export async function saveRecoverySecret(input: RecoverySecretInput) {
   return saved;
 }
 
+const pendingRecoveryReads = new Map<string, Promise<RecoverySecret | null>>();
+
 export async function getRecoverySecret(): Promise<RecoverySecret | null> {
-  if (!(await getManagedAccount())) return null;
+  const account = await getManagedAccount();
+  if (!account) return null;
+  // Reconciliation, the drive catalog and Vault can all ask during one render.
+  // Share only an in-flight read: a later call must see newly saved wrappers.
+  const key = JSON.stringify([getManagedApiBase(), account.email]);
+  const pending = pendingRecoveryReads.get(key);
+  if (pending) return pending;
+  const request = fetchRecoverySecret();
+  pendingRecoveryReads.set(key, request);
+
+  try {
+    return await request;
+  } finally {
+    if (pendingRecoveryReads.get(key) === request)
+      pendingRecoveryReads.delete(key);
+  }
+}
+
+async function fetchRecoverySecret(): Promise<RecoverySecret | null> {
   // [RECOVERY-RECONSTRUCTED] body — only this function's signature survived in
   // the transcripts. Reconstructed as the GET counterpart of saveRecoverySecret
   // (PUT) above; 204/401/404 all mean "no recovery secret stored".

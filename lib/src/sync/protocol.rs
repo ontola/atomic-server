@@ -258,6 +258,13 @@ pub mod error_code {
     /// (or that carries none). Terminal for that envelope: re-sending the
     /// same bytes changes nothing; the client has to sign again.
     pub const INVALID_SIGNATURE: u16 = 9;
+    /// The commit's subject is itself a Commit (`did:ad:commit:<sig>` or the
+    /// legacy `<server>/commits/<sig>`). Commits are immutable, so
+    /// `hierarchy.rs` refuses every write to one ("Commits cannot be
+    /// edited."). Terminal — drop the entry. Nothing is lost: a Commit's
+    /// content is whatever was signed, and no local edit to it could ever
+    /// have applied.
+    pub const IMMUTABLE_COMMIT: u16 = 10;
 }
 
 /// Decode the payload of an `ERROR` frame (slice *after* the tag byte):
@@ -311,6 +318,12 @@ pub fn classify_commit_error(message: &str) -> u16 {
 
     if message.contains("missing. Is required in class") {
         return error_code::MISSING_REQUIRED_PROPERTY;
+    }
+
+    // `hierarchy.rs` — the commit's subject is a Commit, which can never be
+    // edited, whoever signs.
+    if message.contains("Commits cannot be edited") {
+        return error_code::IMMUTABLE_COMMIT;
     }
 
     // `hierarchy.rs` — no write right on the resource, or (for a create) no
@@ -1859,6 +1872,10 @@ mod tests {
                 "Incorrect signature for Commit. This could be due to an error during signing"
             ),
             error_code::INVALID_SIGNATURE
+        );
+        assert_eq!(
+            classify_commit_error("Commits cannot be edited."),
+            error_code::IMMUTABLE_COMMIT
         );
         assert_eq!(
             classify_commit_error("some other error"),

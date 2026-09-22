@@ -6,22 +6,34 @@ They enhance the functionality of an Atomic Server by extending one or more clas
 For example they can be used to create more restrictive requirements for classes, like requiring names to start with an uppercase letter.
 They can also add dynamic properties to classes that get populated each time the resource is fetched.
 
-Plugins can be created in any programming language that compiles to Wasm.
+Plugins can be created in any programming language that compiles to Wasm, or written in JavaScript in the browser.
 For more information on how to create a plugin, see [Creating Plugins](plugins/creating-plugins.md).
+
+## Releases, Listings and Installations
+
+Three classes describe a plugin's life on a server:
+
+- A **Release** is an immutable, content-addressed package: JS source (`atomic-js/1`) or a WASM zip (`wasip2/1`), its manifest, and a `releaseId` (`blake3:…` over every field). It lives at `<server>/releases/<id>` on the server it was published to, and can be fetched from any other server.
+- A **Listing** is a marketplace entry pointing at a Release: name, emoji, description, domains, standards. Every Listing the public can read on a server is part of that server's Store; `GET /plugin-catalog` returns them. Any drive of Listings is a marketplace.
+- An **Installation** is one installed Release on one Drive. It pins the `release` URL and its `releaseId`, holds the `grants` you approved, your `config`, and an `installationStatus` (`draft`, `active`, `paused`, `revoked`). Committing it as `active` is the single install trigger for both runtimes; `paused` stops the plugin without uninstalling it, keeping its files, its config and the agent it signs as; `revoked` or destroying the resource uninstalls it and retires that agent. Updating a plugin means pointing the same Installation at a newer Release, which keeps everything the plugin already owns.
 
 ## Installing a plugin
 
-To install a plugin you need to have write access to the drive that the plugin will be installed on.
-Navigate to the drive and click on the 'Upload Plugin' button.
-Select your plugin zip file.
-You will see a description of the plugin, any permissions it requires and a config field.
-Edit the config if needed and click 'Install'.
-You can change the config at any time once the plugin is installed.
+You need write access to the drive the plugin will be installed on. Two ways in, one review:
+
+- **From the Store**: open the Store, pick a Listing and click 'Install'.
+- **From a zip**: on the drive, choose 'Upload plugin' and select the zip. The server publishes it as a private Release on this server first.
+
+Both end in the Installation review: the release's manifest, every capability it declares with the reason its author gave, the origins it may reach, and a config field. The server only activates an Installation whose `grants` equal exactly the set of capabilities the manifest declares, so nothing is approved by omission. You can change the config at any time once the plugin is installed; changing it does not reinstall anything.
+
+Pausing an Installation keeps its files and identity; resuming the same release does not extract or compile it again. Revoking or deleting it removes the plugin's files, its class extender and its agent.
+
+Servers that still have plugins installed the old way (a `Plugin` resource with a `pluginFile`) migrate them on startup: the zip becomes a Release, and the same resource becomes an active Installation pinned to it, without touching what is on disk.
 
 ## Giving your plugin access to resources
 
-By default plugins do not have access to any resources unless they have the `full-drive-access` permission.
-To add access to specific resources (and their children) navigate to the plugin page and add the resource in the 'Assign Rights' section.
+By default plugins do not have access to any resources unless they have the `full-drive-access` capability.
+To add access to specific resources (and their children) navigate to the Installation page and add the resource in the 'Assign Rights' section.
 
 <!-- ## Hooks
 

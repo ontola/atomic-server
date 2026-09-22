@@ -29,6 +29,7 @@ type ComboBoxProps = {
   selectedItem: string | undefined;
   onSelect: (value: string | undefined) => void;
   subtle?: boolean;
+  ariaLabel?: string;
 };
 
 export const ComboBox: React.FC<ComboBoxProps> = ({
@@ -36,6 +37,7 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
   selectedItem,
   onSelect,
   subtle = false,
+  ariaLabel,
 }) => {
   // Use Combobox does not work with the compiler.
   'use no memo';
@@ -155,6 +157,8 @@ export const ComboBox: React.FC<ComboBoxProps> = ({
       >
         <InputStyled
           {...getInputProps({
+            'aria-label': ariaLabel,
+            ...(ariaLabel ? { 'aria-labelledby': undefined } : {}),
             onFocus: () => {
               setIsFocused(true);
 

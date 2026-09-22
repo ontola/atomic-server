@@ -54,6 +54,29 @@ export const BASIC_CREATIONS = [
     description: 'Start a dedicated conversation with an assistant.',
   },
 ];
+
+/** These classes are minted per drive, so they must be offered before they exist. */
+export const DRIVE_CREATIONS = [
+  {
+    shortname: 'plugin-script',
+    title: 'Plugin',
+    description:
+      'Create a script or automation and review its proposed changes.',
+  },
+  {
+    shortname: 'website-project',
+    title: 'Website',
+    description: 'Build a website from your documents and tables.',
+  },
+  {
+    shortname: 'app',
+    title: 'App',
+    description: 'Create an interactive app backed by its own data.',
+  },
+] as const;
+
+export type DriveCreation = (typeof DRIVE_CREATIONS)[number]['shortname'];
+
 export function matchesCreationSearch(
   query: string,
   ...values: string[]
@@ -68,3 +91,62 @@ export function matchesCreationSearch(
 }
 export const CREATION_TABLE_TEMPLATES = TABLE_TEMPLATES.filter(t => t.spec);
 export const CREATION_PAGE_TEMPLATES = templates;
+
+/**
+ * Offer assistant-filled alternatives to the blank starters above.
+ *
+ * Every seed is deliberately unfinished. A suggestion puts its seed in the
+ * composer with the caret at the end instead of sending it, because "build me
+ * an app" on its own tells the assistant nothing and it would only have to ask
+ * the same question back.
+ */
+export const AI_BUILD_SUGGESTIONS: AIBuildSuggestion[] = [
+  {
+    id: 'app',
+    title: 'App',
+    seed: 'Build an app that ',
+    shortname: 'app',
+  },
+  {
+    id: 'website',
+    title: 'Website',
+    seed: 'Build a website for ',
+    shortname: 'website-project',
+  },
+  {
+    id: 'dashboard',
+    title: 'Dashboard',
+    seed: 'Build a dashboard showing ',
+    subject: dataBrowser.classes.dashboard,
+  },
+  {
+    id: 'table',
+    title: 'Custom table',
+    seed: 'Build a table for tracking ',
+    subject: dataBrowser.classes.table,
+  },
+];
+
+export interface AIBuildSuggestion {
+  id: string;
+  title: string;
+  seed: string;
+  /** The class whose icon this wears, for the ones with a fixed subject. */
+  subject?: string;
+  /** Used instead for App and Website, which are minted per drive. */
+  shortname?: string;
+}
+
+/**
+ * Whether the composer still holds nothing but a suggestion.
+ *
+ * Suggestions replace what is in the composer, so they are only offered while
+ * there is nothing of the user's own to lose. Setting a textarea's value from
+ * code does not go on the browser's undo stack, so a click that wiped a
+ * half-written description could not be taken back.
+ */
+export function isUntouchedSuggestion(prompt: string): boolean {
+  return (
+    prompt === '' || AI_BUILD_SUGGESTIONS.some(item => item.seed === prompt)
+  );
+}

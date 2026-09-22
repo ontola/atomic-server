@@ -48,3 +48,5 @@ scratchpad
 node_modules/
 # Generated integration certification evidence
 /artifacts/integration-certification/
+# Raw footage and cuts from browser/e2e/scripts/record-*.mjs
+/browser/e2e/recordings/

@@ -1,4 +1,3 @@
-import { styled } from 'styled-components';
 import {
   ai,
   commits,
@@ -10,9 +9,7 @@ import {
   useResource,
   useString,
 } from '@tomic/react';
-import { useEffect, useRef, useState, type JSX } from 'react';
-import { DragAreaBase, useResizable } from '@hooks/useResizable';
-import { useLocalStorage } from '@hooks/useLocalStorage';
+import { useEffect, useState, type JSX } from 'react';
 import { FaPlus, FaRegComment } from 'react-icons/fa6';
 import { IconButton } from '@components/IconButton/IconButton';
 import { useAISidebar } from '@components/AI/AISidebarContext';
@@ -41,37 +38,15 @@ export function AIChatsPanel(): JSX.Element | null {
     privateDrive ?? unknownSubject,
   );
   const chats = folderChats;
-  // The list height is the user's to set: drag the bar under it. Remembered per device.
-  const listRef = useRef<HTMLDivElement>(null);
-  const [storedHeight, setStoredHeight] = useLocalStorage(
-    'aiChatsPanelHeight',
-    320,
-  );
-  const { size, dragAreaRef, dragAreaListeners, isDragging } = useResizable({
-    initialSize: storedHeight,
-    minSize: 60,
-    maxSize: 1200,
-    targetRef: listRef,
-    edge: 'top',
-    onResize: setStoredHeight,
-  });
 
   return (
     <>
-      <Wrapper ref={listRef} style={{ maxHeight: size }}>
-        {chats.map(subject => (
-          <ChatLink key={subject} subject={subject} />
-        ))}
-        {rootChildren.map(subject => (
-          <LegacyRootChat key={subject} subject={subject} />
-        ))}
-      </Wrapper>
-      <HeightHandle
-        ref={dragAreaRef}
-        isDragging={isDragging}
-        title='Drag to resize'
-        {...dragAreaListeners}
-      />
+      {chats.map(subject => (
+        <ChatLink key={subject} subject={subject} />
+      ))}
+      {rootChildren.map(subject => (
+        <LegacyRootChat key={subject} subject={subject} />
+      ))}
     </>
   );
 }
@@ -139,18 +114,6 @@ function LegacyRootChat({ subject }: { subject: string }): JSX.Element | null {
 
   return <ChatLink subject={subject} />;
 }
-
-const Wrapper = styled.div`
-  overflow-y: auto;
-`;
-
-const HeightHandle = styled(DragAreaBase)`
-  position: relative;
-  height: 6px;
-  width: 100%;
-  margin-top: 2px;
-  cursor: row-resize;
-`;
 
 export function NewSidebarChatButton() {
   const { openChat } = useAISidebar();

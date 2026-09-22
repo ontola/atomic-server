@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { before, waitForSynced } from './test-utils';
+import { createFromCatalog, before, waitForSynced } from './test-utils';
 
 test('one-click website publishing, draft isolation and version recovery', async ({
   page,
@@ -16,9 +16,7 @@ test('one-click website publishing, draft isolation and version recovery', async
     .click();
   await page.locator('#document-editor').waitFor();
   await page.locator('#document-editor').fill('Bakery bread costs five euros.');
-  await page.getByRole('button', { name: 'More', exact: true }).click();
-  await page.getByPlaceholder(/filter actions/i).fill('website');
-  await page.getByTestId('menu-item-new-website').click();
+  await createFromCatalog(page, 'Website');
   const publish = page.getByRole('button', {
     name: 'Publish site',
     exact: true,

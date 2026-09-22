@@ -81,9 +81,8 @@ export interface ResourceContextMenuProps {
   anchorPoint?: { x: number; y: number };
   /**
    * Render a filter input at the top so the user can type to narrow the
-   * actions and run one with Enter. Defaults to on for the main menu
-   * (navbar kebab / cmd+m) and for right-click menus, off for the small
-   * embedded ones (`simple`, custom triggers).
+   * actions and run one with Enter. Enabled by default for every menu,
+   * including sidebar buttons and embedded menus.
    */
   searchable?: boolean;
 }
@@ -105,7 +104,7 @@ export function ResourceContextMenu({
   bindActive,
   onAfterDelete,
   anchorPoint,
-  searchable,
+  searchable = true,
 }: ResourceContextMenuProps) {
   const [confirmingAction, setConfirmingAction] = useState<ActionDefinition>();
   const [showCodeUsageDialog, setShowCodeUsageDialog] = useState(false);
@@ -255,7 +254,7 @@ export function ResourceContextMenu({
         items={filteredItems}
         Trigger={triggerComp}
         isMainMenu={isMainMenu}
-        searchable={searchable ?? (!!isMainMenu || anchorPoint !== undefined)}
+        searchable={searchable}
         bindActive={handleBindActive}
         anchorPoint={anchorPoint}
       />

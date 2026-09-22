@@ -1,3 +1,5 @@
+import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { useMobilePanelHistory } from './useMobilePanelHistory';
 import React, {
   useCallback,
   useContext,
@@ -60,6 +62,11 @@ export const RightPanelProvider: React.FC<
       setState(previous => updatePanelState(previous, scope, panel, action));
     },
     [scope],
+  );
+
+  const mobile = useMediaQuery('(max-width: 600px)', false);
+  useMobilePanelHistory(mobile && activePanel === 'ai', () =>
+    setPanelOpen('ai', false),
   );
 
   const togglePanel = useCallback(

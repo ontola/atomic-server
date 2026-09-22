@@ -258,10 +258,11 @@ export async function run(ctx) {{
         let declaration = json!({"schemaVersion":1,"secrets":[],"operations":[]});
         let release = db
             .publish_plugin_release(&atomic_lib::db::plugin_release::PluginRelease {
-                source,
+                source: Some(source),
                 manifest: declaration.clone(),
                 runtime: atomic_lib::db::plugin_release::RUNTIME.into(),
                 schemas: Default::default(),
+                ..Default::default()
             })
             .unwrap();
         let host = StoreHost {
@@ -373,10 +374,11 @@ export async function run(ctx) {{
         );
         let release = db
             .publish_plugin_release(&atomic_lib::db::plugin_release::PluginRelease {
-                source,
+                source: Some(source),
                 manifest: json!({"schemaVersion":1,"secrets":[],"operations":[]}),
                 runtime: atomic_lib::db::plugin_release::RUNTIME.into(),
                 schemas: Default::default(),
+                ..Default::default()
             })
             .unwrap();
         let host = StoreHost {

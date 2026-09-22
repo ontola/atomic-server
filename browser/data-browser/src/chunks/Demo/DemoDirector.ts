@@ -31,6 +31,12 @@ const HEARTBEAT_MS = 10_000;
 /** Base delay between typed characters; jittered per character, with an
  *  extra beat at word boundaries so the rhythm reads as human typing. */
 const LETTER_MS = 35;
+/** How often Yusuf's canvas cursor moves while he's idling on the
+ *  moodboard. Short enough that the dot glides instead of hopping. */
+const WANDER_TICK_MS = 120;
+/** The patch of canvas world space Yusuf's cursor stays inside — the
+ *  area the moodboard artwork occupies. */
+const WANDER_BOUNDS = { minX: 60, maxX: 900, minY: 60, maxY: 600 };
 
 interface PersonaState {
   sessionId: string;
@@ -85,6 +91,14 @@ export class DemoDirector {
   private sayHiPromise?: Promise<void>;
   private heartbeatTimer?: ReturnType<typeof setInterval>;
   private wanderTimer?: ReturnType<typeof setInterval>;
+  private tableWanderTimer?: ReturnType<typeof setInterval>;
+  /** Yusuf's cursor position in canvas world coordinates. Shared by the
+   *  idle wander and the stroke-tracing beat, so the two hand over
+   *  without the cursor teleporting. */
+  private yusufPointer = { x: 420, y: 260 };
+  /** Set while Yusuf traces a stroke, so the wander timer keeps its
+   *  hands off the cursor. */
+  private yusufDrawing = false;
   private unsubscribePresence?: () => void;
   private unsubscribeSaved?: () => void;
   private personas: Record<PersonaKey, PersonaState>;
@@ -154,6 +168,7 @@ export class DemoDirector {
 
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     if (this.wanderTimer) clearInterval(this.wanderTimer);
+    this.stopTableWander();
 
     const manager = this.store.getPresence(this.manifest.drive);
 
@@ -267,6 +282,7 @@ export class DemoDirector {
 
     // ── Tour stop 3: the team table — the user becomes a row in it ──
     this.announceMara(manifest.team.table);
+    this.startTableWander();
     await this.narrate(
       'One more stop: the Team table. This is where we keep track of our members!',
     );
@@ -307,6 +323,7 @@ export class DemoDirector {
     }
 
     await this.sleep(3_000);
+    this.stopTableWander();
 
     // ── The ask ──
     this.announceMara(manifest.checklist.table);
@@ -463,19 +480,60 @@ export class DemoDirector {
     );
   }
 
+  /** Broadcast Yusuf's canvas pointer, as long as he's still looking at
+   *  the moodboard. */
+  private moveYusufPointer(x: number, y: number): void {
+    const yusuf = this.personas.yusuf;
+
+    if (
+      this.stopped ||
+      !yusuf.entry ||
+      yusuf.entry.resource !== this.manifest.moodboard
+    ) {
+      return;
+    }
+
+    this.yusufPointer = { x, y };
+
+    this.announce('yusuf', {
+      ...yusuf.entry,
+      data: { x: Math.round(x), y: Math.round(y) },
+    });
+  }
+
+  /** Travel the cursor to a point over a few frames, so reaching for the
+   *  next stroke reads as a hand moving rather than a jump cut. */
+  private async glideYusufTo(x: number, y: number): Promise<void> {
+    const from = { ...this.yusufPointer };
+    const steps = 8;
+
+    for (let i = 1; i <= steps; i++) {
+      if (this.stopped) return;
+
+      const t = i / steps;
+      // Ease out, so the cursor arrives gently instead of slamming.
+      const eased = 1 - (1 - t) * (1 - t);
+
+      this.moveYusufPointer(
+        from.x + (x - from.x) * eased,
+        from.y + (y - from.y) * eased,
+      );
+      await this.sleep(40);
+    }
+  }
+
   /** Yusuf's cursor drifts around the moodboard while he's on it —
    *  a smooth random walk in canvas world coordinates. */
   private startYusufWander(): void {
-    let x = 420;
-    let y = 260;
-    let vx = 30;
-    let vy = 18;
+    let vx = 6;
+    let vy = 4;
 
     this.wanderTimer = setInterval(() => {
       const yusuf = this.personas.yusuf;
 
       if (
         this.stopped ||
+        this.yusufDrawing ||
         !yusuf.entry ||
         yusuf.entry.resource !== this.manifest.moodboard ||
         document.hidden
@@ -483,18 +541,67 @@ export class DemoDirector {
         return;
       }
 
-      vx += (Math.random() - 0.5) * 24;
-      vy += (Math.random() - 0.5) * 24;
-      vx = Math.max(-48, Math.min(48, vx));
-      vy = Math.max(-48, Math.min(48, vy));
-      x = Math.max(40, Math.min(900, x + vx));
-      y = Math.max(40, Math.min(600, y + vy));
+      vx += (Math.random() - 0.5) * 5;
+      vy += (Math.random() - 0.5) * 5;
+      vx = Math.max(-10, Math.min(10, vx));
+      vy = Math.max(-10, Math.min(10, vy));
 
-      this.announce('yusuf', {
-        ...yusuf.entry,
-        data: { x: Math.round(x), y: Math.round(y) },
+      let x = this.yusufPointer.x + vx;
+      let y = this.yusufPointer.y + vy;
+
+      // Bounce off the edges. Clamping alone parks the cursor against a
+      // border for as long as the velocity keeps pointing outward, which
+      // reads as a frozen, and so invisible, collaborator.
+      if (x < WANDER_BOUNDS.minX || x > WANDER_BOUNDS.maxX) {
+        vx = -vx;
+        x = Math.max(WANDER_BOUNDS.minX, Math.min(WANDER_BOUNDS.maxX, x));
+      }
+
+      if (y < WANDER_BOUNDS.minY || y > WANDER_BOUNDS.maxY) {
+        vy = -vy;
+        y = Math.max(WANDER_BOUNDS.minY, Math.min(WANDER_BOUNDS.maxY, y));
+      }
+
+      this.moveYusufPointer(x, y);
+    }, WANDER_TICK_MS);
+  }
+
+  /** Pip reads through the Team table while the tour is parked there:
+   *  her selected cell hops from cell to cell, so the table shows a
+   *  teammate at work rather than a still frame. */
+  private startTableWander(): void {
+    const { team, personas } = this.manifest;
+    const columns = [
+      team.roleColumn,
+      team.responsibilitiesColumn,
+      team.doingTaskColumn,
+      team.onboardingColumn,
+    ];
+    const rows = [personas.pip, personas.yusuf, personas.mara];
+    let index = 0;
+
+    this.tableWanderTimer = setInterval(() => {
+      if (this.stopped || document.hidden) return;
+
+      // Walk the grid cell by cell, wrapping — a steady reading motion
+      // reads better on camera than a random jitter.
+      index = (index + 1) % (rows.length * columns.length);
+
+      this.announce('pip', {
+        resource: team.table,
+        data: {
+          row: rows[Math.floor(index / columns.length)],
+          column: columns[index % columns.length],
+        },
       });
-    }, 600);
+    }, 900);
+  }
+
+  private stopTableWander(): void {
+    if (this.tableWanderTimer) {
+      clearInterval(this.tableWanderTimer);
+      this.tableWanderTimer = undefined;
+    }
   }
 
   // ─── State changes (simulated remote peers) ──────────────────────
@@ -684,21 +791,45 @@ export class DemoDirector {
 
     const strokeDataProp = 'https://atomicdata.dev/ontology/canvas/strokeData';
 
-    for (const stroke of YUSUF_LIVE_STROKES) {
-      if (this.stopped) return;
-      await this.sleep(700 + Math.random() * 400);
+    this.yusufDrawing = true;
 
-      const current = moodboard.get(strokeDataProp);
-      const strokes = Array.isArray(current) ? [...current] : [];
-      strokes.push(stroke as unknown as (typeof strokes)[number]);
+    try {
+      for (const stroke of YUSUF_LIVE_STROKES) {
+        if (this.stopped) return;
 
-      this.touch(this.manifest.moodboard);
-      await simulatePropEdit(
-        this.store,
-        moodboard,
-        this.manifest.personas.yusuf,
-        properties => properties.set(strokeDataProp, strokes),
-      );
+        const path = stroke.path as [number, number][];
+        const [startX, startY] = path[0] ?? [
+          this.yusufPointer.x,
+          this.yusufPointer.y,
+        ];
+
+        // Reach for the start of the stroke, then draw it: the cursor has
+        // to be where the ink appears, or the drawing looks unattended.
+        await this.glideYusufTo(startX, startY);
+        await this.sleep(120);
+
+        for (const [pointX, pointY] of path) {
+          if (this.stopped) return;
+          this.moveYusufPointer(pointX, pointY);
+          await this.sleep(45);
+        }
+
+        const current = moodboard.get(strokeDataProp);
+        const strokes = Array.isArray(current) ? [...current] : [];
+        strokes.push(stroke as unknown as (typeof strokes)[number]);
+
+        this.touch(this.manifest.moodboard);
+        await simulatePropEdit(
+          this.store,
+          moodboard,
+          this.manifest.personas.yusuf,
+          properties => properties.set(strokeDataProp, strokes),
+        );
+
+        await this.sleep(150 + Math.random() * 200);
+      }
+    } finally {
+      this.yusufDrawing = false;
     }
   }
 

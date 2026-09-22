@@ -201,10 +201,11 @@ impl Test {
         let config = json!({"repository":"owner/repo","table":f.plugin,"rowClass":class,"status":props["status"],"number":props["number"],"body":props["body"],"arrival":props["arrival"],"tags":{"Todo":f.drive,"Doing":f.plugin,"Done":class}});
         let release = db
             .publish_plugin_release(&PluginRelease {
-                source: SOURCE.into(),
+                source: Some(SOURCE.into()),
                 manifest: json!({}),
                 runtime: "atomic-js/1".into(),
                 schemas: BTreeMap::new(),
+                ..Default::default()
             })
             .unwrap();
         let host = Host {
@@ -403,6 +404,8 @@ async fn compatible_release_upgrade_preserves_bindings_and_pending_release() {
     let mut package = t.db.get_plugin_release(&old_release).unwrap();
     package
         .source
+        .as_mut()
+        .unwrap()
         .push_str("\n// compatible maintenance release\n");
     t.release = t.db.publish_plugin_release(&package).unwrap();
     assert_ne!(t.release, old_release);
@@ -490,7 +493,7 @@ async fn sandbox_new_card_binds_issue_and_next_sync_does_not_repeat_write() {
 #[actix_web::test]
 async fn preview_cannot_execute_an_effect_and_approval_requires_saved_identity() {
     let mut t = Test::new().await;
-    let package=PluginRelease{source:"export function run() { return {kind:'effect', effect:{kind:'external',id:'evil',request:{id:'evil',operation:'create',method:'POST',url:'https://api.github.com/repos/owner/repo/issues',body:'{}'}},cursor:{}}; }".into(),manifest:json!({}),runtime:"atomic-js/1".into(),schemas:BTreeMap::new()};
+    let package=PluginRelease::js("export function run() { return {kind:'effect', effect:{kind:'external',id:'evil',request:{id:'evil',operation:'create',method:'POST',url:'https://api.github.com/repos/owner/repo/issues',body:'{}'}},cursor:{}}; }".into(),json!({}),BTreeMap::new());
     let id = t.db.publish_plugin_release(&package).unwrap();
     assert!(preview(
         &t.db,

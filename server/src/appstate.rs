@@ -60,10 +60,13 @@ impl AppState {
             tracing::warn!("Development mode is enabled. This will use staging environments for services like LetsEncrypt.");
         }
 
-        let mut store = atomic_lib::Db::init_redb_file(
+        // Opens the file, logs its size and open time, and compacts it
+        // first when `config.compaction` says the dead space is worth it.
+        let mut store = atomic_lib::Db::init_redb_file_with_policy(
             &config.store_path,
             Some(config.get_origin()),
             &config.uploads_path,
+            &config.compaction,
         )
         .await?;
 
@@ -96,10 +99,9 @@ impl AppState {
         store.add_class_extender(plugins::chatroom::build_chatroom_extender())?;
         store.add_class_extender(plugins::chatroom::build_message_extender())?;
         store.add_endpoint(plugins::invite::invite_endpoint())?;
-        store.add_class_extender(plugins::plugin::build_plugin_extender(
+        store.add_class_extender(plugins::plugin::build_installation_extender(
             config.plugin_path.clone(),
             config.plugin_cache_path.clone(),
-            config.uploads_path.clone(),
         ))?;
         store.add_class_extender(plugins::files::build_file_extender(
             config.uploads_path.clone(),
@@ -153,21 +155,32 @@ impl AppState {
             .await?;
 
             for extender in extenders {
+                // A paused installation keeps its files, so the loader above
+                // finds them. Registering them anyway would resume every
+                // paused plugin on restart.
+                if let Some(subject) = &extender.subject {
+                    if let Ok(resource) = store.get_resource(&subject.as_str().into()).await {
+                        if plugins::installation::is_suspended(&resource) {
+                            tracing::info!(
+                                %subject,
+                                "skipped a class extender: its installation is not active"
+                            );
+                            continue;
+                        }
+                    }
+                }
                 store.add_class_extender(extender)?;
             }
         }
 
         set_default_agent(&config, &store).await?;
 
-        let should_init = !&config.store_path.exists() || config.initialize;
-        // If the store is empty, populate the core models (classes, properties, etc.).
-        // We don't create a Drive here anymore; that's handled in the data-browser (new identity flow).
-        if should_init {
-            tracing::info!("Initialize: bootstrapping core models...");
-            atomic_lib::populate::bootstrap(&store)
-                .await
-                .map_err(|e| format!("Failed to bootstrap store. {}", e))?;
-        } else if config.repopulate_defaults {
+        // The core models (classes, properties, default ontologies) are seeded
+        // by `Db::init_redb_file` above: `populate::bootstrap` runs on every
+        // open and seeds a fresh store, or adds what a newer build brought.
+        // We don't create a Drive here; that's handled in the data-browser
+        // (new identity flow).
+        if config.repopulate_defaults {
             // Forced re-seed of the built-in base models + `lib/defaults/*.json`
             // into an already-seeded store, ignoring the defaults fingerprint.
             // Normally unnecessary: `Db` open (`bootstrap`) already re-seeds
@@ -178,6 +191,14 @@ impl AppState {
             atomic_lib::populate::repopulate_defaults(&store)
                 .await
                 .map_err(|e| format!("Failed to repopulate defaults. {}", e))?;
+        }
+
+        // Legacy `Plugin` + `pluginFile` resources become Installations, once.
+        // After the extenders above are loaded (so their meta is current) and
+        // after the default agent is set (the migration commits as the server).
+        #[cfg(feature = "wasm-plugins")]
+        if let Err(e) = plugins::plugin::migrate_legacy_plugins(&store).await {
+            tracing::warn!("legacy plugin migration failed: {e}");
         }
 
         // Who may put a *new* Drive here. Installed after populate so the scan
@@ -225,7 +246,10 @@ impl AppState {
         };
         store.set_handle_commit(Box::new(send_commit));
 
-        if should_init && vector_search_state.is_enabled() {
+        // `config.initialize` is `--initialize`, or "the store did not exist
+        // when the config was built" — decided before `Db::init_redb_file`
+        // created the store directory above.
+        if config.initialize && vector_search_state.is_enabled() {
             tracing::info!("Adding all resources to vector search index");
             if let Err(e) = vector_search_state.add_all_resources(&store).await {
                 tracing::error!("Failed to add all resources to vector search index: {}", e);

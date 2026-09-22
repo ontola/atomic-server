@@ -20,6 +20,17 @@ test.beforeEach(async ({ page }) => {
 test('MT940 rejects unbalanced files, previews in sandbox and skips repeat imports', async ({
   page,
 }) => {
+  // The first preview installs the importer as well as running it. The drive
+  // has no plugin schema yet, so `ensureSchema` creates sixteen properties and
+  // their classes, then the installation resource, the Bank transactions table
+  // and its view, each its own signed commit, before the statement is planned
+  // in the sandbox. Timed under the four-worker load that reproduces the
+  // failure: that step took 24.9s and 34.5s, while everything after it took
+  // 2.1s and 0.4s. The whole test ran 51s and 66s against 24.5s alone, so the
+  // suite's 60s default was losing on the test budget as well as on the
+  // assertion below. `plugins.spec.ts` gives this install-and-run shape the
+  // same treatment.
+  test.setTimeout(240_000);
   await page.goto(new URL('/app/integrations', page.url()).href);
   const card = page.locator('[data-integration="mt940"]');
   await card.getByText('Repository test results', { exact: true }).click();
@@ -42,9 +53,14 @@ test('MT940 rejects unbalanced files, previews in sandbox and skips repeat impor
   await page
     .getByRole('button', { name: 'Preview import', exact: true })
     .click();
+  // Every one of those commits sits behind this one assertion, with the button
+  // reading "Preparing preview…" for all of it, which is why this line is where
+  // the test dies under load and the second preview is not. 25-35s is the
+  // measured range and a busier box has taken it past 60s; treat anything
+  // approaching this budget as a hang rather than as slowness.
   await expect(
     page.getByRole('button', { name: /Apply 2 changes/ }),
-  ).toBeVisible({ timeout: 30000 });
+  ).toBeVisible({ timeout: 120000 });
   await page.getByRole('button', { name: /Apply 2 changes/ }).click();
   await expect(
     page.getByRole('link', { name: 'Open bank transactions' }),

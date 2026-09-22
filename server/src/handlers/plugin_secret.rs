@@ -75,8 +75,7 @@ fn declared_origins(
         .get_plugin_meta(&PluginMetaKey::new(drive, &namespace, &name))
         .ok()
         .flatten()
-        .and_then(|meta| meta.manifest.network)
-        .map(|network| network.origins)
+        .map(|meta| meta.network_origins())
         .unwrap_or_default()
 }
 

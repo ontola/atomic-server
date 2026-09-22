@@ -72,4 +72,6 @@ Make sure AtomicServer is not publicly accessible, because this will allow anyon
 
 It depends on your operating system, because some data is _temporary_, others are _configuration files_, and so forth. Run `atomic-server show-config` to see the used paths. You can overwrite these if you want, see `--help`.
 
+The store itself is a single file that only ever grows unless it is compacted; see [Store size and automatic compaction](installation.md#store-size-and-automatic-compaction) if it is larger than your data.
+
 <https://user-images.githubusercontent.com/2183313/139728539-d69b899f-6f9b-44cb-a1b7-bbab68beac0c.mp4>

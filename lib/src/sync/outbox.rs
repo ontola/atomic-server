@@ -113,7 +113,9 @@ impl CommitRefused {
     pub fn is_terminal(&self) -> bool {
         matches!(
             self.effective_code(),
-            error_code::GENESIS_COLLISION | error_code::MISSING_REQUIRED_PROPERTY
+            error_code::GENESIS_COLLISION
+                | error_code::MISSING_REQUIRED_PROPERTY
+                | error_code::IMMUTABLE_COMMIT
         )
     }
 

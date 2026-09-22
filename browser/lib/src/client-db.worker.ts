@@ -38,6 +38,8 @@ export type WorkerRequest =
       dbKey?: Uint8Array;
       /** Migrate the legacy shared DB into `dbName` before opening. */
       migrateLegacy?: boolean;
+      /** Allow discarding an undecryptable `dbName`; see `client-db-open.ts`. */
+      discardUndecryptable?: boolean;
     }
   | { id: number; type: 'getResource'; subject: string }
   | { id: number; type: 'getResourceWithSnapshot'; subject: string }
@@ -165,6 +167,7 @@ async function handleMessage(msg: WorkerRequest): Promise<unknown> {
         msg.dbName,
         msg.dbKey,
         msg.migrateLegacy,
+        msg.discardUndecryptable,
       );
 
       return await initPromise;
@@ -503,6 +506,7 @@ async function doInit(
   dbName?: string,
   dbKey?: Uint8Array,
   migrateLegacy?: boolean,
+  discardUndecryptable?: boolean,
 ): Promise<ClientDbInitTimings> {
   // Dynamic import of the WASM glue code.
   // The URL should point to the directory containing atomic_wasm.js and atomic_wasm_bg.wasm
@@ -536,13 +540,15 @@ async function doInit(
 
   // `ClientDb.open` opens the OPFS-backed database (acquire OPFS handle, open
   // redb, run migrations). `openClientDb` adds one recovery step: an existing
-  // file this agent's key can no longer decrypt is deleted and recreated,
-  // because it is a cache whose contents are unreadable either way. Every
-  // other open failure still propagates.
+  // file this agent's key can no longer decrypt is deleted and recreated — but
+  // only when the caller passed `discardUndecryptable`, having established that
+  // the key is unrecoverable rather than just missing here. Every other open
+  // failure still propagates.
   const opened = await openClientDb(wasm, {
     baseUrl: baseUrl ?? undefined,
     dbName: dbName ?? undefined,
     dbKey: dbKey ?? undefined,
+    discardUndecryptable: discardUndecryptable ?? false,
   });
   db = opened.db;
   const t3 = performance.now();

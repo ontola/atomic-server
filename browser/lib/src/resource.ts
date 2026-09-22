@@ -39,6 +39,11 @@ import {
 } from './forks.js';
 import { GENESIS, properties, instances } from './urls.js';
 import {
+  DERIVED_BY_SERVER,
+  SERVER_MANAGED_PROPS,
+  isDerivedByServer,
+} from './server-managed-props.js';
+import {
   valToArray,
   type JSONValue,
   type JSONArray,
@@ -48,33 +53,6 @@ import {
 
 /** Contains the PropertyURL / Value combinations */
 export type PropVals = Map<string, AtomicValue>;
-
-/**
- * Propvals the server derives and ships alongside a resource, which must never
- * be written into its CRDT.
- *
- * They all have another source of truth: `lastCommit` is commit metadata,
- * `createdAt` and `createdBy` come from the genesis certificate (see
- * {@link Resource.getCreatedBy}). Writing one into Loro produces a LOCAL
- * operation, and a local operation means a dirty subject and a commit — for a
- * value the client never authored. On a resource you may write that is a
- * redundant commit per hydration; on one you may only READ, the server refuses
- * it forever, which is how an invitee who had written nothing ended up with a
- * blocked outbox entry and a permanent "changes pending".
- *
- * They stay in the read cache, so `resource.get()` and JSON-AD round-trips are
- * unaffected — which is why every `serverManaged` preservation list below has
- * to include them.
- */
-const DERIVED_BY_SERVER: ReadonlySet<string> = new Set<string>([
-  properties.commit.lastCommit,
-  commits.properties.createdAt,
-  properties.createdBy,
-]);
-
-/** True for a propval the server derives — see {@link DERIVED_BY_SERVER}. */
-const isDerivedByServer = (prop: string): boolean =>
-  DERIVED_BY_SERVER.has(prop);
 
 export interface MergeOptions {
   replaceLoroDocs?: boolean;
@@ -797,23 +775,9 @@ export class Resource<C extends OptionalClass = any> {
     // Preserve server-managed / genesis-immutable properties in the cache.
     // These are set once (at genesis or by the server) and are NOT necessarily
     // re-encoded into a later Loro delta — so a rebuild from a delta-only doc
-    // would otherwise drop them. `drive` and `parent` matter especially for a
-    // GUEST who loaded a shared resource: losing the parent's `drive` here
-    // leaves a reply unstamped, so the drive-scoped commit fan-out never
-    // delivers it to the owner. See planning/commit-fanout-drive-isolation.md.
-    const serverManaged = [
-      properties.commit.lastCommit,
-      commits.properties.createdAt,
-      properties.createdBy,
-      'https://atomicdata.dev/properties/drive',
-      // The inline genesis certificate: set once at creation, immutable, and
-      // must not be dropped when the cache is rebuilt from a delta-only doc —
-      // it's what verifies the resource's DID.
-      'https://atomicdata.dev/properties/genesis',
-      core.properties.parent,
-    ];
-
-    for (const key of serverManaged) {
+    // would otherwise drop them. See `SERVER_MANAGED_PROPS` for why each is
+    // on the list.
+    for (const key of SERVER_MANAGED_PROPS) {
       if (this.#cache[key] !== undefined && nextCache[key] === undefined) {
         nextCache[key] = this.#cache[key];
       }
@@ -827,6 +791,10 @@ export class Resource<C extends OptionalClass = any> {
    * so the server recovers reference / array `Value` variants exactly instead
    * of guessing. The map is sparse — only load-bearing datatypes get a tag;
    * see {@link datatypeTag}. Idempotent: re-signing rewrites nothing.
+   *
+   * Called from `exportLoroDeltaInternal` after the user's ops are sealed —
+   * the shared path of genesis and drain-time signing — and, for a genesis
+   * sign, once more up front by `signChanges` (see the commit note below).
    *
    * Cache-only — never triggers a fetch. A property whose definition is not
    * already cached is left untagged; the server then falls back to its
@@ -1137,9 +1105,9 @@ export class Resource<C extends OptionalClass = any> {
     isFirstCommit: boolean,
     commitMessage?: string,
   ): { bytes: Uint8Array; versionAfterExport: VersionVector } | undefined {
-    // Incremental saves bypass signChanges; they still need datatype tags for
-    // newly added JSON/reference fields before capturing the signed delta.
-    this.writeDatatypeTags();
+    // Incremental saves bypass `signChanges`; the datatype tags for newly
+    // added JSON/reference fields are written by `exportLoroDeltaInternal`,
+    // the path both signers share.
     const bytes = this.exportLoroDeltaInternal(isFirstCommit, commitMessage);
     if (!bytes) return undefined;
     if (!this._loroDoc) return undefined;
@@ -1378,6 +1346,26 @@ export class Resource<C extends OptionalClass = any> {
       ...(message ? { message } : {}),
     });
     this._stagedCommitToken = undefined;
+
+    // Stamp the sibling `datatypes` map for whatever the doc now holds, so
+    // the server materializes references/arrays/JSON exactly (see
+    // `writeDatatypeTags`). This is the shared path for BOTH signers:
+    // `signChanges` (genesis, local-only drives) and the store-level drain.
+    // It runs AFTER the user's ops were sealed above, on purpose. `set()`
+    // leaves its ops in an open transaction, and the first `commit()` seals
+    // everything pending — so tagging first would fold the user's edit into
+    // the tag write's `atomic:system` commit, where the UndoManager
+    // (`excludeOriginPrefixes`) never records it and the user's undo skips
+    // straight past their own change. It reuses this commit's message so
+    // history buckets the tags with the edit they belong to, and it is a
+    // no-op once every tag is present, so a clean resource stays clean.
+    // Genesis signs already tagged before calling in (the agent message has
+    // to ride on the doc's first change), and land here as that no-op.
+    this.writeDatatypeTags({
+      origin: SYSTEM_COMMIT_ORIGIN,
+      timestamp: Date.now(),
+      ...(message ? { message } : {}),
+    });
 
     // If it's the first commit, we must export a full snapshot.
     if (isFirstCommit || !this._loroVersionAtLastSave) {
@@ -1665,15 +1653,13 @@ export class Resource<C extends OptionalClass = any> {
           }
         }
 
-        // Copy housekeeping properties from resourceB.#cache to this.#cache
-        // before rebuilding cache so they are preserved
-        const serverManaged = [
-          properties.commit.lastCommit,
-          commits.properties.createdAt,
-          properties.createdBy,
-        ];
-
-        for (const key of serverManaged) {
+        // Copy the server-derived properties from resourceB.#cache to
+        // this.#cache before rebuilding the cache so they are preserved.
+        // Deliberately the narrower `DERIVED_BY_SERVER`, not
+        // `SERVER_MANAGED_PROPS`: drive/genesis/parent live in the Loro doc
+        // and arrive through the CRDT import above, whereas these three are
+        // in no doc at all and only the incoming (server-fresh) cache has them.
+        for (const key of DERIVED_BY_SERVER) {
           if (resourceB.#cache[key] !== undefined) {
             this.#cache[key] = resourceB.#cache[key];
           }
@@ -1697,14 +1683,8 @@ export class Resource<C extends OptionalClass = any> {
       }
     } else {
       // No incoming Loro snapshot (e.g. metadata-only update or non-crdt resource)
-      // Copy housekeeping properties first
-      const serverManaged = [
-        properties.commit.lastCommit,
-        commits.properties.createdAt,
-        properties.createdBy,
-      ];
-
-      for (const key of serverManaged) {
+      // Copy the server-derived properties first (same reasoning as above).
+      for (const key of DERIVED_BY_SERVER) {
         if (resourceB.#cache[key] !== undefined) {
           this.#cache[key] = resourceB.#cache[key];
         }
@@ -2448,6 +2428,25 @@ export class Resource<C extends OptionalClass = any> {
     return count === 0 ? null : obj;
   }
 
+  /**
+   * The JSON-AD row the client database (OPFS) stores for this resource:
+   * `@id` plus every non-binary propval. Binary aux values are left out — a
+   * blob lives in the blob store, keyed by hash, and the snapshot travels next
+   * to this row (see `ClientDb.putResourceWithSnapshot`).
+   *
+   * The one serializer for that row: `Store.addResource` and
+   * {@link persistToClientDb} both write through it, so the store's
+   * "already persisted" stamp (`Store.recordPersistedState`) is computed over
+   * exactly the bytes either path writes.
+   *
+   * Returns `null` when the resource has no non-binary propvals at all.
+   */
+  public toClientDbJsonAd(): string | null {
+    const obj = this.toObject({ includeBinary: false });
+
+    return obj ? JSON.stringify(obj) : null;
+  }
+
   /** Compact debug representation for error messages. */
   public debugValueSummary(): string {
     const objectView = this.toObject({ includeBinary: false });
@@ -2510,9 +2509,34 @@ export class Resource<C extends OptionalClass = any> {
     return !!this.error && isUnauthorized(this.error);
   }
 
-  /** Removes the resource form both the server and locally */
+  /**
+   * Removes the resource both locally and from the server.
+   *
+   * The delete is durable the moment this is called: the signed destroy
+   * commit goes into the store's `LocalOutbox` (localStorage-backed, survives a
+   * reload) and the resource is removed from the store and tombstoned in
+   * OPFS right away. The outbox drain POSTs the envelope with the same
+   * backoff and reconnect replay as any other write.
+   *
+   * Resolution semantics mirror {@link save}:
+   *  - **online**: resolves once the server has acknowledged the destroy;
+   *    rejects with the server's error on a real refusal (e.g. no write
+   *    right). The entry then stays queued and is retried / parked by the
+   *    outbox like any other refused write.
+   *  - **offline** (or the POST fails with a transport error): resolves
+   *    with the delete queued; the reconnect drain sends it.
+   *  - a resource that never reached the server (`new`) is dropped locally
+   *    along with any unposted genesis for it — nothing is POSTed.
+   *  - a local-only drive materializes the commit locally, as before.
+   */
   public async destroy(agent?: Agent): Promise<void> {
-    if (this.new) {
+    if (this.new || this._pendingGenesis) {
+      // Never synced (a `_new:` placeholder, or a `store.newResource` whose
+      // genesis is still parked on the resource because `save()` never
+      // ran): no server-side tombstone needed. Also forget any queued
+      // genesis, or the next drain would create what we just deleted.
+      this._pendingGenesis = undefined;
+      this.store.outbox.discard(this.subject);
       this.store.removeResource(this.subject);
 
       return;
@@ -2545,8 +2569,41 @@ export class Resource<C extends OptionalClass = any> {
       return;
     }
 
-    await this.store.postCommit(commit, this.getCommitEndpoint());
+    // Queue first, then remove: `hasPendingDestroy` must already answer
+    // true when the `ResourceRemoved` listeners run, so nothing they
+    // trigger (a refetch, a SUB push) can bring the resource back.
+    this.store.outbox.setDestroyCommit(this.subject, commit);
     this.store.removeResource(this.subject);
+
+    if (!this.store.serverConnected) {
+      // Queued; the reconnect drain POSTs it.
+      return;
+    }
+
+    // Await the drain so a real refusal surfaces to the caller. Read the
+    // entry BEFORE draining: a terminal refusal removes it from the queue,
+    // and that must never be mistaken for an acknowledgement.
+    const entry = this.store.outbox.getEntry(this.subject);
+    await this.store.syncDirtyResources();
+
+    if (entry?.lastAttemptFailure) {
+      const cause = entry.lastAttemptFailure.cause;
+
+      if (isNetworkError(cause)) {
+        // Transport, not refusal: the delete stays queued for reconnect.
+        this.store.setServerConnected(false);
+
+        return;
+      }
+
+      throw cause;
+    }
+
+    if (this.store.hasPendingDestroy(this.subject)) {
+      throw new Error(
+        'Delete is still queued; the server has not acknowledged it.',
+      );
+    }
   }
 
   /** Appends a Resource to a ResourceArray */
@@ -2564,6 +2621,7 @@ export class Resource<C extends OptionalClass = any> {
     this.loroSetProperty(propUrl, newArray);
     this.#cacheDirty = true;
     this._dirty = true;
+    this.eventManager.emit(ResourceEvents.LocalChange, propUrl, newArray);
   }
 
   /**
@@ -2868,6 +2926,7 @@ export class Resource<C extends OptionalClass = any> {
   public remove(propertyUrl: string): void {
     this.removeUnsafe(propertyUrl);
     this._dirty = true;
+    this.eventManager.emit(ResourceEvents.LocalChange, propertyUrl, undefined);
   }
 
   /**
@@ -3003,25 +3062,23 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     // Stamp the sibling `datatypes` map so the server materializes
-    // references/arrays exactly. Runs here — after
-    // every property is in the doc, before the snapshot export below — so it
-    // covers props set via `set()` and via cache hydration alike.
-    //
-    // On a genesis sign this is the FIRST commit on the doc, so it creates the
-    // genesis change — tag it with the signing agent's subject (→ `createdBy`)
-    // and a millisecond timestamp (→ `createdAt`). The oplog records only a
-    // random peer id, never the agent, so this commit message is what carries
-    // authorship inside the doc, readable without fetching the commit (which is
-    // no longer refetchable under sign-at-drain).
-    this.writeDatatypeTags(
-      isFirstCommit
-        ? {
-            origin: SYSTEM_COMMIT_ORIGIN,
-            timestamp: Date.now(),
-            message: agent.subject,
-          }
-        : undefined,
-    );
+    // references/arrays exactly. The export below does this for every sign
+    // (see `exportLoroDeltaInternal`), after the user's ops are sealed. A
+    // genesis sign tags up front as well: this is the FIRST commit on the
+    // doc, so it creates the genesis change — tag it with the signing agent's
+    // subject (→ `createdBy`) and a millisecond timestamp (→ `createdAt`). The
+    // oplog records only a random peer id, never the agent, so this commit
+    // message is what carries authorship inside the doc, readable without
+    // fetching the commit (which is no longer refetchable under
+    // sign-at-drain). Runs after every property is in the doc, so it covers
+    // props set via `set()` and via cache hydration alike.
+    if (isFirstCommit) {
+      this.writeDatatypeTags({
+        origin: SYSTEM_COMMIT_ORIGIN,
+        timestamp: Date.now(),
+        message: agent.subject,
+      });
+    }
 
     // Export Loro delta — the sole carrier of property changes. Pass the agent
     // again as a fallback: if `writeDatatypeTags` had nothing to commit, this
@@ -3575,11 +3632,10 @@ export class Resource<C extends OptionalClass = any> {
     const clientDb = this.store.getClientDb();
     if (!clientDb || clientDb.unsupportedEnvironment) return;
 
-    const obj: Record<string, unknown> = { '@id': this.subject };
-
-    for (const [k, v] of this.getEntries()) {
-      if (!(v instanceof Uint8Array)) obj[k] = v;
-    }
+    // A resource without propvals still gets its `@id` row: this path is the
+    // durable one, and a caller that awaited it expects a row to exist.
+    const jsonAd =
+      this.toClientDbJsonAd() ?? JSON.stringify({ '@id': this.subject });
 
     // The export seals pending ops; keep them under their history token.
     this.sealPendingEdits();
@@ -3591,14 +3647,13 @@ export class Resource<C extends OptionalClass = any> {
     const closePersist = perfSpan('resource.persistToClientDb');
 
     try {
-      await clientDb.putResourceWithSnapshot(
-        this.subject,
-        JSON.stringify(obj),
-        snapshot,
-      );
+      await clientDb.putResourceWithSnapshot(this.subject, jsonAd, snapshot);
       // This RPC includes the durable flush. A second RPC could race the
       // identity handoff closing this worker after the write has completed.
       closePersist();
+      // Tell the store's dedup cache what is now on disk, so the next
+      // `addResource` for this subject does not rewrite the same row.
+      this.store.recordPersistedState(this.subject, jsonAd, snapshot);
     } catch (e) {
       closePersist({ err: e instanceof Error ? e.message : String(e) });
 
@@ -3665,8 +3720,8 @@ export class Resource<C extends OptionalClass = any> {
     }
 
     if (value === undefined) {
+      // `remove` emits the `LocalChange` for this property.
       this.remove(prop);
-      this.eventManager.emit(ResourceEvents.LocalChange, prop, value);
 
       return;
     }
@@ -3854,39 +3909,6 @@ export class Resource<C extends OptionalClass = any> {
     await this.store.fetchResourceFromServer(this.subject, {
       noWebSocket: true,
     });
-  }
-
-  /** Resolves the `/commit` endpoint for this resource. */
-  private getCommitEndpoint(): string {
-    const serverUrl = this.store.getServerUrl();
-
-    if (!serverUrl || serverUrl === 'null') {
-      console.warn(
-        `Resource ${this.subject} has an invalid server URL: ${serverUrl}. Falling back to origin.`,
-      );
-    }
-
-    const base = !serverUrl || serverUrl === 'null' ? '' : serverUrl;
-    const fallbackBase = base || window.location.origin;
-
-    if (
-      this.subject.startsWith('did:') ||
-      this.subject.startsWith('internal:')
-    ) {
-      return new URL('/commit', fallbackBase).toString();
-    }
-
-    try {
-      const url = new URL(this.subject);
-
-      if (url.origin && url.origin !== 'null') {
-        return url.origin + `/commit`;
-      }
-    } catch {
-      // ignore
-    }
-
-    return new URL('/commit', fallbackBase).toString();
   }
 
   private isParentNew() {
