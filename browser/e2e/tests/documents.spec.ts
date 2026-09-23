@@ -66,7 +66,7 @@ test.describe('documents', async () => {
     const editor = page.getByLabel('Rich Text Editor');
 
     await editor.fill('/heading');
-    await expect(page.getByText('Heading 1')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Heading 1' })).toBeVisible();
     await page.keyboard.press('Enter');
     // The command changes the document structure asynchronously. Type only
     // once its heading exists, rather than racing that selection transition.

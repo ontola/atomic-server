@@ -128,6 +128,8 @@ msgstr "AI Agents"
 #: src/chunks/TablePage/QuickAddDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx
 #: src/chunks/TablePage/RowActionDialog.tsx src/chunks/Website/WebsitePage.tsx
+#: src/chunks/Website/WebsitePage.tsx
+#: src/chunks/Website/WebsitePage.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/AvatarCropper.tsx src/components/ConfirmationDialog.tsx
 #: src/components/ConfirmationDialog.tsx
@@ -834,6 +836,7 @@ msgstr "Learn more & get involved"
 msgid "v{0}"
 msgstr "v{0}"
 
+#: src/chunks/Website/WebsiteHosting.tsx
 #: src/chunks/Website/WebsiteHosting.tsx src/routes/AboutRoute.tsx
 #: src/routes/AboutRoute.tsx
 #: src/routes/History/HistoryMobileView.tsx
@@ -3221,6 +3224,11 @@ msgid "Install"
 msgstr "Install"
 
 #: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
+#: src/chunks/ResourceDiff/ResourceDiff.tsx
 msgid "unset"
 msgstr "unset"
 
@@ -3325,23 +3333,23 @@ msgstr "Heading 5"
 msgid "Heading 6"
 msgstr "Heading 6"
 
-#: src/chunks/RTE/BubbleMenu.tsx
+#: src/chunks/RTE/MarkToggleButtons.tsx
 msgid "Toggle bold"
 msgstr "Toggle bold"
 
-#: src/chunks/RTE/BubbleMenu.tsx
+#: src/chunks/RTE/MarkToggleButtons.tsx
 msgid "Toggle italic"
 msgstr "Toggle italic"
 
-#: src/chunks/RTE/BubbleMenu.tsx
+#: src/chunks/RTE/MarkToggleButtons.tsx
 msgid "Toggle strikethrough"
 msgstr "Toggle strikethrough"
 
-#: src/chunks/RTE/BubbleMenu.tsx
+#: src/chunks/RTE/MarkToggleButtons.tsx
 msgid "Toggle blockquote"
 msgstr "Toggle blockquote"
 
-#: src/chunks/RTE/BubbleMenu.tsx
+#: src/chunks/RTE/MarkToggleButtons.tsx
 msgid "Toggle inline code"
 msgstr "Toggle inline code"
 
@@ -9610,7 +9618,9 @@ msgid "Frozen release"
 msgstr "Frozen release"
 
 #: src/chunks/Website/WebsiteInlinePreview.tsx
+#: src/chunks/Website/WebsitePage.tsx
 #: src/chunks/Website/WebsitePage.tsx src/chunks/Website/WebsitePreview.tsx
+#: src/chunks/Website/WebsitePreview.tsx
 msgid "Website preview"
 msgstr "Website preview"
 
@@ -9690,11 +9700,14 @@ msgid "Release"
 msgstr "Release"
 
 #: src/chunks/Website/WebsiteExportPage.tsx src/chunks/Website/WebsitePage.tsx
+#: src/chunks/Website/WebsitePage.tsx
 msgid "Download website"
 msgstr "Download website"
 
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/chunks/Plugins/NewPluginButton.tsx src/chunks/Website/WebsiteHosting.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "Publishing…"
 msgstr "Publishing…"
@@ -9765,7 +9778,9 @@ msgstr "Publishing is unavailable until the draft preview can be built. Check ac
 
 #: src/chunks/Website/WebsiteExportPage.tsx
 #: src/chunks/Website/WebsiteInlinePreview.tsx
+#: src/chunks/Website/WebsitePage.tsx
 #: src/chunks/Website/WebsitePage.tsx src/chunks/Website/WebsitePreview.tsx
+#: src/chunks/Website/WebsitePreview.tsx
 msgid "Retry preview"
 msgstr "Retry preview"
 
@@ -9841,6 +9856,7 @@ msgid "Updating preview…"
 msgstr "Updating preview…"
 
 #: src/chunks/Website/WebsiteHosting.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
 msgid "Website versions"
 msgstr "Website versions"
 
@@ -9857,7 +9873,7 @@ msgstr "Click an outlined field to edit its Atomic record. Leave the field to sa
 msgid "{0} editable fields and {1} documents"
 msgstr "{0} editable fields and {1} documents"
 
-#: src/chunks/RTE/BubbleMenu.tsx
+#: src/chunks/RTE/LinkPopoverButton.tsx
 msgid "Set link"
 msgstr "Set link"
 
@@ -12361,3 +12377,35 @@ msgstr "Off stops server sync for this workspace on this browser. The server’s
 #: src/routes/SyncRoute.tsx
 msgid "Workspace sync off"
 msgstr "Workspace sync off"
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Show formatting toolbar"
+msgstr "Show formatting toolbar"
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Bullet list"
+msgstr "Bullet list"
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Numbered list"
+msgstr "Numbered list"
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Task list"
+msgstr "Task list"
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Insert image"
+msgstr "Insert image"
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Mention a resource (@)"
+msgstr "Mention a resource (@)"
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Hide toolbar (type / or @ instead)"
+msgstr "Hide toolbar (type / or @ instead)"
+
+#: src/chunks/RTE/FormattingToolbar.tsx
+msgid "Formatting"
+msgstr "Formatting"

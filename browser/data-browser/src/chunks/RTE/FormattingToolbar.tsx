@@ -79,61 +79,63 @@ function Toolbar({ onHide }: ToolbarProps): React.JSX.Element {
       aria-label='Formatting'
       onMouseDown={keepEditorFocus}
     >
-      <Group>
-        <NodeSelectMenu />
-      </Group>
-      <Group>
-        <MarkToggleButtons />
-        <LinkPopoverButton
-          open={linkMenuOpen}
-          onOpenChange={setLinkMenuOpen}
-          side='bottom'
-        />
-      </Group>
-      <Group>
-        <ToggleButton
-          title='Bullet list'
-          $active={isBulletList}
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          type='button'
-        >
-          <FaListUl />
-        </ToggleButton>
-        <ToggleButton
-          title='Numbered list'
-          $active={isOrderedList}
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          type='button'
-        >
-          <FaListOl />
-        </ToggleButton>
-        <ToggleButton
-          title='Task list'
-          $active={isTaskList}
-          onClick={() => editor.chain().focus().toggleTaskList().run()}
-          type='button'
-        >
-          <FaCheck />
-        </ToggleButton>
-      </Group>
-      <Group>
-        <ToggleButton
-          title='Insert image'
-          $active={false}
-          onClick={() => editor.chain().focus().setImage({ src: '' }).run()}
-          type='button'
-        >
-          <FaImage />
-        </ToggleButton>
-        <ToggleButton
-          title='Mention a resource (@)'
-          $active={false}
-          onClick={() => insertMentionTrigger(editor)}
-          type='button'
-        >
-          <FaAt />
-        </ToggleButton>
-      </Group>
+      <Scroller>
+        <Group>
+          <NodeSelectMenu />
+        </Group>
+        <Group>
+          <MarkToggleButtons />
+          <LinkPopoverButton
+            open={linkMenuOpen}
+            onOpenChange={setLinkMenuOpen}
+            side='bottom'
+          />
+        </Group>
+        <Group>
+          <ToggleButton
+            title='Bullet list'
+            $active={isBulletList}
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            type='button'
+          >
+            <FaListUl />
+          </ToggleButton>
+          <ToggleButton
+            title='Numbered list'
+            $active={isOrderedList}
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            type='button'
+          >
+            <FaListOl />
+          </ToggleButton>
+          <ToggleButton
+            title='Task list'
+            $active={isTaskList}
+            onClick={() => editor.chain().focus().toggleTaskList().run()}
+            type='button'
+          >
+            <FaCheck />
+          </ToggleButton>
+        </Group>
+        <Group>
+          <ToggleButton
+            title='Insert image'
+            $active={false}
+            onClick={() => editor.chain().focus().setImage({ src: '' }).run()}
+            type='button'
+          >
+            <FaImage />
+          </ToggleButton>
+          <ToggleButton
+            title='Mention a resource (@)'
+            $active={false}
+            onClick={() => insertMentionTrigger(editor)}
+            type='button'
+          >
+            <FaAt />
+          </ToggleButton>
+        </Group>
+      </Scroller>
       <HideButton
         title='Hide toolbar (type / or @ instead)'
         $active={false}
@@ -175,10 +177,6 @@ const ToolbarWrapper = styled.div`
   border-bottom: 1px solid ${p => p.theme.colors.bg2};
   background-color: ${p => p.theme.colors.bg};
   cursor: default;
-  /* Narrow screens scroll the buttons sideways instead of wrapping onto
-   * several rows that would push the text down. */
-  overflow-x: auto;
-  scrollbar-width: none;
 
   @supports (backdrop-filter: blur(5px)) {
     background-color: ${p => transparentize(0.1, p.theme.colors.bg)};
@@ -188,6 +186,19 @@ const ToolbarWrapper = styled.div`
   @media print {
     display: none;
   }
+`;
+
+/* Narrow screens scroll the buttons sideways instead of wrapping onto several
+ * rows that would push the text down. The hide button stays outside it, so it
+ * is always in reach. */
+const Scroller = styled.div`
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: ${p => p.theme.size(2)};
+  overflow-x: auto;
+  scrollbar-width: none;
 `;
 
 const Group = styled.div`
@@ -204,7 +215,6 @@ const Group = styled.div`
 
 const HideButton = styled(ToggleButton)`
   flex-shrink: 0;
-  margin-left: auto;
 `;
 
 const CollapsedRow = styled.div`
