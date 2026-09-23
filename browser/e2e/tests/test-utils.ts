@@ -1854,14 +1854,15 @@ export async function contextMenuClick(text: string, page: Page) {
 /**
  * Open the Connections or Automations dialog of the table page on screen.
  * Both live in the table's context menu, which only lists them once the table
- * page has mounted, so `timeout` covers the page still loading.
+ * page has mounted. `timeout` covers opening the menu too, since whatever is
+ * still in front of the page (a setup dialog, say) blocks that click.
  */
 export async function openWorkspaceDialog(
   page: Page,
   section: 'connections' | 'automations',
   timeout?: number,
 ) {
-  await page.click(contextMenu);
+  await page.click(contextMenu, { timeout });
   await page.getByTestId(`menu-item-${section}`).click({ timeout });
 }
 
