@@ -53,8 +53,8 @@ it('routes a Calendar callback to its pending connection when API cards are abse
 });
 
 it('reopens only the originating setup card and supplies safe fallback targets', () => {
-  expect(callbackEntry({ ...pending, entry: 'devonian-todoist' })).toBe(
-    'devonian-todoist',
+  expect(callbackEntry({ ...pending, entry: 'proxy:example' })).toBe(
+    'proxy:example',
   );
   expect(callbackEntry(pending)).toBe('proxy:google-calendar');
   expect(
@@ -65,7 +65,7 @@ it('reopens only the originating setup card and supplies safe fallback targets',
     drive: pending.drive,
     actor: pending.actor,
     origin: pending.origin,
-    entry: 'devonian-todoist',
+    entry: 'proxy:example',
     platform: pending.platform,
     expires: Date.now() + 1_000,
   };
@@ -77,7 +77,7 @@ it('reopens only the originating setup card and supplies safe fallback targets',
   expect(
     completedPlatformForEntry(completed, {
       ...base,
-      entry: 'devonian-todoist',
+      entry: 'proxy:example',
     }),
   ).toBe('google-calendar');
   expect(

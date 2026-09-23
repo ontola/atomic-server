@@ -19,7 +19,7 @@ import {
  * Resolves what the issue list reads open/closed from.
  *
  * A `view-group-by` that names a boolean column is taken as is: a read-only
- * import (Todoist's projected `done`) has nothing better to offer, and
+ * import (a provider's checked flag) has nothing better to offer, and
  * adopting or creating a Status select next to it would be inventing state
  * the provider does not have. Otherwise the same resolution as the board:
  * the configured select property, the first select on the class, or a new

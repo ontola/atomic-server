@@ -23,7 +23,7 @@ export function isClosedStatusTag(subject: string, title: string): boolean {
  * What decides whether an issue is open or closed. A `select` status column
  * (Todo / Doing / Done — the kanban's group-by) is the native tracker's shape;
  * a `boolean` column is what a read-only import offers when the provider only
- * says checked or not (Todoist's `checked`, projected as `done`).
+ * says checked or not.
  */
 export type IssueStatusModel =
   | {

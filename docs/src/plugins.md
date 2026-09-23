@@ -78,14 +78,11 @@ Open **Settings → Integration** to choose which plugins appear on the
 - **Show experimental plugins** displays bundled experimental integrations and
   unverified community plugins.
 
-Some bundled experimental plugins, such as Todoist, carry a `(Devonian)` suffix
-in their catalog name—a holdover from their original lens implementation—and
-add native mappings and synchronization behavior beyond the generated API
-integrations. Both kinds can connect through the integration proxy; using the
-proxy does not determine the category. Proxy-backed experimental
-plugins—including Todoist, Moneybird and Notion—require both options to be
-enabled. Other bundled experimental plugins only require **Show experimental
-plugins**.
+Which plugins exist, and which category each belongs to, comes from the plugin
+catalog (by default the one published from
+[atomic-plugins](https://github.com/ontola/atomic-plugins)). Proxy-backed
+experimental plugins require both options to be enabled. Other experimental
+plugins only require **Show experimental plugins**.
 
 Both options are unchecked by default. When a category
 is hidden, the Integrations page links to Settings so you can consider enabling

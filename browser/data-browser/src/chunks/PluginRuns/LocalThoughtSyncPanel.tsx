@@ -1,20 +1,16 @@
 import { useEffect, useState } from 'react';
-import { core, useStore, type Resource, type JSONValue } from '@tomic/react';
+import { core, useStore, type Resource } from '@tomic/react';
 import { Column, Row } from '@components/Row';
 import { Button } from '@components/Button';
 import { ErrMessage } from '@components/forms/InputStyles';
 import { AtomicLink } from '@components/AtomicLink';
-import { browserIntegrations } from './localThought';
-import { localImportRows } from './localImportVerdict';
 import {
   findInstallation,
   refreshLocalThought,
-  saveInstallation,
   REFRESH_INTERVAL,
   SYNC_CHANGED,
   type LocalThoughtInstallation,
 } from './localThoughtSync';
-import { localThoughtExtension } from './localThoughtExtension';
 
 /** Visiting the installed folder or its tables resumes this browser's import. */
 export function LocalThoughtSync({ resource }: { resource: Resource }) {
@@ -61,14 +57,6 @@ export function LocalThoughtSync({ resource }: { resource: Resource }) {
     installation.drive !== drive
   )
     return null;
-  const { config } = installation;
-  const extension = localThoughtExtension(
-    installation.platform,
-    installation.extension,
-  );
-  const Sync = extension?.Sync;
-  const Manage = extension?.Manage;
-  const providerLink = extension?.providerLink?.(installation);
 
   return (
     <Column gap='0.5rem'>
@@ -92,11 +80,6 @@ export function LocalThoughtSync({ resource }: { resource: Resource }) {
         {subject !== installation.folder && (
           <AtomicLink subject={installation.folder}>Open folder</AtomicLink>
         )}
-        {providerLink && (
-          <a href={providerLink.href} target='_blank' rel='noreferrer'>
-            {providerLink.label}
-          </a>
-        )}
       </Row>
       <small>Refreshes every five minutes while open in this browser.</small>
       {installation.error && (
@@ -104,39 +87,6 @@ export function LocalThoughtSync({ resource }: { resource: Resource }) {
       )}
       {!installation.error && installation.warning && (
         <small role='status'>Synced with issues: {installation.warning}</small>
-      )}
-      {Manage && (
-        <details>
-          <summary>Manage sync</summary>
-          <Manage
-            installation={installation}
-            disabled={!!installation.syncing}
-            update={patch => saveInstallation({ ...installation, ...patch })}
-          />
-        </details>
-      )}
-      {Sync && config && (
-        <Sync
-          config={config}
-          disabled={!!installation.syncing}
-          rows={() => localImportRows(store, installation.drive, config)}
-          request={(path, init) =>
-            browserIntegrations(installation.origin).request(
-              installation.drive,
-              installation.actor,
-              installation.connection,
-              installation.platform,
-              path,
-              init,
-            )
-          }
-          checkpoint={async (rowSubject, values) => {
-            const row = await store.getResource(rowSubject);
-            for (const [property, value] of Object.entries(values))
-              await row.set(property, value as JSONValue);
-            await row.save();
-          }}
-        />
       )}
     </Column>
   );

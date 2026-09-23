@@ -130,7 +130,6 @@ msgstr "<0/> Créer un nouvel agent"
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/NewPluginButton.tsx
-#: src/chunks/Plugins/UpdatePluginButton.tsx
 #: src/chunks/TablePage/BreakdownDialog.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/TablePage/Issues/IssuesView.tsx
@@ -152,8 +151,7 @@ msgstr "<0/> Créer un nouvel agent"
 #: src/routes/History/HistoryMobileView.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
-#: src/views/Plugin/AssignRights.tsx
-#: src/views/Plugin/AssignRights.tsx src/views/PluginView/useResourcePicker.tsx
+#: src/views/PluginView/useResourcePicker.tsx
 #: src/views/PluginView/useResourcePicker.tsx
 msgid "Cancel"
 msgstr "Annuler"
@@ -854,7 +852,6 @@ msgstr "En savoir plus et participer"
 #. 0: version
 #: src/chunks/Plugins/NewPluginButton.tsx src/routes/AboutRoute.tsx
 #: src/routes/AboutRoute.tsx
-#: src/views/Plugin/PluginPage.tsx
 msgid "v{0}"
 msgstr "v{0}"
 
@@ -896,7 +893,6 @@ msgstr "Connexion / Nouvel utilisateur"
 msgid "See and edit the current Agent / User (u)"
 msgstr "Voir et modifier l'agent / l'utilisateur actuel (u)"
 
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
 #: src/chunks/PluginRuns/PluginPage.tsx
 #: src/components/SideBar/AppMenu.tsx
 #: src/components/SideBar/AppMenu.tsx src/routes/AppSettings.tsx
@@ -1238,7 +1234,6 @@ msgstr "Importation..."
 
 #: src/actions/resourceActions.tsx
 #: src/actions/resourceActions.tsx src/views/ImporterPage.tsx
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
 #: src/views/ImporterPage.tsx
 msgid "Import"
 msgstr "Importer"
@@ -1410,35 +1405,13 @@ msgstr "Raccourcis clavier"
 
 #. 0: metadata.author
 #. 0: author
-#: src/chunks/Plugins/NewPluginButton.tsx src/views/Plugin/PluginPage.tsx
-#: src/views/Plugin/PluginPage.tsx
+#: src/chunks/Plugins/NewPluginButton.tsx
 msgid "by {0}"
 msgstr "par {0}"
-
-#: src/views/Plugin/PluginPage.tsx
-msgid "Plugin Description"
-msgstr "Description du plugin"
 
 #: src/components/forms/ValueForm/ValueFormEdit.tsx
 msgid "<0/> Save"
 msgstr "<0/> Enregistrer"
-
-#: src/views/Plugin/PluginPage.tsx
-msgid "Are you sure you want to uninstall this plugin?"
-msgstr "Voulez-vous vraiment désinstaller ce plugin ?"
-
-#: src/views/Plugin/PluginPage.tsx
-msgid "Uninstall Plugin"
-msgstr "Désinstaller le plugin"
-
-#: src/views/Plugin/PluginPage.tsx
-#: src/views/Plugin/PluginPage.tsx
-msgid "Uninstall"
-msgstr "Désinstaller"
-
-#: src/views/Plugin/PluginPage.tsx
-msgid "Plugin uninstalled"
-msgstr "Plugin désinstallé"
 
 #: src/components/forms/NewForm/CustomCreateActions/BasicInstanceHandlers.ts
 msgid "Folder"
@@ -1538,8 +1511,7 @@ msgstr "Description textuelle <0/>"
 #: src/views/Article/ArticleDescription.tsx
 #: src/views/OntologyPage/NewClassButton.tsx
 #: src/views/OntologyPage/NewPropertyButton.tsx
-#: src/views/OntologyPage/NewPropertyButton.tsx src/views/Plugin/PluginPage.tsx
-#: src/views/Plugin/PluginPage.tsx
+#: src/views/OntologyPage/NewPropertyButton.tsx
 msgid "Save"
 msgstr "Enregistrer"
 
@@ -1797,15 +1769,13 @@ msgstr "Permissions héritées :"
 #: src/components/Share/ShareDialog.tsx src/routes/Share/ShareRoute.tsx
 #: src/routes/Share/ShareRoute.tsx
 #: src/views/OntologyPage/OntologyPage.tsx
-#: src/views/OntologyPage/OntologyPage.tsx src/views/Plugin/AssignRights.tsx
-#: src/views/Plugin/AssignRights.tsx
+#: src/views/OntologyPage/OntologyPage.tsx
 msgid "Read"
 msgstr "Lire"
 
 #: src/components/Share/ShareDialog.tsx
 #: src/components/Share/ShareDialog.tsx src/routes/Share/ShareRoute.tsx
 #: src/routes/Share/ShareRoute.tsx
-#: src/views/Plugin/AssignRights.tsx
 msgid "Write"
 msgstr "Écrire"
 
@@ -1904,8 +1874,7 @@ msgstr "Charger quand même ({0})"
 #: src/hooks/useCreateAndNavigate.ts src/routes/History/HistoryDesktopView.tsx
 #: src/routes/History/HistoryDesktopView.tsx
 #: src/routes/History/HistoryMobileView.tsx
-#: src/routes/History/HistoryMobileView.tsx src/views/Plugin/AssignRights.tsx
-#: src/views/Plugin/AssignRights.tsx
+#: src/routes/History/HistoryMobileView.tsx
 msgid "Resource"
 msgstr "Ressource"
 
@@ -2245,14 +2214,6 @@ msgstr "Ouvrir le site"
 msgid "Loading AI"
 msgstr "Chargement de l'IA"
 
-#: src/views/Plugin/AssignRights.tsx
-msgid "Pick a resource"
-msgstr "Sélectionnez une ressource"
-
-#: src/views/Plugin/AssignRights.tsx
-msgid "Assign"
-msgstr "Attribuer"
-
 #: src/components/CodeBlock.tsx
 #: src/components/CodeBlock.tsx src/components/InviteForm.tsx
 #: src/components/InviteForm.tsx
@@ -2270,26 +2231,6 @@ msgstr "Copié !"
 #: src/components/CodeBlock.tsx
 msgid "Copy to clipboard"
 msgstr "Copier dans le presse-papier"
-
-#: src/views/Plugin/ConfigReference.tsx
-msgid "required"
-msgstr "obligatoire"
-
-#: src/views/Plugin/ConfigReference.tsx
-msgid "Default:"
-msgstr "Par défaut :"
-
-#: src/views/Plugin/ConfigReference.tsx
-msgid "Possible values:"
-msgstr "Valeurs possibles :"
-
-#: src/views/Plugin/PluginPermissions.tsx
-msgid "No permissions required"
-msgstr "Aucune autorisation requise"
-
-#: src/views/Plugin/PluginPermissions.tsx
-msgid "No reason provided"
-msgstr "Aucune raison fournie"
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewOntologyDialog.tsx
 msgid "New Ontology"
@@ -3184,22 +3125,6 @@ msgstr "Autoriser uniquement que sa valeur soit sélectionnée parmi les balises
 msgid "Search for a {0} or enter a URL..."
 msgstr "Rechercher un {0} ou saisir une URL..."
 
-#: src/components/Drives/WSIndicator.tsx
-msgid "Websocket Connected"
-msgstr "Websocket connecté"
-
-#: src/components/Drives/WSIndicator.tsx
-msgid "Websocket Closing"
-msgstr "Fermeture du websocket"
-
-#: src/components/Drives/WSIndicator.tsx
-msgid "Websocket Closed"
-msgstr "Websocket fermé"
-
-#: src/components/Drives/WSIndicator.tsx
-msgid "Websocket Connecting..."
-msgstr "Connexion au websocket..."
-
 #: src/components/ParentPicker/ParentPickerDialog.tsx
 msgid "Select a location"
 msgstr "Sélectionner un emplacement"
@@ -3305,26 +3230,6 @@ msgstr "Choisissez un emoji"
 #: src/chunks/HighlightedCode/HighlightedCodeBlock.tsx
 msgid "Copy code"
 msgstr "Copier le code"
-
-#: src/chunks/Plugins/UpdatePluginButton.tsx
-msgid "The update's identifier does not match the existing plugin."
-msgstr "L'identifiant de la mise à jour ne correspond pas au plugin existant."
-
-#: src/chunks/Plugins/UpdatePluginButton.tsx
-msgid "Change Version"
-msgstr "Changer de version"
-
-#: src/chunks/Plugins/UpdatePluginButton.tsx
-msgid "New Permissions"
-msgstr "Nouvelles autorisations"
-
-#: src/chunks/Plugins/UpdatePluginButton.tsx
-msgid "Your config is not fully compatible with the new version."
-msgstr "Votre configuration n'est pas entièrement compatible avec la nouvelle version."
-
-#: src/chunks/Plugins/UpdatePluginButton.tsx
-msgid "Apply"
-msgstr "Appliquer"
 
 #: src/chunks/CodeEditor/AsyncJSONEditor.tsx
 msgid "Enter valid JSON..."
@@ -3531,7 +3436,6 @@ msgid "Drag column"
 msgstr "Faire glisser la colonne"
 
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
-#: src/chunks/PluginRuns/ConnectNotion.tsx
 #: src/chunks/TablePage/TableHeadingMenu.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx
 #: src/chunks/TablePage/TableViewTabs.tsx src/chunks/TablePage/useTableView.ts
@@ -3914,7 +3818,6 @@ msgid "Edit unavailable"
 msgstr ""
 
 #: src/chunks/AI/jsonAdCompact.test.ts
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
 #: src/chunks/TablePage/Kanban/useKanbanGroupBy.ts
 msgid "Status"
 msgstr ""
@@ -3968,7 +3871,6 @@ msgstr ""
 msgid "New item…"
 msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
 #: src/chunks/TablePage/Kanban/KanbanView.tsx
 #: src/chunks/TablePage/createTableFromSpec.ts
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
@@ -4663,8 +4565,6 @@ msgstr ""
 msgid "{0}% used"
 msgstr ""
 
-#: src/chunks/PluginRuns/CalendarSync.tsx
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
 #: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
@@ -4673,7 +4573,6 @@ msgid "Syncing…"
 msgstr ""
 
 #: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
-#: src/routes/DevonianDemoRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Sync now"
 msgstr ""
@@ -6245,7 +6144,6 @@ msgstr ""
 #~ msgid "Keep an encrypted copy of this workspace in {0}. It is sealed on this device, so we store it without being able to read it."
 #~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
 #: src/components/Vault/VaultPanel.tsx
 msgid "Working…"
 msgstr ""
@@ -6587,7 +6485,7 @@ msgstr ""
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 #: src/components/AccountRecoveryCard.tsx
-#: src/components/AccountRecoveryCard.tsx src/views/Plugin/PluginSecrets.tsx
+#: src/components/AccountRecoveryCard.tsx
 msgid "Storing…"
 msgstr ""
 
@@ -6638,11 +6536,6 @@ msgstr ""
 msgid "Your private drive keeps its name. It is tied to your account, not to a project."
 msgstr ""
 
-#: src/components/Drives/PersonalDriveBadge.tsx
-msgid "<0/> Private"
-msgstr ""
-
-#: src/components/Drives/PersonalDriveBadge.tsx
 #: src/components/Drives/PrivateDriveBadge.tsx
 msgid "This is your private drive. It holds your drive list, favourites, notifications and chats, and its address comes from your account — so there is only ever one, and it is not a place for a project."
 msgstr ""
@@ -6655,7 +6548,7 @@ msgstr ""
 msgid "Creating your private drive…"
 msgstr ""
 
-#: src/hooks/usePersonalDriveList.ts src/hooks/usePrivateDriveList.ts
+#: src/hooks/usePrivateDriveList.ts
 #: src/hooks/usePrivateDriveList.ts
 msgid "Could not update your list: no private drive is set up for this account yet."
 msgstr ""
@@ -7222,14 +7115,6 @@ msgstr "Téléverser le plugin"
 msgid "Reading"
 msgstr "Lecture"
 
-#: src/views/Plugin/PluginPage.tsx
-msgid "Config"
-msgstr "Configuration"
-
-#: src/chunks/Plugins/UpdatePluginButton.tsx
-msgid "Update"
-msgstr "Mettre à jour"
-
 #: src/chunks/AI/CompactSeparatorWidget.tsx
 msgid "Context compacted"
 msgstr "Contexte compacté"
@@ -7245,10 +7130,6 @@ msgstr ""
 #: src/components/SideBar/ResourceSideBar/ResourceSideBar.tsx
 msgid "Resource with error"
 msgstr "Ressource avec erreur"
-
-#: src/views/Plugin/AssignRights.tsx
-msgid "Assign Rights"
-msgstr "Attribuer des droits"
 
 #: src/helpers/managed/vault.ts
 msgid "Your account session has ended. Sign in again to resume backup."
@@ -7772,10 +7653,6 @@ msgstr ""
 msgid "Use this template"
 msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Atomic"
-msgstr ""
-
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Or, tell Atomic what you need"
 msgstr ""
@@ -7932,12 +7809,12 @@ msgstr ""
 #. 0: secret.name
 #. 0: secret.name
 #: src/chunks/PluginRuns/PluginSecrets.tsx
-#: src/chunks/PluginRuns/PluginSecrets.tsx src/views/Plugin/PluginSecrets.tsx
+#: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "Stored {0}"
 msgstr ""
 
 #: src/chunks/PluginRuns/PluginSecrets.tsx
-#: src/chunks/PluginRuns/PluginSecrets.tsx src/views/Plugin/PluginSecrets.tsx
+#: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "<0/> Secrets"
 msgstr ""
 
@@ -7946,53 +7823,33 @@ msgstr ""
 #. 0: secret.name
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 #: src/chunks/PluginRuns/PluginSecrets.tsx
-#: src/chunks/PluginRuns/PluginSecrets.tsx src/views/Plugin/PluginSecrets.tsx
+#: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "Revoke {0}"
 msgstr ""
 
 #: src/chunks/PluginRuns/PluginSecrets.tsx
 #: src/chunks/PluginRuns/PluginSecrets.tsx
-#: src/chunks/PluginRuns/PluginSecrets.tsx src/views/Plugin/PluginSecrets.tsx
+#: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "Store"
-msgstr ""
-
-#: src/views/Plugin/PluginSecrets.tsx
-msgid "A secret is sent only to the origin you name here, and moves this plugin to the server so it can reach it. The plugin uses it as"
-msgstr ""
-
-#: src/views/Plugin/PluginSecrets.tsx
-msgid "and never sees the value."
-msgstr ""
-
-#: src/views/Plugin/PluginSecrets.tsx
-msgid "Sent only to"
-msgstr ""
-
-#: src/views/Plugin/PluginSecrets.tsx
-msgid ". Stored on the server and never shown again — the plugin uses it as"
-msgstr ""
-
-#: src/views/Plugin/PluginSecrets.tsx
-msgid "No secrets stored."
 msgstr ""
 
 #: src/chunks/PluginRuns/PluginSchedule.tsx
 #: src/chunks/PluginRuns/PluginSecrets.tsx
-#: src/chunks/PluginRuns/PluginSecrets.tsx src/views/Plugin/PluginSecrets.tsx
+#: src/chunks/PluginRuns/PluginSecrets.tsx
 msgid "Not signed in"
 msgstr ""
 
 #: src/chunks/PluginRuns/PluginPage.tsx
-#: src/chunks/PluginRuns/PluginPage.tsx src/chunks/PluginRuns/PluginView.tsx
+#: src/chunks/PluginRuns/PluginPage.tsx
 msgid "Source"
 msgstr ""
 
-#: src/chunks/PluginRuns/PluginPage.tsx src/chunks/PluginRuns/PluginView.tsx
+#: src/chunks/PluginRuns/PluginPage.tsx
 msgid "<0/> Run"
 msgstr ""
 
 #: src/chunks/PluginRuns/PluginPage.tsx
-#: src/chunks/PluginRuns/PluginPage.tsx src/chunks/PluginRuns/PluginView.tsx
+#: src/chunks/PluginRuns/PluginPage.tsx
 msgid "This plugin has no source yet."
 msgstr ""
 
@@ -8246,12 +8103,10 @@ msgstr ""
 msgid "Approve sync"
 msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 msgid "Preview sync"
 msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 msgid "Sync complete."
 msgstr ""
@@ -8326,22 +8181,6 @@ msgstr ""
 msgid "Record verified result and resume"
 msgstr ""
 
-#: src/chunks/PluginRuns/ConnectGitHub.tsx
-msgid "Sync issue titles, descriptions and status with a kanban board. Review the first import before enabling background sync."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectGitHub.tsx
-msgid "Repository"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectGitHub.tsx
-msgid "GitHub token"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectGitHub.tsx
-msgid "Connect GitHub"
-msgstr ""
-
 #: src/chunks/PluginRuns/PluginTrigger.tsx
 msgid "events queued. They remain saved while waiting for review."
 msgstr ""
@@ -8390,50 +8229,8 @@ msgstr ""
 #~ msgid "Data source ID"
 #~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotionManual.tsx
-msgid "Use the data source UUID from Notion, not a database URL. Share its database with your Notion connection first."
-msgstr ""
-
 #~ msgid "Notion connection token"
 #~ msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotionManual.tsx
-msgid "The token is stored on your AtomicServer. Formatted text, relations, formulas and filtered views need additional mappings. Compatibility notes appear on the connection before you approve any sync."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Connect Notion"
-msgstr ""
-
-#: src/chunks/PluginRuns/IntegrationEvidence.tsx
-msgid "Repository test results"
-msgstr ""
-
-#: src/chunks/PluginRuns/IntegrationEvidence.tsx
-msgid "Checking test evidence…"
-msgstr ""
-
-#: src/chunks/PluginRuns/IntegrationEvidence.tsx
-msgid "No matching test evidence is available for this bundle."
-msgstr ""
-
-#. 0: evidence.checks
-#: src/chunks/PluginRuns/IntegrationEvidence.tsx
-msgid "Offline checks passed: {0}"
-msgstr ""
-
-#. 0: new Date(evidence.testedAt).toLocaleDateString()
-#: src/chunks/PluginRuns/IntegrationEvidence.tsx
-msgid "Tested on: {0}"
-msgstr ""
-
-#: src/chunks/PluginRuns/IntegrationEvidence.tsx
-msgid "Live provider checks are not included in these results."
-msgstr ""
-
-#: src/chunks/PluginRuns/IntegrationEvidence.tsx
-msgid "These results are over 30 days old."
-msgstr ""
 
 #: src/chunks/PluginRuns/AutomationWorkspace.tsx
 msgid "Save and test sample"
@@ -8479,10 +8276,6 @@ msgstr ""
 #~ msgid "Issues only. Comments and pull requests are not synced."
 #~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Notion"
-msgstr ""
-
 #~ msgid "Work with your Notion database in Atomic."
 #~ msgstr ""
 
@@ -8495,11 +8288,6 @@ msgstr ""
 #~ msgid "Formatted text, relations, formulas and filtered views need additional mappings."
 #~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Supported scope"
-msgstr ""
-
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
 #: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
 msgid "Set up connection"
 msgstr ""
@@ -8803,14 +8591,6 @@ msgstr ""
 #~ msgid "Enter a data source ID and connection token to continue."
 #~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotionManual.tsx
-msgid "Connect a Notion database, then review what will sync before making changes."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectGitHub.tsx
-msgid "Enter a repository and token to continue."
-msgstr ""
-
 #~ msgid "Allow pop-ups for Atomic, then try connecting again."
 #~ msgstr ""
 
@@ -8820,62 +8600,14 @@ msgstr ""
 #~ msgid "Search by name"
 #~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Find a database"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Find databases"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Untitled database"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Choose a database"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Database"
-msgstr ""
-
 #~ msgid "Can’t find your database?"
 #~ msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Only databases shared with this connection appear. Reconnect to select more pages in Notion, then search again. A database with multiple data sources can appear more than once."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Load more databases"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "No databases found. Try another name, or reconnect and grant access to the database in Notion."
-msgstr ""
 
 #~ msgid "Connect another workspace"
 #~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Advanced setup with a token"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Choose what to sync from Notion. You’ll review the first sync before any changes are applied."
-msgstr ""
-
 #~ msgid "Loading connections…"
 #~ msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Notion sign-in needs to be configured by your server administrator. Existing connections can still be used."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Reconnect Notion"
-msgstr ""
 
 #~ msgid "Connecting to Notion…"
 #~ msgstr ""
@@ -8896,18 +8628,6 @@ msgstr ""
 
 #~ msgid "Continue to sync setup"
 #~ msgstr ""
-
-#: src/chunks/PluginRuns/ConnectGitHub.tsx
-msgid "New issue board"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectGitHub.tsx
-msgid "Sync into"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectGitHub.tsx
-msgid "Existing tables appear when they use the shared task schema. GitHub supports Todo, Doing and Done; Blocked cards must be resolved before syncing. Existing cards are included in the preview."
-msgstr ""
 
 #: src/chunks/AI/AIChatMessageParts/IntegrationActionReview.tsx
 #: src/chunks/AI/AIChatMessageParts/IntegrationActionReview.tsx
@@ -8941,106 +8661,9 @@ msgstr ""
 #~ msgid "Your entries only; up to 31 days. No active timers, updates, deletions, tags, task links, rates or custom fields."
 #~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "Enter your Clockify API key."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "Clockify import"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "Clockify time entries"
-msgstr ""
-
-#. 0: workspaces.find(w => w.id === workspace)?.name
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "Clockify: {0}"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "Clockify API key"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "Find my workspaces"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "Find your API key in Clockify profile settings. It is stored on your AtomicServer and only used for read requests."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "Bring your completed entries into the Time Tracker template, linked to projects and the person who logged them. Review every proposed import first."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "Workspace"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "Past 7 days"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "Past 30 days"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "Import my completed entries"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-#: src/chunks/PluginRuns/ImportMT940.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Preparing preview…"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-#: src/chunks/PluginRuns/ImportMT940.tsx
-msgid "Preview import"
-msgstr ""
-
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Experimental integration. Preview proposed changes before approving them."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "New Time Tracker table"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-#: src/chunks/PluginRuns/ImportMT940.tsx
-msgid "Import into"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "Compatible Time Tracker tables appear here. Their views and existing entries are kept."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "Open time entries"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "Manage import"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "Your import setup is saved. Open the table, or manage this import to review future runs and its schedule."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectGitHub.tsx
-msgid "Create GitHub token"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectGitHub.tsx
-msgid "Name, Issues read/write access and a 30-day expiry are prefilled. Check the resource owner, choose Only select repositories and select your repository. Generate the token, then paste it below."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectGitHub.tsx
-msgid "Your token is stored on your AtomicServer. Create the atomic:doing label in GitHub to use the Doing column."
 msgstr ""
 
 #: src/chunks/PluginRuns/NewAutomation.tsx
@@ -9055,10 +8678,6 @@ msgstr ""
 msgid "No automations yet. Create one to respond to events from your connected apps."
 msgstr ""
 
-#: src/chunks/PluginRuns/ImportMT940.tsx
-msgid "Bank statements"
-msgstr ""
-
 #~ msgid "Import bank transactions from bunq and other MT940 exports."
 #~ msgstr ""
 
@@ -9070,42 +8689,6 @@ msgstr ""
 
 #~ msgid "MT940 files only, up to 500 transactions and 512 KB. No payment initiation or live bank sync. Bank-specific formats may need additional support."
 #~ msgstr ""
-
-#: src/chunks/PluginRuns/ImportMT940.tsx
-msgid "Bank transactions"
-msgstr ""
-
-#: src/chunks/PluginRuns/ImportMT940.tsx
-msgid "Transactions"
-msgstr ""
-
-#: src/chunks/PluginRuns/ImportMT940.tsx
-msgid "Bank statement file"
-msgstr ""
-
-#: src/chunks/PluginRuns/ImportMT940.tsx
-msgid "Import bank transactions from an MT940 statement. No bank connection or token is needed."
-msgstr ""
-
-#: src/chunks/PluginRuns/ImportMT940.tsx
-msgid "In bunq: open your bank account, choose Settings, then Export statement and select MT940."
-msgstr ""
-
-#: src/chunks/PluginRuns/ImportMT940.tsx
-msgid "bunq export instructions"
-msgstr ""
-
-#: src/chunks/PluginRuns/ImportMT940.tsx
-msgid "Your file is processed in the plugin sandbox on your AtomicServer. Review transactions before saving them. Up to 500 transactions per file."
-msgstr ""
-
-#: src/chunks/PluginRuns/ImportMT940.tsx
-msgid "Open bank transactions"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectClockify.tsx
-msgid "Each run imports your entries from the selected number of days before that run. Running timers and breaks are skipped. Repeating the import updates changed source fields, preserves local edits and asks you to resolve conflicts. It never deletes entries."
-msgstr ""
 
 #. 0: JSON.stringify(conflict.current) ?? 'Empty'
 #: src/chunks/PluginRuns/ImportConflict.tsx
@@ -9131,38 +8714,6 @@ msgstr ""
 
 #: src/chunks/PluginRuns/ImportConflict.tsx
 msgid "Use source value"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyUpgrade.tsx
-msgid "Replacement code"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyUpgrade.tsx
-msgid "Review Clockify update"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyUpgrade.tsx
-msgid "Update the Clockify importer"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyUpgrade.tsx
-msgid "Repeated imports will update unchanged local fields when Clockify changes, preserve your edits, and ask you to resolve conflicts. Shared source identities prevent duplicate imports on this server."
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyUpgrade.tsx
-msgid "This replaces the importer code, including any custom edits. Your workspace, date range, destination table and stored key are kept. Existing records are checked on the next preview."
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyUpgrade.tsx
-msgid "Updating…"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyUpgrade.tsx
-msgid "Apply importer update"
-msgstr ""
-
-#: src/chunks/PluginRuns/ImportMT940.tsx
-msgid "Default Bank transactions table"
 msgstr ""
 
 #: src/chunks/PluginRuns/ImportCollision.tsx
@@ -9370,30 +8921,6 @@ msgstr ""
 msgid "Automations act on your data and can use connected services. Sync works independently."
 msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "This integration creates a new workspace for its imported data."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectPets.tsx
-msgid "Pets"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectPets.tsx
-msgid "Reinstall demo pets"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectPets.tsx
-msgid "Install demo pets"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectPets.tsx
-msgid "Installs five trivial demo pets into a Pets table. No external account, API key or network call is used."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectPets.tsx
-msgid "Open Pets"
-msgstr ""
-
 #: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
 msgid "Loading LocalThought platforms…"
 msgstr ""
@@ -9429,106 +8956,12 @@ msgstr ""
 #~ msgid "LocalThought tenant secret"
 #~ msgstr ""
 
-#. 0: count
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Synchronized {0} issues and comments."
-msgstr ""
-
 #: src/components/Settings/IntegrationSettings.tsx
-#: src/routes/DevonianDemoRoute.tsx
 msgid "Integration proxy URL"
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "GitHub repository (owner/repo)"
 msgstr ""
 
 #~ msgid "Connect a real GitHub repository"
 #~ msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Devonian issue tracker demo"
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Sync issues and comments in both directions. Devonian runs in this browser; the Atomic tracker is stored on this device."
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Try sample data"
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Sample mode: the GitHub side below is a browser fixture. No requests are sent to GitHub."
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Live mode: Sync now creates and updates real GitHub issues and comments. Keep this tab open to sync."
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Open Atomic kanban"
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "New issue title or comment"
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Reopen Atomic issue"
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Close Atomic issue"
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Add Atomic comment"
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Atomic tracker"
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Atomic issues"
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Reopen sample GitHub issue"
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Close sample GitHub issue"
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Add sample GitHub comment"
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Create sample GitHub issue"
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Create Atomic issue"
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Sample GitHub tracker"
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Sample GitHub issues"
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Connect through LocalThought. The tenant secret is used in this tab to start the connection and is never saved."
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Connect GitHub tracker"
-msgstr ""
 
 #. 0: error instanceof Error ? error.message \\: String(error)
 #: src/chunks/TablePage/Calendar/CalendarView.tsx
@@ -9537,10 +8970,6 @@ msgstr ""
 
 #: src/chunks/TablePage/Calendar/CalendarDay.tsx
 msgid "Recurring meeting"
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Connect another tracker"
 msgstr ""
 
 #: src/chunks/TablePage/Calendar/CalendarDay.tsx
@@ -9558,30 +8987,6 @@ msgstr ""
 
 #~ msgid "Imports the collections described by the platform, following pagination. Review changes before applying them. No background sync. {0}"
 #~ msgstr ""
-
-#: src/chunks/PluginRuns/CalendarSync.tsx
-msgid "Preview edits for Google"
-msgstr ""
-
-#: src/chunks/PluginRuns/CalendarSync.tsx
-msgid "No supported local edits to send."
-msgstr ""
-
-#: src/chunks/PluginRuns/CalendarSync.tsx
-msgid "Edits synced. Fetch and preview to receive the latest Google changes."
-msgstr ""
-
-#: src/chunks/PluginRuns/CalendarSync.tsx
-msgid "Send edits to imported events back to Google: Name or Summary, Description, Location, Start and End. Edit Start and End together to change duration or all-day dates. Calendar day and all-day display columns are derived on import. New events, deletion, recurrence rules, guests and RSVP stay in Google. Reconnect with Calendar write access before your first sync."
-msgstr ""
-
-#: src/chunks/PluginRuns/CalendarSync.tsx
-msgid "Applying these edits updates Google Calendar and notifies event guests."
-msgstr ""
-
-#: src/chunks/PluginRuns/CalendarSync.tsx
-msgid "Apply edits to Google"
-msgstr ""
 
 #: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
 msgid "Via integration proxy"
@@ -10439,58 +9844,6 @@ msgstr ""
 #~ msgid "Setup did not finish. Check your integrations for a partially created connection before starting again."
 #~ msgstr ""
 
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Connect Notion through the integration proxy, select a database, then review changes before syncing."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Sync runs in this browser while it is open. Connection credentials stay in this browser. Existing server connections require reconnecting."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Property name"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Both sides are already up to date."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Field"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Proposed"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "No databases found. Reconnect and grant access to the database in Notion."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Open Notion table"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Sync this table"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Review these proposed changes to Atomic and Notion. Approving will apply supported edits in both directions."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "A previous write has an uncertain result. Check the provider and saved run before continuing. It will not be sent again automatically."
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Approve and sync"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectNotion.tsx
-msgid "Close preview"
-msgstr ""
-
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "<0/> Show API plugins"
 msgstr ""
@@ -10509,10 +9862,6 @@ msgstr ""
 #~ msgid "Consider enabling experimental plugins in Settings → Integration."
 #~ msgstr ""
 
-#: src/routes/DevonianDemoRoute.tsx
-msgid "GitHub issues and comments (Devonian)"
-msgstr ""
-
 #~ msgid "Connect a GitHub repository to a local issue tracker."
 #~ msgstr ""
 
@@ -10525,23 +9874,11 @@ msgstr ""
 #~ msgid "Creates a separate local drive. Keep the browser open to sync. Sync writes changes to your GitHub repository."
 #~ msgstr ""
 
-#: src/chunks/PluginRuns/IntegrationDiscovery.tsx
-msgid "Install plugin"
-msgstr ""
-
 #~ msgid "Google Calendar (Devonian)"
 #~ msgstr ""
 
 #~ msgid "Import events into calendar views, preserve recurring series and preview supported edits to send back to Google."
 #~ msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "LocalThought will ask you to sign in and authorize the GitHub connection."
-msgstr ""
-
-#: src/routes/DevonianDemoRoute.tsx
-msgid "Connect a GitHub repository"
-msgstr ""
 
 #. 0: new Date(installation.lastSuccess).toLocaleString()
 #: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
@@ -10577,9 +9914,8 @@ msgstr ""
 msgid "Installed. Your records are syncing in the background."
 msgstr ""
 
-#. 0: writable ? ' After importing, preview supported edits to send changes back.' \\: ' No provider writes.'
 #: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid "Imports the collections described by the platform, following pagination. Syncs automatically when you open the folder and every five minutes while it is open. Keep this browser open to finish importing. {0}"
+msgid "Imports the collections described by the platform, following pagination. Syncs automatically when you open the folder and every five minutes while it is open. Keep this browser open to finish importing. No provider writes."
 msgstr ""
 
 #. 0: name
@@ -10993,7 +10329,6 @@ msgstr ""
 msgid "Website preview assets failed: {0}"
 msgstr ""
 
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Up to date"
 msgstr ""
@@ -11113,10 +10448,6 @@ msgstr ""
 msgid "Synced with issues:"
 msgstr ""
 
-#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
-msgid "Manage sync"
-msgstr ""
-
 #: src/routes/IntegrationStore.tsx
 msgid "No integrations match your search."
 msgstr ""
@@ -11130,160 +10461,6 @@ msgstr ""
 
 #~ msgid "days"
 #~ msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Import only"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Clockify is the source of truth. Entries here update when Clockify changes; local edits are kept but never sent back."
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Two-way sync <0>Coming soon</0>"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Timers you start and edits you make here would be pushed to Clockify on each run, with conflicts shown for review."
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Direction"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Entries from"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Description, start/end and billable are synced. Tags, tasks, hourly rates and custom fields are not. The table refreshes while it is open."
-msgstr ""
-
-#. 0: run.error
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Failed: {0}"
-msgstr ""
-
-#. 0: run.fetched ?? 0; 1: run.applied
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "{0} pulled · {1} changed"
-msgstr ""
-
-#. 0: run.fetched
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "{0} pulled · no changes"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "No entries in range"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Needs attention"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Waiting for first sync"
-msgstr ""
-
-#. 0: new Date(installation.lastSuccess).toLocaleString()
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Last run {0}"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Runs when this table is open"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Waiting to push"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Needs two-way sync"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Conflicts"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Every 5 minutes while this table is open"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Every hour (coming soon)"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Daily (coming soon)"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Schedule"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Closed tabs do not run schedules. Use Sync now for an immediate refresh."
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Look back"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Applies from the next run. Entries already imported stay."
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Not mapped"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Field mapping"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Connection"
-msgstr ""
-
-#. 0: workspace
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "<0/> · Workspace {0} · api.clockify.me"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Personal API key sealed by LocalThought for this browser. Used for reading your entries only. Reconnect from the Integrations page to replace the key."
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Recent runs"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "No runs yet."
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Clockify sync"
-msgstr ""
-
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Open in Clockify"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid "Change key"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid "Select…"
-msgstr ""
-
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid "Setup progress"
-msgstr ""
 
 #: src/chunks/TablePage/Dashboard/DashboardView.tsx
 msgid "This view has no dashboard yet."
@@ -11367,9 +10544,4 @@ msgstr ""
 
 #: src/chunks/TablePage/Issues/IssueRow.tsx
 msgid "Reopen"
-msgstr ""
-
-#. 0: days
-#: src/chunks/PluginRuns/ClockifyLocalThought.tsx
-msgid "Past {0} days"
 msgstr ""

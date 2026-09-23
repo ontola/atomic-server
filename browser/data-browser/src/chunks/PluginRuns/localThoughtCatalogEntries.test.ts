@@ -15,8 +15,8 @@ it('deduplicates generated platforms while preserving their catalog order', () =
 it('leaves out platforms a bundled catalog entry already connects through', () => {
   expect(
     localThoughtCatalogEntries(
-      ['moneybird', 'google-calendar', 'pets'],
-      ['moneybird', 'google-calendar'],
+      ['example', 'google-calendar', 'pets'],
+      ['example', 'google-calendar'],
     ),
   ).toEqual(['pets']);
 });

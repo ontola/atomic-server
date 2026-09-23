@@ -150,17 +150,16 @@ cleanup and the current assistant handoff. External approval transport is stubbe
 
 # Testing coverage map
 
-Bundled plugin discovery: `PluginRuns/localThoughtCatalogEntries.test.ts` checks
-that generated API entries follow the remote catalog. `PluginRuns/IntegrationDiscovery.test.ts`
-covers bundled entries (Todoist, Moneybird, Notion) and gating by the
-experimental/API-plugins toggles. Discovery unit checks do not exercise live
-provider consent. The Google Calendar and GitHub issues (Devonian) bundled
-lenses were retired along with the `devonian` dependency; Google Calendar and
-GitHub issues remain available as plain generated LocalThought imports.
+Plugin discovery: `PluginRuns/localThoughtCatalogEntries.test.ts` checks that
+generated API entries follow the remote catalog; `helpers/integrationVisibility.test.ts`
+covers gating by the experimental/API-plugins toggles. Discovery unit checks do
+not exercise live provider consent. No provider-specific lenses remain in this
+repo; every LocalThought platform imports through the plain generated path.
 
-Extension mode isolation: `PluginRuns/localThoughtExtension.test.ts` and
-`PluginRuns/localThoughtSync.test.ts` cover explicit generated/lens mode and
-separate schema namespaces for the remaining Todoist and Clockify extensions.
+Schema namespaces: `PluginRuns/localThoughtSync.test.ts` covers installation
+and refresh. Plain imports use the `api-<platform>` namespace; installations
+from before the lenses moved to atomic-plugins keep the bare platform namespace
+they were created with.
 `PluginRuns/localThoughtCallback.test.ts` checks originating-entry selection
 and callback redemption; real provider consent remains outside these unit tests.
 

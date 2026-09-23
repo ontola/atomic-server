@@ -33,6 +33,7 @@ import {
   installLocalThought,
   refreshLocalThought,
   saveInstallation,
+  schemaNamespace,
   type LocalThoughtInstallation,
 } from './localThoughtSync';
 const entry: LocalThoughtInstallation = {
@@ -164,4 +165,14 @@ it('does not apply a blocked import or data fetched for a previous signed-in acc
   await refreshLocalThought(store as never, entry);
   expect(mocks.apply).not.toHaveBeenCalled();
   expect(findInstallation(store as never, 'folder')).toBeUndefined();
+});
+
+it('keeps plain imports and older lens installations in separate namespaces', () => {
+  expect(schemaNamespace('google-calendar', 'none')).toBe(
+    'api-google-calendar',
+  );
+  // Installed before lenses moved to atomic-plugins: the stored mode still
+  // names the namespace its schema was created under.
+  expect(schemaNamespace('todoist', 'tasks')).toBe('todoist');
+  expect(schemaNamespace('pets', undefined)).toBe('pets');
 });
