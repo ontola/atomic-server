@@ -10,6 +10,7 @@ import {
   useSubject,
   useTitle,
 } from '@tomic/react';
+import { canonicalizeScheme } from '@tomic/lib';
 import { Fragment, useEffect, useMemo, useState, type JSX } from 'react';
 import { styled } from 'styled-components';
 import { useSettings } from '../../helpers/AppSettings';
@@ -81,12 +82,15 @@ export function SideBarDrive({
   const [aiChatsFolder] = useString(driveResource, ai.properties.aiChatsFolder);
   const subResources = useMemo(
     () =>
-      allChildren.filter(
-        subject =>
-          subject !== defaultOntology &&
-          subject !== commentsFolder &&
-          subject !== aiChatsFolder,
-      ),
+      allChildren.filter(subject => {
+        const canonical = canonicalizeScheme(subject);
+
+        return (
+          canonical !== canonicalizeScheme(defaultOntology ?? '') &&
+          canonical !== canonicalizeScheme(commentsFolder ?? '') &&
+          canonical !== canonicalizeScheme(aiChatsFolder ?? '')
+        );
+      }),
     [allChildren, defaultOntology, commentsFolder, aiChatsFolder],
   );
   const [title] = useTitle(driveResource);

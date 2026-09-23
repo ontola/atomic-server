@@ -261,18 +261,29 @@ pub async fn query_sorted_indexed(
     let mut subjects: Vec<Subject> = vec![];
     let mut resources: Vec<Resource> = vec![];
     let mut count = 0;
+    // Old peers could index the same resource under both identifier schemes.
+    // Count and page by resource identity, not by raw QueryMembers rows.
+    let mut seen = std::collections::HashSet::new();
 
     let base_domain = store.get_base_domain();
     let rights_cache = std::sync::Mutex::new(crate::hierarchy::RightsCache::default());
 
     let limit = q.limit.unwrap_or(usize::MAX);
 
-    for (i, kv) in iter.enumerate() {
+    for kv in iter {
         let kv = kv?;
+        let (k, _v) = &kv;
+        let (_id, _sort, subject_str) = parse_members_key(k)?;
+        let canonical_subject = crate::identifiers::canonicalize_scheme(subject_str);
+        let subject = Subject::from_raw(&canonical_subject, base_domain.as_deref());
+        if !seen.insert(subject.pure_id()) {
+            continue;
+        }
+        let index = seen.len() - 1;
         // The user's maximum amount of results has not yet been reached
         // and
         // The users minimum starting distance (offset) has been reached
-        let in_selection = subjects.len() < limit && i >= q.offset;
+        let in_selection = subjects.len() < limit && index >= q.offset;
         // Tracks whether this iter step should bump the visible count.
         // Defaults to true so entries past the page limit still count
         // (preserving the cheap-pagination behavior). Flipped to false
@@ -282,11 +293,6 @@ pub async fn query_sorted_indexed(
         // `totalMembers: N, members: []` drift (issue #286).
         let mut should_count = true;
         if in_selection {
-            let (k, _v) = &kv;
-            let (_id, _sort, subject_str) = parse_members_key(k)?;
-
-            let subject = Subject::from_raw(subject_str, base_domain.as_deref());
-
             if !q.include_external && !subject.is_local() {
                 should_count = false;
             } else if q.for_agent != crate::agents::ForAgent::Sudo || q.include_nested {
@@ -528,14 +534,27 @@ pub fn update_indexed_member(
         delete,
         collection
     );
-    let key = create_query_index_key(collection, Some(sort_key), Some(subject))?;
+    let canonical = crate::identifiers::canonicalize_scheme(subject);
+    let key = create_query_index_key(collection, Some(sort_key), Some(&canonical))?;
     if delete {
         transaction.push(Operation {
             tree: Tree::QueryMembers,
             method: trees::Method::Delete,
             key,
             val: None,
-        })
+        });
+        // Remove a key written by a pre-upgrade peer as well. The old row's
+        // sort key is available when this function is called for a removal.
+        let legacy = crate::identifiers::to_legacy_scheme(&canonical);
+        if legacy != canonical {
+            transaction.push(Operation {
+                tree: Tree::QueryMembers,
+                method: trees::Method::Delete,
+                key: create_query_index_key(collection, Some(sort_key), Some(&legacy))?,
+                val: None,
+            });
+        }
+        return Ok(());
     } else {
         transaction.push(Operation {
             tree: Tree::QueryMembers,

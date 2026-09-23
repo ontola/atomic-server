@@ -15,6 +15,8 @@ PR #1585 frontend regressions: Vault backup tests verify a legacy drive ID reads
 
 PR #1585 upgrade regressions: library tests pin the pre-rename AI Chats singleton and restored alias cache, negotiate nested reduced/full sync identifiers, and export canonical snapshots for legacy requests. Rust tests cover legacy filtered/full version vectors and restarting an interrupted scheme migration after rows moved but before indexes finished. These are library/frame-level checks; a deployed mixed-version browser/Iroh pairing is not exercised.
 
+Sidebar alias indexing: `sorted_parent_query_deduplicates_legacy_and_canonical_subjects` reproduces an old `did:ad:` query-member key beside its `atomic:` key, then verifies one visible member, a count of one, canonical output in both sort directions, correct pagination, and removal of the stale key on update. The production drive's duplicate labels were observed on two devices, but their individual resource IDs have not been inspected; this test proves the alias failure path rather than the identity of each live row.
+
 New-drive sync: WebSocket unit coverage verifies SUB and SYNC wait for a pending genesis acknowledgement, then resume on ResourceSaved. The Local DB-off rendering E2E exercises this ordering with real server persistence.
 
 Cover repositioning: `cover-reposition.spec.ts` uploads a real image and verifies multiple pointer movements update its framing before release (native image dragging previously interrupted the gesture).
