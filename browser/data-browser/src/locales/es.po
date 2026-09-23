@@ -4626,6 +4626,7 @@ msgid "Your data lives on the device you’re connected to."
 msgstr ""
 
 #: src/routes/SyncRoute.tsx
+#: src/routes/SyncRoute.tsx
 msgid "Syncing this workspace…"
 msgstr ""
 
@@ -7021,14 +7022,6 @@ msgstr ""
 
 #: src/routes/SyncRoute.tsx
 msgid "Checking local copy…"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Use browser sync only on this device"
-msgstr ""
-
-#: src/routes/SyncRoute.tsx
-msgid "Could not verify the local copy. The server connection has been kept."
 msgstr ""
 
 #: src/components/forms/NewForm/CustomCreateActions/CustomForms/NewTableDialog.tsx
@@ -9473,4 +9466,24 @@ msgstr ""
 #. 0: closed.length
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 msgid "{0} Closed"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Could not change workspace sync."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Starting server sync…"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Sync this workspace with this server"
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Off stops server sync for this workspace on this browser. The server’s existing copy and other devices are unchanged; browser sync can still connect open browsers."
+msgstr ""
+
+#: src/routes/SyncRoute.tsx
+msgid "Workspace sync off"
 msgstr ""

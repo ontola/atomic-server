@@ -165,15 +165,21 @@ for (const localOnly of [true, false]) {
       expect(refused.error).toContain('missing its local history');
       expect(refused.local).toBe(false);
 
-      await page
-        .getByRole('button', {
+      await expect(
+        page.getByRole('button', {
           name: 'Use browser sync only on this device',
           exact: true,
-        })
-        .click();
+        }),
+      ).toHaveCount(0);
+      const workspaceSync = page.getByRole('checkbox', {
+        name: 'Sync this workspace with this server',
+      });
+      await expect(workspaceSync).toBeChecked();
+      await workspaceSync.click();
       await page.waitForFunction(() =>
         window.store.isLocalOnlyDrive(window.store.getDrive()!),
       );
+      await expect(workspaceSync).not.toBeChecked();
       switched = true;
       await page.evaluate(async () => {
         const store = window.store;
@@ -217,6 +223,13 @@ for (const localOnly of [true, false]) {
         attachment: 'Keep these attachment bytes',
       });
       expect(writes).toEqual([]);
+
+      await workspaceSync.click();
+      await page.waitForFunction(
+        () => !window.store.isLocalOnlyDrive(window.store.getDrive()!),
+      );
+      await expect(workspaceSync).toBeChecked();
+      await expect.poll(() => writes.length).toBeGreaterThan(0);
     }
   });
 }
