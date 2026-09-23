@@ -50,14 +50,28 @@ test('workspace owns its views and links to separate connection settings', async
     await save(plugin);
 
     // The kanban columns the assertions below read are the embedded task
-    // vocabulary's Tag resources, so the table groups by task status.
+    // vocabulary's Tag resources, so the table groups by task status. Its
+    // class must carry that property: a kanban over a class with no select
+    // property tries to add a Status one, which a built-in class like
+    // `core.classes.class` never accepts, and the board never leaves
+    // "Setting up the board…".
     const status = await store.getResource(taskSchema.properties.status);
+    const rowClass = await store.newResource({
+      parent: drive,
+      isA: [core.classes.class],
+      propVals: {
+        [core.properties.shortname]: 'fixture-task',
+        [core.properties.description]: 'A row of the workspace fixture.',
+        [core.properties.recommends]: [core.properties.name, status.subject],
+      },
+    });
+    await save(rowClass);
     const table = await store.newResource({
       parent: plugin.subject,
       isA: [dataBrowser.classes.table],
       propVals: {
         [core.properties.name]: 'Fixture workspace',
-        [core.properties.classtype]: core.classes.class,
+        [core.properties.classtype]: rowClass.subject,
       },
     });
     await save(table);
@@ -173,7 +187,7 @@ test('workspace owns its views and links to separate connection settings', async
   ).toHaveCount(0);
   await page.getByRole('tab', { name: 'Settings', exact: true }).click();
   await expect(page.getByLabel('Opening view')).toBeVisible();
-  await page.getByLabel('Opening view').selectOption({ label: 'All issues' });
+  await page.getByLabel('Opening view').selectOption({ label: 'All rows' });
   await expect(page.getByRole('heading', { name: /Secrets/ })).toBeVisible();
   await page.getByRole('tab', { name: 'Code', exact: true }).click();
   await expect(
@@ -197,7 +211,7 @@ test('workspace owns its views and links to separate connection settings', async
   // still unresolved sixteen polls in.
   await expect(
     page.getByLabel('Opening view').locator('option:checked'),
-  ).toHaveText('All issues', { timeout: 45_000 });
+  ).toHaveText('All rows', { timeout: 45_000 });
   await page.getByRole('tab', { name: 'Sync', exact: true }).click();
   let releasePreview!: () => void;
   const previewGate = new Promise<void>(resolve => {

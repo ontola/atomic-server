@@ -174,7 +174,8 @@ export function run() { return { intents: [] }; }
 
     const dialog = page.locator('dialog[open]');
     await expect(dialog.getByText(/does not exist/)).toBeVisible();
-    await expect(dialog.getByRole('button', { name: /Apply/ })).toBeDisabled();
+    // A blocked plan has nothing to apply, so Apply is not offered at all.
+    await expect(dialog.getByRole('button', { name: /Apply/ })).toHaveCount(0);
 
     // Cancelling a blocked run still records it: a refusal that leaves no
     // trace reads the same as a plugin that never ran.
