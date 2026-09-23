@@ -660,13 +660,16 @@ impl Resource {
                         // Check write right
                         Ok(parent)
                     }
-                    Err(_err) => Err(format!(
-                        "Parent of {} ({}) not found: {}",
-                        self.get_subject(),
-                        parent_val,
-                        _err
-                    )
-                    .into()),
+                    Err(err) => Err(crate::errors::AtomicError {
+                        message: format!(
+                            "Parent of {} ({}) not found: {}",
+                            self.get_subject(),
+                            parent_val,
+                            err
+                        ),
+                        error_type: err.error_type.clone(),
+                        subject: err.subject.clone(),
+                    }),
                 }
             }
             Err(e) => Err(format!("Parent of {} not found: {}", self.get_subject(), e).into()),
