@@ -15,7 +15,13 @@ export type ViewOperation =
   | 'pickFile'
   | 'search'
   | 'subscribe'
-  | 'unsubscribe';
+  | 'unsubscribe'
+  /** Relay one integration-proxy call; the host holds the connection. */
+  | 'proxy'
+  /** Connection references (never credentials) this app may relay through. */
+  | 'proxyConnections'
+  /** Ask the person, in host UI, to connect a proxy platform for this app. */
+  | 'proxyConnect';
 export interface ViewRequest {
   type: 'atomic.view.request';
   version: 1;
@@ -68,6 +74,9 @@ export function isViewRequest(value: unknown): value is ViewRequest {
       'search',
       'subscribe',
       'unsubscribe',
+      'proxy',
+      'proxyConnections',
+      'proxyConnect',
     ].includes(request.op) &&
     !!request.args &&
     typeof request.args === 'object' &&

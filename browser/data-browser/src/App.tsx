@@ -16,6 +16,7 @@ import {
 
 import { useEffect, type JSX } from 'react';
 import { RouterProvider } from '@tanstack/react-router';
+import { ProxyConnectReturn } from './chunks/AppPage/ProxyConnectReturn';
 import { router } from './routes/Router';
 
 import { errorHandler } from './handlers/errorHandler';
@@ -274,7 +275,9 @@ function App(): JSX.Element {
   return (
     <StoreContext.Provider value={store}>
       <PerformanceProfiler id='app'>
-        <RouterProvider router={router}></RouterProvider>
+        <ProxyConnectReturn>
+          <RouterProvider router={router}></RouterProvider>
+        </ProxyConnectReturn>
       </PerformanceProfiler>
     </StoreContext.Provider>
   );
