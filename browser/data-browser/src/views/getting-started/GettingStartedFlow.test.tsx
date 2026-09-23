@@ -20,6 +20,7 @@ const state = vi.hoisted(() => ({
   setDrive: vi.fn(),
   setServer: vi.fn(),
   recovery: vi.fn(),
+  account: null as { email: string } | null,
   hasData: true,
   agent: { subject: 'did:ad:agent:test' },
   store: {
@@ -61,7 +62,7 @@ vi.mock('../../helpers/managed/deviceLink', () => ({
   canHoldProviderCookie: () => true,
 }));
 vi.mock('../../helpers/managed/session', () => ({
-  getManagedAccount: async () => null,
+  getManagedAccount: async () => state.account,
 }));
 vi.mock('../../helpers/managedServer', () => ({
   fetchManagedInfo: async () => null,
@@ -147,6 +148,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   state.portal = 'https://portal.example';
   state.recovery.mockResolvedValue(null);
+  state.account = null;
   state.hasData = true;
   state.restoreVault.mockResolvedValue({
     status: 'no-backup',
@@ -159,6 +161,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 it('keeps secret sign-in reachable when a portal is configured', async () => {
@@ -253,6 +256,21 @@ it('resumes an invitation instead of settings after unlock', async () => {
   expect(state.navigate).toHaveBeenCalledWith(
     expect.stringContaining('/app/invite'),
   );
+});
+
+it('lets an invitee with nothing to restore create an account', async () => {
+  state.account = { email: 'new@example.com' };
+  await show('?invite=invitation-token&email=new%40example.com');
+  const assign = vi.fn();
+  vi.stubGlobal('location', { href: window.location.href, assign });
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Create account and accept' }),
+  );
+  const target = new URL(assign.mock.calls[0][0]);
+  expect(target.pathname).toBe('/app/welcome');
+  expect(target.searchParams.get('invite')).toBe('invitation-token');
+  expect(target.searchParams.get('from_portal')).toBe('true');
+  expect(target.searchParams.get('email')).toBe('new@example.com');
 });
 
 it('opens its own home without requiring another device', async () => {
