@@ -4,6 +4,12 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: someone who signs up from an invitation and has no recovery backup can
+  still accept it. The portal opens the restore step for an invitee whenever it
+  cannot rule out an earlier identity, and with nothing to restore that step
+  stopped at "No recovery backup was found". It now offers to create the
+  account, keeping the invitation.
+
 - Fix: the integration proxy may live on a `.localhost` name. `proxyOrigin`
   allowed plain http only for the bare `localhost` and `127.0.0.1`, so a proxy
   at, say, `http://atomic.localhost:19090` was rejected, and because the value
