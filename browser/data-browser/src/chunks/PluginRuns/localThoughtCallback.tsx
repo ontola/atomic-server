@@ -25,10 +25,7 @@ export interface LocalThoughtCallbackData {
 }
 
 export function callbackEntry(pending: PendingLocalThoughtConnection) {
-  return (
-    pending.entry ??
-    (pending.platform === 'notion' ? 'notion' : `proxy:${pending.platform}`)
-  );
+  return pending.entry ?? `proxy:${pending.platform}`;
 }
 
 export function completedPlatformForEntry(

@@ -142,12 +142,10 @@ export function useIntegrationVisibility() {
         });
 
       if (!result.error) {
-        writePendingVisibility(
-          actor,
-          dropSaved(readPendingVisibility(actor), entries),
-        );
+        const remaining = dropSaved(readPendingVisibility(actor), entries);
+        writePendingVisibility(actor, remaining);
         setUnconfirmed(current =>
-          current.filter(key => !entries.some(([saved]) => saved === key)),
+          stillUnconfirmed(current, entries, remaining),
         );
       }
 
@@ -214,7 +212,7 @@ function pendingKeys(
 }
 
 /** Keeps entries that were changed again while the write was in flight. */
-function dropSaved(
+export function dropSaved(
   queued: IntegrationVisibilityValues,
   saved: [IntegrationVisibilityKey, boolean][],
 ): IntegrationVisibilityValues {
@@ -225,6 +223,18 @@ function dropSaved(
   }
 
   return next;
+}
+
+/** A saved key is confirmed unless it was toggled again mid-flight, which
+ * leaves it in the remaining pending values. */
+export function stillUnconfirmed(
+  current: IntegrationVisibilityKey[],
+  saved: [IntegrationVisibilityKey, boolean][],
+  remaining: IntegrationVisibilityValues,
+): IntegrationVisibilityKey[] {
+  return current.filter(
+    key => key in remaining || !saved.some(([savedKey]) => savedKey === key),
+  );
 }
 
 async function saveVisibility(

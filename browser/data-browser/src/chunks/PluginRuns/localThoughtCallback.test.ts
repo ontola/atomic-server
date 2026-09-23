@@ -58,8 +58,8 @@ it('reopens only the originating setup card and supplies safe fallback targets',
   );
   expect(callbackEntry(pending)).toBe('proxy:google-calendar');
   expect(
-    callbackEntry({ ...pending, platform: 'pets', entry: undefined }),
-  ).toBe('proxy:pets');
+    callbackEntry({ ...pending, platform: 'notion', entry: undefined }),
+  ).toBe('proxy:notion');
 
   const completed = {
     drive: pending.drive,

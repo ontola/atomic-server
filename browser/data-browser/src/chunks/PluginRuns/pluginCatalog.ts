@@ -5,78 +5,56 @@ const CATALOG_ENTRY_CLASS =
   'https://atomicdata.dev/integrations/classes/PluginCatalogEntry';
 const IS_A_PROP = 'https://atomicdata.dev/properties/isA';
 const SHORTNAME_PROP = 'https://atomicdata.dev/properties/shortname';
-const NAME_PROP = 'https://atomicdata.dev/properties/name';
-const EMOJI_PROP = 'https://atomicdata.dev/properties/emoji';
-const DESCRIPTION_PROP = 'https://atomicdata.dev/properties/description';
 const EXPERIMENTAL_PROP =
   'https://atomicdata.dev/integrations/properties/experimental';
 const ENABLED_PROP = 'https://atomicdata.dev/integrations/properties/enabled';
-const CAPABILITIES_PROP =
-  'https://atomicdata.dev/integrations/properties/capabilities';
-const EVENTS_PROP = 'https://atomicdata.dev/integrations/properties/events';
-const LIMITATION_PROP =
-  'https://atomicdata.dev/integrations/properties/limitation';
-const KEYWORDS_PROP = 'https://atomicdata.dev/integrations/properties/keywords';
 const REQUIRES_API_PLUGINS_PROP =
   'https://atomicdata.dev/integrations/properties/requires-api-plugins';
 const PLATFORM_PROP = 'https://atomicdata.dev/integrations/properties/platform';
-const CALLBACK_PLATFORM_PROP =
-  'https://atomicdata.dev/integrations/properties/callback-platform';
 
-type CatalogResource = Record<string, unknown>;
-
-// A parsed integrations/catalog.json entry. Every entry has an id, an
-// experimental flag and an enabled flag; the rest are only present on the
-// integrations that own card copy —
-// a raw LocalThought proxy platform like 'pets' only carries the first three.
+// A parsed integrations/catalog.json entry: the flags that decide whether a
+// LocalThought proxy platform gets a card. `platform` names the proxy
+// platform the entry describes; without it, the shortname is the platform.
 export interface CatalogEntry {
   shortname: string;
   experimental: boolean;
   enabled: boolean;
-  name?: string;
-  icon?: string;
-  description?: string;
-  capabilities?: string;
-  events?: string;
-  limitation?: string;
-  keywords?: string;
-  requiresApiPlugins?: boolean;
+  requiresApiPlugins: boolean;
   platform?: string;
-  callbackPlatform?: string;
 }
 
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function parseCatalogEntries(raw: unknown): CatalogEntry[] {
+/** Malformed entries are skipped, so one bad row can't hide the rest. */
+export function parseCatalogEntries(raw: unknown): CatalogEntry[] {
   if (!Array.isArray(raw)) return [];
 
-  return (raw as CatalogResource[])
-    .filter(resource =>
-      (resource[IS_A_PROP] as string[] | undefined)?.includes(
-        CATALOG_ENTRY_CLASS,
-      ),
-    )
-    .map(resource => ({
-      shortname: resource[SHORTNAME_PROP] as string,
-      experimental: resource[EXPERIMENTAL_PROP] !== false,
-      enabled: resource[ENABLED_PROP] === true,
-      name: asString(resource[NAME_PROP]),
-      icon: asString(resource[EMOJI_PROP]),
-      description: asString(resource[DESCRIPTION_PROP]),
-      capabilities: asString(resource[CAPABILITIES_PROP]),
-      events: asString(resource[EVENTS_PROP]),
-      limitation: asString(resource[LIMITATION_PROP]),
-      keywords: asString(resource[KEYWORDS_PROP]),
-      requiresApiPlugins: resource[REQUIRES_API_PLUGINS_PROP] === true,
-      platform: asString(resource[PLATFORM_PROP]),
-      callbackPlatform: asString(resource[CALLBACK_PLATFORM_PROP]),
-    }));
+  return raw.flatMap((resource): CatalogEntry[] => {
+    if (!isRecord(resource)) return [];
+    const isA = resource[IS_A_PROP];
+    const shortname = resource[SHORTNAME_PROP];
+
+    if (!Array.isArray(isA) || !isA.includes(CATALOG_ENTRY_CLASS)) return [];
+    if (typeof shortname !== 'string' || !shortname) return [];
+
+    const platform = resource[PLATFORM_PROP];
+
+    return [
+      {
+        shortname,
+        experimental: resource[EXPERIMENTAL_PROP] !== false,
+        enabled: resource[ENABLED_PROP] === true,
+        requiresApiPlugins: resource[REQUIRES_API_PLUGINS_PROP] === true,
+        platform: typeof platform === 'string' ? platform : undefined,
+      },
+    ];
+  });
 }
 
 // catalog.json is published from https://github.com/ontola/atomic-plugins
-// (gh-pages, mirroring this repo's own integrations/ tree) rather than
+// (gh-pages, built from that repo's integrations/ tree) rather than
 // bundled into the SPA at build time or fetched from the paired
 // atomic-server — a Tauri desktop/mobile build ships a separate frontend
 // that can pair with any server, so the catalog has to come from a fixed,
@@ -138,10 +116,13 @@ export function useIntegrationCatalog(): {
   return { entries: entries ?? [], ready: entries !== undefined, error };
 }
 
-export function catalogByShortname(
+/** Entries keyed by the proxy platform they describe (`platform ?? shortname`). */
+export function catalogByPlatform(
   entries: CatalogEntry[],
 ): Map<string, CatalogEntry> {
-  return new Map(entries.map(entry => [entry.shortname, entry]));
+  return new Map(
+    entries.map(entry => [entry.platform ?? entry.shortname, entry]),
+  );
 }
 
 export function isCatalogVisible(

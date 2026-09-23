@@ -73,6 +73,8 @@ export const IntegrationStoreRoute = createRoute({
 function IntegrationStore(): React.JSX.Element {
   const store = useStore();
   const { drive } = useSettings();
+  // Opened from a workspace: new automations can belong to it.
+  const { workspace } = IntegrationStoreRoute.useSearch();
   const { showApiPlugins, showExperimentalPlugins, setVisibility } =
     useIntegrationVisibility();
   const {
@@ -169,14 +171,11 @@ function IntegrationStore(): React.JSX.Element {
     PendingInstallation & { entry: Listing }
   >();
   const serverUrl = store.getServerUrl();
+  // Fetched regardless of the toggle, so the toggle can be offered whenever
+  // this server has listings; they are only shown once it is on.
   useEffect(() => {
     setCatalogError(undefined);
-
-    if (!showExperimentalPlugins) {
-      setListings(undefined);
-
-      return;
-    }
+    setListings(undefined);
 
     const controller = new AbortController();
     void fetch(`${serverUrl}/plugin-catalog`, { signal: controller.signal })
@@ -190,7 +189,7 @@ function IntegrationStore(): React.JSX.Element {
       });
 
     return () => controller.abort();
-  }, [serverUrl, showExperimentalPlugins]);
+  }, [serverUrl]);
 
   const fetchRelease = async (id: string): Promise<PublishedRelease> => {
     const response = await fetch(
@@ -278,17 +277,19 @@ function IntegrationStore(): React.JSX.Element {
   const hasApiPlugins = catalogEntries.some(
     entry => entry.enabled && entry.requiresApiPlugins,
   );
-  const hasExperimentalPlugins = catalogEntries.some(
-    entry => entry.enabled && entry.experimental,
-  );
-  const nothingToDiscover =
-    catalogReady && (!showApiPlugins || !apiCatalogHasResults);
+  const hasExperimentalPlugins =
+    catalogEntries.some(entry => entry.enabled && entry.experimental) ||
+    (listings?.length ?? 0) > 0;
   const visible = (showExperimentalPlugins ? listings : [])?.filter(entry =>
     [entry.name, entry.description, ...entry.domains, ...entry.standards]
       .join(' ')
       .toLocaleLowerCase()
       .includes(query),
   );
+  const nothingToDiscover =
+    catalogReady &&
+    (!showApiPlugins || !apiCatalogHasResults) &&
+    !visible?.length;
 
   return (
     <Main>
@@ -327,7 +328,11 @@ function IntegrationStore(): React.JSX.Element {
             <section aria-label='Your automations'>
               <Row center justify='space-between'>
                 <h2>Your automations</h2>
-                <NewAutomation drive={drive} connections={installed} />
+                <NewAutomation
+                  drive={drive}
+                  connections={installed}
+                  workspace={workspace}
+                />
               </Row>
               {automations.length === 0 && <AutomationEmptyState />}
               <Grid>

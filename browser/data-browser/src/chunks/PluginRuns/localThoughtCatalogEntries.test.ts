@@ -8,15 +8,11 @@ it('reflects the generated catalog without injecting bundled integrations', () =
 
 it('deduplicates generated platforms while preserving their catalog order', () => {
   expect(
-    localThoughtCatalogEntries(['github-issues', 'google-calendar', 'pets']),
-  ).toEqual(['github-issues', 'google-calendar', 'pets']);
-});
-
-it('leaves out platforms a bundled catalog entry already connects through', () => {
-  expect(
-    localThoughtCatalogEntries(
-      ['example', 'google-calendar', 'pets'],
-      ['example', 'google-calendar'],
-    ),
-  ).toEqual(['pets']);
+    localThoughtCatalogEntries([
+      'github-issues',
+      'google-calendar',
+      'github-issues',
+      'fixture-api',
+    ]),
+  ).toEqual(['github-issues', 'google-calendar', 'fixture-api']);
 });

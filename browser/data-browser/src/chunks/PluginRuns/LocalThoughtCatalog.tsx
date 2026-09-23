@@ -10,7 +10,7 @@ import { ConnectLocalThought } from './ConnectLocalThought';
 import { browserIntegrations, platformName } from './localThought';
 import { useLocalThoughtCompletedPlatform } from './localThoughtCallback';
 import {
-  catalogByShortname,
+  catalogByPlatform,
   isCatalogVisible,
   useIntegrationCatalog,
 } from './pluginCatalog';
@@ -28,7 +28,7 @@ export function LocalThoughtCatalog({
 }) {
   const origin = useIntegrationProxy();
   const { entries: catalogEntries } = useIntegrationCatalog();
-  const catalogEntriesByShortname = catalogByShortname(catalogEntries);
+  const catalogEntriesByPlatform = catalogByPlatform(catalogEntries);
   const [platforms, setPlatforms] = useState<string[]>();
   const [error, setError] = useState('');
   useEffect(() => {
@@ -46,13 +46,10 @@ export function LocalThoughtCatalog({
 
     return () => controller.abort();
   }, [origin]);
-  const visible = localThoughtCatalogEntries(
-    platforms,
-    catalogEntries.flatMap(entry => entry.platform ?? []),
-  )
+  const visible = localThoughtCatalogEntries(platforms)
     .filter(id =>
       isCatalogVisible(
-        catalogEntriesByShortname.get(id),
+        catalogEntriesByPlatform.get(id),
         showExperimentalPlugins,
       ),
     )

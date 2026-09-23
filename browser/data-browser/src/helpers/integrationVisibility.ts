@@ -16,7 +16,7 @@ export function integrationVisibilitySchema(): SchemaSpec {
         shortname: 'show-experimental-plugins',
         name: 'Show experimental plugins',
         description:
-          'Offer experimental bundled and community plugins in integration discovery. Defaults to false.',
+          'Offer experimental catalog plugins and community listings in integration discovery. Defaults to false.',
         datatype: Datatype.BOOLEAN,
       },
     ],

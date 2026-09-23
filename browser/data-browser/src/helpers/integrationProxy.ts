@@ -8,23 +8,15 @@ import {
   DEFAULT_PROXY,
   proxyOrigin,
 } from '../../../../integrations/localthought/browser';
+import { subscribeToSetting, validDefault } from './runtimeSetting';
 
-// A build-time default that isn't a bare origin (`proxyOrigin` rejects a path)
-// would make every read throw, including the settings screen that could fix
-// it. Fall back to the compiled-in proxy instead.
-function validDefault(): string {
-  const configured = import.meta.env.VITE_INTEGRATION_PROXY_URL;
-
-  if (!configured) return DEFAULT_PROXY;
-
-  try {
-    return proxyOrigin(configured);
-  } catch {
-    return DEFAULT_PROXY;
-  }
-}
-
-export const defaultIntegrationProxy: string = validDefault();
+// `proxyOrigin` rejects anything but a bare origin, so a build-time default
+// with a path falls back to the compiled-in proxy.
+export const defaultIntegrationProxy: string = validDefault(
+  import.meta.env.VITE_INTEGRATION_PROXY_URL,
+  proxyOrigin,
+  DEFAULT_PROXY,
+);
 
 export const getIntegrationProxy = (): string => {
   // Seeded before the first paint by anything that can write localStorage for
@@ -45,15 +37,7 @@ export function setIntegrationProxy(value: string) {
   window.dispatchEvent(new Event(event));
 }
 
-function subscribe(listener: () => void) {
-  window.addEventListener(event, listener);
-  window.addEventListener('storage', listener);
-
-  return () => {
-    window.removeEventListener(event, listener);
-    window.removeEventListener('storage', listener);
-  };
-}
+const subscribe = subscribeToSetting(event);
 
 export const useIntegrationProxy = () =>
   useSyncExternalStore(subscribe, getIntegrationProxy);
