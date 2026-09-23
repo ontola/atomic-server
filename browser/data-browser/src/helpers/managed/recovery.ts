@@ -1,3 +1,4 @@
+import { canonicalIdentifier } from '@tomic/lib';
 import { accountPasskey } from './accountPasskey';
 import { getManagedAccount } from './session';
 import { isRunningInTauri } from '../tauri';
@@ -54,6 +55,14 @@ export type RecoverySecret = {
   created_at: number;
   updated_at: number;
 };
+
+/**
+ * Backups saved before the `did:ad:` → `atomic:` rename carry the legacy
+ * spelling of the same agent, so compare identities, not strings.
+ */
+function sameAgent(a: string, b: string): boolean {
+  return canonicalIdentifier(a) === canonicalIdentifier(b);
+}
 
 const RECOVERY_FORMAT_VERSION = 1;
 const ENVELOPE_V2_FORMAT_VERSION = 2;
@@ -1115,7 +1124,7 @@ export async function unifyAccountPasskey(
 
   if (
     !recovery ||
-    recovery.agent_subject !== agentSubject ||
+    !sameAgent(recovery.agent_subject, agentSubject) ||
     recovery.format_version !== 2
   ) {
     throw new Error(
@@ -1206,7 +1215,7 @@ export async function addPasskeyWrapper(
   // rather than overwriting a newer envelope with a cached version.
   const recovery = await getRecoverySecret();
 
-  if (!recovery || recovery.agent_subject !== agentSubject) {
+  if (!recovery || !sameAgent(recovery.agent_subject, agentSubject)) {
     throw new Error(
       'Sign in to the account holding this backup before adding a passkey.',
     );
@@ -1483,7 +1492,7 @@ function cacheRecoverySecret(secret: RecoverySecret): void {
     // Keyed by agent, so a shared machine accumulates one entry per account
     // rather than each sign-in evicting the last.
     const others = readCachedBackups().filter(
-      entry => entry.agent_subject !== secret.agent_subject,
+      entry => !sameAgent(entry.agent_subject, secret.agent_subject),
     );
     localStorage.setItem(
       RECOVERY_CACHE_KEY,
@@ -1513,7 +1522,9 @@ export function readCachedBackups(): RecoverySecret[] {
     if (legacy) {
       const parsed = JSON.parse(legacy) as RecoverySecret;
 
-      if (!entries.some(e => e.agent_subject === parsed.agent_subject)) {
+      if (
+        !entries.some(e => sameAgent(e.agent_subject, parsed.agent_subject))
+      ) {
         entries.push(parsed);
       }
 
@@ -1548,7 +1559,7 @@ export function forgetCachedRecoverySecret(agentSubject?: string): void {
     }
 
     const remaining = readCachedBackups().filter(
-      entry => entry.agent_subject !== agentSubject,
+      entry => !sameAgent(entry.agent_subject, agentSubject),
     );
     localStorage.setItem(RECOVERY_CACHE_KEY, JSON.stringify(remaining));
   } catch {
@@ -1572,7 +1583,7 @@ export async function getUnlockableRecoverySecret(
 
     if (
       fromServer &&
-      (!agentSubject || fromServer.agent_subject === agentSubject)
+      (!agentSubject || sameAgent(fromServer.agent_subject, agentSubject))
     ) {
       return fromServer;
     }
@@ -1584,7 +1595,7 @@ export async function getUnlockableRecoverySecret(
 
   return (
     (agentSubject
-      ? cached.find(entry => entry.agent_subject === agentSubject)
+      ? cached.find(entry => sameAgent(entry.agent_subject, agentSubject))
       : cached.at(-1)) ?? null
   );
 }

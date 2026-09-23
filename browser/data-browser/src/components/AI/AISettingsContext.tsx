@@ -27,6 +27,9 @@ interface AISettingsContextType {
   setVoiceEnabled: (enabled: boolean) => void;
   transcriptionModel: string;
   setTranscriptionModel: (model: string) => void;
+  /** Device id of the microphone used for voice input, empty for the system default */
+  microphoneId: string;
+  setMicrophoneId: (id: string) => void;
   /** List of MCP servers */
   mcpServers: MCPServer[];
   /** Update the list of MCP servers */
@@ -65,6 +68,8 @@ const initialState: AISettingsContextType = {
   setVoiceEnabled: () => undefined,
   transcriptionModel: 'openai/whisper-1',
   setTranscriptionModel: () => undefined,
+  microphoneId: '',
+  setMicrophoneId: () => undefined,
   enableAI: true,
   setEnableAI: () => undefined,
   mcpServers: defaultMCPServers,
@@ -149,6 +154,10 @@ export const AISettingsContextProvider = (
     'atomic.ai.transcriptionModel',
     'openai/whisper-1',
   );
+  const [microphoneId, setMicrophoneId] = useLocalStorage(
+    'atomic.ai.microphoneId',
+    '',
+  );
 
   const [storedDefaultChatModel, setDefaultChatModel] =
     useLocalStorage<AIModelIdentifier>(
@@ -215,6 +224,8 @@ export const AISettingsContextProvider = (
     setVoiceEnabled,
     transcriptionModel,
     setTranscriptionModel,
+    microphoneId,
+    setMicrophoneId,
     openRouterApiKey,
     setOpenRouterApiKey,
     mcpServers,

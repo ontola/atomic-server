@@ -9,7 +9,7 @@ import { onManagedLogout } from '@helpers/managed/session';
 import { recordingWav, voiceRequest } from './voiceTurn';
 import { styled } from 'styled-components';
 import { observeVolume, observeWords } from './voiceFeedback';
-import type { AtomicUIMessage } from './types';
+import type { AIMessageContext, AtomicUIMessage } from './types';
 
 type State =
   | 'idle'
@@ -21,6 +21,8 @@ type State =
 interface Props {
   apiKey?: string;
   transcriptionModel: string;
+  /** Device id of the microphone to record from, empty for the system default */
+  microphoneId?: string;
   onConfigure: () => void;
   messages: AtomicUIMessage[];
   busy: boolean;
@@ -29,6 +31,8 @@ interface Props {
     signal: AbortSignal,
   ) => Promise<string>;
   onTranscript: (message: AtomicUIMessage) => void;
+  /** Hands over the resources attached in the composer, like a typed send. */
+  takeContext: () => AIMessageContext[];
   onActive: (active: boolean) => void;
 }
 
@@ -179,10 +183,14 @@ export function LiveConversation(props: Props) {
       if (task.signal.aborted) return;
       if (typeof text !== 'string' || !text.trim())
         throw new Error('No speech detected. Please try again.');
+      const userContext = callbacks.current.takeContext();
       const message: AtomicUIMessage = {
         id: crypto.randomUUID(),
         role: 'user',
-        metadata: { liveVoice: true },
+        metadata: {
+          liveVoice: true,
+          ...(userContext.length > 0 && { userContext }),
+        },
         parts: [{ type: 'text', text }],
       };
       const history = [...callbacks.current.messages, message];
@@ -226,7 +234,14 @@ export function LiveConversation(props: Props) {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          // `ideal` falls back to another input when the saved one is unplugged.
+          ...(props.microphoneId && {
+            deviceId: { ideal: props.microphoneId },
+          }),
+        },
       });
 
       if (task.signal.aborted) {

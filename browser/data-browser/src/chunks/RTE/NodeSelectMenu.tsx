@@ -32,14 +32,18 @@ function changeNodeType(editor: Editor, nodeType: string) {
   if (editor.isDestroyed) return;
   const [targetNodeTitle, level] = nodeData(nodeType);
 
+  // Choosing an option leaves focus on the `<select>`, so the next keystroke
+  // would change the block type again instead of typing. Hand focus back.
+  const chain = editor.chain().focus();
+
   if (nodeType === 'orderedList') {
-    editor.commands.toggleOrderedList();
+    chain.toggleOrderedList().run();
   } else if (nodeType === 'bulletList') {
-    editor.commands.toggleBulletList();
+    chain.toggleBulletList().run();
   } else if (nodeType === 'taskList') {
-    editor.commands.toggleTaskList();
+    chain.toggleTaskList().run();
   } else {
-    editor.commands.setNode(targetNodeTitle, level ? { level } : undefined);
+    chain.setNode(targetNodeTitle, level ? { level } : undefined).run();
   }
 }
 
