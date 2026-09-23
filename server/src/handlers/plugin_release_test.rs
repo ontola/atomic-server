@@ -305,3 +305,44 @@ async fn a_publish_that_claims_the_wrong_world_stores_nothing() {
     assert_eq!(published, id);
     assert!(db.has_blob(hash.as_bytes()).await.unwrap());
 }
+
+/// A release is recorded once per server, under the drive of whoever
+/// published it first. Someone else uploading the same zip to their own drive
+/// gets that same `Release` back, and their Installation resolves it as them:
+/// without a read right of their own, activation was refused with a 401 and
+/// the install never finished.
+#[actix_rt::test]
+async fn publishing_a_recorded_release_again_lets_the_new_publisher_read_it() {
+    let f = fixture("plugin_package_second_publisher").await;
+    let db = &f.appstate.store;
+    let origin = f.appstate.config.get_origin();
+    let (id, published, _) = release::publish_package(db, TEST_PLUGIN_ZIP, None)
+        .await
+        .unwrap();
+    let first = release::publish_release(db, &published, &f.drive, None, &origin, None)
+        .await
+        .unwrap();
+    let url = first.subject.resolve(&origin);
+
+    let second_publisher = atomic_lib::identifiers::agent_subject("second-publisher");
+    let as_second = atomic_lib::agents::ForAgent::AgentSubject(second_publisher.clone().into());
+    assert!(
+        release::resolve(db, &url, &as_second).await.is_err(),
+        "the first publisher's drive is private"
+    );
+
+    let second = release::publish_release(
+        db,
+        &published,
+        "atomic:second-publishers-drive",
+        Some(&second_publisher),
+        &origin,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(second.subject, first.subject, "one record per release");
+
+    let resolved = release::resolve(db, &url, &as_second).await.unwrap();
+    assert_eq!(resolved.id().unwrap(), id);
+}

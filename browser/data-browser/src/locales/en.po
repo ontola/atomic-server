@@ -10073,12 +10073,8 @@ msgstr "Write denied"
 msgid "v"
 msgstr "v"
 
-#. 0: pending.release.url !== pending.release.id && ( <> <br /> from {pending.release.url} </> )
-#. 0: release && release !== releaseId && ( <> <br /> from{' '} {/^https?:\\\\/\\\\//.test(release) ? ( <a href={release} target='_blank' rel='noreferrer'> {release} </a> ) \\: ( release )} </> )
-#: src/chunks/Plugins/InstallationReviewDialog.tsx
-#: src/views/Installation/InstallationPage.tsx
-msgid "Pinned to <0/> {0}"
-msgstr "Pinned to <0/> {0}"
+#~ msgid "Pinned to <0/> {0}"
+#~ msgstr "Pinned to <0/> {0}"
 
 #: src/chunks/RTE/loroSelection.test.ts
 msgid "Server acknowledgement"
@@ -12361,3 +12357,17 @@ msgstr "Off stops server sync for this workspace on this browser. The server’s
 #: src/routes/SyncRoute.tsx
 msgid "Workspace sync off"
 msgstr "Workspace sync off"
+
+#: src/views/Installation/InstallationPage.tsx
+msgid "from"
+msgstr "from"
+
+#: src/chunks/Plugins/InstallationReviewDialog.tsx
+#: src/views/Installation/InstallationPage.tsx
+msgid "Pinned to <0/>"
+msgstr "Pinned to <0/>"
+
+#. 0: pending.release.url
+#: src/chunks/Plugins/InstallationReviewDialog.tsx
+msgid "from {0}"
+msgstr "from {0}"
