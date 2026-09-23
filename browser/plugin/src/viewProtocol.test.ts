@@ -137,3 +137,42 @@ it('lets a generated view wait for host recovery but still rejects a silent host
   await rejected;
   expect(vi.getTimerCount()).toBe(0);
 });
+
+it('carries the proxy relay ops, and store.proxy sends them', () => {
+  for (const op of ['proxy', 'proxyConnections', 'proxyConnect'] as const)
+    expect(isViewRequest(viewRequest(1, op, { platform: 'pets' }))).toBe(true);
+  const f = frame();
+  const source = readFileSync(
+    new URL(
+      '../../../server/src/plugins/assets/view-client.js',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  const store = new Function(
+    'window',
+    'setTimeout',
+    'clearTimeout',
+    source.replace('export const store', 'const store') + '\nreturn store;',
+  )(
+    f.window,
+    () => 0,
+    () => undefined,
+  );
+  void store.proxy.request({
+    platform: 'pets',
+    connectionId: 'c1',
+    path: '/pets',
+    query: { page: '2' },
+  });
+  void store.proxy.connections({ platform: 'pets' });
+  void store.proxy.connect({ platform: 'pets' });
+  const sent = f.parent.postMessage.mock.calls.map(([m]) => m);
+  expect(sent.every(isViewRequest)).toBe(true);
+  expect(sent.map(m => [m.op, m.args.platform])).toEqual([
+    ['proxy', 'pets'],
+    ['proxyConnections', 'pets'],
+    ['proxyConnect', 'pets'],
+  ]);
+  expect(sent[0].args).toMatchObject({ connectionId: 'c1', path: '/pets' });
+});

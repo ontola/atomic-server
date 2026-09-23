@@ -1,5 +1,6 @@
 import { canViewAccess } from '@helpers/extensions/viewPolicy';
 import type { Store } from '@tomic/react';
+import type { ProxyRelay } from '@helpers/proxyConnections';
 import {
   CollectionBuilder,
   core,
@@ -32,6 +33,14 @@ export interface HostRequest {
   parent?: string;
   isA?: string[];
   propVals?: Record<string, unknown>;
+  // `proxy` / `proxyConnections`
+  platform?: string;
+  connectionId?: string;
+  path?: string;
+  method?: string;
+  query?: Record<string, string>;
+  body?: string;
+  ifMatch?: string;
 }
 
 export interface HostReply {
@@ -72,6 +81,11 @@ export async function handleRequest(
   request: HostRequest,
   /** The table this app is a view of, when it is being used as one. */
   table?: string,
+  /**
+   * This app's integration-proxy connections, held by this page. Absent where
+   * the host cannot relay (no signed-in agent, or a host without the op).
+   */
+  relay?: ProxyRelay,
 ): Promise<unknown> {
   switch (request.op) {
     case 'app':
@@ -171,6 +185,26 @@ export async function handleRequest(
 
       return { subject };
     }
+
+    // The frame names a connection; this page holds it and makes the call.
+    // Only status, a few headers and the body go back — never the code.
+    case 'proxy': {
+      if (!relay)
+        throw new Error('This host cannot reach the integration proxy.');
+
+      return await relay.request({
+        platform: required(request.platform, 'platform'),
+        connectionId: required(request.connectionId, 'connectionId'),
+        path: required(request.path, 'path'),
+        method: request.method,
+        query: request.query,
+        body: request.body,
+        ifMatch: request.ifMatch,
+      });
+    }
+
+    case 'proxyConnections':
+      return relay?.connections(required(request.platform, 'platform')) ?? [];
 
     // Subscriptions are wired by the caller, which owns the frame it has to
     // post back to.

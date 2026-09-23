@@ -194,3 +194,78 @@ describe('isHostRequest', () => {
     expect(isHostRequest({ __atomic: true, id: 1 })).toBe(true);
   });
 });
+
+describe('relaying the integration proxy', () => {
+  const relay = {
+    request: vi.fn(async () => ({ status: 200, headers: {}, body: [] })),
+    connections: vi.fn(() => [{ connectionId: 'c1', platform: 'pets' }]),
+  };
+
+  it('passes a call to the relay by reference, never touching the server', async () => {
+    const result = await handleRequest(
+      fakeStore(),
+      APP,
+      DRIVE,
+      req('proxy', {
+        platform: 'pets',
+        connectionId: 'c1',
+        path: '/pets',
+        query: { page: '2' },
+      }),
+      undefined,
+      relay,
+    );
+    expect(result).toEqual({ status: 200, headers: {}, body: [] });
+    expect(relay.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        platform: 'pets',
+        connectionId: 'c1',
+        path: '/pets',
+        query: { page: '2' },
+      }),
+    );
+    expect(sent).toEqual([]);
+  });
+
+  it('lists connection references, and none without a relay', async () => {
+    expect(
+      await handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('proxyConnections', { platform: 'pets' }),
+        undefined,
+        relay,
+      ),
+    ).toEqual([{ connectionId: 'c1', platform: 'pets' }]);
+    expect(
+      await handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('proxyConnections', { platform: 'pets' }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('refuses a proxy call without a relay or without a connection', async () => {
+    await expect(
+      handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('proxy', { platform: 'pets', connectionId: 'c1', path: '/pets' }),
+      ),
+    ).rejects.toThrow('cannot reach the integration proxy');
+    await expect(
+      handleRequest(
+        fakeStore(),
+        APP,
+        DRIVE,
+        req('proxy', { platform: 'pets', path: '/pets' }),
+        undefined,
+        relay,
+      ),
+    ).rejects.toThrow('connectionId is required');
+  });
+});
