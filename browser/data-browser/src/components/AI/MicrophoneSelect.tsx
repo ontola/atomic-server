@@ -26,7 +26,7 @@ export function MicrophoneSelect({ id }: { id?: string }) {
 
   const hasLabels = devices.some(device => device.label);
   const selectedMissing =
-    microphoneId && !devices.some(device => device.deviceId === microphoneId);
+    !!microphoneId && !devices.some(device => device.deviceId === microphoneId);
 
   return (
     <BasicSelect
@@ -44,14 +44,16 @@ export function MicrophoneSelect({ id }: { id?: string }) {
       }}
     >
       <option value=''>System default</option>
+      {/* Kept above the device list: placed right after the `.map`, wuchale
+          did not extract this text and the option rendered empty. */}
+      {selectedMissing && (
+        <option value={microphoneId}>Saved microphone</option>
+      )}
       {devices.map((device, index) => (
         <option key={device.deviceId} value={device.deviceId}>
           {device.label || `Microphone ${index + 1}`}
         </option>
       ))}
-      {selectedMissing && (
-        <option value={microphoneId}>Saved microphone</option>
-      )}
       {!hasLabels && (
         <option value='request-access'>Show microphone names…</option>
       )}
