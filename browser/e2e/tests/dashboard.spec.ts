@@ -3,7 +3,7 @@ import { test, expect, type Page } from './session-fixtures';
 import {
   editableTitle,
   FRONTEND_URL,
-  newResource,
+  openNewResourcePage,
   pickFromMenu,
   waitForRowsMaterialized,
   waitForSynced,
@@ -145,7 +145,8 @@ async function createDashboard(page: Page, fixture: Fixture): Promise<string> {
     const NAME = 'https://atomicdata.dev/properties/name';
     const DESC = 'https://atomicdata.dev/properties/description';
     const D = {
-      dashboard: 'https://atomicdata.dev/classes/Dashboard',
+      app: 'https://atomicdata.dev/classes/View',
+      viewKind: 'https://atomicdata.dev/properties/view-kind',
       block: 'https://atomicdata.dev/classes/Block',
       blocks: 'https://atomicdata.dev/properties/dashboard-blocks',
       layout: 'https://atomicdata.dev/properties/dashboard-layout',
@@ -158,8 +159,8 @@ async function createDashboard(page: Page, fixture: Fixture): Promise<string> {
 
     const dashboard = await store.newResource({
       parent: store.getDrive(),
-      isA: D.dashboard,
-      propVals: { [NAME]: 'Spending overview' },
+      isA: D.app,
+      propVals: { [NAME]: 'Spending overview', [D.viewKind]: 'blocks' },
     });
     await dashboard.save();
 
@@ -284,21 +285,25 @@ test.describe('dashboards', () => {
   test.beforeEach(before);
   test.slow();
 
-  test('a dashboard is created by name, not by writing JSON', async ({
+  test('a block app is created without writing JSON', async ({
     page,
   }) => {
-    // Without a create dialog this class fell through to the generic resource
-    // form, which renders `dashboard-blocks` and `dashboard-layout` as raw JSON
-    // fields — asking for a layout before any blocks exist to lay out.
-    await newResource('dashboard', page);
-    await page.getByTestId('new-dashboard-name').fill('Overview');
-    await page.getByTestId('new-dashboard-create').click();
+    await openNewResourcePage(page);
+    await page.getByRole('button', { name: 'App', exact: true }).click();
+    await page.getByRole('button', { name: 'Blocks', exact: true }).click();
 
     await expect(
       page.getByRole('textbox', { name: 'Set a title' }),
-    ).toHaveValue('Overview', {
+    ).toHaveValue('New app', {
       timeout: 15_000,
     });
+    const createdClass = await page.evaluate(async () => {
+      const subject = new URL(location.href).searchParams.get('subject')!;
+      const resource = await window.store.getResource(subject);
+
+      return resource.get('https://atomicdata.dev/properties/isA');
+    });
+    expect(createdClass).toContain('https://atomicdata.dev/classes/View');
 
     // It lands on the dashboard's own editor, which is where blocks are added.
     await expect(page.getByTitle('Add block')).toBeVisible();
@@ -310,9 +315,8 @@ test.describe('dashboards', () => {
   });
 
   test('a table reaches its dashboard as a tab', async ({ page }) => {
-    // A dashboard nobody can find has no users. "Add view → Dashboard" makes
-    // one as a child of the table and shows it beside Table and Board; the
-    // tab survives a reload because the view names the dashboard.
+    // The tab is now the composed View itself. No second Dashboard resource
+    // is created, and the View also has its own direct URL.
     const fixture = await createSpendingTable(page);
     await page.goto(
       `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(fixture.table)}`,
@@ -323,9 +327,9 @@ test.describe('dashboards', () => {
 
     await page.getByTitle('Add view').click();
     await page
-      .getByRole('menuitem', { name: 'Dashboard', exact: true })
+      .getByRole('menuitem', { name: 'Blocks', exact: true })
       .click();
-    await expect(page.getByRole('tab', { name: 'Dashboard' })).toBeVisible({
+    await expect(page.getByRole('tab', { name: 'Blocks' })).toBeVisible({
       timeout: 15_000,
     });
     // The empty dashboard's own editor, inside the table page.
@@ -334,14 +338,25 @@ test.describe('dashboards', () => {
     });
     await expect(page.getByText(/Nothing here yet/)).toBeVisible();
     await waitForSynced(page);
-
+    const viewSubject = new URL(page.url()).searchParams.get('view');
+    expect(viewSubject).toBeTruthy();
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('tab', { name: 'Dashboard' })).toBeVisible({
+    await expect(page.getByRole('tab', { name: 'Blocks' })).toBeVisible({
       timeout: 15_000,
     });
     await expect(page.getByTitle('Add block')).toBeVisible({
       timeout: 15_000,
     });
+    await page.goto(
+      `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(viewSubject!)}`,
+    );
+    await expect(page.getByTitle('Add block')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await page.goto(
+      `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(fixture.table)}`,
+    );
 
     // The rows are one tab away.
     await page.getByRole('tab', { name: 'Default View' }).click();

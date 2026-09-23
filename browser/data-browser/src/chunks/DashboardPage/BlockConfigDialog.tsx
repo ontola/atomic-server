@@ -56,7 +56,7 @@ interface Props {
 }
 
 /**
- * The other half of `create_dashboard`: everything the tool can write about a
+ * The other half of `create_app` for blocks: everything the tool can write about a
  * block, a person can change here. A capability that only the assistant can
  * configure leaves its owner stuck with whatever it guessed.
  */

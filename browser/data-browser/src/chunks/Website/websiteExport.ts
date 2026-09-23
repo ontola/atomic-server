@@ -24,8 +24,6 @@ import {
 } from '@tomic/lib';
 import {
   assertPrivateWebsiteParent,
-  readWebsite,
-  findWebsiteSchema,
   websiteConfigSchema,
   type WebsiteConfig,
 } from './websiteModel';
@@ -305,23 +303,32 @@ export async function buildWebsiteArtifact(
   };
 }
 
-/** Stores a PRIVATE export. Public activation belongs to the hosting API. */
-export async function saveWebsiteRelease(
+/** Uploads a reviewed App release. Public activation belongs to the hosting API. */
+export async function saveAppRelease(
   store: Store,
-  drive: string,
   resource: Resource,
   artifact: WebsiteArtifact,
 ) {
   await assertPrivateWebsiteParent(store, resource.subject);
   const agent = store.getAgent();
   if (!agent || !(await resource.canWrite(agent.subject)))
-    throw new Error('You cannot create a release for this website.');
+    throw new Error('You cannot publish this app.');
+  if (!resource.hasClasses(dataBrowser.classes.view))
+    throw new Error('Only an App can use this publication path.');
   if (
     artifact.project !== resource.subject ||
     (await artifactDigest(artifact.files, artifact.assets)) !== artifact.digest
   )
-    throw new Error('Release does not match the reviewed website artifact.');
-  await readWebsite(store, drive, resource);
+    throw new Error('Release does not match the reviewed app artifact.');
+
+  return uploadStaticRelease(store, resource, artifact);
+}
+
+async function uploadStaticRelease(
+  store: Store,
+  resource: Resource,
+  artifact: WebsiteArtifact,
+) {
   await uploadWebsiteAssets(store, resource.subject, artifact.assets);
 
   return hostingRequest<HostingStatus>(
@@ -345,30 +352,17 @@ export async function saveWebsiteRelease(
     },
   );
 }
+
 export async function readWebsiteRelease(
   store: Store,
-  drive: string,
   resource: Resource,
 ): Promise<WebsiteArtifact | undefined> {
   const status = await hostingRequest<HostingStatus>(store, resource.subject);
   const latest = status.state?.deployments.at(-1);
 
-  if (latest) {
-    const pkg = await hostingRequest<WebsitePackage>(
-      store,
-      resource.subject,
-      `/preview/${latest}`,
-    );
-    if (pkg.metadata)
-      return readWebsiteVersion(store, resource.subject, latest);
-  }
-
-  const { schema } = await readWebsite(store, drive, resource);
-  const subject = resource.get(schema.properties!['website-release']);
-  if (typeof subject !== 'string') return undefined;
-  const release = await store.getResource(subject);
-
-  return readWebsiteExport(store, drive, release, resource.subject);
+  return latest
+    ? readWebsiteVersion(store, resource.subject, latest)
+    : undefined;
 }
 
 export async function readWebsiteVersion(
@@ -409,41 +403,6 @@ export async function readWebsiteVersion(
   };
 }
 
-export async function readWebsiteExport(
-  store: Store,
-  drive: string,
-  release: Resource,
-  project = String(release.get(core.properties.parent)),
-): Promise<WebsiteArtifact> {
-  const schema = await findWebsiteSchema(store, drive);
-  if (
-    !schema.classes?.['website-export'] ||
-    !release.hasClasses(schema.classes['website-export'])
-  )
-    throw new Error('This resource is not a website export.');
-  const artifact = JSON.parse(
-    String(release.get(schema.properties!['website-artifact'])),
-  ) as WebsiteArtifact;
-  if (
-    artifact.version !== 1 ||
-    artifact.renderer !== 'atomic-static-v1' ||
-    artifact.project !== project ||
-    !artifact.files ||
-    (await artifactDigest(artifact.files, artifact.assets)) !== artifact.digest
-  )
-    throw new Error('Stored website release failed integrity validation.');
-  websiteConfigSchema.parse(artifact.config);
-  if (
-    Object.keys(artifact.files).some(
-      name =>
-        !['search-view.html', 'website-runtime.js'].includes(name) &&
-        !/^(?:[a-z0-9]+(?:-[a-z0-9]+)*\/)*index\.html$/.test(name),
-    )
-  )
-    throw new Error('Stored website release has an invalid file path.');
-
-  return artifact;
-}
 export async function downloadWebsite(artifact: WebsiteArtifact, store: Store) {
   const { ZipWriter, BlobWriter, TextReader, BlobReader } =
     await import('@zip.js/zip.js');

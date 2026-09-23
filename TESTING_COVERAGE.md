@@ -96,6 +96,17 @@ Website publication state: browser coverage verifies unchanged output after publ
 and reload, pending document edits, and pending changes after rollback. Unit tests
 compare page bytes and image hashes, including removed files and entry ordering.
 
+App publication draft (#1634): `renderWebsite.test.ts` checks that the static
+export reads only explicitly selected table rows and rejects a non-App root.
+`createDashboardFromSpec.test.ts` checks Assistant block composition creates an
+App resource. The updated `dashboard.spec.ts` covers block App creation and
+table tabs but has not run in the isolated checkout. Site and table App release
+paths still need browser validation. Block and code App publication have no
+release path yet. The isolated checkout could not boot the browser tests because
+linked workspace dependencies place Loro WASM outside Vite's serving boundary.
+`bootstrap.test.ts` verifies the block schema loads without the retired
+Dashboard class; six Rust population tests pass with the renamed defaults file.
+
 Website error recovery: Chromium verifies an unreadable selected image emits the
 Store toast and console error, replaces the loading placeholder, disables publication,
 and recovers after repairing the selection. Explicit retry is available.

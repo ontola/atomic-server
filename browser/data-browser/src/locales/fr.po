@@ -167,6 +167,8 @@ msgstr "Nom de l'agent"
 #: src/chunks/AI/AgentConfig.tsx src/chunks/AI/MCPConfigTab.tsx
 #: src/chunks/AI/MCPConfigTab.tsx
 #: src/chunks/AI/SkillsConfigTab.tsx
+#: src/chunks/TablePage/AppPublication.tsx
+#: src/chunks/TablePage/AppPublication.tsx
 #: src/chunks/TablePage/DerivedColumnDialog.tsx
 #: src/chunks/Website/renderWebsite.test.ts
 #: src/chunks/Website/websiteInlineEditing.test.ts
@@ -277,6 +279,7 @@ msgstr "Compacte automatiquement la conversation lorsque les jetons d'entrée d�
 #: src/chunks/EmojiInput/EmojiInput.tsx
 #: src/chunks/EmojiInput/EmojiInput.tsx src/chunks/RTE/EditLinkForm.tsx
 #: src/chunks/RTE/EditLinkForm.tsx
+#: src/chunks/TablePage/AppPublication.tsx
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
 #: src/chunks/TablePage/DerivedColumnHeading.tsx
 #: src/chunks/TablePage/QuickAddDialog.tsx
@@ -834,6 +837,7 @@ msgstr "En savoir plus et participer"
 msgid "v{0}"
 msgstr "v{0}"
 
+#: src/chunks/Website/WebsiteHosting.tsx
 #: src/chunks/Website/WebsiteHosting.tsx src/routes/AboutRoute.tsx
 #: src/routes/AboutRoute.tsx
 #: src/routes/History/HistoryMobileView.tsx
@@ -1033,6 +1037,7 @@ msgstr "Secret de l'Agent"
 msgid "Copy secret to continue"
 msgstr "Copier le secret pour continuer"
 
+#: src/chunks/TablePage/AppPublication.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx
 #: src/views/ErrorPage.tsx src/views/File/ConvertToDocumentButton.tsx
@@ -1244,6 +1249,7 @@ msgstr "Échec de l'enregistrement : {0}"
 
 #: src/chunks/PluginRuns/AutomationWorkspace.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
+#: src/chunks/TablePage/AppPublication.tsx
 #: src/components/TeamProfileStep.tsx
 #: src/components/TeamProfileStep.tsx src/views/Canvas/CanvasPage.tsx
 #: src/views/Canvas/CanvasPage.tsx
@@ -8781,6 +8787,7 @@ msgstr ""
 #: src/chunks/PluginRuns/ConnectClockify.tsx
 #: src/chunks/PluginRuns/ImportMT940.tsx
 #: src/chunks/PluginRuns/IntegrationConnection.tsx
+#: src/chunks/TablePage/AppPublication.tsx
 #: src/chunks/Website/WebsitePage.tsx
 msgid "Preparing preview…"
 msgstr ""
@@ -9676,9 +9683,8 @@ msgstr ""
 msgid "Unpublished"
 msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Unpublish website"
-msgstr ""
+#~ msgid "Unpublish website"
+#~ msgstr ""
 
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
 #: src/views/Installation/InstallationPage.tsx
@@ -9692,17 +9698,17 @@ msgstr ""
 
 #: src/chunks/Plugins/NewPluginButton.tsx
 #: src/chunks/Plugins/NewPluginButton.tsx src/chunks/Website/WebsiteHosting.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
 #: src/views/Installation/InstallationPage.tsx
 msgid "Publishing…"
 msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Update site"
-msgstr ""
+#~ msgid "Update site"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Publish site"
-msgstr ""
+#~ msgid "Publish site"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Previous version"
@@ -9713,13 +9719,11 @@ msgstr ""
 msgid "Version {0}"
 msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "View site"
-msgstr ""
+#~ msgid "View site"
+#~ msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Hosted on your Atomic Server. Updates publish the current draft."
-msgstr ""
+#~ msgid "Hosted on your Atomic Server. Updates publish the current draft."
+#~ msgstr ""
 
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Choose a version"
@@ -9763,6 +9767,7 @@ msgstr ""
 #: src/chunks/Website/WebsiteExportPage.tsx
 #: src/chunks/Website/WebsiteInlinePreview.tsx
 #: src/chunks/Website/WebsitePage.tsx src/chunks/Website/WebsitePreview.tsx
+#: src/chunks/Website/WebsitePreview.tsx
 msgid "Retry preview"
 msgstr ""
 
@@ -9770,10 +9775,8 @@ msgstr ""
 msgid "Preview unavailable. Resolve the error above and retry."
 msgstr ""
 
-#. 0: error instanceof Error ? error.message \\: String(error)
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Could not load website hosting status: {0}"
-msgstr ""
+#~ msgid "Could not load website hosting status: {0}"
+#~ msgstr ""
 
 #. 0: String(error)
 #: src/chunks/Website/useWebsitePreviewHtml.ts
@@ -9837,9 +9840,8 @@ msgstr ""
 msgid "Updating preview…"
 msgstr ""
 
-#: src/chunks/Website/WebsiteHosting.tsx
-msgid "Website versions"
-msgstr ""
+#~ msgid "Website versions"
+#~ msgstr ""
 
 #: src/chunks/Website/WebsiteHosting.tsx
 msgid "Preview, restore and inspect publication history"
@@ -12239,4 +12241,149 @@ msgstr ""
 #: src/components/SideBar/FeedbackMenuItem.tsx
 #: src/components/SideBar/FeedbackMenuItem.tsx
 msgid "Report this error"
+msgstr ""
+
+#. 0: String(cause)
+#. 0: String(cause)
+#: src/chunks/TablePage/AppPublication.tsx
+msgid "Could not load publication: {0}"
+msgstr ""
+
+#. 0: String(cause)
+#. 0: String(cause)
+#: src/chunks/TablePage/AppPublication.tsx
+msgid "Could not read the row: {0}"
+msgstr ""
+
+#. 0: String(cause)
+#. 0: String(cause)
+#: src/chunks/TablePage/AppPublication.tsx
+msgid "Could not build the preview: {0}"
+msgstr ""
+
+#: src/chunks/TablePage/AppPublication.tsx
+msgid "Choose a row from this table."
+msgstr ""
+
+#: src/chunks/TablePage/AppPublication.tsx
+msgid "Fields"
+msgstr ""
+
+#. 0: rows.length
+#. 0: rows.length
+#: src/chunks/TablePage/AppPublication.tsx
+msgid "Rows ({0})"
+msgstr ""
+
+#: src/chunks/TablePage/AppPublication.tsx
+msgid "Add a row"
+msgstr ""
+
+#: src/chunks/TablePage/AppPublication.tsx
+msgid "Add row"
+msgstr ""
+
+#: src/chunks/TablePage/AppPublication.tsx
+msgid "Select a field."
+msgstr ""
+
+#: src/chunks/TablePage/AppPublication.tsx
+msgid "Select at least one field."
+msgstr ""
+
+#. 0: app.title
+#: src/chunks/TablePage/AppPublication.tsx
+msgid "Publish {0}"
+msgstr ""
+
+#: src/chunks/TablePage/AppPublication.tsx
+msgid "Public, read-only snapshot. Select exactly which rows and fields visitors can see. Later changes to the source stay private until you publish again."
+msgstr ""
+
+#: src/chunks/TablePage/AppPublication.tsx
+msgid "Review public output"
+msgstr ""
+
+#. 0: error instanceof Error ? error.message \\: String(error)
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Could not load publication status: {0}"
+msgstr ""
+
+#~ msgid "Open published view"
+#~ msgstr ""
+
+#~ msgid "View versions"
+#~ msgstr ""
+
+#~ msgid "Unpublish view"
+#~ msgstr ""
+
+#~ msgid "Update view"
+#~ msgstr ""
+
+#: src/chunks/TablePage/ViewPage.tsx
+msgid "Publish view"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Hosted on your Atomic Server. Updates publish the reviewed snapshot."
+msgstr ""
+
+#. 0: String(resource.error)
+#: src/chunks/TablePage/ViewPage.tsx
+msgid "Could not load this view: {0}"
+msgstr ""
+
+#: src/chunks/TablePage/ViewPage.tsx
+msgid "This view has no table to display."
+msgstr ""
+
+#: src/chunks/TablePage/ViewPage.tsx
+msgid "Back to view"
+msgstr ""
+
+#: src/chunks/TablePage/ViewPage.tsx
+msgid "Back to table"
+msgstr ""
+
+#: src/chunks/TablePage/TableViewTabs.tsx
+msgid "Open view and publish"
+msgstr ""
+
+#: src/chunks/TablePage/Dashboard/DashboardView.tsx
+msgid "This view is still loading."
+msgstr ""
+
+#. 0: String(cause)
+#: src/chunks/TablePage/AppPublication.tsx
+msgid "Could not save the draft: {0}"
+msgstr ""
+
+#: src/chunks/TablePage/AppPublication.tsx
+msgid "Save draft"
+msgstr ""
+
+#: src/chunks/Website/WebsitePreview.tsx
+msgid "App preview"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Open published app"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Publication versions"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Unpublish app"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Update app"
+msgstr ""
+
+#: src/chunks/Website/WebsiteHosting.tsx
+msgid "Publish app"
 msgstr ""

@@ -42,6 +42,15 @@ describe('bootstrap', () => {
     }
   });
 
+  it('loads the block schema used by Apps without a Dashboard class', () => {
+    const store = new Store({ serverUrl: 'https://example.com' });
+    bootstrap(store);
+
+    expect(store.resources.get('https://atomicdata.dev/classes/Block')?.isReady()).toBe(true);
+    expect(store.resources.get('https://atomicdata.dev/properties/dashboard-blocks')?.isReady()).toBe(true);
+    expect(store.resources.get('https://atomicdata.dev/classes/Dashboard')).toBeUndefined();
+  });
+
   it('leaves the public agent usable without a fetch', () => {
     const store = new Store({ serverUrl: 'https://example.com' });
     bootstrap(store);

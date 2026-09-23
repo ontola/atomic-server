@@ -217,7 +217,7 @@ export const GRID_COLUMNS = 12;
  *
  * Size only — *where* a block sits comes from its position in `dashboard-blocks`
  * and the grid's own flow. Coordinates were stored here at first and read by
- * nothing, which meant a layout written by `create_dashboard` was silently
+ * nothing, which meant a block layout written by `create_app` was silently
  * ignored. Free positioning is a real feature (drag and drop, see the plan); it
  * needs a renderer that honours coordinates *and* a way for a person to set them,
  * and it can add `x`/`y` back to this shape when it lands.

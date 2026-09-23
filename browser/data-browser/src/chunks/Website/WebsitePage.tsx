@@ -22,7 +22,7 @@ import {
   buildWebsiteArtifact,
   downloadWebsite,
   readWebsiteRelease,
-  saveWebsiteRelease,
+  saveAppRelease,
   selectedSubjects,
 } from './websiteExport';
 import type { WebsiteArtifact } from './renderWebsite';
@@ -53,7 +53,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
 
   useEffect(() => {
     let active = true;
-    void readWebsiteRelease(store, drive, resource)
+    void readWebsiteRelease(store, resource)
       .then(saved => {
         if (active) setRelease(saved);
       })
@@ -61,10 +61,9 @@ export function WebsitePage({ resource }: { resource: Resource }) {
         if (active && reportedReleaseError.current !== String(cause)) {
           reportedReleaseError.current = String(cause);
           store.notifyError(
-            new Error(
-              'Could not load saved website version: ' + String(cause),
-              { cause },
-            ),
+            new Error('Could not load saved app version: ' + String(cause), {
+              cause,
+            }),
           );
         }
       });
@@ -201,7 +200,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
     () =>
       askAI({
         prompt:
-          /* @wc-ignore */ 'Help me design this website. Read it with describe_website, ask what I want to change, then use update_website. Keep content in its existing Atomic documents and tables.',
+          /* @wc-ignore */ 'Help me design this app’s site pages. Read it with describe_app, ask what I want to change, then use update_app. Keep content in its existing Atomic documents and tables.',
         context: [
           newContextItem<AIAtomicResourceMessageContext>({
             type: 'atomic-resource',
@@ -234,7 +233,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
       },
       {
         id: 'website-download',
-        label: 'Download website',
+        label: 'Download app',
         disabled: !release || busy,
         onClick: () => {
           if (release) void perform(() => downloadWebsite(release, store));
@@ -300,12 +299,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
             canWrite={!!canWrite}
             secondary={!!review}
             saveRelease={async artifact => {
-              const saved = await saveWebsiteRelease(
-                store,
-                drive,
-                resource,
-                artifact,
-              );
+              const saved = await saveAppRelease(store, resource, artifact);
               setRelease(artifact);
 
               return saved;
@@ -332,10 +326,10 @@ export function WebsitePage({ resource }: { resource: Resource }) {
         </div>
       )}
       {review && (
-        <Review aria-label='Review website release'>
+        <Review aria-label='Review app release'>
           <h2>Review release</h2>
           <p>
-            This freezes the pages shown below. It does not make your website
+            This freezes the pages shown below. It does not make your app
             public.
           </p>
           <ul>
@@ -353,7 +347,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
               disabled={busy}
               onClick={() =>
                 perform(async () => {
-                  await saveWebsiteRelease(store, drive, resource, review);
+                  await saveAppRelease(store, resource, review);
                   setRelease(review);
                   setReview(undefined);
                   setShowRelease(true);
@@ -369,7 +363,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
         </Review>
       )}
       <Layout>
-        <Controls role='region' aria-label='Website content'>
+        <Controls role='region' aria-label='App content'>
           {config && (
             <Field label='Page' fieldId='website-page'>
               <select
@@ -471,7 +465,7 @@ export function WebsitePage({ resource }: { resource: Resource }) {
               pagePath={pagePath}
             />
           ) : html && (showRelease || review) ? (
-            <iframe title='Website preview' sandbox='' srcDoc={html} />
+            <iframe title='App preview' sandbox='' srcDoc={html} />
           ) : html ? (
             <WebsitePreview
               key={`${shown!.digest}:${pagePath}`}

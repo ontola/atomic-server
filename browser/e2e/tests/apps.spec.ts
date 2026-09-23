@@ -235,7 +235,7 @@ async function newApp(page: import('@playwright/test').Page) {
   const currentTimeout = test.info().timeout;
 
   if (currentTimeout !== 0 && currentTimeout < 120000) test.setTimeout(120000);
-  await createFromCatalog(page, 'App');
+  await createFromCatalog(page, 'App', 'Custom code');
   await expect(
     page.getByRole('main').locator('iframe[title="App"]'),
   ).toBeVisible({ timeout: 45000 });

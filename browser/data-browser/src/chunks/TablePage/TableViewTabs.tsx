@@ -316,6 +316,15 @@ function ViewTab({
           onClick: startRename,
         },
         {
+          id: 'open-view',
+          label: 'Open view and publish',
+          icon: <FaWindowMaximize />,
+          onClick: () =>
+            window.location.assign(
+              `/app/show?subject=${encodeURIComponent(subject)}`,
+            ),
+        },
+        {
           id: 'duplicate',
           label: 'Duplicate',
           icon: <FaCopy />,

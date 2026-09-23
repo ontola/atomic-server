@@ -1,23 +1,7 @@
 [
   {
-    "@id": "https://atomicdata.dev/classes/Dashboard",
-    "https://atomicdata.dev/properties/description": "A composed page of Blocks over a Drive's data: embedded views, numbers and charts, arranged in a grid. Authorable both by a person and by an assistant, because both write the same resources.",
-    "https://atomicdata.dev/properties/isA": [
-      "https://atomicdata.dev/classes/Class"
-    ],
-    "https://atomicdata.dev/properties/parent": "https://atomicdata.dev/classes",
-    "https://atomicdata.dev/properties/recommends": [
-      "https://atomicdata.dev/properties/dashboard-blocks",
-      "https://atomicdata.dev/properties/dashboard-layout"
-    ],
-    "https://atomicdata.dev/properties/requires": [
-      "https://atomicdata.dev/properties/name"
-    ],
-    "https://atomicdata.dev/properties/shortname": "dashboard"
-  },
-  {
     "@id": "https://atomicdata.dev/classes/Block",
-    "https://atomicdata.dev/properties/description": "One widget of a Dashboard. What it shows is decided by its block-kind ('view', 'stat', 'chart', 'create' or 'text') and the configuration properties that kind reads, in the same way a View's view-kind decides which of its config properties matter. A Block is a resource of its own so it can also be embedded outside a Dashboard later.",
+    "https://atomicdata.dev/properties/description": "One widget of a block App. What it shows is decided by its block-kind ('view', 'stat', 'chart', 'create' or 'text') and the configuration properties that kind reads, in the same way a View's view-kind decides which of its config properties matter. A Block is a resource of its own so it can also be embedded outside a block App later.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Class"
     ],
@@ -40,7 +24,7 @@
   {
     "@id": "https://atomicdata.dev/properties/dashboard-blocks",
     "https://atomicdata.dev/properties/datatype": "https://atomicdata.dev/datatypes/resourceArray",
-    "https://atomicdata.dev/properties/description": "The Blocks a Dashboard shows, in order. The order is the fallback layout: a Dashboard with no stored layout still renders every block, so a block added by an assistant that never wrote a layout is never invisible.",
+    "https://atomicdata.dev/properties/description": "The Blocks an App shows, in order. The order is the fallback layout: an App with no stored layout still renders every block, so a block added by an assistant that never wrote a layout is never invisible.",
     "https://atomicdata.dev/properties/isA": [
       "https://atomicdata.dev/classes/Property"
     ],

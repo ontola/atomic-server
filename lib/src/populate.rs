@@ -281,7 +281,7 @@ const DEFAULT_FILES: &[(&str, &str)] = &[
     ("chatroom.json", include_str!("../defaults/chatroom.json")),
     ("meeting.json", include_str!("../defaults/meeting.json")),
     ("table.json", include_str!("../defaults/table.json")),
-    ("dashboard.json", include_str!("../defaults/dashboard.json")),
+    ("blocks.json", include_str!("../defaults/blocks.json")),
     (
         "ontologies.json",
         include_str!("../defaults/ontologies.json"),

@@ -13,7 +13,6 @@ import {
   FaTag,
   FaAtom,
   FaBook,
-  FaGlobe,
   FaPlug,
   FaGrip,
   FaClock,
@@ -30,7 +29,6 @@ import {
   FaShapes,
   FaShareFromSquare,
   FaTable,
-  FaChartLine,
   FaArrowUpRightFromSquare,
   FaCalendar,
   FaFont,
@@ -64,7 +62,7 @@ const iconMap = new Map<string, IconType>([
   [core.classes.class, FaCube],
   [core.classes.property, FaCubes],
   [dataBrowser.classes.table, FaTable],
-  [dataBrowser.classes.dashboard, FaChartLine],
+  [dataBrowser.classes.view, FaGrip],
   [core.classes.property, FaHashtag],
   [core.classes.ontology, FaShapes],
   [dataBrowser.classes.tag, FaTag],
@@ -78,10 +76,6 @@ const iconMap = new Map<string, IconType>([
  */
 const classShortnameIconMap = new Map<string, IconType>([
   ['plugin-script', FaPlug],
-  ['website-project', FaGlobe],
-  // The launcher grid rather than the puzzle piece a new app gets as its
-  // placeholder emoji: that one already belongs to plugins and installations
-  // here, and an app sits next to both in the sidebar.
   ['app', FaGrip],
 ]);
 

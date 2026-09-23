@@ -32,11 +32,9 @@ it('hands off the actual request with the selected parent', () => {
     },
   ]);
 });
-it('suggests four assistant-built starters, each left unfinished', () => {
+it('offers app and table starters, each left unfinished', () => {
   expect(AI_BUILD_SUGGESTIONS.map(item => item.id)).toEqual([
     'app',
-    'website',
-    'dashboard',
     'table',
   ]);
 

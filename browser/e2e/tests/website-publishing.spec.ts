@@ -16,9 +16,9 @@ test('one-click website publishing, draft isolation and version recovery', async
     .click();
   await page.locator('#document-editor').waitFor();
   await page.locator('#document-editor').fill('Bakery bread costs five euros.');
-  await createFromCatalog(page, 'Website');
+  await createFromCatalog(page, 'App', 'Site pages');
   const publish = page.getByRole('button', {
-    name: 'Publish site',
+    name: 'Publish app',
     exact: true,
   });
   await expect(publish).toBeEnabled({ timeout: 30000 });
@@ -40,7 +40,7 @@ test('one-click website publishing, draft isolation and version recovery', async
   ).toHaveCount(0);
   await page.getByRole('button', { name: 'More', exact: true }).click();
   const popupPromise = page.waitForEvent('popup');
-  await page.getByTestId('menu-item-website-view').click();
+  await page.getByTestId('menu-item-publication-view').click();
   const popup = await popupPromise;
   await popup.waitForLoadState();
   const target = new URL(popup.url());
@@ -57,7 +57,7 @@ test('one-click website publishing, draft isolation and version recovery', async
   ).toBeVisible();
   await visitor.close();
   await page
-    .getByRole('region', { name: 'Website content' })
+    .getByRole('region', { name: 'App content' })
     .getByRole('link', { name: 'Document', exact: true })
     .click();
   await page.locator('#document-editor').fill('Bakery bread costs six euros.');
@@ -76,7 +76,7 @@ test('one-click website publishing, draft isolation and version recovery', async
   await expect(
     page.getByText('Unpublished changes', { exact: true }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Update site', exact: true }).click();
+  await page.getByRole('button', { name: 'Update app', exact: true }).click();
   await expect
     .poll(async () => (await getPublic()).text())
     .toContain('Bakery bread costs six euros.');
@@ -89,7 +89,7 @@ test('one-click website publishing, draft isolation and version recovery', async
     page.getByRole('button', { name: 'Up to date', exact: true }),
   ).toBeDisabled();
   await page.getByRole('button', { name: 'More', exact: true }).click();
-  await page.getByTestId('menu-item-website-versions').click();
+  await page.getByTestId('menu-item-publication-versions').click();
   await page
     .getByLabel('Previous version', { exact: true })
     .selectOption({ label: 'Version 1' });

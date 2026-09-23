@@ -110,8 +110,6 @@ export interface UseTableViewResult {
   viewKind: ViewKind;
   /** Set when this view is rendered by an app rather than a built-in kind. */
   appView: string | undefined;
-  /** For dashboard views: the Dashboard resource the tab shows. */
-  viewDashboard: string | undefined;
   /**
    * The property this view arranges rows by: a SelectProperty (kanban), a date
    * property (calendar), or the start timestamp (timer).
@@ -237,7 +235,6 @@ export function useTableView(
   );
   const [storedColumns] = useArray(view, dataBrowser.properties.viewColumns);
   const [storedKind] = useString(view, dataBrowser.properties.viewKind);
-  const [viewDashboard] = useString(view, dataBrowser.properties.viewDashboard);
   const [viewGroupBy] = useString(view, dataBrowser.properties.viewGroupBy);
   const [viewEndProp] = useString(view, dataBrowser.properties.viewEndProp);
   // Preserve absence here: unlike useBoolean's false fallback, an unset
@@ -411,25 +408,6 @@ export function useTableView(
   }, [activeView, viewName, storedFilters, storedSortBy, storedSortDesc]);
 
   // --- View creation / linking. ---
-  /**
-   * The Dashboard a dashboard view shows. A child of the table, so the two
-   * travel together; a first-class resource, so a Drive page can still embed
-   * it. Empty on creation: the page itself is the editor.
-   */
-  const createDashboardResource = useCallback(
-    async (name: string): Promise<Resource> => {
-      const dashboard = await store.newResource({
-        parent: table.subject,
-        isA: dataBrowser.classes.dashboard,
-        propVals: { [core.properties.name]: name },
-      });
-      await dashboard.save();
-
-      return dashboard;
-    },
-    [store, table],
-  );
-
   /** Save a View under the table, link it, and optionally make it the default. */
   const saveNewView = useCallback(
     async (
@@ -469,7 +447,7 @@ export function useTableView(
     ): Promise<Resource> => {
       let isFirst = views.length === 0 && !defaultViewSubject;
 
-      if (kind === 'dashboard' && isFirst) {
+      if (kind === 'blocks' && isFirst) {
         // The first saved view replaces the implicit "Default View" tab and
         // becomes what the table opens on. A dashboard must be neither: the
         // rows keep their tab and stay the default, so materialize that view
@@ -489,23 +467,9 @@ export function useTableView(
         [dataBrowser.properties.viewKind]: kind,
       };
 
-      if (kind === 'dashboard') {
-        const tableName = (table.get(core.properties.name) as string) ?? '';
-        const dashboard = await createDashboardResource(
-          tableName ? `${tableName} dashboard` : name,
-        );
-        propVals[dataBrowser.properties.viewDashboard] = dashboard.subject;
-      }
-
       return saveNewView(propVals, isFirst);
     },
-    [
-      views.length,
-      defaultViewSubject,
-      table,
-      createDashboardResource,
-      saveNewView,
-    ],
+    [views.length, defaultViewSubject, saveNewView],
   );
 
   /**
@@ -907,27 +871,10 @@ export function useTableView(
         const v = store.getResourceLoading(subject);
         await v.set(dataBrowser.properties.viewKind, kind, false);
 
-        // Switching an existing tab to a dashboard needs one to show; keep
-        // any it already names, so switching away and back loses nothing.
-        if (
-          kind === 'dashboard' &&
-          !v.get(dataBrowser.properties.viewDashboard)
-        ) {
-          const tableName = (table.get(core.properties.name) as string) ?? '';
-          const dashboard = await createDashboardResource(
-            tableName ? `${tableName} dashboard` : 'Dashboard',
-          );
-          await v.set(
-            dataBrowser.properties.viewDashboard,
-            dashboard.subject,
-            false,
-          );
-        }
-
         await v.save();
       })().catch(() => undefined);
     },
-    [store, table, createDashboardResource],
+    [store],
   );
 
   const duplicateView = useCallback(
@@ -1040,7 +987,6 @@ export function useTableView(
     deleteView,
     viewKind: normalizeViewKind(storedKind),
     appView: appViewOf(storedKind),
-    viewDashboard,
     viewGroupBy,
     setViewGroupBy,
     viewEndProp,

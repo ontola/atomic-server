@@ -38,7 +38,7 @@ export function WebsitePreview({
 
   return (
     <iframe
-      title='Website preview'
+      title='App preview'
       sandbox={frozen ? 'allow-same-origin' : 'allow-same-origin allow-scripts'}
       srcDoc={previewHtml.html}
       onLoad={event => {

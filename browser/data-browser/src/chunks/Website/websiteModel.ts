@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import {
   core,
+  dataBrowser,
   Datatype,
   ensureSchema,
   server,
@@ -142,35 +143,8 @@ export const WEBSITE_SPEC: SchemaSpec = {
         'Draft routes, appearance and explicitly selected content. JSON text.',
       datatype: Datatype.STRING,
     },
-    {
-      shortname: 'website-release',
-      name: 'Website release',
-      description:
-        'A private frozen static export. This does not make the website public.',
-      datatype: Datatype.ATOMIC_URL,
-    },
-    {
-      shortname: 'website-artifact',
-      name: 'Website artifact',
-      description: 'Versioned static release manifest as JSON text.',
-      datatype: Datatype.STRING,
-    },
   ],
-  classes: [
-    {
-      shortname: 'website-project',
-      name: 'Website',
-      description:
-        'A website authored in Atomic Assistant, using existing documents and tables.',
-      requires: ['website-design'],
-    },
-    {
-      shortname: 'website-export',
-      name: 'Website export',
-      description: 'A frozen website ready for static hosting.',
-      requires: ['website-artifact'],
-    },
-  ],
+  classes: [],
 };
 export function starterWebsite(
   title = 'My website',
@@ -199,15 +173,17 @@ export async function createWebsite(
   store: Store,
   drive: string,
   config: WebsiteConfig,
+  parent = drive,
 ) {
   const parsed = websiteConfigSchema.parse(config);
-  await assertPrivateWebsiteParent(store, drive);
+  await assertPrivateWebsiteParent(store, parent);
   const schema = await ensureSchema(store, drive, WEBSITE_SPEC);
   const resource = await store.newResource({
-    parent: drive,
-    isA: [schema.classes['website-project']],
+    parent,
+    isA: [dataBrowser.classes.view],
     propVals: {
       [core.properties.name]: parsed.title,
+      [dataBrowser.properties.viewKind]: 'site',
       [schema.properties['website-design']]: JSON.stringify(parsed),
     },
   });
@@ -222,10 +198,10 @@ export async function readWebsite(
 ) {
   const schema = await findWebsiteSchema(store, drive);
   if (
-    !schema.classes?.['website-project'] ||
-    !resource.hasClasses(schema.classes['website-project'])
+    !resource.hasClasses(dataBrowser.classes.view) ||
+    resource.get(dataBrowser.properties.viewKind) !== 'site'
   )
-    throw new Error('This resource is not a website.');
+    throw new Error('This app does not use the site renderer.');
   const property = schema.properties?.['website-design'];
   if (!property) throw new Error('Website schema is missing.');
   const config = websiteConfigSchema.parse(
@@ -233,6 +209,39 @@ export async function readWebsite(
   );
 
   return { config, schema, property };
+}
+
+/** A publication draft belongs to its App, independent of its private layout. */
+export async function readAppPublicationDraft(
+  store: Store,
+  drive: string,
+  app: Resource,
+): Promise<WebsiteConfig | undefined> {
+  const schema = await findWebsiteSchema(store, drive);
+  const property = schema.properties?.['website-design'];
+  if (!property) return undefined;
+  const raw = app.get(property);
+
+  return typeof raw === 'string'
+    ? websiteConfigSchema.parse(JSON.parse(raw))
+    : undefined;
+}
+
+export async function saveAppPublicationDraft(
+  store: Store,
+  drive: string,
+  app: Resource,
+  config: WebsiteConfig,
+) {
+  await assertPrivateWebsiteParent(store, app.subject);
+  if (!app.hasClasses(dataBrowser.classes.view))
+    throw new Error('Only an App can have a publication draft.');
+  const schema = await ensureSchema(store, drive, WEBSITE_SPEC);
+  await app.set(
+    schema.properties['website-design'],
+    JSON.stringify(websiteConfigSchema.parse(config)),
+  );
+  await saveWebsiteResource(app);
 }
 export async function updateWebsite(
   store: Store,

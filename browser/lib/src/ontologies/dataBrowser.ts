@@ -29,7 +29,6 @@ export const dataBrowser = {
     selectProperty: 'https://atomicdata.dev/classes/SelectProperty',
     table: 'https://atomicdata.dev/classes/Table',
     view: 'https://atomicdata.dev/classes/View',
-    dashboard: 'https://atomicdata.dev/classes/Dashboard',
     block: 'https://atomicdata.dev/classes/Block',
     tag: 'https://atomicdata.dev/classes/Tag',
     template: 'https://atomicdata.dev/ontology/data-browser/class/template',
@@ -94,7 +93,6 @@ export const dataBrowser = {
     viewAggregates: 'https://atomicdata.dev/properties/view-aggregates',
     viewRowActions: 'https://atomicdata.dev/properties/view-row-actions',
     viewQuickAdd: 'https://atomicdata.dev/properties/view-quick-add',
-    viewDashboard: 'https://atomicdata.dev/properties/view-dashboard',
     viewGroupByColumn: 'https://atomicdata.dev/properties/view-group-by-column',
     viewGroupGranularity:
       'https://atomicdata.dev/properties/view-group-granularity',
@@ -204,12 +202,8 @@ export const dataBrowser = {
       'https://atomicdata.dev/properties/view-aggregates',
       'https://atomicdata.dev/properties/view-row-actions',
       'https://atomicdata.dev/properties/view-quick-add',
-      'https://atomicdata.dev/properties/view-dashboard',
       'https://atomicdata.dev/properties/view-group-by-column',
       'https://atomicdata.dev/properties/view-group-granularity',
-    ],
-    ['https://atomicdata.dev/classes/Dashboard']: [
-      'https://atomicdata.dev/properties/name',
       'https://atomicdata.dev/properties/dashboard-blocks',
       'https://atomicdata.dev/properties/dashboard-layout',
     ],
@@ -415,13 +409,8 @@ declare module '../index.js' {
         | typeof dataBrowser.properties.viewAggregates
         | typeof dataBrowser.properties.viewRowActions
         | typeof dataBrowser.properties.viewQuickAdd
-        | typeof dataBrowser.properties.viewDashboard
         | typeof dataBrowser.properties.viewGroupByColumn
-        | typeof dataBrowser.properties.viewGroupGranularity;
-    };
-    [dataBrowser.classes.dashboard]: {
-      requires: BaseProps | 'https://atomicdata.dev/properties/name';
-      recommends:
+        | typeof dataBrowser.properties.viewGroupGranularity
         | typeof dataBrowser.properties.dashboardBlocks
         | typeof dataBrowser.properties.dashboardLayout;
     };
@@ -508,7 +497,6 @@ declare module '../index.js' {
     [dataBrowser.properties.tableViews]: string[];
     [dataBrowser.properties.tableDefaultView]: string;
     [dataBrowser.properties.viewKind]: string;
-    [dataBrowser.properties.viewDashboard]: string;
     [dataBrowser.properties.viewFilters]: Array<{
       property?: string;
       value?: string;
@@ -627,7 +615,6 @@ declare module '../index.js' {
     [dataBrowser.properties.tableViews]: 'tableViews';
     [dataBrowser.properties.tableDefaultView]: 'tableDefaultView';
     [dataBrowser.properties.viewKind]: 'viewKind';
-    [dataBrowser.properties.viewDashboard]: 'viewDashboard';
     [dataBrowser.properties.viewFilters]: 'viewFilters';
     [dataBrowser.properties.viewSortBy]: 'viewSortBy';
     [dataBrowser.properties.viewSortDesc]: 'viewSortDesc';

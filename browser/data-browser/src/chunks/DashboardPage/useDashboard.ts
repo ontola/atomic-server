@@ -35,9 +35,9 @@ export interface UseDashboardResult {
 }
 
 /**
- * A Dashboard's blocks and layout.
+ * A block App's blocks and layout.
  *
- * Every mutation is an ordinary commit on the Dashboard (or the Block), so an
+ * Every mutation is an ordinary commit on the App (or the Block), so an
  * assistant writing the same resources and a person clicking a button end up in
  * the same place — which is the whole reason blocks are resources.
  */

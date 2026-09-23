@@ -19,7 +19,7 @@ test('website document preview, frozen release and reload', async ({
   await page
     .locator('#document-editor')
     .fill('This is the first published garden note.');
-  await createFromCatalog(page, 'Website');
+  await createFromCatalog(page, 'App', 'Site pages');
   await page.getByRole('button', { name: 'More', exact: true }).click();
   const prepare = page.getByTestId('menu-item-website-prepare');
   await expect(prepare).toBeEnabled({ timeout: 30000 });
@@ -40,7 +40,7 @@ test('website document preview, frozen release and reload', async ({
   expect(download.suggestedFilename()).toBe('website.zip');
   await download.saveAs(test.info().outputPath('website.zip'));
   await page
-    .getByRole('region', { name: 'Website content' })
+    .getByRole('region', { name: 'App content' })
     .getByRole('link', { name: 'Document', exact: true })
     .click();
   await page
@@ -80,20 +80,21 @@ test('website document preview, frozen release and reload', async ({
   });
   await page.goto(`${new URL(websiteURL).origin}${versionURL}`);
   await expect(
-    page.getByRole('link', { name: 'Back to website', exact: true }),
+    page.getByRole('link', { name: 'Back to app', exact: true }),
+  ).toBeVisible();
+  const versionPreview = page.frameLocator('iframe[title="App preview"]');
+  await expect(
+    versionPreview.getByText('This is the first published garden note.'),
   ).toBeVisible();
   await expect(
-    preview.getByText('This is the first published garden note.'),
-  ).toBeVisible();
-  await expect(
-    preview.getByText('A private change after the release.'),
+    versionPreview.getByText('A private change after the release.'),
   ).toHaveCount(0);
-  await expect(page.locator('iframe[title="Website preview"]')).toHaveAttribute(
+  await expect(page.locator('iframe[title="App preview"]')).toHaveAttribute(
     'sandbox',
     'allow-same-origin',
   );
   await expect(
-    page.getByRole('button', { name: 'Update site', exact: true }),
+    page.getByRole('button', { name: 'Update app', exact: true }),
   ).toHaveCount(0);
   await page.screenshot({
     path: test.info().outputPath('website-export-preview.png'),
@@ -101,7 +102,7 @@ test('website document preview, frozen release and reload', async ({
   });
   await page.reload();
   await expect(
-    preview.getByText('This is the first published garden note.'),
+    versionPreview.getByText('This is the first published garden note.'),
   ).toBeVisible();
 });
 
@@ -168,25 +169,28 @@ test('Assistant creates and redesigns a website using existing table content', a
 
   const websiteFrom = (results: string[]) => {
     for (const result of results) {
-      const match = /"website"\s*:\s*"([^"]+)"/.exec(result);
+      const match = /"app"\s*:\s*"([^"]+)"/.exec(result);
       if (match) return match[1];
     }
 
-    throw new Error('Assistant did not return a website.');
+    throw new Error('Assistant did not return an app.');
   };
 
   const state = await setupScriptedToolCallMocks(
     page,
     [
-      { tool: 'create_website', args: () => ({ config: config() }) },
       {
-        tool: 'describe_website',
-        args: results => ({ website: websiteFrom(results) }),
+        tool: 'create_app',
+        args: () => ({ name: config().title, layout: 'site', config: config() }),
       },
       {
-        tool: 'update_website',
+        tool: 'describe_app',
+        args: results => ({ app: websiteFrom(results) }),
+      },
+      {
+        tool: 'update_app',
         args: results => ({
-          website: websiteFrom(results),
+          app: websiteFrom(results),
           config: {
             ...config(),
             title: 'The garden notebook',
@@ -281,7 +285,7 @@ test('Assistant creates and redesigns a website using existing table content', a
   // exercising the menu so its delayed input autofocus cannot take menu focus.
   await page.getByRole('button', { name: 'AI', exact: true }).click();
   await expect(
-    page.getByRole('button', { name: 'Publish site', exact: true }),
+    page.getByRole('button', { name: 'Publish app', exact: true }),
   ).toBeEnabled({ timeout: 30000 });
   await page.getByRole('button', { name: 'More', exact: true }).click();
   await expect(page.getByTestId('menu-item-website-prepare')).toBeEnabled({

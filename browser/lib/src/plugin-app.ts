@@ -24,6 +24,7 @@ import { pluginSchema } from './plugin-log.js';
 
 export interface CreateAppOptions {
   drive: string;
+  parent?: string;
   name: string;
   /** The module whose `view()` renders the app. */
   source: string;
@@ -105,10 +106,11 @@ export async function createApp(
   const schema = await ensureSchema(store, options.drive, pluginSchema());
 
   const app = await store.newResource({
-    parent: options.drive,
-    isA: [schema.classes.app],
+    parent: options.parent ?? options.drive,
+    isA: [dataBrowser.classes.view],
     propVals: {
       [core.properties.name]: options.name,
+      [dataBrowser.properties.viewKind]: 'code',
       ...(options.emoji
         ? { [dataBrowser.properties.emoji]: options.emoji }
         : {}),

@@ -32,7 +32,7 @@ test('unreadable website content reports an error, stops loading and recovers', 
   ).toBeVisible();
   await expect(page.getByText('Preparing preview…')).toHaveCount(0);
   await expect(
-    page.getByRole('button', { name: 'Publish site', exact: true }),
+    page.getByRole('button', { name: 'Publish app', exact: true }),
   ).toBeDisabled();
   await expect
     .poll(() => errors.some(error => error.includes('Website preview failed:')))
@@ -58,7 +58,7 @@ test('unreadable website content reports an error, stops loading and recovers', 
     await updateWebsite(store, store.getDrive()!, resource, config);
   }, subject);
   await expect(
-    page.getByRole('button', { name: 'Publish site', exact: true }),
+    page.getByRole('button', { name: 'Publish app', exact: true }),
   ).toBeEnabled();
   await expect(
     page.getByRole('button', { name: 'Retry preview', exact: true }),
