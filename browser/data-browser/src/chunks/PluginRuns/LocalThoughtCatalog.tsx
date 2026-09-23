@@ -15,6 +15,34 @@ import {
   useIntegrationCatalog,
 } from './pluginCatalog';
 
+// The proxy's platform list, fetched once per proxy origin like the plugin
+// catalog in pluginCatalog.ts. Fetching it per mount left the section on
+// "Loading…", with no cards, after every remount until the proxy answered
+// again; the settled value lets a remount render the cards straight away.
+const platformCache = new Map<string, Promise<string[]>>();
+const resolvedPlatforms = new Map<string, string[]>();
+
+function fetchPlatforms(origin: string): Promise<string[]> {
+  let promise = platformCache.get(origin);
+
+  if (!promise) {
+    promise = browserIntegrations(origin)
+      .catalog()
+      .then(platforms => {
+        resolvedPlatforms.set(origin, platforms);
+
+        return platforms;
+      })
+      .catch(reason => {
+        platformCache.delete(origin);
+        throw reason;
+      });
+    platformCache.set(origin, promise);
+  }
+
+  return promise;
+}
+
 export function LocalThoughtCatalog({
   drive,
   search,
@@ -29,22 +57,25 @@ export function LocalThoughtCatalog({
   const origin = useIntegrationProxy();
   const { entries: catalogEntries } = useIntegrationCatalog();
   const catalogEntriesByShortname = catalogByShortname(catalogEntries);
-  const [platforms, setPlatforms] = useState<string[]>();
+  const [platforms, setPlatforms] = useState(() =>
+    resolvedPlatforms.get(origin),
+  );
   const [error, setError] = useState('');
   useEffect(() => {
-    const controller = new AbortController();
-    setPlatforms(undefined);
+    let active = true;
+    setPlatforms(resolvedPlatforms.get(origin));
     setError('');
-    browserIntegrations(origin)
-      .catalog(controller.signal)
+    fetchPlatforms(origin)
       .then(data => {
-        if (!controller.signal.aborted) setPlatforms(data);
+        if (active) setPlatforms(data);
       })
       .catch(reason => {
-        if (!controller.signal.aborted) setError(String(reason));
+        if (active) setError(String(reason));
       });
 
-    return () => controller.abort();
+    return () => {
+      active = false;
+    };
   }, [origin]);
   const visible = localThoughtCatalogEntries(
     platforms,

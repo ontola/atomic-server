@@ -84,6 +84,12 @@ function parseCatalogEntries(raw: unknown): CatalogEntry[] {
 // user-configurable (see pluginCatalogUrl.ts / Settings > Integration) so a
 // self-hosted or staging catalog can be used instead.
 const cache = new Map<string, Promise<CatalogEntry[]>>();
+// The settled value of each `cache` entry, so a remounted hook starts from it
+// synchronously. With only the promise, the first render after a remount has
+// no entries, so every catalog-driven card drops out and comes back a tick
+// later. Remounts are routine: the whole app remounts once per page load when
+// its locale arrives (LocaleContext.tsx).
+const resolved = new Map<string, CatalogEntry[]>();
 
 function fetchIntegrationCatalog(catalogUrl: string): Promise<CatalogEntry[]> {
   let promise = cache.get(catalogUrl);
@@ -100,6 +106,11 @@ function fetchIntegrationCatalog(catalogUrl: string): Promise<CatalogEntry[]> {
         return response.json();
       })
       .then(parseCatalogEntries)
+      .then(entries => {
+        resolved.set(catalogUrl, entries);
+
+        return entries;
+      })
       .catch(reason => {
         cache.delete(catalogUrl);
         throw reason;
@@ -116,7 +127,7 @@ export function useIntegrationCatalog(): {
   error?: string;
 } {
   const catalogUrl = usePluginCatalogUrl();
-  const [entries, setEntries] = useState<CatalogEntry[]>();
+  const [entries, setEntries] = useState(() => resolved.get(catalogUrl));
   const [error, setError] = useState<string>();
 
   useEffect(() => {
