@@ -31,6 +31,7 @@ on:
   push:
     tags:
       - "v*"
+      - "!v*-*"
 
 jobs:
   # Nothing reaches a live host without a pipeline having passed on this exact

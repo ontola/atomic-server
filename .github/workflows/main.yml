@@ -19,19 +19,19 @@ concurrency:
   cancel-in-progress: ${{ github.ref_type == 'branch' && github.ref_name != 'develop' }}
 
 # Main prefers Mancave (self-hosted) so Dagger cache volumes stay warm.
-# GitHub-hosted runs only when explicitly selected or required for PRs, never as a retry
-# after a red test suite.
+# Heavy CI runs on GitHub-hosted only when explicitly selected or required for
+# PRs, never as a retry after a red test suite.
 #
 # Flow:
-#   1. Pick runner — trusted self-hosted or explicitly hosted
+#   1. Pick runner — hosted control job selects the heavy CI runner
 #   2. Main (Mancave) XOR Main (GitHub) — one path, not failure-failover
-#   3. Main — aggregator for the required status check
+#   3. Main — hosted aggregator for the required status check
 #
-# Trusted runs start directly on Mancave, including selector and result jobs.
-# There is no GitHub-hosted prerequisite, so exhausted Actions budgets do not
-# block self-hosted CI. If Mancave is offline, jobs queue; explicitly set the
-# repository variable CI_RUNNER = ["ubuntu-latest"] to use hosted runners.
-# No runner-status PAT is needed. Deployments retain their existing runners.
+# Trusted heavy CI defaults to Mancave so its Dagger cache stays warm. The
+# selector and result jobs use hosted runners to avoid queueing a few seconds
+# of control work behind long Mancave builds. If Mancave is offline, heavy CI
+# queues; set CI_RUNNER = ["ubuntu-latest"] to explicitly use hosted runners.
+# Deployments retain their existing runners.
 #
 # SECURITY: pull_request / pull_request_target are forced onto hosted
 # runners (never Mancave).
@@ -41,9 +41,7 @@ name: "Main pipeline: build, lint, test"
 jobs:
   pick:
     name: Pick runner
-    # Trusted runs can start without a GitHub-hosted billing prerequisite.
-    # Mancave must be online; use CI_RUNNER to explicitly select hosted runners.
-    runs-on: ${{ fromJSON((github.event_name == 'pull_request_target' || github.event_name == 'pull_request' || vars.CI_RUNNER == '["ubuntu-latest"]') && '["ubuntu-latest"]' || (vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]')) }}
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
@@ -71,7 +69,7 @@ jobs:
             exit 0
           fi
 
-          echo "Selector is running on the self-hosted runner — using Mancave"
+          echo "Defaulting heavy CI to Mancave"
           echo "host=mancave" >> "$GITHUB_OUTPUT"
 
       - id: e2e
@@ -120,7 +118,6 @@ jobs:
       packages: write
     with:
       runner: ${{ vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]' }}
-      artifact-name: build-artifacts-mancave
       host-profile: mancave
       e2e-mode: ${{ needs.pick.outputs.e2e-mode }}
     secrets:
@@ -143,8 +140,8 @@ jobs:
   # reverse.
   #
   # Mancave only. The token can read a private repo, and fork PRs never run
-  # here; PR events are routed to GitHub-hosted by `pick`, which also keeps
-  # this job off them. `clean: false` keeps both target/ dirs warm, the same
+  # here; PR events are routed to GitHub-hosted heavy CI by `pick`, which also
+  # keeps this job off them. `clean: false` keeps both target/ dirs warm, the same
   # measured reason atomic-saas's own CI gives.
   downstream-saas:
     name: Downstream (atomic-saas builds against this commit)
@@ -267,7 +264,6 @@ jobs:
       packages: write
     with:
       runner: '["ubuntu-latest"]'
-      artifact-name: build-artifacts-github
       host-profile: hosted
       e2e-mode: ${{ needs.pick.outputs.e2e-mode }}
     secrets:
@@ -279,7 +275,7 @@ jobs:
     name: Main
     needs: [pick, mancave, github, downstream-saas]
     if: always() && needs.pick.result == 'success'
-    runs-on: ${{ fromJSON(needs.pick.outputs.host == 'hosted' && '["ubuntu-latest"]' || (vars.CI_RUNNER || '["self-hosted", "Linux", "X64"]')) }}
+    runs-on: ubuntu-latest
     steps:
       - name: Resolve runner outcome
         run: |
