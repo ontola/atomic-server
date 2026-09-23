@@ -4,6 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Typing `@` in a document lists recently opened resources in that drive, topped up with the drive's own children, instead of "No results found".
 - The sidebar's New button stands out for first-time users. It opens the page
   for everything you can build (apps, websites, tables, templates), but at rest
   it is a faint grey line under the tree. Until the New page has been opened
