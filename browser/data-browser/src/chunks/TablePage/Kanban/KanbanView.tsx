@@ -11,6 +11,7 @@ import {
   useResource,
   useResources,
   useStore,
+  useValue,
 } from '@tomic/react';
 import {
   DndContext,
@@ -39,11 +40,7 @@ import { useKanbanGroupBy } from './useKanbanGroupBy';
 import { TablePresenceContext } from '../TablePresence';
 import { KanbanFlipContext, type CardFlipRecord } from './cardFlip';
 import { computeSortOrder, readSortKey } from '@helpers/fractionalSortOrder';
-import {
-  readRowDefaults,
-  setRowDefault,
-  withTableRowDefaults,
-} from '../rowDefaults';
+import { setRowDefault, withTableRowDefaults } from '../rowDefaults';
 
 interface KanbanViewProps {
   /** The Table resource; new cards are created as its children. */
@@ -100,8 +97,17 @@ export function KanbanView({
   );
 
   // The lane new rows start in, from whichever view they are added: the
-  // table's default value for the group-by property.
-  const defaultValue = groupBy ? readRowDefaults(table)[groupBy] : undefined;
+  // table's default value for the group-by property. Read through `useValue`
+  // so the star moves when the default changes; the Table resource object
+  // itself stays the same.
+  const [rowDefaults] = useValue(
+    table,
+    dataBrowser.properties.tableRowDefaults,
+  );
+  const defaultValue =
+    groupBy && rowDefaults && typeof rowDefaults === 'object'
+      ? (rowDefaults as Record<string, JSONValue>)[groupBy]
+      : undefined;
   const defaultTag = Array.isArray(defaultValue)
     ? (defaultValue[0] as string | undefined)
     : undefined;
