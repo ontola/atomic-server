@@ -1,9 +1,50 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
+// @wc-ignore-file
+import { cleanup, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   hasExperimentalEntries,
   parseCatalogEntries,
+  useIntegrationCatalog,
   type CatalogEntry,
 } from './pluginCatalog';
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+function Names() {
+  const { entries, ready } = useIntegrationCatalog();
+
+  return <p>{ready ? entries.map(e => e.shortname).join(',') : 'loading'}</p>;
+}
+
+it('fetches the catalog once and renders it on the first render after a remount', async () => {
+  const fetch = vi.fn(async () =>
+    Response.json([
+      {
+        'https://atomicdata.dev/properties/isA': [
+          'https://atomicdata.dev/integrations/classes/PluginCatalogEntry',
+        ],
+        'https://atomicdata.dev/properties/shortname': 'fixture',
+        'https://atomicdata.dev/integrations/properties/enabled': true,
+      },
+    ]),
+  );
+  vi.stubGlobal('fetch', fetch);
+  // No stored override: the hook reads the build-time default catalog URL.
+  vi.stubGlobal('localStorage', { getItem: () => null });
+
+  const first = render(<Names />);
+  expect(await screen.findByText('fixture')).toBeTruthy();
+  first.unmount();
+
+  render(<Names />);
+  // Synchronously: a remount must not pass through an empty catalog.
+  expect(screen.getByText('fixture')).toBeTruthy();
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
 
 const IS_A = 'https://atomicdata.dev/properties/isA';
 const SHORTNAME = 'https://atomicdata.dev/properties/shortname';

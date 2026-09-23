@@ -199,9 +199,10 @@ failure and successful server visibility. The provider setup browser flows
 
 # Testing coverage map
 
-Plugin discovery: `PluginRuns/pluginCatalog.test.ts` covers parsing the remote
-plugin catalog and which entries unlock "Show experimental plugins" (entries
-that need API plugins don't); `helpers/integrationVisibility.test.ts` covers the
+Plugin discovery: `PluginRuns/pluginCatalog.test.tsx` covers parsing the remote
+plugin catalog, which entries unlock "Show experimental plugins" (entries
+that need API plugins don't), and a remounted hook rendering the cached catalog
+on its first render without fetching again; `helpers/integrationVisibility.test.ts` covers the
 stored preferences. `integration-visibility.spec.ts` checks no "Show API
 plugins" toggle is offered.
 
