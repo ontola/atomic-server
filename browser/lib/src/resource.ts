@@ -3693,12 +3693,16 @@ export class Resource<C extends OptionalClass = any> {
      * Property is not present when set is called
      */
     validate = true,
+    /** A trusted built-in datatype: validate and tag without fetching Property metadata. */
+    knownDatatype?: Datatype,
   ): Promise<void> {
     if (value instanceof Uint8Array) {
       throw new Error('Binary values (Uint8Array) cannot be set via set().');
     }
 
-    if (validate) {
+    if (knownDatatype) {
+      validateDatatype(value, knownDatatype);
+    } else if (validate) {
       let fullProp;
 
       try {
@@ -3738,6 +3742,14 @@ export class Resource<C extends OptionalClass = any> {
 
     // Write to Loro only — cache is rebuilt lazily on next get()
     this.loroSetProperty(prop, value as JSONValue);
+
+    if (knownDatatype) {
+      const tags = this.getLoroDoc()?.getMap('datatypes');
+      const tag = datatypeTag(knownDatatype, value);
+      if (tag && tags?.get(prop) !== tag) tags?.set(prop, tag);
+      else if (!tag && tags?.get(prop) !== undefined) tags?.delete(prop);
+    }
+
     this.#cacheDirty = true;
 
     this._dirty = true;

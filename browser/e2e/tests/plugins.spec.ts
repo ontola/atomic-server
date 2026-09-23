@@ -471,11 +471,14 @@ export function run() { return { intents: [] }; }
       fullPage: true,
     });
 
-    for (const disclosure of await page
-      .locator('summary')
-      .filter({ hasText: 'Repository test results' })
-      .all()) {
-      await disclosure.click();
+    // The cards can re-render while evidence loads. Re-query closed
+    // disclosures instead of retaining nth locators from an earlier count.
+    const closedEvidence = page
+      .locator('details:not([open]) > summary')
+      .filter({ hasText: 'Repository test results' });
+
+    while (await closedEvidence.count()) {
+      await closedEvidence.first().click();
     }
 
     const evidence = page.locator('details').filter({

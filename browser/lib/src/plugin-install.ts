@@ -10,6 +10,7 @@
  * marketplace".
  */
 import { signRequest } from './authentication.js';
+import { Datatype } from './datatypes.js';
 import { core } from './ontologies/core.js';
 import { server, type Server } from './ontologies/server.js';
 import type { Store } from './store.js';
@@ -274,6 +275,20 @@ export async function installRelease(
     isA: server.classes.installation,
     parent: drive,
     propVals,
+    // These built-in Installation fields are validated locally and by the
+    // server. Their Property URLs need not resolve on the public ontology
+    // site. JSON tags preserve grants/config as JSON in the Loro genesis.
+    propDatatypes: {
+      [core.properties.name]: Datatype.STRING,
+      [core.properties.description]: Datatype.MARKDOWN,
+      [server.properties.release]: Datatype.ATOMIC_URL,
+      [server.properties.releaseId]: Datatype.STRING,
+      [server.properties.installationStatus]: Datatype.STRING,
+      [server.properties.grants]: Datatype.JSON,
+      [server.properties.namespace]: Datatype.STRING,
+      [server.properties.version]: Datatype.STRING,
+      [server.properties.config]: Datatype.JSON,
+    },
   });
   await installation.save();
 
@@ -308,16 +323,31 @@ export async function updateInstallationRelease(
   const { release, grants, config, version } = options;
   const resource = await store.getResource<Server.Installation>(installation);
 
-  await resource.set(server.properties.releaseId, release.id);
-  await resource.set(server.properties.release, release.url);
-  await resource.set(server.properties.grants, grants);
+  await resource.set(
+    server.properties.releaseId,
+    release.id,
+    false,
+    Datatype.STRING,
+  );
+  await resource.set(
+    server.properties.release,
+    release.url,
+    false,
+    Datatype.ATOMIC_URL,
+  );
+  await resource.set(server.properties.grants, grants, false, Datatype.JSON);
 
   if (version !== undefined) {
-    await resource.set(server.properties.version, version);
+    await resource.set(
+      server.properties.version,
+      version,
+      false,
+      Datatype.STRING,
+    );
   }
 
   if (config !== undefined) {
-    await resource.set(server.properties.config, config);
+    await resource.set(server.properties.config, config, false, Datatype.JSON);
   }
 
   await resource.save();
