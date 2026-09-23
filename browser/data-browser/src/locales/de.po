@@ -12322,3 +12322,18 @@ msgstr ""
 #: src/routes/SyncRoute.tsx
 msgid "Workspace sync off"
 msgstr ""
+
+#. 0: lowerRowName
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "Stop starting new {0}s here"
+msgstr ""
+
+#. 0: lowerRowName
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "Start new {0}s here"
+msgstr ""
+
+#. 0: lowerRowName
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "New {0}s start here"
+msgstr ""

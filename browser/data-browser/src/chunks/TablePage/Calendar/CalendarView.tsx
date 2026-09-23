@@ -29,6 +29,7 @@ import { Button } from '@components/Button';
 import { ExpandedRowDialog } from '../ExpandedRowDialog';
 import { useCalendarDateProp } from './useCalendarDateProp';
 import { CalendarDay } from './CalendarDay';
+import { withTableRowDefaults } from '../rowDefaults';
 import { calendarFields, isAllDayOnDate, nextCalendarDate } from '@tomic/lib';
 
 interface CalendarViewProps {
@@ -295,7 +296,9 @@ export function CalendarView({
     const row = await store.newResource({
       parent: tableSubject,
       isA: tableClass.subject,
-      propVals,
+      // The table's defaults too, so a task added on a day still lands in a
+      // board's Todo lane rather than "No status".
+      propVals: await withTableRowDefaults(store, tableSubject, propVals),
     });
     await row.save();
     store.notifyResourceManuallyCreated(row);
