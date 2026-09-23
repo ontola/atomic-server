@@ -11,7 +11,7 @@ import Field from '@components/forms/Field';
 import { Input, ErrMessage } from '@components/forms/InputStyles';
 import { AtomicLink } from '@components/AtomicLink';
 import {
-  browserIntegrations,
+  platformReader,
   proxyRequest,
   type SavedConnection,
 } from './localThought';
@@ -54,7 +54,7 @@ export function ConnectLocalThought({
   const [folder, setFolder] = useState<string>();
   useEffect(() => {
     const controller = new AbortController();
-    browserIntegrations(origin)
+    platformReader(origin)
       .describe(platform)
       .then(data => {
         if (controller.signal.aborted) return;

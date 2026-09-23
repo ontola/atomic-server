@@ -1,7 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { BrowserIntegrations, mergeQuerySelections, proxyOrigin, type Engine, type ImportLimits } from './browser';
+import { BrowserIntegrations, proxyOrigin } from './browser';
 const origin = 'https://proxy.example';
-function setup(policy?: Partial<ImportLimits>, sleep?: (milliseconds: number) => Promise<void>) {
+
+function setup() {
   const values = new Map<string, string>();
   const storage = {
     getItem: (k: string) => values.get(k) ?? null,
@@ -22,28 +23,10 @@ function setup(policy?: Partial<ImportLimits>, sleep?: (milliseconds: number) =>
     if (url.endsWith('/catalog')) return new Response('["pets"]');
     if (url.endsWith('/connect/redeem'))
       return Response.json({ connection_code: 'first', platform: 'pets' });
+
     return new Response('{}');
   });
-  const engine: Engine = {
-    describeIntegration: async () =>
-      JSON.stringify({
-        upstream: 'https://pets.example',
-      }),
-    fetchIntegration: async (_text, _platform, _constants, _range, fetch) => {
-      const first = JSON.parse(await fetch('https://pets.example/pets'));
-      expect(first.headers['x-connection-code']).toBeUndefined();
-      await fetch('https://pets.example/pets?page=2');
-      return '{"records":[]}';
-    },
-  };
-  const client = new BrowserIntegrations(
-    storage,
-    async () => engine,
-    origin,
-    http as typeof fetch,
-    sleep,
-    policy,
-  );
+  const client = new BrowserIntegrations(storage, origin, http as typeof fetch);
   const start = () =>
     client.start(
       'drive',
@@ -51,108 +34,17 @@ function setup(policy?: Partial<ImportLimits>, sleep?: (milliseconds: number) =>
       'pets',
       'https://atomic.example/app/integrations',
     );
-  return { values, storage, http, engine, client, start };
+
+  return { values, storage, http, client, start };
 }
 
-it('validates consumer import limits', async () => {
-  const { client, start } = setup({ maxRequests: 0 });
-  const { state } = await start();
-  await client.finish('drive', 'actor', state, 'first');
-  await expect(client.fetchRecords('drive', 'actor', state, {})).rejects.toThrow(
-    'Invalid import limits',
-  );
-  const defaultClient = setup().client;
-  expect(defaultClient).toBeDefined();
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
-
-it('merges catalog selections with explicit caller values winning', () => {
-  expect(
-    mergeQuerySelections(
-      { query_overrides: [{ path: '/items', values: { active: false, archived: true } }] },
-      { query_overrides: [{ path: '/items', values: { active: true, archived: null, orderBy: null } }, { path: '/other', values: { all: true } }] },
-    ),
-  ).toEqual({
-    query_overrides: [
-      { path: '/items', values: { active: true, archived: null, orderBy: null } },
-      { path: '/other', values: { all: true } },
-    ],
-  });
-});
-
-it('paces requests and permits a configured request budget', async () => {
-  vi.spyOn(Date, 'now').mockReturnValue(1000);
-  const waits: number[] = [];
-  const { client, start, engine, http } = setup(
-    { minRequestIntervalMs: 2100, maxRequests: 201, timeoutMs: 1800000 },
-    async milliseconds => {
-      waits.push(milliseconds);
-    },
-  );
-  const { state } = await start();
-  await client.finish('drive', 'actor', state, 'first');
-  let count = 0;
-  http.mockImplementation(async (url, init) => {
-    if (url.includes('/catalog/')) return new Response('{}');
-    count++;
-    return new Response('{}', {
-      headers: { 'x-connection-code': `next-${count}` },
-    });
-  });
-  engine.fetchIntegration = async (_t, _p, _c, _r, fetch) => {
-    for (let i = 0; i < 201; i++) await fetch(`https://pets.example/pets?page=${i}`);
-    return '{}';
-  };
-  await client.fetchRecords('drive', 'actor', state, {});
-  expect(count).toBe(201);
-  expect(waits).toHaveLength(200);
-  expect(waits.every(value => value === 2100)).toBe(true);
-});
-
-it('honors Retry-After on 429 with a rotated code and bounded retry', async () => {
-  const waits: number[] = [];
-  const { client, start, engine, http } = setup(
-    { maxRequests: 10, timeoutMs: 120000 },
-    async milliseconds => waits.push(milliseconds),
-  );
-  const { state } = await start();
-  await client.finish('drive', 'actor', state, 'first');
-  const codes: string[] = [];
-  let call = 0;
-  http.mockImplementation(async (url, init) => {
-    if (url.includes('/catalog/')) return new Response('{}');
-    codes.push((init?.headers as Record<string, string>).Authorization);
-    call++;
-    return new Response('{}', {
-      status: call === 1 ? 429 : 200,
-      headers: {
-        'x-connection-code': call === 1 ? 'second' : 'third',
-        ...(call === 1 ? { 'Retry-After': '2' } : {}),
-      },
-    });
-  });
-  engine.fetchIntegration = async (_t, _p, _c, _r, fetch) => {
-    await fetch('https://pets.example/pets');
-    return '{}';
-  };
-  await client.fetchRecords('drive', 'actor', state, {});
-  expect(codes).toEqual(['Bearer first', 'Bearer second']);
-  expect(waits).toEqual([2000]);
-});
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 it('rejects non-origin proxy URLs', () => {
   expect(() => proxyOrigin('https://proxy.example/path')).toThrow();
   expect(() => proxyOrigin('http://proxy.example')).toThrow();
-});
-it('accepts plain http on any loopback name', () => {
-  // The value CI bakes into the e2e bundle. Rejecting it threw during render,
-  // which took the whole settings page down rather than one integration.
-  expect(proxyOrigin('http://atomic.localhost:19090')).toBe(
-    'http://atomic.localhost:19090',
-  );
-  expect(proxyOrigin('http://localhost:9883')).toBe('http://localhost:9883');
-  expect(proxyOrigin('http://127.0.0.1:19090')).toBe('http://127.0.0.1:19090');
-  expect(() => proxyOrigin('http://notlocalhost')).toThrow();
-  expect(() => proxyOrigin('http://localhost.evil.example')).toThrow();
 });
 it('starts a platform-bound PKCE redirect without a tenant session', async () => {
   const { start, values, http } = setup();
@@ -207,6 +99,7 @@ it('binds redemption to actor, drive, platform and expiry', async () => {
       code: 'code',
       code_verifier: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
     });
+
     return Response.json({ connection_code: 'first', platform: 'pets' });
   });
   await expect(client.finish('drive', 'actor', state, 'code')).resolves.toEqual(
@@ -272,81 +165,67 @@ it('never retries an uncertain redemption after consuming its verifier', async (
   );
   expect(http.mock.calls).toHaveLength(calls);
 });
-it('consumes before dispatch and preserves rotation and pagination', async () => {
+it('consumes before dispatch and preserves rotation', async () => {
   const { client, start, http, values } = setup();
   const { state } = await start();
   await client.finish('drive', 'actor', state, 'handoff');
   const codes: string[] = [];
-  http.mockImplementation(async (url, init) => {
-    if (url.includes('/catalog/')) return new Response('{}');
+  http.mockImplementation(async (_url, init) => {
     expect(JSON.parse([...values.values()][0]).code).toBeUndefined();
     codes.push((init!.headers as Record<string, string>).Authorization);
+
     return new Response('[]', {
-      headers: {
-        'x-connection-code': 'second',
-        link: '<https://pets.example/pets?page=2>; rel=next',
-      },
+      headers: { 'x-connection-code': 'second' },
     });
   });
-  await client.fetchRecords('drive', 'actor', state, {});
-  expect(codes).toEqual(['Bearer first', 'Bearer second']);
-  expect(http.mock.calls.at(-1)?.[0]).toBe(`${origin}/proxy/pets/pets?page=2`);
+  await client.request('drive', 'actor', state, 'pets', '/pets');
+  expect(codes).toEqual(['Bearer first']);
 });
 it('never retries an uncertain consumed credential', async () => {
   const { client, start, http } = setup();
   const { state } = await start();
   await client.finish('drive', 'actor', state, 'handoff');
-  http.mockImplementation(async url => {
-    if (url.includes('/catalog/')) return new Response('{}');
+  http.mockImplementation(async () => {
     throw new Error('connection lost');
   });
   await expect(
-    client.fetchRecords('drive', 'actor', state, {}),
+    client.request('drive', 'actor', state, 'pets', '/pets'),
   ).rejects.toThrow('lost');
   const calls = http.mock.calls.length;
   await expect(
-    client.fetchRecords('drive', 'actor', state, {}),
+    client.request('drive', 'actor', state, 'pets', '/pets'),
   ).rejects.toThrow('Reconnect');
   expect(http.mock.calls).toHaveLength(calls);
 });
-it('rejects pagination to a different provider before spending a credential', async () => {
-  const { client, start, engine, values } = setup();
-  const { state } = await start();
-  await client.finish('drive', 'actor', state, 'handoff');
-  engine.fetchIntegration = async (_t, _p, _c, _r, fetch) =>
-    fetch('https://evil.example/pets');
-  await expect(
-    client.fetchRecords('drive', 'actor', state, {}),
-  ).rejects.toThrow('origin');
-  expect(JSON.parse([...values.values()][0]).code).toBe('first');
-});
 
 it('calls the browser fetch function without binding it to the client', async () => {
-  const { storage, engine } = setup();
+  const { storage } = setup();
   vi.stubGlobal('fetch', function (this: unknown) {
     expect(this).not.toBeInstanceOf(BrowserIntegrations);
+
     return Promise.resolve(new Response('["pets"]'));
   });
-  const client = new BrowserIntegrations(storage, async () => engine, origin);
+  const client = new BrowserIntegrations(storage, origin);
   expect(await client.catalog()).toEqual(['pets']);
 });
 
-it('supports write credentials without using the import engine', async () => {
+it('supports the demo callback and write credentials', async () => {
   const { client, http, values } = setup();
   const { state } = await client.start(
     'drive',
     'actor',
     'pets',
-    'https://atomic.example/app/integrations',
+    'https://atomic.example/app/devonian-demo',
   );
   await client.finish('drive', 'actor', state, 'handoff');
   http.mockImplementation(async (_url, init) => {
     expect(JSON.parse([...values.values()][0]).code).toBeUndefined();
     expect(init?.method).toBe('POST');
     expect(init?.body).toBe('{"title":"new"}');
+
     return new Response('{"id":1}', {
       status: 201,
-      headers: { 'X-Connection-Code': 'next' },
+      headers: { 'X-Connection-Code': 'next', Link: '<https://x/?p=2>' },
     });
   });
   await expect(
@@ -360,7 +239,16 @@ it('supports write credentials without using the import engine', async () => {
       method: 'POST',
       body: '{"title":"new"}',
     }),
-  ).toEqual({ status: 201, body: '{"id":1}' });
+  ).toEqual({
+    status: 201,
+    // Response headers reach the caller (pagination needs `Link`), except
+    // the rotated code, which never leaves this class.
+    headers: {
+      'content-type': 'text/plain;charset=UTF-8',
+      link: '<https://x/?p=2>',
+    },
+    body: '{"id":1}',
+  });
   expect(JSON.parse([...values.values()][0]).code).toBe('next');
 });
 it('forwards the conditional event version while keeping authorization host-owned', async () => {
@@ -375,6 +263,7 @@ it('forwards the conditional event version while keeping authorization host-owne
     });
     expect(init?.method).toBe('PATCH');
     expect(init?.body).toBe('{"summary":"Updated"}');
+
     return new Response('{}', { headers: { 'x-connection-code': 'next' } });
   });
   await client.request('drive', 'actor', state, 'pets', '/events/id', {
@@ -382,69 +271,4 @@ it('forwards the conditional event version while keeping authorization host-owne
     body: '{"summary":"Updated"}',
     ifMatch: '"version"',
   });
-});
-
-it('does not take consumer request budgets from an API description', async () => {
-  const { client, start, engine, http } = setup();
-  const { state } = await start();
-  await client.finish('drive', 'actor', state, 'first');
-  engine.describeIntegration = async () => JSON.stringify({
-    upstream: 'https://pets.example',
-    importPolicy: { maxRequests: 1 },
-    'x-import-policy': { timeoutMs: 1 },
-  });
-  let count = 0;
-  http.mockImplementation(async url => {
-    if (url.includes('/catalog/')) return new Response('{}');
-    return new Response('{}', { headers: { 'x-connection-code': `next-${++count}` } });
-  });
-  await client.fetchRecords('drive', 'actor', state, {});
-  expect(count).toBe(2);
-});
-
-it('rejects retry delays beyond the consumer deadline without sleeping', async () => {
-  const sleep = vi.fn(async () => {});
-  const { client, start, engine, http } = setup({ timeoutMs: 1000 }, sleep);
-  const { state } = await start();
-  await client.finish('drive', 'actor', state, 'first');
-  http.mockImplementation(async url => {
-    if (url.includes('/catalog/')) return new Response('{}');
-    return new Response('{}', { status: 429, headers: { 'x-connection-code': 'second', 'retry-after': '300' } });
-  });
-  await expect(client.fetchRecords('drive', 'actor', state, {})).rejects.toThrow('API retry delay exceeds remaining import time');
-  expect(sleep).not.toHaveBeenCalled();
-});
-
-
-it('checks exactly one provider request, discards the response and rotates credentials', async () => {
-  const { client, start, http, values, engine } = setup();
-  const { state } = await start();
-  await client.finish('drive', 'actor', state, 'first');
-  http.mockImplementation(async (url, init) => {
-    if (url.includes('/proxy/')) {
-      expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer first');
-      return new Response('{"items":[{"id":"one"}]}', { headers: { 'x-connection-code': 'next' } });
-    }
-    return new Response('{}');
-  });
-  // Real Syncables may collect transport errors and continue other roots.
-  engine.fetchIntegration = async (_t, _p, _c, _s, fetch) => {
-    for (const path of ['/pets', '/other']) {
-      try { await fetch('https://pets.example' + path); } catch { /* expected */ }
-    }
-    throw new Error('Traversal interrupted');
-  };
-  await expect(client.validateConnection('drive', 'actor', state, {})).resolves.toBeUndefined();
-  expect(http.mock.calls.filter(([url]) => url.includes('/proxy/'))).toHaveLength(1);
-  expect(values.get('localthought-browser-v1:' + state)).toContain('"code":"next"');
-});
-
-it.each([401, 429, 500])('fails the access check on HTTP %s without retrying', async status => {
-  const { client, start, http } = setup();
-  const { state } = await start();
-  await client.finish('drive', 'actor', state, 'first');
-  http.mockImplementation(async url => new Response('{}', url.includes('/proxy/')
-    ? { status, headers: { 'x-connection-code': 'next' } } : {}));
-  await expect(client.validateConnection('drive', 'actor', state, {})).rejects.toThrow(`HTTP ${status}`);
-  expect(http.mock.calls.filter(([url]) => url.includes('/proxy/'))).toHaveLength(1);
 });

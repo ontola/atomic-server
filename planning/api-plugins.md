@@ -211,3 +211,31 @@ work.
 3. If (1) is chosen: no further `atomic-plugins` work follows from this
    specific thread; `integrations/localthought/browser.ts` stays as #35
    left it (OAuth/PKCE + generic proxy `request()` only).
+
+## Decision (2026-09-23): option (1), with the read path in the browser
+
+ontola/atomic-plugins#52 records the maintainer's decision: take the reflector
+path (option 1 above), and don't restore the WASM methods. #1618's
+removal stands. Every platform moves at once rather than one by one, because
+the browser flow never talks to a running reflector server. Instead:
+
+- `integrations/localthought/reflector-read.ts` is reflector's read path
+  ported to the browser. It covers `discoverResourceModel` from
+  `crudResources`, the pagination-schemes subset from `syncables`, and the
+  ontology derivation of the removed Rust `derive_ontology`. Its only
+  transport is `BrowserIntegrations.request()`, LocalThought's rotating-code
+  proxy call; in reflector that transport is `authorizedFetch()`.
+  `PlatformReader` composes the two, and the data-browser calls only its
+  `describe`/`check`/`read`, in `ConnectLocalThought.tsx` and
+  `localThoughtSync.ts`. `localThought.ts` no longer loads any WASM for
+  integrations.
+- It is a port, not an import: this repo only has `integrations/`, and the
+  published `syncables` entry point imports Node built-ins. The canonical copy
+  lives in ontola/atomic-plugins; the copy here must match it.
+- The browser reads the catalog document as JSON from
+  `/catalog/<platform>.json`. The integration-proxy serves that route since
+  atomic-plugins#52. Without it, the reader falls back to `.yaml`.
+- Not ported: standalone `x-crud` reads and cross-collection links. A
+  collection gets its path variables only from setup values or from a parent
+  collection's identity binding. Writes still go through the Devonian lenses,
+  not this path.

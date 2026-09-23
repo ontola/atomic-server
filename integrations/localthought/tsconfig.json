@@ -8,5 +8,5 @@
     "types": ["node"],
     "noEmit": true
   },
-  "include": ["calendar.ts", "calendar-sync.ts", "schema.ts", "plugin.ts", "browser.ts"]
+  "include": ["calendar.ts", "calendar-sync.ts", "schema.ts", "plugin.ts", "browser.ts", "reflector-read.ts"]
 }

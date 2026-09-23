@@ -8,7 +8,7 @@ import {
 } from '@tomic/react';
 import type { Config } from '../../../../../integrations/localthought/plugin';
 import type { FetchedPlatform } from '../../../../../integrations/localthought/schema';
-import { browserIntegrations, platformName } from './localThought';
+import { platformName, platformReader } from './localThought';
 import { ensureLocalInstallationResource } from './installationResources';
 import { ensureImportTables } from './localThoughtTables';
 import { localImportVerdict } from './localImportVerdict';
@@ -96,10 +96,8 @@ export async function installLocalThought(
   options: Omit<LocalThoughtInstallation, 'folder'>,
 ) {
   assertOwner(store, options);
-  await browserIntegrations(options.origin).validateConnection(
-    options.drive,
-    options.actor,
-    options.connection,
+  await platformReader(options.origin).check(
+    options,
     options.constants,
     options.selection,
   );
@@ -145,15 +143,9 @@ export async function refreshLocalThought(
             warning: undefined,
           };
           saveInstallation(entry);
-          const fetched: FetchedPlatform = await browserIntegrations(
+          const fetched: FetchedPlatform = await platformReader(
             entry.origin,
-          ).fetchRecords(
-            entry.drive,
-            entry.actor,
-            entry.connection,
-            entry.constants,
-            entry.selection,
-          );
+          ).read(entry, entry.constants, entry.selection);
           if (fetched.platform !== entry.platform)
             throw new Error('Imported platform did not match this connection');
           const incomplete = fetched.errors?.length

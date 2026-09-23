@@ -9,30 +9,18 @@ export const platformName = (id: string) =>
     .filter(Boolean)
     .map(word => `${word[0]?.toUpperCase() ?? ''}${word.slice(1)}`)
     .join(' ');
-import {
-  BrowserIntegrations,
-  type Engine,
-} from '../../../../../integrations/localthought/browser';
-import { wasmJsUrl, wasmBinaryUrl } from '../../helpers/wasmUrls';
-let loaded: Promise<Engine> | undefined;
+import { BrowserIntegrations } from '../../../../../integrations/localthought/browser';
+import { PlatformReader } from '../../../../../integrations/localthought/reflector-read';
 
-async function engine(): Promise<Engine> {
-  return (loaded ??= (async () => {
-    const url = wasmJsUrl();
-    const module = await import(/* @vite-ignore */ url);
-    await module.default({ module_or_path: wasmBinaryUrl() });
-    if (typeof module.fetchIntegration !== 'function')
-      throw new Error('Rebuild the WASM bundle and reload Atomic');
-
-    return module;
-  })().catch(error => {
-    loaded = undefined;
-    throw error;
-  }));
-}
-
+/** OAuth/PKCE and the rotating-code proxy call; the credential stays inside. */
 export const browserIntegrations = (origin = getIntegrationProxy()) =>
-  new BrowserIntegrations(localStorage, engine, origin);
+  new BrowserIntegrations(localStorage, origin);
+/**
+ * Setup description and one-way import, read from the proxy's catalog
+ * document on the reflector path (atomic-plugins#52): no WASM engine.
+ */
+export const platformReader = (origin = getIntegrationProxy()) =>
+  new PlatformReader(browserIntegrations(origin));
 export async function proxyRequest<T>(
   store: Store,
   action: string,
@@ -43,11 +31,6 @@ export async function proxyRequest<T>(
     returnUrl?: string;
     state?: string;
     connectionCode?: string;
-    connection?: string;
-    constants?: Record<string, string>;
-    selection?: {
-      query_overrides: { path: string; values: Record<string, unknown> }[];
-    };
   },
 ): Promise<T> {
   const actor = store.getAgent()?.subject;
@@ -67,14 +50,6 @@ export async function proxyRequest<T>(
       body.state!,
       body.connectionCode!,
     )) as T;
-  if (action === 'fetch')
-    return client.fetchRecords(
-      body.drive,
-      actor,
-      body.connection!,
-      body.constants ?? {},
-      body.selection,
-    );
   throw new Error('Unknown browser integration action');
 }
 export interface SavedConnection {

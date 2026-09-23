@@ -14,9 +14,9 @@ vi.mock('@tomic/react', () => ({
   applyHostFromStore: () => ({}),
 }));
 vi.mock('./localThought', () => ({
-  browserIntegrations: () => ({
-    fetchRecords: mocks.fetch,
-    validateConnection: mocks.validate,
+  platformReader: () => ({
+    read: mocks.fetch,
+    check: mocks.validate,
   }),
   platformName: (name: string) => name,
 }));

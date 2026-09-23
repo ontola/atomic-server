@@ -1,8 +1,8 @@
 # LocalThought browser integrations
 
 The LocalThought flow runs entirely in the browser: catalog discovery, OAuth
-consent, PKCE-protected return handling, paginated Syncables reads, ontology
-creation and local Store/OPFS writes. Installation validates access once, creates
+consent, PKCE-protected return handling, paginated reads of the platform's
+catalog document, ontology creation and local Store/OPFS writes. Installation validates access once, creates
 a folder, and starts an automatic inbound import without a proposal dialog. No AtomicServer HTTP
 instance is needed. LocalThought remains the remote OAuth and API proxy.
 
@@ -22,9 +22,15 @@ Web Locks serialize rotating codes across tabs; a request consumes its code
 before dispatch and saves the replacement before processing data. Uncertain
 requests cannot silently replay credentials.
 
-Syncables is vendored temporarily under `syncables/` with upstream provenance in
-`UPSTREAM.md`; the matching upstream branch is `codex/browser-integrations`.
-`wasm/src/integrations.rs` exposes its in-memory engine through wasm-bindgen.
+Reads go through `reflector-read.ts`, reflector's read path ported to the
+browser (ontola/atomic-plugins#52). It replaces the WASM
+`describeIntegration`/`fetchIntegration` bridge that #1618 removed. It reads
+`crudResources` and the pagination-schemes subset from the proxy's catalog
+document (`/catalog/<platform>.json`), derives the ontology, and reaches the
+provider only through `BrowserIntegrations.request()`. The data-browser uses
+its `PlatformReader` for setup (`describe`), the installation check (`check`)
+and imports (`read`). `browser.ts` and `reflector-read.ts` are copies of
+ontola/atomic-plugins' `integrations/localthought/`; change them there first.
 The shipped pure import mapper reads a local snapshot and produces the existing
 reviewed intents; user-edited plugin source is not executed on this path.
 Local edits and repeated imports retain the existing reconciliation behavior.
@@ -68,7 +74,9 @@ silently take over the old plugin tables.
 
 ## Build and proxy requirements
 
-- Build `atomic-wasm` using `cd browser/data-browser && pnpm build:wasm`.
+- The integration-proxy should serve `/catalog/<platform>.json`. Without that
+  route the reader falls back to `/catalog/<platform>.yaml`, which works only
+  when its body is JSON (the mock's is).
 - Open **Settings → Integration** to select the integration-proxy URL. The
   preference is saved in this browser and applies without rebuilding. Connections
   are isolated by proxy origin; switching back restores that proxy’s connections.
@@ -96,9 +104,8 @@ server plugin execution, actions and schedules are outside this migration.
 ## Checks
 
 ```sh
-cargo check -p atomic-wasm --target wasm32-unknown-unknown
 browser/node_modules/.bin/vitest run --config integrations/localthought/vitest.config.ts
-node integrations/localthought/wasm-smoke.mjs # after building wasm/pkg
+browser/node_modules/.bin/tsc -p integrations/localthought/tsconfig.json
 ```
 
 For the browser-only mock journey (no AtomicServer on port 19999):
