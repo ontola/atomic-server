@@ -4,6 +4,15 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: editing a kanban card's title is reliable. A space or Enter typed in
+  the title started a keyboard drag of the card, which swallowed the space,
+  moved focus away and saved a partial title; selecting text with the mouse
+  could start a drag too. The editor also had a different size than the title,
+  so the card resized when editing started and the next click could land on
+  another card and open it. The editor now matches the title's box and wraps
+  like it, opens with the caret under the click, commits on Enter or blur,
+  cancels on Escape, and shows the new title while it saves.
+
 - Fix: the integration proxy may live on a `.localhost` name. `proxyOrigin`
   allowed plain http only for the bare `localhost` and `127.0.0.1`, so a proxy
   at, say, `http://atomic.localhost:19090` was rejected, and because the value
