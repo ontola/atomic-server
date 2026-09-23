@@ -262,6 +262,63 @@ test.describe('kanban', () => {
     },
   );
 
+  test('a task added from another view starts in the default lane', async ({
+    page,
+  }) => {
+    await createTableFromDialog(page, {
+      template: /Project tasks/,
+      name: 'Chores',
+    });
+    await expect(page.getByTestId('kanban-board')).toBeVisible();
+
+    // The template makes Todo the lane new tasks start in.
+    await expect(
+      column(page, 'todo').getByTestId('kanban-column-default'),
+    ).toBeVisible();
+
+    const addOnToday = async (title: string) => {
+      await page.getByRole('tab', { name: 'Schedule' }).click();
+      const today = new Date();
+      const todayKey = [
+        today.getFullYear(),
+        String(today.getMonth() + 1).padStart(2, '0'),
+        String(today.getDate()).padStart(2, '0'),
+      ].join('-');
+      const todayCell = page.locator(
+        `[data-testid="calendar-day"][data-date="${todayKey}"]`,
+      );
+      await todayCell.hover();
+      await todayCell.getByTestId('calendar-day-add').click();
+      const input = todayCell.getByPlaceholder('New item…');
+      await input.fill(title);
+      await input.press('Enter');
+      await expect(
+        todayCell.getByTestId('calendar-event').filter({ hasText: title }),
+      ).toBeVisible();
+      await page.getByRole('tab', { name: 'Board' }).click();
+      await expect(page.getByTestId('kanban-board')).toBeVisible();
+    };
+
+    // Added on the calendar, it still lands in Todo rather than "No status".
+    await addOnToday('Water the plants');
+    await expect(
+      cardIn(column(page, 'todo'), 'Water the plants'),
+    ).toBeVisible();
+    await expect(column(page, 'No status')).not.toBeVisible();
+
+    // Another lane can be made the default from its menu.
+    const doing = column(page, 'doing');
+    await doing.getByRole('button', { name: 'Lane options' }).click();
+    await page.getByTestId('menu-item-default-lane').click();
+    await expect(doing.getByTestId('kanban-column-default')).toBeVisible();
+    await expect(
+      column(page, 'todo').getByTestId('kanban-column-default'),
+    ).toHaveCount(0);
+
+    await addOnToday('Take out the bins');
+    await expect(cardIn(doing, 'Take out the bins')).toBeVisible();
+  });
+
   test('clicking a card opens it in the expanded modal (not full-screen)', async ({
     page,
   }) => {

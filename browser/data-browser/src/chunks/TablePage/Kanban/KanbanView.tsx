@@ -39,6 +39,11 @@ import { useKanbanGroupBy } from './useKanbanGroupBy';
 import { TablePresenceContext } from '../TablePresence';
 import { KanbanFlipContext, type CardFlipRecord } from './cardFlip';
 import { computeSortOrder, readSortKey } from '@helpers/fractionalSortOrder';
+import {
+  readRowDefaults,
+  setRowDefault,
+  withTableRowDefaults,
+} from '../rowDefaults';
 
 interface KanbanViewProps {
   /** The Table resource; new cards are created as its children. */
@@ -70,6 +75,20 @@ export function KanbanView({
 }: KanbanViewProps): JSX.Element {
   const store = useStore();
   const sensors = useDragSensors();
+  const table = useResource(tableSubject);
+
+  // A Status column the board creates itself starts new rows in Todo, the same
+  // as one a template sets up.
+  const handleStatusCreated = useCallback(
+    async (property: string, tagsByName: Record<string, string>) => {
+      const todo = tagsByName['Todo'];
+
+      if (todo) {
+        await setRowDefault(table, property, [todo]);
+      }
+    },
+    [table],
+  );
 
   const { groupBy, status } = useKanbanGroupBy(
     tableClass,
@@ -77,6 +96,29 @@ export function KanbanView({
     viewGroupBy,
     setViewGroupBy,
     !readOnly,
+    handleStatusCreated,
+  );
+
+  // The lane new rows start in, from whichever view they are added: the
+  // table's default value for the group-by property.
+  const defaultValue = groupBy ? readRowDefaults(table)[groupBy] : undefined;
+  const defaultTag = Array.isArray(defaultValue)
+    ? (defaultValue[0] as string | undefined)
+    : undefined;
+
+  const handleSetDefaultLane = useCallback(
+    (tagSubject: string | undefined) => {
+      if (!groupBy) {
+        return;
+      }
+
+      void setRowDefault(
+        table,
+        groupBy,
+        tagSubject ? [tagSubject] : undefined,
+      ).catch(() => undefined);
+    },
+    [table, groupBy],
   );
 
   // All rows of the table, loaded up front so cards can be bucketed by their
@@ -185,7 +227,9 @@ export function KanbanView({
 
   // Create a new card already assigned to a column: a row of the table's class
   // with its group-by property preset to that column's tag (empty for the
-  // "No status" column). `createdAt` is required for it to appear in the table.
+  // "No status" column, even when the table has a default lane). The table's
+  // other row defaults apply. `createdAt` is required for it to appear in the
+  // table.
   const handleCreateCard = useCallback(
     async (tagSubject: string | undefined, name: string) => {
       const trimmed = name.trim();
@@ -194,13 +238,19 @@ export function KanbanView({
         return;
       }
 
-      const propVals: Record<string, JSONValue> = {
-        [core.properties.name]: trimmed,
-        [commits.properties.createdAt]: Date.now(),
-      };
+      const propVals: Record<string, JSONValue> = await withTableRowDefaults(
+        store,
+        tableSubject,
+        {
+          [core.properties.name]: trimmed,
+          [commits.properties.createdAt]: Date.now(),
+        },
+      );
 
       if (groupBy && tagSubject) {
         propVals[groupBy] = [tagSubject];
+      } else if (groupBy) {
+        delete propVals[groupBy];
       }
 
       const row = await store.newResource({
@@ -503,6 +553,13 @@ export function KanbanView({
                   rowName={tableClass.title || 'Row'}
                   readOnly={readOnly}
                   isDropTarget={columnId === dropTargetColumn}
+                  isDefault={!isUncategorized && columnId === defaultTag}
+                  onSetDefault={
+                    isUncategorized
+                      ? undefined
+                      : isDefault =>
+                          handleSetDefaultLane(isDefault ? columnId : undefined)
+                  }
                   onAddCard={name =>
                     handleCreateCard(
                       isUncategorized ? undefined : columnId,

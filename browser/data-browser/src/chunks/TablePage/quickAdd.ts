@@ -7,6 +7,7 @@ import {
   type Store,
 } from '@tomic/react';
 import { ROW_ACTION_GENERATORS, type RowActionKind } from './rowActions';
+import { withTableRowDefaults } from './rowDefaults';
 
 /**
  * One value a new row starts with.
@@ -155,7 +156,8 @@ export async function createQuickAddRow(
   const row = await store.newResource({
     parent: table,
     isA: rowClass,
-    propVals,
+    // The presets above win over the table's defaults.
+    propVals: await withTableRowDefaults(store, table, propVals),
   });
   await row.save();
   // Tells the rest of the app a row appeared that it did not ask for — the
