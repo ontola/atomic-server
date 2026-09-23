@@ -1260,6 +1260,19 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                             transport.runLiveTask(history, signal)
                           }
                           onActive={setLiveActive}
+                          takeContext={() => {
+                            const context = [
+                              ...externalContextItems,
+                              ...userSelectedContextItems,
+                            ];
+
+                            if (context.length > 0) {
+                              setUserSelectedContextItems([]);
+                              setExternalContextItems([]);
+                            }
+
+                            return context;
+                          }}
                           onTranscript={message => {
                             setMessages(previous =>
                               previous.some(m => m.id === message.id)
