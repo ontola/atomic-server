@@ -69,6 +69,7 @@ import type { GroupGranularity } from './tableAggregates';
 import type { AggregateTarget } from './tablePageContext';
 import type { DerivedColumnSpec } from './derivedColumns';
 import { TablePresenceContext, useTablePresence } from './TablePresence';
+import { withRowDefaults } from './rowDefaults';
 
 interface TableResourceProps {
   resource: Resource<DataBrowser.Table>;
@@ -845,12 +846,12 @@ export const TableResource: React.FC<TableResourceProps> = ({
         const row = await store.newResource({
           parent: resource.subject,
           isA: tableClass.subject,
-          propVals: {
+          propVals: withRowDefaults(resource, {
             [dataBrowser.properties.sortOrder]: computeSortOrder(
               readSortKey(anchor),
               readSortKey(next),
             ),
-          },
+          }),
         });
 
         // Table classes only `recommend` their columns, so an empty row is

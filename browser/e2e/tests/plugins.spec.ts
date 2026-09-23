@@ -6,6 +6,7 @@ import {
   createFromCatalog,
   createTableFromDialog,
   getDevDriveSecret,
+  openWorkspaceDialog,
   SERVER_URL,
 } from './test-utils';
 import {
@@ -85,7 +86,24 @@ test.describe('plugins', () => {
       })
       .click();
     await expect(page).not.toHaveURL(/connection_code=/);
-    await page.getByRole('button', { name: 'Complete installation' }).click();
+    // Losing `connection_code` only means the code was consumed. The button
+    // stays disabled until `describe(platform)` has answered with this
+    // connection's collections (`ConnectLocalThought.tsx`, the mount effect
+    // that calls `setCollections`), a proxy round trip that cannot even start
+    // before the page is back from the LocalThought redirect. Nothing waited
+    // for it, so the click's own 10s action timeout was the shortest budget in
+    // the test and it guarded the heaviest step: on develop run 4470 it
+    // expired on all three attempts with the button resolved and `disabled`.
+    //
+    // Wait for the state the click needs rather than widening the click. If
+    // the collections never arrive at all, this now fails saying the button
+    // stayed disabled, which is a product bug no budget fixes and which a
+    // click timeout would have gone on hiding.
+    const completeInstallation = page.getByRole('button', {
+      name: 'Complete installation',
+    });
+    await expect(completeInstallation).toBeEnabled({ timeout: 30_000 });
+    await completeInstallation.click();
     await page.getByRole('link', { name: 'Open folder', exact: true }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Last synced' }),
@@ -1033,14 +1051,12 @@ export function run() { return { intents: [] }; }
       .getByRole('button', { name: 'Connect GitHub', exact: true })
       .click();
     await expect(page).toHaveURL(/\/app\/show\?subject=/, { timeout: 30000 });
-    // The install is still running when that URL appears: the button here
-    // reads "Connecting…" and is disabled until the connection settles, so
-    // `Connections` does not exist yet. The 30s above covers the navigation
-    // and nothing after it. Measured here: the click succeeds at 45s and the
-    // whole test takes 48s, against a 10s default that it never met.
-    await page
-      .getByRole('button', { name: 'Connections', exact: true })
-      .click({ timeout: 45000 });
+    // The install is still running when that URL appears, so the table page
+    // and its `Connections` menu item do not exist yet. The 30s above covers
+    // the navigation and nothing after it. Measured here: the click succeeds
+    // at 45s and the whole test takes 48s, against a 10s default that it
+    // never met.
+    await openWorkspaceDialog(page, 'connections', 45000);
     await page
       .getByRole('link', { name: 'Connection settings', exact: true })
       .click();

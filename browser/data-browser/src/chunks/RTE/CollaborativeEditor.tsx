@@ -200,7 +200,12 @@ export default function CollaborativeEditor({
           ]),
         }),
         ResourceCommands.configure({
-          suggestion: buildResourceSuggestion(menuContainer, store, drive),
+          suggestion: buildResourceSuggestion(
+            menuContainer,
+            store,
+            drive,
+            resource.subject,
+          ),
         }),
         ResourceNode.configure({
           store,

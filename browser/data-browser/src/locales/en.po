@@ -12378,3 +12378,17 @@ msgstr "Access to"
 #: src/components/Share/ShareDialog.tsx
 msgid "Inherited permissions"
 msgstr "Inherited permissions"
+#. 0: lowerRowName
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "Stop starting new {0}s here"
+msgstr "Stop starting new {0}s here"
+
+#. 0: lowerRowName
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "Start new {0}s here"
+msgstr "Start new {0}s here"
+
+#. 0: lowerRowName
+#: src/chunks/TablePage/Kanban/KanbanColumn.tsx
+msgid "New {0}s start here"
+msgstr "New {0}s start here"
