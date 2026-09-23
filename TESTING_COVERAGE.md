@@ -1234,9 +1234,10 @@ request; the JS client test checks the signed request fields. Deleted-automation
 reconciliation and per-run (rather than per-worker) concurrency remain open.
 
 Notion setup UX and proxy migration: the provider and its tests moved to
-atomic-plugins. `integrations/localthought/async-plugin.test.ts` checks bounded
-receipt replay without duplicate HTTP requests. `browser-sync.test.ts` checks
-durable uncertainty and refusal to replay a lost write, plus converged checkpoints.
+atomic-plugins, and so did its browser sync host (`async-plugin.ts` and
+`browser-sync.ts`; their only importer here, `browserPluginSync.ts`, went with
+the LocalThought removal). Their tests (bounded receipt replay, refusal to
+replay a lost write, converged checkpoints) run there.
 
 Runtime feature coverage: `cargo check -p atomic-server` and
 `cargo check -p atomic-server --no-default-features --features light` validate
