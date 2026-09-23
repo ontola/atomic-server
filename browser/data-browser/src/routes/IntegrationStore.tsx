@@ -171,11 +171,14 @@ function IntegrationStore(): React.JSX.Element {
     PendingInstallation & { entry: Listing }
   >();
   const serverUrl = store.getServerUrl();
-  // Fetched regardless of the toggle, so the toggle can be offered whenever
-  // this server has listings; they are only shown once it is on.
   useEffect(() => {
     setCatalogError(undefined);
-    setListings(undefined);
+
+    if (!showExperimentalPlugins) {
+      setListings(undefined);
+
+      return;
+    }
 
     const controller = new AbortController();
     void fetch(`${serverUrl}/plugin-catalog`, { signal: controller.signal })
@@ -189,7 +192,7 @@ function IntegrationStore(): React.JSX.Element {
       });
 
     return () => controller.abort();
-  }, [serverUrl]);
+  }, [serverUrl, showExperimentalPlugins]);
 
   const fetchRelease = async (id: string): Promise<PublishedRelease> => {
     const response = await fetch(
@@ -277,9 +280,9 @@ function IntegrationStore(): React.JSX.Element {
   const hasApiPlugins = catalogEntries.some(
     entry => entry.enabled && entry.requiresApiPlugins,
   );
-  const hasExperimentalPlugins =
-    catalogEntries.some(entry => entry.enabled && entry.experimental) ||
-    (listings?.length ?? 0) > 0;
+  const hasExperimentalPlugins = catalogEntries.some(
+    entry => entry.enabled && entry.experimental,
+  );
   const visible = (showExperimentalPlugins ? listings : [])?.filter(entry =>
     [entry.name, entry.description, ...entry.domains, ...entry.standards]
       .join(' ')

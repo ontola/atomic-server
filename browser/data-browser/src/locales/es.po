@@ -8772,16 +8772,6 @@ msgstr ""
 msgid "Submit new {0}"
 msgstr ""
 
-#. 0: open.length
-#: src/chunks/TablePage/Issues/IssuesView.tsx
-msgid "<0/> {0} Open"
-msgstr ""
-
-#. 0: closed.length
-#: src/chunks/TablePage/Issues/IssuesView.tsx
-msgid "<0/> {0} Closed"
-msgstr ""
-
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 msgid "Issue state"
 msgstr ""
@@ -9473,4 +9463,14 @@ msgstr ""
 
 #: src/chunks/TablePage/Issues/IssuesView.tsx
 msgid "Nothing closed."
+msgstr ""
+
+#. 0: open.length
+#: src/chunks/TablePage/Issues/IssuesView.tsx
+msgid "{0} Open"
+msgstr ""
+
+#. 0: closed.length
+#: src/chunks/TablePage/Issues/IssuesView.tsx
+msgid "{0} Closed"
 msgstr ""

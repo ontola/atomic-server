@@ -279,7 +279,8 @@ export function IssuesView({
             $active={filter === 'open'}
             onClick={() => setFilter('open')}
           >
-            <FaRegCircleDot aria-hidden /> {open.length} Open
+            <FaRegCircleDot aria-hidden />
+            <span>{open.length} Open</span>
           </StateTab>
           <StateTab
             type='button'
@@ -287,7 +288,8 @@ export function IssuesView({
             $active={filter === 'closed'}
             onClick={() => setFilter('closed')}
           >
-            <FaRegCircleCheck aria-hidden /> {closed.length} Closed
+            <FaRegCircleCheck aria-hidden />
+            <span>{closed.length} Closed</span>
           </StateTab>
         </ListHeader>
         <List>
