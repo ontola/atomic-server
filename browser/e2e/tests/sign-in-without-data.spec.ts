@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import { Agent, generateKeyPair } from '@tomic/lib';
+import { Agent, generateKeyPair, toLegacyScheme } from '@tomic/lib';
 import {
   FRONTEND_URL,
   getCurrentSubject,
@@ -103,7 +103,7 @@ test('an unavailable legacy home does not prevent a writable derived home', asyn
     /^Failed to load resource: the server responded with a status of 404 \(Not Found\)$/,
     'The deliberately unavailable legacy drive returns 404.',
     1,
-    new RegExp(`/did\\?subject=${encodeURIComponent(legacy)}$`),
+    new RegExp(`/(?:did|resource)\\?subject=${encodeURIComponent(legacy)}$`),
     { optional: true },
   );
   browserDiagnostics.expect(
@@ -126,7 +126,7 @@ test('a restored session can initialize its missing private home from a direct l
   browserDiagnostics.expect(
     'warning',
     new RegExp(
-      `^\\[WS\\] refused: (SUB|SYNC) refused for ${home}: not readable$`,
+      `^\\[WS\\] refused: (SUB|SYNC) refused for (?:${home}|${toLegacyScheme(home)}): not readable$`,
     ),
     'The persisted identity has no drive on the node while recovery and initialization run; bounded sync retries may be refused.',
     16,

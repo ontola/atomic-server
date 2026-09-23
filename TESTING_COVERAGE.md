@@ -51,6 +51,11 @@ lifecycle tests remain for its retained, separate backend implementation.
 Plugin configuration: hook tests retain a release's validation schema when a save
 receipt omits computed metadata, and clear it when the release or installation
 changes. The plugin-install E2E checks invalid config after saving valid config.
+`browser/lib/src/plugin-install.test.ts` checks that installation and release
+updates validate built-in fields without public Property fetches and preserve
+JSON tags for grants and config. `embedded-vocabulary-routing.test.ts` covers
+host routing for plugin classes, while `plugin.spec.ts` installs a release and
+verifies the active plugin in Chromium.
 
 Editor sync formatting: unit tests cover both enabling and disabling bold before
 an incoming property update, so sync receipts cannot reset the next typed text's
@@ -2270,3 +2275,11 @@ must not override an intentional sign-out or device lock.
 | Pre-DID queries retry without unsupported parameters and filter locally | `browser/lib/src/legacy-http-collection.test.ts` | Preserves drive ancestry and AND filters, sorts before pagination, keeps undated rows; a loaded parent Drive overrides stale default scope |
 | Migrated agents authenticate legacy HTTP reads at their original origin | `browser/lib/src/client-legacy-auth.test.ts` | Original HTTP identity, padded standard-base64 key/signature, real Ed25519 verification; other hosts, schemes, ports and lookalikes never receive the legacy identity |
 | Public legacy HTTP drive and its children load from a nodeless home | `browser/lib/src/legacy-http-live-check.test.ts` | Opt-in `ATOMIC_LEGACY_LIVE=1`; live atomicdata.dev read verified 2026-09-23. Does not cover private legacy auth or browser sidebar rendering |
+
+## Agent secrets from app.atomic.place (#1649)
+
+`browser/lib/src/agent-secret-1649.test.ts` passes a synthetic secret in the
+deployed app's base64 JSON format with an `atomic:agent:` subject through the
+same `Agent.fromSecret` parser used by the local welcome form. It verifies
+the identity and public key. Browser sign-in and data recovery are separate
+flows.
