@@ -6,9 +6,9 @@ reach a server as JS bundles fetched over HTTP from its catalog
 URL set under Settings > Integration). Provider code, provider tests and
 provider certification belong there, not here.
 
-This folder keeps only the host side that the data-browser imports:
-`localthought/`, the LocalThought proxy client and sync layer. It also keeps
-the docs for the host's plugin contract. Test plugins and the catalog mock the
+This folder keeps `localthought/`, the LocalThought proxy client, until
+atomic-plugins takes it over; the data-browser no longer imports it. It also
+keeps the docs for the host's plugin contract. Test plugins and the catalog mock the
 e2e suite runs against are fixtures under [`testdata/`](../testdata/).
 
 Named actions, automation permissions, recovery and MCP setup are documented in

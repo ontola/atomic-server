@@ -10,17 +10,14 @@ const EXPERIMENTAL_PROP =
 const ENABLED_PROP = 'https://atomicdata.dev/integrations/properties/enabled';
 const REQUIRES_API_PLUGINS_PROP =
   'https://atomicdata.dev/integrations/properties/requires-api-plugins';
-const PLATFORM_PROP = 'https://atomicdata.dev/integrations/properties/platform';
 
-// A parsed integrations/catalog.json entry: the flags that decide whether a
-// LocalThought proxy platform gets a card. `platform` names the proxy
-// platform the entry describes; without it, the shortname is the platform.
+// A parsed integrations/catalog.json entry: the flags that decide what the
+// Integrations page offers.
 export interface CatalogEntry {
   shortname: string;
   experimental: boolean;
   enabled: boolean;
   requiresApiPlugins: boolean;
-  platform?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -39,15 +36,12 @@ export function parseCatalogEntries(raw: unknown): CatalogEntry[] {
     if (!Array.isArray(isA) || !isA.includes(CATALOG_ENTRY_CLASS)) return [];
     if (typeof shortname !== 'string' || !shortname) return [];
 
-    const platform = resource[PLATFORM_PROP];
-
     return [
       {
         shortname,
         experimental: resource[EXPERIMENTAL_PROP] !== false,
         enabled: resource[ENABLED_PROP] === true,
         requiresApiPlugins: resource[REQUIRES_API_PLUGINS_PROP] === true,
-        platform: typeof platform === 'string' ? platform : undefined,
       },
     ];
   });
@@ -116,20 +110,13 @@ export function useIntegrationCatalog(): {
   return { entries: entries ?? [], ready: entries !== undefined, error };
 }
 
-/** Entries keyed by the proxy platform they describe (`platform ?? shortname`). */
-export function catalogByPlatform(
-  entries: CatalogEntry[],
-): Map<string, CatalogEntry> {
-  return new Map(
-    entries.map(entry => [entry.platform ?? entry.shortname, entry]),
+/**
+ * Whether the catalog has an enabled experimental entry the app can offer.
+ * Entries that need API plugins don't count: nothing can run them until the
+ * host proxies their calls (#1624).
+ */
+export function hasExperimentalEntries(entries: CatalogEntry[]): boolean {
+  return entries.some(
+    entry => entry.enabled && entry.experimental && !entry.requiresApiPlugins,
   );
-}
-
-export function isCatalogVisible(
-  entry: CatalogEntry | undefined,
-  showExperimentalPlugins: boolean,
-): boolean {
-  if (!entry || !entry.enabled) return false;
-
-  return showExperimentalPlugins || !entry.experimental;
 }

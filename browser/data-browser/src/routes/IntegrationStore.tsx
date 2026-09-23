@@ -1,9 +1,10 @@
 import { usePluginClass } from '../chunks/PluginRuns/runScript';
-import { LocalThoughtCatalog } from '../chunks/PluginRuns/LocalThoughtCatalog';
-import { LocalThoughtCallback } from '../chunks/PluginRuns/localThoughtCallback';
 import { NewAutomation } from '../chunks/PluginRuns/NewAutomation';
 import { ConnectedIntegration } from '../chunks/PluginRuns/ConnectedIntegration';
-import { useIntegrationCatalog } from '../chunks/PluginRuns/pluginCatalog';
+import {
+  hasExperimentalEntries,
+  useIntegrationCatalog,
+} from '../chunks/PluginRuns/pluginCatalog';
 import { useIntegrationVisibility } from '@hooks/useIntegrationVisibility';
 import { createRoute } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
@@ -75,8 +76,7 @@ function IntegrationStore(): React.JSX.Element {
   const { drive } = useSettings();
   // Opened from a workspace: new automations can belong to it.
   const { workspace } = IntegrationStoreRoute.useSearch();
-  const { showApiPlugins, showExperimentalPlugins, setVisibility } =
-    useIntegrationVisibility();
+  const { showExperimentalPlugins, setVisibility } = useIntegrationVisibility();
   const {
     entries: catalogEntries,
     ready: catalogReady,
@@ -165,7 +165,6 @@ function IntegrationStore(): React.JSX.Element {
     };
   }, [store, drive]);
   const [search, setSearch] = useState('');
-  const [apiCatalogHasResults, setApiCatalogHasResults] = useState(true);
   const [creating, setCreating] = useState<string>();
   const [pending, setPending] = useState<
     PendingInstallation & { entry: Listing }
@@ -275,24 +274,16 @@ function IntegrationStore(): React.JSX.Element {
   };
 
   const query = search.trim().toLocaleLowerCase();
-  // Only offer a toggle when the catalog has something behind it: a checkbox
+  // Only offer the toggle when the catalog has something behind it: a checkbox
   // that reveals nothing reads as broken.
-  const hasApiPlugins = catalogEntries.some(
-    entry => entry.enabled && entry.requiresApiPlugins,
-  );
-  const hasExperimentalPlugins = catalogEntries.some(
-    entry => entry.enabled && entry.experimental,
-  );
+  const hasExperimentalPlugins = hasExperimentalEntries(catalogEntries);
   const visible = (showExperimentalPlugins ? listings : [])?.filter(entry =>
     [entry.name, entry.description, ...entry.domains, ...entry.standards]
       .join(' ')
       .toLocaleLowerCase()
       .includes(query),
   );
-  const nothingToDiscover =
-    catalogReady &&
-    (!showApiPlugins || !apiCatalogHasResults) &&
-    !visible?.length;
+  const nothingToDiscover = catalogReady && !visible?.length;
 
   return (
     <Main>
@@ -348,7 +339,6 @@ function IntegrationStore(): React.JSX.Element {
             </section>
           )}
           <h2>Discover integrations</h2>
-          <LocalThoughtCallback drive={drive} />
           <Input
             aria-label='Search integrations'
             placeholder='Search integrations, domains or standards'
@@ -368,40 +358,17 @@ function IntegrationStore(): React.JSX.Element {
           {showExperimentalPlugins && !listings && !catalogError && (
             <p>Loading integrations…</p>
           )}
-          {(hasApiPlugins || hasExperimentalPlugins) && (
-            <Column gap='0.5rem'>
-              {hasApiPlugins && (
-                <CheckboxLabel>
-                  <Checkbox
-                    checked={showApiPlugins}
-                    onChange={value => setVisibility('show-api-plugins', value)}
-                  />
-                  Show API plugins
-                </CheckboxLabel>
-              )}
-              {hasExperimentalPlugins && (
-                <CheckboxLabel>
-                  <Checkbox
-                    checked={showExperimentalPlugins}
-                    onChange={value =>
-                      setVisibility('show-experimental-plugins', value)
-                    }
-                  />
-                  Show experimental plugins
-                </CheckboxLabel>
-              )}
-            </Column>
-          )}
-          <Grid>
-            {showApiPlugins && (
-              <LocalThoughtCatalog
-                drive={drive}
-                search={search}
-                showExperimentalPlugins={showExperimentalPlugins}
-                onVisibilityChange={setApiCatalogHasResults}
+          {hasExperimentalPlugins && (
+            <CheckboxLabel>
+              <Checkbox
+                checked={showExperimentalPlugins}
+                onChange={value =>
+                  setVisibility('show-experimental-plugins', value)
+                }
               />
-            )}
-          </Grid>
+              Show experimental plugins
+            </CheckboxLabel>
+          )}
           {nothingToDiscover && <DiscoverEmptyState searching={!!query} />}
           <Column gap='0.75rem'>
             {visible && visible.length > 0 && (

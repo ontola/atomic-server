@@ -73,7 +73,6 @@ See `wasm-plugins/examples/random-folder-extender` for a minimal Rust project th
 Open **Settings → Integration** to choose which plugins appear on the
 **Integrations** page:
 
-- **Show API plugins** displays the catalog's API (integration-proxy) entries.
 - **Show experimental plugins** displays the catalog's experimental entries and
   unverified community plugins.
 

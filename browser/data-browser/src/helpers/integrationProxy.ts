@@ -1,14 +1,25 @@
 // @wc-ignore-file
 import { useSyncExternalStore } from 'react';
 import {
-  configuredProxy,
-  saveProxy,
-} from '../../../../integrations/localthought/settings';
-import {
-  DEFAULT_PROXY,
-  proxyOrigin,
-} from '../../../../integrations/localthought/browser';
-import { subscribeToSetting, validDefault } from './runtimeSetting';
+  isHttpsOrLoopback,
+  subscribeToSetting,
+  validDefault,
+} from './runtimeSetting';
+
+/** The public LocalThought integration proxy. */
+const DEFAULT_PROXY = 'https://localthought.io';
+const storageKey = 'integration-proxy-url';
+
+/** A bare HTTPS (or loopback HTTP) origin, or it throws. */
+function proxyOrigin(value: string): string {
+  const url = new URL(value);
+
+  if (url.origin !== value || !isHttpsOrLoopback(url)) {
+    throw new Error('Proxy must be an HTTPS origin or localhost');
+  }
+
+  return value;
+}
 
 // `proxyOrigin` rejects anything but a bare origin, so a build-time default
 // with a path falls back to the compiled-in proxy.
@@ -24,7 +35,9 @@ export const getIntegrationProxy = (): string => {
   // value that no longer validates (hand-edited, or left by an older build)
   // falls back to the default rather than throwing out of a render.
   try {
-    return configuredProxy(localStorage, defaultIntegrationProxy);
+    return proxyOrigin(
+      localStorage.getItem(storageKey) || defaultIntegrationProxy,
+    );
   } catch {
     return defaultIntegrationProxy;
   }
@@ -32,8 +45,16 @@ export const getIntegrationProxy = (): string => {
 
 const event = 'integration-proxy-change';
 
+/** Saves a proxy origin; empty resets to the default. Throws when invalid. */
 export function setIntegrationProxy(value: string) {
-  saveProxy(localStorage, value);
+  const trimmed = value.trim();
+
+  if (trimmed) {
+    localStorage.setItem(storageKey, proxyOrigin(trimmed.replace(/\/$/, '')));
+  } else {
+    localStorage.removeItem(storageKey);
+  }
+
   window.dispatchEvent(new Event(event));
 }
 

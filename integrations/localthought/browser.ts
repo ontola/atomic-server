@@ -1,4 +1,3 @@
-import { isLoopbackHost } from '../../browser/data-browser/src/helpers/runtimeSetting';
 /** Browser-owned credentials. Never store these in Atomic graph resources. */
 export const DEFAULT_PROXY = 'https://localthought.io';
 const key = 'localthought-browser-v1:';
@@ -98,9 +97,16 @@ function importLimits(value: unknown): ImportLimits {
     throw new Error('Invalid import limits');
   return result;
 }
-// Lives with the data-browser's other runtime-setting checks; re-exported for
-// existing importers.
-export { isLoopbackHost };
+// RFC 6761 gives the whole `.localhost` TLD to loopback, and browsers treat
+// those names as secure origins for exactly that reason. The e2e bundle is
+// built against `http://atomic.localhost:19090`, because the browser runs in
+// its own container where `127.0.0.1` is the wrong machine, so a check that
+// only knew the bare name rejected a proxy that is loopback by definition.
+export const isLoopbackHost = (host: string) =>
+  host === 'localhost' ||
+  host.endsWith('.localhost') ||
+  host === '127.0.0.1' ||
+  host === '[::1]';
 export function proxyOrigin(value = DEFAULT_PROXY): string {
   const u = new URL(value);
   if (

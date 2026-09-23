@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  catalogByPlatform,
-  isCatalogVisible,
+  hasExperimentalEntries,
   parseCatalogEntries,
   type CatalogEntry,
 } from './pluginCatalog';
@@ -19,14 +18,13 @@ const row = (extra: Record<string, unknown> = {}) => ({
 });
 
 describe('parseCatalogEntries', () => {
-  it('reads the flags and platform of a catalog entry', () => {
+  it('reads the flags of a catalog entry', () => {
     expect(
       parseCatalogEntries([
         row({
           [`${P}experimental`]: false,
           [`${P}enabled`]: true,
           [`${P}requires-api-plugins`]: true,
-          [`${P}platform`]: 'api',
         }),
       ]),
     ).toEqual([
@@ -35,19 +33,17 @@ describe('parseCatalogEntries', () => {
         experimental: false,
         enabled: true,
         requiresApiPlugins: true,
-        platform: 'api',
       },
     ]);
   });
 
-  it('defaults to experimental, disabled and no platform', () => {
+  it('defaults to experimental and disabled', () => {
     expect(parseCatalogEntries([row()])).toEqual([
       {
         shortname: 'fixture-api',
         experimental: true,
         enabled: false,
         requiresApiPlugins: false,
-        platform: undefined,
       },
     ]);
   });
@@ -73,36 +69,26 @@ describe('parseCatalogEntries', () => {
   });
 });
 
-describe('catalogByPlatform', () => {
-  it('keys an entry by its platform, falling back to its shortname', () => {
-    const entries = parseCatalogEntries([
-      row({ [SHORTNAME]: 'card', [`${P}platform`]: 'proxy-id' }),
-      row({ [SHORTNAME]: 'plain' }),
-    ]);
-    const map = catalogByPlatform(entries);
-    expect(map.get('proxy-id')?.shortname).toBe('card');
-    expect(map.get('plain')?.shortname).toBe('plain');
-    expect(map.has('card')).toBe(false);
-  });
-});
-
-describe('isCatalogVisible', () => {
+describe('hasExperimentalEntries', () => {
   const entry = (flags: Partial<CatalogEntry>): CatalogEntry => ({
     shortname: 'x',
-    experimental: false,
+    experimental: true,
     enabled: true,
     requiresApiPlugins: false,
     ...flags,
   });
 
-  it('hides a missing or disabled entry', () => {
-    expect(isCatalogVisible(undefined, true)).toBe(false);
-    expect(isCatalogVisible(entry({ enabled: false }), true)).toBe(false);
+  it('counts an enabled experimental entry', () => {
+    expect(hasExperimentalEntries([entry({})])).toBe(true);
   });
 
-  it('shows a stable entry and gates an experimental one', () => {
-    expect(isCatalogVisible(entry({}), false)).toBe(true);
-    expect(isCatalogVisible(entry({ experimental: true }), false)).toBe(false);
-    expect(isCatalogVisible(entry({ experimental: true }), true)).toBe(true);
+  it('ignores disabled, stable and API-plugin entries', () => {
+    expect(
+      hasExperimentalEntries([
+        entry({ enabled: false }),
+        entry({ experimental: false }),
+        entry({ requiresApiPlugins: true }),
+      ]),
+    ).toBe(false);
   });
 });

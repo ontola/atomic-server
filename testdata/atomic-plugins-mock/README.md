@@ -19,9 +19,9 @@ plugins:
 
 - `fixture-experimental`: enabled and experimental, with no API requirement.
   It is what makes "Show experimental plugins" appear.
-- `fixture-api`: requires API plugins and is disabled, so by default the
-  catalog offers no API plugins. Specs that need one enable it with
-  `page.route` on top of this response.
+- `fixture-api`: requires API plugins and is disabled. The app offers
+  nothing for API-plugin entries yet, even enabled; specs enable it with
+  `page.route` on top of this response to check exactly that.
 
 Each entry's `pluginUrl` points at a bundle served next to it, relative to the
 catalog. The data-browser doesn't read `pluginUrl` yet. The bundles are served

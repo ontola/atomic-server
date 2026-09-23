@@ -21,14 +21,11 @@ async function enableCatalogEntries(page: Page, shortnames: string[]) {
   });
 }
 
-test('integration categories default off and independent Atomic preferences survive reload', async ({
+test('experimental plugins default off and the preference survives reload', async ({
   page,
 }) => {
   const catalogRequests: string[] = [];
   await enableCatalogEntries(page, ['fixture-experimental', 'fixture-api']);
-  await page.route('**/catalog', route =>
-    route.fulfill({ json: ['uncertified'] }),
-  );
   await page.route('**/plugin-catalog', async route => {
     catalogRequests.push(route.request().url());
     await route.fulfill({
@@ -56,15 +53,15 @@ test('integration categories default off and independent Atomic preferences surv
     });
   });
   await page.goto(new URL('/app/integrations', page.url()).href);
+  // Entries that need API plugins have nothing that can run them until the
+  // host proxies their calls (#1624), so no toggle is offered for them.
   const apiToggle = page.getByRole('checkbox', { name: 'Show API plugins' });
   const experimentalToggle = page.getByRole('checkbox', {
     name: 'Show experimental plugins',
   });
-  await expect(apiToggle).toBeVisible();
   await expect(experimentalToggle).toBeVisible();
-  await expect(apiToggle).not.toBeChecked();
+  await expect(apiToggle).toHaveCount(0);
   await expect(experimentalToggle).not.toBeChecked();
-  await expect(page.locator('[data-integration]')).toHaveCount(0);
   expect(catalogRequests).toHaveLength(0);
 
   await experimentalToggle.check();
@@ -101,35 +98,26 @@ test('integration categories default off and independent Atomic preferences surv
 
   await page.reload();
   await expect(page.locator('[data-release="fixture-release"]')).toBeVisible();
-  await expect(apiToggle).toBeVisible();
   await expect(experimentalToggle).toBeChecked();
   expect(catalogRequests.length).toBeGreaterThan(0);
 
   await page.goto(new URL('/app/settings', page.url()).href);
   await page.getByPlaceholder('Search settings...').fill('plugins');
-  const settingsApi = page.getByRole('checkbox', { name: 'Show API plugins' });
   const settingsExperimental = page.getByRole('checkbox', {
     name: 'Show experimental plugins',
   });
   await expect(settingsExperimental).toBeChecked();
-  await expect(settingsApi).not.toBeChecked();
+  await expect(
+    page.getByRole('checkbox', { name: 'Show API plugins' }),
+  ).toHaveCount(0);
 
   await settingsExperimental.uncheck();
   await expect(settingsExperimental).toBeEnabled();
-  await settingsApi.check();
-  await expect(settingsApi).toBeEnabled();
   await page.reload();
   await page.getByPlaceholder('Search settings...').fill('plugins');
-  await expect(settingsApi).toBeChecked();
   await expect(settingsExperimental).not.toBeChecked();
 
   await page.goto(new URL('/app/integrations', page.url()).href);
-  // API plugins alone surfaces the section, but an uncertified platform
-  // stays hidden until experimental plugins are shown too.
-  await expect(
-    page.locator('[data-integration="proxy:uncertified"]'),
-  ).toHaveCount(0);
-  await expect(apiToggle).toBeChecked();
   await expect(experimentalToggle).not.toBeChecked();
   await expect(page.locator('[data-release]')).toHaveCount(0);
 });
@@ -158,20 +146,16 @@ test('existing connections remain visible while both discovery categories are hi
       .getByRole('region', { name: 'Your integrations' })
       .getByRole('link', { name: 'New plugin', exact: true }),
   ).toBeVisible();
-  // The mock catalog enables no API plugins, so that toggle is not offered.
-  await expect(
-    page.getByRole('checkbox', { name: 'Show API plugins' }),
-  ).toHaveCount(0);
   await expect(
     page.getByRole('checkbox', { name: 'Show experimental plugins' }),
   ).toBeVisible();
-  await expect(page.locator('[data-integration]')).toHaveCount(0);
 });
 
 test('visibility toggles are hidden when the catalog enables nothing behind them', async ({
   page,
 }) => {
-  await enableCatalogEntries(page, []);
+  // An enabled entry that needs API plugins still has nothing to run it.
+  await enableCatalogEntries(page, ['fixture-api']);
   await page.goto(new URL('/app/integrations', page.url()).href);
   await expect(page.getByText('No plugins to show here.')).toBeVisible();
   await expect(

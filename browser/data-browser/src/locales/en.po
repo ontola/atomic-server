@@ -4290,14 +4290,12 @@ msgstr "{0}% of storage used"
 msgid "{0}% used"
 msgstr "{0}% used"
 
-#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Syncing…"
 msgstr "Syncing…"
 
-#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
 #: src/routes/SyncRoute.tsx
 msgid "Sync now"
 msgstr "Sync now"
@@ -7592,7 +7590,6 @@ msgstr "A response is saved. Resume sync to reuse it."
 msgid "An Atomic write or checkpoint needs inspection. Resume uses saved receipts and stops if a previous write is uncertain."
 msgstr "An Atomic write or checkpoint needs inspection. Resume uses saved receipts and stops if a previous write is uncertain."
 
-#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
 #: src/chunks/PluginRuns/SyncRecovery.tsx
 msgid "Sync needs attention"
 msgstr "Sync needs attention"
@@ -7699,10 +7696,6 @@ msgstr "Automation name"
 #: src/chunks/PluginRuns/CreateEventAutomation.tsx
 msgid "The next screen opens an editable JavaScript starter. Automatic execution stays off until you enable it."
 msgstr "The next screen opens an editable JavaScript starter. Automatic execution stays off until you enable it."
-
-#: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
-msgid "Set up connection"
-msgstr "Set up connection"
 
 #: src/routes/IntegrationStore.tsx
 msgid "Connect your apps and keep your work in sync. Add automations when you need them."
@@ -8259,26 +8252,6 @@ msgstr "Connect a service"
 msgid "Automations act on your data and can use connected services. Sync works independently."
 msgstr "Automations act on your data and can use connected services. Sync works independently."
 
-#: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
-msgid "Loading LocalThought platforms…"
-msgstr "Loading LocalThought platforms…"
-
-#: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
-msgid "Connect your account through LocalThought and import records into your drive."
-msgstr "Connect your account through LocalThought and import records into your drive."
-
-#: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
-msgid "Loading setup…"
-msgstr "Loading setup…"
-
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid "Reconnect account"
-msgstr "Reconnect account"
-
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid "Install and connect"
-msgstr "Install and connect"
-
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Integration proxy URL"
 msgstr "Integration proxy URL"
@@ -8301,21 +8274,9 @@ msgstr "All day"
 msgid "{0} · Recurring meeting (opens its series or exception)"
 msgstr "{0} · Recurring meeting (opens its series or exception)"
 
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid "LocalThought will ask you to sign in and authorize this connection. Connection credentials stay in this browser."
-msgstr "LocalThought will ask you to sign in and authorize this connection. Connection credentials stay in this browser."
-
-#: src/chunks/PluginRuns/LocalThoughtCatalog.tsx
-msgid "Via integration proxy"
-msgstr "Via integration proxy"
-
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Integration proxy"
 msgstr "Integration proxy"
-
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Connect accounts and import records using a LocalThought integration-proxy server. This setting is saved in this browser."
-msgstr "Connect accounts and import records using a LocalThought integration-proxy server. This setting is saved in this browser."
 
 #: src/components/Settings/IntegrationSettings.tsx
 #: src/components/Settings/IntegrationSettings.tsx
@@ -8354,44 +8315,6 @@ msgstr "Integration"
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "These preferences are saved in your private Atomic drive. Existing connections remain available."
 msgstr "These preferences are saved in your private Atomic drive. Existing connections remain available."
-
-#. 0: new Date(installation.lastSuccess).toLocaleString()
-#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
-msgid "Last synced {0}"
-msgstr "Last synced {0}"
-
-#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
-msgid "Waiting to sync"
-msgstr "Waiting to sync"
-
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
-msgid "Open folder"
-msgstr "Open folder"
-
-#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
-msgid "Refreshes every five minutes while open in this browser."
-msgstr "Refreshes every five minutes while open in this browser."
-
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid "Connect your personal account through LocalThought, then return here to choose what to sync."
-msgstr "Connect your personal account through LocalThought, then return here to choose what to sync."
-
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid "Checking connection…"
-msgstr "Checking connection…"
-
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid "Complete installation"
-msgstr "Complete installation"
-
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid "Installed. Your records are syncing in the background."
-msgstr "Installed. Your records are syncing in the background."
-
-#: src/chunks/PluginRuns/ConnectLocalThought.tsx
-msgid "Imports the collections described by the platform, following pagination. Syncs automatically when you open the folder and every five minutes while it is open. Keep this browser open to finish importing. No provider writes."
-msgstr "Imports the collections described by the platform, following pagination. Syncs automatically when you open the folder and every five minutes while it is open. Keep this browser open to finish importing. No provider writes."
 
 #. 0: name
 #: src/components/Presence/PresenceAvatarMenu.tsx
@@ -8959,11 +8882,6 @@ msgstr "No permissions required"
 msgid "No reason provided"
 msgstr "No reason provided"
 
-#. 0: installation.warning
-#: src/chunks/PluginRuns/LocalThoughtSyncPanel.tsx
-msgid "Synced with issues: {0}"
-msgstr "Synced with issues: {0}"
-
 #: src/chunks/Templates/TemplateChat.tsx
 msgid "Atomic"
 msgstr "Atomic"
@@ -9107,10 +9025,6 @@ msgstr "{0} credits remaining across your drives."
 #: src/chunks/AI/ModelSelect/ModelSelect.tsx
 msgid "Use included model"
 msgstr "Use included model"
-
-#: src/components/Settings/IntegrationSettings.tsx
-msgid "Show API plugins"
-msgstr "Show API plugins"
 
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "Show experimental plugins"
@@ -9505,3 +9419,7 @@ msgstr "Off stops server sync for this workspace on this browser. The server’s
 #: src/routes/SyncRoute.tsx
 msgid "Workspace sync off"
 msgstr "Workspace sync off"
+
+#: src/components/Settings/IntegrationSettings.tsx
+msgid "The integration-proxy server that API plugins call through. This setting is saved in this browser."
+msgstr "The integration-proxy server that API plugins call through. This setting is saved in this browser."

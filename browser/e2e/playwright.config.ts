@@ -42,7 +42,7 @@ const integrationProxy =
   process.env.INTEGRATION_PROXY_URL || process.env.VITE_INTEGRATION_PROXY_URL;
 
 // RFC 6761 gives the whole `.localhost` TLD to loopback; this mirrors
-// `isLoopbackHost` in integrations/localthought/browser.ts, which both of the
+// `isLoopbackHost` in data-browser/src/helpers/runtimeSetting.ts, which both of the
 // runtime validators use.
 const isLoopbackHost = (host: string) =>
   host === 'localhost' ||

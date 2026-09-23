@@ -24,22 +24,15 @@ import {
 export function IntegrationSettings() {
   const proxy = useIntegrationProxy();
   const catalogUrl = usePluginCatalogUrl();
-  const { showApiPlugins, showExperimentalPlugins, error, setVisibility } =
+  const { showExperimentalPlugins, error, setVisibility } =
     useIntegrationVisibility();
 
   return (
     <SettingsSection
       label='Integration'
-      childSearchKeywords='proxy catalog server url localthought api experimental plugins'
+      childSearchKeywords='proxy catalog server url experimental plugins'
     >
       <Column gap='1rem'>
-        <CheckboxLabel>
-          <Checkbox
-            checked={showApiPlugins}
-            onChange={value => setVisibility('show-api-plugins', value)}
-          />
-          <span>Show API plugins</span>
-        </CheckboxLabel>
         <CheckboxLabel>
           <Checkbox
             checked={showExperimentalPlugins}
@@ -83,8 +76,8 @@ function ProxyForm({ proxy }: { proxy: string }) {
       <Column gap='0.5rem'>
         <SectionTitle>Integration proxy</SectionTitle>
         <Description>
-          Connect accounts and import records using a LocalThought
-          integration-proxy server. This setting is saved in this browser.
+          The integration-proxy server that API plugins call through. This
+          setting is saved in this browser.
         </Description>
         <Row center gap='1ch'>
           <label htmlFor='integration-proxy-url'>Integration proxy URL</label>

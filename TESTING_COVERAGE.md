@@ -199,30 +199,20 @@ failure and successful server visibility. The provider setup browser flows
 
 # Testing coverage map
 
-Plugin discovery: `PluginRuns/localThoughtCatalogEntries.test.ts` checks that
-generated API entries follow the remote catalog; `helpers/integrationVisibility.test.ts`
-covers gating by the experimental/API-plugins toggles. Discovery unit checks do
-not exercise live provider consent. No provider-specific lenses remain in this
-repo. `PluginRuns/pluginCatalog.test.ts` covers parsing the remote plugin
-catalog.
+Plugin discovery: `PluginRuns/pluginCatalog.test.ts` covers parsing the remote
+plugin catalog and which entries unlock "Show experimental plugins" (entries
+that need API plugins don't); `helpers/integrationVisibility.test.ts` covers the
+stored preferences. `integration-visibility.spec.ts` checks no "Show API
+plugins" toggle is offered.
 
-Gap: LocalThought connect/sync has no working path on this branch. The WASM
-Syncables engine was removed (#1618), so `engine()` in
-`PluginRuns/localThought.ts` throws; moving the proxy calls into the plugin
-iframe is a follow-up. Nothing tests an end-to-end LocalThought connection or
-sync until then.
+The data-browser no longer connects or syncs LocalThought platforms: that code
+was removed, and plugins will run in their own iframe and make proxy calls
+through the host (#1624). Nothing in this repo tests a LocalThought connection.
 
 Issues view: `TablePage/Issues/issueStatus.test.ts` covers reading open/closed
 status tags and booleans, picking close/reopen targets, and title/`#number`
 filtering; `browser/e2e/tests/issues-view.spec.ts` covers the Issues view for
 tracker tables.
-
-Schema namespaces: `PluginRuns/localThoughtSync.test.ts` covers installation
-and refresh. Plain imports use the `api-<platform>` namespace; installations
-from before the lenses moved to atomic-plugins keep the bare platform namespace
-they were created with.
-`PluginRuns/localThoughtCallback.test.ts` checks originating-entry selection
-and callback redemption; real provider consent remains outside these unit tests.
 
 Typed app setup: `browser/lib/src/plugin-setup.test.ts` covers shared input validation,
 partial model drafts, forbidden arguments and size limits. It also validates resource JSON
@@ -233,17 +223,6 @@ The provider setup E2E (`app-setup.spec.ts`) moved to atomic-plugins. Live
 authentication, installation recovery and arbitrary authored setup execution
 are not covered here.
 
-Local integration resource recovery (#1406):
-`browser/lib/src/local-schema-resource.test.ts` exercises the real Store and
-local installation adapter with a controlled ClientDb. It reproduces a cold
-schema lookup contacting a server that lacks the locally indexed resource,
-and verifies local recovery, refusal to recreate an indexed-but-missing
-installation, and an unavailable database. This is a unit reproduction of the
-local/server lookup mismatch; the patched live Calendar flow remains unverified.
-
-`browser/lib/src/local-import-rows.test.ts` covers cold imported rows in the real
-Store while online: available local snapshots are read without a server fetch,
-and missing snapshots fail rather than falling back to remote state.
 `integrations/localthought/settings.test.ts` verifies that reconnects cannot reuse
 legacy installation identities, while repeated imports on one connection remain
 stable. The LocalThought Vitest config has an explicit root so all six suites
@@ -2068,14 +2047,8 @@ a dedicated multi-device preference test is not yet present.
 - `integrations/localthought/browser.test.ts`: one provider request for validation,
   no pagination/retry or import, credential rotation, and denied/throttled/failed
   access checks.
-- `browser/data-browser/src/chunks/PluginRuns/localThoughtSync.test.ts`: install
-  without importing, failed validation before folder creation, overlapping refresh
-  exclusion, failure/recovery with last-success preservation, blocked imports and
-  switching accounts during a fetch.
-- No E2E: the Calendar import journey was removed and LocalThought sync is
-  broken until the proxy calls move into the plugin iframe.
-- Online and visibility lifecycle hooks use the same refresh function.
-  Closed-browser execution is intentionally unsupported.
+- No app-side coverage: the data-browser's LocalThought sync was removed; it
+  returns as plugins running in their own iframe.
 Portable app definitions: `browser/lib/src/app-package.test.ts` loads a standalone
 JSON fixture through the shared importer, planner and apply engine with in-memory
 storage. It verifies nested placement, native localId, repeat import, conflicting

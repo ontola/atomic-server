@@ -11,7 +11,7 @@ import { before, createFromCatalog } from './test-utils';
 test.describe('plugins', () => {
   test.beforeEach(before);
   test.beforeEach(async ({ page }) => {
-    await enableIntegrationDiscovery(page, true);
+    await enableIntegrationDiscovery(page);
   });
 
   test('a published release is discoverable and creates an independent draft', async ({
