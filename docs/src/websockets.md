@@ -4,7 +4,8 @@
 
 One binary frame format, spoken over two transports: a browser-facing
 WebSocket and a node-to-node Iroh QUIC stream. This page is the canonical
-wire-format reference. It describes what the code on this branch actually
+wire-format reference; for the model behind it (what syncs, why, and which
+transport is used when) read [Atomic Sync](sync.md) first. It describes what the code on this branch actually
 sends and accepts, including which side sends each frame and which
 responders have an arm for it.
 
