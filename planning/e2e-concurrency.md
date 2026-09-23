@@ -67,7 +67,7 @@ The shared process supervisor now covers the local runner as well as generated
 site fixtures, so interruption closes only live owned process groups.
 
 First exploratory baseline was invalidated by another job: at 04:20:43 UTC
-Atomic SaaS CI's Stop the stack step used `pkill -f target/debug/atomic-server`,
+The sibling control-plane CI's Stop the stack step used `pkill -f target/debug/atomic-server`,
 and our server logged SIGTERM at that instant. It had reached 156 passes;
 the resulting connection-refused cascade produced 54 failures and two serial
 cases did not run. This is not a concurrency or correctness baseline. The

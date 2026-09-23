@@ -17,7 +17,7 @@ Cloud Server can provide an always-online replica independently of peer pairing.
 ## Discovery and transport
 
 A random 256-bit room secret in the invitation identifies a rendezvous room at
-Atomic SaaS's `/webrtc-signal`. The secret is sent in the WebSocket join message, not its URL.
+the managed signaling service's `/webrtc-signal`. The secret is sent in the WebSocket join message, not its URL.
 The signaling server exchanges offers and answers and keeps no drive data. There
 is no Pkarr lookup. Each room supports up to eight browsers in a full mesh; the app remembers
 one link per drive and agent. Disconnect removes that browser's saved link.
@@ -47,9 +47,9 @@ storage replica. Browser execution can be suspended in background tabs.
 
 ## Operator configuration
 
-The signaling endpoint is served by **Atomic SaaS**, not an AtomicServer data
-node. It requires no SaaS login, drive enrollment or Cloud Server subscription.
-The browser uses `VITE_MANAGED_PORTAL_URL` for its SaaS environment, defaulting to
+The signaling endpoint is served by the **Atomic Place managed service**, separately
+from an AtomicServer data node. It requires no account login, drive enrollment or Cloud Server subscription.
+The browser uses `VITE_MANAGED_PORTAL_URL` for its managed environment, defaulting to
 `https://atomicserver.eu` (or the staging SaaS origin for the staging app). Users
 do not select a data node to discover peers.
 
