@@ -113,6 +113,7 @@ msgstr "AI Agents"
 #: src/chunks/AI/AgentConfig.tsx
 #: src/chunks/AI/MCPConfigTab.tsx
 #: src/chunks/AI/SkillsConfigTab.tsx
+#: src/chunks/AppPage/AppFrame.tsx
 #: src/chunks/DashboardPage/BlockConfigDialog.tsx
 #: src/chunks/PluginRuns/RunPluginDialog.tsx
 #: src/chunks/Plugins/InstallationReviewDialog.tsx
@@ -4215,6 +4216,7 @@ msgstr "Pairing code copied."
 msgid "Could not copy — select and copy the code manually."
 msgstr "Could not copy — select and copy the code manually."
 
+#: src/chunks/AppPage/AppFrame.tsx
 #: src/components/ConnectServerDialog.tsx
 #: src/components/ConnectToDeviceForm.tsx
 #: src/views/getting-started/ConnectDeviceStep.tsx
@@ -9423,3 +9425,20 @@ msgstr "Workspace sync off"
 #: src/components/Settings/IntegrationSettings.tsx
 msgid "The integration-proxy server that API plugins call through. This setting is saved in this browser."
 msgstr "The integration-proxy server that API plugins call through. This setting is saved in this browser."
+
+#: src/chunks/AppPage/ProxyConnectReturn.tsx
+msgid "Finishing the connection…"
+msgstr "Finishing the connection…"
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Sign in to connect an account."
+msgstr "Sign in to connect an account."
+
+#. 0: ' '; 1: ' '; 2: getIntegrationProxy()
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "This app wants to connect your{0} <0/> account through{1} {2}. The connection stays in this browser; the app can only make requests through it."
+msgstr "This app wants to connect your{0} <0/> account through{1} {2}. The connection stays in this browser; the app can only make requests through it."
+
+#: src/chunks/AppPage/AppFrame.tsx
+msgid "Connect an account"
+msgstr "Connect an account"
