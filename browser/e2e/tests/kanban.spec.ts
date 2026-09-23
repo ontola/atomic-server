@@ -375,6 +375,61 @@ test.describe('kanban', () => {
     });
   });
 
+  test('typing a card title keystroke by keystroke keeps the editor', async ({
+    page,
+  }) => {
+    await createIssueTracker(page, 'Bugs');
+
+    const todo = column(page, 'todo');
+    await addCard(page, todo, 'Typo');
+    // Pin the card by subject: its text changes while we type.
+    const subject = await cardIn(todo, 'Typo').getAttribute(
+      'data-kanban-card-subject',
+    );
+    const card = todo.locator(`[data-kanban-card-subject="${subject}"]`);
+    const heightBefore = (await card.boundingBox())?.height;
+
+    await card.getByTestId('kanban-card-title').click();
+    const titleInput = card.getByTestId('kanban-card-title-input');
+    await expect(titleInput).toBeFocused();
+
+    // The editor takes the title's exact box: a card that resizes shifts
+    // the cards below it, and the next click lands on the wrong one.
+    const heightEditing = (await card.boundingBox())?.height;
+    expect(
+      Math.abs((heightEditing ?? 0) - (heightBefore ?? 0)),
+    ).toBeLessThanOrEqual(1);
+
+    // Real keystrokes, not `fill`: Space and Enter used to bubble to the
+    // card and start a keyboard drag, eating the space and the focus.
+    await titleInput.press('ControlOrMeta+a');
+    await titleInput.pressSequentially('Fix the login bug');
+    await expect(titleInput).toBeFocused();
+    await expect(titleInput).toHaveValue('Fix the login bug');
+    await titleInput.press('Enter');
+
+    await expect(cardIn(todo, 'Fix the login bug')).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    // Escape throws the draft away.
+    await card.getByTestId('kanban-card-title').click();
+    await expect(titleInput).toBeFocused();
+    await titleInput.pressSequentially(' later');
+    await titleInput.press('Escape');
+    await expect(titleInput).toHaveCount(0);
+    await expect(
+      todo.getByTestId('kanban-card-title').filter({ hasText: 'later' }),
+    ).toHaveCount(0);
+
+    await reloadReconnected(page);
+    await expect(page.getByTestId('kanban-board')).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(cardIn(column(page, 'todo'), 'Fix the login bug')).toBeVisible(
+      { timeout: 15_000 },
+    );
+  });
+
   test('right-clicking a card opens the resource context menu', async ({
     page,
   }) => {
