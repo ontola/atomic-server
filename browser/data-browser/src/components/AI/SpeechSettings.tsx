@@ -4,6 +4,7 @@ import { SettingsSection } from '@components/Settings';
 import { Column } from '@components/Row';
 import { Checkbox, CheckboxLabel } from '@components/forms/Checkbox';
 import { BasicSelect } from '@components/forms/BasicSelect';
+import { MicrophoneSelect } from './MicrophoneSelect';
 
 type Model = { id: string; name: string };
 
@@ -57,6 +58,12 @@ export default function SpeechSettings() {
           <Checkbox checked={voiceEnabled} onChange={setVoiceEnabled} />
           <span>Enable voice input</span>
         </CheckboxLabel>
+        {voiceEnabled && (
+          <>
+            <label htmlFor='voice-microphone'>Microphone</label>
+            <MicrophoneSelect id='voice-microphone' />
+          </>
+        )}
         {voiceEnabled &&
           (openRouterApiKey ? (
             <>
