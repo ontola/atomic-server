@@ -6,6 +6,7 @@ import {
   checkAuthenticationCookie,
   setCookieAuthentication,
   signRequest,
+  legacyAgentForRequest,
 } from './authentication.js';
 import { AtomicError, ErrorType } from './error.js';
 import { pageRequestSignal } from './page-request-signal.js';
@@ -245,7 +246,18 @@ export class Client {
       // Sign the request with the actual URL being fetched (not the raw DID
       // subject) since the server verifies against the full HTTP URL.
       if (signInfo) {
-        if (shouldSkipDidAuthForLegacyServer(url, signInfo.agent.subject)) {
+        const legacy = legacyAgentForRequest(url, signInfo.agent);
+
+        if (legacy) {
+          requestHeaders = await signRequest(
+            url,
+            signInfo.agent,
+            requestHeaders,
+            legacy,
+          );
+        } else if (
+          shouldSkipDidAuthForLegacyServer(url, signInfo.agent.subject)
+        ) {
           warnDidAuthCompatibility(url);
         } else if (!subject.startsWith('https://atomicdata.dev')) {
           // Cookies only work in browsers for same-origin requests right now

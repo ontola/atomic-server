@@ -2484,3 +2484,13 @@ The sign-in/profile/sign-out smoke test also requires explicit sign-out to
 clear the local identity and land on the welcome screen without an account
 settings continuation, both immediately and after reload. The settings guard
 must not override an intentional sign-out or device lock.
+
+
+## Legacy HTTP compatibility
+
+| Behavior | Tests | Scope |
+| --- | --- | --- |
+| Foreign HTTP parent/drive collections query their own origin despite an empty or partial local cache and disconnected home server | `browser/lib/src/legacy-http-collection.test.ts` | HTTP subjects preserved; unrelated default personal-drive scope omitted; explicit server respected; DID queries remain local-first |
+| Pre-DID queries retry without unsupported parameters and filter locally | `browser/lib/src/legacy-http-collection.test.ts` | Preserves drive ancestry and AND filters, sorts before pagination, keeps undated rows; a loaded parent Drive overrides stale default scope |
+| Migrated agents authenticate legacy HTTP reads at their original origin | `browser/lib/src/client-legacy-auth.test.ts` | Original HTTP identity, padded standard-base64 key/signature, real Ed25519 verification; other hosts, schemes, ports and lookalikes never receive the legacy identity |
+| Public legacy HTTP drive and its children load from a nodeless home | `browser/lib/src/legacy-http-live-check.test.ts` | Opt-in `ATOMIC_LEGACY_LIVE=1`; live atomicdata.dev read verified 2026-09-23. Does not cover private legacy auth or browser sidebar rendering |
