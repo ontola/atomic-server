@@ -43,6 +43,58 @@ const PRESENCE_TTL_MS = 30_000;
 const HEARTBEAT_MS = 10_000;
 
 /**
+ * Copy an announcement, refusing anything Loro cannot store.
+ *
+ * Handing the ephemeral store a value it cannot convert does not come back as
+ * an error: `LoroValue`'s conversion *panics*, which in a browser surfaces as
+ * a bare `RuntimeError: unreachable` and leaves the wasm module unusable
+ * afterwards. Functions, bigints, symbols and a getter that throws all do it,
+ * and a cyclic object corrupts the wasm heap instead. Since an entry is
+ * retained and re-sent by the heartbeat, one such write becomes an unhandled
+ * error every {@link HEARTBEAT_MS} for as long as the tab stays open. That is
+ * what a whole family of `RuntimeError: unreachable` reports turned out to be,
+ * all of them from `setInterval`, none naming a cause.
+ *
+ * `data` is the reason this can happen at all: it is the view's own payload
+ * and typed as whatever the view likes, so nothing stops a callback or a class
+ * instance travelling in it. Checking here, before the value reaches wasm,
+ * keeps the failure a named field in the console instead of a poisoned tab.
+ *
+ * `undefined` passes through, since Loro accepts it and the entry type uses it
+ * to mean "unset".
+ */
+const plainCopy = (value: unknown, path: string): unknown => {
+  if (value === null || value === undefined) {
+    return value;
+  }
+
+  switch (typeof value) {
+    case 'string':
+    case 'number':
+    case 'boolean':
+      return value;
+    case 'object':
+      break;
+    default:
+      throw new Error(`${path} is a ${typeof value}`);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item, index) => plainCopy(item, `${path}[${index}]`));
+  }
+
+  const copy: Record<string, unknown> = {};
+
+  // Reading the properties here is deliberate: a getter that throws should
+  // throw on this side of the boundary, where it is catchable.
+  for (const [key, item] of Object.entries(value as object)) {
+    copy[key] = plainCopy(item, `${path}.${key}`);
+  }
+
+  return copy;
+};
+
+/**
  * Ephemeral "who is where" state for one drive (issue #1229).
  *
  * Wraps a Loro {@link EphemeralStore} in which every participating session
@@ -126,7 +178,13 @@ export class DrivePresenceManager {
       return;
     }
 
-    this.local = { ...entry, agent, updatedAt: Date.now() };
+    const next = this.storable({ ...entry, agent, updatedAt: Date.now() });
+
+    if (!next) {
+      return;
+    }
+
+    this.local = next;
     this.ephemeral?.set(this.sessionId, this.local as never);
   }
 
@@ -143,8 +201,38 @@ export class DrivePresenceManager {
       return;
     }
 
-    this.local = { ...this.local, ...patch, agent, updatedAt: Date.now() };
+    const next = this.storable({
+      ...this.local,
+      ...patch,
+      agent,
+      updatedAt: Date.now(),
+    });
+
+    if (!next) {
+      return;
+    }
+
+    this.local = next;
     this.ephemeral?.set(this.sessionId, this.local as never);
+  }
+
+  /**
+   * The entry as Loro can hold it, or `undefined` when it cannot hold it at
+   * all. A refused announcement leaves the last good one in place: the tab
+   * keeps its presence and the heartbeat keeps working, which is the point of
+   * refusing rather than storing and finding out ten seconds later.
+   */
+  private storable(entry: PresenceEntry): PresenceEntry | undefined {
+    try {
+      return plainCopy(entry, 'presence') as PresenceEntry;
+    } catch (e) {
+      console.error(
+        '[Presence] ignoring an announcement Loro cannot store:',
+        e instanceof Error ? e.message : e,
+      );
+
+      return undefined;
+    }
   }
 
   /**
@@ -161,7 +249,11 @@ export class DrivePresenceManager {
    * stick to local-only drives.
    */
   public injectEntry(sessionId: string, entry: PresenceEntry): void {
-    const stamped = { ...entry, updatedAt: Date.now() };
+    const stamped = this.storable({ ...entry, updatedAt: Date.now() });
+
+    if (!stamped) {
+      return;
+    }
 
     if (this.ephemeral) {
       this.ephemeral.set(sessionId, stamped as never);
@@ -188,18 +280,38 @@ export class DrivePresenceManager {
       return;
     }
 
-    // Bump our entry's LWW timestamp so peers' TTL cleanup keeps it alive…
-    this.ephemeral.set(this.sessionId, this.local as never);
-    // …and put the encoded entry on the wire ourselves. Relying on
-    // `subscribeLocalUpdates` alone is fragile here: a value-identical
-    // `set` may not emit one, and the very first broadcast can be dropped
-    // while the websocket is still authenticating — this direct send makes
-    // the heartbeat self-healing (it also repopulates the server's
-    // per-connection cache for late-joiner replay).
-    this.store.broadcastPresenceUpdate(
-      this.drive,
-      this.ephemeral.encode(this.sessionId),
-    );
+    const ephemeral = this.ephemeral;
+
+    try {
+      // Bump our entry's LWW timestamp so peers' TTL cleanup keeps it alive…
+      ephemeral.set(this.sessionId, this.local as never);
+      // …and put the encoded entry on the wire ourselves. Relying on
+      // `subscribeLocalUpdates` alone is fragile here: a value-identical
+      // `set` may not emit one, and the very first broadcast can be dropped
+      // while the websocket is still authenticating — this direct send makes
+      // the heartbeat self-healing (it also repopulates the server's
+      // per-connection cache for late-joiner replay).
+      this.store.broadcastPresenceUpdate(
+        this.drive,
+        ephemeral.encode(this.sessionId),
+      );
+    } catch (e) {
+      // {@link plainCopy} should make this unreachable. If it is reached, the
+      // wasm module has panicked and is not going to recover, so there is
+      // nothing here worth retrying every HEARTBEAT_MS: give up the store and
+      // let peers TTL this session out. Raising the same error on a timer
+      // forever is what made one bad announcement look like a fleet of bugs.
+      console.error('[Presence] broadcast failed, dropping presence:', e);
+      this.stopHeartbeat();
+      this.ephemeral = undefined;
+    }
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeat) {
+      clearInterval(this.heartbeat);
+      this.heartbeat = undefined;
+    }
   }
 
   private start(): void {
@@ -248,11 +360,7 @@ export class DrivePresenceManager {
   }
 
   private stop(): void {
-    if (this.heartbeat) {
-      clearInterval(this.heartbeat);
-      this.heartbeat = undefined;
-    }
-
+    this.stopHeartbeat();
     this.unsubLoroReady?.();
     // Announce the departure so peers don't wait out the TTL. Must happen
     // while still subscribed: the server only relays updates from current

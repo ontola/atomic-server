@@ -4,6 +4,18 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Fix: a presence announcement carrying something Loro cannot store no longer
+  breaks the tab. A view's presence payload is typed as whatever that view
+  likes, so a callback or a class with methods can travel in it, and Loro
+  answers such a value by panicking rather than erroring: in a browser that
+  arrives as a bare `RuntimeError: unreachable`, and the wasm module is unusable
+  afterwards (a cyclic object corrupts its heap instead). Because the entry is
+  retained and re-sent every ten seconds by the presence heartbeat, storing one
+  turned into an unhandled error on a timer for as long as the tab stayed open.
+  Announcements are now checked before they reach Loro, a refused one names the
+  offending field in the console and leaves the last good entry in place, and a
+  broadcast that fails anyway stops the heartbeat instead of repeating itself.
+
 - Documents and meetings show a formatting toolbar above the text (block type,
   bold, italic, strikethrough, quote, code, link, lists, image and mention), so
   new users don't have to know the `/` and `@` commands. It can be hidden, which
