@@ -341,9 +341,9 @@ test('mobile chat keeps navigation usable and Back dismisses only the chat', asy
     .toBeLessThanOrEqual(1);
 
   await page.getByRole('button', { name: 'Show / hide sidebar' }).click();
-  const sidebar = page.getByTestId('sidebar');
-  await sidebar.getByRole('button', { name: 'New Chat', exact: true }).click();
+  await expect(page.getByTestId('sidebar')).toBeVisible();
   await page.getByRole('button', { name: 'Show / hide sidebar' }).click();
+  await panel.getByRole('button', { name: 'New Chat', exact: true }).click();
   await sendChatMessage(page, 'Hello from mobile');
   await expect(
     panel.getByText('This is a mock AI response.', { exact: true }),
