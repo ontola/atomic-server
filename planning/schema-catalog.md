@@ -322,5 +322,5 @@ conformance is claimed.
 - [ ] Verify live import and reuse across independently created Time Tracker tables.
 - [ ] Replace per-drive schema allocation with frozen package dependencies; no external standard conformance or cross-drive identity is claimed.
 
-See [Clockify](clockify.md) for import scope and findings. Existing tables retain
+Clockify import now lives in atomic-plugins. Existing tables retain
 their original schema; migration requires an explicit reviewed mapping.

@@ -633,38 +633,8 @@ export class AtomicServer {
           '--test',
           'data-browser/scripts/integration-mcp.test.mjs',
         ])
-        // Provider certification shares the integration and browser mounts.
-        .withWorkdir('/')
-        .withExec(['node', '--test', '/integrations/tooling/certify.test.mjs'])
-        .withExec([
-          'node',
-          '/integrations/tooling/certify.mjs',
-          '--layer',
-          'js',
-          '--output',
-          '/integration-certification',
-        ])
         .stdout()
     );
-  }
-
-  /** Export offline provider evidence; live provider writes are never run here. */
-  @func()
-  integrationCertificationReport(): Directory {
-    return this.jsBuild()
-      .withDirectory('/integrations', this.source.directory('integrations'))
-      .withExec(['ln', '-s', '/app', '/browser'])
-      .withWorkdir('/')
-      .withExec(['node', '--test', '/integrations/tooling/certify.test.mjs'])
-      .withExec([
-        'node',
-        '/integrations/tooling/certify.mjs',
-        '--layer',
-        'js',
-        '--output',
-        '/integration-certification',
-      ])
-      .directory('/integration-certification');
   }
 
   /**
@@ -1232,9 +1202,8 @@ export class AtomicServer {
       // /app, and its raw imports resolve these paths from /integrations.
       .withDirectory('/integrations', this.source.directory('integrations'))
       // Each integrations/*/tsconfig.json extends the repo-root-relative
-      // `../../browser/tsconfig.build.json`. Same fix jsTest()/
-      // integrationCertificationReport() already use for this: alias /browser
-      // to the /app mount so those relative paths resolve.
+      // `../../browser/tsconfig.build.json`. Alias /browser to the /app mount
+      // so those relative paths resolve.
       .withExec(['ln', '-s', '/app', '/browser'])
       .withDirectory('/app/lib-defaults', this.source.directory('lib/defaults'))
       // data-browser imports the repo-root logo from `../../../../logo.svg`

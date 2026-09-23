@@ -35,7 +35,7 @@ it('skips entries without a usable id and scalar bodies', () => {
   expect(parseParameterOptions(JSON.stringify('oops'), lookup)).toEqual([]);
 });
 
-it('treats a single object as a one-item list, as Clockify returns its user', () => {
+it('treats a single object as a one-item list, as a `/user` endpoint returns', () => {
   expect(
     parseParameterOptions(
       JSON.stringify({ id: 'u1', name: 'Michiel' }),

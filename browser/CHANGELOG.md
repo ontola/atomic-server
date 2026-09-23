@@ -4,8 +4,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
-- Removed the `devonian` dependency and the bundled Google Calendar (Devonian) LocalThought extension: its only implementation lived in the `devonian` package, whose immutable pinned tarball could no longer build after upstream deleted the lens it depended on. Google Calendar and GitHub issues remain importable through the plain generated LocalThought path; Todoist and Clockify are unaffected. The standalone `/app/devonian-demo` browser demo is also removed.
-- Fix: `integrations/clockify/localthought.ts` re-exported its schema lens from `devonian/platform-lenses/clockify`, a bare specifier that can't resolve from outside the `browser` pnpm workspace (and no longer resolves there either, now that the `devonian` dependency above is gone) — `Cannot find package 'devonian/platform-lenses/clockify'`. Restored Clockify's self-contained `clockifyProjection`, matching the "Clockify unaffected" intent above ([#1599](https://github.com/ontola/atomic-server/issues/1599)).
+- Plugins moved to [atomic-plugins](https://github.com/ontola/atomic-plugins). The Integrations page lists what that catalog publishes (`catalog.json`, fetched at runtime; the URL is configurable under Settings > Integration) instead of plugins compiled into the app and server. The bundled GitHub issues, Notion, Pets, MT940/camt.053, Clockify and Google Calendar (Devonian) integrations, the `devonian` dependency and the `/app/devonian-demo` page are removed. Todoist stays as a read-only LocalThought lens.
 - Fix: the integration proxy may live on a `.localhost` name. `proxyOrigin`
   allowed plain http only for the bare `localhost` and `127.0.0.1`, so a proxy
   at, say, `http://atomic.localhost:19090` was rejected, and because the value

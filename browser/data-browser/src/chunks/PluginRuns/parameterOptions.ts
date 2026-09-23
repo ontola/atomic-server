@@ -21,22 +21,6 @@ export const PARAMETER_OPTION_LOOKUPS: Record<
       itemLabel: 'name',
     },
   },
-  // Clockify's catalog document only lists time entries; the account and its
-  // workspaces are read through the same proxy so nobody types a 24-hex id.
-  clockify: {
-    workspaceId: {
-      path: '/api/v1/workspaces',
-      itemValue: 'id',
-      itemLabel: 'name',
-      label: 'Workspace',
-    },
-    userId: {
-      path: '/api/v1/user',
-      itemValue: 'id',
-      itemLabel: 'name',
-      label: 'Account',
-    },
-  },
 };
 
 export function parameterLabel(platform: string, parameter: string): string {
@@ -50,7 +34,7 @@ export interface ParameterOption {
 
 /** Parses a proxied list response into dropdown options, skipping entries
  * without a usable id rather than failing the whole lookup. A single object
- * (Clockify's `/v1/user`) is a one-item list. */
+ * (an endpoint like `/v1/user`) is a one-item list. */
 export function parseParameterOptions(
   body: string,
   lookup: ParameterOptionLookup,

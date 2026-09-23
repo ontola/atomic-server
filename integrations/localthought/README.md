@@ -76,8 +76,7 @@ silently take over the old plugin tables.
   `VITE_INTEGRATION_PROXY_URL`, or `https://localthought.io` when unset. A build-time
   value that would not pass the same check is ignored, so a bad one cannot lock
   you out of this screen.
-- Existing bundled GitHub, Notion and MT940 plugins remain available
-  independently. Clockify is a LocalThought lens (`integrations/clockify/`). Proxy cards have an accent border and a “Via integration proxy” label.
+- Proxy cards have an accent border and a “Via integration proxy” label.
 - Deploy the companion integration-proxy CORS change. It handles preflights for
   explicit Authorization headers and exposes `X-Connection-Code`, `Link`,
   pagination/count headers, `ETag` and `Retry-After`. Cookie credentials are not

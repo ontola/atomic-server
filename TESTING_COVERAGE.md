@@ -375,28 +375,14 @@ public deployment, and interactive rich-text editor/cursor acceptance.
 
 ## How to read this
 
-Clockify (2026-09-18): the server-side plugin, its sandbox tests, the TS Store
-integration test and the browser setup/upgrade flows were retired (#1534).
-Clockify is now a LocalThought lens: `integrations/clockify/localthought.test.ts`
-covers the Time Tracker projection (start/end instants, skipped running timers
-and breaks, invalid intervals) and the rolling look-back query overrides;
-`parameterOptions.test.ts` covers the workspace/account picker parsing. The
-generic LocalThought suites cover fetch, refresh and table creation. Live
-provider reads through the proxy and two-way sync remain unverified or
-unimplemented.
-
-Integration maintenance: `node integrations/tooling/certify.mjs` automatically
-discovers provider packages, verifies reproducible shipped bundles and types,
-runs fixture suites and exact Rust sandbox tests, and exports JSON evidence.
-`integrations/tooling/certify.test.mjs` covers zero-test refusal, missing
-metadata, and concise diagnostics for failed commands or bundle validation.
-The browser workspace explicitly declares esbuild for clean-install certification. Dagger's JS gate discovers provider packages, while Rust includes all provider
-fixtures. Reports explicitly distinguish selected offline layers and unrun live
-checks. GitHub's compatible code-only upgrade preserves bindings and prevents
-replacement of pending effects across upgrade/rollback. Mapping migrations and
-scheduled live canaries remain uncovered. Evidence guards reject changed bundles,
-partial/failed reports and invalid dates; old results are labelled. The Notion
-setup browser test opens all three bundled cards' offline evidence disclosures.
+Plugin catalog: the e2e suite runs against a static mock of the atomic-plugins
+catalog (`testdata/atomic-plugins-mock`: `catalog.json` plus the test plugins'
+`plugin.js` bundles in the published layout), which Playwright starts as a
+`webServer` unless `PLUGIN_CATALOG_URL` names another catalog. So
+`integration-visibility.spec.ts` asserts against fixed entries rather than
+whatever is published upstream. Provider plugins, their fixture tests and their
+certification live in atomic-plugins; this repo tests only discovery and
+install.
 
 Integration UX: `plugins.spec.ts` covers search before credential setup, lazy
 GitHub/Notion dialogs, and creating an automation from a connected integration.

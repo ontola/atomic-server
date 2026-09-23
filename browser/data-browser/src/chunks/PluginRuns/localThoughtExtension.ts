@@ -8,7 +8,6 @@ import {
 } from '../../../../../integrations/localthought/todoist';
 import type { TableViewSpec } from '@chunks/TablePage/createTableFromSpec';
 import type { LocalThoughtInstallation } from './localThoughtSync';
-import { clockifyIntegration } from './ClockifyLocalThought';
 
 /**
  * How a LocalThought installation was set up. `none` is the plain generated
@@ -16,7 +15,7 @@ import { clockifyIntegration } from './ClockifyLocalThought';
  * their way in. Stored on the installation, so a lens added later never
  * changes what an older folder shows.
  */
-export type LocalThoughtExtensionMode = 'tasks' | 'clockify' | 'none';
+export type LocalThoughtExtensionMode = 'tasks' | 'none';
 
 /**
  * A platform-specific translation on top of the generic LocalThought import:
@@ -109,10 +108,7 @@ export const todoistIntegration: LocalThoughtExtension = {
   },
 };
 
-const EXTENSIONS: LocalThoughtExtension[] = [
-  todoistIntegration,
-  clockifyIntegration,
-];
+const EXTENSIONS: LocalThoughtExtension[] = [todoistIntegration];
 
 /** Missing mode is a pre-category installation; there's no lens to infer. */
 export function extensionMode(
