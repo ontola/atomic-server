@@ -4,6 +4,11 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- The sidebar's New button stands out for first-time users. It opens the page
+  for everything you can build (apps, websites, tables, templates), but at rest
+  it is a faint grey line under the tree. Until the New page has been opened
+  once in this browser, it shows in the accent colour on a soft tint and pulses
+  a few times after 20 seconds.
 - Fix: a task added from a table's calendar, grid, quick-add button or paste
   now starts in the board's Todo lane instead of "No status". Tables carry
   `table-row-defaults` (property to starting value), which every way of adding
