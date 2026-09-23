@@ -6,6 +6,7 @@ import {
   core,
   dataBrowser,
   perfSpan,
+  isAtomicIdentifier,
 } from '@tomic/react';
 import { sortSubjectList } from '@views/OntologyPage/sortSubjectList';
 import { stringToSlug } from '@helpers/stringToSlug';
@@ -360,7 +361,7 @@ export async function createSelectPropertyOnClass(
   for (const seed of opts.tags) {
     const closeTag = perfSpan('table.tag');
     const closeSubject = perfSpan('table.tagUniqueSubject');
-    const subject = property.subject.startsWith('did:')
+    const subject = isAtomicIdentifier(property.subject)
       ? undefined
       : await store.buildUniqueSubjectFromParts(
           ['tag', seed.name],

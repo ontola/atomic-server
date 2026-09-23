@@ -291,14 +291,7 @@ impl Commit {
                     .get(urls::DRIVE_PROP)
                     .map(|v| v.to_string())
                     .unwrap_or_default();
-                crate::genesis::GenesisCert {
-                    signer_pubkey,
-                    created_at: now,
-                    nonce,
-                    state_hash: None,
-                    parent,
-                    drive,
-                }
+                crate::genesis::GenesisCert::new_v2(signer_pubkey, now, nonce, None, parent, drive)
             }
         };
         let cert_b64 = crate::agents::encode_base64(&cert.encode());
@@ -383,9 +376,8 @@ impl Commit {
         let pubkey_b64 = if commit.signer.is_agent_did() {
             commit
                 .signer
-                .as_str()
-                .strip_prefix("did:ad:agent:")
-                .ok_or("Invalid did:ad:agent signer")?
+                .agent_public_key()
+                .ok_or("Invalid atomic:agent / did:ad:agent signer")?
                 .to_string()
         } else if let Some(path_key) = crate::agents::legacy_agent_pubkey(commit.signer.as_str()) {
             // Legacy HTTP agents (`https://host/agents/{pubkey}`): rights
@@ -453,11 +445,9 @@ impl Commit {
             && commit.subject.is_did()
             && !commit.subject.is_agent_did()
         {
-            let subject_val = commit
-                .subject
-                .as_str()
-                .strip_prefix("did:ad:")
-                .ok_or("Invalid did:ad subject")?;
+            let subject_val = crate::identifiers::identifier_body(commit.subject.as_str())
+                .filter(|body| !body.contains(':'))
+                .ok_or("Invalid atomic: / did:ad: resource subject")?;
 
             let doc_propvals = commit
                 .loro_update
@@ -471,7 +461,7 @@ impl Commit {
                 // Path 1: self-verifying genesis certificate.
                 let cert_bytes = decode_base64(&cert_b64)?;
                 let cert = crate::genesis::GenesisCert::decode(&cert_bytes)?;
-                cert.verify(subject_val)?;
+                cert.verify_signed_bytes(&cert_bytes, subject_val)?;
                 if cert.signer_pubkey != pubkey_bytes {
                     return Err(
                         "Genesis certificate signer does not match the commit signer".into(),
@@ -490,7 +480,15 @@ impl Commit {
                             continue;
                         }
                         if let Some(doc_val) = propvals.get(prop) {
-                            if doc_val.to_string() != cert_val {
+                            // A v1 cert carries the string as it was signed
+                            // (`did:ad:` for every pre-rename resource) while
+                            // the materialized doc is canonical (`atomic:`).
+                            // Both name the same resource; compare on one
+                            // spelling or every old client's genesis fails.
+                            let doc_str = doc_val.to_string();
+                            if crate::identifiers::canonicalize_scheme(&doc_str)
+                                != crate::identifiers::canonicalize_scheme(cert_val)
+                            {
                                 return Err(format!(
                                     "Genesis certificate {name} ({cert_val}) does not match the resource's {name} ({doc_val})"
                                 )
@@ -519,11 +517,9 @@ impl Commit {
         if !self.subject.is_did() || self.subject.is_agent_did() {
             return Ok(false);
         }
-        let subject_val = self
-            .subject
-            .as_str()
-            .strip_prefix("did:ad:")
-            .ok_or("Invalid did:ad subject")?;
+        let subject_val = crate::identifiers::identifier_body(self.subject.as_str())
+            .filter(|body| !body.contains(':'))
+            .ok_or("Invalid atomic: / did:ad: resource subject")?;
         let Some(cert_b64) = self
             .loro_update
             .as_ref()
@@ -538,9 +534,8 @@ impl Commit {
         }
         let signer_key = self
             .signer
-            .as_str()
-            .strip_prefix("did:ad:agent:")
-            .ok_or("Repeat genesis requires a did:ad:agent signer")?;
+            .agent_public_key()
+            .ok_or("Repeat genesis requires an atomic:agent / did:ad:agent signer")?;
         let signer_bytes: [u8; 32] = decode_base64(signer_key)?
             .try_into()
             .map_err(|_| "Agent public key must be 32 bytes")?;
@@ -561,16 +556,16 @@ impl Commit {
         let commit = self;
         let subject = commit.subject.clone();
 
-        if subject.is_did() && subject.as_str().starts_with("did:ad:") {
+        if subject.is_did() && crate::identifiers::is_atomic_identifier(subject.as_str()) {
             let pure_id = subject.pure_id();
             let b64_part = if subject.is_agent_did() {
-                pure_id.strip_prefix("did:ad:agent:")
+                crate::identifiers::agent_public_key(&pure_id)
             } else if subject.is_commit_did() {
-                pure_id.strip_prefix("did:ad:commit:")
+                crate::identifiers::commit_signature(&pure_id)
             } else {
-                pure_id.strip_prefix("did:ad:")
+                crate::identifiers::identifier_body(&pure_id)
             }
-            .ok_or("Invalid DID format")?;
+            .ok_or("Invalid Atomic identifier format")?;
 
             let decoded = crate::agents::decode_base64(b64_part)
                 .map_err(|_| "Invalid DID: not valid base64")?;
@@ -1229,7 +1224,7 @@ impl Commit {
     #[tracing::instrument(skip_all)]
     pub async fn into_resource(&self, store: &impl Storelike) -> AtomicResult<Resource> {
         let commit_subject = match self.signature.as_ref() {
-            Some(sig) => format!("did:ad:commit:{}", sig),
+            Some(sig) => crate::identifiers::commit_subject(sig),
             None => {
                 let now = crate::utils::now();
                 format!("internal:/commitsUnsigned/{}", now)
@@ -1731,7 +1726,7 @@ mod test {
         assert_eq!(
             agent.subject,
             // base64url (URL_SAFE_NO_PAD): agent DIDs must be URL-safe.
-            "did:ad:agent:7LsjMW5gOfDdJzK_atgjQ1t20J_rw8MjVg6xwqm-h8U"
+            "atomic:agent:7LsjMW5gOfDdJzK_atgjQ1t20J_rw8MjVg6xwqm-h8U"
         );
         store
             .add_resource(&agent.to_resource().unwrap())
@@ -1875,8 +1870,8 @@ mod test {
             .map(|r| r.get_subject().to_string())
             .unwrap_or_default();
         assert!(
-            new_subject.starts_with("did:ad:"),
-            "created resource subject should be a did:ad: DID, got: {}",
+            crate::identifiers::is_resource_id(&new_subject),
+            "created resource subject should be an atomic: resource, got: {}",
             new_subject
         );
 
@@ -2568,9 +2563,10 @@ mod test {
             .unwrap();
 
         let created = store.get_resource(&did_subject).await.unwrap();
+        // Added as `did:ad:`, materialized in the canonical spelling.
         assert_eq!(
             created.get(crate::urls::PARENT).unwrap().to_string(),
-            drive_subject
+            crate::identifiers::canonicalize_scheme(drive_subject)
         );
 
         let mut updated_resource = created.clone();
@@ -2592,7 +2588,7 @@ mod test {
         let updated = store.get_resource(&did_subject).await.unwrap();
         assert_eq!(
             updated.get(crate::urls::PARENT).unwrap().to_string(),
-            drive_subject
+            crate::identifiers::canonicalize_scheme(drive_subject)
         );
         assert_eq!(
             updated.get(crate::urls::DESCRIPTION).unwrap().to_string(),

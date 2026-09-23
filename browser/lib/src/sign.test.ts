@@ -39,9 +39,10 @@ describe('Commit signing primitives', () => {
     expect(commit.signature).to.equal(signatureCorrect);
   });
 
-  it('derives a did:ad subject from the genesis signature', async ({
+  it('derives an atomic: subject from the genesis signature', async ({
     expect,
   }) => {
+    // Legacy `did:ad:` placeholder in; the minted subject is canonical `atomic:`.
     const commitBuilder = new CommitBuilder('did:ad:genesis', {
       set: new Map([
         ['https://atomicdata.dev/properties/description', 'Genesis value'],
@@ -52,7 +53,7 @@ describe('Commit signing primitives', () => {
     const commit = await commitBuilder.signAt(agent, 0);
 
     // Subject IS the signature.
-    expect(commit.subject).to.equal(`did:ad:${commit.signature}`);
+    expect(commit.subject).to.equal(`atomic:${commit.signature}`);
     expect(commit.isGenesis).toBe(true);
 
     // Serialization omits the subject (it's circular — the subject is
@@ -62,7 +63,7 @@ describe('Commit signing primitives', () => {
     expect(json['https://atomicdata.dev/properties/isGenesis']).toBe(true);
   });
 
-  it('derives a did:ad subject from a temporary _new subject', async ({
+  it('derives an atomic: subject from a temporary _new subject', async ({
     expect,
   }) => {
     const didAgent = new Agent(
@@ -78,7 +79,7 @@ describe('Commit signing primitives', () => {
 
     const commit = await commitBuilder.signAt(didAgent, 0);
 
-    expect(commit.subject).to.equal(`did:ad:${commit.signature}`);
+    expect(commit.subject).to.equal(`atomic:${commit.signature}`);
     const json = JSON.parse(serializeDeterministically(commit));
     expect(json['https://atomicdata.dev/properties/subject']).toBeUndefined();
   });

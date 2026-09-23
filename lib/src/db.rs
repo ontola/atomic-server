@@ -4,6 +4,7 @@
 pub mod app_agent;
 pub mod blob_backend;
 pub mod btreemap_store;
+mod canonical_scheme;
 #[cfg(all(feature = "db-redb", not(target_arch = "wasm32")))]
 pub mod compaction;
 mod encoding;
@@ -516,7 +517,10 @@ impl Db {
         // However, add_atom uses set_propvals, which skips the validation.
         let subject = self.normalize_subject(resource.get_subject());
         let subject_str = subject.pure_id();
-        let existing = self.get_propvals(&subject_str).ok();
+        let existing = self
+            .get_propvals_aliased(&subject_str)
+            .ok()
+            .map(|(_, pv)| pv);
         if !overwrite_existing && existing.is_some() {
             return Err(format!(
                 "Failed to add: '{}', already exists, should not be overwritten.",
@@ -583,6 +587,7 @@ impl Db {
         // the CRDT state. Commits are native (immutable, not CRDT) — they get
         // no snapshot and keep their `loroUpdate` payload in the blob.
         let mut propvals = resource.get_propvals().clone();
+        canonical_scheme::canonicalize_propvals(&mut propvals);
         if !subject.is_commit_did() {
             let snapshot = resource.build_state_doc()?.export_snapshot();
             propvals.remove(crate::urls::LORO_UPDATE);
@@ -602,6 +607,7 @@ impl Db {
             key: subject_str.as_bytes().to_vec(),
             val: Some(resource_bin),
         });
+        self.queue_delete_identifier_aliases(&subject_str, &mut transaction);
         self.apply_transaction(&mut transaction)?;
         if crate::import_identity::identity(resource).is_some() {
             self.flush()?;
@@ -723,6 +729,7 @@ impl Db {
         // Load persisted watched-queries (if any) into the in-memory map
         // before bootstrap, so any filter-matching commits during bootstrap
         // see the right state.
+        store.migrate_canonical_scheme_if_needed()?;
         store.populate_watched_queries_cache()?;
 
         // Runs on every open, but only writes when the embedded defaults
@@ -763,6 +770,7 @@ impl Db {
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
 
+        store.migrate_canonical_scheme_if_needed()?;
         store.populate_watched_queries_cache()?;
         crate::populate::bootstrap(&store)
             .await
@@ -802,6 +810,7 @@ impl Db {
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
 
+        store.migrate_canonical_scheme_if_needed()?;
         store.populate_watched_queries_cache()?;
         crate::populate::bootstrap(&store)
             .await
@@ -936,6 +945,7 @@ impl Db {
             }
         }
 
+        store.migrate_canonical_scheme_if_needed()?;
         store.populate_watched_queries_cache()?;
         crate::populate::bootstrap(&store)
             .await
@@ -1059,7 +1069,7 @@ impl Db {
                             propvals.insert(
                                 urls::BLOB.to_string(),
                                 Value::AtomicUrl(
-                                    format!("did:ad:blob:{}", hash_hex.clone()).into(),
+                                    crate::identifiers::blob_subject(&hash_hex).into(),
                                 ),
                             );
                             propvals.insert(urls::INTERNAL_ID.to_string(), Value::String(hash_hex));
@@ -1145,6 +1155,7 @@ impl Db {
 
         store.add_class_extender(crate::collections::get_collection_class_extender())?;
 
+        store.migrate_canonical_scheme_if_needed()?;
         store.populate_watched_queries_cache()?;
         crate::populate::bootstrap(&store)
             .await
@@ -1514,9 +1525,55 @@ impl Db {
     /// already stored locally? Used by managed-node replication to skip drives it
     /// already hosts before resolving/pulling them from a peer.
     pub fn has_resource_locally(&self, subject: &str) -> bool {
-        self.kv
-            .contains_key(Tree::Resources, subject.as_bytes())
-            .unwrap_or(false)
+        crate::identifiers::storage_lookup_keys(subject)
+            .into_iter()
+            .any(|key| {
+                self.kv
+                    .contains_key(Tree::Resources, key.as_bytes())
+                    .unwrap_or(false)
+            })
+    }
+
+    /// Rewrite `did:ad:` resource / snapshot / mapping keys to `atomic:` on
+    /// open. Idempotent; see [`canonical_scheme::migrate_if_needed`].
+    fn migrate_canonical_scheme_if_needed(&self) -> AtomicResult<()> {
+        canonical_scheme::migrate_if_needed(self)
+    }
+
+    /// Delete the other accepted spelling of `canonical` so a write under
+    /// `atomic:X` does not leave a `did:ad:X` row beside it.
+    fn queue_delete_identifier_aliases(&self, canonical: &str, transaction: &mut Transaction) {
+        for key in crate::identifiers::storage_lookup_keys(canonical)
+            .into_iter()
+            .filter(|k| k != canonical)
+        {
+            transaction.push(Operation::remove_resource(&key));
+            transaction.push(Operation::remove_loro_snapshot(&key));
+            transaction.push(Operation {
+                tree: Tree::DidMapping,
+                method: Method::Delete,
+                key: key.into_bytes(),
+                val: None,
+            });
+        }
+    }
+
+    pub(crate) fn get_loro_snapshot_bytes(&self, subject: &str) -> Option<Vec<u8>> {
+        for key in crate::identifiers::storage_lookup_keys(subject) {
+            if let Ok(Some(bytes)) = self.kv.get(Tree::LoroSnapshots, key.as_bytes()) {
+                return Some(bytes);
+            }
+        }
+        None
+    }
+
+    fn get_did_mapping_hint(&self, subject: &str) -> Option<String> {
+        for key in crate::identifiers::storage_lookup_keys(subject) {
+            if let Ok(Some(bin)) = self.kv.get(Tree::DidMapping, key.as_bytes()) {
+                return std::str::from_utf8(&bin).ok().map(str::to_string);
+            }
+        }
+        None
     }
 
     /// Per-drive storage usage (resource count, Loro snapshot bytes, blob
@@ -1582,7 +1639,7 @@ impl Db {
                 continue;
             };
 
-            if let Ok(Some(snapshot)) = self.kv.get(Tree::LoroSnapshots, subject.as_bytes()) {
+            if let Some(snapshot) = self.get_loro_snapshot_bytes(subject) {
                 row.loro_bytes += snapshot.len() as u64;
             }
 
@@ -1639,7 +1696,9 @@ impl Db {
 
         for resource in self.all_resources(false) {
             if let Ok(p) = resource.get(urls::PARENT) {
-                if p.to_string() != parent {
+                if crate::identifiers::canonicalize_scheme(&p.to_string())
+                    != crate::identifiers::canonicalize_scheme(parent)
+                {
                     continue;
                 }
             } else {
@@ -1780,7 +1839,7 @@ impl Db {
 
     fn should_bypass_drive_routing(subject: &Subject, subject_string: &str) -> bool {
         subject.is_did()
-            || subject_string.starts_with("/did")
+            || crate::identifiers::is_identifier_resolution_path(subject_string)
             || subject_string.starts_with("/bind-drive")
             || subject_string.starts_with("/search")
             || subject_string.starts_with("/upload")
@@ -1799,9 +1858,7 @@ impl Db {
     /// pubkey is standard base64 and contains `/` and `+`, so the whole
     /// remainder is carried across untouched.
     fn legacy_agent_subject(subject: &Subject) -> Option<Subject> {
-        let pubkey = subject
-            .as_str()
-            .strip_prefix(crate::subject::DID_AD_AGENT_PREFIX)?;
+        let pubkey = subject.agent_public_key()?;
 
         if pubkey.is_empty() {
             return None;
@@ -2285,7 +2342,8 @@ impl Db {
     ) -> AtomicResult<()> {
         let subject = self.normalize_subject(resource.get_subject());
         let subject_str = subject.pure_id();
-        let propvals = resource.get_propvals();
+        let mut propvals = resource.get_propvals().clone();
+        canonical_scheme::canonicalize_propvals(&mut propvals);
 
         // Persist DID routing hint if available
         if let Subject::Did {
@@ -2307,7 +2365,7 @@ impl Db {
         // projection. Commit resources are the exception: a commit's
         // `loroUpdate` is its signed payload and must stay in the blob.
         let resource_bin = if subject.is_commit_did() {
-            encode_propvals(propvals)?
+            encode_propvals(&propvals)?
         } else {
             let mut projection = propvals.clone();
             projection.remove(crate::urls::LORO_UPDATE);
@@ -2320,6 +2378,7 @@ impl Db {
             key: subject_str.as_bytes().to_vec(),
             val: Some(resource_bin),
         });
+        self.queue_delete_identifier_aliases(&subject_str, transaction);
         Ok(())
     }
 
@@ -2433,6 +2492,26 @@ impl Db {
         }
     }
 
+    /// The key under which `subject` is actually stored. Tries the canonical
+    /// `atomic:` form first, then the legacy `did:ad:` alias.
+    fn stored_resource_key(&self, subject: &str) -> Option<String> {
+        crate::identifiers::storage_lookup_keys(subject)
+            .into_iter()
+            .find(|key| self.get_propvals(key).is_ok())
+    }
+
+    fn get_propvals_aliased(&self, subject: &str) -> AtomicResult<(String, PropVals)> {
+        let mut last_err = None;
+        for key in crate::identifiers::storage_lookup_keys(subject) {
+            match self.get_propvals(&key) {
+                Ok(propvals) => return Ok((key, propvals)),
+                Err(e) => last_err = Some(e),
+            }
+        }
+        Err(last_err
+            .unwrap_or_else(|| AtomicError::not_found(format!("Resource {} not found", subject))))
+    }
+
     /// A resource built only from its last-committed materialized propvals,
     /// **skipping the Loro snapshot re-decode** that [`Storelike::get_resource`]
     /// performs. That decode decompresses a resource's full CRDT history and can
@@ -2444,18 +2523,15 @@ impl Db {
     /// drive hint) matches `get_resource`, so ids/subjects stay consistent.
     pub fn get_resource_shallow(&self, subject: &Subject) -> AtomicResult<Resource> {
         let normalized = self.normalize_subject(subject);
-        let subject_str = normalized.pure_id();
-        let propvals = self.get_propvals(&subject_str)?;
+        let (subject_str, propvals) = self.get_propvals_aliased(&normalized.pure_id())?;
 
         let mut res_subject = normalized.clone();
         if let Subject::Did {
             drive_hint: None, ..
         } = &res_subject
         {
-            if let Ok(Some(hint_bin)) = self.kv.get(Tree::DidMapping, subject_str.as_bytes()) {
-                if let Ok(hint) = std::str::from_utf8(&hint_bin) {
-                    res_subject = res_subject.set_drive_hint(hint.to_string());
-                }
+            if let Some(hint) = self.get_did_mapping_hint(&subject_str) {
+                res_subject = res_subject.set_drive_hint(hint);
             }
         }
 
@@ -3227,7 +3303,7 @@ impl Db {
         filter: &query_index::QueryFilter,
         resource: &Resource,
     ) -> bool {
-        if !resource.get_subject().as_str().starts_with("did:") {
+        if !crate::identifiers::is_atomic_identifier(resource.get_subject().as_str()) {
             return true;
         }
         match (resource.get_drive(), self.filter_drive_root(filter)) {
@@ -3418,7 +3494,7 @@ impl Db {
         // everything else gets the stored snapshot attached undecoded.
         if !resource.get_subject().is_commit_did() {
             let pure_id = resource.get_subject().pure_id();
-            if let Ok(Some(snapshot)) = self.kv.get(Tree::LoroSnapshots, pure_id.as_bytes()) {
+            if let Some(snapshot) = self.get_loro_snapshot_bytes(&pure_id) {
                 resource
                     .insert_propval_raw(crate::urls::LORO_UPDATE.into(), Value::LoroDoc(snapshot));
             }
@@ -3917,13 +3993,12 @@ impl Db {
         // `to_string()` (which may carry `?drive=` params) would miss the
         // row entirely for DID subjects with a drive hint.
         let subject_str = subject.pure_id();
-        if let Ok(found) = self.get_propvals(&subject_str) {
+        if let Ok((found_key, found)) = self.get_propvals_aliased(&subject_str) {
             let resource = Resource::from_propvals(found, subject.clone());
-            transaction.push(Operation::remove_resource(&subject_str));
-            // Remove the Loro snapshot in the same transaction. Without this
-            // the snapshot is orphaned in `Tree::LoroSnapshots` and leaks
-            // forever — only the WS/Iroh DESTROY path cleaned it before.
-            transaction.push(Operation::remove_loro_snapshot(&subject_str));
+            for key in crate::identifiers::storage_lookup_keys(&found_key) {
+                transaction.push(Operation::remove_resource(&key));
+                transaction.push(Operation::remove_loro_snapshot(&key));
+            }
             // Read the drive now, while the resource still exists: a listener
             // reacting to the removal cannot look it up any more.
             let drive = resource.get_drive().or(inherited_drive);
@@ -3947,6 +4022,7 @@ impl Db {
                 self.remove_atom_from_index(&remove_atom, &resource, transaction)?;
             }
             crate::search::unindex_subject(self, &subject_str, transaction)?;
+            crate::search::unindex_subject(self, &found_key, transaction)?;
         } else {
             return Err(format!(
                 "Resource {} could not be deleted, because it was not found in the store.",
@@ -4214,7 +4290,7 @@ impl Storelike for Db {
         // never be resolved over the network.
         if commit.destroy.unwrap_or(false) && opts.validate_rights {
             if let Some(sig) = commit.signature.as_ref() {
-                let commit_id = format!("did:ad:commit:{sig}");
+                let commit_id = crate::identifiers::commit_subject(sig);
                 if store.has_resource_locally(&commit_id)
                     && store.has_resource_locally(&commit.subject.pure_id())
                 {
@@ -4399,6 +4475,10 @@ impl Storelike for Db {
                     key: new.get_subject().pure_id().as_bytes().to_vec(),
                     val: Some(snapshot),
                 });
+                self.queue_delete_identifier_aliases(
+                    &new.get_subject().pure_id(),
+                    &mut transaction,
+                );
             }
         }
 
@@ -4591,7 +4671,7 @@ impl Storelike for Db {
     async fn get_resource(&self, subject: &Subject) -> AtomicResult<Resource> {
         let normalized = self.normalize_subject(subject);
         let subject_str = normalized.pure_id();
-        if let Ok(propvals) = self.get_propvals(&subject_str) {
+        if let Ok((subject_str, propvals)) = self.get_propvals_aliased(&subject_str) {
             let mut res_subject = normalized.clone();
 
             // If it's a DID and we don't have a hint in the requested subject,
@@ -4600,20 +4680,15 @@ impl Storelike for Db {
                 drive_hint: None, ..
             } = &res_subject
             {
-                if let Ok(Some(hint_bin)) = self.kv.get(Tree::DidMapping, subject_str.as_bytes()) {
-                    if let Ok(hint) = std::str::from_utf8(&hint_bin) {
-                        res_subject = res_subject.set_drive_hint(hint.to_string());
-                    }
+                if let Some(hint) = self.get_did_mapping_hint(&subject_str) {
+                    res_subject = res_subject.set_drive_hint(hint);
                 }
             }
 
             let mut resource = Resource::from_propvals(propvals, res_subject);
             // Authoritative merged CRDT state (full oplog) lives in LoroSnapshots.
             // Propvals may carry a smaller incremental `loroUpdate` from the last commit.
-            if let Ok(Some(snapshot)) = self.kv.get(
-                crate::db::trees::Tree::LoroSnapshots,
-                subject_str.as_bytes(),
-            ) {
+            if let Some(snapshot) = self.get_loro_snapshot_bytes(&subject_str) {
                 // A snapshot that cannot be read or applied is not fatal: the
                 // read falls back to the (possibly stale) propval projection
                 // stored beside it. It is still worth a warning, because a
@@ -4666,17 +4741,16 @@ impl Storelike for Db {
                 }
             }
             let resolved_url = normalized.resolve(&origin);
+            let path = normalized.path();
 
-            if normalized.is_did() || normalized.path().starts_with("/did") {
-                // If it's an agent DID and not found locally, return a minimal resource
+            if normalized.is_did() || crate::identifiers::is_identifier_resolution_path(&path) {
+                // If it's an agent identifier and not found locally, return a minimal resource
                 // instead of an error. This is important for "just-in-time" agent registration.
-                if normalized.is_agent_did() || normalized.path().starts_with("/did:ad:agent:") {
-                    let lookup = if normalized.path().starts_with('/') {
-                        &normalized.path()[1..]
-                    } else {
-                        &normalized.path()
-                    };
-                    if let Some(pubkey) = lookup.strip_prefix("did:ad:agent:") {
+                if normalized.is_agent_did()
+                    || crate::identifiers::is_agent_id(path.trim_start_matches('/'))
+                {
+                    let lookup = path.strip_prefix('/').unwrap_or(&path);
+                    if let Some(pubkey) = crate::identifiers::agent_public_key(lookup) {
                         if let Ok(agent) = crate::agents::Agent::new_from_public_key(pubkey) {
                             if let Ok(mut resource) = agent.to_resource() {
                                 // A lookup is not creation of an agent. There is
@@ -4701,7 +4775,10 @@ impl Storelike for Db {
                     }
                 }
 
-                if normalized.is_did() || resolved_url.starts_with("/did:") {
+                if normalized.is_did()
+                    || crate::identifiers::is_identifier_path_form(&resolved_url)
+                    || crate::identifiers::is_atomic_identifier(&resolved_url)
+                {
                     return Err(AtomicError::not_found(format!(
                         "DID Resource {} not found locally",
                         resolved_url
@@ -4783,7 +4860,7 @@ impl Storelike for Db {
 
     fn has_stored_resource(&self, subject: &Subject) -> bool {
         let normalized = self.normalize_subject(subject);
-        self.get_propvals(&normalized.pure_id()).is_ok()
+        self.stored_resource_key(&normalized.pure_id()).is_some()
     }
 
     fn get_defaults_fingerprint(&self) -> AtomicResult<Option<String>> {

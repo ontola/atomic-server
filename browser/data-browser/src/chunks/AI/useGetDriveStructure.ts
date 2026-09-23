@@ -5,6 +5,7 @@ import {
   CollectionBuilder,
   core,
   dataBrowser,
+  isCommitSubject,
   useStore,
   type Store,
 } from '@tomic/react';
@@ -48,7 +49,7 @@ async function fetchChildren(store: Store, parent: string): Promise<string[]> {
 
   const members = await collection.getAllMembers();
 
-  return members.filter(subject => !subject.startsWith('did:ad:commit:'));
+  return members.filter(subject => !isCommitSubject(subject));
 }
 
 /** Resources that present their own children in dedicated UI; recursing into

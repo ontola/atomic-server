@@ -9,6 +9,7 @@
  * the result to a variable for further inspection.
  */
 import type { Store, CommitLogEntry, Resource } from '@tomic/react';
+import { ATOMIC_PREFIX } from '@tomic/lib';
 
 type InspectResult = {
   subject: string;
@@ -173,10 +174,11 @@ export async function inspect(
   return result;
 }
 
-/** List DID-subjects in the WASM DB. Pass a prefix to narrow. */
+/** List identifier subjects in the WASM DB. Pass a prefix to narrow; the
+ *  default matches the canonical `atomic:` keys the on-open migration leaves. */
 export async function opfsList(
   store: Store,
-  prefix = 'did:ad:',
+  prefix = ATOMIC_PREFIX,
 ): Promise<string[]> {
   const clientDb = store.getClientDb();
 

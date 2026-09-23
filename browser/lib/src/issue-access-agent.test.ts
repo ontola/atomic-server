@@ -43,7 +43,7 @@ describe('issueAccessAgent', () => {
     });
 
     expect(store.getAgent()?.subject).toBe(agentDID);
-    expect(issued.subject).toMatch(/^did:ad:agent:/);
+    expect(issued.subject).toMatch(/^atomic:agent:/);
     expect(issued.subject).not.toBe(agentDID);
 
     const profile = await store.getResource(issued.subject);

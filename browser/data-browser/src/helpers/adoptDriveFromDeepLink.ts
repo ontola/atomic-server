@@ -1,4 +1,10 @@
-import { enableLoro, isUnauthorized, server, type Store } from '@tomic/react';
+import {
+  enableLoro,
+  isUnauthorized,
+  server,
+  type Store,
+  isAtomicIdentifier,
+} from '@tomic/react';
 import { isOriginWithoutNode } from './originNode';
 
 /** Server-managed property stamping every resource with its drive at genesis. */
@@ -60,7 +66,7 @@ export async function adoptDriveFromDeepLink(store: Store): Promise<void> {
     // nothing — `getResource` resolves, but against an un-materialized doc.
     // Wait out both before fetching so the fetched resource is actually
     // readable.
-    if (subject.startsWith('did:') && !store.serverConnected) {
+    if (isAtomicIdentifier(subject) && !store.serverConnected) {
       // `did:` subjects have no HTTP fallback: `store.getResource` can only
       // resolve them once the WS is connected. A page load always starts
       // disconnected and reconnects within a few hundred ms, so give it a

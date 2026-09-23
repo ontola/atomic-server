@@ -94,15 +94,15 @@ describe('store read policy', () => {
   }) => {
     await enableLoro();
     const { store } = await testStore();
-    const { db, calls } = fakeDb({ 'did:ad:doc': row('did:ad:doc', 'Local') });
+    const { db, calls } = fakeDb({ 'atomic:doc': row('atomic:doc', 'Local') });
     store.setClientDb(db);
     const socket = fakeSocket(store);
 
-    const resource = await store.getResource('did:ad:doc');
+    const resource = await store.getResource('atomic:doc');
 
     expect(resource.get(NAME)).toBe('Local');
     expect(socket.fetch).not.toHaveBeenCalled();
-    expect(calls).toEqual([['did:ad:doc']]);
+    expect(calls).toEqual([['atomic:doc']]);
   });
 
   it('goes to the server for a subject the database does not have', async ({
@@ -113,10 +113,11 @@ describe('store read policy', () => {
     store.setClientDb(fakeDb({}).db);
     const socket = fakeSocket(store);
 
+    // Legacy `did:ad:` in: the store canonicalizes before the miss goes out.
     const resource = await store.getResource('did:ad:elsewhere');
 
-    expect(resource.subject).toBe('did:ad:elsewhere');
-    expect(socket.fetch).toHaveBeenCalledWith('did:ad:elsewhere');
+    expect(resource.subject).toBe('atomic:elsewhere');
+    expect(socket.fetch).toHaveBeenCalledWith('atomic:elsewhere');
   });
 
   it('resolves a missing subject to a resource carrying the error', async ({
@@ -127,10 +128,10 @@ describe('store read policy', () => {
     store.setClientDb(fakeDb({}).db);
     const socket = fakeSocket(store);
     socket.fetch.mockRejectedValue(
-      new Error('Resource not found. did:ad:gone'),
+      new Error('Resource not found. atomic:gone'),
     );
 
-    const resource = await store.getResource('did:ad:gone');
+    const resource = await store.getResource('atomic:gone');
 
     expect(resource.error?.message).toContain('Resource not found');
   });
@@ -138,13 +139,13 @@ describe('store read policy', () => {
   it('never sends a local-only subject to the server', async ({ expect }) => {
     await enableLoro();
     const { store } = await testStore();
-    store.registerLocalOnlyDrive('did:ad:localdrive');
+    store.registerLocalOnlyDrive('atomic:localdrive');
     const { db } = fakeDb({});
     store.setClientDb(db);
     const socket = fakeSocket(store);
     vi.spyOn(store, 'isLocalOnlySubject').mockReturnValue(true);
 
-    const resource = await store.getResource('did:ad:private-note');
+    const resource = await store.getResource('atomic:private-note');
 
     expect((resource.error as AtomicError).type).toBe(ErrorType.Transport);
     expect(socket.fetch).not.toHaveBeenCalled();
@@ -156,25 +157,25 @@ describe('store read policy', () => {
     await enableLoro();
     const { store } = await testStore();
     const { db, calls } = fakeDb({
-      'did:ad:a': row('did:ad:a', 'A'),
-      'did:ad:b': row('did:ad:b', 'B'),
+      'atomic:a': row('atomic:a', 'A'),
+      'atomic:b': row('atomic:b', 'B'),
     });
     store.setClientDb(db);
     const socket = fakeSocket(store);
 
     const [a, b, c, aAgain] = await store.getResources([
-      'did:ad:a',
-      'did:ad:b',
-      'did:ad:c',
-      'did:ad:a',
+      'atomic:a',
+      'atomic:b',
+      'atomic:c',
+      'atomic:a',
     ]);
 
     expect([a.get(NAME), b.get(NAME)]).toEqual(['A', 'B']);
     expect(aAgain).toBe(a);
-    expect(c.subject).toBe('did:ad:c');
+    expect(c.subject).toBe('atomic:c');
     // One bulk read for the misses in memory, then only the true miss on the wire.
-    expect(calls).toEqual([['did:ad:a', 'did:ad:b', 'did:ad:c']]);
-    expect(socket.fetchMany).toHaveBeenCalledWith(['did:ad:c']);
+    expect(calls).toEqual([['atomic:a', 'atomic:b', 'atomic:c']]);
+    expect(socket.fetchMany).toHaveBeenCalledWith(['atomic:c']);
   });
 });
 
@@ -187,7 +188,7 @@ describe('local hydration batching', () => {
   afterEach(() => vi.restoreAllMocks());
 
   const subjects = (n: number) =>
-    Array.from({ length: n }, (_, i) => `did:ad:s${i}`);
+    Array.from({ length: n }, (_, i) => `atomic:s${i}`);
   const rowsFor = (list: string[]) =>
     Object.fromEntries(list.map(s => [s, row(s, `Name ${s}`)]));
 
@@ -215,22 +216,22 @@ describe('local hydration batching', () => {
   }) => {
     await enableLoro();
     const { store } = await testStore();
-    const { db, calls } = fakeDb(rowsFor(['did:ad:twice']));
+    const { db, calls } = fakeDb(rowsFor(['atomic:twice']));
     store.setClientDb(db);
     fakeSocket(store);
 
     // A render-phase miss and a direct local read of the same subject.
-    const fromRender = store.getResourceLoading('did:ad:twice');
-    const fromLocal = store.getLocalResource('did:ad:twice');
+    const fromRender = store.getResourceLoading('atomic:twice');
+    const fromLocal = store.getLocalResource('atomic:twice');
     const [local, awaited] = await Promise.all([
       fromLocal,
-      store.getResource('did:ad:twice'),
+      store.getResource('atomic:twice'),
     ]);
 
-    expect(calls).toEqual([['did:ad:twice']]);
+    expect(calls).toEqual([['atomic:twice']]);
     expect(local).toBe(fromRender);
     expect(awaited).toBe(fromRender);
-    expect(local.get(NAME)).toBe('Name did:ad:twice');
+    expect(local.get(NAME)).toBe('Name atomic:twice');
   });
 
   it('puts a miss issued while a batch is at the worker into the next batch', async ({
@@ -242,7 +243,7 @@ describe('local hydration batching', () => {
     let reached!: () => void;
     const busy = new Promise<void>(resolve => (release = resolve));
     const atWorker = new Promise<void>(resolve => (reached = resolve));
-    const { db, calls } = fakeDb(rowsFor(['did:ad:first', 'did:ad:second']), {
+    const { db, calls } = fakeDb(rowsFor(['atomic:first', 'atomic:second']), {
       onRead: async () => {
         reached();
         await busy;
@@ -251,19 +252,19 @@ describe('local hydration batching', () => {
     store.setClientDb(db);
     fakeSocket(store);
 
-    store.getResourceLoading('did:ad:first');
+    store.getResourceLoading('atomic:first');
     await atWorker;
     // The first batch has been handed over; this one must not be lost.
-    store.getResourceLoading('did:ad:second');
+    store.getResourceLoading('atomic:second');
     release();
     const [first, second] = await Promise.all([
-      store.getResource('did:ad:first'),
-      store.getResource('did:ad:second'),
+      store.getResource('atomic:first'),
+      store.getResource('atomic:second'),
     ]);
 
-    expect(calls).toEqual([['did:ad:first'], ['did:ad:second']]);
-    expect(first.get(NAME)).toBe('Name did:ad:first');
-    expect(second.get(NAME)).toBe('Name did:ad:second');
+    expect(calls).toEqual([['atomic:first'], ['atomic:second']]);
+    expect(first.get(NAME)).toBe('Name atomic:first');
+    expect(second.get(NAME)).toBe('Name atomic:second');
   });
 
   it('treats a failed bulk read as a miss for every subject in it', async ({
@@ -271,29 +272,29 @@ describe('local hydration batching', () => {
   }) => {
     await enableLoro();
     const { store } = await testStore();
-    const { db, calls } = fakeDb(rowsFor(['did:ad:x', 'did:ad:y']), {
+    const { db, calls } = fakeDb(rowsFor(['atomic:x', 'atomic:y']), {
       fail: new Error('worker gone'),
     });
     store.setClientDb(db);
     const socket = fakeSocket(store);
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    store.getResourceLoading('did:ad:x');
-    store.getResourceLoading('did:ad:y');
+    store.getResourceLoading('atomic:x');
+    store.getResourceLoading('atomic:y');
     await Promise.all([
-      store.getResource('did:ad:x'),
-      store.getResource('did:ad:y'),
+      store.getResource('atomic:x'),
+      store.getResource('atomic:y'),
     ]);
 
     // One round trip failed; each subject went on to the server as a miss.
-    expect(calls).toEqual([['did:ad:x', 'did:ad:y']]);
+    expect(calls).toEqual([['atomic:x', 'atomic:y']]);
     expect(
       warn.mock.calls.filter(([message]) =>
         String(message).includes('OPFS lookup failed'),
       ),
     ).toHaveLength(1);
-    expect(socket.fetch).toHaveBeenCalledWith('did:ad:x');
-    expect(socket.fetch).toHaveBeenCalledWith('did:ad:y');
+    expect(socket.fetch).toHaveBeenCalledWith('atomic:x');
+    expect(socket.fetch).toHaveBeenCalledWith('atomic:y');
   });
 
   it('splits a very large batch into worker-sized chunks', async ({

@@ -3,6 +3,11 @@ import { core } from './ontologies/core.js';
 import { dataBrowser } from './ontologies/dataBrowser.js';
 import type { Store } from './store.js';
 import { instances } from './urls.js';
+import {
+  agentPublicKey,
+  agentSubject as agentSubjectOf,
+  isAgentSubject,
+} from './subject.js';
 
 /**
  * Grant-target cache on an issued agent. The live ACL on each target is still
@@ -65,7 +70,7 @@ export async function issueAccessAgent(
   }
 
   const keys = await Agent.generateKeyPair();
-  const subject = `did:ad:agent:${keys.publicKey}`;
+  const subject = agentSubjectOf(keys.publicKey);
 
   await publishIssuedAgentProfile(store, {
     subject,
@@ -127,15 +132,15 @@ export function agentSubjectFromPublicKey(value: string): {
 } {
   const trimmed = value.trim();
 
-  if (trimmed.startsWith('did:ad:agent:')) {
+  if (isAgentSubject(trimmed)) {
     return {
       subject: trimmed,
-      publicKey: trimmed.slice('did:ad:agent:'.length),
+      publicKey: agentPublicKey(trimmed) ?? trimmed,
     };
   }
 
   return {
-    subject: `did:ad:agent:${trimmed}`,
+    subject: agentSubjectOf(trimmed),
     publicKey: trimmed,
   };
 }

@@ -5,6 +5,7 @@ import { Resource, normalizeLoroChangeTimestampMs } from './resource.js';
 import { Store } from './store.js';
 import { commits } from './ontologies/commits.js';
 import { dataBrowser } from './ontologies/dataBrowser.js';
+import { isCommitSubject } from './commit.js';
 
 /**
  * Strips `did:ad:commit:` subjects from a member list. Commit resources don't
@@ -17,7 +18,7 @@ import { dataBrowser } from './ontologies/dataBrowser.js';
  * side index. The proper fix is upstream — see TODO.
  */
 function filterIndexLeakage(subjects: string[]): string[] {
-  return subjects.filter(s => !s.startsWith('did:ad:commit:'));
+  return subjects.filter(s => !isCommitSubject(s));
 }
 
 /**
@@ -610,7 +611,7 @@ export class Collection {
     // Commit subjects leak into `parent=` indexes on both server and client.
     // `filterIndexLeakage` strips them at iteration; mirror that here so we
     // don't even consider treating one as a member.
-    if (subject.startsWith('did:ad:commit:')) return 'unchanged';
+    if (isCommitSubject(subject)) return 'unchanged';
 
     // `_new:` is the placeholder subject the store assigns before async
     // signing renames the resource to its real DID. The placeholder is UI

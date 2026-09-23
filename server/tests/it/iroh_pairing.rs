@@ -96,12 +96,12 @@ impl Drop for PeerServer {
     }
 }
 
-/// Fetch a subject from a server as an anonymous reader. `did:ad:` subjects are
-/// not path segments — they are resolved through `/did?subject=`.
+/// Fetch a subject from a server as an anonymous reader. Identifiers are
+/// not path segments — they are resolved through `/resource?subject=`.
 async fn get_subject_anonymously(base_url: &str, subject: &str) -> reqwest::Response {
     reqwest::Client::new()
         .get(format!(
-            "{base_url}/did?subject={}",
+            "{base_url}/resource?subject={}",
             urlencoding::encode(subject)
         ))
         .header("Accept", "application/ad+json")
@@ -281,8 +281,8 @@ async fn a_public_drive_reconciles_between_two_servers_over_iroh() {
 
     let node_a = await_node_id(&url_a).await;
     assert!(
-        node_a.starts_with("did:ad:node:"),
-        "a pairing code carries a node DID, got {node_a}"
+        atomic_lib::identifiers::is_node_id(&node_a),
+        "a pairing code carries a node identifier, got {node_a}"
     );
 
     // A peer is handed only what the requester may read, so pairing before the

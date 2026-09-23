@@ -11,6 +11,10 @@ File uploads during tab handoff (2026-09-22): `browser/lib/src/client-db-handoff
 
 Account redirects (2026-09-22): mounted `GettingStartedFlow.test.tsx` and `IdentityReconcileGate.test.tsx` cover hosted local sign-in, settings/passkey continuation, invite/drive priority, missing-data recovery and cancellation of stale identity/hosting checks. See [the route map](browser/data-browser/AUTH_FLOWS.md). Portal session, email-link and dashboard browser checks live in atomic-saas and use HTTP fixtures; real production passkey registration is not covered by these checks.
 
+PR #1585 frontend regressions: Vault backup tests verify a legacy drive ID reads canonical cached metadata and refreshes it after edits. Deep-link and peer-pairing tests retain legacy inputs while checking canonical identity behavior.
+
+PR #1585 upgrade regressions: library tests pin the pre-rename AI Chats singleton and restored alias cache, negotiate nested reduced/full sync identifiers, and export canonical snapshots for legacy requests. Rust tests cover legacy filtered/full version vectors and restarting an interrupted scheme migration after rows moved but before indexes finished. These are library/frame-level checks; a deployed mixed-version browser/Iroh pairing is not exercised.
+
 New-drive sync: WebSocket unit coverage verifies SUB and SYNC wait for a pending genesis acknowledgement, then resume on ResourceSaved. The Local DB-off rendering E2E exercises this ordering with real server persistence.
 
 Cover repositioning: `cover-reposition.spec.ts` uploads a real image and verifies multiple pointer movements update its framing before release (native image dragging previously interrupted the gesture).
@@ -2155,10 +2159,13 @@ Paired SaaS `portal/e2e/passkey-open-drive.spec.ts` covers account/profile creat
 
 | Flow | Where |
 |---|---|
-| HTTP path `https://host/did:ad:…` and `/did?subject=` extract the same DID | `browser/lib/src/subject.test.ts` |
+| HTTP path `https://host/did:ad:…` / `https://host/atomic:…` and `/resource?subject=` extract the same identifier | `browser/lib/src/subject.test.ts` |
 | JSON-AD parse accepts `@id: did:ad:…` when the request used the HTTP path alias | `browser/lib/src/parse.test.ts` |
-| `Client.fetchResourceHTTP` resolves DIDs via `/did?subject=` and does not touch `window` in Node | `browser/lib/src/client.fetch.test.ts` |
+| `Client.fetchResourceHTTP` resolves identifiers via `/resource?subject=` and does not touch `window` in Node | `browser/lib/src/client.fetch.test.ts` |
 | Store fetch by HTTP path alias returns the resource stored under the DID | `browser/lib/src/store.test.ts` |
+| Writes collapse `did:ad:` / `atomic:` aliases; parent queries match either spelling; destroy-replay sees a legacy commit id | `lib/src/db/test.rs` `canonical_scheme_store_boundary` |
+| Opening a store rewrites leftover `did:ad:` resource keys and reference values to `atomic:` | `lib/src/db/test.rs` `canonical_scheme_open_rewrites_legacy_keys` |
+| Wire subjects follow `canonical-scheme` (empty caps emit `did:ad:`) | `browser/lib/src/subject.test.ts` `emitSubjectForCaps` |
 
 Not covered: `ad-generate ontologies` end-to-end against a live server (no CLI test runner).
 
@@ -2304,10 +2311,13 @@ Paired SaaS `portal/e2e/passkey-open-drive.spec.ts` covers account/profile creat
 
 | Flow | Where |
 |---|---|
-| HTTP path `https://host/did:ad:…` and `/did?subject=` extract the same DID | `browser/lib/src/subject.test.ts` |
+| HTTP path `https://host/did:ad:…` / `https://host/atomic:…` and `/resource?subject=` extract the same identifier | `browser/lib/src/subject.test.ts` |
 | JSON-AD parse accepts `@id: did:ad:…` when the request used the HTTP path alias | `browser/lib/src/parse.test.ts` |
-| `Client.fetchResourceHTTP` resolves DIDs via `/did?subject=` and does not touch `window` in Node | `browser/lib/src/client.fetch.test.ts` |
+| `Client.fetchResourceHTTP` resolves identifiers via `/resource?subject=` and does not touch `window` in Node | `browser/lib/src/client.fetch.test.ts` |
 | Store fetch by HTTP path alias returns the resource stored under the DID | `browser/lib/src/store.test.ts` |
+| Writes collapse `did:ad:` / `atomic:` aliases; parent queries match either spelling; destroy-replay sees a legacy commit id | `lib/src/db/test.rs` `canonical_scheme_store_boundary` |
+| Opening a store rewrites leftover `did:ad:` resource keys and reference values to `atomic:` | `lib/src/db/test.rs` `canonical_scheme_open_rewrites_legacy_keys` |
+| Wire subjects follow `canonical-scheme` (empty caps emit `did:ad:`) | `browser/lib/src/subject.test.ts` `emitSubjectForCaps` |
 
 Not covered: `ad-generate ontologies` end-to-end against a live server (no CLI test runner).
 

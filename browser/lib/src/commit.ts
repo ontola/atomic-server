@@ -9,6 +9,7 @@ import { decodeB64, encodeB64 } from './base64.js';
 import { commits } from './ontologies/commits.js';
 import { core } from './ontologies/core.js';
 import type { Agent } from './agent.js';
+import { identifierKind } from './subject.js';
 import { perfSpan } from './perf-trace.js';
 
 /** A {@link Commit} without its signature, signer and timestamp */
@@ -54,7 +55,7 @@ type JSONADObject = Record<string, JSONValue>;
 export function commitIdOf(commit: Commit): string | undefined {
   return (
     (commit.id as string | undefined) ??
-    (commit.signature ? `did:ad:commit:${commit.signature}` : undefined)
+    (commit.signature ? `atomic:commit:${commit.signature}` : undefined)
   );
 }
 
@@ -72,7 +73,7 @@ export function commitIdOf(commit: Commit): string | undefined {
  * a folder named "commits" is not mistaken for one.
  */
 export function isCommitSubject(subject: string): boolean {
-  if (subject.startsWith('did:ad:commit:')) return true;
+  if (identifierKind(subject) === 'commit') return true;
 
   if (!subject.startsWith('http://') && !subject.startsWith('https://')) {
     return false;
@@ -285,7 +286,7 @@ export class CommitBuilder {
       commitPreSigned.subject === 'did:ad:genesis';
 
     if (isExplicitGenesis && subjectIsPlaceholder) {
-      subject = `did:ad:${signature}`;
+      subject = `atomic:${signature}`;
     }
 
     const commitPostSigned: Commit = {

@@ -1,3 +1,4 @@
+import { isAtomicIdentifier } from '@tomic/lib';
 import { test, expect } from './fixtures';
 import {
   before,
@@ -41,8 +42,8 @@ test.describe('query GETs after refresh', () => {
         const drive = u.searchParams.get('drive');
         if (!drive) return false;
 
-        // Valid: did:ad:... DID. Invalid: any HTTP(S) URL string.
-        return !drive.startsWith('did:ad:');
+        // Valid: atomic: / did:ad: identifier. Invalid: any HTTP(S) URL string.
+        return !isAtomicIdentifier(drive);
       } catch {
         return false;
       }

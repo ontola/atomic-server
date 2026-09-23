@@ -1650,10 +1650,9 @@ msgstr "Global"
 msgid "In sync"
 msgstr "Synchronisé"
 
-#. 0: NODE_DID_PREFIX
 #: src/routes/SyncRoute.tsx
-msgid "Error: Expected {0}<node-id>"
-msgstr "Erreur : {0}<node-id> attendu"
+msgid "Error: Expected atomic:node:<node-id>"
+msgstr "Erreur : atomic:node:<node-id> attendu"
 
 #: src/helpers/managed/deviceLink.ts
 #: src/helpers/managed/deviceLink.ts src/routes/SettingsAgent.tsx

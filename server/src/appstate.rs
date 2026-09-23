@@ -54,10 +54,14 @@ impl AppState {
 
         // We warn over here because tracing needs to be initialized first.
         if config.opts.slow_mode {
-            tracing::warn!("Slow mode is enabled. This will introduce random delays in the server, to simulate a slow connection.");
+            tracing::warn!(
+                "Slow mode is enabled. This will introduce random delays in the server, to simulate a slow connection."
+            );
         }
         if config.opts.development {
-            tracing::warn!("Development mode is enabled. This will use staging environments for services like LetsEncrypt.");
+            tracing::warn!(
+                "Development mode is enabled. This will use staging environments for services like LetsEncrypt."
+            );
         }
 
         // Opens the file, logs its size and open time, and compacts it
@@ -129,6 +133,8 @@ impl AppState {
         store.add_endpoint(plugins::versioning::version_endpoint())?;
         store.add_endpoint(plugins::versioning::all_versions_endpoint())?;
         store.add_endpoint(plugins::did::did_endpoint())?;
+        store.add_endpoint(plugins::did::resource_endpoint())?;
+        store.add_endpoint(plugins::did::atomic_endpoint())?;
         store.add_endpoint(plugins::bind_drive::bind_drive_endpoint())?;
         store.add_endpoint(plugins::bookmark::bookmark_endpoint())?;
         store.add_endpoint(plugins::replicate::replicate_drive_endpoint())?;
@@ -213,7 +219,7 @@ impl AppState {
                     "ATOMIC_ENVELOPE_RETENTION must be `latest` or `all`, got `{}`",
                     config.opts.envelope_retention
                 )
-                .into())
+                .into());
             }
         }
 
@@ -363,7 +369,9 @@ async fn set_default_agent(config: &Config, store: &impl Storelike) -> AtomicSer
                         // If there is an agent in the config, but not in the store,
                         // That probably means that the DB has been erased and only the config file exists.
                         // This means that the Agent from the Config file should be recreated, using its private key.
-                        tracing::info!("Agent not retrievable, but config was found. Recreating Agent in new store.");
+                        tracing::info!(
+                            "Agent not retrievable, but config was found. Recreating Agent in new store."
+                        );
 
                         let recreated_agent = Agent::new_from_private_key(
                             "server".into(),

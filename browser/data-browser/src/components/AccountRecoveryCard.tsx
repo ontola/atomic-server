@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { styled } from 'styled-components';
 import { FaKey } from 'react-icons/fa6';
-import { Agent, useStore } from '@tomic/react';
+import { Agent, useStore, isAtomicIdentifier } from '@tomic/react';
 import { Button } from './Button';
 import { hasPasskeyApi } from '../helpers/passkeySupport';
 import { Column, Row } from './Row';
@@ -317,7 +317,7 @@ export function AccountRecoveryCard({
       // URL. Sending that was rejected outright; the field is optional, and a
       // backup with no drive named still restores the agent, which is the part
       // that cannot be regenerated.
-      const driveSubject = drive?.startsWith('did:ad:') ? drive : null;
+      const driveSubject = drive && isAtomicIdentifier(drive) ? drive : null;
 
       let request;
 

@@ -18,6 +18,7 @@ import {
   JSCryptoProvider,
   type KeyPair,
   Resource,
+  agentSubject as mintAgentSubject,
 } from '@tomic/react';
 
 import { Button } from '../components/Button';
@@ -315,7 +316,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
         ? new SubtleCryptoProvider(cryptoKeyPair)
         : new JSCryptoProvider(keypair.privateKey);
 
-      const subject = `did:ad:agent:${keypair.publicKey}`;
+      const subject = mintAgentSubject(keypair.publicKey);
       const newAgent = new Agent(provider, subject);
 
       // Same reason as in `handleAccept`: a WebCrypto key cannot reproduce
@@ -366,7 +367,7 @@ function InvitePage({ resource }: ResourcePageProps): JSX.Element {
     }
 
     if (keys) {
-      const newAgentSubject = `did:ad:agent:${keys.real.publicKey}`;
+      const newAgentSubject = mintAgentSubject(keys.real.publicKey);
       const secret = Agent.buildSecret(
         keys.real.privateKey,
         newAgentSubject,

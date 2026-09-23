@@ -8,6 +8,12 @@ import {
   aiChatsFolderCert,
   verifyGenesisCert,
 } from './genesis.js';
+import {
+  isAgentSubject,
+  isAtomicIdentifier,
+  canonicalizeScheme,
+  toLegacyScheme,
+} from './subject.js';
 
 describe('Agent', () => {
   const validPrivateKey = 'CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=';
@@ -59,8 +65,8 @@ describe('Agent', () => {
     const second = await agent.privateDriveSubject();
     expect(first).toBe(second);
     expect(first).toBe(await privateDriveSubject(decodeB64(validPrivateKey)));
-    expect(first.startsWith('did:ad:')).toBe(true);
-    expect(first.startsWith('did:ad:agent:')).toBe(false);
+    expect(isAtomicIdentifier(first)).toBe(true);
+    expect(isAgentSubject(first)).toBe(false);
   });
 
   /**
@@ -185,4 +191,30 @@ describe('AI chat folder identity', () => {
     restored.aiChatsFolders = JSON.parse(JSON.stringify(identities));
     expect(await restored.aiChatsFolderSubject(drive)).toBe(identities[drive]);
   });
+});
+
+// Upgrades must keep the singleton's signed bytes, not merely alias its prefix.
+it('preserves AI Chats identity and cached aliases across the scheme upgrade', async ({
+  expect,
+}) => {
+  const key = 'CapMWIhFUT+w7ANv9oCPqrHrwZpkP2JhzF9JnyT6WcI=';
+  const agent = Agent.fromSecret(
+    Agent.buildSecret(key, 'did:ad:agent:test'),
+    'js',
+  );
+  const drive = await agent.privateDriveSubject();
+  const oldFolder = await agent.aiChatsFolderSubject(toLegacyScheme(drive));
+  const newFolder = await agent.aiChatsFolderSubject(canonicalizeScheme(drive));
+  expect(newFolder).toBe(oldFolder);
+  expect(newFolder).toBe(
+    'atomic:wFAe8DFL7gZoSR0bAzaw1XnlRE5l6aYkIHNvN7uiy_9uPRQu3WieNZPJPkVBvW28zyZs9DdkAe9TVj-NLtNbBg',
+  );
+  // A restored non-extractable session can only use its persisted cache.
+  const restored = await Agent.fromSecret(
+    Agent.buildSecret(key, 'did:ad:agent:test'),
+  );
+  restored.aiChatsFolders = {
+    [toLegacyScheme(drive)]: toLegacyScheme(oldFolder),
+  };
+  expect(await restored.aiChatsFolderSubject(drive)).toBe(oldFolder);
 });

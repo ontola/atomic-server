@@ -46,6 +46,15 @@ describe('knownPeers', () => {
     expect(peers[0].label).toContain('did:ad:node:aaaaaaaa');
   });
 
+  it('keeps an atomic:node: peer that an upgraded server emitted', () => {
+    const canonical = `atomic:node:${'b'.repeat(64)}`;
+    upsertKnownPeer(canonical);
+
+    const peers = readKnownPeers();
+    expect(peers).toHaveLength(1);
+    expect(peers[0].nodeId).toBe(canonical);
+  });
+
   it('a later name replaces the placeholder rather than adding a peer', () => {
     upsertKnownPeer(NODE_A);
     upsertKnownPeer(NODE_A, "Joep's phone");

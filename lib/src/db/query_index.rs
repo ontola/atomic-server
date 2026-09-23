@@ -478,7 +478,7 @@ pub fn check_if_atom_matches_watched_query_filters(
 ) -> AtomicResult<()> {
     let subject_str = index_atom.subject.as_str();
 
-    let filters: Vec<Arc<QueryFilter>> = if subject_str.starts_with("did:") {
+    let filters: Vec<Arc<QueryFilter>> = if crate::identifiers::is_atomic_identifier(subject_str) {
         store.all_watched_queries_for_property(&index_atom.property)
     } else {
         let drive_prefix = drive_prefix_from_subject(&index_atom.subject);

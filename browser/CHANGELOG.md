@@ -37,6 +37,17 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   every later one: the local index is keyed by drive, a subject is not a key
   in it, and the panel then stopped showing messages other people sent while
   it was open.
+
+- Identifiers are now emitted as `atomic:` (`atomic:{genesis}`,
+  `atomic:agent:`, `atomic:commit:`, `atomic:blob:`, `atomic:node:`).
+  `did:ad:` is accepted forever and names the same resource. Pairing is
+  `atomic:node:{id}?v=1&drives=*`; a node identifier starts pairing,
+  anything else navigates. The store canonicalizes at `normalizeSubject`.
+  Fetch uses `/resource?subject=` (`/atomic` and `/did` are aliases).
+  Sync lists the `canonical-scheme` capability and sends `did:ad:` to a
+  server that does not advertise it. Blob copy, identity mint, and node
+  pairing accept both spellings (#1584).
+
 - Fix: installing a plugin works again. Since the `Installation` class started
   requiring `release`, the server refused the commit that creates one with
   "Property .../properties/release missing", the outbox dropped it as terminal

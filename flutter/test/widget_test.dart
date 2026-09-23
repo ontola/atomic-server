@@ -6,6 +6,16 @@ void main() {
     const nodeId =
         '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
+    test('parses atomic node URI with encoded name', () {
+      final peer = PairScreen.parsePeerInfo(
+        'atomic:node:$nodeId:Joe%27s%20Tablet',
+      );
+
+      expect(peer, isNotNull);
+      expect(peer!.nodeId, nodeId);
+      expect(peer.name, "Joe's Tablet");
+    });
+
     test('parses did node URI with encoded name', () {
       final peer = PairScreen.parsePeerInfo(
         'did:ad:node:$nodeId:Joe%27s%20Tablet',

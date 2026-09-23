@@ -4,6 +4,11 @@ import { decodeB64 } from './base64.js';
 import { core } from './ontologies/core.js';
 import { server } from './ontologies/server.js';
 import { properties } from './urls.js';
+import {
+  isAgentSubject,
+  agentPublicKey,
+  isAtomicIdentifier,
+} from './subject.js';
 import type { Store } from './store.js';
 
 const AUTH = 'https://atomicdata.dev/properties/auth/';
@@ -17,10 +22,10 @@ export function decodeBrowserInvite(token: string) {
   const issuer = data[properties.commit.signer];
   if (
     typeof drive !== 'string' ||
-    !drive.startsWith('did:ad:') ||
+    !isAtomicIdentifier(drive) ||
     /[?#]/.test(drive) ||
     typeof issuer !== 'string' ||
-    !issuer.startsWith('did:ad:agent:') ||
+    !isAgentSubject(issuer) ||
     typeof data[server.properties.write] !== 'boolean' ||
     !Number.isSafeInteger(data[EXPIRES]) ||
     data[EXPIRES] <= Date.now()
@@ -33,7 +38,7 @@ export function decodeBrowserInvite(token: string) {
     !verify(
       decodeB64(signature),
       new TextEncoder().encode(stringify(data)),
-      decodeB64(issuer.slice('did:ad:agent:'.length)),
+      decodeB64(agentPublicKey(issuer) ?? ''),
     )
   )
     throw new Error('Invalid invite signature');
@@ -60,9 +65,9 @@ export async function authorizeBrowserInvite(
   const signature = auth[`${AUTH}signature`];
   if (
     typeof recipient !== 'string' ||
-    !recipient.startsWith('did:ad:agent:') ||
+    !isAgentSubject(recipient) ||
     auth[`${AUTH}requestedSubject`] !== challenge ||
-    auth[`${AUTH}publicKey`] !== recipient.slice('did:ad:agent:'.length) ||
+    auth[`${AUTH}publicKey`] !== (agentPublicKey(recipient) ?? '') ||
     typeof timestamp !== 'number' ||
     !Number.isSafeInteger(timestamp) ||
     Math.abs(Date.now() - timestamp) > 60000 ||
@@ -70,7 +75,7 @@ export async function authorizeBrowserInvite(
     !verify(
       decodeB64(signature),
       new TextEncoder().encode(`${challenge} ${timestamp}`),
-      decodeB64(recipient.slice('did:ad:agent:'.length)),
+      decodeB64(agentPublicKey(recipient) ?? ''),
     )
   )
     throw new Error('Invalid invite recipient authentication');

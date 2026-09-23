@@ -392,10 +392,17 @@ impl WebSocketConnection {
                 let store = self.store.clone();
                 let mut agent = self.agent.clone();
                 let bin_vec = bin.to_vec();
+                // Subjects in the answer follow what this client said it
+                // speaks in its HELLO: a client that predates the rename
+                // gets `did:ad:` back, not a scheme it cannot parse.
+                let wire =
+                    atomic_lib::sync::engine::WireScheme::from_caps(&self.client_capabilities);
                 ctx.spawn(
                     async move {
-                        atomic_lib::sync::engine::handle_frame_full(&bin_vec, &store, &mut agent)
-                            .await
+                        atomic_lib::sync::engine::handle_frame_full_for_caps(
+                            &bin_vec, &store, &mut agent, wire,
+                        )
+                        .await
                     }
                     .into_actor(self)
                     .map(|out, actor, ctx| {
@@ -410,6 +417,9 @@ impl WebSocketConnection {
                                     subject,
                                     agent: actor.agent.to_string(),
                                     source_id: actor.connection_id.clone(),
+                                    canonical_scheme: actor.client_capabilities.iter().any(|c| {
+                                        c == atomic_lib::identifiers::CAP_CANONICAL_SCHEME
+                                    }),
                                 });
                         }
                         if let Some(subject) = out.unsubscribe {
@@ -672,11 +682,14 @@ impl WebSocketConnection {
             if let Ok(req) = serde_json::from_str::<RbsrFpRequest>(json) {
                 let store = self.store.clone();
                 let agent = self.agent.clone();
+                let wire =
+                    atomic_lib::sync::engine::WireScheme::from_caps(&self.client_capabilities);
                 ctx.spawn(
                     async move {
-                        let items =
-                            atomic_lib::sync::engine::drive_items_for(&store, &req.drive, &agent)
-                                .await;
+                        let items = atomic_lib::sync::engine::drive_items_for_wire(
+                            &store, &req.drive, &agent, wire,
+                        )
+                        .await;
                         items
                             .map(|items| {
                                 let fps: Vec<String> = req
@@ -709,11 +722,14 @@ impl WebSocketConnection {
             if let Ok(req) = serde_json::from_str::<RbsrItemsRequest>(json) {
                 let store = self.store.clone();
                 let agent = self.agent.clone();
+                let wire =
+                    atomic_lib::sync::engine::WireScheme::from_caps(&self.client_capabilities);
                 ctx.spawn(
                     async move {
-                        let items =
-                            atomic_lib::sync::engine::drive_items_for(&store, &req.drive, &agent)
-                                .await;
+                        let items = atomic_lib::sync::engine::drive_items_for_wire(
+                            &store, &req.drive, &agent, wire,
+                        )
+                        .await;
                         items
                             .map(|items| {
                                 let hi = req.hi.as_deref();

@@ -187,13 +187,11 @@ async fn announce_drives_pkarr(
         }
 
         let drive_did = resource.get_subject().as_str();
-        // Drives have did:ad:{genesis} subjects. The publish_node_id derivation
-        // assumes exactly that shape — bail early for any other kind of drive
-        // resource rather than producing a bad pkarr keypair.
-        if !drive_did.starts_with("did:ad:")
-            || drive_did.starts_with("did:ad:agent:")
-            || drive_did.starts_with("did:ad:commit:")
-        {
+        // Drives have `atomic:{genesis}` (or legacy `did:ad:{genesis}`)
+        // subjects. The publish_node_id derivation assumes exactly that
+        // shape — bail early for any other kind of drive resource rather
+        // than producing a bad pkarr keypair.
+        if !atomic_lib::identifiers::is_resource_id(drive_did) {
             continue;
         }
 
@@ -360,8 +358,9 @@ where
         match crate::iroh_transport::start(store.clone()).await {
             Ok((node_id, router)) => {
                 tracing::info!(
-                    "Iroh transport ready as \"{}\". Connect with: did:ad:node:{node_id}",
-                    atomic_lib::sync::peer::effective_device_name(&store)
+                    "Iroh transport ready as \"{}\". Connect with: {}",
+                    atomic_lib::sync::peer::effective_device_name(&store),
+                    atomic_lib::identifiers::node_subject(&node_id.to_string())
                 );
 
                 // Announce this server's NodeID via pkarr relay, one record per

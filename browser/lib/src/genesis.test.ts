@@ -15,8 +15,11 @@ import {
   privateDriveSubject,
   domainSeparatorNonce,
   PERSONAL_DRIVE_PURPOSE,
+  GENESIS_VERSION_V1,
+  GENESIS_VERSION_V2,
   type GenesisCert,
 } from './genesis.js';
+import { isAtomicIdentifier } from './subject.js';
 
 const hex = (bytes: Uint8Array): string =>
   Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
@@ -30,6 +33,7 @@ describe('GenesisCert', () => {
   // verifying server-side. Do not change without changing both + the version.
   it('known byte vector v1 — must match the Rust layout', ({ expect }) => {
     const cert: GenesisCert = {
+      version: GENESIS_VERSION_V1,
       signerPubkey: new Uint8Array(32).fill(1),
       createdAt: 1,
       nonce: new Uint8Array(16).fill(2),
@@ -61,6 +65,7 @@ describe('GenesisCert', () => {
 
   it('encode/decode roundtrip (with and without stateHash)', ({ expect }) => {
     const base: GenesisCert = {
+      version: GENESIS_VERSION_V2,
       signerPubkey: new Uint8Array(32).fill(3),
       createdAt: 1_780_000_123_456,
       nonce: new Uint8Array(16).fill(7),
@@ -86,6 +91,7 @@ describe('GenesisCert', () => {
     const seed = new Uint8Array(32).fill(7);
     const pub = await getPublicKey(seed);
     const cert: GenesisCert = {
+      version: GENESIS_VERSION_V1,
       signerPubkey: pub,
       createdAt: 1,
       nonce: new Uint8Array(16).fill(2),
@@ -97,7 +103,7 @@ describe('GenesisCert', () => {
       '71Igt-CKD2nhZZn4aKCe8tetVUTCgMMqJ67d97Wrb3pT3LFazyP1lGJjAw2Gg9KY0daGHhHPXj3xFMWEmYVdCw',
     );
     expect(subjectForSignature(sig)).toBe(
-      'did:ad:71Igt-CKD2nhZZn4aKCe8tetVUTCgMMqJ67d97Wrb3pT3LFazyP1lGJjAw2Gg9KY0daGHhHPXj3xFMWEmYVdCw',
+      'atomic:71Igt-CKD2nhZZn4aKCe8tetVUTCgMMqJ67d97Wrb3pT3LFazyP1lGJjAw2Gg9KY0daGHhHPXj3xFMWEmYVdCw',
     );
     expect(await verifyGenesisCert(cert, sig)).toBe(true);
   });
@@ -116,7 +122,7 @@ describe('GenesisCert', () => {
 
     const sig = await signGenesisCert(cert, priv);
     expect(await verifyGenesisCert(cert, sig)).toBe(true);
-    expect(subjectForSignature(sig).startsWith('did:ad:')).toBe(true);
+    expect(isAtomicIdentifier(subjectForSignature(sig))).toBe(true);
 
     const tampered: GenesisCert = { ...cert, createdAt: cert.createdAt + 1 };
     expect(await verifyGenesisCert(tampered, sig)).toBe(false);
@@ -126,6 +132,7 @@ describe('GenesisCert', () => {
     expect,
   }) => {
     const cert: GenesisCert = {
+      version: GENESIS_VERSION_V1,
       signerPubkey: new Uint8Array(32).fill(1),
       createdAt: 1,
       nonce: new Uint8Array(16).fill(2),
@@ -163,7 +170,7 @@ describe('GenesisCert', () => {
     const second = await privateDriveSubject(seed);
     expect(first).toBe(second);
     expect(first).toBe(
-      'did:ad:uv-2o7-7LBEo69T8gj2ncUWOXgNn9oG_rwqJAqHeM0O2GQjE8236RjthBrYuIXQbO_b0TCkU41f-auIx-1AjBw',
+      'atomic:uv-2o7-7LBEo69T8gj2ncUWOXgNn9oG_rwqJAqHeM0O2GQjE8236RjthBrYuIXQbO_b0TCkU41f-auIx-1AjBw',
     );
 
     const other = await privateDriveSubject(new Uint8Array(32).fill(10));
@@ -205,6 +212,7 @@ describe('GenesisCert golden vectors (shared fixture)', () => {
   for (const v of fixture.vectors) {
     it(`reproduces vector for seed ${v.seedByte}`, async ({ expect }) => {
       const cert: GenesisCert = {
+        version: GENESIS_VERSION_V1,
         signerPubkey: unhex(v.pubKeyHex),
         createdAt: v.createdAt,
         nonce: unhex(v.nonceHex),

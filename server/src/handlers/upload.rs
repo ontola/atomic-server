@@ -140,7 +140,7 @@ async fn save_file_and_create_resource(
         .await?
         .set(
             urls::BLOB.into(),
-            Value::AtomicUrl(format!("did:ad:blob:{}", hash_str).into()),
+            Value::AtomicUrl(atomic_lib::identifiers::blob_subject(&hash_str).into()),
             store,
         )
         .await?

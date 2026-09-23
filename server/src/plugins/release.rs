@@ -291,7 +291,7 @@ async fn ensure_package_file(
     file.set_unsafe(urls::INTERNAL_ID.into(), Value::String(package.into()))?;
     file.set_unsafe(
         urls::BLOB.into(),
-        Value::AtomicUrl(format!("did:ad:blob:{package}").into()),
+        Value::AtomicUrl(atomic_lib::identifiers::blob_subject(package).into()),
     )?;
     file.set_unsafe(urls::FILESIZE.into(), Value::Integer(size))?;
     file.set_unsafe(

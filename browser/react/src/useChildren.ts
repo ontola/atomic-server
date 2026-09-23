@@ -2,6 +2,7 @@ import {
   commits,
   core,
   dataBrowser,
+  isCommitSubject,
   orderChildren,
   StoreEvents,
 } from '@tomic/lib';
@@ -152,7 +153,7 @@ export function useChildren(parentSubject: string | undefined): {
       for (const member of resolved) {
         if (
           member &&
-          !member.startsWith('did:ad:commit:') &&
+          !isCommitSubject(member) &&
           !seen.has(member) &&
           // A destroyed child can still come back in an answer to the
           // `parent=` query — the answer may have been computed before the

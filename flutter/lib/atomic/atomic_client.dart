@@ -302,11 +302,13 @@ class AtomicClient {
   /// Canonical 64-char hex NodeID (matches Rust `normalize_node_id`).
   static String normalizeNodeId(String id) {
     var s = id.trim();
-    const prefix = 'did:ad:node:';
-    if (s.startsWith(prefix)) {
-      s = s.substring(prefix.length);
-      if (s.length > 64 && s[64] == ':') {
-        s = s.substring(0, 64);
+    for (final prefix in ['atomic:node:', 'did:ad:node:']) {
+      if (s.startsWith(prefix)) {
+        s = s.substring(prefix.length);
+        if (s.length > 64 && s[64] == ':') {
+          s = s.substring(0, 64);
+        }
+        break;
       }
     }
     if (s.startsWith('iroh:')) s = s.substring(5);

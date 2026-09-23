@@ -84,6 +84,7 @@
     - [FAQ](schema/faq.md)
 
 - [Atomic Data Extended](extended.md)
+  - [Identifiers](identifiers.md)
   - [Decentralized Identifiers (DIDs)](did.md)
   - [Agents](agents.md)
   - [Hierarchy and authorization](hierarchy.md)

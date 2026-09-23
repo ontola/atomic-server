@@ -1735,7 +1735,7 @@ mod peer_sync_tests {
         );
         for s in &a_subjects {
             assert!(
-                !s.starts_with("did:ad:commit:"),
+                !crate::identifiers::is_commit_id(s),
                 "commit subject leaked into drive A: {s}"
             );
         }
@@ -2382,6 +2382,7 @@ mod peer_sync_tests {
             Some(&d),
             &db,
             &ForAgent::Sudo,
+            crate::sync::engine::WireScheme::CANONICAL,
         )
         .await;
 

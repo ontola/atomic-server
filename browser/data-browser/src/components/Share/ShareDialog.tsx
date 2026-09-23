@@ -11,6 +11,7 @@ import {
   useCanWrite,
   useResourceSnapshot,
   useStore,
+  isAtomicIdentifier,
 } from '@tomic/react';
 
 import { Dialog, useDialog } from '../Dialog';
@@ -245,7 +246,7 @@ function CopyLinkButton({ subject }: { subject: string }): JSX.Element {
   const handleCopy = () => {
     let link: string;
 
-    if (subject.startsWith('did:')) {
+    if (isAtomicIdentifier(subject)) {
       const server = store.getServerUrl().replace(/\/$/, '');
       link = `${server}/${subject}`;
     } else {
