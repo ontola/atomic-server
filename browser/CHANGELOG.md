@@ -15,6 +15,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   read "0 rows" under each status until tasks had an estimate. And a select
   option's page counts the rows that use it through its column (a task's
   Status), not only through `tags`, so Doing no longer reads "0 resources".
+- Move the Connections and Automations buttons above table views into the table's context menu, next to Export to CSV. They open the same dialog as before.
 
 - Fix: the integration proxy may live on a `.localhost` name. `proxyOrigin`
   allowed plain http only for the bare `localhost` and `127.0.0.1`, so a proxy
