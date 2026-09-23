@@ -24,7 +24,6 @@ const StyledInputWrapper = styled(InputWrapper)`
 
 const SelectWrapper = styled.span<{ disabled: boolean }>`
   width: 100%;
-  padding-inline: 0.5rem;
   background-color: ${p =>
     p.disabled ? p.theme.colors.bg1 : p.theme.colors.bg};
 
@@ -47,6 +46,9 @@ const Select = styled.select`
   cursor: pointer;
   appearance: none;
   width: 100%;
+  // Padding lives on the select itself, so the whole box, chevron included,
+  // opens the dropdown.
+  padding-inline: 0.5rem 1.5rem;
   border: none;
   outline: none;
   height: 2rem;

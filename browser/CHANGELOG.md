@@ -4,6 +4,9 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- AI chat options and the speech settings let you pick the microphone used for
+  voice messages. The agent select in AI chat options is clickable over its
+  whole width again: an inline width left its chevron outside the select.
 - Fix: someone who signs up from an invitation and has no recovery backup can
   still accept it. The portal opens the restore step for an invitee whenever it
   cannot rule out an earlier identity, and with nothing to restore that step

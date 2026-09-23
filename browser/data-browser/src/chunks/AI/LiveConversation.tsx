@@ -21,6 +21,8 @@ type State =
 interface Props {
   apiKey?: string;
   transcriptionModel: string;
+  /** Device id of the microphone to record from, empty for the system default */
+  microphoneId?: string;
   onConfigure: () => void;
   messages: AtomicUIMessage[];
   busy: boolean;
@@ -232,7 +234,14 @@ export function LiveConversation(props: Props) {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          // `ideal` falls back to another input when the saved one is unplugged.
+          ...(props.microphoneId && {
+            deviceId: { ideal: props.microphoneId },
+          }),
+        },
       });
 
       if (task.signal.aborted) {

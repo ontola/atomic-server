@@ -32,6 +32,7 @@ import {
 } from './types';
 import { useAIAgentConfig } from './AgentConfig';
 import { BasicSelect } from '@components/forms/BasicSelect';
+import { MicrophoneSelect } from '@components/AI/MicrophoneSelect';
 import { MessageContextItem } from './MessageContextItem';
 
 import { ComboBox } from '@components/ComboBox';
@@ -302,6 +303,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
     setDefaultChatModel,
     voiceEnabled,
     transcriptionModel,
+    microphoneId,
     openRouterZdr,
   } = useAISettings();
   const [selectedAgent, setSelectedAgent] = useState<AIAgent>(
@@ -1134,7 +1136,6 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                               );
                               if (agent) handleSelectAgent(agent);
                             }}
-                            style={{ width: 'auto', maxWidth: '10rem' }}
                           >
                             {agents.map(agent => (
                               <option key={agent.id} value={agent.id}>
@@ -1143,6 +1144,12 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                             ))}
                             <option value='settings'>AI settings…</option>
                           </BasicSelect>
+                          {voiceEnabled && (
+                            <>
+                              <ControlLabel>Microphone</ControlLabel>
+                              <MicrophoneSelect />
+                            </>
+                          )}
                           <ControlLabel>Model</ControlLabel>
                           {hostedAI?.enabled &&
                           !openRouterApiKey &&
@@ -1242,6 +1249,7 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                       {voiceEnabled && (
                         <LiveConversation
                           transcriptionModel={transcriptionModel}
+                          microphoneId={microphoneId}
                           apiKey={openRouterApiKey}
                           onConfigure={() => openAISettings()}
                           messages={messages}
