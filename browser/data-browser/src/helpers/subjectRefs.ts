@@ -14,9 +14,17 @@
  * expanded at the tool boundary and in link rendering only.
  */
 
-const DID_PREFIX = 'did:ad:';
-/** Plain did:ad subjects only — commit subjects etc. stay untouched. */
-const SHORTENABLE = /^did:ad:[A-Za-z0-9_-]{16,}$/;
+import { identifierBody } from '@tomic/lib';
+
+/** Plain resource subjects only, in either scheme; agent / commit / blob /
+ *  node subjects stay untouched. */
+const SHORTENABLE = /^(atomic:|did:ad:)[A-Za-z0-9_-]{16,}$/;
+
+/** The identifier body after the scheme; the input already matched SHORTENABLE. */
+function bodyOf(subject: string): string {
+  return identifierBody(subject) ?? subject;
+}
+
 const REF_PATTERN = /^#([A-Za-z0-9_-]{8,})$/;
 
 /** ref body → full subject */
@@ -39,7 +47,7 @@ try {
         typeof entry[1] === 'string' &&
         REF_PATTERN.test(`#${entry[0]}`) &&
         SHORTENABLE.test(entry[1]) &&
-        entry[1].slice(DID_PREFIX.length).startsWith(entry[0])
+        bodyOf(entry[1]).startsWith(entry[0])
       )
         registry.set(entry[0], entry[1]);
     }
@@ -58,7 +66,7 @@ export const shortenSubject = (subject: string): string => {
     return subject;
   }
 
-  const body = subject.slice(DID_PREFIX.length);
+  const body = bodyOf(subject);
   let length = 8;
   let key = body.slice(0, length);
 

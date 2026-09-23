@@ -152,9 +152,8 @@ async fn resolve_node_ids_raw(
 /// Accepts DID strings with an optional `?drive=...` routing hint, which is
 /// stripped before decoding.
 fn drive_did_to_pkarr_keypair(drive_did: &str) -> AtomicResult<pkarr::Keypair> {
-    let raw = drive_did
-        .strip_prefix("did:ad:")
-        .ok_or_else(|| format!("Not a did:ad DID: {drive_did}"))?;
+    let raw = crate::identifiers::identifier_rest(drive_did)
+        .ok_or_else(|| format!("Not an atomic: / did:ad: identifier: {drive_did}"))?;
     // Agent DIDs and commit DIDs aren't drives; they have different payload
     // lengths and semantics. Reject early rather than silently producing a
     // meaningless keypair.

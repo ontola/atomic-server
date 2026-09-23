@@ -34,7 +34,7 @@ AgentInfo createAgent(String name) {
   final keyPair = ed.generateKey();
   final privateKeyB64 = base64Encode(ed.seed(keyPair.privateKey));
   final publicKeyB64 = base64Encode(keyPair.publicKey.bytes);
-  final subject = 'did:ad:agent:$publicKeyB64';
+  final subject = 'atomic:agent:$publicKeyB64';
   final secret = base64Encode(utf8.encode(jsonEncode({
     'privateKey': privateKeyB64,
     'subject': subject,
@@ -91,7 +91,7 @@ Future<String> _postGenesisCommit(Map<String, dynamic> properties) async {
   // Serialize without @id and signature for signing
   final toSign = _jcs(commitMap);
   final sig = _signMessage(toSign, _privateKeyB64!, _publicKeyB64!);
-  final did = 'did:ad:$sig';
+  final did = 'atomic:$sig';
 
   commitMap[_subject] = did;
   commitMap[_signature] = sig;

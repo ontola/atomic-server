@@ -309,7 +309,7 @@ impl Outbox {
     /// then drive roots, then everything else by depth, so a child's genesis
     /// never reaches the hub before its parent's.
     async fn tier(&self, subject: &str) -> (u8, u32) {
-        if subject.starts_with("did:ad:agent:") {
+        if crate::identifiers::is_agent_id(subject) {
             return (0, 0);
         }
         let mut depth = 0u32;

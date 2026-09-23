@@ -6,6 +6,7 @@
  * Try not to rely on hardcoded timeouts, as this is likely to lead to race conditions and flakiness in CI (slower hardware).
  */
 
+import { isAtomicIdentifier } from '@tomic/lib';
 import { test, expect, type Page } from './fixtures';
 import {
   FRONTEND_URL,
@@ -849,7 +850,7 @@ test.describe('data-browser', async () => {
     // DID-parent imports get fresh DIDs (signed genesis commits), not a
     // path-derived subject. Navigate to the parent and click through to the
     // imported child; HTTP-parent imports still produce `<parent>/<id>`.
-    if (parentSubject.startsWith('did:')) {
+    if (isAtomicIdentifier(parentSubject)) {
       await openSubject(page, parentSubject);
       const childLink = page
         .getByRole('main')

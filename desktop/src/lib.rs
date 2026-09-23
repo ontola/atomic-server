@@ -63,7 +63,10 @@ struct PairLinks {
 fn queue_pair_links(state: &PairLinks, urls: impl IntoIterator<Item = String>) {
   let mut pending = state.pending.lock().unwrap();
   for url in urls {
-    if url.starts_with("atomic://") && !pending.contains(&url) {
+    if (atomic_lib::identifiers::is_atomic_identifier(&url)
+      || atomic_lib::identifiers::is_legacy_atomic_link(&url))
+      && !pending.contains(&url)
+    {
       println!("[pairing] queued deep link");
       pending.push(url);
     }

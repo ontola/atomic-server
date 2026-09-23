@@ -38,6 +38,9 @@ export function run() { return { intents: [] }; }
     await expect(
       page.getByRole('heading', { name: 'Integrations', exact: true }),
     ).toBeVisible();
+    await page
+      .getByRole('checkbox', { name: 'Show experimental plugins' })
+      .check();
     const card = page
       .locator('[data-release]')
       .filter({

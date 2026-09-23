@@ -1,6 +1,7 @@
 import {
   Property,
   core,
+  isAtomicIdentifier,
   unknownSubject,
   useResource,
   useString,
@@ -139,7 +140,7 @@ function FilterValueSummary({
   value: string;
   suffix?: string;
 }): JSX.Element {
-  if (value.startsWith('http') || value.startsWith('did:')) {
+  if (value.startsWith('http') || isAtomicIdentifier(value)) {
     return <ResourceInline subject={value} untabbable />;
   }
 

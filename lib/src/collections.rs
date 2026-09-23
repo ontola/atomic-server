@@ -208,10 +208,11 @@ pub async fn delocalize_filter_value(
         return unchanged;
     }
 
-    match Subject::delocalize(raw, store.get_base_domain().as_deref()) {
-        Some(internal) => Value::String(internal),
-        None => unchanged,
-    }
+    let rewritten = match Subject::delocalize(raw, store.get_base_domain().as_deref()) {
+        Some(internal) => internal,
+        None => raw.to_string(),
+    };
+    Value::String(crate::identifiers::canonicalize_scheme(&rewritten))
 }
 
 /// Dynamic resource used for ordering, filtering and querying content.

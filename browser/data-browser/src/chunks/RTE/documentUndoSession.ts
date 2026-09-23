@@ -86,7 +86,7 @@ export function getDocumentUndoManager(
   const manager = new UndoManager(doc, {
     maxUndoSteps: 100,
     mergeInterval: 1000,
-    excludeOriginPrefixes: ['atomic:system', 'sys:init'],
+    excludeOriginPrefixes: ['origin:system', 'atomic:system', 'sys:init'],
   });
   session.documents.set(doc, manager);
   session.managers.add(new WeakRef(manager));

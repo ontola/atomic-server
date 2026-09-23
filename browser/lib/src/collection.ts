@@ -5,6 +5,8 @@ import { Resource, normalizeLoroChangeTimestampMs } from './resource.js';
 import { Store } from './store.js';
 import { commits } from './ontologies/commits.js';
 import { dataBrowser } from './ontologies/dataBrowser.js';
+import { isCommitSubject } from './commit.js';
+import { core } from './ontologies/core.js';
 
 /**
  * Strips `did:ad:commit:` subjects from a member list. Commit resources don't
@@ -17,7 +19,7 @@ import { dataBrowser } from './ontologies/dataBrowser.js';
  * side index. The proper fix is upstream — see TODO.
  */
 function filterIndexLeakage(subjects: string[]): string[] {
-  return subjects.filter(s => !s.startsWith('did:ad:commit:'));
+  return subjects.filter(s => !isCommitSubject(s));
 }
 
 /**
@@ -302,6 +304,9 @@ export class Collection {
    * the ordered page.
    */
   private _assemblingPage = false;
+  private static legacyQueryServers = new WeakMap<Store, Set<string>>();
+  private legacyQuery = false;
+  private legacyMembers?: Promise<string[]>;
 
   public constructor(
     store: Store,
@@ -430,6 +435,7 @@ export class Collection {
 
   public clearPages(): void {
     this.pages = new Map();
+    this.legacyMembers = undefined;
     this._memberIndex.clear();
     this._queriedMembers.clear();
     // Note: `_optimisticAdds` is preserved on `clearPages` — they
@@ -610,7 +616,7 @@ export class Collection {
     // Commit subjects leak into `parent=` indexes on both server and client.
     // `filterIndexLeakage` strips them at iteration; mirror that here so we
     // don't even consider treating one as a member.
-    if (subject.startsWith('did:ad:commit:')) return 'unchanged';
+    if (isCommitSubject(subject)) return 'unchanged';
 
     // `_new:` is the placeholder subject the store assigns before async
     // signing renames the resource to its real DID. The placeholder is UI
@@ -884,6 +890,18 @@ export class Collection {
     // given property — wasted bandwidth and a real source of WS-storm
     // refetches triggered by drive-wide UPDATE pushes.
     if (!this.params.property || !this.params.value) {
+      return;
+    }
+
+    // A foreign HTTP authority has not replicated its complete index into
+    // this client's OPFS. Neither an empty nor a partially cached local set
+    // answers its query, and its HTTP availability is independent of our
+    // home server's WebSocket handshake.
+    if (
+      new URL(this.server).origin !== new URL(this.store.getServerUrl()).origin
+    ) {
+      await this.fetchPageFromServer(page);
+
       return;
     }
 
@@ -1234,7 +1252,117 @@ export class Collection {
     return 'ok';
   }
 
+  /** Old nodes have no drive or multi-filter query support. Fetch the base
+   * match set, then apply scope, AND filters, sorting and pagination here. */
+  private async fetchLegacyPage(page: number): Promise<void> {
+    this.legacyMembers ??= this.loadLegacyMembers();
+    const subjects = [...(await this.legacyMembers)];
+
+    if (subjects.length === 0) {
+      this.setEmptyPage(page);
+
+      return;
+    }
+
+    this.finishLocalDbPage(
+      page,
+      { subjects, count: subjects.length },
+      this.params.drive,
+    );
+  }
+
+  private async loadLegacyMembers(): Promise<string[]> {
+    if (this.params.aggregation || this.params.expression_filters?.length) {
+      throw new Error(
+        'This legacy server does not support query expressions or aggregation',
+      );
+    }
+
+    const raw = new Collection(
+      this.store,
+      this.server,
+      {
+        ...this.params,
+        drive: undefined,
+        filters: undefined,
+        sort_by: undefined,
+        sort_desc: undefined,
+        include_nested: true,
+        page_size: '500',
+      },
+      true,
+    );
+    await raw.fetchPageFromServer(0);
+    const candidates = await raw.getAllMembers();
+    const subjects: string[] = [];
+    const drive = this.params.drive;
+
+    const inDrive = async (subject: string): Promise<boolean> => {
+      const seen = new Set<string>();
+      let current: string | undefined = subject;
+
+      while (current) {
+        if (current === drive) return true;
+        if (seen.has(current)) return false;
+        seen.add(current);
+        const ancestor = await this.store.getResource(current);
+        if (ancestor.error) throw ancestor.error;
+        current = ancestor.get(core.properties.parent) as string | undefined;
+      }
+
+      return false;
+    };
+
+    for (const subject of candidates) {
+      // A direct parent query is already scoped when the parent is the drive.
+      if (
+        drive &&
+        !(
+          this.params.property === core.properties.parent &&
+          this.params.value === drive
+        ) &&
+        !(await inDrive(subject))
+      )
+        continue;
+      const filters = this.params.filters ?? [];
+
+      if (filters.length || this.params.sort_by) {
+        const resource = await this.store.getResource(subject);
+        if (resource.error) throw resource.error;
+        if (
+          !filters.every(filter => {
+            const entries = filter.property
+              ? ([[filter.property, resource.get(filter.property)]] as const)
+              : Object.entries(resource.getPropVals());
+
+            return entries.some(([property, value]) =>
+              filter.value === undefined
+                ? value !== undefined
+                : constraintMatches(
+                    resource,
+                    property,
+                    filter.value,
+                    filter.operator,
+                  ),
+            );
+          })
+        )
+          continue;
+      }
+
+      subjects.push(subject);
+    }
+
+    return subjects;
+  }
+
   private async fetchPageFromServer(page: number): Promise<void> {
+    if (
+      this.legacyQuery ||
+      (/^https?:\/\//.test(this.params.drive ?? '') &&
+        Collection.legacyQueryServers.get(this.store)?.has(this.server))
+    )
+      return this.fetchLegacyPage(page);
     const subject = this.buildSubject(page);
     const resource =
       await this.store.fetchResourceFromServer<Collections.Collection>(subject);
@@ -1244,6 +1372,21 @@ export class Collection {
     }
 
     if (resource.error) {
+      // Negotiate only on the explicit unsupported-parameter response.
+      if (
+        new URL(subject).searchParams.has('drive') &&
+        /^https?:\/\//.test(this.params.drive ?? '') &&
+        resource.error.message.endsWith('Invalid query param: drive')
+      ) {
+        this.legacyQuery = true;
+        const servers =
+          Collection.legacyQueryServers.get(this.store) ?? new Set<string>();
+        servers.add(this.server);
+        Collection.legacyQueryServers.set(this.store, servers);
+
+        return this.fetchPageFromServer(page);
+      }
+
       throw new Error(
         `Invalid collection: resource has error: ${resource.error}`,
       );

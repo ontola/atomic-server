@@ -19,8 +19,8 @@ import { Resource } from './resource.js';
  * drive has synced). These cover the partial one.
  */
 
-const TABLE = 'did:ad:table';
-const DRIVE = 'did:ad:drive';
+const TABLE = 'atomic:table';
+const DRIVE = 'atomic:drive';
 
 const params = (): CollectionParams => ({
   page_size: '30',
@@ -106,10 +106,10 @@ describe('Collection: local sort matches the server', () => {
     expect,
   }) => {
     const rows: Array<[string, unknown]> = [
-      ['did:ad:rowC', null],
-      ['did:ad:rowA', 5],
-      ['did:ad:rowB', null],
-      ['did:ad:rowD', 1],
+      ['atomic:rowC', null],
+      ['atomic:rowA', 5],
+      ['atomic:rowB', null],
+      ['atomic:rowD', 1],
     ];
     const store = new Store({ serverUrl: 'https://example.com' });
     store.setServerConnected(false);
@@ -136,10 +136,10 @@ describe('Collection: local sort matches the server', () => {
     }
 
     expect(ordered).toEqual([
-      'did:ad:rowB', // no value — first, tie broken by subject
-      'did:ad:rowC',
-      'did:ad:rowD', // 1
-      'did:ad:rowA', // 5
+      'atomic:rowB', // no value — first, tie broken by subject
+      'atomic:rowC',
+      'atomic:rowD', // 1
+      'atomic:rowA', // 5
     ]);
   });
 });
@@ -150,8 +150,8 @@ describe('Collection: local surplus is not "stale"', () => {
   }) => {
     // The local index knows about a row the server has not acknowledged yet —
     // an optimistic add, or a pending write. Repairing here would delete it.
-    const local = ['did:ad:row1', 'did:ad:row2', 'did:ad:pending'];
-    const server = ['did:ad:row1', 'did:ad:row2'];
+    const local = ['atomic:row1', 'atomic:row2', 'atomic:pending'];
+    const server = ['atomic:row1', 'atomic:row2'];
     const { store, urls } = storeWithServer(server);
     store.setClientDb(stubClientDb(local));
 

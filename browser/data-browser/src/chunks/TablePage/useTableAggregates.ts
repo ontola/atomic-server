@@ -8,6 +8,7 @@ import {
   type ExpressionFilter,
   type PropVal,
   type Resource,
+  isCommitSubject,
 } from '@tomic/react';
 import { useEffect, useState } from 'react';
 
@@ -159,7 +160,7 @@ export function useTableAggregates(opts: {
       // Placeholders and commit resources are never members (mirrors the
       // membership filter in Collection).
       if (changed.new || subject.startsWith('_new:')) return;
-      if (subject.startsWith('did:ad:commit:')) return;
+      if (isCommitSubject(subject)) return;
 
       // Only resources this query covers. The primary property/value pair is
       // the membership constraint (`parent` = the table); extra filters only

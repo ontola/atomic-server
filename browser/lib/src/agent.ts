@@ -1,3 +1,8 @@
+import {
+  canonicalIdentifier,
+  canonicalizeScheme,
+  toLegacyScheme,
+} from './subject.js';
 import { Client } from './client.js';
 import {
   decodeSecret,
@@ -228,7 +233,13 @@ export class Agent implements AgentInterface {
   }
 
   public async aiChatsFolderSubject(drive: string): Promise<string> {
-    if (this.aiChatsFolders[drive]) return this.aiChatsFolders[drive];
+    drive = canonicalIdentifier(drive);
+    const cached =
+      this.aiChatsFolders[drive] ?? this.aiChatsFolders[toLegacyScheme(drive)];
+
+    if (cached) {
+      return (this.aiChatsFolders[drive] = canonicalizeScheme(cached));
+    }
 
     if (!this.#cryptoProvider.signsDeterministically) {
       throw new AtomicError(

@@ -77,7 +77,7 @@ test.describe('offline create → online sync → disable localDB', () => {
       return drive.subject as string;
     });
     console.log(`[setup] offline-created drive: ${offlineDriveSubject}`);
-    expect(offlineDriveSubject).toMatch(/^did:ad:/);
+    expect(offlineDriveSubject).toMatch(/^atomic:/);
 
     // Confirm it's in the dirty queue (waiting to be synced).
     const pendingBeforeReconnect = await page.evaluate(
@@ -121,16 +121,16 @@ test.describe('offline create → online sync → disable localDB', () => {
     console.log('[setup] server-has check:', JSON.stringify(serverHas));
     expect(serverHas.fetched).toBe(true);
 
-    // 6. Make the offline-created drive the active one, then disable localDB.
-    await page.evaluate((subject: string) => {
-      window.store.setDrive(subject);
-      // Disable client DB — same mechanism SyncRoute uses.
+    // 6. Disable localDB, then select the offline-created drive through the
+    // app route. Store.setDrive alone is overwritten by AppSettings' drive
+    // state on the next React render.
+    await page.evaluate(() => {
       localStorage.setItem('atomic-disable-client-db', '1');
-    }, offlineDriveSubject);
+    });
 
-    // Navigate to the drive's page so the route's useResource(drive) fires.
+    // Navigate to the drive's page and explicitly select it as the workspace.
     await page.goto(
-      `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(offlineDriveSubject)}`,
+      `${FRONTEND_URL}/app/show?subject=${encodeURIComponent(offlineDriveSubject)}&drive=${encodeURIComponent(offlineDriveSubject)}`,
     );
 
     // 8. Verify the drive auto-loads (the route's useResource, not an explicit

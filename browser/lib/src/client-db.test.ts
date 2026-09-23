@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 import { ClientDbWorker } from './client-db.js';
+import { RequestCancelledError } from './error.js';
 
 describe('ClientDbWorker without a secure context', () => {
   it('parks in server-only mode with a clear error when Web Locks are unavailable', async () => {
@@ -71,6 +72,120 @@ describe('ClientDbWorker cold initialization', () => {
       vi.restoreAllMocks();
       vi.unstubAllGlobals();
       vi.useRealTimers();
+    }
+  });
+});
+
+describe('ClientDbWorker leader handoff', () => {
+  it('finishes a pending follower call through its new local worker', async () => {
+    vi.useFakeTimers();
+    const workerMessages: string[] = [];
+    let acquire!: () => Promise<unknown>;
+    vi.stubGlobal('navigator', {
+      locks: {
+        request: vi.fn((_name, _options, callback) => {
+          acquire = callback;
+
+          return new Promise(() => {});
+        }),
+      },
+    });
+    vi.stubGlobal(
+      'BroadcastChannel',
+      class {
+        onmessage?: (event: { data: { type: string } }) => void;
+        postMessage = vi.fn();
+        close() {}
+      },
+    );
+    vi.stubGlobal(
+      'Worker',
+      class {
+        onmessage?: (event: unknown) => void;
+        postMessage(message: { id: string; type: string }) {
+          workerMessages.push(message.type);
+          queueMicrotask(() =>
+            this.onmessage?.({
+              data: { id: message.id, type: 'result', data: undefined },
+            }),
+          );
+        }
+        terminate() {}
+      },
+    );
+    const db = new ClientDbWorker('wasm-url', 'worker-url');
+
+    try {
+      const initialized = db.init('https://example.com');
+      const channel = (
+        db as unknown as {
+          bc: { onmessage?: (event: { data: { type: string } }) => void };
+        }
+      ).bc;
+      channel.onmessage?.({ data: { type: 'leader-announce' } });
+      await initialized;
+      const pending = db.flush();
+      const unacknowledgedWrite = expect(
+        db.putResource('{}'),
+      ).rejects.toBeInstanceOf(RequestCancelledError);
+      let settled = false;
+      void pending.then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        },
+      );
+      void acquire();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(settled).toBe(true);
+      await expect(pending).resolves.toBeUndefined();
+      await unacknowledgedWrite;
+      expect(workerMessages).toEqual(['init', 'flush']);
+    } finally {
+      db.destroy();
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects pending follower calls when the new worker cannot start', async () => {
+    vi.stubGlobal('navigator', {
+      locks: {
+        request: (
+          _name: string,
+          _options: unknown,
+          callback: () => Promise<unknown>,
+        ) => callback(),
+      },
+    });
+    vi.stubGlobal(
+      'Worker',
+      class {
+        constructor() {
+          throw new Error('worker failed');
+        }
+      },
+    );
+    const db = new ClientDbWorker('wasm-url', 'worker-url');
+    Object.assign(db, {
+      role: 'follower',
+      bc: { postMessage: vi.fn(), close: vi.fn() },
+    });
+
+    try {
+      const pending = expect(db.flush()).rejects.toThrow('worker failed');
+      (
+        db as unknown as {
+          requestLeaderLock: (baseUrl: string, steal: boolean) => void;
+        }
+      ).requestLeaderLock('https://example.com', false);
+      await pending;
+      await expect(db.flush()).rejects.toThrow('ClientDb unavailable');
+    } finally {
+      db.destroy();
+      vi.unstubAllGlobals();
     }
   });
 });

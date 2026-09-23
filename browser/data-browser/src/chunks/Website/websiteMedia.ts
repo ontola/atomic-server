@@ -1,5 +1,11 @@
 // @wc-ignore-file
-import { server, hexToBytes, type Store } from '@tomic/lib';
+import {
+  server,
+  hexToBytes,
+  blobHashHex,
+  isBlobSubject,
+  type Store,
+} from '@tomic/lib';
 import { optimizeWebsiteImage } from './optimizeWebsiteImage';
 
 /** Export only an explicitly selected File; never follow its parent or other links. */
@@ -17,10 +23,11 @@ export async function snapshotWebsiteImage(
       throw new Error('Website images must be PNG, JPEG, WebP or GIF.');
     const blob = file.get('https://atomicdata.dev/properties/blob');
     let bytes: Uint8Array | null | undefined;
-    if (typeof blob === 'string' && /^did:ad:blob:[a-f0-9]{64}$/.test(blob))
-      bytes = await store
-        .getClientDb()
-        ?.getBlob(hexToBytes(blob.slice('did:ad:blob:'.length)));
+
+    if (typeof blob === 'string' && isBlobSubject(blob)) {
+      const hash = blobHashHex(blob);
+      if (hash) bytes = await store.getClientDb()?.getBlob(hexToBytes(hash));
+    }
 
     if (!bytes) {
       const url = file.get(server.properties.downloadUrl);

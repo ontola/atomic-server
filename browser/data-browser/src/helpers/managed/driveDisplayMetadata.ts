@@ -1,8 +1,8 @@
-import { core, dataBrowser, type Store } from '@tomic/lib';
+import { canonicalIdentifier, core, dataBrowser, type Store } from '@tomic/lib';
 
 /** Only the drive's explicitly shared display fields leave local storage. */
 export async function driveDisplayMetadata(store: Store, subject: string) {
-  const drive = store.resources.get(subject);
+  const drive = store.resources.get(canonicalIdentifier(subject));
   let name = drive?.get(core.properties.name);
   let emoji = drive?.get(dataBrowser.properties.emoji);
 

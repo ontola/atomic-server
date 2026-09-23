@@ -134,6 +134,12 @@ Source: `browser/data-browser/src/helpers/devtools.ts`.
 
 Atomic Server is a graph database with real-time sync, built on **Loro CRDT** for conflict-free collaborative editing.
 
+**Naming boundary:** Atomic Place (`atomic.place`) is the workspace product;
+AtomicServer is its self-hostable server component. Optional managed accounts,
+billing and signaling are implemented in the internal sibling `atomic-saas`
+repository. Keep that repository's implementation details out of public FOSS
+copy unless they explain an integration boundary.
+
 ### Crates
 
 - **`docs`** (`docs`) — Public-facing Atomic Data spec and product documentation. Describes how the protocol works, very important.

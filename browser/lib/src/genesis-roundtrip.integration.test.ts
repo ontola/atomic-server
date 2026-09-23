@@ -4,6 +4,7 @@ import { Agent } from './agent.js';
 import { JSCryptoProvider } from './CryptoProvider.js';
 import { server } from './ontologies/server.js';
 import { core } from './ontologies/core.js';
+import { identifierBody, isAtomicIdentifier } from './subject.js';
 
 /**
  * Round-trip proof for cert-minting-at-creation: a drive whose `did:ad:` was
@@ -54,7 +55,7 @@ describe('genesis cert round-trip against a live server', () => {
     });
 
     // Minted from a cert, from birth, and the cert verifies against the DID.
-    expect(drive.subject.startsWith('did:ad:')).toBe(true);
+    expect(isAtomicIdentifier(drive.subject)).toBe(true);
     const propval = drive.get(
       'https://atomicdata.dev/properties/genesis',
     ) as string;
@@ -63,9 +64,9 @@ describe('genesis cert round-trip against a live server', () => {
       await import('./genesis.js');
     const { decodeB64 } = await import('./base64.js');
     const cert = decodeGenesisCert(decodeB64(propval));
-    expect(
-      await verifyGenesisCert(cert, drive.subject.slice('did:ad:'.length)),
-    ).toBe(true);
+    expect(await verifyGenesisCert(cert, identifierBody(drive.subject)!)).toBe(
+      true,
+    );
 
     // The real gate: POST the genesis to the live server. If the server's
     // cert verification (Path 1) rejected it, this would throw / drain-fail.

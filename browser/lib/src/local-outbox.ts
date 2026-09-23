@@ -25,7 +25,11 @@ import { RequestCancelledError } from './error.js';
  */
 
 import type { Commit } from './commit.js';
-import { commitToJsonADObject, parseCommitJSON } from './commit.js';
+import {
+  commitToJsonADObject,
+  isCommitSubject,
+  parseCommitJSON,
+} from './commit.js';
 import { ErrorCode } from './ws-v2.js';
 
 export interface OutboxEntry {
@@ -151,20 +155,10 @@ export interface OutboxDrainContext {
  * string they correspond to.
  */
 /**
- * Whether `subject` names a Commit: the `did:ad:commit:<sig>` form, or the
- * older `https://host/commits/<sig>` the server minted for HTTP-subject drives.
- * Commits are immutable and never sync as edits — the server answers "Commits
- * cannot be edited." on every attempt.
+ * Whether `subject` names a Commit. Re-exported from `commit.ts` so outbox
+ * callers keep a stable import.
  */
-export function isCommitSubject(subject: string): boolean {
-  if (subject.startsWith('did:ad:commit:')) return true;
-
-  try {
-    return new URL(subject).pathname.startsWith('/commits/');
-  } catch {
-    return false;
-  }
-}
+export { isCommitSubject } from './commit.js';
 
 export function isTerminalCommitErrorMessage(message: string): boolean {
   // Server emits "Commits cannot be edited." (`commit.rs`) when the commit's

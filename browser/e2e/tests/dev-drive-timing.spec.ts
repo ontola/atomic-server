@@ -35,7 +35,7 @@ test.describe('dev-drive timing', () => {
     );
 
     const waitForURL = await timeIt('waitForURL did:ad:', () =>
-      page.waitForURL(/did(?:%3A|:)ad(?:%3A|:)/, { timeout: 30000 }),
+      page.waitForURL(/(?:did(?:%3A|:)ad|atomic)(?:%3A|:)/, { timeout: 30000 }),
     );
 
     const waitForTitle = await timeIt('currentDriveTitle visible', () =>

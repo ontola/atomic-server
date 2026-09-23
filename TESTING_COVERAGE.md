@@ -1,6 +1,19 @@
+Server descriptor budget (2026-09-22): `server/src/serve.rs` tests the HTTP
+connection budget at small, staging-sized, and effectively unlimited process
+descriptor limits. Startup reads the process soft `RLIMIT_NOFILE`, limits Actix
+workers and per-worker connections, and reserves descriptors for other services.
+This bounds accepted HTTP sockets when they dominate descriptor use; it does
+not identify the source of the September 22 staging descriptor spike or bound
+Iroh and other non-HTTP sockets. A staging load test and process FD sampling
+are still needed before claiming the original incident's cause is fixed.
+
 File uploads during tab handoff (2026-09-22): `browser/lib/src/client-db-handoff.test.ts` closes the leader during hashing and blob storage, verifies recovery when the uploader or a third tab takes over, and covers duplicate announcements, non-repeatable mutations, timeout and teardown. A local Chromium harness also exercised these four handoffs with real Web Locks, BroadcastChannel, WASM and OPFS, verifying the blob survives reload. The exact reported staging profile-picture event could not be retrieved from Sentry on this host; a live-but-unresponsive leader without a handoff still uses the bounded timeout.
 
 Account redirects (2026-09-22): mounted `GettingStartedFlow.test.tsx` and `IdentityReconcileGate.test.tsx` cover hosted local sign-in, settings/passkey continuation, invite/drive priority, missing-data recovery and cancellation of stale identity/hosting checks. See [the route map](browser/data-browser/AUTH_FLOWS.md). Portal session, email-link and dashboard browser checks live in atomic-saas and use HTTP fixtures; real production passkey registration is not covered by these checks.
+
+PR #1585 frontend regressions: Vault backup tests verify a legacy drive ID reads canonical cached metadata and refreshes it after edits. Deep-link and peer-pairing tests retain legacy inputs while checking canonical identity behavior.
+
+PR #1585 upgrade regressions: library tests pin the pre-rename AI Chats singleton and restored alias cache, negotiate nested reduced/full sync identifiers, and export canonical snapshots for legacy requests. Rust tests cover legacy filtered/full version vectors and restarting an interrupted scheme migration after rows moved but before indexes finished. These are library/frame-level checks; a deployed mixed-version browser/Iroh pairing is not exercised.
 
 New-drive sync: WebSocket unit coverage verifies SUB and SYNC wait for a pending genesis acknowledgement, then resume on ResourceSaved. The Local DB-off rendering E2E exercises this ordering with real server persistence.
 
@@ -46,11 +59,17 @@ formatting. The production-bundle typing E2E exercises the keyboard shortcut.
 Sidebar layout: browser checks sample both docked sidebar transitions halfway
 through opening/closing and verify that the main content moves with them, with
 matching duration/easing. They also cover hover reveal, mobile backdrop dismissal,
-and keeping the main content aligned while resizing and after reopening.
+and keeping the main content aligned while resizing and after reopening. Tablet
+checks verify that opening AI, comments, or meeting chat closes the left sidebar.
 Section resizing: hook tests cover touch pointers, drag thresholds, size bounds,
 tap preservation, cancellation, secondary pointers and unmount cleanup. Chromium
 uses native touch gestures on the AI Chats header to shrink/grow the list, checks
 the 44px touch target, saved height after reload, collapse/expand and New Chat.
+AI sidebar navigation checks that the AI Chats section is absent on a fresh
+drive and appears after a chat is saved, then opens the chat report preview from
+its context menu. The tablet composer check simulates a
+shorter visual viewport with zero keyboard inset; physical Firefox Android
+keyboard behavior still needs device verification.
 
 Creation catalog/context menus: browser checks cover the embedded sidebar filter,
 keyboard filtering, removal of plugin/website/app creation actions from menus,
@@ -926,6 +945,7 @@ routing that a second node would require does not exist yet.
 - `browser/data-browser/src/helpers/feedback.test.ts`: unavailable reporting, failed delivery, blank input and successful submission.
 - `browser/data-browser/src/helpers/sentry.test.ts`: runtime disable override, environment and build attribution.
 - `browser/e2e/tests/feedback.spec.ts`: sidebar form, unavailable-reporting guidance, failed Sentry transport, retained input and successful retry; uses a fake Sentry project with intercepted transport.
+- `browser/data-browser/src/chunks/AI/formatAIChatReport.test.ts`: reviewable AI chat text, error inclusion, attachment-data exclusion, and long-chat truncation. `ai-sidebar-navigation.spec.ts` checks the menu, preview, and explicit send through a fake Sentry feedback transport; a real Sentry receipt still needs production verification.
 - Real Sentry evidence and remaining production gates: `planning/sentry-feedback-readiness.md`.
 
 ### E2E browser diagnostic gate
@@ -1017,7 +1037,10 @@ mounts without resetting or re-registering the global parser.
   fallback agent lookups neither invent creation timestamps nor generate new
   CRDT history or persist a resource merely by reading it.
 - `client-db.test.ts` verifies that cold worker initialization does not steal
-  its own Web Lock or emit a false ghost-leader warning.
+  its own Web Lock or emit a false ghost-leader warning. It also covers safe
+  follower calls and unacknowledged writes during lock handoff, plus a failed
+  replacement worker. `client-db-locks.spec.ts` exercises the pending-call
+  handoff with real tabs in Chromium and Firefox.
 - `store.private-drive.test.ts` verifies that linking a private drive on a
   nodeless origin preserves the local profile without fetching it from the SPA.
 
@@ -2097,10 +2120,13 @@ Paired SaaS `portal/e2e/passkey-open-drive.spec.ts` covers account/profile creat
 
 | Flow | Where |
 |---|---|
-| HTTP path `https://host/did:ad:…` and `/did?subject=` extract the same DID | `browser/lib/src/subject.test.ts` |
+| HTTP path `https://host/did:ad:…` / `https://host/atomic:…` and `/resource?subject=` extract the same identifier | `browser/lib/src/subject.test.ts` |
 | JSON-AD parse accepts `@id: did:ad:…` when the request used the HTTP path alias | `browser/lib/src/parse.test.ts` |
-| `Client.fetchResourceHTTP` resolves DIDs via `/did?subject=` and does not touch `window` in Node | `browser/lib/src/client.fetch.test.ts` |
+| `Client.fetchResourceHTTP` resolves identifiers via `/resource?subject=` and does not touch `window` in Node | `browser/lib/src/client.fetch.test.ts` |
 | Store fetch by HTTP path alias returns the resource stored under the DID | `browser/lib/src/store.test.ts` |
+| Writes collapse `did:ad:` / `atomic:` aliases; parent queries match either spelling; destroy-replay sees a legacy commit id | `lib/src/db/test.rs` `canonical_scheme_store_boundary` |
+| Opening a store rewrites leftover `did:ad:` resource keys and reference values to `atomic:` | `lib/src/db/test.rs` `canonical_scheme_open_rewrites_legacy_keys` |
+| Wire subjects follow `canonical-scheme` (empty caps emit `did:ad:`) | `browser/lib/src/subject.test.ts` `emitSubjectForCaps` |
 
 Not covered: `ad-generate ontologies` end-to-end against a live server (no CLI test runner).
 
@@ -2246,10 +2272,13 @@ Paired SaaS `portal/e2e/passkey-open-drive.spec.ts` covers account/profile creat
 
 | Flow | Where |
 |---|---|
-| HTTP path `https://host/did:ad:…` and `/did?subject=` extract the same DID | `browser/lib/src/subject.test.ts` |
+| HTTP path `https://host/did:ad:…` / `https://host/atomic:…` and `/resource?subject=` extract the same identifier | `browser/lib/src/subject.test.ts` |
 | JSON-AD parse accepts `@id: did:ad:…` when the request used the HTTP path alias | `browser/lib/src/parse.test.ts` |
-| `Client.fetchResourceHTTP` resolves DIDs via `/did?subject=` and does not touch `window` in Node | `browser/lib/src/client.fetch.test.ts` |
+| `Client.fetchResourceHTTP` resolves identifiers via `/resource?subject=` and does not touch `window` in Node | `browser/lib/src/client.fetch.test.ts` |
 | Store fetch by HTTP path alias returns the resource stored under the DID | `browser/lib/src/store.test.ts` |
+| Writes collapse `did:ad:` / `atomic:` aliases; parent queries match either spelling; destroy-replay sees a legacy commit id | `lib/src/db/test.rs` `canonical_scheme_store_boundary` |
+| Opening a store rewrites leftover `did:ad:` resource keys and reference values to `atomic:` | `lib/src/db/test.rs` `canonical_scheme_open_rewrites_legacy_keys` |
+| Wire subjects follow `canonical-scheme` (empty caps emit `did:ad:`) | `browser/lib/src/subject.test.ts` `emitSubjectForCaps` |
 
 Not covered: `ad-generate ontologies` end-to-end against a live server (no CLI test runner).
 
@@ -2381,7 +2410,7 @@ repositories and rejects dependency lockfile drift before builds.
 
 `browser/e2e/tests/ai-mobile.spec.ts` checks full-width phone layout and message bodies, long titles keeping the header menu on-screen, the chat resource menu targeting the saved conversation and opening its full-page view, a composer that fits above a simulated keyboard inset, options and token visibility, closing the panel, desktop composer bounds, and model selection with focus returning to the editor. A long-response regression reproduces the final sentence being clipped after keyboard resize, verifies bottom-following and the small gap above the composer, and preserves reading position when scrolled up. AI responses are mocked; a physical mobile keyboard is not exercised.
 
-AI credit display: `helpers/managed/ai.test.ts` verifies usage notification when the SDK cancels a hosted stream; `components/AI/useHostedAI.test.tsx` verifies the immediate refresh and one delayed settlement refresh without ongoing polling. `HostedAICredits.test.tsx` covers fractional monthly and purchased balances. `ai-mobile.spec.ts` verifies the balance stays hidden until AI Chat options opens, refreshes from the account API, and links to the configured portal. These use mocked account/provider responses and do not verify live billing.
+AI credit display: `helpers/managed/ai.test.ts` verifies usage notification when the SDK cancels a hosted stream; `components/AI/useHostedAI.test.tsx` verifies the immediate refresh and one delayed settlement refresh without ongoing polling. `HostedAICredits.test.tsx` covers fractional monthly and purchased balances and offers the purchase link only in a hosted distribution when SaaS reports checkout available. `ai-mobile.spec.ts` verifies the balance stays hidden until AI Chat options opens, refreshes from the account API, and does not offer checkout in a FOSS build. These use mocked account/provider responses and do not verify live billing or the chat error purchase action.
 
 Recovery read fan-out: `recovery-fetch.test.ts` verifies concurrent reads share
 one in-flight request per API/account, settled responses are not cached, failures
@@ -2414,3 +2443,13 @@ The sign-in/profile/sign-out smoke test also requires explicit sign-out to
 clear the local identity and land on the welcome screen without an account
 settings continuation, both immediately and after reload. The settings guard
 must not override an intentional sign-out or device lock.
+
+
+## Legacy HTTP compatibility
+
+| Behavior | Tests | Scope |
+| --- | --- | --- |
+| Foreign HTTP parent/drive collections query their own origin despite an empty or partial local cache and disconnected home server | `browser/lib/src/legacy-http-collection.test.ts` | HTTP subjects preserved; unrelated default personal-drive scope omitted; explicit server respected; DID queries remain local-first |
+| Pre-DID queries retry without unsupported parameters and filter locally | `browser/lib/src/legacy-http-collection.test.ts` | Preserves drive ancestry and AND filters, sorts before pagination, keeps undated rows; a loaded parent Drive overrides stale default scope |
+| Migrated agents authenticate legacy HTTP reads at their original origin | `browser/lib/src/client-legacy-auth.test.ts` | Original HTTP identity, padded standard-base64 key/signature, real Ed25519 verification; other hosts, schemes, ports and lookalikes never receive the legacy identity |
+| Public legacy HTTP drive and its children load from a nodeless home | `browser/lib/src/legacy-http-live-check.test.ts` | Opt-in `ATOMIC_LEGACY_LIVE=1`; live atomicdata.dev read verified 2026-09-23. Does not cover private legacy auth or browser sidebar rendering |

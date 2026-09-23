@@ -7,6 +7,28 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 
 ## UNRELEASED
 
+- Identifiers are now emitted as `atomic:` (`atomic:{genesis}`,
+  `atomic:agent:`, `atomic:commit:`, `atomic:blob:`, `atomic:node:`). The
+  previous `did:ad:` spelling is accepted forever and names the same
+  resource. New genesis certificates still encode the v1 header byte
+  (`0x01`) so `GenesisCert` literals in downstream crates keep compiling;
+  `GenesisCert::new_v2` canonicalizes parent/drive strings to `atomic:`.
+  Decode accepts a `0x02` header. Existing v1 certificates and the
+  personal-drive singleton stay v1. Pairing is
+  `atomic:node:{id}?v=1&drives=*`; `/resource?subject=` is the HTTP
+  endpoint (`/atomic` and `/did` remain aliases). The store canonicalizes
+  subjects and identifier-shaped values on write and on query filters.
+  Opening a pre-rename database rewrites leftover `did:ad:` keys in every
+  subject-keyed tree (resources, snapshots, DID mapping keys and hint
+  values, envelopes, tombstones, the outbox), streaming each tree, and
+  rebuilds indexes. A v2 certificate that carries a `did:ad:` string is
+  refused on decode; a v1 certificate's parent and drive are compared with
+  the resource in one spelling. Sync advertises `canonical-scheme` and
+  emits `did:ad:` to peers that do not list it on every frame that names a
+  subject, over WebSocket and Iroh alike; a client canonicalizes what an
+  old server echoes back. The in-memory store keys resources canonically
+  (#1584).
+
 - Fix: a stale authentication proof no longer fails a request that needed no
   authentication. A browser keeps its proof in the `atomic_session` cookie, and
   until `AUTH_MAX_AGE_MS` arrived in 0.41 a proof never expired, so a stale one
@@ -259,7 +281,7 @@ See [STATUS.md](server/STATUS.md) to learn more about which features will remain
 - Improve browser database durability and resource save-state handling.
 - Isolate E2E shard state and simplify local test tooling; full develop CI passes on the release base.
 
-- Add drive-scoped authenticated browser peer sessions; subscription-independent signaling and optional temporary TURN credentials are provided by Atomic SaaS ([#1396](https://github.com/ontola/atomic-server/issues/1396)).
+- Add drive-scoped authenticated browser peer sessions; subscription-independent signaling and optional temporary TURN credentials are provided by the managed signaling service ([#1396](https://github.com/ontola/atomic-server/issues/1396)).
 
 ## [v0.41.0-beta.6] - 2026-09-09
 

@@ -15,9 +15,10 @@ import {
 it('recovers a locally indexed schema after reload while the server lacks it', async () => {
   const store = new Store({ serverUrl: 'https://example.com' });
   store.setServerConnected(true);
-  const drive = 'did:ad:calendar-drive';
-  const ontology = 'did:ad:calendar-ontology';
-  const subject = 'did:ad:local-property';
+  const drive = 'atomic:calendar-drive';
+  const ontology = 'atomic:calendar-ontology';
+  // The local db is keyed by the canonical `atomic:` spelling.
+  const subject = 'atomic:local-property';
   const jsonAd = JSON.stringify({
     '@id': subject,
     [core.properties.isA]: [core.classes.property],

@@ -1,4 +1,6 @@
 /** Reviewed, non-destructive source identity grouping. Original subjects stay readable. */
+import { canonicalIdentifier } from './subject.js';
+
 export const IMPORT_RESOLUTION =
   'https://atomicdata.dev/properties/importResolution';
 export const IMPORT_REFERENCE_REVIEW =
@@ -57,7 +59,7 @@ export interface ImportResolution {
   supersedes: string[];
   choices?: Record<string, string>;
 }
-const pure = (s: string) => (s.startsWith('did:') ? s.split('?')[0] : s);
+const pure = (s: string) => canonicalIdentifier(s);
 
 function marker(row: Record<string, unknown>): ImportResolution | undefined {
   const v = row[IMPORT_RESOLUTION] as ImportResolution | undefined;

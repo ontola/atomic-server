@@ -1,4 +1,7 @@
-import { HOSTED_AI_USAGE_EVENT } from '@helpers/managed/ai';
+import {
+  canPurchaseHostedAICredits,
+  HOSTED_AI_USAGE_EVENT,
+} from '@helpers/managed/ai';
 import { getManagedApiBase } from '@helpers/managed/api';
 import { HostedAICredits } from './HostedAICredits';
 import { useNavigateWithTransition } from '@hooks/useNavigateWithTransition';
@@ -13,6 +16,7 @@ import { styled, keyframes } from 'styled-components';
 import { GeneratingIndicator } from './GeneratingIndicator';
 import { IconButton } from '@components/IconButton/IconButton';
 import { Button } from '@components/Button';
+import { ButtonLink } from '@components/ButtonLink';
 import { FaXmark, FaPaperclip, FaFile, FaSliders } from 'react-icons/fa6';
 import { ChatMessagesContainer } from '@components/ChatMessagesContainer';
 import { useStore, type Resource } from '@tomic/react';
@@ -361,6 +365,12 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
         : activeModel.provider === AIProvider.OpenRouter
           ? 'No OpenRouter API key is set. Add one or switch to a local Ollama model — you can keep typing in the meantime.'
           : 'No AI model provider is available. Set one up to send — you can keep typing in the meantime.';
+
+  const creditPurchaseUrl =
+    canPurchaseHostedAICredits(hostedAI) &&
+    activeModel.provider === AIProvider.Hosted
+      ? `${new URL(getManagedApiBase(), window.location.origin).origin}/dashboard`
+      : undefined;
 
   const [userSelectedContextItems, setUserSelectedContextItems] = useState<
     AIMessageContext[]
@@ -863,6 +873,15 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
             {providerNotice && !liveActive && (
               <ProviderNotice>
                 <span>{providerNotice}</span>
+                {creditPurchaseUrl && !hostedAI?.remaining_micros && (
+                  <ButtonLink
+                    href={creditPurchaseUrl}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                  >
+                    Buy AI credits
+                  </ButtonLink>
+                )}
                 <Button onClick={openAISettings}>
                   {hostedAI?.enabled
                     ? 'Advanced AI settings'
@@ -875,6 +894,16 @@ const RealAIChatInner: React.FC<React.PropsWithChildren<RealAIChatProps>> = ({
                 <span>
                   {`No answer from ${providerLabel}: ${requestError}`}
                 </span>
+                {creditPurchaseUrl &&
+                  /not enough ai credits/i.test(requestError) && (
+                    <ButtonLink
+                      href={creditPurchaseUrl}
+                      target='_blank'
+                      rel='noopener noreferrer'
+                    >
+                      Buy AI credits
+                    </ButtonLink>
+                  )}
                 <Button
                   onClick={() => {
                     setRequestError(undefined);

@@ -152,6 +152,36 @@ test('mobile AI chat fills the width and keeps its composer above the keyboard',
   ).toBeVisible();
 });
 
+test('tablet chat composer fits when the visible viewport shrinks with the keyboard', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 828, height: 1160 });
+  await setupAIRouteMocks(page);
+  await enableAIForTesting(page);
+  await before({ page });
+  await openAISidebar(page);
+
+  // Firefox Android may shrink innerHeight and visualViewport together,
+  // leaving the keyboard inset at zero while CSS viewport units stay taller.
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty('--keyboard-inset', '0px');
+    document.documentElement.style.setProperty(
+      '--visible-viewport-height',
+      '810px',
+    );
+  });
+
+  const panel = page.getByTestId('ai-sidebar');
+  const composer = panel.getByTestId('assistant-file-dropzone');
+  await expect
+    .poll(async () => {
+      const box = (await composer.boundingBox())!;
+
+      return box.y + box.height;
+    })
+    .toBeLessThanOrEqual(810);
+});
+
 test('desktop AI chat keeps the composer inside the docked panel', async ({
   page,
 }) => {
@@ -311,9 +341,9 @@ test('mobile chat keeps navigation usable and Back dismisses only the chat', asy
     .toBeLessThanOrEqual(1);
 
   await page.getByRole('button', { name: 'Show / hide sidebar' }).click();
-  const sidebar = page.getByTestId('sidebar');
-  await sidebar.getByRole('button', { name: 'New Chat', exact: true }).click();
+  await expect(page.getByTestId('sidebar')).toBeVisible();
   await page.getByRole('button', { name: 'Show / hide sidebar' }).click();
+  await panel.getByRole('button', { name: 'New Chat', exact: true }).click();
   await sendChatMessage(page, 'Hello from mobile');
   await expect(
     panel.getByText('This is a mock AI response.', { exact: true }),
@@ -395,7 +425,7 @@ for (const { name, width, navigateAway } of [
   });
 }
 
-test('AI Chat options refreshes account credits and links to the portal only on tap', async ({
+test('FOSS AI Chat options refreshes account credits without offering checkout', async ({
   page,
 }) => {
   let remaining = 5_000_000;
@@ -418,6 +448,7 @@ test('AI Chat options refreshes account credits and links to the portal only on 
           allowance_micros: 5_000_000,
           remaining_micros: remaining,
           used_micros: 5_000_000 - remaining,
+          purchases_enabled: true,
           resets_at: 1790812800,
         },
       });
@@ -454,7 +485,7 @@ test('AI Chat options refreshes account credits and links to the portal only on 
   ).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'Get more credits' }),
-  ).toHaveAttribute('href', 'https://portal.example/dashboard');
+  ).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(page.getByText(/monthly credits left/)).toHaveCount(0);
 });

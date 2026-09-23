@@ -5,7 +5,14 @@
  * Server counterpart: `server/src/handlers/web_sockets.rs`.
  */
 
+import { canonicalDriveHash } from './canonical-drive-hash.js';
 import { createAuthentication } from './authentication.js';
+import {
+  isAgentSubject,
+  isBlobSubject,
+  canonicalizeScheme,
+  emitSubjectForCaps,
+} from './subject.js';
 import { Resource } from './resource.js';
 import { recordServerVersionFromWsProtocol } from './serverCapabilities.js';
 import { StoreEvents, type Store, type DriveSyncState } from './store.js';
@@ -721,7 +728,7 @@ export class WSClient {
       return;
     }
 
-    this.sendBinary(encodeUnsub(drive));
+    this.sendBinary(encodeUnsub(this.wireSubject(drive)));
   }
 
   /** Capability names the server advertised on `AUTH_OK` (see
@@ -729,6 +736,27 @@ export class WSClient {
    *  than 2026-09. */
   public get serverCapabilities(): string[] {
     return [...this._serverCaps];
+  }
+
+  /** Subjects on the wire: `atomic:` if the server listed `canonical-scheme`, else `did:ad:`. */
+  private wireSubject(subject: string): string {
+    return emitSubjectForCaps(subject, this._serverCaps);
+  }
+
+  private wireSubjectMap<T>(values: Record<string, T>): Record<string, T> {
+    return Object.fromEntries(
+      Object.entries(values).map(([s, value]) => [this.wireSubject(s), value]),
+    );
+  }
+
+  /** A resource by the subject a server answered with. A server without
+   *  `canonical-scheme` echoes the `did:ad:` we sent while the store keys
+   *  canonically, so the canonical spelling is tried second. */
+  private hydratedResource(subject: string): Resource | undefined {
+    return (
+      this.store.resources.get(subject) ??
+      this.store.resources.get(canonicalizeScheme(subject))
+    );
   }
 
   /** Subscribe to vector index status updates for a drive root (see server `SUBSCRIBE_INDEX_STATUS`). */
@@ -854,7 +882,7 @@ export class WSClient {
         },
         timer,
       });
-      this.sendBinary(encodeGet(requestId, subject));
+      this.sendBinary(encodeGet(requestId, this.wireSubject(subject)));
     });
   }
 
@@ -920,7 +948,12 @@ export class WSClient {
         },
         timer,
       });
-      this.sendBinary(encodeGetMany(requestId, subjects));
+      this.sendBinary(
+        encodeGetMany(
+          requestId,
+          subjects.map(s => this.wireSubject(s)),
+        ),
+      );
     });
   }
 
@@ -1257,7 +1290,7 @@ export class WSClient {
           });
           // The resource we just hydrated is what the GET caller is
           // waiting for — read it back from the store map.
-          const resource = this.store.resources.get(msg.subject);
+          const resource = this.hydratedResource(msg.subject);
           if (resource) pending.resolve(resource);
           break;
         }
@@ -1277,7 +1310,7 @@ export class WSClient {
           source: msg.flags & Flags.PUSH ? 'ws-sub-push' : 'ws-pending-get',
         });
 
-        const resource = this.store.resources.get(msg.subject);
+        const resource = this.hydratedResource(msg.subject);
         if (resource) this.checkForMissingBlobs(resource);
 
         break;
@@ -1323,7 +1356,7 @@ export class WSClient {
               source: 'ws-pending-get',
               replaceLoroDocsFromRemote: !!(update.flags & Flags.SNAPSHOT),
             });
-            const hydrated = this.store.resources.get(update.subject);
+            const hydrated = this.hydratedResource(update.subject);
 
             return (
               hydrated ??
@@ -1359,7 +1392,11 @@ export class WSClient {
         const msg = decodeSyncOk(payload);
 
         if (msg) {
-          this.store.finishDriveSync(msg.drive, 0, Date.now());
+          this.store.finishDriveSync(
+            canonicalizeScheme(msg.drive),
+            0,
+            Date.now(),
+          );
         }
 
         break;
@@ -1393,7 +1430,7 @@ export class WSClient {
               loroBytes,
               source: 'ws-sync-push',
             });
-            const resource = this.store.resources.get(subject);
+            const resource = this.hydratedResource(subject);
             if (resource) this.checkForMissingBlobs(resource);
           }
 
@@ -1417,7 +1454,7 @@ export class WSClient {
           // the "done" UI state.
           if (msg.last) {
             this.store.finishDriveSync(
-              msg.drive,
+              canonicalizeScheme(msg.drive),
               msg.entries.length,
               Date.now(),
             );
@@ -1550,7 +1587,7 @@ export class WSClient {
     if (drive && this.awaitingDriveGenesis(drive)) return;
 
     if (drive && this.store.isLiveSyncedDrive(drive)) {
-      this.sendBinary(encodeSub(drive));
+      this.sendBinary(encodeSub(this.wireSubject(drive)));
       this._subscribedDrive = drive;
     }
   }
@@ -1577,11 +1614,7 @@ export class WSClient {
 
   /** Agent profiles are public resources outside the reader's active drive. */
   public subscribeAgentProfile(subject: string): void {
-    if (
-      !subject.startsWith('did:ad:agent:') ||
-      this.readyState !== WebSocket.OPEN
-    )
-      return;
+    if (!isAgentSubject(subject) || this.readyState !== WebSocket.OPEN) return;
     if (this.store.isLocalOnlySubject(subject)) return;
     if (
       this.store.getAgent()?.subject &&
@@ -1595,16 +1628,12 @@ export class WSClient {
       isUnauthorized(resource?.error)
     )
       return;
-    this.sendBinary(encodeSub(subject));
+    this.sendBinary(encodeSub(this.wireSubject(subject)));
   }
 
   public unsubscribeAgentProfile(subject: string): void {
-    if (
-      !subject.startsWith('did:ad:agent:') ||
-      this.readyState !== WebSocket.OPEN
-    )
-      return;
-    this.sendBinary(encodeUnsub(subject));
+    if (!isAgentSubject(subject) || this.readyState !== WebSocket.OPEN) return;
+    this.sendBinary(encodeUnsub(this.wireSubject(subject)));
   }
 
   private reSubscribeAll(): void {
@@ -1789,14 +1818,25 @@ export class WSClient {
       // answers SYNC_OK and we never transmit the O(drive-size) version vector.
       // On a mismatch the server replies `SYNC_RESEND` and
       // `sendReducedSyncState` reconciles from the state stashed here.
-      const syncState = await this.store.computeDriveSyncState(drive);
+      const localState = await this.store.computeDriveSyncState(drive);
+      const resources = this.wireSubjectMap(localState.resources);
+      const renamed = Object.keys(localState.resources).some(
+        s => this.wireSubject(s) !== s,
+      );
+      const syncState = {
+        ...localState,
+        resources,
+        driveHash: renamed
+          ? await canonicalDriveHash(resources)
+          : localState.driveHash,
+      };
       close({ resourceCount: Object.keys(syncState.resources).length });
       if (!current()) return;
       this.store.startDriveSync();
       this._pendingSyncState.set(drive, syncState);
       this.sendBinary(
         encodeSync(
-          drive,
+          this.wireSubject(drive),
           syncState.driveHash,
           JSON.stringify({ peers: [], resources: {}, probe: true }),
         ),
@@ -1829,10 +1869,19 @@ export class WSClient {
     if (!current() || (agent && this.authenticatedWith !== agent)) return;
 
     // A response to a probe invalidated by a drive switch must not restart it.
-    const syncState = this._pendingSyncState.get(drive);
-    this._pendingSyncState.delete(drive);
+    // The probe was keyed by what we sent; a server without
+    // `canonical-scheme` answers with the `did:ad:` spelling of it.
+    const pendingKey = this._pendingSyncState.has(drive)
+      ? drive
+      : canonicalizeScheme(drive);
+    const pendingState = this._pendingSyncState.get(pendingKey);
+    this._pendingSyncState.delete(pendingKey);
 
-    if (!syncState || !current()) return;
+    if (!pendingState || !current()) return;
+    const syncState = {
+      ...pendingState,
+      resources: this.wireSubjectMap(pendingState.resources),
+    };
 
     const requireCurrent = () => {
       if (!current()) throw new Error('Sync identity or drive changed');
@@ -1861,7 +1910,10 @@ export class WSClient {
         ...diff.onlyLocal,
         ...diff.onlyRemote,
         ...diff.differ,
-      ].filter(subject => !this.store.outbox.hasPending(subject));
+      ].filter(
+        subject =>
+          !this.store.outbox.hasPending(this.store.normalizeSubject(subject)),
+      );
 
       // Version vectors for the differing subjects the client actually holds
       // (only-remote subjects it doesn't have — the server pushes those).
@@ -1875,7 +1927,7 @@ export class WSClient {
 
       this.sendBinary(
         encodeSync(
-          drive,
+          this.wireSubject(drive),
           syncState.driveHash,
           JSON.stringify({
             peers: syncState.peers,
@@ -1895,7 +1947,7 @@ export class WSClient {
       if (this.readyState === WebSocket.OPEN) {
         this.sendBinary(
           encodeSync(
-            drive,
+            this.wireSubject(drive),
             syncState.driveHash,
             JSON.stringify({
               peers: syncState.peers,
@@ -1932,7 +1984,9 @@ export class WSClient {
       };
 
       this._rbsrFpQueue.push(settle);
-      this.ws.send('RBSR_FP ' + JSON.stringify({ drive, ranges }));
+      this.ws.send(
+        'RBSR_FP ' + JSON.stringify({ drive: this.wireSubject(drive), ranges }),
+      );
     });
   }
 
@@ -1959,7 +2013,12 @@ export class WSClient {
 
       this._rbsrItemsQueue.push(settle);
       this.ws.send(
-        'RBSR_ITEMS ' + JSON.stringify({ drive, lo, hi: hi ?? null }),
+        'RBSR_ITEMS ' +
+          JSON.stringify({
+            drive: this.wireSubject(drive),
+            lo,
+            hi: hi ?? null,
+          }),
       );
     });
   }
@@ -2014,7 +2073,8 @@ export class WSClient {
 
     const entries: Array<{ subject: string; loroBytes: Uint8Array }> = [];
 
-    for (const subject of diff.pull) {
+    for (const remoteSubject of diff.pull) {
+      const subject = this.store.normalizeSubject(remoteSubject);
       // F1 interim (planning/unified-sync.md): a subject with a pending
       // outbox entry is the drain's to deliver, as a signed commit. Pushing
       // its raw bytes here — from memory or, worse, the clientDb fallback
@@ -2022,10 +2082,14 @@ export class WSClient {
       // `computeDriveSyncState` side already hides these subjects from the
       // version vector we send; this closes the other half, where the
       // server names them in `pull`.
-      if (this.store.outbox.hasPending(subject)) continue;
+      if (
+        this.store.outbox.hasPending(subject) ||
+        this.store.outbox.hasPending(remoteSubject)
+      )
+        continue;
 
       let loroBytes: Uint8Array | undefined;
-      const serverVv = diff.pullFrom?.[subject];
+      const serverVv = diff.pullFrom?.[remoteSubject];
       const memDoc = this.store.resources.get(subject)?.getLoroDoc?.();
 
       if (memDoc) {
@@ -2066,9 +2130,12 @@ export class WSClient {
 
       try {
         for (const frame of encodeSyncPushChunks(
-          diff.drive,
-          entries,
-          envelopes,
+          this.wireSubject(diff.drive),
+          entries.map(entry => ({
+            ...entry,
+            subject: this.wireSubject(entry.subject),
+          })),
+          this.wireSubjectMap(envelopes),
         )) {
           this.sendBinary(frame);
         }
@@ -2081,7 +2148,11 @@ export class WSClient {
 
     // If server has nothing to push, sync is done
     if (diff.push.length === 0) {
-      this.store.finishDriveSync(diff.drive, entries.length, Date.now());
+      this.store.finishDriveSync(
+        this.store.normalizeSubject(diff.drive),
+        entries.length,
+        Date.now(),
+      );
     }
   }
 
@@ -2118,9 +2189,9 @@ export class WSClient {
 
     if (!blobDid) return;
 
-    // Extract the hash from did:ad:blob:{hash}
-    const hashStr = blobDid.startsWith('did:ad:blob:')
-      ? blobDid.substring(12)
+    // Extract the hash from atomic:blob:{hash} / did:ad:blob:{hash}
+    const hashStr = isBlobSubject(blobDid)
+      ? blobDid.replace(/^(atomic:blob:|did:ad:blob:)/, '')
       : blobDid;
 
     const clientDb = this.store.getClientDb();

@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import { isNodeSubject } from './subject.js';
 import {
   decodePairingEnvelope,
   encodePairingEnvelope,
+  isLegacyPairingUri,
+  looksLikePairingUri,
   PairingEnvelopeError,
-  PAIRING_URI_PREFIX,
+  LEGACY_PAIRING_URI_PREFIX,
   type PairingEnvelope,
 } from './pairing.js';
 
-const NODE = `did:ad:node:${'ab'.repeat(32)}`;
+const NODE = `atomic:node:${'ab'.repeat(32)}`;
+const LEGACY_NODE = `did:ad:node:${'ab'.repeat(32)}`;
 
 const allDrives: PairingEnvelope = {
   v: 1,
@@ -34,7 +38,7 @@ function uriOf(params: Record<string, string | string[] | undefined>): string {
     }
   }
 
-  return `${PAIRING_URI_PREFIX}${parts.join('&')}`;
+  return `${LEGACY_PAIRING_URI_PREFIX}${parts.join('&')}`;
 }
 
 function codeOf(fn: () => unknown): string {
@@ -54,7 +58,7 @@ function codeOf(fn: () => unknown): string {
 describe('pairing envelope', () => {
   it('round-trips an envelope with a url hint', () => {
     const uri = encodePairingEnvelope(allDrives);
-    expect(uri.startsWith(PAIRING_URI_PREFIX)).toBe(true);
+    expect(isNodeSubject(uri.split(/[?#]/)[0])).toBe(true);
     expect(decodePairingEnvelope(uri)).toEqual(allDrives);
   });
 
@@ -64,10 +68,23 @@ describe('pairing envelope', () => {
     );
   });
 
-  it('writes the node identity the way the rest of the app writes it', () => {
-    // The whole point of the readable form: no base64, no percent-escaped
-    // colons. A human reading the copied code sees a did:ad:node: identity.
-    expect(encodePairingEnvelope(namedDrives)).toContain(`node=${NODE}`);
+  it('writes the node identity as the URI itself', () => {
+    expect(encodePairingEnvelope(namedDrives).startsWith(NODE)).toBe(true);
+    expect(encodePairingEnvelope(namedDrives)).toContain('v=1');
+  });
+
+  it('accepts a legacy atomic://pair code and a did:ad:node identifier', () => {
+    const legacy = `${LEGACY_PAIRING_URI_PREFIX}v=1&node=${LEGACY_NODE}&drives=*`;
+    expect(decodePairingEnvelope(legacy)).toEqual({
+      v: 1,
+      node: NODE,
+      drives: '*',
+    });
+    expect(decodePairingEnvelope(LEGACY_NODE)).toEqual({
+      v: 1,
+      node: NODE,
+      drives: '*',
+    });
   });
 
   it('repeats the parameter for a multi-drive envelope', () => {
@@ -125,10 +142,12 @@ describe('pairing envelope', () => {
     ).toBe('unsupported-version');
   });
 
-  it('rejects a missing version as malformed', () => {
-    expect(
-      codeOf(() => decodePairingEnvelope(uriOf({ node: NODE, drives: '*' }))),
-    ).toBe('malformed');
+  it('defaults a missing version to v1 on a node identifier', () => {
+    expect(decodePairingEnvelope(NODE)).toEqual({
+      v: 1,
+      node: NODE,
+      drives: '*',
+    });
   });
 
   it('rejects garbage and truncated payloads as malformed', () => {
@@ -168,19 +187,35 @@ describe('pairing envelope', () => {
     ).toBe('malformed');
   });
 
-  it('rejects empty or contradictory drive lists', () => {
-    for (const drives of [undefined, ['*', 'did:ad:drive1']]) {
-      expect(
-        codeOf(() =>
-          decodePairingEnvelope(uriOf({ v: '1', node: NODE, drives })),
+  it('treats a pairing code with no drives as all drives', () => {
+    const decoded = decodePairingEnvelope(uriOf({ v: '1', node: NODE }));
+    expect(decoded.drives).toBe('*');
+  });
+
+  it('rejects a contradictory drive list', () => {
+    expect(
+      codeOf(() =>
+        decodePairingEnvelope(
+          uriOf({ v: '1', node: NODE, drives: ['*', 'did:ad:drive1'] }),
         ),
-      ).toBe('malformed');
-    }
+      ),
+    ).toBe('malformed');
   });
 
   it('refuses to encode an envelope it would not decode', () => {
     expect(() =>
       encodePairingEnvelope({ ...namedDrives, node: 'did:ad:node:short' }),
     ).toThrow(PairingEnvelopeError);
+  });
+
+  it('treats atomic://pair and atomic:pair as pairing, not atomic:pairfoo', () => {
+    expect(
+      isLegacyPairingUri(`${LEGACY_PAIRING_URI_PREFIX}v=1&node=${NODE}`),
+    ).toBe(true);
+    expect(isLegacyPairingUri(`atomic:pair?v=1&node=${NODE}`)).toBe(true);
+    expect(isLegacyPairingUri('atomic:pairfoo')).toBe(false);
+    expect(looksLikePairingUri(NODE)).toBe(true);
+    expect(looksLikePairingUri('atomic:abc')).toBe(false);
+    expect(looksLikePairingUri('did:key:z')).toBe(false);
   });
 });

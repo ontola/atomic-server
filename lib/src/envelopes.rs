@@ -76,7 +76,7 @@ impl StoredEnvelope {
     /// The commit id this envelope is stored under (`did:ad:commit:<sig>`),
     /// the same value `lastCommit` stamps on the resource.
     pub fn commit_id(&self) -> String {
-        format!("did:ad:commit:{}", self.signature)
+        crate::identifiers::commit_subject(&self.signature)
     }
 
     /// Whether this envelope is a destroy.
@@ -262,7 +262,7 @@ pub fn clear_envelopes(store: &Db, subject: &str) {
 /// The genesis change's message is the creator's agent subject (written by
 /// the browser and by `Commit::create_did`), which `createdBy` reads.
 fn is_genesis_carrier(token: &str) -> bool {
-    token.starts_with("did:ad:agent:")
+    crate::identifiers::is_agent_id(token)
 }
 
 /// One signed change, as History shows it.
@@ -660,7 +660,7 @@ mod tests {
             !report.attributions[0]
                 .tokens
                 .iter()
-                .any(|t| t.starts_with("did:ad:agent:")),
+                .any(|t| crate::identifiers::is_agent_id(t)),
             "a snapshot-carrying edit must not be credited with the genesis change"
         );
         assert!(

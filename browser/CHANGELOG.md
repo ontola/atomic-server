@@ -38,6 +38,17 @@ This changelog covers all five packages, as they are (for now) updated as a whol
   every later one: the local index is keyed by drive, a subject is not a key
   in it, and the panel then stopped showing messages other people sent while
   it was open.
+
+- Identifiers are now emitted as `atomic:` (`atomic:{genesis}`,
+  `atomic:agent:`, `atomic:commit:`, `atomic:blob:`, `atomic:node:`).
+  `did:ad:` is accepted forever and names the same resource. Pairing is
+  `atomic:node:{id}?v=1&drives=*`; a node identifier starts pairing,
+  anything else navigates. The store canonicalizes at `normalizeSubject`.
+  Fetch uses `/resource?subject=` (`/atomic` and `/did` are aliases).
+  Sync lists the `canonical-scheme` capability and sends `did:ad:` to a
+  server that does not advertise it. Blob copy, identity mint, and node
+  pairing accept both spellings (#1584).
+
 - Fix: installing a plugin works again. Since the `Installation` class started
   requiring `release`, the server refused the commit that creates one with
   "Property .../properties/release missing", the outbox dropped it as terminal
@@ -111,7 +122,7 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 - Preserve editor selection during remote updates and improve focus, table selection and save-state feedback.
 - Fix deleted sidebar items returning from stale queries.
 
-- Add peer rooms for up to eight simultaneous browsers on the Sync page with WebRTC collaboration, OPFS reconciliation and attachment sync without a Cloud subscription. Discovery defaults to shared Atomic SaaS signaling, independent of the drive’s data node. Export `BrowserPeerSync`, `WebRtcPeer` and `WebRtcTransport` from `@tomic/lib` ([#1396](https://github.com/ontola/atomic-server/issues/1396)).
+- Add peer rooms for up to eight simultaneous browsers on the Sync page with WebRTC collaboration, OPFS reconciliation and attachment sync without a Cloud subscription. Discovery defaults to the shared managed signaling service, independent of the drive’s data node. Export `BrowserPeerSync`, `WebRtcPeer` and `WebRtcTransport` from `@tomic/lib` ([#1396](https://github.com/ontola/atomic-server/issues/1396)).
 - Portal Open links select their workspace; ordinary resource links keep the current drive.
 - Sync distinguishes remote node data from Cloud Server enrollment, explains drive-specific plans, and refreshes account/recovery status after portal sign-in.
 - Account linking explains its purpose without implying another purchase or workspace transfer.

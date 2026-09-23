@@ -205,8 +205,7 @@ async fn check_auth_values(
         // (`+` `/` `=`) — so a raw-string `ends_with` wrongly rejects a key
         // whose decoded BYTES are identical. Compare the decoded bytes.
         let did_pubkey = agent_subject
-            .as_str()
-            .strip_prefix(crate::subject::DID_AD_AGENT_PREFIX)
+            .agent_public_key()
             .unwrap_or_else(|| agent_subject.as_str());
         if public_keys_match(did_pubkey, public_key_trimmed) {
             return Ok(Authenticated::Agent(ForAgent::AgentSubject(agent_subject)));

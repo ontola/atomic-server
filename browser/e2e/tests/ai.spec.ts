@@ -1,3 +1,4 @@
+import { isAtomicIdentifier } from '@tomic/lib';
 import { test, expect } from './fixtures';
 import { before, waitForSynced, reloadReconnected } from './test-utils';
 import {
@@ -109,7 +110,7 @@ test.describe('AI Chat', () => {
       .getByRole('link', { name: 'Test Chat' });
     await expect(chatLink).toBeVisible({ timeout: 15000 });
     const href = await chatLink.getAttribute('href');
-    const subject = href!.startsWith('did:')
+    const subject = isAtomicIdentifier(href!)
       ? href!
       : new URL(href!, page.url()).searchParams.get('subject')!;
     const chatUrl = new URL(
@@ -352,7 +353,7 @@ test.describe('AI Chat', () => {
       .getByRole('link', { name: 'Test Chat' });
     await expect(chatLink).toBeVisible();
     const href = await chatLink.getAttribute('href');
-    const subject = href!.startsWith('did:')
+    const subject = isAtomicIdentifier(href!)
       ? href!
       : new URL(href!, page.url()).searchParams.get('subject')!;
     await waitForSynced(page);

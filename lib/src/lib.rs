@@ -87,6 +87,7 @@ pub mod expression;
 pub mod genesis;
 pub mod hierarchy;
 pub mod history;
+pub mod identifiers;
 pub mod import_identity;
 #[doc(hidden)]
 pub mod loro;
@@ -126,6 +127,13 @@ pub use commit::Commit;
 pub use db::{AgentLoadResult, Db, DbEvent, DriveInfo, DriveUsage, ReplicationTarget};
 pub use errors::AtomicError;
 pub use errors::AtomicErrorType;
+pub use identifiers::{
+    agent_subject, blob_subject, canonicalize_scheme, commit_subject, emit_subject_for_caps,
+    node_subject, resource_subject, scheme_alias, ATOMIC_AGENT_PREFIX, ATOMIC_BLOB_PREFIX,
+    ATOMIC_COMMIT_PREFIX, ATOMIC_NODE_PREFIX, ATOMIC_PREFIX, CAP_CANONICAL_SCHEME,
+    DID_AD_AGENT_PREFIX, DID_AD_BLOB_PREFIX, DID_AD_COMMIT_PREFIX, DID_AD_NODE_PREFIX,
+    DID_AD_PREFIX,
+};
 pub use resources::Resource;
 pub use store::Store;
 pub use storelike::Storelike;
