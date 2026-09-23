@@ -1033,6 +1033,13 @@ property writes that lose completely; expression tests exercise browser operator
 aliases. The editor Link lifecycle test preserves telephone links across multiple
 mounts without resetting or re-registering the global parser.
 
+`lib/src/sync/protocol.rs` classifies a causality refusal as a conflict, and
+`server/src/errors.rs` checks its HTTP 409 response. `browser/lib/src/local-outbox.test.ts`
+classifies both the structured code and the older server message as blocking,
+not terminal; the outbox's existing tests cover bounded retries and keeping
+blocked edits pending. `lib/src/sync/outbox.rs` checks the same verdict for
+native clients.
+
 ### Save durability and identity lifecycle regressions
 
 - `save-acknowledgement.test.ts` exercises `Resource.save()` through the real

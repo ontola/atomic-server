@@ -135,6 +135,9 @@ export const ErrorCode = {
    *  legacy `<server>/commits/<sig>`), which can never be edited. Terminal:
    *  drop the entry; nothing is lost, a Commit is whatever was signed. */
   IMMUTABLE_COMMIT: 10,
+  /** The server rejected a stale Loro write; preserve the local edit and
+   *  stop retrying until it can be based on current state. */
+  CAUSALITY_CONFLICT: 11,
 } as const;
 
 /** Capability names a server may advertise in its AUTH_OK payload (mirrors
