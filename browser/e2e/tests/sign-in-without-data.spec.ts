@@ -1,5 +1,5 @@
 import { test, expect, type Page } from './fixtures';
-import { Agent, generateKeyPair } from '@tomic/lib';
+import { Agent, generateKeyPair, toLegacyScheme } from '@tomic/lib';
 import {
   FRONTEND_URL,
   getCurrentSubject,
@@ -126,7 +126,7 @@ test('a restored session can initialize its missing private home from a direct l
   browserDiagnostics.expect(
     'warning',
     new RegExp(
-      `^\\[WS\\] refused: (SUB|SYNC) refused for ${home}: not readable$`,
+      `^\\[WS\\] refused: (SUB|SYNC) refused for (?:${home}|${toLegacyScheme(home)}): not readable$`,
     ),
     'The persisted identity has no drive on the node while recovery and initialization run; bounded sync retries may be refused.',
     16,
