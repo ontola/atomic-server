@@ -811,18 +811,32 @@ impl Commit {
                 };
                 let body_changed =
                     body_state(&applied.resource_old.build_state_doc()?) != body_state(&merged_doc);
-                let all_match = if body_changed || incoming_intent.is_empty() {
-                    true
+                // The writes that did not survive the merge, each with what the
+                // commit sent and what the store kept. Empty means nothing was
+                // dropped. Collecting the losers rather than answering
+                // yes-or-no is what lets the rejection name them: a key list
+                // alone leaves the one question the reader has ("which write
+                // lost, and to what?") to be guessed from the server's own
+                // logs, which whoever reads the error usually cannot see.
+                let dropped: Vec<String> = if body_changed || incoming_intent.is_empty() {
+                    Vec::new()
                 } else {
-                    incoming_intent.iter().all(|(key, incoming_val)| {
-                        if server_managed.contains(&key.as_str()) {
-                            return true;
-                        }
-                        merged_state.get(key).is_some_and(|mv| mv == incoming_val)
-                    })
+                    incoming_intent
+                        .iter()
+                        .filter(|(key, _)| !server_managed.contains(&key.as_str()))
+                        .filter_map(|(key, incoming_val)| {
+                            let stored = merged_state.get(key);
+
+                            if stored.is_some_and(|mv| mv == incoming_val) {
+                                return None;
+                            }
+
+                            Some(format!("{key}: sent {incoming_val:?}, stored {stored:?}"))
+                        })
+                        .collect()
                 };
 
-                if all_match {
+                if dropped.is_empty() {
                     tracing::debug!(
                         subject = %commit.subject,
                         keys = ?incoming_intent.keys().collect::<Vec<_>>(),
@@ -833,6 +847,7 @@ impl Commit {
                     tracing::warn!(
                         subject = %commit.subject,
                         loro_bytes = commit.loro_update.as_ref().map(|b| b.len()).unwrap_or(0),
+                        dropped = ?dropped,
                         incoming_intent = ?incoming_intent,
                         merged_state = ?merged_state,
                         "[causality-guard] rejecting commit with non-trivial loroUpdate that produced no state changes (silent LWW loss)"
@@ -842,13 +857,8 @@ impl Commit {
                         "Commit's Loro update produced no state changes — its writes were \
                          silently dropped by LWW against stored state. The client's Loro doc \
                          wasn't seeded from the server's current state. Refetch the resource \
-                         and retry the commit. subject={} incoming_intent={:?} merged_state_keys={:?}",
-                        commit.subject,
-                        incoming_intent
-                            .iter()
-                            .map(|(k, v)| format!("{k} = {v:?}"))
-                            .collect::<Vec<_>>(),
-                        merged_state.keys().collect::<Vec<_>>(),
+                         and retry the commit. subject={} dropped={:?}",
+                        commit.subject, dropped,
                     )
                     .into());
                 }
