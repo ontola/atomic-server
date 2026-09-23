@@ -1034,11 +1034,12 @@ export function run() { return { intents: [] }; }
       .getByRole('button', { name: 'Connect GitHub', exact: true })
       .click();
     await expect(page).toHaveURL(/\/app\/show\?subject=/, { timeout: 30000 });
-    // The install is still running when that URL appears, so the table page
-    // and its `Connections` menu item do not exist yet. The 30s above covers
-    // the navigation and nothing after it. Measured here: the click succeeds
-    // at 45s and the whole test takes 48s, against a 10s default that it
-    // never met.
+    // The install is still running when that URL appears: the setup dialog
+    // stays open over the page, its button reading "Connecting…", until the
+    // connection settles, so the context menu cannot be opened yet. The 30s
+    // above covers the navigation and nothing after it. Measured here: the
+    // click succeeds at 45s and the whole test takes 48s, against a 10s
+    // default that it never met.
     await openWorkspaceDialog(page, 'connections', 45000);
     await page
       .getByRole('link', { name: 'Connection settings', exact: true })
