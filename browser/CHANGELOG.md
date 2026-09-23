@@ -4,6 +4,8 @@ This changelog covers all five packages, as they are (for now) updated as a whol
 
 ## UNRELEASED
 
+- Move the Connections and Automations buttons above table views into the table's context menu, next to Export to CSV. They open the same dialog as before.
+
 - Fix: the integration proxy may live on a `.localhost` name. `proxyOrigin`
   allowed plain http only for the bare `localhost` and `127.0.0.1`, so a proxy
   at, say, `http://atomic.localhost:19090` was rejected, and because the value
