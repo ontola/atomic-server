@@ -319,8 +319,8 @@ cargo test -p atomic-server --test it iroh_pairing  # two servers pair via POST 
 cargo test --manifest-path flutter/rust/Cargo.toml  # Flutter bridge (workspace-excluded, needs --manifest-path)
 cd browser/lib && pnpm test                      # JS unit tests
 cd browser && pnpm run -r build                  # Full workspace build
-cd browser && pnpm run test-e2e:light            # Playwright @smoke (feature-branch CI)
-cd browser && pnpm run test-e2e                  # Full Playwright suite (develop / tags)
+cd browser && pnpm run test-e2e:light            # Playwright @smoke (local diagnostic)
+cd browser && pnpm run test-e2e                  # Full Playwright suite (batch / develop / tags)
 ```
 
 When you restart an `atomic-server` for tests, gate on `curl` returning HTTP

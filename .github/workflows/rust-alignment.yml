@@ -1,6 +1,5 @@
 name: Rust build policy
 on:
-  pull_request:
   push:
     branches: [develop]
 permissions:
