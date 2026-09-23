@@ -12322,3 +12322,8 @@ msgstr ""
 #: src/routes/SyncRoute.tsx
 msgid "Workspace sync off"
 msgstr ""
+
+#. 0: restore.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "There is nothing to restore for {0} yet. Create your account to accept the invitation."
+msgstr ""

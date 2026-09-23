@@ -12361,3 +12361,8 @@ msgstr "Off stops server sync for this workspace on this browser. The server’s
 #: src/routes/SyncRoute.tsx
 msgid "Workspace sync off"
 msgstr "Workspace sync off"
+
+#. 0: restore.email
+#: src/views/getting-started/GettingStartedFlow.tsx
+msgid "There is nothing to restore for {0} yet. Create your account to accept the invitation."
+msgstr "There is nothing to restore for {0} yet. Create your account to accept the invitation."
