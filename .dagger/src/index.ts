@@ -1070,9 +1070,8 @@ export class AtomicServer {
    *
    * That report is not a nicety. `playwright.config.ts` records traces with
    * `retain-on-failure`, and this deploy is the only path that carries them
-   * off the runner: the `upload-artifact` step in `main-ci.yml` uploads
-   * `./artifact`, which nothing writes, because the Dagger container holding
-   * them is discarded when the `ci` call throws. So with the token unset the
+   * off the runner: Dagger keeps the traces in its container, which is
+   * discarded when the `ci` call throws. So with the token unset the
    * per-shard 20k-char log tail is the entire evidence channel for a failed
    * run, and "which assertion failed" arrives without "why".
    */
