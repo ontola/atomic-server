@@ -179,6 +179,7 @@ describe('installRelease', () => {
       propVals: { [core.properties.name]: 'Team' },
     });
     await drive.save();
+    const propertyLookup = vi.spyOn(store, 'getProperty');
 
     const subject = await installRelease(store, {
       drive: drive.subject,
@@ -211,6 +212,18 @@ describe('installRelease', () => {
       'active',
     );
     expect(installation.get(server.properties.grants)).toEqual(['storage']);
+    expect(
+      installation
+        .getLoroDoc()
+        ?.getMap('datatypes')
+        .get(server.properties.grants),
+    ).toBe('json');
+    expect(
+      installation
+        .getLoroDoc()
+        ?.getMap('datatypes')
+        .get(server.properties.config),
+    ).toBe('json');
     // The test store skips the datatype fetch, so an object value is kept
     // serialized; against a server the JSON datatype keeps it an object.
     const config = installation.get(server.properties.config);
@@ -218,6 +231,12 @@ describe('installRelease', () => {
       folderPrefix: 'My',
     });
     expect(posted.map(c => c.subject)).toContain(subject);
+    // Installation must not require the public ontology site to serve these
+    // built-in Property URLs; the server validates the signed commit.
+    expect(propertyLookup).not.toHaveBeenCalledWith(server.properties.release);
+    expect(propertyLookup).not.toHaveBeenCalledWith(
+      server.properties.releaseId,
+    );
   });
 
   it('leaves optional fields off and honours a draft status', async () => {
@@ -269,6 +288,7 @@ describe('updateInstallationRelease', () => {
     });
 
     const beforeUpdate = posted.length;
+    const propertyLookup = vi.spyOn(store, 'getProperty');
     await updateInstallationRelease(store, subject, {
       release: {
         url: 'https://example.com/releases/blake3:two',
@@ -287,6 +307,12 @@ describe('updateInstallationRelease', () => {
       'storage',
       'custom-view',
     ]);
+    expect(
+      installation
+        .getLoroDoc()
+        ?.getMap('datatypes')
+        .get(server.properties.grants),
+    ).toBe('json');
     expect(installation.get(server.properties.version)).toBe('1.1.0');
     // An update is not a new install: same resource, same identifiers, and the
     // config it was running is untouched when the caller passes none.
@@ -303,6 +329,10 @@ describe('updateInstallationRelease', () => {
     // the new release's manifest, so a release that arrived on its own could be
     // refused for capabilities the next commit was about to approve.
     expect(posted.length - beforeUpdate).toBe(1);
+    expect(propertyLookup).not.toHaveBeenCalledWith(server.properties.release);
+    expect(propertyLookup).not.toHaveBeenCalledWith(
+      server.properties.releaseId,
+    );
   });
 });
 

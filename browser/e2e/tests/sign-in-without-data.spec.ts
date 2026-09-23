@@ -103,7 +103,7 @@ test('an unavailable legacy home does not prevent a writable derived home', asyn
     /^Failed to load resource: the server responded with a status of 404 \(Not Found\)$/,
     'The deliberately unavailable legacy drive returns 404.',
     1,
-    new RegExp(`/did\\?subject=${encodeURIComponent(legacy)}$`),
+    new RegExp(`/(?:did|resource)\\?subject=${encodeURIComponent(legacy)}$`),
     { optional: true },
   );
   browserDiagnostics.expect(
