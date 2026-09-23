@@ -297,7 +297,6 @@ msgstr "Choose a default model"
 #: src/chunks/AI/AISetupPanel.tsx
 #: src/chunks/AI/AISetupPanel.tsx src/components/DemoExitButton.tsx
 #: src/components/DemoExitButton.tsx
-#: src/components/Share/ShareDialog.tsx
 msgid "Back"
 msgstr "Back"
 
@@ -1492,6 +1491,7 @@ msgstr "Textual Description <0/>"
 #: src/chunks/TablePage/RowActionDialog.tsx src/components/AvatarCropper.tsx
 #: src/components/AvatarCropper.tsx
 #: src/components/Settings/IntegrationSettings.tsx
+#: src/components/Share/ShareDialog.tsx
 #: src/components/forms/ResourceForm.tsx
 #: src/views/Article/ArticleDescription.tsx
 #: src/views/Installation/InstallationPage.tsx
@@ -2448,7 +2448,6 @@ msgstr "Accept Changes"
 
 #: src/components/NavBar.tsx
 #: src/components/NavBar.tsx src/components/Share/ShareDialog.tsx
-#: src/components/Share/ShareDialog.tsx
 msgid "Share"
 msgstr "Share"
 
@@ -2552,9 +2551,8 @@ msgstr "Nothing to show"
 msgid "Allow edits"
 msgstr "Allow edits"
 
-#: src/components/InviteForm.tsx
-msgid "Invite text (optional)"
-msgstr "Invite text (optional)"
+#~ msgid "Invite text (optional)"
+#~ msgstr "Invite text (optional)"
 
 #: src/components/InviteForm.tsx
 msgid "Invite created and copied to clipboard! 🚀"
@@ -4168,7 +4166,6 @@ msgstr "properties have"
 msgid "as a classtype."
 msgstr "as a classtype."
 
-#: src/components/Share/ShareDialog.tsx
 #: src/components/Share/ShareDialog.tsx src/routes/Share/ShareRoute.tsx
 #: src/routes/Share/ShareRoute.tsx
 msgid "Create Invite"
@@ -12361,3 +12358,23 @@ msgstr "Off stops server sync for this workspace on this browser. The server’s
 #: src/routes/SyncRoute.tsx
 msgid "Workspace sync off"
 msgstr "Workspace sync off"
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Invite people to"
+msgstr "Invite people to"
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Manage access"
+msgstr "Manage access"
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Invite"
+msgstr "Invite"
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Access to"
+msgstr "Access to"
+
+#: src/components/Share/ShareDialog.tsx
+msgid "Inherited permissions"
+msgstr "Inherited permissions"

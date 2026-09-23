@@ -70,7 +70,7 @@ export function InviteForm({
       inDialog={inDialog}
       notice={notice}
       secondaryAction={secondaryAction}
-      skipProfile={!!icon}
+      skipProfile={!!icon || profileReviewedBefore(agent?.subject)}
     />
   );
 }
@@ -217,11 +217,16 @@ function InviteFormContent({
   }, [invite, agent, target, store, isSaas]);
 
   if (agent?.subject && !profileReviewed) {
+    const agentSubject = agent.subject;
+
     return (
       <InviteFormLayout inDialog={inDialog}>
         <TeamProfileStep
-          subject={agent.subject}
-          onContinue={() => setProfileReviewed(true)}
+          subject={agentSubject}
+          onContinue={() => {
+            rememberProfileReviewed(agentSubject);
+            setProfileReviewed(true);
+          }}
         />
       </InviteFormLayout>
     );
@@ -275,6 +280,31 @@ function InviteFormContent({
         <CodeBlock content={inviteUrl!} data-test='invite-code' />
       </InviteFormLayout>
     );
+}
+
+const PROFILE_REVIEWED_KEY = 'inviteProfileReviewed';
+
+/**
+ * Share opens on the invite, so without this someone who skips the optional
+ * picture would get the profile step on every Share click. Once per agent on
+ * this device is enough of a nudge.
+ */
+function profileReviewedBefore(agent: string | undefined): boolean {
+  if (!agent) return false;
+
+  try {
+    return localStorage.getItem(PROFILE_REVIEWED_KEY) === agent;
+  } catch {
+    return false;
+  }
+}
+
+function rememberProfileReviewed(agent: string): void {
+  try {
+    localStorage.setItem(PROFILE_REVIEWED_KEY, agent);
+  } catch {
+    /* Without storage the step simply shows again next time. */
+  }
 }
 
 function InviteFormLayout({
