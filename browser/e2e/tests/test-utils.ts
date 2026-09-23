@@ -1862,6 +1862,18 @@ export async function openWorkspaceDialog(
   section: 'connections' | 'automations',
   timeout?: number,
 ) {
+  // A top-level dialog left over from an earlier step covers the table and
+  // swallows this click: the GitHub setup dialog stays up, its button reading
+  // "Connecting…", until the install settles. A bigger budget does work,
+  // because Playwright retries until the dialog goes, but it makes the budget
+  // the thing under test. Measured on develop at `2c581ff`, running this file
+  // at four workers, the click cost 41.1s against the 45s it had, and 9.8s
+  // unloaded against the 10s it had before that.
+  //
+  // So wait for the dialog to go, the way `waitForTableBuild` above does, and
+  // let the clicks keep their ordinary budgets. A dialog that never closes now
+  // says so, instead of arriving as a click that could not reach its target.
+  await currentDialog(page).waitFor({ state: 'hidden', timeout });
   await page.click(contextMenu, { timeout });
   await page.getByTestId(`menu-item-${section}`).click({ timeout });
 }
