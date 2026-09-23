@@ -13,7 +13,7 @@ test('catalog, selected-platform PKCE consent, redemption and single-use rotatio
   try {
     assert.deepEqual(
       await (await fetch(`${base}/catalog`)).json(),
-      ['clockify', 'github-issues', 'google-calendar', 'pets'],
+      ['github-issues', 'google-calendar', 'pets'],
     );
     const callback =
       'http://localhost:6747/app/integrations?integration_state=abc&platform=pets';

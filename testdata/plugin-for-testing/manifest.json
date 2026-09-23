@@ -65,6 +65,24 @@
       "method": "PATCH",
       "url": "https://provider.test/records/{number}",
       "effect": "write"
+    },
+    {
+      "id": "collections",
+      "method": "GET",
+      "url": "https://provider.test/collections",
+      "effect": "read"
+    },
+    {
+      "id": "schema",
+      "method": "GET",
+      "url": "https://provider.test/records/schema",
+      "effect": "read"
+    },
+    {
+      "id": "rename",
+      "method": "PATCH",
+      "url": "https://provider.test/records/schema",
+      "effect": "write"
     }
   ]
 }

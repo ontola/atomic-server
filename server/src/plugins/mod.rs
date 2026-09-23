@@ -90,6 +90,8 @@ pub mod view_token;
 #[cfg(feature = "wasm-plugins")]
 pub mod wasm;
 
+#[cfg(all(test, feature = "wasm-plugins"))]
+mod plugin_for_testing_tests;
 #[cfg(feature = "wasm-plugins")]
 pub mod sync_session;
 #[cfg(all(test, feature = "wasm-plugins"))]

@@ -141,7 +141,7 @@ test('existing connections remain visible while both discovery categories are hi
   // whose first line is `pluginClassesFor`, which creates the drive's whole
   // plugin schema: every property and class saved before a subject exists to
   // navigate to. Measured here at 3.6s idle and 6.8s under four local workers,
-  // an 89% inflation matching what `devonian-issue-sync` showed, and Mancave
+  // an 89% inflation matching what a since-removed sync spec showed, and Mancave
   // carries far more than four workers. The save and the render come after it,
   // inside the same budget.
   test.setTimeout(90_000);

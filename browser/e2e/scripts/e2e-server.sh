@@ -301,13 +301,10 @@ export ATOMIC_WEBSITE_ORIGIN="${ATOMIC_WEBSITE_ORIGIN:-http://sites.localhost:$P
 # since it was created: a store seeded before a Property existed can never
 # receive it otherwise, and every test using that Property fails on a 404 that
 # looks nothing like the cause.
-# The integration specs (Notion, Clockify, GitHub) talk to an integration proxy
-# rather than to the real providers. CI runs `mock-proxy.mjs` beside the server
-# and builds the bundle against it; without it those specs get a
-# "TypeError: Failed to fetch" alert, and the second `role="alert"` on the page
-# then breaks their own strict-mode alert assertions. That reads as four broken
-# integration specs, so anyone running the suite locally without this has been
-# told the product is broken when it is their setup.
+# No spec in this repo needs an integration proxy any more: the provider
+# integrations and their specs moved to atomic-plugins, and CI no longer runs
+# one. `--mock-proxy` still starts `mock-proxy.mjs` beside the server for
+# manual LocalThought testing against a local proxy.
 if [[ "$MOCK_PROXY" == true ]]; then
   PROXY_URL="http://127.0.0.1:$MOCK_PROXY_PORT"
 

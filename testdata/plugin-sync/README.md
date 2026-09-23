@@ -1,8 +1,10 @@
 # `plugin-sync` fixture
 
-A frozen, checked-in plugin bundle used as test *input* by the host's own
-tests — `sync_session_tests.rs`, plus the action/trigger/scheduler setups in
-`actions.rs`, `triggers.rs` and `scheduler.rs`.
+A frozen, checked-in plugin bundle used as test *input* by the host's sync
+tests in `server/src/plugins/sync_session_tests.rs`. The e2e catalog mock
+(`testdata/atomic-plugins-mock`) also serves it as the `fixture-api` entry's
+bundle, but nothing loads it from there yet. The action, trigger and scheduler
+tests use `testdata/plugin-for-testing` instead.
 
 It is not a plugin this repo ships, builds, or maintains. Plugins live in
 [atomic-plugins](https://github.com/ontola/atomic-plugins) and reach a server
