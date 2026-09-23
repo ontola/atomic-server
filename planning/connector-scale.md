@@ -133,7 +133,7 @@ retrieval and browser polling of the local host. Refresh and SaaS deployment rem
   behavior explicitly; do not assume the managed service never sees tokens.
 - [x] Extract/reuse the current Notion authorization code behind that boundary,
   preserving the existing direct self-hosted mode and one credential model.
-- [ ] Add Atomic SaaS deployment/configuration for the shared service and register
+- [ ] Add managed deployment/configuration for the shared service and register
   Atomic's provider apps. Never ship their client secrets in FOSS distributions.
 - [ ] Run the same conformance suite against managed and independent deployments:
   cancellation, wrong actor/server, expired/replayed handoff, inaccessible

@@ -231,7 +231,7 @@ passes. Frontend typecheck retains the three existing Document/Loro errors.
 ## Managed and independent authorization deployment
 
 Follow the [shared authorization architecture](connector-scale.md#shared-authorization-architecture):
-Atomic SaaS deploys the same FOSS authorization implementation that independent
+The managed service deploys the same FOSS authorization implementation that independent
 operators can run with their own provider app credentials. No separate SaaS
 Notion connector, picker or sync engine. The current local OAuth handlers are
 an implementation starting point, not a reason to duplicate them in SaaS.
