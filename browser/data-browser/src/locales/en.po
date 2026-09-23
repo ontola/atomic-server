@@ -12278,3 +12278,68 @@ msgstr "Local copy unavailable"
 #: src/components/SideBar/FeedbackMenuItem.tsx
 msgid "Report this error"
 msgstr "Report this error"
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Report AI chat"
+msgstr "Report AI chat"
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Sending report"
+msgstr "Sending report"
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Copy report"
+msgstr "Copy report"
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Send report"
+msgstr "Send report"
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Thank you. Your AI chat report has been sent."
+msgstr "Thank you. Your AI chat report has been sent."
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Preparing chat transcript…"
+msgstr "Preparing chat transcript…"
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "The chat could not be loaded. Try again."
+msgstr "The chat could not be loaded. Try again."
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "earlier messages were omitted to fit the report. The most recent messages are included."
+msgstr "earlier messages were omitted to fit the report. The most recent messages are included."
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Feedback reporting is unavailable on this installation. You can copy the report instead."
+msgstr "Feedback reporting is unavailable on this installation. You can copy the report instead."
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Report copied to clipboard."
+msgstr "Report copied to clipboard."
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Could not copy. Select the text above to copy it manually."
+msgstr "Could not copy. Select the text above to copy it manually."
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "The report could not be sent. Your text is still here; try again."
+msgstr "The report could not be sent. Your text is still here; try again."
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Pressing Send report shares the reviewed chat text, error messages, and your optional description and email with the Atomic team through Sentry. Attachments, tool payloads, and reasoning are excluded. Remove private information before sending."
+msgstr "Pressing Send report shares the reviewed chat text, error messages, and your optional description and email with the Atomic team through Sentry. Attachments, tool payloads, and reasoning are excluded. Remove private information before sending."
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "What went wrong? <0/>"
+msgstr "What went wrong? <0/>"
+
+#: src/chunks/AI/ReportAIChatDialog.tsx
+msgid "Chat transcript (editable) <0/>"
+msgstr "Chat transcript (editable) <0/>"
+
+#: src/components/ResourceContextMenu/index.tsx
+msgid "Review the chat transcript before sharing it with the Atomic team"
+msgstr "Review the chat transcript before sharing it with the Atomic team"

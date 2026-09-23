@@ -93,6 +93,7 @@ export default function ReportAIChatDialog({
 
     try {
       await navigator.clipboard.writeText(
+        /* @wc-ignore */
         `What went wrong:\n${details.trim() || '(No description)'}\n\n${transcript}`,
       );
       setCopied(true);
@@ -108,6 +109,7 @@ export default function ReportAIChatDialog({
 
     try {
       await submitFeedback(
+        /* @wc-ignore */
         `What went wrong:\n${details.trim() || '(No description)'}\n\n${transcript}`,
         email,
         'ai-chat',

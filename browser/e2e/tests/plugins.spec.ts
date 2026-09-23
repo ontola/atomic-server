@@ -155,6 +155,9 @@ export function run() { return { intents: [] }; }
     await expect(
       page.getByRole('heading', { name: 'Integrations', exact: true }),
     ).toBeVisible();
+    await page
+      .getByRole('checkbox', { name: 'Show experimental plugins' })
+      .check();
     const card = page
       .locator('[data-release]')
       .filter({
@@ -1843,7 +1846,7 @@ export function run() { return { intents: [{ op: 'create', localId: 'sample', pa
 
     const dialog = page.locator('dialog[open]');
     await expect(dialog.getByText(/does not exist/)).toBeVisible();
-    await expect(dialog.getByRole('button', { name: /Apply/ })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: /Apply/ })).toHaveCount(0);
 
     // Cancelling a blocked run still records it: a refusal that leaves no
     // trace reads the same as a plugin that never ran.
