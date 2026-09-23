@@ -186,6 +186,7 @@ export function useIntegrationVisibility() {
     ),
     ready,
     saving,
+    pending: saving || Object.keys(queue).length > 0,
     error,
     setVisibility,
   };

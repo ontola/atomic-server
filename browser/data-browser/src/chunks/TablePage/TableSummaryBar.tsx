@@ -6,6 +6,7 @@ import { usePropertyTitles } from './helpers/usePropertyTitles';
 import type { DerivedColumnSpec } from './derivedColumns';
 import {
   aggregateKey,
+  BREAKDOWN_ROWS_ID,
   formatAggregateValue,
   formatGroupKey,
   type GroupGranularity,
@@ -73,9 +74,15 @@ export function TableSummaryBar({
     );
   };
 
-  // Buckets come from the first outcome: every aggregate is grouped by the same
-  // property, so they all carry the same keys.
-  const groups = groupByColumn ? (outcomes[0]?.groups ?? []) : [];
+  // Buckets come from the row count: every aggregate is grouped by the same
+  // property, but only the count sees every row, so it alone reports each
+  // group's size (a sum's `count` is just the rows that had a number).
+  const rowCounts = byKey.get(
+    aggregateKey({ id: BREAKDOWN_ROWS_ID, function: 'count' }),
+  );
+  const groups = groupByColumn
+    ? (rowCounts?.groups ?? outcomes[0]?.groups ?? [])
+    : [];
   const truncated = outcomes.some(o => o.groups_truncated);
   const groupProperty = groupByColumn
     ? byProperty.get(groupByColumn)
